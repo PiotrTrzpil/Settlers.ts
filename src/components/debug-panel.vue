@@ -79,6 +79,15 @@
             <span class="stat-value">{{ stats.zoom }}x</span>
           </div>
           <div class="stat-row">
+            <span class="stat-label">Zoom speed</span>
+            <span class="stat-value slider-value">
+              <input type="range" min="0.05" max="0.50" step="0.01"
+                :value="stats.zoomSpeed"
+                @input="stats.zoomSpeed = parseFloat(($event.target as HTMLInputElement).value)" />
+              {{ stats.zoomSpeed.toFixed(2) }}
+            </span>
+          </div>
+          <div class="stat-row">
             <span class="stat-label">Canvas</span>
             <span class="stat-value">{{ stats.canvasWidth }} x {{ stats.canvasHeight }}</span>
           </div>
@@ -360,6 +369,19 @@ const fpsClass = computed(() => {
 .fps-good { color: #80c080; }
 .fps-ok { color: #d4a030; }
 .fps-bad { color: #d04040; }
+
+.slider-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.slider-value input[type="range"] {
+  width: 60px;
+  height: 4px;
+  accent-color: #d4a030;
+  cursor: pointer;
+}
 
 .control-row {
   display: flex;
