@@ -54,11 +54,13 @@ export default class RendererViewer extends Vue {
             this.initRenderer();
         });
 
-        // Set up input handlers
-        cav.addEventListener('mousedown', this.handleMouseDown);
-        cav.addEventListener('mouseup', this.handleMouseUp);
+        // Use pointer events (not mouse events) because ViewPoint's
+        // pointerdown handler calls preventDefault(), which suppresses
+        // compatibility mouse events per the Pointer Events spec.
+        cav.addEventListener('pointerdown', this.handleMouseDown);
+        cav.addEventListener('pointerup', this.handleMouseUp);
         cav.addEventListener('contextmenu', this.handleRightClick);
-        cav.addEventListener('mousemove', this.handleMouseMove);
+        cav.addEventListener('pointermove', this.handleMouseMove);
     }
 
     private initRenderer() {
@@ -102,13 +104,13 @@ export default class RendererViewer extends Vue {
         this.game.start();
     }
 
-    private handleMouseDown = (e: MouseEvent) => {
+    private handleMouseDown = (e: PointerEvent) => {
         if (e.button !== 0) return; // left button only
         this.dragStart = { x: e.offsetX, y: e.offsetY };
         this.isDragging = false;
     };
 
-    private handleMouseUp = (e: MouseEvent) => {
+    private handleMouseUp = (e: PointerEvent) => {
         if (e.button !== 0 || !this.dragStart) return;
 
         const dx = e.offsetX - this.dragStart.x;
@@ -152,7 +154,7 @@ export default class RendererViewer extends Vue {
         });
     }
 
-    private handleClick = (e: MouseEvent) => {
+    private handleClick = (e: PointerEvent) => {
         if (!this.game || !this.tilePicker || !this.renderer) return;
 
         const tile = this.tilePicker.screenToTile(
@@ -220,7 +222,7 @@ export default class RendererViewer extends Vue {
     };
 
     /** Show placement preview ghost building as the mouse moves */
-    private handleMouseMove = (e: MouseEvent) => {
+    private handleMouseMove = (e: PointerEvent) => {
         if (!this.game || !this.tilePicker || !this.renderer || !this.entityRenderer) return;
 
         // Track dragging state
@@ -274,10 +276,10 @@ export default class RendererViewer extends Vue {
 
         if (this.renderer) {
             const cav = this.renderer.canvas;
-            cav.removeEventListener('mousedown', this.handleMouseDown);
-            cav.removeEventListener('mouseup', this.handleMouseUp);
+            cav.removeEventListener('pointerdown', this.handleMouseDown);
+            cav.removeEventListener('pointerup', this.handleMouseUp);
             cav.removeEventListener('contextmenu', this.handleRightClick);
-            cav.removeEventListener('mousemove', this.handleMouseMove);
+            cav.removeEventListener('pointermove', this.handleMouseMove);
             this.renderer.destroy();
         }
     }
