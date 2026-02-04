@@ -26,6 +26,7 @@ export default class MapView extends Vue {
     public mapInfo = '';
     public game: Game | null = null;
     protected showDebug = false;
+    public activeTab: 'buildings' | 'units' = 'buildings';
 
     public hoveredTile: TileCoord | null = null;
 
