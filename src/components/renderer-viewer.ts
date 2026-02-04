@@ -4,8 +4,11 @@ import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { EntityType, BuildingType } from '@/game/entity';
+import { canPlaceBuilding } from '@/game/systems/placement';
 
 import { Options, Vue } from 'vue-class-component';
+
+const DRAG_THRESHOLD = 5; // pixels before drag-box activates
 
 @Options({
     name: 'RendererViewer',
@@ -25,6 +28,10 @@ export default class RendererViewer extends Vue {
     private tilePicker: TilePicker | null = null;
     private entityRenderer: EntityRenderer | null = null;
 
+    // Drag-box selection state
+    private dragStart: { x: number; y: number } | null = null;
+    private isDragging = false;
+
     public async mounted(): Promise<void> {
         const cav = this.$refs.cav as HTMLCanvasElement;
         this.renderer = new Renderer(cav);
@@ -36,9 +43,11 @@ export default class RendererViewer extends Vue {
             this.initRenderer();
         });
 
-        // Set up click handlers
-        cav.addEventListener('click', this.handleClick);
+        // Set up input handlers
+        cav.addEventListener('mousedown', this.handleMouseDown);
+        cav.addEventListener('mouseup', this.handleMouseUp);
         cav.addEventListener('contextmenu', this.handleRightClick);
+        cav.addEventListener('mousemove', this.handleMouseMove);
     }
 
     private initRenderer() {
@@ -72,10 +81,64 @@ export default class RendererViewer extends Vue {
             if (this.entityRenderer && this.game) {
                 this.entityRenderer.entities = this.game.state.entities;
                 this.entityRenderer.selectedEntityId = this.game.state.selectedEntityId;
+                this.entityRenderer.selectedEntityIds = this.game.state.selectedEntityIds;
+                this.entityRenderer.unitStates = this.game.state.unitStates;
+                this.entityRenderer.territoryMap = this.game.territory;
+                this.entityRenderer.territoryVersion = this.game.territoryVersion;
             }
             renderer.drawOnce();
         });
         this.game.start();
+    }
+
+    private handleMouseDown = (e: MouseEvent) => {
+        if (e.button !== 0) return; // left button only
+        this.dragStart = { x: e.offsetX, y: e.offsetY };
+        this.isDragging = false;
+    }
+
+    private handleMouseUp = (e: MouseEvent) => {
+        if (e.button !== 0 || !this.dragStart) return;
+
+        const dx = e.offsetX - this.dragStart.x;
+        const dy = e.offsetY - this.dragStart.y;
+        const wasDrag = Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD;
+
+        if (wasDrag && this.game?.mode === 'select') {
+            this.handleDragSelect(this.dragStart.x, this.dragStart.y, e.offsetX, e.offsetY);
+        } else {
+            this.handleClick(e);
+        }
+
+        this.dragStart = null;
+        this.isDragging = false;
+    }
+
+    private handleDragSelect(x1: number, y1: number, x2: number, y2: number): void {
+        if (!this.game || !this.tilePicker || !this.renderer) return;
+
+        const tile1 = this.tilePicker.screenToTile(
+            x1, y1,
+            this.renderer.viewPoint,
+            this.game.mapSize,
+            this.game.groundHeight
+        );
+        const tile2 = this.tilePicker.screenToTile(
+            x2, y2,
+            this.renderer.viewPoint,
+            this.game.mapSize,
+            this.game.groundHeight
+        );
+
+        if (!tile1 || !tile2) return;
+
+        this.game.execute({
+            type: 'select_area',
+            x1: tile1.x,
+            y1: tile1.y,
+            x2: tile2.x,
+            y2: tile2.y
+        });
     }
 
     private handleClick = (e: MouseEvent) => {
@@ -124,9 +187,9 @@ export default class RendererViewer extends Vue {
 
         if (!tile) return;
 
-        // Right-click: move selected unit to target tile
-        if (this.game.state.selectedEntityId !== null) {
-            const entity = this.game.state.getEntity(this.game.state.selectedEntityId);
+        // Right-click: move all selected units to target tile
+        for (const entityId of this.game.state.selectedEntityIds) {
+            const entity = this.game.state.getEntity(entityId);
             if (entity && entity.type === EntityType.Unit) {
                 this.game.execute({
                     type: 'move_unit',
@@ -138,6 +201,48 @@ export default class RendererViewer extends Vue {
         }
     }
 
+    /** Show placement preview ghost building as the mouse moves */
+    private handleMouseMove = (e: MouseEvent) => {
+        if (!this.game || !this.tilePicker || !this.renderer || !this.entityRenderer) return;
+
+        // Track dragging state
+        if (this.dragStart) {
+            const dx = e.offsetX - this.dragStart.x;
+            const dy = e.offsetY - this.dragStart.y;
+            if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
+                this.isDragging = true;
+            }
+        }
+
+        // Only show placement preview in place_building mode
+        if (this.game.mode !== 'place_building') {
+            this.entityRenderer.previewTile = null;
+            return;
+        }
+
+        const tile = this.tilePicker.screenToTile(
+            e.offsetX, e.offsetY,
+            this.renderer.viewPoint,
+            this.game.mapSize,
+            this.game.groundHeight
+        );
+
+        if (!tile) {
+            this.entityRenderer.previewTile = null;
+            return;
+        }
+
+        this.entityRenderer.previewTile = tile;
+        this.entityRenderer.previewValid = canPlaceBuilding(
+            this.game.groundType,
+            this.game.groundHeight,
+            this.game.mapSize,
+            this.game.state.tileOccupancy,
+            tile.x,
+            tile.y
+        );
+    }
+
     public unmounted(): void {
         if (this.game) {
             this.game.stop();
@@ -145,8 +250,10 @@ export default class RendererViewer extends Vue {
 
         if (this.renderer) {
             const cav = this.renderer.canvas;
-            cav.removeEventListener('click', this.handleClick);
+            cav.removeEventListener('mousedown', this.handleMouseDown);
+            cav.removeEventListener('mouseup', this.handleMouseUp);
             cav.removeEventListener('contextmenu', this.handleRightClick);
+            cav.removeEventListener('mousemove', this.handleMouseMove);
             this.renderer.destroy();
         }
     }

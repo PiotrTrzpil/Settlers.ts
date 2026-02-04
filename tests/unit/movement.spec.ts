@@ -99,4 +99,49 @@ describe('Movement System', () => {
         const movedEntity = state.getEntityAt(6, 5);
         expect(movedEntity?.id).to.equal(unit.id);
     });
+
+    describe('smooth interpolation tracking', () => {
+        it('should initialize prevX/prevY to spawn position', () => {
+            const unit = state.addEntity(EntityType.Unit, 0, 7, 3, 0);
+            const unitState = state.unitStates.get(unit.id);
+            expect(unitState).to.not.equal(undefined);
+            if (!unitState) { return }
+            expect(unitState.prevX).to.equal(7);
+            expect(unitState.prevY).to.equal(3);
+        });
+
+        it('should update prevX/prevY to previous tile when advancing', () => {
+            const unit = state.addEntity(EntityType.Unit, 0, 5, 5, 0);
+            const unitState = state.unitStates.get(unit.id);
+            expect(unitState).to.not.equal(undefined);
+            if (!unitState) { return }
+            unitState.path = [
+                { x: 6, y: 5 },
+                { x: 7, y: 5 }
+            ];
+            unitState.speed = 2;
+
+            // Move one tile (0.5s at speed 2)
+            updateMovement(state, 0.5);
+
+            expect(unit.x).to.equal(6);
+            expect(unitState.prevX).to.equal(5);
+            expect(unitState.prevY).to.equal(5);
+        });
+
+        it('should sync prevX/prevY on path completion', () => {
+            const unit = state.addEntity(EntityType.Unit, 0, 0, 0, 0);
+            const unitState = state.unitStates.get(unit.id);
+            expect(unitState).to.not.equal(undefined);
+            if (!unitState) { return }
+            unitState.path = [{ x: 1, y: 0 }];
+            unitState.speed = 10;
+
+            updateMovement(state, 1.0);
+
+            expect(unit.x).to.equal(1);
+            expect(unitState.prevX).to.equal(1);
+            expect(unitState.prevY).to.equal(0);
+        });
+    });
 });

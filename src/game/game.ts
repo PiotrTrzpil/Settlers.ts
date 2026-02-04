@@ -1,9 +1,11 @@
 import { FileManager } from '@/utilities/file-manager';
 import { IMapLoader } from '@/resources/map/imap-loader';
 import { MapSize } from '@/utilities/map-size';
+import { EntityType } from './entity';
 import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
 import { Command, executeCommand } from './commands/command';
+import { TerritoryMap } from './systems/territory';
 
 /** contains the game state */
 export class Game {
@@ -13,6 +15,9 @@ export class Game {
     public fileManager: FileManager;
     public state: GameState;
     public gameLoop: GameLoop;
+    public territory: TerritoryMap;
+    /** Incremented when territory changes, so renderers can cache-invalidate */
+    public territoryVersion = 0;
 
     /** Current interaction mode */
     public mode: 'select' | 'place_building' | 'move' = 'select';
@@ -31,11 +36,26 @@ export class Game {
 
         this.state = new GameState();
         this.gameLoop = new GameLoop(this.state);
+        this.territory = new TerritoryMap(this.mapSize);
     }
 
-    /** Execute a command against the game state */
+    /** Execute a command against the game state, then update territory if needed */
     public execute(cmd: Command): boolean {
-        return executeCommand(this.state, cmd, this.groundType, this.groundHeight, this.mapSize);
+        const result = executeCommand(this.state, cmd, this.groundType, this.groundHeight, this.mapSize);
+
+        // Rebuild territory when buildings change
+        if (result && (cmd.type === 'place_building' || cmd.type === 'remove_entity')) {
+            this.rebuildTerritory();
+        }
+
+        return result;
+    }
+
+    /** Rebuild territory map from current building entities */
+    public rebuildTerritory(): void {
+        const buildings = this.state.entities.filter(e => e.type === EntityType.Building);
+        this.territory.rebuild(buildings);
+        this.territoryVersion++;
     }
 
     /** Start the game loop */

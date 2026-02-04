@@ -5,7 +5,10 @@ export class GameState {
     /** O(1) entity lookup by ID */
     private entityMap: Map<number, Entity> = new Map();
     public unitStates: Map<number, UnitState> = new Map();
+    /** Primary selection (first selected entity or single selection) */
     public selectedEntityId: number | null = null;
+    /** All selected entity IDs (for multi-select) */
+    public selectedEntityIds: Set<number> = new Set();
     public nextId = 1;
 
     /** Spatial lookup: "x,y" -> entityId */
@@ -31,7 +34,9 @@ export class GameState {
                 path: [],
                 pathIndex: 0,
                 moveProgress: 0,
-                speed: 2 // tiles per second
+                speed: 2, // tiles per second
+                prevX: x,
+                prevY: y
             });
         }
 
@@ -51,6 +56,7 @@ export class GameState {
         this.tileOccupancy.delete(tileKey(entity.x, entity.y));
         this.unitStates.delete(id);
 
+        this.selectedEntityIds.delete(id);
         if (this.selectedEntityId === id) {
             this.selectedEntityId = null;
         }
@@ -77,6 +83,18 @@ export class GameState {
             }
         }
         return result;
+    }
+
+    /** Get all entities within a rectangular tile region */
+    public getEntitiesInRect(x1: number, y1: number, x2: number, y2: number): Entity[] {
+        const minX = Math.min(x1, x2);
+        const maxX = Math.max(x1, x2);
+        const minY = Math.min(y1, y2);
+        const maxY = Math.max(y1, y2);
+
+        return this.entities.filter(e =>
+            e.x >= minX && e.x <= maxX && e.y >= minY && e.y <= maxY
+        );
     }
 
     /** Update occupancy when an entity moves */

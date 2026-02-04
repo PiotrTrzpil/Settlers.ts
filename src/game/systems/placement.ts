@@ -1,5 +1,6 @@
 import { CARDINAL_OFFSETS, tileKey } from '../entity';
 import { MapSize } from '@/utilities/map-size';
+import { TerritoryMap, NO_OWNER } from './territory';
 
 /**
  * Terrain passability and buildability based on LandscapeType enum values.
@@ -71,6 +72,54 @@ export function canPlaceBuilding(
         const neighborHeight = groundHeight[mapSize.toIndex(nx, ny)];
         if (Math.abs(centerHeight - neighborHeight) > MAX_SLOPE_DIFF) {
             return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Check if a building can be placed, considering territory ownership.
+ * The first building per player is free (no territory required).
+ * Subsequent buildings must be within the player's territory or adjacent to it.
+ */
+export function canPlaceBuildingWithTerritory(
+    groundType: Uint8Array,
+    groundHeight: Uint8Array,
+    mapSize: MapSize,
+    tileOccupancy: Map<string, number>,
+    territory: TerritoryMap,
+    x: number,
+    y: number,
+    player: number,
+    hasBuildings: boolean
+): boolean {
+    if (!canPlaceBuilding(groundType, groundHeight, mapSize, tileOccupancy, x, y)) {
+        return false;
+    }
+
+    // If the player already has buildings, require territory
+    if (hasBuildings) {
+        const owner = territory.getOwner(x, y);
+        if (owner !== player && owner !== NO_OWNER) {
+            return false; // Can't build in enemy territory
+        }
+        // Allow building in own territory or unclaimed land adjacent to own territory
+        if (owner === NO_OWNER) {
+            let adjacentToOwn = false;
+            for (const [dx, dy] of CARDINAL_OFFSETS) {
+                const nx = x + dx;
+                const ny = y + dy;
+                if (nx >= 0 && nx < mapSize.width && ny >= 0 && ny < mapSize.height) {
+                    if (territory.isOwnedBy(nx, ny, player)) {
+                        adjacentToOwn = true;
+                        break;
+                    }
+                }
+            }
+            if (!adjacentToOwn) {
+                return false;
+            }
         }
     }
 
