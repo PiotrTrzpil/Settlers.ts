@@ -9,6 +9,12 @@ import { TexturePoint } from './texture-point';
 import { TextureMap16Bit } from '../../texture-map-16bit';
 import { GfxImage16Bit } from '@/resources/gfx/gfx-image-16bit';
 
+export interface RiverConfig {
+    swapRows: boolean;
+    reverseInner: boolean;
+    reverseOuter: boolean;
+}
+
 export class LandscapeTextureMap {
     private static log = new LogHandler('LandscapeTextureMap');
     private lookup: {[key: number]: ILandscapeTexture} = {};
@@ -90,7 +96,7 @@ export class LandscapeTextureMap {
         // variation: Hexagon2Texture(type2, type1, 3, row + 3)
     }
 
-    constructor() {
+    constructor(riverConfig?: RiverConfig) {
         this.addTexture(new BigLandscapeTexture(LandscapeType.Grass, 0));
         this.addTexture(new BigLandscapeTexture(LandscapeType.GrassDark, 4));
         this.addTexture(new BigLandscapeTexture(LandscapeType.GrassDry, 8));
@@ -159,12 +165,12 @@ export class LandscapeTextureMap {
         this.addTexture(new Hexagon2Texture(LandscapeType.Water4, LandscapeType.Water5, 0, 26));
         this.addTexture(new Hexagon2Texture(LandscapeType.Water5, LandscapeType.Water6, 1, 26));
         this.addTexture(new Hexagon2Texture(LandscapeType.Water6, LandscapeType.Water7, 2, 26));
-        this.addTexture(new Hexagon2Texture(LandscapeType.Water7, LandscapeType.Water8, 2, 26)); // bad @ 3, 26 -> fake cause this is missing?
+        this.addTexture(new Hexagon2Texture(LandscapeType.Water7, LandscapeType.Water8, 3, 26));
 
         this.addTexture(new Hexagon2Texture(LandscapeType.Water5, LandscapeType.Water4, 0, 27));
         this.addTexture(new Hexagon2Texture(LandscapeType.Water6, LandscapeType.Water5, 1, 27));
         this.addTexture(new Hexagon2Texture(LandscapeType.Water7, LandscapeType.Water6, 2, 27));
-        this.addTexture(new Hexagon2Texture(LandscapeType.Water8, LandscapeType.Water7, 2, 27));// bad @ 3, 27 -> fake cause this is missing?
+        this.addTexture(new Hexagon2Texture(LandscapeType.Water8, LandscapeType.Water7, 3, 27));
 
         // next row
         this.addTexture(new BigLandscapeTexture(LandscapeType.Beach, 28));
@@ -201,7 +207,38 @@ export class LandscapeTextureMap {
         // next row
         this.addTexture(new BigLandscapeTexture(LandscapeType.Snow, 68));
 
-        // todo: next row (river <-> gras) 72..75
+        // [grass] 16 -> 99 -> 98 -> 96 [river] @ 72..75
+        // 3 atlas slots: A=(2,72), B=(0,74), C=(2,74)
+        {
+            const rc = riverConfig ?? { swapRows: false, reverseInner: false, reverseOuter: false };
+            this.addTexture(new SmallLandscapeTexture(LandscapeType.River4, 0, 72));
+            this.addTexture(new SmallLandscapeTexture(LandscapeType.River3, 1, 72));
+
+            // Inner pair: River1 <-> River3
+            const [iA, iB] = rc.reverseInner
+                ? [LandscapeType.River3, LandscapeType.River1]
+                : [LandscapeType.River1, LandscapeType.River3];
+            // Outer pair: Grass <-> River4
+            const [oA, oB] = rc.reverseOuter
+                ? [LandscapeType.Grass, LandscapeType.River4]
+                : [LandscapeType.River4, LandscapeType.Grass];
+
+            // Slot A = (col 2-3, row 72-73), Slot B = (col 0-1, row 74-75)
+            // swapRows swaps inner/outer between slot A and B; middle always at slot C
+            const [innerCol, innerRow] = rc.swapRows ? [0, 74] : [2, 72];
+            const [outerCol, outerRow] = rc.swapRows ? [2, 72] : [0, 74];
+
+            this.addTexture(new Hexagon2Texture(iA, iB, innerCol, innerRow, innerCol, innerRow + 1));
+            this.addTexture(new Hexagon2Texture(iB, iA, innerCol + 1, innerRow, innerCol + 1, innerRow + 1));
+
+            this.addTexture(new Hexagon2Texture(oA, oB, outerCol, outerRow, outerCol, outerRow + 1));
+            this.addTexture(new Hexagon2Texture(oB, oA, outerCol + 1, outerRow, outerCol + 1, outerRow + 1));
+
+            // Middle pair: River4 <-> River3 — always at slot C (col 2-3, row 74-75)
+            this.addTexture(new Hexagon2Texture(LandscapeType.River4, LandscapeType.River3, 2, 74, 2, 75));
+            this.addTexture(new Hexagon2Texture(LandscapeType.River3, LandscapeType.River4, 3, 74, 3, 75));
+        }
+
         // todo: next row (?? <-> gras) 76..79
 
         this.addTexture(new Hexagon2Texture(LandscapeType.DustyWay, LandscapeType.Grass, 0, 76, 0, 77));
@@ -222,9 +259,21 @@ export class LandscapeTextureMap {
         Object.seal(this);
     }
 
+    /** Find a fallback texture by trying uniform types for each corner. */
+    private findFallback(t1: LandscapeType, t2: LandscapeType, t3: LandscapeType): ILandscapeTexture | null {
+        for (const t of [t1, t2, t3]) {
+            const key = new TexturePoint(t, t, t).getKey();
+            const text = this.lookup[key];
+            if (text) {
+                return text;
+            }
+        }
+        return null;
+    }
+
     public getTextureA(t1: LandscapeType, t2: LandscapeType, t3: LandscapeType, x: number, y: number): [number, number] {
         const tp = new TexturePoint(t1, t2, t3);
-        const text = this.lookup[tp.getKey()];
+        const text = this.lookup[tp.getKey()] ?? this.findFallback(t1, t2, t3);
         if (!text) {
             return [0, 0];
         }
@@ -234,7 +283,7 @@ export class LandscapeTextureMap {
 
     public getTextureB(t4: LandscapeType, t5: LandscapeType, t6: LandscapeType, x: number, y: number): [number, number] {
         const tp = new TexturePoint(t4, t5, t6);
-        const text = this.lookup[tp.getKey()];
+        const text = this.lookup[tp.getKey()] ?? this.findFallback(t4, t5, t6);
         if (!text) {
             return [0, 0];
         }

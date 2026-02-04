@@ -1,7 +1,7 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { RendererBase } from '../renderer-base';
 import { IRenderer } from '../i-renderer';
-import { LandscapeTextureMap } from './textures/landscape-texture-map';
+import { LandscapeTextureMap, type RiverConfig } from './textures/landscape-texture-map';
 import { MapSize } from '@/utilities/map-size';
 import { ShaderDataTexture } from '../shader-data-texture';
 import { IViewPoint } from '../i-view-point';
@@ -192,7 +192,29 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         return r;
     }
 
+    public rebuildRiverTextures(rc: RiverConfig): void {
+        LandscapeRenderer.log.debug('Rebuilding river textures: ' + JSON.stringify(rc));
+        this.landscapeTextureMap = new LandscapeTextureMap(rc);
+        if (this.landTypeBuffer) {
+            const map = this.landscapeTextureMap;
+            const h = this.mapSize.height;
+            const w = this.mapSize.width;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const t1 = this.groundTypeMap[this.mapSize.toIndex(x, y)];
+                    const t2 = this.groundTypeMap[this.mapSize.toIndex(x, y + 1)];
+                    const t3 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y + 1)];
+                    const t4 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y)];
+                    const a = map.getTextureA(t1, t2, t3, x, y);
+                    const b = map.getTextureB(t1, t3, t4, x, y);
+                    this.landTypeBuffer.update(x, y, a[0], a[1], b[0], b[1]);
+                }
+            }
+        }
+    }
+
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
+
         super.drawBase(gl, projection);
 
         const sp = this.shaderProgram;

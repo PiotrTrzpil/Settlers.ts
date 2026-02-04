@@ -29,6 +29,8 @@ export function isBuildable(groundTypeValue: number): boolean {
     // Mud: 144, 145 - not buildable
     if (groundTypeValue === 144 || groundTypeValue === 145) return false;
 
+    // River: 96-99 - not buildable
+    if (groundTypeValue >= 96 && groundTypeValue <= 99) return false;
     // Grass (16, 18, 24, 25), Desert (64, 65), paths (28, 29), transitions - buildable
     return true;
 }

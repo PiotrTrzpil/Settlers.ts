@@ -43,6 +43,12 @@ export interface DebugStatsState {
     mode: string;
     selectedEntityId: number | null;
     selectedCount: number;
+
+    // River texture debug
+    riverSwapRows: boolean;
+    riverReverseInner: boolean;
+    riverReverseOuter: boolean;
+    riverDirty: boolean;
 }
 
 class DebugStats {
@@ -81,6 +87,10 @@ class DebugStats {
             mode: '',
             selectedEntityId: null,
             selectedCount: 0,
+            riverSwapRows: false,
+            riverReverseInner: false,
+            riverReverseOuter: false,
+            riverDirty: false,
         });
 
         // Expose on window for Playwright tests

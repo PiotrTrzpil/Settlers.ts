@@ -32,16 +32,8 @@ export class Hexagon3Texture extends LandscapeTextureBase implements ILandscapeT
         const useX = use2 ? this.x2 : this.x1;
         const useY = use2 ? this.y2 : this.y1;
 
-        return [0, 0];
-
-        // todo: fix this
-        if (tp.t0 === this.t1) {
-            return [useX, useY];
-        } else if (tp.t1 === this.t1) {
-            return [useX, useY];
-        } else {
-            return [useX, useY];
-        }
+        // todo: add rotation-specific sub-tile offsets when the correct layout is known
+        return [useX, useY];
     }
 
     public getTextureB(tp: TexturePoint, x: number, y: number): [number, number] {
@@ -49,16 +41,8 @@ export class Hexagon3Texture extends LandscapeTextureBase implements ILandscapeT
         const useX = use2 ? this.x2 : this.x1;
         const useY = use2 ? this.y2 : this.y1;
 
-        return [0, 0];
-
-        // todo: fix this
-        if (tp.t0 === this.t1) {
-            return [useX, useY];
-        } else if (tp.t1 === this.t1) {
-            return [useX, useY];
-        } else {
-            return [useX, useY];
-        }
+        // todo: add rotation-specific sub-tile offsets when the correct layout is known
+        return [useX, useY];
     }
 
     public getPattern(): TexturePoint[] {

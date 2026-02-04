@@ -36,6 +36,11 @@ export enum LandscapeType {
     SnowToRock1 = 129,
     SnowToRock2 = 35,
 
+    River1 = 96,
+    River2 = 97,
+    River3 = 98,
+    River4 = 99,
+
     Mud = 144,
     MudToGras1 = 145,
     MudToGras2 = 23

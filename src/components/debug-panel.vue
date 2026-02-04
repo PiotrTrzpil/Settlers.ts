@@ -132,6 +132,21 @@
               {{ paused ? 'Resume' : 'Pause' }}
             </button>
           </div>
+          <div class="river-debug">
+            <span class="stat-label" style="margin-top:6px;display:block">River textures</span>
+            <label class="control-row">
+              <input type="checkbox" :checked="stats.riverSwapRows" @change="setRiver('riverSwapRows', $event)" />
+              <span>Swap rows</span>
+            </label>
+            <label class="control-row">
+              <input type="checkbox" :checked="stats.riverReverseInner" @change="setRiver('riverReverseInner', $event)" />
+              <span>Reverse inner</span>
+            </label>
+            <label class="control-row">
+              <input type="checkbox" :checked="stats.riverReverseOuter" @change="setRiver('riverReverseOuter', $event)" />
+              <span>Reverse outer</span>
+            </label>
+          </div>
         </div>
       </section>
     </div>
@@ -164,6 +179,18 @@ const sections = reactive({
 });
 
 const stats = debugStats.state;
+
+function setRiver(key: 'riverSwapRows' | 'riverReverseInner' | 'riverReverseOuter', e: Event) {
+    stats[key] = (e.target as HTMLInputElement).checked;
+    const lr = (window as any).__settlers_landscape__;
+    if (lr) {
+        lr.rebuildRiverTextures({
+            swapRows: stats.riverSwapRows,
+            reverseInner: stats.riverReverseInner,
+            reverseOuter: stats.riverReverseOuter,
+        });
+    }
+}
 
 const fpsClass = computed(() => {
     if (stats.fps >= 55) return 'fps-good';

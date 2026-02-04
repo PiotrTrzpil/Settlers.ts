@@ -67,6 +67,8 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
 
         // Expose viewPoint for e2e tests (Vue internals are stripped in prod)
         (window as any).__settlers_viewpoint__ = renderer.viewPoint;
+        // Expose landscape renderer for debug panel river controls
+        (window as any).__settlers_landscape__ = landscapeRenderer;
 
         const r = renderer;
         game.gameLoop.setRenderCallback(() => {

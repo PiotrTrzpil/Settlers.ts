@@ -157,14 +157,15 @@ void main() {
 
   vec2 text_scale = vec2(1.0, 1.0) / vec2(LANDSCAPE_TEXTURE_WIDTH_HEIGHT / 32, LANDSCAPE_TEXTURE_WIDTH_HEIGHT / 32);
 
+  // Reconstruct exact integer grid coordinates from normalized [0,1] values.
+  // RGBA8 normalizes bytes via v/255; round() recovers the original integer.
+  // X grid units are 16px while text_scale expects 32px units, so X is halved.
   vec2 real_text_pos;
   if (baseVertecesTypeAorB == 0) {
-    // for triangle A use
-    real_text_pos = type.xy * vec2(127, 255); // x is scaled by
+    real_text_pos = round(type.xy * 255.0) * vec2(0.5, 1.0);
   }
   else {
-    // for triangle B use
-    real_text_pos = type.zw * vec2(127, 255);
+    real_text_pos = round(type.zw * 255.0) * vec2(0.5, 1.0);
   }
   // Apply fractional viewPoint offset to vertex position for smooth sub-tile scrolling.
   // The parallelogram transform maps tile offset (fx, fy) to screen offset (fx - fy*0.5, fy*0.5).
