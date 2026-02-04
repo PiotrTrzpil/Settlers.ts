@@ -4,11 +4,22 @@ import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { EntityType, BuildingType } from '@/game/entity';
-import { canPlaceBuilding } from '@/game/systems/placement';
+import { canPlaceBuildingWithTerritory } from '@/game/systems/placement';
 
 import { Options, Vue } from 'vue-class-component';
 
 const DRAG_THRESHOLD = 5; // pixels before drag-box activates
+
+/** Formation offsets for group move: center, then ring 1, then ring 2 */
+const FORMATION_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+    [0, 0],
+    [1, 0], [0, 1], [-1, 0], [0, -1],
+    [1, 1], [-1, 1], [1, -1], [-1, -1],
+    [2, 0], [0, 2], [-2, 0], [0, -2],
+    [2, 1], [1, 2], [-1, 2], [-2, 1],
+    [-2, -1], [-1, -2], [1, -2], [2, -1],
+    [2, 2], [-2, 2], [2, -2], [-2, -2]
+];
 
 @Options({
     name: 'RendererViewer',
@@ -187,17 +198,24 @@ export default class RendererViewer extends Vue {
 
         if (!tile) return;
 
-        // Right-click: move all selected units to target tile
+        // Collect all selected units
+        const units: number[] = [];
         for (const entityId of this.game.state.selectedEntityIds) {
             const entity = this.game.state.getEntity(entityId);
             if (entity && entity.type === EntityType.Unit) {
-                this.game.execute({
-                    type: 'move_unit',
-                    entityId: entity.id,
-                    targetX: tile.x,
-                    targetY: tile.y
-                });
+                units.push(entity.id);
             }
+        }
+
+        // Spread units around the target in a formation
+        for (let i = 0; i < units.length; i++) {
+            const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
+            this.game.execute({
+                type: 'move_unit',
+                entityId: units[i],
+                targetX: tile.x + offset[0],
+                targetY: tile.y + offset[1]
+            });
         }
     }
 
@@ -233,13 +251,19 @@ export default class RendererViewer extends Vue {
         }
 
         this.entityRenderer.previewTile = tile;
-        this.entityRenderer.previewValid = canPlaceBuilding(
+        const hasBuildings = this.game.state.entities.some(
+            ent => ent.type === EntityType.Building && ent.player === this.game.currentPlayer
+        );
+        this.entityRenderer.previewValid = canPlaceBuildingWithTerritory(
             this.game.groundType,
             this.game.groundHeight,
             this.game.mapSize,
             this.game.state.tileOccupancy,
+            this.game.territory,
             tile.x,
-            tile.y
+            tile.y,
+            this.game.currentPlayer,
+            hasBuildings
         );
     }
 

@@ -196,28 +196,30 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         };
     }
 
-    /** Draw dots along the remaining path of the selected unit */
+    /** Draw dots along the remaining path of all selected units */
     private drawSelectedUnitPath(gl: WebGLRenderingContext, viewPoint: IViewPoint): void {
-        if (this.selectedEntityId === null) return;
-
-        const unitState = this.unitStates.get(this.selectedEntityId);
-        if (!unitState || unitState.pathIndex >= unitState.path.length) return;
+        if (this.selectedEntityIds.size === 0) return;
 
         gl.vertexAttrib4f(this.aColor, PATH_COLOR[0], PATH_COLOR[1], PATH_COLOR[2], PATH_COLOR[3]);
 
-        // Draw a small dot at each remaining waypoint (max 30 to avoid clutter)
-        const maxDots = Math.min(unitState.path.length, unitState.pathIndex + 30);
-        for (let i = unitState.pathIndex; i < maxDots; i++) {
-            const wp = unitState.path[i];
-            const worldPos = TilePicker.tileToWorld(
-                wp.x, wp.y,
-                this.groundHeight, this.mapSize,
-                viewPoint.x, viewPoint.y
-            );
+        for (const entityId of this.selectedEntityIds) {
+            const unitState = this.unitStates.get(entityId);
+            if (!unitState || unitState.pathIndex >= unitState.path.length) continue;
 
-            this.fillQuadVertices(worldPos.worldX, worldPos.worldY, PATH_DOT_SCALE);
-            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            // Draw a small dot at each remaining waypoint (max 30 per unit)
+            const maxDots = Math.min(unitState.path.length, unitState.pathIndex + 30);
+            for (let i = unitState.pathIndex; i < maxDots; i++) {
+                const wp = unitState.path[i];
+                const worldPos = TilePicker.tileToWorld(
+                    wp.x, wp.y,
+                    this.groundHeight, this.mapSize,
+                    viewPoint.x, viewPoint.y
+                );
+
+                this.fillQuadVertices(worldPos.worldX, worldPos.worldY, PATH_DOT_SCALE);
+                gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+            }
         }
     }
 

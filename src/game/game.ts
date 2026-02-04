@@ -6,6 +6,7 @@ import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
 import { Command, executeCommand } from './commands/command';
 import { TerritoryMap } from './systems/territory';
+import { canPlaceBuildingWithTerritory } from './systems/placement';
 
 /** contains the game state */
 export class Game {
@@ -41,6 +42,20 @@ export class Game {
 
     /** Execute a command against the game state, then update territory if needed */
     public execute(cmd: Command): boolean {
+        // Enforce territory rules for building placement
+        if (cmd.type === 'place_building') {
+            const hasBuildings = this.state.entities.some(
+                e => e.type === EntityType.Building && e.player === cmd.player
+            );
+            if (!canPlaceBuildingWithTerritory(
+                this.groundType, this.groundHeight, this.mapSize,
+                this.state.tileOccupancy, this.territory,
+                cmd.x, cmd.y, cmd.player, hasBuildings
+            )) {
+                return false;
+            }
+        }
+
         const result = executeCommand(this.state, cmd, this.groundType, this.groundHeight, this.mapSize);
 
         // Rebuild territory when buildings change
