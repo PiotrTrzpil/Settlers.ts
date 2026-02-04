@@ -1,8 +1,7 @@
-import { Node, NodeStatus, Sleep } from './behavior-tree';
+import { Node, NodeStatus } from './behavior-tree';
 
 /**
  * Execution context that wraps an entity and a behavior tree root node.
- * Tracks elapsed time so Sleep nodes can function correctly.
  */
 export class Tick<T> {
     private readonly entity: T;
@@ -16,7 +15,6 @@ export class Tick<T> {
     /** Run one tick of the behavior tree.
      *  @param deltaMs elapsed time since last tick in milliseconds */
     tick(deltaMs: number): NodeStatus {
-        Sleep.elapsedMs = deltaMs;
-        return this.rootNode.tick(this.entity);
+        return this.rootNode.tick(this.entity, deltaMs);
     }
 }

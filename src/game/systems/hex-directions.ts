@@ -114,17 +114,22 @@ export function getApproxDirection(
  * Positive offset = clockwise, negative = counter-clockwise.
  */
 export function getNeighbor(direction: EDirection, offset: number): EDirection {
-    return ((direction + offset) % NUMBER_OF_DIRECTIONS + NUMBER_OF_DIRECTIONS) % NUMBER_OF_DIRECTIONS as EDirection;
+    return (((direction + offset) % NUMBER_OF_DIRECTIONS + NUMBER_OF_DIRECTIONS) % NUMBER_OF_DIRECTIONS) as EDirection;
 }
 
 /**
- * Proper hex grid Euclidean distance.
- * Accounts for the hex grid's skewed coordinate system.
+ * Hex grid Manhattan distance using cube coordinates.
+ * Always admissible as an A* heuristic (never overestimates when
+ * minimum step cost is 1).
+ *
+ * Cube coords: q = dx, r = dy, s = -(dx + dy).
+ * Distance = max(|q|, |r|, |s|).
  */
 export function hexDistance(x1: number, y1: number, x2: number, y2: number): number {
-    const dx = (x2 - x1) - (y2 - y1) * 0.5;
-    const dy = (y2 - y1) * Y_SCALE;
-    return Math.sqrt(dx * dx + dy * dy);
+    const q = x2 - x1;
+    const r = y2 - y1;
+    const s = -(q + r);
+    return Math.max(Math.abs(q), Math.abs(r), Math.abs(s));
 }
 
 /**

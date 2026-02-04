@@ -19,10 +19,22 @@ export class GameLoop {
     private animRequest = 0;
 
     private gameState: GameState;
+    private groundType: Uint8Array | undefined;
+    private groundHeight: Uint8Array | undefined;
+    private mapWidth: number | undefined;
+    private mapHeight: number | undefined;
     private onRender: (() => void) | null = null;
 
     constructor(gameState: GameState) {
         this.gameState = gameState;
+    }
+
+    /** Provide terrain data so movement obstacle resolution can function */
+    public setTerrainData(groundType: Uint8Array, groundHeight: Uint8Array, mapWidth: number, mapHeight: number): void {
+        this.groundType = groundType;
+        this.groundHeight = groundHeight;
+        this.mapWidth = mapWidth;
+        this.mapHeight = mapHeight;
     }
 
     /** Set the render callback, called every animation frame */
@@ -75,6 +87,6 @@ export class GameLoop {
     }
 
     private tick(dt: number): void {
-        updateMovement(this.gameState, dt);
+        updateMovement(this.gameState, dt, this.groundType, this.groundHeight, this.mapWidth, this.mapHeight);
     }
 }

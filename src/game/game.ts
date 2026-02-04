@@ -37,6 +37,7 @@ export class Game {
 
         this.state = new GameState();
         this.gameLoop = new GameLoop(this.state);
+        this.gameLoop.setTerrainData(this.groundType, this.groundHeight, this.mapSize.width, this.mapSize.height);
         this.territory = new TerritoryMap(this.mapSize);
     }
 

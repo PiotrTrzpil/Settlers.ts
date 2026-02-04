@@ -1,11 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
     NodeStatus,
     Sequence,
     Selector,
     Condition,
     Action,
-    Action2,
+    StatusAction,
     Guard,
     Repeat,
     RepeatCount,
@@ -16,7 +16,7 @@ import {
     selector,
     condition,
     action,
-    action2,
+    statusAction,
     guard,
     repeat,
     sleep,
@@ -46,7 +46,7 @@ describe('Sequence', () => {
             action(e => { e.log.push('c'); }),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.log).toEqual(['a', 'b', 'c']);
     });
 
@@ -58,7 +58,7 @@ describe('Sequence', () => {
             action(e => { e.log.push('c'); }),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.FAILURE);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.FAILURE);
         expect(entity.log).toEqual(['a']); // 'c' never runs
     });
 
@@ -66,17 +66,17 @@ describe('Sequence', () => {
         const entity = makeEntity();
         const tree = sequence<TestEntity>(
             action(e => { e.log.push('a'); }),
-            action2(() => NodeStatus.RUNNING),
+            statusAction(() => NodeStatus.RUNNING),
             action(e => { e.log.push('c'); }),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);
         expect(entity.log).toEqual(['a']); // 'c' never runs
     });
 
     it('succeeds with zero children', () => {
         const tree = new Sequence<TestEntity>([]);
-        expect(tree.tick(makeEntity())).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.SUCCESS);
     });
 });
 
@@ -91,7 +91,7 @@ describe('Selector', () => {
             action(e => { e.log.push('c'); }),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.log).toEqual(['b']); // 'c' never runs
     });
 
@@ -103,24 +103,24 @@ describe('Selector', () => {
             condition(() => false),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.FAILURE);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.FAILURE);
     });
 
     it('returns RUNNING when a child returns RUNNING', () => {
         const entity = makeEntity();
         const tree = selector<TestEntity>(
             condition(() => false),
-            action2(() => NodeStatus.RUNNING),
+            statusAction(() => NodeStatus.RUNNING),
             action(e => { e.log.push('c'); }),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);
         expect(entity.log).toEqual([]); // 'c' never runs
     });
 
     it('fails with zero children', () => {
         const tree = new Selector<TestEntity>([]);
-        expect(tree.tick(makeEntity())).toBe(NodeStatus.FAILURE);
+        expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.FAILURE);
     });
 });
 
@@ -129,12 +129,12 @@ describe('Selector', () => {
 describe('Condition', () => {
     it('returns SUCCESS when predicate is true', () => {
         const tree = condition<TestEntity>(e => e.flag);
-        expect(tree.tick(makeEntity({ flag: true }))).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(makeEntity({ flag: true }), 0)).toBe(NodeStatus.SUCCESS);
     });
 
     it('returns FAILURE when predicate is false', () => {
         const tree = condition<TestEntity>(e => e.flag);
-        expect(tree.tick(makeEntity({ flag: false }))).toBe(NodeStatus.FAILURE);
+        expect(tree.tick(makeEntity({ flag: false }), 0)).toBe(NodeStatus.FAILURE);
     });
 });
 
@@ -145,35 +145,35 @@ describe('Action', () => {
         const entity = makeEntity();
         const tree = action<TestEntity>(e => { e.value = 42; });
 
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.value).toBe(42);
     });
 });
 
-// ─── Action2 ──────────────────────────────────────────────────────────────────
+// ─── StatusAction ──────────────────────────────────────────────────────────────
 
-describe('Action2', () => {
+describe('StatusAction', () => {
     it('propagates SUCCESS status', () => {
-        const tree = action2<TestEntity>(() => NodeStatus.SUCCESS);
-        expect(tree.tick(makeEntity())).toBe(NodeStatus.SUCCESS);
+        const tree = statusAction<TestEntity>(() => NodeStatus.SUCCESS);
+        expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.SUCCESS);
     });
 
     it('propagates FAILURE status', () => {
-        const tree = action2<TestEntity>(() => NodeStatus.FAILURE);
-        expect(tree.tick(makeEntity())).toBe(NodeStatus.FAILURE);
+        const tree = statusAction<TestEntity>(() => NodeStatus.FAILURE);
+        expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.FAILURE);
     });
 
     it('propagates RUNNING status correctly', () => {
         let callCount = 0;
-        const tree = action2<TestEntity>(() => {
+        const tree = statusAction<TestEntity>(() => {
             callCount++;
             return callCount < 3 ? NodeStatus.RUNNING : NodeStatus.SUCCESS;
         });
 
         const entity = makeEntity();
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING);
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING);
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
     });
 });
 
@@ -187,7 +187,7 @@ describe('Guard', () => {
             action(e => { e.value = 99; }),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.value).toBe(99);
     });
 
@@ -198,17 +198,17 @@ describe('Guard', () => {
             action(e => { e.value = 99; }),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.FAILURE);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.FAILURE);
         expect(entity.value).toBe(0); // child never ran
     });
 
     it('propagates child RUNNING status', () => {
         const tree = guard<TestEntity>(
             () => true,
-            action2(() => NodeStatus.RUNNING),
+            statusAction(() => NodeStatus.RUNNING),
         );
 
-        expect(tree.tick(makeEntity())).toBe(NodeStatus.RUNNING);
+        expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.RUNNING);
     });
 });
 
@@ -223,11 +223,11 @@ describe('Repeat', () => {
         );
 
         // Each tick: check condition, run child, return RUNNING
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING); // value: 3→2
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING); // value: 2→1
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING); // value: 1→0
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING); // value: 3→2
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING); // value: 2→1
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING); // value: 1→0
         // Condition now false on next check
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS); // value: 0
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS); // value: 0
         expect(entity.log).toHaveLength(3);
     });
 
@@ -238,7 +238,7 @@ describe('Repeat', () => {
             action(e => { e.log.push('tick'); }),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.log).toHaveLength(0);
     });
 
@@ -248,7 +248,7 @@ describe('Repeat', () => {
             condition(() => false),
         );
 
-        expect(tree.tick(makeEntity())).toBe(NodeStatus.FAILURE);
+        expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.FAILURE);
     });
 });
 
@@ -259,9 +259,9 @@ describe('RepeatCount', () => {
         const entity = makeEntity();
         const tree = new RepeatCount<TestEntity>(3, action(e => { e.value++; }));
 
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING);  // 1st
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING);  // 2nd
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);  // 3rd
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);  // 1st
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);  // 2nd
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);  // 3rd
         expect(entity.value).toBe(3);
     });
 
@@ -270,12 +270,12 @@ describe('RepeatCount', () => {
         const tree = new RepeatCount<TestEntity>(2, action(e => { e.value++; }));
 
         // First cycle
-        tree.tick(entity); // RUNNING
-        tree.tick(entity); // SUCCESS
+        tree.tick(entity, 0); // RUNNING
+        tree.tick(entity, 0); // SUCCESS
 
         // Second cycle (restarted)
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING);
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.value).toBe(4);
     });
 
@@ -284,22 +284,22 @@ describe('RepeatCount', () => {
         let shouldFail = false;
         const tree = new RepeatCount<TestEntity>(
             3,
-            action2(() => {
+            statusAction(() => {
                 if (shouldFail) return NodeStatus.FAILURE;
                 entity.value++;
                 return NodeStatus.SUCCESS;
             }),
         );
 
-        tree.tick(entity); // 1st: RUNNING
+        tree.tick(entity, 0); // 1st: RUNNING
         shouldFail = true;
-        expect(tree.tick(entity)).toBe(NodeStatus.FAILURE);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.FAILURE);
 
         // Count reset — can do full cycle again
         shouldFail = false;
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING);
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING);
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
     });
 });
 
@@ -355,7 +355,7 @@ describe('ResetAfter', () => {
             action(e => { e.log.push('work'); }),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.log).toEqual(['work', 'reset']);
     });
 
@@ -366,7 +366,7 @@ describe('ResetAfter', () => {
             condition(() => false),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.FAILURE);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.FAILURE);
         expect(entity.log).toEqual(['reset']);
     });
 
@@ -374,10 +374,10 @@ describe('ResetAfter', () => {
         const entity = makeEntity();
         const tree = resetAfter<TestEntity>(
             e => { e.log.push('reset'); },
-            action2(() => NodeStatus.RUNNING),
+            statusAction(() => NodeStatus.RUNNING),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.RUNNING);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);
         expect(entity.log).toEqual([]);
     });
 });
@@ -392,7 +392,7 @@ describe('Parallel', () => {
             action(e => { e.log.push('b'); }),
         ], true);
 
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.log).toEqual(['a', 'b']);
     });
 
@@ -403,16 +403,16 @@ describe('Parallel', () => {
             action(() => {}),
         ], true);
 
-        expect(tree.tick(makeEntity())).toBe(NodeStatus.FAILURE);
+        expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.FAILURE);
     });
 
     it('returns RUNNING if any child is RUNNING and none failed (requireAll)', () => {
         const tree = new Parallel<TestEntity>([
             action(() => {}),
-            action2(() => NodeStatus.RUNNING),
+            statusAction(() => NodeStatus.RUNNING),
         ], true);
 
-        expect(tree.tick(makeEntity())).toBe(NodeStatus.RUNNING);
+        expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.RUNNING);
     });
 
     it('succeeds on first success when requireOne', () => {
@@ -421,7 +421,7 @@ describe('Parallel', () => {
             action(() => {}),
         ], false);
 
-        expect(tree.tick(makeEntity())).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.SUCCESS);
     });
 
     it('fails when all fail (requireOne)', () => {
@@ -430,7 +430,7 @@ describe('Parallel', () => {
             condition(() => false),
         ], false);
 
-        expect(tree.tick(makeEntity())).toBe(NodeStatus.FAILURE);
+        expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.FAILURE);
     });
 });
 
@@ -452,7 +452,7 @@ describe('Nested trees', () => {
             ),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.log).toEqual(['branch2']);
     });
 
@@ -467,7 +467,7 @@ describe('Nested trees', () => {
             action(e => { e.log.push('done'); }),
         );
 
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.log).toEqual(['setup', 'fallback', 'done']);
     });
 
@@ -488,12 +488,12 @@ describe('Nested trees', () => {
         );
 
         // First tick: has job
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.log).toEqual(['pickup', 'deliver', 'jobless']);
 
         // Second tick: job completed, goes idle
         entity.log = [];
-        expect(tree.tick(entity)).toBe(NodeStatus.SUCCESS);
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.log).toEqual(['idle']);
     });
 });

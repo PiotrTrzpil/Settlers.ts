@@ -50,12 +50,12 @@
           </button>
           <button
             class="sidebar-btn"
-            data-testid="btn-woodcutter"
+            data-testid="btn-lumberjack"
             :class="{ active: game.mode === 'place_building' && game.placeBuildingType === 1 }"
             @click="setPlaceMode(1)"
           >
             <span class="btn-icon">&#x1FA93;</span>
-            <span class="btn-label">Woodcutter</span>
+            <span class="btn-label">Lumberjack</span>
           </button>
           <button
             class="sidebar-btn"

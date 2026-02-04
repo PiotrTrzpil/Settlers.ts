@@ -207,11 +207,11 @@ function findDetour(
         // Must not be occupied
         if (state.tileOccupancy.has(tileKey(neighbor.x, neighbor.y))) continue;
 
-        // Check that this detour tile is adjacent to the rejoin point
+        // Check that this detour tile is a hex neighbor of the rejoin point
         // (so we can step: current -> detour -> rejoin)
-        const dxRejoin = Math.abs(neighbor.x - rejoinWp.x);
-        const dyRejoin = Math.abs(neighbor.y - rejoinWp.y);
-        const isAdjacentToRejoin = (dxRejoin + dyRejoin <= 2) && (dxRejoin <= 1) && (dyRejoin <= 1);
+        const rdx = neighbor.x - rejoinWp.x;
+        const rdy = neighbor.y - rejoinWp.y;
+        const isAdjacentToRejoin = GRID_DELTAS.some(([gx, gy]) => gx === rdx && gy === rdy);
 
         if (isAdjacentToRejoin) {
             return neighbor;

@@ -269,11 +269,10 @@ describe('Hex Distance', () => {
         expect(dist).toBeCloseTo(1, 4);
     });
 
-    it('should return sqrt(3) for adjacent NORTH_EAST tile', () => {
-        // NE delta is (1, -1), so from (5,5) to (6,4)
-        // In the hex visual space: dx=1.5, dy=-0.866, dist=sqrt(3)
+    it('should return 1 for adjacent NORTH_EAST tile', () => {
+        // NE delta is (1, -1), cube distance = max(|1|, |-1|, |0|) = 1
         const dist = hexDistance(5, 5, 6, 4);
-        expect(dist).toBeCloseTo(Math.sqrt(3), 3);
+        expect(dist).toBe(1);
     });
 
     it('should return 1 for adjacent SOUTH_EAST tile', () => {
@@ -288,10 +287,10 @@ describe('Hex Distance', () => {
         expect(dist).toBeCloseTo(1, 3);
     });
 
-    it('should return sqrt(3) for adjacent SOUTH_WEST tile', () => {
-        // SW delta is (-1, 1), so from (5,5) to (4,6)
+    it('should return 1 for adjacent SOUTH_WEST tile', () => {
+        // SW delta is (-1, 1), cube distance = max(|-1|, |1|, |0|) = 1
         const dist = hexDistance(5, 5, 4, 6);
-        expect(dist).toBeCloseTo(Math.sqrt(3), 3);
+        expect(dist).toBe(1);
     });
 
     it('should be symmetric', () => {
@@ -399,19 +398,14 @@ describe('Path obstacle repair', () => {
     });
 
     describe('Push system', () => {
-        it('lower ID should yield to higher ID push', () => {
+        it('lower ID does not yield when pushed by higher ID', () => {
             // Unit A (lower ID) at (5,5), Unit B (higher ID) at (4,5)
             const unitA = state.addEntity(EntityType.Unit, 0, 5, 5, 1);
             const unitB = state.addEntity(EntityType.Unit, 0, 4, 5, 1);
 
-            // B pushes A — A has lower ID so it yields
+            // B (higher ID) pushes A (lower ID) — lower ID does not yield
+            // pushUnit: blockedEntityId(1) <= pushingEntityId(2) => false
             const result = pushUnit(state, unitB.id, unitA.id, groundType, groundHeight, width, height);
-
-            // unitA.id < unitB.id — should NOT yield (lower ID doesn't yield)
-            // Wait, the rule is: "Only yield if our ID is lower" means lower ID yields
-            // pushUnit: blockedEntityId <= pushingEntityId => return false
-            // unitA.id=1, unitB.id=2: blockedEntityId=1 <= pushingEntityId=2 => false
-            // So lower ID does NOT get pushed by higher ID
             expect(result).toBe(false);
         });
 

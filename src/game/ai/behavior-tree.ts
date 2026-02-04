@@ -9,7 +9,7 @@ export enum NodeStatus {
 // ─── Abstract Base ────────────────────────────────────────────────────────────
 
 export abstract class Node<T> {
-    abstract tick(entity: T): NodeStatus;
+    abstract tick(entity: T, deltaMs: number): NodeStatus;
 }
 
 // ─── Composite Nodes ──────────────────────────────────────────────────────────
@@ -21,9 +21,9 @@ export class Sequence<T> extends Node<T> {
         super();
     }
 
-    tick(entity: T): NodeStatus {
+    tick(entity: T, deltaMs: number): NodeStatus {
         for (const child of this.children) {
-            const status = child.tick(entity);
+            const status = child.tick(entity, deltaMs);
             if (status !== NodeStatus.SUCCESS) return status;
         }
         return NodeStatus.SUCCESS;
@@ -37,9 +37,9 @@ export class Selector<T> extends Node<T> {
         super();
     }
 
-    tick(entity: T): NodeStatus {
+    tick(entity: T, deltaMs: number): NodeStatus {
         for (const child of this.children) {
-            const status = child.tick(entity);
+            const status = child.tick(entity, deltaMs);
             if (status !== NodeStatus.FAILURE) return status;
         }
         return NodeStatus.FAILURE;
@@ -59,13 +59,13 @@ export class Parallel<T> extends Node<T> {
         super();
     }
 
-    tick(entity: T): NodeStatus {
+    tick(entity: T, deltaMs: number): NodeStatus {
         let successCount = 0;
         let failureCount = 0;
         let hasRunning = false;
 
         for (const child of this.children) {
-            const status = child.tick(entity);
+            const status = child.tick(entity, deltaMs);
             switch (status) {
                 case NodeStatus.SUCCESS:
                     successCount++;
@@ -99,7 +99,7 @@ export class Condition<T> extends Node<T> {
         super();
     }
 
-    tick(entity: T): NodeStatus {
+    tick(entity: T, _deltaMs: number): NodeStatus {
         return this.predicate(entity) ? NodeStatus.SUCCESS : NodeStatus.FAILURE;
     }
 }
@@ -110,19 +110,19 @@ export class Action<T> extends Node<T> {
         super();
     }
 
-    tick(entity: T): NodeStatus {
+    tick(entity: T, _deltaMs: number): NodeStatus {
         this.execute(entity);
         return NodeStatus.SUCCESS;
     }
 }
 
 /** Executes a callback that returns an arbitrary NodeStatus. */
-export class Action2<T> extends Node<T> {
+export class StatusAction<T> extends Node<T> {
     constructor(public readonly execute: (entity: T) => NodeStatus) {
         super();
     }
 
-    tick(entity: T): NodeStatus {
+    tick(entity: T, _deltaMs: number): NodeStatus {
         return this.execute(entity);
     }
 }
@@ -139,9 +139,9 @@ export class Guard<T> extends Node<T> {
         super();
     }
 
-    tick(entity: T): NodeStatus {
+    tick(entity: T, deltaMs: number): NodeStatus {
         if (!this.conditionFn(entity)) return NodeStatus.FAILURE;
-        return this.child.tick(entity);
+        return this.child.tick(entity, deltaMs);
     }
 }
 
@@ -156,9 +156,9 @@ export class Repeat<T> extends Node<T> {
         super();
     }
 
-    tick(entity: T): NodeStatus {
+    tick(entity: T, deltaMs: number): NodeStatus {
         if (!this.conditionFn(entity)) return NodeStatus.SUCCESS;
-        const status = this.child.tick(entity);
+        const status = this.child.tick(entity, deltaMs);
         if (status === NodeStatus.FAILURE) return NodeStatus.FAILURE;
         return NodeStatus.RUNNING;
     }
@@ -177,12 +177,12 @@ export class RepeatCount<T> extends Node<T> {
         super();
     }
 
-    tick(entity: T): NodeStatus {
+    tick(entity: T, deltaMs: number): NodeStatus {
         if (this.count >= this.times) {
             this.count = 0;
             return NodeStatus.SUCCESS;
         }
-        const status = this.child.tick(entity);
+        const status = this.child.tick(entity, deltaMs);
         if (status === NodeStatus.FAILURE) {
             this.count = 0;
             return NodeStatus.FAILURE;
@@ -200,26 +200,20 @@ export class RepeatCount<T> extends Node<T> {
 
 /** Returns RUNNING for a duration (in milliseconds), then SUCCESS.
  *  Duration is obtained from a function so it can vary per entity.
- *  Requires elapsed time to be set externally via Sleep.elapsedMs before
- *  each tick cycle (see Tick class). */
+ *  deltaMs is passed through the tick() call chain from the Tick wrapper. */
 export class Sleep<T> extends Node<T> {
-    /** Accumulated time in current sleep. Shared across all Sleep instances
-     *  via the static elapsed setter on the Tick class. */
     private remaining = -1;
-
-    /** Set by the Tick class before each tick cycle. */
-    static elapsedMs = 0;
 
     constructor(public readonly durationFn: (entity: T) => number) {
         super();
     }
 
-    tick(entity: T): NodeStatus {
+    tick(entity: T, deltaMs: number): NodeStatus {
         if (this.remaining < 0) {
             this.remaining = this.durationFn(entity);
         }
 
-        this.remaining -= Sleep.elapsedMs;
+        this.remaining -= deltaMs;
 
         if (this.remaining <= 0) {
             this.remaining = -1;
@@ -239,8 +233,8 @@ export class ResetAfter<T> extends Node<T> {
         super();
     }
 
-    tick(entity: T): NodeStatus {
-        const status = this.child.tick(entity);
+    tick(entity: T, deltaMs: number): NodeStatus {
+        const status = this.child.tick(entity, deltaMs);
         if (status !== NodeStatus.RUNNING) {
             this.resetFn(entity);
         }
@@ -258,6 +252,10 @@ export function selector<T>(...children: Node<T>[]): Selector<T> {
     return new Selector(children);
 }
 
+export function parallel<T>(children: Node<T>[], requireAll = true): Parallel<T> {
+    return new Parallel(children, requireAll);
+}
+
 export function condition<T>(predicate: (entity: T) => boolean): Condition<T> {
     return new Condition(predicate);
 }
@@ -266,8 +264,8 @@ export function action<T>(callback: (entity: T) => void): Action<T> {
     return new Action(callback);
 }
 
-export function action2<T>(callback: (entity: T) => NodeStatus): Action2<T> {
-    return new Action2(callback);
+export function statusAction<T>(callback: (entity: T) => NodeStatus): StatusAction<T> {
+    return new StatusAction(callback);
 }
 
 export function guard<T>(
@@ -282,6 +280,10 @@ export function repeat<T>(
     child: Node<T>,
 ): Repeat<T> {
     return new Repeat(conditionFn, child);
+}
+
+export function repeatCount<T>(times: number, child: Node<T>): RepeatCount<T> {
+    return new RepeatCount(times, child);
 }
 
 export function sleep<T>(durationFn: (entity: T) => number): Sleep<T> {
