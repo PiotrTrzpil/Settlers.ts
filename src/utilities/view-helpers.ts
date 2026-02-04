@@ -8,7 +8,7 @@ import { IGfxImage } from '@/resources/gfx/igfx-image';
 import { FileManager } from '@/utilities/file-manager';
 
 /** Pad a display string with non-breaking spaces to a fixed width */
-export function pad(value: string, size: number): string {
+export function pad(value: string | number, size: number): string {
     const str = ('' + value + '').split(' ').join('\u00a0');
     const padSize = Math.max(0, size - str.length);
     return str + ('\u00a0'.repeat(padSize));

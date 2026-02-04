@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { GameState } from '@/game/game-state';
 import { EntityType } from '@/game/entity';
 import { executeCommand } from '@/game/commands/command';
@@ -28,12 +28,12 @@ describe('Command System', () => {
                 player: 0
             }, groundType, groundHeight, mapSize);
 
-            expect(result).to.equal(true);
+            expect(result).toBe(true);
             // Guardhouse creates building + auto-spawned soldier
             const building = state.entities.find(e => e.type === EntityType.Building);
-            expect(building).to.not.equal(undefined);
-            expect(building?.x).to.equal(10);
-            expect(building?.y).to.equal(10);
+            expect(building).not.toBeUndefined();
+            expect(building?.x).toBe(10);
+            expect(building?.y).toBe(10);
         });
 
         it('should reject building on water', () => {
@@ -46,8 +46,8 @@ describe('Command System', () => {
                 player: 0
             }, groundType, groundHeight, mapSize);
 
-            expect(result).to.equal(false);
-            expect(state.entities).to.have.length(0);
+            expect(result).toBe(false);
+            expect(state.entities).toHaveLength(0);
         });
 
         it('should auto-spawn a worker unit adjacent to the building', () => {
@@ -60,13 +60,13 @@ describe('Command System', () => {
             }, groundType, groundHeight, mapSize);
 
             // Should have building + auto-spawned soldier
-            expect(state.entities).to.have.length(2);
+            expect(state.entities).toHaveLength(2);
             const unit = state.entities.find(e => e.type === EntityType.Unit);
-            expect(unit).to.not.equal(undefined);
+            expect(unit).not.toBeUndefined();
             if (!unit) { return }
             // Worker should be adjacent to building
             const dist = Math.abs(unit.x - 20) + Math.abs(unit.y - 20);
-            expect(dist).to.be.lessThanOrEqual(2); // EXTENDED_OFFSETS includes diagonals
+            expect(dist).toBeLessThanOrEqual(2); // EXTENDED_OFFSETS includes diagonals
         });
 
         it('should not auto-spawn for Warehouse', () => {
@@ -78,8 +78,8 @@ describe('Command System', () => {
                 player: 0
             }, groundType, groundHeight, mapSize);
 
-            expect(state.entities).to.have.length(1);
-            expect(state.entities[0].type).to.equal(EntityType.Building);
+            expect(state.entities).toHaveLength(1);
+            expect(state.entities[0].type).toBe(EntityType.Building);
         });
     });
 
@@ -93,9 +93,9 @@ describe('Command System', () => {
                 player: 0
             }, groundType, groundHeight, mapSize);
 
-            expect(result).to.equal(true);
-            expect(state.entities).to.have.length(1);
-            expect(state.entities[0].type).to.equal(EntityType.Unit);
+            expect(result).toBe(true);
+            expect(state.entities).toHaveLength(1);
+            expect(state.entities[0].type).toBe(EntityType.Unit);
         });
 
         it('should spawn adjacent when tile is occupied', () => {
@@ -108,7 +108,7 @@ describe('Command System', () => {
                 player: 0
             }, groundType, groundHeight, mapSize);
 
-            expect(state.entities).to.have.length(1);
+            expect(state.entities).toHaveLength(1);
 
             // Spawn unit at same location
             const result = executeCommand(state, {
@@ -119,15 +119,15 @@ describe('Command System', () => {
                 player: 0
             }, groundType, groundHeight, mapSize);
 
-            expect(result).to.equal(true);
-            expect(state.entities).to.have.length(2);
+            expect(result).toBe(true);
+            expect(state.entities).toHaveLength(2);
 
             const unit = state.entities.find(e => e.type === EntityType.Unit);
-            expect(unit).to.not.equal(undefined);
+            expect(unit).toBeDefined();
             if (!unit) { return }
             // Should be adjacent, not at the same spot
             const dist = Math.abs(unit.x - 10) + Math.abs(unit.y - 10);
-            expect(dist).to.equal(1);
+            expect(dist).toBe(1);
         });
     });
 
@@ -150,12 +150,12 @@ describe('Command System', () => {
                 targetY: 5
             }, groundType, groundHeight, mapSize);
 
-            expect(result).to.equal(true);
+            expect(result).toBe(true);
             const unitState = state.unitStates.get(unitId);
-            expect(unitState).to.not.equal(undefined);
+            expect(unitState).toBeDefined();
             if (!unitState) { return }
-            expect(unitState.path.length).to.be.greaterThan(0);
-            expect(unitState.path[unitState.path.length - 1]).to.deep.equal({ x: 10, y: 5 });
+            expect(unitState.path.length).toBeGreaterThan(0);
+            expect(unitState.path[unitState.path.length - 1]).toEqual({ x: 10, y: 5 });
         });
 
         it('should fail for non-existent unit', () => {
@@ -166,7 +166,7 @@ describe('Command System', () => {
                 targetY: 5
             }, groundType, groundHeight, mapSize);
 
-            expect(result).to.equal(false);
+            expect(result).toBe(false);
         });
 
         it('should fail when no path exists', () => {
@@ -190,7 +190,7 @@ describe('Command System', () => {
                 targetY: 5
             }, groundType, groundHeight, mapSize);
 
-            expect(result).to.equal(false);
+            expect(result).toBe(false);
         });
     });
 
@@ -204,7 +204,7 @@ describe('Command System', () => {
                 entityId: unitId
             }, groundType, groundHeight, mapSize);
 
-            expect(state.selectedEntityId).to.equal(unitId);
+            expect(state.selectedEntityId).toBe(unitId);
         });
 
         it('should allow deselection with null', () => {
@@ -216,7 +216,7 @@ describe('Command System', () => {
                 entityId: null
             }, groundType, groundHeight, mapSize);
 
-            expect(state.selectedEntityId).to.equal(null);
+            expect(state.selectedEntityId).toBe(null);
         });
     });
 
@@ -234,8 +234,8 @@ describe('Command System', () => {
                 y2: 8
             }, groundType, groundHeight, mapSize);
 
-            expect(state.selectedEntityIds.size).to.equal(2);
-            expect(state.selectedEntityId).to.not.equal(null);
+            expect(state.selectedEntityIds.size).toBe(2);
+            expect(state.selectedEntityId).not.toBe(null);
         });
 
         it('should prefer units over buildings in area', () => {
@@ -250,10 +250,10 @@ describe('Command System', () => {
                 y2: 11
             }, groundType, groundHeight, mapSize);
 
-            expect(state.selectedEntityIds.size).to.equal(1);
+            expect(state.selectedEntityIds.size).toBe(1);
             const selectedId = Array.from(state.selectedEntityIds)[0];
             const selected = state.getEntity(selectedId);
-            expect(selected?.type).to.equal(EntityType.Unit);
+            expect(selected?.type).toBe(EntityType.Unit);
         });
 
         it('should clear selection when area contains no entities', () => {
@@ -268,8 +268,8 @@ describe('Command System', () => {
                 y2: 30
             }, groundType, groundHeight, mapSize);
 
-            expect(state.selectedEntityIds.size).to.equal(0);
-            expect(state.selectedEntityId).to.equal(null);
+            expect(state.selectedEntityIds.size).toBe(0);
+            expect(state.selectedEntityId).toBe(null);
         });
     });
 
@@ -282,8 +282,8 @@ describe('Command System', () => {
                 entityId: unit.id
             }, groundType, groundHeight, mapSize);
 
-            expect(state.selectedEntityIds.size).to.equal(1);
-            expect(state.selectedEntityIds.has(unit.id)).to.equal(true);
+            expect(state.selectedEntityIds.size).toBe(1);
+            expect(state.selectedEntityIds.has(unit.id)).toBe(true);
         });
 
         it('should clear selectedEntityIds when deselecting', () => {
@@ -296,7 +296,7 @@ describe('Command System', () => {
                 entityId: null
             }, groundType, groundHeight, mapSize);
 
-            expect(state.selectedEntityIds.size).to.equal(0);
+            expect(state.selectedEntityIds.size).toBe(0);
         });
     });
 
@@ -309,9 +309,9 @@ describe('Command System', () => {
                 entityId: entity.id
             }, groundType, groundHeight, mapSize);
 
-            expect(result).to.equal(true);
-            expect(state.entities).to.have.length(0);
-            expect(state.getEntityAt(10, 10)).to.equal(undefined);
+            expect(result).toBe(true);
+            expect(state.entities).toHaveLength(0);
+            expect(state.getEntityAt(10, 10)).toBeUndefined();
         });
 
         it('should fail for non-existent entity', () => {
@@ -320,7 +320,7 @@ describe('Command System', () => {
                 entityId: 999
             }, groundType, groundHeight, mapSize);
 
-            expect(result).to.equal(false);
+            expect(result).toBe(false);
         });
 
         it('should clear selection when selected entity is removed', () => {
@@ -332,19 +332,19 @@ describe('Command System', () => {
                 entityId: unit.id
             }, groundType, groundHeight, mapSize);
 
-            expect(state.selectedEntityId).to.equal(null);
+            expect(state.selectedEntityId).toBe(null);
         });
 
         it('should remove unit state along with unit entity', () => {
             const unit = state.addEntity(EntityType.Unit, 0, 5, 5, 0);
-            expect(state.unitStates.has(unit.id)).to.equal(true);
+            expect(state.unitStates.has(unit.id)).toBe(true);
 
             executeCommand(state, {
                 type: 'remove_entity',
                 entityId: unit.id
             }, groundType, groundHeight, mapSize);
 
-            expect(state.unitStates.has(unit.id)).to.equal(false);
+            expect(state.unitStates.has(unit.id)).toBe(false);
         });
     });
 });

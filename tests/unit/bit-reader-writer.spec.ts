@@ -1,20 +1,20 @@
 import { BinaryReader } from '@/resources/file/binary-reader';
 import { BitReader } from '@/resources/file/bit-reader';
 import { BitWriter } from '@/resources/file/bit-writer';
-import { expect } from 'chai';
+import { describe, it, expect } from 'vitest';
 
 describe('bit-reader/bit-writer.ts', () => {
     it('reader returns: 10011 on 0x13', () => {
         const r = new BitReader(new BinaryReader(new Uint8Array([0x13])));
 
-        expect(r.read(1)).to.equal(0);
-        expect(r.read(1)).to.equal(0);
-        expect(r.read(1)).to.equal(0);
-        expect(r.read(1)).to.equal(1);
-        expect(r.read(1)).to.equal(0);
-        expect(r.read(1)).to.equal(0);
-        expect(r.read(1)).to.equal(1);
-        expect(r.read(1)).to.equal(1);
+        expect(r.read(1)).toBe(0);
+        expect(r.read(1)).toBe(0);
+        expect(r.read(1)).toBe(0);
+        expect(r.read(1)).toBe(1);
+        expect(r.read(1)).toBe(0);
+        expect(r.read(1)).toBe(0);
+        expect(r.read(1)).toBe(1);
+        expect(r.read(1)).toBe(1);
     });
 
     it('reader and writer are the same for 43', () => {
@@ -23,7 +23,7 @@ describe('bit-reader/bit-writer.ts', () => {
 
         const r = new BitReader(w.toReader());
 
-        expect(r.read(8)).to.equal(43);
+        expect(r.read(8)).toBe(43);
     });
 
     it('reader and writer are the same for 43 33 12', () => {
@@ -36,10 +36,10 @@ describe('bit-reader/bit-writer.ts', () => {
 
         const r = new BitReader(w.toReader());
 
-        expect(r.read(7)).to.equal(43);
-        expect(r.read(7)).to.equal(33);
-        expect(r.read(7)).to.equal(12);
-        expect(r.read(15)).to.equal(23456);
+        expect(r.read(7)).toBe(43);
+        expect(r.read(7)).toBe(33);
+        expect(r.read(7)).toBe(12);
+        expect(r.read(15)).toBe(23456);
     });
 
     it('reader and writer are the same for 10011', () => {
@@ -52,10 +52,10 @@ describe('bit-reader/bit-writer.ts', () => {
 
         const r = new BitReader(w.toReader());
 
-        expect(r.read(1)).to.equal(1);
-        expect(r.read(1)).to.equal(0);
-        expect(r.read(1)).to.equal(0);
-        expect(r.read(1)).to.equal(1);
-        expect(r.read(1)).to.equal(1);
+        expect(r.read(1)).toBe(1);
+        expect(r.read(1)).toBe(0);
+        expect(r.read(1)).toBe(0);
+        expect(r.read(1)).toBe(1);
+        expect(r.read(1)).toBe(1);
     });
 });

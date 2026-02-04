@@ -21,7 +21,27 @@
 
 </template>
 
-<script src="./logging-view.ts"></script>
+<script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { LogHandler } from '@/utilities/log-handler';
+import { ILogMessage } from '@/utilities/log-manager';
+
+const logs = ref<ILogMessage[]>([]);
+
+onMounted(() => {
+    LogHandler.getLogManager().onLogMessage((msg) => {
+        if (logs.value.length > 40) {
+            logs.value.shift();
+        }
+
+        logs.value.push(msg);
+    });
+});
+
+onBeforeUnmount(() => {
+    LogHandler.getLogManager().onLogMessage(null);
+});
+</script>
 
 <style scoped>
 .loging {
