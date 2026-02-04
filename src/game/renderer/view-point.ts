@@ -80,7 +80,9 @@ export class ViewPoint implements IViewPoint {
         this.deltaX = dX + dY / 2;
         this.deltaY = dY;
 
-        this.onMove?.();
+        if (this.onMove) {
+            this.onMove();
+        }
     }
 
     private handlePointerUp = () => {
@@ -96,7 +98,9 @@ export class ViewPoint implements IViewPoint {
         this.deltaX = 0;
         this.deltaY = 0;
 
-        this.onMove?.();
+        if (this.onMove) {
+            this.onMove();
+        }
     }
 
     private handleContextmenu = (e: MouseEvent) => {
@@ -107,6 +111,8 @@ export class ViewPoint implements IViewPoint {
         this.zoomValue = Math.max(1, this.zoomValue + Math.sign(e.deltaY));
         e.preventDefault();
 
-        this.onMove?.();
+        if (this.onMove) {
+            this.onMove();
+        }
     }
 }

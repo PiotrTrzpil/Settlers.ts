@@ -17,7 +17,17 @@ module.exports = {
         semi: ['error', 'always', { omitLastInOneLineBlock: true }],
         'space-before-function-paren': ['error', 'never'],
         '@typescript-eslint/no-explicit-any': 'off',
-        indent: ['error', 4]
+        indent: ['error', 4],
+
+        // Bug-catching rules
+        'no-shadow': 'off',
+        '@typescript-eslint/no-shadow': 'warn',
+        'no-unused-expressions': 'error',
+        'no-self-compare': 'error',
+        'no-template-curly-in-string': 'warn',
+        eqeqeq: ['warn', 'smart'],
+        'no-throw-literal': 'error',
+        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
     },
     overrides: [
         {

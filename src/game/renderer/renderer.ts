@@ -42,7 +42,8 @@ export class Renderer {
                 Renderer.log.debug('Run with WebGL debug');
                 newGl = WebGLDebugUtils.makeDebugContext(newGl, processWebGlDebugErrors) as WebGLRenderingContext | null;
             }
-        } catch (e) {
+        } catch {
+            // WebGLDebugUtils is optional; not available in production
         }
 
         this.gl = newGl;
@@ -50,7 +51,7 @@ export class Renderer {
         Object.seal(this);
     }
 
-    public destroy() {
+    public destroy(): void {
         this.gl = null;
         this.viewPoint.destroy();
     }
@@ -64,7 +65,7 @@ export class Renderer {
         this.draw();
     }
 
-    public requestDraw() {
+    public requestDraw(): void {
         if (this.animRequest) {
             return;
         }
@@ -98,14 +99,18 @@ export class Renderer {
         }
     }
 
-    /** Starts the animation */
+    /** Initializes all sub-renderers and triggers the first draw */
     public async init(): Promise<void> {
         if (!this.gl) {
             return;
         }
 
         for (const r of this.renderers) {
-            await r.init(this.gl);
+            try {
+                await r.init(this.gl);
+            } catch (e) {
+                Renderer.log.error('Renderer init failed', e instanceof Error ? e : new Error(String(e)));
+            }
         }
 
         this.requestDraw();

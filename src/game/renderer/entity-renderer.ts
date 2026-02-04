@@ -13,19 +13,17 @@ const PLAYER_COLORS = [
     [0.2, 0.6, 1.0, 0.9], // Player 0: Blue
     [1.0, 0.3, 0.3, 0.9], // Player 1: Red
     [0.3, 1.0, 0.3, 0.9], // Player 2: Green
-    [1.0, 1.0, 0.3, 0.9]  // Player 3: Yellow
+    [1.0, 1.0, 0.3, 0.9] // Player 3: Yellow
 ];
 
 const SELECTED_COLOR = [1.0, 1.0, 1.0, 1.0]; // White highlight
 const RING_COLOR = [1.0, 1.0, 0.0, 0.5]; // Yellow selection ring
 
+// eslint-disable-next-line no-multi-spaces
 const BASE_QUAD = new Float32Array([
-    -0.5, -0.5,
-     0.5, -0.5,
-    -0.5,  0.5,
-    -0.5,  0.5,
-     0.5, -0.5,
-     0.5,  0.5
+    -0.5, -0.5, 0.5, -0.5,
+    -0.5, 0.5, -0.5, 0.5,
+    0.5, -0.5, 0.5, 0.5
 ]);
 
 const BUILDING_SCALE = 0.5;

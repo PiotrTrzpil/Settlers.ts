@@ -45,7 +45,7 @@ export class Matrix {
         dst[7] = src[7];
         dst[8] = src[8];
         dst[9] = src[9];
-        dst[10] = src[10] * dx;
+        dst[10] = src[10] * dz;
         dst[11] = src[11];
         dst[12] = src[12];
         dst[13] = src[13];

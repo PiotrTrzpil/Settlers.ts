@@ -87,20 +87,23 @@ export default class MapView extends Vue {
             return;
         }
 
-        const fileData = await file.readBinary();
-        if (!fileData) {
-            MapView.log.error('unable to load ' + file.name);
-            return;
+        try {
+            const fileData = await file.readBinary();
+            if (!fileData) {
+                MapView.log.error('Unable to load ' + file.name);
+                return;
+            }
+
+            const mapContent = MapLoader.getLoader(fileData);
+            if (!mapContent) {
+                MapView.log.error('Unsupported map format: ' + file.name);
+                return;
+            }
+
+            this.mapInfo = mapContent.toString();
+            this.game = new Game(this.fileManager, mapContent);
+        } catch (e) {
+            MapView.log.error('Failed to load map: ' + file.name, e instanceof Error ? e : new Error(String(e)));
         }
-
-        const mapContent = MapLoader.getLoader(fileData);
-        if (!mapContent) {
-            MapView.log.error('file not found ' + file.name);
-            return;
-        }
-
-        this.mapInfo = mapContent.toString();
-
-        this.game = new Game(this.fileManager, mapContent);
     }
 }

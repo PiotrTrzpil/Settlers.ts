@@ -228,7 +228,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
 
         const glError = gl.getError();
         if (glError !== 0) {
-            console.error('gl error: ' + glError);
+            LandscapeRenderer.log.error('WebGL error: ' + glError);
         }
     }
 }

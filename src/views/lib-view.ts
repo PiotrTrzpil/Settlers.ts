@@ -29,7 +29,7 @@ export default class LibView extends Vue {
         this.load(file);
     }
 
-    public onSelectItem() {
+    public onSelectItem(): void {
         if (!this.selectedItem) {
             this.selectedItemReader = null;
             return;
