@@ -51,7 +51,12 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         );
         renderer.add(landscapeRenderer);
 
-        entityRenderer = new EntityRenderer(game.mapSize, game.groundHeight);
+        entityRenderer = new EntityRenderer(
+            game.mapSize,
+            game.groundHeight,
+            game.fileManager,
+            renderer.textureManager
+        );
         renderer.add(entityRenderer);
 
         void renderer.init().then(() => {
@@ -216,15 +221,18 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
 
         if (game.mode !== 'place_building') {
             entityRenderer.previewTile = null;
+            entityRenderer.previewBuildingType = null;
             return;
         }
 
         if (!tile) {
             entityRenderer.previewTile = null;
+            entityRenderer.previewBuildingType = null;
             return;
         }
 
         entityRenderer.previewTile = tile;
+        entityRenderer.previewBuildingType = game.placeBuildingType as BuildingType ?? null;
         const hasBuildings = game.state.entities.some(
             ent => ent.type === EntityType.Building && ent.player === game.currentPlayer
         );
