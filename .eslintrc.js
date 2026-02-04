@@ -9,7 +9,8 @@ module.exports = {
         '@vue/typescript/recommended'
     ],
     parserOptions: {
-        ecmaVersion: 2020
+        ecmaVersion: 2020,
+        project: './tsconfig.json'
     },
     rules: {
         'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
@@ -27,7 +28,15 @@ module.exports = {
         'no-template-curly-in-string': 'warn',
         eqeqeq: ['warn', 'smart'],
         'no-throw-literal': 'error',
-        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
+        'no-void': 'off',
+        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+
+        // Type-checked rules (use TypeScript compiler for deeper analysis)
+        '@typescript-eslint/no-floating-promises': 'warn',
+        '@typescript-eslint/no-misused-promises': 'warn',
+        '@typescript-eslint/await-thenable': 'warn',
+        '@typescript-eslint/no-unnecessary-type-assertion': 'warn',
+        '@typescript-eslint/restrict-plus-operands': 'off'
     },
     overrides: [
         {
@@ -37,6 +46,20 @@ module.exports = {
             ],
             env: {
                 mocha: true
+            }
+        },
+        {
+            // JS config files are not included in tsconfig.json
+            files: ['*.js'],
+            parserOptions: {
+                project: null
+            },
+            rules: {
+                '@typescript-eslint/no-floating-promises': 'off',
+                '@typescript-eslint/no-misused-promises': 'off',
+                '@typescript-eslint/await-thenable': 'off',
+                '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+                '@typescript-eslint/restrict-plus-operands': 'off'
             }
         }
     ]

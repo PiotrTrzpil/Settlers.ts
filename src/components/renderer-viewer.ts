@@ -64,7 +64,7 @@ export default class RendererViewer extends Vue {
         );
         this.renderer.add(this.entityRenderer);
 
-        this.renderer.init();
+        void this.renderer.init();
 
         // Start game loop with render callback
         const renderer = this.renderer;

@@ -36,7 +36,7 @@ export default class MapView extends Vue {
 
     public onFileSelect(file: IFileSource): void {
         this.fileName = file.name;
-        this.load(file);
+        void this.load(file);
     }
 
     public onTileClick(tile: TileCoord): void {

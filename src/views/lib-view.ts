@@ -26,7 +26,7 @@ export default class LibView extends Vue {
 
     public onFileSelect(file: IFileSource): void {
         this.fileName = file.name;
-        this.load(file);
+        void this.load(file);
     }
 
     public onSelectItem(): void {
