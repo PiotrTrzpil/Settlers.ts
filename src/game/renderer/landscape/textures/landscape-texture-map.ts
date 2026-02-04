@@ -213,6 +213,11 @@ export class LandscapeTextureMap {
             const rc = riverConfig ?? { swapRows: false, reverseInner: false, reverseOuter: false };
             this.addTexture(new SmallLandscapeTexture(LandscapeType.River4, 0, 72));
             this.addTexture(new SmallLandscapeTexture(LandscapeType.River3, 1, 72));
+            // River1 and River2 have no dedicated atlas slots in the texture
+            // file — reuse River3's position so they render as river instead
+            // of falling through to grass via findFallback.
+            this.addTexture(new SmallLandscapeTexture(LandscapeType.River1, 1, 72));
+            this.addTexture(new SmallLandscapeTexture(LandscapeType.River2, 1, 72));
 
             // Inner pair: River1 <-> River3
             const [iA, iB] = rc.reverseInner

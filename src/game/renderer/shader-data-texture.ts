@@ -13,6 +13,9 @@ export class ShaderDataTexture extends ShaderTexture {
     /** Whether the texture data has been uploaded to the GPU */
     private uploaded = false;
 
+    /** Whether the CPU-side data has changed since the last GPU upload */
+    private dirty = false;
+
     public constructor(width: number, height: number, numberOfElements: number, textureIndex: number) {
         super(textureIndex);
 
@@ -46,15 +49,17 @@ export class ShaderDataTexture extends ShaderTexture {
             this.imgData[index + 3] = a;
             break;
         }
+
+        this.dirty = true;
     }
 
-    /** Upload the texture data to the GPU (first call) or just bind the
-     *  existing texture to its slot (subsequent calls). The map data is
-     *  static so there is no need to re-upload every frame. */
+    /** Upload the texture data to the GPU (first call), re-upload when
+     *  data has been modified via update(), or just bind the existing
+     *  texture to its slot (subsequent calls with no changes). */
     public create(gl: WebGL2RenderingContext): void {
         super.bind(gl);
 
-        if (this.uploaded) {
+        if (this.uploaded && !this.dirty) {
             return;
         }
 
@@ -87,5 +92,6 @@ export class ShaderDataTexture extends ShaderTexture {
             format, type, this.imgData);
 
         this.uploaded = true;
+        this.dirty = false;
     }
 }
