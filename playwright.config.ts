@@ -1,7 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
-    testDir: './e2e',
+    testDir: './tests/e2e',
+    outputDir: './tests/e2e/.results',
     timeout: 30000,
     retries: 0,
     snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',

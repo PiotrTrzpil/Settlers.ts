@@ -29,7 +29,7 @@ Then import the zip(s) on your dev machine:
 python3 scripts/import-game-files.py /path/to/zips
 ```
 
-See [docu/game-files-setup.md](docu/game-files-setup.md) for manual setup, expected file structure, and troubleshooting.
+See [docs/game-files-setup.md](docs/game-files-setup.md) for manual setup, expected file structure, and troubleshooting.
 
 ### 2. Install and run
 
@@ -68,22 +68,22 @@ npm run test:unit
 
 View Landscape using WebGL
 
-![screenshot](docu/example-map-web-gl-2021_09.png)
+![screenshot](docs/images/example-map-web-gl-2021_09.png)
 
 ## View / decode file formats
 You can access 'all' Settlers file formats
 
 ### gfx-file view:
-![screenshot](docu/example-gfx-view.png)
+![screenshot](docs/images/example-gfx-view.png)
 
 ### gl-file and gh-file view:
-![screenshot](docu/example-gx-view.png)
+![screenshot](docs/images/example-gx-view.png)
 
 ### lib-file view:
-![screenshot](docu/example-lib-view.png)
+![screenshot](docs/images/example-lib-view.png)
 
 ### map-file view:
-![screenshot](docu/example-map-view.png)
+![screenshot](docs/images/example-map-view.png)
 
 
 # Disclaimer

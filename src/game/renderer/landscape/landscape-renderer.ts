@@ -11,8 +11,8 @@ import { TextureMap16Bit } from '../texture-map-16bit';
 import { GhFileReader } from '@/resources/gfx/gh-file-reader';
 import { GfxImage16Bit } from '@/resources/gfx/gfx-image-16bit';
 import { ImageType } from '@/resources/gfx/image-type';
-import vertCode from './landscape-vert.glsl';
-import fragCode from './landscape-frag.glsl';
+import vertCode from './shaders/landscape-vert.glsl';
+import fragCode from './shaders/landscape-frag.glsl';
 
 export class LandscapeRenderer extends RendererBase implements IRenderer {
     private static log = new LogHandler('LandscapeRenderer');

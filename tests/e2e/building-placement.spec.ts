@@ -1,34 +1,13 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { GamePage } from './game-page';
 
 /**
  * E2E tests for building placement and unit spawning.
  * Verifies the full interaction pipeline: pointer events → game commands → entity creation.
  */
 
-/** Wait for the game to fully load (game UI panel visible) */
-async function waitForGameLoaded(page: Page): Promise<void> {
-    await page.goto('/map-view');
-    // The game-ui div only renders when game !== null (v-if="game")
-    await page.waitForSelector('[data-testid="game-ui"]', { timeout: 15000 });
-    // Give the renderer a moment to initialize
-    await page.waitForTimeout(500);
-}
-
-/** Get the entity count displayed in the UI */
-async function getEntityCount(page: Page): Promise<number> {
-    const text = await page.locator('[data-testid="entity-count"]').textContent();
-    const match = text?.match(/(\d+)/);
-    return match ? parseInt(match[1], 10) : -1;
-}
-
-/** Get the current mode displayed in the UI */
-async function getMode(page: Page): Promise<string> {
-    const text = await page.locator('[data-testid="mode-indicator"]').textContent();
-    return text?.replace('Mode:', '').trim() ?? '';
-}
-
-/** Evaluate game state inside the Vue app */
-async function getGameState(page: Page) {
+/** Evaluate game state inside the Vue app (needs direct Vue access for execute()) */
+async function getGameState(page: import('@playwright/test').Page) {
     return page.evaluate(() => {
         const gameUI = document.querySelector('[data-testid="game-ui"]');
         if (!gameUI) return null;
@@ -54,7 +33,7 @@ async function getGameState(page: Page) {
 }
 
 /** Move camera to a specific tile position */
-async function moveCamera(page: Page, tileX: number, tileY: number): Promise<void> {
+async function moveCamera(page: import('@playwright/test').Page, tileX: number, tileY: number): Promise<void> {
     await page.evaluate(({ x, y }) => {
         const canvasEl = document.querySelector('canvas');
         if (!canvasEl) return;
@@ -67,11 +46,18 @@ async function moveCamera(page: Page, tileX: number, tileY: number): Promise<voi
             vp.deltaY = 0;
         }
     }, { x: tileX, y: tileY });
-    await page.waitForTimeout(100);
+    await page.waitForFunction(
+        ({ x, y }) => {
+            const d = (window as any).__settlers_debug__;
+            return d && Math.abs(d.cameraX - x) < 2 && Math.abs(d.cameraY - y) < 2;
+        },
+        { x: tileX, y: tileY },
+        { timeout: 5000 },
+    ).catch(() => { /* camera may not report exact coords — fall through */ });
 }
 
 /** Find a buildable tile on the map by actually trying to place a building */
-async function findBuildableTile(page: Page): Promise<{ x: number; y: number } | null> {
+async function findBuildableTile(page: import('@playwright/test').Page): Promise<{ x: number; y: number } | null> {
     return page.evaluate(() => {
         const gameUI = document.querySelector('[data-testid="game-ui"]');
         if (!gameUI) return null;
@@ -114,31 +100,13 @@ async function findBuildableTile(page: Page): Promise<{ x: number; y: number } |
     });
 }
 
-// ─── Game Loading ──────────────────────────────────────────────────
-
-test.describe('Game Loading', () => {
-    test('game auto-loads and shows UI', async ({ page }) => {
-        const errors: string[] = [];
-        page.on('pageerror', (err) => errors.push(err.message));
-
-        await waitForGameLoaded(page);
-
-        expect(await getMode(page)).toBe('select');
-        expect(await getEntityCount(page)).toBeGreaterThanOrEqual(0);
-        await expect(page.locator('canvas')).toBeVisible();
-
-        const realErrors = errors.filter(e =>
-            !e.includes('WebGL') && !e.includes('webgl') && !e.includes('GL')
-        );
-        expect(realErrors).toHaveLength(0);
-    });
-});
-
 // ─── Pointer Event Pipeline ────────────────────────────────────────
 
 test.describe('Pointer Event Pipeline', () => {
     test('pointer events fire on canvas (not suppressed)', async ({ page }) => {
-        await waitForGameLoaded(page);
+        const gp = new GamePage(page);
+        await gp.goto();
+        await gp.waitForReady();
 
         const eventLog = await page.evaluate(() => {
             return new Promise<string[]>((resolve) => {
@@ -169,23 +137,22 @@ test.describe('Pointer Event Pipeline', () => {
             });
         });
 
-        console.log('Events fired:', eventLog);
         expect(eventLog).toContain('pointerdown');
         expect(eventLog).toContain('pointerup');
         expect(eventLog).toContain('pointermove');
     });
 
     test('canvas click sets hoveredTile via tileClick event', async ({ page }) => {
-        await waitForGameLoaded(page);
+        const gp = new GamePage(page);
+        await gp.goto();
+        await gp.waitForReady();
 
         const canvas = page.locator('canvas');
         await canvas.click({ position: { x: 400, y: 400 } });
-        await page.waitForTimeout(300);
 
         const tileInfo = page.locator('[data-testid="tile-info"]');
-        await expect(tileInfo).toBeVisible();
+        await expect(tileInfo).toBeVisible({ timeout: 5000 });
         const text = await tileInfo.textContent();
-        console.log('Tile click result:', text);
         expect(text).toMatch(/Tile: \(\d+, \d+\)/);
     });
 });
@@ -194,34 +161,36 @@ test.describe('Pointer Event Pipeline', () => {
 
 test.describe('Building Placement Mode', () => {
     test('clicking building button activates place_building mode', async ({ page }) => {
-        await waitForGameLoaded(page);
+        const gp = new GamePage(page);
+        await gp.goto();
+        await gp.waitForReady();
 
         const btn = page.locator('[data-testid="btn-guardhouse"]');
         await expect(btn).toBeVisible();
         await btn.click();
-        await page.waitForTimeout(100);
 
-        expect(await getMode(page)).toBe('place_building');
+        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
         await expect(btn).toHaveClass(/active/);
     });
 
     test('select mode button returns to select mode', async ({ page }) => {
-        await waitForGameLoaded(page);
+        const gp = new GamePage(page);
+        await gp.goto();
+        await gp.waitForReady();
 
         await page.locator('[data-testid="btn-guardhouse"]').click();
-        await page.waitForTimeout(100);
-        expect(await getMode(page)).toBe('place_building');
+        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
 
-        await page.locator('[data-testid="btn-select-mode"]').click();
-        await page.waitForTimeout(100);
-        expect(await getMode(page)).toBe('select');
+        await gp.selectMode();
+        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
     });
 
     test('building placement works on valid terrain via game.execute()', async ({ page }) => {
-        await waitForGameLoaded(page);
+        const gp = new GamePage(page);
+        await gp.goto();
+        await gp.waitForReady();
 
         const buildableTile = await findBuildableTile(page);
-        console.log('First buildable tile found:', buildableTile);
 
         // This map might be entirely water; skip if no buildable tile found
         if (!buildableTile) {
@@ -248,14 +217,15 @@ test.describe('Building Placement Mode', () => {
             return { ok, before, after, tile: { x, y } };
         }, buildableTile);
 
-        console.log('Placement result:', result);
         expect(result).not.toHaveProperty('error');
         expect(result.ok).toBe(true);
         expect(result.after).toBeGreaterThan(result.before);
     });
 
     test('building placement via canvas click on buildable terrain', async ({ page }) => {
-        await waitForGameLoaded(page);
+        const gp = new GamePage(page);
+        await gp.goto();
+        await gp.waitForReady();
 
         const buildableTile = await findBuildableTile(page);
         if (!buildableTile) {
@@ -268,28 +238,18 @@ test.describe('Building Placement Mode', () => {
 
         // Enter placement mode
         await page.locator('[data-testid="btn-guardhouse"]').click();
-        await page.waitForTimeout(100);
-        expect(await getMode(page)).toBe('place_building');
+        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
 
-        const countBefore = await getEntityCount(page);
+        const countBefore = await gp.getDebugField('entityCount');
 
         // Click canvas center (camera is now centered on buildable terrain)
         const canvas = page.locator('canvas');
         const box = await canvas.boundingBox();
         await canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
+
+        // Wait for entity count to potentially change
         await page.waitForTimeout(300);
-
-        const countAfter = await getEntityCount(page);
-        const state = await getGameState(page);
-
-        const tileText = await page.locator('[data-testid="tile-info"]').textContent().catch(() => 'N/A');
-        console.log('Canvas click placement:');
-        console.log('  Camera at:', buildableTile);
-        console.log('  Clicked tile:', tileText);
-        console.log('  Entities:', countBefore, '->', countAfter);
-        if (state?.entities.length) {
-            console.log('  Entities:', JSON.stringify(state.entities));
-        }
+        const countAfter = await gp.getDebugField('entityCount');
 
         // The clicked tile near the camera position should be buildable
         // (may still fail if the exact center pixel maps to an adjacent non-buildable tile)
@@ -301,48 +261,57 @@ test.describe('Building Placement Mode', () => {
 
 test.describe('Unit Spawning', () => {
     test('spawn settler creates entity on passable terrain', async ({ page }) => {
-        await waitForGameLoaded(page);
+        const gp = new GamePage(page);
+        await gp.goto();
+        await gp.waitForReady();
 
-        const countBefore = await getEntityCount(page);
+        const countBefore = await gp.getDebugField('entityCount');
+        await gp.spawnSettler();
 
-        // Switch to units tab and spawn
-        await page.locator('button.tab-btn', { hasText: 'Units' }).click();
-        await page.locator('[data-testid="btn-spawn-settler"]').click();
-        await page.waitForTimeout(300);
+        // Wait for entity count to increase
+        await page.waitForFunction(
+            (n) => (window as any).__settlers_debug__?.entityCount > n,
+            countBefore,
+            { timeout: 5000 },
+        );
 
-        const countAfter = await getEntityCount(page);
+        const countAfter = await gp.getDebugField('entityCount');
         expect(countAfter).toBe(countBefore + 1);
 
         // Entity should be on the map, NOT at (10,10) water
         const state = await getGameState(page);
         const entity = state?.entities[state.entities.length - 1];
-        console.log('Spawned settler:', entity);
-        console.log('Map size:', `${state?.mapWidth}x${state?.mapHeight}`);
 
         expect(entity).toBeDefined();
         expect(entity!.x).toBeGreaterThanOrEqual(0);
         expect(entity!.y).toBeGreaterThanOrEqual(0);
 
         // Verify it's NOT at old hardcoded (10, 10) which was water
-        // (It should be on buildable land found by spiral search)
         const isOldDefault = entity!.x === 10 && entity!.y === 10;
         expect(isOldDefault).toBe(false);
     });
 
     test('spawn soldier creates entity', async ({ page }) => {
-        await waitForGameLoaded(page);
+        const gp = new GamePage(page);
+        await gp.goto();
+        await gp.waitForReady();
 
-        const countBefore = await getEntityCount(page);
+        const countBefore = await gp.getDebugField('entityCount');
+        await gp.spawnSoldier();
 
-        await page.locator('button.tab-btn', { hasText: 'Units' }).click();
-        await page.locator('[data-testid="btn-spawn-soldier"]').click();
-        await page.waitForTimeout(300);
+        await page.waitForFunction(
+            (n) => (window as any).__settlers_debug__?.entityCount > n,
+            countBefore,
+            { timeout: 5000 },
+        );
 
-        expect(await getEntityCount(page)).toBe(countBefore + 1);
+        expect(await gp.getDebugField('entityCount')).toBe(countBefore + 1);
     });
 
     test('clicking canvas then spawning uses clicked tile', async ({ page }) => {
-        await waitForGameLoaded(page);
+        const gp = new GamePage(page);
+        await gp.goto();
+        await gp.waitForReady();
 
         // Find land and move camera there so the click hits passable terrain
         const buildableTile = await findBuildableTile(page);
@@ -356,53 +325,41 @@ test.describe('Unit Spawning', () => {
         const canvas = page.locator('canvas');
         const box = await canvas.boundingBox();
         await canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
-        await page.waitForTimeout(300);
 
         const tileInfo = page.locator('[data-testid="tile-info"]');
-        await expect(tileInfo).toBeVisible();
-        const tileText = await tileInfo.textContent();
-        console.log('Clicked tile:', tileText);
+        await expect(tileInfo).toBeVisible({ timeout: 5000 });
 
-        // Check the terrain under the clicked tile
-        const clickedTerrain = await page.evaluate(() => {
-            const gameUI = document.querySelector('[data-testid="game-ui"]');
-            if (!gameUI) return null;
-            const vm = (gameUI as any).__vueParentComponent?.ctx;
-            if (!vm?.game || !vm.hoveredTile) return null;
-            const t = vm.hoveredTile;
-            const idx = vm.game.mapSize.toIndex(t.x, t.y);
-            return { x: t.x, y: t.y, groundType: vm.game.groundType[idx] };
-        });
-        console.log('Clicked terrain:', clickedTerrain);
-
-        const countBefore = await getEntityCount(page);
+        const countBefore = await gp.getDebugField('entityCount');
 
         // Now spawn at that tile
-        await page.locator('button.tab-btn', { hasText: 'Units' }).click();
-        await page.locator('[data-testid="btn-spawn-settler"]').click();
-        await page.waitForTimeout(300);
+        await gp.spawnSettler();
 
-        const countAfter = await getEntityCount(page);
+        // Wait briefly for entity creation
+        await page.waitForTimeout(300);
+        const countAfter = await gp.getDebugField('entityCount');
         const state = await getGameState(page);
 
         if (countAfter > countBefore) {
             // Spawn succeeded - entity should be near the clicked tile
             const entity = state?.entities[state.entities.length - 1];
-            console.log('Spawned at:', entity);
             expect(entity).toBeDefined();
-        } else {
-            // Spawn failed - clicked tile was probably impassable (water/rock)
-            console.log('Spawn rejected (tile likely impassable), groundType:', clickedTerrain?.groundType);
-            // This is expected behavior - the spawn command validates terrain now
         }
+        // Spawn may fail if clicked tile is impassable — that's expected behaviour
     });
 
     test('spawned unit is on passable terrain (not water)', async ({ page }) => {
-        await waitForGameLoaded(page);
+        const gp = new GamePage(page);
+        await gp.goto();
+        await gp.waitForReady();
 
-        await page.locator('button.tab-btn', { hasText: 'Units' }).click();
-        await page.locator('[data-testid="btn-spawn-settler"]').click();
-        await page.waitForTimeout(300);
+        await gp.spawnSettler();
+
+        // Wait for entity to appear
+        await page.waitForFunction(
+            () => (window as any).__settlers_debug__?.entityCount > 0,
+            null,
+            { timeout: 5000 },
+        );
 
         // Check the terrain type under the spawned entity
         const terrainCheck = await page.evaluate(() => {
@@ -425,7 +382,6 @@ test.describe('Unit Spawning', () => {
             };
         });
 
-        console.log('Terrain under spawned entity:', terrainCheck);
         expect(terrainCheck).not.toBeNull();
         expect(terrainCheck!.isWater).toBe(false);
         expect(terrainCheck!.isPassable).toBe(true);

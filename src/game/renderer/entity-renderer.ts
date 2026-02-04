@@ -7,8 +7,8 @@ import { TilePicker } from '../input/tile-picker';
 import { TerritoryMap, NO_OWNER } from '../systems/territory';
 import { LogHandler } from '@/utilities/log-handler';
 
-import vertCode from './entity-vert.glsl';
-import fragCode from './entity-frag.glsl';
+import vertCode from './shaders/entity-vert.glsl';
+import fragCode from './shaders/entity-frag.glsl';
 
 // Player colors (RGBA, 0-1 range)
 const PLAYER_COLORS = [

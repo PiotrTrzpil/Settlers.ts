@@ -28,3 +28,4 @@ css
 /package-lock.json
 /public/file-list.txt
 test-results/
+tests/e2e/.results/
