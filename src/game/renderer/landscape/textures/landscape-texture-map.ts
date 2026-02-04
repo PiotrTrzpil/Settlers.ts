@@ -14,10 +14,11 @@ import { AtlasLayout } from './atlas-layout';
 export type RiverSlotId = 'A' | 'B' | 'C';
 
 /** All 6 ways to assign the 3 physical slots to the 3 transition roles.
- *  Roles: [0]=inner (River3↔River1), [1]=outer (Grass↔River4), [2]=middle (River4↔River3) */
+ *  Roles: [0]=inner (River3↔River1), [1]=outer (Grass↔River4), [2]=middle (River4↔River3)
+ *  With gradientReverse layout: A=(2,72)=inner, B=(0,74)=middle, C=(2,74)=outer */
 export const RIVER_SLOT_PERMS: readonly [RiverSlotId, RiverSlotId, RiverSlotId][] = [
-    ['A', 'B', 'C'],  // 0: inner=A, outer=B, middle=C
-    ['A', 'C', 'B'],  // 1: inner=A, outer=C, middle=B
+    ['A', 'C', 'B'],  // 0: identity - inner=A, outer=C, middle=B
+    ['A', 'B', 'C'],  // 1: inner=A, outer=B, middle=C
     ['B', 'A', 'C'],  // 2: inner=B, outer=A, middle=C
     ['B', 'C', 'A'],  // 3: inner=B, outer=C, middle=A
     ['C', 'A', 'B'],  // 4: inner=C, outer=A, middle=B
@@ -254,17 +255,17 @@ export class LandscapeTextureMap {
 
             // Create Hexagon2Textures at fixed source positions (default config).
             // After copyTexture() the shared layout holds correct GPU atlas dest positions.
-            // Layout matches addTextureGradient1(Grass, River4, River3, River1, 72):
+            // Layout matches addTextureGradientReverse(Grass, River4, River3, River1, 72):
             //   River4=99 (outermost, near grass), River1=96 (innermost, river center)
-            // Slot A: cols 2-3, rows 72-73 → Grass↔River4 (outer edge)
-            const slotALeft = new Hexagon2Texture(L, LandscapeType.Grass, LandscapeType.River4, 2, 72, 2, 73);
-            const slotARight = new Hexagon2Texture(L, LandscapeType.River4, LandscapeType.Grass, 3, 72, 3, 73);
+            // Slot A: cols 2-3, rows 72-73 → River3↔River1 (inner edge, water-heavy)
+            const slotALeft = new Hexagon2Texture(L, LandscapeType.River3, LandscapeType.River1, 2, 72, 2, 73);
+            const slotARight = new Hexagon2Texture(L, LandscapeType.River1, LandscapeType.River3, 3, 72, 3, 73);
             // Slot B: cols 0-1, rows 74-75 → River4↔River3 (middle)
             const slotBLeft = new Hexagon2Texture(L, LandscapeType.River4, LandscapeType.River3, 0, 74, 0, 75);
             const slotBRight = new Hexagon2Texture(L, LandscapeType.River3, LandscapeType.River4, 1, 74, 1, 75);
-            // Slot C: cols 2-3, rows 74-75 → River3↔River1 (inner edge)
-            const slotCLeft = new Hexagon2Texture(L, LandscapeType.River3, LandscapeType.River1, 2, 74, 2, 75);
-            const slotCRight = new Hexagon2Texture(L, LandscapeType.River1, LandscapeType.River3, 3, 74, 3, 75);
+            // Slot C: cols 2-3, rows 74-75 → Grass↔River4 (outer edge, grass-heavy)
+            const slotCLeft = new Hexagon2Texture(L, LandscapeType.Grass, LandscapeType.River4, 2, 74, 2, 75);
+            const slotCRight = new Hexagon2Texture(L, LandscapeType.River4, LandscapeType.Grass, 3, 74, 3, 75);
 
             const allSlots = [slotALeft, slotARight, slotBLeft, slotBRight, slotCLeft, slotCRight];
             for (const tex of allSlots) {
@@ -355,7 +356,33 @@ export class LandscapeTextureMap {
 
     /** Find a fallback texture by trying uniform types for each corner. */
     private findFallback(t1: LandscapeType, t2: LandscapeType, t3: LandscapeType): ILandscapeTexture | null {
-        for (const t of [t1, t2, t3]) {
+        // For river transitions, try to find the closest available texture.
+        // Map data often has Grass directly touching River3/River2/River1 without
+        // the intermediate River4 step. Use Grass↔River4 as a visual approximation.
+        const types = [t1, t2, t3];
+        const hasGrass = types.includes(LandscapeType.Grass);
+        const riverTypes = types.filter(t =>
+            t === LandscapeType.River1 || t === LandscapeType.River2 ||
+            t === LandscapeType.River3 || t === LandscapeType.River4
+        );
+
+        if (hasGrass && riverTypes.length > 0) {
+            // Substitute any river type with River4 for lookup purposes
+            const substituted = types.map(t =>
+                (t === LandscapeType.River1 || t === LandscapeType.River2 || t === LandscapeType.River3)
+                    ? LandscapeType.River4
+                    : t
+            ) as [LandscapeType, LandscapeType, LandscapeType];
+
+            const subKey = new TexturePoint(substituted[0], substituted[1], substituted[2]).getKey();
+            const subText = this.lookup[subKey];
+            if (subText) {
+                return subText;
+            }
+        }
+
+        // Original fallback: try uniform textures for each corner
+        for (const t of types) {
             const key = new TexturePoint(t, t, t).getKey();
             const text = this.lookup[key];
             if (text) {

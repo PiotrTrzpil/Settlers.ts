@@ -8,18 +8,23 @@ const MAP_SIZE = 256;
 
 /** Terrain band definitions as fractions of the map height */
 const TERRAIN_BANDS: ReadonlyArray<{ frac0: number; frac1: number; type: LandscapeType }> = [
-    { frac0: 0.00, frac1: 0.10, type: LandscapeType.Water7 },
-    { frac0: 0.10, frac1: 0.16, type: LandscapeType.Beach },
-    { frac0: 0.16, frac1: 0.26, type: LandscapeType.Grass },
-    { frac0: 0.26, frac1: 0.34, type: LandscapeType.GrassDark },
-    { frac0: 0.34, frac1: 0.42, type: LandscapeType.GrassDry },
-    { frac0: 0.42, frac1: 0.50, type: LandscapeType.Desert },
-    { frac0: 0.50, frac1: 0.58, type: LandscapeType.Rock },
-    { frac0: 0.58, frac1: 0.66, type: LandscapeType.Swamp },
-    { frac0: 0.66, frac1: 0.74, type: LandscapeType.Mud },
-    { frac0: 0.74, frac1: 0.82, type: LandscapeType.Snow },
-    { frac0: 0.82, frac1: 0.91, type: LandscapeType.DustyWay },
-    { frac0: 0.91, frac1: 1.00, type: LandscapeType.RockyWay },
+    { frac0: 0.00, frac1: 0.08, type: LandscapeType.Water7 },
+    { frac0: 0.08, frac1: 0.14, type: LandscapeType.Beach },
+    { frac0: 0.14, frac1: 0.22, type: LandscapeType.Grass },
+    { frac0: 0.22, frac1: 0.28, type: LandscapeType.GrassDark },
+    { frac0: 0.28, frac1: 0.34, type: LandscapeType.GrassDry },
+    { frac0: 0.34, frac1: 0.40, type: LandscapeType.Desert },
+    { frac0: 0.40, frac1: 0.46, type: LandscapeType.Rock },
+    { frac0: 0.46, frac1: 0.52, type: LandscapeType.Swamp },
+    { frac0: 0.52, frac1: 0.58, type: LandscapeType.Mud },
+    { frac0: 0.58, frac1: 0.64, type: LandscapeType.Snow },
+    { frac0: 0.64, frac1: 0.70, type: LandscapeType.DustyWay },
+    { frac0: 0.70, frac1: 0.76, type: LandscapeType.RockyWay },
+    // River gradient: Grass → River4 → River3 → River1
+    { frac0: 0.76, frac1: 0.82, type: LandscapeType.Grass },
+    { frac0: 0.82, frac1: 0.88, type: LandscapeType.River4 },
+    { frac0: 0.88, frac1: 0.94, type: LandscapeType.River3 },
+    { frac0: 0.94, frac1: 1.00, type: LandscapeType.River1 },
 ];
 
 function getTerrainForRow(row: number): LandscapeType {
