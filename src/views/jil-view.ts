@@ -1,14 +1,12 @@
 import { Options, Vue } from 'vue-class-component';
 import { Path } from '@/utilities/path';
-import { DilFileReader } from '@/resources/gfx/dil-file-reader';
 import { GfxFileReader } from '@/resources/gfx/gfx-file-reader';
 import { GilFileReader } from '@/resources/gfx/gil-file-reader';
-import { JilFileReader } from '@/resources/gfx/jil-file-reader';
-import { PaletteCollection } from '@/resources/gfx/palette-collection';
-import { PilFileReader } from '@/resources/gfx/pil-file-reader';
+import { DilFileReader } from '@/resources/gfx/dil-file-reader';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { IndexFileItem } from '@/resources/gfx/index-file-item';
+import { pad, loadGfxFileSet, parseGfxReaders } from '@/utilities/view-helpers';
 
 import FileBrowser from '@/components/file-browser.vue';
 import HexViewer from '@/components/hex-viewer.vue';
@@ -49,11 +47,8 @@ export default class JilView extends Vue {
         void this.load(file);
     }
 
-    public pad(value:string, size:number): string {
-        // convert to string
-        const str = ('' + value + '').split(' ').join('\u00a0');
-        const padSize = Math.max(0, size - str.length);
-        return str + ('\u00a0'.repeat(padSize));
+    public pad(value: string, size: number): string {
+        return pad(value, size);
     }
 
     /** load a new gfx */
@@ -69,43 +64,22 @@ export default class JilView extends Vue {
 
     /** load a new image */
     public async doLoad(fileId: string): Promise<void> {
-        const fileNameList: {[key: string]: string} = {};
+        const fileSet = await loadGfxFileSet(this.fileManager, fileId);
+        const readers = parseGfxReaders(fileSet);
 
-        fileNameList.gfx = fileId + '.gfx';
-        fileNameList.gil = fileId + '.gil';
-
-        const pilFileExists = this.fileManager.findFile(fileId + '.pil', false);
-
-        if (pilFileExists) {
-            fileNameList.paletteIndex = fileId + '.pil';
-            fileNameList.palette = fileId + '.pa6';
-        } else {
-            fileNameList.paletteIndex = fileId + '.pi4';
-            fileNameList.palette = fileId + '.p46';
-        }
-
-        fileNameList.dil = fileId + '.dil';
-        fileNameList.jil = fileId + '.jil';
-
-        const files = await this.fileManager.readFiles(fileNameList, true);
-
-        const paletteIndexList = new PilFileReader(files.paletteIndex);
-        const palletCollection = new PaletteCollection(files.palette, paletteIndexList);
-
-        this.dilFileReader = new DilFileReader(files.dil);
-        this.gilFileReader = new GilFileReader(files.gil);
-        const jilFileReader = new JilFileReader(files.jil);
+        this.dilFileReader = readers.dilFileReader;
+        this.gilFileReader = readers.gilFileReader;
+        const jilFileReader = readers.jilFileReader;
         this.jilList = jilFileReader.getItems(0);
 
         this.gfxFileReader = new GfxFileReader(
-            files.gfx,
+            fileSet.gfx,
             this.gilFileReader,
             jilFileReader,
             this.dilFileReader,
-            palletCollection);
+            readers.paletteCollection);
 
         JilView.log.debug('File: ' + fileId);
-        // JilView.log.debug(this.gfxFile.toString());
     }
 
     public onSelectJil(): void {

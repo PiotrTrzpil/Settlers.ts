@@ -3,6 +3,7 @@ import { GhFileReader } from '@/resources/gfx/gh-file-reader';
 import { IGfxImage } from '@/resources/gfx/igfx-image';
 import { ImageType } from '@/resources/gfx/image-type';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
+import { pad, renderImageToCanvas, collectImages } from '@/utilities/view-helpers';
 
 import FileBrowser from '@/components/file-browser.vue';
 import HexViewer from '@/components/hex-viewer.vue';
@@ -29,11 +30,8 @@ export default class GhView extends Vue {
         void this.load(file);
     }
 
-    public pad(value:string, size:number): string {
-        // convert to string
-        const str = ('' + value + '').split(' ').join('\u00a0');
-        const padSize = Math.max(0, size - str.length);
-        return str + ('\u00a0'.repeat(padSize));
+    public pad(value: string, size: number): string {
+        return pad(value, size);
     }
 
     /** load a new gh */
@@ -42,28 +40,15 @@ export default class GhView extends Vue {
 
         const ghFile = new GhFileReader(content);
 
-        this.ghContent = this.fillGhList(ghFile);
+        this.ghContent = collectImages(
+            () => ghFile.getImageCount(),
+            (i) => ghFile.getImage(i)
+        );
         this.ghInfo = ghFile.toString();
     }
 
     public toImageTypeStr(imgType: ImageType): string {
         return ImageType[imgType];
-    }
-
-    private fillGhList(ghReader: GhFileReader):IGfxImage[] {
-        const list: IGfxImage[] = [];
-
-        const l = ghReader.getImageCount();
-
-        for (let i = 0; i < l; i++) {
-            const fileInfo = ghReader.getImage(i);
-
-            if (fileInfo) {
-                list.push(fileInfo);
-            }
-        }
-
-        return list;
     }
 
     public onSelectItem(): void {
@@ -72,18 +57,6 @@ export default class GhView extends Vue {
             return;
         }
 
-        const cav = this.$refs.ghCav as HTMLCanvasElement;
-        if ((!cav) || (!cav.getContext)) {
-            return;
-        }
-
-        cav.height = img.height;
-        const context = cav.getContext('2d');
-
-        if (!context) {
-            return;
-        }
-
-        context.putImageData(img.getImageData(), 0, 0);
+        renderImageToCanvas(img, this.$refs.ghCav as HTMLCanvasElement);
     }
 }
