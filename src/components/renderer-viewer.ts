@@ -88,6 +88,12 @@ export default class RendererViewer extends Vue {
 
         void this.renderer.init();
 
+        // Center camera on the first land tile
+        const landTile = this.game.findLandTile();
+        if (landTile) {
+            this.renderer.viewPoint.setPosition(landTile.x, landTile.y);
+        }
+
         // Start game loop with render callback
         const renderer = this.renderer;
         this.game.gameLoop.setRenderCallback(() => {

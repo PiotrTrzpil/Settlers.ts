@@ -22,6 +22,19 @@ export class ViewPoint implements IViewPoint {
         return 0.1 / this.zoomValue;
     }
 
+    /** Center the camera on a tile coordinate */
+    public setPosition(tileX: number, tileY: number): void {
+        // The shader maps tile (x, y) to instancePos (x + floor(y/2), y),
+        // then offsets by (-posX, -posY).  The projection puts screen-center
+        // at world (aspect, 1) which corresponds to pixelCoord (aspect+1, 2).
+        // So to center tile (tileX, tileY) we need:
+        const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
+        this.posX = tileX + Math.floor(tileY / 2) - aspect - 1;
+        this.posY = tileY - 2;
+        this.deltaX = 0;
+        this.deltaY = 0;
+    }
+
     public get x(): number {
         return this.posX + this.deltaX;
     }
