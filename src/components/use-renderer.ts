@@ -88,6 +88,7 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
             debugStats.state.zoom = r.viewPoint.zoomValue;
             debugStats.state.canvasWidth = r.canvas.width;
             debugStats.state.canvasHeight = r.canvas.height;
+            r.viewPoint.update(1 / 30);
             r.drawOnce();
         });
         game.start();

@@ -4,6 +4,8 @@ import { IViewPoint } from './i-view-point';
  * Handles mouse events and gesture and generates
  * the view-coordinates (x,y,zoom)
  */
+const PAN_KEYS = new Set(['w', 'a', 's', 'd']);
+
 export class ViewPoint implements IViewPoint {
     private posX = 0;
     private posY = 0;
@@ -14,6 +16,8 @@ export class ViewPoint implements IViewPoint {
     public zoomValue = 1;
     private mouseIsMoving = false;
     private canvas: HTMLCanvasElement;
+    private keysDown = new Set<string>();
+    private readonly PAN_SPEED = 8;
 
     /** callback on mouse move */
     public onMove: (() => void) | null = null;
@@ -55,6 +59,9 @@ export class ViewPoint implements IViewPoint {
         canvas.addEventListener('contextmenu', this.handleContextmenu);
         canvas.addEventListener('wheel', this.handleWheel);
 
+        window.addEventListener('keydown', this.handleKeyDown);
+        window.addEventListener('keyup', this.handleKeyUp);
+
         Object.seal(this);
     }
 
@@ -62,6 +69,8 @@ export class ViewPoint implements IViewPoint {
         this.onMove = null;
 
         window.removeEventListener('pointerup', this.handlePointerUp);
+        window.removeEventListener('keydown', this.handleKeyDown);
+        window.removeEventListener('keyup', this.handleKeyUp);
 
         if (this.canvas == null) {
             return;
@@ -115,6 +124,40 @@ export class ViewPoint implements IViewPoint {
             this.onMove();
         }
     };
+
+    private handleKeyDown = (e: KeyboardEvent) => {
+        const key = e.key.toLowerCase();
+        if (PAN_KEYS.has(key)) {
+            this.keysDown.add(key);
+        }
+    };
+
+    private handleKeyUp = (e: KeyboardEvent) => {
+        this.keysDown.delete(e.key.toLowerCase());
+    };
+
+    /** Advance keyboard-driven panning by dt seconds. Call once per frame. */
+    public update(dt: number): void {
+        if (this.keysDown.size === 0) return;
+
+        const speed = this.PAN_SPEED * this.zoomValue * dt;
+        let dx = 0;
+        let dy = 0;
+
+        if (this.keysDown.has('d')) dx += speed;
+        if (this.keysDown.has('a')) dx -= speed;
+        if (this.keysDown.has('s')) { dy += speed * 2; dx += speed; }
+        if (this.keysDown.has('w')) { dy -= speed * 2; dx -= speed; }
+
+        if (dx === 0 && dy === 0) return;
+
+        this.posX += dx;
+        this.posY += dy;
+
+        if (this.onMove) {
+            this.onMove();
+        }
+    }
 
     private handleContextmenu = (e: MouseEvent) => {
         e.preventDefault();

@@ -134,7 +134,11 @@ void main() {
     }
   #endif
 
-  vec2 pixelCoord = instancePos + viewPoint;
+  // Split viewPoint into integer (for tile data lookup) and fractional (for smooth scrolling)
+  vec2 vpInt = floor(viewPoint);
+  vec2 vpFrac = viewPoint - vpInt;
+
+  vec2 pixelCoord = instancePos + vpInt;
 
   // check if position is in map bounds
   if (pixelCoord.x < 0.0 || pixelCoord.x >= mapSize.x
@@ -166,10 +170,12 @@ void main() {
     // for triangle B use
     real_text_pos = type.zw * vec2(127, 255);
   }
+  // Apply fractional viewPoint offset to vertex position for smooth sub-tile scrolling.
+  // The parallelogram transform maps tile offset (fx, fy) to screen offset (fx - fy*0.5, fy*0.5).
   gl_Position = projection *
       vec4(
-        baseVerticesPos.x + instancePos.x - instancePos.y * 0.5,
-        (baseVerticesPos.y + instancePos.y - mapHeight1) * 0.5,
+        baseVerticesPos.x + instancePos.x - instancePos.y * 0.5 - vpFrac.x + vpFrac.y * 0.5,
+        (baseVerticesPos.y + instancePos.y - mapHeight1 - vpFrac.y) * 0.5,
         0,
         1
       );

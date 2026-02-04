@@ -200,7 +200,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         const canvas = gl.canvas as HTMLCanvasElement;
         const aspect = canvas.width / canvas.height;
         const numInstancesX = Math.ceil(2 * aspect / viewPoint.zoom) + 2;
-        const numInstancesY = Math.ceil(4 / viewPoint.zoom) + 2;
+        const numInstancesY = Math.ceil(4 / viewPoint.zoom) + 4;
 
         // ///////////
         // Tell the shader to use all set texture units
