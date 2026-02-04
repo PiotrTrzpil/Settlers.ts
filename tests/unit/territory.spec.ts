@@ -61,7 +61,7 @@ describe('TerritoryMap', () => {
         const buildings: Entity[] = [{
             id: 1,
             type: EntityType.Building,
-            subType: BuildingType.Woodcutter,
+            subType: BuildingType.Lumberjack,
             x: 10,
             y: 10,
             player: 0
