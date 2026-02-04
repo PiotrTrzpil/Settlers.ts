@@ -36,6 +36,9 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     private cachedInstanceW = 0;
     private cachedInstanceH = 0;
 
+    /** Extra Y tile rows needed to cover terrain height displacement at the bottom edge */
+    private heightMarginY: number;
+
     constructor(
         fileManager: FileManager,
         textureManager: TextureManager,
@@ -56,6 +59,15 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         this.useProceduralTextures = useProceduralTextures;
 
         this.texture = new TextureMap16Bit(256 * 6, this.textureManager.create('u_landText'));
+
+        // Compute extra Y rows needed for max terrain height displacement.
+        // Shader: mapHeight = texel.r * 20.0; screen offset = mapHeight * 0.5.
+        // Each tile row covers ~0.5 screen units, so extra rows = ceil(maxHeight).
+        let maxH = 0;
+        for (let i = 0; i < groundHeightMap.length; i++) {
+            if (groundHeightMap[i] > maxH) maxH = groundHeightMap[i];
+        }
+        this.heightMarginY = Math.ceil(maxH / 255 * 20);
 
         Object.seal(this);
     }
@@ -192,11 +204,12 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         // Visible world range: X = [0, 2*aspect/zoom], Y = [0, 2/zoom].
         // Each instance covers ~1 unit in X, ~0.5 units in Y (due to the
         // parallelogram projection), so we need extra instances for Y.
-        // Add a margin of +2 to cover edge tiles that are partially visible.
+        // Extra margins: +4 for X (left/right edge + sub-tile offset + shear),
+        // heightMarginY for bottom edge (tall terrain pushes vertices upward).
         const canvas = gl.canvas as HTMLCanvasElement;
         const aspect = canvas.width / canvas.height;
-        const numInstancesX = Math.ceil(2 * aspect / viewPoint.zoom) + 2;
-        const numInstancesY = Math.ceil(4 / viewPoint.zoom) + 4;
+        const numInstancesX = Math.ceil(2 * aspect / viewPoint.zoom) + 4;
+        const numInstancesY = Math.ceil(4 / viewPoint.zoom) + 4 + this.heightMarginY;
 
         // ///////////
         // Tell the shader to use all set texture units
