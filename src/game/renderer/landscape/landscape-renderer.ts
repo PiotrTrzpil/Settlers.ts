@@ -203,21 +203,30 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         const numInstancesX = Math.ceil(2 * aspect / viewPoint.zoom) + 2;
         const numInstancesY = Math.ceil(4 / viewPoint.zoom) + 2;
 
-        if (LandscapeRenderer._debugDrawCount < 3) {
+        if (LandscapeRenderer._debugDrawCount < 5) {
             LandscapeRenderer._debugDrawCount++;
+            const firstInst = this.getInstancePosArray(numInstancesX, numInstancesY);
+            const firstIX = firstInst[0], firstIY = firstInst[1];
+            const lastIX = firstInst[(numInstancesX * numInstancesY - 1) * 2];
+            const lastIY = firstInst[(numInstancesX * numInstancesY - 1) * 2 + 1];
             console.log('[DEBUG] LandscapeRenderer.draw',
                 'viewPoint x:', viewPoint.x, 'y:', viewPoint.y, 'zoom:', viewPoint.zoom,
                 'instances:', numInstancesX + 'x' + numInstancesY,
                 'mapSize:', this.mapSize.width + 'x' + this.mapSize.height,
-                'canvas:', canvas.width + 'x' + canvas.height);
+                'canvas:', canvas.width + 'x' + canvas.height,
+                'instancePos first:', firstIX + ',' + firstIY,
+                'last:', lastIX + ',' + lastIY,
+                'pixelCoord first:', (firstIX + viewPoint.x) + ',' + (firstIY + viewPoint.y),
+                'pixelCoord last:', (lastIX + viewPoint.x) + ',' + (lastIY + viewPoint.y));
         }
 
         // ///////////
         // Tell the shader to use all set texture units
         this.textureManager.bindToShader(gl, sp);
 
-        // set view Point
-        sp.setVector2('viewPoint', -viewPoint.x, -viewPoint.y);
+        // set view Point – pass as-is (not negated) so that
+        // pixelCoord = instancePos + viewPoint falls inside map bounds.
+        sp.setVector2('viewPoint', viewPoint.x, viewPoint.y);
 
         // ///////////
         // set vertex index
