@@ -21,12 +21,12 @@ declare let WebGLDebugUtils: any;
  */
 export class Renderer {
     private static log = new LogHandler('Renderer');
-    private canvas: HTMLCanvasElement;
+    public canvas: HTMLCanvasElement;
     private gl: WebGLRenderingContext | null = null;
     public textureManager: TextureManager = new TextureManager();
     private renderers: IRenderer[] = [];
     private animRequest = 0;
-    private viewPoint: ViewPoint;
+    public viewPoint: ViewPoint;
 
     constructor(canvas: HTMLCanvasElement) {
         const webGlogger = new LogHandler('WebGL');
@@ -71,7 +71,12 @@ export class Renderer {
         this.requestDraw();
     }
 
-    private requestDraw() {
+    /** Perform a single draw call (used by game loop) */
+    public drawOnce(): void {
+        this.draw();
+    }
+
+    public requestDraw() {
         if (this.animRequest) {
             return;
         }

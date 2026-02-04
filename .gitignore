@@ -27,3 +27,4 @@ css
 /*.zip
 /package-lock.json
 /public/file-list.txt
+test-results/

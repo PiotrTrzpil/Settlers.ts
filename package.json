@@ -13,9 +13,10 @@
     "core-js": "^3.6.5",
     "vue": "^3.0.0",
     "vue-class-component": "^8.0.0-0",
-    "vue-router": "^4.0.0-0"
+    "vue-router": "^4.0.16"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@types/chai": "^4.2.11",
     "@types/mocha": "^5.2.4",
     "@types/node": "^7.0.5",
