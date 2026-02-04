@@ -30,4 +30,44 @@
 
 </template>
 
-<script src="./home.ts"></script>
+<script setup lang="ts">
+import { ref, watch } from 'vue';
+import { FileManager } from '@/utilities/file-manager';
+import { LocalFileProvider } from '@/utilities/local-file-provider';
+
+const props = defineProps<{
+    fileManager: FileManager;
+}>();
+
+const isValidSettlers = ref(false);
+
+function checkIsValidSettlers() {
+    if (!props.fileManager) {
+        isValidSettlers.value = false;
+        return;
+    }
+
+    isValidSettlers.value = props.fileManager.findFile('game.lib', false) != null;
+}
+
+async function selectFiles(e: Event) {
+    if ((!e) || (!e.target)) {
+        return;
+    }
+
+    const files = (e.target as HTMLInputElement).files;
+    if ((!files)) {
+        return;
+    }
+
+    await props.fileManager.addSource(new LocalFileProvider(files));
+
+    checkIsValidSettlers();
+}
+
+watch(() => props.fileManager, () => {
+    checkIsValidSettlers();
+});
+
+checkIsValidSettlers();
+</script>

@@ -1,7 +1,7 @@
 import { BinaryReader } from '@/resources/file/binary-reader';
 import { Compression } from '@/resources/file/compress';
 import { Decompress } from '@/resources/file/decompress';
-import { expect } from 'chai';
+import { describe, it, expect } from 'vitest';
 
 describe('compression/decompression.ts', () => {
     it('compression decompression round trip', () => {
@@ -12,7 +12,7 @@ describe('compression/decompression.ts', () => {
         const unComp = new Decompress();
         const result = unComp.unpack(comp, 0, comp.length, srcText.length);
 
-        expect(result.readString()).to.equal(srcText);
+        expect(result.readString()).toBe(srcText);
     });
 
     it('Decompress can unpack byte data', () => {
@@ -36,7 +36,7 @@ describe('compression/decompression.ts', () => {
 
         const result = resultBuffer.readString();
 
-        expect(result).to.equal(
+        expect(result).toBe(
             'The quick brown fox jumps over the lazy dog.\r\n' +
             'Jackdaws love my big sphinx of quartz.\r\n' +
             'Pack my box with five dozen liquor jugs.\r\n' +
@@ -56,7 +56,7 @@ describe('compression/decompression.ts', () => {
         const resultBuffer = decompress.unpack(sourceBuffer, 0, sourceBuffer.length, 27);
         const readStringHex = resultBuffer.readStringHex(null, null, ' ');
 
-        expect(readStringHex).to.equal('45 00 45 00 66 00 66 00 87 00 87 00 87 00 66 00 66 00 45 00 45 00 45 00 66 00 00 ');
+        expect(readStringHex).toBe('45 00 45 00 66 00 66 00 87 00 87 00 87 00 66 00 66 00 45 00 45 00 45 00 66 00 00 ');
     });
 
     it('Decompress can process multi chunks', () => {
@@ -68,6 +68,6 @@ describe('compression/decompression.ts', () => {
         const resultBuffer = decompress.unpack(sourceBuffer, 0, sourceBuffer.length, 26);
         const readStringHex = resultBuffer.readString();
 
-        expect(readStringHex).to.equal('Hello World!\0Hello World!\0');
+        expect(readStringHex).toBe('Hello World!\0Hello World!\0');
     });
 });

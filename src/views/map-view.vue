@@ -82,7 +82,105 @@
   />
 </template>
 
-<script src="./map-view.ts"></script>
+<script setup lang="ts">
+import { ref, shallowRef, computed } from 'vue';
+import { MapLoader } from '@/resources/map/map-loader';
+import { Game } from '@/game/game';
+import { Entity, TileCoord, UnitType } from '@/game/entity';
+import { FileManager, IFileSource } from '@/utilities/file-manager';
+import { LogHandler } from '@/utilities/log-handler';
+
+import FileBrowser from '@/components/file-browser.vue';
+import RendererViewer from '@/components/renderer-viewer.vue';
+
+const log = new LogHandler('MapView');
+
+const props = defineProps<{
+    fileManager: FileManager;
+}>();
+
+const fileName = ref<string | null>(null);
+const mapInfo = ref('');
+const game = shallowRef<Game | null>(null);
+const showDebug = ref(false);
+const hoveredTile = ref<TileCoord | null>(null);
+
+const selectedEntity = computed<Entity | undefined>(() => {
+    if (!game.value || game.value.state.selectedEntityId === null) return undefined;
+    return game.value.state.getEntity(game.value.state.selectedEntityId);
+});
+
+function onFileSelect(file: IFileSource) {
+    fileName.value = file.name;
+    void load(file);
+}
+
+function onTileClick(tile: TileCoord) {
+    hoveredTile.value = tile;
+}
+
+function setPlaceMode(buildingType: number) {
+    if (!game.value) return;
+    game.value.mode = 'place_building';
+    game.value.placeBuildingType = buildingType;
+}
+
+function setSelectMode() {
+    if (!game.value) return;
+    game.value.mode = 'select';
+}
+
+function spawnUnit(unitType: number) {
+    if (!game.value) return;
+
+    let spawnX = 10;
+    let spawnY = 10;
+
+    if (game.value.state.selectedEntityId !== null) {
+        const selected = game.value.state.getEntity(game.value.state.selectedEntityId);
+        if (selected) {
+            spawnX = selected.x;
+            spawnY = selected.y;
+        }
+    } else if (hoveredTile.value) {
+        spawnX = hoveredTile.value.x;
+        spawnY = hoveredTile.value.y;
+    }
+
+    game.value.execute({
+        type: 'spawn_unit',
+        unitType: unitType as UnitType,
+        x: spawnX,
+        y: spawnY,
+        player: game.value.currentPlayer
+    });
+}
+
+async function load(file: IFileSource) {
+    if (!props.fileManager) {
+        return;
+    }
+
+    try {
+        const fileData = await file.readBinary();
+        if (!fileData) {
+            log.error('Unable to load ' + file.name);
+            return;
+        }
+
+        const mapContent = MapLoader.getLoader(fileData);
+        if (!mapContent) {
+            log.error('Unsupported map format: ' + file.name);
+            return;
+        }
+
+        mapInfo.value = mapContent.toString();
+        game.value = new Game(props.fileManager, mapContent);
+    } catch (e) {
+        log.error('Failed to load map: ' + file.name, e instanceof Error ? e : new Error(String(e)));
+    }
+}
+</script>
 
 <style scoped>
 .mulit-row{

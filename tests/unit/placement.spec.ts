@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { canPlaceBuilding, isPassable, isBuildable } from '@/game/systems/placement';
 import { MapSize } from '@/utilities/map-size';
 
@@ -6,54 +6,54 @@ describe('Building Placement', () => {
     describe('isPassable', () => {
         it('should return false for water (0-8)', () => {
             for (let i = 0; i <= 8; i++) {
-                expect(isPassable(i)).to.equal(false);
+                expect(isPassable(i)).toBe(false);
             }
         });
 
         it('should return false for rock (32)', () => {
-            expect(isPassable(32)).to.equal(false);
+            expect(isPassable(32)).toBe(false);
         });
 
         it('should return true for grass (16)', () => {
-            expect(isPassable(16)).to.equal(true);
+            expect(isPassable(16)).toBe(true);
         });
 
         it('should return true for beach (48)', () => {
-            expect(isPassable(48)).to.equal(true);
+            expect(isPassable(48)).toBe(true);
         });
 
         it('should return true for desert (64)', () => {
-            expect(isPassable(64)).to.equal(true);
+            expect(isPassable(64)).toBe(true);
         });
     });
 
     describe('isBuildable', () => {
         it('should return true for grass (16)', () => {
-            expect(isBuildable(16)).to.equal(true);
+            expect(isBuildable(16)).toBe(true);
         });
 
         it('should return true for desert (64)', () => {
-            expect(isBuildable(64)).to.equal(true);
+            expect(isBuildable(64)).toBe(true);
         });
 
         it('should return false for water (0)', () => {
-            expect(isBuildable(0)).to.equal(false);
+            expect(isBuildable(0)).toBe(false);
         });
 
         it('should return false for rock (32)', () => {
-            expect(isBuildable(32)).to.equal(false);
+            expect(isBuildable(32)).toBe(false);
         });
 
         it('should return false for beach (48)', () => {
-            expect(isBuildable(48)).to.equal(false);
+            expect(isBuildable(48)).toBe(false);
         });
 
         it('should return false for swamp (80)', () => {
-            expect(isBuildable(80)).to.equal(false);
+            expect(isBuildable(80)).toBe(false);
         });
 
         it('should return false for snow (128)', () => {
-            expect(isBuildable(128)).to.equal(false);
+            expect(isBuildable(128)).toBe(false);
         });
     });
 
@@ -72,23 +72,23 @@ describe('Building Placement', () => {
         });
 
         it('should allow placement on flat grass', () => {
-            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).to.equal(true);
+            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).toBe(true);
         });
 
         it('should reject placement on water', () => {
             groundType[mapSize.toIndex(10, 10)] = 0;
-            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).to.equal(false);
+            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).toBe(false);
         });
 
         it('should reject placement on occupied tile', () => {
             occupancy.set('10,10', 1);
-            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).to.equal(false);
+            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).toBe(false);
         });
 
         it('should reject placement on steep slope', () => {
             groundHeight[mapSize.toIndex(10, 10)] = 10;
             groundHeight[mapSize.toIndex(11, 10)] = 0;
-            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).to.equal(false);
+            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).toBe(false);
         });
 
         it('should allow placement on gentle slope', () => {
@@ -97,7 +97,7 @@ describe('Building Placement', () => {
             groundHeight[mapSize.toIndex(9, 10)] = 4;
             groundHeight[mapSize.toIndex(10, 11)] = 4;
             groundHeight[mapSize.toIndex(10, 9)] = 4;
-            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).to.equal(true);
+            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).toBe(true);
         });
     });
 });

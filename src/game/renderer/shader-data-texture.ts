@@ -48,7 +48,7 @@ export class ShaderDataTexture extends ShaderTexture {
     public create(gl: WebGLRenderingContext): void {
         super.bind(gl);
 
-        let internalFormat = gl.RGBA;
+        let internalFormat: GLenum = gl.RGBA;
 
         switch (this.numberOfElements) {
         case 1:

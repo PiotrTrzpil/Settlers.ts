@@ -1,16 +1,18 @@
 module.exports = {
     root: true,
     env: {
-        node: true
+        node: true,
+        browser: true,
+        es2020: true
     },
     extends: [
         'plugin:vue/vue3-essential',
-        '@vue/standard',
-        '@vue/typescript/recommended'
+        'eslint:recommended',
+        '@vue/eslint-config-typescript'
     ],
     parserOptions: {
         ecmaVersion: 2020,
-        project: './tsconfig.json'
+        sourceType: 'module'
     },
     rules: {
         'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
@@ -29,37 +31,13 @@ module.exports = {
         eqeqeq: ['warn', 'smart'],
         'no-throw-literal': 'error',
         'no-void': 'off',
-        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-
-        // Type-checked rules (use TypeScript compiler for deeper analysis)
-        '@typescript-eslint/no-floating-promises': 'warn',
-        '@typescript-eslint/no-misused-promises': 'warn',
-        '@typescript-eslint/await-thenable': 'warn',
-        '@typescript-eslint/no-unnecessary-type-assertion': 'warn',
-        '@typescript-eslint/restrict-plus-operands': 'off'
+        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
     },
     overrides: [
         {
-            files: [
-                '**/__tests__/*.{j,t}s?(x)',
-                '**/tests/unit/**/*.spec.{j,t}s?(x)'
-            ],
+            files: ['*.js', '*.cjs'],
             env: {
-                mocha: true
-            }
-        },
-        {
-            // JS config files are not included in tsconfig.json
-            files: ['*.js'],
-            parserOptions: {
-                project: null
-            },
-            rules: {
-                '@typescript-eslint/no-floating-promises': 'off',
-                '@typescript-eslint/no-misused-promises': 'off',
-                '@typescript-eslint/await-thenable': 'off',
-                '@typescript-eslint/no-unnecessary-type-assertion': 'off',
-                '@typescript-eslint/restrict-plus-operands': 'off'
+                node: true
             }
         }
     ]
