@@ -153,159 +153,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, computed, watch, onMounted } from 'vue';
-import { MapLoader } from '@/resources/map/map-loader';
-import { Game } from '@/game/game';
-import { Entity, TileCoord, UnitType } from '@/game/entity';
-import { FileManager, IFileSource } from '@/utilities/file-manager';
-import { LogHandler } from '@/utilities/log-handler';
+import { FileManager } from '@/utilities/file-manager';
+import { useMapView } from './use-map-view';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
-
-const log = new LogHandler('MapView');
 
 const props = defineProps<{
     fileManager: FileManager;
 }>();
 
-const fileName = ref<string | null>(null);
-const mapInfo = ref('');
-const game = shallowRef<Game | null>(null);
-const showDebug = ref(false);
-const activeTab = ref<'buildings' | 'units'>('buildings');
-const hoveredTile = ref<TileCoord | null>(null);
-
-const selectedEntity = computed<Entity | undefined>(() => {
-    if (!game.value || game.value.state.selectedEntityId === null) return undefined;
-    return game.value.state.getEntity(game.value.state.selectedEntityId);
-});
-
-const selectionCount = computed<number>(() => {
-    if (!game.value) return 0;
-    return game.value.state.selectedEntityIds.size;
-});
-
-const isPaused = computed<boolean>(() => {
-    if (!game.value) return false;
-    return !game.value.gameLoop.isRunning;
-});
-
-function autoLoadFirstMap(): void {
-    if (game.value || !props.fileManager) return;
-    const maps = props.fileManager.filter('.map');
-    if (maps.length > 0) {
-        onFileSelect(maps[0]);
-    }
-}
-
-onMounted(() => {
-    autoLoadFirstMap();
-});
-
-watch(() => props.fileManager, () => {
-    autoLoadFirstMap();
-});
-
-function onFileSelect(file: IFileSource) {
-    fileName.value = file.name;
-    void load(file);
-}
-
-function onTileClick(tile: TileCoord) {
-    hoveredTile.value = tile;
-}
-
-function setPlaceMode(buildingType: number) {
-    if (!game.value) return;
-    game.value.mode = 'place_building';
-    game.value.placeBuildingType = buildingType;
-}
-
-function setSelectMode() {
-    if (!game.value) return;
-    game.value.mode = 'select';
-}
-
-function removeSelected(): void {
-    if (!game.value || game.value.state.selectedEntityId === null) return;
-    game.value.execute({
-        type: 'remove_entity',
-        entityId: game.value.state.selectedEntityId
-    });
-}
-
-function togglePause(): void {
-    if (!game.value) return;
-    if (game.value.gameLoop.isRunning) {
-        game.value.stop();
-    } else {
-        game.value.start();
-    }
-}
-
-function spawnUnit(unitType: number) {
-    if (!game.value) return;
-
-    // Spawn at selected entity location, last clicked tile, or first land tile
-    let spawnX = -1;
-    let spawnY = -1;
-
-    if (game.value.state.selectedEntityId !== null) {
-        const selected = game.value.state.getEntity(game.value.state.selectedEntityId);
-        if (selected) {
-            spawnX = selected.x;
-            spawnY = selected.y;
-        }
-    } else if (hoveredTile.value) {
-        spawnX = hoveredTile.value.x;
-        spawnY = hoveredTile.value.y;
-    }
-
-    // If no valid position chosen, find buildable land
-    if (spawnX < 0) {
-        const land = game.value.findLandTile();
-        if (land) {
-            spawnX = land.x;
-            spawnY = land.y;
-        }
-    }
-
-    if (spawnX < 0) return; // no valid tile found
-
-    game.value.execute({
-        type: 'spawn_unit',
-        unitType: unitType as UnitType,
-        x: spawnX,
-        y: spawnY,
-        player: game.value.currentPlayer
-    });
-}
-
-async function load(file: IFileSource) {
-    if (!props.fileManager) {
-        return;
-    }
-
-    try {
-        const fileData = await file.readBinary();
-        if (!fileData) {
-            log.error('Unable to load ' + file.name);
-            return;
-        }
-
-        const mapContent = MapLoader.getLoader(fileData);
-        if (!mapContent) {
-            log.error('Unsupported map format: ' + file.name);
-            return;
-        }
-
-        mapInfo.value = mapContent.toString();
-        game.value = new Game(props.fileManager, mapContent);
-    } catch (e) {
-        log.error('Failed to load map: ' + file.name, e instanceof Error ? e : new Error(String(e)));
-    }
-}
+const {
+    mapInfo,
+    game,
+    showDebug,
+    activeTab,
+    hoveredTile,
+    selectedEntity,
+    selectionCount,
+    isPaused,
+    onFileSelect,
+    onTileClick,
+    setPlaceMode,
+    setSelectMode,
+    removeSelected,
+    togglePause,
+    spawnUnit
+} = useMapView(() => props.fileManager);
 </script>
 
 <style scoped>

@@ -28,7 +28,7 @@ export class FileListProvider implements IFileProvider {
     }
 
     private async loadFileList() {
-        const fp = new RemoteFile(process.env.BASE_URL);
+        const fp = new RemoteFile(import.meta.env.BASE_URL);
         const fileListText = await fp.loadString('file-list.txt');
 
         return fileListText
