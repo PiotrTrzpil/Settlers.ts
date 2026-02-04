@@ -65,6 +65,9 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
             renderer.viewPoint.setPosition(landTile.x, landTile.y);
         }
 
+        // Expose viewPoint for e2e tests (Vue internals are stripped in prod)
+        (window as any).__settlers_viewpoint__ = renderer.viewPoint;
+
         const r = renderer;
         game.gameLoop.setRenderCallback(() => {
             const g = getGame();

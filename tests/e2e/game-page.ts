@@ -146,6 +146,106 @@ export class GamePage {
         await this.clickButton('btn-select-mode');
     }
 
+    // ── Game state (via __settlers_game__) ─────────────────
+
+    /** Read structured game state including entities and map size. */
+    async getGameState(): Promise<{
+        mode: string;
+        placeBuildingType: number;
+        entityCount: number;
+        entities: Array<{ id: number; type: number; subType: number; x: number; y: number; player: number }>;
+        mapWidth: number;
+        mapHeight: number;
+    } | null> {
+        return this.page.evaluate(() => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            return {
+                mode: game.mode,
+                placeBuildingType: game.placeBuildingType,
+                entityCount: game.state.entities.length,
+                entities: game.state.entities.map((e: any) => ({
+                    id: e.id, type: e.type, subType: e.subType,
+                    x: e.x, y: e.y, player: e.player
+                })),
+                mapWidth: game.mapSize.width,
+                mapHeight: game.mapSize.height,
+            };
+        });
+    }
+
+    /** Move camera to a specific tile position. */
+    async moveCamera(tileX: number, tileY: number): Promise<void> {
+        await this.page.evaluate(({ x, y }) => {
+            const vp = (window as any).__settlers_viewpoint__;
+            if (vp) {
+                vp.posX = x;
+                vp.posY = y;
+                vp.deltaX = 0;
+                vp.deltaY = 0;
+            }
+        }, { x: tileX, y: tileY });
+        await this.page.waitForFunction(
+            ({ x, y }) => {
+                const d = (window as any).__settlers_debug__;
+                return d && Math.abs(d.cameraX - x) < 2 && Math.abs(d.cameraY - y) < 2;
+            },
+            { x: tileX, y: tileY },
+            { timeout: 5000 },
+        ).catch(() => { /* camera may not report exact coords — fall through */ });
+    }
+
+    /**
+     * Find a buildable tile by spiraling from map center.
+     * Temporarily places and removes a building to validate terrain + slope.
+     */
+    async findBuildableTile(): Promise<{ x: number; y: number } | null> {
+        return this.page.evaluate(() => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            const w = game.mapSize.width;
+            const h = game.mapSize.height;
+            const cx = Math.floor(w / 2);
+            const cy = Math.floor(h / 2);
+            const existingIds = new Set(game.state.entities.map((e: any) => e.id));
+
+            for (let r = 0; r < Math.max(w, h) / 2; r++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    for (let dy = -r; dy <= r; dy++) {
+                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+                        const tx = cx + dx;
+                        const ty = cy + dy;
+                        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+
+                        const ok = game.execute({
+                            type: 'place_building',
+                            buildingType: 0, x: tx, y: ty, player: 0
+                        });
+                        if (ok) {
+                            const newEntities = game.state.entities.filter(
+                                (e: any) => !existingIds.has(e.id)
+                            );
+                            for (const e of newEntities) {
+                                game.execute({ type: 'remove_entity', entityId: e.id });
+                            }
+                            return { x: tx, y: ty };
+                        }
+                    }
+                }
+            }
+            return null;
+        });
+    }
+
+    /** Wait for entity count to exceed a given value. */
+    async waitForEntityCountAbove(n: number, timeout = 5000): Promise<void> {
+        await this.page.waitForFunction(
+            (min) => (window as any).__settlers_debug__?.entityCount > min,
+            n,
+            { timeout },
+        );
+    }
+
     // ── Canvas diagnostics ──────────────────────────────────
 
     /** Sample pixel colors from the WebGL canvas at named positions. */

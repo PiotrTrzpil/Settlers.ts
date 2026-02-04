@@ -117,6 +117,8 @@ class DebugStats {
     }
 
     public updateFromGame(game: Game): void {
+        // Expose game reference for e2e tests (Vue internals are stripped in prod builds)
+        (window as any).__settlers_game__ = game;
         const gameState = game.state;
         this.state.entityCount = gameState.entities.length;
 

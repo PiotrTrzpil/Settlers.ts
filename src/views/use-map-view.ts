@@ -1,4 +1,4 @@
-import { ref, shallowRef, computed, watch, onMounted } from 'vue';
+import { ref, shallowRef, triggerRef, computed, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
@@ -85,11 +85,13 @@ export function useMapView(getFileManager: () => FileManager) {
         if (!game.value) return;
         game.value.mode = 'place_building';
         game.value.placeBuildingType = buildingType;
+        triggerRef(game);
     }
 
     function setSelectMode() {
         if (!game.value) return;
         game.value.mode = 'select';
+        triggerRef(game);
     }
 
     function removeSelected(): void {
@@ -98,6 +100,7 @@ export function useMapView(getFileManager: () => FileManager) {
             type: 'remove_entity',
             entityId: game.value.state.selectedEntityId
         });
+        triggerRef(game);
     }
 
     function togglePause(): void {
@@ -143,6 +146,7 @@ export function useMapView(getFileManager: () => FileManager) {
             y: spawnY,
             player: game.value.currentPlayer
         });
+        triggerRef(game);
     }
 
     async function load(file: IFileSource) {
