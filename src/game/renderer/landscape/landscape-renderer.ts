@@ -175,9 +175,15 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
             return;
         }
 
-        // setup matrices, one per instance
-        const numInstancesX = 2 / viewPoint.zoom;
-        const numInstancesY = 4 / viewPoint.zoom;
+        // Calculate how many tile instances are needed to fill the viewport.
+        // Visible world range: X = [0, 2*aspect/zoom], Y = [0, 2/zoom].
+        // Each instance covers ~1 unit in X, ~0.5 units in Y (due to the
+        // parallelogram projection), so we need extra instances for Y.
+        // Add a margin of +2 to cover edge tiles that are partially visible.
+        const canvas = gl.canvas as HTMLCanvasElement;
+        const aspect = canvas.width / canvas.height;
+        const numInstancesX = Math.ceil(2 * aspect / viewPoint.zoom) + 2;
+        const numInstancesY = Math.ceil(4 / viewPoint.zoom) + 2;
 
         // ///////////
         // Tell the shader to use all set texture units

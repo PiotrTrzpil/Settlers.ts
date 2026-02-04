@@ -30,7 +30,7 @@ varying float v_shader_color;
 // output texture coordinate of the background
 varying vec2 v_texcoord;
 
-vec2 mapSize = vec2(MAP_HEIGHT, MAP_WIDTH);
+vec2 mapSize = vec2(MAP_WIDTH, MAP_HEIGHT);
 
 // the position the camera is focused at
 uniform vec2 viewPoint;
@@ -137,11 +137,14 @@ void main() {
   // https://webglfundamentals.org/webgl/lessons/webgl-pulling-vertices.html
   vec2 pixelCoord = instancePos + viewPoint;
 
-  // check if position is in map position
-  if (pixelCoord.x < 0.0 || pixelCoord.x >= mapSize.x 
+  // check if position is in map bounds
+  if (pixelCoord.x < 0.0 || pixelCoord.x >= mapSize.x
       || pixelCoord.y < 0.0 || pixelCoord.y >= mapSize.y) {
-        // out of map
-        v_texcoord = vec2(-1, -1);
+        // Move vertex outside clip space so the triangle is clipped entirely.
+        // Without this, gl_Position would be undefined (the early return left
+        // it unset), which is technically undefined behavior.
+        gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+        v_texcoord = vec2(-1.0, -1.0);
         return;
   }
  

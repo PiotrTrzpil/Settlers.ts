@@ -131,14 +131,12 @@ export class TextureMap16Bit extends ShaderTexture {
 
         super.bind(gl);
 
-        gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border,
-            format, type, this.imgData);
-
+        // UNPACK_ALIGNMENT must be set before texImage2D so that WebGL
+        // interprets the source data rows with the correct stride.
+        // 16-bit (2 byte) texels require alignment of 2.
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
 
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border,
+            format, type, this.imgData);
     }
 }

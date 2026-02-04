@@ -82,12 +82,22 @@ export class Renderer {
             return;
         }
 
-        const zoomV = this.viewPoint.zoom;
-
-        // define camera
+        // Sync the drawing buffer to the canvas display size so the
+        // aspect ratio matches and the rendered image is crisp.
         const canvas = this.canvas;
-        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-        const aspect = canvas.clientWidth / canvas.clientHeight;
+        const displayWidth = canvas.clientWidth;
+        const displayHeight = canvas.clientHeight;
+        if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+            canvas.width = displayWidth;
+            canvas.height = displayHeight;
+        }
+
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        const zoomV = this.viewPoint.zoom;
+        const aspect = canvas.width / canvas.height;
         const projection = Matrix
             .createOrthographic(-aspect, aspect, 1, -1, -1, 1)
             .translate(-1, 1, 0)

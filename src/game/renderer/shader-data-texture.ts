@@ -10,6 +10,9 @@ export class ShaderDataTexture extends ShaderTexture {
     public height: number;
     public numberOfElements: number;
 
+    /** Whether the texture data has been uploaded to the GPU */
+    private uploaded = false;
+
     public constructor(width: number, height: number, numberOfElements: number, textureIndex: number) {
         super(textureIndex);
 
@@ -45,8 +48,15 @@ export class ShaderDataTexture extends ShaderTexture {
         }
     }
 
+    /** Upload the texture data to the GPU (first call) or just bind the
+     *  existing texture to its slot (subsequent calls). The map data is
+     *  static so there is no need to re-upload every frame. */
     public create(gl: WebGLRenderingContext): void {
         super.bind(gl);
+
+        if (this.uploaded) {
+            return;
+        }
 
         let internalFormat: GLenum = gl.RGBA;
 
@@ -67,7 +77,10 @@ export class ShaderDataTexture extends ShaderTexture {
         const format = internalFormat;
         const type = gl.UNSIGNED_BYTE;
 
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
         gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, this.width, this.height, border,
             format, type, this.imgData);
+
+        this.uploaded = true;
     }
 }

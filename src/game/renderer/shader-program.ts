@@ -16,6 +16,9 @@ export class ShaderProgram implements ShaderObject {
     // eslint-disable-next-line camelcase
     private extInstancedArrays: ANGLE_instanced_arrays | null = null;
 
+    /** Cached WebGL buffers keyed by attribute name to avoid leaking GPU memory */
+    private bufferCache: Map<string, WebGLBuffer> = new Map();
+
     constructor() {
         Object.seal(this);
     }
@@ -123,9 +126,15 @@ export class ShaderProgram implements ShaderObject {
         const attribLocation = gl.getAttribLocation(this.shaderProgram, name);
         gl.enableVertexAttribArray(attribLocation);
 
-        const buffer = gl.createBuffer();
+        // Reuse an existing buffer for this attribute or create one.
+        // Previously a new buffer was created every frame, leaking GPU memory.
+        let buffer = this.bufferCache.get(name);
+        if (!buffer) {
+            buffer = gl.createBuffer()!;
+            this.bufferCache.set(name, buffer);
+        }
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, values, gl.STATIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, values, gl.DYNAMIC_DRAW);
 
         gl.vertexAttribPointer(attribLocation, size, type, false, 0, 0);
 
@@ -191,6 +200,11 @@ export class ShaderProgram implements ShaderObject {
                 this.gl.deleteShader(s);
             }
         }
+
+        for (const buf of this.bufferCache.values()) {
+            this.gl.deleteBuffer(buf);
+        }
+        this.bufferCache.clear();
     }
 
     /**
