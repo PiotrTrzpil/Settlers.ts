@@ -1,22 +1,52 @@
-import { TileCoord, CARDINAL_OFFSETS, tileKey } from '../entity';
+import { TileCoord, tileKey } from '../entity';
 import { isPassable } from './placement';
-
-interface PathNode {
-    x: number;
-    y: number;
-    g: number; // cost from start
-    h: number; // heuristic to goal
-    f: number; // g + h
-    parent: PathNode | null;
-}
+import { GRID_DELTAS, NUMBER_OF_DIRECTIONS, hexDistance } from './hex-directions';
 
 const MAX_SEARCH_NODES = 2000;
 
 /**
- * A* pathfinding on the tile grid.
+ * Bucket queue for A* — O(1) insert, amortized O(1) popMin.
+ * Nodes are grouped into buckets by integer floor of their cost.
+ * On uniform-cost grids this is significantly faster than a binary heap.
+ */
+class ListMinBucketQueue {
+    private buckets: number[][] = [];
+    private minBucket = 0;
+    private _size = 0;
+
+    get size(): number {
+        return this._size;
+    }
+
+    insert(nodeId: number, cost: number): void {
+        const bucketIndex = Math.max(0, Math.floor(cost));
+        // Ensure capacity
+        while (this.buckets.length <= bucketIndex) {
+            this.buckets.push([]);
+        }
+        this.buckets[bucketIndex].push(nodeId);
+        if (bucketIndex < this.minBucket) {
+            this.minBucket = bucketIndex;
+        }
+        this._size++;
+    }
+
+    popMin(): number {
+        while (this.minBucket < this.buckets.length && this.buckets[this.minBucket].length === 0) {
+            this.minBucket++;
+        }
+        this._size--;
+        return this.buckets[this.minBucket].pop()!;
+    }
+}
+
+/**
+ * A* pathfinding on the hex tile grid.
  *
- * Uses 4-directional movement (up/down/left/right).
+ * Uses 6-directional movement (hex grid neighbors).
  * Cost = 1 + abs(heightDiff). Impassable tiles block movement.
+ * Uses bucket queue for O(1) insert and amortized O(1) extract-min.
+ * Uses flat arrays for costs and bitset-style tracking for open/closed sets.
  *
  * Returns array of waypoints from start (exclusive) to goal (inclusive),
  * or null if no path found.
@@ -42,57 +72,69 @@ export function findPath(
         return null;
     }
 
-    const openSet: PathNode[] = [];
-    const closedSet = new Set<number>();
+    const totalTiles = mapWidth * mapHeight;
 
-    const startH = heuristic(startX, startY, goalX, goalY);
-    const startNode: PathNode = {
-        x: startX,
-        y: startY,
-        g: 0,
-        h: startH,
-        f: startH,
-        parent: null
-    };
-    openSet.push(startNode);
+    // Flat arrays for costs — Float32Array avoids Map overhead
+    const gCost = new Float32Array(totalTiles);
+    gCost.fill(Infinity);
+
+    // Parent tracking — integer index, -1 = no parent
+    const parent = new Int32Array(totalTiles);
+    parent.fill(-1);
+
+    // Bitset-style open/closed tracking using Uint8Array
+    // Bit 0 = in open set, Bit 1 = in closed set
+    const flags = new Uint8Array(totalTiles);
+    const FLAG_OPEN = 1;
+    const FLAG_CLOSED = 2;
+
+    const openQueue = new ListMinBucketQueue();
+
+    const startIdx = startX + startY * mapWidth;
+    const startH = hexDistance(startX, startY, goalX, goalY);
+    gCost[startIdx] = 0;
+    flags[startIdx] = FLAG_OPEN;
+    openQueue.insert(startIdx, startH);
 
     let nodesSearched = 0;
 
-    while (openSet.length > 0 && nodesSearched < MAX_SEARCH_NODES) {
-        // Find node with lowest f
-        let bestIdx = 0;
-        for (let i = 1; i < openSet.length; i++) {
-            if (openSet[i].f < openSet[bestIdx].f) {
-                bestIdx = i;
-            }
-        }
+    while (openQueue.size > 0 && nodesSearched < MAX_SEARCH_NODES) {
+        const currentIdx = openQueue.popMin();
 
-        const current = openSet[bestIdx];
-        openSet.splice(bestIdx, 1);
-
-        if (current.x === goalX && current.y === goalY) {
-            return reconstructPath(current);
-        }
-
-        const closedKey = current.x + current.y * mapWidth;
-        if (closedSet.has(closedKey)) continue;
-        closedSet.add(closedKey);
+        // Skip if already closed (bucket queue may have stale entries)
+        if (flags[currentIdx] & FLAG_CLOSED) continue;
+        flags[currentIdx] = FLAG_CLOSED;
         nodesSearched++;
 
-        for (const [dx, dy] of CARDINAL_OFFSETS) {
-            const nx = current.x + dx;
-            const ny = current.y + dy;
+        const cx = currentIdx % mapWidth;
+        const cy = (currentIdx - cx) / mapWidth;
+
+        // Goal check
+        if (cx === goalX && cy === goalY) {
+            return reconstructPathFromArrays(currentIdx, parent, mapWidth);
+        }
+
+        const currentG = gCost[currentIdx];
+        const currentHeight = groundHeight[currentIdx];
+
+        // Expand all 6 hex neighbors
+        for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+            const [dx, dy] = GRID_DELTAS[d];
+            const nx = cx + dx;
+            const ny = cy + dy;
 
             // Bounds check
             if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) {
                 continue;
             }
 
-            const nKey = nx + ny * mapWidth;
-            if (closedSet.has(nKey)) continue;
+            const nIdx = nx + ny * mapWidth;
+
+            // Skip if already closed
+            if (flags[nIdx] & FLAG_CLOSED) continue;
 
             // Check passability
-            if (!isPassable(groundType[nKey])) continue;
+            if (!isPassable(groundType[nIdx])) continue;
 
             // Don't path through occupied tiles (except the goal)
             if (nx !== goalX || ny !== goalY) {
@@ -102,33 +144,18 @@ export function findPath(
             }
 
             // Cost: base 1 + height difference penalty
-            const currentHeight = groundHeight[current.x + current.y * mapWidth];
-            const neighborHeight = groundHeight[nKey];
+            const neighborHeight = groundHeight[nIdx];
             const heightDiff = Math.abs(currentHeight - neighborHeight);
             const moveCost = 1 + heightDiff;
 
-            const tentativeG = current.g + moveCost;
+            const tentativeG = currentG + moveCost;
 
-            // Check if already in open set with better g
-            const existingIdx = openSet.findIndex(n => n.x === nx && n.y === ny);
-            if (existingIdx >= 0 && openSet[existingIdx].g <= tentativeG) {
-                continue;
-            }
-
-            const h = heuristic(nx, ny, goalX, goalY);
-            const newNode: PathNode = {
-                x: nx,
-                y: ny,
-                g: tentativeG,
-                h,
-                f: tentativeG + h,
-                parent: current
-            };
-
-            if (existingIdx >= 0) {
-                openSet[existingIdx] = newNode;
-            } else {
-                openSet.push(newNode);
+            if (tentativeG < gCost[nIdx]) {
+                gCost[nIdx] = tentativeG;
+                parent[nIdx] = currentIdx;
+                flags[nIdx] |= FLAG_OPEN;
+                const h = hexDistance(nx, ny, goalX, goalY);
+                openQueue.insert(nIdx, tentativeG + h);
             }
         }
     }
@@ -136,17 +163,23 @@ export function findPath(
     return null; // No path found
 }
 
-function heuristic(ax: number, ay: number, bx: number, by: number): number {
-    return Math.abs(ax - bx) + Math.abs(ay - by);
-}
-
-function reconstructPath(node: PathNode): TileCoord[] {
+/**
+ * Reconstruct path from flat parent array.
+ * Returns waypoints from start (exclusive) to goal (inclusive).
+ */
+function reconstructPathFromArrays(
+    goalIdx: number,
+    parent: Int32Array,
+    mapWidth: number,
+): TileCoord[] {
     const path: TileCoord[] = [];
-    let current: PathNode | null = node;
+    let idx = goalIdx;
 
-    while (current !== null && current.parent !== null) {
-        path.push({ x: current.x, y: current.y });
-        current = current.parent;
+    while (parent[idx] !== -1) {
+        const x = idx % mapWidth;
+        const y = (idx - x) / mapWidth;
+        path.push({ x, y });
+        idx = parent[idx];
     }
 
     path.reverse();
