@@ -80,7 +80,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.groundHeight = groundHeight;
     }
 
-    public async init(gl: WebGLRenderingContext): Promise<boolean> {
+    public async init(gl: WebGL2RenderingContext): Promise<boolean> {
         super.initShader(gl, vertCode, fragCode);
 
         const sp = this.shaderProgram;
@@ -96,7 +96,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         return true;
     }
 
-    public draw(gl: WebGLRenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
+    public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         if (!this.dynamicBuffer) return;
         if (this.entities.length === 0 && !this.previewTile) return;
 
@@ -197,7 +197,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /** Draw dots along the remaining path of all selected units */
-    private drawSelectedUnitPath(gl: WebGLRenderingContext, viewPoint: IViewPoint): void {
+    private drawSelectedUnitPath(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
         if (this.selectedEntityIds.size === 0) return;
 
         gl.vertexAttrib4f(this.aColor, PATH_COLOR[0], PATH_COLOR[1], PATH_COLOR[2], PATH_COLOR[3]);
@@ -224,7 +224,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /** Draw a ghost building at the preview tile when in placement mode */
-    private drawPlacementPreview(gl: WebGLRenderingContext, viewPoint: IViewPoint): void {
+    private drawPlacementPreview(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
         if (!this.previewTile) return;
 
         const worldPos = TilePicker.tileToWorld(
@@ -241,7 +241,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /** Draw small markers at territory border tiles */
-    private drawTerritoryBorders(gl: WebGLRenderingContext, viewPoint: IViewPoint): void {
+    private drawTerritoryBorders(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
         if (!this.territoryMap) return;
 
         // Rebuild border cache when territory changes

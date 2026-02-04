@@ -30,6 +30,11 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     private groundHeightMap: Uint8Array;
     private debugGrid: boolean;
 
+    /** Cached instance position array to avoid allocating a new Int16Array every frame */
+    private cachedInstancePos: Int16Array | null = null;
+    private cachedInstanceW = 0;
+    private cachedInstanceH = 0;
+
     constructor(
         fileManager: FileManager,
         textureManager: TextureManager,
@@ -116,7 +121,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         return result;
     }
 
-    public async init(gl: WebGLRenderingContext): Promise<boolean> {
+    public async init(gl: WebGL2RenderingContext): Promise<boolean> {
         if (this.debugGrid) {
             this.shaderProgram.setDefine('DEBUG_TRIANGLE_BORDER', 1);
         }
@@ -133,10 +138,6 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         this.landTypeBuffer = this.createLandTypeBuffer(this.mapSize, this.textureManager.create('u_landTypeBuffer'), this.groundTypeMap);
         this.landHeightBuffer = this.createLandHeightBuffer(this.mapSize, this.textureManager.create('u_landHeightBuffer'), this.groundHeightMap);
 
-        if (!this.shaderProgram.getAngleInstancedArrayExtension()) {
-            LandscapeRenderer.log.error('need WebGL ANGLE_instanced_arrays');
-        }
-
         this.numVertices = 6;
 
         return true;
@@ -148,7 +149,12 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     //    /-----/-----/-----/
     //   / 0/1 / 1/1 / 2/1 /
     //  /-----/-----/-----/
-    private createInstancePosArray(width: number, height: number): Int16Array {
+    private getInstancePosArray(width: number, height: number): Int16Array {
+        // Return cached array if dimensions haven't changed
+        if (this.cachedInstancePos && this.cachedInstanceW === width && this.cachedInstanceH === height) {
+            return this.cachedInstancePos;
+        }
+
         const r = new Int16Array(width * height * 2);
         let i = 0;
         for (let y = 0; y < height; y++) {
@@ -159,19 +165,18 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
                 i++;
             }
         }
+
+        this.cachedInstancePos = r;
+        this.cachedInstanceW = width;
+        this.cachedInstanceH = height;
         return r;
     }
 
-    public draw(gl: WebGLRenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
+    public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         super.drawBase(gl, projection);
 
         const sp = this.shaderProgram;
         if (!sp) {
-            return;
-        }
-
-        const ext = sp.getAngleInstancedArrayExtension();
-        if (!ext) {
             return;
         }
 
@@ -221,11 +226,11 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         //    /-----/-----/-----/
         //   / 0/1 / 1/1 / 2/1 /
         //  /-----/-----/-----/
-        sp.setArrayShort('instancePos', this.createInstancePosArray(numInstancesX, numInstancesY), 2, 1);
+        sp.setArrayShort('instancePos', this.getInstancePosArray(numInstancesX, numInstancesY), 2, 1);
 
         // ////////
-        // do it!
-        ext.drawArraysInstancedANGLE(
+        // do it! Native WebGL2 instanced draw
+        sp.drawArraysInstanced(
             gl.TRIANGLES,
             0, // offset
             this.numVertices, // num vertices per instance

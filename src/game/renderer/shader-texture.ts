@@ -6,18 +6,17 @@ import { ShaderObject } from './shader-object';
 
 export class ShaderTexture implements ShaderObject {
     protected texture: WebGLTexture | null = null;
-    private gl: WebGLRenderingContext | null = null;
+    private gl: WebGL2RenderingContext | null = null;
     private textureIndex: number;
 
     public constructor(textureIndex: number) {
         this.textureIndex = textureIndex;
     }
 
-    protected bind(gl: WebGLRenderingContext): void {
+    protected bind(gl: WebGL2RenderingContext): void {
         this.gl = gl;
 
         // Reuse existing texture object if already created.
-        // Previously a new texture was allocated on every call, leaking GPU memory.
         if (!this.texture) {
             this.texture = gl.createTexture();
         }

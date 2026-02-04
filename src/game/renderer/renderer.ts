@@ -10,7 +10,7 @@ declare let WebGLDebugUtils: any;
 export class Renderer {
     private static log = new LogHandler('Renderer');
     public canvas: HTMLCanvasElement;
-    private gl: WebGLRenderingContext | null = null;
+    private gl: WebGL2RenderingContext | null = null;
     public textureManager: TextureManager = new TextureManager();
     private renderers: IRenderer[] = [];
     private animRequest = 0;
@@ -31,16 +31,16 @@ export class Renderer {
         this.viewPoint = new ViewPoint(canvas);
         this.viewPoint.onMove = () => this.onMove();
 
-        let newGl = canvas.getContext('webgl');
+        let newGl = canvas.getContext('webgl2');
         if (!newGl) {
-            Renderer.log.error('Unable to initialize WebGL. Your browser may not support it.');
+            Renderer.log.error('Unable to initialize WebGL2. Your browser may not support it.');
             return;
         }
 
         try {
             if (WebGLDebugUtils) {
                 Renderer.log.debug('Run with WebGL debug');
-                newGl = WebGLDebugUtils.makeDebugContext(newGl, processWebGlDebugErrors) as WebGLRenderingContext | null;
+                newGl = WebGLDebugUtils.makeDebugContext(newGl, processWebGlDebugErrors) as WebGL2RenderingContext | null;
             }
         } catch {
             // WebGLDebugUtils is optional; not available in production
@@ -82,11 +82,12 @@ export class Renderer {
             return;
         }
 
-        // Sync the drawing buffer to the canvas display size so the
-        // aspect ratio matches and the rendered image is crisp.
+        // Sync the drawing buffer to the canvas display size, accounting for
+        // HiDPI displays so the rendered image is crisp on retina screens.
         const canvas = this.canvas;
-        const displayWidth = canvas.clientWidth;
-        const displayHeight = canvas.clientHeight;
+        const dpr = window.devicePixelRatio || 1;
+        const displayWidth = Math.round(canvas.clientWidth * dpr);
+        const displayHeight = Math.round(canvas.clientHeight * dpr);
         if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
             canvas.width = displayWidth;
             canvas.height = displayHeight;

@@ -6,7 +6,7 @@
 //       /  A \\  /
 //      /------\\/
 //     1       2 4
-attribute float baseVerticesIndex; // 0, 1, 2, 3, 4, 5
+in float baseVerticesIndex; // 0, 1, 2, 3, 4, 5
 
 // ///////////
 // set the instance index
@@ -15,20 +15,20 @@ attribute float baseVerticesIndex; // 0, 1, 2, 3, 4, 5
 //    /-----/-----/-----/
 //   / 0,1 / 1,1 / 2,1 /
 //  /-----/-----/-----/
-attribute vec2 instancePos;
+in vec2 instancePos;
 
 uniform mat4 projection;
 
 #ifdef DEBUG_TRIANGLE_BORDER
-  // output color 
-  varying vec3 v_barycentric;
+  // output color
+  out vec3 v_barycentric;
 #endif
 
-// output color used to shader/gray the texture
-varying float v_shader_color;
+// output color used to shade the texture based on height gradient
+out float v_shader_color;
 
 // output texture coordinate of the background
-varying vec2 v_texcoord;
+out vec2 v_texcoord;
 
 vec2 mapSize = vec2(MAP_WIDTH, MAP_HEIGHT);
 
@@ -73,14 +73,14 @@ void main() {
   int baseVertecesTypeAorB;
 
   // the position offset in the map-data-array for this vertex
-  //        (0/0)    (1/0)  
+  //        (0/0)    (1/0)
   //         0 3      5
   //         /\\------/
   //        /  \\  B /
   //       /  A \\  /
   //      /------\\/
   //     1       2 4
-  // (0/1)      (1/1)  
+  // (0/1)      (1/1)
   vec2 baseMapPosOffset;
 
   if (baseVerticesIndex < 3.0) {
@@ -134,36 +134,33 @@ void main() {
     }
   #endif
 
-  // https://webglfundamentals.org/webgl/lessons/webgl-pulling-vertices.html
   vec2 pixelCoord = instancePos + viewPoint;
 
   // check if position is in map bounds
   if (pixelCoord.x < 0.0 || pixelCoord.x >= mapSize.x
       || pixelCoord.y < 0.0 || pixelCoord.y >= mapSize.y) {
         // Move vertex outside clip space so the triangle is clipped entirely.
-        // Without this, gl_Position would be undefined (the early return left
-        // it unset), which is technically undefined behavior.
         gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
         v_texcoord = vec2(-1.0, -1.0);
         return;
   }
- 
+
   vec2 mapPointCord = pixelCoord + baseMapPosOffset;
 
-  // read the land-texture-type for the data-texture
-  vec2 texcoord = pixelCoord / mapSize;
-  vec4 type = texture2D(u_landTypeBuffer, texcoord);
+  // Use texelFetch for exact integer pixel lookups (no filtering/normalization).
+  // This is more precise than texture() with normalized coordinates.
+  vec4 type = texelFetch(u_landTypeBuffer, ivec2(pixelCoord), 0);
 
   // value of map height at this vertex
-  float mapHeight1 = texture2D(u_landHeightBuffer, mapPointCord / mapSize).a * 20.0;
-  float mapHeight2 = texture2D(u_landHeightBuffer, (mapPointCord + vec2(0.0, 1.0)) / mapSize).a * 20.0;
+  float mapHeight1 = texelFetch(u_landHeightBuffer, ivec2(mapPointCord), 0).r * 20.0;
+  float mapHeight2 = texelFetch(u_landHeightBuffer, ivec2(mapPointCord + vec2(0.0, 1.0)), 0).r * 20.0;
 
   vec2 text_scale = vec2(1.0, 1.0) / vec2(LANDSCAPE_TEXTURE_WIDTH_HEIGHT / 32, LANDSCAPE_TEXTURE_WIDTH_HEIGHT / 32);
 
   vec2 real_text_pos;
   if (baseVertecesTypeAorB == 0) {
     // for triangle A use
-    real_text_pos = type.xy * vec2(127, 255); // x is scaled by 
+    real_text_pos = type.xy * vec2(127, 255); // x is scaled by
   }
   else {
     // for triangle B use
@@ -178,17 +175,9 @@ void main() {
       );
 
   // Pass the vertex color/texture to the fragment shader.
-  //v_barycentric = color;
   v_texcoord = (baseVerticesPos.xy + real_text_pos.xy) * text_scale;
 
   // color depending on height gradient
   float mapHeightGrad = mapHeight1 - mapHeight2;
   v_shader_color = 0.95 + mapHeightGrad * (mapHeightGrad > 0.0 ? 0.8 : 1.0);
-  
- /* if (v_shader_color > 1.0) {
-    v_shader_color = 1.0;
-  } else if (v_shader_color < 0.4) {
-    v_shader_color = 0.4;
-  }
-*/
 }

@@ -51,30 +51,35 @@ export class ShaderDataTexture extends ShaderTexture {
     /** Upload the texture data to the GPU (first call) or just bind the
      *  existing texture to its slot (subsequent calls). The map data is
      *  static so there is no need to re-upload every frame. */
-    public create(gl: WebGLRenderingContext): void {
+    public create(gl: WebGL2RenderingContext): void {
         super.bind(gl);
 
         if (this.uploaded) {
             return;
         }
 
-        let internalFormat: GLenum = gl.RGBA;
+        // WebGL2 sized internal formats with matching unsized format enums.
+        // R8 replaces ALPHA, RG8 replaces LUMINANCE_ALPHA.
+        let internalFormat: GLenum = gl.RGBA8;
+        let format: GLenum = gl.RGBA;
 
         switch (this.numberOfElements) {
         case 1:
-            internalFormat = gl.ALPHA;
+            internalFormat = gl.R8;
+            format = gl.RED;
             break;
         case 2:
-            internalFormat = gl.LUMINANCE_ALPHA;
+            internalFormat = gl.RG8;
+            format = gl.RG;
             break;
         default:
-            internalFormat = gl.RGBA;
+            internalFormat = gl.RGBA8;
+            format = gl.RGBA;
             break;
         }
 
         const level = 0;
         const border = 0;
-        const format = internalFormat;
         const type = gl.UNSIGNED_BYTE;
 
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);

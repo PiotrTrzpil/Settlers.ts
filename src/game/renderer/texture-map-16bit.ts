@@ -120,7 +120,7 @@ export class TextureMap16Bit extends ShaderTexture {
         return newImg;
     }
 
-    public load(gl: WebGLRenderingContext): void {
+    public load(gl: WebGL2RenderingContext): void {
         const level = 0;
         const internalFormat = gl.RGB;
         const width = this.imgWidthHeight;

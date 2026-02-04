@@ -8,13 +8,13 @@ export enum ShaderType {
 
 export class ShaderProgram implements ShaderObject {
     private static log = new LogHandler('ShaderProgram');
-    private gl: WebGLRenderingContext | null = null;
+    private gl: WebGL2RenderingContext | null = null;
     private shaders: WebGLShader[] = [];
     private shaderProgram: WebGLProgram | null = null;
     private defines: string[] = [];
 
-    // eslint-disable-next-line camelcase
-    private extInstancedArrays: ANGLE_instanced_arrays | null = null;
+    /** Vertex Array Object – captures attribute state so we don't rebind every frame */
+    private vao: WebGLVertexArrayObject | null = null;
 
     /** Cached WebGL buffers keyed by attribute name to avoid leaking GPU memory */
     private bufferCache: Map<string, WebGLBuffer> = new Map();
@@ -23,7 +23,7 @@ export class ShaderProgram implements ShaderObject {
         Object.seal(this);
     }
 
-    public init(gl: WebGLRenderingContext): void {
+    public init(gl: WebGL2RenderingContext): void {
         this.gl = gl;
     }
 
@@ -63,6 +63,9 @@ export class ShaderProgram implements ShaderObject {
         // Link programs
         this.gl.linkProgram(this.shaderProgram);
 
+        // Create a VAO to capture attribute state for this program
+        this.vao = this.gl.createVertexArray();
+
         return true;
     }
 
@@ -73,6 +76,11 @@ export class ShaderProgram implements ShaderObject {
 
         // Use the shader program object
         this.gl.useProgram(this.shaderProgram);
+
+        // Bind this program's VAO so its attribute state is active
+        if (this.vao) {
+            this.gl.bindVertexArray(this.vao);
+        }
     }
 
     public setDefine(defineName: string, value: number | string): void {
@@ -139,30 +147,17 @@ export class ShaderProgram implements ShaderObject {
         gl.vertexAttribPointer(attribLocation, size, type, false, 0, 0);
 
         if (divisor) {
-            const extInstancedArrays = this.getAngleInstancedArrayExtension();
-            if (extInstancedArrays) {
-                // this line says this attribute only changes for each 1 instance
-                extInstancedArrays.vertexAttribDivisorANGLE(attribLocation, divisor);
-            }
+            // Native WebGL2 instancing – no extension needed
+            gl.vertexAttribDivisor(attribLocation, divisor);
         }
     }
 
-    // eslint-disable-next-line camelcase
-    public getAngleInstancedArrayExtension(): ANGLE_instanced_arrays | null {
+    /** Draw instanced geometry using native WebGL2 instancing */
+    public drawArraysInstanced(mode: GLenum, first: number, count: number, instanceCount: number): void {
         if (!this.gl) {
-            return null;
+            return;
         }
-
-        if (this.extInstancedArrays != null) {
-            return this.extInstancedArrays;
-        }
-
-        this.extInstancedArrays = this.gl.getExtension('ANGLE_instanced_arrays');
-        if (!this.extInstancedArrays) {
-            return null;
-        }
-
-        return this.extInstancedArrays;
+        this.gl.drawArraysInstanced(mode, first, count, instanceCount);
     }
 
     public getAttribLocation(name: string): number {
@@ -188,6 +183,10 @@ export class ShaderProgram implements ShaderObject {
     public free(): void {
         if (!this.gl) {
             return;
+        }
+
+        if (this.vao) {
+            this.gl.deleteVertexArray(this.vao);
         }
 
         if (this.shaderProgram) {
@@ -233,8 +232,9 @@ export class ShaderProgram implements ShaderObject {
             return false;
         }
 
-        // add defines to source
-        src = this.defines.join('\n') + '\n' + src;
+        // #version 300 es MUST be the very first line in GLSL ES 3.0 shaders,
+        // before any #define directives or other source code.
+        src = '#version 300 es\n' + this.defines.join('\n') + '\n' + src;
 
         // Compile the shader
         this.gl.shaderSource(newShader, src);
