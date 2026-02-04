@@ -10,10 +10,28 @@ import { TextureMap16Bit } from '../../texture-map-16bit';
 import { GfxImage16Bit } from '@/resources/gfx/gfx-image-16bit';
 import { AtlasLayout } from './atlas-layout';
 
+/** Labels for the 3 physical atlas texture slots used by river transitions. */
+export type RiverSlotId = 'A' | 'B' | 'C';
+
+/** All 6 ways to assign the 3 physical slots to the 3 transition roles. */
+export const RIVER_SLOT_PERMS: readonly [RiverSlotId, RiverSlotId, RiverSlotId][] = [
+    ['A', 'B', 'C'],  // 0: inner=A, outer=B, middle=C (default)
+    ['A', 'C', 'B'],  // 1: inner=A, outer=C, middle=B
+    ['B', 'A', 'C'],  // 2: inner=B, outer=A, middle=C
+    ['B', 'C', 'A'],  // 3: inner=B, outer=C, middle=A
+    ['C', 'A', 'B'],  // 4: inner=C, outer=A, middle=B
+    ['C', 'B', 'A'],  // 5: inner=C, outer=B, middle=A
+];
+
 export interface RiverConfig {
-    swapRows: boolean;
-    reverseInner: boolean;
-    reverseOuter: boolean;
+    /** Index into RIVER_SLOT_PERMS (0–5): which physical slot handles inner/outer/middle */
+    slotPermutation: number;
+    /** Swap left/right pair for the inner transition (River1 ↔ River3) */
+    flipInner: boolean;
+    /** Swap left/right pair for the outer transition (River4 ↔ Grass) */
+    flipOuter: boolean;
+    /** Swap left/right pair for the middle transition (River4 ↔ River3) */
+    flipMiddle: boolean;
 }
 
 export class LandscapeTextureMap {
@@ -291,30 +309,35 @@ export class LandscapeTextureMap {
         }
         this.riverHexKeys = [];
 
-        // Determine types
-        const [iA, iB] = rc.reverseInner
-            ? [LandscapeType.River3, LandscapeType.River1]
-            : [LandscapeType.River1, LandscapeType.River3];
-        const [oA, oB] = rc.reverseOuter
-            ? [LandscapeType.Grass, LandscapeType.River4]
-            : [LandscapeType.River4, LandscapeType.Grass];
+        // Resolve physical slot pairs by letter
+        const slotPairs: Record<RiverSlotId, { left: Hexagon2Texture; right: Hexagon2Texture }> = {
+            A: { left: this.riverSlots.slotALeft, right: this.riverSlots.slotARight },
+            B: { left: this.riverSlots.slotBLeft, right: this.riverSlots.slotBRight },
+            C: { left: this.riverSlots.slotCLeft, right: this.riverSlots.slotCRight },
+        };
 
-        // Pick which physical slot to use for inner vs outer
-        const { slotALeft, slotARight, slotBLeft, slotBRight, slotCLeft, slotCRight } = this.riverSlots;
-        const innerLeft  = rc.swapRows ? slotBLeft  : slotALeft;
-        const innerRight = rc.swapRows ? slotBRight : slotARight;
-        const outerLeft  = rc.swapRows ? slotALeft  : slotBLeft;
-        const outerRight = rc.swapRows ? slotARight : slotBRight;
+        const perm = RIVER_SLOT_PERMS[rc.slotPermutation % RIVER_SLOT_PERMS.length];
+        const innerPair  = slotPairs[perm[0]];
+        const outerPair  = slotPairs[perm[1]];
+        const middlePair = slotPairs[perm[2]];
 
-        // Create new Hex2 objects that reference the same source positions.
-        // The shared layout already maps those src positions → atlas dest positions.
+        // Apply left/right flips per role
+        const iLeft  = rc.flipInner ? innerPair.right  : innerPair.left;
+        const iRight = rc.flipInner ? innerPair.left   : innerPair.right;
+        const oLeft  = rc.flipOuter ? outerPair.right  : outerPair.left;
+        const oRight = rc.flipOuter ? outerPair.left   : outerPair.right;
+        const mLeft  = rc.flipMiddle ? middlePair.right : middlePair.left;
+        const mRight = rc.flipMiddle ? middlePair.left  : middlePair.right;
+
+        // Create new Hex2 objects with correct type assignments.
+        // The shared layout already maps their src positions → atlas dest positions.
         const newTextures = [
-            innerLeft.withTypes(iA, iB),
-            innerRight.withTypes(iB, iA),
-            outerLeft.withTypes(oA, oB),
-            outerRight.withTypes(oB, oA),
-            slotCLeft.withTypes(LandscapeType.River4, LandscapeType.River3),
-            slotCRight.withTypes(LandscapeType.River3, LandscapeType.River4),
+            iLeft.withTypes(LandscapeType.River1, LandscapeType.River3),
+            iRight.withTypes(LandscapeType.River3, LandscapeType.River1),
+            oLeft.withTypes(LandscapeType.River4, LandscapeType.Grass),
+            oRight.withTypes(LandscapeType.Grass, LandscapeType.River4),
+            mLeft.withTypes(LandscapeType.River4, LandscapeType.River3),
+            mRight.withTypes(LandscapeType.River3, LandscapeType.River4),
         ];
 
         for (const tex of newTextures) {

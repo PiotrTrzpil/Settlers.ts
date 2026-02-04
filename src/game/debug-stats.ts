@@ -45,9 +45,10 @@ export interface DebugStatsState {
     selectedCount: number;
 
     // River texture debug
-    riverSwapRows: boolean;
-    riverReverseInner: boolean;
-    riverReverseOuter: boolean;
+    riverSlotPermutation: number;
+    riverFlipInner: boolean;
+    riverFlipOuter: boolean;
+    riverFlipMiddle: boolean;
 }
 
 class DebugStats {
@@ -86,9 +87,10 @@ class DebugStats {
             mode: '',
             selectedEntityId: null,
             selectedCount: 0,
-            riverSwapRows: false,
-            riverReverseInner: false,
-            riverReverseOuter: false,
+            riverSlotPermutation: 0,
+            riverFlipInner: false,
+            riverFlipOuter: false,
+            riverFlipMiddle: false,
         });
 
         // Expose on window for Playwright tests

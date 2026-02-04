@@ -134,18 +134,29 @@
           </div>
           <div class="river-debug">
             <span class="stat-label river-heading">River textures</span>
+            <div class="stat-row">
+              <span class="stat-label">Slots (I/O/M)</span>
+              <span class="perm-control">
+                <button class="perm-btn" @click="cycleSlotPerm(-1)">&lt;</button>
+                <span class="perm-value">{{ slotPermLabel }}</span>
+                <button class="perm-btn" @click="cycleSlotPerm(1)">&gt;</button>
+              </span>
+            </div>
             <label class="control-row">
-              <input type="checkbox" :checked="stats.riverSwapRows" @change="setRiver('riverSwapRows', $event)" />
-              <span>Swap rows</span>
+              <input type="checkbox" :checked="stats.riverFlipInner" @change="setRiverFlip('riverFlipInner', $event)" />
+              <span>Flip inner (River1&#x2194;River3)</span>
             </label>
             <label class="control-row">
-              <input type="checkbox" :checked="stats.riverReverseInner" @change="setRiver('riverReverseInner', $event)" />
-              <span>Reverse inner</span>
+              <input type="checkbox" :checked="stats.riverFlipOuter" @change="setRiverFlip('riverFlipOuter', $event)" />
+              <span>Flip outer (River4&#x2194;Grass)</span>
             </label>
             <label class="control-row">
-              <input type="checkbox" :checked="stats.riverReverseOuter" @change="setRiver('riverReverseOuter', $event)" />
-              <span>Reverse outer</span>
+              <input type="checkbox" :checked="stats.riverFlipMiddle" @change="setRiverFlip('riverFlipMiddle', $event)" />
+              <span>Flip middle (River4&#x2194;River3)</span>
             </label>
+            <div class="stat-row">
+              <span class="stat-label dim">{{ configIndex }}/48</span>
+            </div>
           </div>
         </div>
       </section>
@@ -156,6 +167,7 @@
 <script setup lang="ts">
 import { reactive, ref, computed } from 'vue';
 import { debugStats } from '@/game/debug-stats';
+import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
 
 defineProps<{
     debugGrid: boolean;
@@ -180,16 +192,39 @@ const sections = reactive({
 
 const stats = debugStats.state;
 
-function setRiver(key: 'riverSwapRows' | 'riverReverseInner' | 'riverReverseOuter', e: Event) {
-    stats[key] = (e.target as HTMLInputElement).checked;
+const slotPermLabel = computed(() => {
+    const perm = RIVER_SLOT_PERMS[stats.riverSlotPermutation % RIVER_SLOT_PERMS.length];
+    return perm.join('-');
+});
+
+const configIndex = computed(() => {
+    return stats.riverSlotPermutation * 8
+        + (stats.riverFlipInner ? 4 : 0)
+        + (stats.riverFlipOuter ? 2 : 0)
+        + (stats.riverFlipMiddle ? 1 : 0)
+        + 1;
+});
+
+function applyRiverConfig() {
     const lr = (window as any).__settlers_landscape__;
     if (lr) {
         lr.rebuildRiverTextures({
-            swapRows: stats.riverSwapRows,
-            reverseInner: stats.riverReverseInner,
-            reverseOuter: stats.riverReverseOuter,
+            slotPermutation: stats.riverSlotPermutation,
+            flipInner: stats.riverFlipInner,
+            flipOuter: stats.riverFlipOuter,
+            flipMiddle: stats.riverFlipMiddle,
         });
     }
+}
+
+function cycleSlotPerm(dir: number) {
+    stats.riverSlotPermutation = ((stats.riverSlotPermutation + dir) % RIVER_SLOT_PERMS.length + RIVER_SLOT_PERMS.length) % RIVER_SLOT_PERMS.length;
+    applyRiverConfig();
+}
+
+function setRiverFlip(key: 'riverFlipInner' | 'riverFlipOuter' | 'riverFlipMiddle', e: Event) {
+    stats[key] = (e.target as HTMLInputElement).checked;
+    applyRiverConfig();
 }
 
 const fpsClass = computed(() => {
@@ -371,6 +406,36 @@ const fpsClass = computed(() => {
 .river-heading {
   display: block;
   margin-top: 6px;
+}
+
+.perm-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.perm-btn {
+  padding: 1px 6px;
+  background: #2c1e0e;
+  color: #c8a96e;
+  border: 1px solid #4a3218;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: monospace;
+  line-height: 1;
+}
+
+.perm-btn:hover {
+  background: #3a2810;
+  border-color: #6a4a20;
+}
+
+.perm-value {
+  color: #d4b27a;
+  font-weight: bold;
+  min-width: 36px;
+  text-align: center;
 }
 
 /* Scrollbar */
