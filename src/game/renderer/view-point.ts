@@ -14,6 +14,7 @@ export class ViewPoint implements IViewPoint {
     private downX = 0;
     private downY = 0;
     public zoomValue = 1;
+    public zoomSpeed = 0.15;
     private mouseIsMoving = false;
     private canvas: HTMLCanvasElement;
     private keysDown = new Set<string>();
@@ -164,8 +165,34 @@ export class ViewPoint implements IViewPoint {
     };
 
     private handleWheel = (e: WheelEvent) => {
-        this.zoomValue = Math.max(1, this.zoomValue + Math.sign(e.deltaY));
         e.preventDefault();
+
+        const direction = Math.sign(e.deltaY);
+        if (direction === 0) return;
+
+        const canvas = this.canvas;
+        const aspect = canvas.clientWidth / canvas.clientHeight;
+
+        // Mouse position in NDC (-1 to 1)
+        const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
+        const ndcY = 1 - (e.offsetY / canvas.clientHeight) * 2;
+
+        const oldZoomValue = this.zoomValue;
+
+        // Multiplicative zoom for uniform feel at all zoom levels
+        const factor = direction > 0
+            ? (1 + this.zoomSpeed)
+            : (1 / (1 + this.zoomSpeed));
+        this.zoomValue = Math.max(0.5, Math.min(30, this.zoomValue * factor));
+
+        // Adjust camera so the world point under the cursor stays fixed.
+        // Derived from the orthographic projection and tile-picker inverse:
+        //   d = 10 * (newZoomValue - oldZoomValue)   [since 1/zoom = 10*zoomValue]
+        //   Δvp.x = -(ndcX * aspect - ndcY) * d
+        //   Δvp.y =  2 * ndcY * d
+        const d = 10 * (this.zoomValue - oldZoomValue);
+        this.posX -= (ndcX * aspect - ndcY) * d;
+        this.posY += 2 * ndcY * d;
 
         if (this.onMove) {
             this.onMove();

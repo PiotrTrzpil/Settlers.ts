@@ -90,7 +90,9 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
             }
             debugStats.state.cameraX = Math.round(r.viewPoint.x * 10) / 10;
             debugStats.state.cameraY = Math.round(r.viewPoint.y * 10) / 10;
-            debugStats.state.zoom = r.viewPoint.zoomValue;
+            debugStats.state.zoom = Math.round(r.viewPoint.zoomValue * 100) / 100;
+            // Sync zoom speed from debug panel (source of truth) to viewPoint
+            r.viewPoint.zoomSpeed = debugStats.state.zoomSpeed;
             debugStats.state.canvasWidth = r.canvas.width;
             debugStats.state.canvasHeight = r.canvas.height;
             r.viewPoint.update(1 / 30);
