@@ -6,7 +6,7 @@ import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
 import { Command, executeCommand } from './commands/command';
 import { TerritoryMap } from './systems/territory';
-import { canPlaceBuildingWithTerritory } from './systems/placement';
+import { canPlaceBuildingWithTerritory, isBuildable } from './systems/placement';
 
 /** contains the game state */
 export class Game {
@@ -71,6 +71,29 @@ export class Game {
         const buildings = this.state.entities.filter(e => e.type === EntityType.Building);
         this.territory.rebuild(buildings);
         this.territoryVersion++;
+    }
+
+    /** Find the first buildable land tile, spiraling out from map center */
+    public findLandTile(): { x: number; y: number } | null {
+        const w = this.mapSize.width;
+        const h = this.mapSize.height;
+        const cx = Math.floor(w / 2);
+        const cy = Math.floor(h / 2);
+
+        for (let r = 0; r < Math.max(w, h) / 2; r++) {
+            for (let dx = -r; dx <= r; dx++) {
+                for (let dy = -r; dy <= r; dy++) {
+                    if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+                    const tx = cx + dx;
+                    const ty = cy + dy;
+                    if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+                    if (isBuildable(this.groundType[this.mapSize.toIndex(tx, ty)])) {
+                        return { x: tx, y: ty };
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /** Start the game loop */

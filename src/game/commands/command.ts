@@ -1,6 +1,6 @@
 import { BuildingType, EntityType, EXTENDED_OFFSETS, UnitType, BUILDING_UNIT_TYPE } from '../entity';
 import { GameState } from '../game-state';
-import { canPlaceBuilding } from '../systems/placement';
+import { canPlaceBuilding, isPassable } from '../systems/placement';
 import { findPath } from '../systems/pathfinding';
 import { MapSize } from '@/utilities/map-size';
 
@@ -49,22 +49,25 @@ export function executeCommand(
     }
 
     case 'spawn_unit': {
-        // Spawn at the given tile, or find adjacent free tile
+        // Spawn at the given tile, or find adjacent free & passable tile
         let spawnX = cmd.x;
         let spawnY = cmd.y;
 
-        if (state.getEntityAt(spawnX, spawnY)) {
+        const isTileValid = (x: number, y: number) =>
+            x >= 0 && x < mapSize.width && y >= 0 && y < mapSize.height &&
+            isPassable(groundType[mapSize.toIndex(x, y)]) &&
+            !state.getEntityAt(x, y);
+
+        if (!isTileValid(spawnX, spawnY)) {
             let found = false;
             for (const [dx, dy] of EXTENDED_OFFSETS) {
                 const nx = spawnX + dx;
                 const ny = spawnY + dy;
-                if (nx >= 0 && nx < mapSize.width && ny >= 0 && ny < mapSize.height) {
-                    if (!state.getEntityAt(nx, ny)) {
-                        spawnX = nx;
-                        spawnY = ny;
-                        found = true;
-                        break;
-                    }
+                if (isTileValid(nx, ny)) {
+                    spawnX = nx;
+                    spawnY = ny;
+                    found = true;
+                    break;
                 }
             }
             if (!found) return false;

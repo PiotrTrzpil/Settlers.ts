@@ -97,9 +97,9 @@ export default class MapView extends Vue {
     public spawnUnit(unitType: number): void {
         if (!this.game) return;
 
-        // Spawn at selected entity location, or at a default position
-        let spawnX = 10;
-        let spawnY = 10;
+        // Spawn at selected entity location, last clicked tile, or first land tile
+        let spawnX = -1;
+        let spawnY = -1;
 
         if (this.game.state.selectedEntityId !== null) {
             const selected = this.game.state.getEntity(this.game.state.selectedEntityId);
@@ -111,6 +111,17 @@ export default class MapView extends Vue {
             spawnX = this.hoveredTile.x;
             spawnY = this.hoveredTile.y;
         }
+
+        // If no valid position chosen, find buildable land
+        if (spawnX < 0) {
+            const land = this.game.findLandTile();
+            if (land) {
+                spawnX = land.x;
+                spawnY = land.y;
+            }
+        }
+
+        if (spawnX < 0) return; // no valid tile found
 
         this.game.execute({
             type: 'spawn_unit',
