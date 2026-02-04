@@ -1,7 +1,8 @@
 module.exports = {
+    // vue-router v4.6 ships .mjs with optional chaining that needs transpiling
+    transpileDependencies: ['vue-router'],
     chainWebpack: config => {
         config.module
-        // Add another loader
             .rule('glsl')
             .test(/\.(glsl|vs|fs)$/)
             .use('ts-shader-loader')

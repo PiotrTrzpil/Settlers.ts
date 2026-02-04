@@ -14,13 +14,17 @@ export default class App extends Vue {
     public async mounted(): Promise<void> {
         App.log.debug('Starting...');
 
-        const fileManager = new FileManager();
+        try {
+            const fileManager = new FileManager();
 
-        await fileManager.addSource(new FileListProvider());
-        await fileManager.registerProxy(new LibFileProvider());
+            await fileManager.addSource(new FileListProvider());
+            await fileManager.registerProxy(new LibFileProvider());
 
-        this.fileManager = fileManager;
+            this.fileManager = fileManager;
 
-        App.log.debug('Read FileManager sources done!');
+            App.log.debug('Read FileManager sources done!');
+        } catch (e) {
+            App.log.error('Failed to initialize file manager', e instanceof Error ? e : new Error(String(e)));
+        }
     }
 }

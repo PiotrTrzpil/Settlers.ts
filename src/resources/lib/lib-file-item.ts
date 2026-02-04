@@ -1,6 +1,5 @@
 import { BinaryReader } from '../file/binary-reader';
 import { ChecksumCalculator } from '../file/checksum-calculator';
-import { Compression } from '../file/compress';
 import { Decompress } from '../file/decompress';
 import { PathList } from './path-list';
 

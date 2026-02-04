@@ -36,49 +36,31 @@ export class ViewPoint implements IViewPoint {
         // disable touch scroll
         canvas.style.touchAction = 'none';
 
-        canvas.addEventListener('pointerdown', this.hanldlePointerdown);
+        canvas.addEventListener('pointerdown', this.handlePointerDown);
         canvas.addEventListener('pointermove', this.handlePointerMove);
         window.addEventListener('pointerup', this.handlePointerUp);
         canvas.addEventListener('contextmenu', this.handleContextmenu);
-        canvas.addEventListener('wheel', this.henaleWheel);
+        canvas.addEventListener('wheel', this.handleWheel);
 
         Object.seal(this);
     }
 
     public destroy(): void {
-        // remove callback event
         this.onMove = null;
 
-        // remove all event handlers
-        this.doTry(() => window.removeEventListener('pointerup', this.handlePointerUp));
+        window.removeEventListener('pointerup', this.handlePointerUp);
 
         if (this.canvas == null) {
             return;
         }
 
-        this.doTry(() => this.canvas.removeEventListener('pointerdown', this.hanldlePointerdown));
-        this.doTry(() => this.canvas.removeEventListener('pointermove', this.handlePointerMove));
-        this.doTry(() => this.canvas.removeEventListener('contextmenu', this.handleContextmenu));
-        this.doTry(() => this.canvas.removeEventListener('wheel', this.henaleWheel));
+        this.canvas.removeEventListener('pointerdown', this.handlePointerDown);
+        this.canvas.removeEventListener('pointermove', this.handlePointerMove);
+        this.canvas.removeEventListener('contextmenu', this.handleContextmenu);
+        this.canvas.removeEventListener('wheel', this.handleWheel);
     }
 
-    private doTry(callback: () => void) {
-        try {
-            callback();
-        } catch (e: any) {
-            console.debug(e);
-        }
-    }
-
-    private invokeOnMove(): void {
-        if (!this.onMove) {
-            return;
-        }
-
-        this.onMove();
-    }
-
-    private hanldlePointerdown = (e: PointerEvent) => {
+    private handlePointerDown = (e: PointerEvent) => {
         e.preventDefault();
 
         this.downX = e.offsetX;
@@ -98,7 +80,9 @@ export class ViewPoint implements IViewPoint {
         this.deltaX = dX + dY / 2;
         this.deltaY = dY;
 
-        this.invokeOnMove();
+        if (this.onMove) {
+            this.onMove();
+        }
     }
 
     private handlePointerUp = () => {
@@ -114,17 +98,21 @@ export class ViewPoint implements IViewPoint {
         this.deltaX = 0;
         this.deltaY = 0;
 
-        this.invokeOnMove();
+        if (this.onMove) {
+            this.onMove();
+        }
     }
 
     private handleContextmenu = (e: MouseEvent) => {
         e.preventDefault();
     }
 
-    private henaleWheel = (e: WheelEvent) => {
+    private handleWheel = (e: WheelEvent) => {
         this.zoomValue = Math.max(1, this.zoomValue + Math.sign(e.deltaY));
         e.preventDefault();
 
-        this.invokeOnMove();
+        if (this.onMove) {
+            this.onMove();
+        }
     }
 }

@@ -1,4 +1,4 @@
-import { IViewPoint } from "./i-view-point";
+import { IViewPoint } from './i-view-point';
 
 export interface IRenderer {
         init(gl: WebGLRenderingContext): Promise<boolean>;

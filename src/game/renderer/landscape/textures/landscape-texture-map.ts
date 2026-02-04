@@ -56,44 +56,26 @@ export class LandscapeTextureMap {
         // variation: Hexagon2Texture(type4, type3, 3, row + 3)
     }
 
-    private addTextureGradient2(type1: LandscapeType, type2: LandscapeType, type3: LandscapeType, type4: LandscapeType, row: number) {
+    /**
+     * Shared gradient for types that differ only in the first-row pair order.
+     * swapFirstPair=false: first pair is (type4,type3) then (type3,type4) (formerly addTextureGradient2)
+     * swapFirstPair=true:  first pair is (type3,type4) then (type4,type3) (formerly addTextureGradient3)
+     */
+    private addTextureGradientReverse(type1: LandscapeType, type2: LandscapeType, type3: LandscapeType, type4: LandscapeType, row: number, swapFirstPair: boolean) {
+        const firstA = swapFirstPair ? type3 : type4;
+        const firstB = swapFirstPair ? type4 : type3;
+
         // Using Hexagon2Texture for SmallLandscapeTexture!
         this.addTexture(new SmallLandscapeTexture(type2, 0, row)); /// todo: add variation
         this.addTexture(new SmallLandscapeTexture(type3, 1, row)); /// todo: add variation
 
-        this.addTexture(new Hexagon2Texture(type4, type3, 2, row, 2, row + 1));
-        this.addTexture(new Hexagon2Texture(type3, type4, 3, row, 3, row + 1));
+        this.addTexture(new Hexagon2Texture(firstA, firstB, 2, row, 2, row + 1));
+        this.addTexture(new Hexagon2Texture(firstB, firstA, 3, row, 3, row + 1));
 
         // empty: @ 0, row + 1
         // empty: @ 1, row + 1
-        // variation: Hexagon2Texture(type4, type3, 2, row + 1)
-        // variation: Hexagon2Texture(type3, type4, 3, row + 1)
-
-        // next row
-        this.addTexture(new Hexagon2Texture(type2, type3, 0, row + 2, 0, row + 3));
-        this.addTexture(new Hexagon2Texture(type3, type2, 1, row + 2, 1, row + 3));
-        this.addTexture(new Hexagon2Texture(type1, type2, 2, row + 2, 2, row + 3));
-        this.addTexture(new Hexagon2Texture(type2, type1, 3, row + 2, 3, row + 3));
-
-        // next row
-        // variation: Hexagon2Texture(type2, type3, 0, row + 3)
-        // variation: Hexagon2Texture(type3, type2, 1, row + 3)
-        // variation: Hexagon2Texture(type1, type2, 2, row + 3)
-        // variation: Hexagon2Texture(type2, type1, 3, row + 3)
-    }
-
-    private addTextureGradient3(type1: LandscapeType, type2: LandscapeType, type3: LandscapeType, type4: LandscapeType, row: number) {
-        // Using Hexagon2Texture for SmallLandscapeTexture!
-        this.addTexture(new SmallLandscapeTexture(type2, 0, row)); /// todo: add variation
-        this.addTexture(new SmallLandscapeTexture(type3, 1, row)); /// todo: add variation
-
-        this.addTexture(new Hexagon2Texture(type3, type4, 2, row, 2, row + 1));
-        this.addTexture(new Hexagon2Texture(type4, type3, 3, row, 3, row + 1));
-
-        // empty: @ 0, row + 1
-        // empty: @ 1, row + 1
-        // variation: Hexagon2Texture(type3, type4, 2, row + 1)
-        // variation: Hexagon2Texture(type4, type3, 3, row + 1)
+        // variation: Hexagon2Texture(firstA, firstB, 2, row + 1)
+        // variation: Hexagon2Texture(firstB, firstA, 3, row + 1)
 
         // next row
         this.addTexture(new Hexagon2Texture(type2, type3, 0, row + 2, 0, row + 3));
@@ -197,11 +179,11 @@ export class LandscapeTextureMap {
 
         // https://github.com/tomsoftware/sied3/blob/master/src/clTexturesLoadHelper.cpp
         // [grass] 16 -> 20 -> 65 -> 64 [desert] @ 44..47
-        this.addTextureGradient3(LandscapeType.Grass, LandscapeType.DesertToGras2, LandscapeType.DesertToGras1, LandscapeType.Desert, 44);
+        this.addTextureGradientReverse(LandscapeType.Grass, LandscapeType.DesertToGras2, LandscapeType.DesertToGras1, LandscapeType.Desert, 44, true);
 
         // ///////
         // [mud] 80 -> 81 -> 21 -> 16 [gras] @ 48..51
-        this.addTextureGradient2(LandscapeType.Grass, LandscapeType.MudToGras2, LandscapeType.MudToGras1, LandscapeType.Mud, 48);
+        this.addTextureGradientReverse(LandscapeType.Grass, LandscapeType.MudToGras2, LandscapeType.MudToGras1, LandscapeType.Mud, 48, false);
 
         this.addTexture(new BigLandscapeTexture(LandscapeType.Mud, 52));
 
