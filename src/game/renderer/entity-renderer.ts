@@ -1,5 +1,6 @@
 import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
+import { RendererBase } from './renderer-base';
 import { Entity, EntityType } from '../entity';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
@@ -34,11 +35,9 @@ const RING_SCALE_FACTOR = 1.4;
  * Renders entities (units and buildings) as colored quads on the terrain.
  * Buildings are squares, units are diamonds.
  */
-export class EntityRenderer implements IRenderer {
+export class EntityRenderer extends RendererBase implements IRenderer {
     private static log = new LogHandler('EntityRenderer');
 
-    private gl: WebGLRenderingContext | null = null;
-    private program: WebGLProgram | null = null;
     private dynamicBuffer: WebGLBuffer | null = null;
 
     private mapSize: MapSize;
@@ -52,43 +51,25 @@ export class EntityRenderer implements IRenderer {
     private aPosition = -1;
     private aEntityPos = -1;
     private aColor = -1;
-    private uProjection: WebGLUniformLocation | null = null;
 
     // Reusable vertex buffer to avoid per-frame allocations
     private vertexData = new Float32Array(6 * 2);
 
     constructor(mapSize: MapSize, groundHeight: Uint8Array) {
+        super();
         this.mapSize = mapSize;
         this.groundHeight = groundHeight;
     }
 
     public async init(gl: WebGLRenderingContext): Promise<boolean> {
-        this.gl = gl;
+        super.initShader(gl, vertCode, fragCode);
 
-        // Compile shaders
-        const vs = this.compileShader(gl, gl.VERTEX_SHADER, vertCode);
-        const fs = this.compileShader(gl, gl.FRAGMENT_SHADER, fragCode);
-        if (!vs || !fs) return false;
-
-        const program = gl.createProgram();
-        if (!program) return false;
-
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
-
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            EntityRenderer.log.error('Shader link error: ' + gl.getProgramInfoLog(program));
-            return false;
-        }
-
-        this.program = program;
+        const sp = this.shaderProgram;
 
         // Get locations
-        this.aPosition = gl.getAttribLocation(program, 'a_position');
-        this.aEntityPos = gl.getAttribLocation(program, 'a_entityPos');
-        this.aColor = gl.getAttribLocation(program, 'a_color');
-        this.uProjection = gl.getUniformLocation(program, 'projection');
+        this.aPosition = sp.getAttribLocation('a_position');
+        this.aEntityPos = sp.getAttribLocation('a_entityPos');
+        this.aColor = sp.getAttribLocation('a_color');
 
         // Create a single reusable dynamic buffer
         this.dynamicBuffer = gl.createBuffer();
@@ -97,16 +78,13 @@ export class EntityRenderer implements IRenderer {
     }
 
     public draw(gl: WebGLRenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        if (!this.program || !this.dynamicBuffer || this.entities.length === 0) return;
+        if (!this.dynamicBuffer || this.entities.length === 0) return;
 
-        gl.useProgram(this.program);
+        super.drawBase(gl, projection);
 
         // Enable blending for semi-transparent entities
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-        // Set projection
-        gl.uniformMatrix4fv(this.uProjection, false, projection);
 
         // Bind the reusable buffer once
         gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
@@ -158,21 +136,5 @@ export class EntityRenderer implements IRenderer {
             verts[i * 2] = BASE_QUAD[i * 2] * scale + worldX;
             verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1] * scale + worldY;
         }
-    }
-
-    private compileShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
-        const shader = gl.createShader(type);
-        if (!shader) return null;
-
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            EntityRenderer.log.error('Shader compile error: ' + gl.getShaderInfoLog(shader));
-            gl.deleteShader(shader);
-            return null;
-        }
-
-        return shader;
     }
 }

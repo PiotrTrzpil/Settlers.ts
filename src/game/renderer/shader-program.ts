@@ -156,6 +156,16 @@ export class ShaderProgram implements ShaderObject {
         return this.extInstancedArrays;
     }
 
+    public getAttribLocation(name: string): number {
+        if (!this.gl || !this.shaderProgram) return -1;
+        return this.gl.getAttribLocation(this.shaderProgram, name);
+    }
+
+    public getUniformLocation(name: string): WebGLUniformLocation | null {
+        if (!this.gl || !this.shaderProgram) return null;
+        return this.gl.getUniformLocation(this.shaderProgram, name);
+    }
+
     public bindTexture(name: string, textureId: number): void {
         if ((!this.shaderProgram) || (!this.gl)) {
             return;
