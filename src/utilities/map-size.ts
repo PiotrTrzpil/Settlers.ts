@@ -23,7 +23,7 @@ export class MapSize {
         }
     }
 
-    /** geht the map index position form a x,y coordinates  */
+    /** Get the map index position from x,y coordinates */
     public toIndex(x: number, y: number) : number {
         return (x % this.width) + ((y % this.height) * this.width);
     }

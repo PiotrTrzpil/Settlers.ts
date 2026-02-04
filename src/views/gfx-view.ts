@@ -31,7 +31,7 @@ export default class GfxView extends Vue {
     public selectedItem: IGfxImage | null = null;
     public gfxFile: GfxFileReader | null = null;
 
-    public get imageSize() {
+    public get imageSize(): number {
         let sum = 0;
         for (const i of this.gfxContent) {
             sum += i.height * i.width;
@@ -41,7 +41,7 @@ export default class GfxView extends Vue {
 
     public onFileSelect(file: IFileSource): void {
         this.fileName = file.name;
-        this.load(file);
+        void this.load(file);
     }
 
     public pad(value:string, size:number): string {
@@ -59,7 +59,7 @@ export default class GfxView extends Vue {
 
         const fileId = Path.getFileNameWithoutExtension(file.name);
 
-        this.doLoad(fileId);
+        void this.doLoad(fileId);
     }
 
     /** load a new image */

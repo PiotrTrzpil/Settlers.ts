@@ -48,7 +48,7 @@ export class FileManager {
         }
 
         for (const newF of newFiles) {
-            this.addFile(newF);
+            await this.addFile(newF);
         }
     }
 
@@ -67,7 +67,7 @@ export class FileManager {
         const list = await provider.readFiles();
 
         for (const file of list) {
-            this.addFile(file);
+            await this.addFile(file);
         }
     }
 

@@ -73,13 +73,10 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     private createLandHeightBuffer(mapSize: MapSize, textureIndex: number, groundHeightMap: Uint8Array): ShaderDataTexture {
         const result = new ShaderDataTexture(mapSize.width, mapSize.height, 1, textureIndex);
 
-        const h = mapSize.height;
-        const w = mapSize.width;
-
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                const h = groundHeightMap[mapSize.toIndex(x, y)];
-                result.update(x, y, h);
+        for (let y = 0; y < mapSize.height; y++) {
+            for (let x = 0; x < mapSize.width; x++) {
+                const heightValue = groundHeightMap[mapSize.toIndex(x, y)];
+                result.update(x, y, heightValue);
             }
         }
 
@@ -125,7 +122,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         }
 
         this.shaderProgram.setDefine('MAP_WIDTH', this.mapSize.width);
-        this.shaderProgram.setDefine('MAP_HEIGHT', this.mapSize.width);
+        this.shaderProgram.setDefine('MAP_HEIGHT', this.mapSize.height);
         this.shaderProgram.setDefine('LANDSCAPE_TEXTURE_WIDTH_HEIGHT', this.texture.imgWidthHeight);
 
         super.initShader(gl, vertCode, fragCode);
@@ -231,7 +228,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
 
         const glError = gl.getError();
         if (glError !== 0) {
-            console.error('gl error: ' + glError);
+            LandscapeRenderer.log.error('WebGL error: ' + glError);
         }
     }
 }

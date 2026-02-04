@@ -1,4 +1,4 @@
-import { BuildingType, EntityType, UnitType } from '../entity';
+import { BuildingType, EntityType, EXTENDED_OFFSETS, UnitType } from '../entity';
 import { GameState } from '../game-state';
 import { canPlaceBuilding } from '../systems/placement';
 import { findPath } from '../systems/pathfinding';
@@ -35,11 +35,9 @@ export function executeCommand(
         let spawnX = cmd.x;
         let spawnY = cmd.y;
 
-        // If tile is occupied, try adjacent tiles
         if (state.getEntityAt(spawnX, spawnY)) {
-            const offsets = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]];
             let found = false;
-            for (const [dx, dy] of offsets) {
+            for (const [dx, dy] of EXTENDED_OFFSETS) {
                 const nx = spawnX + dx;
                 const ny = spawnY + dy;
                 if (nx >= 0 && nx < mapSize.width && ny >= 0 && ny < mapSize.height) {

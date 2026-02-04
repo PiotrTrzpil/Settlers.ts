@@ -17,6 +17,18 @@ const PLAYER_COLORS = [
 ];
 
 const SELECTED_COLOR = [1.0, 1.0, 1.0, 1.0]; // White highlight
+const RING_COLOR = [1.0, 1.0, 0.0, 0.5]; // Yellow selection ring
+
+// eslint-disable-next-line no-multi-spaces
+const BASE_QUAD = new Float32Array([
+    -0.5, -0.5, 0.5, -0.5,
+    -0.5, 0.5, -0.5, 0.5,
+    0.5, -0.5, 0.5, 0.5
+]);
+
+const BUILDING_SCALE = 0.5;
+const UNIT_SCALE = 0.3;
+const RING_SCALE_FACTOR = 1.4;
 
 /**
  * Renders entities (units and buildings) as colored quads on the terrain.
@@ -27,7 +39,7 @@ export class EntityRenderer implements IRenderer {
 
     private gl: WebGLRenderingContext | null = null;
     private program: WebGLProgram | null = null;
-    private posBuffer: WebGLBuffer | null = null;
+    private dynamicBuffer: WebGLBuffer | null = null;
 
     private mapSize: MapSize;
     private groundHeight: Uint8Array;
@@ -41,6 +53,9 @@ export class EntityRenderer implements IRenderer {
     private aEntityPos = -1;
     private aColor = -1;
     private uProjection: WebGLUniformLocation | null = null;
+
+    // Reusable vertex buffer to avoid per-frame allocations
+    private vertexData = new Float32Array(6 * 2);
 
     constructor(mapSize: MapSize, groundHeight: Uint8Array) {
         this.mapSize = mapSize;
@@ -75,23 +90,14 @@ export class EntityRenderer implements IRenderer {
         this.aColor = gl.getAttribLocation(program, 'a_color');
         this.uProjection = gl.getUniformLocation(program, 'projection');
 
-        // Create static quad vertex buffer (two triangles forming a square)
-        this.posBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-            -0.5, -0.5,
-            0.5, -0.5,
-            -0.5, 0.5,
-            -0.5, 0.5,
-            0.5, -0.5,
-            0.5, 0.5
-        ]), gl.STATIC_DRAW);
+        // Create a single reusable dynamic buffer
+        this.dynamicBuffer = gl.createBuffer();
 
         return true;
     }
 
     public draw(gl: WebGLRenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        if (!this.program || this.entities.length === 0) return;
+        if (!this.program || !this.dynamicBuffer || this.entities.length === 0) return;
 
         gl.useProgram(this.program);
 
@@ -101,6 +107,18 @@ export class EntityRenderer implements IRenderer {
 
         // Set projection
         gl.uniformMatrix4fv(this.uProjection, false, projection);
+
+        // Bind the reusable buffer once
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
+        gl.enableVertexAttribArray(this.aPosition);
+        gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
+
+        // Entity position not used (constant zero)
+        gl.disableVertexAttribArray(this.aEntityPos);
+        gl.vertexAttrib2f(this.aEntityPos, 0, 0);
+
+        // Color set per-entity as constant attribute
+        gl.disableVertexAttribArray(this.aColor);
 
         // Draw each entity as a quad
         for (const entity of this.entities) {
@@ -114,72 +132,32 @@ export class EntityRenderer implements IRenderer {
             const isSelected = entity.id === this.selectedEntityId;
             const playerColor = PLAYER_COLORS[entity.player % PLAYER_COLORS.length];
             const color = isSelected ? SELECTED_COLOR : playerColor;
+            const scale = entity.type === EntityType.Building ? BUILDING_SCALE : UNIT_SCALE;
 
-            // Adjust quad size based on entity type
-            const scale = entity.type === EntityType.Building ? 0.5 : 0.3;
+            // Fill reusable vertex buffer
+            this.fillQuadVertices(worldPos.worldX, worldPos.worldY, scale);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-            this.drawQuad(gl, worldPos.worldX, worldPos.worldY, scale, color, isSelected);
+            // Draw selection ring if highlighted
+            if (isSelected) {
+                this.fillQuadVertices(worldPos.worldX, worldPos.worldY, scale * RING_SCALE_FACTOR);
+                gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+                gl.vertexAttrib4f(this.aColor, RING_COLOR[0], RING_COLOR[1], RING_COLOR[2], RING_COLOR[3]);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+            }
         }
 
         gl.disable(gl.BLEND);
     }
 
-    private drawQuad(
-        gl: WebGLRenderingContext,
-        worldX: number,
-        worldY: number,
-        scale: number,
-        color: number[],
-        highlighted: boolean
-    ): void {
-        // Build vertex data for this entity's quad
-        const verts = new Float32Array(6 * 2); // 6 vertices, 2 components each
-        const baseQuad = [
-            -0.5, -0.5,
-            0.5, -0.5,
-            -0.5, 0.5,
-            -0.5, 0.5,
-            0.5, -0.5,
-            0.5, 0.5
-        ];
-
+    private fillQuadVertices(worldX: number, worldY: number, scale: number): void {
+        const verts = this.vertexData;
         for (let i = 0; i < 6; i++) {
-            verts[i * 2] = baseQuad[i * 2] * scale + worldX;
-            verts[i * 2 + 1] = baseQuad[i * 2 + 1] * scale + worldY;
+            verts[i * 2] = BASE_QUAD[i * 2] * scale + worldX;
+            verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1] * scale + worldY;
         }
-
-        // Position attribute
-        const posBuf = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-        gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
-        gl.enableVertexAttribArray(this.aPosition);
-        gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
-
-        // Entity position (constant per-vertex)
-        gl.disableVertexAttribArray(this.aEntityPos);
-        gl.vertexAttrib2f(this.aEntityPos, 0, 0);
-
-        // Color (constant per-vertex)
-        gl.disableVertexAttribArray(this.aColor);
-        gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
-
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-        // Draw selection ring if highlighted
-        if (highlighted) {
-            const ringVerts = new Float32Array(6 * 2);
-            const ringScale = scale * 1.4;
-            for (let i = 0; i < 6; i++) {
-                ringVerts[i * 2] = baseQuad[i * 2] * ringScale + worldX;
-                ringVerts[i * 2 + 1] = baseQuad[i * 2 + 1] * ringScale + worldY;
-            }
-
-            gl.bufferData(gl.ARRAY_BUFFER, ringVerts, gl.DYNAMIC_DRAW);
-            gl.vertexAttrib4f(this.aColor, 1.0, 1.0, 0.0, 0.5); // yellow ring
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
-        }
-
-        gl.deleteBuffer(posBuf);
     }
 
     private compileShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {

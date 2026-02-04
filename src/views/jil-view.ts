@@ -46,7 +46,7 @@ export default class JilView extends Vue {
 
     public onFileSelect(file: IFileSource): void {
         this.fileName = file.name;
-        this.load(file);
+        void this.load(file);
     }
 
     public pad(value:string, size:number): string {
@@ -64,7 +64,7 @@ export default class JilView extends Vue {
 
         const fileId = Path.getFileNameWithoutExtension(file.name);
 
-        this.doLoad(fileId);
+        void this.doLoad(fileId);
     }
 
     /** load a new image */

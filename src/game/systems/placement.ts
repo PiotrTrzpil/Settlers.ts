@@ -1,3 +1,4 @@
+import { CARDINAL_OFFSETS, tileKey } from '../entity';
 import { MapSize } from '@/utilities/map-size';
 
 /**
@@ -17,10 +18,7 @@ export function isPassable(groundTypeValue: number): boolean {
 
 /** Check if a terrain type is buildable (buildings can be placed on it) */
 export function isBuildable(groundTypeValue: number): boolean {
-    // Water: 0-8 - not buildable
-    if (groundTypeValue <= 8) return false;
-    // Rock: 32 - not buildable
-    if (groundTypeValue === 32) return false;
+    if (!isPassable(groundTypeValue)) return false;
     // Beach: 48 - not buildable
     if (groundTypeValue === 48) return false;
     // Swamp: 80, 81 - not buildable
@@ -33,6 +31,8 @@ export function isBuildable(groundTypeValue: number): boolean {
     // Grass (16, 18, 24, 25), Desert (64, 65), paths (28, 29), transitions - buildable
     return true;
 }
+
+const MAX_SLOPE_DIFF = 2;
 
 /**
  * Check if a building can be placed at tile (x, y).
@@ -51,30 +51,25 @@ export function canPlaceBuilding(
 ): boolean {
     const idx = mapSize.toIndex(x, y);
 
-    // Check terrain is buildable
     if (!isBuildable(groundType[idx])) {
         return false;
     }
 
-    // Check tile is not occupied
-    const key = x + ',' + y;
-    if (tileOccupancy.has(key)) {
+    if (tileOccupancy.has(tileKey(x, y))) {
         return false;
     }
 
-    // Check slope: max height difference with 4 neighbors <= 2
+    // Check slope: max height difference with 4 neighbors
     const centerHeight = groundHeight[idx];
-    const neighbors = [
-        [x - 1, y], [x + 1, y],
-        [x, y - 1], [x, y + 1]
-    ];
 
-    for (const [nx, ny] of neighbors) {
+    for (const [dx, dy] of CARDINAL_OFFSETS) {
+        const nx = x + dx;
+        const ny = y + dy;
         if (nx < 0 || nx >= mapSize.width || ny < 0 || ny >= mapSize.height) {
             continue;
         }
         const neighborHeight = groundHeight[mapSize.toIndex(nx, ny)];
-        if (Math.abs(centerHeight - neighborHeight) > 2) {
+        if (Math.abs(centerHeight - neighborHeight) > MAX_SLOPE_DIFF) {
             return false;
         }
     }

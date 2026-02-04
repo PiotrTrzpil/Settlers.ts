@@ -1,10 +1,6 @@
+import { TileCoord } from '../entity';
 import { IViewPoint } from '../renderer/i-view-point';
 import { MapSize } from '@/utilities/map-size';
-
-export interface TileCoord {
-    x: number;
-    y: number;
-}
 
 /**
  * Converts screen (canvas pixel) coordinates to tile coordinates.
