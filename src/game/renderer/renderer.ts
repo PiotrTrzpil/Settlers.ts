@@ -101,8 +101,8 @@ export class Renderer {
         const aspect = canvas.width / canvas.height;
         const projection = Matrix
             .createOrthographic(-aspect, aspect, 1, -1, -1, 1)
-            .translate(-1, 1, 0)
-            .scale(zoomV, zoomV, 1.0);
+            .scale(zoomV, zoomV, 1.0)
+            .translate(-zoomV, zoomV, 0);
 
         // draw all renderers
         for (const r of this.renderers) {

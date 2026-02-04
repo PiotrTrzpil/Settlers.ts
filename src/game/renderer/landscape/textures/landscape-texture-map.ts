@@ -13,9 +13,10 @@ import { AtlasLayout } from './atlas-layout';
 /** Labels for the 3 physical atlas texture slots used by river transitions. */
 export type RiverSlotId = 'A' | 'B' | 'C';
 
-/** All 6 ways to assign the 3 physical slots to the 3 transition roles. */
+/** All 6 ways to assign the 3 physical slots to the 3 transition roles.
+ *  Roles: [0]=inner (River3↔River1), [1]=outer (Grass↔River4), [2]=middle (River4↔River3) */
 export const RIVER_SLOT_PERMS: readonly [RiverSlotId, RiverSlotId, RiverSlotId][] = [
-    ['A', 'B', 'C'],  // 0: inner=A, outer=B, middle=C (default)
+    ['A', 'B', 'C'],  // 0: inner=A, outer=B, middle=C
     ['A', 'C', 'B'],  // 1: inner=A, outer=C, middle=B
     ['B', 'A', 'C'],  // 2: inner=B, outer=A, middle=C
     ['B', 'C', 'A'],  // 3: inner=B, outer=C, middle=A
@@ -26,9 +27,9 @@ export const RIVER_SLOT_PERMS: readonly [RiverSlotId, RiverSlotId, RiverSlotId][
 export interface RiverConfig {
     /** Index into RIVER_SLOT_PERMS (0–5): which physical slot handles inner/outer/middle */
     slotPermutation: number;
-    /** Swap left/right pair for the inner transition (River1 ↔ River3) */
+    /** Swap left/right pair for the inner transition (River3 ↔ River1) */
     flipInner: boolean;
-    /** Swap left/right pair for the outer transition (River4 ↔ Grass) */
+    /** Swap left/right pair for the outer transition (Grass ↔ River4) */
     flipOuter: boolean;
     /** Swap left/right pair for the middle transition (River4 ↔ River3) */
     flipMiddle: boolean;
@@ -253,15 +254,17 @@ export class LandscapeTextureMap {
 
             // Create Hexagon2Textures at fixed source positions (default config).
             // After copyTexture() the shared layout holds correct GPU atlas dest positions.
-            // Slot A: cols 2-3, rows 72-73 (inner transition in default config)
-            const slotALeft = new Hexagon2Texture(L, LandscapeType.River1, LandscapeType.River3, 2, 72, 2, 73);
-            const slotARight = new Hexagon2Texture(L, LandscapeType.River3, LandscapeType.River1, 3, 72, 3, 73);
-            // Slot B: cols 0-1, rows 74-75 (outer transition in default config)
-            const slotBLeft = new Hexagon2Texture(L, LandscapeType.River4, LandscapeType.Grass, 0, 74, 0, 75);
-            const slotBRight = new Hexagon2Texture(L, LandscapeType.Grass, LandscapeType.River4, 1, 74, 1, 75);
-            // Slot C: cols 2-3, rows 74-75 (middle transition, never changes)
-            const slotCLeft = new Hexagon2Texture(L, LandscapeType.River4, LandscapeType.River3, 2, 74, 2, 75);
-            const slotCRight = new Hexagon2Texture(L, LandscapeType.River3, LandscapeType.River4, 3, 74, 3, 75);
+            // Layout matches addTextureGradient1(Grass, River4, River3, River1, 72):
+            //   River4=99 (outermost, near grass), River1=96 (innermost, river center)
+            // Slot A: cols 2-3, rows 72-73 → Grass↔River4 (outer edge)
+            const slotALeft = new Hexagon2Texture(L, LandscapeType.Grass, LandscapeType.River4, 2, 72, 2, 73);
+            const slotARight = new Hexagon2Texture(L, LandscapeType.River4, LandscapeType.Grass, 3, 72, 3, 73);
+            // Slot B: cols 0-1, rows 74-75 → River4↔River3 (middle)
+            const slotBLeft = new Hexagon2Texture(L, LandscapeType.River4, LandscapeType.River3, 0, 74, 0, 75);
+            const slotBRight = new Hexagon2Texture(L, LandscapeType.River3, LandscapeType.River4, 1, 74, 1, 75);
+            // Slot C: cols 2-3, rows 74-75 → River3↔River1 (inner edge)
+            const slotCLeft = new Hexagon2Texture(L, LandscapeType.River3, LandscapeType.River1, 2, 74, 2, 75);
+            const slotCRight = new Hexagon2Texture(L, LandscapeType.River1, LandscapeType.River3, 3, 74, 3, 75);
 
             const allSlots = [slotALeft, slotARight, slotBLeft, slotBRight, slotCLeft, slotCRight];
             for (const tex of allSlots) {
@@ -331,11 +334,12 @@ export class LandscapeTextureMap {
 
         // Create new Hex2 objects with correct type assignments.
         // The shared layout already maps their src positions → atlas dest positions.
+        // Gradient: Grass(16) → River4(99) → River3(98) → River1(96)
         const newTextures = [
-            iLeft.withTypes(LandscapeType.River1, LandscapeType.River3),
-            iRight.withTypes(LandscapeType.River3, LandscapeType.River1),
-            oLeft.withTypes(LandscapeType.River4, LandscapeType.Grass),
-            oRight.withTypes(LandscapeType.Grass, LandscapeType.River4),
+            iLeft.withTypes(LandscapeType.River3, LandscapeType.River1),
+            iRight.withTypes(LandscapeType.River1, LandscapeType.River3),
+            oLeft.withTypes(LandscapeType.Grass, LandscapeType.River4),
+            oRight.withTypes(LandscapeType.River4, LandscapeType.Grass),
             mLeft.withTypes(LandscapeType.River4, LandscapeType.River3),
             mRight.withTypes(LandscapeType.River3, LandscapeType.River4),
         ];

@@ -14,7 +14,7 @@ export class ViewPoint implements IViewPoint {
     private downX = 0;
     private downY = 0;
     public zoomValue = 1;
-    public zoomSpeed = 0.15;
+    public zoomSpeed = 0.05;
     private mouseIsMoving = false;
     private canvas: HTMLCanvasElement;
     private keysDown = new Set<string>();

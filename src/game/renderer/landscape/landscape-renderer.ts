@@ -35,6 +35,8 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     private cachedInstancePos: Int16Array | null = null;
     private cachedInstanceW = 0;
     private cachedInstanceH = 0;
+    private cachedInstanceSX = 0;
+    private cachedInstanceSY = 0;
 
     /** Extra Y tile rows needed to cover terrain height displacement at the bottom edge */
     private heightMarginY: number;
@@ -169,19 +171,23 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     //    /-----/-----/-----/
     //   / 0/1 / 1/1 / 2/1 /
     //  /-----/-----/-----/
-    private getInstancePosArray(width: number, height: number): Int16Array {
+    private getInstancePosArray(width: number, height: number, startX: number, startY: number): Int16Array {
         // Return cached array if dimensions haven't changed
-        if (this.cachedInstancePos && this.cachedInstanceW === width && this.cachedInstanceH === height) {
+        if (this.cachedInstancePos
+            && this.cachedInstanceW === width && this.cachedInstanceH === height
+            && this.cachedInstanceSX === startX && this.cachedInstanceSY === startY) {
             return this.cachedInstancePos;
         }
 
         const r = new Int16Array(width * height * 2);
         let i = 0;
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                r[i] = x + Math.floor(y / 2);
+        for (let dy = 0; dy < height; dy++) {
+            for (let dx = 0; dx < width; dx++) {
+                const iy = startY + dy;
+                const ix = startX + dx;
+                r[i] = ix + Math.floor(iy / 2);
                 i++;
-                r[i] = y;
+                r[i] = iy;
                 i++;
             }
         }
@@ -189,6 +195,8 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         this.cachedInstancePos = r;
         this.cachedInstanceW = width;
         this.cachedInstanceH = height;
+        this.cachedInstanceSX = startX;
+        this.cachedInstanceSY = startY;
         return r;
     }
 
@@ -223,15 +231,17 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         }
 
         // Calculate how many tile instances are needed to fill the viewport.
-        // Visible world range: X = [0, 2*aspect/zoom], Y = [0, 2/zoom].
-        // Each instance covers ~1 unit in X, ~0.5 units in Y (due to the
-        // parallelogram projection), so we need extra instances for Y.
-        // Extra margins: +4 for X (left/right edge + sub-tile offset + shear),
-        // heightMarginY for bottom edge (tall terrain pushes vertices upward).
+        // With the corrected projection, the viewport center maps to world
+        // (aspect, 1), so the visible range extends in both directions from
+        // there.  We need instances covering negative world coordinates too.
         const canvas = gl.canvas as HTMLCanvasElement;
         const aspect = canvas.width / canvas.height;
-        const numInstancesX = Math.ceil(2 * aspect / viewPoint.zoom) + 4;
-        const numInstancesY = Math.ceil(4 / viewPoint.zoom) + 4 + this.heightMarginY;
+        const halfX = Math.ceil(aspect / viewPoint.zoom) + 2;
+        const halfY = Math.ceil(2 / viewPoint.zoom) + 2 + this.heightMarginY;
+        const startX = -halfX + Math.ceil(aspect);
+        const startY = -halfY + 2;
+        const numInstancesX = 2 * halfX;
+        const numInstancesY = 2 * halfY;
 
         // ///////////
         // Tell the shader to use all set texture units
@@ -274,7 +284,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         //    /-----/-----/-----/
         //   / 0/1 / 1/1 / 2/1 /
         //  /-----/-----/-----/
-        sp.setArrayShort('instancePos', this.getInstancePosArray(numInstancesX, numInstancesY), 2, 1);
+        sp.setArrayShort('instancePos', this.getInstancePosArray(numInstancesX, numInstancesY, startX, startY), 2, 1);
 
         // ////////
         // do it! Native WebGL2 instanced draw

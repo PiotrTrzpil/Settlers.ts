@@ -78,7 +78,7 @@ class DebugStats {
             cameraX: 0,
             cameraY: 0,
             zoom: 0,
-            zoomSpeed: 0.15,
+            zoomSpeed: 0.05,
             canvasWidth: 0,
             canvasHeight: 0,
             tileX: 0,

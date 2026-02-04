@@ -81,7 +81,7 @@
           <div class="stat-row">
             <span class="stat-label">Zoom speed</span>
             <span class="stat-value slider-value">
-              <input type="range" min="0.05" max="0.50" step="0.01"
+              <input type="range" min="0.01" max="0.10" step="0.01"
                 :value="stats.zoomSpeed"
                 @input="stats.zoomSpeed = parseFloat(($event.target as HTMLInputElement).value)" />
               {{ stats.zoomSpeed.toFixed(2) }}
@@ -153,11 +153,11 @@
             </div>
             <label class="control-row">
               <input type="checkbox" :checked="stats.riverFlipInner" @change="setRiverFlip('riverFlipInner', $event)" />
-              <span>Flip inner (River1&#x2194;River3)</span>
+              <span>Flip inner (River3&#x2194;River1)</span>
             </label>
             <label class="control-row">
               <input type="checkbox" :checked="stats.riverFlipOuter" @change="setRiverFlip('riverFlipOuter', $event)" />
-              <span>Flip outer (River4&#x2194;Grass)</span>
+              <span>Flip outer (Grass&#x2194;River4)</span>
             </label>
             <label class="control-row">
               <input type="checkbox" :checked="stats.riverFlipMiddle" @change="setRiverFlip('riverFlipMiddle', $event)" />
