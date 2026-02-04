@@ -115,19 +115,22 @@
       <div class="canvas-area">
         <!-- Info bar -->
         <div class="info-bar">
-          <div class="mode-indicator" data-testid="mode-indicator">
+          <div class="mode-indicator" data-testid="mode-indicator" :data-mode="game.mode">
             Mode: <strong>{{ game.mode }}</strong>
           </div>
-          <div class="tile-info" data-testid="tile-info" v-if="hoveredTile">
+          <div class="tile-info" data-testid="tile-info" v-if="hoveredTile"
+            :data-tile-x="hoveredTile.x" :data-tile-y="hoveredTile.y">
             Tile: ({{ hoveredTile.x }}, {{ hoveredTile.y }})
           </div>
-          <div class="entity-info" data-testid="entity-info" v-if="selectedEntity">
+          <div class="entity-info" data-testid="entity-info" v-if="selectedEntity"
+            :data-entity-id="selectedEntity.id" :data-selection-count="selectionCount">
             Selected: {{ selectedEntity.type === 1 ? 'Unit' : 'Building' }}
             #{{ selectedEntity.id }}
             at ({{ selectedEntity.x }}, {{ selectedEntity.y }})
             <span v-if="selectionCount > 1"> (+{{ selectionCount - 1 }} more)</span>
           </div>
-          <div class="entity-count" data-testid="entity-count">
+          <div class="entity-count" data-testid="entity-count"
+            :data-count="game.state.entities.length">
             Entities: {{ game.state.entities.length }}
           </div>
         </div>
@@ -136,8 +139,19 @@
         <renderer-viewer
           :game="game"
           :debugGrid="showDebug"
+          :showTerritoryBorders="showTerritoryBorders"
           @tileClick="onTileClick"
           class="game-canvas"
+        />
+
+        <!-- Debug panel overlay -->
+        <debug-panel
+          :debugGrid="showDebug"
+          :showTerritoryBorders="showTerritoryBorders"
+          :paused="isPaused"
+          @update:debugGrid="showDebug = $event"
+          @update:showTerritoryBorders="showTerritoryBorders = $event"
+          @togglePause="togglePause()"
         />
       </div>
     </div>
@@ -147,6 +161,7 @@
       v-if="!game"
       :game="game"
       :debugGrid="showDebug"
+      :showTerritoryBorders="showTerritoryBorders"
       @tileClick="onTileClick"
     />
   </div>
@@ -158,6 +173,7 @@ import { useMapView } from './use-map-view';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
+import DebugPanel from '@/components/debug-panel.vue';
 
 const props = defineProps<{
     fileManager: FileManager;
@@ -167,6 +183,7 @@ const {
     mapInfo,
     game,
     showDebug,
+    showTerritoryBorders,
     activeTab,
     hoveredTile,
     selectedEntity,

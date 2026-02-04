@@ -1,6 +1,7 @@
 import { GameState } from './game-state';
 import { updateMovement } from './systems/movement';
 import { LogHandler } from '@/utilities/log-handler';
+import { debugStats } from './debug-stats';
 
 const TICK_RATE = 30;
 const TICK_DURATION = 1 / TICK_RATE;
@@ -64,6 +65,8 @@ export class GameLoop {
     private frame(now: number): void {
         if (!this.running) return;
 
+        debugStats.recordFrame(now);
+
         try {
             const deltaSec = Math.min((now - this.lastTime) / 1000, 0.1); // cap at 100ms
             this.lastTime = now;
@@ -87,6 +90,7 @@ export class GameLoop {
     }
 
     private tick(dt: number): void {
+        debugStats.recordTick();
         updateMovement(this.gameState, dt, this.groundType, this.groundHeight, this.mapWidth, this.mapHeight);
     }
 }

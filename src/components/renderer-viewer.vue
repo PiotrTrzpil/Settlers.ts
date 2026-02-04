@@ -15,6 +15,7 @@ import { useRenderer } from './use-renderer';
 const props = defineProps<{
     game: Game | null;
     debugGrid: boolean;
+    showTerritoryBorders: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -27,6 +28,7 @@ useRenderer({
     canvas: cav,
     getGame: () => props.game,
     getDebugGrid: () => props.debugGrid,
+    getShowTerritoryBorders: () => props.showTerritoryBorders,
     onTileClick: (tile) => emit('tileClick', tile)
 });
 </script>

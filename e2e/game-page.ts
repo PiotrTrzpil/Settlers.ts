@@ -1,0 +1,202 @@
+import { type Page, type Locator, expect } from '@playwright/test';
+
+/**
+ * Mirrors DebugStatsState from src/game/debug-stats.ts.
+ * Only the fields tests actually need — kept minimal to avoid drift.
+ */
+interface SettlersDebug {
+    gameLoaded: boolean;
+    rendererReady: boolean;
+    frameCount: number;
+    fps: number;
+    entityCount: number;
+    buildingCount: number;
+    unitCount: number;
+    unitsMoving: number;
+    totalPathSteps: number;
+    cameraX: number;
+    cameraY: number;
+    zoom: number;
+    canvasWidth: number;
+    canvasHeight: number;
+    mode: string;
+    selectedEntityId: number | null;
+    selectedCount: number;
+}
+
+/**
+ * Page Object Model for the Settlers.ts map view.
+ *
+ * Encapsulates navigation, waiting for game readiness, and
+ * common assertions so E2E tests stay concise and readable.
+ */
+export class GamePage {
+    readonly page: Page;
+    readonly canvas: Locator;
+    readonly gameUi: Locator;
+    readonly entityCount: Locator;
+    readonly modeIndicator: Locator;
+
+    constructor(page: Page) {
+        this.page = page;
+        this.canvas = page.locator('canvas');
+        this.gameUi = page.locator('[data-testid="game-ui"]');
+        this.entityCount = page.locator('[data-testid="entity-count"]');
+        this.modeIndicator = page.locator('[data-testid="mode-indicator"]');
+    }
+
+    // ── Navigation ──────────────────────────────────────────
+
+    /** Navigate to the map view with an optional test map. */
+    async goto(options: { testMap?: boolean } = {}): Promise<void> {
+        const query = options.testMap ? '?testMap=true' : '';
+        await this.page.goto(`/map-view${query}`);
+    }
+
+    // ── Waiting ─────────────────────────────────────────────
+
+    /** Wait until the game UI is mounted in the DOM. */
+    async waitForGameUi(timeout = 20_000): Promise<void> {
+        await this.gameUi.waitFor({ timeout });
+    }
+
+    /**
+     * Wait until the renderer has drawn at least `minFrames` frames.
+     * Replaces brittle `waitForTimeout` calls — polls the debug bridge
+     * until the exact readiness condition is met.
+     */
+    async waitForFrames(minFrames = 5, timeout = 20_000): Promise<void> {
+        await this.page.waitForFunction(
+            (n) => (window as any).__settlers_debug__?.frameCount >= n,
+            minFrames,
+            { timeout },
+        );
+    }
+
+    /** Wait for game loaded + renderer ready + N frames rendered. */
+    async waitForReady(minFrames = 5, timeout = 20_000): Promise<void> {
+        await this.waitForGameUi(timeout);
+        await this.page.waitForFunction(
+            (n) => {
+                const d = (window as any).__settlers_debug__;
+                return d && d.gameLoaded && d.rendererReady && d.frameCount >= n;
+            },
+            minFrames,
+            { timeout },
+        );
+    }
+
+    // ── Debug bridge reads ──────────────────────────────────
+
+    /** Read the full debug state object from the page. */
+    async getDebug(): Promise<SettlersDebug> {
+        return this.page.evaluate(() => {
+            const d = (window as any).__settlers_debug__;
+            // Return a plain object (the Vue reactive proxy can't be serialised)
+            return { ...d };
+        });
+    }
+
+    /** Read a single debug field. */
+    async getDebugField<K extends keyof SettlersDebug>(key: K): Promise<SettlersDebug[K]> {
+        return this.page.evaluate(
+            (k) => (window as any).__settlers_debug__?.[k],
+            key,
+        );
+    }
+
+    // ── Structured data-* attribute reads ───────────────────
+
+    async getEntityCount(): Promise<number> {
+        const val = await this.entityCount.getAttribute('data-count');
+        return Number(val);
+    }
+
+    async getMode(): Promise<string> {
+        const val = await this.modeIndicator.getAttribute('data-mode');
+        return val ?? '';
+    }
+
+    // ── Actions ─────────────────────────────────────────────
+
+    async clickButton(testId: string): Promise<void> {
+        await this.page.locator(`[data-testid="${testId}"]`).click();
+    }
+
+    async placeBuilding(testId: string): Promise<void> {
+        await this.clickButton(testId);
+    }
+
+    async spawnSettler(): Promise<void> {
+        // Switch to Units tab first
+        await this.page.locator('.tab-btn', { hasText: 'Units' }).click();
+        await this.clickButton('btn-spawn-settler');
+    }
+
+    async spawnSoldier(): Promise<void> {
+        await this.page.locator('.tab-btn', { hasText: 'Units' }).click();
+        await this.clickButton('btn-spawn-soldier');
+    }
+
+    async pause(): Promise<void> {
+        await this.clickButton('btn-pause');
+    }
+
+    async selectMode(): Promise<void> {
+        await this.clickButton('btn-select-mode');
+    }
+
+    // ── Canvas diagnostics ──────────────────────────────────
+
+    /** Sample pixel colors from the WebGL canvas at named positions. */
+    async samplePixels(): Promise<Record<string, number[]>> {
+        return this.page.evaluate(() => {
+            const c = document.querySelector('canvas');
+            if (!c) return {};
+            const gl = c.getContext('webgl2');
+            if (!gl) return {};
+
+            const spots: Record<string, [number, number]> = {
+                center: [Math.floor(c.width / 2), Math.floor(c.height / 2)],
+                topLeft: [10, 10],
+                topRight: [c.width - 10, 10],
+                bottomLeft: [10, c.height - 10],
+                bottomRight: [c.width - 10, c.height - 10],
+            };
+
+            const result: Record<string, number[]> = {};
+            for (const [name, [x, y]] of Object.entries(spots)) {
+                const buf = new Uint8Array(4);
+                gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+                result[name] = Array.from(buf);
+            }
+            return result;
+        });
+    }
+
+    // ── Assertions ──────────────────────────────────────────
+
+    /** Assert the canvas is visible and non-zero size. */
+    async expectCanvasVisible(): Promise<void> {
+        await expect(this.canvas).toBeVisible();
+        const box = await this.canvas.boundingBox();
+        expect(box).toBeTruthy();
+        expect(box!.width).toBeGreaterThan(0);
+        expect(box!.height).toBeGreaterThan(0);
+    }
+
+    /** Assert no unexpected JS errors occurred (filters known WebGL warnings). */
+    collectErrors(): { errors: string[]; check: () => void } {
+        const errors: string[] = [];
+        this.page.on('pageerror', (err) => errors.push(err.message));
+        return {
+            errors,
+            check: () => {
+                const unexpected = errors.filter(
+                    (e) => !e.includes('2.gh6') && !e.includes('WebGL') && !e.includes('texture'),
+                );
+                expect(unexpected).toHaveLength(0);
+            },
+        };
+    }
+}

@@ -6,6 +6,7 @@ import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { EntityType, BuildingType } from '@/game/entity';
 import { canPlaceBuildingWithTerritory } from '@/game/systems/placement';
+import { debugStats } from '@/game/debug-stats';
 
 const DRAG_THRESHOLD = 5;
 
@@ -23,10 +24,11 @@ interface UseRendererOptions {
     canvas: Ref<HTMLCanvasElement | null>;
     getGame: () => Game | null;
     getDebugGrid: () => boolean;
+    getShowTerritoryBorders: () => boolean;
     onTileClick: (tile: { x: number; y: number }) => void;
 }
 
-export function useRenderer({ canvas, getGame, getDebugGrid, onTileClick }: UseRendererOptions) {
+export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBorders, onTileClick }: UseRendererOptions) {
     let renderer: Renderer | null = null;
     let tilePicker: TilePicker | null = null;
     let entityRenderer: EntityRenderer | null = null;
@@ -53,7 +55,11 @@ export function useRenderer({ canvas, getGame, getDebugGrid, onTileClick }: UseR
         entityRenderer = new EntityRenderer(game.mapSize, game.groundHeight);
         renderer.add(entityRenderer);
 
-        void renderer.init();
+        void renderer.init().then(() => {
+            debugStats.state.rendererReady = true;
+        });
+
+        debugStats.state.gameLoaded = true;
 
         const landTile = game.findLandTile();
         if (landTile) {
@@ -73,9 +79,18 @@ export function useRenderer({ canvas, getGame, getDebugGrid, onTileClick }: UseR
                 entityRenderer.selectedEntityId = g.state.selectedEntityId;
                 entityRenderer.selectedEntityIds = g.state.selectedEntityIds;
                 entityRenderer.unitStates = g.state.unitStates;
-                entityRenderer.territoryMap = g.territory;
+                entityRenderer.territoryMap = getShowTerritoryBorders() ? g.territory : null;
                 entityRenderer.territoryVersion = g.territoryVersion;
             }
+            // Feed game + camera info to debug stats
+            if (g) {
+                debugStats.updateFromGame(g);
+            }
+            debugStats.state.cameraX = Math.round(r.viewPoint.x * 10) / 10;
+            debugStats.state.cameraY = Math.round(r.viewPoint.y * 10) / 10;
+            debugStats.state.zoom = r.viewPoint.zoomValue;
+            debugStats.state.canvasWidth = r.canvas.width;
+            debugStats.state.canvasHeight = r.canvas.height;
             r.drawOnce();
         });
         game.start();
@@ -181,12 +196,24 @@ export function useRenderer({ canvas, getGame, getDebugGrid, onTileClick }: UseR
             }
         }
 
+        // Always resolve hovered tile for debug stats
+        const tile = tilePicker.screenToTile(e.offsetX, e.offsetY, renderer.viewPoint, game.mapSize, game.groundHeight);
+        if (tile) {
+            debugStats.state.hasTile = true;
+            debugStats.state.tileX = tile.x;
+            debugStats.state.tileY = tile.y;
+            const idx = game.mapSize.toIndex(tile.x, tile.y);
+            debugStats.state.tileGroundType = game.groundType[idx];
+            debugStats.state.tileGroundHeight = game.groundHeight[idx];
+        } else {
+            debugStats.state.hasTile = false;
+        }
+
         if (game.mode !== 'place_building') {
             entityRenderer.previewTile = null;
             return;
         }
 
-        const tile = tilePicker.screenToTile(e.offsetX, e.offsetY, renderer.viewPoint, game.mapSize, game.groundHeight);
         if (!tile) {
             entityRenderer.previewTile = null;
             return;
@@ -233,4 +260,8 @@ export function useRenderer({ canvas, getGame, getDebugGrid, onTileClick }: UseR
             renderer.destroy();
         }
     });
+
+    return {
+        getRenderer: () => renderer,
+    };
 }

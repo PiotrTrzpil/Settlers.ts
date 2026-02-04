@@ -9,6 +9,10 @@ export default defineConfig({
         toMatchSnapshot: {
             maxDiffPixelRatio: 0.01,
         },
+        toHaveScreenshot: {
+            maxDiffPixelRatio: 0.01,
+            animations: 'disabled',
+        },
     },
     use: {
         baseURL: 'http://localhost:4173',

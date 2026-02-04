@@ -17,6 +17,7 @@ export function useMapView(getFileManager: () => FileManager) {
     const mapInfo = ref('');
     const game = shallowRef<Game | null>(null);
     const showDebug = ref(false);
+    const showTerritoryBorders = ref(true);
     const activeTab = ref<'buildings' | 'units'>('buildings');
     const hoveredTile = ref<TileCoord | null>(null);
 
@@ -173,6 +174,7 @@ export function useMapView(getFileManager: () => FileManager) {
         mapInfo,
         game,
         showDebug,
+        showTerritoryBorders,
         activeTab,
         hoveredTile,
         selectedEntity,
