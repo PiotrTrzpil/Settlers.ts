@@ -6,19 +6,7 @@ import { ViewPoint } from './view-point';
 
 declare let WebGLDebugUtils: any;
 
-// https://stackoverflow.com/questions/48741570/how-can-i-import-glsl-as-string-in-typescript
-// https://tympanus.net/codrops/2019/01/17/interactive-particles-with-three-js/
-// https://webglfundamentals.org/webgl/lessons/webgl-instanced-drawing.html
-
-// Device Web-GL support
-// https://webglreport.com/?v=1
-
-// WebGl Debugging
-// https://www.khronos.org/webgl/wiki/Debugging
-
-/**
- * manages the WebGL context and the IRenderer who drawing to this context
- */
+/** Manages the WebGL context and the IRenderers that draw to it */
 export class Renderer {
     private static log = new LogHandler('Renderer');
     public canvas: HTMLCanvasElement;
@@ -93,11 +81,7 @@ export class Renderer {
             return;
         }
 
-        // position of the map to dispaly
-        // const viewX = this.viewPoint.x;
-        // const viewY = this.viewPoint.y;
         const zoomV = this.viewPoint.zoom;
-        // console.log('draw: ' + viewX + ' x ' + viewY + ' zoom: ' + zoomV);
 
         // define camera
         const canvas = this.canvas;
@@ -112,8 +96,6 @@ export class Renderer {
         for (const r of this.renderers) {
             r.draw(gl, projection.mat, this.viewPoint);
         }
-
-        requestAnimationFrame(() => this.draw);
     }
 
     /** Starts the animation */

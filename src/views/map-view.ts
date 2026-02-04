@@ -1,9 +1,7 @@
 import { Options, Vue } from 'vue-class-component';
 import { MapLoader } from '@/resources/map/map-loader';
-import { OriginalMapFile } from '@/resources/map/original/original-map-file';
-import { MapChunk } from '@/resources/map/original/map-chunk';
 import { Game } from '@/game/game';
-import { Entity, UnitType } from '@/game/entity';
+import { Entity, TileCoord, UnitType } from '@/game/entity';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
 
@@ -29,7 +27,7 @@ export default class MapView extends Vue {
     public game: Game | null = null;
     protected showDebug = false;
 
-    public hoveredTile: { x: number; y: number } | null = null;
+    public hoveredTile: TileCoord | null = null;
 
     public get selectedEntity(): Entity | undefined {
         if (!this.game || this.game.state.selectedEntityId === null) return undefined;
@@ -41,7 +39,7 @@ export default class MapView extends Vue {
         this.load(file);
     }
 
-    public onTileClick(tile: { x: number; y: number }): void {
+    public onTileClick(tile: TileCoord): void {
         this.hoveredTile = tile;
     }
 
@@ -83,12 +81,6 @@ export default class MapView extends Vue {
         });
     }
 
-    public pad(value: string, size: number): string {
-        const str = ('' + value + '').split(' ').join('\u00a0');
-        const padSize = Math.max(0, size - str.length);
-        return str + ('\u00a0'.repeat(padSize));
-    }
-
     /** load a new game/level */
     public async load(file: IFileSource): Promise<void> {
         if (!this.fileManager) {
@@ -109,20 +101,6 @@ export default class MapView extends Vue {
 
         this.mapInfo = mapContent.toString();
 
-        /// create a game object
         this.game = new Game(this.fileManager, mapContent);
-    }
-
-    private fillChunkList(map: OriginalMapFile) {
-        const list: MapChunk[] = [];
-
-        const count = map.getChunkCount();
-        for (let i = 0; i < count; i++) {
-            const chunk = map.getChunkByIndex(i);
-
-            list.push(chunk);
-        }
-
-        return list;
     }
 }

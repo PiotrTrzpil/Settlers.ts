@@ -1,3 +1,4 @@
+import { TileCoord, CARDINAL_OFFSETS, tileKey } from '../entity';
 import { isPassable } from './placement';
 
 interface PathNode {
@@ -30,7 +31,7 @@ export function findPath(
     mapWidth: number,
     mapHeight: number,
     tileOccupancy: Map<string, number>
-): { x: number; y: number }[] | null {
+): TileCoord[] | null {
     if (startX === goalX && startY === goalY) {
         return [];
     }
@@ -44,15 +45,15 @@ export function findPath(
     const openSet: PathNode[] = [];
     const closedSet = new Set<number>();
 
+    const startH = heuristic(startX, startY, goalX, goalY);
     const startNode: PathNode = {
         x: startX,
         y: startY,
         g: 0,
-        h: heuristic(startX, startY, goalX, goalY),
-        f: 0,
+        h: startH,
+        f: startH,
         parent: null
     };
-    startNode.f = startNode.g + startNode.h;
     openSet.push(startNode);
 
     let nodesSearched = 0;
@@ -73,20 +74,15 @@ export function findPath(
             return reconstructPath(current);
         }
 
-        const key = current.x + current.y * mapWidth;
-        if (closedSet.has(key)) continue;
-        closedSet.add(key);
+        const closedKey = current.x + current.y * mapWidth;
+        if (closedSet.has(closedKey)) continue;
+        closedSet.add(closedKey);
         nodesSearched++;
 
-        // 4-directional neighbors
-        const neighbors = [
-            [current.x - 1, current.y],
-            [current.x + 1, current.y],
-            [current.x, current.y - 1],
-            [current.x, current.y + 1]
-        ];
+        for (const [dx, dy] of CARDINAL_OFFSETS) {
+            const nx = current.x + dx;
+            const ny = current.y + dy;
 
-        for (const [nx, ny] of neighbors) {
             // Bounds check
             if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) {
                 continue;
@@ -95,24 +91,19 @@ export function findPath(
             const nKey = nx + ny * mapWidth;
             if (closedSet.has(nKey)) continue;
 
-            const nIdx = nx + ny * mapWidth;
-
             // Check passability
-            if (!isPassable(groundType[nIdx])) continue;
+            if (!isPassable(groundType[nKey])) continue;
 
             // Don't path through occupied tiles (except the goal)
             if (nx !== goalX || ny !== goalY) {
-                const occKey = nx + ',' + ny;
-                if (tileOccupancy.has(occKey)) {
-                    // Allow pathing through unit-occupied tiles but not building-occupied
-                    // For simplicity in MVP, skip occupied tiles
+                if (tileOccupancy.has(tileKey(nx, ny))) {
                     continue;
                 }
             }
 
             // Cost: base 1 + height difference penalty
             const currentHeight = groundHeight[current.x + current.y * mapWidth];
-            const neighborHeight = groundHeight[nIdx];
+            const neighborHeight = groundHeight[nKey];
             const heightDiff = Math.abs(currentHeight - neighborHeight);
             const moveCost = 1 + heightDiff;
 
@@ -124,15 +115,15 @@ export function findPath(
                 continue;
             }
 
+            const h = heuristic(nx, ny, goalX, goalY);
             const newNode: PathNode = {
                 x: nx,
                 y: ny,
                 g: tentativeG,
-                h: heuristic(nx, ny, goalX, goalY),
-                f: 0,
+                h,
+                f: tentativeG + h,
                 parent: current
             };
-            newNode.f = newNode.g + newNode.h;
 
             if (existingIdx >= 0) {
                 openSet[existingIdx] = newNode;
@@ -149,8 +140,8 @@ function heuristic(ax: number, ay: number, bx: number, by: number): number {
     return Math.abs(ax - bx) + Math.abs(ay - by);
 }
 
-function reconstructPath(node: PathNode): { x: number; y: number }[] {
-    const path: { x: number; y: number }[] = [];
+function reconstructPath(node: PathNode): TileCoord[] {
+    const path: TileCoord[] = [];
     let current: PathNode | null = node;
 
     while (current !== null && current.parent !== null) {

@@ -1,17 +1,15 @@
-import { Entity, EntityType, UnitState } from './entity';
+import { Entity, EntityType, UnitState, tileKey } from './entity';
 
 export class GameState {
     public entities: Entity[] = [];
+    /** O(1) entity lookup by ID */
+    private entityMap: Map<number, Entity> = new Map();
     public unitStates: Map<number, UnitState> = new Map();
     public selectedEntityId: number | null = null;
     public nextId = 1;
 
     /** Spatial lookup: "x,y" -> entityId */
     public tileOccupancy: Map<string, number> = new Map();
-
-    private static tileKey(x: number, y: number): string {
-        return x + ',' + y;
-    }
 
     public addEntity(type: EntityType, subType: number, x: number, y: number, player: number): Entity {
         const entity: Entity = {
@@ -24,7 +22,8 @@ export class GameState {
         };
 
         this.entities.push(entity);
-        this.tileOccupancy.set(GameState.tileKey(x, y), entity.id);
+        this.entityMap.set(entity.id, entity);
+        this.tileOccupancy.set(tileKey(x, y), entity.id);
 
         if (type === EntityType.Unit) {
             this.unitStates.set(entity.id, {
@@ -40,12 +39,16 @@ export class GameState {
     }
 
     public removeEntity(id: number): void {
-        const index = this.entities.findIndex(e => e.id === id);
-        if (index < 0) return;
+        const entity = this.entityMap.get(id);
+        if (!entity) return;
 
-        const entity = this.entities[index];
-        this.tileOccupancy.delete(GameState.tileKey(entity.x, entity.y));
-        this.entities.splice(index, 1);
+        const index = this.entities.indexOf(entity);
+        if (index >= 0) {
+            this.entities.splice(index, 1);
+        }
+
+        this.entityMap.delete(id);
+        this.tileOccupancy.delete(tileKey(entity.x, entity.y));
         this.unitStates.delete(id);
 
         if (this.selectedEntityId === id) {
@@ -54,13 +57,13 @@ export class GameState {
     }
 
     public getEntity(id: number): Entity | undefined {
-        return this.entities.find(e => e.id === id);
+        return this.entityMap.get(id);
     }
 
     public getEntityAt(x: number, y: number): Entity | undefined {
-        const id = this.tileOccupancy.get(GameState.tileKey(x, y));
+        const id = this.tileOccupancy.get(tileKey(x, y));
         if (id === undefined) return undefined;
-        return this.getEntity(id);
+        return this.entityMap.get(id);
     }
 
     public getEntitiesInRadius(x: number, y: number, radius: number): Entity[] {
@@ -78,12 +81,12 @@ export class GameState {
 
     /** Update occupancy when an entity moves */
     public updateEntityPosition(id: number, newX: number, newY: number): void {
-        const entity = this.getEntity(id);
+        const entity = this.entityMap.get(id);
         if (!entity) return;
 
-        this.tileOccupancy.delete(GameState.tileKey(entity.x, entity.y));
+        this.tileOccupancy.delete(tileKey(entity.x, entity.y));
         entity.x = newX;
         entity.y = newY;
-        this.tileOccupancy.set(GameState.tileKey(newX, newY), id);
+        this.tileOccupancy.set(tileKey(newX, newY), id);
     }
 }
