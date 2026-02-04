@@ -31,7 +31,7 @@ export class Renderer {
         this.viewPoint = new ViewPoint(canvas);
         this.viewPoint.onMove = () => this.onMove();
 
-        let newGl = canvas.getContext('webgl2');
+        let newGl = canvas.getContext('webgl2', { preserveDrawingBuffer: true });
         if (!newGl) {
             Renderer.log.error('Unable to initialize WebGL2. Your browser may not support it.');
             return;

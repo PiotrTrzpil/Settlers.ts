@@ -63,6 +63,26 @@ class Slot {
 }
 
 /**
+ * RGB565 palette of 12 bright, distinct colors used as procedural fallback
+ * when the real texture file (2.gh6) is unavailable.
+ * Format: (R5 << 11) | (G6 << 5) | B5
+ */
+const PROCEDURAL_PALETTE: readonly number[] = [
+    0x001F, // bright blue    (water)
+    0xFE60, // sandy yellow   (beach)
+    0x07E0, // bright green   (grass)
+    0x0400, // dark green     (grass dark)
+    0xCE40, // olive          (grass dry)
+    0xFD20, // orange         (desert)
+    0x8410, // gray           (rock)
+    0x4A49, // dark teal      (swamp)
+    0xA145, // brown          (mud)
+    0xFFFF, // white          (snow)
+    0xDDA0, // tan            (dusty way)
+    0x632C, // dark gray      (rocky way)
+];
+
+/**
  * A big texture buffer where images can write to
  **/
 export class TextureMap16Bit extends ShaderTexture {
@@ -118,6 +138,23 @@ export class TextureMap16Bit extends ShaderTexture {
         slot.increase(width);
 
         return newImg;
+    }
+
+    /**
+     * Fill the atlas with procedural colors so terrain types are visually
+     * distinguishable when the real texture file (2.gh6) is unavailable.
+     * Each 256x256 block row gets a unique color from the palette.
+     */
+    public fillProceduralColors(): void {
+        const size = this.imgWidthHeight;
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const bx = Math.floor(x / 256);
+                const by = Math.floor(y / 256);
+                const idx = (bx + by * Math.ceil(size / 256)) % PROCEDURAL_PALETTE.length;
+                this.imgData[y * size + x] = PROCEDURAL_PALETTE[idx];
+            }
+        }
     }
 
     public load(gl: WebGL2RenderingContext): void {

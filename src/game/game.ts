@@ -29,6 +29,9 @@ export class Game {
     /** Current player index */
     public currentPlayer = 0;
 
+    /** When true, renderers use procedural textures instead of loading game assets */
+    public useProceduralTextures = false;
+
     public constructor(fileManager: FileManager, mapLoader: IMapLoader) {
         this.fileManager = fileManager;
         this.mapSize = mapLoader.mapSize;

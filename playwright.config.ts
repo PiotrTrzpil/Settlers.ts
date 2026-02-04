@@ -4,6 +4,12 @@ export default defineConfig({
     testDir: './e2e',
     timeout: 30000,
     retries: 0,
+    snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',
+    expect: {
+        toMatchSnapshot: {
+            maxDiffPixelRatio: 0.01,
+        },
+    },
     use: {
         baseURL: 'http://localhost:4173',
         headless: true,

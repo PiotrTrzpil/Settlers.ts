@@ -35,6 +35,7 @@ export function useRenderer({ canvas, getGame, getDebugGrid, onTileClick }: UseR
 
     function initRenderer() {
         const game = getGame();
+        console.log('[DEBUG] initRenderer called, game:', !!game, 'renderer:', !!renderer);
         if (game == null || renderer == null) return;
 
         renderer.add(
@@ -44,7 +45,8 @@ export function useRenderer({ canvas, getGame, getDebugGrid, onTileClick }: UseR
                 game.mapSize,
                 game.groundType,
                 game.groundHeight,
-                getDebugGrid()
+                getDebugGrid(),
+                game.useProceduralTextures
             )
         );
 
@@ -56,6 +58,11 @@ export function useRenderer({ canvas, getGame, getDebugGrid, onTileClick }: UseR
         const landTile = game.findLandTile();
         if (landTile) {
             renderer.viewPoint.setPosition(landTile.x, landTile.y);
+            console.log('[DEBUG] viewPoint setPosition to landTile:', landTile.x, landTile.y,
+                '-> viewPoint x:', renderer.viewPoint.x, 'y:', renderer.viewPoint.y,
+                'zoom:', renderer.viewPoint.zoom, 'zoomValue:', renderer.viewPoint.zoomValue);
+        } else {
+            console.log('[DEBUG] no landTile found, viewPoint at x:', renderer.viewPoint.x, 'y:', renderer.viewPoint.y);
         }
 
         const r = renderer;

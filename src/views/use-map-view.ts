@@ -1,6 +1,8 @@
 import { ref, shallowRef, computed, watch, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
+import { createTestMapLoader } from '@/game/test-map-factory';
 import { Entity, TileCoord, UnitType } from '@/game/entity';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
@@ -8,6 +10,9 @@ import { LogHandler } from '@/utilities/log-handler';
 const log = new LogHandler('MapView');
 
 export function useMapView(getFileManager: () => FileManager) {
+    const route = useRoute();
+    const isTestMap = route.query.testMap === 'true';
+
     const fileName = ref<string | null>(null);
     const mapInfo = ref('');
     const game = shallowRef<Game | null>(null);
@@ -30,6 +35,17 @@ export function useMapView(getFileManager: () => FileManager) {
         return !game.value.gameLoop.isRunning;
     });
 
+    function loadTestMap(): void {
+        if (game.value) return;
+        const fm = getFileManager();
+        if (!fm) return;
+        const mapContent = createTestMapLoader();
+        mapInfo.value = 'Test map (synthetic 256x256)';
+        const g = new Game(fm, mapContent);
+        g.useProceduralTextures = true;
+        game.value = g;
+    }
+
     function autoLoadFirstMap(): void {
         const fm = getFileManager();
         if (game.value || !fm) return;
@@ -40,11 +56,19 @@ export function useMapView(getFileManager: () => FileManager) {
     }
 
     onMounted(() => {
-        autoLoadFirstMap();
+        if (isTestMap) {
+            loadTestMap();
+        } else {
+            autoLoadFirstMap();
+        }
     });
 
     watch(getFileManager, () => {
-        autoLoadFirstMap();
+        if (isTestMap) {
+            loadTestMap();
+        } else {
+            autoLoadFirstMap();
+        }
     });
 
     function onFileSelect(file: IFileSource) {

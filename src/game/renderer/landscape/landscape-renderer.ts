@@ -16,6 +16,7 @@ import fragCode from './landscape-frag.glsl';
 
 export class LandscapeRenderer extends RendererBase implements IRenderer {
     private static log = new LogHandler('LandscapeRenderer');
+    private static _debugDrawCount = 0;
     private numVertices = 0;
     private textureManager: TextureManager;
     private texture: TextureMap16Bit;
@@ -29,6 +30,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     private groundTypeMap: Uint8Array;
     private groundHeightMap: Uint8Array;
     private debugGrid: boolean;
+    private useProceduralTextures: boolean;
 
     /** Cached instance position array to avoid allocating a new Int16Array every frame */
     private cachedInstancePos: Int16Array | null = null;
@@ -41,7 +43,8 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         mapSize: MapSize,
         groundTypeMap: Uint8Array,
         groundHeightMap: Uint8Array,
-        debugGrid: boolean
+        debugGrid: boolean,
+        useProceduralTextures = false
     ) {
         super();
 
@@ -51,6 +54,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         this.groundHeightMap = groundHeightMap;
         this.groundTypeMap = groundTypeMap;
         this.debugGrid = debugGrid;
+        this.useProceduralTextures = useProceduralTextures;
 
         this.texture = new TextureMap16Bit(256 * 6, this.textureManager.create('u_landText'));
 
@@ -59,9 +63,16 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
 
     /** load the landscape texture from file and push it to a texture map buffer */
     private async createLandscapeTextureMap() {
+        if (this.useProceduralTextures) {
+            LandscapeRenderer.log.debug('Using procedural textures (flag set)');
+            this.texture.fillProceduralColors();
+            return;
+        }
+
         const imgFile = await this.fileManager.readFile('2.gh6', true);
         if (!imgFile) {
-            LandscapeRenderer.log.error('Unable to load texture file "2.gh6"');
+            LandscapeRenderer.log.error('Unable to load texture file "2.gh6" – using procedural fallback');
+            this.texture.fillProceduralColors();
             return;
         }
 
@@ -69,6 +80,8 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         const img = reader.findImageByType<GfxImage16Bit>(ImageType.Image16Bit);
 
         if (!img) {
+            LandscapeRenderer.log.error('No 16-bit image in "2.gh6" – using procedural fallback');
+            this.texture.fillProceduralColors();
             return;
         }
 
@@ -189,6 +202,15 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         const aspect = canvas.width / canvas.height;
         const numInstancesX = Math.ceil(2 * aspect / viewPoint.zoom) + 2;
         const numInstancesY = Math.ceil(4 / viewPoint.zoom) + 2;
+
+        if (LandscapeRenderer._debugDrawCount < 3) {
+            LandscapeRenderer._debugDrawCount++;
+            console.log('[DEBUG] LandscapeRenderer.draw',
+                'viewPoint x:', viewPoint.x, 'y:', viewPoint.y, 'zoom:', viewPoint.zoom,
+                'instances:', numInstancesX + 'x' + numInstancesY,
+                'mapSize:', this.mapSize.width + 'x' + this.mapSize.height,
+                'canvas:', canvas.width + 'x' + canvas.height);
+        }
 
         // ///////////
         // Tell the shader to use all set texture units
