@@ -5,12 +5,13 @@ module.exports = {
     },
     extends: [
         'plugin:vue/vue3-essential',
-        '@vue/standard',
-        '@vue/typescript/recommended'
+        '@vue/eslint-config-typescript/recommended'
     ],
     parserOptions: {
         ecmaVersion: 2020,
-        project: './tsconfig.json'
+        parser: '@typescript-eslint/parser',
+        project: './tsconfig.json',
+        extraFileExtensions: ['.vue']
     },
     rules: {
         'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
@@ -18,6 +19,7 @@ module.exports = {
         semi: ['error', 'always', { omitLastInOneLineBlock: true }],
         'space-before-function-paren': ['error', 'never'],
         '@typescript-eslint/no-explicit-any': 'off',
+        'vue/multi-word-component-names': 'off',
         indent: ['error', 4],
 
         // Bug-catching rules

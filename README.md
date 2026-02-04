@@ -1,80 +1,68 @@
 # Settlers 4 remake (File Formats)
-This is a Settlers 4 (Siedler 4) Remake (it will be :-) ) written in JavaScript (Typescript) so 
+This is a Settlers 4 (Siedler 4) Remake (it will be :-) ) written in JavaScript (Typescript) so
   it can be run in your browser.
-  
+
 <p style="text-align:center" align="center">
 <a href="https://settlers.hmilch.net/">🎉 run the "game" 🎉</a>
 </p>
 
 
-# How to compile:
-1. Install [NodeJs](https://nodejs.org/)
-2. run on command line:
+# Prerequisites
 
-        npm install
-        npm run build
+- [Node.js](https://nodejs.org/) (v18+)
+- A legal copy of **Settlers 4** (e.g. *The Settlers History Collection* / *Settlers United* from Ubisoft)
 
 
-➜ This will create the `./dist/` folder with the app.
+# Quick start
+
+### 1. Set up game files
+
+The app needs original Settlers 4 assets. On a Windows machine with the game installed, export them:
+
+```powershell
+.\scripts\export-game-files.ps1 -SourcePath "D:\path\to\settlers4"
+```
+
+Then import the zip(s) on your dev machine:
+
+```sh
+python3 scripts/import-game-files.py /path/to/zips
+```
+
+See [docu/game-files-setup.md](docu/game-files-setup.md) for manual setup, expected file structure, and troubleshooting.
+
+### 2. Install and run
+
+```sh
+npm install
+npm run serve
+```
+
+Open http://localhost:8080/
 
 
-# How to start:
-You need a WebServer that serves the App. E.g. you can use the included one:
-1. Install [NodeJs](https://nodejs.org/)
-2. Copy the *Settlers-4*-game folder with the files (`game.lib`, `gfx.lib`, `Gfx/0.gfx`, ...) to the `/dist/` folder - e.g. to `./dist/Siedler4/`
-3. Run `./dist/run.bat` \
-   This will: 
-   * create a list of all files in your e.g. `./dist/Siedler4/` folder.
-   * start a local Webserver on your PC
-4. Open: http://localhost:8888/
+# Development
+
+### Build for production
+
+```sh
+npm run build
+```
+
+### Lint
+
+```sh
+npm run lint -- --fix
+```
+
+### Tests
+
+```sh
+npm run test:unit
+```
 
 
-# How to edit:
-You can use *Visual Studio Code* to edit and debug your code:
-1. [Visual Studio Code](https://code.visualstudio.com/)
-2. Install *Debugger for Chrome* Plugin in Visual Studio Code
-3. Copy the *Settlers-4*-game folder to `./public/` e.g.  to `./public/Siedler4/`
-4. run
-
-        npm install
-        npm run serve
-
-    Or press `Ctrl+Shift+B` to start the live-server in VS-Code
-
-    ➜ This will start a live-server on http://localhost:8080/
-
-
-* Fix code style / linter errors
-
-        npm run lint -- --fix
-
-
-* Run unit tests
-
-        npm run test:unit
-
-or to run a single file in watch mode:
-
-        npm run test:watch tests/unit/objects-info.spec.ts
-
-
-# Next BIG steps:
-1. using webGl to render the state of a game by loading a save game and pushing all data to webGl:
-    - ✔️ drawing map background
-    - ⌛ drawing objects
-    - drawing settlers
-    - drawing buildings
-
-2. adding game logic to process state changing in the game
-    - see: `game.lib/objectInfo.xml` and `game.lib/buildingInfo.xml`
-    - see: https://github.com/jsettlers/settlers-remake
-
-
-3. adding backend logic
-     - use MQTT over websocket to connect with other players see: http://www.hivemq.com/demos/websocket-client/
-
-
-# State:
+# State
 
 ## Load/view a Map
 
@@ -98,5 +86,5 @@ You can access 'all' Settlers file formats
 ![screenshot](docu/example-map-view.png)
 
 
-# Disclaim
-This Software reads the original graphics/data from the original *Settlers 4* title released by Blue Byte® - The authors of this Software do not clam any rights on any of that data nor the name *Siedler* and *Settlers*.
+# Disclaimer
+This Software reads the original graphics/data from the original *Settlers 4* title released by Blue Byte® — The authors of this Software do not claim any rights on any of that data nor the name *Siedler* and *Settlers*.

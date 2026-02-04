@@ -4,18 +4,18 @@ import { ImageType } from './image-type';
 import { Palette } from './palette';
 
 export class GfxImage implements IGfxImage {
-    public imageType = ImageType.ImageGfx
+    public imageType = ImageType.ImageGfx;
 
     /** start of image data */
     public dataOffset = 0;
 
-    public headType = false
+    public headType = false;
 
-    public imgType = 0
+    public imgType = 0;
     /** width of the image */
     public width = 0;
     /** height of the image */
-    public height = 0
+    public height = 0;
     /** left (x) offset to display the image */
     public left = 0;
     /** top (y) offset to display the image */

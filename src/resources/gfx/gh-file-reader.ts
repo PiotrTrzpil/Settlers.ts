@@ -34,10 +34,10 @@ export class GhFileReader {
     /** may this is the file version or a magic indicator for this
      * file type: 0x03 0x80 */
     private magic = 0;
-    private flag1 = 0
-    private flag2 = 0
-    private flag3 = 0
-    private flag4 = 0
+    private flag1 = 0;
+    private flag2 = 0;
+    private flag3 = 0;
+    private flag4 = 0;
 
     /** return the number of images in this gfx file */
     public getImageCount() :number {

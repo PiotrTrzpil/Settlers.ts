@@ -29,6 +29,19 @@ export default class MapView extends Vue {
 
     public hoveredTile: TileCoord | null = null;
 
+    public mounted(): void {
+        this.autoLoadFirstMap();
+        this.$watch('fileManager', () => this.autoLoadFirstMap());
+    }
+
+    private autoLoadFirstMap(): void {
+        if (this.game || !this.fileManager) return;
+        const maps = this.fileManager.filter('.map');
+        if (maps.length > 0) {
+            this.onFileSelect(maps[0]);
+        }
+    }
+
     public get selectedEntity(): Entity | undefined {
         if (!this.game || this.game.state.selectedEntityId === null) return undefined;
         return this.game.state.getEntity(this.game.state.selectedEntityId);

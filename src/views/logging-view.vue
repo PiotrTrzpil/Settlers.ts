@@ -1,18 +1,22 @@
 <template>
 
   <table class="loging">
-    <tr>
-      <th>Source:</th>
-      <th>Message:</th>
-    </tr>
-    <tr
-      v-for="msg of logs"
-      :key="msg.index"
-      :class="'logType' + msg.type"
-    >
-      <td>{{msg.source}}</td>
-      <td>{{msg.msg}}</td>
-    </tr>
+    <thead>
+      <tr>
+        <th>Source:</th>
+        <th>Message:</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr
+        v-for="msg of logs"
+        :key="msg.index"
+        :class="'logType' + msg.type"
+      >
+        <td>{{msg.source}}</td>
+        <td>{{msg.msg}}</td>
+      </tr>
+    </tbody>
   </table>
 
 </template>

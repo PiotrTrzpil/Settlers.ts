@@ -106,7 +106,7 @@ export default class RendererViewer extends Vue {
         if (e.button !== 0) return; // left button only
         this.dragStart = { x: e.offsetX, y: e.offsetY };
         this.isDragging = false;
-    }
+    };
 
     private handleMouseUp = (e: MouseEvent) => {
         if (e.button !== 0 || !this.dragStart) return;
@@ -123,7 +123,7 @@ export default class RendererViewer extends Vue {
 
         this.dragStart = null;
         this.isDragging = false;
-    }
+    };
 
     private handleDragSelect(x1: number, y1: number, x2: number, y2: number): void {
         if (!this.game || !this.tilePicker || !this.renderer) return;
@@ -183,7 +183,7 @@ export default class RendererViewer extends Vue {
                 entityId: entity ? entity.id : null
             });
         }
-    }
+    };
 
     private handleRightClick = (e: MouseEvent) => {
         e.preventDefault();
@@ -217,7 +217,7 @@ export default class RendererViewer extends Vue {
                 targetY: tile.y + offset[1]
             });
         }
-    }
+    };
 
     /** Show placement preview ghost building as the mouse moves */
     private handleMouseMove = (e: MouseEvent) => {
@@ -265,7 +265,7 @@ export default class RendererViewer extends Vue {
             this.game.currentPlayer,
             hasBuildings
         );
-    }
+    };
 
     public unmounted(): void {
         if (this.game) {

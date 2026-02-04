@@ -66,7 +66,7 @@ export class ViewPoint implements IViewPoint {
         this.downX = e.offsetX;
         this.downY = e.offsetY;
         this.mouseIsMoving = true;
-    }
+    };
 
     private handlePointerMove = (e: PointerEvent) => {
         e.preventDefault();
@@ -83,7 +83,7 @@ export class ViewPoint implements IViewPoint {
         if (this.onMove) {
             this.onMove();
         }
-    }
+    };
 
     private handlePointerUp = () => {
         if (!this.mouseIsMoving) {
@@ -101,11 +101,11 @@ export class ViewPoint implements IViewPoint {
         if (this.onMove) {
             this.onMove();
         }
-    }
+    };
 
     private handleContextmenu = (e: MouseEvent) => {
         e.preventDefault();
-    }
+    };
 
     private handleWheel = (e: WheelEvent) => {
         this.zoomValue = Math.max(1, this.zoomValue + Math.sign(e.deltaY));
@@ -114,5 +114,5 @@ export class ViewPoint implements IViewPoint {
         if (this.onMove) {
             this.onMove();
         }
-    }
+    };
 }

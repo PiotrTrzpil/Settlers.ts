@@ -16,7 +16,7 @@ export type LogMessageCallback = ((msg: ILogMessage) => void);
 export class LogManager {
     public log: ILogMessage[] = [];
     private logMsgCount = 0;
-    private listener: LogMessageCallback | null = null
+    private listener: LogMessageCallback | null = null;
 
     public onLogMessage(callback: LogMessageCallback | null): void {
         this.listener = callback;

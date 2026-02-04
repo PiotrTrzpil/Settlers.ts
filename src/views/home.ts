@@ -29,7 +29,10 @@ export default class Home extends Vue {
             return;
         }
 
-        this.isValidSettlers = this.fileManager.findFile('game.lib', false) != null;
+        // Classic editions have game.lib; History Edition has unpacked files
+        this.isValidSettlers =
+            this.fileManager.findFile('game.lib', false) != null ||
+            this.fileManager.findFile('2.gh6', false) != null;
     }
 
     protected async selectFiles(e: Event): Promise<void> {
