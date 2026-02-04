@@ -194,7 +194,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
 
     public rebuildRiverTextures(rc: RiverConfig): void {
         LandscapeRenderer.log.debug('Rebuilding river textures: ' + JSON.stringify(rc));
-        this.landscapeTextureMap = new LandscapeTextureMap(rc);
+        this.landscapeTextureMap.updateRiverConfig(rc);
         if (this.landTypeBuffer) {
             const map = this.landscapeTextureMap;
             const h = this.mapSize.height;

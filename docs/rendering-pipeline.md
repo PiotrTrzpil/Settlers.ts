@@ -161,12 +161,13 @@ the projection is `0.1 / zoomValue`, so scrolling up increases
 
 ### Drag
 
-Pointer drag deltas are scaled by `zoomValue * 0.03` and transformed to
-match the isometric axes:
+Pointer drag deltas are scaled by `zoomValue * 0.03` and negated (so
+dragging right scrolls left -- i.e. "grab-and-move-the-map" feel), then
+transformed to match the isometric axes:
 
 ```
-deltaX = dPixelX + dPixelY / 2    (accounts for the slanted grid)
-deltaY = dPixelY
+deltaX = -(dPixelX + dPixelY / 2)   (accounts for the slanted grid)
+deltaY = -(dPixelY)
 ```
 
 ---
@@ -199,13 +200,17 @@ Before drawing, the renderer calculates how many tiles are visible at the
 current zoom level:
 
 ```
-numInstancesX = ceil(2 * aspect / zoom) + 2
-numInstancesY = ceil(4 / zoom) + 2
+numInstancesX = ceil(2 * aspect / zoom) + 4
+numInstancesY = ceil(4 / zoom) + 4 + heightMarginY
 ```
 
-Only this subset of instances is drawn. Tiles that fall outside the map
-boundaries are discarded in the vertex shader by moving them to `z = 2.0`
-(outside the clip volume).
+The `+4` margins account for sub-tile viewport offsets and the
+parallelogram shear. `heightMarginY` adds extra rows at the bottom to
+cover tall terrain whose vertices are displaced upward by the height
+shader -- without it, elevated tiles near the viewport's lower edge pop
+in abruptly. Only this subset of instances is drawn. Tiles that fall
+outside map boundaries are discarded in the vertex shader by moving them
+to `z = 2.0` (outside the clip volume).
 
 ### Data textures
 
@@ -246,8 +251,9 @@ The fragment shader is simple:
 - Discards fragments with `v_texcoord.x < 0` (out-of-bounds tiles).
 - Samples the terrain texture atlas.
 - Multiplies the sample by the height-gradient shading value.
-- Optionally draws a black wireframe overlay when
-  `DEBUG_TRIANGLE_BORDER` is defined, using barycentric coordinates.
+- Optionally draws a black wireframe overlay when `u_debugGrid` is true,
+  using barycentric coordinates. This is a runtime `uniform bool` toggled
+  from the debug panel (the `v_barycentric` varying is always computed).
 
 ---
 
@@ -405,10 +411,35 @@ maps every possible terrain-type combination to a position in the atlas:
 | `BigLandscapeTexture` | 256x256 | Solid terrain (grass, rock, desert, ...) |
 | `Hexagon2Texture` | 64x64 | Transition between two terrain types |
 | `Hexagon3Texture` | 64x64 | Three-way terrain corner |
-| `SmallLandscapeTexture` | 128x128 | Water and small tiles |
+| `SmallLandscapeTexture` | 64x64 | Uniform single-type tiles (water depths, rivers) |
 
 A lookup table keyed by `(t1 << 16 | t2 << 8 | t3)` maps any three
-terrain-type corners of a triangle to the correct atlas region.
+terrain-type corners of a triangle to the correct atlas region. When no
+exact match exists, `findFallback()` tries each corner type as a
+uniform lookup (all three corners the same type). If that also fails the
+tile gets `[0, 0]` — the reserved null slot.
+
+### Atlas coordinate lifecycle
+
+Each texture object carries position fields (e.g. `x1`, `y1` for
+`Hexagon2Texture`) that go through two phases:
+
+1. **Source coordinates** — set in the constructor, these point into the
+   original `2.gh6` image file. They use a grid measured in
+   `TextureBlockSizeX/Y` units (4 columns = 64 px, 2 rows = 64 px).
+2. **Destination coordinates** — set by `copyToTextureMap()` during
+   `init()`. The method calls `TextureMap16Bit.reserve()` to allocate a
+   slot in the GPU atlas, blits the source pixels into it, then
+   **overwrites** the position fields with the destination position.
+
+After this point, `getTextureA()` / `getTextureB()` return destination
+coordinates that the vertex shader can use directly. This means texture
+objects are **single-use** — once `copyToTextureMap()` has run, the
+original source position is lost. Creating a new `LandscapeTextureMap`
+produces objects with source coordinates that cannot be used for
+rendering without another `copyToTextureMap()` call (the atlas fills
+with magenta `0xF81F` on init, so stale source coordinates sample
+that error colour).
 
 ### Procedural fallback
 
@@ -422,8 +453,11 @@ file I/O.
 `ShaderDataTexture` (`src/game/renderer/shader-data-texture.ts`) wraps a
 CPU-side `Uint8Array` with `update(x, y, r, g, b, a)` and a `create()`
 method that uploads to the GPU. It supports 1, 2, or 4 channel formats
-(R8, RG8, RGBA8). After the initial upload, subsequent calls rebind the
-existing texture without re-uploading.
+(R8, RG8, RGBA8). A `dirty` flag tracks whether `update()` has been
+called since the last upload. `create()` re-uploads via `texImage2D`
+when dirty, otherwise just rebinds the existing texture to its slot.
+This allows runtime modifications (e.g. river config changes) without
+re-creating the texture object.
 
 ---
 
@@ -534,21 +568,21 @@ unless the data has changed.
 | `src/game/renderer/renderer.ts` | ~130 | WebGL context, draw loop, sub-renderer orchestration |
 | `src/game/renderer/renderer-base.ts` | ~25 | Shared shader init and projection uniform setup |
 | `src/game/renderer/i-renderer.ts` | ~6 | `IRenderer` interface (`init`, `draw`) |
-| `src/game/renderer/view-point.ts` | ~130 | Camera position, zoom, mouse drag/scroll |
+| `src/game/renderer/view-point.ts` | ~175 | Camera position, zoom, mouse drag/scroll |
 | `src/game/renderer/shader-program.ts` | ~255 | GLSL compile/link, attribute/uniform helpers |
 
 ### Landscape
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/game/renderer/landscape/landscape-renderer.ts` | ~260 | Instanced terrain drawing |
+| `src/game/renderer/landscape/landscape-renderer.ts` | ~295 | Instanced terrain drawing, river texture rebuild |
 | `src/game/renderer/landscape/shaders/landscape-vert.glsl` | ~183 | Vertex shader (parallelogram projection, height, texture lookup) |
 | `src/game/renderer/landscape/shaders/landscape-frag.glsl` | ~33 | Fragment shader (texture sample + shading) |
 | `src/game/renderer/landscape/landscape-type.ts` | ~42 | `LandscapeType` enum (Grass, Water, Rock, ...) |
 | `src/game/renderer/landscape/matrix.ts` | ~81 | 4x4 matrix math (orthographic, translate, scale) |
-| `src/game/renderer/landscape/textures/landscape-texture-map.ts` | ~250 | Terrain type to atlas coordinate lookup |
+| `src/game/renderer/landscape/textures/landscape-texture-map.ts` | ~350 | Terrain type to atlas coordinate lookup, river config |
 | `src/game/renderer/landscape/textures/big-landscape-texture.ts` | ~54 | 256x256 solid terrain tiles |
-| `src/game/renderer/landscape/textures/hexagon-2-texture.ts` | ~87 | Two-terrain transition tiles |
+| `src/game/renderer/landscape/textures/hexagon-2-texture.ts` | ~100 | Two-terrain transition tiles, `fromExisting()` factory |
 
 ### Entities
 
@@ -564,7 +598,7 @@ unless the data has changed.
 |------|-------|---------|
 | `src/game/renderer/texture-manager.ts` | ~20 | Texture unit allocator |
 | `src/game/renderer/texture-map-16bit.ts` | ~180 | RGB565 texture atlas with slot packing |
-| `src/game/renderer/shader-data-texture.ts` | ~91 | CPU-to-GPU data texture wrapper |
+| `src/game/renderer/shader-data-texture.ts` | ~98 | CPU-to-GPU data texture wrapper (with dirty flag) |
 | `src/game/renderer/shader-texture.ts` | ~40 | Base texture bind/activate helper |
 
 ### Input

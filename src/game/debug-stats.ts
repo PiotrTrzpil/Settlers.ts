@@ -48,7 +48,6 @@ export interface DebugStatsState {
     riverSwapRows: boolean;
     riverReverseInner: boolean;
     riverReverseOuter: boolean;
-    riverDirty: boolean;
 }
 
 class DebugStats {
@@ -90,7 +89,6 @@ class DebugStats {
             riverSwapRows: false,
             riverReverseInner: false,
             riverReverseOuter: false,
-            riverDirty: false,
         });
 
         // Expose on window for Playwright tests

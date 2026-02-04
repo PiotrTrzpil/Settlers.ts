@@ -133,7 +133,7 @@
             </button>
           </div>
           <div class="river-debug">
-            <span class="stat-label" style="margin-top:6px;display:block">River textures</span>
+            <span class="stat-label river-heading">River textures</span>
             <label class="control-row">
               <input type="checkbox" :checked="stats.riverSwapRows" @change="setRiver('riverSwapRows', $event)" />
               <span>Swap rows</span>
@@ -366,6 +366,11 @@ const fpsClass = computed(() => {
 .ctrl-btn:hover {
   background: #3a2810;
   border-color: #6a4a20;
+}
+
+.river-heading {
+  display: block;
+  margin-top: 6px;
 }
 
 /* Scrollbar */

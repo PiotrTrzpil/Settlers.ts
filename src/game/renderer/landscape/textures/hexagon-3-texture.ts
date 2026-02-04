@@ -4,23 +4,24 @@ import { TexturePoint } from './texture-point';
 import { GfxImage16Bit } from '@/resources/gfx/gfx-image-16bit';
 import { TextureMap16Bit } from '../../texture-map-16bit';
 import { LandscapeTextureBase } from './landscape-texture-base';
+import { AtlasLayout } from './atlas-layout';
 
 export class Hexagon3Texture extends LandscapeTextureBase implements ILandscapeTexture {
-    private x1: number;
-    private y1: number;
-    private x2: number;
-    private y2: number;
+    private readonly srcX1: number;
+    private readonly srcY1: number;
+    private readonly srcX2: number;
+    private readonly srcY2: number;
     private t1: LandscapeType;
     private t2: LandscapeType;
     private t3: LandscapeType;
 
-    constructor(t1: LandscapeType, t2: LandscapeType, t3: LandscapeType, x1: number, y1: number, x2: number, y2: number) {
-        super();
+    constructor(layout: AtlasLayout, t1: LandscapeType, t2: LandscapeType, t3: LandscapeType, x1: number, y1: number, x2: number, y2: number) {
+        super(layout);
 
-        this.x1 = x1 * TextureBlockSizeX;
-        this.y1 = y1 * TextureBlockSizeY;
-        this.x2 = x2 * TextureBlockSizeX;
-        this.y2 = y2 * TextureBlockSizeY;
+        this.srcX1 = x1 * TextureBlockSizeX;
+        this.srcY1 = y1 * TextureBlockSizeY;
+        this.srcX2 = x2 * TextureBlockSizeX;
+        this.srcY2 = y2 * TextureBlockSizeY;
 
         this.t1 = t1;
         this.t2 = t2;
@@ -29,20 +30,24 @@ export class Hexagon3Texture extends LandscapeTextureBase implements ILandscapeT
 
     public getTextureA(tp: TexturePoint, x: number, y: number): [number, number] {
         const use2 = ((x + y) % 2) === 0;
-        const useX = use2 ? this.x2 : this.x1;
-        const useY = use2 ? this.y2 : this.y1;
+        const { destX, destY } = this.layout.get(
+            use2 ? this.srcX2 : this.srcX1,
+            use2 ? this.srcY2 : this.srcY1
+        );
 
         // todo: add rotation-specific sub-tile offsets when the correct layout is known
-        return [useX, useY];
+        return [destX, destY];
     }
 
     public getTextureB(tp: TexturePoint, x: number, y: number): [number, number] {
         const use2 = ((x + y) % 2) === 0;
-        const useX = use2 ? this.x2 : this.x1;
-        const useY = use2 ? this.y2 : this.y1;
+        const { destX, destY } = this.layout.get(
+            use2 ? this.srcX2 : this.srcX1,
+            use2 ? this.srcY2 : this.srcY1
+        );
 
         // todo: add rotation-specific sub-tile offsets when the correct layout is known
-        return [useX, useY];
+        return [destX, destY];
     }
 
     public getPattern(): TexturePoint[] {
@@ -54,12 +59,7 @@ export class Hexagon3Texture extends LandscapeTextureBase implements ILandscapeT
     }
 
     public copyToTextureMap(srcImg: GfxImage16Bit, destTextureMap: TextureMap16Bit): void {
-        let newPos = this.copyImage(srcImg, destTextureMap, 64, this.x1, this.y1);
-        this.x1 = newPos.newX;
-        this.y1 = newPos.newY;
-
-        newPos = this.copyImage(srcImg, destTextureMap, 64, this.x2, this.y2);
-        this.x2 = newPos.newX;
-        this.y2 = newPos.newY;
+        this.copyImage(srcImg, destTextureMap, 64, this.srcX1, this.srcY1);
+        this.copyImage(srcImg, destTextureMap, 64, this.srcX2, this.srcY2);
     }
 }

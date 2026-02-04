@@ -4,61 +4,78 @@ import { TexturePoint } from './texture-point';
 import { GfxImage16Bit } from '@/resources/gfx/gfx-image-16bit';
 import { TextureMap16Bit } from '../../texture-map-16bit';
 import { LandscapeTextureBase } from './landscape-texture-base';
+import { AtlasLayout } from './atlas-layout';
 
 export class Hexagon2Texture extends LandscapeTextureBase implements ILandscapeTexture {
-    private x1: number;
-    private y1: number;
-    private x2: number;
-    private y2: number;
+    readonly srcX1: number;
+    readonly srcY1: number;
+    readonly srcX2: number;
+    readonly srcY2: number;
     private outerType: LandscapeType;
     private innerType: LandscapeType;
     private useTwo: boolean;
 
-    constructor(typeOut: LandscapeType, typeIn: LandscapeType, x1: number, y1: number, x2?: number, y2?: number) {
-        super();
+    constructor(layout: AtlasLayout, typeOut: LandscapeType, typeIn: LandscapeType, x1: number, y1: number, x2?: number, y2?: number) {
+        super(layout);
 
-        this.x1 = x1 * TextureBlockSizeX;
-        this.y1 = y1 * TextureBlockSizeY;
+        this.srcX1 = x1 * TextureBlockSizeX;
+        this.srcY1 = y1 * TextureBlockSizeY;
 
         if ((x2 != null) && (y2 != null)) {
             this.useTwo = true;
-            this.x2 = x2 * TextureBlockSizeX;
-            this.y2 = y2 * TextureBlockSizeY;
+            this.srcX2 = x2 * TextureBlockSizeX;
+            this.srcY2 = y2 * TextureBlockSizeY;
         } else {
             this.useTwo = false;
-            this.x2 = this.x1;
-            this.y2 = this.y1;
+            this.srcX2 = this.srcX1;
+            this.srcY2 = this.srcY1;
         }
 
         this.outerType = typeOut;
         this.innerType = typeIn;
     }
 
+    /** Create a new texture with the same source positions but different type
+     *  assignments. Because both share the same AtlasLayout, the new object
+     *  resolves to the same atlas dest positions. */
+    public withTypes(outerType: LandscapeType, innerType: LandscapeType): Hexagon2Texture {
+        return new Hexagon2Texture(
+            this.layout, outerType, innerType,
+            this.srcX1 / TextureBlockSizeX, this.srcY1 / TextureBlockSizeY,
+            this.useTwo ? this.srcX2 / TextureBlockSizeX : undefined,
+            this.useTwo ? this.srcY2 / TextureBlockSizeY : undefined
+        );
+    }
+
     public getTextureA(tp: TexturePoint, x: number, y: number): [number, number] {
         const use2 = ((x + y) % 2) === 0;
-        const useX = use2 ? this.x2 : this.x1;
-        const useY = use2 ? this.y2 : this.y1;
+        const { destX, destY } = this.layout.get(
+            use2 ? this.srcX2 : this.srcX1,
+            use2 ? this.srcY2 : this.srcY1
+        );
 
         if (tp.t0 === this.innerType) {
-            return [useX + 2, useY + 1];
+            return [destX + 2, destY + 1];
         } else if (tp.t1 === this.innerType) {
-            return [useX + 3, useY];
+            return [destX + 3, destY];
         } else {
-            return [useX + 1, useY];
+            return [destX + 1, destY];
         }
     }
 
     public getTextureB(tp: TexturePoint, x: number, y: number): [number, number] {
         const use2 = ((x + y) % 2) === 0;
-        const useX = use2 ? this.x2 : this.x1;
-        const useY = use2 ? this.y2 : this.y1;
+        const { destX, destY } = this.layout.get(
+            use2 ? this.srcX2 : this.srcX1,
+            use2 ? this.srcY2 : this.srcY1
+        );
 
         if (tp.t0 === this.innerType) {
-            return [useX + 2, useY + 1];
+            return [destX + 2, destY + 1];
         } else if (tp.t1 === this.innerType) {
-            return [useX + 1, useY];
+            return [destX + 1, destY];
         } else {
-            return [useX, useY + 1];
+            return [destX, destY + 1];
         }
     }
 
@@ -71,17 +88,10 @@ export class Hexagon2Texture extends LandscapeTextureBase implements ILandscapeT
     }
 
     public copyToTextureMap(srcImg: GfxImage16Bit, destTextureMap: TextureMap16Bit): void {
-        let newPos = this.copyImage(srcImg, destTextureMap, 64, this.x1, this.y1);
-        this.x1 = newPos.newX;
-        this.y1 = newPos.newY;
+        this.copyImage(srcImg, destTextureMap, 64, this.srcX1, this.srcY1);
 
         if (this.useTwo) {
-            newPos = this.copyImage(srcImg, destTextureMap, 64, this.x2, this.y2);
-            this.x2 = newPos.newX;
-            this.y2 = newPos.newY;
-        } else {
-            this.x2 = this.x1;
-            this.y2 = this.y1;
+            this.copyImage(srcImg, destTextureMap, 64, this.srcX2, this.srcY2);
         }
     }
 }
