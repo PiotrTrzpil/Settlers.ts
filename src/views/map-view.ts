@@ -34,6 +34,11 @@ export default class MapView extends Vue {
         return this.game.state.getEntity(this.game.state.selectedEntityId);
     }
 
+    public get selectionCount(): number {
+        if (!this.game) return 0;
+        return this.game.state.selectedEntityIds.size;
+    }
+
     public onFileSelect(file: IFileSource): void {
         this.fileName = file.name;
         void this.load(file);
@@ -52,6 +57,28 @@ export default class MapView extends Vue {
     public setSelectMode(): void {
         if (!this.game) return;
         this.game.mode = 'select';
+    }
+
+    public removeSelected(): void {
+        if (!this.game || this.game.state.selectedEntityId === null) return;
+        this.game.execute({
+            type: 'remove_entity',
+            entityId: this.game.state.selectedEntityId
+        });
+    }
+
+    public togglePause(): void {
+        if (!this.game) return;
+        if (this.game.gameLoop.isRunning) {
+            this.game.stop();
+        } else {
+            this.game.start();
+        }
+    }
+
+    public get isPaused(): boolean {
+        if (!this.game) return false;
+        return !this.game.gameLoop.isRunning;
     }
 
     public spawnUnit(unitType: number): void {

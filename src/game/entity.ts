@@ -35,6 +35,20 @@ export enum UnitType {
     Soldier = 1,
 }
 
+/** Territory radius for each building type (in tiles) */
+export const BUILDING_TERRITORY_RADIUS: Record<number, number> = {
+    [BuildingType.Guardhouse]: 8,
+    [BuildingType.Woodcutter]: 4,
+    [BuildingType.Warehouse]: 6
+};
+
+/** Which unit type each building produces (undefined = no auto-spawn) */
+export const BUILDING_UNIT_TYPE: Record<number, UnitType | undefined> = {
+    [BuildingType.Guardhouse]: UnitType.Soldier,
+    [BuildingType.Woodcutter]: UnitType.Settler,
+    [BuildingType.Warehouse]: undefined
+};
+
 export interface Entity {
     id: number;
     type: EntityType;
@@ -50,4 +64,7 @@ export interface UnitState {
     pathIndex: number;
     moveProgress: number;
     speed: number;
+    /** Previous tile position for visual interpolation */
+    prevX: number;
+    prevY: number;
 }

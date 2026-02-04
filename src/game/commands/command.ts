@@ -1,4 +1,4 @@
-import { BuildingType, EntityType, EXTENDED_OFFSETS, UnitType } from '../entity';
+import { BuildingType, EntityType, EXTENDED_OFFSETS, UnitType, BUILDING_UNIT_TYPE } from '../entity';
 import { GameState } from '../game-state';
 import { canPlaceBuilding } from '../systems/placement';
 import { findPath } from '../systems/pathfinding';
@@ -8,7 +8,9 @@ export type Command =
     | { type: 'place_building'; buildingType: BuildingType; x: number; y: number; player: number }
     | { type: 'spawn_unit'; unitType: UnitType; x: number; y: number; player: number }
     | { type: 'move_unit'; entityId: number; targetX: number; targetY: number }
-    | { type: 'select'; entityId: number | null };
+    | { type: 'select'; entityId: number | null }
+    | { type: 'select_area'; x1: number; y1: number; x2: number; y2: number }
+    | { type: 'remove_entity'; entityId: number };
 
 /**
  * Execute a player command against the game state.
@@ -27,6 +29,22 @@ export function executeCommand(
             return false;
         }
         state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
+
+        // Auto-spawn the associated worker unit adjacent to the building
+        const workerType = BUILDING_UNIT_TYPE[cmd.buildingType];
+        if (workerType !== undefined) {
+            for (const [dx, dy] of EXTENDED_OFFSETS) {
+                const nx = cmd.x + dx;
+                const ny = cmd.y + dy;
+                if (nx >= 0 && nx < mapSize.width && ny >= 0 && ny < mapSize.height) {
+                    if (!state.getEntityAt(nx, ny)) {
+                        state.addEntity(EntityType.Unit, workerType, nx, ny, cmd.player);
+                        break;
+                    }
+                }
+            }
+        }
+
         return true;
     }
 
@@ -82,6 +100,31 @@ export function executeCommand(
 
     case 'select': {
         state.selectedEntityId = cmd.entityId;
+        state.selectedEntityIds.clear();
+        if (cmd.entityId !== null) {
+            state.selectedEntityIds.add(cmd.entityId);
+        }
+        return true;
+    }
+
+    case 'select_area': {
+        const entities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
+        // Prefer selecting units over buildings
+        const units = entities.filter(e => e.type === EntityType.Unit);
+        const toSelect = units.length > 0 ? units : entities;
+
+        state.selectedEntityIds.clear();
+        for (const e of toSelect) {
+            state.selectedEntityIds.add(e.id);
+        }
+        state.selectedEntityId = toSelect.length > 0 ? toSelect[0].id : null;
+        return true;
+    }
+
+    case 'remove_entity': {
+        const entity = state.getEntity(cmd.entityId);
+        if (!entity) return false;
+        state.removeEntity(cmd.entityId);
         return true;
     }
 

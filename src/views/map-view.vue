@@ -29,6 +29,7 @@
         Selected: {{ selectedEntity.type === 1 ? 'Unit' : 'Building' }}
         #{{ selectedEntity.id }}
         at ({{ selectedEntity.x }}, {{ selectedEntity.y }})
+        <span v-if="selectionCount > 1"> (+{{ selectionCount - 1 }} more)</span>
       </div>
 
       <div class="building-palette" data-testid="building-palette">
@@ -67,6 +68,16 @@
           :class="{ active: game.mode === 'select' }"
           @click="setSelectMode()"
         >Select Mode</button>
+        <button
+          data-testid="btn-remove-entity"
+          :disabled="!selectedEntity"
+          @click="removeSelected()"
+        >Delete Selected</button>
+        <button
+          data-testid="btn-pause"
+          :class="{ active: isPaused }"
+          @click="togglePause()"
+        >{{ isPaused ? 'Resume' : 'Pause' }}</button>
       </div>
 
       <div class="entity-count" data-testid="entity-count">
@@ -120,6 +131,11 @@
     background: #4CAF50;
     color: white;
     border-color: #388E3C;
+}
+
+.game-controls button:disabled {
+    opacity: 0.4;
+    cursor: default;
 }
 
 .mode-indicator {
