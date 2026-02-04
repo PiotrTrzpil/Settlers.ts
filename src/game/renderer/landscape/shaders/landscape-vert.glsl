@@ -19,10 +19,8 @@ in vec2 instancePos;
 
 uniform mat4 projection;
 
-#ifdef DEBUG_TRIANGLE_BORDER
-  // output color
-  out vec3 v_barycentric;
-#endif
+// Barycentric coordinates for optional wireframe overlay
+out vec3 v_barycentric;
 
 // output color used to shade the texture based on height gradient
 out float v_shader_color;
@@ -122,17 +120,15 @@ void main() {
 
 
   ///////
-  #ifdef DEBUG_TRIANGLE_BORDER
-    if (baseVerticesPos.x == 0.0) {
-      v_barycentric = vec3(1, 0, 0);
-    }
-    else if (baseVerticesPos.x == 0.5) {
-      v_barycentric = vec3(0, 1, 0);
-    }
-    else {
-      v_barycentric = vec3(0, 0, 1);
-    }
-  #endif
+  if (baseVerticesPos.x == 0.0) {
+    v_barycentric = vec3(1, 0, 0);
+  }
+  else if (baseVerticesPos.x == 0.5) {
+    v_barycentric = vec3(0, 1, 0);
+  }
+  else {
+    v_barycentric = vec3(0, 0, 1);
+  }
 
   // Split viewPoint into integer (for tile data lookup) and fractional (for smooth scrolling)
   vec2 vpInt = floor(viewPoint);

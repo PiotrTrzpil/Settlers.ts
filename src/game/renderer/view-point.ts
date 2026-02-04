@@ -99,8 +99,8 @@ export class ViewPoint implements IViewPoint {
 
         const dX = (e.offsetX - this.downX) * this.zoomValue * 0.03;
         const dY = (e.offsetY - this.downY) * this.zoomValue * 0.03;
-        this.deltaX = dX + dY / 2;
-        this.deltaY = dY;
+        this.deltaX = -(dX + dY / 2);
+        this.deltaY = -dY;
 
         if (this.onMove) {
             this.onMove();

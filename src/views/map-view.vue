@@ -10,10 +10,6 @@
           filter=".map"
           class="browser"
         />
-        <label class="debug-toggle">
-          <input type="checkbox" v-model="showDebug" />
-          Debug Grid
-        </label>
       </div>
       <pre v-if="mapInfo" class="map-info-pre">{{ mapInfo }}</pre>
     </div>
@@ -231,12 +227,6 @@ const {
 .header-label {
   font-weight: bold;
   color: #d4b27a;
-}
-
-.debug-toggle {
-  margin-left: auto;
-  cursor: pointer;
-  color: #a08050;
 }
 
 

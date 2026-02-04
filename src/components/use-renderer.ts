@@ -32,6 +32,7 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
     let renderer: Renderer | null = null;
     let tilePicker: TilePicker | null = null;
     let entityRenderer: EntityRenderer | null = null;
+    let landscapeRenderer: LandscapeRenderer | null = null;
     let dragStart: { x: number; y: number } | null = null;
     let isDragging = false;
 
@@ -39,17 +40,16 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         const game = getGame();
         if (game == null || renderer == null) return;
 
-        renderer.add(
-            new LandscapeRenderer(
-                game.fileManager,
-                renderer.textureManager,
-                game.mapSize,
-                game.groundType,
-                game.groundHeight,
-                getDebugGrid(),
-                game.useProceduralTextures
-            )
+        landscapeRenderer = new LandscapeRenderer(
+            game.fileManager,
+            renderer.textureManager,
+            game.mapSize,
+            game.groundType,
+            game.groundHeight,
+            getDebugGrid(),
+            game.useProceduralTextures
         );
+        renderer.add(landscapeRenderer);
 
         entityRenderer = new EntityRenderer(game.mapSize, game.groundHeight);
         renderer.add(entityRenderer);
@@ -78,6 +78,9 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
                 entityRenderer.unitStates = g.state.unitStates;
                 entityRenderer.territoryMap = getShowTerritoryBorders() ? g.territory : null;
                 entityRenderer.territoryVersion = g.territoryVersion;
+            }
+            if (landscapeRenderer) {
+                landscapeRenderer.debugGrid = getDebugGrid();
             }
             // Feed game + camera info to debug stats
             if (g) {

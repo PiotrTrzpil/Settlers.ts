@@ -28,7 +28,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
 
     private groundTypeMap: Uint8Array;
     private groundHeightMap: Uint8Array;
-    private debugGrid: boolean;
+    public debugGrid: boolean;
     private useProceduralTextures: boolean;
 
     /** Cached instance position array to avoid allocating a new Int16Array every frame */
@@ -134,10 +134,6 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     }
 
     public async init(gl: WebGL2RenderingContext): Promise<boolean> {
-        if (this.debugGrid) {
-            this.shaderProgram.setDefine('DEBUG_TRIANGLE_BORDER', 1);
-        }
-
         this.shaderProgram.setDefine('MAP_WIDTH', this.mapSize.width);
         this.shaderProgram.setDefine('MAP_HEIGHT', this.mapSize.height);
         this.shaderProgram.setDefine('LANDSCAPE_TEXTURE_WIDTH_HEIGHT', this.texture.imgWidthHeight);
@@ -209,6 +205,10 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         // set view Point – pass as-is (not negated) so that
         // pixelCoord = instancePos + viewPoint falls inside map bounds.
         sp.setVector2('viewPoint', viewPoint.x, viewPoint.y);
+
+        // Toggle debug grid wireframe overlay at runtime
+        const debugLoc = sp.getUniformLocation('u_debugGrid');
+        gl.uniform1i(debugLoc, this.debugGrid ? 1 : 0);
 
         // ///////////
         // set vertex index

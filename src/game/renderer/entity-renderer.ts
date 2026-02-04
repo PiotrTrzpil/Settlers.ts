@@ -111,9 +111,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.enableVertexAttribArray(this.aPosition);
         gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
 
-        // Entity position not used (constant zero)
+        // Entity position set per-entity as constant attribute
         gl.disableVertexAttribArray(this.aEntityPos);
-        gl.vertexAttrib2f(this.aEntityPos, 0, 0);
 
         // Color set per-entity as constant attribute
         gl.disableVertexAttribArray(this.aColor);
@@ -143,15 +142,16 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 );
             }
 
-            // Fill reusable vertex buffer
-            this.fillQuadVertices(worldPos.worldX, worldPos.worldY, scale);
+            // Set entity world position, fill quad centered at origin
+            gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
+            this.fillQuadVertices(0, 0, scale);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
             gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
 
             // Draw selection ring if highlighted
             if (isSelected) {
-                this.fillQuadVertices(worldPos.worldX, worldPos.worldY, scale * RING_SCALE_FACTOR);
+                this.fillQuadVertices(0, 0, scale * RING_SCALE_FACTOR);
                 gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
                 gl.vertexAttrib4f(this.aColor, RING_COLOR[0], RING_COLOR[1], RING_COLOR[2], RING_COLOR[3]);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -216,7 +216,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     viewPoint.x, viewPoint.y
                 );
 
-                this.fillQuadVertices(worldPos.worldX, worldPos.worldY, PATH_DOT_SCALE);
+                gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
+                this.fillQuadVertices(0, 0, PATH_DOT_SCALE);
                 gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
             }
@@ -234,7 +235,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         );
 
         const color = this.previewValid ? PREVIEW_VALID_COLOR : PREVIEW_INVALID_COLOR;
-        this.fillQuadVertices(worldPos.worldX, worldPos.worldY, BUILDING_SCALE);
+        gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
+        this.fillQuadVertices(0, 0, BUILDING_SCALE);
         gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
         gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -261,7 +263,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             );
 
             const playerColor = PLAYER_COLORS[border.player % PLAYER_COLORS.length];
-            this.fillQuadVertices(worldPos.worldX, worldPos.worldY, BORDER_SCALE);
+            gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
+            this.fillQuadVertices(0, 0, BORDER_SCALE);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
             gl.vertexAttrib4f(this.aColor, playerColor[0], playerColor[1], playerColor[2], BORDER_ALPHA);
             gl.drawArrays(gl.TRIANGLES, 0, 6);

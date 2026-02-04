@@ -11,7 +11,7 @@
       <router-link to="/logging-view">Logging</router-link>
     </div>
 
-    <router-view :fileManager="fileManager" class="app-content" />
+    <router-view v-if="fileManager" :fileManager="fileManager" class="app-content" />
   </div>
 </template>
 
