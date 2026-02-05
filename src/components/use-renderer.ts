@@ -77,6 +77,11 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         // Expose landscape renderer for debug panel river controls
         (window as any).__settlers_landscape__ = landscapeRenderer;
 
+        // Set up terrain modification callback for building construction
+        game.gameLoop.setTerrainModifiedCallback(() => {
+            landscapeRenderer?.markTerrainDirty();
+        });
+
         const r = renderer;
         game.gameLoop.setRenderCallback((alpha: number, deltaSec: number) => {
             const g = getGame();

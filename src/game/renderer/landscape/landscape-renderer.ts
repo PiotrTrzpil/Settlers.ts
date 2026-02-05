@@ -44,6 +44,9 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     /** Extra Y tile rows needed to cover terrain height displacement at the bottom edge */
     private heightMarginY: number;
 
+    /** Flag indicating terrain buffers need to be rebuilt */
+    private terrainDirty = false;
+
     constructor(
         fileManager: FileManager,
         mapSize: MapSize,
@@ -201,6 +204,50 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         return r;
     }
 
+    /**
+     * Mark terrain as dirty, requiring buffer rebuild on next draw.
+     * Call this when groundType or groundHeight arrays are modified externally.
+     */
+    public markTerrainDirty(): void {
+        this.terrainDirty = true;
+    }
+
+    /**
+     * Rebuild terrain buffers from current groundType and groundHeight arrays.
+     * Called automatically when terrain is marked dirty.
+     */
+    private rebuildTerrainBuffers(): void {
+        if (!this.landTypeBuffer || !this.landHeightBuffer) return;
+
+        const map = this.landscapeTextureMap;
+        const h = this.mapSize.height;
+        const w = this.mapSize.width;
+
+        // Rebuild land type buffer
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const t1 = this.groundTypeMap[this.mapSize.toIndex(x, y)];
+                const t2 = this.groundTypeMap[this.mapSize.toIndex(x, y + 1)];
+                const t3 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y + 1)];
+                const t4 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y)];
+                const a = map.getTextureA(t1, t2, t3, x, y);
+                const b = map.getTextureB(t1, t3, t4, x, y);
+                this.landTypeBuffer.update(x, y, a[0], a[1], b[0], b[1]);
+            }
+        }
+
+        // Rebuild land height buffer
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const heightValue = this.groundHeightMap[this.mapSize.toIndex(x, y)];
+                this.landHeightBuffer.update(x, y, heightValue);
+            }
+        }
+
+        this.terrainDirty = false;
+        LandscapeRenderer.log.debug('Terrain buffers rebuilt');
+    }
+
     public rebuildRiverTextures(rc: RiverConfig): void {
         LandscapeRenderer.log.debug('Rebuilding river textures: ' + JSON.stringify(rc));
         this.landscapeTextureMap.updateRiverConfig(rc);
@@ -229,6 +276,11 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         const sp = this.shaderProgram;
         if (!sp) {
             return;
+        }
+
+        // Rebuild terrain buffers if marked dirty
+        if (this.terrainDirty) {
+            this.rebuildTerrainBuffers();
         }
 
         // Calculate how many tile instances are needed to fill the viewport.

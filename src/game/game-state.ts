@@ -52,6 +52,10 @@ export class GameState {
                 phaseProgress: 0,
                 totalDuration: DEFAULT_CONSTRUCTION_DURATION,
                 elapsedTime: 0,
+                tileX: x,
+                tileY: y,
+                originalTerrain: null,
+                terrainModified: false,
             });
         }
 

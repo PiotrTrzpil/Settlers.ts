@@ -5,6 +5,11 @@
 
 import { GameState } from '../game-state';
 import { BuildingConstructionPhase, BuildingState } from '../entity';
+import { MapSize } from '@/utilities/map-size';
+import {
+    captureOriginalTerrain,
+    applyTerrainLeveling,
+} from './terrain-leveling';
 
 /**
  * Phase durations as fraction of total construction time.
@@ -73,18 +78,39 @@ function calculatePhaseProgress(elapsedFraction: number, phase: BuildingConstruc
 }
 
 /**
+ * Terrain modification context for construction.
+ * Pass this to enable terrain leveling during construction.
+ */
+export interface TerrainContext {
+    groundType: Uint8Array;
+    groundHeight: Uint8Array;
+    mapSize: MapSize;
+    /** Callback to notify that terrain has changed and needs re-upload to GPU */
+    onTerrainModified?: () => void;
+}
+
+/**
  * Update building construction progress for all buildings.
  * Called each game tick.
  *
  * @param state Game state containing building states
  * @param dt Delta time in seconds
+ * @param terrainContext Optional terrain context for terrain modification
  */
-export function updateBuildingConstruction(state: GameState, dt: number): void {
+export function updateBuildingConstruction(
+    state: GameState,
+    dt: number,
+    terrainContext?: TerrainContext
+): void {
+    let terrainModified = false;
+
     for (const buildingState of state.buildingStates.values()) {
         // Skip completed buildings
         if (buildingState.phase === BuildingConstructionPhase.Completed) {
             continue;
         }
+
+        const previousPhase = buildingState.phase;
 
         // Update elapsed time
         buildingState.elapsedTime += dt;
@@ -101,6 +127,60 @@ export function updateBuildingConstruction(state: GameState, dt: number): void {
 
         // Calculate progress within the current phase
         buildingState.phaseProgress = calculatePhaseProgress(elapsedFraction, newPhase);
+
+        // Handle terrain leveling if context is provided
+        if (terrainContext) {
+            // Capture original terrain when entering TerrainLeveling phase
+            if (previousPhase === BuildingConstructionPhase.Poles &&
+                newPhase === BuildingConstructionPhase.TerrainLeveling &&
+                !buildingState.originalTerrain) {
+                buildingState.originalTerrain = captureOriginalTerrain(
+                    buildingState,
+                    terrainContext.groundType,
+                    terrainContext.groundHeight,
+                    terrainContext.mapSize
+                );
+            }
+
+            // Apply terrain leveling during TerrainLeveling phase
+            if (newPhase === BuildingConstructionPhase.TerrainLeveling &&
+                buildingState.originalTerrain) {
+                const modified = applyTerrainLeveling(
+                    buildingState,
+                    terrainContext.groundType,
+                    terrainContext.groundHeight,
+                    terrainContext.mapSize,
+                    buildingState.phaseProgress
+                );
+                if (modified) {
+                    terrainModified = true;
+                }
+            }
+
+            // Mark terrain as fully modified when leaving TerrainLeveling phase
+            if (previousPhase === BuildingConstructionPhase.TerrainLeveling &&
+                newPhase > BuildingConstructionPhase.TerrainLeveling) {
+                // Apply final leveling (progress = 1.0) if not already done
+                if (buildingState.originalTerrain && !buildingState.terrainModified) {
+                    const modified = applyTerrainLeveling(
+                        buildingState,
+                        terrainContext.groundType,
+                        terrainContext.groundHeight,
+                        terrainContext.mapSize,
+                        1.0
+                    );
+                    if (modified) {
+                        terrainModified = true;
+                    }
+                    buildingState.terrainModified = true;
+                }
+            }
+        }
+    }
+
+    // Notify that terrain was modified
+    if (terrainModified && terrainContext?.onTerrainModified) {
+        terrainContext.onTerrainModified();
     }
 }
 

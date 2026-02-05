@@ -1,8 +1,9 @@
 import { GameState } from './game-state';
 import { updateMovement } from './systems/movement';
-import { updateBuildingConstruction } from './systems/building-construction';
+import { updateBuildingConstruction, TerrainContext } from './systems/building-construction';
 import { LogHandler } from '@/utilities/log-handler';
 import { debugStats } from './debug-stats';
+import { MapSize } from '@/utilities/map-size';
 
 const TICK_RATE = 30;
 const TICK_DURATION = 1 / TICK_RATE;
@@ -25,7 +26,9 @@ export class GameLoop {
     private groundHeight: Uint8Array | undefined;
     private mapWidth: number | undefined;
     private mapHeight: number | undefined;
+    private mapSize: MapSize | undefined;
     private onRender: ((alpha: number, deltaSec: number) => void) | null = null;
+    private onTerrainModified: (() => void) | null = null;
 
     constructor(gameState: GameState) {
         this.gameState = gameState;
@@ -37,11 +40,17 @@ export class GameLoop {
         this.groundHeight = groundHeight;
         this.mapWidth = mapWidth;
         this.mapHeight = mapHeight;
+        this.mapSize = new MapSize(mapWidth, mapHeight);
     }
 
     /** Set the render callback, called every animation frame with interpolation alpha and delta time */
     public setRenderCallback(callback: (alpha: number, deltaSec: number) => void): void {
         this.onRender = callback;
+    }
+
+    /** Set callback for when terrain is modified (e.g., during building construction) */
+    public setTerrainModifiedCallback(callback: () => void): void {
+        this.onTerrainModified = callback;
     }
 
     public start(): void {
@@ -94,6 +103,18 @@ export class GameLoop {
     private tick(dt: number): void {
         debugStats.recordTick();
         updateMovement(this.gameState, dt, this.groundType, this.groundHeight, this.mapWidth, this.mapHeight);
-        updateBuildingConstruction(this.gameState, dt);
+
+        // Create terrain context for building construction if terrain data is available
+        let terrainContext: TerrainContext | undefined;
+        if (this.groundType && this.groundHeight && this.mapSize) {
+            terrainContext = {
+                groundType: this.groundType,
+                groundHeight: this.groundHeight,
+                mapSize: this.mapSize,
+                onTerrainModified: this.onTerrainModified ?? undefined,
+            };
+        }
+
+        updateBuildingConstruction(this.gameState, dt, terrainContext);
     }
 }

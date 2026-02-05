@@ -190,6 +190,19 @@ export enum BuildingConstructionPhase {
 }
 
 /**
+ * Stores original terrain state before construction site modification.
+ * Used to restore terrain if building is cancelled.
+ */
+export interface ConstructionSiteOriginalTerrain {
+    /** Original ground types for the building tile and neighbors */
+    groundTypes: Map<string, number>;
+    /** Original ground heights for the building tile and neighbors */
+    groundHeights: Map<string, number>;
+    /** Target (leveled) height for the construction site */
+    targetHeight: number;
+}
+
+/**
  * State tracking for building construction progress.
  * Similar to UnitState for movement interpolation.
  */
@@ -203,4 +216,11 @@ export interface BuildingState {
     totalDuration: number;
     /** Time elapsed since construction started */
     elapsedTime: number;
+    /** Building tile position for terrain modification */
+    tileX: number;
+    tileY: number;
+    /** Original terrain state before construction */
+    originalTerrain: ConstructionSiteOriginalTerrain | null;
+    /** Whether terrain modification has been applied */
+    terrainModified: boolean;
 }
