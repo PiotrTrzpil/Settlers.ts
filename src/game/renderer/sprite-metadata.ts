@@ -294,25 +294,50 @@ export function getMapObjectSpriteMap(): Partial<Record<MapObjectType, MapObject
 }
 
 /**
+ * Building sprite entries with both construction and completed states.
+ */
+export interface BuildingSpriteEntries {
+    /** Construction state sprite (D0) */
+    construction: SpriteEntry | null;
+    /** Completed state sprite (D1) */
+    completed: SpriteEntry | null;
+}
+
+/**
  * Registry that maps game entity types to their sprite atlas entries.
  * Built during initialization after sprites are loaded and packed into the atlas.
  */
 export class SpriteMetadataRegistry {
-    private buildings: Map<BuildingType, SpriteEntry> = new Map();
+    private buildings: Map<BuildingType, BuildingSpriteEntries> = new Map();
     private mapObjects: Map<MapObjectType, SpriteEntry> = new Map();
 
     /**
-     * Register a sprite entry for a building type.
+     * Register sprite entries for a building type (both construction and completed).
      */
-    public registerBuilding(type: BuildingType, entry: SpriteEntry): void {
-        this.buildings.set(type, entry);
+    public registerBuilding(type: BuildingType, construction: SpriteEntry | null, completed: SpriteEntry | null): void {
+        this.buildings.set(type, { construction, completed });
     }
 
     /**
-     * Look up the sprite entry for a building type.
+     * Look up the completed sprite entry for a building type (legacy/default).
      * Returns null if no sprite is registered for this type.
      */
     public getBuilding(type: BuildingType): SpriteEntry | null {
+        return this.buildings.get(type)?.completed ?? null;
+    }
+
+    /**
+     * Look up the construction sprite entry for a building type.
+     * Returns null if no sprite is registered for this type.
+     */
+    public getBuildingConstruction(type: BuildingType): SpriteEntry | null {
+        return this.buildings.get(type)?.construction ?? null;
+    }
+
+    /**
+     * Get both construction and completed sprites for a building type.
+     */
+    public getBuildingSprites(type: BuildingType): BuildingSpriteEntries | null {
         return this.buildings.get(type) ?? null;
     }
 

@@ -253,3 +253,56 @@ export interface UnitState {
     prevX: number;
     prevY: number;
 }
+
+/**
+ * Phases of building construction.
+ * Each phase uses different visuals and progresses over time.
+ */
+export enum BuildingConstructionPhase {
+    /** Initial phase: building poles/markers appear */
+    Poles = 0,
+    /** Terrain leveling phase: ground is prepared */
+    TerrainLeveling = 1,
+    /** Construction frame rises from bottom */
+    ConstructionRising = 2,
+    /** Completed building frame rises from bottom */
+    CompletedRising = 3,
+    /** Building is fully completed */
+    Completed = 4,
+}
+
+/**
+ * Stores original terrain state before construction site modification.
+ * Used to restore terrain if building is cancelled.
+ */
+export interface ConstructionSiteOriginalTerrain {
+    /** Original ground types for the building tile and neighbors */
+    groundTypes: Map<string, number>;
+    /** Original ground heights for the building tile and neighbors */
+    groundHeights: Map<string, number>;
+    /** Target (leveled) height for the construction site */
+    targetHeight: number;
+}
+
+/**
+ * State tracking for building construction progress.
+ * Similar to UnitState for movement interpolation.
+ */
+export interface BuildingState {
+    entityId: number;
+    /** Current construction phase */
+    phase: BuildingConstructionPhase;
+    /** Progress within current phase (0.0 to 1.0) */
+    phaseProgress: number;
+    /** Total construction duration in seconds */
+    totalDuration: number;
+    /** Time elapsed since construction started */
+    elapsedTime: number;
+    /** Building tile position for terrain modification */
+    tileX: number;
+    tileY: number;
+    /** Original terrain state before construction */
+    originalTerrain: ConstructionSiteOriginalTerrain | null;
+    /** Whether terrain modification has been applied */
+    terrainModified: boolean;
+}

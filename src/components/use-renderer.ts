@@ -78,6 +78,11 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         // Expose landscape renderer for debug panel river controls
         (window as any).__settlers_landscape__ = landscapeRenderer;
 
+        // Set up terrain modification callback for building construction
+        game.gameLoop.setTerrainModifiedCallback(() => {
+            landscapeRenderer?.markTerrainDirty();
+        });
+
         const r = renderer;
         game.gameLoop.setRenderCallback((alpha: number, deltaSec: number) => {
             const g = getGame();
@@ -86,6 +91,7 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
                 entityRenderer.selectedEntityId = g.state.selectedEntityId;
                 entityRenderer.selectedEntityIds = g.state.selectedEntityIds;
                 entityRenderer.unitStates = g.state.unitStates;
+                entityRenderer.buildingStates = g.state.buildingStates;
                 entityRenderer.territoryMap = getShowTerritoryBorders() ? g.territory : null;
                 entityRenderer.territoryVersion = g.territoryVersion;
                 entityRenderer.renderAlpha = alpha;
