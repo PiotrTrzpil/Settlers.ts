@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { GameState } from '@/game/game-state';
-import { EntityType } from '@/game/entity';
+import { BuildingConstructionPhase, EntityType } from '@/game/entity';
 import { executeCommand } from '@/game/commands/command';
+import { captureOriginalTerrain, applyTerrainLeveling, CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/systems/terrain-leveling';
 import { MapSize } from '@/utilities/map-size';
 
 describe('Command System', () => {
@@ -345,6 +346,49 @@ describe('Command System', () => {
             }, groundType, groundHeight, mapSize);
 
             expect(state.unitStates.has(unit.id)).toBe(false);
+        });
+
+        it('should restore terrain when removing a building with modified terrain', () => {
+            // Set up varied terrain heights around the building site
+            for (let dy = -1; dy <= 2; dy++) {
+                for (let dx = -1; dx <= 2; dx++) {
+                    const idx = mapSize.toIndex(10 + dx, 10 + dy);
+                    groundHeight[idx] = 100 + dy * 5;
+                }
+            }
+
+            // Save original terrain state for verification
+            const originalGroundType = new Uint8Array(groundType);
+            const originalGroundHeight = new Uint8Array(groundHeight);
+
+            // Place a building (Lumberjack = 2x2 footprint)
+            const building = state.addEntity(EntityType.Building, 1, 10, 10, 0);
+            const bs = state.buildingStates.get(building.id)!;
+
+            // Simulate terrain leveling (as building-construction.ts would do)
+            bs.originalTerrain = captureOriginalTerrain(bs, groundType, groundHeight, mapSize);
+            bs.terrainModified = true;
+            bs.phase = BuildingConstructionPhase.TerrainLeveling;
+            applyTerrainLeveling(bs, groundType, groundHeight, mapSize, 1.0);
+
+            // Verify terrain was modified
+            const footprintIdx = mapSize.toIndex(10, 10);
+            expect(groundType[footprintIdx]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
+
+            // Remove the building
+            executeCommand(state, {
+                type: 'remove_entity',
+                entityId: building.id
+            }, groundType, groundHeight, mapSize);
+
+            // Verify terrain was restored
+            for (let dy = -1; dy <= 2; dy++) {
+                for (let dx = -1; dx <= 2; dx++) {
+                    const idx = mapSize.toIndex(10 + dx, 10 + dy);
+                    expect(groundType[idx]).toBe(originalGroundType[idx]);
+                    expect(groundHeight[idx]).toBe(originalGroundHeight[idx]);
+                }
+            }
         });
     });
 });

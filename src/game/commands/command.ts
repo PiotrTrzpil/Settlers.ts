@@ -1,6 +1,7 @@
 import { BuildingType, EntityType, EXTENDED_OFFSETS, UnitType, BUILDING_UNIT_TYPE } from '../entity';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../systems/placement';
+import { restoreOriginalTerrain } from '../systems/terrain-leveling';
 import { TerritoryMap } from '../systems/territory';
 import { findPath } from '../systems/pathfinding';
 import { MapSize } from '@/utilities/map-size';
@@ -151,6 +152,15 @@ export function executeCommand(
     case 'remove_entity': {
         const entity = state.getEntity(cmd.entityId);
         if (!entity) return false;
+
+        // Restore terrain before removing a building that modified it
+        if (entity.type === EntityType.Building) {
+            const bs = state.buildingStates.get(cmd.entityId);
+            if (bs) {
+                restoreOriginalTerrain(bs, groundType, groundHeight, mapSize);
+            }
+        }
+
         state.removeEntity(cmd.entityId);
         return true;
     }
