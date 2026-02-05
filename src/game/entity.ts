@@ -294,6 +294,8 @@ export interface ConstructionSiteOriginalTerrain {
  */
 export interface BuildingState {
     entityId: number;
+    /** Building type, used to determine footprint for terrain modification */
+    buildingType: BuildingType;
     /** Current construction phase */
     phase: BuildingConstructionPhase;
     /** Progress within current phase (0.0 to 1.0) */
@@ -302,7 +304,7 @@ export interface BuildingState {
     totalDuration: number;
     /** Time elapsed since construction started */
     elapsedTime: number;
-    /** Building tile position for terrain modification */
+    /** Building anchor tile position (top-left corner of footprint) */
     tileX: number;
     tileY: number;
     /** Original terrain state before construction */

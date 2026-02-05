@@ -578,8 +578,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /**
-     * Fill sprite quad vertices with partial vertical visibility (for "rising from bottom" effect).
-     * Only renders the bottom portion of the sprite based on verticalProgress (0.0 to 1.0).
+     * Fill sprite quad vertices with partial vertical visibility (for "rising from ground" effect).
+     * Shows the bottom portion of the sprite, growing upward as verticalProgress increases.
+     *
+     * Coordinate system: smaller worldY = higher on screen (roof), larger worldY = lower (ground).
+     * The base of the sprite (y1 = y0 + heightWorld) stays fixed at ground level.
+     * The visible top edge moves from y1 toward y0 as the building rises.
      */
     private fillSpriteQuadPartial(
         offset: number,
@@ -597,52 +601,52 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const data = this.spriteBatchData;
         const { atlasRegion: region, offsetX, offsetY, widthWorld, heightWorld } = entry;
 
-        // Calculate visible portion of sprite
-        // verticalProgress 0.0 = nothing visible, 1.0 = fully visible
         const visibleHeight = heightWorld * verticalProgress;
 
-        // Position: start at the base (ground level) and only show the bottom portion
         const x0 = worldX + offsetX;
-        const y0 = worldY + offsetY;  // Bottom of sprite (ground level)
         const x1 = x0 + widthWorld;
-        const y1 = y0 + visibleHeight;  // Only show up to visible height
 
-        // UV coordinates: show bottom portion of texture
-        // v0 = bottom of texture, v1 = top of texture
-        // We want to show from v0 up to v0 + (v1-v0) * verticalProgress
+        // y1 is the base (ground level, larger worldY = lower on screen) — stays fixed
+        const y1 = worldY + offsetY + heightWorld;
+        // Visible top edge rises from y1 (nothing) toward y0 (full building)
+        const visibleY0 = y1 - visibleHeight;
+
+        // UV: v1 corresponds to the base (y1), v0 to the roof (y0).
+        // Show the bottom portion of the texture, expanding upward.
         const { u0, v0, u1, v1 } = region;
-        const visibleV1 = v0 + (v1 - v0) * verticalProgress;
+        const visibleV0 = v1 - (v1 - v0) * verticalProgress;
 
-        // 6 vertices for 2 triangles (CCW winding)
-        // Note: V coordinates - v0 at bottom, visibleV1 at the visible top
-        // Vertex 0: top-left (visible top)
+        // 6 vertices for 2 triangles — same winding as fillSpriteQuad
+        // but with y0/v0 replaced by visibleY0/visibleV0
+
+        // Vertex 0: base-left (ground level)
         data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = visibleV1;
+        data[offset++] = u0; data[offset++] = v1;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
-        // Vertex 1: bottom-left
-        data[offset++] = x0; data[offset++] = y0;
-        data[offset++] = u0; data[offset++] = v0;
+        // Vertex 1: visible-top-left (rises upward)
+        data[offset++] = x0; data[offset++] = visibleY0;
+        data[offset++] = u0; data[offset++] = visibleV0;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
-        // Vertex 2: bottom-right
-        data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1; data[offset++] = v0;
+        // Vertex 2: visible-top-right (rises upward)
+        data[offset++] = x1; data[offset++] = visibleY0;
+        data[offset++] = u1; data[offset++] = visibleV0;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
-        // Vertex 3: top-left (again)
+        // Vertex 3: base-left (again)
         data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = visibleV1;
+        data[offset++] = u0; data[offset++] = v1;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
-        // Vertex 4: bottom-right (again)
-        data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1; data[offset++] = v0;
+        // Vertex 4: visible-top-right (again)
+        data[offset++] = x1; data[offset++] = visibleY0;
+        data[offset++] = u1; data[offset++] = visibleV0;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
-        // Vertex 5: top-right (visible top)
+        // Vertex 5: base-right (ground level)
         data[offset++] = x1; data[offset++] = y1;
-        data[offset++] = u1; data[offset++] = visibleV1;
+        data[offset++] = u1; data[offset++] = v1;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         return offset;

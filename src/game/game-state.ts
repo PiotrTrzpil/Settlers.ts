@@ -60,6 +60,7 @@ export class GameState {
         if (type === EntityType.Building) {
             this.buildingStates.set(entity.id, {
                 entityId: entity.id,
+                buildingType: subType as BuildingType,
                 phase: BuildingConstructionPhase.Poles,
                 phaseProgress: 0,
                 totalDuration: DEFAULT_CONSTRUCTION_DURATION,
