@@ -1,4 +1,4 @@
-import { Entity, EntityType, UnitState, BuildingState, BuildingConstructionPhase, tileKey } from './entity';
+import { Entity, EntityType, UnitState, BuildingState, BuildingConstructionPhase, tileKey, BuildingType, getBuildingFootprint } from './entity';
 
 /** Default building construction duration in seconds */
 export const DEFAULT_CONSTRUCTION_DURATION = 30;
@@ -31,7 +31,16 @@ export class GameState {
 
         this.entities.push(entity);
         this.entityMap.set(entity.id, entity);
-        this.tileOccupancy.set(tileKey(x, y), entity.id);
+
+        // Add occupancy for all tiles in the entity's footprint
+        if (type === EntityType.Building) {
+            const footprint = getBuildingFootprint(x, y, subType as BuildingType);
+            for (const tile of footprint) {
+                this.tileOccupancy.set(tileKey(tile.x, tile.y), entity.id);
+            }
+        } else {
+            this.tileOccupancy.set(tileKey(x, y), entity.id);
+        }
 
         if (type === EntityType.Unit) {
             this.unitStates.set(entity.id, {
@@ -72,7 +81,17 @@ export class GameState {
         }
 
         this.entityMap.delete(id);
-        this.tileOccupancy.delete(tileKey(entity.x, entity.y));
+
+        // Remove occupancy for all tiles in the entity's footprint
+        if (entity.type === EntityType.Building) {
+            const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType);
+            for (const tile of footprint) {
+                this.tileOccupancy.delete(tileKey(tile.x, tile.y));
+            }
+        } else {
+            this.tileOccupancy.delete(tileKey(entity.x, entity.y));
+        }
+
         this.unitStates.delete(id);
         this.buildingStates.delete(id);
 

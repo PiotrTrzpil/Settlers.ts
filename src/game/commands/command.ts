@@ -1,6 +1,7 @@
 import { BuildingType, EntityType, EXTENDED_OFFSETS, UnitType, BUILDING_UNIT_TYPE } from '../entity';
 import { GameState } from '../game-state';
-import { canPlaceBuilding, isPassable } from '../systems/placement';
+import { canPlaceBuildingFootprint, isPassable } from '../systems/placement';
+import { TerritoryMap } from '../systems/territory';
 import { findPath } from '../systems/pathfinding';
 import { MapSize } from '@/utilities/map-size';
 
@@ -21,12 +22,35 @@ export function executeCommand(
     cmd: Command,
     groundType: Uint8Array,
     groundHeight: Uint8Array,
-    mapSize: MapSize
+    mapSize: MapSize,
+    territory?: TerritoryMap
 ): boolean {
     switch (cmd.type) {
     case 'place_building': {
-        if (!canPlaceBuilding(groundType, groundHeight, mapSize, state.tileOccupancy, cmd.x, cmd.y)) {
-            return false;
+        // Check if player already has buildings (for territory rules)
+        const hasBuildings = state.entities.some(
+            e => e.type === EntityType.Building && e.player === cmd.player
+        );
+
+        // Use footprint-aware placement validation with territory checks
+        // Territory is optional - if not provided, only basic placement rules apply
+        if (territory) {
+            if (!canPlaceBuildingFootprint(
+                groundType, groundHeight, mapSize, state.tileOccupancy,
+                territory, cmd.x, cmd.y, cmd.player, hasBuildings, cmd.buildingType
+            )) {
+                return false;
+            }
+        } else {
+            // Fallback: basic footprint validation without territory
+            // Create a dummy territory for validation that always returns NO_OWNER
+            const dummyTerritory = new TerritoryMap(mapSize);
+            if (!canPlaceBuildingFootprint(
+                groundType, groundHeight, mapSize, state.tileOccupancy,
+                dummyTerritory, cmd.x, cmd.y, cmd.player, false, cmd.buildingType
+            )) {
+                return false;
+            }
         }
         state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
 
