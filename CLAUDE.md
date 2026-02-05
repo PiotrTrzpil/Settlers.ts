@@ -69,6 +69,20 @@ Test maps and procedural textures work without game files.
 - Playwright `outputDir` writes to `tests/e2e/.results/` (gitignored).
 - Screenshot baselines live in `tests/e2e/__screenshots__/` and are committed.
 
+## E2E testing best practices
+
+- **Always rebuild** before running e2e tests: `pnpm build` (Playwright uses the built dist, not dev server)
+- **Use debug bridges**: Access game state via `window.__settlers_game__`, `window.__settlers_debug__`, `window.__settlers_entity_renderer__`
+- **Use GamePage**: Page object at `tests/e2e/game-page.ts` provides waiting helpers and common actions
+- **Wait properly**: Use `waitForReady()`, `waitForFrames()`, `waitForFunction()` instead of `waitForTimeout()`
+- **Run headed**: `npx playwright test --headed -g "test name"` to observe tests visually
+- **Test specific file**: `npx playwright test building-placement.spec.ts`
+- **Poll output in background**: When running tests in background, poll output every ~0.5-1s with a marker file:
+  ```sh
+  rm -f /tmp/done; npx playwright test ... 2>&1; touch /tmp/done &
+  while [ ! -f /tmp/done ]; do sleep 0.5; tail -20 output.log; done
+  ```
+
 ## Claude Code guidelines
 
 - When taking screenshots with MCP browser tools, always save to `.playwright-mcp/` folder (e.g., `filename: ".playwright-mcp/screenshot.png"`). This folder is gitignored.

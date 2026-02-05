@@ -15,6 +15,7 @@ import {
     EnvironmentSubLayer,
 } from '@/game/renderer/layer-visibility';
 import { debugStats } from '@/game/debug-stats';
+import type { InputManager } from '@/game/input';
 
 /** Entity counts per layer for display in the layer panel */
 export interface LayerCounts {
@@ -54,7 +55,10 @@ const availableBuildings = [
     { type: BuildingType.Forester, id: 'forester', name: 'Forester', icon: '🌲' },
 ];
 
-export function useMapView(getFileManager: () => FileManager) {
+export function useMapView(
+    getFileManager: () => FileManager,
+    getInputManager?: () => InputManager | null
+) {
     const route = useRoute();
     const isTestMap = route.query.testMap === 'true';
 
@@ -97,6 +101,10 @@ export function useMapView(getFileManager: () => FileManager) {
         if (!game.value) return false;
         return !game.value.gameLoop.isRunning;
     });
+
+    // Mode state - use debugStats as the single source of truth (reactive and instant)
+    const currentMode = computed(() => debugStats.state.mode);
+    const placeBuildingType = computed(() => debugStats.state.placeBuildingType);
 
     /** Compute entity counts per layer */
     const layerCounts = computed<LayerCounts>(() => {
@@ -198,15 +206,27 @@ export function useMapView(getFileManager: () => FileManager) {
 
     function setPlaceMode(buildingType: number) {
         if (!game.value) return;
-        game.value.mode = 'place_building';
-        game.value.placeBuildingType = buildingType;
-        triggerRef(game);
+        const inputManager = getInputManager?.();
+        if (!inputManager) return;
+
+        // Toggle behavior: if already placing this building type, exit to select mode
+        // Use debugStats as the single source of truth for mode state
+        if (debugStats.state.mode === 'place_building' && debugStats.state.placeBuildingType === buildingType) {
+            inputManager.switchMode('select');
+        } else {
+            inputManager.switchMode('place_building', {
+                buildingType,
+                player: game.value.currentPlayer,
+            });
+        }
     }
 
     function setSelectMode() {
         if (!game.value) return;
-        game.value.mode = 'select';
-        triggerRef(game);
+        const inputManager = getInputManager?.();
+        if (inputManager) {
+            inputManager.switchMode('select');
+        }
     }
 
     function removeSelected(): void {
@@ -299,6 +319,8 @@ export function useMapView(getFileManager: () => FileManager) {
         selectedEntity,
         selectionCount,
         isPaused,
+        currentMode,
+        placeBuildingType,
         availableBuildings,
         layerVisibility,
         layerCounts,

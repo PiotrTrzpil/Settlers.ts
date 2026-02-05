@@ -20,6 +20,28 @@ import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy/material-type';
 
 /**
+ * Consolidated building render data - all sprites needed for a building type in one lookup.
+ */
+export interface BuildingRenderEntry {
+    /** Construction state sprite (D0) */
+    construction: SpriteEntry | null;
+    /** Completed state sprite (D1) - static fallback */
+    completed: SpriteEntry | null;
+    /** Animated sprite data if available */
+    animated: AnimatedSpriteEntry | null;
+}
+
+/**
+ * Consolidated map object render data.
+ */
+export interface MapObjectRenderEntry {
+    /** Static sprite */
+    static: SpriteEntry | null;
+    /** Animated sprite data if available */
+    animated: AnimatedSpriteEntry | null;
+}
+
+/**
  * Manages sprite loading, atlas packing, and race switching for entity rendering.
  * Extracted from EntityRenderer to separate concerns.
  */
@@ -196,6 +218,32 @@ export class SpriteRenderManager {
     }
 
     /**
+     * Get all building sprites in a single lookup (construction, completed, animated).
+     * Reduces multiple method calls per building per frame.
+     */
+    public getBuildingRenderEntry(type: BuildingType): BuildingRenderEntry {
+        const sprites = this._spriteRegistry?.getBuildingSprites(type);
+        const animated = this._spriteRegistry?.getAnimatedBuilding(type) ?? null;
+        return {
+            construction: sprites?.construction ?? null,
+            completed: sprites?.completed ?? null,
+            animated,
+        };
+    }
+
+    /**
+     * Get all map object sprites in a single lookup (static, animated).
+     */
+    public getMapObjectRenderEntry(type: MapObjectType): MapObjectRenderEntry {
+        const staticSprite = this._spriteRegistry?.getMapObject(type) ?? null;
+        const animated = this._spriteRegistry?.getAnimatedMapObject(type) ?? null;
+        return {
+            static: staticSprite,
+            animated,
+        };
+    }
+
+    /**
      * Clean up GPU resources. Call when switching races or destroying.
      */
     public cleanup(): void {
@@ -229,8 +277,8 @@ export class SpriteRenderManager {
             return false;
         }
 
-        // Create atlas and registry - 4096 needed for large building sprites
-        const atlas = new EntityTextureAtlas(4096, this.textureUnit);
+        // Create atlas and registry - 8192 needed to fit buildings, map objects, and resources
+        const atlas = new EntityTextureAtlas(8192, this.textureUnit);
         const registry = new SpriteMetadataRegistry();
 
         let loadedAny = false;

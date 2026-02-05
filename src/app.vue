@@ -181,4 +181,13 @@ input[type="checkbox"]:checked::after {
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
+
+/* Global button focus styles - remove browser outline */
+button:focus {
+  outline: none;
+}
+
+button:focus-visible {
+  outline: none;
+}
 </style>

@@ -9,7 +9,7 @@ import { GamePage } from './game-page';
 // ─── Pointer Event Pipeline ────────────────────────────────────────
 
 test.describe('Pointer Event Pipeline', () => {
-    test('pointer events fire on canvas (not suppressed)', async ({ page }) => {
+    test('pointer events fire on canvas (not suppressed)', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -17,7 +17,7 @@ test.describe('Pointer Event Pipeline', () => {
         const eventLog = await page.evaluate(() => {
             return new Promise<string[]>((resolve) => {
                 const canvas = document.querySelector('canvas');
-                if (!canvas) { resolve(['no canvas']); return; }
+                if (!canvas) { resolve(['no canvas']); return }
 
                 const log: string[] = [];
                 for (const evt of ['pointerdown', 'pointerup', 'pointermove',
@@ -48,7 +48,7 @@ test.describe('Pointer Event Pipeline', () => {
         expect(eventLog).toContain('pointermove');
     });
 
-    test('canvas click sets hoveredTile via tileClick event', async ({ page }) => {
+    test('canvas click sets hoveredTile via tileClick event', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -66,7 +66,7 @@ test.describe('Pointer Event Pipeline', () => {
 // ─── Building Placement Mode ───────────────────────────────────────
 
 test.describe('Building Placement Mode', () => {
-    test('clicking building button activates place_building mode', async ({ page }) => {
+    test('clicking building button activates place_building mode', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -79,7 +79,7 @@ test.describe('Building Placement Mode', () => {
         await expect(btn).toHaveClass(/active/);
     });
 
-    test('select mode button returns to select mode', async ({ page }) => {
+    test('select mode button returns to select mode', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -91,7 +91,7 @@ test.describe('Building Placement Mode', () => {
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
     });
 
-    test('building placement works on valid terrain via game.execute()', async ({ page }) => {
+    test('building placement works on valid terrain via game.execute()', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -123,7 +123,7 @@ test.describe('Building Placement Mode', () => {
         expect(result.after).toBeGreaterThan(result.before);
     });
 
-    test('building placement via canvas click on buildable terrain', async ({ page }) => {
+    test('building placement via canvas click on buildable terrain', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -154,7 +154,7 @@ test.describe('Building Placement Mode', () => {
         expect(countAfter).toBeGreaterThanOrEqual(countBefore);
     });
 
-    test('building placed via mouse has correct type and position', async ({ page }) => {
+    test('building placed via mouse has correct type and position', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -219,7 +219,7 @@ test.describe('Building Placement Mode', () => {
         expect(result.building!.player).toBe(0);
     });
 
-    test('canvas click in placement mode triggers building placement', async ({ page }) => {
+    test('canvas click in placement mode triggers building placement', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -293,7 +293,7 @@ test.describe('Building Placement Mode', () => {
         expect(countAfter).toBeGreaterThanOrEqual(countBefore);
     });
 
-    test('clicking canvas while not in placement mode does not place building', async ({ page }) => {
+    test('clicking canvas while not in placement mode does not place building', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -322,7 +322,7 @@ test.describe('Building Placement Mode', () => {
         expect(buildingsAfter).toBe(buildingsBefore);
     });
 
-    test('multiple canvas clicks place multiple buildings', async ({ page }) => {
+    test('multiple canvas clicks place multiple buildings', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -382,7 +382,7 @@ test.describe('Building Placement Mode', () => {
         expect(buildingCount).toBe(result.totalBuildings);
     });
 
-    test('different building types can be selected and placed', async ({ page }) => {
+    test('different building types can be selected and placed', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -449,7 +449,7 @@ test.describe('Building Placement Mode', () => {
 // ─── Unit Spawning ─────────────────────────────────────────────────
 
 test.describe('Unit Spawning', () => {
-    test('spawn settler creates entity on passable terrain', async ({ page }) => {
+    test('spawn settler creates entity on passable terrain', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -474,7 +474,7 @@ test.describe('Unit Spawning', () => {
         expect(isOldDefault).toBe(false);
     });
 
-    test('spawn soldier creates entity', async ({ page }) => {
+    test('spawn soldier creates entity', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -486,7 +486,7 @@ test.describe('Unit Spawning', () => {
         expect(await gp.getDebugField('entityCount')).toBe(countBefore + 1);
     });
 
-    test('clicking canvas then spawning uses clicked tile', async ({ page }) => {
+    test('clicking canvas then spawning uses clicked tile', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -522,7 +522,7 @@ test.describe('Unit Spawning', () => {
         // Spawn may fail if clicked tile is impassable — that's expected behaviour
     });
 
-    test('spawned unit is on passable terrain (not water)', async ({ page }) => {
+    test('spawned unit is on passable terrain (not water)', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -557,7 +557,7 @@ test.describe('Unit Spawning', () => {
 // ─── Entity Rendering ─────────────────────────────────────────────
 
 test.describe('Entity Rendering', () => {
-    test('placed building is visually rendered on canvas', async ({ page }) => {
+    test('placed building is visually rendered on canvas', async({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 
@@ -623,7 +623,7 @@ test.describe('Entity Rendering', () => {
         checkErrors();
     });
 
-    test('building renders with player color (procedural fallback)', async ({ page }) => {
+    test('building renders with player color (procedural fallback)', async({ page }) => {
         const gp = new GamePage(page);
 
         await gp.goto({ testMap: true });
@@ -681,7 +681,7 @@ test.describe('Entity Rendering', () => {
         expect(building0).toBeDefined();
     });
 
-    test('multiple buildings rendered correctly', async ({ page }) => {
+    test('multiple buildings rendered correctly', async({ page }) => {
         const gp = new GamePage(page);
 
         await gp.goto({ testMap: true });
@@ -742,7 +742,7 @@ test.describe('Entity Rendering', () => {
         expect(entityCount).toBe(result.totalEntities);
     });
 
-    test('building placement preview renders during placement mode', async ({ page }) => {
+    test('building placement preview renders during placement mode', async({ page }) => {
         const gp = new GamePage(page);
 
         await gp.goto({ testMap: true });
@@ -768,11 +768,41 @@ test.describe('Entity Rendering', () => {
         // Wait for a few frames
         await gp.waitForFrames(10);
 
-        // Verify we're in placement mode with preview
+        // Verify we're in placement mode
         const mode = await gp.getMode();
         expect(mode).toBe('place_building');
 
-        // The preview should be rendered (we can't easily verify visually without screenshot,
-        // but we verify the mode is correct and no errors occurred)
+        // Check building indicator renderer state
+        const indicatorState = await page.evaluate(() => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+
+            const renderer = (window as any).__settlers_entity_renderer__;
+            if (!renderer) return null;
+
+            const indicatorRenderer = (renderer as any).buildingIndicatorRenderer;
+            if (!indicatorRenderer) return null;
+
+            // Count buildable statuses in cache
+            // Status enum: 5=Difficult, 6=Medium, 7=Easy (these show indicators)
+            let buildableCount = 0;
+            if (indicatorRenderer.indicatorCache) {
+                for (const status of indicatorRenderer.indicatorCache.values()) {
+                    if (status >= 5 && status <= 7) buildableCount++;
+                }
+            }
+
+            return {
+                indicatorsEnabled: renderer.buildingIndicatorsEnabled,
+                buildingType: indicatorRenderer.buildingType,
+                cacheSize: indicatorRenderer.indicatorCache?.size ?? 0,
+                buildableCount,
+            };
+        });
+
+        expect(indicatorState).not.toBeNull();
+        expect(indicatorState!.indicatorsEnabled).toBe(true);
+        expect(indicatorState!.buildingType).toBeGreaterThan(0);
+        expect(indicatorState!.buildableCount).toBeGreaterThan(0);
     });
 });

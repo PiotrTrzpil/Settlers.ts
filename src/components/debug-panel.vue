@@ -259,10 +259,6 @@ const fpsClass = computed(() => {
 
 <style scoped>
 .debug-panel {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 100;
   background: rgba(13, 10, 5, 0.92);
   border: 1px solid #5c3d1a;
   border-radius: 4px;
@@ -270,7 +266,7 @@ const fpsClass = computed(() => {
   font-size: 11px;
   font-family: monospace;
   min-width: 200px;
-  max-height: calc(100% - 16px);
+  max-height: 100%;
   overflow-y: auto;
   pointer-events: auto;
 }

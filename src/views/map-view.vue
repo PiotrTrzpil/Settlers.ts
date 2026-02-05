@@ -36,13 +36,13 @@
             :key="b.type"
             class="sidebar-btn"
             :data-testid="'btn-' + b.id"
-            :class="{ active: game.mode === 'place_building' && game.placeBuildingType === b.type }"
+            :class="{ active: currentMode === 'place_building' && placeBuildingType === b.type }"
             @click="setPlaceMode(b.type)"
           >
             <span class="btn-icon">
               <img
                 v-if="getIconUrl(b.type)"
-                :src="getIconUrl(b.type, game.mode === 'place_building' && game.placeBuildingType === b.type)!"
+                :src="getIconUrl(b.type, currentMode === 'place_building' && placeBuildingType === b.type)!"
                 :alt="b.name"
                 class="building-icon-img"
               />
@@ -77,7 +77,7 @@
           <button
             class="sidebar-btn mode-btn"
             data-testid="btn-select-mode"
-            :class="{ active: game.mode === 'select' }"
+            :class="{ active: currentMode === 'select' }"
             @click="setSelectMode()"
           >Select</button>
           <button
@@ -108,8 +108,8 @@
               class="browser"
             />
           </div>
-          <div class="mode-indicator" data-testid="mode-indicator" :data-mode="game.mode">
-            Mode: <strong>{{ game.mode }}</strong>
+          <div class="mode-indicator" data-testid="mode-indicator" :data-mode="currentMode">
+            Mode: <strong>{{ currentMode }}</strong>
           </div>
           <div class="entity-count" data-testid="entity-count"
             :data-count="game.state.entities.length">
@@ -139,21 +139,21 @@
           class="game-canvas"
         />
 
-        <!-- Layer panel overlay (left side) -->
-        <layer-panel
-          :counts="layerCounts"
-          @update:visibility="updateLayerVisibility"
-        />
-
-        <!-- Debug panel overlay (right side) -->
-        <debug-panel
-          :debugGrid="showDebug"
-          :showTerritoryBorders="showTerritoryBorders"
-          :paused="isPaused"
-          @update:debugGrid="showDebug = $event"
-          @update:showTerritoryBorders="showTerritoryBorders = $event"
-          @togglePause="togglePause()"
-        />
+        <!-- Right panel container (layers + debug) -->
+        <div class="right-panels">
+          <layer-panel
+            :counts="layerCounts"
+            @update:visibility="updateLayerVisibility"
+          />
+          <debug-panel
+            :debugGrid="showDebug"
+            :showTerritoryBorders="showTerritoryBorders"
+            :paused="isPaused"
+            @update:debugGrid="showDebug = $event"
+            @update:showTerritoryBorders="showTerritoryBorders = $event"
+            @togglePause="togglePause()"
+          />
+        </div>
       </div>
     </div>
 
@@ -197,6 +197,9 @@ const props = defineProps<{
     fileManager: FileManager;
 }>();
 
+// Template ref for renderer - declared before useMapView so getter works
+const rendererRef = useTemplateRef<InstanceType<typeof RendererViewer>>('rendererRef');
+
 const {
     game,
     showDebug,
@@ -206,6 +209,8 @@ const {
     selectedEntity,
     selectionCount,
     isPaused,
+    currentMode,
+    placeBuildingType,
     availableBuildings,
     layerVisibility,
     layerCounts,
@@ -217,10 +222,12 @@ const {
     togglePause,
     spawnUnit,
     updateLayerVisibility
-} = useMapView(() => props.fileManager);
+} = useMapView(
+    () => props.fileManager,
+    () => rendererRef.value?.getInputManager?.() ?? null
+);
 
 // Race selection
-const rendererRef = useTemplateRef<InstanceType<typeof RendererViewer>>('rendererRef');
 const currentRace = ref<Race>(Race.Roman);
 
 const availableRaces = AVAILABLE_RACES.map(race => ({
@@ -488,6 +495,19 @@ async function onRaceChange() {
 .game-canvas {
   flex: 1;
   min-height: 0;
+}
+
+/* Right panels container */
+.right-panels {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  z-index: 100;
+  max-height: calc(100% - 16px);
+  pointer-events: none;
 }
 
 .game-canvas :deep(.cav) {

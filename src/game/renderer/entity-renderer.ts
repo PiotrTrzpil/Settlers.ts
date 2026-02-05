@@ -10,6 +10,13 @@ import { TerritoryMap } from '../systems/territory';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
 import { SpriteEntry, Race } from './sprite-metadata';
+import {
+    PLAYER_COLORS,
+    TINT_PREVIEW_VALID,
+    TINT_PREVIEW_INVALID,
+    computePlayerTint,
+    computeNeutralTint,
+} from './tint-utils';
 import { MapObjectType } from '../entity';
 import { EMaterialType } from '../economy/material-type';
 import { TerritoryBorderRenderer } from './territory-border-renderer';
@@ -29,27 +36,12 @@ import fragCode from './shaders/entity-frag.glsl';
 import spriteVertCode from './shaders/entity-sprite-vert.glsl';
 import spriteFragCode from './shaders/entity-sprite-frag.glsl';
 
-// Player colors (RGBA, 0-1 range)
-const PLAYER_COLORS = [
-    [0.2, 0.6, 1.0, 0.9], // Player 0: Blue
-    [1.0, 0.3, 0.3, 0.9], // Player 1: Red
-    [0.3, 1.0, 0.3, 0.9], // Player 2: Green
-    [1.0, 1.0, 0.3, 0.9] // Player 3: Yellow
-];
-
+// Color shader constants (for non-textured rendering)
 const SELECTED_COLOR = [1.0, 1.0, 1.0, 1.0]; // White highlight
 const RING_COLOR = [1.0, 1.0, 0.0, 0.5]; // Yellow selection ring
 const PATH_COLOR = [0.3, 1.0, 0.6, 0.4]; // Green path indicator
 const PREVIEW_VALID_COLOR = [0.3, 1.0, 0.3, 0.5]; // Green ghost building
 const PREVIEW_INVALID_COLOR = [1.0, 0.3, 0.3, 0.5]; // Red ghost building
-
-// Sprite tint colors (multiplicative, so 1.0 = no change)
-const SPRITE_TINT_SELECTED = [1.3, 1.3, 1.3, 1.0]; // Bright highlight
-const SPRITE_TINT_PREVIEW_VALID = [0.5, 1.0, 0.5, 0.5]; // Green ghost
-const SPRITE_TINT_PREVIEW_INVALID = [1.0, 0.5, 0.5, 0.5]; // Red ghost
-
-// Player tint strength (0 = no tint, 1 = full player color)
-const PLAYER_TINT_STRENGTH = 0.4;
 
 // Texture unit assignments (landscape uses 0-2)
 const TEXTURE_UNIT_SPRITE_ATLAS = 3;
@@ -392,8 +384,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
             if (entity.type === EntityType.Building) {
                 const isSelected = this.selectedEntityIds.has(entity.id);
-                const playerColor = PLAYER_COLORS[entity.player % PLAYER_COLORS.length];
-                tint = this.computePlayerTint(playerColor, isSelected);
+                tint = computePlayerTint(entity.player, isSelected);
 
                 // Get building construction state
                 const buildingState = this.buildingStates.get(entity.id);
@@ -447,12 +438,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 }
 
                 const isSelected = this.selectedEntityIds.has(entity.id);
-                tint = isSelected ? [1.3, 1.3, 1.3, 1.0] : [1.0, 1.0, 1.0, 1.0];
+                tint = computeNeutralTint(isSelected);
             } else if (entity.type === EntityType.StackedResource) {
                 // Render stacked resources (dropped goods)
                 spriteEntry = this.spriteManager.getResource(entity.subType as EMaterialType);
                 const isSelected = this.selectedEntityIds.has(entity.id);
-                tint = isSelected ? [1.3, 1.3, 1.3, 1.0] : [1.0, 1.0, 1.0, 1.0];
+                tint = computeNeutralTint(isSelected);
             } else {
                 continue;
             }
@@ -658,20 +649,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /**
-     * Compute player tint color blended with white.
-     */
-    private computePlayerTint(playerColor: number[], isSelected: boolean): number[] {
-        if (isSelected) {
-            return SPRITE_TINT_SELECTED;
-        }
-
-        const r = 1.0 + (playerColor[0] - 1.0) * PLAYER_TINT_STRENGTH;
-        const g = 1.0 + (playerColor[1] - 1.0) * PLAYER_TINT_STRENGTH;
-        const b = 1.0 + (playerColor[2] - 1.0) * PLAYER_TINT_STRENGTH;
-        return [r, g, b, 1.0];
-    }
-
-    /**
      * Draw entities using the color shader (solid quads).
      */
     private drawColorEntities(
@@ -847,6 +824,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     ): void {
         if (!this.previewTile) return;
 
+        // Get world position of the anchor tile (where the building will be placed)
         const worldPos = TilePicker.tileToWorld(
             this.previewTile.x, this.previewTile.y,
             this.groundHeight, this.mapSize,
@@ -858,12 +836,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (this.previewBuildingType !== null && this.spriteManager?.hasSprites && sp) {
             const spriteEntry = this.spriteManager.getBuilding(this.previewBuildingType);
             if (spriteEntry) {
-                const tint = this.previewValid ? SPRITE_TINT_PREVIEW_VALID : SPRITE_TINT_PREVIEW_INVALID;
+                const tint = this.previewValid ? TINT_PREVIEW_VALID : TINT_PREVIEW_INVALID;
 
                 sp.use();
                 sp.setMatrix('projection', projection);
                 sp.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
 
+                // Draw sprite at anchor position with normal offset (matches placed buildings)
                 const offset = this.fillSpriteQuad(
                     0,
                     worldPos.worldX,

@@ -27,7 +27,7 @@ const emit = defineEmits<{
 
 const cav = useTemplateRef<HTMLCanvasElement>('cav');
 
-const { setRace, getRace } = useRenderer({
+const { setRace, getRace, getInputManager } = useRenderer({
     canvas: cav,
     getGame: () => props.game,
     getDebugGrid: () => props.debugGrid,
@@ -36,8 +36,8 @@ const { setRace, getRace } = useRenderer({
     onTileClick: (tile) => emit('tileClick', tile)
 });
 
-// Expose race switching for parent components
-defineExpose({ setRace, getRace, Race });
+// Expose race switching and input manager for parent components
+defineExpose({ setRace, getRace, getInputManager, Race });
 </script>
 
 <style scoped>
