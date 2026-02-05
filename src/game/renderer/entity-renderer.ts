@@ -2,7 +2,7 @@ import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
 import { ShaderProgram } from './shader-program';
-import { Entity, EntityType, UnitState, BuildingState, TileCoord, BuildingType, getBuildingFootprint } from '../entity';
+import { Entity, EntityType, UnitState, BuildingState, StackedResourceState, TileCoord, BuildingType, getBuildingFootprint } from '../entity';
 import { getBuildingVisualState } from '../systems/building-construction';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
@@ -11,6 +11,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
 import { SpriteEntry, Race } from './sprite-metadata';
 import { MapObjectType } from '../entity';
+import { EMaterialType } from '../economy/material-type';
 import { TerritoryBorderRenderer } from './territory-border-renderer';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { BuildingIndicatorRenderer } from './building-indicator-renderer';
@@ -58,6 +59,7 @@ const BASE_QUAD = new Float32Array([
 
 const BUILDING_SCALE = 0.5;
 const UNIT_SCALE = 0.3;
+const RESOURCE_SCALE = 0.25;
 const RING_SCALE_FACTOR = 1.4;
 const PATH_DOT_SCALE = 0.12;
 
@@ -99,6 +101,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // Building states for construction animation
     public buildingStates: Map<number, BuildingState> = new Map();
+
+    // Resource states for stacked resources (quantity tracking)
+    public resourceStates: Map<number, StackedResourceState> = new Map();
 
     // Building placement preview
     public previewTile: TileCoord | null = null;
@@ -431,6 +436,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
                 const isSelected = this.selectedEntityIds.has(entity.id);
                 tint = isSelected ? [1.3, 1.3, 1.3, 1.0] : [1.0, 1.0, 1.0, 1.0];
+            } else if (entity.type === EntityType.StackedResource) {
+                // Render stacked resources (dropped goods)
+                spriteEntry = this.spriteManager.getResource(entity.subType as EMaterialType);
+                const isSelected = this.selectedEntityIds.has(entity.id);
+                tint = isSelected ? [1.3, 1.3, 1.3, 1.0] : [1.0, 1.0, 1.0, 1.0];
             } else {
                 continue;
             }
@@ -679,10 +689,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 if (hasSprite) continue;
             }
 
+            // Skip textured stacked resources
+            if (texturedBuildingsHandled && entity.type === EntityType.StackedResource) {
+                const hasSprite = this.spriteManager?.getResource(entity.subType as EMaterialType);
+                if (hasSprite) continue;
+            }
+
             const isSelected = this.selectedEntityIds.has(entity.id);
             const playerColor = PLAYER_COLORS[entity.player % PLAYER_COLORS.length];
             const color = isSelected ? SELECTED_COLOR : playerColor;
-            const scale = entity.type === EntityType.Building ? BUILDING_SCALE : UNIT_SCALE;
+            let scale = UNIT_SCALE;
+            if (entity.type === EntityType.Building) {
+                scale = BUILDING_SCALE;
+            } else if (entity.type === EntityType.StackedResource) {
+                scale = RESOURCE_SCALE;
+            }
 
             let worldPos: { worldX: number; worldY: number };
             if (entity.type === EntityType.Unit) {
@@ -712,7 +733,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         for (const entity of this.entities) {
             if (!this.selectedEntityIds.has(entity.id)) continue;
 
-            const scale = entity.type === EntityType.Building ? BUILDING_SCALE : UNIT_SCALE;
+            let scale = UNIT_SCALE;
+            if (entity.type === EntityType.Building) {
+                scale = BUILDING_SCALE;
+            } else if (entity.type === EntityType.StackedResource) {
+                scale = RESOURCE_SCALE;
+            }
 
             let worldPos: { worldX: number; worldY: number };
             if (entity.type === EntityType.Unit) {

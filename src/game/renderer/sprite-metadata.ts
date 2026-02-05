@@ -202,6 +202,7 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
 /**
  * Mapping from EMaterialType to JIL job index in file 3.jil (resources).
  * These indices need to be verified by visually inspecting the GFX file.
+ * Resource sprites use the JIL job system like buildings.
  */
 export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
     // Job 0: Placeholder
@@ -211,11 +212,62 @@ export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
     [EMaterialType.AXE]: 4,
     [EMaterialType.BATTLE_AXE]: 5,    // Heavy battle axes
     [EMaterialType.PLANK]: 7,
+    [EMaterialType.STONE]: 8,         // Stone blocks
+    [EMaterialType.COAL]: 9,          // Coal lumps
+    [EMaterialType.GOLDORE]: 10,      // Gold ore
+    [EMaterialType.IRON]: 11,         // Iron bars
+    [EMaterialType.GOLD]: 12,         // Gold bars
+    [EMaterialType.SWORD]: 13,        // Swords
+    [EMaterialType.BOW]: 14,          // Bows
+    [EMaterialType.SPEAR]: 15,        // Spears
     [EMaterialType.CROP]: 16,         // Wheat
+    [EMaterialType.FLOUR]: 17,        // Flour sacks
+    [EMaterialType.BREAD]: 18,        // Bread
+    [EMaterialType.MEAT]: 19,         // Meat
+    [EMaterialType.FISH]: 20,         // Fish
+    [EMaterialType.WINE]: 21,         // Wine barrels
     [EMaterialType.TRUNK]: 22,        // Logs
-
-    // TODO: Need to identify remaining indices from visual inspection
+    [EMaterialType.PICK]: 23,         // Pickaxes
+    [EMaterialType.SAW]: 24,          // Saws
+    [EMaterialType.HAMMER]: 25,       // Hammers
+    [EMaterialType.SCYTHE]: 26,       // Scythes
+    [EMaterialType.FISHINGROD]: 27,   // Fishing rods
+    [EMaterialType.WATER]: 28,        // Water buckets
+    [EMaterialType.PIG]: 29,          // Pigs (may not have sprite)
+    [EMaterialType.GRAPES]: 30,       // Grapes
+    [EMaterialType.SULFUR]: 31,       // Sulfur
+    [EMaterialType.GEMS]: 32,         // Gems
+    [EMaterialType.BLADE]: 33,        // Blades
 };
+
+/**
+ * Sprite information for a resource type (dropped goods).
+ */
+export interface ResourceSpriteInfo {
+    /** GFX file number (always file 3 for resources) */
+    file: number;
+    /** JIL job index within the GFX file */
+    index: number;
+}
+
+/**
+ * Get the resource sprite map.
+ * Resources use JIL job indices from file 3.gfx.
+ */
+export function getResourceSpriteMap(): Partial<Record<EMaterialType, ResourceSpriteInfo>> {
+    const result: Partial<Record<EMaterialType, ResourceSpriteInfo>> = {};
+
+    for (const [typeStr, jobIndex] of Object.entries(RESOURCE_JOB_INDICES)) {
+        if (jobIndex !== undefined) {
+            result[Number(typeStr) as EMaterialType] = {
+                file: GFX_FILE_NUMBERS.RESOURCES,
+                index: jobIndex,
+            };
+        }
+    }
+
+    return result;
+}
 
 /**
  * Get the building sprite map for a specific race.
@@ -327,6 +379,7 @@ export class SpriteMetadataRegistry {
     private animatedBuildings: Map<BuildingType, AnimatedSpriteEntry> = new Map();
     /** Animated map objects (trees swaying, etc.) */
     private animatedMapObjects: Map<MapObjectType, AnimatedSpriteEntry> = new Map();
+    private resources: Map<EMaterialType, SpriteEntry> = new Map();
 
     /**
      * Register sprite entries for a building type (both construction and completed).
@@ -374,6 +427,21 @@ export class SpriteMetadataRegistry {
     }
 
     /**
+     * Register a sprite entry for a resource/material type.
+     */
+    public registerResource(type: EMaterialType, entry: SpriteEntry): void {
+        this.resources.set(type, entry);
+    }
+
+    /**
+     * Look up the sprite entry for a resource/material type.
+     * Returns null if no sprite is registered for this type.
+     */
+    public getResource(type: EMaterialType): SpriteEntry | null {
+        return this.resources.get(type) ?? null;
+    }
+
+    /**
      * Check if any building sprites have been registered.
      */
     public hasBuildingSprites(): boolean {
@@ -385,6 +453,13 @@ export class SpriteMetadataRegistry {
      */
     public hasMapObjectSprites(): boolean {
         return this.mapObjects.size > 0;
+    }
+
+    /**
+     * Check if any resource sprites have been registered.
+     */
+    public hasResourceSprites(): boolean {
+        return this.resources.size > 0;
     }
 
     /**
@@ -503,6 +578,13 @@ export class SpriteMetadataRegistry {
     }
 
     /**
+     * Get the number of registered resource sprites.
+     */
+    public getResourceCount(): number {
+        return this.resources.size;
+    }
+
+    /**
      * Clear all registered sprites.
      */
     public clear(): void {
@@ -510,5 +592,6 @@ export class SpriteMetadataRegistry {
         this.mapObjects.clear();
         this.animatedBuildings.clear();
         this.animatedMapObjects.clear();
+        this.resources.clear();
     }
 }
