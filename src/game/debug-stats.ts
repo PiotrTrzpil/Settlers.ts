@@ -30,6 +30,7 @@ export interface DebugStatsState {
     cameraY: number;
     zoom: number;
     zoomSpeed: number;
+    panSpeed: number;
     canvasWidth: number;
     canvasHeight: number;
 
@@ -79,6 +80,7 @@ class DebugStats {
             cameraY: 0,
             zoom: 0,
             zoomSpeed: 0.05,
+            panSpeed: 40,
             canvasWidth: 0,
             canvasHeight: 0,
             tileX: 0,

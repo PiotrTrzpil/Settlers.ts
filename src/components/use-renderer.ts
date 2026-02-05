@@ -77,7 +77,7 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         (window as any).__settlers_landscape__ = landscapeRenderer;
 
         const r = renderer;
-        game.gameLoop.setRenderCallback(() => {
+        game.gameLoop.setRenderCallback((alpha: number, deltaSec: number) => {
             const g = getGame();
             if (entityRenderer && g) {
                 entityRenderer.entities = g.state.entities;
@@ -86,6 +86,7 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
                 entityRenderer.unitStates = g.state.unitStates;
                 entityRenderer.territoryMap = getShowTerritoryBorders() ? g.territory : null;
                 entityRenderer.territoryVersion = g.territoryVersion;
+                entityRenderer.renderAlpha = alpha;
             }
             if (landscapeRenderer) {
                 landscapeRenderer.debugGrid = getDebugGrid();
@@ -97,11 +98,12 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
             debugStats.state.cameraX = Math.round(r.viewPoint.x * 10) / 10;
             debugStats.state.cameraY = Math.round(r.viewPoint.y * 10) / 10;
             debugStats.state.zoom = Math.round(r.viewPoint.zoomValue * 100) / 100;
-            // Sync zoom speed from debug panel (source of truth) to viewPoint
+            // Sync zoom/pan speed from debug panel (source of truth) to viewPoint
             r.viewPoint.zoomSpeed = debugStats.state.zoomSpeed;
+            r.viewPoint.panSpeed = debugStats.state.panSpeed;
             debugStats.state.canvasWidth = r.canvas.width;
             debugStats.state.canvasHeight = r.canvas.height;
-            r.viewPoint.update(1 / 30);
+            r.viewPoint.update(deltaSec);
             r.drawOnce();
         });
         game.start();

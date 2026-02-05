@@ -24,7 +24,7 @@ export class GameLoop {
     private groundHeight: Uint8Array | undefined;
     private mapWidth: number | undefined;
     private mapHeight: number | undefined;
-    private onRender: (() => void) | null = null;
+    private onRender: ((alpha: number, deltaSec: number) => void) | null = null;
 
     constructor(gameState: GameState) {
         this.gameState = gameState;
@@ -38,8 +38,8 @@ export class GameLoop {
         this.mapHeight = mapHeight;
     }
 
-    /** Set the render callback, called every animation frame */
-    public setRenderCallback(callback: () => void): void {
+    /** Set the render callback, called every animation frame with interpolation alpha and delta time */
+    public setRenderCallback(callback: (alpha: number, deltaSec: number) => void): void {
         this.onRender = callback;
     }
 
@@ -78,9 +78,10 @@ export class GameLoop {
                 this.accumulator -= TICK_DURATION;
             }
 
-            // Render
+            // Render with interpolation alpha for smooth sub-tick visuals
             if (this.onRender) {
-                this.onRender();
+                const alpha = this.accumulator / TICK_DURATION;
+                this.onRender(alpha, deltaSec);
             }
         } catch (e) {
             GameLoop.log.error('Error in game frame', e instanceof Error ? e : new Error(String(e)));

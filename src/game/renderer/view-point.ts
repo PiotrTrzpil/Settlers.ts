@@ -18,7 +18,7 @@ export class ViewPoint implements IViewPoint {
     private mouseIsMoving = false;
     private canvas: HTMLCanvasElement;
     private keysDown = new Set<string>();
-    private readonly PAN_SPEED = 8;
+    public panSpeed = 40;
 
     /** callback on mouse move */
     public onMove: (() => void) | null = null;
@@ -98,10 +98,18 @@ export class ViewPoint implements IViewPoint {
             return;
         }
 
-        const dX = (e.offsetX - this.downX) * this.zoomValue * 0.03;
-        const dY = (e.offsetY - this.downY) * this.zoomValue * 0.03;
-        this.deltaX = -(dX + dY / 2);
-        this.deltaY = -dY;
+        // Scale factor converts pixel movement to viewPoint units
+        // Derived from the isometric projection to keep tiles "sticky" under cursor
+        const height = this.canvas.clientHeight;
+        const scale = 20 * this.zoomValue / height;
+
+        const dpx = e.offsetX - this.downX;
+        const dpy = e.offsetY - this.downY;
+
+        // For isometric projection: moving vertically in screen space
+        // moves both viewPointX and viewPointY
+        this.deltaX = -scale * (dpx + dpy);
+        this.deltaY = -scale * 2 * dpy;
 
         if (this.onMove) {
             this.onMove();
@@ -141,7 +149,7 @@ export class ViewPoint implements IViewPoint {
     public update(dt: number): void {
         if (this.keysDown.size === 0) return;
 
-        const speed = this.PAN_SPEED * this.zoomValue * dt;
+        const speed = this.panSpeed * this.zoomValue * dt;
         let dx = 0;
         let dy = 0;
 

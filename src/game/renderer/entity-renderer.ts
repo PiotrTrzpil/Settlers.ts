@@ -107,6 +107,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private lastTerritoryVersion = -1;
     public territoryVersion = 0;
 
+    // Render interpolation alpha for smooth sub-tick movement (0-1)
+    public renderAlpha = 0;
+
     // Cached attribute/uniform locations for color shader
     private aPosition = -1;
     private aEntityPos = -1;
@@ -726,7 +729,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         );
 
         // Lerp between previous and current position using moveProgress
-        const t = Math.min(unitState.moveProgress, 1);
+        // Add sub-tick interpolation using renderAlpha to smooth movement between ticks
+        // Estimate expected progress by end of current tick: speed * (1/30) per tick
+        const tickProgress = unitState.speed * (1 / 30);
+        const t = Math.min(unitState.moveProgress + this.renderAlpha * tickProgress, 1);
         return {
             worldX: prevPos.worldX + (currPos.worldX - prevPos.worldX) * t,
             worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t

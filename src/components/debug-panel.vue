@@ -88,6 +88,15 @@
             </span>
           </div>
           <div class="stat-row">
+            <span class="stat-label">Pan speed</span>
+            <span class="stat-value slider-value">
+              <input type="range" min="5" max="100" step="5"
+                :value="stats.panSpeed"
+                @input="stats.panSpeed = parseFloat(($event.target as HTMLInputElement).value)" />
+              {{ stats.panSpeed }}
+            </span>
+          </div>
+          <div class="stat-row">
             <span class="stat-label">Canvas</span>
             <span class="stat-value">{{ stats.canvasWidth }} x {{ stats.canvasHeight }}</span>
           </div>
