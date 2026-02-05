@@ -35,13 +35,6 @@ function getPhaseStartTime(phase: BuildingConstructionPhase): number {
 }
 
 /**
- * Get the end time (as fraction) for a given phase.
- */
-function getPhaseEndTime(phase: BuildingConstructionPhase): number {
-    return getPhaseStartTime(phase) + PHASE_DURATIONS[phase];
-}
-
-/**
  * Determine which phase we should be in based on elapsed time.
  */
 function determinePhase(elapsedFraction: number): BuildingConstructionPhase {

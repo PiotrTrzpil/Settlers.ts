@@ -3,7 +3,7 @@
  * Handles ground type and height modifications during construction.
  */
 
-import { CARDINAL_OFFSETS, tileKey, BuildingState, BuildingConstructionPhase, ConstructionSiteOriginalTerrain } from '../entity';
+import { CARDINAL_OFFSETS, tileKey, BuildingState, ConstructionSiteOriginalTerrain } from '../entity';
 import { MapSize } from '@/utilities/map-size';
 import { LandscapeType } from '../renderer/landscape/landscape-type';
 
@@ -115,16 +115,6 @@ export function applyTerrainLeveling(
     }
 
     return modified;
-}
-
-/**
- * Checks if terrain modifications should be applied for a building.
- * Returns true if the building is in TerrainLeveling phase and hasn't finished leveling.
- */
-export function shouldApplyTerrainLeveling(buildingState: BuildingState): boolean {
-    return buildingState.phase === BuildingConstructionPhase.TerrainLeveling ||
-           (buildingState.phase > BuildingConstructionPhase.TerrainLeveling &&
-            !buildingState.terrainModified);
 }
 
 /**
