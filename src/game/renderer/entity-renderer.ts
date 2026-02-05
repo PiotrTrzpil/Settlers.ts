@@ -2,7 +2,7 @@ import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
 import { ShaderProgram } from './shader-program';
-import { Entity, EntityType, UnitState, TileCoord, BuildingType } from '../entity';
+import { Entity, EntityType, UnitState, TileCoord, BuildingType, getBuildingFootprint } from '../entity';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { TerritoryMap } from '../systems/territory';
@@ -261,11 +261,23 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.buildingIndicatorRenderer.player = this.buildingIndicatorsPlayer;
         this.buildingIndicatorRenderer.hasBuildings = this.buildingIndicatorsHasBuildings;
         this.buildingIndicatorRenderer.territory = this.territoryMap;
-        this.buildingIndicatorRenderer.tileOccupancy = this.entities.reduce((map, e) => {
-            const key = `${e.x},${e.y}`;
-            map.set(key, e.id);
-            return map;
-        }, new Map<string, number>());
+        this.buildingIndicatorRenderer.buildingType = this.previewBuildingType;
+
+        // Build tile occupancy map including full building footprints
+        const occupancy = new Map<string, number>();
+        for (const e of this.entities) {
+            if (e.type === EntityType.Building) {
+                // Add all tiles in building footprint
+                const footprint = getBuildingFootprint(e.x, e.y, e.subType as BuildingType);
+                for (const tile of footprint) {
+                    occupancy.set(`${tile.x},${tile.y}`, e.id);
+                }
+            } else {
+                // Single tile for non-buildings
+                occupancy.set(`${e.x},${e.y}`, e.id);
+            }
+        }
+        this.buildingIndicatorRenderer.tileOccupancy = occupancy;
 
         // Draw the indicators
         this.buildingIndicatorRenderer.draw(gl, projection, viewPoint, this.territoryVersion);

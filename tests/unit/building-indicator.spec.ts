@@ -6,6 +6,7 @@ import {
 } from '@/game/renderer/building-indicator-renderer';
 import { MapSize } from '@/utilities/map-size';
 import { TerritoryMap } from '@/game/systems/territory';
+import { BuildingType } from '@/game/entity';
 
 describe('BuildingIndicatorRenderer', () => {
     let mapSize: MapSize;
@@ -24,6 +25,8 @@ describe('BuildingIndicatorRenderer', () => {
         groundHeight.fill(100);
 
         renderer = new BuildingIndicatorRenderer(mapSize, groundType, groundHeight);
+        // Set a default building type for tests (1x1 decoration for simplicity)
+        renderer.buildingType = BuildingType.Decoration;
     });
 
     describe('computePlacementStatus', () => {
@@ -56,24 +59,36 @@ describe('BuildingIndicatorRenderer', () => {
             expect(status).toBe(PlacementStatus.InvalidTerrain);
         });
 
-        it('should return Medium for slight slope (difference 1)', () => {
-            // Create a slight slope
-            groundHeight[mapSize.toIndex(5, 4)] = 101;
-            const status = renderer.computePlacementStatus(5, 5);
+        it('should return Medium for slight slope (difference 1) within footprint', () => {
+            // Use a 2x2 building (Lumberjack) to test slope within footprint
+            renderer.buildingType = BuildingType.Lumberjack;
+            // Create a slight slope within the 2x2 footprint at (4,4)
+            // Tiles: (4,4), (5,4), (4,5), (5,5)
+            groundHeight[mapSize.toIndex(4, 4)] = 100;
+            groundHeight[mapSize.toIndex(5, 4)] = 101; // +1 height diff
+            groundHeight[mapSize.toIndex(4, 5)] = 100;
+            groundHeight[mapSize.toIndex(5, 5)] = 100;
+            const status = renderer.computePlacementStatus(4, 4);
             expect(status).toBe(PlacementStatus.Medium);
         });
 
-        it('should return Difficult for moderate slope (difference 2)', () => {
-            // Create a moderate slope
-            groundHeight[mapSize.toIndex(5, 4)] = 102;
-            const status = renderer.computePlacementStatus(5, 5);
+        it('should return Difficult for moderate slope (difference 2) within footprint', () => {
+            renderer.buildingType = BuildingType.Lumberjack;
+            groundHeight[mapSize.toIndex(4, 4)] = 100;
+            groundHeight[mapSize.toIndex(5, 4)] = 102; // +2 height diff
+            groundHeight[mapSize.toIndex(4, 5)] = 100;
+            groundHeight[mapSize.toIndex(5, 5)] = 100;
+            const status = renderer.computePlacementStatus(4, 4);
             expect(status).toBe(PlacementStatus.Difficult);
         });
 
-        it('should return TooSteep for steep slope (difference > 2)', () => {
-            // Create a steep slope
-            groundHeight[mapSize.toIndex(5, 4)] = 103;
-            const status = renderer.computePlacementStatus(5, 5);
+        it('should return TooSteep for steep slope (difference > 2) within footprint', () => {
+            renderer.buildingType = BuildingType.Lumberjack;
+            groundHeight[mapSize.toIndex(4, 4)] = 100;
+            groundHeight[mapSize.toIndex(5, 4)] = 103; // +3 height diff
+            groundHeight[mapSize.toIndex(4, 5)] = 100;
+            groundHeight[mapSize.toIndex(5, 5)] = 100;
+            const status = renderer.computePlacementStatus(4, 4);
             expect(status).toBe(PlacementStatus.TooSteep);
         });
 
