@@ -276,14 +276,28 @@ export enum BuildingConstructionPhase {
 }
 
 /**
+ * A single tile captured before construction site modification.
+ * Stores all original state needed for restoration.
+ */
+export interface CapturedTerrainTile {
+    x: number;
+    y: number;
+    /** Original ground type (landscape type) before construction */
+    originalGroundType: number;
+    /** Original ground height before leveling */
+    originalGroundHeight: number;
+    /** True if this tile is part of the building footprint (gets ground type changed).
+     *  False if it's a neighbor tile (only height is leveled for smooth transitions). */
+    isFootprint: boolean;
+}
+
+/**
  * Stores original terrain state before construction site modification.
  * Used to restore terrain if building is cancelled.
  */
 export interface ConstructionSiteOriginalTerrain {
-    /** Original ground types for the building tile and neighbors */
-    groundTypes: Map<string, number>;
-    /** Original ground heights for the building tile and neighbors */
-    groundHeights: Map<string, number>;
+    /** All captured tiles (footprint + surrounding neighbors) */
+    tiles: CapturedTerrainTile[];
     /** Target (leveled) height for the construction site */
     targetHeight: number;
 }

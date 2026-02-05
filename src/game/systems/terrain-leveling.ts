@@ -7,7 +7,13 @@
  * of the footprint are also captured so their heights can be smoothly leveled.
  */
 
-import { CARDINAL_OFFSETS, tileKey, BuildingState, ConstructionSiteOriginalTerrain, getBuildingFootprint } from '../entity';
+import {
+    CARDINAL_OFFSETS,
+    BuildingState,
+    ConstructionSiteOriginalTerrain,
+    CapturedTerrainTile,
+    getBuildingFootprint,
+} from '../entity';
 import { MapSize } from '@/utilities/map-size';
 import { LandscapeType } from '../renderer/landscape/landscape-type';
 
@@ -18,7 +24,8 @@ export const CONSTRUCTION_SITE_GROUND_TYPE = LandscapeType.DustyWay;
  * Captures the original terrain state before construction begins.
  * Call this when entering the TerrainLeveling phase.
  *
- * Captures all tiles in the building footprint plus their cardinal neighbors.
+ * Captures all tiles in the building footprint (marked isFootprint=true)
+ * plus their cardinal neighbors (isFootprint=false) for smooth height transitions.
  * The target height is the average height across all captured tiles.
  */
 export function captureOriginalTerrain(
@@ -27,8 +34,10 @@ export function captureOriginalTerrain(
     groundHeight: Uint8Array,
     mapSize: MapSize
 ): ConstructionSiteOriginalTerrain {
-    const groundTypes = new Map<string, number>();
-    const groundHeights = new Map<string, number>();
+    const tiles: CapturedTerrainTile[] = [];
+
+    // Track which tiles we've already captured (by map index) to avoid duplicates
+    const captured = new Set<number>();
 
     // Get all tiles in the building footprint
     const footprint = getBuildingFootprint(buildingState.tileX, buildingState.tileY, buildingState.buildingType);
@@ -39,44 +48,46 @@ export function captureOriginalTerrain(
             continue;
         }
         const idx = mapSize.toIndex(tile.x, tile.y);
-        const key = tileKey(tile.x, tile.y);
-        groundTypes.set(key, groundType[idx]);
-        groundHeights.set(key, groundHeight[idx]);
+        captured.add(idx);
+        tiles.push({
+            x: tile.x,
+            y: tile.y,
+            originalGroundType: groundType[idx],
+            originalGroundHeight: groundHeight[idx],
+            isFootprint: true,
+        });
     }
 
-    // Capture cardinal neighbors of the footprint for smooth height transitions.
-    // Only add tiles that aren't already part of the footprint.
+    // Capture cardinal neighbors of the footprint for smooth height transitions
     for (const tile of footprint) {
         for (const [dx, dy] of CARDINAL_OFFSETS) {
             const nx = tile.x + dx;
             const ny = tile.y + dy;
-            const nKey = tileKey(nx, ny);
-
-            // Skip if already captured (footprint tile or neighbor of another footprint tile)
-            if (groundHeights.has(nKey)) continue;
-
             if (nx < 0 || nx >= mapSize.width || ny < 0 || ny >= mapSize.height) {
                 continue;
             }
-
             const nIdx = mapSize.toIndex(nx, ny);
-            groundTypes.set(nKey, groundType[nIdx]);
-            groundHeights.set(nKey, groundHeight[nIdx]);
+            if (captured.has(nIdx)) continue;
+            captured.add(nIdx);
+
+            tiles.push({
+                x: nx,
+                y: ny,
+                originalGroundType: groundType[nIdx],
+                originalGroundHeight: groundHeight[nIdx],
+                isFootprint: false,
+            });
         }
     }
 
     // Target height is the average of all captured tiles (footprint + neighbors)
     let totalHeight = 0;
-    for (const h of groundHeights.values()) {
-        totalHeight += h;
+    for (const tile of tiles) {
+        totalHeight += tile.originalGroundHeight;
     }
-    const targetHeight = Math.round(totalHeight / groundHeights.size);
+    const targetHeight = Math.round(totalHeight / tiles.length);
 
-    return {
-        groundTypes,
-        groundHeights,
-        targetHeight,
-    };
+    return { tiles, targetHeight };
 }
 
 /**
@@ -84,7 +95,7 @@ export function captureOriginalTerrain(
  * Called during the TerrainLeveling phase to gradually modify terrain.
  *
  * Heights are interpolated toward the target for all captured tiles.
- * Ground type is changed to construction site material for all footprint tiles.
+ * Ground type is changed to construction site material for footprint tiles only.
  *
  * @param buildingState The building state being constructed
  * @param groundType Ground type array to modify
@@ -105,28 +116,12 @@ export function applyTerrainLeveling(
 
     let modified = false;
 
-    // Build a set of footprint tile keys for O(1) lookup
-    const footprint = getBuildingFootprint(buildingState.tileX, buildingState.tileY, buildingState.buildingType);
-    const footprintKeys = new Set<string>();
-    for (const tile of footprint) {
-        footprintKeys.add(tileKey(tile.x, tile.y));
-    }
-
-    // Iterate over all captured tiles (footprint + neighbors)
-    for (const [key, originalHeight] of original.groundHeights) {
-        const [xStr, yStr] = key.split(',');
-        const x = parseInt(xStr);
-        const y = parseInt(yStr);
-
-        if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) {
-            continue;
-        }
-
-        const idx = mapSize.toIndex(x, y);
+    for (const tile of original.tiles) {
+        const idx = mapSize.toIndex(tile.x, tile.y);
 
         // Interpolate height from original toward target
         const newHeight = Math.round(
-            originalHeight + (original.targetHeight - originalHeight) * levelingProgress
+            tile.originalGroundHeight + (original.targetHeight - tile.originalGroundHeight) * levelingProgress
         );
 
         if (groundHeight[idx] !== newHeight) {
@@ -134,8 +129,8 @@ export function applyTerrainLeveling(
             modified = true;
         }
 
-        // Change ground type to construction site material for all footprint tiles
-        if (footprintKeys.has(key) && levelingProgress > 0) {
+        // Change ground type to construction site material for footprint tiles
+        if (tile.isFootprint && levelingProgress > 0) {
             if (groundType[idx] !== CONSTRUCTION_SITE_GROUND_TYPE) {
                 groundType[idx] = CONSTRUCTION_SITE_GROUND_TYPE;
                 modified = true;
@@ -161,27 +156,16 @@ export function restoreOriginalTerrain(
 
     let modified = false;
 
-    for (const [key, originalType] of original.groundTypes) {
-        const [xStr, yStr] = key.split(',');
-        const x = parseInt(xStr);
-        const y = parseInt(yStr);
+    for (const tile of original.tiles) {
+        const idx = mapSize.toIndex(tile.x, tile.y);
 
-        if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) {
-            continue;
-        }
-
-        const idx = mapSize.toIndex(x, y);
-
-        // Restore original ground type
-        if (groundType[idx] !== originalType) {
-            groundType[idx] = originalType;
+        if (groundType[idx] !== tile.originalGroundType) {
+            groundType[idx] = tile.originalGroundType;
             modified = true;
         }
 
-        // Restore original height
-        const originalHeight = original.groundHeights.get(key);
-        if (originalHeight !== undefined && groundHeight[idx] !== originalHeight) {
-            groundHeight[idx] = originalHeight;
+        if (groundHeight[idx] !== tile.originalGroundHeight) {
+            groundHeight[idx] = tile.originalGroundHeight;
             modified = true;
         }
     }

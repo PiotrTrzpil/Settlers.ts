@@ -10,6 +10,7 @@ import { TextureMap16Bit } from '../texture-map-16bit';
 import { GhFileReader } from '@/resources/gfx/gh-file-reader';
 import { GfxImage16Bit } from '@/resources/gfx/gfx-image-16bit';
 import { ImageType } from '@/resources/gfx/image-type';
+import { TILE_HEIGHT_SCALE } from '@/game/systems/coordinate-system';
 import vertCode from './shaders/landscape-vert.glsl';
 import fragCode from './shaders/landscape-frag.glsl';
 
@@ -67,13 +68,13 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         this.texture = new TextureMap16Bit(256 * 6, TEXTURE_UNIT_LANDSCAPE);
 
         // Compute extra Y rows needed for max terrain height displacement.
-        // Shader: mapHeight = texel.r * 20.0; screen offset = mapHeight * 0.5.
+        // Shader: mapHeight = texel.r * TILE_HEIGHT_SCALE; screen offset = mapHeight * 0.5.
         // Each tile row covers ~0.5 screen units, so extra rows = ceil(maxHeight).
         let maxH = 0;
         for (let i = 0; i < groundHeightMap.length; i++) {
             if (groundHeightMap[i] > maxH) maxH = groundHeightMap[i];
         }
-        this.heightMarginY = Math.ceil(maxH / 255 * 20);
+        this.heightMarginY = Math.ceil(maxH / 255 * TILE_HEIGHT_SCALE);
 
         Object.seal(this);
     }
