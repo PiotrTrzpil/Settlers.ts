@@ -10,9 +10,12 @@ import {
     GFX_FILE_NUMBERS,
     getMapObjectSpriteMap,
     BUILDING_DIRECTION,
+    AnimatedSpriteEntry,
 } from './sprite-metadata';
 import { SpriteLoader, LoadedGfxFileSet } from './sprite-loader';
 import { BuildingType, MapObjectType } from '../entity';
+import { ANIMATION_DEFAULTS, AnimationData } from '../animation';
+import { AnimationDataProvider } from '../systems/animation';
 
 /**
  * Manages sprite loading, atlas packing, and race switching for entity rendering.
@@ -127,6 +130,63 @@ export class SpriteRenderManager {
     }
 
     /**
+     * Get animated building data (if available).
+     */
+    public getAnimatedBuilding(type: BuildingType): AnimatedSpriteEntry | null {
+        return this._spriteRegistry?.getAnimatedBuilding(type) ?? null;
+    }
+
+    /**
+     * Check if a building has animation frames.
+     */
+    public hasBuildingAnimation(type: BuildingType): boolean {
+        return this._spriteRegistry?.hasBuildingAnimation(type) ?? false;
+    }
+
+    /**
+     * Get animated map object data (if available).
+     */
+    public getAnimatedMapObject(type: MapObjectType): AnimatedSpriteEntry | null {
+        return this._spriteRegistry?.getAnimatedMapObject(type) ?? null;
+    }
+
+    /**
+     * Check if a map object has animation frames.
+     */
+    public hasMapObjectAnimation(type: MapObjectType): boolean {
+        return this._spriteRegistry?.hasMapObjectAnimation(type) ?? false;
+    }
+
+    /**
+     * Get animation data for a building type.
+     */
+    public getBuildingAnimationData(type: BuildingType): AnimationData | null {
+        const entry = this._spriteRegistry?.getAnimatedBuilding(type);
+        return entry?.animationData ?? null;
+    }
+
+    /**
+     * Get animation data for a map object type.
+     */
+    public getMapObjectAnimationData(type: MapObjectType): AnimationData | null {
+        const entry = this._spriteRegistry?.getAnimatedMapObject(type);
+        return entry?.animationData ?? null;
+    }
+
+    /**
+     * Returns this manager as an AnimationDataProvider.
+     * Allows the animation system to query animation data without direct coupling.
+     */
+    public asAnimationProvider(): AnimationDataProvider {
+        return {
+            getBuildingAnimationData: (type: BuildingType) => this.getBuildingAnimationData(type),
+            getMapObjectAnimationData: (type: MapObjectType) => this.getMapObjectAnimationData(type),
+            hasBuildingAnimation: (type: BuildingType) => this.hasBuildingAnimation(type),
+            hasMapObjectAnimation: (type: MapObjectType) => this.hasMapObjectAnimation(type),
+        };
+    }
+
+    /**
      * Clean up GPU resources. Call when switching races or destroying.
      */
     public cleanup(): void {
@@ -223,19 +283,55 @@ export class SpriteRenderManager {
                 const buildingType = Number(typeStr) as BuildingType;
                 const jobIndex = info.index;
 
-                // Load construction sprite (D0)
+                // Load construction sprite (D0) - single frame
                 const constructionSprite = this.spriteLoader.loadJobSprite(
                     fileSet,
                     { jobIndex, directionIndex: BUILDING_DIRECTION.CONSTRUCTION },
                     atlas
                 );
 
-                // Load completed sprite (D1)
-                const completedSprite = this.spriteLoader.loadJobSprite(
+                // Check if completed state has multiple frames (animation)
+                const completedFrameCount = this.spriteLoader.getFrameCount(
                     fileSet,
-                    { jobIndex, directionIndex: BUILDING_DIRECTION.COMPLETED },
-                    atlas
+                    jobIndex,
+                    BUILDING_DIRECTION.COMPLETED
                 );
+
+                let completedSprite = null;
+
+                if (completedFrameCount > 1) {
+                    // Load as animation
+                    const animation = this.spriteLoader.loadJobAnimation(
+                        fileSet,
+                        jobIndex,
+                        BUILDING_DIRECTION.COMPLETED,
+                        atlas
+                    );
+
+                    if (animation && animation.frames.length > 0) {
+                        // Register animated building
+                        const frames = animation.frames.map(f => f.entry);
+                        registry.registerAnimatedBuilding(
+                            buildingType,
+                            frames,
+                            BUILDING_DIRECTION.COMPLETED,
+                            ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                            true // loop
+                        );
+                        completedSprite = animation.frames[0];
+
+                        SpriteRenderManager.log.debug(
+                            `Loaded ${animation.frameCount} animation frames for building ${BuildingType[buildingType]}`
+                        );
+                    }
+                } else {
+                    // Load single frame
+                    completedSprite = this.spriteLoader.loadJobSprite(
+                        fileSet,
+                        { jobIndex, directionIndex: BUILDING_DIRECTION.COMPLETED },
+                        atlas
+                    );
+                }
 
                 if (!constructionSprite && !completedSprite) {
                     SpriteRenderManager.log.debug(

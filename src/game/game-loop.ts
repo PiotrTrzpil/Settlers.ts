@@ -1,6 +1,7 @@
 import { GameState } from './game-state';
 import { updateMovement } from './systems/movement';
 import { updateBuildingConstruction, TerrainContext } from './systems/building-construction';
+import { updateAnimations, AnimationDataProvider } from './systems/animation';
 import { LogHandler } from '@/utilities/log-handler';
 import { debugStats } from './debug-stats';
 import { MapSize } from '@/utilities/map-size';
@@ -29,6 +30,7 @@ export class GameLoop {
     private mapSize: MapSize | undefined;
     private onRender: ((alpha: number, deltaSec: number) => void) | null = null;
     private onTerrainModified: (() => void) | null = null;
+    private animationProvider: AnimationDataProvider | null = null;
 
     constructor(gameState: GameState) {
         this.gameState = gameState;
@@ -51,6 +53,11 @@ export class GameLoop {
     /** Set callback for when terrain is modified (e.g., during building construction) */
     public setTerrainModifiedCallback(callback: () => void): void {
         this.onTerrainModified = callback;
+    }
+
+    /** Set the animation data provider for updating entity animations */
+    public setAnimationProvider(provider: AnimationDataProvider | null): void {
+        this.animationProvider = provider;
     }
 
     public start(): void {
@@ -86,6 +93,12 @@ export class GameLoop {
             while (this.accumulator >= TICK_DURATION) {
                 this.tick(TICK_DURATION);
                 this.accumulator -= TICK_DURATION;
+            }
+
+            // Update animations (runs every frame for smooth animation)
+            if (this.animationProvider) {
+                const deltaMs = deltaSec * 1000;
+                updateAnimations(this.gameState, deltaMs, this.animationProvider);
             }
 
             // Render with interpolation alpha for smooth sub-tick visuals

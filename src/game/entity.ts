@@ -241,6 +241,8 @@ export interface Entity {
     y: number;
     player: number;
     subType: number;
+    /** Optional animation state for animated entities */
+    animationState?: import('./animation').AnimationState;
 }
 
 export interface UnitState {

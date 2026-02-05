@@ -1,6 +1,7 @@
 import { BuildingType, MapObjectType } from '../entity';
 import { EMaterialType } from '../economy/material-type';
 import { AtlasRegion } from './entity-texture-atlas';
+import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS } from '../animation';
 
 /** Conversion factor from sprite pixels to world-space units */
 export const PIXELS_TO_WORLD = 1.0 / 64.0;
@@ -304,12 +305,28 @@ export interface BuildingSpriteEntries {
 }
 
 /**
+ * Animation entry containing sequence data for animated sprites.
+ */
+export interface AnimatedSpriteEntry {
+    /** Static sprite (first frame) for non-animated rendering */
+    staticSprite: SpriteEntry;
+    /** Full animation data with all frames */
+    animationData: AnimationData;
+    /** Whether this sprite has multiple frames */
+    isAnimated: boolean;
+}
+
+/**
  * Registry that maps game entity types to their sprite atlas entries.
  * Built during initialization after sprites are loaded and packed into the atlas.
  */
 export class SpriteMetadataRegistry {
     private buildings: Map<BuildingType, BuildingSpriteEntries> = new Map();
     private mapObjects: Map<MapObjectType, SpriteEntry> = new Map();
+    /** Animated building sprites (completed state only for now) */
+    private animatedBuildings: Map<BuildingType, AnimatedSpriteEntry> = new Map();
+    /** Animated map objects (trees swaying, etc.) */
+    private animatedMapObjects: Map<MapObjectType, AnimatedSpriteEntry> = new Map();
 
     /**
      * Register sprite entries for a building type (both construction and completed).
@@ -385,10 +402,113 @@ export class SpriteMetadataRegistry {
     }
 
     /**
+     * Register an animated building sprite (completed state with multiple frames).
+     */
+    public registerAnimatedBuilding(
+        type: BuildingType,
+        frames: SpriteEntry[],
+        direction: number = 1,
+        frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+        loop: boolean = true
+    ): void {
+        if (frames.length === 0) return;
+
+        const sequence: AnimationSequence = {
+            frames,
+            frameDurationMs,
+            loop,
+        };
+
+        const directionMap = new Map<number, AnimationSequence>();
+        directionMap.set(direction, sequence);
+
+        const sequences = new Map<string, Map<number, AnimationSequence>>();
+        sequences.set('default', directionMap);
+
+        const animationData: AnimationData = {
+            sequences,
+            defaultSequence: 'default',
+        };
+
+        this.animatedBuildings.set(type, {
+            staticSprite: frames[0],
+            animationData,
+            isAnimated: frames.length > 1,
+        });
+    }
+
+    /**
+     * Get animated building data.
+     */
+    public getAnimatedBuilding(type: BuildingType): AnimatedSpriteEntry | null {
+        return this.animatedBuildings.get(type) ?? null;
+    }
+
+    /**
+     * Check if a building has animation data.
+     */
+    public hasBuildingAnimation(type: BuildingType): boolean {
+        const entry = this.animatedBuildings.get(type);
+        return entry?.isAnimated ?? false;
+    }
+
+    /**
+     * Register an animated map object sprite.
+     */
+    public registerAnimatedMapObject(
+        type: MapObjectType,
+        frames: SpriteEntry[],
+        frameDurationMs: number = ANIMATION_DEFAULTS.SLOW_FRAME_DURATION_MS,
+        loop: boolean = true
+    ): void {
+        if (frames.length === 0) return;
+
+        const sequence: AnimationSequence = {
+            frames,
+            frameDurationMs,
+            loop,
+        };
+
+        const directionMap = new Map<number, AnimationSequence>();
+        directionMap.set(0, sequence);
+
+        const sequences = new Map<string, Map<number, AnimationSequence>>();
+        sequences.set('default', directionMap);
+
+        const animationData: AnimationData = {
+            sequences,
+            defaultSequence: 'default',
+        };
+
+        this.animatedMapObjects.set(type, {
+            staticSprite: frames[0],
+            animationData,
+            isAnimated: frames.length > 1,
+        });
+    }
+
+    /**
+     * Get animated map object data.
+     */
+    public getAnimatedMapObject(type: MapObjectType): AnimatedSpriteEntry | null {
+        return this.animatedMapObjects.get(type) ?? null;
+    }
+
+    /**
+     * Check if a map object has animation data.
+     */
+    public hasMapObjectAnimation(type: MapObjectType): boolean {
+        const entry = this.animatedMapObjects.get(type);
+        return entry?.isAnimated ?? false;
+    }
+
+    /**
      * Clear all registered sprites.
      */
     public clear(): void {
         this.buildings.clear();
         this.mapObjects.clear();
+        this.animatedBuildings.clear();
+        this.animatedMapObjects.clear();
     }
 }

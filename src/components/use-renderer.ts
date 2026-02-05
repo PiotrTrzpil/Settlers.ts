@@ -305,6 +305,11 @@ export function useRenderer({
 
         void renderer.init().then(() => {
             debugStats.state.rendererReady = true;
+            // Set up animation provider after sprites are loaded
+            const animProvider = entityRenderer?.getAnimationProvider();
+            if (animProvider && game) {
+                game.gameLoop.setAnimationProvider(animProvider);
+            }
         });
 
         debugStats.state.gameLoaded = true;

@@ -14,6 +14,8 @@ import { MapObjectType } from '../entity';
 import { TerritoryBorderRenderer } from './territory-border-renderer';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { BuildingIndicatorRenderer } from './building-indicator-renderer';
+import { getAnimatedSprite } from '../systems/animation';
+import { BuildingConstructionPhase } from '../entity';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -206,6 +208,14 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /**
+     * Get the animation data provider for use with the animation system.
+     * Returns null if sprite manager is not available.
+     */
+    public getAnimationProvider(): import('../systems/animation').AnimationDataProvider | null {
+        return this.spriteManager?.asAnimationProvider() ?? null;
+    }
+
+    /**
      * Clean up all GPU resources. Call when destroying the renderer.
      */
     public destroy(): void {
@@ -380,7 +390,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                         spriteEntry = this.spriteManager.getBuilding(entity.subType as BuildingType);
                     }
                 } else {
-                    spriteEntry = this.spriteManager.getBuilding(entity.subType as BuildingType);
+                    // For completed buildings, check for animation
+                    const buildingType = entity.subType as BuildingType;
+                    const animatedEntry = this.spriteManager.getAnimatedBuilding(buildingType);
+
+                    if (animatedEntry && entity.animationState) {
+                        // Use animated sprite based on current frame
+                        spriteEntry = getAnimatedSprite(
+                            entity.animationState,
+                            animatedEntry.animationData,
+                            animatedEntry.staticSprite
+                        );
+                    } else {
+                        // Use static sprite
+                        spriteEntry = this.spriteManager.getBuilding(buildingType);
+                    }
                 }
 
                 verticalProgress = visualState.verticalProgress;
@@ -390,7 +414,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     continue;
                 }
             } else if (entity.type === EntityType.MapObject) {
-                spriteEntry = this.spriteManager.getMapObject(entity.subType as MapObjectType);
+                const mapObjectType = entity.subType as MapObjectType;
+                const animatedEntry = this.spriteManager.getAnimatedMapObject(mapObjectType);
+
+                if (animatedEntry && entity.animationState) {
+                    // Use animated sprite based on current frame
+                    spriteEntry = getAnimatedSprite(
+                        entity.animationState,
+                        animatedEntry.animationData,
+                        animatedEntry.staticSprite
+                    );
+                } else {
+                    // Use static sprite
+                    spriteEntry = this.spriteManager.getMapObject(mapObjectType);
+                }
+
                 const isSelected = this.selectedEntityIds.has(entity.id);
                 tint = isSelected ? [1.3, 1.3, 1.3, 1.0] : [1.0, 1.0, 1.0, 1.0];
             } else {
