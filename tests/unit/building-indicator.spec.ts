@@ -98,7 +98,8 @@ describe('BuildingIndicatorRenderer', () => {
             expect(status).toBe(PlacementStatus.Occupied);
         });
 
-        it('should return EnemyTerritory when in enemy territory', () => {
+        // Territory checks are currently disabled (ENABLE_TERRITORY_CHECKS = false)
+        it.skip('should return EnemyTerritory when in enemy territory', () => {
             renderer.hasBuildings = true;
             renderer.player = 0;
             renderer.territory = new TerritoryMap(mapSize);

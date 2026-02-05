@@ -41,8 +41,9 @@ export interface DebugStatsState {
     tileGroundHeight: number;
     hasTile: boolean;
 
-    // Game mode (written externally)
+    // Game mode (written by InputManager onModeChange callback)
     mode: string;
+    placeBuildingType: number;
     selectedEntityId: number | null;
     selectedCount: number;
 
@@ -160,7 +161,8 @@ class DebugStats {
             tileGroundType: 0,
             tileGroundHeight: 0,
             hasTile: false,
-            mode: '',
+            mode: 'select',
+            placeBuildingType: 0,
             selectedEntityId: null,
             selectedCount: 0,
             riverSlotPermutation: savedSettings.riverSlotPermutation,
@@ -271,7 +273,8 @@ class DebugStats {
         this.state.unitsMoving = moving;
         this.state.totalPathSteps = pathSteps;
 
-        this.state.mode = game.mode;
+        // Note: mode and placeBuildingType are managed by InputManager onModeChange callback
+        // to ensure immediate updates without frame delay
         this.state.selectedEntityId = gameState.selectedEntityId;
         this.state.selectedCount = gameState.selectedEntityIds.size;
     }

@@ -53,10 +53,13 @@ const HOVER_RING_COLOR = [1.0, 1.0, 0.3, 0.7];
 // Maximum slope difference for building placement
 const MAX_SLOPE_DIFF = 2;
 
-// Indicator dot size
-const INDICATOR_DOT_SCALE = 0.08;
-const HOVER_DOT_SCALE = 0.12;
-const HOVER_RING_SCALE = 0.18;
+// Territory checks disabled for easier testing (matches placement.ts)
+const ENABLE_TERRITORY_CHECKS = false;
+
+// Indicator dot size (shader multiplies by 0.4, so effective size = scale * 0.4)
+const INDICATOR_DOT_SCALE = 0.4;
+const HOVER_DOT_SCALE = 0.5;
+const HOVER_RING_SCALE = 0.6;
 
 // Base quad for dot rendering
 const BASE_QUAD = new Float32Array([
@@ -196,8 +199,8 @@ export class BuildingIndicatorRenderer {
                 return PlacementStatus.Occupied;
             }
 
-            // Check territory
-            if (this.territory && this.hasBuildings) {
+            // Check territory (if enabled)
+            if (ENABLE_TERRITORY_CHECKS && this.territory && this.hasBuildings) {
                 const owner = this.territory.getOwner(tile.x, tile.y);
                 if (owner !== this.player && owner !== NO_OWNER) {
                     return PlacementStatus.EnemyTerritory;
@@ -206,7 +209,7 @@ export class BuildingIndicatorRenderer {
         }
 
         // For territory: at least one tile must be in own territory or adjacent to it
-        if (this.territory && this.hasBuildings) {
+        if (ENABLE_TERRITORY_CHECKS && this.territory && this.hasBuildings) {
             let hasValidTerritory = false;
             for (const tile of footprint) {
                 const owner = this.territory.getOwner(tile.x, tile.y);

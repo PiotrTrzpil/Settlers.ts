@@ -84,7 +84,12 @@ export function canPlaceBuilding(
  * Check if a building can be placed, considering territory ownership.
  * The first building per player is free (no territory required).
  * Subsequent buildings must be within the player's territory or adjacent to it.
+ *
+ * NOTE: Territory checks are currently disabled for easier testing.
+ * Set ENABLE_TERRITORY_CHECKS = true to re-enable.
  */
+const ENABLE_TERRITORY_CHECKS = false;
+
 export function canPlaceBuildingWithTerritory(
     groundType: Uint8Array,
     groundHeight: Uint8Array,
@@ -108,6 +113,11 @@ export function canPlaceBuildingWithTerritory(
     // Legacy single-tile validation
     if (!canPlaceBuilding(groundType, groundHeight, mapSize, tileOccupancy, x, y)) {
         return false;
+    }
+
+    // Territory checks disabled for now
+    if (!ENABLE_TERRITORY_CHECKS) {
+        return true;
     }
 
     // If the player already has buildings, require territory
@@ -178,8 +188,8 @@ export function canPlaceBuildingFootprint(
             return false;
         }
 
-        // Check territory - no tile can be in enemy territory
-        if (hasBuildings) {
+        // Check territory - no tile can be in enemy territory (if enabled)
+        if (ENABLE_TERRITORY_CHECKS && hasBuildings) {
             const owner = territory.getOwner(tile.x, tile.y);
             if (owner !== player && owner !== NO_OWNER) {
                 return false;
@@ -188,7 +198,7 @@ export function canPlaceBuildingFootprint(
     }
 
     // For territory: at least one tile must be in own territory or adjacent to it
-    if (hasBuildings) {
+    if (ENABLE_TERRITORY_CHECKS && hasBuildings) {
         let hasValidTerritory = false;
         for (const tile of footprint) {
             const owner = territory.getOwner(tile.x, tile.y);

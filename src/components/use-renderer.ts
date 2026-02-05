@@ -11,7 +11,7 @@ import { LandscapeRenderer } from '@/game/renderer/landscape/landscape-renderer'
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
-import { EntityType, getBuildingSize, type TileCoord } from '@/game/entity';
+import { EntityType, type TileCoord } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
 import { canPlaceBuildingWithTerritory } from '@/game/systems/placement';
 import { debugStats } from '@/game/debug-stats';
@@ -118,12 +118,19 @@ export function useRenderer({
             commandExecutor: executeCommand,
             initialMode: 'select',
             onModeChange: (oldMode, newMode, data) => {
+                // Update debugStats as the central source of truth for mode
+                debugStats.state.mode = newMode;
+                if (newMode === 'place_building' && data?.buildingType !== undefined) {
+                    debugStats.state.placeBuildingType = data.buildingType;
+                } else if (newMode !== 'place_building') {
+                    debugStats.state.placeBuildingType = 0;
+                }
+
+                // Also update game.mode for backward compatibility with renderer
                 const game = getGame();
                 if (game) {
                     game.mode = newMode as any;
-                    if (newMode === 'place_building' && data?.buildingType !== undefined) {
-                        game.placeBuildingType = data.buildingType;
-                    }
+                    game.placeBuildingType = debugStats.state.placeBuildingType;
                 }
             },
         });
@@ -194,83 +201,58 @@ export function useRenderer({
 
         inputManager.registerMode(selectMode);
 
-        // Create PlaceBuildingMode with validation
+        // Create PlaceBuildingMode - use built-in behavior with validator hook
+        // The mode handles placement logic correctly; we just need to provide validation
         const placeBuildingMode = new PlaceBuildingMode();
 
-        // Override pointer move for placement preview
+        // Store original onPointerMove to extend it (not replace)
+        const originalOnPointerMove = placeBuildingMode.onPointerMove.bind(placeBuildingMode);
+
+        // Extend onPointerMove to update debug stats and set validator
         placeBuildingMode.onPointerMove = (data, context) => {
-            if (data.tileX === undefined || data.tileY === undefined) return UNHANDLED;
+            // Update debug stats first
+            if (data.tileX !== undefined && data.tileY !== undefined) {
+                onTileClick({ x: data.tileX, y: data.tileY });
+                debugStats.state.hasTile = true;
+                debugStats.state.tileX = data.tileX;
+                debugStats.state.tileY = data.tileY;
 
-            const modeData = context.getModeData<PlaceBuildingModeData>();
-            if (!modeData) return UNHANDLED;
-
-            const game = getGame();
-            if (!game) return UNHANDLED;
-
-            // Update debug stats
-            onTileClick({ x: data.tileX, y: data.tileY });
-            debugStats.state.hasTile = true;
-            debugStats.state.tileX = data.tileX;
-            debugStats.state.tileY = data.tileY;
-            const idx = game.mapSize.toIndex(data.tileX, data.tileY);
-            debugStats.state.tileGroundType = game.groundType[idx];
-            debugStats.state.tileGroundHeight = game.groundHeight[idx];
-
-            // Calculate building anchor position
-            const size = getBuildingSize(modeData.buildingType);
-            const anchorX = Math.round(data.tileX - (size.width - 1) / 2);
-            const anchorY = Math.round(data.tileY - (size.height - 1) / 2);
-
-            // Clamp to map bounds
-            const clampedX = Math.max(0, Math.min(game.mapSize.width - size.width, anchorX));
-            const clampedY = Math.max(0, Math.min(game.mapSize.height - size.height, anchorY));
-
-            modeData.previewX = clampedX;
-            modeData.previewY = clampedY;
-
-            // Validate placement
-            const hasBuildings = game.state.entities.some(
-                ent => ent.type === EntityType.Building && ent.player === game.currentPlayer
-            );
-            modeData.previewValid = canPlaceBuildingWithTerritory(
-                game.groundType, game.groundHeight, game.mapSize,
-                game.state.tileOccupancy, game.territory,
-                clampedX, clampedY, game.currentPlayer, hasBuildings,
-                modeData.buildingType
-            );
-
-            context.setModeData(modeData);
-            return HANDLED;
-        };
-
-        // Override pointer up for building placement
-        placeBuildingMode.onPointerUp = (data, context) => {
-            const modeData = context.getModeData<PlaceBuildingModeData>();
-            if (!modeData) return UNHANDLED;
-
-            if (data.button === MouseButton.Left) {
-                if (modeData.previewValid) {
-                    const game = getGame();
-                    if (game) {
-                        game.execute({
-                            type: 'place_building',
-                            buildingType: modeData.buildingType,
-                            x: modeData.previewX,
-                            y: modeData.previewY,
-                            player: game.currentPlayer,
-                        });
-                    }
+                const game = getGame();
+                if (game) {
+                    const idx = game.mapSize.toIndex(data.tileX, data.tileY);
+                    debugStats.state.tileGroundType = game.groundType[idx];
+                    debugStats.state.tileGroundHeight = game.groundHeight[idx];
                 }
-                return HANDLED;
             }
 
-            if (data.button === MouseButton.Right) {
-                context.switchMode('select');
-                return HANDLED;
+            // Ensure validator is set (it checks placement with territory rules)
+            const modeData = context.getModeData<PlaceBuildingModeData>();
+            if (modeData && !modeData.validatePlacement) {
+                modeData.validatePlacement = (x, y, buildingType) => {
+                    const game = getGame();
+                    if (!game) return false;
+
+                    const hasBuildings = game.state.entities.some(
+                        ent => ent.type === EntityType.Building && ent.player === game.currentPlayer
+                    );
+
+                    return canPlaceBuildingWithTerritory(
+                        game.groundType, game.groundHeight, game.mapSize,
+                        game.state.tileOccupancy, game.territory,
+                        x, y, game.currentPlayer, hasBuildings, buildingType
+                    );
+                };
+                context.setModeData(modeData);
             }
 
-            return UNHANDLED;
+            // Call original handler (it does positioning, validation, and sets previewValid)
+            return originalOnPointerMove(data, context);
         };
+
+        // No need to override onPointerUp - the mode's built-in behavior:
+        // 1. Calls context.executeCommand() which routes to game.execute()
+        // 2. Calls context.switchMode('select') after successful placement
+        // 3. Handles right-click cancel
 
         inputManager.registerMode(placeBuildingMode);
         inputManager.attach();
@@ -322,6 +304,7 @@ export function useRenderer({
         // Expose for e2e tests
         (window as any).__settlers_viewpoint__ = renderer.viewPoint;
         (window as any).__settlers_landscape__ = landscapeRenderer;
+        (window as any).__settlers_entity_renderer__ = entityRenderer;
 
         // Set up terrain modification callback
         game.gameLoop.setTerrainModifiedCallback(() => {
@@ -348,8 +331,8 @@ export function useRenderer({
                 // Get render state from input manager
                 const renderState = inputManager?.getRenderState();
 
-                // Building placement indicators
-                const inPlacementMode = g.mode === 'place_building';
+                // Building placement indicators - read from debugStats (single source of truth)
+                const inPlacementMode = debugStats.state.mode === 'place_building';
                 entityRenderer.buildingIndicatorsEnabled = inPlacementMode;
 
                 if (inPlacementMode) {
@@ -359,11 +342,14 @@ export function useRenderer({
                     );
                     entityRenderer.territoryMap = g.territory;
 
-                    // Get building preview from render state
+                    // Always set building type from game state for indicators
+                    // This ensures indicators show immediately when entering placement mode
+                    entityRenderer.previewBuildingType = g.placeBuildingType;
+
+                    // Get building preview position from render state (mouse position)
                     const preview = renderState?.preview;
                     if (preview?.type === 'building') {
                         entityRenderer.previewTile = { x: preview.x, y: preview.y };
-                        entityRenderer.previewBuildingType = preview.buildingType;
                         entityRenderer.previewValid = preview.valid;
                     }
                 } else {

@@ -72,7 +72,7 @@ export class PlaceBuildingMode extends BaseInputMode {
         if (data.button === MouseButton.Left) {
             // Try to place building
             if (modeData.previewValid) {
-                context.executeCommand({
+                const success = context.executeCommand({
                     type: 'place_building',
                     buildingType: modeData.buildingType,
                     x: modeData.previewX,
@@ -80,9 +80,10 @@ export class PlaceBuildingMode extends BaseInputMode {
                     player: this.currentPlayer,
                 });
 
-                // Optionally stay in placement mode for rapid building
-                // or switch back to select mode after placement
-                // For now, stay in placement mode
+                // Exit placement mode after successful placement
+                if (success) {
+                    context.switchMode('select');
+                }
             }
             return HANDLED;
         }

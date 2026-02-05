@@ -61,50 +61,48 @@ export class TilePicker {
         const worldX = (ndcX + zoom) * aspect / zoom;
         const worldY = (zoom - ndcY) / zoom;
 
-        // From vertex shader, the viewPoint is added to instancePos:
-        //   pixelCoord = instancePos + viewPoint (shader viewPoint is -viewPoint.x, -viewPoint.y)
-        //   worldX_rendered = pixelCoord.x - pixelCoord.y * 0.5
-        //   worldY_rendered = (pixelCoord.y - height) * 0.5
+        // Reverse the tileToWorld transformation (must match shader formula exactly):
+        //   Forward (tileToWorld, matches landscape-vert.glsl):
+        //     vpInt = floor(viewPoint)
+        //     vpFrac = viewPoint - vpInt
+        //     instancePos = tile - vpInt
+        //     worldX = 0.25 + instancePosX - instancePosY * 0.5 - vpFracX + vpFracY * 0.5
+        //     worldY = (0.5 + instancePosY - height - vpFracY) * 0.5
         //
-        // So: tileX_with_offset = worldX + viewPoint.x (undo the camera)
-        //     But the shader passes -viewPoint.x, -viewPoint.y as 'viewPoint' uniform,
-        //     and uses pixelCoord = instancePos + viewPoint.
-        //
-        // The rendered position for a tile (tx, ty) at height h is:
-        //   rx = (tx + floor(ty/2) + vp.x) - (ty + vp.y) * 0.5
-        //      where vp.x = -viewPoint.x, vp.y = -viewPoint.y (passed as uniform)
-        //   This simplifies to:
-        //   rx = tx + floor(ty/2) - viewPoint.x - (ty - viewPoint.y) * 0.5
-        //   ry = ((ty - viewPoint.y) - h) * 0.5
-        //
-        // Ignoring height initially for a first approximation:
-        //   worldY = (ty - viewPoint.y) * 0.5
-        //   ty = worldY * 2 + viewPoint.y
-        //
-        //   worldX = tx + floor(ty/2) - viewPoint.x - (ty - viewPoint.y) * 0.5
-        //   worldX = tx + floor(ty/2) - viewPoint.x - worldY
-        //   tx = worldX - floor(ty/2) + viewPoint.x + worldY
+        //   Reverse (screenToTile):
+        //     instancePosY = worldY * 2 - 0.5 + height + vpFracY
+        //     tileY = instancePosY + vpIntY
+        //     instancePosX = worldX - 0.25 + instancePosY * 0.5 + vpFracX - vpFracY * 0.5
+        //     tileX = instancePosX + vpIntX
 
-        // First pass: estimate ty ignoring height
-        let tileY = Math.round(worldY * 2 + viewPoint.y);
+        const vpIntX = Math.floor(viewPoint.x);
+        const vpIntY = Math.floor(viewPoint.y);
+        const vpFracX = viewPoint.x - vpIntX;
+        const vpFracY = viewPoint.y - vpIntY;
+
+        // First pass: estimate tileY ignoring height
+        let instancePosY = worldY * 2 - 0.5 + vpFracY;
+        let tileY = Math.round(instancePosY + vpIntY);
 
         // Clamp to map
         tileY = Math.max(0, Math.min(mapSize.height - 1, tileY));
 
         // Estimate tileX
-        let tileX = Math.round(worldX - Math.floor(tileY / 2) + viewPoint.x + worldY);
+        let instancePosX = worldX - 0.25 + instancePosY * 0.5 + vpFracX - vpFracY * 0.5;
+        let tileX = Math.round(instancePosX + vpIntX);
         tileX = Math.max(0, Math.min(mapSize.width - 1, tileX));
 
         // Refine using actual height at this tile
         const heightAtTile = groundHeight[mapSize.toIndex(tileX, tileY)];
-        const heightOffset = heightAtTile * 20.0 / 255.0; // shader reads height * 20.0 from texture (normalized 0-1 range)
+        const heightOffset = heightAtTile * 20.0 / 255.0;
 
-        // With height: worldY = ((ty - viewPoint.y) - h) * 0.5
-        // ty = worldY * 2 + viewPoint.y + h
-        tileY = Math.round(worldY * 2 + viewPoint.y + heightOffset);
+        // With height: instancePosY = worldY * 2 - 0.5 + height + vpFracY
+        instancePosY = worldY * 2 - 0.5 + heightOffset + vpFracY;
+        tileY = Math.round(instancePosY + vpIntY);
         tileY = Math.max(0, Math.min(mapSize.height - 1, tileY));
 
-        tileX = Math.round(worldX - Math.floor(tileY / 2) + viewPoint.x + worldY);
+        instancePosX = worldX - 0.25 + instancePosY * 0.5 + vpFracX - vpFracY * 0.5;
+        tileX = Math.round(instancePosX + vpIntX);
         tileX = Math.max(0, Math.min(mapSize.width - 1, tileX));
 
         // Wrap around map edges
@@ -129,21 +127,29 @@ export class TilePicker {
         const h = groundHeight[heightIndex];
         const heightScaled = h * 20.0 / 255.0;
 
-        // Match the vertex shader transform:
-        //   instancePos = (tileX + floor(tileY/2), tileY)  [from createInstancePosArray]
-        //   pixelCoord = instancePos + shaderViewPoint  [shaderViewPoint = (-vpX, -vpY)]
-        //   worldX = pixelCoord.x - pixelCoord.y * 0.5
-        //   worldY = (pixelCoord.y - height) * 0.5
+        // Match the vertex shader transform EXACTLY (from landscape-vert.glsl):
+        //   vec2 vpInt = floor(viewPoint);
+        //   vec2 vpFrac = viewPoint - vpInt;
+        //   instancePos = tile - vpInt  (relative to integer viewpoint)
         //
-        // Center of parallelogram (average of vertices 0,1,2):
-        //   vertex0 = (0, 0), vertex1 = (-0.5, 1), vertex2 = (0.5, 1)
-        //   center ≈ (0.0, 0.67) but for tile center use (0.25, 0.5)
+        //   worldX = 0.25 + instancePos.x - instancePos.y * 0.5 - vpFrac.x + vpFrac.y * 0.5
+        //   worldY = (0.5 + instancePos.y - mapHeight - vpFrac.y) * 0.5
+        //
+        // The shader does NOT use staggered coordinates! The isometric effect comes
+        // from the `-instancePos.y * 0.5` term in the X calculation.
 
-        const instX = tileX + Math.floor(tileY / 2) - viewPointX;
-        const instY = tileY - viewPointY;
+        const vpIntX = Math.floor(viewPointX);
+        const vpIntY = Math.floor(viewPointY);
+        const vpFracX = viewPointX - vpIntX;
+        const vpFracY = viewPointY - vpIntY;
 
-        const worldX = instX + 0.25 - instY * 0.5;
-        const worldY = (instY + 0.5 - heightScaled) * 0.5;
+        // instancePos is relative to floor(viewPoint)
+        const instancePosX = tileX - vpIntX;
+        const instancePosY = tileY - vpIntY;
+
+        // Exact shader formula (0.25 and 0.5 are tile center offsets)
+        const worldX = 0.25 + instancePosX - instancePosY * 0.5 - vpFracX + vpFracY * 0.5;
+        const worldY = (0.5 + instancePosY - heightScaled - vpFracY) * 0.5;
 
         return { worldX, worldY };
     }
