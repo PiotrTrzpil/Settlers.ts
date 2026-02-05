@@ -68,3 +68,7 @@ Test maps and procedural textures work without game files.
 - The `.eslintrc.js` config uses CommonJS syntax but `package.json` has `"type": "module"` — linting is currently broken. Rename to `.eslintrc.cjs` to fix.
 - Playwright `outputDir` writes to `tests/e2e/.results/` (gitignored).
 - Screenshot baselines live in `tests/e2e/__screenshots__/` and are committed.
+
+## Claude Code guidelines
+
+- When taking screenshots with MCP browser tools, always save to `.playwright-mcp/` folder (e.g., `filename: ".playwright-mcp/screenshot.png"`). This folder is gitignored.

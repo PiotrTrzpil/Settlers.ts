@@ -29,3 +29,6 @@ css
 /public/file-list.txt
 test-results/
 tests/e2e/.results/
+
+# Playwright MCP browser logs
+.playwright-mcp/
