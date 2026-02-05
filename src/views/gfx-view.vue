@@ -1,43 +1,62 @@
 <template>
-  <div class="about">
-    Gfx File:
-    <file-browser
-      :fileManager="fileManager"
-      @select="onFileSelect"
-      filter=".gfx"
-      class="browser"
-    />
-    <br />
-    number of images: {{gfxContent?.length}} - total image size: {{imageSize}}
-    <br />
-    Items:
-    <select
-      class="mulit-row fullsize"
-      v-model="selectedItem"
-      @change="onSelectItem"
-    >
-      <option v-for="item of gfxContent" :key="item.dataOffset" :value="item">
-        {{pad(item.dataOffset, 10)}} Size: {{pad(item.height + ' x ' + item.width, 12)}}
-      </option>
-    </select>
+  <div class="file-viewer">
+    <div class="controls">
+      <span class="label">Gfx File:</span>
+      <file-browser
+        :fileManager="fileManager"
+        @select="onFileSelect"
+        filter=".gfx"
+        class="browser"
+      />
+      <span class="info">{{ gfxContent?.length }} images</span>
+      <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
+      <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridImages)">Grid</button>
+    </div>
 
-    <br />
+    <!-- Grid View -->
+    <div v-if="viewMode === 'grid' && gfxContent.length > 0" class="grid-container">
+      <div
+        v-for="(img, index) in gfxContent"
+        :key="img.dataOffset"
+        class="grid-item"
+        :class="{ selected: selectedItem === img }"
+        @click="selectImage(img, index)"
+      >
+        <canvas
+          :ref="el => setCanvasRef(el as HTMLCanvasElement, index)"
+          :width="Math.min(img.width, 200)"
+          :height="Math.min(img.height, 200)"
+          class="grid-canvas"
+        />
+        <div class="grid-label">#{{ index }} ({{ img.width }}x{{ img.height }})</div>
+      </div>
+    </div>
 
-    <template v-if="selectedItem!=null">
-      <pre class="fullsize">{{selectedItem.toString()}}</pre>
-      <br />
-    </template>
+    <!-- Single View -->
+    <div v-if="viewMode === 'single'" class="single-view">
+      <select
+        class="item-select"
+        v-model="selectedItem"
+        @change="onSelectItem"
+      >
+        <option v-for="(item, index) of gfxContent" :key="item.dataOffset" :value="item">
+          #{{ index }} - {{ pad(item.dataOffset, 10) }} Size: {{ item.width }} x {{ item.height }}
+        </option>
+      </select>
 
-    Image:<br />
-    <canvas height="800" width="800" ref="ghCav" class="1PixelatedRendering">
-      Sorry! Your browser does not support HTML5 Canvas and can not run this Application.
-    </canvas>
+      <template v-if="selectedItem != null">
+        <pre class="item-info">{{ selectedItem.toString() }}</pre>
+      </template>
 
+      <div class="canvas-wrapper">
+        <canvas height="600" width="600" ref="mainCanvas" class="main-canvas" />
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useTemplateRef } from 'vue';
+import { ref, useTemplateRef, nextTick } from 'vue';
 import { IGfxImage } from '@/resources/gfx/igfx-image';
 import { Path } from '@/utilities/path';
 import { GfxFileReader } from '@/resources/gfx/gfx-file-reader';
@@ -45,9 +64,9 @@ import { GilFileReader } from '@/resources/gfx/gil-file-reader';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { pad, renderImageToCanvas, collectImages, loadGfxFileSet, parseGfxReaders } from '@/utilities/view-helpers';
+import { useSimpleGridView } from '@/composables/useGridView';
 
 import FileBrowser from '@/components/file-browser.vue';
-import HexViewer from '@/components/hex-viewer.vue';
 
 const log = new LogHandler('GfxView');
 
@@ -55,33 +74,26 @@ const props = defineProps<{
     fileManager: FileManager;
 }>();
 
-const ghCav = useTemplateRef<HTMLCanvasElement>('ghCav');
+const mainCanvas = useTemplateRef<HTMLCanvasElement>('mainCanvas');
+
+// Use composable for grid view functionality
+const { viewMode, setCanvasRef, clearRefs, canvasRefs, switchToGrid, watchGridMode } = useSimpleGridView('grid');
 
 const fileName = ref<string | null>(null);
 const gfxContent = ref<IGfxImage[]>([]);
 const selectedItem = ref<IGfxImage | null>(null);
 const gfxFile = ref<GfxFileReader | null>(null);
 
-const imageSize = computed(() => {
-    let sum = 0;
-    for (const i of gfxContent.value) {
-        sum += i.height * i.width;
-    }
-    return sum;
-});
-
 function onFileSelect(file: IFileSource) {
     fileName.value = file.name;
+    clearRefs();
     void load(file);
 }
 
 async function load(file: IFileSource) {
-    if (!props.fileManager) {
-        return;
-    }
-
+    if (!props.fileManager) return;
     const fileId = Path.getFileNameWithoutExtension(file.name);
-    void doLoad(fileId);
+    await doLoad(fileId);
 }
 
 async function doLoad(fileId: string) {
@@ -101,23 +113,38 @@ async function doLoad(fileId: string) {
         (i) => gfx.getImage(i)
     );
 
-    log.debug('File: ' + fileId);
-    log.debug(gfxIndexList.toString());
-    log.debug(gfx.toString());
+    log.debug('File: ' + fileId + ' with ' + gfxContent.value.length + ' images');
+
+    // Render grid after DOM updates
+    if (viewMode.value === 'grid') {
+        await nextTick();
+        renderAllGridImages();
+    }
+}
+
+function renderAllGridImages() {
+    for (let i = 0; i < gfxContent.value.length; i++) {
+        const canvas = canvasRefs.get(i);
+        const img = gfxContent.value[i];
+        if (canvas && img) {
+            renderImageToCanvas(img, canvas);
+        }
+    }
+}
+
+function selectImage(img: IGfxImage, index: number) {
+    selectedItem.value = img;
+    log.debug(`Selected image #${index}: ${img.width}x${img.height}`);
 }
 
 function onSelectItem() {
     const img = selectedItem.value;
-    if (!img) {
-        return;
-    }
-
-    renderImageToCanvas(img, ghCav.value as HTMLCanvasElement);
+    if (!img || !mainCanvas.value) return;
+    renderImageToCanvas(img, mainCanvas.value);
 }
+
+// Re-render grid when toggled on
+watchGridMode(renderAllGridImages, () => gfxContent.value.length > 0);
 </script>
 
-<style scoped>
-.mulit-row{
-    font-family:"Courier New", Courier, monospace
-}
-</style>
+<style src="@/styles/file-viewer.css"></style>

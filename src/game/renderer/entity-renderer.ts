@@ -10,13 +10,9 @@ import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
 import { TextureManager } from './texture-manager';
 import { EntityTextureAtlas } from './entity-texture-atlas';
-import { SpriteMetadataRegistry, SpriteEntry, BUILDING_SPRITE_MAP, PIXELS_TO_WORLD } from './sprite-metadata';
-import { GfxFileReader } from '@/resources/gfx/gfx-file-reader';
-import { GilFileReader } from '@/resources/gfx/gil-file-reader';
-import { JilFileReader } from '@/resources/gfx/jil-file-reader';
-import { DilFileReader } from '@/resources/gfx/dil-file-reader';
-import { PilFileReader } from '@/resources/gfx/pil-file-reader';
-import { PaletteCollection } from '@/resources/gfx/palette-collection';
+import { SpriteMetadataRegistry, SpriteEntry, Race, getBuildingSpriteMap, BUILDING_JOB_INDICES, GFX_FILE_NUMBERS, getMapObjectSpriteMap, MapObjectSpriteInfo } from './sprite-metadata';
+import { SpriteLoader, LoadedGfxFileSet } from './sprite-loader';
+import { MapObjectType } from '../entity';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -78,10 +74,14 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // File manager and texture manager for loading sprites
     private fileManager: FileManager | null = null;
     private textureManager: TextureManager | null = null;
+    private spriteLoader: SpriteLoader | null = null;
 
     // Sprite atlas and metadata (null if sprites not loaded)
     private spriteAtlas: EntityTextureAtlas | null = null;
     private spriteRegistry: SpriteMetadataRegistry | null = null;
+    private currentRace: Race = Race.Roman;
+    private glContext: WebGL2RenderingContext | null = null;
+    private spriteTextureIndex: number = 0;
 
     // Sprite shader program (separate from color shader)
     private spriteShaderProgram: ShaderProgram | null = null;
@@ -126,9 +126,14 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.groundHeight = groundHeight;
         this.fileManager = fileManager ?? null;
         this.textureManager = textureManager ?? null;
+        if (fileManager) {
+            this.spriteLoader = new SpriteLoader(fileManager);
+        }
     }
 
     public async init(gl: WebGL2RenderingContext): Promise<boolean> {
+        this.glContext = gl;
+
         // Initialize color shader (always needed for borders, paths, selection rings)
         super.initShader(gl, vertCode, fragCode);
 
@@ -144,8 +149,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         // Try to load sprite textures if file manager is available
         if (this.fileManager && this.textureManager) {
-            const spriteTextureIndex = this.textureManager.create('u_spriteAtlas');
-            const loaded = await this.loadBuildingSprites(gl, spriteTextureIndex);
+            this.spriteTextureIndex = this.textureManager.create('u_spriteAtlas');
+            const loaded = await this.loadBuildingSprites(gl, this.spriteTextureIndex, this.currentRace);
 
             if (loaded) {
                 // Initialize sprite shader
@@ -156,12 +161,55 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 this.spriteBuffer = gl.createBuffer();
 
                 EntityRenderer.log.debug(
-                    `Sprite rendering enabled: ${this.spriteRegistry?.getBuildingCount() ?? 0} building sprites loaded`
+                    `Sprite rendering enabled: ${this.spriteRegistry?.getBuildingCount() ?? 0} building sprites loaded for ${Race[this.currentRace]}`
                 );
             }
         }
 
         return true;
+    }
+
+    /**
+     * Get the current race being used for building sprites.
+     */
+    public getRace(): Race {
+        return this.currentRace;
+    }
+
+    /**
+     * Switch to a different race and reload building sprites.
+     * Returns true if sprites were loaded successfully.
+     */
+    public async setRace(race: Race): Promise<boolean> {
+        EntityRenderer.log.debug(`setRace called: ${Race[race]} (current: ${Race[this.currentRace]})`);
+        if (race === this.currentRace) return true;
+        if (!this.glContext || !this.fileManager) {
+            EntityRenderer.log.debug(`setRace failed: glContext=${!!this.glContext}, fileManager=${!!this.fileManager}`);
+            return false;
+        }
+
+        this.currentRace = race;
+
+        // Clear existing sprites
+        this.spriteRegistry?.clear();
+        this.spriteAtlas = null;
+
+        // Reload sprites for the new race
+        const loaded = await this.loadBuildingSprites(
+            this.glContext,
+            this.spriteTextureIndex,
+            race
+        );
+
+        if (loaded) {
+            EntityRenderer.log.debug(
+                `Switched to ${Race[race]}: ${this.spriteRegistry?.getBuildingCount() ?? 0} building sprites loaded`
+            );
+        } else {
+            EntityRenderer.log.debug(`Failed to load sprites for ${Race[race]}, using color fallback`);
+        }
+
+        return loaded;
     }
 
     /**
@@ -176,16 +224,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     /**
      * Load building sprites from GFX files and pack them into the atlas.
+     * Uses the SpriteLoader service for file loading.
      */
     private async loadBuildingSprites(
         gl: WebGL2RenderingContext,
-        textureIndex: number
+        textureIndex: number,
+        race: Race
     ): Promise<boolean> {
-        if (!this.fileManager) return false;
+        if (!this.spriteLoader) return false;
+
+        // Get sprite map for the specified race
+        const spriteMap = getBuildingSpriteMap(race);
 
         // Determine which GFX files we need to load based on the sprite map
         const requiredFiles = new Set<number>();
-        for (const info of Object.values(BUILDING_SPRITE_MAP)) {
+        for (const info of Object.values(spriteMap)) {
             if (info) requiredFiles.add(info.file);
         }
 
@@ -194,18 +247,30 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return false;
         }
 
-        // Create atlas and registry
-        const atlas = new EntityTextureAtlas(1024, textureIndex);
+        // Create atlas and registry - 4096 needed for large building sprites
+        const atlas = new EntityTextureAtlas(4096, textureIndex);
         const registry = new SpriteMetadataRegistry();
 
         let loadedAny = false;
 
         for (const fileNum of requiredFiles) {
-            const loaded = await this.loadSpritesFromFile(fileNum, atlas, registry);
+            const loaded = await this.loadSpritesFromFile(fileNum, atlas, registry, spriteMap);
             if (loaded) loadedAny = true;
         }
 
         if (!loadedAny) {
+            EntityRenderer.log.debug('No building sprite files found');
+        }
+
+        // Also try to load map object sprites (trees, stones, etc.)
+        // These go into the same atlas but use different sprite indices
+        const mapObjectsLoaded = await this.loadMapObjectSprites(atlas, registry);
+        if (mapObjectsLoaded) {
+            EntityRenderer.log.debug(`Map object sprites loaded: ${registry.getMapObjectCount()} objects`);
+        }
+
+        // Only return false if no sprites were loaded at all
+        if (!loadedAny && !mapObjectsLoaded) {
             EntityRenderer.log.debug('No sprite files found, using color fallback');
             return false;
         }
@@ -215,83 +280,115 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.spriteAtlas = atlas;
         this.spriteRegistry = registry;
 
-        return registry.hasBuildingSprites();
+        return registry.hasBuildingSprites() || registry.hasMapObjectSprites();
     }
 
     /**
-     * Load sprites from a single GFX file set.
+     * Load sprites from a single GFX file set using the SpriteLoader.
+     * The index in spriteMap is the JIL job index.
      */
     private async loadSpritesFromFile(
         fileNum: number,
         atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry
+        registry: SpriteMetadataRegistry,
+        spriteMap: Partial<Record<BuildingType, { file: number; index: number }>>
     ): Promise<boolean> {
-        if (!this.fileManager) return false;
+        if (!this.spriteLoader) return false;
 
-        // Load all required files for this GFX set
-        const files = await this.fileManager.readFiles({
-            gfx: `${fileNum}.gfx`,
-            gil: `${fileNum}.gil`,
-            jil: `${fileNum}.jil`,
-            dil: `${fileNum}.dil`,
-            pa6: `${fileNum}.pa6`,
-            pil: `${fileNum}.pil`,
-        }, true);
+        const fileId = `${fileNum}`;
+        const fileSet = await this.spriteLoader.loadFileSet(fileId);
 
-        // Check if we have the minimum required files
-        if (!files.gfx?.length || !files.gil?.length || !files.pa6?.length || !files.pil?.length) {
+        if (!fileSet) {
             EntityRenderer.log.debug(`GFX file set ${fileNum} not available`);
             return false;
         }
 
-        try {
-            // Build readers
-            const gilReader = new GilFileReader(files.gil);
-            const jilReader = files.jil?.length ? new JilFileReader(files.jil) : null;
-            const dilReader = files.dil?.length ? new DilFileReader(files.dil) : null;
-            const pilReader = new PilFileReader(files.pil);
-            const paletteCollection = new PaletteCollection(files.pa6, pilReader);
-            const gfxReader = new GfxFileReader(
-                files.gfx, gilReader, jilReader, dilReader, paletteCollection
-            );
+        // JIL/DIL are required for building sprite lookup
+        if (!fileSet.jilReader || !fileSet.dilReader) {
+            EntityRenderer.log.debug(`JIL/DIL files not available for ${fileNum}, cannot load building sprites`);
+            return false;
+        }
 
+        try {
             // Load sprites for each building type that uses this file
-            for (const [typeStr, info] of Object.entries(BUILDING_SPRITE_MAP)) {
+            for (const [typeStr, info] of Object.entries(spriteMap)) {
                 if (!info || info.file !== fileNum) continue;
 
                 const buildingType = Number(typeStr) as BuildingType;
-                const gfxImage = gfxReader.getImage(info.index);
+                const jobIndex = info.index;
 
-                if (!gfxImage) {
-                    EntityRenderer.log.debug(
-                        `Sprite index ${info.index} not found in file ${fileNum}`
-                    );
+                const loadedSprite = this.spriteLoader.loadJobSprite(fileSet, { jobIndex }, atlas);
+
+                if (!loadedSprite) {
+                    EntityRenderer.log.debug(`Failed to load sprite for building ${BuildingType[buildingType]} (job ${jobIndex})`);
                     continue;
                 }
 
-                const imageData = gfxImage.getImageData();
-                const region = atlas.reserve(imageData.width, imageData.height);
-
-                if (!region) {
-                    EntityRenderer.log.error(`Atlas full, cannot fit sprite for building ${buildingType}`);
-                    continue;
-                }
-
-                atlas.blit(region, imageData);
-
-                registry.registerBuilding(buildingType, {
-                    atlasRegion: region,
-                    offsetX: gfxImage.left * PIXELS_TO_WORLD,
-                    offsetY: -gfxImage.top * PIXELS_TO_WORLD, // Negate Y for screen coords
-                    widthWorld: imageData.width * PIXELS_TO_WORLD,
-                    heightWorld: imageData.height * PIXELS_TO_WORLD,
-                });
+                registry.registerBuilding(buildingType, loadedSprite.entry);
             }
 
-            EntityRenderer.log.debug(`Loaded sprites from file ${fileNum}.gfx`);
+            EntityRenderer.log.debug(`Loaded sprites from file ${fileNum}.gfx via SpriteLoader`);
             return true;
         } catch (e) {
             EntityRenderer.log.error(`Failed to load GFX file ${fileNum}: ${e}`);
+            return false;
+        }
+    }
+
+    /**
+     * Load map object sprites (trees, stones, etc.) into the atlas.
+     * Map objects use direct GIL indexing rather than JIL job indexing.
+     */
+    private async loadMapObjectSprites(
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry
+    ): Promise<boolean> {
+        if (!this.spriteLoader) return false;
+
+        const spriteMap = getMapObjectSpriteMap();
+        const fileNum = GFX_FILE_NUMBERS.MAP_OBJECTS;
+        const fileId = `${fileNum}`;
+
+        const fileSet = await this.spriteLoader.loadFileSet(fileId);
+        if (!fileSet) {
+            EntityRenderer.log.debug(`Map object GFX file ${fileNum} not available`);
+            return false;
+        }
+
+        try {
+            let loadedCount = 0;
+
+            for (const [typeStr, info] of Object.entries(spriteMap)) {
+                if (!info) continue;
+
+                const objectType = Number(typeStr) as MapObjectType;
+                const spriteIndex = info.index;
+                const paletteIndex = info.paletteIndex ?? 0;
+
+                const loadedSprite = this.spriteLoader.loadDirectSprite(
+                    fileSet,
+                    spriteIndex,
+                    paletteIndex,
+                    atlas
+                );
+
+                if (!loadedSprite) {
+                    EntityRenderer.log.debug(`Failed to load sprite for map object ${MapObjectType[objectType]} (index ${spriteIndex})`);
+                    continue;
+                }
+
+                registry.registerMapObject(objectType, loadedSprite.entry);
+                loadedCount++;
+            }
+
+            if (loadedCount > 0) {
+                EntityRenderer.log.debug(`Loaded ${loadedCount} map object sprites from file ${fileNum}.gfx`);
+                return true;
+            }
+
+            return false;
+        } catch (e) {
+            EntityRenderer.log.error(`Failed to load map object sprites: ${e}`);
             return false;
         }
     }
@@ -362,17 +459,26 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         let batchOffset = 0;
 
         for (const entity of this.entities) {
-            // Only render buildings with textured sprites here
-            if (entity.type !== EntityType.Building) continue;
+            let spriteEntry: SpriteEntry | null = null;
+            let tint: number[];
 
-            const spriteEntry = this.spriteRegistry.getBuilding(entity.subType as BuildingType);
+            if (entity.type === EntityType.Building) {
+                // Buildings: use building sprite registry with player color
+                spriteEntry = this.spriteRegistry.getBuilding(entity.subType as BuildingType);
+                const isSelected = this.selectedEntityIds.has(entity.id);
+                const playerColor = PLAYER_COLORS[entity.player % PLAYER_COLORS.length];
+                tint = this.computePlayerTint(playerColor, isSelected);
+            } else if (entity.type === EntityType.MapObject) {
+                // Map objects (trees, stones): use map object registry with no tint
+                spriteEntry = this.spriteRegistry.getMapObject(entity.subType as MapObjectType);
+                const isSelected = this.selectedEntityIds.has(entity.id);
+                // No player color for map objects, just brightness adjustment if selected
+                tint = isSelected ? [1.3, 1.3, 1.3, 1.0] : [1.0, 1.0, 1.0, 1.0];
+            } else {
+                continue; // Skip units and other entity types for textured rendering
+            }
+
             if (!spriteEntry) continue;
-
-            const isSelected = this.selectedEntityIds.has(entity.id);
-            const playerColor = PLAYER_COLORS[entity.player % PLAYER_COLORS.length];
-
-            // Compute tint: blend between white and player color
-            const tint = this.computePlayerTint(playerColor, isSelected);
 
             const worldPos = TilePicker.tileToWorld(
                 entity.x, entity.y,

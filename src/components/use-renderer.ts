@@ -5,6 +5,7 @@ import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { EntityType, BuildingType } from '@/game/entity';
+import { Race } from '@/game/renderer/sprite-metadata';
 import { canPlaceBuildingWithTerritory } from '@/game/systems/placement';
 import { debugStats } from '@/game/debug-stats';
 
@@ -274,7 +275,24 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         }
     });
 
+    /**
+     * Switch to a different race for building sprites.
+     */
+    async function setRace(race: Race): Promise<boolean> {
+        if (!entityRenderer) return false;
+        return entityRenderer.setRace(race);
+    }
+
+    /**
+     * Get the current race being used for building sprites.
+     */
+    function getRace(): Race {
+        return entityRenderer?.getRace() ?? Race.Roman;
+    }
+
     return {
         getRenderer: () => renderer,
+        setRace,
+        getRace,
     };
 }

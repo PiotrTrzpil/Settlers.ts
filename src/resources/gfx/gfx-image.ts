@@ -46,7 +46,8 @@ export class GfxImage implements IGfxImage {
                 const count = buffer[pos];
                 pos++;
 
-                const color = value === 0 ? 0xFF0000FF : 0xFF00FF00;
+                // Palette index 0 = transparent, index 1 = shadow/semi-transparent
+                const color = value === 0 ? 0x00000000 : 0x40000000;
                 for (let i = 0; (i < count) && (j < length); i++) {
                     imgData[j++] = color;
                 }

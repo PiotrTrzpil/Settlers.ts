@@ -20,6 +20,10 @@ export class GfxImageWithPalette implements IGfxImage {
     public width: number;
     /** height of the image */
     public height: number;
+    /** left (x) offset to display the image */
+    public left = 0;
+    /** top (y) offset to display the image */
+    public top = 0;
 
     /** every chunk height has it'S own palette */
     public chunkHeight: number;

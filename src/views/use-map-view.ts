@@ -3,11 +3,36 @@ import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
 import { createTestMapLoader } from '@/game/test-map-factory';
-import { Entity, TileCoord, UnitType } from '@/game/entity';
+import { Entity, TileCoord, UnitType, BuildingType } from '@/game/entity';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('MapView');
+
+/** Buildings available in the UI - matches BUILDING_SPRITE_MAP entries */
+const availableBuildings = [
+    { type: BuildingType.Guardhouse, id: 'guardhouse', name: 'Guardhouse', icon: '🏰' },
+    { type: BuildingType.Lumberjack, id: 'lumberjack', name: 'Lumberjack', icon: '🪓' },
+    { type: BuildingType.Warehouse, id: 'warehouse', name: 'Warehouse', icon: '📦' },
+    { type: BuildingType.Sawmill, id: 'sawmill', name: 'Sawmill', icon: '🪚' },
+    { type: BuildingType.Stonecutter, id: 'stonecutter', name: 'Stonecutter', icon: '🪨' },
+    { type: BuildingType.Farm, id: 'farm', name: 'Farm', icon: '🌾' },
+    { type: BuildingType.Windmill, id: 'windmill', name: 'Windmill', icon: '🌀' },
+    { type: BuildingType.Bakery, id: 'bakery', name: 'Bakery', icon: '🍞' },
+    { type: BuildingType.Fishery, id: 'fishery', name: 'Fishery', icon: '🐟' },
+    { type: BuildingType.PigFarm, id: 'pigfarm', name: 'Pig Farm', icon: '🐷' },
+    { type: BuildingType.Slaughterhouse, id: 'slaughterhouse', name: 'Slaughter', icon: '🥩' },
+    { type: BuildingType.Waterworks, id: 'waterworks', name: 'Waterworks', icon: '💧' },
+    { type: BuildingType.CoalMine, id: 'coalmine', name: 'Coal Mine', icon: '⛏️' },
+    { type: BuildingType.IronMine, id: 'ironmine', name: 'Iron Mine', icon: '🔩' },
+    { type: BuildingType.GoldMine, id: 'goldmine', name: 'Gold Mine', icon: '🪙' },
+    { type: BuildingType.IronSmelter, id: 'ironsmelter', name: 'Iron Smelter', icon: '🔥' },
+    { type: BuildingType.GoldSmelter, id: 'goldsmelter', name: 'Gold Smelter', icon: '✨' },
+    { type: BuildingType.WeaponSmith, id: 'weaponsmith', name: 'Weaponsmith', icon: '⚔️' },
+    { type: BuildingType.ToolSmith, id: 'toolsmith', name: 'Toolsmith', icon: '🔧' },
+    { type: BuildingType.Barrack, id: 'barrack', name: 'Barrack', icon: '🛡️' },
+    { type: BuildingType.Forester, id: 'forester', name: 'Forester', icon: '🌲' },
+];
 
 export function useMapView(getFileManager: () => FileManager) {
     const route = useRoute();
@@ -184,6 +209,7 @@ export function useMapView(getFileManager: () => FileManager) {
         selectedEntity,
         selectionCount,
         isPaused,
+        availableBuildings,
         onFileSelect,
         onTileClick,
         setPlaceMode,

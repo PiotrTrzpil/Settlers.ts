@@ -19,6 +19,16 @@
 
       <!-- LEFT SIDEBAR -->
       <aside class="sidebar">
+        <!-- Race selector at top of sidebar -->
+        <div class="race-selector-sidebar">
+          <label>Race:</label>
+          <select v-model="currentRace" @change="onRaceChange" data-testid="race-select">
+            <option v-for="race in availableRaces" :key="race.value" :value="race.value">
+              {{ race.name }}
+            </option>
+          </select>
+        </div>
+
         <!-- Tab strip -->
         <div class="sidebar-tabs">
           <button
@@ -34,33 +44,17 @@
         </div>
 
         <!-- Buildings tab -->
-        <div v-if="activeTab === 'buildings'" class="tab-content" data-testid="building-palette">
+        <div v-if="activeTab === 'buildings'" class="tab-content building-list" data-testid="building-palette">
           <button
+            v-for="b in availableBuildings"
+            :key="b.type"
             class="sidebar-btn"
-            data-testid="btn-guardhouse"
-            :class="{ active: game.mode === 'place_building' && game.placeBuildingType === 0 }"
-            @click="setPlaceMode(0)"
+            :data-testid="'btn-' + b.id"
+            :class="{ active: game.mode === 'place_building' && game.placeBuildingType === b.type }"
+            @click="setPlaceMode(b.type)"
           >
-            <span class="btn-icon">&#x1F3F0;</span>
-            <span class="btn-label">Guardhouse</span>
-          </button>
-          <button
-            class="sidebar-btn"
-            data-testid="btn-lumberjack"
-            :class="{ active: game.mode === 'place_building' && game.placeBuildingType === 1 }"
-            @click="setPlaceMode(1)"
-          >
-            <span class="btn-icon">&#x1FA93;</span>
-            <span class="btn-label">Lumberjack</span>
-          </button>
-          <button
-            class="sidebar-btn"
-            data-testid="btn-warehouse"
-            :class="{ active: game.mode === 'place_building' && game.placeBuildingType === 2 }"
-            @click="setPlaceMode(2)"
-          >
-            <span class="btn-icon">&#x1F4E6;</span>
-            <span class="btn-label">Warehouse</span>
+            <span class="btn-icon">{{ b.icon }}</span>
+            <span class="btn-label">{{ b.name }}</span>
           </button>
         </div>
 
@@ -133,6 +127,7 @@
 
         <!-- Canvas fills remaining space -->
         <renderer-viewer
+          ref="rendererRef"
           :game="game"
           :debugGrid="showDebug"
           :showTerritoryBorders="showTerritoryBorders"
@@ -164,8 +159,10 @@
 </template>
 
 <script setup lang="ts">
+import { ref, useTemplateRef } from 'vue';
 import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
+import { Race, RACE_NAMES, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
@@ -185,6 +182,7 @@ const {
     selectedEntity,
     selectionCount,
     isPaused,
+    availableBuildings,
     onFileSelect,
     onTileClick,
     setPlaceMode,
@@ -193,6 +191,22 @@ const {
     togglePause,
     spawnUnit
 } = useMapView(() => props.fileManager);
+
+// Race selection
+const rendererRef = useTemplateRef<InstanceType<typeof RendererViewer>>('rendererRef');
+const currentRace = ref<Race>(Race.Roman);
+
+const availableRaces = AVAILABLE_RACES.map(race => ({
+    value: race,
+    name: RACE_NAMES[race]
+}));
+
+async function onRaceChange() {
+    const renderer = rendererRef.value;
+    if (renderer && typeof renderer.setRace === 'function') {
+        await renderer.setRace(currentRace.value);
+    }
+}
 </script>
 
 <style scoped>
@@ -408,13 +422,44 @@ const {
 }
 
 .entity-count {
-  margin-left: auto;
   padding: 3px 8px;
   background: #2a1a1a;
   border: 1px solid #4a2a2a;
   border-radius: 3px;
   color: #d09060;
   font-size: 12px;
+}
+
+.race-selector-sidebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #1a1209;
+  border-bottom: 2px solid #5c3d1a;
+  color: #c8a96e;
+  font-size: 13px;
+}
+
+.race-selector-sidebar label {
+  font-weight: bold;
+  color: #d4b27a;
+}
+
+.race-selector-sidebar select {
+  flex: 1;
+  background: #2c1e0e;
+  color: #c8a96e;
+  border: 1px solid #4a3218;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.race-selector-sidebar select:hover {
+  border-color: #6a4a20;
+  background: #3a2810;
 }
 
 /* Canvas fills remaining space */
