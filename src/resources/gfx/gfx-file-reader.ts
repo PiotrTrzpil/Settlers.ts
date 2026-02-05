@@ -71,10 +71,10 @@ export class GfxFileReader extends ResourceFile {
         Object.seal(this);
     }
 
-    public readImage(offset: number, platteIndex: number): GfxImage {
+    public readImage(offset: number, paletteIndex: number): GfxImage {
         const reader = this.reader;
-        const platte = this.paletteCollection.getPalette();
-        const paletteOffset = this.paletteCollection.getOffset(platteIndex);
+        const palette = this.paletteCollection.getPalette();
+        const paletteOffset = this.paletteCollection.getOffset(paletteIndex);
 
         reader.setOffset(offset);
 
@@ -82,7 +82,7 @@ export class GfxFileReader extends ResourceFile {
 
         reader.setOffset(offset);
 
-        const newImg = new GfxImage(reader, platte, paletteOffset);
+        const newImg = new GfxImage(reader, palette, paletteOffset);
 
         if (imgHeadType > 860) {
             this.isWordHeader = true;

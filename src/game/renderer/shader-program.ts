@@ -63,6 +63,12 @@ export class ShaderProgram implements ShaderObject {
         // Link programs
         this.gl.linkProgram(this.shaderProgram);
 
+        // Check link status
+        if (!this.gl.getProgramParameter(this.shaderProgram, this.gl.LINK_STATUS)) {
+            ShaderProgram.log.error('Shader program link failed: ' + this.gl.getProgramInfoLog(this.shaderProgram));
+            return false;
+        }
+
         // Create a VAO to capture attribute state for this program
         this.vao = this.gl.createVertexArray();
 
@@ -94,6 +100,10 @@ export class ShaderProgram implements ShaderObject {
         }
 
         const uniformLocation = gl.getUniformLocation(this.shaderProgram, name);
+        if (uniformLocation === null) {
+            ShaderProgram.log.debug(`Uniform '${name}' not found or optimized away`);
+            return;
+        }
 
         gl.uniformMatrix4fv(uniformLocation, false, values);
     }
@@ -105,6 +115,10 @@ export class ShaderProgram implements ShaderObject {
         }
 
         const uniformLocation = gl.getUniformLocation(this.shaderProgram, name);
+        if (uniformLocation === null) {
+            ShaderProgram.log.debug(`Uniform '${name}' not found or optimized away`);
+            return;
+        }
 
         gl.uniform2fv(uniformLocation, [a1, a2]);
     }
@@ -176,6 +190,10 @@ export class ShaderProgram implements ShaderObject {
         }
 
         const location = this.gl.getUniformLocation(this.shaderProgram, name);
+        if (location === null) {
+            ShaderProgram.log.debug(`Texture uniform '${name}' not found or optimized away`);
+            return;
+        }
 
         this.gl.uniform1i(location, textureId);
     }

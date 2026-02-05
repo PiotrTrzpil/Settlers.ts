@@ -38,12 +38,12 @@ export class Palette {
             const value2 = buffer.readByte();
 
             const r = value2 & 0xF8;
-            const g = (value1 >> 3) | (value2 << 5) & 0xFC;
+            const g = ((value1 >> 3) | (value2 << 5)) & 0xFC;
             const b = (value1 << 3) & 0xF8;
 
             this.setRGB(i, r, g, b);
         }
 
-        return pos;
+        return buffer.getOffset();
     }
 }

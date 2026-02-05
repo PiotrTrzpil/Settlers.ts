@@ -59,9 +59,6 @@ export class GfxImageWithPalette implements IGfxImage {
 
             i[j++] = p.getColor(index);
         }
-
-        console.log('size : ' + (pos - this.dataOffset));
-        console.log('left byte: ' + (buffer.length - pos));
     }
 
     public getDataSize(): number {
