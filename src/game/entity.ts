@@ -66,7 +66,6 @@ export enum MapObjectType {
 }
 
 export enum BuildingType {
-    Guardhouse = 0,
     Lumberjack = 1,
     Warehouse = 2,
     Sawmill = 3,
@@ -90,6 +89,25 @@ export enum BuildingType {
     LivingHouse = 21,
     Tower = 22,
     Winegrower = 23,
+    Hunter = 24,
+    DonkeyFarm = 25,
+    StoneMine = 26,
+    SulfurMine = 27,
+    Healer = 28,
+    SmallHouse = 29,
+    MediumHouse = 30,
+    LargeHouse = 31,
+    LargeTower = 32,
+    Castle = 33,
+    AmmunitionMaker = 34,
+    SmallTemple = 35,
+    LargeTemple = 36,
+    ScoutTower = 37,
+    Shipyard = 38,
+    Decoration = 39,
+    WinePress = 40,
+    SiegeWorkshop = 41,
+    LargeDecoration = 42,
 }
 
 export enum UnitType {
@@ -103,7 +121,6 @@ export enum UnitType {
 
 /** Territory radius for each building type (in tiles) */
 export const BUILDING_TERRITORY_RADIUS: Record<number, number> = {
-    [BuildingType.Guardhouse]: 8,
     [BuildingType.Lumberjack]: 4,
     [BuildingType.Warehouse]: 6,
     [BuildingType.Sawmill]: 4,
@@ -131,7 +148,6 @@ export const BUILDING_TERRITORY_RADIUS: Record<number, number> = {
 
 /** Which unit type each building produces (undefined = no auto-spawn) */
 export const BUILDING_UNIT_TYPE: Record<number, UnitType | undefined> = {
-    [BuildingType.Guardhouse]: UnitType.Soldier,
     [BuildingType.Lumberjack]: UnitType.Settler,
     [BuildingType.Warehouse]: undefined,
 };

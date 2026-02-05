@@ -64,10 +64,6 @@ export const BUILDING_PRODUCTIONS: ReadonlyMap<BuildingType, ProductionChain> = 
  */
 export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly ConstructionCost[]> = new Map([
     // Military
-    [BuildingType.Guardhouse, [
-        { material: EMaterialType.PLANK, count: 2 },
-        { material: EMaterialType.STONE, count: 3 },
-    ]],
     [BuildingType.Tower, [
         { material: EMaterialType.PLANK, count: 4 },
         { material: EMaterialType.STONE, count: 6 },
@@ -170,6 +166,88 @@ export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly Construction
     // Wine
     [BuildingType.Winegrower, [
         { material: EMaterialType.PLANK, count: 2 },
+        { material: EMaterialType.STONE, count: 2 },
+    ]],
+    [BuildingType.WinePress, [
+        { material: EMaterialType.PLANK, count: 2 },
+        { material: EMaterialType.STONE, count: 2 },
+    ]],
+
+    // Additional buildings
+    [BuildingType.Hunter, [
+        { material: EMaterialType.PLANK, count: 2 },
+        { material: EMaterialType.STONE, count: 1 },
+    ]],
+    [BuildingType.DonkeyFarm, [
+        { material: EMaterialType.PLANK, count: 2 },
+        { material: EMaterialType.STONE, count: 2 },
+    ]],
+    [BuildingType.StoneMine, [
+        { material: EMaterialType.PLANK, count: 3 },
+    ]],
+    [BuildingType.SulfurMine, [
+        { material: EMaterialType.PLANK, count: 3 },
+    ]],
+    [BuildingType.Healer, [
+        { material: EMaterialType.PLANK, count: 2 },
+        { material: EMaterialType.STONE, count: 2 },
+    ]],
+    [BuildingType.AmmunitionMaker, [
+        { material: EMaterialType.PLANK, count: 2 },
+        { material: EMaterialType.STONE, count: 2 },
+    ]],
+    [BuildingType.SiegeWorkshop, [
+        { material: EMaterialType.PLANK, count: 4 },
+        { material: EMaterialType.STONE, count: 3 },
+    ]],
+
+    // Houses
+    [BuildingType.SmallHouse, [
+        { material: EMaterialType.PLANK, count: 2 },
+        { material: EMaterialType.STONE, count: 2 },
+    ]],
+    [BuildingType.MediumHouse, [
+        { material: EMaterialType.PLANK, count: 3 },
+        { material: EMaterialType.STONE, count: 3 },
+    ]],
+    [BuildingType.LargeHouse, [
+        { material: EMaterialType.PLANK, count: 4 },
+        { material: EMaterialType.STONE, count: 4 },
+    ]],
+
+    // Military structures
+    [BuildingType.ScoutTower, [
+        { material: EMaterialType.PLANK, count: 2 },
+        { material: EMaterialType.STONE, count: 4 },
+    ]],
+    [BuildingType.LargeTower, [
+        { material: EMaterialType.PLANK, count: 6 },
+        { material: EMaterialType.STONE, count: 8 },
+    ]],
+    [BuildingType.Castle, [
+        { material: EMaterialType.PLANK, count: 8 },
+        { material: EMaterialType.STONE, count: 12 },
+    ]],
+
+    // Temples
+    [BuildingType.SmallTemple, [
+        { material: EMaterialType.PLANK, count: 3 },
+        { material: EMaterialType.STONE, count: 4 },
+    ]],
+    [BuildingType.LargeTemple, [
+        { material: EMaterialType.PLANK, count: 5 },
+        { material: EMaterialType.STONE, count: 8 },
+    ]],
+
+    // Special
+    [BuildingType.Shipyard, [
+        { material: EMaterialType.PLANK, count: 4 },
+        { material: EMaterialType.STONE, count: 3 },
+    ]],
+    [BuildingType.Decoration, [
+        { material: EMaterialType.STONE, count: 1 },
+    ]],
+    [BuildingType.LargeDecoration, [
         { material: EMaterialType.STONE, count: 2 },
     ]],
 ]);

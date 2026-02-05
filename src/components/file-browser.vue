@@ -22,12 +22,20 @@ const emit = defineEmits<{
 const selectedFile = ref<IFileSource | null>(null);
 const files = ref<IFileSource[]>([]);
 
+/**
+ * Natural sort comparator that handles numbers within strings.
+ * e.g., "2.jil" < "10.jil" instead of "10.jil" < "2.jil"
+ */
+function naturalSort(a: IFileSource, b: IFileSource): number {
+    return a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' });
+}
+
 function doFilter() {
     if (!props.fileManager) {
         return;
     }
 
-    files.value = props.fileManager.filter(props.filter);
+    files.value = props.fileManager.filter(props.filter).sort(naturalSort);
 
     // Auto-select first file if available and nothing selected
     if (files.value.length > 0 && !selectedFile.value) {

@@ -22,14 +22,14 @@ describe('Command System', () => {
         it('should place building on valid tile', () => {
             const result = executeCommand(state, {
                 type: 'place_building',
-                buildingType: 0,
+                buildingType: 1, // Lumberjack
                 x: 10,
                 y: 10,
                 player: 0
             }, groundType, groundHeight, mapSize);
 
             expect(result).toBe(true);
-            // Guardhouse creates building + auto-spawned soldier
+            // Lumberjack creates building + auto-spawned settler
             const building = state.entities.find(e => e.type === EntityType.Building);
             expect(building).not.toBeUndefined();
             expect(building?.x).toBe(10);
@@ -40,7 +40,7 @@ describe('Command System', () => {
             groundType[mapSize.toIndex(10, 10)] = 0;
             const result = executeCommand(state, {
                 type: 'place_building',
-                buildingType: 0,
+                buildingType: 1, // Lumberjack
                 x: 10,
                 y: 10,
                 player: 0
@@ -53,13 +53,13 @@ describe('Command System', () => {
         it('should auto-spawn a worker unit adjacent to the building', () => {
             executeCommand(state, {
                 type: 'place_building',
-                buildingType: 0, // Guardhouse -> Soldier
+                buildingType: 1, // Lumberjack -> Settler
                 x: 20,
                 y: 20,
                 player: 0
             }, groundType, groundHeight, mapSize);
 
-            // Should have building + auto-spawned soldier
+            // Should have building + auto-spawned settler
             expect(state.entities).toHaveLength(2);
             const unit = state.entities.find(e => e.type === EntityType.Unit);
             expect(unit).not.toBeUndefined();

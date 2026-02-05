@@ -106,8 +106,9 @@ import { LogHandler } from '@/utilities/log-handler';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { IndexFileItem } from '@/resources/gfx/index-file-item';
 import { pad, loadGfxFileSet, parseGfxReaders, renderImageToCanvas } from '@/utilities/view-helpers';
-import { BUILDING_JOB_INDICES } from '@/game/renderer/sprite-metadata';
+import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, GFX_FILE_NUMBERS } from '@/game/renderer/sprite-metadata';
 import { BuildingType } from '@/game/entity';
+import { EMaterialType } from '@/game/economy/material-type';
 import { useCompositeGridView } from '@/composables/useGridView';
 
 import FileBrowser from '@/components/file-browser.vue';
@@ -157,8 +158,45 @@ for (const [typeStr, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
     }
 }
 
+// Build reverse lookup from job index to resource/material name
+const jobToResourceName = new Map<number, string>();
+for (const [typeStr, jobIndex] of Object.entries(RESOURCE_JOB_INDICES)) {
+    if (jobIndex !== undefined) {
+        const materialType = Number(typeStr) as EMaterialType;
+        jobToResourceName.set(jobIndex, EMaterialType[materialType]);
+    }
+}
+
+// Building files are race-specific: 10=Roman, 11=Viking, 12=Mayan, 14=Trojan
+// Dark Tribe (13) uses different mappings
+const BUILDING_FILE_IDS = new Set([10, 11, 12, 14]);
+
+function getCurrentFileId(): number | null {
+    if (!fileName.value) return null;
+    const match = fileName.value.match(/(\d+)\.jil$/i);
+    return match ? parseInt(match[1], 10) : null;
+}
+
+function getNameForJob(jobIndex: number): string | null {
+    const fileId = getCurrentFileId();
+    if (fileId === null) return null;
+
+    // Check if it's a building file
+    if (BUILDING_FILE_IDS.has(fileId)) {
+        return jobToBuildingName.get(jobIndex) ?? null;
+    }
+
+    // Check if it's the resource file (3.jil)
+    if (fileId === GFX_FILE_NUMBERS.RESOURCES) {
+        return jobToResourceName.get(jobIndex) ?? null;
+    }
+
+    return null;
+}
+
+// Keep for backwards compatibility
 function getBuildingForJob(jobIndex: number): string | null {
-    return jobToBuildingName.get(jobIndex) ?? null;
+    return getNameForJob(jobIndex);
 }
 
 function onFileSelect(file: IFileSource) {

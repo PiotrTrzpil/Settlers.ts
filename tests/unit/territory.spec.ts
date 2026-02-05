@@ -21,7 +21,7 @@ describe('TerritoryMap', () => {
         const buildings: Entity[] = [{
             id: 1,
             type: EntityType.Building,
-            subType: BuildingType.Guardhouse,
+            subType: BuildingType.Tower,
             x: 20,
             y: 20,
             player: 0
@@ -29,12 +29,12 @@ describe('TerritoryMap', () => {
 
         territory.rebuild(buildings);
 
-        // Guardhouse has radius 8: tile at (20,20) should be owned by player 0
+        // Tower has radius 10: tile at (20,20) should be owned by player 0
         expect(territory.getOwner(20, 20)).toBe(0);
-        // Tile at (25, 20) is 5 tiles away, within radius 8
+        // Tile at (25, 20) is 5 tiles away, within radius 10
         expect(territory.getOwner(25, 20)).toBe(0);
-        // Tile at (30, 20) is 10 tiles away, outside radius 8
-        expect(territory.getOwner(30, 20)).toBe(NO_OWNER);
+        // Tile at (31, 20) is 11 tiles away, outside radius 10
+        expect(territory.getOwner(31, 20)).toBe(NO_OWNER);
     });
 
     it('should use circular territory shape', () => {
@@ -42,7 +42,7 @@ describe('TerritoryMap', () => {
         const buildings: Entity[] = [{
             id: 1,
             type: EntityType.Building,
-            subType: BuildingType.Guardhouse,
+            subType: BuildingType.Tower,
             x: 20,
             y: 20,
             player: 0
@@ -50,10 +50,10 @@ describe('TerritoryMap', () => {
 
         territory.rebuild(buildings);
 
-        // Diagonal at (26, 26) is ~8.5 away, outside radius 8
-        expect(territory.getOwner(26, 26)).toBe(NO_OWNER);
-        // Diagonal at (25, 25) is ~7.1 away, inside radius 8
-        expect(territory.getOwner(25, 25)).toBe(0);
+        // Diagonal at (28, 28) is ~11.3 away, outside radius 10
+        expect(territory.getOwner(28, 28)).toBe(NO_OWNER);
+        // Diagonal at (27, 27) is ~9.9 away, inside radius 10
+        expect(territory.getOwner(27, 27)).toBe(0);
     });
 
     it('should use different radii for different building types', () => {
@@ -80,7 +80,7 @@ describe('TerritoryMap', () => {
             {
                 id: 1,
                 type: EntityType.Building,
-                subType: BuildingType.Guardhouse,
+                subType: BuildingType.Tower,
                 x: 10,
                 y: 10,
                 player: 0
@@ -88,7 +88,7 @@ describe('TerritoryMap', () => {
             {
                 id: 2,
                 type: EntityType.Building,
-                subType: BuildingType.Guardhouse,
+                subType: BuildingType.Tower,
                 x: 40,
                 y: 40,
                 player: 1
@@ -105,12 +105,12 @@ describe('TerritoryMap', () => {
 
     it('should resolve overlap by closest building', () => {
         const territory = new TerritoryMap(mapSize);
-        // Two guardhouses 12 tiles apart (radius 8 each, so they overlap)
+        // Two towers 12 tiles apart (radius 10 each, so they overlap)
         const buildings: Entity[] = [
             {
                 id: 1,
                 type: EntityType.Building,
-                subType: BuildingType.Guardhouse,
+                subType: BuildingType.Tower,
                 x: 20,
                 y: 20,
                 player: 0
@@ -118,7 +118,7 @@ describe('TerritoryMap', () => {
             {
                 id: 2,
                 type: EntityType.Building,
-                subType: BuildingType.Guardhouse,
+                subType: BuildingType.Tower,
                 x: 32,
                 y: 20,
                 player: 1
@@ -139,7 +139,7 @@ describe('TerritoryMap', () => {
         const buildings: Entity[] = [{
             id: 1,
             type: EntityType.Building,
-            subType: BuildingType.Guardhouse,
+            subType: BuildingType.Tower,
             x: 20,
             y: 20,
             player: 0

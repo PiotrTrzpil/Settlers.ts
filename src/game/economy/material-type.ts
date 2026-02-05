@@ -38,6 +38,14 @@ export enum EMaterialType {
     SPEAR = 24,
     BLADE = 25,
 
+    // Additional resources
+    GRAPES = 27,
+    SULFUR = 28,
+    DONKEY = 29,
+    GEMS = 30,
+    OFFICER_GEAR = 31,  // Leader helmets/equipment
+    BATTLE_AXE = 32,    // Heavy battle axes (different from tool axe)
+
     // Special
     NO_MATERIAL = 26,
 }
@@ -91,6 +99,14 @@ export const MATERIAL_CONFIGS: ReadonlyMap<EMaterialType, MaterialTypeConfig> = 
     [EMaterialType.BOW, { droppable: true, defaultPriorityIndex: 23, distributionConfigurable: false }],
     [EMaterialType.SPEAR, { droppable: true, defaultPriorityIndex: 24, distributionConfigurable: false }],
     [EMaterialType.BLADE, { droppable: true, defaultPriorityIndex: 25, distributionConfigurable: false }],
+    [EMaterialType.BATTLE_AXE, { droppable: true, defaultPriorityIndex: 26, distributionConfigurable: false }],
+
+    // Additional resources
+    [EMaterialType.GRAPES, { droppable: true, defaultPriorityIndex: 27, distributionConfigurable: false }],
+    [EMaterialType.SULFUR, { droppable: true, defaultPriorityIndex: 28, distributionConfigurable: false }],
+    [EMaterialType.DONKEY, { droppable: false, defaultPriorityIndex: 29, distributionConfigurable: false }],
+    [EMaterialType.GEMS, { droppable: true, defaultPriorityIndex: 30, distributionConfigurable: false }],
+    [EMaterialType.OFFICER_GEAR, { droppable: true, defaultPriorityIndex: 31, distributionConfigurable: false }],
 
     // Non-droppable
     [EMaterialType.NO_MATERIAL, { droppable: false, defaultPriorityIndex: -1, distributionConfigurable: false }],

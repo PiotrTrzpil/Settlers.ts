@@ -1,4 +1,5 @@
 import { BuildingType, MapObjectType } from '../entity';
+import { EMaterialType } from '../economy/material-type';
 import { AtlasRegion } from './entity-texture-atlas';
 
 /** Conversion factor from sprite pixels to world-space units */
@@ -11,8 +12,8 @@ export enum Race {
     Roman = 10,
     Viking = 11,
     Mayan = 12,
-    Trojan = 13,
-    // Dark Tribe uses file 14
+    DarkTribe = 13,  // Uses different building mappings
+    Trojan = 14,
 }
 
 /** Display names for races */
@@ -20,21 +21,69 @@ export const RACE_NAMES: Record<Race, string> = {
     [Race.Roman]: 'Roman',
     [Race.Viking]: 'Viking',
     [Race.Mayan]: 'Mayan',
+    [Race.DarkTribe]: 'Dark Tribe',
     [Race.Trojan]: 'Trojan',
 };
 
-/** List of all available races for UI */
+/** List of all available races for UI (excludes DarkTribe which has different mappings) */
 export const AVAILABLE_RACES: Race[] = [Race.Roman, Race.Viking, Race.Mayan, Race.Trojan];
 
 /**
  * GFX file numbers for different content types.
  */
 export const GFX_FILE_NUMBERS = {
-    /** Map objects (trees, stones, resources) */
-    MAP_OBJECTS: 20,
     /** Landscape textures */
     LANDSCAPE: 2,
+    /** Resource sprites (logs, piles, goods on ground) */
+    RESOURCES: 3,
+    /** Map objects (trees, stones, plants, decorations) */
+    MAP_OBJECTS: 5,
+    /** UI elements including building icons */
+    UI: 9,
 } as const;
+
+/**
+ * Direct GIL indices for building icons in the UI palette, per race.
+ * Each entry has [unselected, selected] indices.
+ * Mapped from the icon GFX files (9.gfx for Roman, 19.gfx for Viking, etc.)
+ */
+export const BUILDING_ICON_INDICES: Record<Race, Partial<Record<BuildingType, [number, number]>>> = {
+    [Race.Roman]: {
+        [BuildingType.Lumberjack]: [828, 833],
+    },
+    [Race.Viking]: {
+        [BuildingType.Lumberjack]: [772, 773],
+    },
+    [Race.Mayan]: {
+        [BuildingType.Lumberjack]: [776, 806],
+    },
+    [Race.DarkTribe]: {},
+    [Race.Trojan]: {},
+};
+
+/**
+ * GFX file numbers for building icons by race.
+ * These contain UI icons for the building palette.
+ */
+export const BUILDING_ICON_FILE_NUMBERS: Record<Race, number> = {
+    [Race.Roman]: 9,
+    [Race.Viking]: 19,
+    [Race.Mayan]: 29,
+    [Race.DarkTribe]: 9,  // Fallback to Roman icons
+    [Race.Trojan]: 39,
+};
+
+/**
+ * GFX file numbers for settler/unit sprites by race.
+ * These are separate from building sprites.
+ */
+export const SETTLER_FILE_NUMBERS: Record<Race, number> = {
+    [Race.Roman]: 20,
+    [Race.Viking]: 21,
+    [Race.Mayan]: 22,
+    [Race.DarkTribe]: 23,
+    [Race.Trojan]: 24,
+};
 
 /**
  * Metadata for a single sprite entry in the atlas.
@@ -84,29 +133,65 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
     // These can be verified/edited via the /building-sprites view
     // or by browsing JIL files in /jil-view
     [BuildingType.Lumberjack]:    1,
-    [BuildingType.Stonecutter]:   2,
+    [BuildingType.Forester]:      2,
     [BuildingType.Sawmill]:       3,
-    [BuildingType.Forester]:      4,
-    [BuildingType.Farm]:          5,
+    [BuildingType.Stonecutter]:   4,
+    [BuildingType.Waterworks]:    5,
     [BuildingType.Fishery]:       6,
-    [BuildingType.Windmill]:      7,
-    [BuildingType.Bakery]:        8,
-    [BuildingType.PigFarm]:       9,
-    [BuildingType.Slaughterhouse]: 10,
-    [BuildingType.Waterworks]:    11,
-    [BuildingType.CoalMine]:      12,
-    [BuildingType.IronMine]:      13,
-    [BuildingType.GoldMine]:      14,
-    [BuildingType.IronSmelter]:   15,
-    [BuildingType.GoldSmelter]:   16,
-    [BuildingType.WeaponSmith]:   17,
-    [BuildingType.ToolSmith]:     18,
-    [BuildingType.Warehouse]:     19,
-    [BuildingType.Guardhouse]:    20,
-    [BuildingType.Barrack]:       21,
-    [BuildingType.LivingHouse]:   22,
-    [BuildingType.Tower]:         23,
-    [BuildingType.Winegrower]:    24,
+    [BuildingType.Hunter]:        7,
+    [BuildingType.Slaughterhouse]: 8,
+    [BuildingType.Windmill]:      9,
+    [BuildingType.Bakery]:        10,
+    [BuildingType.Farm]:          11,
+    [BuildingType.PigFarm]:       12,
+    [BuildingType.DonkeyFarm]:    13,
+    [BuildingType.StoneMine]:     14,
+    [BuildingType.IronMine]:      15,
+    [BuildingType.GoldMine]:      16,
+    [BuildingType.CoalMine]:      17,
+    [BuildingType.SulfurMine]:    18,
+    [BuildingType.GoldSmelter]:   19,
+    [BuildingType.IronSmelter]:   20,
+    [BuildingType.ToolSmith]:     21,
+    [BuildingType.WeaponSmith]:   22,
+    [BuildingType.SiegeWorkshop]: 23,  // Siege engine maker (uncertain)
+    [BuildingType.LargeDecoration]: 33,
+    [BuildingType.Warehouse]:     34,
+    [BuildingType.Barrack]:       24,
+    [BuildingType.LivingHouse]:   26,
+    [BuildingType.Healer]:        27,
+    [BuildingType.AmmunitionMaker]: 28,
+    [BuildingType.Winegrower]:    29,
+    [BuildingType.WinePress]:     35,  // Wine processing (race-equivalent)
+    [BuildingType.SmallHouse]:    40,
+    [BuildingType.MediumHouse]:   41,
+    [BuildingType.LargeHouse]:    42,
+    [BuildingType.SmallTemple]:   43,
+    [BuildingType.LargeTemple]:   44,
+    [BuildingType.ScoutTower]:    45,
+    [BuildingType.Tower]:         46,
+    [BuildingType.LargeTower]:    47,
+    [BuildingType.Castle]:        48,
+    [BuildingType.Shipyard]:      52,  // 52-63, 76-79 are shipyard orientations
+    [BuildingType.Decoration]:    64,  // 64-75 are decorations
+};
+
+/**
+ * Mapping from EMaterialType to JIL job index in file 3.jil (resources).
+ * These indices need to be verified by visually inspecting the GFX file.
+ */
+export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
+    // Job 0: Placeholder
+    // Job 1: Unknown plant
+    [EMaterialType.IRONORE]: 2,
+    [EMaterialType.OFFICER_GEAR]: 3,  // Leader helmets/equipment
+    [EMaterialType.AXE]: 4,
+    [EMaterialType.BATTLE_AXE]: 5,    // Heavy battle axes
+    [EMaterialType.PLANK]: 7,
+    [EMaterialType.CROP]: 16,         // Wheat
+    [EMaterialType.TRUNK]: 22,        // Logs
+
+    // TODO: Need to identify remaining indices from visual inspection
 };
 
 /**

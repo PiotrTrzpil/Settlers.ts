@@ -39,7 +39,15 @@
             :class="{ active: game.mode === 'place_building' && game.placeBuildingType === b.type }"
             @click="setPlaceMode(b.type)"
           >
-            <span class="btn-icon">{{ b.icon }}</span>
+            <span class="btn-icon">
+              <img
+                v-if="getIconUrl(b.type)"
+                :src="getIconUrl(b.type, game.mode === 'place_building' && game.placeBuildingType === b.type)!"
+                :alt="b.name"
+                class="building-icon-img"
+              />
+              <span v-else>{{ b.icon }}</span>
+            </span>
             <span class="btn-label">{{ b.name }}</span>
           </button>
         </div>
@@ -166,10 +174,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, useTemplateRef } from 'vue';
+import { ref, computed, useTemplateRef } from 'vue';
 import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
+import { useBuildingIcons } from '@/composables/useBuildingIcons';
 import { Race, RACE_NAMES, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
+import { BuildingType } from '@/game/entity';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
@@ -206,6 +216,10 @@ const availableRaces = AVAILABLE_RACES.map(race => ({
     value: race,
     name: RACE_NAMES[race]
 }));
+
+// Building icons
+const fileManagerRef = computed(() => props.fileManager);
+const { getIconUrl } = useBuildingIcons(fileManagerRef, currentRace);
 
 async function onRaceChange() {
     const renderer = rendererRef.value;
@@ -319,8 +333,19 @@ async function onRaceChange() {
 .btn-icon {
   font-size: 20px;
   width: 28px;
+  height: 28px;
   text-align: center;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.building-icon-img {
+  max-width: 28px;
+  max-height: 28px;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
 .btn-label {

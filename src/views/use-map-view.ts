@@ -11,7 +11,6 @@ const log = new LogHandler('MapView');
 
 /** Buildings available in the UI - matches BUILDING_SPRITE_MAP entries */
 const availableBuildings = [
-    { type: BuildingType.Guardhouse, id: 'guardhouse', name: 'Guardhouse', icon: '🏰' },
     { type: BuildingType.Lumberjack, id: 'lumberjack', name: 'Lumberjack', icon: '🪓' },
     { type: BuildingType.Warehouse, id: 'warehouse', name: 'Warehouse', icon: '📦' },
     { type: BuildingType.Sawmill, id: 'sawmill', name: 'Sawmill', icon: '🪚' },
