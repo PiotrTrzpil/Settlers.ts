@@ -2,16 +2,16 @@ import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
 import { ShaderProgram } from './shader-program';
-import { Entity, EntityType, UnitState, TileCoord, CARDINAL_OFFSETS, BuildingType } from '../entity';
+import { Entity, EntityType, UnitState, TileCoord, BuildingType } from '../entity';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
-import { TerritoryMap, NO_OWNER } from '../systems/territory';
+import { TerritoryMap } from '../systems/territory';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
-import { EntityTextureAtlas } from './entity-texture-atlas';
-import { SpriteMetadataRegistry, SpriteEntry, Race, getBuildingSpriteMap, BUILDING_JOB_INDICES, GFX_FILE_NUMBERS, getMapObjectSpriteMap, MapObjectSpriteInfo } from './sprite-metadata';
-import { SpriteLoader, LoadedGfxFileSet } from './sprite-loader';
+import { SpriteEntry, Race } from './sprite-metadata';
 import { MapObjectType } from '../entity';
+import { TerritoryBorderRenderer } from './territory-border-renderer';
+import { SpriteRenderManager } from './sprite-render-manager';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -46,7 +46,6 @@ const TEXTURE_UNIT_SPRITE_ATLAS = 3;
 // Maximum path dots to show per selected unit
 const MAX_PATH_DOTS = 30;
 
-// eslint-disable-next-line no-multi-spaces
 const BASE_QUAD = new Float32Array([
     -0.5, -0.5, 0.5, -0.5,
     -0.5, 0.5, -0.5, 0.5,
@@ -71,19 +70,14 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private static log = new LogHandler('EntityRenderer');
 
     private dynamicBuffer: WebGLBuffer | null = null;
+    private glContext: WebGL2RenderingContext | null = null;
 
     private mapSize: MapSize;
     private groundHeight: Uint8Array;
 
-    // File manager for loading sprites
-    private fileManager: FileManager | null = null;
-    private spriteLoader: SpriteLoader | null = null;
-
-    // Sprite atlas and metadata (null if sprites not loaded)
-    private spriteAtlas: EntityTextureAtlas | null = null;
-    private spriteRegistry: SpriteMetadataRegistry | null = null;
-    private currentRace: Race = Race.Roman;
-    private glContext: WebGL2RenderingContext | null = null;
+    // Extracted managers
+    private spriteManager: SpriteRenderManager | null = null;
+    private territoryBorderRenderer: TerritoryBorderRenderer;
 
     // Sprite shader program (separate from color shader)
     private spriteShaderProgram: ShaderProgram | null = null;
@@ -105,8 +99,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // Territory visualization
     public territoryMap: TerritoryMap | null = null;
-    private territoryBorderCache: { x: number; y: number; player: number }[] = [];
-    private lastTerritoryVersion = -1;
     public territoryVersion = 0;
 
     // Render interpolation alpha for smooth sub-tick movement (0-1)
@@ -133,9 +125,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         super();
         this.mapSize = mapSize;
         this.groundHeight = groundHeight;
-        this.fileManager = fileManager ?? null;
+        this.territoryBorderRenderer = new TerritoryBorderRenderer(mapSize, groundHeight);
+
         if (fileManager) {
-            this.spriteLoader = new SpriteLoader(fileManager);
+            this.spriteManager = new SpriteRenderManager(fileManager, TEXTURE_UNIT_SPRITE_ATLAS);
         }
     }
 
@@ -155,9 +148,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Create a single reusable dynamic buffer for color shader
         this.dynamicBuffer = gl.createBuffer();
 
-        // Try to load sprite textures if file manager is available
-        if (this.fileManager) {
-            const loaded = await this.loadBuildingSprites(gl, TEXTURE_UNIT_SPRITE_ATLAS, this.currentRace);
+        // Initialize sprite manager if available
+        if (this.spriteManager) {
+            const loaded = await this.spriteManager.init(gl);
 
             if (loaded) {
                 // Initialize sprite shader
@@ -168,7 +161,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 this.spriteBuffer = gl.createBuffer();
 
                 EntityRenderer.log.debug(
-                    `Sprite rendering enabled: ${this.spriteRegistry?.getBuildingCount() ?? 0} building sprites loaded for ${Race[this.currentRace]}`
+                    `Sprite rendering enabled: ${this.spriteManager.spriteRegistry?.getBuildingCount() ?? 0} building sprites loaded for ${Race[this.spriteManager.currentRace]}`
                 );
             }
         }
@@ -180,7 +173,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      * Get the current race being used for building sprites.
      */
     public getRace(): Race {
-        return this.currentRace;
+        return this.spriteManager?.currentRace ?? Race.Roman;
     }
 
     /**
@@ -188,56 +181,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      * Returns true if sprites were loaded successfully.
      */
     public async setRace(race: Race): Promise<boolean> {
-        EntityRenderer.log.debug(`setRace called: ${Race[race]} (current: ${Race[this.currentRace]})`);
-        if (race === this.currentRace) return true;
-        if (!this.glContext || !this.fileManager) {
-            EntityRenderer.log.debug(`setRace failed: glContext=${!!this.glContext}, fileManager=${!!this.fileManager}`);
-            return false;
-        }
-
-        this.currentRace = race;
-
-        // Clean up old GPU resources before creating new ones
-        this.cleanupSpriteResources();
-
-        // Clear sprite loader cache for previous race files
-        this.spriteLoader?.clearCache();
-
-        // Reload sprites for the new race
-        const loaded = await this.loadBuildingSprites(
-            this.glContext,
-            TEXTURE_UNIT_SPRITE_ATLAS,
-            race
-        );
-
-        if (loaded) {
-            EntityRenderer.log.debug(
-                `Switched to ${Race[race]}: ${this.spriteRegistry?.getBuildingCount() ?? 0} building sprites loaded`
-            );
-        } else {
-            EntityRenderer.log.debug(`Failed to load sprites for ${Race[race]}, using color fallback`);
-        }
-
-        return loaded;
-    }
-
-    /**
-     * Clean up sprite-related GPU resources.
-     */
-    private cleanupSpriteResources(): void {
-        const gl = this.glContext;
-        if (!gl) return;
-
-        // Delete old sprite buffer
-        if (this.spriteBuffer) {
-            gl.deleteBuffer(this.spriteBuffer);
-            this.spriteBuffer = null;
-        }
-
-        // Clear registry
-        this.spriteRegistry?.clear();
-        this.spriteAtlas = null;
-        this.spriteBatchData = null;
+        if (!this.spriteManager) return false;
+        return this.spriteManager.setRace(race);
     }
 
     /**
@@ -254,12 +199,16 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
 
         // Clean up sprite shader resources
-        this.cleanupSpriteResources();
+        if (this.spriteBuffer) {
+            gl.deleteBuffer(this.spriteBuffer);
+            this.spriteBuffer = null;
+        }
         this.spriteShaderProgram?.free();
         this.spriteShaderProgram = null;
+        this.spriteBatchData = null;
 
-        // Clear sprite loader cache
-        this.spriteLoader?.clearCache();
+        // Clean up sprite manager
+        this.spriteManager?.destroy();
 
         EntityRenderer.log.debug('EntityRenderer resources cleaned up');
     }
@@ -279,180 +228,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.aSpriteTint = this.spriteShaderProgram.getAttribLocation('a_tint');
     }
 
-    /**
-     * Load building sprites from GFX files and pack them into the atlas.
-     * Uses the SpriteLoader service for file loading.
-     */
-    private async loadBuildingSprites(
-        gl: WebGL2RenderingContext,
-        textureIndex: number,
-        race: Race
-    ): Promise<boolean> {
-        if (!this.spriteLoader) return false;
-
-        // Get sprite map for the specified race
-        const spriteMap = getBuildingSpriteMap(race);
-
-        // Determine which GFX files we need to load based on the sprite map
-        const requiredFiles = new Set<number>();
-        for (const info of Object.values(spriteMap)) {
-            if (info) requiredFiles.add(info.file);
-        }
-
-        if (requiredFiles.size === 0) {
-            EntityRenderer.log.debug('No building sprites configured');
-            return false;
-        }
-
-        // Create atlas and registry - 4096 needed for large building sprites
-        const atlas = new EntityTextureAtlas(4096, textureIndex);
-        const registry = new SpriteMetadataRegistry();
-
-        let loadedAny = false;
-
-        for (const fileNum of requiredFiles) {
-            const loaded = await this.loadSpritesFromFile(fileNum, atlas, registry, spriteMap);
-            if (loaded) loadedAny = true;
-        }
-
-        if (!loadedAny) {
-            EntityRenderer.log.debug('No building sprite files found');
-        }
-
-        // Also try to load map object sprites (trees, stones, etc.)
-        // These go into the same atlas but use different sprite indices
-        const mapObjectsLoaded = await this.loadMapObjectSprites(atlas, registry);
-        if (mapObjectsLoaded) {
-            EntityRenderer.log.debug(`Map object sprites loaded: ${registry.getMapObjectCount()} objects`);
-        }
-
-        // Only return false if no sprites were loaded at all
-        if (!loadedAny && !mapObjectsLoaded) {
-            EntityRenderer.log.debug('No sprite files found, using color fallback');
-            return false;
-        }
-
-        // Upload atlas to GPU
-        atlas.load(gl);
-        this.spriteAtlas = atlas;
-        this.spriteRegistry = registry;
-
-        return registry.hasBuildingSprites() || registry.hasMapObjectSprites();
-    }
-
-    /**
-     * Load sprites from a single GFX file set using the SpriteLoader.
-     * The index in spriteMap is the JIL job index.
-     */
-    private async loadSpritesFromFile(
-        fileNum: number,
-        atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry,
-        spriteMap: Partial<Record<BuildingType, { file: number; index: number }>>
-    ): Promise<boolean> {
-        if (!this.spriteLoader) return false;
-
-        const fileId = `${fileNum}`;
-        const fileSet = await this.spriteLoader.loadFileSet(fileId);
-
-        if (!fileSet) {
-            EntityRenderer.log.debug(`GFX file set ${fileNum} not available`);
-            return false;
-        }
-
-        // JIL/DIL are required for building sprite lookup
-        if (!fileSet.jilReader || !fileSet.dilReader) {
-            EntityRenderer.log.debug(`JIL/DIL files not available for ${fileNum}, cannot load building sprites`);
-            return false;
-        }
-
-        try {
-            // Load sprites for each building type that uses this file
-            for (const [typeStr, info] of Object.entries(spriteMap)) {
-                if (!info || info.file !== fileNum) continue;
-
-                const buildingType = Number(typeStr) as BuildingType;
-                const jobIndex = info.index;
-
-                const loadedSprite = this.spriteLoader.loadJobSprite(fileSet, { jobIndex }, atlas);
-
-                if (!loadedSprite) {
-                    EntityRenderer.log.debug(`Failed to load sprite for building ${BuildingType[buildingType]} (job ${jobIndex})`);
-                    continue;
-                }
-
-                registry.registerBuilding(buildingType, loadedSprite.entry);
-            }
-
-            EntityRenderer.log.debug(`Loaded sprites from file ${fileNum}.gfx via SpriteLoader`);
-            return true;
-        } catch (e) {
-            EntityRenderer.log.error(`Failed to load GFX file ${fileNum}: ${e}`);
-            return false;
-        }
-    }
-
-    /**
-     * Load map object sprites (trees, stones, etc.) into the atlas.
-     * Map objects use direct GIL indexing rather than JIL job indexing.
-     */
-    private async loadMapObjectSprites(
-        atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry
-    ): Promise<boolean> {
-        if (!this.spriteLoader) return false;
-
-        const spriteMap = getMapObjectSpriteMap();
-        const fileNum = GFX_FILE_NUMBERS.MAP_OBJECTS;
-        const fileId = `${fileNum}`;
-
-        const fileSet = await this.spriteLoader.loadFileSet(fileId);
-        if (!fileSet) {
-            EntityRenderer.log.debug(`Map object GFX file ${fileNum} not available`);
-            return false;
-        }
-
-        try {
-            let loadedCount = 0;
-
-            for (const [typeStr, info] of Object.entries(spriteMap)) {
-                if (!info) continue;
-
-                const objectType = Number(typeStr) as MapObjectType;
-                const spriteIndex = info.index;
-                const paletteIndex = info.paletteIndex ?? 0;
-
-                const loadedSprite = this.spriteLoader.loadDirectSprite(
-                    fileSet,
-                    spriteIndex,
-                    paletteIndex,
-                    atlas
-                );
-
-                if (!loadedSprite) {
-                    EntityRenderer.log.debug(`Failed to load sprite for map object ${MapObjectType[objectType]} (index ${spriteIndex})`);
-                    continue;
-                }
-
-                registry.registerMapObject(objectType, loadedSprite.entry);
-                loadedCount++;
-            }
-
-            if (loadedCount > 0) {
-                EntityRenderer.log.debug(`Loaded ${loadedCount} map object sprites from file ${fileNum}.gfx`);
-                return true;
-            }
-
-            return false;
-        } catch (e) {
-            EntityRenderer.log.error(`Failed to load map object sprites: ${e}`);
-            return false;
-        }
-    }
-
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         if (!this.dynamicBuffer) return;
-        if (this.entities.length === 0 && !this.previewTile) return;
+        if (this.entities.length === 0 && !this.previewTile && !this.territoryMap) return;
 
         // Enable blending for semi-transparent entities
         gl.enable(gl.BLEND);
@@ -473,13 +251,16 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.disableVertexAttribArray(this.aColor);
 
         // Draw territory borders (color shader)
-        this.drawTerritoryBorders(gl, viewPoint);
+        this.territoryBorderRenderer.draw(
+            gl, viewPoint, this.territoryMap, this.territoryVersion,
+            this.aEntityPos, this.aColor
+        );
 
         // Draw path indicators for selected unit (color shader)
         this.drawSelectedUnitPath(gl, viewPoint);
 
         // Draw entities (textured or color fallback)
-        if (this.spriteAtlas && this.spriteRegistry && this.spriteShaderProgram) {
+        if (this.spriteManager?.hasSprites && this.spriteShaderProgram) {
             this.drawTexturedEntities(gl, projection, viewPoint);
             this.drawColorEntities(gl, projection, viewPoint, true); // Only units without sprites
         } else {
@@ -503,7 +284,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         projection: Float32Array,
         viewPoint: IViewPoint
     ): void {
-        if (!this.spriteShaderProgram || !this.spriteAtlas || !this.spriteRegistry ||
+        if (!this.spriteShaderProgram || !this.spriteManager?.hasSprites ||
             !this.spriteBuffer || !this.spriteBatchData) {
             return;
         }
@@ -520,19 +301,16 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             let tint: number[];
 
             if (entity.type === EntityType.Building) {
-                // Buildings: use building sprite registry with player color
-                spriteEntry = this.spriteRegistry.getBuilding(entity.subType as BuildingType);
+                spriteEntry = this.spriteManager.getBuilding(entity.subType as BuildingType);
                 const isSelected = this.selectedEntityIds.has(entity.id);
                 const playerColor = PLAYER_COLORS[entity.player % PLAYER_COLORS.length];
                 tint = this.computePlayerTint(playerColor, isSelected);
             } else if (entity.type === EntityType.MapObject) {
-                // Map objects (trees, stones): use map object registry with no tint
-                spriteEntry = this.spriteRegistry.getMapObject(entity.subType as MapObjectType);
+                spriteEntry = this.spriteManager.getMapObject(entity.subType as MapObjectType);
                 const isSelected = this.selectedEntityIds.has(entity.id);
-                // No player color for map objects, just brightness adjustment if selected
                 tint = isSelected ? [1.3, 1.3, 1.3, 1.0] : [1.0, 1.0, 1.0, 1.0];
             } else {
-                continue; // Skip units and other entity types for textured rendering
+                continue;
             }
 
             if (!spriteEntry) continue;
@@ -579,7 +357,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         const stride = 8 * 4; // 8 floats * 4 bytes
 
-        // Use cached attribute locations instead of looking up each time
         gl.enableVertexAttribArray(this.aSpritePos);
         gl.vertexAttribPointer(this.aSpritePos, 2, gl.FLOAT, false, stride, 0);
 
@@ -595,7 +372,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     /**
      * Fill sprite quad vertices into the batch buffer.
-     * Returns the new offset after adding 48 floats (6 vertices * 8 floats).
      */
     private fillSpriteQuad(
         offset: number,
@@ -612,7 +388,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const data = this.spriteBatchData;
         const { atlasRegion: region, offsetX, offsetY, widthWorld, heightWorld } = entry;
 
-        // Compute quad corners in world space
         const x0 = worldX + offsetX;
         const y0 = worldY + offsetY;
         const x1 = x0 + widthWorld;
@@ -621,9 +396,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const { u0, v0, u1, v1 } = region;
 
         // 6 vertices for 2 triangles (CCW winding)
-        // Triangle 1: top-left, bottom-left, bottom-right
-        // Triangle 2: top-left, bottom-right, top-right
-
         // Vertex 0: top-left
         data[offset++] = x0; data[offset++] = y1;
         data[offset++] = u0; data[offset++] = v0;
@@ -665,7 +437,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return SPRITE_TINT_SELECTED;
         }
 
-        // Blend between white (no tint) and player colour
         const r = 1.0 + (playerColor[0] - 1.0) * PLAYER_TINT_STRENGTH;
         const g = 1.0 + (playerColor[1] - 1.0) * PLAYER_TINT_STRENGTH;
         const b = 1.0 + (playerColor[2] - 1.0) * PLAYER_TINT_STRENGTH;
@@ -674,7 +445,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     /**
      * Draw entities using the color shader (solid quads).
-     * If texturedBuildingsHandled is true, only draws entities without sprites.
      */
     private drawColorEntities(
         gl: WebGL2RenderingContext,
@@ -682,7 +452,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         viewPoint: IViewPoint,
         texturedBuildingsHandled: boolean
     ): void {
-        // Re-activate color shader with proper projection
         super.drawBase(gl, projection);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
@@ -694,7 +463,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         for (const entity of this.entities) {
             // Skip textured buildings if they're handled by sprite renderer
             if (texturedBuildingsHandled && entity.type === EntityType.Building) {
-                const hasSprite = this.spriteRegistry?.getBuilding(entity.subType as BuildingType);
+                const hasSprite = this.spriteManager?.getBuilding(entity.subType as BuildingType);
+                if (hasSprite) continue;
+            }
+
+            // Skip textured map objects
+            if (texturedBuildingsHandled && entity.type === EntityType.MapObject) {
+                const hasSprite = this.spriteManager?.getMapObject(entity.subType as MapObjectType);
                 if (hasSprite) continue;
             }
 
@@ -703,7 +478,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const color = isSelected ? SELECTED_COLOR : playerColor;
             const scale = entity.type === EntityType.Building ? BUILDING_SCALE : UNIT_SCALE;
 
-            // Use interpolated position for units, exact position for buildings
             let worldPos: { worldX: number; worldY: number };
             if (entity.type === EntityType.Unit) {
                 worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
@@ -715,7 +489,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 );
             }
 
-            // Set entity world position, fill quad centered at origin
             gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
             this.fillQuadVertices(0, 0, scale);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
@@ -728,7 +501,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      * Draw selection rings for selected entities.
      */
     private drawSelectionRings(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
-        // Re-bind color shader state
         gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
 
         for (const entity of this.entities) {
@@ -755,11 +527,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
     }
 
-    /** Get the interpolated world position for a unit using lerp between prev and current tile */
+    /** Get the interpolated world position for a unit */
     private getInterpolatedWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {
         const unitState = this.unitStates.get(entity.id);
 
-        // No unit state or not moving: use exact position
         if (!unitState || unitState.pathIndex >= unitState.path.length) {
             return TilePicker.tileToWorld(
                 entity.x, entity.y,
@@ -779,9 +550,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             viewPoint.x, viewPoint.y
         );
 
-        // Lerp between previous and current position using moveProgress
-        // Add sub-tick interpolation using renderAlpha to smooth movement between ticks
-        // Estimate expected progress by end of current tick: speed * (1/30) per tick
         const tickProgress = unitState.speed * (1 / 30);
         const t = Math.min(unitState.moveProgress + this.renderAlpha * tickProgress, 1);
         return {
@@ -800,7 +568,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const unitState = this.unitStates.get(entityId);
             if (!unitState || unitState.pathIndex >= unitState.path.length) continue;
 
-            // Draw a small dot at each remaining waypoint
             const maxDots = Math.min(unitState.path.length, unitState.pathIndex + MAX_PATH_DOTS);
             for (let i = unitState.pathIndex; i < maxDots; i++) {
                 const wp = unitState.path[i];
@@ -833,8 +600,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         );
 
         // Try to use sprite preview if available
-        if (this.previewBuildingType !== null && this.spriteAtlas && this.spriteRegistry && this.spriteShaderProgram) {
-            const spriteEntry = this.spriteRegistry.getBuilding(this.previewBuildingType);
+        if (this.previewBuildingType !== null && this.spriteManager?.hasSprites && this.spriteShaderProgram) {
+            const spriteEntry = this.spriteManager.getBuilding(this.previewBuildingType);
             if (spriteEntry) {
                 const tint = this.previewValid ? SPRITE_TINT_PREVIEW_VALID : SPRITE_TINT_PREVIEW_INVALID;
 
@@ -868,93 +635,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
-    /** Draw small markers at territory border tiles */
-    private drawTerritoryBorders(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
-        if (!this.territoryMap) return;
-
-        // Rebuild border cache when territory changes
-        if (this.lastTerritoryVersion !== this.territoryVersion) {
-            this.rebuildBorderCache();
-            this.lastTerritoryVersion = this.territoryVersion;
-        }
-
-        const BORDER_SCALE = 0.15;
-        const BORDER_ALPHA = 0.35;
-
-        for (const border of this.territoryBorderCache) {
-            const worldPos = TilePicker.tileToWorld(
-                border.x, border.y,
-                this.groundHeight, this.mapSize,
-                viewPoint.x, viewPoint.y
-            );
-
-            const playerColor = PLAYER_COLORS[border.player % PLAYER_COLORS.length];
-            gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
-            this.fillQuadVertices(0, 0, BORDER_SCALE);
-            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-            gl.vertexAttrib4f(this.aColor, playerColor[0], playerColor[1], playerColor[2], BORDER_ALPHA);
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
-        }
-    }
-
-    /** Compute which tiles are on a territory border (owned with a differently-owned neighbor) */
-    private rebuildBorderCache(): void {
-        this.territoryBorderCache = [];
-        if (!this.territoryMap) return;
-
-        const w = this.mapSize.width;
-        const h = this.mapSize.height;
-
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                const owner = this.territoryMap.getOwner(x, y);
-                if (owner === NO_OWNER) continue;
-
-                // Check if this is a border tile
-                let isBorder = false;
-                for (const [dx, dy] of CARDINAL_OFFSETS) {
-                    const nx = x + dx;
-                    const ny = y + dy;
-                    if (nx < 0 || nx >= w || ny < 0 || ny >= h) {
-                        isBorder = true;
-                        break;
-                    }
-                    if (this.territoryMap.getOwner(nx, ny) !== owner) {
-                        isBorder = true;
-                        break;
-                    }
-                }
-
-                if (isBorder) {
-                    this.territoryBorderCache.push({ x, y, player: owner });
-                }
-            }
-        }
-    }
-
     private fillQuadVertices(worldX: number, worldY: number, scale: number): void {
         const verts = this.vertexData;
         for (let i = 0; i < 6; i++) {
             verts[i * 2] = BASE_QUAD[i * 2] * scale + worldX;
             verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1] * scale + worldY;
         }
-    }
-
-    /**
-     * Helper method to draw a single colored quad at a world position.
-     * Reduces code duplication in color shader drawing methods.
-     */
-    private drawColorQuad(
-        gl: WebGL2RenderingContext,
-        worldX: number,
-        worldY: number,
-        scale: number,
-        color: readonly number[]
-    ): void {
-        gl.vertexAttrib2f(this.aEntityPos, worldX, worldY);
-        this.fillQuadVertices(0, 0, scale);
-        gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-        gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 }

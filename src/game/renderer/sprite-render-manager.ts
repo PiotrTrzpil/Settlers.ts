@@ -1,0 +1,286 @@
+import { LogHandler } from '@/utilities/log-handler';
+import { FileManager } from '@/utilities/file-manager';
+import { EntityTextureAtlas } from './entity-texture-atlas';
+import {
+    SpriteMetadataRegistry,
+    SpriteEntry,
+    Race,
+    getBuildingSpriteMap,
+    GFX_FILE_NUMBERS,
+    getMapObjectSpriteMap
+} from './sprite-metadata';
+import { SpriteLoader, LoadedGfxFileSet } from './sprite-loader';
+import { BuildingType, MapObjectType } from '../entity';
+
+/**
+ * Manages sprite loading, atlas packing, and race switching for entity rendering.
+ * Extracted from EntityRenderer to separate concerns.
+ */
+export class SpriteRenderManager {
+    private static log = new LogHandler('SpriteRenderManager');
+
+    private fileManager: FileManager;
+    private spriteLoader: SpriteLoader;
+    private glContext: WebGL2RenderingContext | null = null;
+    private textureUnit: number;
+
+    // Sprite atlas and metadata
+    private _spriteAtlas: EntityTextureAtlas | null = null;
+    private _spriteRegistry: SpriteMetadataRegistry | null = null;
+    private _currentRace: Race = Race.Roman;
+
+    constructor(fileManager: FileManager, textureUnit: number) {
+        this.fileManager = fileManager;
+        this.textureUnit = textureUnit;
+        this.spriteLoader = new SpriteLoader(fileManager);
+    }
+
+    /** Get the sprite atlas (null if not loaded) */
+    get spriteAtlas(): EntityTextureAtlas | null {
+        return this._spriteAtlas;
+    }
+
+    /** Get the sprite registry (null if not loaded) */
+    get spriteRegistry(): SpriteMetadataRegistry | null {
+        return this._spriteRegistry;
+    }
+
+    /** Get the current race */
+    get currentRace(): Race {
+        return this._currentRace;
+    }
+
+    /** Check if sprites are available for rendering */
+    get hasSprites(): boolean {
+        return this._spriteAtlas !== null && this._spriteRegistry !== null;
+    }
+
+    /**
+     * Initialize sprite loading. Call once after GL context is available.
+     */
+    public async init(gl: WebGL2RenderingContext): Promise<boolean> {
+        this.glContext = gl;
+        return this.loadSpritesForRace(gl, this._currentRace);
+    }
+
+    /**
+     * Switch to a different race and reload sprites.
+     * Returns true if sprites were loaded successfully.
+     */
+    public async setRace(race: Race): Promise<boolean> {
+        SpriteRenderManager.log.debug(`setRace called: ${Race[race]} (current: ${Race[this._currentRace]})`);
+
+        if (race === this._currentRace) return true;
+        if (!this.glContext) {
+            SpriteRenderManager.log.debug('setRace failed: no GL context');
+            return false;
+        }
+
+        this._currentRace = race;
+
+        // Clean up old resources
+        this.cleanup();
+        this.spriteLoader.clearCache();
+
+        // Load new sprites
+        const loaded = await this.loadSpritesForRace(this.glContext, race);
+
+        if (loaded) {
+            SpriteRenderManager.log.debug(
+                `Switched to ${Race[race]}: ${this._spriteRegistry?.getBuildingCount() ?? 0} building sprites loaded`
+            );
+        } else {
+            SpriteRenderManager.log.debug(`Failed to load sprites for ${Race[race]}, using color fallback`);
+        }
+
+        return loaded;
+    }
+
+    /**
+     * Get a building sprite entry by type.
+     */
+    public getBuilding(type: BuildingType): SpriteEntry | null {
+        return this._spriteRegistry?.getBuilding(type) ?? null;
+    }
+
+    /**
+     * Get a map object sprite entry by type.
+     */
+    public getMapObject(type: MapObjectType): SpriteEntry | null {
+        return this._spriteRegistry?.getMapObject(type) ?? null;
+    }
+
+    /**
+     * Clean up GPU resources. Call when switching races or destroying.
+     */
+    public cleanup(): void {
+        this._spriteRegistry?.clear();
+        this._spriteAtlas = null;
+    }
+
+    /**
+     * Full cleanup including sprite loader cache.
+     */
+    public destroy(): void {
+        this.cleanup();
+        this.spriteLoader.clearCache();
+        SpriteRenderManager.log.debug('SpriteRenderManager resources cleaned up');
+    }
+
+    /**
+     * Load sprites for a specific race.
+     */
+    private async loadSpritesForRace(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
+        const spriteMap = getBuildingSpriteMap(race);
+
+        // Determine which GFX files we need
+        const requiredFiles = new Set<number>();
+        for (const info of Object.values(spriteMap)) {
+            if (info) requiredFiles.add(info.file);
+        }
+
+        if (requiredFiles.size === 0) {
+            SpriteRenderManager.log.debug('No building sprites configured');
+            return false;
+        }
+
+        // Create atlas and registry - 4096 needed for large building sprites
+        const atlas = new EntityTextureAtlas(4096, this.textureUnit);
+        const registry = new SpriteMetadataRegistry();
+
+        let loadedAny = false;
+
+        for (const fileNum of requiredFiles) {
+            const loaded = await this.loadSpritesFromFile(fileNum, atlas, registry, spriteMap);
+            if (loaded) loadedAny = true;
+        }
+
+        if (!loadedAny) {
+            SpriteRenderManager.log.debug('No building sprite files found');
+        }
+
+        // Also load map object sprites (trees, stones)
+        const mapObjectsLoaded = await this.loadMapObjectSprites(atlas, registry);
+        if (mapObjectsLoaded) {
+            SpriteRenderManager.log.debug(`Map object sprites loaded: ${registry.getMapObjectCount()} objects`);
+        }
+
+        if (!loadedAny && !mapObjectsLoaded) {
+            SpriteRenderManager.log.debug('No sprite files found, using color fallback');
+            return false;
+        }
+
+        // Upload atlas to GPU
+        atlas.load(gl);
+        this._spriteAtlas = atlas;
+        this._spriteRegistry = registry;
+
+        return registry.hasBuildingSprites() || registry.hasMapObjectSprites();
+    }
+
+    /**
+     * Load sprites from a single GFX file set.
+     */
+    private async loadSpritesFromFile(
+        fileNum: number,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry,
+        spriteMap: Partial<Record<BuildingType, { file: number; index: number }>>
+    ): Promise<boolean> {
+        const fileId = `${fileNum}`;
+        const fileSet = await this.spriteLoader.loadFileSet(fileId);
+
+        if (!fileSet) {
+            SpriteRenderManager.log.debug(`GFX file set ${fileNum} not available`);
+            return false;
+        }
+
+        if (!fileSet.jilReader || !fileSet.dilReader) {
+            SpriteRenderManager.log.debug(`JIL/DIL files not available for ${fileNum}`);
+            return false;
+        }
+
+        try {
+            for (const [typeStr, info] of Object.entries(spriteMap)) {
+                if (!info || info.file !== fileNum) continue;
+
+                const buildingType = Number(typeStr) as BuildingType;
+                const jobIndex = info.index;
+
+                const loadedSprite = this.spriteLoader.loadJobSprite(fileSet, { jobIndex }, atlas);
+
+                if (!loadedSprite) {
+                    SpriteRenderManager.log.debug(
+                        `Failed to load sprite for building ${BuildingType[buildingType]} (job ${jobIndex})`
+                    );
+                    continue;
+                }
+
+                registry.registerBuilding(buildingType, loadedSprite.entry);
+            }
+
+            SpriteRenderManager.log.debug(`Loaded sprites from file ${fileNum}.gfx`);
+            return true;
+        } catch (e) {
+            SpriteRenderManager.log.error(`Failed to load GFX file ${fileNum}: ${e}`);
+            return false;
+        }
+    }
+
+    /**
+     * Load map object sprites (trees, stones, etc.).
+     */
+    private async loadMapObjectSprites(
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry
+    ): Promise<boolean> {
+        const spriteMap = getMapObjectSpriteMap();
+        const fileNum = GFX_FILE_NUMBERS.MAP_OBJECTS;
+        const fileId = `${fileNum}`;
+
+        const fileSet = await this.spriteLoader.loadFileSet(fileId);
+        if (!fileSet) {
+            SpriteRenderManager.log.debug(`Map object GFX file ${fileNum} not available`);
+            return false;
+        }
+
+        try {
+            let loadedCount = 0;
+
+            for (const [typeStr, info] of Object.entries(spriteMap)) {
+                if (!info) continue;
+
+                const objectType = Number(typeStr) as MapObjectType;
+                const spriteIndex = info.index;
+                const paletteIndex = info.paletteIndex ?? 0;
+
+                const loadedSprite = this.spriteLoader.loadDirectSprite(
+                    fileSet,
+                    spriteIndex,
+                    paletteIndex,
+                    atlas
+                );
+
+                if (!loadedSprite) {
+                    SpriteRenderManager.log.debug(
+                        `Failed to load sprite for map object ${MapObjectType[objectType]} (index ${spriteIndex})`
+                    );
+                    continue;
+                }
+
+                registry.registerMapObject(objectType, loadedSprite.entry);
+                loadedCount++;
+            }
+
+            if (loadedCount > 0) {
+                SpriteRenderManager.log.debug(`Loaded ${loadedCount} map object sprites from file ${fileNum}.gfx`);
+                return true;
+            }
+
+            return false;
+        } catch (e) {
+            SpriteRenderManager.log.error(`Failed to load map object sprites: ${e}`);
+            return false;
+        }
+    }
+}
