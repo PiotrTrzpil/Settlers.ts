@@ -1,4 +1,4 @@
-import { CARDINAL_OFFSETS, tileKey, BuildingType, getBuildingSize, getBuildingFootprint } from '../entity';
+import { CARDINAL_OFFSETS, tileKey, BuildingType, getBuildingFootprint } from '../entity';
 import { MapSize } from '@/utilities/map-size';
 import { TerritoryMap, NO_OWNER } from './territory';
 
@@ -154,7 +154,6 @@ export function canPlaceBuildingFootprint(
     hasBuildings: boolean,
     buildingType: BuildingType
 ): boolean {
-    const size = getBuildingSize(buildingType);
     const footprint = getBuildingFootprint(x, y, buildingType);
 
     // Check if entire footprint is within map bounds

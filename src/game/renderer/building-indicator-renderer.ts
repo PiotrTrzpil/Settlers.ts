@@ -176,7 +176,6 @@ export class BuildingIndicatorRenderer {
             return PlacementStatus.InvalidTerrain;
         }
 
-        const size = getBuildingSize(this.buildingType);
         const footprint = getBuildingFootprint(x, y, this.buildingType);
 
         // Check if entire footprint is within map bounds
