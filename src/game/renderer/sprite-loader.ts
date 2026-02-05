@@ -41,7 +41,8 @@ export interface LoadedSprite {
  */
 export interface JobSpriteConfig {
     jobIndex: number;
-    directionIndex?: number; // Default: 0 (first direction)
+    /** Direction index. Default: 1 (completed building). D0 = construction, D1 = completed. */
+    directionIndex?: number;
     frameIndex?: number; // Default: 0 (first frame)
 }
 
@@ -131,7 +132,7 @@ export class SpriteLoader {
         config: JobSpriteConfig,
         atlas: EntityTextureAtlas
     ): LoadedSprite | null {
-        const { jobIndex, directionIndex = 0, frameIndex = 0 } = config;
+        const { jobIndex, directionIndex = 1, frameIndex = 0 } = config;
 
         if (!fileSet.jilReader || !fileSet.dilReader) {
             SpriteLoader.log.debug(`JIL/DIL not available for file ${fileSet.fileId}`);

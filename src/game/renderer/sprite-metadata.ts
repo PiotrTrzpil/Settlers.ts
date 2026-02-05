@@ -54,6 +54,17 @@ export interface SpriteEntry {
 }
 
 /**
+ * Direction indices for building sprites.
+ * D0 = construction/ghost, D1 = completed building.
+ */
+export const BUILDING_DIRECTION = {
+    /** Partially constructed / ghost preview */
+    CONSTRUCTION: 0,
+    /** Completed building */
+    COMPLETED: 1,
+} as const;
+
+/**
  * Defines the GFX file and sprite index for a building type.
  */
 export interface BuildingSpriteInfo {

@@ -41,6 +41,9 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         const game = getGame();
         if (game == null || renderer == null) return;
 
+        // Clear old renderers before adding new ones (important for game reloads)
+        renderer.clear();
+
         landscapeRenderer = new LandscapeRenderer(
             game.fileManager,
             game.mapSize,

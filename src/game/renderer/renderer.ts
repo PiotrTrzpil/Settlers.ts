@@ -27,7 +27,7 @@ export class Renderer {
 
         this.canvas = canvas;
         this.viewPoint = new ViewPoint(canvas);
-        this.viewPoint.onMove = () => this.onMove();
+        // Note: onMove callback removed - the game loop now drives all rendering via drawOnce()
 
         let newGl = canvas.getContext('webgl2', { preserveDrawingBuffer: true });
         if (!newGl) {
@@ -52,10 +52,6 @@ export class Renderer {
     public destroy(): void {
         this.gl = null;
         this.viewPoint.destroy();
-    }
-
-    private onMove() {
-        this.requestDraw();
     }
 
     /** Perform a single draw call (used by game loop) */
@@ -127,5 +123,10 @@ export class Renderer {
 
     public add(newRenderer: IRenderer): void {
         this.renderers.push(newRenderer);
+    }
+
+    /** Clear all renderers (call before adding new ones on game change) */
+    public clear(): void {
+        this.renderers = [];
     }
 }

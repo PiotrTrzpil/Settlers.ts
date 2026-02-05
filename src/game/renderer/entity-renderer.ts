@@ -396,34 +396,35 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const { u0, v0, u1, v1 } = region;
 
         // 6 vertices for 2 triangles (CCW winding)
+        // Note: V coordinates flipped (v1 at top, v0 at bottom) to correct texture orientation
         // Vertex 0: top-left
         data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = v0;
+        data[offset++] = u0; data[offset++] = v1;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 1: bottom-left
         data[offset++] = x0; data[offset++] = y0;
-        data[offset++] = u0; data[offset++] = v1;
+        data[offset++] = u0; data[offset++] = v0;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 2: bottom-right
         data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1; data[offset++] = v1;
+        data[offset++] = u1; data[offset++] = v0;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 3: top-left (again)
         data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = v0;
+        data[offset++] = u0; data[offset++] = v1;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 4: bottom-right (again)
         data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1; data[offset++] = v1;
+        data[offset++] = u1; data[offset++] = v0;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 5: top-right
         data[offset++] = x1; data[offset++] = y1;
-        data[offset++] = u1; data[offset++] = v0;
+        data[offset++] = u1; data[offset++] = v1;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         return offset;
@@ -600,12 +601,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         );
 
         // Try to use sprite preview if available
-        if (this.previewBuildingType !== null && this.spriteManager?.hasSprites && this.spriteShaderProgram) {
+        const sp = this.spriteShaderProgram;
+        if (this.previewBuildingType !== null && this.spriteManager?.hasSprites && sp) {
             const spriteEntry = this.spriteManager.getBuilding(this.previewBuildingType);
             if (spriteEntry) {
                 const tint = this.previewValid ? SPRITE_TINT_PREVIEW_VALID : SPRITE_TINT_PREVIEW_INVALID;
 
-                const sp = this.spriteShaderProgram;
                 sp.use();
                 sp.setMatrix('projection', projection);
                 sp.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
