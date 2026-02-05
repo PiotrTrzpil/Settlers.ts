@@ -2,6 +2,12 @@ import { LogHandler } from '@/utilities/log-handler';
 import { ShaderTexture } from './shader-texture';
 
 /**
+ * Padding in pixels around each sprite to prevent texture bleeding
+ * when sampling near edges with bilinear filtering.
+ */
+const ATLAS_PADDING = 1;
+
+/**
  * Defines a region within the texture atlas, with both pixel coordinates
  * and normalized UV coordinates for shader use.
  */
@@ -96,36 +102,44 @@ export class EntityTextureAtlas extends ShaderTexture {
     /**
      * Reserve a region in the atlas for a sprite of the given dimensions.
      * Uses row-based slot packing: sprites of the same height share a row.
+     * Includes padding to prevent texture bleeding.
      * Returns null if the atlas is full.
      */
     public reserve(width: number, height: number): AtlasRegion | null {
-        // Find an existing slot with matching height and enough space
-        let slot = this.slots.find(s => s.height === height && s.leftSize >= width);
+        // Account for padding in slot size
+        const paddedWidth = width + ATLAS_PADDING * 2;
+        const paddedHeight = height + ATLAS_PADDING * 2;
+
+        // Find an existing slot with matching padded height and enough space
+        let slot = this.slots.find(s => s.height === paddedHeight && s.leftSize >= paddedWidth);
 
         if (!slot) {
             // Need to create a new slot (row)
             const freeY = this.slots.length > 0 ? this.slots[this.slots.length - 1].bottom : 0;
 
             // Check if we have vertical space
-            if (freeY + height > this.atlasHeight) {
+            if (freeY + paddedHeight > this.atlasHeight) {
                 EntityTextureAtlas.log.error(`Atlas full: cannot fit ${width}x${height} sprite`);
                 return null;
             }
 
-            slot = new Slot(freeY, this.atlasWidth, height);
+            slot = new Slot(freeY, this.atlasWidth, paddedHeight);
             this.slots.push(slot);
         }
 
-        const x = slot.x;
-        const y = slot.y;
+        // Actual sprite position (inside the padding)
+        const x = slot.x + ATLAS_PADDING;
+        const y = slot.y + ATLAS_PADDING;
 
-        // Compute normalized UV coordinates
-        const u0 = x / this.atlasWidth;
-        const v0 = y / this.atlasHeight;
-        const u1 = (x + width) / this.atlasWidth;
-        const v1 = (y + height) / this.atlasHeight;
+        // Compute normalized UV coordinates with half-pixel inset to prevent bleeding
+        const halfPixelU = 0.5 / this.atlasWidth;
+        const halfPixelV = 0.5 / this.atlasHeight;
+        const u0 = x / this.atlasWidth + halfPixelU;
+        const v0 = y / this.atlasHeight + halfPixelV;
+        const u1 = (x + width) / this.atlasWidth - halfPixelU;
+        const v1 = (y + height) / this.atlasHeight - halfPixelV;
 
-        slot.increase(width);
+        slot.increase(paddedWidth);
 
         return { x, y, width, height, u0, v0, u1, v1 };
     }
@@ -133,6 +147,7 @@ export class EntityTextureAtlas extends ShaderTexture {
     /**
      * Copy sprite pixel data into a reserved region of the atlas.
      * The ImageData must match the region dimensions.
+     * Uses row-based copying for better performance.
      */
     public blit(region: AtlasRegion, imageData: ImageData): void {
         if (imageData.width !== region.width || imageData.height !== region.height) {
@@ -146,19 +161,18 @@ export class EntityTextureAtlas extends ShaderTexture {
         const src = imageData.data;
         const dst = this.imgData;
         const atlasW = this.atlasWidth;
+        const rowBytes = region.width * 4;
 
+        // Use row-based copying with TypedArray.set() for better performance
         for (let y = 0; y < region.height; y++) {
-            const srcRow = y * region.width * 4;
-            const dstRow = ((region.y + y) * atlasW + region.x) * 4;
+            const srcRowStart = y * rowBytes;
+            const dstRowStart = ((region.y + y) * atlasW + region.x) * 4;
 
-            for (let x = 0; x < region.width; x++) {
-                const srcIdx = srcRow + x * 4;
-                const dstIdx = dstRow + x * 4;
-                dst[dstIdx + 0] = src[srcIdx + 0]; // R
-                dst[dstIdx + 1] = src[srcIdx + 1]; // G
-                dst[dstIdx + 2] = src[srcIdx + 2]; // B
-                dst[dstIdx + 3] = src[srcIdx + 3]; // A
-            }
+            // Copy entire row at once using subarray view
+            dst.set(
+                src.subarray(srcRowStart, srcRowStart + rowBytes),
+                dstRowStart
+            );
         }
     }
 

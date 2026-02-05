@@ -36,13 +36,16 @@ export class GfxImage implements IGfxImage {
     private getImageDataWithRunLengthEncoding(buffer: Uint8Array, imgData: Uint32Array, pos: number, length: number) {
         const paletteOffset = this.paletteOffset;
         const palette = this.palette;
+        const bufferLength = buffer.length;
 
         let j = 0;
-        while (j < length) {
+        while (j < length && pos < bufferLength) {
             const value = buffer[pos];
             pos++;
 
             if (value <= 1) {
+                // Bounds check before reading count byte
+                if (pos >= bufferLength) break;
                 const count = buffer[pos];
                 pos++;
 
@@ -61,13 +64,12 @@ export class GfxImage implements IGfxImage {
     private getImageDataWithNoEncoding(buffer: Uint8Array, imgData: Uint32Array, pos: number, length: number) {
         const paletteOffset = this.paletteOffset;
         const palette = this.palette;
+        const bufferLength = buffer.length;
 
         let j = 0;
-        while (j < length) {
+        while (j < length && pos < bufferLength) {
             const value = buffer[pos];
             pos++;
-
-            // imgData[j++] = value << 8 | value << 16 | value | 0xFF000000;
 
             imgData[j++] = palette.getColor(paletteOffset + value);
         }

@@ -43,6 +43,6 @@ export class DilFileReader extends IndexFile {
     }
 
     public toString(): string {
-        return 'jil: ' + super.toString();
+        return 'dil: ' + super.toString();
     }
 }

@@ -34,13 +34,18 @@ const PREVIEW_VALID_COLOR = [0.3, 1.0, 0.3, 0.5]; // Green ghost building
 const PREVIEW_INVALID_COLOR = [1.0, 0.3, 0.3, 0.5]; // Red ghost building
 
 // Sprite tint colors (multiplicative, so 1.0 = no change)
-const SPRITE_TINT_NORMAL = [1.0, 1.0, 1.0, 1.0]; // No tint
 const SPRITE_TINT_SELECTED = [1.3, 1.3, 1.3, 1.0]; // Bright highlight
 const SPRITE_TINT_PREVIEW_VALID = [0.5, 1.0, 0.5, 0.5]; // Green ghost
 const SPRITE_TINT_PREVIEW_INVALID = [1.0, 0.5, 0.5, 0.5]; // Red ghost
 
 // Player tint strength (0 = no tint, 1 = full player color)
 const PLAYER_TINT_STRENGTH = 0.4;
+
+// Texture unit assignments (landscape uses 0-2)
+const TEXTURE_UNIT_SPRITE_ATLAS = 3;
+
+// Maximum path dots to show per selected unit
+const MAX_PATH_DOTS = 30;
 
 // eslint-disable-next-line no-multi-spaces
 const BASE_QUAD = new Float32Array([
@@ -114,6 +119,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private aPosition = -1;
     private aEntityPos = -1;
     private aColor = -1;
+
+    // Cached attribute locations for sprite shader
+    private aSpritePos = -1;
+    private aSpriteTex = -1;
+    private aSpriteTint = -1;
 
     // Reusable vertex buffer to avoid per-frame allocations
     private vertexData = new Float32Array(6 * 2);
@@ -193,9 +203,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         this.currentRace = race;
 
-        // Clear existing sprites
-        this.spriteRegistry?.clear();
-        this.spriteAtlas = null;
+        // Clean up old GPU resources before creating new ones
+        this.cleanupSpriteResources();
+
+        // Clear sprite loader cache for previous race files
+        this.spriteLoader?.clearCache();
 
         // Reload sprites for the new race
         const loaded = await this.loadBuildingSprites(
@@ -216,6 +228,49 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /**
+     * Clean up sprite-related GPU resources.
+     */
+    private cleanupSpriteResources(): void {
+        const gl = this.glContext;
+        if (!gl) return;
+
+        // Delete old sprite buffer
+        if (this.spriteBuffer) {
+            gl.deleteBuffer(this.spriteBuffer);
+            this.spriteBuffer = null;
+        }
+
+        // Clear registry
+        this.spriteRegistry?.clear();
+        this.spriteAtlas = null;
+        this.spriteBatchData = null;
+    }
+
+    /**
+     * Clean up all GPU resources. Call when destroying the renderer.
+     */
+    public destroy(): void {
+        const gl = this.glContext;
+        if (!gl) return;
+
+        // Clean up color shader resources
+        if (this.dynamicBuffer) {
+            gl.deleteBuffer(this.dynamicBuffer);
+            this.dynamicBuffer = null;
+        }
+
+        // Clean up sprite shader resources
+        this.cleanupSpriteResources();
+        this.spriteShaderProgram?.free();
+        this.spriteShaderProgram = null;
+
+        // Clear sprite loader cache
+        this.spriteLoader?.clearCache();
+
+        EntityRenderer.log.debug('EntityRenderer resources cleaned up');
+    }
+
+    /**
      * Initialize the sprite shader program.
      */
     private initSpriteShader(gl: WebGL2RenderingContext): void {
@@ -223,6 +278,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.spriteShaderProgram.init(gl);
         this.spriteShaderProgram.attachShaders(spriteVertCode, spriteFragCode);
         this.spriteShaderProgram.create();
+
+        // Cache attribute locations for sprite shader
+        this.aSpritePos = this.spriteShaderProgram.getAttribLocation('a_position');
+        this.aSpriteTex = this.spriteShaderProgram.getAttribLocation('a_texcoord');
+        this.aSpriteTint = this.spriteShaderProgram.getAttribLocation('a_tint');
     }
 
     /**
@@ -457,7 +517,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const sp = this.spriteShaderProgram;
         sp.use();
         sp.setMatrix('projection', projection);
-        sp.bindTexture('u_spriteAtlas', 3); // Use texture unit 3 (0-2 used by landscape)
+        sp.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
 
         let batchOffset = 0;
 
@@ -483,6 +543,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
             if (!spriteEntry) continue;
 
+            // Check batch capacity BEFORE adding to avoid buffer overflow
+            if (batchOffset + FLOATS_PER_ENTITY > this.spriteBatchData.length) {
+                this.flushSpriteBatch(gl, sp, batchOffset);
+                batchOffset = 0;
+            }
+
             const worldPos = TilePicker.tileToWorld(
                 entity.x, entity.y,
                 this.groundHeight, this.mapSize,
@@ -496,12 +562,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 spriteEntry,
                 tint[0], tint[1], tint[2], tint[3]
             );
-
-            // Check batch capacity
-            if (batchOffset >= this.spriteBatchData.length) {
-                this.flushSpriteBatch(gl, sp, batchOffset);
-                batchOffset = 0;
-            }
         }
 
         // Flush remaining sprites
@@ -515,7 +575,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      */
     private flushSpriteBatch(
         gl: WebGL2RenderingContext,
-        sp: ShaderProgram,
+        _sp: ShaderProgram,
         floatCount: number
     ): void {
         if (!this.spriteBuffer || !this.spriteBatchData || floatCount === 0) return;
@@ -525,18 +585,15 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         const stride = 8 * 4; // 8 floats * 4 bytes
 
-        const aPos = sp.getAttribLocation('a_position');
-        const aTex = sp.getAttribLocation('a_texcoord');
-        const aTint = sp.getAttribLocation('a_tint');
+        // Use cached attribute locations instead of looking up each time
+        gl.enableVertexAttribArray(this.aSpritePos);
+        gl.vertexAttribPointer(this.aSpritePos, 2, gl.FLOAT, false, stride, 0);
 
-        gl.enableVertexAttribArray(aPos);
-        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, stride, 0);
+        gl.enableVertexAttribArray(this.aSpriteTex);
+        gl.vertexAttribPointer(this.aSpriteTex, 2, gl.FLOAT, false, stride, 8);
 
-        gl.enableVertexAttribArray(aTex);
-        gl.vertexAttribPointer(aTex, 2, gl.FLOAT, false, stride, 8);
-
-        gl.enableVertexAttribArray(aTint);
-        gl.vertexAttribPointer(aTint, 4, gl.FLOAT, false, stride, 16);
+        gl.enableVertexAttribArray(this.aSpriteTint);
+        gl.vertexAttribPointer(this.aSpriteTint, 4, gl.FLOAT, false, stride, 16);
 
         const vertexCount = floatCount / 8;
         gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
@@ -749,8 +806,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const unitState = this.unitStates.get(entityId);
             if (!unitState || unitState.pathIndex >= unitState.path.length) continue;
 
-            // Draw a small dot at each remaining waypoint (max 30 per unit)
-            const maxDots = Math.min(unitState.path.length, unitState.pathIndex + 30);
+            // Draw a small dot at each remaining waypoint
+            const maxDots = Math.min(unitState.path.length, unitState.pathIndex + MAX_PATH_DOTS);
             for (let i = unitState.pathIndex; i < maxDots; i++) {
                 const wp = unitState.path[i];
                 const worldPos = TilePicker.tileToWorld(
@@ -790,7 +847,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 const sp = this.spriteShaderProgram;
                 sp.use();
                 sp.setMatrix('projection', projection);
-                sp.bindTexture('u_spriteAtlas', 3);
+                sp.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
 
                 const offset = this.fillSpriteQuad(
                     0,
@@ -887,5 +944,23 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             verts[i * 2] = BASE_QUAD[i * 2] * scale + worldX;
             verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1] * scale + worldY;
         }
+    }
+
+    /**
+     * Helper method to draw a single colored quad at a world position.
+     * Reduces code duplication in color shader drawing methods.
+     */
+    private drawColorQuad(
+        gl: WebGL2RenderingContext,
+        worldX: number,
+        worldY: number,
+        scale: number,
+        color: readonly number[]
+    ): void {
+        gl.vertexAttrib2f(this.aEntityPos, worldX, worldY);
+        this.fillQuadVertices(0, 0, scale);
+        gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+        gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 }
