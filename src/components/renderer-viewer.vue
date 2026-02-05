@@ -12,11 +12,13 @@ import { useTemplateRef } from 'vue';
 import { Game } from '@/game/game';
 import { useRenderer } from './use-renderer';
 import { Race } from '@/game/renderer/sprite-metadata';
+import { LayerVisibility, DEFAULT_LAYER_VISIBILITY } from '@/game/renderer/layer-visibility';
 
 const props = defineProps<{
     game: Game | null;
     debugGrid: boolean;
     showTerritoryBorders: boolean;
+    layerVisibility?: LayerVisibility;
 }>();
 
 const emit = defineEmits<{
@@ -30,6 +32,7 @@ const { setRace, getRace } = useRenderer({
     getGame: () => props.game,
     getDebugGrid: () => props.debugGrid,
     getShowTerritoryBorders: () => props.showTerritoryBorders,
+    getLayerVisibility: () => props.layerVisibility ?? DEFAULT_LAYER_VISIBILITY,
     onTileClick: (tile) => emit('tileClick', tile)
 });
 

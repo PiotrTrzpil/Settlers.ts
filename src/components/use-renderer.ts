@@ -28,12 +28,14 @@ import {
     HANDLED,
     UNHANDLED,
 } from '@/game/input';
+import { LayerVisibility, DEFAULT_LAYER_VISIBILITY } from '@/game/renderer/layer-visibility';
 
 interface UseRendererOptions {
     canvas: Ref<HTMLCanvasElement | null>;
     getGame: () => Game | null;
     getDebugGrid: () => boolean;
     getShowTerritoryBorders: () => boolean;
+    getLayerVisibility: () => LayerVisibility;
     onTileClick: (tile: { x: number; y: number }) => void;
 }
 
@@ -42,6 +44,7 @@ export function useRenderer({
     getGame,
     getDebugGrid,
     getShowTerritoryBorders,
+    getLayerVisibility,
     onTileClick,
 }: UseRendererOptions) {
     let renderer: Renderer | null = null;
@@ -343,6 +346,7 @@ export function useRenderer({
                 entityRenderer.territoryMap = getShowTerritoryBorders() ? g.territory : null;
                 entityRenderer.territoryVersion = g.territoryVersion;
                 entityRenderer.renderAlpha = alpha;
+                entityRenderer.layerVisibility = getLayerVisibility();
 
                 // Get render state from input manager
                 const renderState = inputManager?.getRenderState();

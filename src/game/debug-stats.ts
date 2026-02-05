@@ -1,9 +1,10 @@
-import { reactive } from 'vue';
+import { reactive, watch } from 'vue';
 import { GameState } from './game-state';
 import { EntityType } from './entity';
 import type { Game } from './game';
 
 const WINDOW_SIZE = 60;
+const SETTINGS_STORAGE_KEY = 'settlers_debug_settings';
 
 export interface DebugStatsState {
     // Readiness (for Playwright tests)
@@ -51,6 +52,75 @@ export interface DebugStatsState {
     riverFlipInner: boolean;
     riverFlipOuter: boolean;
     riverFlipMiddle: boolean;
+
+    // Debug panel UI state (persisted)
+    debugPanelOpen: boolean;
+    debugGridEnabled: boolean;
+    territoryBordersEnabled: boolean;
+
+    // Layer panel UI state (persisted)
+    layerPanelOpen: boolean;
+}
+
+/** Settings that should be persisted to localStorage */
+interface PersistedDebugSettings {
+    zoomSpeed: number;
+    panSpeed: number;
+    riverSlotPermutation: number;
+    riverFlipInner: boolean;
+    riverFlipOuter: boolean;
+    riverFlipMiddle: boolean;
+    debugPanelOpen: boolean;
+    debugGridEnabled: boolean;
+    territoryBordersEnabled: boolean;
+    layerPanelOpen: boolean;
+}
+
+/** Default values for persisted settings */
+const DEFAULT_SETTINGS: PersistedDebugSettings = {
+    zoomSpeed: 0.05,
+    panSpeed: 40,
+    riverSlotPermutation: 0,
+    riverFlipInner: false,
+    riverFlipOuter: false,
+    riverFlipMiddle: false,
+    debugPanelOpen: false,
+    debugGridEnabled: false,
+    territoryBordersEnabled: true,
+    layerPanelOpen: false,
+};
+
+/** Load persisted settings from localStorage */
+function loadDebugSettings(): PersistedDebugSettings {
+    try {
+        const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (!stored) return { ...DEFAULT_SETTINGS };
+        const parsed = JSON.parse(stored) as Partial<PersistedDebugSettings>;
+        return {
+            zoomSpeed: parsed.zoomSpeed ?? DEFAULT_SETTINGS.zoomSpeed,
+            panSpeed: parsed.panSpeed ?? DEFAULT_SETTINGS.panSpeed,
+            riverSlotPermutation: parsed.riverSlotPermutation ?? DEFAULT_SETTINGS.riverSlotPermutation,
+            riverFlipInner: parsed.riverFlipInner ?? DEFAULT_SETTINGS.riverFlipInner,
+            riverFlipOuter: parsed.riverFlipOuter ?? DEFAULT_SETTINGS.riverFlipOuter,
+            riverFlipMiddle: parsed.riverFlipMiddle ?? DEFAULT_SETTINGS.riverFlipMiddle,
+            debugPanelOpen: parsed.debugPanelOpen ?? DEFAULT_SETTINGS.debugPanelOpen,
+            debugGridEnabled: parsed.debugGridEnabled ?? DEFAULT_SETTINGS.debugGridEnabled,
+            territoryBordersEnabled: parsed.territoryBordersEnabled ?? DEFAULT_SETTINGS.territoryBordersEnabled,
+            layerPanelOpen: parsed.layerPanelOpen ?? DEFAULT_SETTINGS.layerPanelOpen,
+        };
+    } catch (e) {
+        console.warn('Failed to load debug settings from localStorage:', e);
+        return { ...DEFAULT_SETTINGS };
+    }
+}
+
+/** Save persisted settings to localStorage */
+function saveDebugSettings(settings: PersistedDebugSettings): void {
+    try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch (e) {
+        console.warn('Failed to save debug settings to localStorage:', e);
+    }
 }
 
 class DebugStats {
@@ -62,6 +132,9 @@ class DebugStats {
     private tickResetTime = 0;
 
     constructor() {
+        // Load persisted settings
+        const savedSettings = loadDebugSettings();
+
         this.state = reactive<DebugStatsState>({
             gameLoaded: false,
             rendererReady: false,
@@ -79,8 +152,8 @@ class DebugStats {
             cameraX: 0,
             cameraY: 0,
             zoom: 0,
-            zoomSpeed: 0.05,
-            panSpeed: 40,
+            zoomSpeed: savedSettings.zoomSpeed,
+            panSpeed: savedSettings.panSpeed,
             canvasWidth: 0,
             canvasHeight: 0,
             tileX: 0,
@@ -91,14 +164,56 @@ class DebugStats {
             mode: '',
             selectedEntityId: null,
             selectedCount: 0,
-            riverSlotPermutation: 0,
-            riverFlipInner: false,
-            riverFlipOuter: false,
-            riverFlipMiddle: false,
+            riverSlotPermutation: savedSettings.riverSlotPermutation,
+            riverFlipInner: savedSettings.riverFlipInner,
+            riverFlipOuter: savedSettings.riverFlipOuter,
+            riverFlipMiddle: savedSettings.riverFlipMiddle,
+            debugPanelOpen: savedSettings.debugPanelOpen,
+            debugGridEnabled: savedSettings.debugGridEnabled,
+            territoryBordersEnabled: savedSettings.territoryBordersEnabled,
+            layerPanelOpen: savedSettings.layerPanelOpen,
         });
 
         // Expose on window for Playwright tests
         (window as any).__settlers_debug__ = this.state;
+
+        // Set up watchers to auto-save settings when they change
+        this.setupSettingsWatchers();
+    }
+
+    /** Set up watchers to persist settings on change */
+    private setupSettingsWatchers(): void {
+        // Watch all persisted settings and save when any changes
+        const settingsKeys: (keyof PersistedDebugSettings)[] = [
+            'zoomSpeed', 'panSpeed', 'riverSlotPermutation',
+            'riverFlipInner', 'riverFlipOuter', 'riverFlipMiddle',
+            'debugPanelOpen', 'debugGridEnabled', 'territoryBordersEnabled',
+            'layerPanelOpen'
+        ];
+
+        for (const key of settingsKeys) {
+            watch(
+                () => this.state[key],
+                () => this.saveSettings(),
+                { flush: 'post' }
+            );
+        }
+    }
+
+    /** Save current settings to localStorage */
+    private saveSettings(): void {
+        saveDebugSettings({
+            zoomSpeed: this.state.zoomSpeed,
+            panSpeed: this.state.panSpeed,
+            riverSlotPermutation: this.state.riverSlotPermutation,
+            riverFlipInner: this.state.riverFlipInner,
+            riverFlipOuter: this.state.riverFlipOuter,
+            riverFlipMiddle: this.state.riverFlipMiddle,
+            debugPanelOpen: this.state.debugPanelOpen,
+            debugGridEnabled: this.state.debugGridEnabled,
+            territoryBordersEnabled: this.state.territoryBordersEnabled,
+            layerPanelOpen: this.state.layerPanelOpen,
+        });
     }
 
     public recordFrame(now: number): void {

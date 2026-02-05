@@ -1,11 +1,32 @@
-import { ref, shallowRef, triggerRef, computed, watch, onMounted } from 'vue';
+import { ref, shallowRef, triggerRef, computed, watch, onMounted, reactive, toRef } from 'vue';
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
 import { createTestMapLoader } from '@/game/test-map-factory';
-import { Entity, TileCoord, UnitType, BuildingType } from '@/game/entity';
+import { Entity, EntityType, TileCoord, UnitType, BuildingType, MapObjectType } from '@/game/entity';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
+import {
+    LayerVisibility,
+    loadLayerVisibility,
+    saveLayerVisibility,
+    isResourceDeposit,
+    getEnvironmentSubLayer,
+    EnvironmentSubLayer,
+} from '@/game/renderer/layer-visibility';
+import { debugStats } from '@/game/debug-stats';
+
+/** Entity counts per layer for display in the layer panel */
+export interface LayerCounts {
+    buildings: number;
+    units: number;
+    resources: number;
+    environment: number;
+    trees: number;
+    stones: number;
+    plants: number;
+    other: number;
+}
 
 const log = new LogHandler('MapView');
 
@@ -40,10 +61,27 @@ export function useMapView(getFileManager: () => FileManager) {
     const fileName = ref<string | null>(null);
     const mapInfo = ref('');
     const game = shallowRef<Game | null>(null);
-    const showDebug = ref(false);
-    const showTerritoryBorders = ref(true);
+
+    // Use debug stats for persisted settings
+    const showDebug = computed({
+        get: () => debugStats.state.debugGridEnabled,
+        set: (value: boolean) => { debugStats.state.debugGridEnabled = value; }
+    });
+    const showTerritoryBorders = computed({
+        get: () => debugStats.state.territoryBordersEnabled,
+        set: (value: boolean) => { debugStats.state.territoryBordersEnabled = value; }
+    });
+
     const activeTab = ref<'buildings' | 'units'>('buildings');
     const hoveredTile = ref<TileCoord | null>(null);
+
+    // Layer visibility state (loaded from localStorage)
+    const layerVisibility = reactive<LayerVisibility>(loadLayerVisibility());
+
+    function updateLayerVisibility(newVisibility: LayerVisibility): void {
+        Object.assign(layerVisibility, newVisibility);
+        saveLayerVisibility(layerVisibility);
+    }
 
     const selectedEntity = computed<Entity | undefined>(() => {
         if (!game.value || game.value.state.selectedEntityId === null) return undefined;
@@ -58,6 +96,59 @@ export function useMapView(getFileManager: () => FileManager) {
     const isPaused = computed<boolean>(() => {
         if (!game.value) return false;
         return !game.value.gameLoop.isRunning;
+    });
+
+    /** Compute entity counts per layer */
+    const layerCounts = computed<LayerCounts>(() => {
+        const counts: LayerCounts = {
+            buildings: 0,
+            units: 0,
+            resources: 0,
+            environment: 0,
+            trees: 0,
+            stones: 0,
+            plants: 0,
+            other: 0,
+        };
+
+        if (!game.value) return counts;
+
+        for (const entity of game.value.state.entities) {
+            switch (entity.type) {
+                case EntityType.Building:
+                    counts.buildings++;
+                    break;
+                case EntityType.Unit:
+                    counts.units++;
+                    break;
+                case EntityType.MapObject: {
+                    const objType = entity.subType as MapObjectType;
+                    if (isResourceDeposit(objType)) {
+                        counts.resources++;
+                    } else {
+                        counts.environment++;
+                        const subLayer = getEnvironmentSubLayer(objType);
+                        switch (subLayer) {
+                            case EnvironmentSubLayer.Trees:
+                                counts.trees++;
+                                break;
+                            case EnvironmentSubLayer.Stones:
+                                counts.stones++;
+                                break;
+                            case EnvironmentSubLayer.Plants:
+                                counts.plants++;
+                                break;
+                            case EnvironmentSubLayer.Other:
+                                counts.other++;
+                                break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        return counts;
     });
 
     function loadTestMap(): void {
@@ -209,12 +300,15 @@ export function useMapView(getFileManager: () => FileManager) {
         selectionCount,
         isPaused,
         availableBuildings,
+        layerVisibility,
+        layerCounts,
         onFileSelect,
         onTileClick,
         setPlaceMode,
         setSelectMode,
         removeSelected,
         togglePause,
-        spawnUnit
+        spawnUnit,
+        updateLayerVisibility
     };
 }

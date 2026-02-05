@@ -134,11 +134,18 @@
           :game="game"
           :debugGrid="showDebug"
           :showTerritoryBorders="showTerritoryBorders"
+          :layerVisibility="layerVisibility"
           @tileClick="onTileClick"
           class="game-canvas"
         />
 
-        <!-- Debug panel overlay -->
+        <!-- Layer panel overlay (left side) -->
+        <layer-panel
+          :counts="layerCounts"
+          @update:visibility="updateLayerVisibility"
+        />
+
+        <!-- Debug panel overlay (right side) -->
         <debug-panel
           :debugGrid="showDebug"
           :showTerritoryBorders="showTerritoryBorders"
@@ -167,6 +174,7 @@
         :game="game"
         :debugGrid="showDebug"
         :showTerritoryBorders="showTerritoryBorders"
+        :layerVisibility="layerVisibility"
         @tileClick="onTileClick"
       />
     </div>
@@ -184,6 +192,7 @@ import { BuildingType } from '@/game/entity';
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
 import DebugPanel from '@/components/debug-panel.vue';
+import LayerPanel from '@/components/layer-panel.vue';
 
 const props = defineProps<{
     fileManager: FileManager;
@@ -199,13 +208,16 @@ const {
     selectionCount,
     isPaused,
     availableBuildings,
+    layerVisibility,
+    layerCounts,
     onFileSelect,
     onTileClick,
     setPlaceMode,
     setSelectMode,
     removeSelected,
     togglePause,
-    spawnUnit
+    spawnUnit,
+    updateLayerVisibility
 } = useMapView(() => props.fileManager);
 
 // Race selection

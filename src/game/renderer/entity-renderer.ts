@@ -16,7 +16,13 @@ import { TerritoryBorderRenderer } from './territory-border-renderer';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { BuildingIndicatorRenderer } from './building-indicator-renderer';
 import { getAnimatedSprite } from '../systems/animation';
-import { BuildingConstructionPhase } from '../entity';
+import {
+    LayerVisibility,
+    DEFAULT_LAYER_VISIBILITY,
+    isMapObjectVisible,
+    getMapObjectFallbackColor,
+    getMapObjectDotScale,
+} from './layer-visibility';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -121,6 +127,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // Render interpolation alpha for smooth sub-tick movement (0-1)
     public renderAlpha = 0;
+
+    // Layer visibility settings
+    public layerVisibility: LayerVisibility = { ...DEFAULT_LAYER_VISIBILITY };
 
     // Cached attribute/uniform locations for color shader
     private aPosition = -1;
@@ -374,6 +383,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         let batchOffset = 0;
 
         for (const entity of this.entities) {
+            // Skip entities hidden by layer visibility
+            if (!this.isEntityVisible(entity)) continue;
+
             let spriteEntry: SpriteEntry | null = null;
             let tint: number[];
             let verticalProgress = 1.0; // Full visibility by default
@@ -677,16 +689,24 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.disableVertexAttribArray(this.aColor);
 
         for (const entity of this.entities) {
+            // Skip entities hidden by layer visibility
+            if (!this.isEntityVisible(entity)) continue;
+
             // Skip textured buildings if they're handled by sprite renderer
             if (texturedBuildingsHandled && entity.type === EntityType.Building) {
                 const hasSprite = this.spriteManager?.getBuilding(entity.subType as BuildingType);
                 if (hasSprite) continue;
             }
 
-            // Skip textured map objects
-            if (texturedBuildingsHandled && entity.type === EntityType.MapObject) {
-                const hasSprite = this.spriteManager?.getMapObject(entity.subType as MapObjectType);
-                if (hasSprite) continue;
+            // Handle map objects - use colored dots if no sprite available
+            if (entity.type === EntityType.MapObject) {
+                if (texturedBuildingsHandled) {
+                    const hasSprite = this.spriteManager?.getMapObject(entity.subType as MapObjectType);
+                    if (hasSprite) continue;
+                }
+                // Draw colored dot fallback for map objects without textures
+                this.drawMapObjectDot(gl, entity, viewPoint);
+                continue;
             }
 
             // Skip textured stacked resources
@@ -732,6 +752,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         for (const entity of this.entities) {
             if (!this.selectedEntityIds.has(entity.id)) continue;
+            // Don't show selection rings for hidden entities
+            if (!this.isEntityVisible(entity)) continue;
 
             let scale = UNIT_SCALE;
             if (entity.type === EntityType.Building) {
@@ -873,5 +895,49 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             verts[i * 2] = BASE_QUAD[i * 2] * scale + worldX;
             verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1] * scale + worldY;
         }
+    }
+
+    /**
+     * Check if an entity should be rendered based on layer visibility settings.
+     */
+    private isEntityVisible(entity: Entity): boolean {
+        switch (entity.type) {
+            case EntityType.Building:
+                return this.layerVisibility.buildings;
+
+            case EntityType.Unit:
+                return this.layerVisibility.units;
+
+            case EntityType.MapObject:
+                return isMapObjectVisible(this.layerVisibility, entity.subType as MapObjectType);
+
+            default:
+                return true;
+        }
+    }
+
+    /**
+     * Draw a colored dot for a map object without sprite texture.
+     */
+    private drawMapObjectDot(
+        gl: WebGL2RenderingContext,
+        entity: Entity,
+        viewPoint: IViewPoint
+    ): void {
+        const objectType = entity.subType as MapObjectType;
+        const color = getMapObjectFallbackColor(objectType);
+        const scale = getMapObjectDotScale(objectType);
+
+        const worldPos = TilePicker.tileToWorld(
+            entity.x, entity.y,
+            this.groundHeight, this.mapSize,
+            viewPoint.x, viewPoint.y
+        );
+
+        gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
+        this.fillQuadVertices(0, 0, scale);
+        gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+        gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 }
