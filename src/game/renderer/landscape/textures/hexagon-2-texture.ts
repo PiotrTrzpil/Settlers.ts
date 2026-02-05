@@ -54,9 +54,15 @@ export class Hexagon2Texture extends LandscapeTextureBase implements ILandscapeT
             use2 ? this.srcY2 : this.srcY1
         );
 
-        if (tp.t0 === this.innerType) {
+        // Identify which corner is the "minority" type (the one that differs from the other two).
+        // This works correctly even after fallback substitution (e.g., River3→River4) where
+        // the original TexturePoint types don't match the texture's innerType.
+        const t0IsMinority = (tp.t0 !== tp.t1) && (tp.t0 !== tp.t2);
+        const t1IsMinority = (tp.t1 !== tp.t0) && (tp.t1 !== tp.t2);
+
+        if (t0IsMinority) {
             return [destX + 2, destY + 1];
-        } else if (tp.t1 === this.innerType) {
+        } else if (t1IsMinority) {
             return [destX + 3, destY];
         } else {
             return [destX + 1, destY];
@@ -70,9 +76,15 @@ export class Hexagon2Texture extends LandscapeTextureBase implements ILandscapeT
             use2 ? this.srcY2 : this.srcY1
         );
 
-        if (tp.t0 === this.innerType) {
+        // Identify which corner is the "minority" type (the one that differs from the other two).
+        // This works correctly even after fallback substitution (e.g., River3→River4) where
+        // the original TexturePoint types don't match the texture's innerType.
+        const t0IsMinority = (tp.t0 !== tp.t1) && (tp.t0 !== tp.t2);
+        const t1IsMinority = (tp.t1 !== tp.t0) && (tp.t1 !== tp.t2);
+
+        if (t0IsMinority) {
             return [destX + 2, destY + 1];
-        } else if (tp.t1 === this.innerType) {
+        } else if (t1IsMinority) {
             return [destX + 1, destY];
         } else {
             return [destX, destY + 1];

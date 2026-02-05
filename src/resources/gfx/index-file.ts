@@ -30,11 +30,11 @@ export class IndexFile extends ResourceFile {
         }
 
         const l = this.offsetTable.length;
-        let lenght = -1;
+        let length = -1;
 
         for (let i = index + 1; i < l; i++) {
             if (this.offsetTable[i]) {
-                lenght = this.offsetTable[i] - offset;
+                length = this.offsetTable[i] - offset;
                 break;
             }
         }
@@ -42,7 +42,7 @@ export class IndexFile extends ResourceFile {
         return {
             index,
             offset: (offset - 20) >> 2,
-            lenght: lenght >> 2
+            length: length >> 2
         };
     }
 

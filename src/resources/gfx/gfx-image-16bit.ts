@@ -12,6 +12,10 @@ export class GfxImage16Bit implements IGfxImage {
     public width: number;
     /** height of the image */
     public height: number;
+    /** left (x) offset to display the image */
+    public left = 0;
+    /** top (y) offset to display the image */
+    public top = 0;
 
     public flag1 = 0;
     public flag2 = 0;

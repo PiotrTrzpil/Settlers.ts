@@ -12,6 +12,10 @@ export class GfxImage8Bit implements IGfxImage {
     public width = 0;
     /** height of the image */
     public height = 0;
+    /** left (x) offset to display the image */
+    public left = 0;
+    /** top (y) offset to display the image */
+    public top = 0;
 
     public flag1 = 0;
     public flag2 = 0;
