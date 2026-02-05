@@ -136,20 +136,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue';
+import { reactive, computed } from 'vue';
 import {
     LayerVisibility,
     loadLayerVisibility,
     saveLayerVisibility,
-    DEFAULT_LAYER_VISIBILITY,
 } from '@/game/renderer/layer-visibility';
+import { debugStats } from '@/game/debug-stats';
 
 const emit = defineEmits<{
     (e: 'update:visibility', value: LayerVisibility): void;
 }>();
 
-// Panel state
-const open = ref(false);
+// Use the persisted open state from debug stats
+const open = computed({
+    get: () => debugStats.state.layerPanelOpen,
+    set: (value: boolean) => { debugStats.state.layerPanelOpen = value; }
+});
+
+// Section expansion state (local, not persisted)
 const sections = reactive({
     main: true,
     environment: true,

@@ -57,6 +57,9 @@ export interface DebugStatsState {
     debugPanelOpen: boolean;
     debugGridEnabled: boolean;
     territoryBordersEnabled: boolean;
+
+    // Layer panel UI state (persisted)
+    layerPanelOpen: boolean;
 }
 
 /** Settings that should be persisted to localStorage */
@@ -70,6 +73,7 @@ interface PersistedDebugSettings {
     debugPanelOpen: boolean;
     debugGridEnabled: boolean;
     territoryBordersEnabled: boolean;
+    layerPanelOpen: boolean;
 }
 
 /** Default values for persisted settings */
@@ -83,6 +87,7 @@ const DEFAULT_SETTINGS: PersistedDebugSettings = {
     debugPanelOpen: false,
     debugGridEnabled: false,
     territoryBordersEnabled: true,
+    layerPanelOpen: false,
 };
 
 /** Load persisted settings from localStorage */
@@ -101,6 +106,7 @@ function loadDebugSettings(): PersistedDebugSettings {
             debugPanelOpen: parsed.debugPanelOpen ?? DEFAULT_SETTINGS.debugPanelOpen,
             debugGridEnabled: parsed.debugGridEnabled ?? DEFAULT_SETTINGS.debugGridEnabled,
             territoryBordersEnabled: parsed.territoryBordersEnabled ?? DEFAULT_SETTINGS.territoryBordersEnabled,
+            layerPanelOpen: parsed.layerPanelOpen ?? DEFAULT_SETTINGS.layerPanelOpen,
         };
     } catch (e) {
         console.warn('Failed to load debug settings from localStorage:', e);
@@ -165,6 +171,7 @@ class DebugStats {
             debugPanelOpen: savedSettings.debugPanelOpen,
             debugGridEnabled: savedSettings.debugGridEnabled,
             territoryBordersEnabled: savedSettings.territoryBordersEnabled,
+            layerPanelOpen: savedSettings.layerPanelOpen,
         });
 
         // Expose on window for Playwright tests
@@ -180,7 +187,8 @@ class DebugStats {
         const settingsKeys: (keyof PersistedDebugSettings)[] = [
             'zoomSpeed', 'panSpeed', 'riverSlotPermutation',
             'riverFlipInner', 'riverFlipOuter', 'riverFlipMiddle',
-            'debugPanelOpen', 'debugGridEnabled', 'territoryBordersEnabled'
+            'debugPanelOpen', 'debugGridEnabled', 'territoryBordersEnabled',
+            'layerPanelOpen'
         ];
 
         for (const key of settingsKeys) {
@@ -204,6 +212,7 @@ class DebugStats {
             debugPanelOpen: this.state.debugPanelOpen,
             debugGridEnabled: this.state.debugGridEnabled,
             territoryBordersEnabled: this.state.territoryBordersEnabled,
+            layerPanelOpen: this.state.layerPanelOpen,
         });
     }
 

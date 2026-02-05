@@ -20,7 +20,6 @@ import {
     isMapObjectVisible,
     getMapObjectFallbackColor,
     getMapObjectDotScale,
-    isResourceDeposit,
 } from './layer-visibility';
 
 import vertCode from './shaders/entity-vert.glsl';
