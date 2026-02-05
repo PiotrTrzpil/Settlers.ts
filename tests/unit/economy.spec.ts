@@ -36,11 +36,7 @@ describe('Material Types', () => {
         expect(isMaterialDroppable(EMaterialType.BREAD)).toBe(true);
     });
 
-    it('should return correct priority via getMaterialPriority', () => {
-        expect(getMaterialPriority(EMaterialType.PLANK)).toBe(0);
-        expect(getMaterialPriority(EMaterialType.STONE)).toBe(1);
-        expect(getMaterialPriority(EMaterialType.NO_MATERIAL)).toBe(-1);
-    });
+    // Note: getMaterialPriority values are verified by game-session flow test.
 
     it('should not include NO_MATERIAL in DROPPABLE_MATERIALS', () => {
         expect(DROPPABLE_MATERIALS).not.toContain(EMaterialType.NO_MATERIAL);
@@ -100,17 +96,8 @@ describe('Production Chains', () => {
         expect(BUILDING_PRODUCTIONS.has(BuildingType.WeaponSmith)).toBe(true);
     });
 
-    it('should map Lumberjack to TRUNK output with no inputs', () => {
-        const chain = BUILDING_PRODUCTIONS.get(BuildingType.Lumberjack)!;
-        expect(chain.output).toBe(EMaterialType.TRUNK);
-        expect(chain.inputs).toHaveLength(0);
-    });
-
-    it('should map Sawmill to PLANK output with TRUNK input', () => {
-        const chain = BUILDING_PRODUCTIONS.get(BuildingType.Sawmill)!;
-        expect(chain.output).toBe(EMaterialType.PLANK);
-        expect(chain.inputs).toContain(EMaterialType.TRUNK);
-    });
+    // Note: Lumberjack→TRUNK and Sawmill→PLANK chain tests are covered by
+    // game-session flow test.
 
     it('should map IronSmelter to IRON output with IRONORE and COAL inputs', () => {
         const chain = BUILDING_PRODUCTIONS.get(BuildingType.IronSmelter)!;
@@ -121,10 +108,7 @@ describe('Production Chains', () => {
 });
 
 describe('getBuildingTypesRequestingMaterial', () => {
-    it('should return Sawmill for TRUNK', () => {
-        const buildings = getBuildingTypesRequestingMaterial(EMaterialType.TRUNK);
-        expect(buildings).toContain(BuildingType.Sawmill);
-    });
+    // Note: TRUNK→Sawmill lookup is covered by game-session flow test.
 
     it('should return multiple buildings for COAL', () => {
         const buildings = getBuildingTypesRequestingMaterial(EMaterialType.COAL);

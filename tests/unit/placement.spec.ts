@@ -1,103 +1,44 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { canPlaceBuilding, isPassable, isBuildable } from '@/game/systems/placement';
-import { MapSize } from '@/utilities/map-size';
+import { canPlaceBuilding } from '@/game/systems/placement';
+import { createTestMap, TERRAIN, setTerrainAt, setHeightAt, type TestMap } from './helpers/test-map';
 
-describe('Building Placement', () => {
-    describe('isPassable', () => {
-        it('should return false for water (0-8)', () => {
-            for (let i = 0; i <= 8; i++) {
-                expect(isPassable(i)).toBe(false);
-            }
-        });
+// Note: isPassable and isBuildable terrain-type tests are covered by the
+// game-session flow test which validates all terrain types against both functions.
+// This file focuses on canPlaceBuilding edge cases only.
 
-        it('should return false for rock (32)', () => {
-            expect(isPassable(32)).toBe(false);
-        });
+describe('canPlaceBuilding – edge cases', () => {
+    let map: TestMap;
 
-        it('should return true for grass (16)', () => {
-            expect(isPassable(16)).toBe(true);
-        });
-
-        it('should return true for beach (48)', () => {
-            expect(isPassable(48)).toBe(true);
-        });
-
-        it('should return true for desert (64)', () => {
-            expect(isPassable(64)).toBe(true);
-        });
+    beforeEach(() => {
+        map = createTestMap();
     });
 
-    describe('isBuildable', () => {
-        it('should return true for grass (16)', () => {
-            expect(isBuildable(16)).toBe(true);
-        });
-
-        it('should return true for desert (64)', () => {
-            expect(isBuildable(64)).toBe(true);
-        });
-
-        it('should return false for water (0)', () => {
-            expect(isBuildable(0)).toBe(false);
-        });
-
-        it('should return false for rock (32)', () => {
-            expect(isBuildable(32)).toBe(false);
-        });
-
-        it('should return false for beach (48)', () => {
-            expect(isBuildable(48)).toBe(false);
-        });
-
-        it('should return false for swamp (80)', () => {
-            expect(isBuildable(80)).toBe(false);
-        });
-
-        it('should return false for snow (128)', () => {
-            expect(isBuildable(128)).toBe(false);
-        });
+    it('should allow placement on flat grass', () => {
+        expect(canPlaceBuilding(map.groundType, map.groundHeight, map.mapSize, map.occupancy, 10, 10)).toBe(true);
     });
 
-    describe('canPlaceBuilding', () => {
-        let mapSize: MapSize;
-        let groundType: Uint8Array;
-        let groundHeight: Uint8Array;
-        let occupancy: Map<string, number>;
+    it('should reject placement on water', () => {
+        setTerrainAt(map, 10, 10, TERRAIN.WATER);
+        expect(canPlaceBuilding(map.groundType, map.groundHeight, map.mapSize, map.occupancy, 10, 10)).toBe(false);
+    });
 
-        beforeEach(() => {
-            mapSize = new MapSize(64, 64);
-            groundType = new Uint8Array(64 * 64);
-            groundHeight = new Uint8Array(64 * 64);
-            groundType.fill(16); // all grass
-            occupancy = new Map();
-        });
+    it('should reject placement on occupied tile', () => {
+        map.occupancy.set('10,10', 1);
+        expect(canPlaceBuilding(map.groundType, map.groundHeight, map.mapSize, map.occupancy, 10, 10)).toBe(false);
+    });
 
-        it('should allow placement on flat grass', () => {
-            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).toBe(true);
-        });
+    it('should reject placement on steep slope', () => {
+        setHeightAt(map, 10, 10, 10);
+        setHeightAt(map, 11, 10, 0);
+        expect(canPlaceBuilding(map.groundType, map.groundHeight, map.mapSize, map.occupancy, 10, 10)).toBe(false);
+    });
 
-        it('should reject placement on water', () => {
-            groundType[mapSize.toIndex(10, 10)] = 0;
-            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).toBe(false);
-        });
-
-        it('should reject placement on occupied tile', () => {
-            occupancy.set('10,10', 1);
-            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).toBe(false);
-        });
-
-        it('should reject placement on steep slope', () => {
-            groundHeight[mapSize.toIndex(10, 10)] = 10;
-            groundHeight[mapSize.toIndex(11, 10)] = 0;
-            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).toBe(false);
-        });
-
-        it('should allow placement on gentle slope', () => {
-            groundHeight[mapSize.toIndex(10, 10)] = 5;
-            groundHeight[mapSize.toIndex(11, 10)] = 4;
-            groundHeight[mapSize.toIndex(9, 10)] = 4;
-            groundHeight[mapSize.toIndex(10, 11)] = 4;
-            groundHeight[mapSize.toIndex(10, 9)] = 4;
-            expect(canPlaceBuilding(groundType, groundHeight, mapSize, occupancy, 10, 10)).toBe(true);
-        });
+    it('should allow placement on gentle slope', () => {
+        setHeightAt(map, 10, 10, 5);
+        setHeightAt(map, 11, 10, 4);
+        setHeightAt(map, 9, 10, 4);
+        setHeightAt(map, 10, 11, 4);
+        setHeightAt(map, 10, 9, 4);
+        expect(canPlaceBuilding(map.groundType, map.groundHeight, map.mapSize, map.occupancy, 10, 10)).toBe(true);
     });
 });

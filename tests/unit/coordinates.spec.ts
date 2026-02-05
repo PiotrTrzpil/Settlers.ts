@@ -32,6 +32,8 @@
 import { describe, it, expect } from 'vitest';
 import { TilePicker } from '@/game/input/tile-picker';
 import { MapSize } from '@/utilities/map-size';
+import { IViewPoint } from '@/game/renderer/i-view-point';
+import { heightToWorld } from '@/game/systems/coordinate-system';
 
 describe('Coordinate Systems', () => {
     // Create a simple test map
@@ -682,5 +684,174 @@ describe('tileToWorld must match shader formula', () => {
             expect(tilePickerPos.worldX).toBeCloseTo(expectedWorldX, 5);
             expect(tilePickerPos.worldY).toBeCloseTo(expectedWorldY, 5);
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// screenToTile Height Refinement (consolidated from building-construction.spec.ts)
+// ---------------------------------------------------------------------------
+
+describe('screenToTile on varying terrain', () => {
+    const mockCanvas = {
+        clientWidth: 1300,
+        clientHeight: 1000,
+    } as HTMLCanvasElement;
+    const picker = new TilePicker(mockCanvas);
+
+    function expectRoundTrip(
+        tileX: number,
+        tileY: number,
+        groundHeight: Uint8Array,
+        mapSize: MapSize,
+        viewPoint: { x: number; y: number; zoom: number },
+    ) {
+        const worldPos = TilePicker.tileToWorld(
+            tileX, tileY, groundHeight, mapSize, viewPoint.x, viewPoint.y,
+        );
+
+        const aspect = mockCanvas.clientWidth / mockCanvas.clientHeight;
+        const ndcX = worldPos.worldX * viewPoint.zoom / aspect - viewPoint.zoom;
+        const ndcY = viewPoint.zoom - worldPos.worldY * viewPoint.zoom;
+        const screenX = (ndcX + 1) / 2 * mockCanvas.clientWidth;
+        const screenY = (1 - ndcY) / 2 * mockCanvas.clientHeight;
+
+        const recovered = picker.screenToTile(screenX, screenY, viewPoint, mapSize, groundHeight);
+
+        expect(recovered).not.toBeNull();
+        expect(recovered!.x).toBe(tileX);
+        expect(recovered!.y).toBe(tileY);
+    }
+
+    function expectRoundTripApprox(
+        tileX: number, tileY: number,
+        groundHeight: Uint8Array, mapSize: MapSize, viewPoint: IViewPoint,
+        tolerance = 1,
+    ) {
+        const worldPos = TilePicker.tileToWorld(
+            tileX, tileY, groundHeight, mapSize, viewPoint.x, viewPoint.y,
+        );
+
+        const aspect = mockCanvas.clientWidth / mockCanvas.clientHeight;
+        const ndcX = worldPos.worldX * viewPoint.zoom / aspect - viewPoint.zoom;
+        const ndcY = viewPoint.zoom - worldPos.worldY * viewPoint.zoom;
+        const screenX = (ndcX + 1) / 2 * mockCanvas.clientWidth;
+        const screenY = (1 - ndcY) / 2 * mockCanvas.clientHeight;
+
+        const recovered = picker.screenToTile(screenX, screenY, viewPoint, mapSize, groundHeight);
+
+        expect(recovered).not.toBeNull();
+        expect(Math.abs(recovered!.x - tileX)).toBeLessThanOrEqual(tolerance);
+        expect(Math.abs(recovered!.y - tileY)).toBeLessThanOrEqual(tolerance);
+    }
+
+    it('should round-trip on flat terrain', () => {
+        const mapSize = new MapSize(640, 640);
+        const groundHeight = new Uint8Array(mapSize.width * mapSize.height).fill(128);
+        const vp = { x: 320, y: 320, zoom: 0.1 };
+
+        for (const [dx, dy] of [[0, 0], [3, 2], [-2, 3], [5, -4]]) {
+            expectRoundTrip(320 + dx, 320 + dy, groundHeight, mapSize, vp);
+        }
+    });
+
+    it('should round-trip on high terrain (max height)', () => {
+        const mapSize = new MapSize(640, 640);
+        const groundHeight = new Uint8Array(mapSize.width * mapSize.height).fill(255);
+        const vp = { x: 320, y: 320, zoom: 0.1 };
+
+        for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1]]) {
+            expectRoundTrip(320 + dx, 320 + dy, groundHeight, mapSize, vp);
+        }
+    });
+
+    it('should round-trip on terrain with a height gradient (slope)', () => {
+        const mapSize = new MapSize(640, 640);
+        const groundHeight = new Uint8Array(mapSize.width * mapSize.height);
+        for (let y = 0; y < mapSize.height; y++) {
+            for (let x = 0; x < mapSize.width; x++) {
+                groundHeight[mapSize.toIndex(x, y)] = Math.min(255, Math.floor(y * 0.5));
+            }
+        }
+
+        const vp = { x: 320, y: 320, zoom: 0.1 };
+
+        for (const [dx, dy] of [[0, 0], [0, 5], [0, -5], [3, 3], [-3, -3], [5, -2]]) {
+            expectRoundTrip(320 + dx, 320 + dy, groundHeight, mapSize, vp);
+        }
+    });
+
+    it('should round-trip on terrain with moderate height ramp', () => {
+        const mapSize = new MapSize(640, 640);
+        const groundHeight = new Uint8Array(mapSize.width * mapSize.height);
+        for (let y = 0; y < mapSize.height; y++) {
+            for (let x = 0; x < mapSize.width; x++) {
+                groundHeight[mapSize.toIndex(x, y)] = Math.min(255, Math.floor(y * 3) % 256);
+            }
+        }
+
+        const vp = { x: 320, y: 320, zoom: 0.1 };
+
+        for (const [dx, dy] of [[0, 0], [0, 3], [0, -3], [3, 3], [-3, -3], [5, -2]]) {
+            expectRoundTrip(320 + dx, 320 + dy, groundHeight, mapSize, vp);
+        }
+    });
+
+    it('should round-trip with gentle hill near a building site', () => {
+        const mapSize = new MapSize(640, 640);
+        const groundHeight = new Uint8Array(mapSize.width * mapSize.height).fill(100);
+
+        for (let dy = -8; dy <= 8; dy++) {
+            for (let dx = -8; dx <= 8; dx++) {
+                const dist = Math.abs(dx) + Math.abs(dy);
+                const h = Math.max(100, Math.min(255, 140 - dist * 5));
+                const x = 320 + dx, y = 320 + dy;
+                if (x >= 0 && x < mapSize.width && y >= 0 && y < mapSize.height) {
+                    groundHeight[mapSize.toIndex(x, y)] = h;
+                }
+            }
+        }
+
+        const vp = { x: 320, y: 320, zoom: 0.1 };
+
+        for (let dy = -3; dy <= 3; dy++) {
+            for (let dx = -3; dx <= 3; dx++) {
+                expectRoundTripApprox(320 + dx, 320 + dy, groundHeight, mapSize, vp);
+            }
+        }
+    });
+
+    it('should round-trip with fractional viewpoint on varied terrain', () => {
+        const mapSize = new MapSize(640, 640);
+        const groundHeight = new Uint8Array(mapSize.width * mapSize.height);
+        for (let y = 0; y < mapSize.height; y++) {
+            for (let x = 0; x < mapSize.width; x++) {
+                groundHeight[mapSize.toIndex(x, y)] = ((x + y) % 2 === 0) ? 50 : 150;
+            }
+        }
+
+        const vp = { x: 320.3, y: 320.7, zoom: 0.1 };
+
+        for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1], [-1, -1], [2, -1]]) {
+            expectRoundTrip(320 + dx, 320 + dy, groundHeight, mapSize, vp);
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// heightToWorld (consolidated from building-construction.spec.ts)
+// ---------------------------------------------------------------------------
+
+describe('heightToWorld', () => {
+    it('should map 0 to 0', () => {
+        expect(heightToWorld(0)).toBe(0);
+    });
+
+    it('should map 255 to TILE_HEIGHT_SCALE (20.0)', () => {
+        expect(heightToWorld(255)).toBeCloseTo(20.0, 5);
+    });
+
+    it('should map 128 to approximately half the scale', () => {
+        const expected = 128 * 20.0 / 255.0;
+        expect(heightToWorld(128)).toBeCloseTo(expected, 5);
     });
 });

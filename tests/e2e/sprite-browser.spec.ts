@@ -9,7 +9,7 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('JIL View Sprite Browser', () => {
-    test('jil-view page loads without errors', async ({ page }) => {
+    test('jil-view page loads without errors', async({ page }) => {
         const errors: string[] = [];
         page.on('console', msg => {
             if (msg.type() === 'error') {
@@ -30,7 +30,7 @@ test.describe('JIL View Sprite Browser', () => {
         expect(criticalErrors.length).toBe(0);
     });
 
-    test('view mode buttons work (single/grid toggle)', async ({ page }) => {
+    test('view mode buttons work (single/grid toggle)', async({ page }) => {
         await page.goto('/jil-view');
         await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
 
@@ -56,7 +56,7 @@ test.describe('JIL View Sprite Browser', () => {
         await expect(page.locator('.grid-container')).toBeVisible({ timeout: 5000 });
     });
 
-    test('selectors are visible in single view', async ({ page }) => {
+    test('selectors are visible in single view', async({ page }) => {
         await page.goto('/jil-view');
         await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
 
@@ -70,7 +70,7 @@ test.describe('JIL View Sprite Browser', () => {
 });
 
 test.describe('GFX View Grid', () => {
-    test('gfx-view page loads and shows grid toggle', async ({ page }) => {
+    test('gfx-view page loads and shows grid toggle', async({ page }) => {
         await page.goto('/gfx-view');
         await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
 
@@ -79,7 +79,7 @@ test.describe('GFX View Grid', () => {
         await expect(page.locator('button:has-text("Grid")')).toBeVisible();
     });
 
-    test('file browser is visible and functional', async ({ page }) => {
+    test('file browser is visible and functional', async({ page }) => {
         await page.goto('/gfx-view');
         await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
 
@@ -88,88 +88,5 @@ test.describe('GFX View Grid', () => {
         await expect(fileBrowser).toBeVisible({ timeout: 5000 });
     });
 });
-
-test.describe('Entity Type Definitions', () => {
-    test('MapObjectType enum is accessible in game', async ({ page }) => {
-        await page.goto('/?testMap=true');
-
-        // Wait for game to load
-        await page.waitForFunction(() => {
-            return (window as any).__settlers_game__ !== undefined;
-        }, { timeout: 10000 });
-
-        // Check that MapObjectType enum values exist
-        const result = await page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            return {
-                hasGame: !!game,
-                entityTypes: game?.state?.entities?.length ?? 0
-            };
-        });
-
-        expect(result.hasGame).toBe(true);
-    });
-
-    test('building placement creates correct entity type', async ({ page }) => {
-        await page.goto('/?testMap=true');
-
-        // Wait for game to load
-        await page.waitForFunction(() => {
-            return (window as any).__settlers_game__ !== undefined;
-        }, { timeout: 10000 });
-
-        // Place a building and verify entity type
-        const result = await page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
-
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-
-            // Try to find a buildable spot
-            for (let r = 0; r < 20; r++) {
-                for (let dx = -r; dx <= r; dx++) {
-                    for (let dy = -r; dy <= r; dy++) {
-                        const tx = cx + dx;
-                        const ty = cy + dy;
-
-                        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-
-                        const ok = game.execute({
-                            type: 'place_building',
-                            buildingType: 1, // Lumberjack
-                            x: tx, y: ty,
-                            player: 0
-                        });
-
-                        if (ok) {
-                            const building = game.state.entities.find(
-                                (e: any) => e.type === 2 && e.x === tx && e.y === ty
-                            );
-
-                            return {
-                                success: true,
-                                building: building ? {
-                                    id: building.id,
-                                    type: building.type,
-                                    subType: building.subType,
-                                    player: building.player
-                                } : null
-                            };
-                        }
-                    }
-                }
-            }
-
-            return { error: 'no buildable spot found' };
-        });
-
-        expect(result).not.toHaveProperty('error');
-        expect(result.success).toBe(true);
-        expect(result.building).not.toBeNull();
-        expect(result.building!.type).toBe(2); // EntityType.Building
-        expect(result.building!.subType).toBe(1); // BuildingType.Lumberjack
-    });
-});
+// Note: Entity type definition tests (game bridge access, building placement entity type)
+// are covered in building-placement.spec.ts which tests these more thoroughly via the full UI flow.
