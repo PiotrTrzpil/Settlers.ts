@@ -8,7 +8,6 @@ import { TilePicker } from '../input/tile-picker';
 import { TerritoryMap, NO_OWNER } from '../systems/territory';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
-import { TextureManager } from './texture-manager';
 import { EntityTextureAtlas } from './entity-texture-atlas';
 import { SpriteMetadataRegistry, SpriteEntry, Race, getBuildingSpriteMap, BUILDING_JOB_INDICES, GFX_FILE_NUMBERS, getMapObjectSpriteMap, MapObjectSpriteInfo } from './sprite-metadata';
 import { SpriteLoader, LoadedGfxFileSet } from './sprite-loader';
@@ -76,9 +75,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private mapSize: MapSize;
     private groundHeight: Uint8Array;
 
-    // File manager and texture manager for loading sprites
+    // File manager for loading sprites
     private fileManager: FileManager | null = null;
-    private textureManager: TextureManager | null = null;
     private spriteLoader: SpriteLoader | null = null;
 
     // Sprite atlas and metadata (null if sprites not loaded)
@@ -86,7 +84,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private spriteRegistry: SpriteMetadataRegistry | null = null;
     private currentRace: Race = Race.Roman;
     private glContext: WebGL2RenderingContext | null = null;
-    private spriteTextureIndex: number = 0;
 
     // Sprite shader program (separate from color shader)
     private spriteShaderProgram: ShaderProgram | null = null;
@@ -131,14 +128,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     constructor(
         mapSize: MapSize,
         groundHeight: Uint8Array,
-        fileManager?: FileManager,
-        textureManager?: TextureManager
+        fileManager?: FileManager
     ) {
         super();
         this.mapSize = mapSize;
         this.groundHeight = groundHeight;
         this.fileManager = fileManager ?? null;
-        this.textureManager = textureManager ?? null;
         if (fileManager) {
             this.spriteLoader = new SpriteLoader(fileManager);
         }
@@ -161,9 +156,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.dynamicBuffer = gl.createBuffer();
 
         // Try to load sprite textures if file manager is available
-        if (this.fileManager && this.textureManager) {
-            this.spriteTextureIndex = this.textureManager.create('u_spriteAtlas');
-            const loaded = await this.loadBuildingSprites(gl, this.spriteTextureIndex, this.currentRace);
+        if (this.fileManager) {
+            const loaded = await this.loadBuildingSprites(gl, TEXTURE_UNIT_SPRITE_ATLAS, this.currentRace);
 
             if (loaded) {
                 // Initialize sprite shader
@@ -212,7 +206,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Reload sprites for the new race
         const loaded = await this.loadBuildingSprites(
             this.glContext,
-            this.spriteTextureIndex,
+            TEXTURE_UNIT_SPRITE_ATLAS,
             race
         );
 

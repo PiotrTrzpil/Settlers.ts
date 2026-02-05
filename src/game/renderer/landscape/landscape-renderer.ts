@@ -5,7 +5,6 @@ import { LandscapeTextureMap, type RiverConfig } from './textures/landscape-text
 import { MapSize } from '@/utilities/map-size';
 import { ShaderDataTexture } from '../shader-data-texture';
 import { IViewPoint } from '../i-view-point';
-import { TextureManager } from '../texture-manager';
 import { FileManager } from '@/utilities/file-manager';
 import { TextureMap16Bit } from '../texture-map-16bit';
 import { GhFileReader } from '@/resources/gfx/gh-file-reader';
@@ -14,10 +13,14 @@ import { ImageType } from '@/resources/gfx/image-type';
 import vertCode from './shaders/landscape-vert.glsl';
 import fragCode from './shaders/landscape-frag.glsl';
 
+// Texture unit assignments for landscape renderer (0-2)
+const TEXTURE_UNIT_LANDSCAPE = 0;
+const TEXTURE_UNIT_LAND_TYPE = 1;
+const TEXTURE_UNIT_LAND_HEIGHT = 2;
+
 export class LandscapeRenderer extends RendererBase implements IRenderer {
     private static log = new LogHandler('LandscapeRenderer');
     private numVertices = 0;
-    private textureManager: TextureManager;
     private texture: TextureMap16Bit;
     private mapSize: MapSize;
     private landscapeTextureMap = new LandscapeTextureMap();
@@ -43,7 +46,6 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
 
     constructor(
         fileManager: FileManager,
-        textureManager: TextureManager,
         mapSize: MapSize,
         groundTypeMap: Uint8Array,
         groundHeightMap: Uint8Array,
@@ -53,14 +55,13 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         super();
 
         this.fileManager = fileManager;
-        this.textureManager = textureManager;
         this.mapSize = mapSize;
         this.groundHeightMap = groundHeightMap;
         this.groundTypeMap = groundTypeMap;
         this.debugGrid = debugGrid;
         this.useProceduralTextures = useProceduralTextures;
 
-        this.texture = new TextureMap16Bit(256 * 6, this.textureManager.create('u_landText'));
+        this.texture = new TextureMap16Bit(256 * 6, TEXTURE_UNIT_LANDSCAPE);
 
         // Compute extra Y rows needed for max terrain height displacement.
         // Shader: mapHeight = texel.r * 20.0; screen offset = mapHeight * 0.5.
@@ -157,8 +158,8 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         await this.createLandscapeTextureMap();
         this.texture.load(gl);
 
-        this.landTypeBuffer = this.createLandTypeBuffer(this.mapSize, this.textureManager.create('u_landTypeBuffer'), this.groundTypeMap);
-        this.landHeightBuffer = this.createLandHeightBuffer(this.mapSize, this.textureManager.create('u_landHeightBuffer'), this.groundHeightMap);
+        this.landTypeBuffer = this.createLandTypeBuffer(this.mapSize, TEXTURE_UNIT_LAND_TYPE, this.groundTypeMap);
+        this.landHeightBuffer = this.createLandHeightBuffer(this.mapSize, TEXTURE_UNIT_LAND_HEIGHT, this.groundHeightMap);
 
         this.numVertices = 6;
 
@@ -244,8 +245,10 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         const numInstancesY = 2 * halfY;
 
         // ///////////
-        // Tell the shader to use all set texture units
-        this.textureManager.bindToShader(gl, sp);
+        // Bind texture uniforms to their assigned texture units
+        sp.bindTexture('u_texture', TEXTURE_UNIT_LANDSCAPE);
+        sp.bindTexture('u_landTypeBuffer', TEXTURE_UNIT_LAND_TYPE);
+        sp.bindTexture('u_landHeightBuffer', TEXTURE_UNIT_LAND_HEIGHT);
 
         // set view Point – pass as-is (not negated) so that
         // pixelCoord = instancePos + viewPoint falls inside map bounds.

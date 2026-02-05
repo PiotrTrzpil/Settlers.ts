@@ -1,7 +1,6 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { IRenderer } from './i-renderer';
 import { Matrix } from './landscape/matrix';
-import { TextureManager } from './texture-manager';
 import { ViewPoint } from './view-point';
 
 declare let WebGLDebugUtils: any;
@@ -11,7 +10,6 @@ export class Renderer {
     private static log = new LogHandler('Renderer');
     public canvas: HTMLCanvasElement;
     private gl: WebGL2RenderingContext | null = null;
-    public textureManager: TextureManager = new TextureManager();
     private renderers: IRenderer[] = [];
     private animRequest = 0;
     public viewPoint: ViewPoint;

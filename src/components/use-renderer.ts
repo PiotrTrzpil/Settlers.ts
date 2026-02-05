@@ -43,7 +43,6 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
 
         landscapeRenderer = new LandscapeRenderer(
             game.fileManager,
-            renderer.textureManager,
             game.mapSize,
             game.groundType,
             game.groundHeight,
@@ -55,8 +54,7 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         entityRenderer = new EntityRenderer(
             game.mapSize,
             game.groundHeight,
-            game.fileManager,
-            renderer.textureManager
+            game.fileManager
         );
         renderer.add(entityRenderer);
 
