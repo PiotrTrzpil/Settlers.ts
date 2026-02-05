@@ -219,7 +219,7 @@ export class GamePage {
 
                         const ok = game.execute({
                             type: 'place_building',
-                            buildingType: 0, x: tx, y: ty, player: 0
+                            buildingType: 1, x: tx, y: ty, player: 0  // Lumberjack
                         });
                         if (ok) {
                             const newEntities = game.state.entities.filter(
