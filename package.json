@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "lint": "eslint src --ext .ts,.vue",
     "analyze:circular": "madge --circular --extensions ts src/",
-    "analyze:type-coverage": "type-coverage --project tsconfig.json --detail --strict"
+    "analyze:type-coverage": "type-coverage --project tsconfig.json --detail --strict",
+    "gfx:export": "tsx --tsconfig tsconfig.json scripts/gfx-export/cli.ts"
   },
   "dependencies": {
     "@vueuse/core": "^14.2.0",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
+    "tsx": "^4.7.0",
     "@rollup/pluginutils": "^5.3.0",
     "@types/node": "^25.2.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
