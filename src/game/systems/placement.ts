@@ -1,4 +1,4 @@
-import { CARDINAL_OFFSETS, tileKey } from '../entity';
+import { CARDINAL_OFFSETS, tileKey, BuildingType, getBuildingFootprint } from '../entity';
 import { MapSize } from '@/utilities/map-size';
 import { TerritoryMap, NO_OWNER } from './territory';
 
@@ -94,8 +94,18 @@ export function canPlaceBuildingWithTerritory(
     x: number,
     y: number,
     player: number,
-    hasBuildings: boolean
+    hasBuildings: boolean,
+    buildingType?: BuildingType
 ): boolean {
+    // If building type is specified, use multi-tile validation
+    if (buildingType !== undefined) {
+        return canPlaceBuildingFootprint(
+            groundType, groundHeight, mapSize, tileOccupancy,
+            territory, x, y, player, hasBuildings, buildingType
+        );
+    }
+
+    // Legacy single-tile validation
     if (!canPlaceBuilding(groundType, groundHeight, mapSize, tileOccupancy, x, y)) {
         return false;
     }
@@ -123,6 +133,99 @@ export function canPlaceBuildingWithTerritory(
                 return false;
             }
         }
+    }
+
+    return true;
+}
+
+/**
+ * Check if a building with multi-tile footprint can be placed.
+ * The (x, y) is the top-left corner of the building footprint.
+ */
+export function canPlaceBuildingFootprint(
+    groundType: Uint8Array,
+    groundHeight: Uint8Array,
+    mapSize: MapSize,
+    tileOccupancy: Map<string, number>,
+    territory: TerritoryMap,
+    x: number,
+    y: number,
+    player: number,
+    hasBuildings: boolean,
+    buildingType: BuildingType
+): boolean {
+    const footprint = getBuildingFootprint(x, y, buildingType);
+
+    // Check if entire footprint is within map bounds
+    for (const tile of footprint) {
+        if (tile.x < 0 || tile.x >= mapSize.width ||
+            tile.y < 0 || tile.y >= mapSize.height) {
+            return false;
+        }
+    }
+
+    // Check all tiles in footprint for basic requirements
+    for (const tile of footprint) {
+        const idx = mapSize.toIndex(tile.x, tile.y);
+
+        // Check terrain type
+        if (!isBuildable(groundType[idx])) {
+            return false;
+        }
+
+        // Check occupancy
+        if (tileOccupancy.has(tileKey(tile.x, tile.y))) {
+            return false;
+        }
+
+        // Check territory - no tile can be in enemy territory
+        if (hasBuildings) {
+            const owner = territory.getOwner(tile.x, tile.y);
+            if (owner !== player && owner !== NO_OWNER) {
+                return false;
+            }
+        }
+    }
+
+    // For territory: at least one tile must be in own territory or adjacent to it
+    if (hasBuildings) {
+        let hasValidTerritory = false;
+        for (const tile of footprint) {
+            const owner = territory.getOwner(tile.x, tile.y);
+            if (owner === player) {
+                hasValidTerritory = true;
+                break;
+            }
+            // Check if adjacent to own territory
+            for (const [dx, dy] of CARDINAL_OFFSETS) {
+                const nx = tile.x + dx;
+                const ny = tile.y + dy;
+                if (nx >= 0 && nx < mapSize.width &&
+                    ny >= 0 && ny < mapSize.height) {
+                    if (territory.isOwnedBy(nx, ny, player)) {
+                        hasValidTerritory = true;
+                        break;
+                    }
+                }
+            }
+            if (hasValidTerritory) break;
+        }
+        if (!hasValidTerritory) {
+            return false;
+        }
+    }
+
+    // Check slope across entire footprint
+    let minHeight = 255;
+    let maxHeight = 0;
+    for (const tile of footprint) {
+        const h = groundHeight[mapSize.toIndex(tile.x, tile.y)];
+        minHeight = Math.min(minHeight, h);
+        maxHeight = Math.max(maxHeight, h);
+    }
+
+    if (maxHeight - minHeight > MAX_SLOPE_DIFF) {
+        return false;
     }
 
     return true;

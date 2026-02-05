@@ -2,7 +2,7 @@ import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
 import { ShaderProgram } from './shader-program';
-import { Entity, EntityType, UnitState, TileCoord, BuildingType } from '../entity';
+import { Entity, EntityType, UnitState, TileCoord, BuildingType, getBuildingFootprint } from '../entity';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { TerritoryMap } from '../systems/territory';
@@ -12,6 +12,7 @@ import { SpriteEntry, Race } from './sprite-metadata';
 import { MapObjectType } from '../entity';
 import { TerritoryBorderRenderer } from './territory-border-renderer';
 import { SpriteRenderManager } from './sprite-render-manager';
+import { BuildingIndicatorRenderer } from './building-indicator-renderer';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -78,6 +79,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Extracted managers
     private spriteManager: SpriteRenderManager | null = null;
     private territoryBorderRenderer: TerritoryBorderRenderer;
+    private buildingIndicatorRenderer: BuildingIndicatorRenderer;
 
     // Sprite shader program (separate from color shader)
     private spriteShaderProgram: ShaderProgram | null = null;
@@ -101,6 +103,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     public territoryMap: TerritoryMap | null = null;
     public territoryVersion = 0;
 
+    // Building placement indicators mode
+    public buildingIndicatorsEnabled = false;
+    public buildingIndicatorsPlayer = 0;
+    public buildingIndicatorsHasBuildings = false;
+
     // Render interpolation alpha for smooth sub-tick movement (0-1)
     public renderAlpha = 0;
 
@@ -120,12 +127,18 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     constructor(
         mapSize: MapSize,
         groundHeight: Uint8Array,
-        fileManager?: FileManager
+        fileManager?: FileManager,
+        groundType?: Uint8Array
     ) {
         super();
         this.mapSize = mapSize;
         this.groundHeight = groundHeight;
         this.territoryBorderRenderer = new TerritoryBorderRenderer(mapSize, groundHeight);
+        this.buildingIndicatorRenderer = new BuildingIndicatorRenderer(
+            mapSize,
+            groundType ?? new Uint8Array(mapSize.width * mapSize.height),
+            groundHeight
+        );
 
         if (fileManager) {
             this.spriteManager = new SpriteRenderManager(fileManager, TEXTURE_UNIT_SPRITE_ATLAS);
@@ -147,6 +160,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         // Create a single reusable dynamic buffer for color shader
         this.dynamicBuffer = gl.createBuffer();
+
+        // Initialize building indicator renderer
+        this.buildingIndicatorRenderer.init(gl);
 
         // Initialize sprite manager if available
         if (this.spriteManager) {
@@ -210,6 +226,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Clean up sprite manager
         this.spriteManager?.destroy();
 
+        // Clean up building indicator renderer
+        this.buildingIndicatorRenderer.destroy();
+
         EntityRenderer.log.debug('EntityRenderer resources cleaned up');
     }
 
@@ -228,13 +247,52 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.aSpriteTint = this.spriteShaderProgram.getAttribLocation('a_tint');
     }
 
+    /**
+     * Draw building placement indicators across visible terrain.
+     */
+    private drawBuildingIndicators(
+        gl: WebGL2RenderingContext,
+        projection: Float32Array,
+        viewPoint: IViewPoint
+    ): void {
+        // Update indicator renderer state
+        this.buildingIndicatorRenderer.enabled = this.buildingIndicatorsEnabled;
+        this.buildingIndicatorRenderer.hoveredTile = this.previewTile;
+        this.buildingIndicatorRenderer.player = this.buildingIndicatorsPlayer;
+        this.buildingIndicatorRenderer.hasBuildings = this.buildingIndicatorsHasBuildings;
+        this.buildingIndicatorRenderer.territory = this.territoryMap;
+        this.buildingIndicatorRenderer.buildingType = this.previewBuildingType;
+
+        // Build tile occupancy map including full building footprints
+        const occupancy = new Map<string, number>();
+        for (const e of this.entities) {
+            if (e.type === EntityType.Building) {
+                // Add all tiles in building footprint
+                const footprint = getBuildingFootprint(e.x, e.y, e.subType as BuildingType);
+                for (const tile of footprint) {
+                    occupancy.set(`${tile.x},${tile.y}`, e.id);
+                }
+            } else {
+                // Single tile for non-buildings
+                occupancy.set(`${e.x},${e.y}`, e.id);
+            }
+        }
+        this.buildingIndicatorRenderer.tileOccupancy = occupancy;
+
+        // Draw the indicators
+        this.buildingIndicatorRenderer.draw(gl, projection, viewPoint, this.territoryVersion);
+    }
+
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         if (!this.dynamicBuffer) return;
-        if (this.entities.length === 0 && !this.previewTile && !this.territoryMap) return;
+        if (this.entities.length === 0 && !this.previewTile && !this.territoryMap && !this.buildingIndicatorsEnabled) return;
 
         // Enable blending for semi-transparent entities
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        // Draw building placement indicators (behind everything)
+        this.drawBuildingIndicators(gl, projection, viewPoint);
 
         // Use color shader for non-textured elements
         super.drawBase(gl, projection);

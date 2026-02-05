@@ -4,7 +4,7 @@ import { LandscapeRenderer } from '@/game/renderer/landscape/landscape-renderer'
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
-import { EntityType, BuildingType } from '@/game/entity';
+import { EntityType, BuildingType, getBuildingSize } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
 import { canPlaceBuildingWithTerritory } from '@/game/systems/placement';
 import { debugStats } from '@/game/debug-stats';
@@ -57,7 +57,8 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         entityRenderer = new EntityRenderer(
             game.mapSize,
             game.groundHeight,
-            game.fileManager
+            game.fileManager,
+            game.groundType
         );
         renderer.add(entityRenderer);
 
@@ -88,6 +89,18 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
                 entityRenderer.territoryMap = getShowTerritoryBorders() ? g.territory : null;
                 entityRenderer.territoryVersion = g.territoryVersion;
                 entityRenderer.renderAlpha = alpha;
+
+                // Building placement indicators
+                const inPlacementMode = g.mode === 'place_building';
+                entityRenderer.buildingIndicatorsEnabled = inPlacementMode;
+                if (inPlacementMode) {
+                    entityRenderer.buildingIndicatorsPlayer = g.currentPlayer;
+                    entityRenderer.buildingIndicatorsHasBuildings = g.state.entities.some(
+                        ent => ent.type === EntityType.Building && ent.player === g.currentPlayer
+                    );
+                    // Also set territory for indicators even when borders aren't shown
+                    entityRenderer.territoryMap = g.territory;
+                }
             }
             if (landscapeRenderer) {
                 landscapeRenderer.debugGrid = getDebugGrid();
@@ -159,10 +172,21 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         onTileClick(tile);
 
         if (game.mode === 'place_building') {
+            const buildingType = game.placeBuildingType as BuildingType;
+            const size = getBuildingSize(buildingType);
+
+            // Center the building on the click position
+            const anchorX = Math.round(tile.x - (size.width - 1) / 2);
+            const anchorY = Math.round(tile.y - (size.height - 1) / 2);
+
+            // Clamp to map bounds
+            const clampedX = Math.max(0, Math.min(game.mapSize.width - size.width, anchorX));
+            const clampedY = Math.max(0, Math.min(game.mapSize.height - size.height, anchorY));
+
             game.execute({
                 type: 'place_building',
-                buildingType: game.placeBuildingType as BuildingType,
-                x: tile.x, y: tile.y,
+                buildingType,
+                x: clampedX, y: clampedY,
                 player: game.currentPlayer
             });
         } else if (game.mode === 'select') {
@@ -235,15 +259,29 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
             return;
         }
 
-        entityRenderer.previewTile = tile;
-        entityRenderer.previewBuildingType = game.placeBuildingType as BuildingType ?? null;
+        const buildingType = game.placeBuildingType as BuildingType;
+        const size = getBuildingSize(buildingType);
+
+        // Center the building on the cursor by computing anchor (top-left) position
+        // For a 2x2 building, offset by (-0.5, -0.5) tiles and round
+        // For a 3x3 building, offset by (-1, -1) tiles
+        const anchorX = Math.round(tile.x - (size.width - 1) / 2);
+        const anchorY = Math.round(tile.y - (size.height - 1) / 2);
+
+        // Clamp to map bounds
+        const clampedX = Math.max(0, Math.min(game.mapSize.width - size.width, anchorX));
+        const clampedY = Math.max(0, Math.min(game.mapSize.height - size.height, anchorY));
+
+        entityRenderer.previewTile = { x: clampedX, y: clampedY };
+        entityRenderer.previewBuildingType = buildingType ?? null;
         const hasBuildings = game.state.entities.some(
             ent => ent.type === EntityType.Building && ent.player === game.currentPlayer
         );
         entityRenderer.previewValid = canPlaceBuildingWithTerritory(
             game.groundType, game.groundHeight, game.mapSize,
             game.state.tileOccupancy, game.territory,
-            tile.x, tile.y, game.currentPlayer, hasBuildings
+            clampedX, clampedY, game.currentPlayer, hasBuildings,
+            buildingType
         );
     };
 
