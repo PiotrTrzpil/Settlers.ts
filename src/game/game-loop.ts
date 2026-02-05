@@ -1,5 +1,6 @@
 import { GameState } from './game-state';
 import { updateMovement } from './systems/movement';
+import { updateBuildingConstruction } from './systems/building-construction';
 import { LogHandler } from '@/utilities/log-handler';
 import { debugStats } from './debug-stats';
 
@@ -93,5 +94,6 @@ export class GameLoop {
     private tick(dt: number): void {
         debugStats.recordTick();
         updateMovement(this.gameState, dt, this.groundType, this.groundHeight, this.mapWidth, this.mapHeight);
+        updateBuildingConstruction(this.gameState, dt);
     }
 }

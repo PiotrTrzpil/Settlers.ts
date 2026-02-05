@@ -4,10 +4,12 @@ import { EntityTextureAtlas } from './entity-texture-atlas';
 import {
     SpriteMetadataRegistry,
     SpriteEntry,
+    BuildingSpriteEntries,
     Race,
     getBuildingSpriteMap,
     GFX_FILE_NUMBERS,
-    getMapObjectSpriteMap
+    getMapObjectSpriteMap,
+    BUILDING_DIRECTION,
 } from './sprite-metadata';
 import { SpriteLoader, LoadedGfxFileSet } from './sprite-loader';
 import { BuildingType, MapObjectType } from '../entity';
@@ -97,10 +99,24 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Get a building sprite entry by type.
+     * Get a building sprite entry by type (completed state, for backwards compatibility).
      */
     public getBuilding(type: BuildingType): SpriteEntry | null {
         return this._spriteRegistry?.getBuilding(type) ?? null;
+    }
+
+    /**
+     * Get a building construction sprite entry by type.
+     */
+    public getBuildingConstruction(type: BuildingType): SpriteEntry | null {
+        return this._spriteRegistry?.getBuildingConstruction(type) ?? null;
+    }
+
+    /**
+     * Get both construction and completed sprites for a building type.
+     */
+    public getBuildingSprites(type: BuildingType): BuildingSpriteEntries | null {
+        return this._spriteRegistry?.getBuildingSprites(type) ?? null;
     }
 
     /**
@@ -207,16 +223,32 @@ export class SpriteRenderManager {
                 const buildingType = Number(typeStr) as BuildingType;
                 const jobIndex = info.index;
 
-                const loadedSprite = this.spriteLoader.loadJobSprite(fileSet, { jobIndex }, atlas);
+                // Load construction sprite (D0)
+                const constructionSprite = this.spriteLoader.loadJobSprite(
+                    fileSet,
+                    { jobIndex, directionIndex: BUILDING_DIRECTION.CONSTRUCTION },
+                    atlas
+                );
 
-                if (!loadedSprite) {
+                // Load completed sprite (D1)
+                const completedSprite = this.spriteLoader.loadJobSprite(
+                    fileSet,
+                    { jobIndex, directionIndex: BUILDING_DIRECTION.COMPLETED },
+                    atlas
+                );
+
+                if (!constructionSprite && !completedSprite) {
                     SpriteRenderManager.log.debug(
-                        `Failed to load sprite for building ${BuildingType[buildingType]} (job ${jobIndex})`
+                        `Failed to load any sprite for building ${BuildingType[buildingType]} (job ${jobIndex})`
                     );
                     continue;
                 }
 
-                registry.registerBuilding(buildingType, loadedSprite.entry);
+                registry.registerBuilding(
+                    buildingType,
+                    constructionSprite?.entry ?? null,
+                    completedSprite?.entry ?? null
+                );
             }
 
             SpriteRenderManager.log.debug(`Loaded sprites from file ${fileNum}.gfx`);

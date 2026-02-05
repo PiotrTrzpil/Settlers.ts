@@ -85,6 +85,7 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
                 entityRenderer.selectedEntityId = g.state.selectedEntityId;
                 entityRenderer.selectedEntityIds = g.state.selectedEntityIds;
                 entityRenderer.unitStates = g.state.unitStates;
+                entityRenderer.buildingStates = g.state.buildingStates;
                 entityRenderer.territoryMap = getShowTerritoryBorders() ? g.territory : null;
                 entityRenderer.territoryVersion = g.territoryVersion;
                 entityRenderer.renderAlpha = alpha;

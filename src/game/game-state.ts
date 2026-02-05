@@ -1,10 +1,15 @@
-import { Entity, EntityType, UnitState, tileKey } from './entity';
+import { Entity, EntityType, UnitState, BuildingState, BuildingConstructionPhase, tileKey } from './entity';
+
+/** Default building construction duration in seconds */
+export const DEFAULT_CONSTRUCTION_DURATION = 30;
 
 export class GameState {
     public entities: Entity[] = [];
     /** O(1) entity lookup by ID */
     private entityMap: Map<number, Entity> = new Map();
     public unitStates: Map<number, UnitState> = new Map();
+    /** Building construction state tracking */
+    public buildingStates: Map<number, BuildingState> = new Map();
     /** Primary selection (first selected entity or single selection) */
     public selectedEntityId: number | null = null;
     /** All selected entity IDs (for multi-select) */
@@ -40,6 +45,16 @@ export class GameState {
             });
         }
 
+        if (type === EntityType.Building) {
+            this.buildingStates.set(entity.id, {
+                entityId: entity.id,
+                phase: BuildingConstructionPhase.Poles,
+                phaseProgress: 0,
+                totalDuration: DEFAULT_CONSTRUCTION_DURATION,
+                elapsedTime: 0,
+            });
+        }
+
         return entity;
     }
 
@@ -55,6 +70,7 @@ export class GameState {
         this.entityMap.delete(id);
         this.tileOccupancy.delete(tileKey(entity.x, entity.y));
         this.unitStates.delete(id);
+        this.buildingStates.delete(id);
 
         this.selectedEntityIds.delete(id);
         if (this.selectedEntityId === id) {

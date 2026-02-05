@@ -2,7 +2,8 @@ import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
 import { ShaderProgram } from './shader-program';
-import { Entity, EntityType, UnitState, TileCoord, BuildingType } from '../entity';
+import { Entity, EntityType, UnitState, BuildingState, TileCoord, BuildingType } from '../entity';
+import { getBuildingVisualState } from '../systems/building-construction';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { TerritoryMap } from '../systems/territory';
@@ -91,6 +92,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // Unit states for smooth interpolation and path visualization
     public unitStates: Map<number, UnitState> = new Map();
+
+    // Building states for construction animation
+    public buildingStates: Map<number, BuildingState> = new Map();
 
     // Building placement preview
     public previewTile: TileCoord | null = null;
@@ -299,12 +303,34 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         for (const entity of this.entities) {
             let spriteEntry: SpriteEntry | null = null;
             let tint: number[];
+            let verticalProgress = 1.0; // Full visibility by default
 
             if (entity.type === EntityType.Building) {
-                spriteEntry = this.spriteManager.getBuilding(entity.subType as BuildingType);
                 const isSelected = this.selectedEntityIds.has(entity.id);
                 const playerColor = PLAYER_COLORS[entity.player % PLAYER_COLORS.length];
                 tint = this.computePlayerTint(playerColor, isSelected);
+
+                // Get building construction state
+                const buildingState = this.buildingStates.get(entity.id);
+                const visualState = getBuildingVisualState(buildingState);
+
+                // Choose sprite based on construction state
+                if (visualState.useConstructionSprite) {
+                    spriteEntry = this.spriteManager.getBuildingConstruction(entity.subType as BuildingType);
+                    // Fall back to completed sprite if no construction sprite
+                    if (!spriteEntry) {
+                        spriteEntry = this.spriteManager.getBuilding(entity.subType as BuildingType);
+                    }
+                } else {
+                    spriteEntry = this.spriteManager.getBuilding(entity.subType as BuildingType);
+                }
+
+                verticalProgress = visualState.verticalProgress;
+
+                // Skip rendering if building is not visible yet (verticalProgress is 0)
+                if (verticalProgress <= 0) {
+                    continue;
+                }
             } else if (entity.type === EntityType.MapObject) {
                 spriteEntry = this.spriteManager.getMapObject(entity.subType as MapObjectType);
                 const isSelected = this.selectedEntityIds.has(entity.id);
@@ -327,13 +353,25 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 viewPoint.x, viewPoint.y
             );
 
-            batchOffset = this.fillSpriteQuad(
-                batchOffset,
-                worldPos.worldX,
-                worldPos.worldY,
-                spriteEntry,
-                tint[0], tint[1], tint[2], tint[3]
-            );
+            // Use partial sprite rendering for construction animation
+            if (verticalProgress < 1.0) {
+                batchOffset = this.fillSpriteQuadPartial(
+                    batchOffset,
+                    worldPos.worldX,
+                    worldPos.worldY,
+                    spriteEntry,
+                    tint[0], tint[1], tint[2], tint[3],
+                    verticalProgress
+                );
+            } else {
+                batchOffset = this.fillSpriteQuad(
+                    batchOffset,
+                    worldPos.worldX,
+                    worldPos.worldY,
+                    spriteEntry,
+                    tint[0], tint[1], tint[2], tint[3]
+                );
+            }
         }
 
         // Flush remaining sprites
@@ -425,6 +463,77 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Vertex 5: top-right
         data[offset++] = x1; data[offset++] = y1;
         data[offset++] = u1; data[offset++] = v1;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        return offset;
+    }
+
+    /**
+     * Fill sprite quad vertices with partial vertical visibility (for "rising from bottom" effect).
+     * Only renders the bottom portion of the sprite based on verticalProgress (0.0 to 1.0).
+     */
+    private fillSpriteQuadPartial(
+        offset: number,
+        worldX: number,
+        worldY: number,
+        entry: SpriteEntry,
+        tintR: number,
+        tintG: number,
+        tintB: number,
+        tintA: number,
+        verticalProgress: number
+    ): number {
+        if (!this.spriteBatchData) return offset;
+
+        const data = this.spriteBatchData;
+        const { atlasRegion: region, offsetX, offsetY, widthWorld, heightWorld } = entry;
+
+        // Calculate visible portion of sprite
+        // verticalProgress 0.0 = nothing visible, 1.0 = fully visible
+        const visibleHeight = heightWorld * verticalProgress;
+
+        // Position: start at the base (ground level) and only show the bottom portion
+        const x0 = worldX + offsetX;
+        const y0 = worldY + offsetY;  // Bottom of sprite (ground level)
+        const x1 = x0 + widthWorld;
+        const y1 = y0 + visibleHeight;  // Only show up to visible height
+
+        // UV coordinates: show bottom portion of texture
+        // v0 = bottom of texture, v1 = top of texture
+        // We want to show from v0 up to v0 + (v1-v0) * verticalProgress
+        const { u0, v0, u1, v1 } = region;
+        const visibleV1 = v0 + (v1 - v0) * verticalProgress;
+
+        // 6 vertices for 2 triangles (CCW winding)
+        // Note: V coordinates - v0 at bottom, visibleV1 at the visible top
+        // Vertex 0: top-left (visible top)
+        data[offset++] = x0; data[offset++] = y1;
+        data[offset++] = u0; data[offset++] = visibleV1;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        // Vertex 1: bottom-left
+        data[offset++] = x0; data[offset++] = y0;
+        data[offset++] = u0; data[offset++] = v0;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        // Vertex 2: bottom-right
+        data[offset++] = x1; data[offset++] = y0;
+        data[offset++] = u1; data[offset++] = v0;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        // Vertex 3: top-left (again)
+        data[offset++] = x0; data[offset++] = y1;
+        data[offset++] = u0; data[offset++] = visibleV1;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        // Vertex 4: bottom-right (again)
+        data[offset++] = x1; data[offset++] = y0;
+        data[offset++] = u1; data[offset++] = v0;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        // Vertex 5: top-right (visible top)
+        data[offset++] = x1; data[offset++] = y1;
+        data[offset++] = u1; data[offset++] = visibleV1;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         return offset;

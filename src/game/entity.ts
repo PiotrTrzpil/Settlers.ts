@@ -171,3 +171,36 @@ export interface UnitState {
     prevX: number;
     prevY: number;
 }
+
+/**
+ * Phases of building construction.
+ * Each phase uses different visuals and progresses over time.
+ */
+export enum BuildingConstructionPhase {
+    /** Initial phase: building poles/markers appear */
+    Poles = 0,
+    /** Terrain leveling phase: ground is prepared */
+    TerrainLeveling = 1,
+    /** Construction frame rises from bottom */
+    ConstructionRising = 2,
+    /** Completed building frame rises from bottom */
+    CompletedRising = 3,
+    /** Building is fully completed */
+    Completed = 4,
+}
+
+/**
+ * State tracking for building construction progress.
+ * Similar to UnitState for movement interpolation.
+ */
+export interface BuildingState {
+    entityId: number;
+    /** Current construction phase */
+    phase: BuildingConstructionPhase;
+    /** Progress within current phase (0.0 to 1.0) */
+    phaseProgress: number;
+    /** Total construction duration in seconds */
+    totalDuration: number;
+    /** Time elapsed since construction started */
+    elapsedTime: number;
+}
