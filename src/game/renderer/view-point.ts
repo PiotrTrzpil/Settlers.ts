@@ -192,8 +192,8 @@ export class ViewPoint implements IViewPoint {
 
         if (this.keysDown.has('d')) dx += speed;
         if (this.keysDown.has('a')) dx -= speed;
-        if (this.keysDown.has('s')) { dy += speed * 2; dx += speed; }
-        if (this.keysDown.has('w')) { dy -= speed * 2; dx -= speed; }
+        if (this.keysDown.has('s')) { dy += speed * 2; dx += speed }
+        if (this.keysDown.has('w')) { dy -= speed * 2; dx -= speed }
 
         if (dx === 0 && dy === 0) return;
 

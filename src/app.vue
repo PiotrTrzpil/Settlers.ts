@@ -25,7 +25,7 @@ import { LogHandler } from './utilities/log-handler';
 const log = new LogHandler('App');
 const fileManager = ref<FileManager | null>(null);
 
-onMounted(async () => {
+onMounted(async() => {
     log.debug('Starting...');
 
     try {

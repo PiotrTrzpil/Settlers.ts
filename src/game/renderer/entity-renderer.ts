@@ -902,17 +902,17 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      */
     private isEntityVisible(entity: Entity): boolean {
         switch (entity.type) {
-            case EntityType.Building:
-                return this.layerVisibility.buildings;
+        case EntityType.Building:
+            return this.layerVisibility.buildings;
 
-            case EntityType.Unit:
-                return this.layerVisibility.units;
+        case EntityType.Unit:
+            return this.layerVisibility.units;
 
-            case EntityType.MapObject:
-                return isMapObjectVisible(this.layerVisibility, entity.subType as MapObjectType);
+        case EntityType.MapObject:
+            return isMapObjectVisible(this.layerVisibility, entity.subType as MapObjectType);
 
-            default:
-                return true;
+        default:
+            return true;
         }
     }
 

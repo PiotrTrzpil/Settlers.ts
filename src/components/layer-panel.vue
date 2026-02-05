@@ -165,7 +165,7 @@ const emit = defineEmits<{
 // Use the persisted open state from debug stats
 const open = computed({
     get: () => debugStats.state.layerPanelOpen,
-    set: (value: boolean) => { debugStats.state.layerPanelOpen = value; }
+    set: (value: boolean) => { debugStats.state.layerPanelOpen = value }
 });
 
 // Section expansion state (local, not persisted)

@@ -129,7 +129,7 @@ async function deflateWithPlatform(data: Uint8Array): Promise<Uint8Array> {
             const chunks: Uint8Array[] = [];
             const reader = stream.readable.getReader();
 
-            while (true) {
+            for (;;) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 if (value) chunks.push(value);

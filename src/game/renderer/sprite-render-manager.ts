@@ -13,7 +13,7 @@ import {
     BUILDING_DIRECTION,
     AnimatedSpriteEntry,
 } from './sprite-metadata';
-import { SpriteLoader, LoadedGfxFileSet } from './sprite-loader';
+import { SpriteLoader } from './sprite-loader';
 import { BuildingType, MapObjectType } from '../entity';
 import { ANIMATION_DEFAULTS, AnimationData } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';

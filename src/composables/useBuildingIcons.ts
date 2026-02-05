@@ -37,7 +37,7 @@ async function loadIconGfx(fileManager: FileManager, race: Race): Promise<GfxFil
         return loadingPromises.get(race)!;
     }
 
-    const loadPromise = (async (): Promise<GfxFileReader | null> => {
+    const loadPromise = (async(): Promise<GfxFileReader | null> => {
         try {
             const fileId = BUILDING_ICON_FILE_NUMBERS[race].toString();
             const fileNameList: { [key: string]: string } = {
@@ -161,7 +161,6 @@ export function useBuildingIcons(
     const iconsLoaded = ref(false);
     const iconUrls = ref<Map<BuildingType, string>>(new Map());
     const selectedIconUrls = ref<Map<BuildingType, string>>(new Map());
-    let currentGfxReader: GfxFileReader | null = null;
 
     async function loadIconsForRace(race: Race) {
         if (!fileManager.value) return;
@@ -174,7 +173,6 @@ export function useBuildingIcons(
             return;
         }
 
-        currentGfxReader = reader;
         updateIconUrls(race, reader);
         iconsLoaded.value = true;
     }

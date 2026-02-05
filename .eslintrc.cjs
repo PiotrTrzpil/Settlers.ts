@@ -5,6 +5,7 @@ module.exports = {
         browser: true,
         es2020: true
     },
+    plugins: ['unused-imports'],
     extends: [
         'plugin:vue/vue3-essential',
         'eslint:recommended',
@@ -32,7 +33,11 @@ module.exports = {
         eqeqeq: ['warn', 'smart'],
         'no-throw-literal': 'error',
         'no-void': 'off',
-        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
+
+        // Unused imports - auto-fixable
+        '@typescript-eslint/no-unused-vars': 'off',
+        'unused-imports/no-unused-imports': 'warn',
+        'unused-imports/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
     },
     overrides: [
         {

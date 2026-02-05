@@ -204,7 +204,7 @@ const stats = debugStats.state;
 // Use the persisted open state from debug stats
 const open = computed({
     get: () => stats.debugPanelOpen,
-    set: (value: boolean) => { stats.debugPanelOpen = value; }
+    set: (value: boolean) => { stats.debugPanelOpen = value }
 });
 
 const sections = reactive({

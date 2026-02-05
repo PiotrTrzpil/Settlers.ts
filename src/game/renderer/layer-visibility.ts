@@ -225,35 +225,35 @@ export const FALLBACK_ENTITY_COLORS: Record<string, [number, number, number, num
 /** Get fallback color for a MapObjectType */
 export function getMapObjectFallbackColor(objectType: MapObjectType): [number, number, number, number] {
     switch (objectType) {
-        case MapObjectType.TreePine: return FALLBACK_ENTITY_COLORS.tree_pine;
-        case MapObjectType.TreeOak: return FALLBACK_ENTITY_COLORS.tree_oak;
-        case MapObjectType.TreeBirch: return FALLBACK_ENTITY_COLORS.tree_birch;
-        case MapObjectType.TreePalm: return FALLBACK_ENTITY_COLORS.tree_palm;
-        case MapObjectType.TreeCypress: return FALLBACK_ENTITY_COLORS.tree_cypress;
-        case MapObjectType.TreeDead: return FALLBACK_ENTITY_COLORS.tree_dead;
+    case MapObjectType.TreePine: return FALLBACK_ENTITY_COLORS.tree_pine;
+    case MapObjectType.TreeOak: return FALLBACK_ENTITY_COLORS.tree_oak;
+    case MapObjectType.TreeBirch: return FALLBACK_ENTITY_COLORS.tree_birch;
+    case MapObjectType.TreePalm: return FALLBACK_ENTITY_COLORS.tree_palm;
+    case MapObjectType.TreeCypress: return FALLBACK_ENTITY_COLORS.tree_cypress;
+    case MapObjectType.TreeDead: return FALLBACK_ENTITY_COLORS.tree_dead;
 
-        case MapObjectType.StoneSmall: return FALLBACK_ENTITY_COLORS.stone_small;
-        case MapObjectType.StoneMedium: return FALLBACK_ENTITY_COLORS.stone_medium;
-        case MapObjectType.StoneLarge: return FALLBACK_ENTITY_COLORS.stone_large;
+    case MapObjectType.StoneSmall: return FALLBACK_ENTITY_COLORS.stone_small;
+    case MapObjectType.StoneMedium: return FALLBACK_ENTITY_COLORS.stone_medium;
+    case MapObjectType.StoneLarge: return FALLBACK_ENTITY_COLORS.stone_large;
 
-        case MapObjectType.IronDeposit: return FALLBACK_ENTITY_COLORS.deposit_iron;
-        case MapObjectType.GoldDeposit: return FALLBACK_ENTITY_COLORS.deposit_gold;
-        case MapObjectType.CoalDeposit: return FALLBACK_ENTITY_COLORS.deposit_coal;
-        case MapObjectType.StoneDeposit: return FALLBACK_ENTITY_COLORS.deposit_stone;
-        case MapObjectType.SulfurDeposit: return FALLBACK_ENTITY_COLORS.deposit_sulfur;
-        case MapObjectType.GemsDeposit: return FALLBACK_ENTITY_COLORS.deposit_gems;
+    case MapObjectType.IronDeposit: return FALLBACK_ENTITY_COLORS.deposit_iron;
+    case MapObjectType.GoldDeposit: return FALLBACK_ENTITY_COLORS.deposit_gold;
+    case MapObjectType.CoalDeposit: return FALLBACK_ENTITY_COLORS.deposit_coal;
+    case MapObjectType.StoneDeposit: return FALLBACK_ENTITY_COLORS.deposit_stone;
+    case MapObjectType.SulfurDeposit: return FALLBACK_ENTITY_COLORS.deposit_sulfur;
+    case MapObjectType.GemsDeposit: return FALLBACK_ENTITY_COLORS.deposit_gems;
 
-        case MapObjectType.Bush: return FALLBACK_ENTITY_COLORS.plant_bush;
-        case MapObjectType.Mushroom: return FALLBACK_ENTITY_COLORS.plant_mushroom;
-        case MapObjectType.Flowers: return FALLBACK_ENTITY_COLORS.plant_flowers;
-        case MapObjectType.Corn: return FALLBACK_ENTITY_COLORS.plant_corn;
-        case MapObjectType.Wheat: return FALLBACK_ENTITY_COLORS.plant_wheat;
+    case MapObjectType.Bush: return FALLBACK_ENTITY_COLORS.plant_bush;
+    case MapObjectType.Mushroom: return FALLBACK_ENTITY_COLORS.plant_mushroom;
+    case MapObjectType.Flowers: return FALLBACK_ENTITY_COLORS.plant_flowers;
+    case MapObjectType.Corn: return FALLBACK_ENTITY_COLORS.plant_corn;
+    case MapObjectType.Wheat: return FALLBACK_ENTITY_COLORS.plant_wheat;
 
-        case MapObjectType.Stump: return FALLBACK_ENTITY_COLORS.stump;
-        case MapObjectType.FallenTree: return FALLBACK_ENTITY_COLORS.fallen_tree;
-        case MapObjectType.Pile: return FALLBACK_ENTITY_COLORS.pile;
+    case MapObjectType.Stump: return FALLBACK_ENTITY_COLORS.stump;
+    case MapObjectType.FallenTree: return FALLBACK_ENTITY_COLORS.fallen_tree;
+    case MapObjectType.Pile: return FALLBACK_ENTITY_COLORS.pile;
 
-        default: return [0.5, 0.5, 0.5, 1.0]; // Default gray
+    default: return [0.5, 0.5, 0.5, 1.0]; // Default gray
     }
 }
 

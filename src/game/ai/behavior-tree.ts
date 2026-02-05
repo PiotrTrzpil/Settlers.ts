@@ -67,15 +67,15 @@ export class Parallel<T> extends Node<T> {
         for (const child of this.children) {
             const status = child.tick(entity, deltaMs);
             switch (status) {
-                case NodeStatus.SUCCESS:
-                    successCount++;
-                    break;
-                case NodeStatus.FAILURE:
-                    failureCount++;
-                    break;
-                case NodeStatus.RUNNING:
-                    hasRunning = true;
-                    break;
+            case NodeStatus.SUCCESS:
+                successCount++;
+                break;
+            case NodeStatus.FAILURE:
+                failureCount++;
+                break;
+            case NodeStatus.RUNNING:
+                hasRunning = true;
+                break;
             }
         }
 

@@ -12,9 +12,6 @@ import {
     getCurrentAnimationSprite,
 } from '../animation';
 import { SpriteEntry } from '../renderer/sprite-metadata';
-import { LogHandler } from '@/utilities/log-handler';
-
-const log = new LogHandler('AnimationSystem');
 
 /**
  * Animation data provider interface.

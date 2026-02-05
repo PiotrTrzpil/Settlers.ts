@@ -1,4 +1,3 @@
-import { BinaryReader } from '@/resources/file/binary-reader';
 import { DilFileReader } from '@/resources/gfx/dil-file-reader';
 import { GfxFileReader } from '@/resources/gfx/gfx-file-reader';
 import { GhFileReader } from '@/resources/gfx/gh-file-reader';
@@ -172,7 +171,7 @@ export class GfxImageExporter {
     async exportImage(
         image: IGfxImage,
         outputPath: string,
-        includeMetadata = false
+        _includeMetadata = false
     ): Promise<void> {
         const rawData = this.imageToRawData(image);
         const pngData = await encodePNG(rawData);

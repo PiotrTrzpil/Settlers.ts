@@ -1,5 +1,5 @@
 import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
-import { InputAction, MouseButton, type PointerData, type DragData } from '../input-actions';
+import { InputAction, MouseButton, type PointerData } from '../input-actions';
 import type { InputConfig } from '../input-config';
 import { CursorType, type ModeRenderState } from '../render-state';
 
@@ -93,12 +93,12 @@ export class CameraMode extends BaseInputMode {
         this.cameraState.targetZoom = this.cameraState.zoom;
     }
 
-    onAction(action: InputAction, context: InputContext): InputResult {
+    onAction(_action: InputAction, _context: InputContext): InputResult {
         // Camera actions are handled in onUpdate for smooth movement
         return UNHANDLED;
     }
 
-    onPointerDown(data: PointerData, context: InputContext): InputResult {
+    onPointerDown(data: PointerData, _context: InputContext): InputResult {
         // Middle mouse button starts camera drag
         if (data.button === MouseButton.Middle) {
             this.isDraggingCamera = true;
@@ -109,7 +109,7 @@ export class CameraMode extends BaseInputMode {
         return UNHANDLED;
     }
 
-    onPointerUp(data: PointerData, context: InputContext): InputResult {
+    onPointerUp(data: PointerData, _context: InputContext): InputResult {
         if (data.button === MouseButton.Middle && this.isDraggingCamera) {
             // Finalize camera position
             this.cameraState.x += this.cameraState.dragOffsetX;
@@ -122,7 +122,7 @@ export class CameraMode extends BaseInputMode {
         return UNHANDLED;
     }
 
-    onPointerMove(data: PointerData, context: InputContext): InputResult {
+    onPointerMove(data: PointerData, _context: InputContext): InputResult {
         if (this.isDraggingCamera) {
             // Calculate drag offset
             const dx = data.screenX - this.dragStartX;
@@ -141,7 +141,7 @@ export class CameraMode extends BaseInputMode {
         return UNHANDLED;
     }
 
-    onWheel(data: PointerData, context: InputContext): InputResult {
+    onWheel(data: PointerData, _context: InputContext): InputResult {
         if (data.wheelDelta === undefined) return UNHANDLED;
 
         const delta = this.config.invertZoom ? -data.wheelDelta : data.wheelDelta;

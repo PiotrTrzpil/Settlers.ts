@@ -71,7 +71,7 @@ import { useSimpleGridView } from '@/composables/useGridView';
 
 import FileBrowser from '@/components/file-browser.vue';
 
-const props = defineProps<{
+defineProps<{
     fileManager: FileManager;
 }>();
 

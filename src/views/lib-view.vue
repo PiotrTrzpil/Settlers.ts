@@ -45,7 +45,7 @@ import { FileManager, IFileSource } from '@/utilities/file-manager';
 import FileBrowser from '@/components/file-browser.vue';
 import HexViewer from '@/components/hex-viewer.vue';
 
-const props = defineProps<{
+defineProps<{
     fileManager: FileManager;
 }>();
 

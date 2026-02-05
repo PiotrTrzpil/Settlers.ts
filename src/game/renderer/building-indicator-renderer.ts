@@ -1,9 +1,9 @@
 import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
-import { TileCoord, CARDINAL_OFFSETS, tileKey, BuildingType, getBuildingSize, getBuildingFootprint } from '../entity';
+import { TileCoord, CARDINAL_OFFSETS, tileKey, BuildingType, getBuildingFootprint } from '../entity';
 import { TerritoryMap, NO_OWNER } from '../systems/territory';
-import { isBuildable, isPassable } from '../systems/placement';
+import { isBuildable } from '../systems/placement';
 import { ShaderProgram } from './shader-program';
 
 import vertCode from './shaders/entity-vert.glsl';
@@ -57,10 +57,6 @@ const MAX_SLOPE_DIFF = 2;
 const INDICATOR_DOT_SCALE = 0.08;
 const HOVER_DOT_SCALE = 0.12;
 const HOVER_RING_SCALE = 0.18;
-
-// Maximum indicators to batch render at once
-const MAX_BATCH_INDICATORS = 2000;
-const FLOATS_PER_INDICATOR = 6 * 4; // 6 vertices, 4 floats each (x, y, entityX, entityY) - but we use constant attributes
 
 // Base quad for dot rendering
 const BASE_QUAD = new Float32Array([
@@ -410,22 +406,22 @@ export class BuildingIndicatorRenderer {
      */
     public static getStatusDescription(status: PlacementStatus): string {
         switch (status) {
-            case PlacementStatus.InvalidTerrain:
-                return 'Cannot build: Invalid terrain';
-            case PlacementStatus.Occupied:
-                return 'Cannot build: Occupied';
-            case PlacementStatus.EnemyTerritory:
-                return 'Cannot build: Enemy territory';
-            case PlacementStatus.OutsideTerritory:
-                return 'Cannot build: Outside territory';
-            case PlacementStatus.TooSteep:
-                return 'Cannot build: Too steep';
-            case PlacementStatus.Difficult:
-                return 'Can build: Uneven terrain';
-            case PlacementStatus.Medium:
-                return 'Can build: Slight slope';
-            case PlacementStatus.Easy:
-                return 'Can build: Flat terrain';
+        case PlacementStatus.InvalidTerrain:
+            return 'Cannot build: Invalid terrain';
+        case PlacementStatus.Occupied:
+            return 'Cannot build: Occupied';
+        case PlacementStatus.EnemyTerritory:
+            return 'Cannot build: Enemy territory';
+        case PlacementStatus.OutsideTerritory:
+            return 'Cannot build: Outside territory';
+        case PlacementStatus.TooSteep:
+            return 'Cannot build: Too steep';
+        case PlacementStatus.Difficult:
+            return 'Can build: Uneven terrain';
+        case PlacementStatus.Medium:
+            return 'Can build: Slight slope';
+        case PlacementStatus.Easy:
+            return 'Can build: Flat terrain';
         }
     }
 

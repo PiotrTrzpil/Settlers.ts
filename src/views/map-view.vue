@@ -187,7 +187,6 @@ import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
 import { useBuildingIcons } from '@/composables/useBuildingIcons';
 import { Race, RACE_NAMES, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
-import { BuildingType } from '@/game/entity';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';

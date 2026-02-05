@@ -1,5 +1,4 @@
 import { reactive, watch } from 'vue';
-import { GameState } from './game-state';
 import { EntityType } from './entity';
 import type { Game } from './game';
 

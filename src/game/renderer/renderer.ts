@@ -1,7 +1,7 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { IRenderer } from './i-renderer';
 import { Matrix } from './landscape/matrix';
-import { ViewPoint, type ViewPointOptions } from './view-point';
+import { ViewPoint } from './view-point';
 
 declare let WebGLDebugUtils: any;
 

@@ -77,7 +77,7 @@ export class NodeFileSystem implements IFileReader, IFileWriter {
 
     async readFiles(paths: string[]): Promise<Map<string, BinaryReader>> {
         const result = new Map<string, BinaryReader>();
-        const promises = paths.map(async (p) => {
+        const promises = paths.map(async(p) => {
             try {
                 const reader = await this.readFile(p);
                 result.set(p, reader);
@@ -207,7 +207,7 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
 
     async readFiles(paths: string[]): Promise<Map<string, BinaryReader>> {
         const result = new Map<string, BinaryReader>();
-        const promises = paths.map(async (p) => {
+        const promises = paths.map(async(p) => {
             try {
                 const reader = await this.readFile(p);
                 result.set(p, reader);

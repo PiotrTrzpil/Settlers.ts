@@ -11,7 +11,7 @@ import { LandscapeRenderer } from '@/game/renderer/landscape/landscape-renderer'
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
-import { EntityType, BuildingType, getBuildingSize, type TileCoord } from '@/game/entity';
+import { EntityType, getBuildingSize, type TileCoord } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
 import { canPlaceBuildingWithTerritory } from '@/game/systems/placement';
 import { debugStats } from '@/game/debug-stats';
@@ -20,15 +20,12 @@ import {
     SelectMode,
     PlaceBuildingMode,
     type PlaceBuildingModeData,
-    type ModeRenderState,
-    type BuildingPreview,
     getDefaultInputConfig,
     MouseButton,
-    CursorType,
     HANDLED,
     UNHANDLED,
 } from '@/game/input';
-import { LayerVisibility, DEFAULT_LAYER_VISIBILITY } from '@/game/renderer/layer-visibility';
+import { LayerVisibility } from '@/game/renderer/layer-visibility';
 
 interface UseRendererOptions {
     canvas: Ref<HTMLCanvasElement | null>;
@@ -175,7 +172,7 @@ export function useRenderer({
         };
 
         // Override drag end for box selection
-        selectMode.onDragEnd = (data, context) => {
+        selectMode.onDragEnd = (data, _context) => {
             if (data.button === MouseButton.Left && data.isDragging) {
                 if (data.startTileX !== undefined && data.startTileY !== undefined &&
                     data.currentTileX !== undefined && data.currentTileY !== undefined) {

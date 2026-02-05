@@ -213,53 +213,53 @@ export function getBuildingVisualState(buildingState: BuildingState | undefined)
     const overallProgress = buildingState.elapsedTime / buildingState.totalDuration;
 
     switch (phase) {
-        case BuildingConstructionPhase.Poles:
-            // Poles phase: show nothing or poles (we'll show construction sprite at 0 height)
-            return {
-                useConstructionSprite: true,
-                verticalProgress: 0.0,
-                overallProgress,
-                isCompleted: false,
-                phase,
-            };
+    case BuildingConstructionPhase.Poles:
+        // Poles phase: show nothing or poles (we'll show construction sprite at 0 height)
+        return {
+            useConstructionSprite: true,
+            verticalProgress: 0.0,
+            overallProgress,
+            isCompleted: false,
+            phase,
+        };
 
-        case BuildingConstructionPhase.TerrainLeveling:
-            // Terrain leveling: still no building visible (terrain modification)
-            return {
-                useConstructionSprite: true,
-                verticalProgress: 0.0,
-                overallProgress,
-                isCompleted: false,
-                phase,
-            };
+    case BuildingConstructionPhase.TerrainLeveling:
+        // Terrain leveling: still no building visible (terrain modification)
+        return {
+            useConstructionSprite: true,
+            verticalProgress: 0.0,
+            overallProgress,
+            isCompleted: false,
+            phase,
+        };
 
-        case BuildingConstructionPhase.ConstructionRising:
-            // Construction sprite rises from bottom
-            return {
-                useConstructionSprite: true,
-                verticalProgress: phaseProgress,
-                overallProgress,
-                isCompleted: false,
-                phase,
-            };
+    case BuildingConstructionPhase.ConstructionRising:
+        // Construction sprite rises from bottom
+        return {
+            useConstructionSprite: true,
+            verticalProgress: phaseProgress,
+            overallProgress,
+            isCompleted: false,
+            phase,
+        };
 
-        case BuildingConstructionPhase.CompletedRising:
-            // Completed sprite rises from bottom (construction sprite fades out)
-            return {
-                useConstructionSprite: false,
-                verticalProgress: phaseProgress,
-                overallProgress,
-                isCompleted: false,
-                phase,
-            };
+    case BuildingConstructionPhase.CompletedRising:
+        // Completed sprite rises from bottom (construction sprite fades out)
+        return {
+            useConstructionSprite: false,
+            verticalProgress: phaseProgress,
+            overallProgress,
+            isCompleted: false,
+            phase,
+        };
 
-        default:
-            return {
-                useConstructionSprite: false,
-                verticalProgress: 1.0,
-                overallProgress: 1.0,
-                isCompleted: true,
-                phase: BuildingConstructionPhase.Completed,
-            };
+    default:
+        return {
+            useConstructionSprite: false,
+            verticalProgress: 1.0,
+            overallProgress: 1.0,
+            isCompleted: true,
+            phase: BuildingConstructionPhase.Completed,
+        };
     }
 }

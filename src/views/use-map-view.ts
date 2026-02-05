@@ -1,4 +1,4 @@
-import { ref, shallowRef, triggerRef, computed, watch, onMounted, reactive, toRef } from 'vue';
+import { ref, shallowRef, triggerRef, computed, watch, onMounted, reactive } from 'vue';
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
@@ -65,11 +65,11 @@ export function useMapView(getFileManager: () => FileManager) {
     // Use debug stats for persisted settings
     const showDebug = computed({
         get: () => debugStats.state.debugGridEnabled,
-        set: (value: boolean) => { debugStats.state.debugGridEnabled = value; }
+        set: (value: boolean) => { debugStats.state.debugGridEnabled = value }
     });
     const showTerritoryBorders = computed({
         get: () => debugStats.state.territoryBordersEnabled,
-        set: (value: boolean) => { debugStats.state.territoryBordersEnabled = value; }
+        set: (value: boolean) => { debugStats.state.territoryBordersEnabled = value }
     });
 
     const activeTab = ref<'buildings' | 'units'>('buildings');
@@ -115,36 +115,36 @@ export function useMapView(getFileManager: () => FileManager) {
 
         for (const entity of game.value.state.entities) {
             switch (entity.type) {
-                case EntityType.Building:
-                    counts.buildings++;
-                    break;
-                case EntityType.Unit:
-                    counts.units++;
-                    break;
-                case EntityType.MapObject: {
-                    const objType = entity.subType as MapObjectType;
-                    if (isResourceDeposit(objType)) {
-                        counts.resources++;
-                    } else {
-                        counts.environment++;
-                        const subLayer = getEnvironmentSubLayer(objType);
-                        switch (subLayer) {
-                            case EnvironmentSubLayer.Trees:
-                                counts.trees++;
-                                break;
-                            case EnvironmentSubLayer.Stones:
-                                counts.stones++;
-                                break;
-                            case EnvironmentSubLayer.Plants:
-                                counts.plants++;
-                                break;
-                            case EnvironmentSubLayer.Other:
-                                counts.other++;
-                                break;
-                        }
+            case EntityType.Building:
+                counts.buildings++;
+                break;
+            case EntityType.Unit:
+                counts.units++;
+                break;
+            case EntityType.MapObject: {
+                const objType = entity.subType as MapObjectType;
+                if (isResourceDeposit(objType)) {
+                    counts.resources++;
+                } else {
+                    counts.environment++;
+                    const subLayer = getEnvironmentSubLayer(objType);
+                    switch (subLayer) {
+                    case EnvironmentSubLayer.Trees:
+                        counts.trees++;
+                        break;
+                    case EnvironmentSubLayer.Stones:
+                        counts.stones++;
+                        break;
+                    case EnvironmentSubLayer.Plants:
+                        counts.plants++;
+                        break;
+                    case EnvironmentSubLayer.Other:
+                        counts.other++;
+                        break;
                     }
-                    break;
                 }
+                break;
+            }
             }
         }
 

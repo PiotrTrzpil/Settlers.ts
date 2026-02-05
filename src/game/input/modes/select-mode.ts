@@ -1,6 +1,5 @@
 import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
 import { InputAction, MouseButton, type PointerData, type DragData } from '../input-actions';
-import { EntityType } from '../../entity';
 import { CursorType, type ModeRenderState, type SelectionBox } from '../render-state';
 
 /**
@@ -26,20 +25,21 @@ export class SelectMode extends BaseInputMode {
 
     onAction(action: InputAction, context: InputContext): InputResult {
         switch (action) {
-            case InputAction.DeselectAll:
-                context.executeCommand({ type: 'select', entityId: null });
-                return HANDLED;
+        case InputAction.DeselectAll:
+            context.executeCommand({ type: 'select', entityId: null });
+            return HANDLED;
 
-            case InputAction.Delete:
-                // Delete selected entity if any
-                const data = context.getModeData<{ selectedEntityId: number | null }>();
-                if (data?.selectedEntityId != null) {
-                    context.executeCommand({ type: 'remove_entity', entityId: data.selectedEntityId });
-                }
-                return HANDLED;
+        case InputAction.Delete: {
+            // Delete selected entity if any
+            const data = context.getModeData<{ selectedEntityId: number | null }>();
+            if (data?.selectedEntityId != null) {
+                context.executeCommand({ type: 'remove_entity', entityId: data.selectedEntityId });
+            }
+            return HANDLED;
+        }
 
-            default:
-                return UNHANDLED;
+        default:
+            return UNHANDLED;
         }
     }
 
@@ -85,7 +85,7 @@ export class SelectMode extends BaseInputMode {
         return UNHANDLED;
     }
 
-    onDrag(data: DragData, context: InputContext): InputResult {
+    onDrag(_data: DragData, _context: InputContext): InputResult {
         // Visual feedback for drag selection would go here
         // The actual selection happens on drag end
         return HANDLED;

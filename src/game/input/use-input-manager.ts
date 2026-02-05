@@ -1,4 +1,4 @@
-import { ref, shallowRef, watch, onUnmounted, type Ref, type ShallowRef, type ComputedRef } from 'vue';
+import { ref, shallowRef, watch, onUnmounted, type Ref, type ShallowRef } from 'vue';
 import { InputManager, type TileResolver, type CommandExecutor } from './input-manager';
 import type { InputConfig } from './input-config';
 import type { InputMode } from './input-mode';

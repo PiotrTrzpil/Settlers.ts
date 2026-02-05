@@ -51,17 +51,17 @@ export class PlaceBuildingMode extends BaseInputMode {
 
     onAction(action: InputAction, context: InputContext): InputResult {
         switch (action) {
-            case InputAction.CancelPlacement:
-            case InputAction.DeselectAll:
-                context.switchMode('select');
-                return HANDLED;
+        case InputAction.CancelPlacement:
+        case InputAction.DeselectAll:
+            context.switchMode('select');
+            return HANDLED;
 
-            case InputAction.RotateBuilding:
-                // Future: implement building rotation
-                return HANDLED;
+        case InputAction.RotateBuilding:
+            // Future: implement building rotation
+            return HANDLED;
 
-            default:
-                return UNHANDLED;
+        default:
+            return UNHANDLED;
         }
     }
 
@@ -72,7 +72,7 @@ export class PlaceBuildingMode extends BaseInputMode {
         if (data.button === MouseButton.Left) {
             // Try to place building
             if (modeData.previewValid) {
-                const success = context.executeCommand({
+                context.executeCommand({
                     type: 'place_building',
                     buildingType: modeData.buildingType,
                     x: modeData.previewX,
