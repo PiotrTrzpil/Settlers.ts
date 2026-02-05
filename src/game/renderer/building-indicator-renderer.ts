@@ -70,6 +70,17 @@ const BASE_QUAD = new Float32Array([
 ]);
 
 /**
+ * Check if a placement status allows building (shows an indicator).
+ * Only Easy, Medium, and Difficult statuses show indicators.
+ * Invalid tiles (terrain, occupied, territory, steep) show NO indicator.
+ */
+export function isBuildableStatus(status: PlacementStatus): boolean {
+    return status === PlacementStatus.Easy ||
+           status === PlacementStatus.Medium ||
+           status === PlacementStatus.Difficult;
+}
+
+/**
  * Renders building placement indicators across the visible terrain.
  * Shows colored dots indicating where buildings can be placed and the
  * relative difficulty (based on slope/terrain).
@@ -310,8 +321,13 @@ export class BuildingIndicatorRenderer {
         gl.disableVertexAttribArray(this.aEntityPos);
         gl.disableVertexAttribArray(this.aColor);
 
-        // Draw all indicators
+        // Draw only buildable indicators (skip invalid tiles - no dot shown)
         for (const [key, status] of this.indicatorCache) {
+            // Only show indicators for tiles where building is possible
+            if (!isBuildableStatus(status)) {
+                continue;
+            }
+
             const [xStr, yStr] = key.split(',');
             const x = parseInt(xStr, 10);
             const y = parseInt(yStr, 10);

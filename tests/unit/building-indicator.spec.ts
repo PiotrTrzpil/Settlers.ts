@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
     BuildingIndicatorRenderer,
-    PlacementStatus
+    PlacementStatus,
+    isBuildableStatus
 } from '@/game/renderer/building-indicator-renderer';
 import { MapSize } from '@/utilities/map-size';
 import { TerritoryMap } from '@/game/systems/territory';
@@ -124,6 +125,24 @@ describe('BuildingIndicatorRenderer', () => {
 
             // Invalid should be reddish (higher R than G)
             expect(invalidColor[0]).toBeGreaterThan(invalidColor[1]);
+        });
+    });
+
+    describe('isBuildableStatus', () => {
+        it('should return true only for buildable statuses', () => {
+            // These should show indicators (can build here)
+            expect(isBuildableStatus(PlacementStatus.Easy)).toBe(true);
+            expect(isBuildableStatus(PlacementStatus.Medium)).toBe(true);
+            expect(isBuildableStatus(PlacementStatus.Difficult)).toBe(true);
+        });
+
+        it('should return false for non-buildable statuses (no indicator shown)', () => {
+            // These should NOT show indicators (cannot build here)
+            expect(isBuildableStatus(PlacementStatus.InvalidTerrain)).toBe(false);
+            expect(isBuildableStatus(PlacementStatus.Occupied)).toBe(false);
+            expect(isBuildableStatus(PlacementStatus.EnemyTerritory)).toBe(false);
+            expect(isBuildableStatus(PlacementStatus.OutsideTerritory)).toBe(false);
+            expect(isBuildableStatus(PlacementStatus.TooSteep)).toBe(false);
         });
     });
 });
