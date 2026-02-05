@@ -47,4 +47,8 @@ export class OriginalLandscape implements IMapLandscape {
     public getGroundType(): Uint8Array {
         return this.getSlice(1);
     }
+
+    public getObjectType(): Uint8Array {
+        return this.getSlice(2);
+    }
 }

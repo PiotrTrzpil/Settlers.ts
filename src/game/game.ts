@@ -13,6 +13,8 @@ export class Game {
     public mapSize: MapSize;
     public groundHeight: Uint8Array;
     public groundType: Uint8Array;
+    /** Raw object type data from landscape (null for test maps) */
+    public objectType: Uint8Array | null = null;
     public fileManager: FileManager;
     public state: GameState;
     public gameLoop: GameLoop;
@@ -37,6 +39,7 @@ export class Game {
         this.mapSize = mapLoader.mapSize;
         this.groundHeight = mapLoader.landscape.getGroundHeight();
         this.groundType = mapLoader.landscape.getGroundType();
+        this.objectType = mapLoader.landscape.getObjectType?.() ?? null;
 
         this.state = new GameState();
         this.gameLoop = new GameLoop(this.state);

@@ -178,14 +178,60 @@
           </div>
         </div>
       </section>
+
+      <!-- Map Objects -->
+      <section class="debug-section">
+        <h3 class="section-header" @click="sections.mapObjects = !sections.mapObjects">
+          <span class="caret">{{ sections.mapObjects ? '&#x25BC;' : '&#x25B6;' }}</span>
+          Map Objects
+        </h3>
+        <div v-if="sections.mapObjects" class="section-body">
+          <div class="map-obj-row">
+            <span class="stat-label">Trees</span>
+            <span class="stat-value">{{ mapObjectCounts.trees }}</span>
+            <button class="spawn-btn" @click="spawnCategory('trees')">+</button>
+          </div>
+          <div class="map-obj-row">
+            <span class="stat-label">Stones</span>
+            <span class="stat-value">{{ mapObjectCounts.stones }}</span>
+            <button class="spawn-btn" @click="spawnCategory('stones')">+</button>
+          </div>
+          <div class="map-obj-row">
+            <span class="stat-label">Resources</span>
+            <span class="stat-value">{{ mapObjectCounts.resources }}</span>
+            <button class="spawn-btn" @click="spawnCategory('resources')">+</button>
+          </div>
+          <div class="map-obj-row">
+            <span class="stat-label">Plants</span>
+            <span class="stat-value">{{ mapObjectCounts.plants }}</span>
+            <button class="spawn-btn" @click="spawnCategory('plants')">+</button>
+          </div>
+          <div class="map-obj-actions">
+            <button class="ctrl-btn" @click="spawnAllFromMap()">From Map</button>
+            <button class="ctrl-btn" @click="clearAllMapObjects()">Clear</button>
+          </div>
+          <div v-if="!hasObjectTypeData" class="stat-row">
+            <span class="stat-label dim">No map object data (test map)</span>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { reactive, computed, ref, onMounted, onUnmounted } from 'vue';
 import { debugStats } from '@/game/debug-stats';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
+import {
+    type ObjectCategory,
+    countMapObjectsByCategory,
+    populateMapObjects,
+    spawnTestObjects,
+    clearMapObjects,
+    analyzeObjectTypes
+} from '@/game/systems/map-objects';
+import type { Game } from '@/game/game';
 
 defineProps<{
     debugGrid: boolean;
@@ -213,6 +259,79 @@ const sections = reactive({
     camera: true,
     tile: true,
     controls: true,
+    mapObjects: false,
+});
+
+// Map objects functionality
+const mapObjectCounts = ref({ trees: 0, stones: 0, resources: 0, plants: 0, other: 0 });
+const hasObjectTypeData = ref(false);
+
+function getGame(): Game | null {
+    return (window as any).__settlers_game__ ?? null;
+}
+
+function updateMapObjectCounts() {
+    const game = getGame();
+    if (!game) return;
+
+    hasObjectTypeData.value = game.objectType !== null;
+    const counts = countMapObjectsByCategory(game.state);
+    mapObjectCounts.value = {
+        trees: counts.get('trees') ?? 0,
+        stones: counts.get('stones') ?? 0,
+        resources: counts.get('resources') ?? 0,
+        plants: counts.get('plants') ?? 0,
+        other: counts.get('other') ?? 0,
+    };
+}
+
+function spawnCategory(category: ObjectCategory) {
+    const game = getGame();
+    if (!game) return;
+
+    if (game.objectType) {
+        // Use real map data
+        populateMapObjects(game.state, game.objectType, game.groundType, game.mapSize, { category });
+    } else {
+        // Use test objects
+        spawnTestObjects(game.state, game.groundType, game.mapSize, category, 50);
+    }
+    updateMapObjectCounts();
+}
+
+function spawnAllFromMap() {
+    const game = getGame();
+    if (!game) return;
+
+    if (game.objectType) {
+        // Log analysis first for debugging
+        analyzeObjectTypes(game.objectType);
+        populateMapObjects(game.state, game.objectType, game.groundType, game.mapSize);
+    } else {
+        // Spawn test objects for each category
+        for (const cat of ['trees', 'stones', 'resources', 'plants'] as ObjectCategory[]) {
+            spawnTestObjects(game.state, game.groundType, game.mapSize, cat, 30);
+        }
+    }
+    updateMapObjectCounts();
+}
+
+function clearAllMapObjects() {
+    const game = getGame();
+    if (!game) return;
+
+    clearMapObjects(game.state);
+    updateMapObjectCounts();
+}
+
+// Update counts periodically
+let countUpdateInterval: ReturnType<typeof setInterval> | null = null;
+onMounted(() => {
+    updateMapObjectCounts();
+    countUpdateInterval = setInterval(updateMapObjectCounts, 1000);
+});
+onUnmounted(() => {
+    if (countUpdateInterval) clearInterval(countUpdateInterval);
 });
 
 const slotPermLabel = computed(() => {
@@ -482,5 +601,46 @@ const fpsClass = computed(() => {
 .debug-panel::-webkit-scrollbar-thumb {
   background: #4a3218;
   border-radius: 2px;
+}
+
+/* Map Objects section */
+.map-obj-row {
+  display: flex;
+  align-items: center;
+  padding: 2px 0;
+  gap: 8px;
+}
+
+.map-obj-row .stat-label {
+  flex: 1;
+}
+
+.map-obj-row .stat-value {
+  min-width: 30px;
+  text-align: right;
+}
+
+.spawn-btn {
+  padding: 1px 6px;
+  background: #1a3a1a;
+  color: #80c080;
+  border: 1px solid #2a5a2a;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: monospace;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.spawn-btn:hover {
+  background: #2a4a2a;
+  border-color: #3a6a3a;
+}
+
+.map-obj-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
 }
 </style>
