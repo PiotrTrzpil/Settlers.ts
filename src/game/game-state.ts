@@ -1,4 +1,5 @@
-import { Entity, EntityType, UnitState, BuildingState, BuildingConstructionPhase, tileKey, BuildingType, getBuildingFootprint } from './entity';
+import { Entity, EntityType, UnitState, BuildingState, BuildingConstructionPhase, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE } from './entity';
+import { EMaterialType } from './economy/material-type';
 
 /** Default building construction duration in seconds */
 export const DEFAULT_CONSTRUCTION_DURATION = 30;
@@ -10,6 +11,8 @@ export class GameState {
     public unitStates: Map<number, UnitState> = new Map();
     /** Building construction state tracking */
     public buildingStates: Map<number, BuildingState> = new Map();
+    /** Stacked resource state tracking (quantity of items in each stack) */
+    public resourceStates: Map<number, StackedResourceState> = new Map();
     /** Primary selection (first selected entity or single selection) */
     public selectedEntityId: number | null = null;
     /** All selected entity IDs (for multi-select) */
@@ -68,6 +71,13 @@ export class GameState {
             });
         }
 
+        if (type === EntityType.StackedResource) {
+            this.resourceStates.set(entity.id, {
+                entityId: entity.id,
+                quantity: 1,
+            });
+        }
+
         return entity;
     }
 
@@ -94,6 +104,7 @@ export class GameState {
 
         this.unitStates.delete(id);
         this.buildingStates.delete(id);
+        this.resourceStates.delete(id);
 
         this.selectedEntityIds.delete(id);
         if (this.selectedEntityId === id) {
@@ -145,5 +156,123 @@ export class GameState {
         entity.x = newX;
         entity.y = newY;
         this.tileOccupancy.set(tileKey(newX, newY), id);
+    }
+
+    // ==========================================
+    // Stacked Resource Management Methods
+    // ==========================================
+
+    /**
+     * Add a stacked resource at the specified position.
+     * If there's already a stack of the same material type, adds to it (up to MAX_RESOURCE_STACK_SIZE).
+     * Otherwise creates a new stack.
+     * @returns The entity if created/updated successfully, null if stack is full or tile occupied by different entity
+     */
+    public addStackedResource(materialType: EMaterialType, x: number, y: number, player: number): Entity | null {
+        const key = tileKey(x, y);
+        const existingId = this.tileOccupancy.get(key);
+
+        if (existingId !== undefined) {
+            const existing = this.entityMap.get(existingId);
+            if (existing && existing.type === EntityType.StackedResource && existing.subType === materialType) {
+                // Add to existing stack if not full
+                const state = this.resourceStates.get(existingId);
+                if (state && state.quantity < MAX_RESOURCE_STACK_SIZE) {
+                    state.quantity++;
+                    return existing;
+                }
+                // Stack is full
+                return null;
+            }
+            // Tile is occupied by a different entity
+            return null;
+        }
+
+        // Create new stack
+        return this.addEntity(EntityType.StackedResource, materialType, x, y, player);
+    }
+
+    /**
+     * Remove one item from a stacked resource.
+     * If the stack becomes empty, removes the entity entirely.
+     * @returns true if item was removed, false if no stack exists or stack was empty
+     */
+    public removeResourceFromStack(entityId: number): boolean {
+        const entity = this.entityMap.get(entityId);
+        if (!entity || entity.type !== EntityType.StackedResource) return false;
+
+        const state = this.resourceStates.get(entityId);
+        if (!state || state.quantity <= 0) return false;
+
+        state.quantity--;
+
+        if (state.quantity <= 0) {
+            this.removeEntity(entityId);
+        }
+
+        return true;
+    }
+
+    /**
+     * Get the stacked resource entity at a position, if any.
+     */
+    public getStackedResourceAt(x: number, y: number): Entity | undefined {
+        const entity = this.getEntityAt(x, y);
+        if (entity && entity.type === EntityType.StackedResource) {
+            return entity;
+        }
+        return undefined;
+    }
+
+    /**
+     * Get the quantity of resources in a stack.
+     * @returns The quantity, or 0 if the entity doesn't exist or isn't a stack
+     */
+    public getResourceQuantity(entityId: number): number {
+        const state = this.resourceStates.get(entityId);
+        return state?.quantity ?? 0;
+    }
+
+    /**
+     * Set the quantity of resources in a stack directly.
+     * If quantity is 0 or less, removes the entity.
+     */
+    public setResourceQuantity(entityId: number, quantity: number): void {
+        const entity = this.entityMap.get(entityId);
+        if (!entity || entity.type !== EntityType.StackedResource) return;
+
+        if (quantity <= 0) {
+            this.removeEntity(entityId);
+            return;
+        }
+
+        const state = this.resourceStates.get(entityId);
+        if (state) {
+            state.quantity = Math.min(quantity, MAX_RESOURCE_STACK_SIZE);
+        }
+    }
+
+    /**
+     * Find the nearest stacked resource of a specific material type within a radius.
+     */
+    public findNearestResource(x: number, y: number, materialType: EMaterialType, radius: number): Entity | undefined {
+        let nearest: Entity | undefined;
+        let nearestDist = Infinity;
+
+        for (const entity of this.entities) {
+            if (entity.type !== EntityType.StackedResource) continue;
+            if (entity.subType !== materialType) continue;
+
+            const dx = entity.x - x;
+            const dy = entity.y - y;
+            const dist = dx * dx + dy * dy;
+
+            if (dist <= radius * radius && dist < nearestDist) {
+                nearest = entity;
+                nearestDist = dist;
+            }
+        }
+
+        return nearest;
     }
 }

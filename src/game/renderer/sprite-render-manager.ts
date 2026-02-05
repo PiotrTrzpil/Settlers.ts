@@ -9,10 +9,12 @@ import {
     getBuildingSpriteMap,
     GFX_FILE_NUMBERS,
     getMapObjectSpriteMap,
+    getResourceSpriteMap,
     BUILDING_DIRECTION,
 } from './sprite-metadata';
 import { SpriteLoader, LoadedGfxFileSet } from './sprite-loader';
 import { BuildingType, MapObjectType } from '../entity';
+import { EMaterialType } from '../economy/material-type';
 
 /**
  * Manages sprite loading, atlas packing, and race switching for entity rendering.
@@ -127,6 +129,13 @@ export class SpriteRenderManager {
     }
 
     /**
+     * Get a resource/material sprite entry by type.
+     */
+    public getResource(type: EMaterialType): SpriteEntry | null {
+        return this._spriteRegistry?.getResource(type) ?? null;
+    }
+
+    /**
      * Clean up GPU resources. Call when switching races or destroying.
      */
     public cleanup(): void {
@@ -181,7 +190,13 @@ export class SpriteRenderManager {
             SpriteRenderManager.log.debug(`Map object sprites loaded: ${registry.getMapObjectCount()} objects`);
         }
 
-        if (!loadedAny && !mapObjectsLoaded) {
+        // Also load resource sprites (logs, planks, goods)
+        const resourcesLoaded = await this.loadResourceSprites(atlas, registry);
+        if (resourcesLoaded) {
+            SpriteRenderManager.log.debug(`Resource sprites loaded: ${registry.getResourceCount()} resources`);
+        }
+
+        if (!loadedAny && !mapObjectsLoaded && !resourcesLoaded) {
             SpriteRenderManager.log.debug('No sprite files found, using color fallback');
             return false;
         }
@@ -191,7 +206,7 @@ export class SpriteRenderManager {
         this._spriteAtlas = atlas;
         this._spriteRegistry = registry;
 
-        return registry.hasBuildingSprites() || registry.hasMapObjectSprites();
+        return registry.hasBuildingSprites() || registry.hasMapObjectSprites() || registry.hasResourceSprites();
     }
 
     /**
@@ -312,6 +327,69 @@ export class SpriteRenderManager {
             return false;
         } catch (e) {
             SpriteRenderManager.log.error(`Failed to load map object sprites: ${e}`);
+            return false;
+        }
+    }
+
+    /**
+     * Load resource sprites (dropped goods like logs, planks, etc.).
+     * Resources are stored in file 3.gfx and use JIL job indices.
+     */
+    private async loadResourceSprites(
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry
+    ): Promise<boolean> {
+        const spriteMap = getResourceSpriteMap();
+        const fileNum = GFX_FILE_NUMBERS.RESOURCES;
+        const fileId = `${fileNum}`;
+
+        const fileSet = await this.spriteLoader.loadFileSet(fileId);
+        if (!fileSet) {
+            SpriteRenderManager.log.debug(`Resource GFX file ${fileNum} not available`);
+            return false;
+        }
+
+        if (!fileSet.jilReader || !fileSet.dilReader) {
+            SpriteRenderManager.log.debug(`JIL/DIL files not available for resources in ${fileNum}`);
+            return false;
+        }
+
+        try {
+            let loadedCount = 0;
+
+            for (const [typeStr, info] of Object.entries(spriteMap)) {
+                if (!info) continue;
+
+                const materialType = Number(typeStr) as EMaterialType;
+                const jobIndex = info.index;
+
+                // Load resource sprite using job index (direction 0, frame 0)
+                // Resources typically have a single direction with multiple frames for stack sizes
+                const loadedSprite = this.spriteLoader.loadJobSprite(
+                    fileSet,
+                    { jobIndex, directionIndex: 0, frameIndex: 0 },
+                    atlas
+                );
+
+                if (!loadedSprite) {
+                    SpriteRenderManager.log.debug(
+                        `Failed to load sprite for resource ${EMaterialType[materialType]} (job ${jobIndex})`
+                    );
+                    continue;
+                }
+
+                registry.registerResource(materialType, loadedSprite.entry);
+                loadedCount++;
+            }
+
+            if (loadedCount > 0) {
+                SpriteRenderManager.log.debug(`Loaded ${loadedCount} resource sprites from file ${fileNum}.gfx`);
+                return true;
+            }
+
+            return false;
+        } catch (e) {
+            SpriteRenderManager.log.error(`Failed to load resource sprites: ${e}`);
             return false;
         }
     }

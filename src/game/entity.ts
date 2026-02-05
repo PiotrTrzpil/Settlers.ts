@@ -24,6 +24,8 @@ export enum EntityType {
     Building = 2,
     /** Map objects like trees, stones, resources */
     MapObject = 3,
+    /** Stacked resources on the ground (logs, planks, etc.) */
+    StackedResource = 4,
 }
 
 /**
@@ -305,4 +307,20 @@ export interface BuildingState {
     originalTerrain: ConstructionSiteOriginalTerrain | null;
     /** Whether terrain modification has been applied */
     terrainModified: boolean;
+}
+
+/**
+ * Maximum items that can be stacked in a single resource pile.
+ * This matches Settlers 4 behavior where carriers drop resources in stacks.
+ */
+export const MAX_RESOURCE_STACK_SIZE = 8;
+
+/**
+ * State tracking for stacked resources on the ground.
+ * These are mutable - carriers can add to or take from stacks.
+ */
+export interface StackedResourceState {
+    entityId: number;
+    /** Number of items in the stack (1 to MAX_RESOURCE_STACK_SIZE) */
+    quantity: number;
 }
