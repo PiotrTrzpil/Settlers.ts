@@ -1,9 +1,20 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { IRenderer } from './i-renderer';
 import { Matrix } from './landscape/matrix';
-import { ViewPoint } from './view-point';
+import { ViewPoint, type ViewPointOptions } from './view-point';
 
 declare let WebGLDebugUtils: any;
+
+/**
+ * Options for Renderer constructor.
+ */
+export interface RendererOptions {
+    /**
+     * If true, ViewPoint will not attach its own event listeners.
+     * Use when integrating with an external InputManager.
+     */
+    externalInput?: boolean;
+}
 
 /** Manages the WebGL context and the IRenderers that draw to it */
 export class Renderer {
@@ -14,7 +25,7 @@ export class Renderer {
     private animRequest = 0;
     public viewPoint: ViewPoint;
 
-    constructor(canvas: HTMLCanvasElement) {
+    constructor(canvas: HTMLCanvasElement, options?: RendererOptions) {
         const webGlogger = new LogHandler('WebGL');
 
         function processWebGlDebugErrors(err: any, funcName: string, args: any) {
@@ -26,7 +37,7 @@ export class Renderer {
         }
 
         this.canvas = canvas;
-        this.viewPoint = new ViewPoint(canvas);
+        this.viewPoint = new ViewPoint(canvas, { externalInput: options?.externalInput });
         // Note: onMove callback removed - the game loop now drives all rendering via drawOnce()
 
         let newGl = canvas.getContext('webgl2', { preserveDrawingBuffer: true });

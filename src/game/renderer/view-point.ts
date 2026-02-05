@@ -1,6 +1,17 @@
 import { IViewPoint } from './i-view-point';
 
 /**
+ * ViewPoint options for configuration.
+ */
+export interface ViewPointOptions {
+    /**
+     * If true, ViewPoint will NOT attach its own event listeners.
+     * Use this when integrating with InputManager.
+     */
+    externalInput?: boolean;
+}
+
+/**
  * Handles mouse events and gesture and generates
  * the view-coordinates (x,y,zoom)
  */
@@ -19,6 +30,7 @@ export class ViewPoint implements IViewPoint {
     private canvas: HTMLCanvasElement;
     private keysDown = new Set<string>();
     public panSpeed = 40;
+    private externalInput: boolean;
 
     /** callback on mouse move */
     public onMove: (() => void) | null = null;
@@ -48,26 +60,51 @@ export class ViewPoint implements IViewPoint {
         return this.posY + this.deltaY;
     }
 
-    constructor(canvas: HTMLCanvasElement) {
+    /**
+     * Set position and delta directly (for external input control).
+     */
+    public setRawPosition(posX: number, posY: number, deltaX = 0, deltaY = 0): void {
+        this.posX = posX;
+        this.posY = posY;
+        this.deltaX = deltaX;
+        this.deltaY = deltaY;
+    }
+
+    /**
+     * Set zoom directly (for external input control).
+     */
+    public setZoom(zoom: number): void {
+        // Convert from shader zoom (0.1/zoomValue) to zoomValue
+        this.zoomValue = 0.1 / zoom;
+    }
+
+    constructor(canvas: HTMLCanvasElement, options?: ViewPointOptions) {
         this.canvas = canvas;
+        this.externalInput = options?.externalInput ?? false;
 
         // disable touch scroll
         canvas.style.touchAction = 'none';
 
-        canvas.addEventListener('pointerdown', this.handlePointerDown);
-        canvas.addEventListener('pointermove', this.handlePointerMove);
-        window.addEventListener('pointerup', this.handlePointerUp);
-        canvas.addEventListener('contextmenu', this.handleContextmenu);
-        canvas.addEventListener('wheel', this.handleWheel);
+        // Only attach event listeners if not using external input
+        if (!this.externalInput) {
+            canvas.addEventListener('pointerdown', this.handlePointerDown);
+            canvas.addEventListener('pointermove', this.handlePointerMove);
+            window.addEventListener('pointerup', this.handlePointerUp);
+            canvas.addEventListener('contextmenu', this.handleContextmenu);
+            canvas.addEventListener('wheel', this.handleWheel);
 
-        window.addEventListener('keydown', this.handleKeyDown);
-        window.addEventListener('keyup', this.handleKeyUp);
+            window.addEventListener('keydown', this.handleKeyDown);
+            window.addEventListener('keyup', this.handleKeyUp);
+        }
 
         Object.seal(this);
     }
 
     public destroy(): void {
         this.onMove = null;
+
+        // Only remove listeners if we attached them
+        if (this.externalInput) return;
 
         window.removeEventListener('pointerup', this.handlePointerUp);
         window.removeEventListener('keydown', this.handleKeyDown);
