@@ -47,6 +47,14 @@ export interface JobSpriteConfig {
 }
 
 /**
+ * Result of loading an animation (multiple frames).
+ */
+export interface LoadedAnimation {
+    frames: LoadedSprite[];
+    frameCount: number;
+}
+
+/**
  * Unified sprite loader service.
  * Provides methods for loading sprites from GFX files into texture atlases.
  */
@@ -216,6 +224,98 @@ export class SpriteLoader {
         };
 
         return { image: gfxImage, region, entry };
+    }
+
+    /**
+     * Get the number of frames for a job/direction combination.
+     */
+    public getFrameCount(
+        fileSet: LoadedGfxFileSet,
+        jobIndex: number,
+        directionIndex: number
+    ): number {
+        if (!fileSet.jilReader || !fileSet.dilReader) {
+            return 0;
+        }
+
+        const jobItems = fileSet.jilReader.getItems(0);
+        if (jobIndex >= jobItems.length) {
+            return 0;
+        }
+
+        const jobItem = jobItems[jobIndex];
+        const dirItems = fileSet.dilReader.getItems(jobItem.offset, jobItem.length);
+        if (directionIndex >= dirItems.length) {
+            return 0;
+        }
+
+        const dirItem = dirItems[directionIndex];
+        return dirItem.length;
+    }
+
+    /**
+     * Load all frames for a job/direction as an animation.
+     * Returns null if the animation cannot be loaded.
+     */
+    public loadJobAnimation(
+        fileSet: LoadedGfxFileSet,
+        jobIndex: number,
+        directionIndex: number,
+        atlas: EntityTextureAtlas
+    ): LoadedAnimation | null {
+        if (!fileSet.jilReader || !fileSet.dilReader) {
+            SpriteLoader.log.debug(`JIL/DIL not available for file ${fileSet.fileId}`);
+            return null;
+        }
+
+        // Navigate: job -> direction
+        const jobItems = fileSet.jilReader.getItems(0);
+        if (jobIndex >= jobItems.length) {
+            SpriteLoader.log.debug(`Job index ${jobIndex} out of range in file ${fileSet.fileId}`);
+            return null;
+        }
+
+        const jobItem = jobItems[jobIndex];
+        const dirItems = fileSet.dilReader.getItems(jobItem.offset, jobItem.length);
+        if (directionIndex >= dirItems.length) {
+            SpriteLoader.log.debug(`Direction ${directionIndex} out of range for job ${jobIndex}`);
+            return null;
+        }
+
+        const dirItem = dirItems[directionIndex];
+        const frameItems = fileSet.gilReader.getItems(dirItem.offset, dirItem.length);
+
+        if (frameItems.length === 0) {
+            SpriteLoader.log.debug(`No frames for job ${jobIndex} direction ${directionIndex}`);
+            return null;
+        }
+
+        const frames: LoadedSprite[] = [];
+
+        for (let i = 0; i < frameItems.length; i++) {
+            const frameItem = frameItems[i];
+            const gfxOffset = fileSet.gilReader.getImageOffset(frameItem.index);
+            const gfxImage = fileSet.gfxReader.readImage(gfxOffset, jobIndex);
+
+            if (!gfxImage) {
+                SpriteLoader.log.debug(`Failed to read frame ${i} for job ${jobIndex}`);
+                continue;
+            }
+
+            const loadedSprite = this.packSpriteIntoAtlas(gfxImage, atlas);
+            if (loadedSprite) {
+                frames.push(loadedSprite);
+            }
+        }
+
+        if (frames.length === 0) {
+            return null;
+        }
+
+        return {
+            frames,
+            frameCount: frames.length,
+        };
     }
 
     /**
