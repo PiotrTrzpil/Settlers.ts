@@ -1,25 +1,30 @@
+/**
+ * use-renderer.ts - Renderer composable with integrated InputManager
+ *
+ * This composable sets up the WebGL renderer and handles all input
+ * through the new InputManager system.
+ */
+
 import { watch, onMounted, onUnmounted, type Ref } from 'vue';
 import { Game } from '@/game/game';
 import { LandscapeRenderer } from '@/game/renderer/landscape/landscape-renderer';
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
-import { EntityType, BuildingType, getBuildingSize } from '@/game/entity';
+import { EntityType, BuildingType, getBuildingSize, type TileCoord } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
 import { canPlaceBuildingWithTerritory } from '@/game/systems/placement';
 import { debugStats } from '@/game/debug-stats';
-
-const DRAG_THRESHOLD = 5;
-
-const FORMATION_OFFSETS: ReadonlyArray<readonly [number, number]> = [
-    [0, 0],
-    [1, 0], [0, 1], [-1, 0], [0, -1],
-    [1, 1], [-1, 1], [1, -1], [-1, -1],
-    [2, 0], [0, 2], [-2, 0], [0, -2],
-    [2, 1], [1, 2], [-1, 2], [-2, 1],
-    [-2, -1], [-1, -2], [1, -2], [2, -1],
-    [2, 2], [-2, 2], [2, -2], [-2, -2]
-];
+import {
+    InputManager,
+    SelectMode,
+    PlaceBuildingMode,
+    type PlaceBuildingModeData,
+    getDefaultInputConfig,
+    MouseButton,
+    HANDLED,
+    UNHANDLED,
+} from '@/game/input';
 
 interface UseRendererOptions {
     canvas: Ref<HTMLCanvasElement | null>;
@@ -29,19 +34,252 @@ interface UseRendererOptions {
     onTileClick: (tile: { x: number; y: number }) => void;
 }
 
-export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBorders, onTileClick }: UseRendererOptions) {
+export function useRenderer({
+    canvas,
+    getGame,
+    getDebugGrid,
+    getShowTerritoryBorders,
+    onTileClick,
+}: UseRendererOptions) {
     let renderer: Renderer | null = null;
     let tilePicker: TilePicker | null = null;
     let entityRenderer: EntityRenderer | null = null;
     let landscapeRenderer: LandscapeRenderer | null = null;
-    let dragStart: { x: number; y: number } | null = null;
-    let isDragging = false;
+    let inputManager: InputManager | null = null;
 
-    function initRenderer() {
+    // Formation offsets for unit movement
+    const FORMATION_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+        [0, 0],
+        [1, 0], [0, 1], [-1, 0], [0, -1],
+        [1, 1], [-1, 1], [1, -1], [-1, -1],
+        [2, 0], [0, 2], [-2, 0], [0, -2],
+        [2, 1], [1, 2], [-1, 2], [-2, 1],
+        [-2, -1], [-1, -2], [1, -2], [2, -1],
+        [2, 2], [-2, 2], [2, -2], [-2, -2],
+    ];
+
+    /**
+     * Resolve screen coordinates to tile coordinates.
+     */
+    function resolveTile(screenX: number, screenY: number): TileCoord | null {
+        const game = getGame();
+        if (!game || !tilePicker || !renderer) return null;
+        return tilePicker.screenToTile(screenX, screenY, renderer.viewPoint, game.mapSize, game.groundHeight);
+    }
+
+    /**
+     * Execute a game command.
+     */
+    function executeCommand(command: any): boolean {
+        const game = getGame();
+        if (!game) return false;
+        return game.execute(command);
+    }
+
+    /**
+     * Handle unit movement commands with formation.
+     */
+    function handleMoveCommand(tileX: number, tileY: number): void {
+        const game = getGame();
+        if (!game) return;
+
+        const units: number[] = [];
+        for (const entityId of game.state.selectedEntityIds) {
+            const entity = game.state.getEntity(entityId);
+            if (entity && entity.type === EntityType.Unit) {
+                units.push(entity.id);
+            }
+        }
+
+        for (let i = 0; i < units.length; i++) {
+            const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
+            game.execute({
+                type: 'move_unit',
+                entityId: units[i],
+                targetX: tileX + offset[0],
+                targetY: tileY + offset[1],
+            });
+        }
+    }
+
+    /**
+     * Create and configure the InputManager.
+     */
+    function createInputManager(): void {
+        if (!canvas.value) return;
+
+        inputManager = new InputManager({
+            target: canvas as Ref<HTMLElement | null>,
+            config: getDefaultInputConfig(),
+            tileResolver: resolveTile,
+            commandExecutor: executeCommand,
+            initialMode: 'select',
+            onModeChange: (oldMode, newMode, data) => {
+                const game = getGame();
+                if (game) {
+                    game.mode = newMode as any;
+                    if (newMode === 'place_building' && data?.buildingType !== undefined) {
+                        game.placeBuildingType = data.buildingType;
+                    }
+                }
+            },
+        });
+
+        // Create and register SelectMode with game-specific behavior
+        const selectMode = new SelectMode();
+
+        // Override pointer up for selection and movement
+        selectMode.onPointerUp = (data, context) => {
+            // Update debug stats with tile info
+            if (data.tileX !== undefined && data.tileY !== undefined) {
+                onTileClick({ x: data.tileX, y: data.tileY });
+                debugStats.state.hasTile = true;
+                debugStats.state.tileX = data.tileX;
+                debugStats.state.tileY = data.tileY;
+
+                const game = getGame();
+                if (game) {
+                    const idx = game.mapSize.toIndex(data.tileX, data.tileY);
+                    debugStats.state.tileGroundType = game.groundType[idx];
+                    debugStats.state.tileGroundHeight = game.groundHeight[idx];
+                }
+            }
+
+            // Left click: select entity
+            if (data.button === MouseButton.Left && !context.state.drag.value?.isDragging) {
+                if (data.tileX !== undefined && data.tileY !== undefined) {
+                    const game = getGame();
+                    if (game) {
+                        const entity = game.state.getEntityAt(data.tileX, data.tileY);
+                        game.execute({ type: 'select', entityId: entity?.id ?? null });
+                    }
+                }
+                return HANDLED;
+            }
+
+            // Right click: move units
+            if (data.button === MouseButton.Right) {
+                if (data.tileX !== undefined && data.tileY !== undefined) {
+                    handleMoveCommand(data.tileX, data.tileY);
+                }
+                return HANDLED;
+            }
+
+            return UNHANDLED;
+        };
+
+        // Override drag end for box selection
+        selectMode.onDragEnd = (data, context) => {
+            if (data.button === MouseButton.Left && data.isDragging) {
+                if (data.startTileX !== undefined && data.startTileY !== undefined &&
+                    data.currentTileX !== undefined && data.currentTileY !== undefined) {
+                    const game = getGame();
+                    if (game) {
+                        game.execute({
+                            type: 'select_area',
+                            x1: data.startTileX,
+                            y1: data.startTileY,
+                            x2: data.currentTileX,
+                            y2: data.currentTileY,
+                        });
+                    }
+                }
+                return HANDLED;
+            }
+            return UNHANDLED;
+        };
+
+        inputManager.registerMode(selectMode);
+
+        // Create PlaceBuildingMode with validation
+        const placeBuildingMode = new PlaceBuildingMode();
+
+        // Override pointer move for placement preview
+        placeBuildingMode.onPointerMove = (data, context) => {
+            if (data.tileX === undefined || data.tileY === undefined) return UNHANDLED;
+
+            const modeData = context.getModeData<PlaceBuildingModeData>();
+            if (!modeData) return UNHANDLED;
+
+            const game = getGame();
+            if (!game) return UNHANDLED;
+
+            // Update debug stats
+            onTileClick({ x: data.tileX, y: data.tileY });
+            debugStats.state.hasTile = true;
+            debugStats.state.tileX = data.tileX;
+            debugStats.state.tileY = data.tileY;
+            const idx = game.mapSize.toIndex(data.tileX, data.tileY);
+            debugStats.state.tileGroundType = game.groundType[idx];
+            debugStats.state.tileGroundHeight = game.groundHeight[idx];
+
+            // Calculate building anchor position
+            const size = getBuildingSize(modeData.buildingType);
+            const anchorX = Math.round(data.tileX - (size.width - 1) / 2);
+            const anchorY = Math.round(data.tileY - (size.height - 1) / 2);
+
+            // Clamp to map bounds
+            const clampedX = Math.max(0, Math.min(game.mapSize.width - size.width, anchorX));
+            const clampedY = Math.max(0, Math.min(game.mapSize.height - size.height, anchorY));
+
+            modeData.previewX = clampedX;
+            modeData.previewY = clampedY;
+
+            // Validate placement
+            const hasBuildings = game.state.entities.some(
+                ent => ent.type === EntityType.Building && ent.player === game.currentPlayer
+            );
+            modeData.previewValid = canPlaceBuildingWithTerritory(
+                game.groundType, game.groundHeight, game.mapSize,
+                game.state.tileOccupancy, game.territory,
+                clampedX, clampedY, game.currentPlayer, hasBuildings,
+                modeData.buildingType
+            );
+
+            context.setModeData(modeData);
+            return HANDLED;
+        };
+
+        // Override pointer up for building placement
+        placeBuildingMode.onPointerUp = (data, context) => {
+            const modeData = context.getModeData<PlaceBuildingModeData>();
+            if (!modeData) return UNHANDLED;
+
+            if (data.button === MouseButton.Left) {
+                if (modeData.previewValid) {
+                    const game = getGame();
+                    if (game) {
+                        game.execute({
+                            type: 'place_building',
+                            buildingType: modeData.buildingType,
+                            x: modeData.previewX,
+                            y: modeData.previewY,
+                            player: game.currentPlayer,
+                        });
+                    }
+                }
+                return HANDLED;
+            }
+
+            if (data.button === MouseButton.Right) {
+                context.switchMode('select');
+                return HANDLED;
+            }
+
+            return UNHANDLED;
+        };
+
+        inputManager.registerMode(placeBuildingMode);
+        inputManager.attach();
+    }
+
+    /**
+     * Initialize the renderer.
+     */
+    function initRenderer(): void {
         const game = getGame();
         if (game == null || renderer == null) return;
 
-        // Clear old renderers before adding new ones (important for game reloads)
         renderer.clear();
 
         landscapeRenderer = new LandscapeRenderer(
@@ -73,12 +311,11 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
             renderer.viewPoint.setPosition(landTile.x, landTile.y);
         }
 
-        // Expose viewPoint for e2e tests (Vue internals are stripped in prod)
+        // Expose for e2e tests
         (window as any).__settlers_viewpoint__ = renderer.viewPoint;
-        // Expose landscape renderer for debug panel river controls
         (window as any).__settlers_landscape__ = landscapeRenderer;
 
-        // Set up terrain modification callback for building construction
+        // Set up terrain modification callback
         game.gameLoop.setTerrainModifiedCallback(() => {
             landscapeRenderer?.markTerrainDirty();
         });
@@ -87,6 +324,9 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         game.gameLoop.setRenderCallback((alpha: number, deltaSec: number) => {
             const g = getGame();
             if (entityRenderer && g) {
+                // Update input manager
+                inputManager?.update(deltaSec);
+
                 entityRenderer.entities = g.state.entities;
                 entityRenderer.selectedEntityId = g.state.selectedEntityId;
                 entityRenderer.selectedEntityIds = g.state.selectedEntityIds;
@@ -99,209 +339,57 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
                 // Building placement indicators
                 const inPlacementMode = g.mode === 'place_building';
                 entityRenderer.buildingIndicatorsEnabled = inPlacementMode;
+
                 if (inPlacementMode) {
                     entityRenderer.buildingIndicatorsPlayer = g.currentPlayer;
                     entityRenderer.buildingIndicatorsHasBuildings = g.state.entities.some(
                         ent => ent.type === EntityType.Building && ent.player === g.currentPlayer
                     );
-                    // Also set territory for indicators even when borders aren't shown
                     entityRenderer.territoryMap = g.territory;
+
+                    // Get preview from input manager mode data
+                    const modeData = (inputManager as any)?.modeData?.get('place_building') as PlaceBuildingModeData | undefined;
+                    if (modeData) {
+                        entityRenderer.previewTile = { x: modeData.previewX, y: modeData.previewY };
+                        entityRenderer.previewBuildingType = modeData.buildingType;
+                        entityRenderer.previewValid = modeData.previewValid;
+                    }
+                } else {
+                    entityRenderer.previewTile = null;
+                    entityRenderer.previewBuildingType = null;
                 }
             }
+
             if (landscapeRenderer) {
                 landscapeRenderer.debugGrid = getDebugGrid();
             }
-            // Feed game + camera info to debug stats
+
             if (g) {
                 debugStats.updateFromGame(g);
             }
+
             debugStats.state.cameraX = Math.round(r.viewPoint.x * 10) / 10;
             debugStats.state.cameraY = Math.round(r.viewPoint.y * 10) / 10;
             debugStats.state.zoom = Math.round(r.viewPoint.zoomValue * 100) / 100;
-            // Sync zoom/pan speed from debug panel (source of truth) to viewPoint
             r.viewPoint.zoomSpeed = debugStats.state.zoomSpeed;
             r.viewPoint.panSpeed = debugStats.state.panSpeed;
             debugStats.state.canvasWidth = r.canvas.width;
             debugStats.state.canvasHeight = r.canvas.height;
+
             r.viewPoint.update(deltaSec);
             r.drawOnce();
         });
+
         game.start();
     }
-
-    const handleMouseDown = (e: PointerEvent) => {
-        if (e.button !== 0) return;
-        dragStart = { x: e.offsetX, y: e.offsetY };
-        isDragging = false;
-    };
-
-    const handleMouseUp = (e: PointerEvent) => {
-        const game = getGame();
-        if (e.button !== 0 || !dragStart) return;
-
-        const dx = e.offsetX - dragStart.x;
-        const dy = e.offsetY - dragStart.y;
-        const wasDrag = Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD;
-
-        if (wasDrag && game?.mode === 'select') {
-            handleDragSelect(dragStart.x, dragStart.y, e.offsetX, e.offsetY);
-        } else {
-            handleClick(e);
-        }
-
-        dragStart = null;
-        isDragging = false;
-    };
-
-    function handleDragSelect(x1: number, y1: number, x2: number, y2: number): void {
-        const game = getGame();
-        if (!game || !tilePicker || !renderer) return;
-
-        const tile1 = tilePicker.screenToTile(x1, y1, renderer.viewPoint, game.mapSize, game.groundHeight);
-        const tile2 = tilePicker.screenToTile(x2, y2, renderer.viewPoint, game.mapSize, game.groundHeight);
-        if (!tile1 || !tile2) return;
-
-        game.execute({
-            type: 'select_area',
-            x1: tile1.x, y1: tile1.y,
-            x2: tile2.x, y2: tile2.y
-        });
-    }
-
-    const handleClick = (e: PointerEvent) => {
-        const game = getGame();
-        if (!game || !tilePicker || !renderer) return;
-
-        const tile = tilePicker.screenToTile(e.offsetX, e.offsetY, renderer.viewPoint, game.mapSize, game.groundHeight);
-        if (!tile) return;
-
-        onTileClick(tile);
-
-        if (game.mode === 'place_building') {
-            const buildingType = game.placeBuildingType as BuildingType;
-            const size = getBuildingSize(buildingType);
-
-            // Center the building on the click position
-            const anchorX = Math.round(tile.x - (size.width - 1) / 2);
-            const anchorY = Math.round(tile.y - (size.height - 1) / 2);
-
-            // Clamp to map bounds
-            const clampedX = Math.max(0, Math.min(game.mapSize.width - size.width, anchorX));
-            const clampedY = Math.max(0, Math.min(game.mapSize.height - size.height, anchorY));
-
-            game.execute({
-                type: 'place_building',
-                buildingType,
-                x: clampedX, y: clampedY,
-                player: game.currentPlayer
-            });
-        } else if (game.mode === 'select') {
-            const entity = game.state.getEntityAt(tile.x, tile.y);
-            game.execute({ type: 'select', entityId: entity ? entity.id : null });
-        }
-    };
-
-    const handleRightClick = (e: MouseEvent) => {
-        e.preventDefault();
-        const game = getGame();
-        if (!game || !tilePicker || !renderer) return;
-
-        const tile = tilePicker.screenToTile(e.offsetX, e.offsetY, renderer.viewPoint, game.mapSize, game.groundHeight);
-        if (!tile) return;
-
-        const units: number[] = [];
-        for (const entityId of game.state.selectedEntityIds) {
-            const entity = game.state.getEntity(entityId);
-            if (entity && entity.type === EntityType.Unit) {
-                units.push(entity.id);
-            }
-        }
-
-        for (let i = 0; i < units.length; i++) {
-            const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
-            game.execute({
-                type: 'move_unit',
-                entityId: units[i],
-                targetX: tile.x + offset[0],
-                targetY: tile.y + offset[1]
-            });
-        }
-    };
-
-    const handleMouseMove = (e: PointerEvent) => {
-        const game = getGame();
-        if (!game || !tilePicker || !renderer || !entityRenderer) return;
-
-        if (dragStart) {
-            const dx = e.offsetX - dragStart.x;
-            const dy = e.offsetY - dragStart.y;
-            if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
-                isDragging = true;
-            }
-        }
-
-        // Always resolve hovered tile for debug stats
-        const tile = tilePicker.screenToTile(e.offsetX, e.offsetY, renderer.viewPoint, game.mapSize, game.groundHeight);
-        if (tile) {
-            debugStats.state.hasTile = true;
-            debugStats.state.tileX = tile.x;
-            debugStats.state.tileY = tile.y;
-            const idx = game.mapSize.toIndex(tile.x, tile.y);
-            debugStats.state.tileGroundType = game.groundType[idx];
-            debugStats.state.tileGroundHeight = game.groundHeight[idx];
-        } else {
-            debugStats.state.hasTile = false;
-        }
-
-        if (game.mode !== 'place_building') {
-            entityRenderer.previewTile = null;
-            entityRenderer.previewBuildingType = null;
-            return;
-        }
-
-        if (!tile) {
-            entityRenderer.previewTile = null;
-            entityRenderer.previewBuildingType = null;
-            return;
-        }
-
-        const buildingType = game.placeBuildingType as BuildingType;
-        const size = getBuildingSize(buildingType);
-
-        // Center the building on the cursor by computing anchor (top-left) position
-        // For a 2x2 building, offset by (-0.5, -0.5) tiles and round
-        // For a 3x3 building, offset by (-1, -1) tiles
-        const anchorX = Math.round(tile.x - (size.width - 1) / 2);
-        const anchorY = Math.round(tile.y - (size.height - 1) / 2);
-
-        // Clamp to map bounds
-        const clampedX = Math.max(0, Math.min(game.mapSize.width - size.width, anchorX));
-        const clampedY = Math.max(0, Math.min(game.mapSize.height - size.height, anchorY));
-
-        entityRenderer.previewTile = { x: clampedX, y: clampedY };
-        entityRenderer.previewBuildingType = buildingType ?? null;
-        const hasBuildings = game.state.entities.some(
-            ent => ent.type === EntityType.Building && ent.player === game.currentPlayer
-        );
-        entityRenderer.previewValid = canPlaceBuildingWithTerritory(
-            game.groundType, game.groundHeight, game.mapSize,
-            game.state.tileOccupancy, game.territory,
-            clampedX, clampedY, game.currentPlayer, hasBuildings,
-            buildingType
-        );
-    };
 
     onMounted(() => {
         const cavEl = canvas.value!;
         renderer = new Renderer(cavEl);
         tilePicker = new TilePicker(cavEl);
 
+        createInputManager();
         initRenderer();
-
-        cavEl.addEventListener('pointerdown', handleMouseDown);
-        cavEl.addEventListener('pointerup', handleMouseUp);
-        cavEl.addEventListener('contextmenu', handleRightClick);
-        cavEl.addEventListener('pointermove', handleMouseMove);
     });
 
     watch(getGame, () => {
@@ -312,34 +400,34 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         const game = getGame();
         if (game) game.stop();
 
+        inputManager?.destroy();
+        inputManager = null;
+
         if (renderer) {
-            const cavEl = renderer.canvas;
-            cavEl.removeEventListener('pointerdown', handleMouseDown);
-            cavEl.removeEventListener('pointerup', handleMouseUp);
-            cavEl.removeEventListener('contextmenu', handleRightClick);
-            cavEl.removeEventListener('pointermove', handleMouseMove);
             renderer.destroy();
         }
     });
 
-    /**
-     * Switch to a different race for building sprites.
-     */
     async function setRace(race: Race): Promise<boolean> {
         if (!entityRenderer) return false;
         return entityRenderer.setRace(race);
     }
 
-    /**
-     * Get the current race being used for building sprites.
-     */
     function getRace(): Race {
         return entityRenderer?.getRace() ?? Race.Roman;
+    }
+
+    /**
+     * Get the input manager for external control.
+     */
+    function getInputManager(): InputManager | null {
+        return inputManager;
     }
 
     return {
         getRenderer: () => renderer,
         setRace,
         getRace,
+        getInputManager,
     };
 }
