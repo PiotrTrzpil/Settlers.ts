@@ -103,15 +103,37 @@ export interface SpriteEntry {
 }
 
 /**
- * Direction indices for building sprites.
+ * Direction indices for building sprites in DIL files.
  * D0 = construction/ghost, D1 = completed building.
  */
 export const BUILDING_DIRECTION = {
-    /** Partially constructed / ghost preview */
+    /** Partially constructed / ghost preview (D0) */
     CONSTRUCTION: 0,
-    /** Completed building */
+    /** Completed building (D1) */
     COMPLETED: 1,
 } as const;
+
+/**
+ * Building sprite info with both construction and completed GIL frame indices.
+ * These are looked up via JIL job -> DIL direction -> GIL frame.
+ */
+export interface BuildingSpriteFrames {
+    /** JIL job index for this building */
+    job: number;
+    /** GIL frame index for construction/ghost state (from DIL D0) */
+    construction: number;
+    /** GIL frame index for completed state (from DIL D1) */
+    completed: number;
+}
+
+/**
+ * Complete building sprite mappings with both construction and completed frame indices.
+ * Job index is the JIL entry, construction/completed are the resolved GIL frame indices.
+ */
+export const BUILDING_SPRITE_FRAMES: Partial<Record<BuildingType, BuildingSpriteFrames>> = {
+    // TODO: Fill in GIL frame indices from JIL viewer
+    // Format: { job: JIL_index, construction: D0_GIL_frame, completed: D1_GIL_frame }
+};
 
 /**
  * Defines the GFX file and sprite index for a building type.
