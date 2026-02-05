@@ -384,17 +384,11 @@ describe('Building Construction Phases', () => {
                 onTerrainModified: () => { terrainNotified = true },
             };
 
-            // Phase 1: Poles (0-10% = 0-1s)
+            // Phase 1: TerrainLeveling starts immediately (0-20% = 0-2s)
+            // First tick captures terrain and starts leveling
             updateBuildingConstruction(gameState, 0.5, ctx);
-            expect(bs.phase).toBe(BuildingConstructionPhase.Poles);
-
-            // Phase 2: TerrainLeveling (10-25% = 1-2.5s)
-            updateBuildingConstruction(gameState, 0.8, ctx);
             expect(bs.phase).toBe(BuildingConstructionPhase.TerrainLeveling);
             expect(bs.originalTerrain).not.toBeNull();
-
-            // Terrain should be modified
-            updateBuildingConstruction(gameState, 0.5, ctx);
             expect(terrainNotified).toBe(true);
 
             // All footprint tiles should have construction ground type
@@ -403,15 +397,15 @@ describe('Building Construction Phases', () => {
                 expect(groundType[mapSize.toIndex(tile.x, tile.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
             }
 
-            // Phase 3: ConstructionRising (25-60% = 2.5-6s)
+            // Phase 2: ConstructionRising (20-55% = 2-5.5s)
             updateBuildingConstruction(gameState, 2.0, ctx);
             expect(bs.phase).toBe(BuildingConstructionPhase.ConstructionRising);
 
-            // Phase 4: CompletedRising (60-100% = 6-10s)
+            // Phase 3: CompletedRising (55-100% = 5.5-10s)
             updateBuildingConstruction(gameState, 4.0, ctx);
             expect(bs.phase).toBe(BuildingConstructionPhase.CompletedRising);
 
-            // Phase 5: Completed
+            // Phase 4: Completed
             updateBuildingConstruction(gameState, 5.0, ctx);
             expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
         });

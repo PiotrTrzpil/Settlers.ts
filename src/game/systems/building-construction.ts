@@ -13,13 +13,14 @@ import {
 
 /**
  * Phase durations as fraction of total construction time.
- * Poles: 10%, TerrainLeveling: 15%, ConstructionRising: 35%, CompletedRising: 40%
+ * TerrainLeveling: 20%, ConstructionRising: 35%, CompletedRising: 45%
+ * Note: Poles phase is skipped (duration 0) - terrain leveling starts immediately.
  */
 const PHASE_DURATIONS: Record<BuildingConstructionPhase, number> = {
-    [BuildingConstructionPhase.Poles]: 0.10,
-    [BuildingConstructionPhase.TerrainLeveling]: 0.15,
+    [BuildingConstructionPhase.Poles]: 0,
+    [BuildingConstructionPhase.TerrainLeveling]: 0.20,
     [BuildingConstructionPhase.ConstructionRising]: 0.35,
-    [BuildingConstructionPhase.CompletedRising]: 0.40,
+    [BuildingConstructionPhase.CompletedRising]: 0.45,
     [BuildingConstructionPhase.Completed]: 0, // Terminal phase
 };
 
@@ -123,9 +124,8 @@ export function updateBuildingConstruction(
 
         // Handle terrain leveling if context is provided
         if (terrainContext) {
-            // Capture original terrain when entering TerrainLeveling phase
-            if (previousPhase === BuildingConstructionPhase.Poles &&
-                newPhase === BuildingConstructionPhase.TerrainLeveling &&
+            // Capture original terrain on first tick in TerrainLeveling phase
+            if (newPhase === BuildingConstructionPhase.TerrainLeveling &&
                 !buildingState.originalTerrain) {
                 buildingState.originalTerrain = captureOriginalTerrain(
                     buildingState,
@@ -244,7 +244,7 @@ export function getBuildingVisualState(buildingState: BuildingState | undefined)
         };
 
     case BuildingConstructionPhase.CompletedRising:
-        // Completed sprite rises from bottom (construction sprite fades out)
+        // Completed sprite rises from bottom with construction sprite visible behind
         return {
             useConstructionSprite: false,
             verticalProgress: phaseProgress,

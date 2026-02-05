@@ -61,7 +61,7 @@ export class GameState {
             this.buildingStates.set(entity.id, {
                 entityId: entity.id,
                 buildingType: subType as BuildingType,
-                phase: BuildingConstructionPhase.Poles,
+                phase: BuildingConstructionPhase.TerrainLeveling, // Start immediately with terrain leveling
                 phaseProgress: 0,
                 totalDuration: DEFAULT_CONSTRUCTION_DURATION,
                 elapsedTime: 0,

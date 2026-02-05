@@ -215,10 +215,14 @@ export class SpriteLoader {
 
         atlas.blit(region, imageData);
 
+        // GFX offset convention: left/top are distances from sprite edge to anchor point.
+        // To position the sprite so the anchor aligns with worldX/worldY:
+        // - offsetX = -left (move sprite left so anchor lands at worldX)
+        // - offsetY = -top (move sprite up so anchor lands at worldY)
         const entry: SpriteEntry = {
             atlasRegion: region,
-            offsetX: gfxImage.left * PIXELS_TO_WORLD,
-            offsetY: -gfxImage.top * PIXELS_TO_WORLD, // Negate Y for screen coords
+            offsetX: -gfxImage.left * PIXELS_TO_WORLD,
+            offsetY: -gfxImage.top * PIXELS_TO_WORLD,
             widthWorld: imageData.width * PIXELS_TO_WORLD,
             heightWorld: imageData.height * PIXELS_TO_WORLD,
         };

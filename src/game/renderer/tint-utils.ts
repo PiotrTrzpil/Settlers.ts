@@ -14,8 +14,8 @@ export const PLAYER_COLORS: readonly number[][] = [
 // Sprite tint presets (multiplicative, so 1.0 = no change)
 export const TINT_NEUTRAL: readonly number[] = [1.0, 1.0, 1.0, 1.0];
 export const TINT_SELECTED: readonly number[] = [1.3, 1.3, 1.3, 1.0];
-export const TINT_PREVIEW_VALID: readonly number[] = [0.5, 1.0, 0.5, 0.5];
-export const TINT_PREVIEW_INVALID: readonly number[] = [1.0, 0.5, 0.5, 0.5];
+export const TINT_PREVIEW_VALID: readonly number[] = [1.0, 1.0, 1.0, 0.8];
+export const TINT_PREVIEW_INVALID: readonly number[] = [0.3, 0.3, 0.3, 0.5];
 
 // Player tint strength (0 = no tint, 1 = full player color)
 const PLAYER_TINT_STRENGTH = 0.4;

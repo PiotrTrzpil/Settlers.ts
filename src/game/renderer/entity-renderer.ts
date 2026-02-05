@@ -2,7 +2,7 @@ import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
 import { ShaderProgram } from './shader-program';
-import { Entity, EntityType, UnitState, BuildingState, StackedResourceState, TileCoord, BuildingType, getBuildingFootprint } from '../entity';
+import { Entity, EntityType, UnitState, BuildingState, StackedResourceState, TileCoord, BuildingType, BuildingConstructionPhase, getBuildingFootprint } from '../entity';
 import { getBuildingVisualState } from '../systems/building-construction';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
@@ -14,7 +14,6 @@ import {
     PLAYER_COLORS,
     TINT_PREVIEW_VALID,
     TINT_PREVIEW_INVALID,
-    computePlayerTint,
     computeNeutralTint,
 } from './tint-utils';
 import { MapObjectType } from '../entity';
@@ -384,35 +383,43 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
             if (entity.type === EntityType.Building) {
                 const isSelected = this.selectedEntityIds.has(entity.id);
-                tint = computePlayerTint(entity.player, isSelected);
+                tint = computeNeutralTint(isSelected);
 
                 // Get building construction state
                 const buildingState = this.buildingStates.get(entity.id);
                 const visualState = getBuildingVisualState(buildingState);
 
+                const buildingType = entity.subType as BuildingType;
+
+                // During CompletedRising, render construction sprite at full height behind
+                if (visualState.phase === BuildingConstructionPhase.CompletedRising) {
+                    const constructionSprite = this.spriteManager.getBuildingConstruction(buildingType);
+                    if (constructionSprite) {
+                        if (batchOffset + FLOATS_PER_ENTITY > this.spriteBatchData.length) {
+                            this.flushSpriteBatch(gl, sp, batchOffset);
+                            batchOffset = 0;
+                        }
+                        const bgWorldPos = TilePicker.tileToWorld(
+                            entity.x, entity.y,
+                            this.groundHeight, this.mapSize,
+                            viewPoint.x, viewPoint.y
+                        );
+                        batchOffset = this.fillSpriteQuad(
+                            batchOffset, bgWorldPos.worldX, bgWorldPos.worldY,
+                            constructionSprite, tint[0], tint[1], tint[2], tint[3]
+                        );
+                    }
+                }
+
                 // Choose sprite based on construction state
                 if (visualState.useConstructionSprite) {
-                    spriteEntry = this.spriteManager.getBuildingConstruction(entity.subType as BuildingType);
-                    // Fall back to completed sprite if no construction sprite
-                    if (!spriteEntry) {
-                        spriteEntry = this.spriteManager.getBuilding(entity.subType as BuildingType);
-                    }
+                    spriteEntry = this.spriteManager.getBuildingConstruction(buildingType)
+                        ?? this.spriteManager.getBuilding(buildingType);
                 } else {
-                    // For completed buildings, check for animation
-                    const buildingType = entity.subType as BuildingType;
                     const animatedEntry = this.spriteManager.getAnimatedBuilding(buildingType);
-
-                    if (animatedEntry && entity.animationState) {
-                        // Use animated sprite based on current frame
-                        spriteEntry = getAnimatedSprite(
-                            entity.animationState,
-                            animatedEntry.animationData,
-                            animatedEntry.staticSprite
-                        );
-                    } else {
-                        // Use static sprite
-                        spriteEntry = this.spriteManager.getBuilding(buildingType);
-                    }
+                    spriteEntry = (animatedEntry && entity.animationState)
+                        ? getAnimatedSprite(entity.animationState, animatedEntry.animationData, animatedEntry.staticSprite)
+                        : this.spriteManager.getBuilding(buildingType);
                 }
 
                 verticalProgress = visualState.verticalProgress;
