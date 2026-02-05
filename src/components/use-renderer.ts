@@ -57,7 +57,8 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
         entityRenderer = new EntityRenderer(
             game.mapSize,
             game.groundHeight,
-            game.fileManager
+            game.fileManager,
+            game.groundType
         );
         renderer.add(entityRenderer);
 
@@ -88,6 +89,18 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
                 entityRenderer.territoryMap = getShowTerritoryBorders() ? g.territory : null;
                 entityRenderer.territoryVersion = g.territoryVersion;
                 entityRenderer.renderAlpha = alpha;
+
+                // Building placement indicators
+                const inPlacementMode = g.mode === 'place_building';
+                entityRenderer.buildingIndicatorsEnabled = inPlacementMode;
+                if (inPlacementMode) {
+                    entityRenderer.buildingIndicatorsPlayer = g.currentPlayer;
+                    entityRenderer.buildingIndicatorsHasBuildings = g.state.entities.some(
+                        ent => ent.type === EntityType.Building && ent.player === g.currentPlayer
+                    );
+                    // Also set territory for indicators even when borders aren't shown
+                    entityRenderer.territoryMap = g.territory;
+                }
             }
             if (landscapeRenderer) {
                 landscapeRenderer.debugGrid = getDebugGrid();
