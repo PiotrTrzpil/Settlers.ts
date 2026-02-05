@@ -20,8 +20,11 @@ import {
     SelectMode,
     PlaceBuildingMode,
     type PlaceBuildingModeData,
+    type ModeRenderState,
+    type BuildingPreview,
     getDefaultInputConfig,
     MouseButton,
+    CursorType,
     HANDLED,
     UNHANDLED,
 } from '@/game/input';
@@ -336,6 +339,9 @@ export function useRenderer({
                 entityRenderer.territoryVersion = g.territoryVersion;
                 entityRenderer.renderAlpha = alpha;
 
+                // Get render state from input manager
+                const renderState = inputManager?.getRenderState();
+
                 // Building placement indicators
                 const inPlacementMode = g.mode === 'place_building';
                 entityRenderer.buildingIndicatorsEnabled = inPlacementMode;
@@ -347,16 +353,21 @@ export function useRenderer({
                     );
                     entityRenderer.territoryMap = g.territory;
 
-                    // Get preview from input manager mode data
-                    const modeData = (inputManager as any)?.modeData?.get('place_building') as PlaceBuildingModeData | undefined;
-                    if (modeData) {
-                        entityRenderer.previewTile = { x: modeData.previewX, y: modeData.previewY };
-                        entityRenderer.previewBuildingType = modeData.buildingType;
-                        entityRenderer.previewValid = modeData.previewValid;
+                    // Get building preview from render state
+                    const preview = renderState?.preview;
+                    if (preview?.type === 'building') {
+                        entityRenderer.previewTile = { x: preview.x, y: preview.y };
+                        entityRenderer.previewBuildingType = preview.buildingType;
+                        entityRenderer.previewValid = preview.valid;
                     }
                 } else {
                     entityRenderer.previewTile = null;
                     entityRenderer.previewBuildingType = null;
+                }
+
+                // Update cursor based on render state
+                if (renderState?.cursor && r.canvas) {
+                    r.canvas.style.cursor = renderState.cursor;
                 }
             }
 

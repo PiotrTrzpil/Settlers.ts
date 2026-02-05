@@ -1,6 +1,7 @@
 import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
 import { InputAction, MouseButton, type PointerData, type DragData } from '../input-actions';
 import type { InputConfig } from '../input-config';
+import { CursorType, type ModeRenderState } from '../render-state';
 
 /**
  * Camera control data.
@@ -193,5 +194,12 @@ export class CameraMode extends BaseInputMode {
         //     const t = Math.min(1, deltaTime * 10);
         //     this.cameraState.zoom += (this.cameraState.targetZoom - this.cameraState.zoom) * t;
         // }
+    }
+
+    override getRenderState(_context: InputContext): ModeRenderState {
+        // Camera mode changes cursor during drag
+        return {
+            cursor: this.isDraggingCamera ? CursorType.Grabbing : CursorType.Default,
+        };
     }
 }

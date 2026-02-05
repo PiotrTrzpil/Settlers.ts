@@ -1,6 +1,7 @@
 import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
 import { InputAction, MouseButton, type PointerData, type DragData } from '../input-actions';
 import { EntityType } from '../../entity';
+import { CursorType, type ModeRenderState, type SelectionBox } from '../render-state';
 
 /**
  * Formation offsets for unit movement commands.
@@ -136,5 +137,37 @@ export class SelectMode extends BaseInputMode {
                 targetY: tileY + offset[1],
             });
         }
+    }
+
+    override getRenderState(context: InputContext): ModeRenderState {
+        const dragState = context.state.getDragState();
+        const currentTile = context.currentTile;
+
+        // Check if we're actively dragging a selection box
+        if (dragState?.isDragging && dragState.button === MouseButton.Left) {
+            const selectionBox: SelectionBox = {
+                type: 'selection_box',
+                startTileX: dragState.startTileX ?? 0,
+                startTileY: dragState.startTileY ?? 0,
+                endTileX: dragState.currentTileX ?? 0,
+                endTileY: dragState.currentTileY ?? 0,
+                startScreenX: dragState.startX,
+                startScreenY: dragState.startY,
+                endScreenX: dragState.currentX,
+                endScreenY: dragState.currentY,
+            };
+
+            return {
+                cursor: CursorType.Crosshair,
+                preview: selectionBox,
+                hoverTile: currentTile,
+            };
+        }
+
+        // Default state - show pointer and hover tile
+        return {
+            cursor: CursorType.Default,
+            hoverTile: currentTile,
+        };
     }
 }

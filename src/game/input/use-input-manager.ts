@@ -1,10 +1,11 @@
-import { ref, shallowRef, watch, onUnmounted, type Ref, type ShallowRef } from 'vue';
+import { ref, shallowRef, watch, onUnmounted, type Ref, type ShallowRef, type ComputedRef } from 'vue';
 import { InputManager, type TileResolver, type CommandExecutor } from './input-manager';
 import type { InputConfig } from './input-config';
 import type { InputMode } from './input-mode';
 import { SelectMode } from './modes/select-mode';
 import { PlaceBuildingMode } from './modes/place-building-mode';
 import type { BuildingType } from '../entity';
+import { type ModeRenderState, createDefaultRenderState } from './render-state';
 
 /**
  * Options for useInputManager composable.
@@ -30,6 +31,8 @@ export interface UseInputManagerReturn {
     modeName: Ref<string>;
     /** Whether input manager is ready */
     isReady: Ref<boolean>;
+    /** Current render state from the active mode - updated each frame */
+    renderState: Ref<ModeRenderState>;
 
     // Camera state
     /** Camera X position */
@@ -81,6 +84,7 @@ export function useInputManager(options: UseInputManagerOptions): UseInputManage
     const manager = shallowRef<InputManager | null>(null);
     const modeName = ref('select');
     const isReady = ref(false);
+    const renderState = ref<ModeRenderState>(createDefaultRenderState());
 
     // Camera state (reactive)
     const cameraX = ref(0);
@@ -183,12 +187,19 @@ export function useInputManager(options: UseInputManagerOptions): UseInputManage
         cameraX.value = camera.x;
         cameraY.value = camera.y;
         cameraZoom.value = camera.zoom;
+
+        // Sync render state from current mode
+        const newRenderState = manager.value.getRenderState();
+        if (newRenderState) {
+            renderState.value = newRenderState;
+        }
     }
 
     return {
         manager,
         modeName,
         isReady,
+        renderState,
         cameraX,
         cameraY,
         cameraZoom,

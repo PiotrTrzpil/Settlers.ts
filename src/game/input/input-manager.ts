@@ -3,6 +3,7 @@ import type { TileCoord } from '../entity';
 import type { InputMode, InputContext, InputResult } from './input-mode';
 import type { InputConfig } from './input-config';
 import type { InputState } from './input-state';
+import type { ModeRenderState } from './render-state';
 import {
     InputAction,
     MouseButton,
@@ -280,6 +281,18 @@ export class InputManager {
         // Update current mode
         const mode = this.getCurrentMode();
         mode?.onUpdate?.(deltaTime, context);
+    }
+
+    /**
+     * Get the current render state from the active mode.
+     * This is the primary way for the rendering system to know what overlays to draw.
+     */
+    getRenderState(): ModeRenderState | null {
+        const mode = this.getCurrentMode();
+        if (!mode) return null;
+
+        const context = this.createContext();
+        return mode.getRenderState(context);
     }
 
     // ─── Private Methods ─────────────────────────────────────────────────

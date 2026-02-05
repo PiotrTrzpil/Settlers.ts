@@ -1,6 +1,7 @@
 import type { InputAction, PointerData, DragData, KeyboardData } from './input-actions';
 import type { InputState } from './input-state';
 import type { TileCoord } from '../entity';
+import { type ModeRenderState, createDefaultRenderState } from './render-state';
 
 /**
  * Context passed to input mode handlers.
@@ -126,6 +127,14 @@ export interface InputMode {
      * @param context Input context
      */
     onUpdate?(deltaTime: number, context: InputContext): void;
+
+    /**
+     * Get the current render state for this mode.
+     * Called by the rendering system to determine what overlays to draw.
+     * @param context Input context
+     * @returns Render state describing cursor, preview, highlights, etc.
+     */
+    getRenderState(context: InputContext): ModeRenderState;
 }
 
 /**
@@ -177,5 +186,9 @@ export abstract class BaseInputMode implements InputMode {
 
     onUpdate(_deltaTime: number, _context: InputContext): void {
         // Default: do nothing
+    }
+
+    getRenderState(_context: InputContext): ModeRenderState {
+        return createDefaultRenderState();
     }
 }

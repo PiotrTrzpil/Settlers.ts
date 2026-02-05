@@ -41,6 +41,18 @@ export {
     BaseInputMode,
 } from './input-mode';
 
+// Render State (for mode rendering)
+export {
+    CursorType,
+    type ModeRenderState,
+    type BuildingPreview,
+    type SelectionBox,
+    type PathPreview,
+    type TileHighlight,
+    type ModePreview,
+    createDefaultRenderState,
+} from './render-state';
+
 // Built-in Modes
 export { SelectMode } from './modes/select-mode';
 export { PlaceBuildingMode, type PlaceBuildingModeData } from './modes/place-building-mode';

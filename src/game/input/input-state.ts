@@ -41,6 +41,8 @@ export interface InputState {
     endDrag(): DragData | null;
     /** Cancel drag without completing */
     cancelDrag(): void;
+    /** Get current drag state (readonly snapshot) */
+    getDragState(): DragData | null;
 }
 
 /**
@@ -142,6 +144,10 @@ export function createInputState(
         drag.value = null;
     }
 
+    function getDragState(): DragData | null {
+        return drag.value;
+    }
+
     return {
         mouseX,
         mouseY,
@@ -159,6 +165,7 @@ export function createInputState(
         updateDrag,
         endDrag,
         cancelDrag,
+        getDragState,
     };
 }
 

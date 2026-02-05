@@ -1,6 +1,7 @@
 import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
 import { InputAction, MouseButton, type PointerData } from '../input-actions';
 import { BuildingType, getBuildingSize } from '../../entity';
+import { CursorType, type ModeRenderState } from '../render-state';
 
 /**
  * Data specific to building placement mode.
@@ -134,5 +135,33 @@ export class PlaceBuildingMode extends BaseInputMode {
             modeData.validatePlacement = validator;
             context.setModeData(modeData);
         }
+    }
+
+    override getRenderState(context: InputContext): ModeRenderState {
+        const modeData = context.getModeData<PlaceBuildingModeData>();
+
+        if (!modeData) {
+            return {
+                cursor: CursorType.Crosshair,
+            };
+        }
+
+        return {
+            cursor: modeData.previewValid ? CursorType.Crosshair : CursorType.NotAllowed,
+            preview: {
+                type: 'building',
+                buildingType: modeData.buildingType,
+                x: modeData.previewX,
+                y: modeData.previewY,
+                valid: modeData.previewValid,
+            },
+            hoverTile: {
+                x: modeData.previewX,
+                y: modeData.previewY,
+            },
+            statusText: modeData.previewValid
+                ? `Place ${BuildingType[modeData.buildingType]}`
+                : 'Cannot place here',
+        };
     }
 }
