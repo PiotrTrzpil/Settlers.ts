@@ -141,6 +141,7 @@
 
         <!-- Layer panel overlay (left side) -->
         <layer-panel
+          :counts="layerCounts"
           @update:visibility="updateLayerVisibility"
         />
 
@@ -208,6 +209,7 @@ const {
     isPaused,
     availableBuildings,
     layerVisibility,
+    layerCounts,
     onFileSelect,
     onTileClick,
     setPlaceMode,

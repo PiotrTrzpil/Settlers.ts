@@ -179,7 +179,8 @@ export function createLayerVisibility(): LayerVisibility {
 // Fallback Colors for Entities Without Textures
 // ============================================================================
 
-/** Colors for rendering entities as colored dots when textures are unavailable */
+/** Colors for rendering entities as colored dots when textures are unavailable.
+ * Colors chosen to be visible against typical bright green grass backgrounds. */
 export const FALLBACK_ENTITY_COLORS: Record<string, [number, number, number, number]> = {
     // Buildings - will use player color, this is just a fallback shape indicator
     building_default: [0.6, 0.5, 0.3, 1.0], // Brown
@@ -187,38 +188,38 @@ export const FALLBACK_ENTITY_COLORS: Record<string, [number, number, number, num
     // Units - will use player color
     unit_default: [0.8, 0.7, 0.5, 1.0], // Light tan
 
-    // Trees
-    tree_pine: [0.1, 0.4, 0.1, 1.0], // Dark green
-    tree_oak: [0.2, 0.5, 0.15, 1.0], // Medium green
-    tree_birch: [0.3, 0.6, 0.2, 1.0], // Light green
-    tree_palm: [0.15, 0.55, 0.2, 1.0], // Tropical green
-    tree_cypress: [0.08, 0.35, 0.12, 1.0], // Very dark green
-    tree_dead: [0.4, 0.3, 0.2, 1.0], // Brown-gray
+    // Trees - dark browns and olive tones to contrast with grass
+    tree_pine: [0.2, 0.35, 0.15, 1.0], // Dark forest green-brown
+    tree_oak: [0.35, 0.3, 0.15, 1.0], // Brown-olive
+    tree_birch: [0.8, 0.75, 0.65, 1.0], // Light birch bark (white-ish)
+    tree_palm: [0.5, 0.4, 0.25, 1.0], // Tropical brown
+    tree_cypress: [0.15, 0.25, 0.2, 1.0], // Dark blue-green
+    tree_dead: [0.5, 0.35, 0.2, 1.0], // Brown-gray
 
-    // Stones
-    stone_small: [0.5, 0.5, 0.5, 1.0], // Gray
-    stone_medium: [0.45, 0.45, 0.45, 1.0], // Darker gray
-    stone_large: [0.4, 0.4, 0.4, 1.0], // Even darker gray
+    // Stones - neutral grays with slight blue tint for visibility
+    stone_small: [0.55, 0.55, 0.6, 1.0], // Light blue-gray
+    stone_medium: [0.5, 0.5, 0.55, 1.0], // Medium blue-gray
+    stone_large: [0.45, 0.45, 0.5, 1.0], // Dark blue-gray
 
-    // Resource deposits
-    deposit_iron: [0.6, 0.35, 0.25, 1.0], // Rust red
-    deposit_gold: [1.0, 0.85, 0.0, 1.0], // Gold
-    deposit_coal: [0.15, 0.15, 0.15, 1.0], // Black
-    deposit_stone: [0.55, 0.55, 0.55, 1.0], // Light gray
-    deposit_sulfur: [0.9, 0.9, 0.2, 1.0], // Yellow
-    deposit_gems: [0.5, 0.2, 0.7, 1.0], // Purple
+    // Resource deposits - bright saturated colors
+    deposit_iron: [0.7, 0.3, 0.2, 1.0], // Rust red
+    deposit_gold: [1.0, 0.85, 0.0, 1.0], // Bright gold
+    deposit_coal: [0.2, 0.2, 0.25, 1.0], // Dark charcoal with blue tint
+    deposit_stone: [0.6, 0.6, 0.65, 1.0], // Light gray
+    deposit_sulfur: [1.0, 0.95, 0.2, 1.0], // Bright yellow
+    deposit_gems: [0.6, 0.2, 0.8, 1.0], // Bright purple
 
-    // Plants
-    plant_bush: [0.25, 0.45, 0.15, 1.0], // Bush green
-    plant_mushroom: [0.7, 0.5, 0.4, 1.0], // Tan/brown
-    plant_flowers: [0.9, 0.4, 0.6, 1.0], // Pink
-    plant_corn: [0.9, 0.8, 0.3, 1.0], // Yellow-tan
-    plant_wheat: [0.85, 0.75, 0.3, 1.0], // Golden wheat
+    // Plants - warm/distinct colors to contrast with grass
+    plant_bush: [0.4, 0.35, 0.2, 1.0], // Olive brown (contrasts with bright green)
+    plant_mushroom: [0.85, 0.6, 0.5, 1.0], // Warm tan/orange
+    plant_flowers: [1.0, 0.4, 0.6, 1.0], // Bright pink
+    plant_corn: [1.0, 0.9, 0.3, 1.0], // Bright yellow
+    plant_wheat: [0.95, 0.8, 0.35, 1.0], // Golden wheat
 
-    // Other
-    stump: [0.45, 0.3, 0.15, 1.0], // Dark wood
-    fallen_tree: [0.5, 0.35, 0.2, 1.0], // Medium wood
-    pile: [0.55, 0.45, 0.3, 1.0], // Light wood
+    // Other - distinct brown tones
+    stump: [0.55, 0.35, 0.15, 1.0], // Dark wood
+    fallen_tree: [0.6, 0.4, 0.2, 1.0], // Medium wood
+    pile: [0.65, 0.5, 0.3, 1.0], // Light wood
 };
 
 /** Get fallback color for a MapObjectType */

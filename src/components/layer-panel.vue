@@ -21,8 +21,9 @@
               :checked="visibility.buildings"
               @change="updateLayer('buildings', ($event.target as HTMLInputElement).checked)"
             />
-            <span class="layer-icon building-icon"></span>
+            <span class="layer-emoji">🏠</span>
             <span>Buildings</span>
+            <span class="layer-count" v-if="props.counts">{{ props.counts.buildings }}</span>
           </label>
 
           <!-- Units -->
@@ -32,8 +33,9 @@
               :checked="visibility.units"
               @change="updateLayer('units', ($event.target as HTMLInputElement).checked)"
             />
-            <span class="layer-icon unit-icon"></span>
+            <span class="layer-emoji">👷</span>
             <span>Units</span>
+            <span class="layer-count" v-if="props.counts">{{ props.counts.units }}</span>
           </label>
 
           <!-- Resources -->
@@ -43,8 +45,9 @@
               :checked="visibility.resources"
               @change="updateLayer('resources', ($event.target as HTMLInputElement).checked)"
             />
-            <span class="layer-icon resource-icon"></span>
+            <span class="layer-emoji">💎</span>
             <span>Resources</span>
+            <span class="layer-count" v-if="props.counts">{{ props.counts.resources }}</span>
           </label>
         </div>
       </section>
@@ -53,10 +56,11 @@
       <section class="layer-section">
         <h3 class="section-header" @click="sections.environment = !sections.environment">
           <span class="caret">{{ sections.environment ? '&#x25BC;' : '&#x25B6;' }}</span>
-          Environment
+          🌳 Environment
           <span class="env-status" :class="{ partial: isEnvironmentPartial }">
             {{ environmentStatusText }}
           </span>
+          <span class="layer-count header-count" v-if="props.counts">{{ props.counts.environment }}</span>
         </h3>
         <div v-if="sections.environment" class="section-body">
           <!-- Environment master toggle -->
@@ -67,8 +71,9 @@
               :indeterminate="isEnvironmentPartial"
               @change="toggleEnvironmentMaster(($event.target as HTMLInputElement).checked)"
             />
-            <span class="layer-icon env-icon"></span>
+            <span class="layer-emoji">🌍</span>
             <span>All Environment</span>
+            <span class="layer-count" v-if="props.counts">{{ props.counts.environment }}</span>
           </label>
 
           <!-- Sub-layers (indented) -->
@@ -80,8 +85,9 @@
                 :disabled="!visibility.environment"
                 @change="updateSubLayer('trees', ($event.target as HTMLInputElement).checked)"
               />
-              <span class="layer-icon tree-icon"></span>
+              <span class="layer-emoji">🌲</span>
               <span>Trees</span>
+              <span class="layer-count" v-if="props.counts">{{ props.counts.trees }}</span>
             </label>
 
             <label class="layer-row sub-layer">
@@ -91,8 +97,9 @@
                 :disabled="!visibility.environment"
                 @change="updateSubLayer('stones', ($event.target as HTMLInputElement).checked)"
               />
-              <span class="layer-icon stone-icon"></span>
+              <span class="layer-emoji">🪨</span>
               <span>Stones</span>
+              <span class="layer-count" v-if="props.counts">{{ props.counts.stones }}</span>
             </label>
 
             <label class="layer-row sub-layer">
@@ -102,8 +109,9 @@
                 :disabled="!visibility.environment"
                 @change="updateSubLayer('plants', ($event.target as HTMLInputElement).checked)"
               />
-              <span class="layer-icon plant-icon"></span>
+              <span class="layer-emoji">🌿</span>
               <span>Plants</span>
+              <span class="layer-count" v-if="props.counts">{{ props.counts.plants }}</span>
             </label>
 
             <label class="layer-row sub-layer">
@@ -113,8 +121,9 @@
                 :disabled="!visibility.environment"
                 @change="updateSubLayer('other', ($event.target as HTMLInputElement).checked)"
               />
-              <span class="layer-icon other-icon"></span>
+              <span class="layer-emoji">📦</span>
               <span>Other</span>
+              <span class="layer-count" v-if="props.counts">{{ props.counts.other }}</span>
             </label>
           </div>
         </div>
@@ -143,6 +152,11 @@ import {
     saveLayerVisibility,
 } from '@/game/renderer/layer-visibility';
 import { debugStats } from '@/game/debug-stats';
+import type { LayerCounts } from '@/views/use-map-view';
+
+const props = defineProps<{
+    counts?: LayerCounts;
+}>();
 
 const emit = defineEmits<{
     (e: 'update:visibility', value: LayerVisibility): void;
@@ -375,6 +389,29 @@ emit('update:visibility', { ...visibility, environmentLayers: { ...visibility.en
 
 .layer-row:hover {
   color: #c8a96e;
+}
+
+.layer-emoji {
+  font-size: 12px;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.layer-count {
+  margin-left: auto;
+  padding: 1px 5px;
+  background: #1a1a2a;
+  border: 1px solid #2a2a4a;
+  border-radius: 2px;
+  color: #8080c0;
+  font-size: 9px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.header-count {
+  margin-left: 4px;
 }
 
 .layer-row input[type="checkbox"] {
