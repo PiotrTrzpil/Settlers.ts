@@ -39,7 +39,6 @@ defineExpose({ setRace, getRace, Race });
 
 <style scoped>
 .cav {
-  margin: 3px;
-  border: 1px solid blue;
+  display: block;
 }
 </style>

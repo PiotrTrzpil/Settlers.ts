@@ -1,19 +1,5 @@
 <template>
   <div class="map-view-root">
-    <!-- Header bar: file browser + debug toggle -->
-    <div class="game-header">
-      <div class="header-row">
-        <span class="header-label">Map:</span>
-        <file-browser
-          :fileManager="fileManager"
-          @select="onFileSelect"
-          filter=".map"
-          class="browser"
-        />
-      </div>
-      <pre v-if="mapInfo" class="map-info-pre">{{ mapInfo }}</pre>
-    </div>
-
     <!-- Main game area: sidebar + canvas -->
     <div v-if="game" class="game-layout" data-testid="game-ui">
 
@@ -105,8 +91,21 @@
       <div class="canvas-area">
         <!-- Info bar -->
         <div class="info-bar">
+          <div class="map-selector">
+            <span class="info-label">Map:</span>
+            <file-browser
+              :fileManager="fileManager"
+              @select="onFileSelect"
+              filter=".map"
+              class="browser"
+            />
+          </div>
           <div class="mode-indicator" data-testid="mode-indicator" :data-mode="game.mode">
             Mode: <strong>{{ game.mode }}</strong>
+          </div>
+          <div class="entity-count" data-testid="entity-count"
+            :data-count="game.state.entities.length">
+            Entities: {{ game.state.entities.length }}
           </div>
           <div class="tile-info" data-testid="tile-info" v-if="hoveredTile"
             :data-tile-x="hoveredTile.x" :data-tile-y="hoveredTile.y">
@@ -118,10 +117,6 @@
             #{{ selectedEntity.id }}
             at ({{ selectedEntity.x }}, {{ selectedEntity.y }})
             <span v-if="selectionCount > 1"> (+{{ selectionCount - 1 }} more)</span>
-          </div>
-          <div class="entity-count" data-testid="entity-count"
-            :data-count="game.state.entities.length">
-            Entities: {{ game.state.entities.length }}
           </div>
         </div>
 
@@ -148,13 +143,25 @@
     </div>
 
     <!-- Fallback when no game loaded -->
-    <renderer-viewer
-      v-if="!game"
-      :game="game"
-      :debugGrid="showDebug"
-      :showTerritoryBorders="showTerritoryBorders"
-      @tileClick="onTileClick"
-    />
+    <div v-if="!game" class="no-game-fallback">
+      <div class="info-bar">
+        <div class="map-selector">
+          <span class="info-label">Map:</span>
+          <file-browser
+            :fileManager="fileManager"
+            @select="onFileSelect"
+            filter=".map"
+            class="browser"
+          />
+        </div>
+      </div>
+      <renderer-viewer
+        :game="game"
+        :debugGrid="showDebug"
+        :showTerritoryBorders="showTerritoryBorders"
+        @tileClick="onTileClick"
+      />
+    </div>
   </div>
 </template>
 
@@ -173,7 +180,6 @@ const props = defineProps<{
 }>();
 
 const {
-    mapInfo,
     game,
     showDebug,
     showTerritoryBorders,
@@ -216,45 +222,6 @@ async function onRaceChange() {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-}
-
-/* ===== GAME HEADER ===== */
-.game-header {
-  background: #1a1209;
-  border-bottom: 2px solid #5c3d1a;
-  padding: 6px 12px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  color: #c8a96e;
-  font-size: 13px;
-}
-
-.header-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.header-label {
-  font-weight: bold;
-  color: #d4b27a;
-}
-
-
-.map-info-pre {
-  width: 100%;
-  margin: 4px 0 0;
-  padding: 4px 8px;
-  background: #0d0a05;
-  color: #7a6a4a;
-  font-size: 11px;
-  border-radius: 3px;
-  max-height: 60px;
-  overflow: auto;
-  border: 1px solid #3a2a10;
 }
 
 /* ===== MAIN GAME LAYOUT ===== */
@@ -392,10 +359,29 @@ async function onRaceChange() {
   flex-wrap: wrap;
   gap: 12px;
   padding: 6px 12px;
-  background: rgba(26, 18, 9, 0.92);
-  border-bottom: 1px solid #3a2a10;
+  background: #1a1209;
+  border-bottom: 2px solid #5c3d1a;
   align-items: center;
   z-index: 10;
+}
+
+.map-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-label {
+  font-weight: bold;
+  color: #d4b27a;
+  font-size: 13px;
+}
+
+.no-game-fallback {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .mode-indicator {
