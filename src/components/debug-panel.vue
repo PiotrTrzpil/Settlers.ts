@@ -183,7 +183,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, computed } from 'vue';
+import { reactive, computed } from 'vue';
 import { debugStats } from '@/game/debug-stats';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
 
@@ -199,7 +199,14 @@ defineEmits<{
     (e: 'togglePause'): void;
 }>();
 
-const open = ref(false);
+const stats = debugStats.state;
+
+// Use the persisted open state from debug stats
+const open = computed({
+    get: () => stats.debugPanelOpen,
+    set: (value: boolean) => { stats.debugPanelOpen = value; }
+});
+
 const sections = reactive({
     perf: true,
     entities: true,
@@ -207,8 +214,6 @@ const sections = reactive({
     tile: true,
     controls: true,
 });
-
-const stats = debugStats.state;
 
 const slotPermLabel = computed(() => {
     const perm = RIVER_SLOT_PERMS[stats.riverSlotPermutation % RIVER_SLOT_PERMS.length];

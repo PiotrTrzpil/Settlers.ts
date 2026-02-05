@@ -8,6 +8,7 @@ import { EntityType, BuildingType, getBuildingSize } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
 import { canPlaceBuildingWithTerritory } from '@/game/systems/placement';
 import { debugStats } from '@/game/debug-stats';
+import { LayerVisibility, DEFAULT_LAYER_VISIBILITY } from '@/game/renderer/layer-visibility';
 
 const DRAG_THRESHOLD = 5;
 
@@ -26,10 +27,11 @@ interface UseRendererOptions {
     getGame: () => Game | null;
     getDebugGrid: () => boolean;
     getShowTerritoryBorders: () => boolean;
+    getLayerVisibility: () => LayerVisibility;
     onTileClick: (tile: { x: number; y: number }) => void;
 }
 
-export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBorders, onTileClick }: UseRendererOptions) {
+export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBorders, getLayerVisibility, onTileClick }: UseRendererOptions) {
     let renderer: Renderer | null = null;
     let tilePicker: TilePicker | null = null;
     let entityRenderer: EntityRenderer | null = null;
@@ -95,6 +97,7 @@ export function useRenderer({ canvas, getGame, getDebugGrid, getShowTerritoryBor
                 entityRenderer.territoryMap = getShowTerritoryBorders() ? g.territory : null;
                 entityRenderer.territoryVersion = g.territoryVersion;
                 entityRenderer.renderAlpha = alpha;
+                entityRenderer.layerVisibility = getLayerVisibility();
 
                 // Building placement indicators
                 const inPlacementMode = g.mode === 'place_building';

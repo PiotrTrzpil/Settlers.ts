@@ -1,4 +1,4 @@
-import { ref, shallowRef, triggerRef, computed, watch, onMounted } from 'vue';
+import { ref, shallowRef, triggerRef, computed, watch, onMounted, reactive, toRef } from 'vue';
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
@@ -6,6 +6,8 @@ import { createTestMapLoader } from '@/game/test-map-factory';
 import { Entity, TileCoord, UnitType, BuildingType } from '@/game/entity';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
+import { LayerVisibility, loadLayerVisibility, saveLayerVisibility } from '@/game/renderer/layer-visibility';
+import { debugStats } from '@/game/debug-stats';
 
 const log = new LogHandler('MapView');
 
@@ -40,10 +42,27 @@ export function useMapView(getFileManager: () => FileManager) {
     const fileName = ref<string | null>(null);
     const mapInfo = ref('');
     const game = shallowRef<Game | null>(null);
-    const showDebug = ref(false);
-    const showTerritoryBorders = ref(true);
+
+    // Use debug stats for persisted settings
+    const showDebug = computed({
+        get: () => debugStats.state.debugGridEnabled,
+        set: (value: boolean) => { debugStats.state.debugGridEnabled = value; }
+    });
+    const showTerritoryBorders = computed({
+        get: () => debugStats.state.territoryBordersEnabled,
+        set: (value: boolean) => { debugStats.state.territoryBordersEnabled = value; }
+    });
+
     const activeTab = ref<'buildings' | 'units'>('buildings');
     const hoveredTile = ref<TileCoord | null>(null);
+
+    // Layer visibility state (loaded from localStorage)
+    const layerVisibility = reactive<LayerVisibility>(loadLayerVisibility());
+
+    function updateLayerVisibility(newVisibility: LayerVisibility): void {
+        Object.assign(layerVisibility, newVisibility);
+        saveLayerVisibility(layerVisibility);
+    }
 
     const selectedEntity = computed<Entity | undefined>(() => {
         if (!game.value || game.value.state.selectedEntityId === null) return undefined;
@@ -209,12 +228,14 @@ export function useMapView(getFileManager: () => FileManager) {
         selectionCount,
         isPaused,
         availableBuildings,
+        layerVisibility,
         onFileSelect,
         onTileClick,
         setPlaceMode,
         setSelectMode,
         removeSelected,
         togglePause,
-        spawnUnit
+        spawnUnit,
+        updateLayerVisibility
     };
 }
