@@ -11,6 +11,7 @@
 import { useTemplateRef } from 'vue';
 import { Game } from '@/game/game';
 import { useRenderer } from './use-renderer';
+import { Race } from '@/game/renderer/sprite-metadata';
 
 const props = defineProps<{
     game: Game | null;
@@ -24,13 +25,16 @@ const emit = defineEmits<{
 
 const cav = useTemplateRef<HTMLCanvasElement>('cav');
 
-useRenderer({
+const { setRace, getRace } = useRenderer({
     canvas: cav,
     getGame: () => props.game,
     getDebugGrid: () => props.debugGrid,
     getShowTerritoryBorders: () => props.showTerritoryBorders,
     onTileClick: (tile) => emit('tileClick', tile)
 });
+
+// Expose race switching for parent components
+defineExpose({ setRace, getRace, Race });
 </script>
 
 <style scoped>

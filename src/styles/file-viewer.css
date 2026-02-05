@@ -1,0 +1,264 @@
+/**
+ * Shared styles for file viewer components (gfx-view, gh-view, jil-view)
+ * Import this file in Vue components and use class="file-viewer" on root element
+ */
+
+/* Base view container */
+.file-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1a1209;
+  color: #c8a96e;
+}
+
+/* Controls bar */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #2c1e0e;
+  border-bottom: 2px solid #5c3d1a;
+  flex-wrap: wrap;
+}
+
+.controls .label {
+  font-weight: 500;
+}
+
+.controls .info {
+  color: #8a7040;
+  font-size: 13px;
+}
+
+.controls button {
+  padding: 5px 12px;
+  background: #3a2810;
+  color: #c8a96e;
+  border: 1px solid #5c3d1a;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.controls button:hover {
+  background: #4a3518;
+}
+
+.controls button.active {
+  background: #5c3d1a;
+  border-color: #d4a030;
+}
+
+/* Grid view */
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.grid-item {
+  background: #0d0a05;
+  border: 2px solid #3a2a10;
+  border-radius: 4px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.grid-item:hover {
+  border-color: #5c3d1a;
+  background: #1a1209;
+}
+
+.grid-item.selected {
+  border-color: #d4a030;
+  background: #2c1e0e;
+}
+
+.grid-item.mapped {
+  border-color: #4a8030;
+}
+
+.grid-canvas {
+  max-width: 200px;
+  max-height: 200px;
+  image-rendering: pixelated;
+  background: #0a0805;
+}
+
+.grid-label {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #8a7040;
+  font-family: monospace;
+  text-align: center;
+}
+
+/* Single view */
+.single-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.item-select {
+  width: 100%;
+  padding: 8px;
+  background: #0d0a05;
+  color: #c8a96e;
+  border: 1px solid #3a2a10;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.item-info {
+  padding: 8px;
+  background: #0d0a05;
+  border: 1px solid #3a2a10;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #8a7040;
+  margin-bottom: 12px;
+}
+
+.canvas-wrapper {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.main-canvas {
+  background: #0d0a05;
+  border: 1px solid #3a2a10;
+  image-rendering: pixelated;
+}
+
+/* Selector groups (jil-view style) */
+.selectors {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.selector-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.selector-group label {
+  font-size: 11px;
+  color: #8a7040;
+  text-transform: uppercase;
+}
+
+.selector-group select {
+  min-width: 200px;
+  font-family: 'Consolas', monospace;
+}
+
+/* Sprite info display */
+.sprite-info {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #8a7040;
+  margin-bottom: 12px;
+}
+
+/* Animation toggle */
+.animate-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+/* Direction grid for multi-direction sprites (jil-view) */
+.direction-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  background: #0a0805;
+  padding: 4px;
+  border-radius: 3px;
+  justify-content: center;
+}
+
+.direction-grid.dirs-1 {
+  display: block;
+}
+
+.direction-grid.dirs-1 .grid-canvas {
+  width: 100px;
+  height: 100px;
+}
+
+.direction-grid.dirs-2 {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.direction-grid.dirs-2 .grid-canvas {
+  width: 80px;
+  height: 80px;
+}
+
+.direction-grid.dirs-3,
+.direction-grid.dirs-4 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.direction-grid.dirs-3 .grid-canvas,
+.direction-grid.dirs-4 .grid-canvas {
+  width: 70px;
+  height: 70px;
+}
+
+.direction-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dir-label {
+  font-size: 9px;
+  color: #6a5a30;
+  margin-top: 2px;
+}
+
+/* Job/building labels */
+.job-index {
+  display: block;
+  font-weight: 600;
+  color: #c8a96e;
+}
+
+.building-name {
+  display: block;
+  color: #4a8030;
+  font-size: 10px;
+}
+
+/* Image type label (gh-view) */
+.grid-type {
+  font-size: 10px;
+  color: #6a5a30;
+}

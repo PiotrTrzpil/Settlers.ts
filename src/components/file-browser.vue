@@ -28,6 +28,12 @@ function doFilter() {
     }
 
     files.value = props.fileManager.filter(props.filter);
+
+    // Auto-select first file if available and nothing selected
+    if (files.value.length > 0 && !selectedFile.value) {
+        selectedFile.value = files.value[0];
+        emit('select', selectedFile.value);
+    }
 }
 
 function selectFile() {
