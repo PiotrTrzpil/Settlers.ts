@@ -310,23 +310,24 @@ async function onRaceChange() {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px;
+  gap: 2px;
+  padding: 6px;
+  overflow-y: auto;
 }
 
 /* ===== SIDEBAR BUTTONS ===== */
 .sidebar-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 5px 8px;
   background: #2c1e0e;
   color: #c8a96e;
   border: 1px solid #4a3218;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 11px;
   text-align: left;
   transition: background 0.15s, border-color 0.15s;
 }
@@ -349,9 +350,9 @@ async function onRaceChange() {
 }
 
 .btn-icon {
-  font-size: 20px;
-  width: 28px;
-  height: 28px;
+  font-size: 14px;
+  width: 20px;
+  height: 20px;
   text-align: center;
   flex-shrink: 0;
   display: flex;
@@ -360,8 +361,8 @@ async function onRaceChange() {
 }
 
 .building-icon-img {
-  max-width: 28px;
-  max-height: 28px;
+  max-width: 20px;
+  max-height: 20px;
   object-fit: contain;
   image-rendering: pixelated;
 }
