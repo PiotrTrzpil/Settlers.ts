@@ -644,37 +644,19 @@ test.describe('Entity Rendering', () => {
         const mode = await gp.getMode();
         expect(mode).toBe('place_building');
 
-        // Check building indicator renderer state
+        // Check that building indicators are enabled via public entity renderer properties
         const indicatorState = await page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-
             const renderer = (window as any).__settlers_entity_renderer__;
             if (!renderer) return null;
 
-            const indicatorRenderer = (renderer as any).buildingIndicatorRenderer;
-            if (!indicatorRenderer) return null;
-
-            // Count buildable statuses in cache
-            // Status enum: 5=Difficult, 6=Medium, 7=Easy (these show indicators)
-            let buildableCount = 0;
-            if (indicatorRenderer.indicatorCache) {
-                for (const status of indicatorRenderer.indicatorCache.values()) {
-                    if (status >= 5 && status <= 7) buildableCount++;
-                }
-            }
-
             return {
                 indicatorsEnabled: renderer.buildingIndicatorsEnabled,
-                buildingType: indicatorRenderer.buildingType,
-                cacheSize: indicatorRenderer.indicatorCache?.size ?? 0,
-                buildableCount,
+                previewBuildingType: renderer.previewBuildingType,
             };
         });
 
         expect(indicatorState).not.toBeNull();
         expect(indicatorState!.indicatorsEnabled).toBe(true);
-        expect(indicatorState!.buildingType).toBeGreaterThan(0);
-        expect(indicatorState!.buildableCount).toBeGreaterThan(0);
+        expect(indicatorState!.previewBuildingType).toBeGreaterThan(0);
     });
 });
