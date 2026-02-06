@@ -10,6 +10,7 @@ tests/
   unit/                           # Fast, isolated unit tests (Vitest)
   e2e/                            # End-to-end browser tests (Playwright)
     game-page.ts                  # Page object — all shared helpers live here
+    matchers.ts                   # Custom Playwright matchers (toHaveEntity, etc.)
     fixtures.ts                   # Shared test map fixture (worker-scoped)
     game-logic.spec.ts            # App loading, navigation, canvas interaction
     building-placement.spec.ts    # Building placement, unit spawning, rendering
@@ -31,13 +32,15 @@ tests/
 
 ```
   Spec files  →  GamePage (page object)  →  Debug bridges  →  Game engine
+                 matchers.ts (custom expect)
                  fixtures.ts (shared fixture)
 
   Spec files interact with the game through:
   1. UI interactions   — click buttons, hover canvas, navigate routes
-  2. GamePage helpers  — waitForReady, moveCamera, spawnBearer, etc.
+  2. GamePage helpers  — waitForReady, moveCamera, placeBuilding, spawnUnit, etc.
   3. game.execute()    — the command pipeline (same path the UI uses)
   4. Debug reads       — __settlers_debug__, getGameState(), getDebugField()
+  5. Custom matchers   — toHaveEntity, toHaveMode, toHaveEntityCount, etc.
 ```
 
 ### Debug bridges (window globals)
@@ -75,6 +78,22 @@ Tests should use the same code paths a player would. Ranked from most preferred 
 **Always read the existing e2e tests and `game-page.ts` before modifying or adding tests.**
 Understand what helpers exist, what patterns are used, and avoid duplicating functionality.
 
+### Import structure
+
+Tests import from one of two sources depending on whether they need the shared fixture:
+
+```typescript
+// Tests using shared fixture (testMap pre-loaded, state reset between tests)
+import { test, expect } from './fixtures';
+
+// Tests managing their own page (screenshot regression, navigation, real assets)
+import { test, expect } from './matchers';
+import { GamePage } from './game-page';
+```
+
+Both provide custom matchers. Never import `expect` directly from `@playwright/test`
+in spec files — always go through `matchers.ts` or `fixtures.ts`.
+
 ### Use Page Objects
 All e2e tests should use `GamePage` from `tests/e2e/game-page.ts`:
 ```typescript
@@ -87,16 +106,125 @@ test('can place building', async ({ page }) => {
 ```
 
 Key `GamePage` helpers — **use these instead of reimplementing**:
+
+**Navigation & waiting:**
 - `goto({ testMap: true })` — navigate to map view with synthetic test map
 - `waitForReady(minFrames)` — wait for game loaded + renderer ready + N new frames
 - `waitForFrames(n)` — wait for N **new** frames (relative counting)
 - `waitForEntityCountAbove(n)` — poll until entity count exceeds N
-- `findBuildableTile(buildingType?)` — spiral from map center to find valid spot
-- `moveCamera(x, y)` — center camera on tile (uses `ViewPoint.setPosition()`)
-- `resetGameState()` — remove all entities + reset mode via InputManager
+
+**Game actions (command pipeline):**
+- `placeBuilding(type, x, y, player?)` — place via `game.execute()`, returns entity info
+- `spawnUnit(unitType?, x?, y?, player?)` — spawn via `game.execute()`, returns entity info
+- `moveUnit(entityId, targetX, targetY)` — issue move command, returns success
+- `spawnBearer()` / `spawnSwordsman()` — spawn via UI button click
+
+**State reads:**
 - `getDebugField(key)` — read a single debug bridge field
 - `getGameState()` — structured game state with entities
+- `getEntities(filter?)` — read entities with optional type/subType/player filter
+- `findBuildableTile(buildingType?)` — spiral from map center to find valid spot
+
+**UI actions:**
+- `moveCamera(x, y)` — center camera on tile (uses `ViewPoint.setPosition()`)
+- `resetGameState()` — remove all entities + reset mode via InputManager
+- `selectMode()` — click select mode button
 - `collectErrors()` — error collector with known-harmless warning filter
+
+### Custom matchers
+
+Custom matchers in `tests/e2e/matchers.ts` provide domain-specific assertions:
+
+```typescript
+// Check game state directly on GamePage
+await expect(gp).toHaveEntity({ type: 2, subType: 1, x: 10, y: 15 });
+await expect(gp).toHaveMode('select');
+await expect(gp).toHaveEntityCount(5);
+await expect(gp).toHaveBuildingCount(3);
+```
+
+These are **point-in-time checks** (no auto-retry). For polling, wrap with `expect.toPass()`:
+```typescript
+await expect(async () => {
+    await expect(gp).toHaveEntityCount(5);
+}).toPass({ timeout: 5000 });
+```
+
+### `expect.toPass()` for multi-condition polling
+
+Use `expect.toPass()` when you need to poll until multiple conditions are met.
+It retries the entire block and gives better error messages than `waitForFunction`:
+
+```typescript
+// GOOD — retries with clear failure messages for each condition
+await expect(async () => {
+    const state = await page.evaluate(/* read state */);
+    expect(state.x).toBe(targetX);
+    expect(state.y).toBe(targetY);
+    expect(state.isStationary).toBe(true);
+}).toPass({ timeout: 5000, intervals: [100, 200, 500, 1000] });
+
+// ACCEPTABLE — single-condition waits are fine with waitForFunction
+await page.waitForFunction(
+    ({ unitId }) => game.state.getEntity(unitId)?.x !== startX,
+    { unitId },
+    { timeout: 3000 }
+);
+```
+
+### `test.step()` for complex tests
+
+Use `test.step()` to structure multi-phase tests. Steps appear in traces and reports,
+making it clear which phase failed:
+
+```typescript
+test('building is rendered on canvas', async({ page }) => {
+    const gp = new GamePage(page);
+    await gp.goto({ testMap: true });
+    await gp.waitForReady(10);
+
+    await test.step('place building at buildable tile', async () => {
+        const tile = await gp.findBuildableTile();
+        await gp.placeBuilding(1, tile!.x, tile!.y);
+        await gp.waitForFrames(15);
+    });
+
+    await test.step('verify building exists', async () => {
+        await expect(gp).toHaveEntity({ type: 2 });
+    });
+});
+```
+
+Only add `test.step()` to tests with 3+ distinct phases. Simple tests don't need it.
+
+### Test tags
+
+Tests are tagged for selective execution:
+
+| Tag | Purpose | Example |
+|-----|---------|---------|
+| `@smoke` | Core functionality, run first | App loading, building placement |
+| `@screenshot` | Visual regression tests | Terrain rendering baseline |
+| `@requires-assets` | Needs real Settlers 4 files | Sprite loading tests |
+| `@slow` | Takes >10s per test | Asset-dependent tests |
+
+```typescript
+// On describe blocks
+test.describe('App Loading', { tag: '@smoke' }, () => { ... });
+
+// On individual tests
+test('screenshot baseline', { tag: '@screenshot' }, async ({ page }) => { ... });
+
+// Multiple tags
+test.describe('Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () => { ... });
+```
+
+Run subsets:
+```sh
+npx playwright test --grep @smoke              # Only smoke tests
+npx playwright test --grep-invert @slow        # Skip slow tests
+npx playwright test --grep-invert @requires-assets  # Skip asset-dependent tests
+```
 
 ### Never use `waitForTimeout`
 Use deterministic waiting instead:
@@ -209,12 +337,30 @@ The `gp` fixture:
 - Waits for 2 frames to propagate cleanup
 - Provides a `GamePage` ready for immediate use
 
+### Preset fixtures
+
+For tests that need common starting state, use preset fixtures:
+
+```typescript
+// Test with a Lumberjack building already placed
+test('verify building state', async ({ gpWithBuilding }) => {
+    const buildings = await gpWithBuilding.getEntities({ type: 2 });
+    expect(buildings.length).toBe(1);
+});
+
+// Test with a Bearer unit already spawned
+test('verify unit state', async ({ gpWithUnit }) => {
+    const units = await gpWithUnit.getEntities({ type: 1 });
+    expect(units.length).toBeGreaterThan(0);
+});
+```
+
 **When NOT to use the shared fixture:**
 - Screenshot regression tests (need pixel-perfect fresh state)
 - Tests that need a non-testMap page (sprite browser, real assets)
 - Tests that intentionally corrupt page state (navigation tests)
 
-For those, import from `@playwright/test` and manage the page yourself.
+For those, import from `./matchers` and manage the page yourself.
 
 ### State reset details
 
@@ -366,4 +512,9 @@ npx playwright test         # E2E tests (uses built dist)
 npx playwright test --headed -g "test name"  # Run specific test visually
 npx playwright test building-placement.spec.ts  # Run specific file
 E2E_TIMEOUT=60000 npx playwright test          # Custom timeout
+
+# Tag-based filtering
+npx playwright test --grep @smoke              # Only smoke tests
+npx playwright test --grep-invert @slow        # Skip slow tests
+npx playwright test --grep-invert @requires-assets  # Skip asset-dependent
 ```

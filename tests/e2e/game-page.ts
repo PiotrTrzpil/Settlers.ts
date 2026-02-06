@@ -157,10 +157,6 @@ export class GamePage {
         await this.page.locator(`[data-testid="${testId}"]`).click();
     }
 
-    async placeBuilding(testId: string): Promise<void> {
-        await this.clickButton(testId);
-    }
-
     async spawnBearer(): Promise<void> {
         // Switch to Units tab first
         await this.page.locator('.tab-btn', { hasText: 'Units' }).click();
@@ -277,6 +273,89 @@ export class GamePage {
             n,
             { timeout },
         );
+    }
+
+    // ── Higher-level game actions ────────────────────────────
+
+    /**
+     * Place a building via game.execute() command pipeline.
+     * Returns the created entity info, or null if placement failed.
+     */
+    async placeBuilding(buildingType: number, x: number, y: number, player = 0): Promise<{
+        id: number; type: number; subType: number; x: number; y: number; player: number;
+    } | null> {
+        return this.page.evaluate(({ bt, x, y, p }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
+            const ok = game.execute({ type: 'place_building', buildingType: bt, x, y, player: p });
+            if (!ok) return null;
+            const newEntity = game.state.entities.find(
+                (e: any) => !idsBefore.has(e.id) && e.type === 2
+            );
+            return newEntity
+                ? { id: newEntity.id, type: newEntity.type, subType: newEntity.subType, x: newEntity.x, y: newEntity.y, player: newEntity.player }
+                : null;
+        }, { bt: buildingType, x, y, p: player });
+    }
+
+    /**
+     * Spawn a unit via game.execute() command pipeline (bypasses UI buttons).
+     * If x/y not provided, spawns at map center.
+     * Returns the created entity info, or null if spawn failed.
+     */
+    async spawnUnit(unitType = 1, x?: number, y?: number, player = 0): Promise<{
+        id: number; type: number; subType: number; x: number; y: number;
+    } | null> {
+        return this.page.evaluate(({ ut, x, y, p }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            const spawnX = x ?? Math.floor(game.mapSize.width / 2);
+            const spawnY = y ?? Math.floor(game.mapSize.height / 2);
+            const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
+            game.execute({ type: 'spawn_unit', unitType: ut, x: spawnX, y: spawnY, player: p });
+            const newEntity = game.state.entities.find(
+                (e: any) => !idsBefore.has(e.id) && e.type === 1
+            );
+            return newEntity
+                ? { id: newEntity.id, type: newEntity.type, subType: newEntity.subType, x: newEntity.x, y: newEntity.y }
+                : null;
+        }, { ut: unitType, x, y, p: player });
+    }
+
+    /**
+     * Issue a move_unit command via game.execute().
+     * Returns true if the command was accepted.
+     */
+    async moveUnit(entityId: number, targetX: number, targetY: number): Promise<boolean> {
+        return this.page.evaluate(({ id, tx, ty }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return false;
+            return !!game.execute({ type: 'move_unit', entityId: id, targetX: tx, targetY: ty });
+        }, { id: entityId, tx: targetX, ty: targetY });
+    }
+
+    /**
+     * Read entities from game state, optionally filtered.
+     */
+    async getEntities(filter?: { type?: number; subType?: number; player?: number }): Promise<
+        Array<{ id: number; type: number; subType: number; x: number; y: number; player: number }>
+    > {
+        return this.page.evaluate((f) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return [];
+            return game.state.entities
+                .filter((e: any) => {
+                    if (f?.type !== undefined && e.type !== f.type) return false;
+                    if (f?.subType !== undefined && e.subType !== f.subType) return false;
+                    if (f?.player !== undefined && e.player !== f.player) return false;
+                    return true;
+                })
+                .map((e: any) => ({
+                    id: e.id, type: e.type, subType: e.subType,
+                    x: e.x, y: e.y, player: e.player
+                }));
+        }, filter ?? null);
     }
 
     // ── Canvas diagnostics ──────────────────────────────────

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './matchers';
 import { GamePage } from './game-page';
 
 /**
@@ -13,7 +13,7 @@ import { GamePage } from './game-page';
  * required), so different terrain types appear as different colors.
  */
 
-test.describe('Terrain Rendering', () => {
+test.describe('Terrain Rendering', { tag: '@screenshot' }, () => {
     test('renders all terrain types and matches baseline screenshot', async({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
@@ -34,7 +34,7 @@ test.describe('Terrain Rendering', () => {
         checkErrors();
     });
 
-    test('test map loads with correct initial state', async({ page }) => {
+    test('test map loads with correct initial state', { tag: '@smoke' }, async({ page }) => {
         const gp = new GamePage(page);
 
         await gp.goto({ testMap: true });
@@ -47,10 +47,9 @@ test.describe('Terrain Rendering', () => {
 
         // Entity count starts at zero on fresh test map
         await expect(gp.entityCount).toHaveAttribute('data-count', '0');
-        expect(await gp.getDebugField('entityCount')).toBe(0);
+        await expect(gp).toHaveEntityCount(0);
 
         // Mode defaults to select
-        expect(await gp.getMode()).toBe('select');
-        expect(await gp.getDebugField('mode')).toBe('select');
+        await expect(gp).toHaveMode('select');
     });
 });

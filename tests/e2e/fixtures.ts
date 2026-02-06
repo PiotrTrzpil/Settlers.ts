@@ -1,6 +1,3 @@
-import { test as base, type Page } from '@playwright/test';
-import { GamePage } from './game-page';
-
 /**
  * Custom Playwright fixture that provides a pre-loaded test map page.
  *
@@ -17,13 +14,36 @@ import { GamePage } from './game-page';
  *       // ...
  *   });
  *
+ * Preset fixtures for common starting states:
+ *   test('with building', async ({ gpWithBuilding }) => {
+ *       // gpWithBuilding has a Lumberjack already placed
+ *       const buildings = await gpWithBuilding.getEntities({ type: 2 });
+ *       // ...
+ *   });
+ *
+ *   test('with unit', async ({ gpWithUnit }) => {
+ *       // gpWithUnit has a Bearer already spawned
+ *       const units = await gpWithUnit.getEntities({ type: 1 });
+ *       // ...
+ *   });
+ *
  * Tests that need a completely fresh page (e.g. screenshot baselines)
  * should use the standard `{ page }` fixture instead.
  */
 
+import { test as base, type Page } from '@playwright/test';
+import { GamePage } from './game-page';
+
+// Re-export custom matchers so fixture users get them automatically
+export { expect } from './matchers';
+
 type TestFixtures = {
     /** GamePage with testMap pre-loaded. State is reset before each test. */
     gp: GamePage;
+    /** GamePage with a Lumberjack building already placed. */
+    gpWithBuilding: GamePage;
+    /** GamePage with a Bearer unit already spawned. */
+    gpWithUnit: GamePage;
 };
 
 type WorkerFixtures = {
@@ -51,6 +71,28 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         await gp.waitForFrames(2);
         await use(gp);
     },
-});
 
-export { expect } from '@playwright/test';
+    // Preset: reset state + place a Lumberjack building
+    gpWithBuilding: async({ testMapPage }, use) => {
+        const gp = new GamePage(testMapPage);
+        await gp.resetGameState();
+        await gp.selectMode();
+        const tile = await gp.findBuildableTile();
+        if (tile) {
+            await gp.placeBuilding(1, tile.x, tile.y);
+        }
+        await gp.waitForFrames(2);
+        await use(gp);
+    },
+
+    // Preset: reset state + spawn a Bearer unit
+    gpWithUnit: async({ testMapPage }, use) => {
+        const gp = new GamePage(testMapPage);
+        await gp.resetGameState();
+        await gp.selectMode();
+        await gp.spawnUnit();
+        await gp.waitForEntityCountAbove(0);
+        await gp.waitForFrames(2);
+        await use(gp);
+    },
+});

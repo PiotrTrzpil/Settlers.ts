@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './matchers';
 
 /**
  * E2E tests for the JIL view sprite browser and entity texture pipeline.
@@ -88,5 +88,3 @@ test.describe('GFX View Grid', () => {
         await expect(fileBrowser).toBeVisible({ timeout: 5000 });
     });
 });
-// Note: Entity type definition tests (game bridge access, building placement entity type)
-// are covered in building-placement.spec.ts which tests these more thoroughly via the full UI flow.

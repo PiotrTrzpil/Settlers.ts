@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './matchers';
 import { GamePage } from './game-page';
 
 /**
@@ -7,7 +7,7 @@ import { GamePage } from './game-page';
  * for the game MVP are properly rendered and interactive.
  */
 
-test.describe('App Loading and Structure', () => {
+test.describe('App Loading and Structure', { tag: '@smoke' }, () => {
     test('app loads without JavaScript errors', async({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
@@ -33,7 +33,7 @@ test.describe('App Loading and Structure', () => {
     });
 });
 
-test.describe('Map View Page', () => {
+test.describe('Map View Page', { tag: '@smoke' }, () => {
     test('map view page renders with map selector', async({ page }) => {
         await page.goto('/map-view');
 
@@ -111,7 +111,7 @@ test.describe('Route Navigation', () => {
     });
 });
 
-test.describe('Canvas Interaction', () => {
+test.describe('Canvas Interaction', { tag: '@smoke' }, () => {
     test('canvas responds to mouse wheel events without errors', async({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();

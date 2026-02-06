@@ -1,12 +1,14 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './matchers';
 import { GamePage } from './game-page';
 
 /**
  * E2E tests for unit sprite loading, especially high job indices.
  * Tests verify that units like swordsman (#227) and bowman (#236) load correctly.
+ *
+ * Requires real Settlers 4 game assets — skip with: npx playwright test --grep-invert @requires-assets
  */
 
-test.describe('Unit Sprite Loading', () => {
+test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () => {
     // Bypass cache for large GFX files to avoid ERR_CACHE_WRITE_FAILURE
     test.beforeEach(async({ page }) => {
         await page.route('**/*.gfx', async route => {
@@ -106,13 +108,10 @@ test.describe('Unit Sprite Loading', () => {
         await gp.waitForEntityCountAbove(0);
 
         // Check that swordsman entity exists
-        const gameState = await gp.getGameState();
-        expect(gameState).not.toBeNull();
+        await expect(gp).toHaveEntity({ type: 1 }); // EntityType.Unit
 
-        // Find units (swordsman type depends on the game's enum, but we can check for any spawned unit)
-        const units = gameState!.entities.filter(e => e.type === 1); // EntityType.Unit = 1
+        const units = await gp.getEntities({ type: 1 });
         expect(units.length).toBeGreaterThan(0);
-
         expect(units[0].subType).toBeGreaterThan(0);
     });
 

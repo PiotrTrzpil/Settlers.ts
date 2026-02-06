@@ -104,173 +104,98 @@ test.describe('Unit Movement', () => {
     test('unit movement is smooth (interpolation works)', async({ gp }) => {
         const page = gp.page;
 
-        // Spawn a unit and move it
-        const setup = await page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
-
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-
-            // Spawn bearer at center
-            game.execute({
-                type: 'spawn_unit',
-                unitType: 1,
-                x: cx,
-                y: cy,
-                player: 0
-            });
-
-            const units = game.state.entities.filter((e: any) => e.type === 1);
-            if (units.length === 0) return { error: 'no units spawned' };
-
-            const unit = units[units.length - 1];
-            const startX = unit.x;
-            const startY = unit.y;
+        await test.step('spawn unit and start movement', async() => {
+            // Spawn via game.execute for precise placement
+            const unit = await gp.spawnUnit(1);
+            expect(unit).not.toBeNull();
 
             // Move 5 tiles east
-            const targetX = startX + 5;
-            const ok = game.execute({
-                type: 'move_unit',
-                entityId: unit.id,
-                targetX,
-                targetY: startY
-            });
+            const ok = await gp.moveUnit(unit!.id, unit!.x + 5, unit!.y);
+            expect(ok).toBe(true);
 
-            if (!ok) return { error: 'move command failed' };
-
-            return { unitId: unit.id, startX, startY, targetX };
+            // Wait for movement to start (first tile transition)
+            await page.waitForFunction(
+                ({ unitId, startX }) => {
+                    const game = (window as any).__settlers_game__;
+                    if (!game) return false;
+                    const u = game.state.getEntity(unitId);
+                    return u && u.x !== startX;
+                },
+                { unitId: unit!.id, startX: unit!.x },
+                { timeout: 3000 }
+            );
         });
 
-        expect(setup).not.toHaveProperty('error');
+        const unit = (await gp.getEntities({ type: 1 }))[0];
 
-        // Wait for movement to start (first tile transition)
-        await page.waitForFunction(
-            ({ unitId, startX }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return false;
-                const unit = game.state.getEntity(unitId);
-                return unit && unit.x !== startX;
-            },
-            { unitId: setup.unitId, startX: setup.startX },
-            { timeout: 3000 }
-        );
+        await test.step('sample positions and verify no teleporting', async() => {
+            // Sample tile positions across frames to check for large jumps
+            const positions: Array<{ x: number; y: number }> = [];
+            for (let i = 0; i < 10; i++) {
+                const pos = await page.evaluate(({ unitId }) => {
+                    const game = (window as any).__settlers_game__;
+                    if (!game) return null;
+                    const u = game.state.getEntity(unitId);
+                    return u ? { x: u.x, y: u.y } : null;
+                }, { unitId: unit.id });
 
-        // Sample tile positions across frames to check for large jumps
-        const positions: Array<{ x: number; y: number }> = [];
-        for (let i = 0; i < 10; i++) {
-            const pos = await page.evaluate(({ unitId }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return null;
-                const unit = game.state.getEntity(unitId);
-                return unit ? { x: unit.x, y: unit.y } : null;
-            }, { unitId: setup.unitId });
+                if (pos) positions.push(pos);
+                await gp.waitForFrames(1);
+            }
 
-            if (pos) positions.push(pos);
-            await gp.waitForFrames(1);
-        }
+            expect(positions.length).toBeGreaterThan(3);
 
-        expect(positions.length).toBeGreaterThan(3);
-
-        // Verify no large jumps (teleporting) - max 2 tiles per sample
-        for (let i = 1; i < positions.length; i++) {
-            const dx = Math.abs(positions[i].x - positions[i - 1].x);
-            const dy = Math.abs(positions[i].y - positions[i - 1].y);
-            expect(dx).toBeLessThanOrEqual(2);
-            expect(dy).toBeLessThanOrEqual(2);
-        }
-
-        // Verify unit has moved from start
-        const finalPos = await page.evaluate(({ unitId }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-            const unit = game.state.getEntity(unitId);
-            return unit ? { x: unit.x, y: unit.y } : null;
-        }, { unitId: setup.unitId });
-
-        expect(finalPos).not.toBeNull();
-        expect(finalPos!.x).not.toBe(setup.startX);
+            // Verify no large jumps (teleporting) - max 2 tiles per sample
+            for (let i = 1; i < positions.length; i++) {
+                const dx = Math.abs(positions[i].x - positions[i - 1].x);
+                const dy = Math.abs(positions[i].y - positions[i - 1].y);
+                expect(dx).toBeLessThanOrEqual(2);
+                expect(dy).toBeLessThanOrEqual(2);
+            }
+        });
     });
 
     test('multiple units move at consistent speeds', async({ gp }) => {
         const page = gp.page;
 
-        // Spawn multiple units
-        const spawnResult = await page.evaluate(() => {
+        // Spawn 3 units at nearby positions
+        const unitIds: number[] = [];
+        const cx = await page.evaluate(() => {
             const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
-
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-
-            const unitIds: number[] = [];
-
-            // Spawn 3 bearers at nearby positions
-            for (let i = 0; i < 3; i++) {
-                const ok = game.execute({
-                    type: 'spawn_unit',
-                    unitType: 1, // Bearer
-                    x: cx + i * 2,
-                    y: cy,
-                    player: 0
-                });
-                if (ok) {
-                    const units = game.state.entities.filter((e: any) => e.type === 1);
-                    unitIds.push(units[units.length - 1].id);
-                }
-            }
-
-            return { unitIds, centerX: cx, centerY: cy };
+            return game ? Math.floor(game.mapSize.width / 2) : 0;
+        });
+        const cy = await page.evaluate(() => {
+            const game = (window as any).__settlers_game__;
+            return game ? Math.floor(game.mapSize.height / 2) : 0;
         });
 
-        expect(spawnResult).not.toHaveProperty('error');
-        expect(spawnResult.unitIds).toBeDefined();
-        expect(spawnResult.unitIds!.length).toBe(3);
+        for (let i = 0; i < 3; i++) {
+            const unit = await gp.spawnUnit(1, cx + i * 2, cy);
+            if (unit) unitIds.push(unit.id);
+        }
+        expect(unitIds.length).toBe(3);
 
-        const { unitIds, centerX, centerY } = spawnResult as { unitIds: number[]; centerX: number; centerY: number };
+        // Capture initial positions
+        const initialPositions = await page.evaluate(({ ids }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return [];
+            return ids.map((id: number) => {
+                const unit = game.state.getEntity(id);
+                return unit ? { id, x: unit.x, y: unit.y } : null;
+            }).filter((v): v is { id: number; x: number; y: number } => v !== null);
+        }, { ids: unitIds });
 
         // Issue simultaneous move commands to all units
-        const moveSetup = await page.evaluate(({ unitIds: ids, centerX: cx, centerY: cy }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
-
-            // Move all units to the same distant target
-            const targetX = cx + 10;
-            const targetY = cy;
-
-            const initialPositions: Array<{ id: number; x: number; y: number }> = [];
-
-            for (const id of ids) {
-                const unit = game.state.getEntity(id);
-                if (unit) {
-                    initialPositions.push({ id, x: unit.x, y: unit.y });
-                    game.execute({
-                        type: 'move_unit',
-                        entityId: id,
-                        targetX,
-                        targetY
-                    });
-                }
-            }
-
-            return { targetX, targetY, initialPositions };
-        }, { unitIds, centerX, centerY });
-
-        expect(moveSetup).not.toHaveProperty('error');
-        expect(moveSetup.initialPositions).toBeDefined();
-
-        const initialPositions = moveSetup.initialPositions!;
+        const targetX = cx + 10;
+        for (const id of unitIds) {
+            await gp.moveUnit(id, targetX, cy);
+        }
 
         // Wait for all units to start moving (poll instead of fixed timeout)
         await page.waitForFunction(
             ({ ids, initPos }) => {
                 const game = (window as any).__settlers_game__;
                 if (!game) return false;
-                // All units should have moved from their initial positions
                 return initPos.every((init: any) => {
                     const unit = game.state.getEntity(init.id);
                     return unit && (unit.x !== init.x || unit.y !== init.y);
@@ -309,7 +234,6 @@ test.describe('Unit Movement', () => {
         }
 
         // Distances should be similar (within 2 tiles of each other)
-        // Units may take slightly different paths due to formation offsets
         const maxDist = Math.max(...finalCheck!.distances);
         const minDist = Math.min(...finalCheck!.distances);
         expect(maxDist - minDist).toBeLessThan(4);
@@ -319,236 +243,119 @@ test.describe('Unit Movement', () => {
         const page = gp.page;
 
         // Spawn and move a unit to a nearby destination
-        const setup = await page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
+        const unit = await gp.spawnUnit(1);
+        expect(unit).not.toBeNull();
 
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
+        const targetX = unit!.x + 3;
+        const targetY = unit!.y;
 
-            // Spawn bearer
-            game.execute({
-                type: 'spawn_unit',
-                unitType: 1,
-                x: cx,
-                y: cy,
-                player: 0
-            });
-
-            const units = game.state.entities.filter((e: any) => e.type === 1);
-            const unit = units[units.length - 1];
-
-            // Move 3 tiles (short distance so it completes quickly)
-            const targetX = unit.x + 3;
-            const targetY = unit.y;
-
-            game.execute({
-                type: 'move_unit',
-                entityId: unit.id,
-                targetX,
-                targetY
-            });
-
-            return { unitId: unit.id, targetX, targetY };
-        });
-
-        expect(setup).not.toHaveProperty('error');
+        const ok = await gp.moveUnit(unit!.id, targetX, targetY);
+        expect(ok).toBe(true);
 
         // Wait for unit to reach destination AND become stationary
-        // (prev == entity, meaning visual transition is complete)
-        await page.waitForFunction(
-            ({ unitId, targetX, targetY }) => {
+        // Using expect.toPass() for better error messages on multi-condition check
+        await expect(async() => {
+            const state = await page.evaluate(({ unitId }) => {
                 const game = (window as any).__settlers_game__;
-                if (!game) return false;
-                const unit = game.state.getEntity(unitId);
-                const unitState = game.state.unitStates.get(unitId);
-                if (!unit || !unitState) return false;
-                // Check both position AND stationary state
-                return unit.x === targetX && unit.y === targetY &&
-                    unitState.prevX === unit.x && unitState.prevY === unit.y;
-            },
-            { unitId: setup.unitId, targetX: setup.targetX, targetY: setup.targetY },
-            { timeout: 5000 }
-        );
+                if (!game) return null;
+                const u = game.state.getEntity(unitId);
+                const us = game.state.unitStates.get(unitId);
+                return {
+                    x: u?.x, y: u?.y,
+                    pathLength: us?.path.length ?? -1,
+                    isStationary: us ? us.prevX === u?.x && us.prevY === u?.y : false
+                };
+            }, { unitId: unit!.id });
 
-        // Verify unit is at destination and path is cleared
-        const finalState = await page.evaluate(({ unitId }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-
-            const unit = game.state.getEntity(unitId);
-            const unitState = game.state.unitStates.get(unitId);
-
-            return {
-                x: unit?.x,
-                y: unit?.y,
-                pathLength: unitState?.path.length ?? 0,
-                pathIndex: unitState?.pathIndex ?? 0,
-                isStationary: unitState ? unitState.prevX === unit?.x && unitState.prevY === unit?.y : true
-            };
-        }, { unitId: setup.unitId });
-
-        expect(finalState).not.toBeNull();
-        expect(finalState!.x).toBe(setup.targetX);
-        expect(finalState!.y).toBe(setup.targetY);
-        expect(finalState!.pathLength).toBe(0);
-        expect(finalState!.isStationary).toBe(true);
+            expect(state).not.toBeNull();
+            expect(state!.x).toBe(targetX);
+            expect(state!.y).toBe(targetY);
+            expect(state!.pathLength).toBe(0);
+            expect(state!.isStationary).toBe(true);
+        }).toPass({ timeout: 5000, intervals: [100, 200, 500, 1000] });
     });
 
     test('movement command while already moving updates path correctly', async({ gp }) => {
         const page = gp.page;
 
-        // Spawn and start moving a unit
-        const setup = await page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
+        // Spawn a unit and start moving east
+        const unit = await gp.spawnUnit(1);
+        expect(unit).not.toBeNull();
 
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-
-            // Spawn bearer
-            game.execute({
-                type: 'spawn_unit',
-                unitType: 1,
-                x: cx,
-                y: cy,
-                player: 0
-            });
-
-            const units = game.state.entities.filter((e: any) => e.type === 1);
-            const unit = units[units.length - 1];
-
-            // Start moving east
-            game.execute({
-                type: 'move_unit',
-                entityId: unit.id,
-                targetX: unit.x + 10,
-                targetY: unit.y
-            });
-
-            return { unitId: unit.id, startX: unit.x, startY: unit.y };
+        await test.step('start initial movement east', async() => {
+            await gp.moveUnit(unit!.id, unit!.x + 10, unit!.y);
         });
 
-        expect(setup).not.toHaveProperty('error');
+        await test.step('wait for unit to start moving', async() => {
+            await page.waitForFunction(
+                ({ unitId, startX }) => {
+                    const game = (window as any).__settlers_game__;
+                    if (!game) return false;
+                    const u = game.state.getEntity(unitId);
+                    return u && u.x !== startX;
+                },
+                { unitId: unit!.id, startX: unit!.x },
+                { timeout: 3000 }
+            );
+        });
 
-        // Wait for unit to start moving (at least 1 tile from start)
-        await page.waitForFunction(
-            ({ unitId, startX }) => {
+        // Capture position before redirect
+        const posBeforeRedirect = (await gp.getEntities({ type: 1 }))[0];
+
+        await test.step('redirect south and verify', async() => {
+            // Issue new command to move south instead
+            const newTargetY = unit!.y + 5;
+            await gp.moveUnit(unit!.id, posBeforeRedirect.x, newTargetY);
+
+            // Verify new path was set
+            const redirect = await page.evaluate(({ unitId }) => {
                 const game = (window as any).__settlers_game__;
-                if (!game) return false;
-                const unit = game.state.getEntity(unitId);
-                return unit && unit.x !== startX;
-            },
-            { unitId: setup.unitId, startX: setup.startX },
-            { timeout: 3000 }
-        );
+                if (!game) return null;
+                const us = game.state.unitStates.get(unitId);
+                return {
+                    newPathLength: us?.path.length ?? 0,
+                    moveProgress: us?.moveProgress
+                };
+            }, { unitId: unit!.id });
 
-        // Issue new command to move in different direction
-        const redirect = await page.evaluate(({ unitId, startY }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
+            expect(redirect).not.toBeNull();
+            expect(redirect!.newPathLength).toBeGreaterThan(0);
+            expect(redirect!.moveProgress).toBeGreaterThanOrEqual(0);
+        });
 
-            const unit = game.state.getEntity(unitId);
-            if (!unit) return { error: 'unit not found' };
+        await test.step('wait for unit to move south', async() => {
+            // Wait for unit to move in new direction (Y should increase)
+            await page.waitForFunction(
+                ({ unitId, prevY }) => {
+                    const game = (window as any).__settlers_game__;
+                    if (!game) return false;
+                    const u = game.state.getEntity(unitId);
+                    return u && u.y > prevY;
+                },
+                { unitId: unit!.id, prevY: posBeforeRedirect.y },
+                { timeout: 3000 }
+            );
 
-            const posBeforeRedirect = { x: unit.x, y: unit.y };
-
-            // Redirect to move south instead
-            const newTargetY = startY + 5;
-            game.execute({
-                type: 'move_unit',
-                entityId: unitId,
-                targetX: unit.x, // Keep same X
-                targetY: newTargetY
-            });
-
-            const unitState = game.state.unitStates.get(unitId);
-
-            return {
-                posBeforeRedirect,
-                newTargetY,
-                newPathLength: unitState?.path.length ?? 0,
-                moveProgress: unitState?.moveProgress
-            };
-        }, { unitId: setup.unitId, startY: setup.startY });
-
-        expect(redirect).not.toHaveProperty('error');
-        expect(redirect.newPathLength).toBeGreaterThan(0);
-        // Progress is preserved during redirect, not reset
-        expect(redirect.moveProgress).toBeGreaterThanOrEqual(0);
-        expect(redirect.posBeforeRedirect).toBeDefined();
-
-        const posBeforeRedirect = redirect.posBeforeRedirect!;
-
-        // Wait for unit to move in new direction (Y should increase)
-        await page.waitForFunction(
-            ({ unitId, prevY }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return false;
-                const unit = game.state.getEntity(unitId);
-                return unit && unit.y > prevY;
-            },
-            { unitId: setup.unitId, prevY: posBeforeRedirect.y },
-            { timeout: 3000 }
-        );
-
-        // Verify unit has moved south
-        const checkDirection = await page.evaluate(({ unitId, prevPos }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-
-            const unit = game.state.getEntity(unitId);
-            if (!unit) return null;
-
-            return {
-                currentX: unit.x,
-                currentY: unit.y,
-                movedSouth: unit.y > prevPos.y
-            };
-        }, { unitId: setup.unitId, prevPos: posBeforeRedirect });
-
-        expect(checkDirection).not.toBeNull();
-        expect(checkDirection!.movedSouth).toBe(true);
+            // Verify unit has moved south
+            const finalUnit = (await gp.getEntities({ type: 1 }))
+                .find(e => e.id === unit!.id);
+            expect(finalUnit).toBeDefined();
+            expect(finalUnit!.y).toBeGreaterThan(posBeforeRedirect.y);
+        });
     });
 
     test('debug stats show moving units count', async({ gp }) => {
         const page = gp.page;
 
         // Initially no units moving
+        await expect(gp).toHaveEntityCount(0);
         let unitsMoving = await gp.getDebugField('unitsMoving');
         expect(unitsMoving).toBe(0);
 
-        // Spawn and move a unit
-        await page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return;
-
-            const w = game.mapSize.width;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(game.mapSize.height / 2);
-
-            game.execute({
-                type: 'spawn_unit',
-                unitType: 1,
-                x: cx,
-                y: cy,
-                player: 0
-            });
-
-            const units = game.state.entities.filter((e: any) => e.type === 1);
-            const unit = units[units.length - 1];
-
-            game.execute({
-                type: 'move_unit',
-                entityId: unit.id,
-                targetX: unit.x + 5,
-                targetY: unit.y
-            });
-        });
+        // Spawn and move a unit using helpers
+        const unit = await gp.spawnUnit(1);
+        expect(unit).not.toBeNull();
+        await gp.moveUnit(unit!.id, unit!.x + 5, unit!.y);
 
         // Wait for tick to process
         await gp.waitForFrames(3);
