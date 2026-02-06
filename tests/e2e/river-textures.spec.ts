@@ -17,7 +17,9 @@ import { GamePage } from './game-page';
  */
 
 test.describe('River Textures', () => {
-    test('cycle through all 48 river configurations with real textures', async ({ page }) => {
+    // This test cycles through 48 configurations and takes screenshots - needs longer timeout
+    test('cycle through all 48 river configurations with real textures', async({ page }) => {
+        test.setTimeout(180000); // 3 minutes for 48 screenshots
         const gp = new GamePage(page);
 
         // Load WITHOUT testMap flag to use real textures
@@ -98,7 +100,7 @@ test.describe('River Textures', () => {
         }
     });
 
-    test('river area renders without errors', async ({ page }) => {
+    test('river area renders without errors', async({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 

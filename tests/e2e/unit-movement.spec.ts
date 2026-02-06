@@ -83,32 +83,23 @@ test.describe('Unit Movement', () => {
         expect(stateAfter.pathLength).toBeGreaterThan(0);
         expect(stateAfter.pathIndex).toBe(0);
 
-        // Wait enough time for movement to start (speed=2 means 0.5s per tile)
-        await page.waitForTimeout(600);
+        // Wait for unit to actually move using polling (more reliable than fixed timeout)
+        // speed=2 means 0.5s per tile, but with game loop timing variance, poll for up to 2s
+        const moved = await page.waitForFunction(
+            ({ unitId, startX, startY }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return false;
 
-        // Check that unit has started moving (entity position changed)
-        const positionCheck = await page.evaluate(({ unitId, startX, startY }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
+                const unit = game.state.getEntity(unitId);
+                if (!unit) return false;
 
-            const unit = game.state.getEntity(unitId);
-            if (!unit) return null;
+                return unit.x !== startX || unit.y !== startY;
+            },
+            { unitId: moveResult.unitId, startX: moveResult.startX, startY: moveResult.startY },
+            { timeout: 3000, polling: 100 }
+        );
 
-            const unitState = game.state.unitStates.get(unitId);
-
-            return {
-                currentX: unit.x,
-                currentY: unit.y,
-                prevX: unitState?.prevX,
-                prevY: unitState?.prevY,
-                pathIndex: unitState?.pathIndex,
-                moved: unit.x !== startX || unit.y !== startY
-            };
-        }, { unitId: moveResult.unitId, startX: moveResult.startX, startY: moveResult.startY });
-
-        expect(positionCheck).not.toBeNull();
-        // After a few frames, the unit should have moved at least one tile
-        expect(positionCheck!.moved).toBe(true);
+        expect(moved).toBeTruthy();
     });
 
     test('unit movement is smooth (interpolation works)', async({ page }) => {

@@ -8,7 +8,7 @@ import { GamePage } from './game-page';
  */
 
 test.describe('App Loading and Structure', () => {
-    test('app loads without JavaScript errors', async ({ page }) => {
+    test('app loads without JavaScript errors', async({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 
@@ -18,7 +18,7 @@ test.describe('App Loading and Structure', () => {
         checkErrors();
     });
 
-    test('navigation bar has all required links', async ({ page }) => {
+    test('navigation bar has all required links', async({ page }) => {
         await page.goto('/');
 
         const nav = page.locator('#nav');
@@ -33,33 +33,47 @@ test.describe('App Loading and Structure', () => {
 });
 
 test.describe('Map View Page', () => {
-    test('map view page renders with file browser', async ({ page }) => {
+    test('map view page renders with map selector', async({ page }) => {
         await page.goto('/map-view');
 
-        await expect(page.locator('text=Debug Grid')).toBeVisible();
-        await expect(page.locator('input[type="checkbox"]')).toBeVisible();
+        // Map selector label should be visible
+        await expect(page.locator('text=Map:')).toBeVisible();
+        // Canvas should be present
+        await expect(page.locator('canvas')).toBeVisible();
     });
 
-    test('debug grid checkbox is toggleable', async ({ page }) => {
-        await page.goto('/map-view');
+    test('debug panel can be expanded and checkbox toggled', async({ page }) => {
+        const gp = new GamePage(page);
+        await gp.goto({ testMap: true });
+        await gp.waitForGameUi(15_000);
 
-        const checkbox = page.locator('input[type="checkbox"]');
-        await expect(checkbox).not.toBeChecked();
+        // Debug panel toggle should be visible
+        const debugToggle = page.locator('.debug-toggle-btn');
+        await expect(debugToggle).toBeVisible();
 
-        await checkbox.check();
-        await expect(checkbox).toBeChecked();
+        // Click to expand the debug panel
+        await debugToggle.click();
 
-        await checkbox.uncheck();
-        await expect(checkbox).not.toBeChecked();
+        // Wait for the debug panel content to appear
+        await expect(page.locator('.debug-sections')).toBeVisible();
+
+        // The Debug grid checkbox should be visible (Controls section is expanded by default)
+        const checkbox = page.locator('label:has-text("Debug grid") input[type="checkbox"]');
+        await expect(checkbox).toBeVisible({ timeout: 5000 });
+
+        // Toggle it
+        const wasChecked = await checkbox.isChecked();
+        await checkbox.click();
+        await expect(checkbox).toBeChecked({ checked: !wasChecked });
     });
 
-    test('canvas element exists for rendering', async ({ page }) => {
+    test('canvas element exists for rendering', async({ page }) => {
         const gp = new GamePage(page);
         await page.goto('/map-view');
         await gp.expectCanvasVisible();
     });
 
-    test('game UI panel appears when test map is loaded', async ({ page }) => {
+    test('game UI panel appears when test map is loaded', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForGameUi(15_000);
@@ -67,25 +81,25 @@ test.describe('Map View Page', () => {
 });
 
 test.describe('Route Navigation', () => {
-    test('navigating between routes preserves app state', async ({ page }) => {
+    test('navigating between routes preserves app state', async({ page }) => {
         await page.goto('/');
 
         await page.click('a[href="/map-view"]');
         await expect(page).toHaveURL(/map-view/);
-        await expect(page.locator('text=Debug Grid')).toBeVisible();
+        await expect(page.locator('text=Map:')).toBeVisible();
 
         await page.click('a[href="/logging-view"]');
         await expect(page).toHaveURL(/logging-view/);
 
         await page.click('a[href="/map-view"]');
         await expect(page).toHaveURL(/map-view/);
-        await expect(page.locator('text=Debug Grid')).toBeVisible();
+        await expect(page.locator('text=Map:')).toBeVisible();
     });
 
-    test('direct URL navigation works for all routes', async ({ page }) => {
+    test('direct URL navigation works for all routes', async({ page }) => {
         const routes = [
             { path: '/', selector: '#nav' },
-            { path: '/map-view', selector: 'text=Debug Grid' },
+            { path: '/map-view', selector: 'text=Map:' },
             { path: '/logging-view', selector: '#nav' }
         ];
 
@@ -97,7 +111,7 @@ test.describe('Route Navigation', () => {
 });
 
 test.describe('Canvas Interaction', () => {
-    test('canvas responds to mouse wheel events', async ({ page }) => {
+    test('canvas responds to mouse wheel events', async({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 
@@ -110,7 +124,7 @@ test.describe('Canvas Interaction', () => {
         checkErrors();
     });
 
-    test('canvas handles click events without errors', async ({ page }) => {
+    test('canvas handles click events without errors', async({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 
@@ -123,7 +137,7 @@ test.describe('Canvas Interaction', () => {
         checkErrors();
     });
 
-    test('canvas handles right-click without showing context menu', async ({ page }) => {
+    test('canvas handles right-click without showing context menu', async({ page }) => {
         const gp = new GamePage(page);
         await page.goto('/map-view');
         await gp.expectCanvasVisible();

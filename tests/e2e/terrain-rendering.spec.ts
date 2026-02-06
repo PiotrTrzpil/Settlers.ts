@@ -14,7 +14,7 @@ import { GamePage } from './game-page';
  */
 
 test.describe('Terrain Rendering', () => {
-    test('renders all terrain types and matches baseline screenshot', async ({ page }) => {
+    test('renders all terrain types and matches baseline screenshot', async({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 
@@ -34,17 +34,19 @@ test.describe('Terrain Rendering', () => {
         checkErrors();
     });
 
-    test('terrain map info shows synthetic label', async ({ page }) => {
+    test('test map is loaded via debug bridge', async({ page }) => {
         const gp = new GamePage(page);
 
         await gp.goto({ testMap: true });
         await gp.waitForReady();
 
-        const mapInfo = page.locator('.map-info-pre');
-        await expect(mapInfo).toContainText('Test map');
+        // Verify the game is loaded via debug bridge
+        const debug = await gp.getDebug();
+        expect(debug.gameLoaded).toBe(true);
+        expect(debug.rendererReady).toBe(true);
     });
 
-    test('entity count starts at zero on fresh test map', async ({ page }) => {
+    test('entity count starts at zero on fresh test map', async({ page }) => {
         const gp = new GamePage(page);
 
         await gp.goto({ testMap: true });
@@ -58,7 +60,7 @@ test.describe('Terrain Rendering', () => {
         expect(count).toBe(0);
     });
 
-    test('mode defaults to select', async ({ page }) => {
+    test('mode defaults to select', async({ page }) => {
         const gp = new GamePage(page);
 
         await gp.goto({ testMap: true });
