@@ -250,10 +250,41 @@ await page.waitForFunction(predicate, args);
 The `GamePage` helpers (`waitForReady`, `waitForFrames`, `waitForEntityCountAbove`)
 all have sensible default timeouts (5–20s) that are capped by the global test timeout.
 
-### Resetting game state between tests
+### Shared test map fixture (faster tests)
+
+Most e2e tests load the same `?testMap=true` page. To avoid repeating that
+expensive navigation for every test, use the shared fixture from `tests/e2e/fixtures.ts`:
+
+```typescript
+// Import from fixtures instead of @playwright/test
+import { test, expect } from './fixtures';
+
+test('my test', async ({ gp }) => {
+    // gp is a GamePage with testMap already loaded and state reset
+    // No need to call goto() or waitForReady()
+    await gp.spawnBearer();
+    await gp.waitForEntityCountAbove(0);
+    // ...
+});
+```
+
+The `gp` fixture:
+- Loads the test map **once per worker** (not per test)
+- Calls `resetGameState()` before each test (removes entities, resets mode)
+- Provides a `GamePage` ready for immediate use
+
+**When NOT to use the shared fixture:**
+- Screenshot regression tests (need pixel-perfect fresh state)
+- Tests that need a non-testMap page (sprite browser, real assets)
+- Tests that intentionally corrupt page state (navigation tests)
+
+For those, import from `@playwright/test` and manage the page yourself.
+
+### Resetting game state
 
 `GamePage.resetGameState()` removes all entities and resets mode to 'select'.
-Use this in `beforeEach` when tests share a page to avoid state leaking:
+This is called automatically by the `gp` fixture, but you can also use it
+manually in `beforeEach` when sharing a page without the fixture:
 
 ```typescript
 test.describe('Feature', () => {
