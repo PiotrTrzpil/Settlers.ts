@@ -1,6 +1,8 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
 import { EntityTextureAtlas } from './entity-texture-atlas';
+import { processBatchedWithHandler } from './batch-loader';
+import { debugStats } from '@/game/debug-stats';
 import {
     SpriteMetadataRegistry,
     SpriteEntry,
@@ -17,10 +19,21 @@ import {
     SETTLER_FILE_NUMBERS,
 } from './sprite-metadata';
 import { SpriteLoader } from './sprite-loader';
+import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
 import { BuildingType, MapObjectType, UnitType } from '../entity';
 import { ANIMATION_DEFAULTS, AnimationData } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy/material-type';
+
+/** Simple timer for measuring phases */
+function createTimer() {
+    const start = performance.now();
+    let last = start;
+    return {
+        lap: () => { const now = performance.now(); const elapsed = Math.round(now - last); last = now; return elapsed },
+        total: () => Math.round(performance.now() - start),
+    };
+}
 
 /**
  * Consolidated building render data - all sprites needed for a building type in one lookup.
@@ -263,11 +276,12 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Full cleanup including sprite loader cache.
+     * Full cleanup including sprite loader cache and worker pool.
      */
     public destroy(): void {
         this.cleanup();
         this.spriteLoader.clearCache();
+        destroyDecoderPool();
         SpriteRenderManager.log.debug('SpriteRenderManager resources cleaned up');
     }
 
@@ -275,72 +289,93 @@ export class SpriteRenderManager {
      * Load sprites for a specific race.
      */
     private async loadSpritesForRace(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
-        const totalStart = performance.now();
+        const t = createTimer();
         const spriteMap = getBuildingSpriteMap(race);
 
         // Determine which GFX files we need
-        const requiredFiles = new Set<number>();
+        const buildingFiles = new Set<number>();
         for (const info of Object.values(spriteMap)) {
-            if (info) requiredFiles.add(info.file);
+            if (info) buildingFiles.add(info.file);
         }
 
-        if (requiredFiles.size === 0) {
+        if (buildingFiles.size === 0) {
             SpriteRenderManager.log.debug('No building sprites configured');
             return false;
         }
 
-        // Create atlas and registry - 16384 needed to fit buildings, map objects, resources, and units (4 dirs each)
-        const atlas = new EntityTextureAtlas(16384, this.textureUnit);
+        // Collect ALL file IDs and preload in parallel
+        const allFileIds = [
+            ...Array.from(buildingFiles).map(String),
+            `${GFX_FILE_NUMBERS.MAP_OBJECTS}`,
+            `${GFX_FILE_NUMBERS.RESOURCES}`,
+            `${SETTLER_FILE_NUMBERS[race]}`,
+        ];
+
+        // Warm up decoder workers in parallel with file loading
+        // This ensures workers are ready before sprite decoding starts
+        await Promise.all([
+            ...allFileIds.map(id => this.spriteLoader.loadFileSet(id)),
+            warmUpDecoderPool(),
+        ]);
+        const filePreload = t.lap();
+
+        const atlas = new EntityTextureAtlas(8192, this.textureUnit);
+        const atlasAlloc = t.lap();
+
         const registry = new SpriteMetadataRegistry();
 
+        // Load all sprite categories
         let loadedAny = false;
-
-        const buildingStart = performance.now();
-        for (const fileNum of requiredFiles) {
-            const loaded = await this.loadSpritesFromFile(fileNum, atlas, registry, spriteMap);
-            if (loaded) loadedAny = true;
+        for (const fileNum of buildingFiles) {
+            if (await this.loadBuildingSprites(fileNum, atlas, registry, spriteMap)) {
+                loadedAny = true;
+            }
         }
-        SpriteRenderManager.log.debug(`Buildings: ${Math.round(performance.now() - buildingStart)}ms`);
+        const buildings = t.lap();
 
-        if (!loadedAny) {
-            SpriteRenderManager.log.debug('No building sprite files found');
-        }
-
-        // Also load map object sprites (trees, stones)
-        const mapStart = performance.now();
         const mapObjectsLoaded = await this.loadMapObjectSprites(atlas, registry);
-        SpriteRenderManager.log.debug(`Map objects: ${Math.round(performance.now() - mapStart)}ms (${registry.getMapObjectCount()} loaded)`);
+        const mapObjects = t.lap();
 
-        // Also load resource sprites (logs, planks, goods)
-        const resStart = performance.now();
         const resourcesLoaded = await this.loadResourceSprites(atlas, registry);
-        SpriteRenderManager.log.debug(`Resources: ${Math.round(performance.now() - resStart)}ms (${registry.getResourceCount()} loaded)`);
+        const resources = t.lap();
 
-        // Also load unit sprites (settlers, soldiers)
-        const unitStart = performance.now();
         const unitsLoaded = await this.loadUnitSprites(race, atlas, registry);
-        SpriteRenderManager.log.debug(`Units: ${Math.round(performance.now() - unitStart)}ms (${registry.getUnitCount()} loaded)`);
+        const units = t.lap();
 
         if (!loadedAny && !mapObjectsLoaded && !resourcesLoaded && !unitsLoaded) {
-            SpriteRenderManager.log.debug('No sprite files found, using color fallback');
             return false;
         }
 
-        // Upload atlas to GPU
-        const uploadStart = performance.now();
         atlas.load(gl);
-        SpriteRenderManager.log.debug(`Atlas upload: ${Math.round(performance.now() - uploadStart)}ms`);
+        const gpuUpload = t.lap();
+
         this._spriteAtlas = atlas;
         this._spriteRegistry = registry;
 
-        SpriteRenderManager.log.debug(`=== Sprite loading total: ${Math.round(performance.now() - totalStart)}ms ===`);
-        return registry.hasBuildingSprites() || registry.hasMapObjectSprites() || registry.hasResourceSprites() || registry.hasUnitSprites();
+        // Record timings to debug stats
+        const lt = debugStats.state.loadTimings;
+        Object.assign(lt, {
+            filePreload, atlasAlloc, buildings, mapObjects, resources, units, gpuUpload,
+            totalSprites: t.total(),
+            atlasSize: `${atlas.width}x${atlas.height}`,
+            spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
+                         registry.getResourceCount() + registry.getUnitCount(),
+        });
+
+        SpriteRenderManager.log.debug(
+            `Sprite loading (ms): preload=${filePreload}, buildings=${buildings}, ` +
+            `mapObj=${mapObjects}, resources=${resources}, units=${units}, ` +
+            `gpu=${gpuUpload}, TOTAL=${t.total()}, workers=${getDecoderPool().getDecodeCount()}`
+        );
+
+        return registry.hasBuildingSprites() || registry.hasMapObjectSprites() ||
+               registry.hasResourceSprites() || registry.hasUnitSprites();
     }
 
     /**
-     * Load sprites from a single GFX file set.
+     * Load building sprites from a GFX file set.
      */
-    private async loadSpritesFromFile(
+    private async loadBuildingSprites(
         fileNum: number,
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry,
@@ -360,77 +395,88 @@ export class SpriteRenderManager {
         }
 
         try {
+            // Collect building info for this file
+            const buildingInfos: Array<{ buildingType: BuildingType; jobIndex: number }> = [];
+
             for (const [typeStr, info] of Object.entries(spriteMap)) {
                 if (!info || info.file !== fileNum) continue;
+                buildingInfos.push({
+                    buildingType: Number(typeStr) as BuildingType,
+                    jobIndex: info.index,
+                });
+            }
 
-                const buildingType = Number(typeStr) as BuildingType;
-                const jobIndex = info.index;
-
-                // Load construction sprite (D0) - single frame
-                const constructionSprite = this.spriteLoader.loadJobSprite(
-                    fileSet,
-                    { jobIndex, directionIndex: BUILDING_DIRECTION.CONSTRUCTION },
-                    atlas
-                );
-
-                // Check if completed state has multiple frames (animation)
-                const completedFrameCount = this.spriteLoader.getFrameCount(
-                    fileSet,
-                    jobIndex,
-                    BUILDING_DIRECTION.COMPLETED
-                );
-
-                let completedSprite = null;
-
-                if (completedFrameCount > 1) {
-                    // Load as animation
-                    const animation = this.spriteLoader.loadJobAnimation(
+            // Process buildings in batches with yielding
+            await processBatchedWithHandler(
+                buildingInfos,
+                async({ buildingType, jobIndex }) => {
+                    // Load construction sprite (D0)
+                    const constructionSprite = await this.spriteLoader.loadJobSprite(
                         fileSet,
-                        jobIndex,
-                        BUILDING_DIRECTION.COMPLETED,
+                        { jobIndex, directionIndex: BUILDING_DIRECTION.CONSTRUCTION },
                         atlas
                     );
 
-                    if (animation && animation.frames.length > 0) {
-                        // Register animated building
-                        const frames = animation.frames.map(f => f.entry);
+                    // Check if completed state has multiple frames (animation)
+                    const completedFrameCount = this.spriteLoader.getFrameCount(
+                        fileSet,
+                        jobIndex,
+                        BUILDING_DIRECTION.COMPLETED
+                    );
+
+                    let completedSprite = null;
+                    let animationFrames: SpriteEntry[] | null = null;
+
+                    if (completedFrameCount > 1) {
+                        // Load as animation
+                        const animation = await this.spriteLoader.loadJobAnimation(
+                            fileSet,
+                            jobIndex,
+                            BUILDING_DIRECTION.COMPLETED,
+                            atlas
+                        );
+
+                        if (animation && animation.frames.length > 0) {
+                            animationFrames = animation.frames.map(f => f.entry);
+                            completedSprite = animation.frames[0];
+                        }
+                    } else {
+                        // Load single frame
+                        completedSprite = await this.spriteLoader.loadJobSprite(
+                            fileSet,
+                            { jobIndex, directionIndex: BUILDING_DIRECTION.COMPLETED },
+                            atlas
+                        );
+                    }
+
+                    return { buildingType, jobIndex, constructionSprite, completedSprite, animationFrames };
+                },
+                ({ buildingType, jobIndex, constructionSprite, completedSprite, animationFrames }) => {
+                    if (!constructionSprite && !completedSprite) {
+                        SpriteRenderManager.log.debug(
+                            `Failed to load any sprite for building ${BuildingType[buildingType]} (job ${jobIndex})`
+                        );
+                        return;
+                    }
+
+                    if (animationFrames) {
                         registry.registerAnimatedBuilding(
                             buildingType,
-                            frames,
+                            animationFrames,
                             BUILDING_DIRECTION.COMPLETED,
                             ANIMATION_DEFAULTS.FRAME_DURATION_MS,
                             true // loop
                         );
-                        completedSprite = animation.frames[0];
-
-                        SpriteRenderManager.log.debug(
-                            `Loaded ${animation.frameCount} animation frames for building ${BuildingType[buildingType]}`
-                        );
                     }
-                } else {
-                    // Load single frame
-                    completedSprite = this.spriteLoader.loadJobSprite(
-                        fileSet,
-                        { jobIndex, directionIndex: BUILDING_DIRECTION.COMPLETED },
-                        atlas
+
+                    registry.registerBuilding(
+                        buildingType,
+                        constructionSprite?.entry ?? null,
+                        completedSprite?.entry ?? null
                     );
                 }
+            );
 
-                if (!constructionSprite && !completedSprite) {
-                    SpriteRenderManager.log.debug(
-                        `Failed to load any sprite for building ${BuildingType[buildingType]} (job ${jobIndex})`
-                    );
-                    continue;
-                }
-
-                registry.registerBuilding(
-                    buildingType,
-                    constructionSprite?.entry ?? null,
-                    completedSprite?.entry ?? null
-                );
-            }
-
-            SpriteRenderManager.log.debug(`Loaded sprites from file ${fileNum}.gfx`);
             return true;
         } catch (e) {
             SpriteRenderManager.log.error(`Failed to load GFX file ${fileNum}: ${e}`);
@@ -439,200 +485,90 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Load map object sprites (trees, stones, etc.).
+     * Load map object sprites.
      */
     private async loadMapObjectSprites(
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry
     ): Promise<boolean> {
-        const spriteMap = getMapObjectSpriteMap();
-        const fileNum = GFX_FILE_NUMBERS.MAP_OBJECTS;
-        const fileId = `${fileNum}`;
+        const fileSet = await this.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.MAP_OBJECTS}`);
+        if (!fileSet) return false;
 
-        const fileSet = await this.spriteLoader.loadFileSet(fileId);
-        if (!fileSet) {
-            SpriteRenderManager.log.debug(`Map object GFX file ${fileNum} not available`);
-            return false;
-        }
-
-        try {
-            let loadedCount = 0;
-
-            for (const [typeStr, info] of Object.entries(spriteMap)) {
-                if (!info) continue;
-
-                const objectType = Number(typeStr) as MapObjectType;
-                const spriteIndex = info.index;
-                const paletteIndex = info.paletteIndex ?? 0;
-
-                const loadedSprite = this.spriteLoader.loadDirectSprite(
-                    fileSet,
-                    spriteIndex,
-                    paletteIndex,
-                    atlas
-                );
-
-                if (!loadedSprite) {
-                    SpriteRenderManager.log.debug(
-                        `Failed to load sprite for map object ${MapObjectType[objectType]} (index ${spriteIndex})`
-                    );
-                    continue;
-                }
-
-                registry.registerMapObject(objectType, loadedSprite.entry);
-                loadedCount++;
-            }
-
-            if (loadedCount > 0) {
-                SpriteRenderManager.log.debug(`Loaded ${loadedCount} map object sprites from file ${fileNum}.gfx`);
-                return true;
-            }
-
-            return false;
-        } catch (e) {
-            SpriteRenderManager.log.error(`Failed to load map object sprites: ${e}`);
-            return false;
-        }
+        return this.loadSpritesFromMap(
+            getMapObjectSpriteMap(),
+            (type, info) => [{ type, index: info.index, palette: info.paletteIndex ?? 0 }],
+            ({ index, palette }) => this.spriteLoader.loadDirectSprite(fileSet, index, palette, atlas),
+            ({ type }, sprite) => registry.registerMapObject(type, sprite.entry)
+        );
     }
 
     /**
-     * Load resource sprites (dropped goods like logs, planks, etc.).
-     * Resources are stored in file 3.gfx and use JIL job indices.
+     * Load resource sprites.
      */
     private async loadResourceSprites(
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry
     ): Promise<boolean> {
-        const spriteMap = getResourceSpriteMap();
-        const fileNum = GFX_FILE_NUMBERS.RESOURCES;
-        const fileId = `${fileNum}`;
+        const fileSet = await this.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.RESOURCES}`);
+        if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
 
-        const fileSet = await this.spriteLoader.loadFileSet(fileId);
-        if (!fileSet) {
-            SpriteRenderManager.log.debug(`Resource GFX file ${fileNum} not available`);
-            return false;
-        }
-
-        if (!fileSet.jilReader || !fileSet.dilReader) {
-            SpriteRenderManager.log.debug(`JIL/DIL files not available for resources in ${fileNum}`);
-            return false;
-        }
-
-        try {
-            let loadedCount = 0;
-
-            for (const [typeStr, info] of Object.entries(spriteMap)) {
-                if (!info) continue;
-
-                const materialType = Number(typeStr) as EMaterialType;
-                const jobIndex = info.index;
-
-                // Load resource sprite using job index (direction 0, frame 0)
-                // Resources typically have a single direction with multiple frames for stack sizes
-                const loadedSprite = this.spriteLoader.loadJobSprite(
-                    fileSet,
-                    { jobIndex, directionIndex: 0, frameIndex: 0 },
-                    atlas
-                );
-
-                if (!loadedSprite) {
-                    SpriteRenderManager.log.debug(
-                        `Failed to load sprite for resource ${EMaterialType[materialType]} (job ${jobIndex})`
-                    );
-                    continue;
-                }
-
-                registry.registerResource(materialType, loadedSprite.entry);
-                loadedCount++;
-            }
-
-            if (loadedCount > 0) {
-                SpriteRenderManager.log.debug(`Loaded ${loadedCount} resource sprites from file ${fileNum}.gfx`);
-                return true;
-            }
-
-            return false;
-        } catch (e) {
-            SpriteRenderManager.log.error(`Failed to load resource sprites: ${e}`);
-            return false;
-        }
+        return this.loadSpritesFromMap(
+            getResourceSpriteMap(),
+            (type, info) => [{ type, jobIndex: info.index }],
+            ({ jobIndex }) => this.spriteLoader.loadJobSprite(
+                fileSet, { jobIndex, directionIndex: 0, frameIndex: 0 }, atlas
+            ),
+            ({ type }, sprite) => registry.registerResource(type, sprite.entry)
+        );
     }
 
     /**
-     * Load unit sprites (settlers, soldiers, etc.).
-     * Units are stored in race-specific files (20-24.gfx) and use JIL job indices.
-     * Loads all 4 directions for each unit type.
+     * Load unit sprites (all 4 directions per unit).
      */
     private async loadUnitSprites(
         race: Race,
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry
     ): Promise<boolean> {
-        const spriteMap = getUnitSpriteMap(race);
-        const fileNum = SETTLER_FILE_NUMBERS[race];
-        const fileId = `${fileNum}`;
+        const fileSet = await this.spriteLoader.loadFileSet(`${SETTLER_FILE_NUMBERS[race]}`);
+        if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
 
-        const fileSet = await this.spriteLoader.loadFileSet(fileId);
-        if (!fileSet) {
-            SpriteRenderManager.log.debug(`Unit GFX file ${fileNum} not available`);
-            return false;
-        }
-
-        if (!fileSet.jilReader || !fileSet.dilReader) {
-            SpriteRenderManager.log.debug(`JIL/DIL files not available for units in ${fileNum}`);
-            return false;
-        }
-
-        // Unit directions: D0=right, D1=right+down, D2=left+down, D3=left
-        const UNIT_DIRECTIONS = [
-            UNIT_DIRECTION.RIGHT,
-            UNIT_DIRECTION.RIGHT_BOTTOM,
-            UNIT_DIRECTION.LEFT_BOTTOM,
-            UNIT_DIRECTION.LEFT,
+        const DIRECTIONS = [
+            UNIT_DIRECTION.RIGHT, UNIT_DIRECTION.RIGHT_BOTTOM,
+            UNIT_DIRECTION.LEFT_BOTTOM, UNIT_DIRECTION.LEFT,
         ];
 
-        try {
-            let loadedCount = 0;
+        return this.loadSpritesFromMap(
+            getUnitSpriteMap(race),
+            (type, info) => DIRECTIONS.map(dir => ({ type, dir, jobIndex: info.index })),
+            ({ dir, jobIndex }) => this.spriteLoader.loadJobSprite(
+                fileSet, { jobIndex, directionIndex: dir, frameIndex: 0 }, atlas
+            ),
+            ({ type, dir }, sprite) => registry.registerUnit(type, dir, sprite.entry)
+        );
+    }
 
-            for (const [typeStr, info] of Object.entries(spriteMap)) {
-                if (!info) continue;
-
-                const unitType = Number(typeStr) as UnitType;
-                const jobIndex = info.index;
-                let unitLoadedAny = false;
-
-                // Load all 4 directions for this unit type
-                for (const direction of UNIT_DIRECTIONS) {
-                    const loadedSprite = this.spriteLoader.loadJobSprite(
-                        fileSet,
-                        { jobIndex, directionIndex: direction, frameIndex: 0 },
-                        atlas
-                    );
-
-                    if (loadedSprite) {
-                        registry.registerUnit(unitType, direction, loadedSprite.entry);
-                        unitLoadedAny = true;
-                    }
-                }
-
-                if (!unitLoadedAny) {
-                    SpriteRenderManager.log.debug(
-                        `Failed to load any sprites for unit ${UnitType[unitType]} (job ${jobIndex})`
-                    );
-                } else {
-                    loadedCount++;
-                }
-            }
-
-            if (loadedCount > 0) {
-                SpriteRenderManager.log.debug(`Loaded ${loadedCount} unit types (4 directions each) from file ${fileNum}.gfx`);
-                return true;
-            }
-
-            return false;
-        } catch (e) {
-            SpriteRenderManager.log.error(`Failed to load unit sprites: ${e}`);
-            return false;
+    /**
+     * Generic sprite loading helper.
+     * Collects tasks from sprite map, loads in batches, registers results.
+     */
+    private async loadSpritesFromMap<K extends number, I, T extends { type: K }, R>(
+        spriteMap: Partial<Record<K, I>>,
+        expandTasks: (type: K, info: I) => T[],
+        load: (task: T) => Promise<R | null>,
+        register: (task: T, result: R) => void
+    ): Promise<boolean> {
+        const tasks: T[] = [];
+        for (const [typeStr, info] of Object.entries(spriteMap) as [string, I][]) {
+            if (info) tasks.push(...expandTasks(Number(typeStr) as K, info));
         }
+
+        let count = 0;
+        await processBatchedWithHandler(
+            tasks,
+            load,
+            (result, task) => { if (result) { register(task, result); count++ } }
+        );
+        return count > 0;
     }
 }
