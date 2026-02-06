@@ -127,15 +127,15 @@ export class GamePage {
         await this.clickButton(testId);
     }
 
-    async spawnSettler(): Promise<void> {
+    async spawnBearer(): Promise<void> {
         // Switch to Units tab first
         await this.page.locator('.tab-btn', { hasText: 'Units' }).click();
-        await this.clickButton('btn-spawn-settler');
+        await this.clickButton('btn-spawn-bearer');
     }
 
-    async spawnSoldier(): Promise<void> {
+    async spawnSwordsman(): Promise<void> {
         await this.page.locator('.tab-btn', { hasText: 'Units' }).click();
-        await this.clickButton('btn-spawn-soldier');
+        await this.clickButton('btn-spawn-swordsman');
     }
 
     async pause(): Promise<void> {

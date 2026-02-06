@@ -113,16 +113,15 @@ export enum BuildingType {
 }
 
 export enum UnitType {
-    Settler = 0,
-    Soldier = 1,
-    Bearer = 2,
-    Swordsman = 3,
-    Bowman = 4,
-    Pikeman = 5,
-    Priest = 6,
-    Pioneer = 7,
-    Thief = 8,
-    Geologist = 9,
+    Bearer = 0,
+    Builder = 1,
+    Swordsman = 2,
+    Bowman = 3,
+    Pikeman = 4,
+    Priest = 5,
+    Pioneer = 6,
+    Thief = 7,
+    Geologist = 8,
 }
 
 /**
@@ -148,9 +147,8 @@ export interface UnitTypeConfig {
  * 3. Optionally add it to BUILDING_SPAWN_ON_COMPLETE if a building produces it
  */
 export const UNIT_TYPE_CONFIG: Record<UnitType, UnitTypeConfig> = {
-    [UnitType.Settler]: { name: 'Settler', speed: 2, selectable: false, military: false },
-    [UnitType.Soldier]: { name: 'Soldier', speed: 2.5, selectable: true, military: true },
     [UnitType.Bearer]: { name: 'Bearer', speed: 2, selectable: false, military: false },
+    [UnitType.Builder]: { name: 'Builder', speed: 2, selectable: true, military: false },
     [UnitType.Swordsman]: { name: 'Swordsman', speed: 2, selectable: true, military: true },
     [UnitType.Bowman]: { name: 'Bowman', speed: 2.2, selectable: true, military: true },
     [UnitType.Pikeman]: { name: 'Pikeman', speed: 1.8, selectable: true, military: true },
@@ -199,7 +197,7 @@ export const BUILDING_TERRITORY_RADIUS: Record<number, number> = {
 
 /** Which unit type each building auto-spawns at placement time (undefined = no auto-spawn) */
 export const BUILDING_UNIT_TYPE: Record<number, UnitType | undefined> = {
-    [BuildingType.Lumberjack]: UnitType.Settler,
+    [BuildingType.Lumberjack]: UnitType.Builder,
     [BuildingType.Warehouse]: undefined,
 };
 
@@ -220,9 +218,9 @@ export interface BuildingSpawnConfig {
 
 export const BUILDING_SPAWN_ON_COMPLETE: Record<number, BuildingSpawnConfig | undefined> = {
     [BuildingType.Barrack]: { unitType: UnitType.Swordsman, count: 3 },
-    [BuildingType.SmallHouse]: { unitType: UnitType.Settler, count: 2 },
-    [BuildingType.MediumHouse]: { unitType: UnitType.Settler, count: 4 },
-    [BuildingType.LargeHouse]: { unitType: UnitType.Settler, count: 6 },
+    [BuildingType.SmallHouse]: { unitType: UnitType.Bearer, count: 2 },
+    [BuildingType.MediumHouse]: { unitType: UnitType.Bearer, count: 4 },
+    [BuildingType.LargeHouse]: { unitType: UnitType.Bearer, count: 6 },
 };
 
 /**

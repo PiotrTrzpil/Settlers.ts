@@ -11,8 +11,8 @@ import { CursorType, type ModeRenderState, type SelectionBox } from '../render-s
  * Right click:       Move selected units to target (with formation)
  * Delete/Backspace:  Remove selected entity
  * Escape:            Deselect all
- * U:                 Spawn settler at hovered tile
- * I:                 Spawn soldier at hovered tile
+ * U:                 Spawn bearer at hovered tile
+ * I:                 Spawn swordsman at hovered tile
  */
 export class SelectMode extends BaseInputMode {
     readonly name = 'select';
@@ -32,12 +32,12 @@ export class SelectMode extends BaseInputMode {
             return HANDLED;
         }
 
-        case InputAction.SpawnSettler: {
+        case InputAction.SpawnBearer: {
             const tile = context.currentTile;
             if (tile) {
                 context.executeCommand({
                     type: 'spawn_unit',
-                    unitType: 0, // Settler
+                    unitType: 0, // Bearer
                     x: tile.x,
                     y: tile.y,
                     player: 0,
@@ -46,12 +46,12 @@ export class SelectMode extends BaseInputMode {
             return HANDLED;
         }
 
-        case InputAction.SpawnSoldier: {
+        case InputAction.SpawnSwordsman: {
             const tile = context.currentTile;
             if (tile) {
                 context.executeCommand({
                     type: 'spawn_unit',
-                    unitType: 1, // Soldier
+                    unitType: 2, // Swordsman
                     x: tile.x,
                     y: tile.y,
                     player: 0,

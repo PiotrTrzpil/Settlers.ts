@@ -623,7 +623,7 @@ describe('Barracks unit spawning on construction complete', () => {
         const units = gameState.entities.filter(e => e.type === EntityType.Unit);
         expect(units).toHaveLength(3);
         for (const unit of units) {
-            expect(unit.subType).toBe(3); // UnitType.Swordsman = 3
+            expect(unit.subType).toBe(2); // UnitType.Swordsman = 2
             expect(unit.player).toBe(0);
         }
     });
@@ -735,7 +735,7 @@ describe('Barracks unit spawning on construction complete', () => {
         expect(units).toHaveLength(0);
     });
 
-    it('should spawn unselectable settlers from SmallHouse', () => {
+    it('should spawn unselectable bearers from SmallHouse', () => {
         const { mapSize, groundType, groundHeight } = makeMap(64, 64);
         const gameState = new GameState();
         const house = gameState.addEntity(EntityType.Building, BuildingType.SmallHouse, 10, 10, 0);
@@ -758,7 +758,7 @@ describe('Barracks unit spawning on construction complete', () => {
         }
     });
 
-    it('should spawn unselectable settlers from MediumHouse', () => {
+    it('should spawn unselectable bearers from MediumHouse', () => {
         const { mapSize, groundType, groundHeight } = makeMap(64, 64);
         const gameState = new GameState();
         const house = gameState.addEntity(EntityType.Building, BuildingType.MediumHouse, 10, 10, 0);
@@ -780,7 +780,7 @@ describe('Barracks unit spawning on construction complete', () => {
         }
     });
 
-    it('should spawn unselectable settlers from LargeHouse', () => {
+    it('should spawn unselectable bearers from LargeHouse', () => {
         const { mapSize, groundType, groundHeight } = makeMap(64, 64);
         const gameState = new GameState();
         const house = gameState.addEntity(EntityType.Building, BuildingType.LargeHouse, 10, 10, 0);

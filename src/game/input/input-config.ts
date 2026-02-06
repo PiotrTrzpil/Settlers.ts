@@ -85,8 +85,8 @@ export function getDefaultInputConfig(): InputConfig {
             { action: InputAction.RotateBuilding, key: 'KeyR', onKeyDown: true },
 
             // Unit spawning
-            { action: InputAction.SpawnSettler, key: 'KeyU', onKeyDown: true },
-            { action: InputAction.SpawnSoldier, key: 'KeyI', onKeyDown: true },
+            { action: InputAction.SpawnBearer, key: 'KeyU', onKeyDown: true },
+            { action: InputAction.SpawnSwordsman, key: 'KeyI', onKeyDown: true },
 
             // UI toggles
             { action: InputAction.TogglePause, key: 'KeyP', onKeyDown: true },

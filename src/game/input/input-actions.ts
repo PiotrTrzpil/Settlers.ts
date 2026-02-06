@@ -29,8 +29,8 @@ export enum InputAction {
     RotateBuilding = 'rotate_building',
 
     // Unit spawning
-    SpawnSettler = 'spawn_settler',
-    SpawnSoldier = 'spawn_soldier',
+    SpawnBearer = 'spawn_bearer',
+    SpawnSwordsman = 'spawn_swordsman',
 
     // UI
     TogglePause = 'toggle_pause',
