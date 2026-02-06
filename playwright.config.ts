@@ -18,7 +18,12 @@ export default defineConfig({
     use: {
         baseURL: 'http://localhost:4173',
         headless: true,
-        viewport: { width: 1280, height: 720 }
+        viewport: { width: 1280, height: 720 },
+        // Disable cache to avoid ERR_CACHE_WRITE_FAILURE with large GFX files
+        bypassCSP: true,
+        launchOptions: {
+            args: ['--disable-web-security', '--disable-features=IsolateOrigins,site-per-process'],
+        },
     },
     webServer: {
         command: 'npm run build && npx vite preview --port 4173',

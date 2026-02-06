@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { updateMovement } from '@/game/systems/movement';
 import { createGameState, addUnit, addUnitWithPath } from './helpers/test-game';
 import type { GameState } from '@/game/game-state';
 
@@ -17,7 +16,7 @@ describe('Movement System – edge cases', () => {
     it('should not move units with empty path', () => {
         const { entity: unit } = addUnit(state, 5, 5);
 
-        updateMovement(state, 1.0);
+        state.movement.update(1.0);
 
         expect(unit.x).toBe(5);
         expect(unit.y).toBe(5);
@@ -31,7 +30,7 @@ describe('Movement System – edge cases', () => {
         ], 2);
 
         // 0.5 seconds at speed 2 = 1 tile
-        updateMovement(state, 0.5);
+        state.movement.update(0.5);
 
         expect(unit.x).toBe(1);
         expect(unit.y).toBe(0);

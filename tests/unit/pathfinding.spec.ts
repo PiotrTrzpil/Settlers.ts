@@ -13,9 +13,18 @@ import {
     getAllNeighbors,
 } from '@/game/systems/hex-directions';
 import { GameState } from '@/game/game-state';
-import { pushUnit, findRandomFreeDirection } from '@/game/systems/movement';
+import { pushUnit, findRandomFreeDirection, type TerrainAccessor } from '@/game/systems/movement/index';
 import { createTestMap, TERRAIN, blockColumn, type TestMap } from './helpers/test-map';
 import { createGameState, addUnit } from './helpers/test-game';
+
+/** Helper to create TerrainAccessor from test map */
+function makeTerrain(map: TestMap): TerrainAccessor {
+    return {
+        groundType: map.groundType,
+        mapWidth: map.mapSize.width,
+        mapHeight: map.mapSize.height,
+    };
+}
 
 describe('Pathfinding (A*)', () => {
     let map: TestMap;
@@ -314,16 +323,24 @@ describe('Path obstacle repair', () => {
         it('lower ID does not yield when pushed by higher ID', () => {
             const { entity: unitA } = addUnit(state, 5, 5);
             const { entity: unitB } = addUnit(state, 4, 5);
+            const controllerA = state.movement.getController(unitA.id)!;
 
-            const result = pushUnit(state, unitB.id, unitA.id, map.groundType, map.groundHeight, 64, 64);
+            const result = pushUnit(
+                unitB.id, controllerA, state.tileOccupancy, makeTerrain(map),
+                (id, x, y) => state.updateEntityPosition(id, x, y)
+            );
             expect(result).toBe(false);
         });
 
         it('higher ID should yield when pushed by lower ID', () => {
             const { entity: unitA } = addUnit(state, 5, 5);
             const { entity: unitB } = addUnit(state, 6, 5);
+            const controllerB = state.movement.getController(unitB.id)!;
 
-            const result = pushUnit(state, unitA.id, unitB.id, map.groundType, map.groundHeight, 64, 64);
+            const result = pushUnit(
+                unitA.id, controllerB, state.tileOccupancy, makeTerrain(map),
+                (id, x, y) => state.updateEntityPosition(id, x, y)
+            );
             expect(result).toBe(true);
 
             const movedB = state.getEntity(unitB.id)!;
@@ -332,8 +349,12 @@ describe('Path obstacle repair', () => {
 
         it('same ID should not yield', () => {
             const { entity: unitA } = addUnit(state, 5, 5);
+            const controllerA = state.movement.getController(unitA.id)!;
 
-            const result = pushUnit(state, unitA.id, unitA.id, map.groundType, map.groundHeight, 64, 64);
+            const result = pushUnit(
+                unitA.id, controllerA, state.tileOccupancy, makeTerrain(map),
+                (id, x, y) => state.updateEntityPosition(id, x, y)
+            );
             expect(result).toBe(false);
         });
     });
@@ -342,9 +363,7 @@ describe('Path obstacle repair', () => {
         it('should find a free neighbor on open terrain', () => {
             addUnit(state, 10, 10);
 
-            const free = findRandomFreeDirection(
-                state, 10, 10, map.groundType, map.groundHeight, 64, 64,
-            );
+            const free = findRandomFreeDirection(10, 10, state.tileOccupancy, makeTerrain(map));
             expect(free).not.toBe(null);
         });
 
@@ -356,9 +375,7 @@ describe('Path obstacle repair', () => {
                 addUnit(state, n.x, n.y);
             }
 
-            const free = findRandomFreeDirection(
-                state, 10, 10, map.groundType, map.groundHeight, 64, 64,
-            );
+            const free = findRandomFreeDirection(10, 10, state.tileOccupancy, makeTerrain(map));
             expect(free).toBe(null);
         });
 
@@ -372,9 +389,7 @@ describe('Path obstacle repair', () => {
                 }
             }
 
-            const free = findRandomFreeDirection(
-                state, 10, 10, map.groundType, map.groundHeight, 64, 64,
-            );
+            const free = findRandomFreeDirection(10, 10, state.tileOccupancy, makeTerrain(map));
             expect(free).toBe(null);
         });
     });

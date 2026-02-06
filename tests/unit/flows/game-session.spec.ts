@@ -20,7 +20,7 @@ import {
     removeEntity,
 } from '../helpers/test-game';
 import { EntityType, BuildingType } from '@/game/entity';
-import { updateMovement } from '@/game/systems/movement';
+// Movement is handled via state.movement.update(dt)
 import { TerritoryMap } from '@/game/systems/territory';
 import { executeCommand } from '@/game/commands/command';
 import {
@@ -136,7 +136,7 @@ describe('Game Session: multi-system integration sweep', () => {
         expect(unitState!.path.length).toBeGreaterThan(0);
 
         // Simulate movement
-        updateMovement(state, 5.0); // Enough time to arrive
+        state.movement.update(5.0); // Enough time to arrive
         expect(spawnedUnit!.x).toBe(18);
         expect(spawnedUnit!.y).toBe(15);
 

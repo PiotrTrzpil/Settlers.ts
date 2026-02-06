@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { GameState } from '@/game/game-state';
 import { EntityType, UnitType } from '@/game/entity';
 import { executeCommand } from '@/game/commands/command';
-import { updateMovement } from '@/game/systems/movement';
 import { MapSize } from '@/utilities/map-size';
 
 /**
@@ -22,6 +21,8 @@ describe('Unit Placement, Selection & Movement', () => {
         groundType = new Uint8Array(64 * 64);
         groundHeight = new Uint8Array(64 * 64);
         groundType.fill(16); // all grass (passable & buildable)
+        // Set terrain data for the movement system (required for pathfinding)
+        state.setTerrainData(groundType, groundHeight, mapSize.width, mapSize.height);
     });
 
     // ── Unit Placement (spawn_unit) ────────────────────────────────────
@@ -491,7 +492,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
             // Simulate movement ticks
             for (let i = 0; i < 100; i++) {
-                updateMovement(state, 1 / 30);
+                state.movement.update(1 / 30);
             }
 
             // Unit should have reached or approached the target
@@ -502,12 +503,12 @@ describe('Unit Placement, Selection & Movement', () => {
 
         it('should update tile occupancy during movement', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Bearer, 5, 5, 0);
-            const unitState = state.unitStates.get(unit.id)!;
-            unitState.path = [{ x: 6, y: 5 }, { x: 7, y: 5 }];
-            unitState.speed = 2;
+            const controller = state.movement.getController(unit.id)!;
+            controller.startPath([{ x: 6, y: 5 }, { x: 7, y: 5 }]);
+            // Default speed is 2 for Bearer
 
             // Move one tile
-            updateMovement(state, 0.5);
+            state.movement.update(0.5);
 
             expect(state.getEntityAt(5, 5)).toBeUndefined();
             expect(state.getEntityAt(6, 5)).toBeDefined();
@@ -516,12 +517,13 @@ describe('Unit Placement, Selection & Movement', () => {
 
         it('should track previous position for interpolation', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Bearer, 5, 5, 0);
+            const controller = state.movement.getController(unit.id)!;
             const unitState = state.unitStates.get(unit.id)!;
-            unitState.path = [{ x: 6, y: 5 }, { x: 7, y: 5 }];
-            unitState.speed = 2;
+            controller.startPath([{ x: 6, y: 5 }, { x: 7, y: 5 }]);
+            // Default speed is 2 for Bearer
 
             // Move one tile (0.5s at speed 2 = 1 tile)
-            updateMovement(state, 0.5);
+            state.movement.update(0.5);
 
             expect(unit.x).toBe(6);
             expect(unitState.prevX).toBe(5);
@@ -530,11 +532,12 @@ describe('Unit Placement, Selection & Movement', () => {
 
         it('should reset state after path completion', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Bearer, 5, 5, 0);
+            const controller = state.movement.getController(unit.id)!;
             const unitState = state.unitStates.get(unit.id)!;
-            unitState.path = [{ x: 6, y: 5 }];
-            unitState.speed = 10;
+            controller.startPath([{ x: 6, y: 5 }]);
+            controller.setSpeed(10);
 
-            updateMovement(state, 1.0);
+            state.movement.update(1.0);
 
             expect(unitState.path).toHaveLength(0);
             expect(unitState.pathIndex).toBe(0);
@@ -582,7 +585,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
             // Simulate movement
             for (let i = 0; i < 200; i++) {
-                updateMovement(state, 1 / 30);
+                state.movement.update(1 / 30);
             }
 
             expect(unit.x).toBe(15);
@@ -631,7 +634,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
             // Simulate enough movement ticks
             for (let i = 0; i < 600; i++) {
-                updateMovement(state, 1 / 30, groundType, groundHeight, mapSize.width, mapSize.height);
+                state.movement.update(1 / 30);
             }
 
             // All units should have moved from their start positions

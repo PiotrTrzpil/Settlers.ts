@@ -5,8 +5,8 @@
  * pathfinding tests that need entities with valid state.
  */
 
-import { GameState } from '@/game/game-state';
-import { EntityType, BuildingType, type Entity, type UnitState } from '@/game/entity';
+import { GameState, UnitStateView } from '@/game/game-state';
+import { EntityType, BuildingType, type Entity } from '@/game/entity';
 import { type TestMap } from './test-map';
 
 // ─── GameState factory ──────────────────────────────────────────────
@@ -17,13 +17,13 @@ export function createGameState(): GameState {
 
 // ─── Entity creation helpers ────────────────────────────────────────
 
-/** Add a unit and return both the entity and its UnitState (asserted non-null). */
+/** Add a unit and return both the entity and its UnitStateView (asserted non-null). */
 export function addUnit(
     state: GameState,
     x: number,
     y: number,
     options: { player?: number; subType?: number } = {},
-): { entity: Entity; unitState: UnitState } {
+): { entity: Entity; unitState: UnitStateView } {
     const entity = state.addEntity(EntityType.Unit, options.subType ?? 0, x, y, options.player ?? 0);
     const unitState = state.unitStates.get(entity.id);
     if (!unitState) throw new Error(`UnitState not created for unit ${entity.id}`);
@@ -48,10 +48,14 @@ export function addUnitWithPath(
     startY: number,
     path: Array<{ x: number; y: number }>,
     speed = 2,
-): { entity: Entity; unitState: UnitState } {
+): { entity: Entity; unitState: UnitStateView } {
     const { entity, unitState } = addUnit(state, startX, startY);
-    unitState.path = path;
-    unitState.speed = speed;
+    // Use the MovementController to set up the path and speed
+    const controller = state.movement.getController(entity.id);
+    if (controller) {
+        controller.setSpeed(speed);
+        controller.startPath(path);
+    }
     return { entity, unitState };
 }
 
@@ -103,6 +107,13 @@ export function moveUnit(
     targetX: number,
     targetY: number,
 ): boolean {
+    // Ensure terrain data is set for the movement system
+    state.setTerrainData(
+        map.groundType,
+        map.groundHeight,
+        map.mapSize.width,
+        map.mapSize.height
+    );
     return executeCommand(
         state,
         { type: 'move_unit', entityId, targetX, targetY },

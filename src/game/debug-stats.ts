@@ -263,8 +263,8 @@ class DebugStats {
 
         let moving = 0;
         let pathSteps = 0;
-        for (const us of gameState.unitStates.values()) {
-            const remaining = us.path.length - us.pathIndex;
+        for (const controller of gameState.movement.getAllControllers()) {
+            const remaining = controller.path.length - controller.pathIndex;
             if (remaining > 0) {
                 moving++;
                 pathSteps += remaining;

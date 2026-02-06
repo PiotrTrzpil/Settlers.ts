@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { createTestMap, TERRAIN, blockColumn } from '../helpers/test-map';
+import { createTestMap, TERRAIN, blockColumn, TestMap } from '../helpers/test-map';
 import {
     createGameState,
     addUnit,
@@ -20,10 +20,18 @@ import {
     placeBuilding,
 } from '../helpers/test-game';
 import { EntityType, BuildingType } from '@/game/entity';
-import { updateMovement } from '@/game/systems/movement';
 import { findPath } from '@/game/systems/pathfinding';
 import { getAllNeighbors, hexDistance } from '@/game/systems/hex-directions';
-import { pushUnit, findRandomFreeDirection } from '@/game/systems/movement';
+import { pushUnit, findRandomFreeDirection, TerrainAccessor } from '@/game/systems/movement/index';
+
+/** Helper to create TerrainAccessor from test map */
+function makeTerrain(map: TestMap): TerrainAccessor {
+    return {
+        groundType: map.groundType,
+        mapWidth: map.mapSize.width,
+        mapHeight: map.mapSize.height,
+    };
+}
 
 describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
     it('full lifecycle from spawn through movement to arrival', () => {
@@ -56,13 +64,13 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
 
         // ── Step 3: Simulate movement updates ──
         // At speed 2, 0.5s = 1 tile
-        updateMovement(state, 0.5);
+        state.movement.update(0.5);
         expect(unit.x).toBe(6);
         expect(unit.y).toBe(5);
         expect(unitState!.prevX).toBe(5); // Previous position tracked for interpolation
 
         // Continue movement to completion
-        updateMovement(state, 5.0); // Enough time to finish
+        state.movement.update(5.0); // Enough time to finish
         expect(unit.x).toBe(10);
         expect(unit.y).toBe(5);
         expect(unitState!.path).toHaveLength(0);
@@ -110,7 +118,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const { entity: u1, unitState: us1 } = addUnitWithPath(state, 0, 0, [{ x: 1, y: 0 }], 2);
         const { entity: u2, unitState: us2 } = addUnitWithPath(state, 10, 10, [{ x: 11, y: 10 }, { x: 12, y: 10 }], 4);
 
-        updateMovement(state, 0.5);
+        state.movement.update(0.5);
 
         // u1: speed 2 * 0.5s = 1 tile
         expect(u1.x).toBe(1);
@@ -132,11 +140,16 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const { entity: unitA } = addUnit(state, 5, 5);
         const { entity: unitB } = addUnit(state, 6, 5);
 
+        const controllerB = state.movement.getController(unitB.id)!;
+        const controllerA = state.movement.getController(unitA.id)!;
+
         // Lower ID pushing higher ID → higher yields
         const pushResult = pushUnit(
-            state, unitA.id, unitB.id,
-            map.groundType, map.groundHeight,
-            map.mapSize.width, map.mapSize.height,
+            unitA.id,
+            controllerB,
+            state.tileOccupancy,
+            makeTerrain(map),
+            (id, x, y) => state.updateEntityPosition(id, x, y),
         );
         expect(pushResult).toBe(true);
         // Unit B should have moved away from (6,5)
@@ -144,9 +157,11 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
 
         // Higher ID pushing lower ID → lower does NOT yield
         const reverseResult = pushUnit(
-            state, unitB.id, unitA.id,
-            map.groundType, map.groundHeight,
-            map.mapSize.width, map.mapSize.height,
+            unitB.id,
+            controllerA,
+            state.tileOccupancy,
+            makeTerrain(map),
+            (id, x, y) => state.updateEntityPosition(id, x, y),
         );
         expect(reverseResult).toBe(false);
     });
@@ -217,11 +232,13 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const map = createTestMap(64, 64);
         const state = createGameState();
 
-        const { entity: center } = addUnit(state, 10, 10);
+        addUnit(state, 10, 10);
 
         // All open → should find a free direction
         const free = findRandomFreeDirection(
-            state, 10, 10, map.groundType, map.groundHeight, 64, 64,
+            10, 10,
+            state.tileOccupancy,
+            makeTerrain(map),
         );
         expect(free).not.toBeNull();
 
@@ -232,7 +249,9 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         }
 
         const blocked = findRandomFreeDirection(
-            state, 10, 10, map.groundType, map.groundHeight, 64, 64,
+            10, 10,
+            state.tileOccupancy,
+            makeTerrain(map),
         );
         expect(blocked).toBeNull();
     });
@@ -250,13 +269,13 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         expect(unitState.prevY).toBe(5);
 
         // Move one tile
-        updateMovement(state, 0.5);
+        state.movement.update(0.5);
         expect(entity.x).toBe(6);
         expect(unitState.prevX).toBe(5);
         expect(unitState.prevY).toBe(5);
 
         // Complete path
-        updateMovement(state, 1.0);
+        state.movement.update(1.0);
         expect(entity.x).toBe(7);
         // After completion, prev syncs to current
         expect(unitState.prevX).toBe(7);

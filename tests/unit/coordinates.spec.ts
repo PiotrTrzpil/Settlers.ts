@@ -32,7 +32,7 @@
 import { describe, it, expect } from 'vitest';
 import { TilePicker } from '@/game/input/tile-picker';
 import { MapSize } from '@/utilities/map-size';
-import { IViewPoint } from '@/game/renderer/i-view-point';
+import { IViewPointReadonly } from '@/game/renderer/i-view-point';
 import { heightToWorld } from '@/game/systems/coordinate-system';
 
 describe('Coordinate Systems', () => {
@@ -724,7 +724,7 @@ describe('screenToTile on varying terrain', () => {
 
     function expectRoundTripApprox(
         tileX: number, tileY: number,
-        groundHeight: Uint8Array, mapSize: MapSize, viewPoint: IViewPoint,
+        groundHeight: Uint8Array, mapSize: MapSize, viewPoint: IViewPointReadonly,
         tolerance = 1,
     ) {
         const worldPos = TilePicker.tileToWorld(
