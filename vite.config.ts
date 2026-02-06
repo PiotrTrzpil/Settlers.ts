@@ -15,7 +15,13 @@ export default defineConfig({
         }
     },
     server: {
-        port: 5173
+        port: 5173,
+        hmr: {
+            // If HMR update fails, trigger full reload instead of getting stuck
+            overlay: true,
+        },
+        // Note: COOP/COEP headers for SharedArrayBuffer can be enabled later
+        // when SharedArrayBuffer support is properly implemented
     },
     test: {
         environment: 'jsdom',
