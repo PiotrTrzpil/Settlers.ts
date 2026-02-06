@@ -7,20 +7,19 @@ import { GamePage } from './game-page';
  */
 
 test.describe('Unit Sprite Loading', () => {
-    test('should load unit sprites from sprite registry', async({ page }) => {
-        const gp = new GamePage(page);
-
-        // Bypass cache for large GFX files to avoid ERR_CACHE_WRITE_FAILURE
+    // Bypass cache for large GFX files to avoid ERR_CACHE_WRITE_FAILURE
+    test.beforeEach(async({ page }) => {
         await page.route('**/*.gfx', async route => {
             const response = await route.fetch();
             await route.fulfill({
                 response,
-                headers: {
-                    ...response.headers(),
-                    'cache-control': 'no-store',
-                },
+                headers: { ...response.headers(), 'cache-control': 'no-store' },
             });
         });
+    });
+
+    test('should load unit sprites from sprite registry', async({ page }) => {
+        const gp = new GamePage(page);
 
         // Collect console logs
         const consoleLogs: string[] = [];
@@ -64,23 +63,17 @@ test.describe('Unit Sprite Loading', () => {
             };
         });
 
-        // Print sprite-related console logs
+        // Check that console logs show units loaded
         const spriteRelatedLogs = consoleLogs.filter(log =>
             log.includes('SpriteRenderManager') || log.includes('Unit')
         );
-        console.log('Sprite logs:', spriteRelatedLogs);
-        console.log('Unit sprite loading results:', JSON.stringify(loadedUnits, null, 2));
-
-        // Check that console logs show units loaded (the real test is the log message)
         const unitLoadedLog = spriteRelatedLogs.find(log => log.includes('Unit sprites loaded'));
         expect(unitLoadedLog).toBeDefined();
 
         // Parse how many units loaded from the log
         const match = unitLoadedLog?.match(/Unit sprites loaded: (\d+) units/);
         if (match) {
-            const loggedCount = parseInt(match[1], 10);
-            console.log(`Logged ${loggedCount} unit types with sprites`);
-            expect(loggedCount).toBeGreaterThan(0);
+            expect(parseInt(match[1], 10)).toBeGreaterThan(0);
         }
 
         // The direct API check may fail due to renderer timing issues in headless Chrome
@@ -90,12 +83,6 @@ test.describe('Unit Sprite Loading', () => {
 
     test('should render swordsman with texture not just color dot', async({ page }) => {
         const gp = new GamePage(page);
-
-        // Bypass cache
-        await page.route('**/*.gfx', async route => {
-            const response = await route.fetch();
-            await route.fulfill({ response, headers: { ...response.headers(), 'cache-control': 'no-store' } });
-        });
 
         // Load with real assets
         await gp.goto({ testMap: false });
@@ -110,7 +97,6 @@ test.describe('Unit Sprite Loading', () => {
         });
 
         if (!unitSpriteInfo.hasUnits) {
-            console.log('No unit sprites loaded - game assets may be missing');
             test.skip();
             return;
         }
@@ -127,17 +113,11 @@ test.describe('Unit Sprite Loading', () => {
         const units = gameState!.entities.filter(e => e.type === 1); // EntityType.Unit = 1
         expect(units.length).toBeGreaterThan(0);
 
-        console.log('Spawned unit:', units[0]);
+        expect(units[0].subType).toBeGreaterThan(0);
     });
 
     test('JIL index lookup returns correct job for high indices', async({ page }) => {
         const gp = new GamePage(page);
-
-        // Bypass cache
-        await page.route('**/*.gfx', async route => {
-            const response = await route.fetch();
-            await route.fulfill({ response, headers: { ...response.headers(), 'cache-control': 'no-store' } });
-        });
 
         // Load game
         await gp.goto({ testMap: false });
@@ -186,10 +166,7 @@ test.describe('Unit Sprite Loading', () => {
             };
         });
 
-        console.log('JIL lookup test results:', JSON.stringify(jilTest, null, 2));
-
         if ('error' in jilTest) {
-            console.log('Test skipped:', jilTest.error);
             test.skip();
             return;
         }

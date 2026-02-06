@@ -61,14 +61,18 @@ export class GamePage {
     }
 
     /**
-     * Wait until the renderer has drawn at least `minFrames` frames.
-     * Replaces brittle `waitForTimeout` calls — polls the debug bridge
-     * until the exact readiness condition is met.
+     * Wait until the renderer has drawn at least `minFrames` **new** frames.
+     * Uses relative counting (reads current frameCount first, then waits for
+     * current + minFrames) so it works correctly with the shared fixture where
+     * frameCount is already high from previous tests.
      */
     async waitForFrames(minFrames = 5, timeout = 20_000): Promise<void> {
+        const baseFrame = await this.page.evaluate(
+            () => (window as any).__settlers_debug__?.frameCount ?? 0,
+        );
         await this.page.waitForFunction(
-            (n) => (window as any).__settlers_debug__?.frameCount >= n,
-            minFrames,
+            ({ base, n }) => (window as any).__settlers_debug__?.frameCount >= base + n,
+            { base: baseFrame, n: minFrames },
             { timeout },
         );
     }
@@ -77,13 +81,14 @@ export class GamePage {
     async waitForReady(minFrames = 5, timeout = 20_000): Promise<void> {
         await this.waitForGameUi(timeout);
         await this.page.waitForFunction(
-            (n) => {
+            () => {
                 const d = (window as any).__settlers_debug__;
-                return d && d.gameLoaded && d.rendererReady && d.frameCount >= n;
+                return d && d.gameLoaded && d.rendererReady;
             },
-            minFrames,
+            null,
             { timeout },
         );
+        await this.waitForFrames(minFrames, timeout);
     }
 
     // ── State reset ───────────────────────────────────────────
@@ -227,9 +232,11 @@ export class GamePage {
     /**
      * Find a buildable tile by spiraling from map center.
      * Temporarily places and removes a building to validate terrain + slope.
+     * @param buildingType BuildingType to test (default 1 = Lumberjack).
+     *   Use 2 for Warehouse (3x3) to find spots with enough room.
      */
-    async findBuildableTile(): Promise<{ x: number; y: number } | null> {
-        return this.page.evaluate(() => {
+    async findBuildableTile(buildingType = 1): Promise<{ x: number; y: number } | null> {
+        return this.page.evaluate((bt) => {
             const game = (window as any).__settlers_game__;
             if (!game) return null;
             const w = game.mapSize.width;
@@ -248,7 +255,7 @@ export class GamePage {
 
                         const ok = game.execute({
                             type: 'place_building',
-                            buildingType: 1, x: tx, y: ty, player: 0  // Lumberjack
+                            buildingType: bt, x: tx, y: ty, player: 0
                         });
                         if (ok) {
                             const newEntities = game.state.entities.filter(
@@ -263,7 +270,7 @@ export class GamePage {
                 }
             }
             return null;
-        });
+        }, buildingType);
     }
 
     /** Wait for entity count to exceed a given value. */
@@ -314,7 +321,13 @@ export class GamePage {
         expect(box!.height).toBeGreaterThan(0);
     }
 
-    /** Assert no unexpected JS errors occurred (filters known WebGL warnings). */
+    /**
+     * Assert no unexpected JS errors occurred.
+     * Filters only specific known-harmless messages:
+     * - Missing GFX asset files (e.g. '2.gh6')
+     * - WebGL context warnings from headless Chrome
+     * - Procedural texture fallback warnings (exact prefix match)
+     */
     collectErrors(): { errors: string[]; check: () => void } {
         const errors: string[] = [];
         this.page.on('pageerror', (err) => errors.push(err.message));
@@ -322,7 +335,10 @@ export class GamePage {
             errors,
             check: () => {
                 const unexpected = errors.filter(
-                    (e) => !e.includes('2.gh6') && !e.includes('WebGL') && !e.includes('texture'),
+                    (e) =>
+                        !e.includes('2.gh6') &&
+                        !e.includes('WebGL') &&
+                        !e.startsWith('texture fallback:'),
                 );
                 expect(unexpected).toHaveLength(0);
             },

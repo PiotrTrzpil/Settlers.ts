@@ -39,7 +39,9 @@ test.describe('Pointer Event Pipeline', () => {
                     clientX: cx, clientY: cy, bubbles: true, button: 0, pointerId: 1
                 }));
 
-                setTimeout(() => resolve(log), 200);
+                // Events are dispatched synchronously; wait one animation frame
+                // for any async handlers to settle before reading the log.
+                requestAnimationFrame(() => resolve(log));
             });
         });
 
@@ -284,43 +286,32 @@ test.describe('Building Placement Mode', () => {
         state = await gp.getGameState();
         expect(state?.placeBuildingType).toBe(2); // Warehouse
 
-        // Place the warehouse via game.execute
-        const result = await page.evaluate(() => {
+        // Find a spot that fits a Warehouse (3x3) using the parameterized helper
+        const warehouseTile = await gp.findBuildableTile(2);
+        if (!warehouseTile) {
+            test.skip();
+            return;
+        }
+
+        // Place the warehouse via game.execute at the validated spot
+        const result = await page.evaluate(({ x, y }) => {
             const game = (window as any).__settlers_game__;
             if (!game) return { error: 'no game' };
 
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
+            const ok = game.execute({
+                type: 'place_building',
+                buildingType: 2, // Warehouse (3x3)
+                x, y,
+                player: 0
+            });
 
-            for (let r = 0; r < 30; r++) {
-                for (let dx = -r; dx <= r; dx++) {
-                    for (let dy = -r; dy <= r; dy++) {
-                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-                        const tx = cx + dx;
-                        const ty = cy + dy;
-                        if (tx < 0 || ty < 0 || tx >= w - 3 || ty >= h - 3) continue;
-
-                        const ok = game.execute({
-                            type: 'place_building',
-                            buildingType: 2, // Warehouse (3x3)
-                            x: tx, y: ty,
-                            player: 0
-                        });
-                        if (ok) {
-                            const buildings = game.state.entities.filter((e: any) => e.type === 2);
-                            const warehouse = buildings.find((e: any) => e.subType === 2);
-                            return {
-                                placed: true,
-                                warehouse: warehouse ? { x: warehouse.x, y: warehouse.y, subType: warehouse.subType } : null
-                            };
-                        }
-                    }
-                }
-            }
-            return { placed: false };
-        });
+            const buildings = game.state.entities.filter((e: any) => e.type === 2);
+            const warehouse = buildings.find((e: any) => e.subType === 2);
+            return {
+                placed: ok,
+                warehouse: warehouse ? { x: warehouse.x, y: warehouse.y, subType: warehouse.subType } : null
+            };
+        }, warehouseTile);
 
         expect(result).not.toHaveProperty('error');
         expect(result.placed).toBe(true);
@@ -391,18 +382,16 @@ test.describe('Unit Spawning', () => {
 
         const countBefore = await gp.getDebugField('entityCount');
         await gp.spawnBearer();
+        await gp.waitForEntityCountAbove(countBefore);
 
-        // Poll for entity creation instead of fixed timeout
-        await gp.waitForFrames(5);
         const countAfter = await gp.getDebugField('entityCount');
-        const state = await gp.getGameState();
+        expect(countAfter).toBe(countBefore + 1);
 
-        if (countAfter > countBefore) {
-            // Spawn succeeded - entity should be near the clicked tile
-            const entity = state?.entities[state.entities.length - 1];
-            expect(entity).toBeDefined();
-        }
-        // Spawn may fail if clicked tile is impassable — that's expected behaviour
+        // Entity should be near the clicked tile (on passable terrain)
+        const state = await gp.getGameState();
+        const entity = state?.entities[state.entities.length - 1];
+        expect(entity).toBeDefined();
+        expect(entity!.type).toBe(1); // EntityType.Unit
     });
 
     test('spawned unit is on passable terrain (not water)', async({ page }) => {

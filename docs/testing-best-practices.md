@@ -152,7 +152,7 @@ Key `GamePage` helpers — **use these instead of reimplementing**:
 - `waitForReady(minFrames)` — wait for game loaded + renderer ready + N frames
 - `waitForFrames(n)` — wait for N frames rendered
 - `waitForEntityCountAbove(n)` — poll until entity count exceeds N
-- `findBuildableTile()` — spiral from map center to find valid placement spot
+- `findBuildableTile(buildingType?)` — spiral from map center to find valid placement spot
 - `moveCamera(x, y)` — position camera on specific tile
 - `getDebugField(key)` — read a single debug bridge field
 - `getGameState()` — structured game state with entities
@@ -195,7 +195,13 @@ When filtering entities, use the correct `EntityType` values:
 
 ### Don't duplicate GamePage helpers
 If a test needs to find buildable terrain, use `gp.findBuildableTile()` instead of
-writing a custom spiral search inline. If you need new shared logic, add it to `GamePage`.
+writing a custom spiral search inline. Pass a `buildingType` for larger buildings:
+`gp.findBuildableTile(2)` for Warehouse (3x3). If you need new shared logic, add it to `GamePage`.
+
+### `waitForFrames` uses relative counting
+`waitForFrames(n)` waits for `n` **new** frames from the current frame count,
+not `n` absolute frames. This is critical for the shared fixture where `frameCount`
+is already high from previous tests. Never compare directly against absolute `frameCount`.
 
 ### No debug-only test files
 Tests should have meaningful assertions — not just capture screenshots or log data.
