@@ -75,14 +75,14 @@ export function setHeightAt(map: TestMap, x: number, y: number, height: number):
 }
 
 /** Block an entire column with the given terrain type (for pathfinding walls). */
-export function blockColumn(map: TestMap, x: number, type = TERRAIN.WATER): void {
+export function blockColumn(map: TestMap, x: number, type: number = TERRAIN.WATER): void {
     for (let y = 0; y < map.mapSize.height; y++) {
         map.groundType[x + y * map.mapSize.width] = type;
     }
 }
 
 /** Block an entire column except for a gap at the given Y. */
-export function blockColumnWithGap(map: TestMap, x: number, gapY: number, type = TERRAIN.WATER): void {
+export function blockColumnWithGap(map: TestMap, x: number, gapY: number, type: number = TERRAIN.WATER): void {
     for (let y = 0; y < map.mapSize.height; y++) {
         if (y !== gapY) {
             map.groundType[x + y * map.mapSize.width] = type;
