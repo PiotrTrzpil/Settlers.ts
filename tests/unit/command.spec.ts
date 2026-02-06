@@ -197,7 +197,7 @@ describe('Command System', () => {
 
     describe('select', () => {
         it('should set selectedEntityId', () => {
-            state.addEntity(EntityType.Unit, 0, 5, 5, 0);
+            state.addEntity(EntityType.Unit, 1, 5, 5, 0); // Soldier (selectable)
             const unitId = state.entities[0].id;
 
             executeCommand(state, {
@@ -223,9 +223,9 @@ describe('Command System', () => {
 
     describe('select_area', () => {
         it('should select units within the rectangular area', () => {
-            state.addEntity(EntityType.Unit, 0, 5, 5, 0);
-            state.addEntity(EntityType.Unit, 0, 7, 7, 0);
-            state.addEntity(EntityType.Unit, 0, 20, 20, 0); // outside area
+            state.addEntity(EntityType.Unit, 1, 5, 5, 0); // Soldier (selectable)
+            state.addEntity(EntityType.Unit, 1, 7, 7, 0);
+            state.addEntity(EntityType.Unit, 1, 20, 20, 0); // outside area
 
             executeCommand(state, {
                 type: 'select_area',
@@ -241,7 +241,7 @@ describe('Command System', () => {
 
         it('should prefer units over buildings in area', () => {
             state.addEntity(EntityType.Building, 0, 10, 10, 0);
-            state.addEntity(EntityType.Unit, 0, 11, 10, 0);
+            state.addEntity(EntityType.Unit, 1, 11, 10, 0); // Soldier (selectable)
 
             executeCommand(state, {
                 type: 'select_area',
@@ -276,7 +276,7 @@ describe('Command System', () => {
 
     describe('select (multi-select sync)', () => {
         it('should update selectedEntityIds when using select command', () => {
-            const unit = state.addEntity(EntityType.Unit, 0, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, 1, 5, 5, 0); // Soldier (selectable)
 
             executeCommand(state, {
                 type: 'select',

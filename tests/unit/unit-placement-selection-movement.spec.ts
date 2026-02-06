@@ -174,7 +174,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Selection (select_at_tile)', () => {
         it('should select a unit at a tile', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 10, 10, 0);
 
             const result = executeCommand(state, {
                 type: 'select_at_tile',
@@ -190,7 +190,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should deselect when clicking empty tile', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 10, 10, 0);
             state.selectedEntityId = unit.id;
             state.selectedEntityIds.add(unit.id);
 
@@ -207,8 +207,8 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should replace selection on normal click', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Settler, 20, 20, 0);
+            const unit1 = state.addEntity(EntityType.Unit, UnitType.Soldier, 10, 10, 0);
+            const unit2 = state.addEntity(EntityType.Unit, UnitType.Soldier, 20, 20, 0);
 
             // Select unit1
             executeCommand(state, {
@@ -235,8 +235,8 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should add to selection with shift+click', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Settler, 20, 20, 0);
+            const unit1 = state.addEntity(EntityType.Unit, UnitType.Soldier, 10, 10, 0);
+            const unit2 = state.addEntity(EntityType.Unit, UnitType.Soldier, 20, 20, 0);
 
             // Select unit1
             executeCommand(state, {
@@ -260,8 +260,8 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should toggle entity off with shift+click on already-selected', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Settler, 20, 20, 0);
+            const unit1 = state.addEntity(EntityType.Unit, UnitType.Soldier, 10, 10, 0);
+            const unit2 = state.addEntity(EntityType.Unit, UnitType.Soldier, 20, 20, 0);
 
             // Select both
             state.selectedEntityIds.add(unit1.id);
@@ -282,8 +282,8 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should update primary selection when toggling off primary', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Settler, 20, 20, 0);
+            const unit1 = state.addEntity(EntityType.Unit, UnitType.Soldier, 10, 10, 0);
+            const unit2 = state.addEntity(EntityType.Unit, UnitType.Soldier, 20, 20, 0);
 
             state.selectedEntityIds.add(unit1.id);
             state.selectedEntityIds.add(unit2.id);
@@ -319,7 +319,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Toggle Selection', () => {
         it('should add entity to selection', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 10, 10, 0);
 
             const result = executeCommand(state, {
                 type: 'toggle_selection',
@@ -331,7 +331,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should remove entity from selection', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 10, 10, 0);
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
@@ -355,7 +355,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should set primary selection when adding first entity', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 10, 10, 0);
 
             executeCommand(state, {
                 type: 'toggle_selection',
@@ -366,8 +366,8 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should maintain primary when adding second entity', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Settler, 20, 20, 0);
+            const unit1 = state.addEntity(EntityType.Unit, UnitType.Soldier, 10, 10, 0);
+            const unit2 = state.addEntity(EntityType.Unit, UnitType.Soldier, 20, 20, 0);
 
             state.selectedEntityIds.add(unit1.id);
             state.selectedEntityId = unit1.id;
@@ -386,7 +386,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Move Selected Units (move_selected_units)', () => {
         it('should move a single selected unit to target', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
@@ -403,8 +403,8 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should move multiple selected units with formation', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Settler, 5, 5, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Settler, 5, 7, 0);
+            const unit1 = state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
+            const unit2 = state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 7, 0);
             state.selectedEntityIds.add(unit1.id);
             state.selectedEntityIds.add(unit2.id);
             state.selectedEntityId = unit1.id;
@@ -453,7 +453,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should move only units when selection includes buildings', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
             const building = state.addEntity(EntityType.Building, 1, 10, 10, 0);
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityIds.add(building.id);
@@ -551,7 +551,7 @@ describe('Unit Placement, Selection & Movement', () => {
             // Spawn
             executeCommand(state, {
                 type: 'spawn_unit',
-                unitType: UnitType.Settler,
+                unitType: UnitType.Soldier,
                 x: 5,
                 y: 5,
                 player: 0,
@@ -594,7 +594,7 @@ describe('Unit Placement, Selection & Movement', () => {
             for (let i = 0; i < 3; i++) {
                 executeCommand(state, {
                     type: 'spawn_unit',
-                    unitType: UnitType.Settler,
+                    unitType: UnitType.Soldier,
                     x: 5 + i,
                     y: 5,
                     player: 0,
@@ -653,7 +653,7 @@ describe('Unit Placement, Selection & Movement', () => {
             // Spawn 2 units far apart
             executeCommand(state, {
                 type: 'spawn_unit',
-                unitType: UnitType.Settler,
+                unitType: UnitType.Soldier,
                 x: 5,
                 y: 5,
                 player: 0,
@@ -667,14 +667,14 @@ describe('Unit Placement, Selection & Movement', () => {
                 player: 0,
             }, groundType, groundHeight, mapSize);
 
-            const settler = state.entities.find(e => e.subType === UnitType.Settler)!;
-            const soldier = state.entities.find(e => e.subType === UnitType.Soldier)!;
+            const unit1 = state.entities[0];
+            const unit2 = state.entities[1];
 
             // Select first (normal click)
             executeCommand(state, {
                 type: 'select_at_tile',
-                x: settler.x,
-                y: settler.y,
+                x: unit1.x,
+                y: unit1.y,
                 addToSelection: false,
             }, groundType, groundHeight, mapSize);
 
@@ -683,8 +683,8 @@ describe('Unit Placement, Selection & Movement', () => {
             // Shift+click second
             executeCommand(state, {
                 type: 'select_at_tile',
-                x: soldier.x,
-                y: soldier.y,
+                x: unit2.x,
+                y: unit2.y,
                 addToSelection: true,
             }, groundType, groundHeight, mapSize);
 
@@ -698,8 +698,8 @@ describe('Unit Placement, Selection & Movement', () => {
             }, groundType, groundHeight, mapSize);
 
             expect(result).toBe(true);
-            expect(state.unitStates.get(settler.id)!.path.length).toBeGreaterThan(0);
-            expect(state.unitStates.get(soldier.id)!.path.length).toBeGreaterThan(0);
+            expect(state.unitStates.get(unit1.id)!.path.length).toBeGreaterThan(0);
+            expect(state.unitStates.get(unit2.id)!.path.length).toBeGreaterThan(0);
         });
     });
 
@@ -707,9 +707,9 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Selection Area', () => {
         it('should select all units in rectangle', () => {
-            state.addEntity(EntityType.Unit, UnitType.Settler, 5, 5, 0);
-            state.addEntity(EntityType.Unit, UnitType.Settler, 7, 7, 0);
-            state.addEntity(EntityType.Unit, UnitType.Settler, 20, 20, 0);
+            state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
+            state.addEntity(EntityType.Unit, UnitType.Soldier, 7, 7, 0);
+            state.addEntity(EntityType.Unit, UnitType.Soldier, 20, 20, 0);
 
             executeCommand(state, {
                 type: 'select_area',
@@ -724,7 +724,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
         it('should prefer units over buildings in area', () => {
             state.addEntity(EntityType.Building, 1, 10, 10, 0);
-            state.addEntity(EntityType.Unit, UnitType.Settler, 11, 10, 0);
+            state.addEntity(EntityType.Unit, UnitType.Soldier, 11, 10, 0);
 
             executeCommand(state, {
                 type: 'select_area',
@@ -740,7 +740,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should clear selection when area is empty', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
@@ -757,8 +757,8 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should handle reversed coordinates (bottom-right to top-left drag)', () => {
-            state.addEntity(EntityType.Unit, UnitType.Settler, 5, 5, 0);
-            state.addEntity(EntityType.Unit, UnitType.Settler, 7, 7, 0);
+            state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
+            state.addEntity(EntityType.Unit, UnitType.Soldier, 7, 7, 0);
 
             // Drag from bottom-right to top-left
             executeCommand(state, {
@@ -777,7 +777,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Deselect and Remove', () => {
         it('should deselect all with select null', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
@@ -791,7 +791,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should clear selection when entity is removed', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
@@ -805,7 +805,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should remove unit state when unit is removed', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
             expect(state.unitStates.has(unit.id)).toBe(true);
 
             executeCommand(state, {
@@ -817,7 +817,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should clear tile occupancy when unit is removed', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
             expect(state.getEntityAt(5, 5)).toBeDefined();
 
             executeCommand(state, {
@@ -826,6 +826,102 @@ describe('Unit Placement, Selection & Movement', () => {
             }, groundType, groundHeight, mapSize);
 
             expect(state.getEntityAt(5, 5)).toBeUndefined();
+        });
+    });
+
+    // ── Unselectable Entities ──────────────────────────────────────────
+
+    describe('Unselectable Entities', () => {
+        it('should not select unselectable entity via select_at_tile', () => {
+            // Spawn unselectable unit
+            state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0, false);
+
+            executeCommand(state, {
+                type: 'select_at_tile',
+                x: 10,
+                y: 10,
+                addToSelection: false,
+            }, groundType, groundHeight, mapSize);
+
+            expect(state.selectedEntityId).toBe(null);
+            expect(state.selectedEntityIds.size).toBe(0);
+        });
+
+        it('should not add unselectable entity with shift+click', () => {
+            const selectable = state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
+            state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0, false);
+
+            // Select the selectable one
+            executeCommand(state, {
+                type: 'select_at_tile',
+                x: 5,
+                y: 5,
+                addToSelection: false,
+            }, groundType, groundHeight, mapSize);
+            expect(state.selectedEntityIds.size).toBe(1);
+
+            // Shift+click the unselectable one
+            executeCommand(state, {
+                type: 'select_at_tile',
+                x: 10,
+                y: 10,
+                addToSelection: true,
+            }, groundType, groundHeight, mapSize);
+
+            // Should still only have the selectable one
+            expect(state.selectedEntityIds.size).toBe(1);
+            expect(state.selectedEntityIds.has(selectable.id)).toBe(true);
+        });
+
+        it('should exclude unselectable entities from box selection', () => {
+            state.addEntity(EntityType.Unit, UnitType.Soldier, 5, 5, 0);
+            state.addEntity(EntityType.Unit, UnitType.Settler, 7, 7, 0, false); // unselectable
+            state.addEntity(EntityType.Unit, UnitType.Swordsman, 6, 6, 0);
+
+            executeCommand(state, {
+                type: 'select_area',
+                x1: 4,
+                y1: 4,
+                x2: 8,
+                y2: 8,
+            }, groundType, groundHeight, mapSize);
+
+            // Should only select the 2 selectable units
+            expect(state.selectedEntityIds.size).toBe(2);
+        });
+
+        it('should not select unselectable entity via select command', () => {
+            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0, false);
+
+            executeCommand(state, {
+                type: 'select',
+                entityId: unit.id,
+            }, groundType, groundHeight, mapSize);
+
+            expect(state.selectedEntityId).toBe(null);
+            expect(state.selectedEntityIds.size).toBe(0);
+        });
+
+        it('should not toggle unselectable entity via toggle_selection', () => {
+            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0, false);
+
+            const result = executeCommand(state, {
+                type: 'toggle_selection',
+                entityId: unit.id,
+            }, groundType, groundHeight, mapSize);
+
+            expect(result).toBe(false);
+            expect(state.selectedEntityIds.size).toBe(0);
+        });
+
+        it('should default selectable to true for normal entities', () => {
+            const unit = state.addEntity(EntityType.Unit, UnitType.Soldier, 10, 10, 0);
+            expect(unit.selectable).toBe(true);
+        });
+
+        it('should track selectable=false on entity', () => {
+            const unit = state.addEntity(EntityType.Unit, UnitType.Settler, 10, 10, 0, false);
+            expect(unit.selectable).toBe(false);
         });
     });
 });

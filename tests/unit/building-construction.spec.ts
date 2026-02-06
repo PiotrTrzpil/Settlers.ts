@@ -679,11 +679,9 @@ describe('Barracks unit spawning on construction complete', () => {
         const barrack = gameState.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
         const bs = gameState.buildingStates.get(barrack.id)!;
 
-        // Block some adjacent tiles with water so fewer units can spawn
-        // Barrack footprint is 2x2 at (10,10)-(11,11), spawn uses EXTENDED_OFFSETS from (10,10)
-        // Block many surrounding tiles with water, leave only a few free
-        for (let y = 8; y <= 13; y++) {
-            for (let x = 8; x <= 13; x++) {
+        // Block tiles in expanding rings with water (radius up to 4), leave only 2 free
+        for (let y = 6; y <= 15; y++) {
+            for (let x = 6; x <= 15; x++) {
                 if (x >= 10 && x <= 11 && y >= 10 && y <= 11) continue; // skip footprint
                 groundType[mapSize.toIndex(x, y)] = 0; // water
             }
@@ -714,9 +712,9 @@ describe('Barracks unit spawning on construction complete', () => {
         const barrack = gameState.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
         const bs = gameState.buildingStates.get(barrack.id)!;
 
-        // Surround the building with water (except the footprint tiles)
-        for (let y = 8; y <= 13; y++) {
-            for (let x = 8; x <= 13; x++) {
+        // Surround the building with water in a wide area (radius 4 search area)
+        for (let y = 6; y <= 15; y++) {
+            for (let x = 6; x <= 15; x++) {
                 // Skip the barrack's own footprint tiles (2x2 at 10,10)
                 if (x >= 10 && x <= 11 && y >= 10 && y <= 11) continue;
                 groundType[mapSize.toIndex(x, y)] = 0; // water
@@ -732,8 +730,97 @@ describe('Barracks unit spawning on construction complete', () => {
         bs.elapsedTime = bs.totalDuration - 0.1;
         updateBuildingConstruction(gameState, 0.2, ctx);
 
-        // No units should spawn since all adjacent tiles are water
+        // No units should spawn since all surrounding tiles are water
         const units = gameState.entities.filter(e => e.type === EntityType.Unit);
         expect(units).toHaveLength(0);
+    });
+
+    it('should spawn unselectable settlers from SmallHouse', () => {
+        const { mapSize, groundType, groundHeight } = makeMap(64, 64);
+        const gameState = new GameState();
+        const house = gameState.addEntity(EntityType.Building, BuildingType.SmallHouse, 10, 10, 0);
+        const bs = gameState.buildingStates.get(house.id)!;
+
+        const ctx: TerrainContext = {
+            groundType,
+            groundHeight,
+            mapSize,
+        };
+
+        bs.elapsedTime = bs.totalDuration - 0.1;
+        updateBuildingConstruction(gameState, 0.2, ctx);
+
+        expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
+        const units = gameState.entities.filter(e => e.type === EntityType.Unit);
+        expect(units).toHaveLength(2); // SmallHouse spawns 2
+        for (const unit of units) {
+            expect(unit.selectable).toBe(false);
+        }
+    });
+
+    it('should spawn unselectable settlers from MediumHouse', () => {
+        const { mapSize, groundType, groundHeight } = makeMap(64, 64);
+        const gameState = new GameState();
+        const house = gameState.addEntity(EntityType.Building, BuildingType.MediumHouse, 10, 10, 0);
+        const bs = gameState.buildingStates.get(house.id)!;
+
+        const ctx: TerrainContext = {
+            groundType,
+            groundHeight,
+            mapSize,
+        };
+
+        bs.elapsedTime = bs.totalDuration - 0.1;
+        updateBuildingConstruction(gameState, 0.2, ctx);
+
+        const units = gameState.entities.filter(e => e.type === EntityType.Unit);
+        expect(units).toHaveLength(4); // MediumHouse spawns 4
+        for (const unit of units) {
+            expect(unit.selectable).toBe(false);
+        }
+    });
+
+    it('should spawn unselectable settlers from LargeHouse', () => {
+        const { mapSize, groundType, groundHeight } = makeMap(64, 64);
+        const gameState = new GameState();
+        const house = gameState.addEntity(EntityType.Building, BuildingType.LargeHouse, 10, 10, 0);
+        const bs = gameState.buildingStates.get(house.id)!;
+
+        const ctx: TerrainContext = {
+            groundType,
+            groundHeight,
+            mapSize,
+        };
+
+        bs.elapsedTime = bs.totalDuration - 0.1;
+        updateBuildingConstruction(gameState, 0.2, ctx);
+
+        const units = gameState.entities.filter(e => e.type === EntityType.Unit);
+        expect(units).toHaveLength(6); // LargeHouse spawns 6
+        for (const unit of units) {
+            expect(unit.selectable).toBe(false);
+        }
+    });
+
+    it('should spawn selectable swordsmen from Barrack', () => {
+        const { mapSize, groundType, groundHeight } = makeMap(64, 64);
+        const gameState = new GameState();
+        const barrack = gameState.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
+        const bs = gameState.buildingStates.get(barrack.id)!;
+
+        const ctx: TerrainContext = {
+            groundType,
+            groundHeight,
+            mapSize,
+        };
+
+        bs.elapsedTime = bs.totalDuration - 0.1;
+        updateBuildingConstruction(gameState, 0.2, ctx);
+
+        const units = gameState.entities.filter(e => e.type === EntityType.Unit);
+        expect(units).toHaveLength(3);
+        for (const unit of units) {
+            expect(unit.selectable).toBe(true); // Barrack units ARE selectable
+        }
     });
 });

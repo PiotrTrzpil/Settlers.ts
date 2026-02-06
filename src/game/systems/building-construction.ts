@@ -9,7 +9,6 @@ import {
     BuildingState,
     EntityType,
     BUILDING_SPAWN_ON_COMPLETE,
-    EXTENDED_OFFSETS,
 } from '../entity';
 import { MapSize } from '@/utilities/map-size';
 import { isPassable } from './placement';
@@ -196,6 +195,7 @@ export function updateBuildingConstruction(
 /**
  * Spawn units adjacent to a building that just completed construction.
  * Uses BUILDING_SPAWN_ON_COMPLETE to determine which unit type and count to spawn.
+ * Searches in expanding rings around the building to find free passable tiles.
  */
 function spawnUnitsOnBuildingComplete(
     state: GameState,
@@ -208,26 +208,38 @@ function spawnUnitsOnBuildingComplete(
     const entity = state.getEntity(buildingState.entityId);
     if (!entity) return;
 
+    const bx = buildingState.tileX;
+    const by = buildingState.tileY;
+    // Use explicit override from spawn config if provided, otherwise undefined
+    // so addEntity falls back to UNIT_TYPE_CONFIG defaults
+    const selectable = spawnDef.selectable;
+
+    // Search expanding rings around the building for free tiles
     let spawned = 0;
-    for (const [dx, dy] of EXTENDED_OFFSETS) {
-        if (spawned >= spawnDef.count) break;
+    for (let radius = 1; radius <= 4 && spawned < spawnDef.count; radius++) {
+        for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                if (spawned >= spawnDef.count) break;
+                // Only process tiles on the current ring perimeter
+                if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
 
-        const nx = buildingState.tileX + dx;
-        const ny = buildingState.tileY + dy;
+                const nx = bx + dx;
+                const ny = by + dy;
 
-        // Bounds check
-        if (terrainContext) {
-            const ms = terrainContext.mapSize;
-            if (nx < 0 || nx >= ms.width || ny < 0 || ny >= ms.height) continue;
-            // Passability check
-            if (!isPassable(terrainContext.groundType[ms.toIndex(nx, ny)])) continue;
+                // Bounds check
+                if (terrainContext) {
+                    const ms = terrainContext.mapSize;
+                    if (nx < 0 || nx >= ms.width || ny < 0 || ny >= ms.height) continue;
+                    if (!isPassable(terrainContext.groundType[ms.toIndex(nx, ny)])) continue;
+                }
+
+                // Occupancy check
+                if (state.getEntityAt(nx, ny)) continue;
+
+                state.addEntity(EntityType.Unit, spawnDef.unitType, nx, ny, entity.player, selectable);
+                spawned++;
+            }
         }
-
-        // Occupancy check
-        if (state.getEntityAt(nx, ny)) continue;
-
-        state.addEntity(EntityType.Unit, spawnDef.unitType, nx, ny, entity.player);
-        spawned++;
     }
 }
 

@@ -144,6 +144,16 @@ export function executeCommand(
     }
 
     case 'select': {
+        // Respect selectable flag (undefined = selectable, false = not selectable)
+        if (cmd.entityId !== null) {
+            const ent = state.getEntity(cmd.entityId);
+            if (ent && ent.selectable === false) {
+                // Can't select unselectable entities - treat as deselect
+                state.selectedEntityId = null;
+                state.selectedEntityIds.clear();
+                return true;
+            }
+        }
         state.selectedEntityId = cmd.entityId;
         state.selectedEntityIds.clear();
         if (cmd.entityId !== null) {
@@ -153,7 +163,9 @@ export function executeCommand(
     }
 
     case 'select_at_tile': {
-        const entity = state.getEntityAt(cmd.x, cmd.y);
+        const rawEntity = state.getEntityAt(cmd.x, cmd.y);
+        // Skip unselectable entities
+        const entity = rawEntity?.selectable !== false ? rawEntity : undefined;
         if (cmd.addToSelection) {
             if (entity) {
                 // Toggle: remove if already selected, add if not
@@ -185,7 +197,7 @@ export function executeCommand(
 
     case 'toggle_selection': {
         const entity = state.getEntity(cmd.entityId);
-        if (!entity) return false;
+        if (!entity || entity.selectable === false) return false;
         if (state.selectedEntityIds.has(cmd.entityId)) {
             state.selectedEntityIds.delete(cmd.entityId);
             if (state.selectedEntityId === cmd.entityId) {
@@ -203,7 +215,8 @@ export function executeCommand(
     }
 
     case 'select_area': {
-        const entities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
+        const allEntities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
+        const entities = allEntities.filter(e => e.selectable !== false);
         // Prefer selecting units over buildings
         const units = entities.filter(e => e.type === EntityType.Unit);
         const toSelect = units.length > 0 ? units : entities;
