@@ -36,9 +36,6 @@ export class DilFileReader extends IndexFile {
 
     constructor(resourceReader: BinaryReader) {
         super(resourceReader);
-
-        DilFileReader.log.debug('object count ' + resourceReader.length);
-
         Object.seal(this);
     }
 

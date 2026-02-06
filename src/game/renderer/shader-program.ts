@@ -47,6 +47,15 @@ export class ShaderProgram implements ShaderObject {
             return false;
         }
 
+        // Clean up existing program if reinitializing (handles HMR)
+        if (this.shaderProgram) {
+            this.gl.deleteProgram(this.shaderProgram);
+        }
+        if (this.vao) {
+            this.gl.deleteVertexArray(this.vao);
+            this.vao = null;
+        }
+
         // Create a shader program object to store combined shader program
         this.shaderProgram = this.gl.createProgram();
 
@@ -228,6 +237,14 @@ export class ShaderProgram implements ShaderObject {
      * setup, compiles shaders and links GLSL program
      */
     public attachShaders(srcVertex: string, srcFragment: string): boolean {
+        // Clean up any existing shaders first (handles HMR reinitialization)
+        if (this.shaders.length > 0 && this.gl) {
+            for (const s of this.shaders) {
+                this.gl.deleteShader(s);
+            }
+            this.shaders.length = 0;
+        }
+
         const r1 = this.attachShader(srcVertex, ShaderType.VERTEX_SHADER);
         const r2 = this.attachShader(srcFragment, ShaderType.FRAGMENT_SHADER);
 

@@ -61,8 +61,6 @@ export class GhFileReader {
             return;
         }
 
-        GhFileReader.log.debug('read ' + reader.filename);
-
         /// file header
         this.magic = reader.readIntBE();
         this.flag1 = reader.readIntBE();
@@ -110,9 +108,6 @@ export class GhFileReader {
             img.dataOffset = filePos + 8;
 
             this.images.push(img);
-
-            GhFileReader.log.debug('Found:' + img.toString());
-
             filePos += size + 8;
         }
 

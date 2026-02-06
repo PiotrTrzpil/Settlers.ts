@@ -178,6 +178,7 @@ export function useRenderer({
 
     /**
      * Initialize the renderer.
+     * Landscape loads first for immediate camera control, then sprites load in background.
      */
     function initRenderer(): void {
         const game = getGame();
@@ -203,16 +204,28 @@ export function useRenderer({
         );
         renderer.add(entityRenderer);
 
-        void renderer.init().then(() => {
+        // Initialize renderers asynchronously
+        // Landscape first (essential for camera), then sprites in background
+        (async() => {
+            const gl = renderer!.gl;
+            if (!gl) return;
+
+            // Initialize landscape first for immediate camera control
+            const t0 = performance.now();
+            await landscapeRenderer!.init(gl);
+            debugStats.state.loadTimings.landscape = Math.round(performance.now() - t0);
+            debugStats.state.gameLoaded = true;
+
+            // Load sprites in background (non-blocking)
+            await entityRenderer!.init(gl);
             debugStats.state.rendererReady = true;
+
             // Set up animation provider after sprites are loaded
             const animProvider = entityRenderer?.getAnimationProvider();
             if (animProvider && game) {
                 game.gameLoop.setAnimationProvider(animProvider);
             }
-        });
-
-        debugStats.state.gameLoaded = true;
+        })();
 
         const landTile = game.findLandTile();
         if (landTile) {

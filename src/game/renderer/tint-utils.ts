@@ -27,27 +27,32 @@ export function getPlayerColor(playerIndex: number): readonly number[] {
     return PLAYER_COLORS[playerIndex % PLAYER_COLORS.length];
 }
 
-/**
- * Compute sprite tint with player color influence.
- * Used for buildings and units that should show player ownership.
- */
-export function computePlayerTint(playerIndex: number, isSelected: boolean): number[] {
-    if (isSelected) {
-        return [...TINT_SELECTED];
-    }
-
-    const playerColor = getPlayerColor(playerIndex);
+// Pre-computed player tints to avoid per-frame allocations
+const PLAYER_TINTS: readonly (readonly number[])[] = PLAYER_COLORS.map(playerColor => {
     const r = 1.0 + (playerColor[0] - 1.0) * PLAYER_TINT_STRENGTH;
     const g = 1.0 + (playerColor[1] - 1.0) * PLAYER_TINT_STRENGTH;
     const b = 1.0 + (playerColor[2] - 1.0) * PLAYER_TINT_STRENGTH;
-    return [r, g, b, 1.0];
+    return [r, g, b, 1.0] as const;
+});
+
+/**
+ * Compute sprite tint with player color influence.
+ * Used for buildings and units that should show player ownership.
+ * Returns a readonly array to avoid allocations - do not mutate!
+ */
+export function computePlayerTint(playerIndex: number, isSelected: boolean): readonly number[] {
+    if (isSelected) {
+        return TINT_SELECTED;
+    }
+    return PLAYER_TINTS[playerIndex % PLAYER_TINTS.length];
 }
 
 /**
  * Compute sprite tint for entities without player ownership (map objects, resources).
+ * Returns a readonly array to avoid allocations - do not mutate!
  */
-export function computeNeutralTint(isSelected: boolean): number[] {
-    return isSelected ? [...TINT_SELECTED] : [...TINT_NEUTRAL];
+export function computeNeutralTint(isSelected: boolean): readonly number[] {
+    return isSelected ? TINT_SELECTED : TINT_NEUTRAL;
 }
 
 /**

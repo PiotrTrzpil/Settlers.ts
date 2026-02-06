@@ -73,8 +73,6 @@ async function loadIconGfx(fileManager: FileManager, race: Race): Promise<GfxFil
                 paletteCollection
             );
 
-            log.debug(`Loaded icon GFX ${fileId}.gfx with ${reader.getImageCount()} images for race ${Race[race]}`);
-
             // Cache the reader
             gfxReaderCache.set(race, reader);
             return reader;

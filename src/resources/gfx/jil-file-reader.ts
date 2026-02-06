@@ -29,9 +29,6 @@ export class JilFileReader extends IndexFile {
 
     constructor(resourceReader: BinaryReader) {
         super(resourceReader);
-
-        JilFileReader.log.debug('job count ' + this.length);
-
         Object.seal(this);
     }
 

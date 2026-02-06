@@ -22,7 +22,6 @@ export class PilFileReader extends ResourceFile {
 
         /// read the palette offsets
         const imageCount = reader.length / 4;
-        PilFileReader.log.debug('image count ' + imageCount);
 
         this.offsetTable = new Int32Array(imageCount);
 

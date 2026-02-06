@@ -25,9 +25,6 @@ export class GilFileReader extends IndexFile {
 
     constructor(resourceReader: BinaryReader) {
         super(resourceReader);
-
-        GilFileReader.log.debug('image count ' + this.length + ' of ' + resourceReader.filename);
-
         Object.seal(this);
     }
 

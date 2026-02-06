@@ -20,10 +20,15 @@ export interface RendererOptions {
 export class Renderer {
     private static log = new LogHandler('Renderer');
     public canvas: HTMLCanvasElement;
-    private gl: WebGL2RenderingContext | null = null;
+    private _gl: WebGL2RenderingContext | null = null;
     private renderers: IRenderer[] = [];
     private animRequest = 0;
     public viewPoint: ViewPoint;
+
+    /** Get the WebGL2 context */
+    public get gl(): WebGL2RenderingContext | null {
+        return this._gl;
+    }
 
     constructor(canvas: HTMLCanvasElement, options?: RendererOptions) {
         const webGlogger = new LogHandler('WebGL');
@@ -55,13 +60,13 @@ export class Renderer {
             // WebGLDebugUtils is optional; not available in production
         }
 
-        this.gl = newGl;
+        this._gl = newGl;
 
         Object.seal(this);
     }
 
     public destroy(): void {
-        this.gl = null;
+        this._gl = null;
         this.viewPoint.destroy();
     }
 
@@ -121,21 +126,13 @@ export class Renderer {
             return;
         }
 
-        const totalStart = performance.now();
-        Renderer.log.debug('=== Renderer init starting ===');
-
         for (const r of this.renderers) {
-            const name = r.constructor.name;
-            const start = performance.now();
             try {
                 await r.init(this.gl);
-                Renderer.log.debug(`${name} init: ${Math.round(performance.now() - start)}ms`);
             } catch (e) {
                 Renderer.log.error('Renderer init failed', e instanceof Error ? e : new Error(String(e)));
             }
         }
-
-        Renderer.log.debug(`=== Renderer init complete: ${Math.round(performance.now() - totalStart)}ms ===`);
         this.requestDraw();
     }
 
