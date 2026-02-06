@@ -117,14 +117,14 @@ test.describe('Unit Sprite Loading', () => {
 
         // Spawn a swordsman
         await gp.spawnSwordsman();
-        await page.waitForTimeout(500);
+        await gp.waitForEntityCountAbove(0);
 
         // Check that swordsman entity exists
         const gameState = await gp.getGameState();
         expect(gameState).not.toBeNull();
 
         // Find units (swordsman type depends on the game's enum, but we can check for any spawned unit)
-        const units = gameState!.entities.filter(e => e.type === 2); // EntityType.Unit = 2
+        const units = gameState!.entities.filter(e => e.type === 1); // EntityType.Unit = 1
         expect(units.length).toBeGreaterThan(0);
 
         console.log('Spawned unit:', units[0]);

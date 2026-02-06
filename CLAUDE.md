@@ -71,10 +71,14 @@ Test maps and procedural textures work without game files.
 
 ## E2E testing best practices
 
+**Read `docs/testing-best-practices.md` and `tests/e2e/game-page.ts` before modifying or adding e2e tests.**
+
 - **Always rebuild** before running e2e tests: `pnpm build` (Playwright uses the built dist, not dev server)
 - **Use debug bridges**: Access game state via `window.__settlers_game__`, `window.__settlers_debug__`, `window.__settlers_entity_renderer__`
-- **Use GamePage**: Page object at `tests/e2e/game-page.ts` provides waiting helpers and common actions
-- **Wait properly**: Use `waitForReady()`, `waitForFrames()`, `waitForFunction()` instead of `waitForTimeout()`
+- **Use GamePage helpers**: Page object at `tests/e2e/game-page.ts` provides waiting helpers, `findBuildableTile()`, `moveCamera()`, etc. — don't reimplement these inline
+- **Never use `waitForTimeout()`**: Use `waitForReady()`, `waitForFrames()`, `waitForFunction()`, or `waitForEntityCountAbove()` instead
+- **Entity types**: `Unit = 1`, `Building = 2`, `MapObject = 3`. `BuildingType` starts at 1 (Lumberjack). Never use `buildingType: 0`
+- **No debug-only tests**: Tests must have meaningful assertions — diagnostic scripts belong in `scripts/`
 - **Run headed**: `npx playwright test --headed -g "test name"` to observe tests visually
 - **Test specific file**: `npx playwright test building-placement.spec.ts`
 - **Poll output in background**: When running tests in background, poll output every ~0.5-1s with a marker file:

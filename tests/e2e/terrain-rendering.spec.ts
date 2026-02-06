@@ -34,38 +34,22 @@ test.describe('Terrain Rendering', () => {
         checkErrors();
     });
 
-    test('test map is loaded via debug bridge', async({ page }) => {
+    test('test map loads with correct initial state', async({ page }) => {
         const gp = new GamePage(page);
 
         await gp.goto({ testMap: true });
         await gp.waitForReady();
 
-        // Verify the game is loaded via debug bridge
+        // Debug bridge reports game loaded and renderer ready
         const debug = await gp.getDebug();
         expect(debug.gameLoaded).toBe(true);
         expect(debug.rendererReady).toBe(true);
-    });
 
-    test('entity count starts at zero on fresh test map', async({ page }) => {
-        const gp = new GamePage(page);
-
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
-
-        // data-* attribute assertion — no text parsing needed
+        // Entity count starts at zero on fresh test map
         await expect(gp.entityCount).toHaveAttribute('data-count', '0');
+        expect(await gp.getDebugField('entityCount')).toBe(0);
 
-        // Cross-check via debug bridge
-        const count = await gp.getDebugField('entityCount');
-        expect(count).toBe(0);
-    });
-
-    test('mode defaults to select', async({ page }) => {
-        const gp = new GamePage(page);
-
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
-
+        // Mode defaults to select
         expect(await gp.getMode()).toBe('select');
         expect(await gp.getDebugField('mode')).toBe('select');
     });

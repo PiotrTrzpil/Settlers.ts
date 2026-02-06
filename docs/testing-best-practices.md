@@ -131,36 +131,80 @@ it('should round-trip through screenToTile and tileToWorld', () => {
 
 ## E2E Tests (Playwright)
 
-### Use Page Objects
-```typescript
-// tests/e2e/game-page.ts
-export class GamePage {
-    async waitForGameReady() { ... }
-    async clickTile(x: number, y: number) { ... }
-    async getDebugState() { ... }
-}
+### Read before changing
+**Always read the existing e2e tests and `game-page.ts` before modifying or adding tests.**
+Understand what helpers exist, what patterns are used, and avoid duplicating functionality.
 
-// tests/e2e/building.e2e.ts
+### Use Page Objects
+All e2e tests should use `GamePage` from `tests/e2e/game-page.ts`:
+```typescript
+// tests/e2e/building-placement.spec.ts
 test('can place building', async ({ page }) => {
-    const gamePage = new GamePage(page);
-    await gamePage.waitForGameReady();
-    await gamePage.clickBuildingButton('lumberjack');
+    const gp = new GamePage(page);
+    await gp.goto({ testMap: true });
+    await gp.waitForReady();
     // ...
 });
 ```
 
-### Test with `?testMap=true`
-Use synthetic test maps that don't require game assets:
+Key `GamePage` helpers — **use these instead of reimplementing**:
+- `goto({ testMap: true })` — navigate to map view with synthetic test map
+- `waitForReady(minFrames)` — wait for game loaded + renderer ready + N frames
+- `waitForFrames(n)` — wait for N frames rendered
+- `waitForEntityCountAbove(n)` — poll until entity count exceeds N
+- `findBuildableTile()` — spiral from map center to find valid placement spot
+- `moveCamera(x, y)` — position camera on specific tile
+- `getDebugField(key)` — read a single debug bridge field
+- `getGameState()` — structured game state with entities
+- `collectErrors()` — error collector with WebGL warning filter
+
+### Never use `waitForTimeout`
+Use deterministic waiting instead:
 ```typescript
-await page.goto('/?testMap=true');
+// BAD — flaky, slow
+await page.waitForTimeout(500);
+const count = await gp.getDebugField('entityCount');
+
+// GOOD — deterministic, fast
+await gp.waitForFrames(5);
+const count = await gp.getDebugField('entityCount');
+
+// GOOD — poll for specific condition
+await page.waitForFunction(
+    (min) => (window as any).__settlers_debug__?.entityCount > min,
+    countBefore,
+    { timeout: 5000 },
+);
 ```
 
-### Access Debug State
-Use the debug bridge for assertions:
-```typescript
-const debug = await page.evaluate(() => window.__settlers_debug__);
-expect(debug.mode).toBe('select');
-```
+### Use `testMap: true` for all game tests
+Tests that interact with game state should use the synthetic test map:
+- No game asset dependencies
+- Deterministic terrain layout
+- Fast loading
+
+Only use `testMap: false` when testing real asset loading (e.g., sprite files).
+
+### Entity type constants
+When filtering entities, use the correct `EntityType` values:
+- `type === 1` → Unit (bearer, swordsman, etc.)
+- `type === 2` → Building (lumberjack, warehouse, etc.)
+- `type === 3` → MapObject (trees, stones)
+
+`BuildingType` starts at 1 (Lumberjack). Never use `buildingType: 0`.
+
+### Don't duplicate GamePage helpers
+If a test needs to find buildable terrain, use `gp.findBuildableTile()` instead of
+writing a custom spiral search inline. If you need new shared logic, add it to `GamePage`.
+
+### No debug-only test files
+Tests should have meaningful assertions — not just capture screenshots or log data.
+Debug/diagnostic scripts belong in `scripts/`, not in the test suite.
+
+### E2E vs Unit test boundary
+**E2E tests should verify the full UI pipeline**: button clicks, canvas interactions,
+visual rendering, navigation, error-free loading. If a test only calls `game.execute()`
+and checks state without any UI interaction, it should be a unit test instead.
 
 ## What to Test
 
@@ -168,11 +212,14 @@ expect(debug.mode).toBe('select');
 - Pure functions (pathfinding, placement validation, coordinate transforms)
 - State machines (input modes, game state transitions)
 - Data transformations (command execution)
+- Game logic (entity lifecycle, economy, behavior trees)
 
 ### E2E Tests
-- User flows (select building → place → verify)
+- User flows (click button → mode changes → click canvas → building appears)
 - Visual rendering (screenshot comparisons)
-- Integration between systems
+- Canvas interactions (pointer events, wheel, right-click)
+- Navigation and app loading
+- Debug bridge integration
 
 ### Skip Testing
 - Simple getters/setters
@@ -186,6 +233,8 @@ pnpm test:unit              # All unit tests
 pnpm test:unit path/to/test # Specific test file
 pnpm test:watch             # Watch mode
 
-npx playwright test         # E2E tests (runs build first)
-npx playwright test --ui    # Interactive UI mode
+pnpm build                  # Must rebuild before e2e tests
+npx playwright test         # E2E tests (uses built dist)
+npx playwright test --headed -g "test name"  # Run specific test visually
+npx playwright test building-placement.spec.ts  # Run specific file
 ```

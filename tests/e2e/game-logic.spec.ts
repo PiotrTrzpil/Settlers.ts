@@ -13,7 +13,8 @@ test.describe('App Loading and Structure', () => {
         const { check: checkErrors } = gp.collectErrors();
 
         await page.goto('/');
-        await page.waitForTimeout(1000);
+        // Wait for app to mount by checking for nav element
+        await page.locator('#nav').waitFor({ timeout: 10_000 });
 
         checkErrors();
     });
@@ -111,15 +112,15 @@ test.describe('Route Navigation', () => {
 });
 
 test.describe('Canvas Interaction', () => {
-    test('canvas responds to mouse wheel events', async({ page }) => {
+    test('canvas responds to mouse wheel events without errors', async({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 
-        await page.goto('/map-view');
-        await gp.expectCanvasVisible();
+        await gp.goto({ testMap: true });
+        await gp.waitForReady();
 
         await gp.canvas.dispatchEvent('wheel', { deltaY: 100 });
-        await page.waitForTimeout(200);
+        await gp.waitForFrames(3);
 
         checkErrors();
     });
@@ -128,21 +129,22 @@ test.describe('Canvas Interaction', () => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 
-        await page.goto('/map-view');
-        await gp.expectCanvasVisible();
+        await gp.goto({ testMap: true });
+        await gp.waitForReady();
 
         await gp.canvas.click({ position: { x: 400, y: 400 } });
-        await page.waitForTimeout(200);
+        await gp.waitForFrames(3);
 
         checkErrors();
     });
 
     test('canvas handles right-click without showing context menu', async({ page }) => {
         const gp = new GamePage(page);
-        await page.goto('/map-view');
-        await gp.expectCanvasVisible();
+
+        await gp.goto({ testMap: true });
+        await gp.waitForReady();
 
         await gp.canvas.click({ button: 'right', position: { x: 400, y: 400 } });
-        await page.waitForTimeout(200);
+        await gp.waitForFrames(3);
     });
 });

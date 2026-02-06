@@ -268,10 +268,22 @@ test.describe('Unit Movement', () => {
         expect(moveSetup).not.toHaveProperty('error');
         expect(moveSetup.initialPositions).toBeDefined();
 
-        // Wait for movement to progress (speed=2 means 0.5s per tile, wait long enough for multiple tiles)
-        await page.waitForTimeout(800);
-
         const initialPositions = moveSetup.initialPositions!;
+
+        // Wait for all units to start moving (poll instead of fixed timeout)
+        await page.waitForFunction(
+            ({ ids, initPos }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return false;
+                // All units should have moved from their initial positions
+                return initPos.every((init: any) => {
+                    const unit = game.state.getEntity(init.id);
+                    return unit && (unit.x !== init.x || unit.y !== init.y);
+                });
+            },
+            { ids: unitIds, initPos: initialPositions },
+            { timeout: 5000 },
+        );
 
         // Check that all units have moved similar distances
         const finalCheck = await page.evaluate(({ ids, initPos }) => {
