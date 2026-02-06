@@ -3,21 +3,16 @@ import { InputAction, MouseButton, type PointerData, type DragData } from '../in
 import { CursorType, type ModeRenderState, type SelectionBox } from '../render-state';
 
 /**
- * Formation offsets for unit movement commands.
- * Units spread out in a formation pattern when given move orders.
- */
-const FORMATION_OFFSETS: ReadonlyArray<readonly [number, number]> = [
-    [0, 0],
-    [1, 0], [0, 1], [-1, 0], [0, -1],
-    [1, 1], [-1, 1], [1, -1], [-1, -1],
-    [2, 0], [0, 2], [-2, 0], [0, -2],
-    [2, 1], [1, 2], [-1, 2], [-2, 1],
-    [-2, -1], [-1, -2], [1, -2], [2, -1],
-    [2, 2], [-2, 2], [2, -2], [-2, -2],
-];
-
-/**
  * Select mode - default mode for selecting entities and issuing commands.
+ *
+ * Left click:        Select entity at tile (replaces selection)
+ * Shift+left click:  Add/remove entity from selection (toggle)
+ * Left drag:         Box select all units in rectangle
+ * Right click:       Move selected units to target (with formation)
+ * Delete/Backspace:  Remove selected entity
+ * Escape:            Deselect all
+ * U:                 Spawn settler at hovered tile
+ * I:                 Spawn soldier at hovered tile
  */
 export class SelectMode extends BaseInputMode {
     readonly name = 'select';
@@ -30,10 +25,37 @@ export class SelectMode extends BaseInputMode {
             return HANDLED;
 
         case InputAction.Delete: {
-            // Delete selected entity if any
             const data = context.getModeData<{ selectedEntityId: number | null }>();
             if (data?.selectedEntityId != null) {
                 context.executeCommand({ type: 'remove_entity', entityId: data.selectedEntityId });
+            }
+            return HANDLED;
+        }
+
+        case InputAction.SpawnSettler: {
+            const tile = context.currentTile;
+            if (tile) {
+                context.executeCommand({
+                    type: 'spawn_unit',
+                    unitType: 0, // Settler
+                    x: tile.x,
+                    y: tile.y,
+                    player: 0,
+                });
+            }
+            return HANDLED;
+        }
+
+        case InputAction.SpawnSoldier: {
+            const tile = context.currentTile;
+            if (tile) {
+                context.executeCommand({
+                    type: 'spawn_unit',
+                    unitType: 1, // Soldier
+                    x: tile.x,
+                    y: tile.y,
+                    player: 0,
+                });
             }
             return HANDLED;
         }
@@ -69,15 +91,24 @@ export class SelectMode extends BaseInputMode {
 
             // Single click - select entity at tile
             if (data.tileX !== undefined && data.tileY !== undefined) {
-                this.handleSelect(data.tileX, data.tileY, data.shiftKey, context);
+                context.executeCommand({
+                    type: 'select_at_tile',
+                    x: data.tileX,
+                    y: data.tileY,
+                    addToSelection: data.shiftKey,
+                });
             }
             return HANDLED;
         }
 
         if (data.button === MouseButton.Right) {
-            // Right click - issue move command to selected units
+            // Right click - move selected units to target with formation
             if (data.tileX !== undefined && data.tileY !== undefined) {
-                this.handleMoveCommand(data.tileX, data.tileY, context);
+                context.executeCommand({
+                    type: 'move_selected_units',
+                    targetX: data.tileX,
+                    targetY: data.tileY,
+                });
             }
             return HANDLED;
         }
@@ -86,8 +117,7 @@ export class SelectMode extends BaseInputMode {
     }
 
     onDrag(_data: DragData, _context: InputContext): InputResult {
-        // Visual feedback for drag selection would go here
-        // The actual selection happens on drag end
+        // Visual feedback for drag selection - the selection box is drawn via getRenderState
         return HANDLED;
     }
 
@@ -107,36 +137,6 @@ export class SelectMode extends BaseInputMode {
             return HANDLED;
         }
         return UNHANDLED;
-    }
-
-    private handleSelect(tileX: number, tileY: number, addToSelection: boolean, context: InputContext): void {
-        // Get entity at tile (this would need to be exposed via context)
-        // For now, we just send the select command and let the game handle it
-        context.executeCommand({
-            type: 'select_at_tile',
-            x: tileX,
-            y: tileY,
-            addToSelection,
-        });
-    }
-
-    private handleMoveCommand(tileX: number, tileY: number, context: InputContext): void {
-        // Get selected units and issue move commands with formation
-        const modeData = context.getModeData<{
-            selectedUnits: number[];
-        }>();
-
-        const units = modeData?.selectedUnits ?? [];
-
-        for (let i = 0; i < units.length; i++) {
-            const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
-            context.executeCommand({
-                type: 'move_unit',
-                entityId: units[i],
-                targetX: tileX + offset[0],
-                targetY: tileY + offset[1],
-            });
-        }
     }
 
     override getRenderState(context: InputContext): ModeRenderState {

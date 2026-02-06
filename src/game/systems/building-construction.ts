@@ -4,8 +4,15 @@
  */
 
 import { GameState } from '../game-state';
-import { BuildingConstructionPhase, BuildingState } from '../entity';
+import {
+    BuildingConstructionPhase,
+    BuildingState,
+    EntityType,
+    BUILDING_SPAWN_ON_COMPLETE,
+    EXTENDED_OFFSETS,
+} from '../entity';
 import { MapSize } from '@/utilities/map-size';
+import { isPassable } from './placement';
 import {
     captureOriginalTerrain,
     applyTerrainLeveling,
@@ -86,6 +93,9 @@ export interface TerrainContext {
 /**
  * Update building construction progress for all buildings.
  * Called each game tick.
+ *
+ * When a building transitions to the Completed phase, it may auto-spawn
+ * units (e.g., Barrack spawns soldiers) as defined by BUILDING_SPAWN_ON_COMPLETE.
  *
  * @param state Game state containing building states
  * @param dt Delta time in seconds
@@ -169,11 +179,55 @@ export function updateBuildingConstruction(
                 }
             }
         }
+
+        // Spawn units when building transitions to Completed phase
+        // (previousPhase is guaranteed to be non-Completed here due to early continue above)
+        if (newPhase === BuildingConstructionPhase.Completed) {
+            spawnUnitsOnBuildingComplete(state, buildingState, terrainContext);
+        }
     }
 
     // Notify that terrain was modified
     if (terrainModified && terrainContext?.onTerrainModified) {
         terrainContext.onTerrainModified();
+    }
+}
+
+/**
+ * Spawn units adjacent to a building that just completed construction.
+ * Uses BUILDING_SPAWN_ON_COMPLETE to determine which unit type and count to spawn.
+ */
+function spawnUnitsOnBuildingComplete(
+    state: GameState,
+    buildingState: BuildingState,
+    terrainContext?: TerrainContext
+): void {
+    const spawnDef = BUILDING_SPAWN_ON_COMPLETE[buildingState.buildingType];
+    if (!spawnDef) return;
+
+    const entity = state.getEntity(buildingState.entityId);
+    if (!entity) return;
+
+    let spawned = 0;
+    for (const [dx, dy] of EXTENDED_OFFSETS) {
+        if (spawned >= spawnDef.count) break;
+
+        const nx = buildingState.tileX + dx;
+        const ny = buildingState.tileY + dy;
+
+        // Bounds check
+        if (terrainContext) {
+            const ms = terrainContext.mapSize;
+            if (nx < 0 || nx >= ms.width || ny < 0 || ny >= ms.height) continue;
+            // Passability check
+            if (!isPassable(terrainContext.groundType[ms.toIndex(nx, ny)])) continue;
+        }
+
+        // Occupancy check
+        if (state.getEntityAt(nx, ny)) continue;
+
+        state.addEntity(EntityType.Unit, spawnDef.unitType, nx, ny, entity.player);
+        spawned++;
     }
 }
 

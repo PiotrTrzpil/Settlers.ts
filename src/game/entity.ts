@@ -148,10 +148,19 @@ export const BUILDING_TERRITORY_RADIUS: Record<number, number> = {
     [BuildingType.Winegrower]: 6,
 };
 
-/** Which unit type each building produces (undefined = no auto-spawn) */
+/** Which unit type each building auto-spawns at placement time (undefined = no auto-spawn) */
 export const BUILDING_UNIT_TYPE: Record<number, UnitType | undefined> = {
     [BuildingType.Lumberjack]: UnitType.Settler,
     [BuildingType.Warehouse]: undefined,
+};
+
+/**
+ * Which unit type (and count) each building spawns when construction completes.
+ * The Barrack produces soldiers, etc.
+ * Buildings not listed here don't spawn units on completion.
+ */
+export const BUILDING_SPAWN_ON_COMPLETE: Record<number, { unitType: UnitType; count: number } | undefined> = {
+    [BuildingType.Barrack]: { unitType: UnitType.Swordsman, count: 3 },
 };
 
 /**

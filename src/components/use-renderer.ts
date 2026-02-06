@@ -21,9 +21,6 @@ import {
     PlaceBuildingMode,
     type PlaceBuildingModeData,
     getDefaultInputConfig,
-    MouseButton,
-    HANDLED,
-    UNHANDLED,
 } from '@/game/input';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
 
@@ -50,17 +47,6 @@ export function useRenderer({
     let landscapeRenderer: LandscapeRenderer | null = null;
     let inputManager: InputManager | null = null;
 
-    // Formation offsets for unit movement
-    const FORMATION_OFFSETS: ReadonlyArray<readonly [number, number]> = [
-        [0, 0],
-        [1, 0], [0, 1], [-1, 0], [0, -1],
-        [1, 1], [-1, 1], [1, -1], [-1, -1],
-        [2, 0], [0, 2], [-2, 0], [0, -2],
-        [2, 1], [1, 2], [-1, 2], [-2, 1],
-        [-2, -1], [-1, -2], [1, -2], [2, -1],
-        [2, 2], [-2, 2], [2, -2], [-2, -2],
-    ];
-
     /**
      * Resolve screen coordinates to tile coordinates.
      */
@@ -71,38 +57,28 @@ export function useRenderer({
     }
 
     /**
-     * Execute a game command.
+     * Execute a game command, updating debug stats for tile clicks.
      */
     function executeCommand(command: any): boolean {
         const game = getGame();
         if (!game) return false;
-        return game.execute(command);
-    }
 
-    /**
-     * Handle unit movement commands with formation.
-     */
-    function handleMoveCommand(tileX: number, tileY: number): void {
-        const game = getGame();
-        if (!game) return;
-
-        const units: number[] = [];
-        for (const entityId of game.state.selectedEntityIds) {
-            const entity = game.state.getEntity(entityId);
-            if (entity && entity.type === EntityType.Unit) {
-                units.push(entity.id);
+        // Track tile info for debug stats on tile-targeting commands
+        if (command.type === 'select_at_tile' || command.type === 'move_selected_units') {
+            const x = command.x ?? command.targetX;
+            const y = command.y ?? command.targetY;
+            if (x !== undefined && y !== undefined) {
+                onTileClick({ x, y });
+                debugStats.state.hasTile = true;
+                debugStats.state.tileX = x;
+                debugStats.state.tileY = y;
+                const idx = game.mapSize.toIndex(x, y);
+                debugStats.state.tileGroundType = game.groundType[idx];
+                debugStats.state.tileGroundHeight = game.groundHeight[idx];
             }
         }
 
-        for (let i = 0; i < units.length; i++) {
-            const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
-            game.execute({
-                type: 'move_unit',
-                entityId: units[i],
-                targetX: tileX + offset[0],
-                targetY: tileY + offset[1],
-            });
-        }
+        return game.execute(command);
     }
 
     /**
@@ -117,7 +93,7 @@ export function useRenderer({
             tileResolver: resolveTile,
             commandExecutor: executeCommand,
             initialMode: 'select',
-            onModeChange: (oldMode, newMode, data) => {
+            onModeChange: (_oldMode, newMode, data) => {
                 // Update debugStats as the central source of truth for mode
                 debugStats.state.mode = newMode;
                 if (newMode === 'place_building' && data?.buildingType !== undefined) {
@@ -135,70 +111,8 @@ export function useRenderer({
             },
         });
 
-        // Create and register SelectMode with game-specific behavior
+        // Register SelectMode - now self-contained, no overrides needed
         const selectMode = new SelectMode();
-
-        // Override pointer up for selection and movement
-        selectMode.onPointerUp = (data, context) => {
-            // Update debug stats with tile info
-            if (data.tileX !== undefined && data.tileY !== undefined) {
-                onTileClick({ x: data.tileX, y: data.tileY });
-                debugStats.state.hasTile = true;
-                debugStats.state.tileX = data.tileX;
-                debugStats.state.tileY = data.tileY;
-
-                const game = getGame();
-                if (game) {
-                    const idx = game.mapSize.toIndex(data.tileX, data.tileY);
-                    debugStats.state.tileGroundType = game.groundType[idx];
-                    debugStats.state.tileGroundHeight = game.groundHeight[idx];
-                }
-            }
-
-            // Left click: select entity
-            if (data.button === MouseButton.Left && !context.state.drag.value?.isDragging) {
-                if (data.tileX !== undefined && data.tileY !== undefined) {
-                    const game = getGame();
-                    if (game) {
-                        const entity = game.state.getEntityAt(data.tileX, data.tileY);
-                        game.execute({ type: 'select', entityId: entity?.id ?? null });
-                    }
-                }
-                return HANDLED;
-            }
-
-            // Right click: move units
-            if (data.button === MouseButton.Right) {
-                if (data.tileX !== undefined && data.tileY !== undefined) {
-                    handleMoveCommand(data.tileX, data.tileY);
-                }
-                return HANDLED;
-            }
-
-            return UNHANDLED;
-        };
-
-        // Override drag end for box selection
-        selectMode.onDragEnd = (data, _context) => {
-            if (data.button === MouseButton.Left && data.isDragging) {
-                if (data.startTileX !== undefined && data.startTileY !== undefined &&
-                    data.currentTileX !== undefined && data.currentTileY !== undefined) {
-                    const game = getGame();
-                    if (game) {
-                        game.execute({
-                            type: 'select_area',
-                            x1: data.startTileX,
-                            y1: data.startTileY,
-                            x2: data.currentTileX,
-                            y2: data.currentTileY,
-                        });
-                    }
-                }
-                return HANDLED;
-            }
-            return UNHANDLED;
-        };
-
         inputManager.registerMode(selectMode);
 
         // Create PlaceBuildingMode - use built-in behavior with validator hook
@@ -248,11 +162,6 @@ export function useRenderer({
             // Call original handler (it does positioning, validation, and sets previewValid)
             return originalOnPointerMove(data, context);
         };
-
-        // No need to override onPointerUp - the mode's built-in behavior:
-        // 1. Calls context.executeCommand() which routes to game.execute()
-        // 2. Calls context.switchMode('select') after successful placement
-        // 3. Handles right-click cancel
 
         inputManager.registerMode(placeBuildingMode);
         inputManager.attach();
@@ -323,6 +232,7 @@ export function useRenderer({
                 entityRenderer.selectedEntityIds = g.state.selectedEntityIds;
                 entityRenderer.unitStates = g.state.unitStates;
                 entityRenderer.buildingStates = g.state.buildingStates;
+                entityRenderer.resourceStates = g.state.resourceStates;
                 entityRenderer.territoryMap = getShowTerritoryBorders() ? g.territory : null;
                 entityRenderer.territoryVersion = g.territoryVersion;
                 entityRenderer.renderAlpha = alpha;
