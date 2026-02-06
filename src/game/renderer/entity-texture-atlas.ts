@@ -7,6 +7,9 @@ import { ShaderTexture } from './shader-texture';
  */
 const ATLAS_PADDING = 1;
 
+/** Log slow main-thread operations (threshold in ms) */
+const SLOW_OP_THRESHOLD_MS = 2;
+
 /**
  * Defines a region within the texture atlas, with both pixel coordinates
  * and normalized UV coordinates for shader use.
@@ -61,10 +64,20 @@ class Slot {
     }
 }
 
+/** Maximum atlas size (16384x16384 = 1GB) - needed for all sprites with 4 directions */
+const MAX_ATLAS_SIZE = 16384;
+
+/** Initial atlas size - start at 8192 to avoid expensive grow operations during loading.
+ * 8192x8192 = 256MB which is acceptable for modern systems. */
+const INITIAL_ATLAS_SIZE = 8192;
+
 /**
  * RGBA8 texture atlas for entity sprites (buildings, units).
  * Uses slot-based row packing similar to TextureMap16Bit but with
  * 32-bit RGBA format for transparency support.
+ *
+ * The atlas starts small and grows automatically when full,
+ * reducing initial memory allocation.
  */
 export class EntityTextureAtlas extends ShaderTexture {
     private static log = new LogHandler('EntityTextureAtlas');
@@ -74,20 +87,37 @@ export class EntityTextureAtlas extends ShaderTexture {
     private atlasHeight: number;
     private slots: Slot[] = [];
 
-    constructor(size: number, textureIndex: number) {
+    /** Track all reserved regions so we can update UVs when growing */
+    private reservedRegions: AtlasRegion[] = [];
+
+    /** Maximum size this atlas can grow to */
+    private maxSize: number;
+
+    constructor(maxSize: number, textureIndex: number) {
         super(textureIndex);
 
-        this.atlasWidth = size;
-        this.atlasHeight = size;
+        this.maxSize = Math.min(maxSize, MAX_ATLAS_SIZE);
+
+        // Start with small initial size
+        const initialSize = Math.min(INITIAL_ATLAS_SIZE, this.maxSize);
+        this.atlasWidth = initialSize;
+        this.atlasHeight = initialSize;
+
         // 4 bytes per pixel (RGBA)
-        this.imgData = new Uint8Array(size * size * 4);
+        const byteLength = initialSize * initialSize * 4;
+        this.imgData = new Uint8Array(byteLength);
 
         // Initialize with transparent magenta for debugging (visible if UV coords are wrong)
-        for (let i = 0; i < size * size; i++) {
-            this.imgData[i * 4 + 0] = 255; // R
-            this.imgData[i * 4 + 1] = 0;   // G
-            this.imgData[i * 4 + 2] = 255; // B
-            this.imgData[i * 4 + 3] = 0;   // A (transparent)
+        this.fillTransparent(this.imgData, initialSize * initialSize);
+    }
+
+    /** Fill array with transparent magenta (debug color) */
+    private fillTransparent(data: Uint8Array, pixelCount: number): void {
+        for (let i = 0; i < pixelCount; i++) {
+            data[i * 4 + 0] = 255; // R
+            data[i * 4 + 1] = 0;   // G
+            data[i * 4 + 2] = 255; // B
+            data[i * 4 + 3] = 0;   // A (transparent)
         }
     }
 
@@ -103,7 +133,8 @@ export class EntityTextureAtlas extends ShaderTexture {
      * Reserve a region in the atlas for a sprite of the given dimensions.
      * Uses row-based slot packing: sprites of the same height share a row.
      * Includes padding to prevent texture bleeding.
-     * Returns null if the atlas is full.
+     * Automatically grows the atlas if needed (up to maxSize).
+     * Returns null if the atlas is full and cannot grow.
      */
     public reserve(width: number, height: number): AtlasRegion | null {
         // Account for padding in slot size
@@ -119,8 +150,13 @@ export class EntityTextureAtlas extends ShaderTexture {
 
             // Check if we have vertical space
             if (freeY + paddedHeight > this.atlasHeight) {
-                EntityTextureAtlas.log.error(`Atlas full: cannot fit ${width}x${height} sprite`);
-                return null;
+                // Try to grow the atlas
+                if (!this.grow()) {
+                    EntityTextureAtlas.log.error(`Atlas full: cannot fit ${width}x${height} sprite (max size reached)`);
+                    return null;
+                }
+                // After growing, retry finding/creating a slot
+                return this.reserve(width, height);
             }
 
             slot = new Slot(freeY, this.atlasWidth, paddedHeight);
@@ -141,7 +177,64 @@ export class EntityTextureAtlas extends ShaderTexture {
 
         slot.increase(paddedWidth);
 
-        return { x, y, width, height, u0, v0, u1, v1 };
+        const region = { x, y, width, height, u0, v0, u1, v1 };
+        this.reservedRegions.push(region);
+        return region;
+    }
+
+    /**
+     * Grow the atlas to double its current size (up to maxSize).
+     * Copies existing pixel data and updates all reserved region UVs.
+     * Returns true if growth succeeded, false if already at max size.
+     */
+    private grow(): boolean {
+        const start = performance.now();
+        const newSize = this.atlasWidth * 2;
+        if (newSize > this.maxSize) {
+            return false;
+        }
+
+        EntityTextureAtlas.log.debug(`Growing atlas from ${this.atlasWidth} to ${newSize}`);
+
+        const byteLength = newSize * newSize * 4;
+        const newData = new Uint8Array(byteLength);
+
+        this.fillTransparent(newData, newSize * newSize);
+
+        // Copy existing data row by row
+        const oldWidth = this.atlasWidth;
+        const oldHeight = this.atlasHeight;
+        for (let y = 0; y < oldHeight; y++) {
+            const srcStart = y * oldWidth * 4;
+            const srcEnd = srcStart + oldWidth * 4;
+            const dstStart = y * newSize * 4;
+            newData.set(this.imgData.subarray(srcStart, srcEnd), dstStart);
+        }
+
+        // Update atlas dimensions
+        this.atlasWidth = newSize;
+        this.atlasHeight = newSize;
+        this.imgData = newData;
+
+        // Update slot widths
+        for (const slot of this.slots) {
+            slot.width = newSize;
+        }
+
+        // Update all reserved region UVs (pixel positions stay the same)
+        for (const region of this.reservedRegions) {
+            const halfPixelU = 0.5 / this.atlasWidth;
+            const halfPixelV = 0.5 / this.atlasHeight;
+            region.u0 = region.x / this.atlasWidth + halfPixelU;
+            region.v0 = region.y / this.atlasHeight + halfPixelV;
+            region.u1 = (region.x + region.width) / this.atlasWidth - halfPixelU;
+            region.v1 = (region.y + region.height) / this.atlasHeight - halfPixelV;
+        }
+
+        const elapsed = performance.now() - start;
+        console.warn(`[Atlas] grow ${this.atlasWidth/2} -> ${newSize} took ${elapsed.toFixed(1)}ms (${this.reservedRegions.length} regions)`);
+
+        return true;
     }
 
     /**
@@ -157,6 +250,8 @@ export class EntityTextureAtlas extends ShaderTexture {
             );
             return;
         }
+
+        const start = performance.now();
 
         const src = imageData.data;
         const dst = this.imgData;
@@ -174,6 +269,11 @@ export class EntityTextureAtlas extends ShaderTexture {
                 dstRowStart
             );
         }
+
+        const elapsed = performance.now() - start;
+        if (elapsed > SLOW_OP_THRESHOLD_MS) {
+            console.warn(`[Atlas] blit ${region.width}x${region.height} took ${elapsed.toFixed(1)}ms`);
+        }
     }
 
     /**
@@ -181,6 +281,16 @@ export class EntityTextureAtlas extends ShaderTexture {
      * Uses NEAREST filtering to preserve pixel-art style.
      */
     public load(gl: WebGL2RenderingContext): void {
+        // Calculate utilization before upload
+        const usedHeight = this.slots.length > 0 ? this.slots[this.slots.length - 1].bottom : 0;
+        const utilization = (usedHeight / this.atlasHeight * 100).toFixed(1);
+        const memoryMB = (this.atlasWidth * this.atlasHeight * 4 / 1024 / 1024).toFixed(1);
+
+        EntityTextureAtlas.log.debug(
+            `Atlas final: ${this.atlasWidth}x${this.atlasHeight} (${memoryMB}MB), ` +
+            `${this.reservedRegions.length} sprites, ${utilization}% height used`
+        );
+
         super.bind(gl);
 
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
@@ -194,10 +304,6 @@ export class EntityTextureAtlas extends ShaderTexture {
             gl.RGBA,
             gl.UNSIGNED_BYTE,
             this.imgData
-        );
-
-        EntityTextureAtlas.log.debug(
-            `Uploaded ${this.atlasWidth}x${this.atlasHeight} RGBA8 atlas to GPU`
         );
     }
 

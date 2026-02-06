@@ -15,7 +15,6 @@ import {
     PLAYER_COLORS,
     TINT_PREVIEW_VALID,
     TINT_PREVIEW_INVALID,
-    computeNeutralTint,
 } from './tint-utils';
 import { MapObjectType } from '../entity';
 import { EMaterialType } from '../economy/material-type';
@@ -150,6 +149,14 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private sortedEntities: Entity[] = [];
     // Cached depth keys for sorting (parallel array with sortedEntities)
     private depthKeys: number[] = [];
+    // Reusable index array for sorting (avoids per-frame allocations)
+    private sortIndices: number[] = [];
+    // Temporary array for in-place reordering
+    private sortTempEntities: Entity[] = [];
+    // Reusable array for units with direction transitions
+    private transitioningUnits: Entity[] = [];
+    // Reusable occupancy map for building indicators (avoids per-frame Map allocation)
+    private tileOccupancy: Map<string, number> = new Map();
 
     constructor(
         mapSize: MapSize,
@@ -191,22 +198,22 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Initialize building indicator renderer
         this.buildingIndicatorRenderer.init(gl);
 
-        // Initialize sprite manager if available
+        // Initialize sprite manager if available - NON-BLOCKING
+        // Sprites load in background, camera controls work immediately
         if (this.spriteManager) {
-            const loaded = await this.spriteManager.init(gl);
+            // Pre-allocate sprite shader and buffers (cheap, no data yet)
+            this.initSpriteShader(gl);
+            this.spriteBatchData = new Float32Array(MAX_BATCH_ENTITIES * FLOATS_PER_ENTITY);
+            this.spriteBuffer = gl.createBuffer();
 
-            if (loaded) {
-                // Initialize sprite shader
-                this.initSpriteShader(gl);
-
-                // Allocate batch buffer for sprite rendering
-                this.spriteBatchData = new Float32Array(MAX_BATCH_ENTITIES * FLOATS_PER_ENTITY);
-                this.spriteBuffer = gl.createBuffer();
-
-                EntityRenderer.log.debug(
-                    `Sprite rendering enabled: ${this.spriteManager.spriteRegistry?.getBuildingCount() ?? 0} building sprites loaded for ${Race[this.spriteManager.currentRace]}`
-                );
-            }
+            // Start sprite loading in background (don't await)
+            this.spriteManager.init(gl).then(loaded => {
+                if (loaded) {
+                    EntityRenderer.log.debug(
+                        `Sprite loading complete: ${this.spriteManager?.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${Race[this.spriteManager?.currentRace ?? Race.Roman]}`
+                    );
+                }
+            });
         }
 
         return true;
@@ -335,20 +342,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.buildingIndicatorRenderer.buildingType = this.previewBuildingType;
 
         // Build tile occupancy map including full building footprints
-        const occupancy = new Map<string, number>();
+        // Reuse Map object to avoid per-frame allocation
+        this.tileOccupancy.clear();
         for (const e of this.entities) {
             if (e.type === EntityType.Building) {
                 // Add all tiles in building footprint
                 const footprint = getBuildingFootprint(e.x, e.y, e.subType as BuildingType);
                 for (const tile of footprint) {
-                    occupancy.set(`${tile.x},${tile.y}`, e.id);
+                    this.tileOccupancy.set(`${tile.x},${tile.y}`, e.id);
                 }
             } else {
                 // Single tile for non-buildings
-                occupancy.set(`${e.x},${e.y}`, e.id);
+                this.tileOccupancy.set(`${e.x},${e.y}`, e.id);
             }
         }
-        this.buildingIndicatorRenderer.tileOccupancy = occupancy;
+        this.buildingIndicatorRenderer.tileOccupancy = this.tileOccupancy;
 
         // Draw the indicators
         this.buildingIndicatorRenderer.draw(gl, projection, viewPoint, this.territoryVersion);
@@ -427,18 +435,15 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         sp.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
 
         let batchOffset = 0;
-        const transitioningUnits: Entity[] = []; // Units with direction transitions (rendered with blend shader)
+        this.transitioningUnits.length = 0; // Clear and reuse array
 
         // Use depth-sorted entities for correct painter's algorithm rendering
         for (const entity of this.sortedEntities) {
 
             let spriteEntry: SpriteEntry | null = null;
-            let tint: number[];
             let verticalProgress = 1.0; // Full visibility by default
 
             if (entity.type === EntityType.Building) {
-                const isSelected = this.selectedEntityIds.has(entity.id);
-                tint = computeNeutralTint(isSelected);
 
                 // Get building construction state
                 const buildingState = this.buildingStates.get(entity.id);
@@ -461,7 +466,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                         );
                         batchOffset = this.fillSpriteQuad(
                             batchOffset, bgWorldPos.worldX, bgWorldPos.worldY,
-                            constructionSprite, tint[0], tint[1], tint[2], tint[3]
+                            constructionSprite, 1.0, 1.0, 1.0, 1.0
                         );
                     }
                 }
@@ -498,29 +503,22 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     // Use static sprite
                     spriteEntry = this.spriteManager.getMapObject(mapObjectType);
                 }
-
-                const isSelected = this.selectedEntityIds.has(entity.id);
-                tint = computeNeutralTint(isSelected);
             } else if (entity.type === EntityType.StackedResource) {
                 // Render stacked resources (dropped goods)
                 spriteEntry = this.spriteManager.getResource(entity.subType as EMaterialType);
-                const isSelected = this.selectedEntityIds.has(entity.id);
-                tint = computeNeutralTint(isSelected);
             } else if (entity.type === EntityType.Unit) {
                 // Check if unit is in a direction transition (needs blend shader)
                 const animState = entity.animationState;
                 if (animState?.directionTransitionProgress !== undefined &&
                     animState.previousDirection !== undefined) {
                     // Collect for blend rendering (handled after regular batch)
-                    transitioningUnits.push(entity);
+                    this.transitioningUnits.push(entity);
                     continue;
                 }
 
                 // Render units (settlers, soldiers) with direction from animation state
                 const direction = animState?.direction ?? 0;
                 spriteEntry = this.spriteManager.getUnit(entity.subType as UnitType, direction);
-                const isSelected = this.selectedEntityIds.has(entity.id);
-                tint = computeNeutralTint(isSelected);
             } else {
                 continue;
             }
@@ -552,7 +550,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     worldPos.worldX,
                     worldPos.worldY,
                     spriteEntry,
-                    tint[0], tint[1], tint[2], tint[3],
+                    1.0, 1.0, 1.0, 1.0,
                     verticalProgress
                 );
             } else {
@@ -561,7 +559,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     worldPos.worldX,
                     worldPos.worldY,
                     spriteEntry,
-                    tint[0], tint[1], tint[2], tint[3]
+                    1.0, 1.0, 1.0, 1.0
                 );
             }
         }
@@ -572,8 +570,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
 
         // Render units with direction transitions using blend shader
-        if (transitioningUnits.length > 0) {
-            this.drawTransitioningUnits(gl, projection, viewPoint, transitioningUnits);
+        if (this.transitioningUnits.length > 0) {
+            this.drawTransitioningUnits(gl, projection, viewPoint, this.transitioningUnits);
         }
     }
 
@@ -611,9 +609,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
             if (!oldSprite || !newSprite) continue;
 
-            const isSelected = this.selectedEntityIds.has(entity.id);
-            const tint = computeNeutralTint(isSelected);
-
             const worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
 
             // Check batch capacity
@@ -629,7 +624,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 oldSprite,
                 newSprite,
                 blendFactor,
-                tint[0], tint[1], tint[2], tint[3]
+                1.0, 1.0, 1.0, 1.0
             );
         }
 
@@ -1232,14 +1227,31 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
 
         // Sort by depth key (smaller = behind = drawn first)
-        // Use indices to sort both arrays together
-        const indices = this.sortedEntities.map((_, i) => i);
-        indices.sort((a, b) => this.depthKeys[a] - this.depthKeys[b]);
+        // Reuse index array to avoid per-frame allocations
+        const count = this.sortedEntities.length;
 
-        // Reorder arrays based on sorted indices
-        const sortedEntitiesCopy = indices.map(i => this.sortedEntities[i]);
-        for (let i = 0; i < sortedEntitiesCopy.length; i++) {
-            this.sortedEntities[i] = sortedEntitiesCopy[i];
+        // Resize reusable arrays if needed (grows but never shrinks)
+        if (this.sortIndices.length < count) {
+            this.sortIndices.length = count;
+            this.sortTempEntities.length = count;
+        }
+
+        // Populate indices
+        for (let i = 0; i < count; i++) {
+            this.sortIndices[i] = i;
+        }
+
+        // Sort indices by depth key
+        const depthKeys = this.depthKeys;
+        this.sortIndices.length = count; // Truncate to actual count for sort
+        this.sortIndices.sort((a, b) => depthKeys[a] - depthKeys[b]);
+
+        // Reorder entities using temp array (avoids allocating new array)
+        for (let i = 0; i < count; i++) {
+            this.sortTempEntities[i] = this.sortedEntities[this.sortIndices[i]];
+        }
+        for (let i = 0; i < count; i++) {
+            this.sortedEntities[i] = this.sortTempEntities[i];
         }
     }
 
