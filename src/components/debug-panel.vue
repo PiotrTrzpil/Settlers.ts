@@ -33,6 +33,60 @@
         </div>
       </section>
 
+      <!-- Load Timings -->
+      <section class="debug-section">
+        <h3 class="section-header" @click="sections.loadTimings = !sections.loadTimings">
+          <span class="caret">{{ sections.loadTimings ? '&#x25BC;' : '&#x25B6;' }}</span>
+          Load Timings
+        </h3>
+        <div v-if="sections.loadTimings" class="section-body">
+          <div class="stat-row">
+            <span class="stat-label">Landscape</span>
+            <span class="stat-value">{{ stats.loadTimings.landscape }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">File preload</span>
+            <span class="stat-value">{{ stats.loadTimings.filePreload }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Atlas alloc</span>
+            <span class="stat-value">{{ stats.loadTimings.atlasAlloc }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Buildings</span>
+            <span class="stat-value">{{ stats.loadTimings.buildings }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Map objects</span>
+            <span class="stat-value">{{ stats.loadTimings.mapObjects }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Resources</span>
+            <span class="stat-value">{{ stats.loadTimings.resources }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Units</span>
+            <span class="stat-value">{{ stats.loadTimings.units }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">GPU upload</span>
+            <span class="stat-value">{{ stats.loadTimings.gpuUpload }} ms</span>
+          </div>
+          <div class="stat-row total-row">
+            <span class="stat-label">Total sprites</span>
+            <span class="stat-value">{{ stats.loadTimings.totalSprites }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Atlas size</span>
+            <span class="stat-value">{{ stats.loadTimings.atlasSize || '-' }}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Sprite count</span>
+            <span class="stat-value">{{ stats.loadTimings.spriteCount }}</span>
+          </div>
+        </div>
+      </section>
+
       <!-- Entities -->
       <section class="debug-section">
         <h3 class="section-header" @click="sections.entities = !sections.entities">
@@ -255,6 +309,7 @@ const open = computed({
 
 const sections = reactive({
     perf: true,
+    loadTimings: false,
     entities: true,
     camera: true,
     tile: true,
@@ -498,6 +553,17 @@ const fpsClass = computed(() => {
 .fps-good { color: #80c080; }
 .fps-ok { color: #d4a030; }
 .fps-bad { color: #d04040; }
+
+.total-row {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid #3a2a10;
+  font-weight: bold;
+}
+
+.total-row .stat-value {
+  color: #e0c080;
+}
 
 .slider-value {
   display: flex;

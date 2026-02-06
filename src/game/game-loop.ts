@@ -5,6 +5,7 @@ import { updateIdleBehavior } from './systems/idle-behavior';
 import { LogHandler } from '@/utilities/log-handler';
 import { debugStats } from './debug-stats';
 import { MapSize } from '@/utilities/map-size';
+import Stats from 'stats.js';
 
 const TICK_RATE = 30;
 const TICK_DURATION = 1 / TICK_RATE;
@@ -21,6 +22,7 @@ export class GameLoop {
     private lastTime = 0;
     private running = false;
     private animRequest = 0;
+    private stats: Stats | null = null;
 
     private gameState: GameState;
     private groundType: Uint8Array | undefined;
@@ -34,6 +36,17 @@ export class GameLoop {
 
     constructor(gameState: GameState) {
         this.gameState = gameState;
+        this.initStats();
+    }
+
+    /** Initialize stats.js panel (shows FPS graph in top-left corner) */
+    private initStats(): void {
+        this.stats = new Stats();
+        this.stats.showPanel(0); // 0: fps, 1: ms, 2: mb
+        this.stats.dom.style.position = 'absolute';
+        this.stats.dom.style.top = '10px';
+        this.stats.dom.style.left = '10px';
+        document.body.appendChild(this.stats.dom);
     }
 
     /** Provide terrain data so movement obstacle resolution can function */
@@ -76,6 +89,10 @@ export class GameLoop {
             cancelAnimationFrame(this.animRequest);
             this.animRequest = 0;
         }
+        if (this.stats) {
+            this.stats.dom.remove();
+            this.stats = null;
+        }
     }
 
     public get isRunning(): boolean {
@@ -85,6 +102,7 @@ export class GameLoop {
     private frame(now: number): void {
         if (!this.running) return;
 
+        this.stats?.begin();
         debugStats.recordFrame(now);
 
         try {
@@ -113,6 +131,7 @@ export class GameLoop {
             GameLoop.log.error('Error in game frame', e instanceof Error ? e : new Error(String(e)));
         }
 
+        this.stats?.end();
         this.animRequest = requestAnimationFrame((t) => this.frame(t));
     }
 

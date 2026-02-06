@@ -5,11 +5,29 @@ import type { Game } from './game';
 const WINDOW_SIZE = 60;
 const SETTINGS_STORAGE_KEY = 'settlers_debug_settings';
 
+/** Load timing data for each layer */
+export interface LoadTimings {
+    landscape: number;
+    filePreload: number;
+    atlasAlloc: number;
+    buildings: number;
+    mapObjects: number;
+    resources: number;
+    units: number;
+    gpuUpload: number;
+    totalSprites: number;
+    atlasSize: string;
+    spriteCount: number;
+}
+
 export interface DebugStatsState {
     // Readiness (for Playwright tests)
     gameLoaded: boolean;
     rendererReady: boolean;
     frameCount: number;
+
+    // Load timings
+    loadTimings: LoadTimings;
 
     // Performance
     fps: number;
@@ -139,6 +157,19 @@ class DebugStats {
             gameLoaded: false,
             rendererReady: false,
             frameCount: 0,
+            loadTimings: {
+                landscape: 0,
+                filePreload: 0,
+                atlasAlloc: 0,
+                buildings: 0,
+                mapObjects: 0,
+                resources: 0,
+                units: 0,
+                gpuUpload: 0,
+                totalSprites: 0,
+                atlasSize: '',
+                spriteCount: 0,
+            },
             fps: 0,
             frameTimeMs: 0,
             frameTimeMin: 0,
