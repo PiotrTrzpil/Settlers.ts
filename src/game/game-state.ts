@@ -1,14 +1,93 @@
-import { Entity, EntityType, UnitType, UnitState, BuildingState, BuildingConstructionPhase, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE, isUnitTypeSelectable, getUnitTypeSpeed } from './entity';
+import { Entity, EntityType, UnitType, BuildingState, BuildingConstructionPhase, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE, isUnitTypeSelectable, getUnitTypeSpeed } from './entity';
 import { EMaterialType } from './economy/material-type';
+import { MovementSystem, MovementController } from './systems/movement/index';
+import { cleanupIdleState } from './systems/idle-behavior';
 
 /** Default building construction duration in seconds */
 export const DEFAULT_CONSTRUCTION_DURATION = 30;
+
+/**
+ * Legacy UnitState interface for backward compatibility.
+ * This is a read-only view into a MovementController.
+ * Note: Animation-related state (idleTime, etc.) is now managed by the animation system.
+ */
+export interface UnitStateView {
+    readonly entityId: number;
+    readonly path: ReadonlyArray<{ x: number; y: number }>;
+    readonly pathIndex: number;
+    readonly moveProgress: number;
+    readonly speed: number;
+    readonly prevX: number;
+    readonly prevY: number;
+}
+
+/**
+ * Adapter that wraps a MovementController as a UnitStateView.
+ * Provides backward-compatible read access to movement state.
+ */
+class UnitStateAdapter implements UnitStateView {
+    constructor(private controller: MovementController) {}
+
+    get entityId(): number { return this.controller.entityId }
+    get path(): ReadonlyArray<{ x: number; y: number }> { return this.controller.path }
+    get pathIndex(): number { return this.controller.pathIndex }
+    get moveProgress(): number { return this.controller.progress }
+    get speed(): number { return this.controller.speed }
+    get prevX(): number { return this.controller.prevTileX }
+    get prevY(): number { return this.controller.prevTileY }
+}
+
+/**
+ * Adapter Map that provides legacy unitStates interface.
+ * Wraps MovementSystem for backward compatibility with existing code.
+ */
+class UnitStatesMap {
+    constructor(private movementSystem: MovementSystem) {}
+
+    get(entityId: number): UnitStateView | undefined {
+        const controller = this.movementSystem.getController(entityId);
+        return controller ? new UnitStateAdapter(controller) : undefined;
+    }
+
+    has(entityId: number): boolean {
+        return this.movementSystem.hasController(entityId);
+    }
+
+    delete(entityId: number): boolean {
+        if (this.movementSystem.hasController(entityId)) {
+            this.movementSystem.removeController(entityId);
+            return true;
+        }
+        return false;
+    }
+
+    values(): IterableIterator<UnitStateView> {
+        const self = this;
+        return (function* () {
+            for (const controller of self.movementSystem.getAllControllers()) {
+                yield new UnitStateAdapter(controller);
+            }
+        })();
+    }
+
+    *[Symbol.iterator](): IterableIterator<[number, UnitStateView]> {
+        for (const controller of this.movementSystem.getAllControllers()) {
+            yield [controller.entityId, new UnitStateAdapter(controller)];
+        }
+    }
+}
 
 export class GameState {
     public entities: Entity[] = [];
     /** O(1) entity lookup by ID */
     private entityMap: Map<number, Entity> = new Map();
-    public unitStates: Map<number, UnitState> = new Map();
+
+    /** Movement system for all units */
+    public readonly movement: MovementSystem = new MovementSystem();
+
+    /** Legacy adapter for backward compatibility - wraps movement system */
+    public readonly unitStates: UnitStatesMap;
+
     /** Building construction state tracking */
     public buildingStates: Map<number, BuildingState> = new Map();
     /** Stacked resource state tracking (quantity of items in each stack) */
@@ -21,6 +100,28 @@ export class GameState {
 
     /** Spatial lookup: "x,y" -> entityId */
     public tileOccupancy: Map<string, number> = new Map();
+
+    constructor() {
+        this.unitStates = new UnitStatesMap(this.movement);
+
+        // Set up movement system callbacks
+        this.movement.setCallbacks(
+            (id, x, y) => {
+                this.updateEntityPosition(id, x, y);
+                return true;
+            },
+            (id) => this.getEntity(id)
+        );
+        this.movement.setTileOccupancy(this.tileOccupancy);
+    }
+
+    /**
+     * Initialize terrain data for the movement system.
+     * Must be called after map is loaded.
+     */
+    public setTerrainData(groundType: Uint8Array, groundHeight: Uint8Array, mapWidth: number, mapHeight: number): void {
+        this.movement.setTerrainData(groundType, groundHeight, mapWidth, mapHeight);
+    }
 
     /**
      * Add an entity to the game state.
@@ -61,15 +162,8 @@ export class GameState {
         }
 
         if (type === EntityType.Unit) {
-            this.unitStates.set(entity.id, {
-                entityId: entity.id,
-                path: [],
-                pathIndex: 0,
-                moveProgress: 0,
-                speed: getUnitTypeSpeed(subType as UnitType),
-                prevX: x,
-                prevY: y
-            });
+            const speed = getUnitTypeSpeed(subType as UnitType);
+            this.movement.createController(entity.id, x, y, speed);
         }
 
         if (type === EntityType.Building) {
@@ -118,7 +212,8 @@ export class GameState {
             this.tileOccupancy.delete(tileKey(entity.x, entity.y));
         }
 
-        this.unitStates.delete(id);
+        this.movement.removeController(id);
+        cleanupIdleState(id);
         this.buildingStates.delete(id);
         this.resourceStates.delete(id);
 

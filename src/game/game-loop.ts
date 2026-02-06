@@ -1,7 +1,7 @@
 import { GameState } from './game-state';
-import { updateMovement } from './systems/movement';
 import { updateBuildingConstruction, TerrainContext } from './systems/building-construction';
 import { updateAnimations, AnimationDataProvider } from './systems/animation';
+import { updateIdleBehavior } from './systems/idle-behavior';
 import { LogHandler } from '@/utilities/log-handler';
 import { debugStats } from './debug-stats';
 import { MapSize } from '@/utilities/map-size';
@@ -43,6 +43,9 @@ export class GameLoop {
         this.mapWidth = mapWidth;
         this.mapHeight = mapHeight;
         this.mapSize = new MapSize(mapWidth, mapHeight);
+
+        // Initialize terrain data in the movement system
+        this.gameState.setTerrainData(groundType, groundHeight, mapWidth, mapHeight);
     }
 
     /** Set the render callback, called every animation frame with interpolation alpha and delta time */
@@ -115,7 +118,9 @@ export class GameLoop {
 
     private tick(dt: number): void {
         debugStats.recordTick();
-        updateMovement(this.gameState, dt, this.groundType, this.groundHeight, this.mapWidth, this.mapHeight);
+        // Update unit movement using the new MovementSystem
+        this.gameState.movement.update(dt);
+        updateIdleBehavior(this.gameState, dt);
 
         // Create terrain context for building construction if terrain data is available
         let terrainContext: TerrainContext | undefined;
