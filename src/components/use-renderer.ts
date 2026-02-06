@@ -223,6 +223,7 @@ export function useRenderer({
         (window as any).__settlers_viewpoint__ = renderer.viewPoint;
         (window as any).__settlers_landscape__ = landscapeRenderer;
         (window as any).__settlers_entity_renderer__ = entityRenderer;
+        (window as any).__settlers_input__ = inputManager;
 
         // Set up terrain modification callback
         game.gameLoop.setTerrainModifiedCallback(() => {

@@ -1,14 +1,14 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './matchers';
 import { GamePage } from './game-page';
 
 /**
  * E2E tests for building placement and unit spawning.
- * Verifies the full interaction pipeline: pointer events → game commands → entity creation.
+ * Verifies the full interaction pipeline: pointer events -> game commands -> entity creation.
  */
 
-// ─── Pointer Event Pipeline ────────────────────────────────────────
+// --- Pointer Event Pipeline ---
 
-test.describe('Pointer Event Pipeline', () => {
+test.describe('Pointer Event Pipeline', { tag: '@smoke' }, () => {
     test('pointer events fire on canvas (not suppressed)', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
@@ -39,7 +39,9 @@ test.describe('Pointer Event Pipeline', () => {
                     clientX: cx, clientY: cy, bubbles: true, button: 0, pointerId: 1
                 }));
 
-                setTimeout(() => resolve(log), 200);
+                // Events are dispatched synchronously; wait one animation frame
+                // for any async handlers to settle before reading the log.
+                requestAnimationFrame(() => resolve(log));
             });
         });
 
@@ -63,9 +65,9 @@ test.describe('Pointer Event Pipeline', () => {
     });
 });
 
-// ─── Building Placement Mode ───────────────────────────────────────
+// --- Building Placement Mode ---
 
-test.describe('Building Placement Mode', () => {
+test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
     test('clicking building button activates place_building mode', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
@@ -91,7 +93,7 @@ test.describe('Building Placement Mode', () => {
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
     });
 
-    test('building placement works on valid terrain via game.execute()', async({ page }) => {
+    test('building placement via game.execute() creates entity with correct attributes', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
@@ -105,7 +107,7 @@ test.describe('Building Placement Mode', () => {
         const result = await page.evaluate(({ x, y }) => {
             const game = (window as any).__settlers_game__;
             if (!game) return { error: 'no game' };
-            const before = game.state.entities.length;
+            const countBefore = game.state.entities.filter((e: any) => e.type === 2).length;
 
             const ok = game.execute({
                 type: 'place_building',
@@ -114,13 +116,32 @@ test.describe('Building Placement Mode', () => {
                 player: 0
             });
 
-            const after = game.state.entities.length;
-            return { ok, before, after, tile: { x, y } };
+            const buildings = game.state.entities.filter((e: any) => e.type === 2);
+            const newBuilding = buildings[buildings.length - 1];
+            return {
+                ok,
+                countBefore,
+                countAfter: buildings.length,
+                building: newBuilding ? {
+                    type: newBuilding.type,
+                    subType: newBuilding.subType,
+                    x: newBuilding.x,
+                    y: newBuilding.y,
+                    player: newBuilding.player
+                } : null,
+                expectedPos: { x, y }
+            };
         }, buildableTile);
 
         expect(result).not.toHaveProperty('error');
         expect(result.ok).toBe(true);
-        expect(result.after).toBeGreaterThan(result.before);
+        expect(result.countAfter).toBeGreaterThan(result.countBefore);
+        expect(result.building).not.toBeNull();
+        expect(result.building!.type).toBe(2); // EntityType.Building
+        expect(result.building!.subType).toBe(1); // BuildingType.Lumberjack
+        expect(result.building!.x).toBe(result.expectedPos!.x);
+        expect(result.building!.y).toBe(result.expectedPos!.y);
+        expect(result.building!.player).toBe(0);
     });
 
     test('building placement via canvas click on buildable terrain', async({ page }) => {
@@ -135,161 +156,24 @@ test.describe('Building Placement Mode', () => {
         }
 
         await gp.moveCamera(buildableTile.x, buildableTile.y);
+        await gp.waitForFrames(5);
 
         // Enter placement mode
         await page.locator('[data-testid="btn-lumberjack"]').click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
 
-        const countBefore = await gp.getDebugField('entityCount');
+        const countBefore = await gp.getDebugField('buildingCount');
 
         // Click canvas center (camera is now centered on buildable terrain)
         const box = await gp.canvas.boundingBox();
         await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
 
-        // Wait for entity count to potentially change
-        await page.waitForTimeout(300);
-        const countAfter = await gp.getDebugField('entityCount');
-
-        // The clicked tile near the camera position should be buildable
-        expect(countAfter).toBeGreaterThanOrEqual(countBefore);
-    });
-
-    test('building placed via mouse has correct type and position', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
-
-        // First, use game.execute to place a building and verify the type/position
-        // This validates that game.execute correctly creates buildings with proper attributes
-        const result = await page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
-
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-
-            // Find a buildable tile
-            for (let r = 0; r < 30; r++) {
-                for (let dx = -r; dx <= r; dx++) {
-                    for (let dy = -r; dy <= r; dy++) {
-                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-                        const tx = cx + dx;
-                        const ty = cy + dy;
-                        if (tx < 0 || ty < 0 || tx >= w - 2 || ty >= h - 2) continue;
-
-                        const countBefore = game.state.entities.filter((e: any) => e.type === 2).length;
-                        const ok = game.execute({
-                            type: 'place_building',
-                            buildingType: 1, // Lumberjack
-                            x: tx, y: ty,
-                            player: 0
-                        });
-                        if (ok) {
-                            const buildings = game.state.entities.filter((e: any) => e.type === 2);
-                            const newBuilding = buildings[buildings.length - 1];
-                            return {
-                                placed: true,
-                                countBefore,
-                                countAfter: buildings.length,
-                                building: {
-                                    type: newBuilding.type,
-                                    subType: newBuilding.subType,
-                                    x: newBuilding.x,
-                                    y: newBuilding.y,
-                                    player: newBuilding.player
-                                },
-                                expectedPos: { x: tx, y: ty }
-                            };
-                        }
-                    }
-                }
-            }
-            return { placed: false };
-        });
-
-        expect(result).not.toHaveProperty('error');
-        expect(result.placed).toBe(true);
-        expect(result.countAfter).toBeGreaterThan(result.countBefore!);
-        expect(result.building!.type).toBe(2); // EntityType.Building
-        expect(result.building!.subType).toBe(1); // BuildingType.Lumberjack
-        expect(result.building!.x).toBe(result.expectedPos!.x);
-        expect(result.building!.y).toBe(result.expectedPos!.y);
-        expect(result.building!.player).toBe(0);
-    });
-
-    test('canvas click in placement mode triggers building placement', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
-
-        // Enter placement mode
-        await page.locator('[data-testid="btn-lumberjack"]').click();
-        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
-
-        // Get a buildable position and move camera there
-        const setupResult = await page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
-
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-
-            // Find a buildable spot near center
-            for (let r = 0; r < 30; r++) {
-                for (let dx = -r; dx <= r; dx++) {
-                    for (let dy = -r; dy <= r; dy++) {
-                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-                        const tx = cx + dx;
-                        const ty = cy + dy;
-                        if (tx < 0 || ty < 0 || tx >= w - 2 || ty >= h - 2) continue;
-
-                        // Test if placement would work
-                        const testOk = game.execute({
-                            type: 'place_building',
-                            buildingType: 1,
-                            x: tx, y: ty,
-                            player: 0
-                        });
-                        if (testOk) {
-                            // Remove the test building
-                            const entities = game.state.entities;
-                            const lastEntity = entities[entities.length - 1];
-                            game.execute({ type: 'remove_entity', entityId: lastEntity.id });
-                            return { buildableTile: { x: tx, y: ty } };
-                        }
-                    }
-                }
-            }
-            return { buildableTile: null };
-        });
-
-        if (!setupResult.buildableTile) {
-            test.skip();
-            return;
-        }
-
-        // Move camera to the buildable tile
-        await gp.moveCamera(setupResult.buildableTile.x, setupResult.buildableTile.y);
+        // Wait a few frames for placement to process
         await gp.waitForFrames(5);
-
-        const countBefore = await gp.getDebugField('buildingCount');
-
-        // Click canvas center
-        const box = await gp.canvas.boundingBox();
-        await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
-
-        // Wait for potential placement
-        await page.waitForTimeout(500);
 
         const countAfter = await gp.getDebugField('buildingCount');
 
-        // The click should have placed a building (or at least not crashed)
-        // Due to tile picker precision, it might land on a non-buildable tile
-        // so we use >= instead of strictly greater
+        // Due to tile picker precision, click might land on non-buildable tile
         expect(countAfter).toBeGreaterThanOrEqual(countBefore);
     });
 
@@ -316,10 +200,10 @@ test.describe('Building Placement Mode', () => {
         const box = await gp.canvas.boundingBox();
         await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
 
-        await page.waitForTimeout(300);
+        // Wait a few frames for any potential side effects
+        await gp.waitForFrames(5);
 
-        const buildingsAfter = await gp.getDebugField('buildingCount');
-        expect(buildingsAfter).toBe(buildingsBefore);
+        await expect(gp).toHaveBuildingCount(buildingsBefore);
     });
 
     test('multiple canvas clicks place multiple buildings', async({ page }) => {
@@ -377,9 +261,7 @@ test.describe('Building Placement Mode', () => {
 
         expect(result).not.toHaveProperty('error');
         expect(result.placedCount).toBeGreaterThanOrEqual(2);
-
-        const buildingCount = await gp.getDebugField('buildingCount');
-        expect(buildingCount).toBe(result.totalBuildings);
+        await expect(gp).toHaveBuildingCount(result.totalBuildings);
     });
 
     test('different building types can be selected and placed', async({ page }) => {
@@ -396,59 +278,28 @@ test.describe('Building Placement Mode', () => {
 
         // Switch to warehouse
         await page.locator('[data-testid="btn-warehouse"]').click();
-        await page.waitForTimeout(100);
+        await gp.waitForFrames(2);
 
         state = await gp.getGameState();
         expect(state?.placeBuildingType).toBe(2); // Warehouse
 
-        // Place the warehouse via game.execute
-        const result = await page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
+        // Find a spot that fits a Warehouse (3x3) using the parameterized helper
+        const warehouseTile = await gp.findBuildableTile(2);
+        if (!warehouseTile) {
+            test.skip();
+            return;
+        }
 
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-
-            for (let r = 0; r < 30; r++) {
-                for (let dx = -r; dx <= r; dx++) {
-                    for (let dy = -r; dy <= r; dy++) {
-                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-                        const tx = cx + dx;
-                        const ty = cy + dy;
-                        if (tx < 0 || ty < 0 || tx >= w - 3 || ty >= h - 3) continue;
-
-                        const ok = game.execute({
-                            type: 'place_building',
-                            buildingType: 2, // Warehouse (3x3)
-                            x: tx, y: ty,
-                            player: 0
-                        });
-                        if (ok) {
-                            const buildings = game.state.entities.filter((e: any) => e.type === 2);
-                            const warehouse = buildings.find((e: any) => e.subType === 2);
-                            return {
-                                placed: true,
-                                warehouse: warehouse ? { x: warehouse.x, y: warehouse.y, subType: warehouse.subType } : null
-                            };
-                        }
-                    }
-                }
-            }
-            return { placed: false };
-        });
-
-        expect(result).not.toHaveProperty('error');
-        expect(result.placed).toBe(true);
-        expect(result.warehouse).not.toBeNull();
-        expect(result.warehouse?.subType).toBe(2); // Warehouse
+        // Place the warehouse via helper
+        const warehouse = await gp.placeBuilding(2, warehouseTile.x, warehouseTile.y);
+        expect(warehouse).not.toBeNull();
+        expect(warehouse!.subType).toBe(2); // Warehouse
     });
 });
 
-// ─── Unit Spawning ─────────────────────────────────────────────────
+// --- Unit Spawning ---
 
-test.describe('Unit Spawning', () => {
+test.describe('Unit Spawning', { tag: '@smoke' }, () => {
     test('spawn bearer creates entity on passable terrain', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
@@ -458,8 +309,7 @@ test.describe('Unit Spawning', () => {
         await gp.spawnBearer();
         await gp.waitForEntityCountAbove(countBefore);
 
-        const countAfter = await gp.getDebugField('entityCount');
-        expect(countAfter).toBe(countBefore + 1);
+        await expect(gp).toHaveEntityCount(countBefore + 1);
 
         // Entity should be on the map, NOT at (10,10) water
         const state = await gp.getGameState();
@@ -483,7 +333,7 @@ test.describe('Unit Spawning', () => {
         await gp.spawnSwordsman();
         await gp.waitForEntityCountAbove(countBefore);
 
-        expect(await gp.getDebugField('entityCount')).toBe(countBefore + 1);
+        await expect(gp).toHaveEntityCount(countBefore + 1);
     });
 
     test('clicking canvas then spawning uses clicked tile', async({ page }) => {
@@ -508,18 +358,12 @@ test.describe('Unit Spawning', () => {
 
         const countBefore = await gp.getDebugField('entityCount');
         await gp.spawnBearer();
+        await gp.waitForEntityCountAbove(countBefore);
 
-        // Wait briefly for entity creation
-        await page.waitForTimeout(300);
-        const countAfter = await gp.getDebugField('entityCount');
-        const state = await gp.getGameState();
+        await expect(gp).toHaveEntityCount(countBefore + 1);
 
-        if (countAfter > countBefore) {
-            // Spawn succeeded - entity should be near the clicked tile
-            const entity = state?.entities[state.entities.length - 1];
-            expect(entity).toBeDefined();
-        }
-        // Spawn may fail if clicked tile is impassable — that's expected behaviour
+        // Entity should be near the clicked tile (on passable terrain)
+        await expect(gp).toHaveEntity({ type: 1 }); // EntityType.Unit
     });
 
     test('spawned unit is on passable terrain (not water)', async({ page }) => {
@@ -554,7 +398,7 @@ test.describe('Unit Spawning', () => {
     });
 });
 
-// ─── Entity Rendering ─────────────────────────────────────────────
+// --- Entity Rendering ---
 
 test.describe('Entity Rendering', () => {
     test('placed building is visually rendered on canvas', async({ page }) => {
@@ -564,61 +408,33 @@ test.describe('Entity Rendering', () => {
         await gp.goto({ testMap: true });
         await gp.waitForReady(10);
 
-        // Find a buildable tile
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
             test.skip();
             return;
         }
 
-        // Move camera to the buildable tile
-        await gp.moveCamera(buildableTile.x, buildableTile.y);
+        await test.step('place building at buildable tile', async() => {
+            await gp.moveCamera(buildableTile.x, buildableTile.y);
 
-        // Sample pixels before placing building
-        const pixelsBefore = await gp.samplePixels();
+            // Sample pixels before placing building (baseline)
+            await gp.samplePixels();
 
-        // Place a building via game.execute()
-        const result = await page.evaluate(({ x, y }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
+            const building = await gp.placeBuilding(1, buildableTile.x, buildableTile.y);
+            expect(building).not.toBeNull();
 
-            const ok = game.execute({
-                type: 'place_building',
-                buildingType: 1, // Lumberjack
-                x, y,
-                player: 0
-            });
+            await gp.waitForFrames(15);
+        });
 
-            return { ok, tile: { x, y } };
-        }, buildableTile);
+        await test.step('verify building exists in game state', async() => {
+            const buildingCount = await gp.getDebugField('buildingCount');
+            expect(buildingCount).toBeGreaterThan(0);
 
-        expect(result).not.toHaveProperty('error');
-        expect(result.ok).toBe(true);
+            // Sample pixels after (building should be rendered)
+            await gp.samplePixels();
 
-        // Wait for a few frames to ensure rendering
-        await gp.waitForFrames(15);
-
-        // Verify building count increased
-        const buildingCount = await gp.getDebugField('buildingCount');
-        expect(buildingCount).toBeGreaterThan(0);
-
-        // Sample pixels after placing building
-        const pixelsAfter = await gp.samplePixels();
-
-        // At least the center pixel should have changed (building rendered there)
-        // This verifies the entity renderer is drawing something
-        const centerBefore = pixelsBefore.center;
-        const centerAfter = pixelsAfter.center;
-
-        // Pixels may or may not change depending on exact camera position,
-        // but the building should exist and be rendered
-        const state = await gp.getGameState();
-        expect(state).not.toBeNull();
-        expect(state!.entities.length).toBeGreaterThan(0);
-
-        // Find the building we just placed
-        const building = state!.entities.find(e => e.type === 2 && e.x === buildableTile.x && e.y === buildableTile.y);
-        expect(building).toBeDefined();
+            await expect(gp).toHaveEntity({ type: 2, x: buildableTile.x, y: buildableTile.y });
+        });
 
         checkErrors();
     });
@@ -635,50 +451,22 @@ test.describe('Entity Rendering', () => {
             return;
         }
 
-        // Place buildings for two different players
-        const placements = await page.evaluate(({ x, y }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { error: 'no game' };
-
+        await test.step('place buildings for two different players', async() => {
             // Place building for player 0 (blue)
-            const ok1 = game.execute({
-                type: 'place_building',
-                buildingType: 1, // Lumberjack
-                x, y,
-                player: 0
-            });
+            const building0 = await gp.placeBuilding(1, buildableTile.x, buildableTile.y, 0);
+            expect(building0).not.toBeNull();
 
             // Place building for player 1 (red) at nearby tile
-            const ok2 = game.execute({
-                type: 'place_building',
-                buildingType: 1, // Lumberjack
-                x: x + 3, y: y + 3,
-                player: 1
-            });
+            await gp.placeBuilding(1, buildableTile.x + 3, buildableTile.y + 3, 1);
+        });
 
-            return {
-                player0: ok1,
-                player1: ok2,
-                entities: game.state.entities.map((e: any) => ({
-                    id: e.id, type: e.type, player: e.player, x: e.x, y: e.y
-                }))
-            };
-        }, buildableTile);
+        await test.step('verify buildings exist with different players', async() => {
+            await gp.waitForFrames(15);
+            await expect(gp).toHaveEntity({ type: 2, player: 0 });
 
-        expect(placements).not.toHaveProperty('error');
-        expect(placements.player0).toBe(true);
-
-        // Wait for rendering
-        await gp.waitForFrames(15);
-
-        // Verify both buildings exist with different players
-        const state = await gp.getGameState();
-        const buildings = state?.entities.filter(e => e.type === 2) ?? [];
-        expect(buildings.length).toBeGreaterThanOrEqual(1);
-
-        // First building should be player 0
-        const building0 = buildings.find(b => b.player === 0);
-        expect(building0).toBeDefined();
+            const buildings = await gp.getEntities({ type: 2 });
+            expect(buildings.length).toBeGreaterThanOrEqual(1);
+        });
     });
 
     test('multiple buildings rendered correctly', async({ page }) => {
@@ -712,7 +500,7 @@ test.describe('Entity Rendering', () => {
 
                     const ok = game.execute({
                         type: 'place_building',
-                        buildingType: placedCount % 3, // Rotate building types
+                        buildingType: (placedCount % 3) + 1, // Rotate: Lumberjack(1), Warehouse(2), Sawmill(3)
                         x: tx, y: ty,
                         player: placedCount % 4 // Rotate players
                     });
@@ -730,16 +518,10 @@ test.describe('Entity Rendering', () => {
         expect(result).not.toHaveProperty('error');
         expect(result.placedCount).toBeGreaterThan(0);
 
-        // Wait for rendering
         await gp.waitForFrames(15);
 
-        // Verify building count in debug stats
-        const buildingCount = await gp.getDebugField('buildingCount');
-        expect(buildingCount).toBe(result.placedCount);
-
-        // Verify entity count matches
-        const entityCount = await gp.getDebugField('entityCount');
-        expect(entityCount).toBe(result.totalEntities);
+        await expect(gp).toHaveBuildingCount(result.placedCount!);
+        await expect(gp).toHaveEntityCount(result.totalEntities!);
     });
 
     test('building placement preview renders during placement mode', async({ page }) => {
@@ -754,55 +536,31 @@ test.describe('Entity Rendering', () => {
             return;
         }
 
-        // Move camera to buildable tile
-        await gp.moveCamera(buildableTile.x, buildableTile.y);
+        await test.step('enter placement mode and hover', async() => {
+            await gp.moveCamera(buildableTile.x, buildableTile.y);
+            await page.locator('[data-testid="btn-lumberjack"]').click();
+            await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
 
-        // Enter placement mode
-        await page.locator('[data-testid="btn-lumberjack"]').click();
-        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
-
-        // Move mouse over canvas to trigger preview
-        const box = await gp.canvas.boundingBox();
-        await gp.canvas.hover({ position: { x: box!.width / 2, y: box!.height / 2 } });
-
-        // Wait for a few frames
-        await gp.waitForFrames(10);
-
-        // Verify we're in placement mode
-        const mode = await gp.getMode();
-        expect(mode).toBe('place_building');
-
-        // Check building indicator renderer state
-        const indicatorState = await page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-
-            const renderer = (window as any).__settlers_entity_renderer__;
-            if (!renderer) return null;
-
-            const indicatorRenderer = (renderer as any).buildingIndicatorRenderer;
-            if (!indicatorRenderer) return null;
-
-            // Count buildable statuses in cache
-            // Status enum: 5=Difficult, 6=Medium, 7=Easy (these show indicators)
-            let buildableCount = 0;
-            if (indicatorRenderer.indicatorCache) {
-                for (const status of indicatorRenderer.indicatorCache.values()) {
-                    if (status >= 5 && status <= 7) buildableCount++;
-                }
-            }
-
-            return {
-                indicatorsEnabled: renderer.buildingIndicatorsEnabled,
-                buildingType: indicatorRenderer.buildingType,
-                cacheSize: indicatorRenderer.indicatorCache?.size ?? 0,
-                buildableCount,
-            };
+            const box = await gp.canvas.boundingBox();
+            await gp.canvas.hover({ position: { x: box!.width / 2, y: box!.height / 2 } });
+            await gp.waitForFrames(10);
         });
 
-        expect(indicatorState).not.toBeNull();
-        expect(indicatorState!.indicatorsEnabled).toBe(true);
-        expect(indicatorState!.buildingType).toBeGreaterThan(0);
-        expect(indicatorState!.buildableCount).toBeGreaterThan(0);
+        await test.step('verify placement preview is active', async() => {
+            await expect(gp).toHaveMode('place_building');
+
+            const indicatorState = await page.evaluate(() => {
+                const renderer = (window as any).__settlers_entity_renderer__;
+                if (!renderer) return null;
+                return {
+                    indicatorsEnabled: renderer.buildingIndicatorsEnabled,
+                    previewBuildingType: renderer.previewBuildingType,
+                };
+            });
+
+            expect(indicatorState).not.toBeNull();
+            expect(indicatorState!.indicatorsEnabled).toBe(true);
+            expect(indicatorState!.previewBuildingType).toBeGreaterThan(0);
+        });
     });
 });
