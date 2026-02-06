@@ -1,4 +1,4 @@
-import { Entity, EntityType, UnitState, BuildingState, BuildingConstructionPhase, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE } from './entity';
+import { Entity, EntityType, UnitType, UnitState, BuildingState, BuildingConstructionPhase, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE, isUnitTypeSelectable, getUnitTypeSpeed } from './entity';
 import { EMaterialType } from './economy/material-type';
 
 /** Default building construction duration in seconds */
@@ -22,14 +22,29 @@ export class GameState {
     /** Spatial lookup: "x,y" -> entityId */
     public tileOccupancy: Map<string, number> = new Map();
 
-    public addEntity(type: EntityType, subType: number, x: number, y: number, player: number): Entity {
+    /**
+     * Add an entity to the game state.
+     * For units, selectable and speed default to the UnitTypeConfig values
+     * unless explicitly overridden.
+     */
+    public addEntity(type: EntityType, subType: number, x: number, y: number, player: number, selectable?: boolean): Entity {
+        // Determine selectability: explicit override > unit type config > true
+        let resolvedSelectable: boolean | undefined;
+        if (selectable !== undefined) {
+            resolvedSelectable = selectable;
+        } else if (type === EntityType.Unit) {
+            resolvedSelectable = isUnitTypeSelectable(subType as UnitType);
+        }
+        // Leave undefined for non-unit entities (treated as true by selection logic)
+
         const entity: Entity = {
             id: this.nextId++,
             type,
             x,
             y,
             player,
-            subType
+            subType,
+            selectable: resolvedSelectable,
         };
 
         this.entities.push(entity);
@@ -51,7 +66,7 @@ export class GameState {
                 path: [],
                 pathIndex: 0,
                 moveProgress: 0,
-                speed: 2, // tiles per second
+                speed: getUnitTypeSpeed(subType as UnitType),
                 prevX: x,
                 prevY: y
             });

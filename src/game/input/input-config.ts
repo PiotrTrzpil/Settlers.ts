@@ -84,6 +84,10 @@ export function getDefaultInputConfig(): InputConfig {
             { action: InputAction.CancelPlacement, mouseButton: MouseButton.Right, onKeyDown: true },
             { action: InputAction.RotateBuilding, key: 'KeyR', onKeyDown: true },
 
+            // Unit spawning
+            { action: InputAction.SpawnBearer, key: 'KeyU', onKeyDown: true },
+            { action: InputAction.SpawnSwordsman, key: 'KeyI', onKeyDown: true },
+
             // UI toggles
             { action: InputAction.TogglePause, key: 'KeyP', onKeyDown: true },
             { action: InputAction.TogglePause, key: 'Space', onKeyDown: true },

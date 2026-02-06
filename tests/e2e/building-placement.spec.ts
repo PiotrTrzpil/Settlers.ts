@@ -449,13 +449,13 @@ test.describe('Building Placement Mode', () => {
 // ─── Unit Spawning ─────────────────────────────────────────────────
 
 test.describe('Unit Spawning', () => {
-    test('spawn settler creates entity on passable terrain', async({ page }) => {
+    test('spawn bearer creates entity on passable terrain', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
 
         const countBefore = await gp.getDebugField('entityCount');
-        await gp.spawnSettler();
+        await gp.spawnBearer();
         await gp.waitForEntityCountAbove(countBefore);
 
         const countAfter = await gp.getDebugField('entityCount');
@@ -474,13 +474,13 @@ test.describe('Unit Spawning', () => {
         expect(isOldDefault).toBe(false);
     });
 
-    test('spawn soldier creates entity', async({ page }) => {
+    test('spawn swordsman creates entity', async({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForReady();
 
         const countBefore = await gp.getDebugField('entityCount');
-        await gp.spawnSoldier();
+        await gp.spawnSwordsman();
         await gp.waitForEntityCountAbove(countBefore);
 
         expect(await gp.getDebugField('entityCount')).toBe(countBefore + 1);
@@ -507,7 +507,7 @@ test.describe('Unit Spawning', () => {
         await expect(tileInfo).toBeVisible({ timeout: 5000 });
 
         const countBefore = await gp.getDebugField('entityCount');
-        await gp.spawnSettler();
+        await gp.spawnBearer();
 
         // Wait briefly for entity creation
         await page.waitForTimeout(300);
@@ -527,7 +527,7 @@ test.describe('Unit Spawning', () => {
         await gp.goto({ testMap: true });
         await gp.waitForReady();
 
-        await gp.spawnSettler();
+        await gp.spawnBearer();
         await gp.waitForEntityCountAbove(0);
 
         // Check the terrain type under the spawned entity

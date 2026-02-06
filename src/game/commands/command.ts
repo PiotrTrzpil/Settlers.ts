@@ -6,12 +6,29 @@ import { TerritoryMap } from '../systems/territory';
 import { findPath } from '../systems/pathfinding';
 import { MapSize } from '@/utilities/map-size';
 
+/**
+ * Formation offsets for multi-unit movement commands.
+ * Units spread out in an expanding spiral pattern around the target.
+ */
+const FORMATION_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+    [0, 0],
+    [1, 0], [0, 1], [-1, 0], [0, -1],
+    [1, 1], [-1, 1], [1, -1], [-1, -1],
+    [2, 0], [0, 2], [-2, 0], [0, -2],
+    [2, 1], [1, 2], [-1, 2], [-2, 1],
+    [-2, -1], [-1, -2], [1, -2], [2, -1],
+    [2, 2], [-2, 2], [2, -2], [-2, -2],
+];
+
 export type Command =
     | { type: 'place_building'; buildingType: BuildingType; x: number; y: number; player: number }
     | { type: 'spawn_unit'; unitType: UnitType; x: number; y: number; player: number }
     | { type: 'move_unit'; entityId: number; targetX: number; targetY: number }
     | { type: 'select'; entityId: number | null }
+    | { type: 'select_at_tile'; x: number; y: number; addToSelection: boolean }
+    | { type: 'toggle_selection'; entityId: number }
     | { type: 'select_area'; x1: number; y1: number; x2: number; y2: number }
+    | { type: 'move_selected_units'; targetX: number; targetY: number }
     | { type: 'remove_entity'; entityId: number };
 
 /**
@@ -127,6 +144,16 @@ export function executeCommand(
     }
 
     case 'select': {
+        // Respect selectable flag (undefined = selectable, false = not selectable)
+        if (cmd.entityId !== null) {
+            const ent = state.getEntity(cmd.entityId);
+            if (ent && ent.selectable === false) {
+                // Can't select unselectable entities - treat as deselect
+                state.selectedEntityId = null;
+                state.selectedEntityIds.clear();
+                return true;
+            }
+        }
         state.selectedEntityId = cmd.entityId;
         state.selectedEntityIds.clear();
         if (cmd.entityId !== null) {
@@ -135,8 +162,61 @@ export function executeCommand(
         return true;
     }
 
+    case 'select_at_tile': {
+        const rawEntity = state.getEntityAt(cmd.x, cmd.y);
+        // Skip unselectable entities
+        const entity = rawEntity?.selectable !== false ? rawEntity : undefined;
+        if (cmd.addToSelection) {
+            if (entity) {
+                // Toggle: remove if already selected, add if not
+                if (state.selectedEntityIds.has(entity.id)) {
+                    state.selectedEntityIds.delete(entity.id);
+                    if (state.selectedEntityId === entity.id) {
+                        // Set primary to first remaining, or null
+                        state.selectedEntityId = state.selectedEntityIds.size > 0
+                            ? state.selectedEntityIds.values().next().value!
+                            : null;
+                    }
+                } else {
+                    state.selectedEntityIds.add(entity.id);
+                    if (state.selectedEntityId === null) {
+                        state.selectedEntityId = entity.id;
+                    }
+                }
+            }
+        } else {
+            // Replace selection
+            state.selectedEntityIds.clear();
+            state.selectedEntityId = entity?.id ?? null;
+            if (entity) {
+                state.selectedEntityIds.add(entity.id);
+            }
+        }
+        return true;
+    }
+
+    case 'toggle_selection': {
+        const entity = state.getEntity(cmd.entityId);
+        if (!entity || entity.selectable === false) return false;
+        if (state.selectedEntityIds.has(cmd.entityId)) {
+            state.selectedEntityIds.delete(cmd.entityId);
+            if (state.selectedEntityId === cmd.entityId) {
+                state.selectedEntityId = state.selectedEntityIds.size > 0
+                    ? state.selectedEntityIds.values().next().value!
+                    : null;
+            }
+        } else {
+            state.selectedEntityIds.add(cmd.entityId);
+            if (state.selectedEntityId === null) {
+                state.selectedEntityId = cmd.entityId;
+            }
+        }
+        return true;
+    }
+
     case 'select_area': {
-        const entities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
+        const allEntities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
+        const entities = allEntities.filter(e => e.selectable !== false);
         // Prefer selecting units over buildings
         const units = entities.filter(e => e.type === EntityType.Unit);
         const toSelect = units.length > 0 ? units : entities;
@@ -147,6 +227,42 @@ export function executeCommand(
         }
         state.selectedEntityId = toSelect.length > 0 ? toSelect[0].id : null;
         return true;
+    }
+
+    case 'move_selected_units': {
+        // Move all selected units toward target with formation offsets
+        const selectedUnits: number[] = [];
+        for (const entityId of state.selectedEntityIds) {
+            const e = state.getEntity(entityId);
+            if (e && e.type === EntityType.Unit) {
+                selectedUnits.push(entityId);
+            }
+        }
+        if (selectedUnits.length === 0) return false;
+
+        let anyMoved = false;
+        for (let i = 0; i < selectedUnits.length; i++) {
+            const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
+            const entity = state.getEntity(selectedUnits[i]);
+            if (!entity) continue;
+            const unitState = state.unitStates.get(selectedUnits[i]);
+            if (!unitState) continue;
+
+            const path = findPath(
+                entity.x, entity.y,
+                cmd.targetX + offset[0], cmd.targetY + offset[1],
+                groundType, groundHeight,
+                mapSize.width, mapSize.height,
+                state.tileOccupancy
+            );
+            if (path && path.length > 0) {
+                unitState.path = path;
+                unitState.pathIndex = 0;
+                unitState.moveProgress = 0;
+                anyMoved = true;
+            }
+        }
+        return anyMoved;
     }
 
     case 'remove_entity': {

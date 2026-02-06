@@ -102,7 +102,7 @@ describe('Game Session: multi-system integration sweep', () => {
         expect(territory.getOwner(20, 20)).toBe(0);
 
         // ── Spawn additional units ──
-        expect(spawnUnit(state, map, 15, 15, 0, 0)).toBe(true);
+        expect(spawnUnit(state, map, 15, 15, 1, 0)).toBe(true); // Builder (selectable)
         const spawnedUnit = state.entities.find(
             e => e.type === EntityType.Unit && e.x === 15 && e.y === 15
         );
@@ -197,7 +197,7 @@ describe('Game Session: multi-system integration sweep', () => {
 
         // Place a building and a unit in the same area
         placeBuilding(state, map, 10, 10, BuildingType.Warehouse, 0);
-        spawnUnit(state, map, 11, 10, 0, 0);
+        spawnUnit(state, map, 11, 10, 1, 0); // Builder (selectable)
 
         // Area select covering both
         executeCommand(

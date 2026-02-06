@@ -56,19 +56,19 @@
         <div v-if="activeTab === 'units'" class="tab-content" data-testid="unit-controls">
           <button
             class="sidebar-btn"
-            data-testid="btn-spawn-settler"
+            data-testid="btn-spawn-bearer"
             @click="spawnUnit(0)"
           >
             <span class="btn-icon">&#x1F9D1;</span>
-            <span class="btn-label">Settler</span>
+            <span class="btn-label">Bearer</span>
           </button>
           <button
             class="sidebar-btn"
-            data-testid="btn-spawn-soldier"
-            @click="spawnUnit(1)"
+            data-testid="btn-spawn-swordsman"
+            @click="spawnUnit(2)"
           >
             <span class="btn-icon">&#x2694;</span>
-            <span class="btn-label">Soldier</span>
+            <span class="btn-label">Swordsman</span>
           </button>
         </div>
 

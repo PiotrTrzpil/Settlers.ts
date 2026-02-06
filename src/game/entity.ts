@@ -113,12 +113,59 @@ export enum BuildingType {
 }
 
 export enum UnitType {
-    Settler = 0,
-    Soldier = 1,
-    Bearer = 2,
-    Swordsman = 3,
-    Bowman = 4,
-    Pikeman = 5,
+    Bearer = 0,
+    Builder = 1,
+    Swordsman = 2,
+    Bowman = 3,
+    Pikeman = 4,
+    Priest = 5,
+    Pioneer = 6,
+    Thief = 7,
+    Geologist = 8,
+}
+
+/**
+ * Configuration for each unit type.
+ * Centralizes all unit properties so adding new types is a single-entry change.
+ */
+export interface UnitTypeConfig {
+    /** Display name for UI */
+    name: string;
+    /** Default movement speed in tiles/second */
+    speed: number;
+    /** Whether units of this type are selectable by the player */
+    selectable: boolean;
+    /** Whether this is a military unit (can fight) */
+    military: boolean;
+}
+
+/**
+ * Central registry of unit type configurations.
+ * To add a new unit type:
+ * 1. Add an entry to the UnitType enum
+ * 2. Add its config here
+ * 3. Optionally add it to BUILDING_SPAWN_ON_COMPLETE if a building produces it
+ */
+export const UNIT_TYPE_CONFIG: Record<UnitType, UnitTypeConfig> = {
+    [UnitType.Bearer]: { name: 'Bearer', speed: 2, selectable: false, military: false },
+    [UnitType.Builder]: { name: 'Builder', speed: 2, selectable: true, military: false },
+    [UnitType.Swordsman]: { name: 'Swordsman', speed: 2, selectable: true, military: true },
+    [UnitType.Bowman]: { name: 'Bowman', speed: 2.2, selectable: true, military: true },
+    [UnitType.Pikeman]: { name: 'Pikeman', speed: 1.8, selectable: true, military: true },
+    [UnitType.Priest]: { name: 'Priest', speed: 1.5, selectable: true, military: false },
+    [UnitType.Pioneer]: { name: 'Pioneer', speed: 2, selectable: true, military: false },
+    [UnitType.Thief]: { name: 'Thief', speed: 3, selectable: true, military: false },
+    [UnitType.Geologist]: { name: 'Geologist', speed: 1.5, selectable: true, military: false },
+};
+
+/** Get the default selectable state for a unit type. */
+export function isUnitTypeSelectable(unitType: UnitType): boolean {
+    return UNIT_TYPE_CONFIG[unitType]?.selectable ?? true;
+}
+
+/** Get the default speed for a unit type. */
+export function getUnitTypeSpeed(unitType: UnitType): number {
+    return UNIT_TYPE_CONFIG[unitType]?.speed ?? 2;
 }
 
 /** Territory radius for each building type (in tiles) */
@@ -148,10 +195,32 @@ export const BUILDING_TERRITORY_RADIUS: Record<number, number> = {
     [BuildingType.Winegrower]: 6,
 };
 
-/** Which unit type each building produces (undefined = no auto-spawn) */
+/** Which unit type each building auto-spawns at placement time (undefined = no auto-spawn) */
 export const BUILDING_UNIT_TYPE: Record<number, UnitType | undefined> = {
-    [BuildingType.Lumberjack]: UnitType.Settler,
+    [BuildingType.Lumberjack]: UnitType.Builder,
     [BuildingType.Warehouse]: undefined,
+};
+
+/**
+ * Which unit type (and count) each building spawns when construction completes.
+ * The Barrack produces soldiers, residence buildings produce settlers, etc.
+ * Buildings not listed here don't spawn units on completion.
+ *
+ * Selectability of spawned units is determined by UNIT_TYPE_CONFIG by default.
+ * Use the optional `selectable` field to override the default for specific buildings.
+ */
+export interface BuildingSpawnConfig {
+    unitType: UnitType;
+    count: number;
+    /** Override default selectability from UNIT_TYPE_CONFIG (undefined = use default) */
+    selectable?: boolean;
+}
+
+export const BUILDING_SPAWN_ON_COMPLETE: Record<number, BuildingSpawnConfig | undefined> = {
+    [BuildingType.Barrack]: { unitType: UnitType.Swordsman, count: 3 },
+    [BuildingType.SmallHouse]: { unitType: UnitType.Bearer, count: 2 },
+    [BuildingType.MediumHouse]: { unitType: UnitType.Bearer, count: 4 },
+    [BuildingType.LargeHouse]: { unitType: UnitType.Bearer, count: 6 },
 };
 
 /**
@@ -245,6 +314,8 @@ export interface Entity {
     subType: number;
     /** Optional animation state for animated entities */
     animationState?: import('./animation').AnimationState;
+    /** Whether this entity can be selected by the player. Defaults to true if not specified. */
+    selectable?: boolean;
 }
 
 export interface UnitState {

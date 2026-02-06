@@ -28,6 +28,10 @@ export enum InputAction {
     CancelPlacement = 'cancel_placement',
     RotateBuilding = 'rotate_building',
 
+    // Unit spawning
+    SpawnBearer = 'spawn_bearer',
+    SpawnSwordsman = 'spawn_swordsman',
+
     // UI
     TogglePause = 'toggle_pause',
     ToggleDebug = 'toggle_debug',

@@ -37,7 +37,8 @@ import spriteFragCode from './shaders/entity-sprite-frag.glsl';
 
 // Color shader constants (for non-textured rendering)
 const SELECTED_COLOR = [1.0, 1.0, 1.0, 1.0]; // White highlight
-const RING_COLOR = [1.0, 1.0, 0.0, 0.5]; // Yellow selection ring
+const FRAME_COLOR = [1.0, 1.0, 0.0, 0.85]; // Yellow selection frame
+const FRAME_CORNER_COLOR = [1.0, 1.0, 1.0, 0.95]; // White corner accents
 const PATH_COLOR = [0.3, 1.0, 0.6, 0.4]; // Green path indicator
 const PREVIEW_VALID_COLOR = [0.3, 1.0, 0.3, 0.5]; // Green ghost building
 const PREVIEW_INVALID_COLOR = [1.0, 0.3, 0.3, 0.5]; // Red ghost building
@@ -57,8 +58,12 @@ const BASE_QUAD = new Float32Array([
 const BUILDING_SCALE = 0.5;
 const UNIT_SCALE = 0.3;
 const RESOURCE_SCALE = 0.25;
-const RING_SCALE_FACTOR = 1.4;
 const PATH_DOT_SCALE = 0.12;
+
+// Selection frame parameters
+const FRAME_PADDING = 1.3; // Frame size relative to entity scale
+const FRAME_THICKNESS = 0.025; // Thickness of frame border lines
+const FRAME_CORNER_LENGTH = 0.35; // Corner accent length (fraction of frame side)
 
 // Maximum entities for batch buffer allocation
 const MAX_BATCH_ENTITIES = 500;
@@ -344,8 +349,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             this.drawColorEntities(gl, projection, viewPoint, false); // All entities
         }
 
-        // Draw selection rings (color shader) - must be after entities
-        this.drawSelectionRings(gl, viewPoint);
+        // Draw selection frames (color shader) - must be after entities
+        this.drawSelectionFrames(gl, viewPoint);
 
         // Draw placement preview
         this.drawPlacementPreview(gl, projection, viewPoint);
@@ -733,14 +738,15 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /**
-     * Draw selection rings for selected entities.
+     * Draw selection frames (rectangular borders) around selected entities.
+     * Each frame consists of 4 border quads forming a rectangle outline,
+     * plus 4 corner accent pieces for visual clarity.
      */
-    private drawSelectionRings(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
+    private drawSelectionFrames(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
 
         for (const entity of this.entities) {
             if (!this.selectedEntityIds.has(entity.id)) continue;
-            // Don't show selection rings for hidden entities
             if (!this.isEntityVisible(entity)) continue;
 
             let scale = UNIT_SCALE;
@@ -762,11 +768,85 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             }
 
             gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
-            this.fillQuadVertices(0, 0, scale * RING_SCALE_FACTOR);
+
+            const halfSize = scale * FRAME_PADDING * 0.5;
+            const t = FRAME_THICKNESS;
+
+            // Draw 4 border sides as thin quads
+            // Top edge
+            this.fillRectVertices(-halfSize, halfSize - t, halfSize, halfSize);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-            gl.vertexAttrib4f(this.aColor, RING_COLOR[0], RING_COLOR[1], RING_COLOR[2], RING_COLOR[3]);
+            gl.vertexAttrib4f(this.aColor, FRAME_COLOR[0], FRAME_COLOR[1], FRAME_COLOR[2], FRAME_COLOR[3]);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            // Bottom edge
+            this.fillRectVertices(-halfSize, -halfSize, halfSize, -halfSize + t);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            // Left edge
+            this.fillRectVertices(-halfSize, -halfSize, -halfSize + t, halfSize);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            // Right edge
+            this.fillRectVertices(halfSize - t, -halfSize, halfSize, halfSize);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            // Draw corner accents (brighter, slightly thicker)
+            const cornerLen = halfSize * FRAME_CORNER_LENGTH;
+            const ct = t * 1.8; // Corner thickness
+            gl.vertexAttrib4f(this.aColor, FRAME_CORNER_COLOR[0], FRAME_CORNER_COLOR[1], FRAME_CORNER_COLOR[2], FRAME_CORNER_COLOR[3]);
+
+            // Top-left corner (horizontal + vertical)
+            this.fillRectVertices(-halfSize, halfSize - ct, -halfSize + cornerLen, halfSize);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            this.fillRectVertices(-halfSize, halfSize - cornerLen, -halfSize + ct, halfSize);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            // Top-right corner
+            this.fillRectVertices(halfSize - cornerLen, halfSize - ct, halfSize, halfSize);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            this.fillRectVertices(halfSize - ct, halfSize - cornerLen, halfSize, halfSize);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            // Bottom-left corner
+            this.fillRectVertices(-halfSize, -halfSize, -halfSize + cornerLen, -halfSize + ct);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            this.fillRectVertices(-halfSize, -halfSize, -halfSize + ct, -halfSize + cornerLen);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            // Bottom-right corner
+            this.fillRectVertices(halfSize - cornerLen, -halfSize, halfSize, -halfSize + ct);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            this.fillRectVertices(halfSize - ct, -halfSize, halfSize, -halfSize + cornerLen);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
+    }
+
+    /**
+     * Fill vertex data for an axis-aligned rectangle.
+     * Used for selection frame border segments.
+     */
+    private fillRectVertices(x0: number, y0: number, x1: number, y1: number): void {
+        const verts = this.vertexData;
+        // Triangle 1: top-left, bottom-left, bottom-right
+        verts[0] = x0; verts[1] = y1;
+        verts[2] = x0; verts[3] = y0;
+        verts[4] = x1; verts[5] = y0;
+        // Triangle 2: top-left, bottom-right, top-right
+        verts[6] = x0; verts[7] = y1;
+        verts[8] = x1; verts[9] = y0;
+        verts[10] = x1; verts[11] = y1;
     }
 
     /** Get the interpolated world position for a unit */
