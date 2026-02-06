@@ -8,6 +8,8 @@ export default defineConfig({
     testDir: './tests/e2e',
     outputDir: './tests/e2e/.results',
     timeout: globalTimeout,
+    // Run tests in all files in parallel for better worker utilization
+    fullyParallel: true,
     retries: 0,
     snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',
     expect: {
@@ -29,6 +31,9 @@ export default defineConfig({
         navigationTimeout: Math.min(globalTimeout, 15_000),
         // Disable cache to avoid ERR_CACHE_WRITE_FAILURE with large GFX files
         bypassCSP: true,
+        // Only capture traces/videos on failure to reduce overhead
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
         launchOptions: {
             args: ['--disable-web-security', '--disable-features=IsolateOrigins,site-per-process'],
         },
@@ -37,6 +42,7 @@ export default defineConfig({
         command: 'npm run build && npx vite preview --port 4173',
         url: 'http://localhost:4173',
         timeout: 120000,
-        reuseExistingServer: true
+        // Reuse existing server locally (skip build+preview if already running)
+        reuseExistingServer: !process.env.CI,
     }
 });

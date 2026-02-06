@@ -1,16 +1,16 @@
-import { test, expect } from '@playwright/test';
-import { GamePage } from './game-page';
+import { test, expect } from './fixtures';
 
 /**
  * E2E tests for unit movement system.
  * Verifies movement starts immediately, is smooth, and consistent across multiple units.
+ *
+ * Uses the shared testMap fixture — the map is loaded once per worker,
+ * and game state is reset between tests via resetGameState().
  */
 
 test.describe('Unit Movement', () => {
-    test('unit starts moving immediately after command (no delay)', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('unit starts moving immediately after command (no delay)', async({ gp }) => {
+        const page = gp.page;
 
         // Spawn a unit
         await gp.spawnBearer();
@@ -34,7 +34,6 @@ test.describe('Unit Movement', () => {
 
             // Find a passable target tile 3-5 tiles away
             const w = game.mapSize.width;
-            const h = game.mapSize.height;
             let targetX = startX + 3;
             const targetY = startY;
 
@@ -102,10 +101,8 @@ test.describe('Unit Movement', () => {
         expect(moved).toBeTruthy();
     });
 
-    test('unit movement is smooth (interpolation works)', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('unit movement is smooth (interpolation works)', async({ gp }) => {
+        const page = gp.page;
 
         // Spawn a unit and move it
         const setup = await page.evaluate(() => {
@@ -197,10 +194,8 @@ test.describe('Unit Movement', () => {
         expect(finalPos!.x).not.toBe(setup.startX);
     });
 
-    test('multiple units move at consistent speeds', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('multiple units move at consistent speeds', async({ gp }) => {
+        const page = gp.page;
 
         // Spawn multiple units
         const spawnResult = await page.evaluate(() => {
@@ -320,10 +315,8 @@ test.describe('Unit Movement', () => {
         expect(maxDist - minDist).toBeLessThan(4);
     });
 
-    test('unit completes path to destination', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('unit completes path to destination', async({ gp }) => {
+        const page = gp.page;
 
         // Spawn and move a unit to a nearby destination
         const setup = await page.evaluate(() => {
@@ -404,10 +397,8 @@ test.describe('Unit Movement', () => {
         expect(finalState!.isStationary).toBe(true);
     });
 
-    test('movement command while already moving updates path correctly', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('movement command while already moving updates path correctly', async({ gp }) => {
+        const page = gp.page;
 
         // Spawn and start moving a unit
         const setup = await page.evaluate(() => {
@@ -524,10 +515,8 @@ test.describe('Unit Movement', () => {
         expect(checkDirection!.movedSouth).toBe(true);
     });
 
-    test('debug stats show moving units count', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('debug stats show moving units count', async({ gp }) => {
+        const page = gp.page;
 
         // Initially no units moving
         let unitsMoving = await gp.getDebugField('unitsMoving');
