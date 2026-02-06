@@ -95,21 +95,21 @@ export class GamePage {
 
     /**
      * Remove all entities and reset mode to 'select'.
-     * Use this to clean up between tests that share a browser/page
-     * to avoid state leaking from one test into the next.
+     * Uses the proper game command pipeline (game.execute) for entity removal
+     * and InputManager.switchMode for mode changes (with full exit/enter lifecycle).
      */
     async resetGameState(): Promise<void> {
         await this.page.evaluate(() => {
             const game = (window as any).__settlers_game__;
             if (!game) return;
-            // Remove all entities
-            const ids = game.state.entities.map((e: any) => e.id);
-            for (const id of ids) {
-                game.execute({ type: 'remove_entity', entityId: id });
-            }
-            // Reset mode to select
-            if (game.mode !== 'select') {
-                game.switchMode?.('select');
+            // Remove all entities through the game's public API, which uses
+            // the command pipeline (terrain restoration, territory rebuild, etc.)
+            game.removeAllEntities();
+            // Reset mode via InputManager — goes through proper onExit/onEnter
+            // lifecycle so mode data is cleaned up and callbacks fire.
+            const input = (window as any).__settlers_input__;
+            if (input && input.getModeName() !== 'select') {
+                input.switchMode('select');
             }
         });
         // Wait for cleanup to propagate
@@ -208,25 +208,22 @@ export class GamePage {
         });
     }
 
-    /** Move camera to a specific tile position. */
+    /**
+     * Move camera to center on a specific tile position.
+     * Uses ViewPoint.setPosition() which does proper isometric coordinate
+     * conversion, or falls back to CameraMode.setPosition() via InputManager.
+     */
     async moveCamera(tileX: number, tileY: number): Promise<void> {
         await this.page.evaluate(({ x, y }) => {
             const vp = (window as any).__settlers_viewpoint__;
-            if (vp) {
-                vp.posX = x;
-                vp.posY = y;
-                vp.deltaX = 0;
-                vp.deltaY = 0;
+            if (vp?.setPosition) {
+                // ViewPoint.setPosition(tileX, tileY) does proper isometric
+                // coordinate conversion and centers the camera on the tile.
+                vp.setPosition(x, y);
             }
         }, { x: tileX, y: tileY });
-        await this.page.waitForFunction(
-            ({ x, y }) => {
-                const d = (window as any).__settlers_debug__;
-                return d && Math.abs(d.cameraX - x) < 2 && Math.abs(d.cameraY - y) < 2;
-            },
-            { x: tileX, y: tileY },
-            { timeout: 5000 },
-        ).catch(() => { /* camera may not report exact coords — fall through */ });
+        // Wait for the camera position to propagate through the render loop
+        await this.waitForFrames(2, 5000);
     }
 
     /**

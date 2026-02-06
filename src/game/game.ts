@@ -91,6 +91,18 @@ export class Game {
         return null;
     }
 
+    /**
+     * Remove all entities via the command pipeline and rebuild territory.
+     * Each entity goes through the full remove_entity command flow
+     * (terrain restoration, movement cleanup, selection cleanup, etc.).
+     */
+    public removeAllEntities(): void {
+        const ids = this.state.entities.map(e => e.id);
+        for (const id of ids) {
+            this.execute({ type: 'remove_entity', entityId: id });
+        }
+    }
+
     /** Start the game loop */
     public start(): void {
         this.gameLoop.start();
