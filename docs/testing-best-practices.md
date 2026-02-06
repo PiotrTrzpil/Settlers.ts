@@ -226,6 +226,55 @@ and checks state without any UI interaction, it should be a unit test instead.
 - Framework code (Vue reactivity, Vite)
 - Implementation details that could change
 
+### Timeouts
+
+Every wait must have an explicit timeout. The global test timeout is configurable
+via the `E2E_TIMEOUT` env variable (default: 30s):
+
+```sh
+E2E_TIMEOUT=60000 npx playwright test   # 60s per test
+```
+
+The Playwright config also sets `actionTimeout` (10s) and `navigationTimeout` (15s)
+so individual actions like clicks and page navigations can't hang indefinitely.
+
+When using `page.waitForFunction` in spec files, always pass an explicit `{ timeout }`:
+```typescript
+// GOOD — explicit timeout
+await page.waitForFunction(predicate, args, { timeout: 5000 });
+
+// BAD — relies on global default, unclear intent
+await page.waitForFunction(predicate, args);
+```
+
+The `GamePage` helpers (`waitForReady`, `waitForFrames`, `waitForEntityCountAbove`)
+all have sensible default timeouts (5–20s) that are capped by the global test timeout.
+
+### Resetting game state between tests
+
+`GamePage.resetGameState()` removes all entities and resets mode to 'select'.
+Use this in `beforeEach` when tests share a page to avoid state leaking:
+
+```typescript
+test.describe('Feature', () => {
+    let gp: GamePage;
+
+    test.beforeAll(async ({ browser }) => {
+        const page = await browser.newPage();
+        gp = new GamePage(page);
+        await gp.goto({ testMap: true });
+        await gp.waitForReady();
+    });
+
+    test.beforeEach(async () => {
+        await gp.resetGameState();
+    });
+
+    test('first test', async () => { /* uses gp */ });
+    test('second test', async () => { /* clean state */ });
+});
+```
+
 ## Running Tests
 
 ```sh
@@ -237,4 +286,5 @@ pnpm build                  # Must rebuild before e2e tests
 npx playwright test         # E2E tests (uses built dist)
 npx playwright test --headed -g "test name"  # Run specific test visually
 npx playwright test building-placement.spec.ts  # Run specific file
+E2E_TIMEOUT=60000 npx playwright test          # Custom timeout
 ```

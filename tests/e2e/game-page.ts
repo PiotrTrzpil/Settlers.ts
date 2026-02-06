@@ -86,6 +86,35 @@ export class GamePage {
         );
     }
 
+    // ── State reset ───────────────────────────────────────────
+
+    /**
+     * Remove all entities and reset mode to 'select'.
+     * Use this to clean up between tests that share a browser/page
+     * to avoid state leaking from one test into the next.
+     */
+    async resetGameState(): Promise<void> {
+        await this.page.evaluate(() => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return;
+            // Remove all entities
+            const ids = game.state.entities.map((e: any) => e.id);
+            for (const id of ids) {
+                game.execute({ type: 'remove_entity', entityId: id });
+            }
+            // Reset mode to select
+            if (game.mode !== 'select') {
+                game.switchMode?.('select');
+            }
+        });
+        // Wait for cleanup to propagate
+        await this.page.waitForFunction(
+            () => (window as any).__settlers_debug__?.entityCount === 0,
+            null,
+            { timeout: 5000 },
+        );
+    }
+
     // ── Debug bridge reads ──────────────────────────────────
 
     /** Read the full debug state object from the page. */

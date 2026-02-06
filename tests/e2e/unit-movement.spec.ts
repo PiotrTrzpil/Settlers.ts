@@ -161,7 +161,7 @@ test.describe('Unit Movement', () => {
             { timeout: 3000 }
         );
 
-        // Sample tile positions over time to check for large jumps
+        // Sample tile positions across frames to check for large jumps
         const positions: Array<{ x: number; y: number }> = [];
         for (let i = 0; i < 10; i++) {
             const pos = await page.evaluate(({ unitId }) => {
@@ -172,7 +172,7 @@ test.describe('Unit Movement', () => {
             }, { unitId: setup.unitId });
 
             if (pos) positions.push(pos);
-            await page.waitForTimeout(50);
+            await gp.waitForFrames(1);
         }
 
         expect(positions.length).toBeGreaterThan(3);

@@ -79,6 +79,8 @@ Test maps and procedural textures work without game files.
 - **Never use `waitForTimeout()`**: Use `waitForReady()`, `waitForFrames()`, `waitForFunction()`, or `waitForEntityCountAbove()` instead
 - **Entity types**: `Unit = 1`, `Building = 2`, `MapObject = 3`. `BuildingType` starts at 1 (Lumberjack). Never use `buildingType: 0`
 - **No debug-only tests**: Tests must have meaningful assertions — diagnostic scripts belong in `scripts/`
+- **Explicit timeouts**: Every `waitForFunction` must have `{ timeout }`. Global timeout configurable via `E2E_TIMEOUT=60000 npx playwright test`
+- **Reset state**: Use `gp.resetGameState()` to clean up entities between tests sharing a page
 - **Run headed**: `npx playwright test --headed -g "test name"` to observe tests visually
 - **Test specific file**: `npx playwright test building-placement.spec.ts`
 - **Poll output in background**: When running tests in background, poll output every ~0.5-1s with a marker file:

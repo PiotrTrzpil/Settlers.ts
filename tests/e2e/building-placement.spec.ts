@@ -166,24 +166,10 @@ test.describe('Building Placement Mode', () => {
         const box = await gp.canvas.boundingBox();
         await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
 
-        // Poll for building count change instead of fixed timeout
-        // Tile picker precision may cause click to miss — poll briefly then assert
-        const countAfter = await page.evaluate(
-            (before) => {
-                return new Promise<number>((resolve) => {
-                    let checks = 0;
-                    const interval = setInterval(() => {
-                        const count = (window as any).__settlers_debug__?.buildingCount ?? 0;
-                        checks++;
-                        if (count > before || checks >= 10) {
-                            clearInterval(interval);
-                            resolve(count);
-                        }
-                    }, 50);
-                });
-            },
-            countBefore,
-        );
+        // Wait a few frames for placement to process
+        await gp.waitForFrames(5);
+
+        const countAfter = await gp.getDebugField('buildingCount');
 
         // Due to tile picker precision, click might land on non-buildable tile
         expect(countAfter).toBeGreaterThanOrEqual(countBefore);
