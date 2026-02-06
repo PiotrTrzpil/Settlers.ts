@@ -3,6 +3,17 @@ import { IGfxImage } from './igfx-image';
 import { ImageType } from './image-type';
 import { Palette } from './palette';
 
+/** Parameters needed for worker-based decoding */
+export interface GfxDecodeParams {
+    buffer: ArrayBuffer;
+    offset: number;
+    width: number;
+    height: number;
+    imgType: number;
+    paletteData: Uint32Array;
+    paletteOffset: number;
+}
+
 export class GfxImage implements IGfxImage {
     public imageType = ImageType.ImageGfx;
 
@@ -108,5 +119,18 @@ export class GfxImage implements IGfxImage {
                     'data offset ' + this.dataOffset + '; ' +
                     'flags: ' + this.flag1 + ' / ' + this.flag2 + ' ' +
                     'header Type: ' + this.headType;
+    }
+
+    /** Get parameters for worker-based async decoding */
+    public getDecodeParams(): GfxDecodeParams {
+        return {
+            buffer: this.data.getBuffer().buffer,
+            offset: this.dataOffset,
+            width: this.width,
+            height: this.height,
+            imgType: this.imgType,
+            paletteData: this.palette.getData(),
+            paletteOffset: this.paletteOffset,
+        };
     }
 }

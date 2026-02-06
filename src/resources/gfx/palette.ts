@@ -18,6 +18,11 @@ export class Palette {
         return this.palette[index];
     }
 
+    /** Get the raw palette data for worker transfer */
+    public getData(): Uint32Array {
+        return this.palette;
+    }
+
     public read3BytePalette(buffer: Uint8Array, pos: number):number {
         for (let i = 0; i < this.palette.length; i++) {
             const r = buffer[pos++];
