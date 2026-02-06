@@ -47,8 +47,8 @@ export {
 } from './unit-types';
 
 // Building construction (spawn config)
-export type { BuildingSpawnConfig } from './systems/building-construction';
-export { BUILDING_SPAWN_ON_COMPLETE } from './systems/building-construction';
+export type { BuildingSpawnConfig } from './buildings';
+export { BUILDING_SPAWN_ON_COMPLETE } from './buildings';
 
 export interface Entity {
     id: number;

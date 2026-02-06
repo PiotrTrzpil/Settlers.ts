@@ -1,6 +1,6 @@
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
-import { TerritoryMap, NO_OWNER } from '../systems/territory';
+import { TerritoryMap, NO_OWNER } from '../buildings/territory';
 import { CARDINAL_OFFSETS } from '../entity';
 import { IViewPoint } from './i-view-point';
 

@@ -2,7 +2,7 @@ import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { TileCoord, CARDINAL_OFFSETS, tileKey, BuildingType, getBuildingFootprint } from '../entity';
-import { TerritoryMap, NO_OWNER } from '../systems/territory';
+import { TerritoryMap, NO_OWNER } from '../buildings/territory';
 import { isBuildable } from '../systems/placement';
 import { ShaderProgram } from './shader-program';
 

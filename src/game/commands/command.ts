@@ -2,7 +2,7 @@ import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE } from '../entity';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../systems/placement';
 import { restoreOriginalTerrain } from '../systems/terrain-leveling';
-import { TerritoryMap } from '../systems/territory';
+import { TerritoryMap } from '../buildings/territory';
 import { MapSize } from '@/utilities/map-size';
 import { Command, FORMATION_OFFSETS } from './command-types';
 

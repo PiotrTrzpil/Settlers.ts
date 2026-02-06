@@ -1,5 +1,5 @@
 import { GameState } from './game-state';
-import { updateBuildingConstruction, TerrainContext } from './systems/building-construction';
+import { updateBuildingConstruction, TerrainContext } from './buildings/construction';
 import { updateAnimations, AnimationDataProvider } from './systems/animation';
 import { updateIdleBehavior } from './systems/idle-behavior';
 import { LogHandler } from '@/utilities/log-handler';

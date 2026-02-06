@@ -1,6 +1,6 @@
 import { CARDINAL_OFFSETS, tileKey, BuildingType, getBuildingFootprint } from '../entity';
 import { MapSize } from '@/utilities/map-size';
-import { TerritoryMap, NO_OWNER } from './territory';
+import { TerritoryMap, NO_OWNER } from '../buildings/territory';
 
 /**
  * Terrain passability and buildability based on LandscapeType enum values.

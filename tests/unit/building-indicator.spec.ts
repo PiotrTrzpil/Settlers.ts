@@ -5,7 +5,7 @@ import {
     isBuildableStatus,
 } from '@/game/renderer/building-indicator-renderer';
 import { MapSize } from '@/utilities/map-size';
-import { TerritoryMap } from '@/game/systems/territory';
+import { TerritoryMap } from '@/game/buildings/territory';
 import { BuildingType } from '@/game/entity';
 import { TERRAIN } from './helpers/test-map';
 

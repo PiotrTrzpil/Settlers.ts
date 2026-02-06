@@ -5,7 +5,7 @@ import { EntityType } from './entity';
 import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
 import { Command, executeCommand } from './commands/command';
-import { TerritoryMap } from './systems/territory';
+import { TerritoryMap } from './buildings/territory';
 import { isBuildable } from './systems/placement';
 
 /** contains the game state */

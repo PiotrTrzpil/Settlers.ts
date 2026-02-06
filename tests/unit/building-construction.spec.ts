@@ -17,7 +17,7 @@ import {
     getBuildingVisualState,
     updateBuildingConstruction,
     type TerrainContext,
-} from '@/game/systems/building-construction';
+} from '@/game/buildings/construction';
 import { GameState } from '@/game/game-state';
 import { createTestMap, TERRAIN } from './helpers/test-map';
 

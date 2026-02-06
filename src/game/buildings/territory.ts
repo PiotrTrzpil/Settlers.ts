@@ -1,4 +1,5 @@
-import { Entity, EntityType, BuildingType } from '../entity';
+import { Entity, EntityType } from '../entity';
+import { BuildingType } from './types';
 import { MapSize } from '@/utilities/map-size';
 
 /** No owner sentinel value */

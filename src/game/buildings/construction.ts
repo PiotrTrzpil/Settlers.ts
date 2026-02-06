@@ -5,7 +5,8 @@
 
 import { GameState } from '../game-state';
 import { EntityType } from '../entity';
-import { BuildingType, BuildingConstructionPhase, BuildingState } from '../buildings';
+import { BuildingType } from './types';
+import { BuildingConstructionPhase, BuildingState } from './state';
 import { UnitType } from '../unit-types';
 import { MapSize } from '@/utilities/map-size';
 
@@ -30,11 +31,11 @@ export const BUILDING_SPAWN_ON_COMPLETE: Record<number, BuildingSpawnConfig | un
     [BuildingType.MediumHouse]: { unitType: UnitType.Bearer, count: 4 },
     [BuildingType.LargeHouse]: { unitType: UnitType.Bearer, count: 6 },
 };
-import { isPassable } from './placement';
+import { isPassable } from '../systems/placement';
 import {
     captureOriginalTerrain,
     applyTerrainLeveling,
-} from './terrain-leveling';
+} from '../systems/terrain-leveling';
 
 /**
  * Phase durations as fraction of total construction time.

@@ -21,7 +21,7 @@ import {
 } from '../helpers/test-game';
 import { EntityType, BuildingType } from '@/game/entity';
 // Movement is handled via state.movement.update(dt)
-import { TerritoryMap } from '@/game/systems/territory';
+import { TerritoryMap } from '@/game/buildings/territory';
 import { executeCommand } from '@/game/commands/command';
 import {
     BUILDING_PRODUCTIONS,

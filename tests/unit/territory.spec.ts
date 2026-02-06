@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Entity, EntityType, BuildingType } from '@/game/entity';
-import { TerritoryMap, NO_OWNER } from '@/game/systems/territory';
+import { TerritoryMap, NO_OWNER } from '@/game/buildings/territory';
 import { createTestMap, type TestMap } from './helpers/test-map';
 
 // Note: Basic territory claiming, multi-player ownership, overlap resolution,

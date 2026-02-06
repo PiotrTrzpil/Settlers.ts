@@ -17,7 +17,7 @@ import {
     removeEntity,
 } from '../helpers/test-game';
 import { EntityType, BuildingType, BuildingConstructionPhase, getBuildingFootprint } from '@/game/entity';
-import { TerritoryMap, NO_OWNER } from '@/game/systems/territory';
+import { TerritoryMap, NO_OWNER } from '@/game/buildings/territory';
 import {
     captureOriginalTerrain,
     applyTerrainLeveling,
@@ -28,7 +28,7 @@ import {
     updateBuildingConstruction,
     getBuildingVisualState,
     type TerrainContext,
-} from '@/game/systems/building-construction';
+} from '@/game/buildings/construction';
 
 describe('Building Lifecycle: place → construct → territory → remove', () => {
     it('full lifecycle from placement through construction to removal', () => {
