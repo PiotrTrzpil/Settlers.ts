@@ -5,7 +5,7 @@
  * through the new InputManager system.
  */
 
-import { watch, onMounted, onUnmounted, type Ref } from 'vue';
+import { watch, onMounted, onUnmounted, ref, type Ref } from 'vue';
 import { Game } from '@/game/game';
 import { LandscapeRenderer } from '@/game/renderer/landscape/landscape-renderer';
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
@@ -23,6 +23,7 @@ import {
     getDefaultInputConfig,
 } from '@/game/input';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
+import type { SelectionBox } from '@/game/input/render-state';
 
 interface UseRendererOptions {
     canvas: Ref<HTMLCanvasElement | null>;
@@ -46,6 +47,9 @@ export function useRenderer({
     let entityRenderer: EntityRenderer | null = null;
     let landscapeRenderer: LandscapeRenderer | null = null;
     let inputManager: InputManager | null = null;
+
+    // Selection box state for rendering drag selection overlay
+    const selectionBox = ref<SelectionBox | null>(null);
 
     /**
      * Resolve screen coordinates to tile coordinates.
@@ -165,6 +169,11 @@ export function useRenderer({
 
         inputManager.registerMode(placeBuildingMode);
         inputManager.attach();
+
+        // Connect camera mode to the ViewPoint
+        if (renderer) {
+            inputManager.getCamera().setViewPoint(renderer.viewPoint);
+        }
     }
 
     /**
@@ -267,6 +276,14 @@ export function useRenderer({
                     entityRenderer.previewBuildingType = null;
                 }
 
+                // Update selection box state for overlay rendering
+                const preview = renderState?.preview;
+                if (preview?.type === 'selection_box') {
+                    selectionBox.value = preview;
+                } else {
+                    selectionBox.value = null;
+                }
+
                 // Update cursor based on render state
                 if (renderState?.cursor && r.canvas) {
                     r.canvas.style.cursor = renderState.cursor;
@@ -289,7 +306,6 @@ export function useRenderer({
             debugStats.state.canvasWidth = r.canvas.width;
             debugStats.state.canvasHeight = r.canvas.height;
 
-            r.viewPoint.update(deltaSec);
             r.drawOnce();
         });
 
@@ -298,7 +314,9 @@ export function useRenderer({
 
     onMounted(() => {
         const cavEl = canvas.value!;
-        renderer = new Renderer(cavEl);
+        // Pass externalInput: true to disable ViewPoint's legacy mouse handlers
+        // since we use InputManager for all input handling
+        renderer = new Renderer(cavEl, { externalInput: true });
         tilePicker = new TilePicker(cavEl);
 
         createInputManager();
@@ -342,5 +360,6 @@ export function useRenderer({
         setRace,
         getRace,
         getInputManager,
+        selectionBox,
     };
 }

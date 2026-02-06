@@ -216,6 +216,18 @@ export class InputManager {
     }
 
     /**
+     * Get the tile at the center of the screen/camera.
+     */
+    getCenterTile(): TileCoord | null {
+        const el = this.target.value;
+        if (!el || !this.tileResolver) return null;
+
+        const centerX = el.clientWidth / 2;
+        const centerY = el.clientHeight / 2;
+        return this.tileResolver(centerX, centerY);
+    }
+
+    /**
      * Update the input configuration.
      */
     setConfig(config: InputConfig): void {

@@ -1,35 +1,31 @@
-import { BuildingType, EntityType, EXTENDED_OFFSETS, UnitType, BUILDING_UNIT_TYPE } from '../entity';
+import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE } from '../entity';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../systems/placement';
 import { restoreOriginalTerrain } from '../systems/terrain-leveling';
 import { TerritoryMap } from '../systems/territory';
-import { findPath } from '../systems/pathfinding';
 import { MapSize } from '@/utilities/map-size';
+import { Command, FORMATION_OFFSETS } from './command-types';
 
-/**
- * Formation offsets for multi-unit movement commands.
- * Units spread out in an expanding spiral pattern around the target.
- */
-const FORMATION_OFFSETS: ReadonlyArray<readonly [number, number]> = [
-    [0, 0],
-    [1, 0], [0, 1], [-1, 0], [0, -1],
-    [1, 1], [-1, 1], [1, -1], [-1, -1],
-    [2, 0], [0, 2], [-2, 0], [0, -2],
-    [2, 1], [1, 2], [-1, 2], [-2, 1],
-    [-2, -1], [-1, -2], [1, -2], [2, -1],
-    [2, 2], [-2, 2], [2, -2], [-2, -2],
-];
-
-export type Command =
-    | { type: 'place_building'; buildingType: BuildingType; x: number; y: number; player: number }
-    | { type: 'spawn_unit'; unitType: UnitType; x: number; y: number; player: number }
-    | { type: 'move_unit'; entityId: number; targetX: number; targetY: number }
-    | { type: 'select'; entityId: number | null }
-    | { type: 'select_at_tile'; x: number; y: number; addToSelection: boolean }
-    | { type: 'toggle_selection'; entityId: number }
-    | { type: 'select_area'; x1: number; y1: number; x2: number; y2: number }
-    | { type: 'move_selected_units'; targetX: number; targetY: number }
-    | { type: 'remove_entity'; entityId: number };
+// Re-export Command type and related types for backward compatibility
+export type { Command } from './command-types';
+export type {
+    PlaceBuildingCommand,
+    SpawnUnitCommand,
+    MoveUnitCommand,
+    SelectCommand,
+    SelectAtTileCommand,
+    ToggleSelectionCommand,
+    SelectAreaCommand,
+    MoveSelectedUnitsCommand,
+    RemoveEntityCommand,
+} from './command-types';
+export {
+    FORMATION_OFFSETS,
+    isBuildingCommand,
+    isUnitCommand,
+    isSelectionCommand,
+    isMovementCommand,
+} from './command-types';
 
 /**
  * Execute a player command against the game state.
@@ -120,27 +116,8 @@ export function executeCommand(
     }
 
     case 'move_unit': {
-        const entity = state.getEntity(cmd.entityId);
-        if (!entity) return false;
-
-        const unitState = state.unitStates.get(cmd.entityId);
-        if (!unitState) return false;
-
-        const path = findPath(
-            entity.x, entity.y,
-            cmd.targetX, cmd.targetY,
-            groundType, groundHeight,
-            mapSize.width, mapSize.height,
-            state.tileOccupancy
-        );
-
-        if (!path || path.length === 0) return false;
-
-        unitState.path = path;
-        unitState.pathIndex = 0;
-        unitState.moveProgress = 0;
-
-        return true;
+        // Delegate to the MovementSystem
+        return state.movement.moveUnit(cmd.entityId, cmd.targetX, cmd.targetY);
     }
 
     case 'select': {
@@ -243,22 +220,10 @@ export function executeCommand(
         let anyMoved = false;
         for (let i = 0; i < selectedUnits.length; i++) {
             const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
-            const entity = state.getEntity(selectedUnits[i]);
-            if (!entity) continue;
-            const unitState = state.unitStates.get(selectedUnits[i]);
-            if (!unitState) continue;
+            const targetX = cmd.targetX + offset[0];
+            const targetY = cmd.targetY + offset[1];
 
-            const path = findPath(
-                entity.x, entity.y,
-                cmd.targetX + offset[0], cmd.targetY + offset[1],
-                groundType, groundHeight,
-                mapSize.width, mapSize.height,
-                state.tileOccupancy
-            );
-            if (path && path.length > 0) {
-                unitState.path = path;
-                unitState.pathIndex = 0;
-                unitState.moveProgress = 0;
+            if (state.movement.moveUnit(selectedUnits[i], targetX, targetY)) {
                 anyMoved = true;
             }
         }

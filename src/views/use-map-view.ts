@@ -92,6 +92,19 @@ const availableBuildings = [
     { type: BuildingType.LargeDecoration, id: 'largedeco', name: 'Large Deco', icon: '🌳' },
 ];
 
+/** Units available in the UI */
+const availableUnits = [
+    { type: UnitType.Bearer, id: 'bearer', name: 'Bearer', icon: '🧑' },
+    { type: UnitType.Builder, id: 'builder', name: 'Builder', icon: '👷' },
+    { type: UnitType.Swordsman, id: 'swordsman', name: 'Swordsman', icon: '⚔️' },
+    { type: UnitType.Bowman, id: 'bowman', name: 'Bowman', icon: '🏹' },
+    { type: UnitType.Pikeman, id: 'pikeman', name: 'Pikeman', icon: '🔱' },
+    { type: UnitType.Priest, id: 'priest', name: 'Priest', icon: '🙏' },
+    { type: UnitType.Pioneer, id: 'pioneer', name: 'Pioneer', icon: '🚩' },
+    { type: UnitType.Thief, id: 'thief', name: 'Thief', icon: '🥷' },
+    { type: UnitType.Geologist, id: 'geologist', name: 'Geologist', icon: '🔍' },
+];
+
 export function useMapView(
     getFileManager: () => FileManager,
     getInputManager?: () => InputManager | null
@@ -290,17 +303,15 @@ export function useMapView(
         let spawnX = -1;
         let spawnY = -1;
 
-        if (game.value.state.selectedEntityId !== null) {
-            const selected = game.value.state.getEntity(game.value.state.selectedEntityId);
-            if (selected) {
-                spawnX = selected.x;
-                spawnY = selected.y;
-            }
-        } else if (hoveredTile.value) {
-            spawnX = hoveredTile.value.x;
-            spawnY = hoveredTile.value.y;
+        // Spawn at camera center
+        const inputManager = getInputManager?.();
+        const centerTile = inputManager?.getCenterTile();
+        if (centerTile) {
+            spawnX = centerTile.x;
+            spawnY = centerTile.y;
         }
 
+        // Fallback to any land tile if center unavailable
         if (spawnX < 0) {
             const land = game.value.findLandTile();
             if (land) {
@@ -359,6 +370,7 @@ export function useMapView(
         currentMode,
         placeBuildingType,
         availableBuildings,
+        availableUnits,
         layerVisibility,
         layerCounts,
         onFileSelect,

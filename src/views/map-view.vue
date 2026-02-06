@@ -55,20 +55,14 @@
         <!-- Units tab -->
         <div v-if="activeTab === 'units'" class="tab-content" data-testid="unit-controls">
           <button
+            v-for="u in availableUnits"
+            :key="u.type"
             class="sidebar-btn"
-            data-testid="btn-spawn-bearer"
-            @click="spawnUnit(0)"
+            :data-testid="'btn-spawn-' + u.id"
+            @click="spawnUnit(u.type)"
           >
-            <span class="btn-icon">&#x1F9D1;</span>
-            <span class="btn-label">Bearer</span>
-          </button>
-          <button
-            class="sidebar-btn"
-            data-testid="btn-spawn-swordsman"
-            @click="spawnUnit(2)"
-          >
-            <span class="btn-icon">&#x2694;</span>
-            <span class="btn-label">Swordsman</span>
+            <span class="btn-icon">{{ u.icon }}</span>
+            <span class="btn-label">{{ u.name }}</span>
           </button>
         </div>
 
@@ -212,6 +206,7 @@ const {
     currentMode,
     placeBuildingType,
     availableBuildings,
+    availableUnits,
     layerVisibility,
     layerCounts,
     onFileSelect,

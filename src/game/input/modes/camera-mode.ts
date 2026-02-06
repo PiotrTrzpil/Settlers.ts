@@ -2,147 +2,152 @@ import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult 
 import { InputAction, MouseButton, type PointerData } from '../input-actions';
 import type { InputConfig } from '../input-config';
 import { CursorType, type ModeRenderState } from '../render-state';
-
-/**
- * Camera control data.
- */
-export interface CameraState {
-    /** Camera X position */
-    x: number;
-    /** Camera Y position */
-    y: number;
-    /** Camera zoom level */
-    zoom: number;
-    /** Target zoom (for smooth zooming) */
-    targetZoom: number;
-    /** Temporary offset during drag */
-    dragOffsetX: number;
-    dragOffsetY: number;
-}
+import type { IViewPoint } from '@/game/renderer/i-view-point';
 
 /**
  * Camera mode - handles camera panning and zooming.
  * This is a "background" mode that runs alongside other modes.
+ *
+ * Works directly with ViewPoint to avoid duplicate state.
  */
 export class CameraMode extends BaseInputMode {
     readonly name = 'camera';
     readonly displayName = 'Camera';
 
     private config: InputConfig;
-    private cameraState: CameraState;
+    private viewPoint: IViewPoint | null = null;
+
+    // Drag state
     private isDraggingCamera = false;
+    private dragButton: MouseButton | null = null;
     private dragStartX = 0;
     private dragStartY = 0;
+    private dragStartPosX = 0;
+    private dragStartPosY = 0;
+    /** Track if actual camera movement occurred during drag */
+    private didMoveCamera = false;
 
-    constructor(config: InputConfig, initialState?: Partial<CameraState>) {
+    constructor(config: InputConfig) {
         super();
         this.config = config;
-        this.cameraState = {
-            x: initialState?.x ?? 0,
-            y: initialState?.y ?? 0,
-            zoom: initialState?.zoom ?? 1,
-            targetZoom: initialState?.targetZoom ?? 1,
-            dragOffsetX: 0,
-            dragOffsetY: 0,
-        };
     }
 
     /**
-     * Get current camera state.
+     * Set the ViewPoint to control.
+     * Must be called before camera controls will work.
      */
-    getState(): Readonly<CameraState> {
-        return this.cameraState;
+    setViewPoint(viewPoint: IViewPoint): void {
+        this.viewPoint = viewPoint;
     }
 
     /**
-     * Get effective camera X (including drag offset).
+     * Get current camera X position.
      */
     get x(): number {
-        return this.cameraState.x + this.cameraState.dragOffsetX;
+        return this.viewPoint?.x ?? 0;
     }
 
     /**
-     * Get effective camera Y (including drag offset).
+     * Get current camera Y position.
      */
     get y(): number {
-        return this.cameraState.y + this.cameraState.dragOffsetY;
+        return this.viewPoint?.y ?? 0;
     }
 
     /**
      * Get current zoom level.
      */
     get zoom(): number {
-        return this.cameraState.zoom;
+        return this.viewPoint?.zoomValue ?? 1;
     }
 
     /**
      * Set camera position directly.
      */
     setPosition(x: number, y: number): void {
-        this.cameraState.x = x;
-        this.cameraState.y = y;
-        this.cameraState.dragOffsetX = 0;
-        this.cameraState.dragOffsetY = 0;
+        this.viewPoint?.setRawPosition(x, y);
     }
 
     /**
      * Set zoom level directly.
      */
     setZoom(zoom: number): void {
-        this.cameraState.zoom = Math.max(this.config.minZoom, Math.min(this.config.maxZoom, zoom));
-        this.cameraState.targetZoom = this.cameraState.zoom;
+        if (this.viewPoint) {
+            this.viewPoint.zoomValue = Math.max(this.config.minZoom, Math.min(this.config.maxZoom, zoom));
+        }
     }
 
     onAction(_action: InputAction, _context: InputContext): InputResult {
-        // Camera actions are handled in onUpdate for smooth movement
         return UNHANDLED;
     }
 
     onPointerDown(data: PointerData, _context: InputContext): InputResult {
-        // Middle mouse button starts camera drag
-        if (data.button === MouseButton.Middle) {
+        if (!this.viewPoint) return UNHANDLED;
+
+        // Middle or right mouse button starts camera drag
+        if (data.button === MouseButton.Middle || data.button === MouseButton.Right) {
             this.isDraggingCamera = true;
+            this.dragButton = data.button;
             this.dragStartX = data.screenX;
             this.dragStartY = data.screenY;
+            this.dragStartPosX = this.viewPoint.x;
+            this.dragStartPosY = this.viewPoint.y;
+            this.didMoveCamera = false;
             return HANDLED;
         }
         return UNHANDLED;
     }
 
     onPointerUp(data: PointerData, _context: InputContext): InputResult {
-        if (data.button === MouseButton.Middle && this.isDraggingCamera) {
-            // Finalize camera position
-            this.cameraState.x += this.cameraState.dragOffsetX;
-            this.cameraState.y += this.cameraState.dragOffsetY;
-            this.cameraState.dragOffsetX = 0;
-            this.cameraState.dragOffsetY = 0;
+        if (this.isDraggingCamera && data.button === this.dragButton) {
+            const wasMoving = this.didMoveCamera;
             this.isDraggingCamera = false;
-            return HANDLED;
+            this.dragButton = null;
+            this.didMoveCamera = false;
+            // If no actual movement occurred, let other modes handle the click
+            // (e.g., select mode uses right-click to move units)
+            return wasMoving ? HANDLED : UNHANDLED;
         }
         return UNHANDLED;
     }
 
     onPointerMove(data: PointerData, _context: InputContext): InputResult {
-        if (this.isDraggingCamera) {
-            // Calculate drag offset
-            const dx = data.screenX - this.dragStartX;
-            const dy = data.screenY - this.dragStartY;
+        if (!this.viewPoint || !this.isDraggingCamera) return UNHANDLED;
 
-            // Convert screen movement to world movement
-            // The factor 0.01 and the y*2 come from the isometric projection
-            const scale = 0.01 / this.cameraState.zoom;
-            const invertFactor = this.config.invertPan ? -1 : 1;
+        // Calculate drag offset from start position
+        const dpx = data.screenX - this.dragStartX;
+        const dpy = data.screenY - this.dragStartY;
 
-            this.cameraState.dragOffsetX = -dx * scale * invertFactor;
-            this.cameraState.dragOffsetY = -dy * scale * 2 * invertFactor;
-
+        // Only move if we've exceeded a small threshold to avoid accidental micro-movements
+        const moveThreshold = 3;
+        if (Math.abs(dpx) < moveThreshold && Math.abs(dpy) < moveThreshold) {
             return HANDLED;
         }
-        return UNHANDLED;
+
+        // Mark that actual camera movement occurred
+        this.didMoveCamera = true;
+
+        // Scale factor converts pixel movement to viewPoint units
+        // Derived from the isometric projection to keep tiles "sticky" under cursor
+        // This matches ViewPoint's original formula
+        const height = this.viewPoint.canvasHeight;
+        const scale = 20 * this.viewPoint.zoomValue / height;
+        const invertFactor = this.config.invertPan ? -1 : 1;
+
+        // For isometric projection: moving vertically in screen space
+        // moves both viewPointX and viewPointY
+        const deltaX = -scale * (dpx + dpy) * invertFactor;
+        const deltaY = -scale * 2 * dpy * invertFactor;
+
+        this.viewPoint.setRawPosition(
+            this.dragStartPosX + deltaX,
+            this.dragStartPosY + deltaY
+        );
+        return HANDLED;
     }
 
     onWheel(data: PointerData, _context: InputContext): InputResult {
-        if (data.wheelDelta === undefined) return UNHANDLED;
+        if (!this.viewPoint || data.wheelDelta === undefined) return UNHANDLED;
 
         const delta = this.config.invertZoom ? -data.wheelDelta : data.wheelDelta;
         const zoomFactor = delta > 0 ? (1 + this.config.cameraZoomSpeed) : (1 - this.config.cameraZoomSpeed);
@@ -150,54 +155,50 @@ export class CameraMode extends BaseInputMode {
         // Calculate new zoom
         const newZoom = Math.max(
             this.config.minZoom,
-            Math.min(this.config.maxZoom, this.cameraState.zoom * zoomFactor)
+            Math.min(this.config.maxZoom, this.viewPoint.zoomValue * zoomFactor)
         );
 
-        // Zoom towards cursor position
-        // This keeps the point under the cursor stationary
-        if (newZoom !== this.cameraState.zoom) {
-            // Get cursor position in world coordinates before zoom
-            // (This would need the canvas dimensions and aspect ratio)
-            // For now, just set the zoom without cursor-lock
-            this.cameraState.zoom = newZoom;
-            this.cameraState.targetZoom = newZoom;
+        if (newZoom !== this.viewPoint.zoomValue) {
+            this.viewPoint.zoomValue = newZoom;
         }
 
         return HANDLED;
     }
 
     onUpdate(deltaTime: number, context: InputContext): void {
-        const speed = this.config.cameraPanSpeed * deltaTime;
+        if (!this.viewPoint) return;
+
+        const speed = this.config.cameraPanSpeed * this.viewPoint.zoomValue * deltaTime;
+
+        let dx = 0;
+        let dy = 0;
 
         // Handle WASD/Arrow keys for camera pan
         if (context.state.isKeyPressed('KeyW') || context.state.isKeyPressed('ArrowUp')) {
-            const factor = this.config.invertPan ? 1 : -1;
-            this.cameraState.x += speed * factor;
-            this.cameraState.y += speed * 2 * factor;
+            dy -= speed * 2;
+            dx -= speed;
         }
         if (context.state.isKeyPressed('KeyS') || context.state.isKeyPressed('ArrowDown')) {
-            const factor = this.config.invertPan ? -1 : 1;
-            this.cameraState.x += speed * factor;
-            this.cameraState.y += speed * 2 * factor;
+            dy += speed * 2;
+            dx += speed;
         }
         if (context.state.isKeyPressed('KeyA') || context.state.isKeyPressed('ArrowLeft')) {
-            const factor = this.config.invertPan ? 1 : -1;
-            this.cameraState.x += speed * factor;
+            dx -= speed;
         }
         if (context.state.isKeyPressed('KeyD') || context.state.isKeyPressed('ArrowRight')) {
-            const factor = this.config.invertPan ? -1 : 1;
-            this.cameraState.x += speed * factor;
+            dx += speed;
         }
 
-        // Smooth zoom interpolation (optional)
-        // if (this.cameraState.zoom !== this.cameraState.targetZoom) {
-        //     const t = Math.min(1, deltaTime * 10);
-        //     this.cameraState.zoom += (this.cameraState.targetZoom - this.cameraState.zoom) * t;
-        // }
+        if (dx !== 0 || dy !== 0) {
+            const factor = this.config.invertPan ? -1 : 1;
+            this.viewPoint.setRawPosition(
+                this.viewPoint.x + dx * factor,
+                this.viewPoint.y + dy * factor
+            );
+        }
     }
 
     override getRenderState(_context: InputContext): ModeRenderState {
-        // Camera mode changes cursor during drag
         return {
             cursor: this.isDraggingCamera ? CursorType.Grabbing : CursorType.Default,
         };
