@@ -7,14 +7,17 @@ import {
     BuildingSpriteEntries,
     Race,
     getBuildingSpriteMap,
+    getUnitSpriteMap,
     GFX_FILE_NUMBERS,
     getMapObjectSpriteMap,
     getResourceSpriteMap,
     BUILDING_DIRECTION,
+    UNIT_DIRECTION,
     AnimatedSpriteEntry,
+    SETTLER_FILE_NUMBERS,
 } from './sprite-metadata';
 import { SpriteLoader } from './sprite-loader';
-import { BuildingType, MapObjectType } from '../entity';
+import { BuildingType, MapObjectType, UnitType } from '../entity';
 import { ANIMATION_DEFAULTS, AnimationData } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy/material-type';
@@ -218,6 +221,14 @@ export class SpriteRenderManager {
     }
 
     /**
+     * Get a unit sprite entry by type and direction.
+     * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT (defaults to 0)
+     */
+    public getUnit(type: UnitType, direction: number = 0): SpriteEntry | null {
+        return this._spriteRegistry?.getUnit(type, direction) ?? null;
+    }
+
+    /**
      * Get all building sprites in a single lookup (construction, completed, animated).
      * Reduces multiple method calls per building per frame.
      */
@@ -277,8 +288,8 @@ export class SpriteRenderManager {
             return false;
         }
 
-        // Create atlas and registry - 8192 needed to fit buildings, map objects, and resources
-        const atlas = new EntityTextureAtlas(8192, this.textureUnit);
+        // Create atlas and registry - 16384 needed to fit buildings, map objects, resources, and units (4 dirs each)
+        const atlas = new EntityTextureAtlas(16384, this.textureUnit);
         const registry = new SpriteMetadataRegistry();
 
         let loadedAny = false;
@@ -304,7 +315,13 @@ export class SpriteRenderManager {
             SpriteRenderManager.log.debug(`Resource sprites loaded: ${registry.getResourceCount()} resources`);
         }
 
-        if (!loadedAny && !mapObjectsLoaded && !resourcesLoaded) {
+        // Also load unit sprites (settlers, soldiers)
+        const unitsLoaded = await this.loadUnitSprites(race, atlas, registry);
+        if (unitsLoaded) {
+            SpriteRenderManager.log.debug(`Unit sprites loaded: ${registry.getUnitCount()} units`);
+        }
+
+        if (!loadedAny && !mapObjectsLoaded && !resourcesLoaded && !unitsLoaded) {
             SpriteRenderManager.log.debug('No sprite files found, using color fallback');
             return false;
         }
@@ -314,7 +331,7 @@ export class SpriteRenderManager {
         this._spriteAtlas = atlas;
         this._spriteRegistry = registry;
 
-        return registry.hasBuildingSprites() || registry.hasMapObjectSprites() || registry.hasResourceSprites();
+        return registry.hasBuildingSprites() || registry.hasMapObjectSprites() || registry.hasResourceSprites() || registry.hasUnitSprites();
     }
 
     /**
@@ -534,6 +551,84 @@ export class SpriteRenderManager {
             return false;
         } catch (e) {
             SpriteRenderManager.log.error(`Failed to load resource sprites: ${e}`);
+            return false;
+        }
+    }
+
+    /**
+     * Load unit sprites (settlers, soldiers, etc.).
+     * Units are stored in race-specific files (20-24.gfx) and use JIL job indices.
+     * Loads all 4 directions for each unit type.
+     */
+    private async loadUnitSprites(
+        race: Race,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry
+    ): Promise<boolean> {
+        const spriteMap = getUnitSpriteMap(race);
+        const fileNum = SETTLER_FILE_NUMBERS[race];
+        const fileId = `${fileNum}`;
+
+        const fileSet = await this.spriteLoader.loadFileSet(fileId);
+        if (!fileSet) {
+            SpriteRenderManager.log.debug(`Unit GFX file ${fileNum} not available`);
+            return false;
+        }
+
+        if (!fileSet.jilReader || !fileSet.dilReader) {
+            SpriteRenderManager.log.debug(`JIL/DIL files not available for units in ${fileNum}`);
+            return false;
+        }
+
+        // Unit directions: D0=right, D1=right+down, D2=left+down, D3=left
+        const UNIT_DIRECTIONS = [
+            UNIT_DIRECTION.RIGHT,
+            UNIT_DIRECTION.RIGHT_BOTTOM,
+            UNIT_DIRECTION.LEFT_BOTTOM,
+            UNIT_DIRECTION.LEFT,
+        ];
+
+        try {
+            let loadedCount = 0;
+
+            for (const [typeStr, info] of Object.entries(spriteMap)) {
+                if (!info) continue;
+
+                const unitType = Number(typeStr) as UnitType;
+                const jobIndex = info.index;
+                let unitLoadedAny = false;
+
+                // Load all 4 directions for this unit type
+                for (const direction of UNIT_DIRECTIONS) {
+                    const loadedSprite = this.spriteLoader.loadJobSprite(
+                        fileSet,
+                        { jobIndex, directionIndex: direction, frameIndex: 0 },
+                        atlas
+                    );
+
+                    if (loadedSprite) {
+                        registry.registerUnit(unitType, direction, loadedSprite.entry);
+                        unitLoadedAny = true;
+                    }
+                }
+
+                if (!unitLoadedAny) {
+                    SpriteRenderManager.log.debug(
+                        `Failed to load any sprites for unit ${UnitType[unitType]} (job ${jobIndex})`
+                    );
+                } else {
+                    loadedCount++;
+                }
+            }
+
+            if (loadedCount > 0) {
+                SpriteRenderManager.log.debug(`Loaded ${loadedCount} unit types (4 directions each) from file ${fileNum}.gfx`);
+                return true;
+            }
+
+            return false;
+        } catch (e) {
+            SpriteRenderManager.log.error(`Failed to load unit sprites: ${e}`);
             return false;
         }
     }

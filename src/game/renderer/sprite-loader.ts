@@ -148,13 +148,14 @@ export class SpriteLoader {
         }
 
         // Navigate: job -> direction -> frame
-        const jobItems = fileSet.jilReader.getItems(0);
-        if (jobIndex >= jobItems.length) {
-            SpriteLoader.log.debug(`Job index ${jobIndex} out of range in file ${fileSet.fileId}`);
+        // Use getItem(jobIndex) directly to access the correct job, not indexed array
+        const totalJobs = fileSet.jilReader.length;
+        const jobItem = fileSet.jilReader.getItem(jobIndex);
+        if (!jobItem) {
+            SpriteLoader.log.debug(`Job index ${jobIndex} not found in file ${fileSet.fileId} (total jobs: ${totalJobs})`);
             return null;
         }
-
-        const jobItem = jobItems[jobIndex];
+        SpriteLoader.log.debug(`Loading job ${jobIndex} from ${fileSet.fileId}: offset=${jobItem.offset}, length=${jobItem.length}`);
         const dirItems = fileSet.dilReader.getItems(jobItem.offset, jobItem.length);
         if (directionIndex >= dirItems.length) {
             SpriteLoader.log.debug(`Direction ${directionIndex} out of range for job ${jobIndex}`);
@@ -202,10 +203,39 @@ export class SpriteLoader {
     }
 
     /**
+     * Trim pixel rows from top and bottom of an ImageData.
+     * Used to remove artifact lines from sprite edges.
+     */
+    private trimImageData(imageData: ImageData, trimTop: number, trimBottom: number): ImageData {
+        const newHeight = imageData.height - trimTop - trimBottom;
+        if (newHeight <= 0) return imageData;
+
+        const trimmed = new ImageData(imageData.width, newHeight);
+        const srcData = imageData.data;
+        const dstData = trimmed.data;
+        const rowBytes = imageData.width * 4;
+
+        // Copy rows, skipping trimTop rows from the start
+        for (let y = 0; y < newHeight; y++) {
+            const srcOffset = (y + trimTop) * rowBytes;
+            const dstOffset = y * rowBytes;
+            for (let x = 0; x < rowBytes; x++) {
+                dstData[dstOffset + x] = srcData[srcOffset + x];
+            }
+        }
+
+        return trimmed;
+    }
+
+    /**
      * Pack a GFX image into the atlas and create a SpriteEntry.
      */
     private packSpriteIntoAtlas(gfxImage: IGfxImage, atlas: EntityTextureAtlas): LoadedSprite | null {
-        const imageData = gfxImage.getImageData();
+        const rawImageData = gfxImage.getImageData();
+
+        // Trim pixels from top and bottom to remove artifact lines
+        const imageData = this.trimImageData(rawImageData, 1, 5);
+
         const region = atlas.reserve(imageData.width, imageData.height);
 
         if (!region) {
@@ -218,11 +248,11 @@ export class SpriteLoader {
         // GFX offset convention: left/top are distances from sprite edge to anchor point.
         // To position the sprite so the anchor aligns with worldX/worldY:
         // - offsetX = -left (move sprite left so anchor lands at worldX)
-        // - offsetY = -top (move sprite up so anchor lands at worldY)
+        // - offsetY = -(top - 1) because we trimmed 1 pixel from top
         const entry: SpriteEntry = {
             atlasRegion: region,
             offsetX: -gfxImage.left * PIXELS_TO_WORLD,
-            offsetY: -gfxImage.top * PIXELS_TO_WORLD,
+            offsetY: -(gfxImage.top - 1) * PIXELS_TO_WORLD,
             widthWorld: imageData.width * PIXELS_TO_WORLD,
             heightWorld: imageData.height * PIXELS_TO_WORLD,
         };
@@ -242,12 +272,11 @@ export class SpriteLoader {
             return 0;
         }
 
-        const jobItems = fileSet.jilReader.getItems(0);
-        if (jobIndex >= jobItems.length) {
+        // Use getItem(jobIndex) directly to access the correct job
+        const jobItem = fileSet.jilReader.getItem(jobIndex);
+        if (!jobItem) {
             return 0;
         }
-
-        const jobItem = jobItems[jobIndex];
         const dirItems = fileSet.dilReader.getItems(jobItem.offset, jobItem.length);
         if (directionIndex >= dirItems.length) {
             return 0;
@@ -273,13 +302,13 @@ export class SpriteLoader {
         }
 
         // Navigate: job -> direction
-        const jobItems = fileSet.jilReader.getItems(0);
-        if (jobIndex >= jobItems.length) {
-            SpriteLoader.log.debug(`Job index ${jobIndex} out of range in file ${fileSet.fileId}`);
+        // Use getItem(jobIndex) directly to access the correct job
+        const jobItem = fileSet.jilReader.getItem(jobIndex);
+        if (!jobItem) {
+            SpriteLoader.log.debug(`Job index ${jobIndex} not found in file ${fileSet.fileId}`);
             return null;
         }
 
-        const jobItem = jobItems[jobIndex];
         const dirItems = fileSet.dilReader.getItems(jobItem.offset, jobItem.length);
         if (directionIndex >= dirItems.length) {
             SpriteLoader.log.debug(`Direction ${directionIndex} out of range for job ${jobIndex}`);

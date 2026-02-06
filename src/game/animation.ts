@@ -30,6 +30,9 @@ export interface AnimationSequence {
     loop: boolean;
 }
 
+/** Duration of direction transition blend in milliseconds */
+export const DIRECTION_TRANSITION_DURATION_MS = 125;
+
 /**
  * Runtime animation state for an entity.
  * Tracks current playback position within an animation.
@@ -41,10 +44,14 @@ export interface AnimationState {
     currentFrame: number;
     /** Time elapsed in current frame (milliseconds) */
     elapsedMs: number;
-    /** Direction index for directional animations (0-7, or 0-1 for buildings) */
+    /** Direction index for directional animations (0-3 for units, 0-1 for buildings) */
     direction: number;
     /** Whether animation is currently playing */
     playing: boolean;
+    /** Previous direction during a transition (for blending) */
+    previousDirection?: number;
+    /** Progress of direction transition (0 = old direction, 1 = new direction) */
+    directionTransitionProgress?: number;
 }
 
 /**
@@ -148,6 +155,7 @@ export function setAnimationSequence(
 
 /**
  * Sets just the direction, keeping the current sequence.
+ * Use startDirectionTransition() for smooth blended transitions.
  */
 export function setAnimationDirection(
     state: AnimationState,
@@ -155,8 +163,58 @@ export function setAnimationDirection(
 ): void {
     if (state.direction !== direction) {
         state.direction = direction;
-        // Optionally reset frame when direction changes
-        // state.currentFrame = 0;
-        // state.elapsedMs = 0;
+        // Clear any in-progress transition
+        state.previousDirection = undefined;
+        state.directionTransitionProgress = undefined;
     }
+}
+
+/**
+ * Starts a smooth transition to a new direction.
+ * The renderer will blend between old and new direction sprites.
+ */
+export function startDirectionTransition(
+    state: AnimationState,
+    newDirection: number
+): void {
+    if (state.direction === newDirection) return;
+
+    // If already transitioning, use current blended state as the "previous"
+    // (This handles rapid direction changes smoothly)
+    state.previousDirection = state.direction;
+    state.direction = newDirection;
+    state.directionTransitionProgress = 0;
+}
+
+/**
+ * Updates direction transition progress.
+ * Call this every frame during transitions.
+ * @returns true if transition is still in progress
+ */
+export function updateDirectionTransition(
+    state: AnimationState,
+    deltaMs: number
+): boolean {
+    if (state.directionTransitionProgress === undefined) {
+        return false;
+    }
+
+    state.directionTransitionProgress += deltaMs / DIRECTION_TRANSITION_DURATION_MS;
+
+    if (state.directionTransitionProgress >= 1) {
+        // Transition complete
+        state.previousDirection = undefined;
+        state.directionTransitionProgress = undefined;
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Check if direction transition is in progress.
+ */
+export function isDirectionTransitioning(state: AnimationState): boolean {
+    return state.directionTransitionProgress !== undefined &&
+           state.directionTransitionProgress < 1;
 }

@@ -80,7 +80,7 @@ export class GfxImage implements IGfxImage {
         const imgData = new Uint32Array(img.data.buffer);
 
         const buffer = this.data.getBuffer();
-        const length = this.width * this.height * 4;
+        const length = this.width * this.height; // Pixel count (Uint32Array elements)
         const pos = this.dataOffset;
 
         if (this.imgType !== 32) {

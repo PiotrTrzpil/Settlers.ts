@@ -2,7 +2,7 @@ import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
 import { ShaderProgram } from './shader-program';
-import { Entity, EntityType, UnitState, BuildingState, StackedResourceState, TileCoord, BuildingType, BuildingConstructionPhase, getBuildingFootprint } from '../entity';
+import { Entity, EntityType, BuildingState, StackedResourceState, TileCoord, BuildingType, BuildingConstructionPhase, getBuildingFootprint, UnitType } from '../entity';
 import { getBuildingVisualState } from '../systems/building-construction';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
@@ -30,10 +30,25 @@ import {
     getMapObjectDotScale,
 } from './layer-visibility';
 
+/**
+ * Interface for unit state access (compatible with old UnitState and new UnitStateView).
+ */
+interface UnitStateAccessor {
+    get(entityId: number): {
+        readonly prevX: number;
+        readonly prevY: number;
+        readonly moveProgress: number;
+        readonly path: ReadonlyArray<{ x: number; y: number }>;
+        readonly pathIndex: number;
+    } | undefined;
+}
+
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
 import spriteVertCode from './shaders/entity-sprite-vert.glsl';
 import spriteFragCode from './shaders/entity-sprite-frag.glsl';
+import spriteBlendVertCode from './shaders/entity-sprite-blend-vert.glsl';
+import spriteBlendFragCode from './shaders/entity-sprite-blend-frag.glsl';
 
 // Color shader constants (for non-textured rendering)
 const SELECTED_COLOR = [1.0, 1.0, 1.0, 1.0]; // White highlight
@@ -59,6 +74,17 @@ const BUILDING_SCALE = 0.5;
 const UNIT_SCALE = 0.3;
 const RESOURCE_SCALE = 0.25;
 const PATH_DOT_SCALE = 0.12;
+
+/**
+ * Depth factors for different entity types.
+ * These determine where the "depth point" is relative to sprite height:
+ * 0.0 = top of sprite, 1.0 = bottom of sprite.
+ * Higher values = depth point closer to ground = appears "more in front".
+ */
+const DEPTH_FACTOR_BUILDING = 0.5;   // Middle of building
+const DEPTH_FACTOR_MAP_OBJECT = 0.85; // Near bottom (trees, stones have base at bottom)
+const DEPTH_FACTOR_UNIT = 1.0;       // At feet (units stand on ground)
+const DEPTH_FACTOR_RESOURCE = 1.0;   // On ground
 
 // Selection frame parameters
 const FRAME_PADDING = 1.3; // Frame size relative to entity scale
@@ -99,7 +125,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     public selectedEntityIds: Set<number> = new Set();
 
     // Unit states for smooth interpolation and path visualization
-    public unitStates: Map<number, UnitState> = new Map();
+    public unitStates: UnitStateAccessor = { get: () => undefined };
 
     // Building states for construction animation
     public buildingStates: Map<number, BuildingState> = new Map();
@@ -137,8 +163,25 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private aSpriteTex = -1;
     private aSpriteTint = -1;
 
+    // Blend shader for direction transitions
+    private spriteBlendShaderProgram: ShaderProgram | null = null;
+    private spriteBlendBuffer: WebGLBuffer | null = null;
+    private spriteBlendBatchData: Float32Array | null = null;
+
+    // Cached attribute locations for blend shader
+    private aBlendPos = -1;
+    private aBlendTex1 = -1;
+    private aBlendTex2 = -1;
+    private aBlendFactor = -1;
+    private aBlendTint = -1;
+
     // Reusable vertex buffer to avoid per-frame allocations
     private vertexData = new Float32Array(6 * 2);
+
+    // Reusable array for depth-sorted entities (avoids per-frame allocations)
+    private sortedEntities: Entity[] = [];
+    // Cached depth keys for sorting (parallel array with sortedEntities)
+    private depthKeys: number[] = [];
 
     constructor(
         mapSize: MapSize,
@@ -247,6 +290,15 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.spriteShaderProgram = null;
         this.spriteBatchData = null;
 
+        // Clean up blend shader resources
+        if (this.spriteBlendBuffer) {
+            gl.deleteBuffer(this.spriteBlendBuffer);
+            this.spriteBlendBuffer = null;
+        }
+        this.spriteBlendShaderProgram?.free();
+        this.spriteBlendShaderProgram = null;
+        this.spriteBlendBatchData = null;
+
         // Clean up sprite manager
         this.spriteManager?.destroy();
 
@@ -269,6 +321,33 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.aSpritePos = this.spriteShaderProgram.getAttribLocation('a_position');
         this.aSpriteTex = this.spriteShaderProgram.getAttribLocation('a_texcoord');
         this.aSpriteTint = this.spriteShaderProgram.getAttribLocation('a_tint');
+
+        // Initialize blend shader for direction transitions
+        this.initSpriteBlendShader(gl);
+    }
+
+    /**
+     * Initialize the sprite blend shader for smooth direction transitions.
+     */
+    private initSpriteBlendShader(gl: WebGL2RenderingContext): void {
+        this.spriteBlendShaderProgram = new ShaderProgram();
+        this.spriteBlendShaderProgram.init(gl);
+        this.spriteBlendShaderProgram.attachShaders(spriteBlendVertCode, spriteBlendFragCode);
+        this.spriteBlendShaderProgram.create();
+
+        // Cache attribute locations for blend shader
+        this.aBlendPos = this.spriteBlendShaderProgram.getAttribLocation('a_position');
+        this.aBlendTex1 = this.spriteBlendShaderProgram.getAttribLocation('a_texcoord1');
+        this.aBlendTex2 = this.spriteBlendShaderProgram.getAttribLocation('a_texcoord2');
+        this.aBlendFactor = this.spriteBlendShaderProgram.getAttribLocation('a_blend');
+        this.aBlendTint = this.spriteBlendShaderProgram.getAttribLocation('a_tint');
+
+        // Allocate blend batch buffer
+        // 6 vertices per quad, 11 floats per vertex (pos:2 + uv1:2 + uv2:2 + blend:1 + tint:4)
+        const FLOATS_PER_BLEND_ENTITY = 6 * 11;
+        const MAX_BLEND_ENTITIES = 100; // Fewer needed since only transitioning units use this
+        this.spriteBlendBatchData = new Float32Array(MAX_BLEND_ENTITIES * FLOATS_PER_BLEND_ENTITY);
+        this.spriteBlendBuffer = gl.createBuffer();
     }
 
     /**
@@ -341,6 +420,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Draw path indicators for selected unit (color shader)
         this.drawSelectedUnitPath(gl, viewPoint);
 
+        // Sort entities by depth for correct painter's algorithm rendering
+        this.sortEntitiesByDepth(viewPoint);
+
         // Draw entities (textured or color fallback)
         if (this.spriteManager?.hasSprites && this.spriteShaderProgram) {
             this.drawTexturedEntities(gl, projection, viewPoint);
@@ -377,10 +459,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         sp.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
 
         let batchOffset = 0;
+        const transitioningUnits: Entity[] = []; // Units with direction transitions (rendered with blend shader)
 
-        for (const entity of this.entities) {
-            // Skip entities hidden by layer visibility
-            if (!this.isEntityVisible(entity)) continue;
+        // Use depth-sorted entities for correct painter's algorithm rendering
+        for (const entity of this.sortedEntities) {
 
             let spriteEntry: SpriteEntry | null = null;
             let tint: number[];
@@ -456,6 +538,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 spriteEntry = this.spriteManager.getResource(entity.subType as EMaterialType);
                 const isSelected = this.selectedEntityIds.has(entity.id);
                 tint = computeNeutralTint(isSelected);
+            } else if (entity.type === EntityType.Unit) {
+                // Check if unit is in a direction transition (needs blend shader)
+                const animState = entity.animationState;
+                if (animState?.directionTransitionProgress !== undefined &&
+                    animState.previousDirection !== undefined) {
+                    // Collect for blend rendering (handled after regular batch)
+                    transitioningUnits.push(entity);
+                    continue;
+                }
+
+                // Render units (settlers, soldiers) with direction from animation state
+                const direction = animState?.direction ?? 0;
+                spriteEntry = this.spriteManager.getUnit(entity.subType as UnitType, direction);
+                const isSelected = this.selectedEntityIds.has(entity.id);
+                tint = computeNeutralTint(isSelected);
             } else {
                 continue;
             }
@@ -468,11 +565,17 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 batchOffset = 0;
             }
 
-            const worldPos = TilePicker.tileToWorld(
-                entity.x, entity.y,
-                this.groundHeight, this.mapSize,
-                viewPoint.x, viewPoint.y
-            );
+            // Use interpolated position for units (smooth movement), static for others
+            let worldPos: { worldX: number; worldY: number };
+            if (entity.type === EntityType.Unit) {
+                worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
+            } else {
+                worldPos = TilePicker.tileToWorld(
+                    entity.x, entity.y,
+                    this.groundHeight, this.mapSize,
+                    viewPoint.x, viewPoint.y
+                );
+            }
 
             // Use partial sprite rendering for construction animation
             if (verticalProgress < 1.0) {
@@ -499,6 +602,185 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (batchOffset > 0) {
             this.flushSpriteBatch(gl, sp, batchOffset);
         }
+
+        // Render units with direction transitions using blend shader
+        if (transitioningUnits.length > 0) {
+            this.drawTransitioningUnits(gl, projection, viewPoint, transitioningUnits);
+        }
+    }
+
+    /**
+     * Draw units that are transitioning between directions using the blend shader.
+     */
+    private drawTransitioningUnits(
+        gl: WebGL2RenderingContext,
+        projection: Float32Array,
+        viewPoint: IViewPoint,
+        units: Entity[]
+    ): void {
+        if (!this.spriteBlendShaderProgram || !this.spriteBlendBuffer ||
+            !this.spriteBlendBatchData || !this.spriteManager) {
+            return;
+        }
+
+        const sp = this.spriteBlendShaderProgram;
+        sp.use();
+        sp.setMatrix('projection', projection);
+        sp.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
+
+        let batchOffset = 0;
+        const FLOATS_PER_BLEND_VERTEX = 11; // pos:2 + uv1:2 + uv2:2 + blend:1 + tint:4
+        const FLOATS_PER_BLEND_ENTITY = 6 * FLOATS_PER_BLEND_VERTEX;
+
+        for (const entity of units) {
+            const animState = entity.animationState!;
+            const oldDir = animState.previousDirection!;
+            const newDir = animState.direction;
+            const blendFactor = animState.directionTransitionProgress!;
+
+            const oldSprite = this.spriteManager.getUnit(entity.subType as UnitType, oldDir);
+            const newSprite = this.spriteManager.getUnit(entity.subType as UnitType, newDir);
+
+            if (!oldSprite || !newSprite) continue;
+
+            const isSelected = this.selectedEntityIds.has(entity.id);
+            const tint = computeNeutralTint(isSelected);
+
+            const worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
+
+            // Check batch capacity
+            if (batchOffset + FLOATS_PER_BLEND_ENTITY > this.spriteBlendBatchData.length) {
+                this.flushBlendBatch(gl, batchOffset);
+                batchOffset = 0;
+            }
+
+            batchOffset = this.fillBlendSpriteQuad(
+                batchOffset,
+                worldPos.worldX,
+                worldPos.worldY,
+                oldSprite,
+                newSprite,
+                blendFactor,
+                tint[0], tint[1], tint[2], tint[3]
+            );
+        }
+
+        // Flush remaining blend sprites
+        if (batchOffset > 0) {
+            this.flushBlendBatch(gl, batchOffset);
+        }
+    }
+
+    /**
+     * Fill blend sprite quad vertices into the batch buffer.
+     */
+    private fillBlendSpriteQuad(
+        offset: number,
+        worldX: number,
+        worldY: number,
+        oldSprite: SpriteEntry,
+        newSprite: SpriteEntry,
+        blendFactor: number,
+        tintR: number,
+        tintG: number,
+        tintB: number,
+        tintA: number
+    ): number {
+        if (!this.spriteBlendBatchData) return offset;
+
+        const data = this.spriteBlendBatchData;
+
+        // Use the old sprite's dimensions (they should be similar)
+        const { atlasRegion: region1, offsetX, offsetY, widthWorld, heightWorld } = oldSprite;
+        const { atlasRegion: region2 } = newSprite;
+
+        const x0 = worldX + offsetX;
+        const y0 = worldY + offsetY;
+        const x1 = x0 + widthWorld;
+        const y1 = y0 + heightWorld;
+
+        // UV coordinates for both sprites
+        const { u0: u0_1, v0: v0_1, u1: u1_1, v1: v1_1 } = region1;
+        const { u0: u0_2, v0: v0_2, u1: u1_2, v1: v1_2 } = region2;
+
+        // 6 vertices for 2 triangles (CCW winding)
+        // Each vertex: pos(2) + uv1(2) + uv2(2) + blend(1) + tint(4) = 11 floats
+
+        // Vertex 0: top-left
+        data[offset++] = x0; data[offset++] = y1;
+        data[offset++] = u0_1; data[offset++] = v1_1;
+        data[offset++] = u0_2; data[offset++] = v1_2;
+        data[offset++] = blendFactor;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        // Vertex 1: bottom-left
+        data[offset++] = x0; data[offset++] = y0;
+        data[offset++] = u0_1; data[offset++] = v0_1;
+        data[offset++] = u0_2; data[offset++] = v0_2;
+        data[offset++] = blendFactor;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        // Vertex 2: bottom-right
+        data[offset++] = x1; data[offset++] = y0;
+        data[offset++] = u1_1; data[offset++] = v0_1;
+        data[offset++] = u1_2; data[offset++] = v0_2;
+        data[offset++] = blendFactor;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        // Vertex 3: top-left (again)
+        data[offset++] = x0; data[offset++] = y1;
+        data[offset++] = u0_1; data[offset++] = v1_1;
+        data[offset++] = u0_2; data[offset++] = v1_2;
+        data[offset++] = blendFactor;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        // Vertex 4: bottom-right (again)
+        data[offset++] = x1; data[offset++] = y0;
+        data[offset++] = u1_1; data[offset++] = v0_1;
+        data[offset++] = u1_2; data[offset++] = v0_2;
+        data[offset++] = blendFactor;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        // Vertex 5: top-right
+        data[offset++] = x1; data[offset++] = y1;
+        data[offset++] = u1_1; data[offset++] = v1_1;
+        data[offset++] = u1_2; data[offset++] = v1_2;
+        data[offset++] = blendFactor;
+        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+
+        return offset;
+    }
+
+    /**
+     * Flush the blend sprite batch buffer to GPU and draw.
+     */
+    private flushBlendBatch(gl: WebGL2RenderingContext, floatCount: number): void {
+        if (!this.spriteBlendBuffer || !this.spriteBlendBatchData || floatCount === 0) return;
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.spriteBlendBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, this.spriteBlendBatchData.subarray(0, floatCount), gl.DYNAMIC_DRAW);
+
+        // Stride: 11 floats * 4 bytes = 44 bytes
+        // Layout: pos(2) + uv1(2) + uv2(2) + blend(1) + tint(4)
+        const stride = 11 * 4;
+
+        gl.enableVertexAttribArray(this.aBlendPos);
+        gl.vertexAttribPointer(this.aBlendPos, 2, gl.FLOAT, false, stride, 0);
+
+        gl.enableVertexAttribArray(this.aBlendTex1);
+        gl.vertexAttribPointer(this.aBlendTex1, 2, gl.FLOAT, false, stride, 8);
+
+        gl.enableVertexAttribArray(this.aBlendTex2);
+        gl.vertexAttribPointer(this.aBlendTex2, 2, gl.FLOAT, false, stride, 16);
+
+        gl.enableVertexAttribArray(this.aBlendFactor);
+        gl.vertexAttribPointer(this.aBlendFactor, 1, gl.FLOAT, false, stride, 24);
+
+        gl.enableVertexAttribArray(this.aBlendTint);
+        gl.vertexAttribPointer(this.aBlendTint, 4, gl.FLOAT, false, stride, 28);
+
+        const vertexCount = floatCount / 11;
+        gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
     }
 
     /**
@@ -681,10 +963,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.disableVertexAttribArray(this.aEntityPos);
         gl.disableVertexAttribArray(this.aColor);
 
-        for (const entity of this.entities) {
-            // Skip entities hidden by layer visibility
-            if (!this.isEntityVisible(entity)) continue;
-
+        // Use depth-sorted entities for correct painter's algorithm rendering
+        for (const entity of this.sortedEntities) {
             // Skip textured buildings if they're handled by sprite renderer
             if (texturedBuildingsHandled && entity.type === EntityType.Building) {
                 const hasSprite = this.spriteManager?.getBuilding(entity.subType as BuildingType);
@@ -705,6 +985,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             // Skip textured stacked resources
             if (texturedBuildingsHandled && entity.type === EntityType.StackedResource) {
                 const hasSprite = this.spriteManager?.getResource(entity.subType as EMaterialType);
+                if (hasSprite) continue;
+            }
+
+            // Skip textured units
+            if (texturedBuildingsHandled && entity.type === EntityType.Unit) {
+                const hasSprite = this.spriteManager?.getUnit(entity.subType as UnitType);
                 if (hasSprite) continue;
             }
 
@@ -745,9 +1031,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private drawSelectionFrames(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
 
-        for (const entity of this.entities) {
+        // Use depth-sorted entities for consistent ordering
+        for (const entity of this.sortedEntities) {
             if (!this.selectedEntityIds.has(entity.id)) continue;
-            if (!this.isEntityVisible(entity)) continue;
 
             let scale = UNIT_SCALE;
             if (entity.type === EntityType.Building) {
@@ -853,7 +1139,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private getInterpolatedWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {
         const unitState = this.unitStates.get(entity.id);
 
-        if (!unitState || unitState.pathIndex >= unitState.path.length) {
+        // Check if unit is stationary: no unit state, or prev == curr position
+        // Use prev != curr to determine if interpolation is needed, not path state
+        // This ensures smooth movement even when path completes mid-transition
+        const isStationary = !unitState ||
+            (unitState.prevX === entity.x && unitState.prevY === entity.y);
+
+        if (isStationary) {
             return TilePicker.tileToWorld(
                 entity.x, entity.y,
                 this.groundHeight, this.mapSize,
@@ -872,12 +1164,115 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             viewPoint.x, viewPoint.y
         );
 
-        const tickProgress = unitState.speed * (1 / 30);
-        const t = Math.min(unitState.moveProgress + this.renderAlpha * tickProgress, 1);
+        // Use moveProgress directly for interpolation (0 to 1)
+        // This gives smooth, predictable movement at tick rate (30 Hz)
+        // Clamp to ensure valid range even during edge cases
+        const t = Math.max(0, Math.min(unitState.moveProgress, 1));
         return {
             worldX: prevPos.worldX + (currPos.worldX - prevPos.worldX) * t,
             worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t
         };
+    }
+
+    /**
+     * Compute the depth key for an entity for painter's algorithm sorting.
+     * Larger depth = drawn later = appears in front.
+     * The depth point is adjusted based on entity type and sprite dimensions.
+     */
+    private computeDepthKey(entity: Entity, worldY: number, spriteEntry: SpriteEntry | null): number {
+        // Base depth is the world Y coordinate (larger = lower on screen = in front)
+        let depth = worldY;
+
+        // Adjust depth based on sprite dimensions and entity-specific depth factor
+        if (spriteEntry) {
+            const { offsetY, heightWorld } = spriteEntry;
+            let depthFactor: number;
+
+            switch (entity.type) {
+            case EntityType.Building:
+                depthFactor = DEPTH_FACTOR_BUILDING;
+                break;
+            case EntityType.MapObject:
+                depthFactor = DEPTH_FACTOR_MAP_OBJECT;
+                break;
+            case EntityType.Unit:
+                depthFactor = DEPTH_FACTOR_UNIT;
+                break;
+            case EntityType.StackedResource:
+                depthFactor = DEPTH_FACTOR_RESOURCE;
+                break;
+            default:
+                depthFactor = 1.0;
+            }
+
+            // Depth point = base position + offset to the depth line within sprite
+            // offsetY is typically negative (sprite extends upward from anchor)
+            // heightWorld is the full sprite height
+            // depthFactor=0 means top of sprite, depthFactor=1 means bottom
+            depth = worldY + offsetY + heightWorld * depthFactor;
+        }
+
+        return depth;
+    }
+
+    /**
+     * Sort entities by depth for correct painter's algorithm rendering.
+     * Populates sortedEntities array with visible entities sorted back-to-front.
+     */
+    private sortEntitiesByDepth(viewPoint: IViewPoint): void {
+        // Clear and populate sortedEntities with visible entities
+        this.sortedEntities.length = 0;
+        this.depthKeys.length = 0;
+
+        for (const entity of this.entities) {
+            if (!this.isEntityVisible(entity)) continue;
+
+            // Get world position
+            let worldPos: { worldX: number; worldY: number };
+            if (entity.type === EntityType.Unit) {
+                worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
+            } else {
+                worldPos = TilePicker.tileToWorld(
+                    entity.x, entity.y,
+                    this.groundHeight, this.mapSize,
+                    viewPoint.x, viewPoint.y
+                );
+            }
+
+            // Get sprite for depth calculation (if available)
+            let spriteEntry: SpriteEntry | null = null;
+            if (this.spriteManager) {
+                switch (entity.type) {
+                case EntityType.Building:
+                    spriteEntry = this.spriteManager.getBuilding(entity.subType as BuildingType);
+                    break;
+                case EntityType.MapObject:
+                    spriteEntry = this.spriteManager.getMapObject(entity.subType as MapObjectType);
+                    break;
+                case EntityType.Unit:
+                    spriteEntry = this.spriteManager.getUnit(entity.subType as UnitType);
+                    break;
+                case EntityType.StackedResource:
+                    spriteEntry = this.spriteManager.getResource(entity.subType as EMaterialType);
+                    break;
+                }
+            }
+
+            const depthKey = this.computeDepthKey(entity, worldPos.worldY, spriteEntry);
+            this.sortedEntities.push(entity);
+            this.depthKeys.push(depthKey);
+        }
+
+        // Sort by depth key (smaller = behind = drawn first)
+        // Use indices to sort both arrays together
+        const indices = this.sortedEntities.map((_, i) => i);
+        indices.sort((a, b) => this.depthKeys[a] - this.depthKeys[b]);
+
+        // Reorder arrays based on sorted indices
+        const sortedEntitiesCopy = indices.map(i => this.sortedEntities[i]);
+        for (let i = 0; i < sortedEntitiesCopy.length; i++) {
+            this.sortedEntities[i] = sortedEntitiesCopy[i];
+        }
     }
 
     /** Draw dots along the remaining path of all selected units */

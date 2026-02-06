@@ -39,6 +39,10 @@ export class ViewPoint implements IViewPoint {
         return 0.1 / this.zoomValue;
     }
 
+    public get canvasHeight(): number {
+        return this.canvas.clientHeight;
+    }
+
     /** Center the camera on a tile coordinate */
     public setPosition(tileX: number, tileY: number): void {
         // The shader maps tile (x, y) to instancePos (x + floor(y/2), y),

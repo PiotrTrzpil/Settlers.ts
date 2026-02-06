@@ -327,6 +327,10 @@ export interface UnitState {
     /** Previous tile position for visual interpolation */
     prevX: number;
     prevY: number;
+    /** Time spent idle (no path) in seconds */
+    idleTime: number;
+    /** Random threshold for next idle direction change (seconds) */
+    nextIdleTurnTime: number;
 }
 
 /**

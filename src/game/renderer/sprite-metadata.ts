@@ -1,4 +1,4 @@
-import { BuildingType, MapObjectType } from '../entity';
+import { BuildingType, MapObjectType, UnitType } from '../entity';
 import { EMaterialType } from '../economy/material-type';
 import { AtlasRegion } from './entity-texture-atlas';
 import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS } from '../animation';
@@ -85,6 +85,66 @@ export const SETTLER_FILE_NUMBERS: Record<Race, number> = {
     [Race.DarkTribe]: 23,
     [Race.Trojan]: 24,
 };
+
+/**
+ * Direction indices for unit sprites in DIL files.
+ * Units have 4 directions for walking/facing.
+ */
+export const UNIT_DIRECTION = {
+    /** Facing right (D0) */
+    RIGHT: 0,
+    /** Facing right+bottom diagonal (D1) */
+    RIGHT_BOTTOM: 1,
+    /** Facing left+bottom diagonal (D2) */
+    LEFT_BOTTOM: 2,
+    /** Facing left (D3) */
+    LEFT: 3,
+} as const;
+
+/**
+ * Mapping from UnitType to JIL job index in settler files (20-24.jil).
+ * The job index is the same across all race files - only the GFX file number differs.
+ * These indices map to unit sprites via JIL -> DIL -> GIL -> GFX.
+ *
+ * Each job has 4 directions (D0-D3) with multiple animation frames per direction.
+ */
+export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
+    // Job 0: Unknown/placeholder
+    [UnitType.Bearer]: 1,      // Carrier without goods
+    [UnitType.Builder]: 19,    // Construction worker
+    [UnitType.Swordsman]: 227, // Lvl1 swordsman (first of pair 227/228)
+    [UnitType.Bowman]: 236,    // Lvl1 bowman standing (236-240 = set1, 242-246 = set2)
+    // TODO: Identify remaining unit job indices by inspecting JIL files
+    // [UnitType.Pikeman]: ?,
+    // [UnitType.Priest]: ?,
+    // [UnitType.Pioneer]: ?,
+    // [UnitType.Thief]: ?,
+    // [UnitType.Geologist]: ?,
+};
+
+/**
+ * Soldier unit job indices by type and level.
+ * Structure varies by unit type due to different animation needs.
+ */
+export const SOLDIER_JOB_INDICES = {
+    /** Swordsman: 2 variants per level (appear identical) */
+    swordsman: {
+        lvl1: [227, 228],
+        lvl2: [230, 231],
+        lvl3: [233, 234],
+    },
+    /**
+     * Bowman: Multiple animation states per level.
+     * First index is standing/idle, rest are shooting animation variants.
+     */
+    bowman: {
+        lvl1: [236, 237, 238, 239, 240],
+        lvl2: [242, 243, 244, 245, 246],
+        lvl3: [248, 249, 250, 251, 252],
+    },
+    // TODO: Add pikeman indices when identified
+    // pikeman: { lvl1: ?, lvl2: ?, lvl3: ? },
+} as const;
 
 /**
  * Metadata for a single sprite entry in the atlas.
@@ -270,6 +330,36 @@ export function getResourceSpriteMap(): Partial<Record<EMaterialType, ResourceSp
 }
 
 /**
+ * Sprite information for a unit type.
+ */
+export interface UnitSpriteInfo {
+    /** GFX file number (race-specific: 20-24) */
+    file: number;
+    /** JIL job index within the GFX file */
+    index: number;
+}
+
+/**
+ * Get the unit sprite map for a specific race.
+ * Returns a map of UnitType -> { file, index } using the race's settler file number.
+ */
+export function getUnitSpriteMap(race: Race): Partial<Record<UnitType, UnitSpriteInfo>> {
+    const fileNum = SETTLER_FILE_NUMBERS[race];
+    const result: Partial<Record<UnitType, UnitSpriteInfo>> = {};
+
+    for (const [typeStr, jobIndex] of Object.entries(UNIT_JOB_INDICES)) {
+        if (jobIndex !== undefined) {
+            result[Number(typeStr) as UnitType] = {
+                file: fileNum,
+                index: jobIndex,
+            };
+        }
+    }
+
+    return result;
+}
+
+/**
  * Get the building sprite map for a specific race.
  * Returns a map of BuildingType -> { file, index } using the race's GFX file number.
  */
@@ -380,6 +470,8 @@ export class SpriteMetadataRegistry {
     /** Animated map objects (trees swaying, etc.) */
     private animatedMapObjects: Map<MapObjectType, AnimatedSpriteEntry> = new Map();
     private resources: Map<EMaterialType, SpriteEntry> = new Map();
+    /** Unit sprites indexed by type and direction (0-3: RIGHT, RIGHT_BOTTOM, LEFT_BOTTOM, LEFT) */
+    private units: Map<UnitType, Map<number, SpriteEntry>> = new Map();
 
     /**
      * Register sprite entries for a building type (both construction and completed).
@@ -442,6 +534,31 @@ export class SpriteMetadataRegistry {
     }
 
     /**
+     * Register a sprite entry for a unit type and direction.
+     * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT
+     */
+    public registerUnit(type: UnitType, direction: number, entry: SpriteEntry): void {
+        let dirMap = this.units.get(type);
+        if (!dirMap) {
+            dirMap = new Map();
+            this.units.set(type, dirMap);
+        }
+        dirMap.set(direction, entry);
+    }
+
+    /**
+     * Look up the sprite entry for a unit type and direction.
+     * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT (defaults to 0)
+     * Returns null if no sprite is registered for this type/direction.
+     */
+    public getUnit(type: UnitType, direction: number = 0): SpriteEntry | null {
+        const dirMap = this.units.get(type);
+        if (!dirMap) return null;
+        // Try requested direction, fall back to direction 0 if not found
+        return dirMap.get(direction) ?? dirMap.get(0) ?? null;
+    }
+
+    /**
      * Check if any building sprites have been registered.
      */
     public hasBuildingSprites(): boolean {
@@ -463,6 +580,13 @@ export class SpriteMetadataRegistry {
     }
 
     /**
+     * Check if any unit sprites have been registered.
+     */
+    public hasUnitSprites(): boolean {
+        return this.units.size > 0;
+    }
+
+    /**
      * Get the number of registered building sprites.
      */
     public getBuildingCount(): number {
@@ -474,6 +598,13 @@ export class SpriteMetadataRegistry {
      */
     public getMapObjectCount(): number {
         return this.mapObjects.size;
+    }
+
+    /**
+     * Get the number of registered unit sprites.
+     */
+    public getUnitCount(): number {
+        return this.units.size;
     }
 
     /**
@@ -593,5 +724,6 @@ export class SpriteMetadataRegistry {
         this.animatedBuildings.clear();
         this.animatedMapObjects.clear();
         this.resources.clear();
+        this.units.clear();
     }
 }
