@@ -50,6 +50,7 @@ Test maps and procedural textures work without game files.
 
 ## Claude Code workflow
 
+- **Always use async/await**: Prefer `async/await` over `.then()` chains for cleaner, more readable code
 - **Validate every change**: Run targeted unit test after each edit, full suite before commit
 - **Cross-module changes need e2e**: If touching multiple modules, run `pnpm build && npx playwright test`
 - **Use LSP MCP** (if available): Always prefer over grep/edit for code exploration and refactoring
@@ -68,3 +69,9 @@ Test maps and procedural textures work without game files.
 - Always rebuild first: `pnpm build && npx playwright test`
 - Use `GamePage` helpers and shared fixture (`import { test, expect } from './fixtures'`)
 - Never use `waitForTimeout()` — use `waitForFrames()`, `waitForReady()`, etc.
+- **Run full e2e suite in background** to avoid blocking and recover from stuck tests:
+  ```sh
+  npx playwright test --reporter=line 2>&1 | tee /tmp/e2e.log &
+  # Then poll output every 1-2 seconds:
+  while ! grep -q "passed\|failed" /tmp/e2e.log 2>/dev/null; do sleep 1; tail -5 /tmp/e2e.log 2>/dev/null; done
+  ```
