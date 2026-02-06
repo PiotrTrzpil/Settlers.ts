@@ -35,6 +35,7 @@ export class Game {
     public useProceduralTextures = false;
 
     public constructor(fileManager: FileManager, mapLoader: IMapLoader) {
+        const start = performance.now();
         this.fileManager = fileManager;
         this.mapSize = mapLoader.mapSize;
         this.groundHeight = mapLoader.landscape.getGroundHeight();
@@ -45,6 +46,7 @@ export class Game {
         this.gameLoop = new GameLoop(this.state);
         this.gameLoop.setTerrainData(this.groundType, this.groundHeight, this.mapSize.width, this.mapSize.height);
         this.territory = new TerritoryMap(this.mapSize);
+        console.log(`Game\tMap loaded: ${this.mapSize.width}x${this.mapSize.height} in ${Math.round(performance.now() - start)}ms`);
     }
 
     /** Execute a command against the game state, then update territory if needed */

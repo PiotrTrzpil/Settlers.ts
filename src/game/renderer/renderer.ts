@@ -121,14 +121,21 @@ export class Renderer {
             return;
         }
 
+        const totalStart = performance.now();
+        Renderer.log.debug('=== Renderer init starting ===');
+
         for (const r of this.renderers) {
+            const name = r.constructor.name;
+            const start = performance.now();
             try {
                 await r.init(this.gl);
+                Renderer.log.debug(`${name} init: ${Math.round(performance.now() - start)}ms`);
             } catch (e) {
                 Renderer.log.error('Renderer init failed', e instanceof Error ? e : new Error(String(e)));
             }
         }
 
+        Renderer.log.debug(`=== Renderer init complete: ${Math.round(performance.now() - totalStart)}ms ===`);
         this.requestDraw();
     }
 

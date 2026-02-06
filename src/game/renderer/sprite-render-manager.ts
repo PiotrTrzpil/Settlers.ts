@@ -275,6 +275,7 @@ export class SpriteRenderManager {
      * Load sprites for a specific race.
      */
     private async loadSpritesForRace(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
+        const totalStart = performance.now();
         const spriteMap = getBuildingSpriteMap(race);
 
         // Determine which GFX files we need
@@ -294,32 +295,31 @@ export class SpriteRenderManager {
 
         let loadedAny = false;
 
+        const buildingStart = performance.now();
         for (const fileNum of requiredFiles) {
             const loaded = await this.loadSpritesFromFile(fileNum, atlas, registry, spriteMap);
             if (loaded) loadedAny = true;
         }
+        SpriteRenderManager.log.debug(`Buildings: ${Math.round(performance.now() - buildingStart)}ms`);
 
         if (!loadedAny) {
             SpriteRenderManager.log.debug('No building sprite files found');
         }
 
         // Also load map object sprites (trees, stones)
+        const mapStart = performance.now();
         const mapObjectsLoaded = await this.loadMapObjectSprites(atlas, registry);
-        if (mapObjectsLoaded) {
-            SpriteRenderManager.log.debug(`Map object sprites loaded: ${registry.getMapObjectCount()} objects`);
-        }
+        SpriteRenderManager.log.debug(`Map objects: ${Math.round(performance.now() - mapStart)}ms (${registry.getMapObjectCount()} loaded)`);
 
         // Also load resource sprites (logs, planks, goods)
+        const resStart = performance.now();
         const resourcesLoaded = await this.loadResourceSprites(atlas, registry);
-        if (resourcesLoaded) {
-            SpriteRenderManager.log.debug(`Resource sprites loaded: ${registry.getResourceCount()} resources`);
-        }
+        SpriteRenderManager.log.debug(`Resources: ${Math.round(performance.now() - resStart)}ms (${registry.getResourceCount()} loaded)`);
 
         // Also load unit sprites (settlers, soldiers)
+        const unitStart = performance.now();
         const unitsLoaded = await this.loadUnitSprites(race, atlas, registry);
-        if (unitsLoaded) {
-            SpriteRenderManager.log.debug(`Unit sprites loaded: ${registry.getUnitCount()} units`);
-        }
+        SpriteRenderManager.log.debug(`Units: ${Math.round(performance.now() - unitStart)}ms (${registry.getUnitCount()} loaded)`);
 
         if (!loadedAny && !mapObjectsLoaded && !resourcesLoaded && !unitsLoaded) {
             SpriteRenderManager.log.debug('No sprite files found, using color fallback');
@@ -327,10 +327,13 @@ export class SpriteRenderManager {
         }
 
         // Upload atlas to GPU
+        const uploadStart = performance.now();
         atlas.load(gl);
+        SpriteRenderManager.log.debug(`Atlas upload: ${Math.round(performance.now() - uploadStart)}ms`);
         this._spriteAtlas = atlas;
         this._spriteRegistry = registry;
 
+        SpriteRenderManager.log.debug(`=== Sprite loading total: ${Math.round(performance.now() - totalStart)}ms ===`);
         return registry.hasBuildingSprites() || registry.hasMapObjectSprites() || registry.hasResourceSprites() || registry.hasUnitSprites();
     }
 

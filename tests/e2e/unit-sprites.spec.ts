@@ -69,11 +69,14 @@ test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () 
         const spriteRelatedLogs = consoleLogs.filter(log =>
             log.includes('SpriteRenderManager') || log.includes('Unit')
         );
-        const unitLoadedLog = spriteRelatedLogs.find(log => log.includes('Unit sprites loaded'));
+        // Match either old format "Unit sprites loaded: X units" or new timing format "Units: Xms (X loaded)"
+        const unitLoadedLog = spriteRelatedLogs.find(log =>
+            log.includes('unit types') || log.includes('Units:')
+        );
         expect(unitLoadedLog).toBeDefined();
 
-        // Parse how many units loaded from the log
-        const match = unitLoadedLog?.match(/Unit sprites loaded: (\d+) units/);
+        // Parse how many units loaded from the log (either format)
+        const match = unitLoadedLog?.match(/(\d+)\s+unit types/) || unitLoadedLog?.match(/\((\d+) loaded\)/);
         if (match) {
             expect(parseInt(match[1], 10)).toBeGreaterThan(0);
         }

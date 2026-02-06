@@ -155,7 +155,7 @@ export class SpriteLoader {
             SpriteLoader.log.debug(`Job index ${jobIndex} not found in file ${fileSet.fileId} (total jobs: ${totalJobs})`);
             return null;
         }
-        SpriteLoader.log.debug(`Loading job ${jobIndex} from ${fileSet.fileId}: offset=${jobItem.offset}, length=${jobItem.length}`);
+        // Note: removed verbose per-job loading log - too noisy during normal operation
         const dirItems = fileSet.dilReader.getItems(jobItem.offset, jobItem.length);
         if (directionIndex >= dirItems.length) {
             SpriteLoader.log.debug(`Direction ${directionIndex} out of range for job ${jobIndex}`);
