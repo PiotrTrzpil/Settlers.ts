@@ -4,13 +4,32 @@
  */
 
 import { GameState } from '../game-state';
-import {
-    BuildingConstructionPhase,
-    BuildingState,
-    EntityType,
-    BUILDING_SPAWN_ON_COMPLETE,
-} from '../entity';
+import { EntityType } from '../entity';
+import { BuildingType, BuildingConstructionPhase, BuildingState } from '../buildings';
+import { UnitType } from '../unit-types';
 import { MapSize } from '@/utilities/map-size';
+
+/**
+ * Which unit type (and count) each building spawns when construction completes.
+ * The Barrack produces soldiers, residence buildings produce settlers, etc.
+ * Buildings not listed here don't spawn units on completion.
+ *
+ * Selectability of spawned units is determined by UNIT_TYPE_CONFIG by default.
+ * Use the optional `selectable` field to override the default for specific buildings.
+ */
+export interface BuildingSpawnConfig {
+    unitType: UnitType;
+    count: number;
+    /** Override default selectability from UNIT_TYPE_CONFIG (undefined = use default) */
+    selectable?: boolean;
+}
+
+export const BUILDING_SPAWN_ON_COMPLETE: Record<number, BuildingSpawnConfig | undefined> = {
+    [BuildingType.Barrack]: { unitType: UnitType.Swordsman, count: 3 },
+    [BuildingType.SmallHouse]: { unitType: UnitType.Bearer, count: 2 },
+    [BuildingType.MediumHouse]: { unitType: UnitType.Bearer, count: 4 },
+    [BuildingType.LargeHouse]: { unitType: UnitType.Bearer, count: 6 },
+};
 import { isPassable } from './placement';
 import {
     captureOriginalTerrain,

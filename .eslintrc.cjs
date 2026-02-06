@@ -5,12 +5,18 @@ module.exports = {
         browser: true,
         es2020: true
     },
-    plugins: ['unused-imports'],
+    plugins: ['unused-imports', 'import'],
     extends: [
         'plugin:vue/vue3-essential',
         'eslint:recommended',
         '@vue/eslint-config-typescript'
     ],
+    settings: {
+        'import/resolver': {
+            typescript: true,
+            node: true
+        }
+    },
     parserOptions: {
         ecmaVersion: 2020,
         sourceType: 'module'
@@ -37,7 +43,11 @@ module.exports = {
         // Unused imports - auto-fixable
         '@typescript-eslint/no-unused-vars': 'off',
         'unused-imports/no-unused-imports': 'warn',
-        'unused-imports/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }]
+        'unused-imports/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+
+        // Import rules - detect circular dependencies
+        'import/no-cycle': ['error', { maxDepth: 5 }],
+        'import/no-self-import': 'error'
     },
     overrides: [
         {

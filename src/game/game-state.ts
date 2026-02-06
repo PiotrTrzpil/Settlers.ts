@@ -22,6 +22,14 @@ export interface UnitStateView {
 }
 
 /**
+ * Interface for looking up unit states by entity ID.
+ * Used by renderers and other systems that need to access unit movement state.
+ */
+export interface UnitStateLookup {
+    get(entityId: number): UnitStateView | undefined;
+}
+
+/**
  * Adapter that wraps a MovementController as a UnitStateView.
  * Provides backward-compatible read access to movement state.
  */
@@ -41,7 +49,7 @@ class UnitStateAdapter implements UnitStateView {
  * Adapter Map that provides legacy unitStates interface.
  * Wraps MovementSystem for backward compatibility with existing code.
  */
-class UnitStatesMap {
+class UnitStateMap implements UnitStateLookup {
     constructor(private movementSystem: MovementSystem) {}
 
     get(entityId: number): UnitStateView | undefined {
@@ -86,7 +94,7 @@ export class GameState {
     public readonly movement: MovementSystem = new MovementSystem();
 
     /** Legacy adapter for backward compatibility - wraps movement system */
-    public readonly unitStates: UnitStatesMap;
+    public readonly unitStates: UnitStateMap;
 
     /** Building construction state tracking */
     public buildingStates: Map<number, BuildingState> = new Map();
@@ -102,7 +110,7 @@ export class GameState {
     public tileOccupancy: Map<string, number> = new Map();
 
     constructor() {
-        this.unitStates = new UnitStatesMap(this.movement);
+        this.unitStates = new UnitStateMap(this.movement);
 
         // Set up movement system callbacks
         this.movement.setCallbacks(

@@ -3,6 +3,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "strict": true,
+    "isolatedModules": true,
     "jsx": "preserve",
     "moduleResolution": "bundler",
     "skipLibCheck": true,

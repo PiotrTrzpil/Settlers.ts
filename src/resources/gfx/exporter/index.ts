@@ -30,18 +30,15 @@
 
 export { RawImageData } from './raw-image-data';
 export { PngEncoder, encodePNG, encodePNGSync } from './png-encoder';
+export type { IFileReader, IFileWriter } from './file-system';
 export {
-    IFileReader,
-    IFileWriter,
     NodeFileSystem,
     BrowserFileSystem,
     MemoryFileSystem,
     createFileSystem
 } from './file-system';
+export type { ExportOptions, ExportResult, GfxFileInfo } from './gfx-image-exporter';
 export {
     GfxImageExporter,
-    createGfxExporter,
-    ExportOptions,
-    ExportResult,
-    GfxFileInfo
+    createGfxExporter
 } from './gfx-image-exporter';

@@ -3,6 +3,7 @@ import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
 import { ShaderProgram } from './shader-program';
 import { Entity, EntityType, BuildingState, StackedResourceState, TileCoord, BuildingType, BuildingConstructionPhase, getBuildingFootprint, UnitType } from '../entity';
+import { UnitStateLookup } from '../game-state';
 import { getBuildingVisualState } from '../systems/building-construction';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
@@ -30,18 +31,6 @@ import {
     getMapObjectDotScale,
 } from './layer-visibility';
 
-/**
- * Interface for unit state access (compatible with old UnitState and new UnitStateView).
- */
-interface UnitStateAccessor {
-    get(entityId: number): {
-        readonly prevX: number;
-        readonly prevY: number;
-        readonly moveProgress: number;
-        readonly path: ReadonlyArray<{ x: number; y: number }>;
-        readonly pathIndex: number;
-    } | undefined;
-}
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -50,51 +39,30 @@ import spriteFragCode from './shaders/entity-sprite-frag.glsl';
 import spriteBlendVertCode from './shaders/entity-sprite-blend-vert.glsl';
 import spriteBlendFragCode from './shaders/entity-sprite-blend-frag.glsl';
 
-// Color shader constants (for non-textured rendering)
-const SELECTED_COLOR = [1.0, 1.0, 1.0, 1.0]; // White highlight
-const FRAME_COLOR = [1.0, 1.0, 0.0, 0.85]; // Yellow selection frame
-const FRAME_CORNER_COLOR = [1.0, 1.0, 1.0, 0.95]; // White corner accents
-const PATH_COLOR = [0.3, 1.0, 0.6, 0.4]; // Green path indicator
-const PREVIEW_VALID_COLOR = [0.3, 1.0, 0.3, 0.5]; // Green ghost building
-const PREVIEW_INVALID_COLOR = [1.0, 0.3, 0.3, 0.5]; // Red ghost building
-
-// Texture unit assignments (landscape uses 0-2)
-const TEXTURE_UNIT_SPRITE_ATLAS = 3;
-
-// Maximum path dots to show per selected unit
-const MAX_PATH_DOTS = 30;
-
-const BASE_QUAD = new Float32Array([
-    -0.5, -0.5, 0.5, -0.5,
-    -0.5, 0.5, -0.5, 0.5,
-    0.5, -0.5, 0.5, 0.5
-]);
-
-const BUILDING_SCALE = 0.5;
-const UNIT_SCALE = 0.3;
-const RESOURCE_SCALE = 0.25;
-const PATH_DOT_SCALE = 0.12;
-
-/**
- * Depth factors for different entity types.
- * These determine where the "depth point" is relative to sprite height:
- * 0.0 = top of sprite, 1.0 = bottom of sprite.
- * Higher values = depth point closer to ground = appears "more in front".
- */
-const DEPTH_FACTOR_BUILDING = 0.5;   // Middle of building
-const DEPTH_FACTOR_MAP_OBJECT = 0.85; // Near bottom (trees, stones have base at bottom)
-const DEPTH_FACTOR_UNIT = 1.0;       // At feet (units stand on ground)
-const DEPTH_FACTOR_RESOURCE = 1.0;   // On ground
-
-// Selection frame parameters
-const FRAME_PADDING = 1.3; // Frame size relative to entity scale
-const FRAME_THICKNESS = 0.025; // Thickness of frame border lines
-const FRAME_CORNER_LENGTH = 0.35; // Corner accent length (fraction of frame side)
-
-// Maximum entities for batch buffer allocation
-const MAX_BATCH_ENTITIES = 500;
-// 6 vertices per quad, 8 floats per vertex (posX, posY, texU, texV, r, g, b, a)
-const FLOATS_PER_ENTITY = 6 * 8;
+import {
+    SELECTED_COLOR,
+    FRAME_COLOR,
+    FRAME_CORNER_COLOR,
+    PATH_COLOR,
+    PREVIEW_VALID_COLOR,
+    PREVIEW_INVALID_COLOR,
+    TEXTURE_UNIT_SPRITE_ATLAS,
+    MAX_PATH_DOTS,
+    BASE_QUAD,
+    BUILDING_SCALE,
+    UNIT_SCALE,
+    RESOURCE_SCALE,
+    PATH_DOT_SCALE,
+    DEPTH_FACTOR_BUILDING,
+    DEPTH_FACTOR_MAP_OBJECT,
+    DEPTH_FACTOR_UNIT,
+    DEPTH_FACTOR_RESOURCE,
+    FRAME_PADDING,
+    FRAME_THICKNESS,
+    FRAME_CORNER_LENGTH,
+    MAX_BATCH_ENTITIES,
+    FLOATS_PER_ENTITY,
+} from './entity-renderer-constants';
 
 /**
  * Renders entities (units and buildings) as colored quads or textured sprites.
@@ -125,7 +93,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     public selectedEntityIds: Set<number> = new Set();
 
     // Unit states for smooth interpolation and path visualization
-    public unitStates: UnitStateAccessor = { get: () => undefined };
+    public unitStates: UnitStateLookup = { get: () => undefined };
 
     // Building states for construction animation
     public buildingStates: Map<number, BuildingState> = new Map();

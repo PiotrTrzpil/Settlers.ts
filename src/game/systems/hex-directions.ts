@@ -113,7 +113,7 @@ export function getApproxDirection(
  * Get a neighbor direction by rotating the given direction by `offset` steps.
  * Positive offset = clockwise, negative = counter-clockwise.
  */
-export function getNeighbor(direction: EDirection, offset: number): EDirection {
+export function rotateDirection(direction: EDirection, offset: number): EDirection {
     return (((direction + offset) % NUMBER_OF_DIRECTIONS + NUMBER_OF_DIRECTIONS) % NUMBER_OF_DIRECTIONS) as EDirection;
 }
 

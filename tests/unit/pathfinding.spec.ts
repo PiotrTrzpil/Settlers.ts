@@ -8,7 +8,7 @@ import {
     Y_SCALE,
     getNextHexPoint,
     getApproxDirection,
-    getNeighbor,
+    rotateDirection,
     hexDistance,
     getAllNeighbors,
 } from '@/game/systems/hex-directions';
@@ -193,26 +193,26 @@ describe('Hex Directions', () => {
 
     describe('getNeighbor', () => {
         it('should rotate clockwise by 1', () => {
-            expect(getNeighbor(EDirection.NORTH_EAST, 1)).toBe(EDirection.EAST);
-            expect(getNeighbor(EDirection.EAST, 1)).toBe(EDirection.SOUTH_EAST);
-            expect(getNeighbor(EDirection.NORTH_WEST, 1)).toBe(EDirection.NORTH_EAST);
+            expect(rotateDirection(EDirection.NORTH_EAST, 1)).toBe(EDirection.EAST);
+            expect(rotateDirection(EDirection.EAST, 1)).toBe(EDirection.SOUTH_EAST);
+            expect(rotateDirection(EDirection.NORTH_WEST, 1)).toBe(EDirection.NORTH_EAST);
         });
 
         it('should rotate counter-clockwise by 1', () => {
-            expect(getNeighbor(EDirection.EAST, -1)).toBe(EDirection.NORTH_EAST);
-            expect(getNeighbor(EDirection.NORTH_EAST, -1)).toBe(EDirection.NORTH_WEST);
+            expect(rotateDirection(EDirection.EAST, -1)).toBe(EDirection.NORTH_EAST);
+            expect(rotateDirection(EDirection.NORTH_EAST, -1)).toBe(EDirection.NORTH_WEST);
         });
 
         it('should wrap around with offset 3 (opposite direction)', () => {
-            expect(getNeighbor(EDirection.NORTH_EAST, 3)).toBe(EDirection.SOUTH_WEST);
-            expect(getNeighbor(EDirection.EAST, 3)).toBe(EDirection.WEST);
-            expect(getNeighbor(EDirection.SOUTH_EAST, 3)).toBe(EDirection.NORTH_WEST);
+            expect(rotateDirection(EDirection.NORTH_EAST, 3)).toBe(EDirection.SOUTH_WEST);
+            expect(rotateDirection(EDirection.EAST, 3)).toBe(EDirection.WEST);
+            expect(rotateDirection(EDirection.SOUTH_EAST, 3)).toBe(EDirection.NORTH_WEST);
         });
 
         it('should return same direction with offset 0 or full circle (6)', () => {
             for (let d = 0; d < 6; d++) {
-                expect(getNeighbor(d as EDirection, 0)).toBe(d);
-                expect(getNeighbor(d as EDirection, 6)).toBe(d);
+                expect(rotateDirection(d as EDirection, 0)).toBe(d);
+                expect(rotateDirection(d as EDirection, 6)).toBe(d);
             }
         });
     });

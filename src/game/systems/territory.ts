@@ -1,8 +1,35 @@
-import { Entity, EntityType, BUILDING_TERRITORY_RADIUS } from '../entity';
+import { Entity, EntityType, BuildingType } from '../entity';
 import { MapSize } from '@/utilities/map-size';
 
 /** No owner sentinel value */
 export const NO_OWNER = -1;
+
+/** Territory radius for each building type (in tiles) */
+export const BUILDING_TERRITORY_RADIUS: Record<number, number> = {
+    [BuildingType.Lumberjack]: 4,
+    [BuildingType.Warehouse]: 6,
+    [BuildingType.Sawmill]: 4,
+    [BuildingType.Stonecutter]: 4,
+    [BuildingType.Farm]: 6,
+    [BuildingType.Windmill]: 4,
+    [BuildingType.Bakery]: 4,
+    [BuildingType.Fishery]: 4,
+    [BuildingType.PigFarm]: 5,
+    [BuildingType.Slaughterhouse]: 4,
+    [BuildingType.Waterworks]: 4,
+    [BuildingType.CoalMine]: 4,
+    [BuildingType.IronMine]: 4,
+    [BuildingType.GoldMine]: 4,
+    [BuildingType.IronSmelter]: 4,
+    [BuildingType.GoldSmelter]: 4,
+    [BuildingType.WeaponSmith]: 4,
+    [BuildingType.ToolSmith]: 4,
+    [BuildingType.Barrack]: 5,
+    [BuildingType.Forester]: 6,
+    [BuildingType.LivingHouse]: 4,
+    [BuildingType.Tower]: 10,
+    [BuildingType.Winegrower]: 6,
+};
 
 /**
  * Territory system: computes a per-tile ownership map based on building positions.

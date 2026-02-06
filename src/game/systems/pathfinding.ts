@@ -9,7 +9,7 @@ const MAX_SEARCH_NODES = 2000;
  * Nodes are grouped into buckets by integer floor of their cost.
  * On uniform-cost grids this is significantly faster than a binary heap.
  */
-class ListMinBucketQueue {
+class BucketPriorityQueue {
     private buckets: number[][] = [];
     private minBucket = 0;
     private _size = 0;
@@ -88,7 +88,7 @@ export function findPath(
     const FLAG_OPEN = 1;
     const FLAG_CLOSED = 2;
 
-    const openQueue = new ListMinBucketQueue();
+    const openQueue = new BucketPriorityQueue();
 
     const startIdx = startX + startY * mapWidth;
     const startH = hexDistance(startX, startY, goalX, goalY);

@@ -27,9 +27,12 @@
  *   const worldPos = interpolator.getInterpolatedPosition(controller);
  */
 
-export { MovementController, MovementState } from './movement-controller';
-export { MovementSystem, UpdatePositionFn, GetEntityFn } from './movement-system';
-export { Interpolator, WorldCoord, TileToWorldFn, createTestInterpolator } from './interpolator';
+export type { MovementState } from './movement-controller';
+export { MovementController } from './movement-controller';
+export type { UpdatePositionFn, GetEntityFn } from './movement-system';
+export { MovementSystem } from './movement-system';
+export type { WorldCoord, TileToWorldFn } from './interpolator';
+export { Interpolator, createTestInterpolator } from './interpolator';
 
 // Push utilities - clean API without GameState coupling
 export {
