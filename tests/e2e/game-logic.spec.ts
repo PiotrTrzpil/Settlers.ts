@@ -5,6 +5,9 @@ import { GamePage } from './game-page';
  * High-value Playwright E2E tests for the MVP game UI and interaction flow.
  * Tests verify the app loads correctly, navigation works, and UI elements
  * for the game MVP are properly rendered and interactive.
+ *
+ * NOTE: These tests use fresh page navigation intentionally - they test
+ * initial load, navigation, and cannot use shared fixtures.
  */
 
 test.describe('App Loading and Structure', { tag: '@smoke' }, () => {

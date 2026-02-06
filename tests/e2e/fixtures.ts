@@ -68,7 +68,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         const gp = new GamePage(testMapPage);
         await gp.resetGameState();
         await gp.selectMode();
-        await gp.waitForFrames(2);
+        // Ensure Buildings tab is selected (may have been changed by previous test)
+        await testMapPage.locator('.tab-btn', { hasText: 'Buildings' }).click();
+        await gp.waitForFrames(1);
         await use(gp);
     },
 

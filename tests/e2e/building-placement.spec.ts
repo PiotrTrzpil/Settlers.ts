@@ -1,18 +1,18 @@
-import { test, expect } from './matchers';
-import { GamePage } from './game-page';
+import { test, expect } from './fixtures';
 
 /**
  * E2E tests for building placement and unit spawning.
  * Verifies the full interaction pipeline: pointer events -> game commands -> entity creation.
+ *
+ * Uses the shared testMap fixture — the map is loaded once per worker,
+ * and game state is reset between tests via resetGameState().
  */
 
 // --- Pointer Event Pipeline ---
 
 test.describe('Pointer Event Pipeline', { tag: '@smoke' }, () => {
-    test('pointer events fire on canvas (not suppressed)', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('pointer events fire on canvas (not suppressed)', async({ gp }) => {
+        const page = gp.page;
 
         const eventLog = await page.evaluate(() => {
             return new Promise<string[]>((resolve) => {
@@ -50,10 +50,8 @@ test.describe('Pointer Event Pipeline', { tag: '@smoke' }, () => {
         expect(eventLog).toContain('pointermove');
     });
 
-    test('canvas click sets hoveredTile via tileClick event', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('canvas click sets hoveredTile via tileClick event', async({ gp }) => {
+        const page = gp.page;
 
         const canvas = page.locator('canvas');
         await canvas.click({ position: { x: 400, y: 400 } });
@@ -68,10 +66,8 @@ test.describe('Pointer Event Pipeline', { tag: '@smoke' }, () => {
 // --- Building Placement Mode ---
 
 test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
-    test('clicking building button activates place_building mode', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('clicking building button activates place_building mode', async({ gp }) => {
+        const page = gp.page;
 
         const btn = page.locator('[data-testid="btn-lumberjack"]');
         await expect(btn).toBeVisible();
@@ -81,22 +77,20 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await expect(btn).toHaveClass(/active/);
     });
 
-    test('select mode button returns to select mode', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('select mode button returns to select mode', async({ gp }) => {
+        const page = gp.page;
 
-        await page.locator('[data-testid="btn-lumberjack"]').click();
+        const btn = page.locator('[data-testid="btn-lumberjack"]');
+        await expect(btn).toBeVisible();
+        await btn.click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
 
         await gp.selectMode();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
     });
 
-    test('building placement via game.execute() creates entity with correct attributes', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('building placement via game.execute() creates entity with correct attributes', async({ gp }) => {
+        const page = gp.page;
 
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
@@ -144,10 +138,8 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         expect(result.building!.player).toBe(0);
     });
 
-    test('building placement via canvas click on buildable terrain', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('building placement via canvas click on buildable terrain', async({ gp }) => {
+        const page = gp.page;
 
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
@@ -177,11 +169,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         expect(countAfter).toBeGreaterThanOrEqual(countBefore);
     });
 
-    test('clicking canvas while not in placement mode does not place building', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
-
+    test('clicking canvas while not in placement mode does not place building', async({ gp }) => {
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
             test.skip();
@@ -206,10 +194,8 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await expect(gp).toHaveBuildingCount(buildingsBefore);
     });
 
-    test('multiple canvas clicks place multiple buildings', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('multiple canvas clicks place multiple buildings', async({ gp }) => {
+        const page = gp.page;
 
         // Enter placement mode
         await page.locator('[data-testid="btn-lumberjack"]').click();
@@ -264,10 +250,8 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await expect(gp).toHaveBuildingCount(result.totalBuildings);
     });
 
-    test('different building types can be selected and placed', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('different building types can be selected and placed', async({ gp }) => {
+        const page = gp.page;
 
         // Place a lumberjack first
         await page.locator('[data-testid="btn-lumberjack"]').click();
@@ -300,11 +284,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
 // --- Unit Spawning ---
 
 test.describe('Unit Spawning', { tag: '@smoke' }, () => {
-    test('spawn bearer creates entity on passable terrain', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
-
+    test('spawn bearer creates entity on passable terrain', async({ gp }) => {
         const countBefore = await gp.getDebugField('entityCount');
         await gp.spawnBearer();
         await gp.waitForEntityCountAbove(countBefore);
@@ -324,11 +304,7 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
         expect(isOldDefault).toBe(false);
     });
 
-    test('spawn swordsman creates entity', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
-
+    test('spawn swordsman creates entity', async({ gp }) => {
         const countBefore = await gp.getDebugField('entityCount');
         await gp.spawnSwordsman();
         await gp.waitForEntityCountAbove(countBefore);
@@ -336,10 +312,8 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
         await expect(gp).toHaveEntityCount(countBefore + 1);
     });
 
-    test('clicking canvas then spawning uses clicked tile', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('clicking canvas then spawning uses clicked tile', async({ gp }) => {
+        const page = gp.page;
 
         // Find land and move camera there so the click hits passable terrain
         const buildableTile = await gp.findBuildableTile();
@@ -366,10 +340,8 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
         await expect(gp).toHaveEntity({ type: 1 }); // EntityType.Unit
     });
 
-    test('spawned unit is on passable terrain (not water)', async({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
+    test('spawned unit is on passable terrain (not water)', async({ gp }) => {
+        const page = gp.page;
 
         await gp.spawnBearer();
         await gp.waitForEntityCountAbove(0);
@@ -401,12 +373,8 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
 // --- Entity Rendering ---
 
 test.describe('Entity Rendering', () => {
-    test('placed building is visually rendered on canvas', async({ page }) => {
-        const gp = new GamePage(page);
+    test('placed building is visually rendered on canvas', async({ gp }) => {
         const { check: checkErrors } = gp.collectErrors();
-
-        await gp.goto({ testMap: true });
-        await gp.waitForReady(10);
 
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
@@ -439,12 +407,7 @@ test.describe('Entity Rendering', () => {
         checkErrors();
     });
 
-    test('building renders with player color (procedural fallback)', async({ page }) => {
-        const gp = new GamePage(page);
-
-        await gp.goto({ testMap: true });
-        await gp.waitForReady(10);
-
+    test('building renders with player color (procedural fallback)', async({ gp }) => {
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
             test.skip();
@@ -469,11 +432,8 @@ test.describe('Entity Rendering', () => {
         });
     });
 
-    test('multiple buildings rendered correctly', async({ page }) => {
-        const gp = new GamePage(page);
-
-        await gp.goto({ testMap: true });
-        await gp.waitForReady(10);
+    test('multiple buildings rendered correctly', async({ gp }) => {
+        const page = gp.page;
 
         // Place multiple buildings
         const result = await page.evaluate(() => {
@@ -524,11 +484,8 @@ test.describe('Entity Rendering', () => {
         await expect(gp).toHaveEntityCount(result.totalEntities!);
     });
 
-    test('building placement preview renders during placement mode', async({ page }) => {
-        const gp = new GamePage(page);
-
-        await gp.goto({ testMap: true });
-        await gp.waitForReady(10);
+    test('building placement preview renders during placement mode', async({ gp }) => {
+        const page = gp.page;
 
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
@@ -538,7 +495,9 @@ test.describe('Entity Rendering', () => {
 
         await test.step('enter placement mode and hover', async() => {
             await gp.moveCamera(buildableTile.x, buildableTile.y);
-            await page.locator('[data-testid="btn-lumberjack"]').click();
+            const btn = page.locator('[data-testid="btn-lumberjack"]');
+            await expect(btn).toBeVisible();
+            await btn.click();
             await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
 
             const box = await gp.canvas.boundingBox();
