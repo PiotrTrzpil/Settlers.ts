@@ -12,31 +12,10 @@ A Settlers 4 (Siedler 4) browser-based remake using TypeScript, Vue 3, and WebGL
 
 ## Project layout
 
-```
-src/
-  components/     Vue components (debug panel, file browser, renderers)
-  game/
-    ai/           Behavior trees, tick logic
-    commands/     Game commands (place_building, spawn, etc.)
-    economy/      Building production, material types
-    input/        Tile picker (pointer → tile coordinate mapping)
-    renderer/     WebGL renderer, shader programs, texture management
-      landscape/  Landscape renderer + terrain textures
-      shaders/    Entity vertex/fragment shaders
-    systems/      Hex grid, movement, pathfinding, placement, territory
-  resources/
-    file/         Binary readers, compression, Settlers file decoding
-    gfx/          Graphics file format readers (GFX, GH, GIL, JIL, PIL, DIL)
-    lib/          LIB archive format reader
-    map/          Map loaders (original format + savegames)
-  utilities/      File providers, logging, path helpers
-  views/          Vue page components (map view, file views, etc.)
-tests/
-  unit/           Vitest specs (pathfinding, placement, economy, etc.)
-  e2e/            Playwright specs + GamePage page object
-docs/             Architecture docs, screenshots, setup guides
-scripts/          Build helpers, game file import/export
-```
+- `src/game/` — Core engine: commands, systems, renderer, input, economy, ai
+- `src/resources/` — Binary file readers (GFX, LIB, MAP formats)
+- `src/components/`, `src/views/` — Vue UI
+- `tests/unit/`, `tests/e2e/` — Vitest + Playwright
 
 ## Commands
 
@@ -69,28 +48,23 @@ Test maps and procedural textures work without game files.
 - Playwright `outputDir` writes to `tests/e2e/.results/` (gitignored).
 - Screenshot baselines live in `tests/e2e/__screenshots__/` and are committed.
 
-## E2E testing best practices
+## Claude Code workflow
 
-**Read `docs/testing-best-practices.md` and `tests/e2e/game-page.ts` before modifying or adding e2e tests.**
+- **Validate every change**: Run targeted unit test after each edit, full suite before commit
+- **Cross-module changes need e2e**: If touching multiple modules, run `pnpm build && npx playwright test`
+- **Use LSP MCP** (if available): Always prefer over grep/edit for code exploration and refactoring
+  - `find_references` — find all usages of a symbol
+  - `find_definition` — jump to where something is defined
+  - `rename_symbol` — rename across codebase (scope-aware, updates imports)
+  - `get_diagnostics` — check for type errors
+- **MCP screenshots**: Save to `.playwright-mcp/` folder (gitignored)
+- **Hex coordinates**: Odd/even Y rows differ — test both
+- **WebGL**: Unit tests (jsdom) have no WebGL — use e2e for rendering
 
-- **Always rebuild** before running e2e tests: `pnpm build` (Playwright uses the built dist, not dev server)
-- **Use debug bridges**: `__settlers_game__`, `__settlers_debug__`, `__settlers_input__`, `__settlers_entity_renderer__`, `__settlers_viewpoint__`
-- **Use GamePage helpers**: Page object at `tests/e2e/game-page.ts` provides waiting helpers, `findBuildableTile()`, `moveCamera()`, etc. — don't reimplement these inline
-- **Go through regular game logic**: Use `game.execute()` (command pipeline), UI buttons, `InputManager.switchMode()`, `ViewPoint.setPosition()`. Never set private properties directly.
-- **Never use `waitForTimeout()`**: Use `waitForReady()`, `waitForFrames()`, `waitForFunction()`, or `waitForEntityCountAbove()` instead
-- **`waitForFrames` is relative**: Waits for N **new** frames (not absolute count). Critical for shared fixture.
-- **Entity types**: `Unit = 1`, `Building = 2`, `MapObject = 3`. `BuildingType` starts at 1 (Lumberjack). Never use `buildingType: 0`
-- **Shared fixture**: Use `import { test, expect } from './fixtures'` for tests that use testMap — loads once per worker
-- **Reset state**: `gp.resetGameState()` uses `game.removeAllEntities()` + `inputManager.switchMode('select')` (proper game logic, not hacky state mutation)
-- **Explicit timeouts**: Every `waitForFunction` must have `{ timeout }`. Global timeout configurable via `E2E_TIMEOUT=60000 npx playwright test`
-- **Run headed**: `npx playwright test --headed -g "test name"` to observe tests visually
-- **Test specific file**: `npx playwright test building-placement.spec.ts`
-- **Poll output in background**: When running tests in background, poll output every ~0.5-1s with a marker file:
-  ```sh
-  rm -f /tmp/done; npx playwright test ... 2>&1; touch /tmp/done &
-  while [ ! -f /tmp/done ]; do sleep 0.5; tail -20 output.log; done
-  ```
+## E2E testing
 
-## Claude Code guidelines
+**Read `docs/testing-best-practices.md` before writing or updating tests.**
 
-- When taking screenshots with MCP browser tools, always save to `.playwright-mcp/` folder (e.g., `filename: ".playwright-mcp/screenshot.png"`). This folder is gitignored.
+- Always rebuild first: `pnpm build && npx playwright test`
+- Use `GamePage` helpers and shared fixture (`import { test, expect } from './fixtures'`)
+- Never use `waitForTimeout()` — use `waitForFrames()`, `waitForReady()`, etc.
