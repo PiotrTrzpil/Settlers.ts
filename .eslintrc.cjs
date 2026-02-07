@@ -47,13 +47,38 @@ module.exports = {
 
         // Import rules - detect circular dependencies
         'import/no-cycle': ['error', { maxDepth: 5 }],
-        'import/no-self-import': 'error'
+        'import/no-self-import': 'error',
+
+        // Complexity limits
+        'complexity': ['error', { max: 15 }],
+        'max-depth': ['error', 4],
+
+        // Length limits
+        'max-len': ['error', { code: 140, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
+        'max-lines': ['error', { max: 600, skipBlankLines: true, skipComments: true }],
+        'max-lines-per-function': ['error', { max: 150, skipBlankLines: true, skipComments: true }]
     },
     overrides: [
         {
             files: ['*.js', '*.cjs'],
             env: {
                 node: true
+            }
+        },
+        {
+            // Large renderer classes with many interrelated WebGL methods
+            files: ['**/renderer/**/*.ts'],
+            rules: {
+                'max-lines': ['error', { max: 1000, skipBlankLines: true, skipComments: true }]
+            }
+        },
+        {
+            // E2E tests often have long test functions with many assertions
+            files: ['tests/e2e/**/*.ts'],
+            rules: {
+                'max-lines-per-function': 'off',
+                'max-depth': ['error', 5],
+                'max-len': ['error', { code: 150, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }]
             }
         }
     ]

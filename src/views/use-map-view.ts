@@ -31,6 +31,100 @@ export interface LayerCounts {
 
 const log = new LogHandler('MapView');
 
+/** Create a test map Game instance */
+function createTestGame(fileManager: FileManager): Game {
+    const mapContent = createTestMapLoader();
+    const g = new Game(fileManager, mapContent);
+    g.useProceduralTextures = true;
+    return g;
+}
+
+/** Find a spawn position for a unit (camera center or any land tile) */
+function findSpawnPosition(
+    game: Game,
+    inputManager: InputManager | null | undefined
+): TileCoord | null {
+    const centerTile = inputManager?.getCenterTile();
+    if (centerTile) return centerTile;
+    return game.findLandTile();
+}
+
+/** Load a map file and create a Game instance */
+async function loadMapFile(
+    file: IFileSource,
+    fileManager: FileManager
+): Promise<{ game: Game | null; mapInfo: string }> {
+    try {
+        const fileData = await file.readBinary();
+        if (!fileData) {
+            log.error('Unable to load ' + file.name);
+            return { game: null, mapInfo: '' };
+        }
+
+        const mapContent = MapLoader.getLoader(fileData);
+        if (!mapContent) {
+            log.error('Unsupported map format: ' + file.name);
+            return { game: null, mapInfo: '' };
+        }
+
+        return { game: new Game(fileManager, mapContent), mapInfo: mapContent.toString() };
+    } catch (e) {
+        log.error('Failed to load map: ' + file.name, e instanceof Error ? e : new Error(String(e)));
+        return { game: null, mapInfo: '' };
+    }
+}
+
+/** Count entities per layer from the game state */
+function countEntitiesByLayer(entities: readonly Entity[]): LayerCounts {
+    const counts: LayerCounts = {
+        buildings: 0,
+        units: 0,
+        resources: 0,
+        environment: 0,
+        trees: 0,
+        stones: 0,
+        plants: 0,
+        other: 0,
+    };
+
+    for (const entity of entities) {
+        switch (entity.type) {
+        case EntityType.Building:
+            counts.buildings++;
+            break;
+        case EntityType.Unit:
+            counts.units++;
+            break;
+        case EntityType.MapObject: {
+            const objType = entity.subType as MapObjectType;
+            if (isResourceDeposit(objType)) {
+                counts.resources++;
+            } else {
+                counts.environment++;
+                const subLayer = getEnvironmentSubLayer(objType);
+                switch (subLayer) {
+                case EnvironmentSubLayer.Trees:
+                    counts.trees++;
+                    break;
+                case EnvironmentSubLayer.Stones:
+                    counts.stones++;
+                    break;
+                case EnvironmentSubLayer.Plants:
+                    counts.plants++;
+                    break;
+                case EnvironmentSubLayer.Other:
+                    counts.other++;
+                    break;
+                }
+            }
+            break;
+        }
+        }
+    }
+
+    return counts;
+}
+
 /** Buildings available in the UI - organized by category */
 const availableBuildings = [
     // --- Storage ---
@@ -137,87 +231,31 @@ export function useMapView(
         saveLayerVisibility(layerVisibility);
     }
 
-    const selectedEntity = computed<Entity | undefined>(() => {
-        if (!game.value || game.value.state.selectedEntityId === null) return undefined;
-        return game.value.state.getEntity(game.value.state.selectedEntityId);
-    });
-
-    const selectionCount = computed<number>(() => {
-        if (!game.value) return 0;
-        return game.value.state.selectedEntityIds.size;
-    });
-
-    const isPaused = computed<boolean>(() => {
-        if (!game.value) return false;
-        return !game.value.gameLoop.isRunning;
-    });
+    const selectedEntity = computed<Entity | undefined>(() =>
+        game.value?.state.selectedEntityId != null
+            ? game.value.state.getEntity(game.value.state.selectedEntityId)
+            : undefined
+    );
+    const selectionCount = computed(() => game.value?.state.selectedEntityIds.size ?? 0);
+    const isPaused = computed(() => game.value ? !game.value.gameLoop.isRunning : false);
 
     // Mode state - use debugStats as the single source of truth (reactive and instant)
     const currentMode = computed(() => debugStats.state.mode);
     const placeBuildingType = computed(() => debugStats.state.placeBuildingType);
 
-    /** Compute entity counts per layer */
     const layerCounts = computed<LayerCounts>(() => {
-        const counts: LayerCounts = {
-            buildings: 0,
-            units: 0,
-            resources: 0,
-            environment: 0,
-            trees: 0,
-            stones: 0,
-            plants: 0,
-            other: 0,
-        };
-
-        if (!game.value) return counts;
-
-        for (const entity of game.value.state.entities) {
-            switch (entity.type) {
-            case EntityType.Building:
-                counts.buildings++;
-                break;
-            case EntityType.Unit:
-                counts.units++;
-                break;
-            case EntityType.MapObject: {
-                const objType = entity.subType as MapObjectType;
-                if (isResourceDeposit(objType)) {
-                    counts.resources++;
-                } else {
-                    counts.environment++;
-                    const subLayer = getEnvironmentSubLayer(objType);
-                    switch (subLayer) {
-                    case EnvironmentSubLayer.Trees:
-                        counts.trees++;
-                        break;
-                    case EnvironmentSubLayer.Stones:
-                        counts.stones++;
-                        break;
-                    case EnvironmentSubLayer.Plants:
-                        counts.plants++;
-                        break;
-                    case EnvironmentSubLayer.Other:
-                        counts.other++;
-                        break;
-                    }
-                }
-                break;
-            }
-            }
+        if (!game.value) {
+            return { buildings: 0, units: 0, resources: 0, environment: 0, trees: 0, stones: 0, plants: 0, other: 0 };
         }
-
-        return counts;
+        return countEntitiesByLayer(game.value.state.entities);
     });
 
     function loadTestMap(): void {
         if (game.value) return;
         const fm = getFileManager();
         if (!fm) return;
-        const mapContent = createTestMapLoader();
         mapInfo.value = 'Test map (synthetic 256x256)';
-        const g = new Game(fm, mapContent);
-        g.useProceduralTextures = true;
-        game.value = g;
+        game.value = createTestGame(fm);
     }
 
     function autoLoadFirstMap(): void {
@@ -229,21 +267,9 @@ export function useMapView(
         }
     }
 
-    onMounted(() => {
-        if (isTestMap) {
-            loadTestMap();
-        } else {
-            autoLoadFirstMap();
-        }
-    });
-
-    watch(getFileManager, () => {
-        if (isTestMap) {
-            loadTestMap();
-        } else {
-            autoLoadFirstMap();
-        }
-    });
+    const initializeMap = () => isTestMap ? loadTestMap() : autoLoadFirstMap();
+    onMounted(initializeMap);
+    watch(getFileManager, initializeMap);
 
     function onFileSelect(file: IFileSource) {
         fileName.value = file.name;
@@ -299,34 +325,13 @@ export function useMapView(
 
     function spawnUnit(unitType: number) {
         if (!game.value) return;
-
-        let spawnX = -1;
-        let spawnY = -1;
-
-        // Spawn at camera center
-        const inputManager = getInputManager?.();
-        const centerTile = inputManager?.getCenterTile();
-        if (centerTile) {
-            spawnX = centerTile.x;
-            spawnY = centerTile.y;
-        }
-
-        // Fallback to any land tile if center unavailable
-        if (spawnX < 0) {
-            const land = game.value.findLandTile();
-            if (land) {
-                spawnX = land.x;
-                spawnY = land.y;
-            }
-        }
-
-        if (spawnX < 0) return;
-
+        const pos = findSpawnPosition(game.value, getInputManager?.());
+        if (!pos) return;
         game.value.execute({
             type: 'spawn_unit',
             unitType: unitType as UnitType,
-            x: spawnX,
-            y: spawnY,
+            x: pos.x,
+            y: pos.y,
             player: game.value.currentPlayer
         });
         triggerRef(game);
@@ -335,24 +340,10 @@ export function useMapView(
     async function load(file: IFileSource) {
         const fm = getFileManager();
         if (!fm) return;
-
-        try {
-            const fileData = await file.readBinary();
-            if (!fileData) {
-                log.error('Unable to load ' + file.name);
-                return;
-            }
-
-            const mapContent = MapLoader.getLoader(fileData);
-            if (!mapContent) {
-                log.error('Unsupported map format: ' + file.name);
-                return;
-            }
-
-            mapInfo.value = mapContent.toString();
-            game.value = new Game(fm, mapContent);
-        } catch (e) {
-            log.error('Failed to load map: ' + file.name, e instanceof Error ? e : new Error(String(e)));
+        const result = await loadMapFile(file, fm);
+        if (result.game) {
+            game.value = result.game;
+            mapInfo.value = result.mapInfo;
         }
     }
 

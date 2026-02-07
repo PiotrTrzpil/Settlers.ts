@@ -68,6 +68,24 @@ export function getAllNeighbors(pos: TileCoord): TileCoord[] {
     return neighbors;
 }
 
+/** Helper to get direction when q (x-axis) is dominant */
+function getQDominantDirection(q: number, r: number): EDirection {
+    if (q > 0) return r < 0 ? EDirection.NORTH_EAST : EDirection.EAST;
+    return r > 0 ? EDirection.SOUTH_WEST : EDirection.WEST;
+}
+
+/** Helper to get direction when r (y-axis) is dominant */
+function getRDominantDirection(q: number, r: number): EDirection {
+    if (r > 0) return q >= 0 ? EDirection.SOUTH_EAST : EDirection.SOUTH_WEST;
+    return q > 0 ? EDirection.NORTH_EAST : EDirection.NORTH_WEST;
+}
+
+/** Helper to get direction when s (diagonal) is dominant */
+function getSDominantDirection(q: number, s: number): EDirection {
+    if (s > 0) return q >= 0 ? EDirection.NORTH_WEST : EDirection.WEST;
+    return q > 0 ? EDirection.EAST : EDirection.SOUTH_EAST;
+}
+
 /**
  * Get the approximate direction from one point to another.
  * Uses cube coordinate decomposition on the hex grid to determine
@@ -95,18 +113,12 @@ export function getApproxDirection(
     const absS = Math.abs(s);
 
     if (absQ >= absR && absQ >= absS) {
-        // q (x-axis) dominant
-        if (q > 0) return r < 0 ? EDirection.NORTH_EAST : EDirection.EAST;
-        else return r > 0 ? EDirection.SOUTH_WEST : EDirection.WEST;
-    } else if (absR >= absQ && absR >= absS) {
-        // r (y-axis) dominant
-        if (r > 0) return q >= 0 ? EDirection.SOUTH_EAST : EDirection.SOUTH_WEST;
-        else return q > 0 ? EDirection.NORTH_EAST : EDirection.NORTH_WEST;
-    } else {
-        // s (diagonal axis) dominant
-        if (s > 0) return q >= 0 ? EDirection.NORTH_WEST : EDirection.WEST;
-        else return q > 0 ? EDirection.EAST : EDirection.SOUTH_EAST;
+        return getQDominantDirection(q, r);
     }
+    if (absR >= absQ && absR >= absS) {
+        return getRDominantDirection(q, r);
+    }
+    return getSDominantDirection(q, s);
 }
 
 /**

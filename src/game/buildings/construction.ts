@@ -109,6 +109,84 @@ export interface TerrainContext {
     onTerrainModified?: () => void;
 }
 
+/** Handle terrain leveling initialization for a building */
+function handleTerrainCapture(
+    buildingState: BuildingState,
+    newPhase: BuildingConstructionPhase,
+    ctx: TerrainContext
+): void {
+    if (newPhase !== BuildingConstructionPhase.TerrainLeveling) return;
+    if (buildingState.originalTerrain) return;
+
+    buildingState.originalTerrain = captureOriginalTerrain(
+        buildingState, ctx.groundType, ctx.groundHeight, ctx.mapSize
+    );
+}
+
+/** Handle active terrain leveling during construction */
+function handleTerrainLeveling(
+    buildingState: BuildingState,
+    newPhase: BuildingConstructionPhase,
+    ctx: TerrainContext
+): boolean {
+    if (newPhase !== BuildingConstructionPhase.TerrainLeveling) return false;
+    if (!buildingState.originalTerrain) return false;
+
+    return applyTerrainLeveling(
+        buildingState, ctx.groundType, ctx.groundHeight, ctx.mapSize,
+        buildingState.phaseProgress
+    );
+}
+
+/** Finalize terrain when transitioning out of TerrainLeveling phase */
+function handleTerrainFinalization(
+    buildingState: BuildingState,
+    previousPhase: BuildingConstructionPhase,
+    newPhase: BuildingConstructionPhase,
+    ctx: TerrainContext
+): boolean {
+    if (previousPhase !== BuildingConstructionPhase.TerrainLeveling) return false;
+    if (newPhase <= BuildingConstructionPhase.TerrainLeveling) return false;
+    if (!buildingState.originalTerrain || buildingState.terrainModified) return false;
+
+    buildingState.terrainModified = true;
+    return applyTerrainLeveling(
+        buildingState, ctx.groundType, ctx.groundHeight, ctx.mapSize, 1.0
+    );
+}
+
+/** Update a single building's construction state */
+function updateSingleBuilding(
+    state: GameState,
+    buildingState: BuildingState,
+    dt: number,
+    terrainContext?: TerrainContext
+): boolean {
+    const previousPhase = buildingState.phase;
+
+    buildingState.elapsedTime += dt;
+    const elapsedFraction = Math.min(buildingState.elapsedTime / buildingState.totalDuration, 1.0);
+
+    const newPhase = determinePhase(elapsedFraction);
+    buildingState.phase = newPhase;
+    buildingState.phaseProgress = calculatePhaseProgress(elapsedFraction, newPhase);
+
+    let terrainModified = false;
+    if (terrainContext) {
+        handleTerrainCapture(buildingState, newPhase, terrainContext);
+        terrainModified = handleTerrainLeveling(buildingState, newPhase, terrainContext);
+        terrainModified = handleTerrainFinalization(
+            buildingState, previousPhase, newPhase, terrainContext
+        ) || terrainModified;
+    }
+
+    if (newPhase === BuildingConstructionPhase.Completed) {
+        spawnUnitsOnBuildingComplete(state, buildingState, terrainContext);
+    }
+
+    return terrainModified;
+}
+
 /**
  * Update building construction progress for all buildings.
  * Called each game tick.
@@ -128,87 +206,40 @@ export function updateBuildingConstruction(
     let terrainModified = false;
 
     for (const buildingState of state.buildingStates.values()) {
-        // Skip completed buildings
-        if (buildingState.phase === BuildingConstructionPhase.Completed) {
-            continue;
-        }
+        if (buildingState.phase === BuildingConstructionPhase.Completed) continue;
 
-        const previousPhase = buildingState.phase;
-
-        // Update elapsed time
-        buildingState.elapsedTime += dt;
-
-        // Calculate elapsed fraction (0.0 to 1.0)
-        const elapsedFraction = Math.min(
-            buildingState.elapsedTime / buildingState.totalDuration,
-            1.0
-        );
-
-        // Determine current phase based on elapsed time
-        const newPhase = determinePhase(elapsedFraction);
-        buildingState.phase = newPhase;
-
-        // Calculate progress within the current phase
-        buildingState.phaseProgress = calculatePhaseProgress(elapsedFraction, newPhase);
-
-        // Handle terrain leveling if context is provided
-        if (terrainContext) {
-            // Capture original terrain on first tick in TerrainLeveling phase
-            if (newPhase === BuildingConstructionPhase.TerrainLeveling &&
-                !buildingState.originalTerrain) {
-                buildingState.originalTerrain = captureOriginalTerrain(
-                    buildingState,
-                    terrainContext.groundType,
-                    terrainContext.groundHeight,
-                    terrainContext.mapSize
-                );
-            }
-
-            // Apply terrain leveling during TerrainLeveling phase
-            if (newPhase === BuildingConstructionPhase.TerrainLeveling &&
-                buildingState.originalTerrain) {
-                const modified = applyTerrainLeveling(
-                    buildingState,
-                    terrainContext.groundType,
-                    terrainContext.groundHeight,
-                    terrainContext.mapSize,
-                    buildingState.phaseProgress
-                );
-                if (modified) {
-                    terrainModified = true;
-                }
-            }
-
-            // Mark terrain as fully modified when leaving TerrainLeveling phase
-            if (previousPhase === BuildingConstructionPhase.TerrainLeveling &&
-                newPhase > BuildingConstructionPhase.TerrainLeveling) {
-                // Apply final leveling (progress = 1.0) if not already done
-                if (buildingState.originalTerrain && !buildingState.terrainModified) {
-                    const modified = applyTerrainLeveling(
-                        buildingState,
-                        terrainContext.groundType,
-                        terrainContext.groundHeight,
-                        terrainContext.mapSize,
-                        1.0
-                    );
-                    if (modified) {
-                        terrainModified = true;
-                    }
-                    buildingState.terrainModified = true;
-                }
-            }
-        }
-
-        // Spawn units when building transitions to Completed phase
-        // (previousPhase is guaranteed to be non-Completed here due to early continue above)
-        if (newPhase === BuildingConstructionPhase.Completed) {
-            spawnUnitsOnBuildingComplete(state, buildingState, terrainContext);
+        if (updateSingleBuilding(state, buildingState, dt, terrainContext)) {
+            terrainModified = true;
         }
     }
 
-    // Notify that terrain was modified
     if (terrainModified && terrainContext?.onTerrainModified) {
         terrainContext.onTerrainModified();
+    }
+}
+
+/** Check if a tile is valid for spawning a unit */
+function isValidSpawnTile(
+    state: GameState,
+    x: number, y: number,
+    terrainContext?: TerrainContext
+): boolean {
+    if (terrainContext) {
+        const { mapSize, groundType } = terrainContext;
+        if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) return false;
+        if (!isPassable(groundType[mapSize.toIndex(x, y)])) return false;
+    }
+    return !state.getEntityAt(x, y);
+}
+
+/** Generate ring perimeter tiles (only the edge of a square ring) */
+function* getRingTiles(cx: number, cy: number, radius: number): Generator<{ x: number; y: number }> {
+    for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+            if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
+                yield { x: cx + dx, y: cy + dy };
+            }
+        }
     }
 }
 
@@ -228,37 +259,19 @@ function spawnUnitsOnBuildingComplete(
     const entity = state.getEntity(buildingState.entityId);
     if (!entity) return;
 
-    const bx = buildingState.tileX;
-    const by = buildingState.tileY;
-    // Use explicit override from spawn config if provided, otherwise undefined
-    // so addEntity falls back to UNIT_TYPE_CONFIG defaults
-    const selectable = spawnDef.selectable;
-
-    // Search expanding rings around the building for free tiles
+    const { tileX: bx, tileY: by } = buildingState;
     let spawned = 0;
+
     for (let radius = 1; radius <= 4 && spawned < spawnDef.count; radius++) {
-        for (let dy = -radius; dy <= radius; dy++) {
-            for (let dx = -radius; dx <= radius; dx++) {
-                if (spawned >= spawnDef.count) break;
-                // Only process tiles on the current ring perimeter
-                if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+        for (const tile of getRingTiles(bx, by, radius)) {
+            if (spawned >= spawnDef.count) break;
+            if (!isValidSpawnTile(state, tile.x, tile.y, terrainContext)) continue;
 
-                const nx = bx + dx;
-                const ny = by + dy;
-
-                // Bounds check
-                if (terrainContext) {
-                    const ms = terrainContext.mapSize;
-                    if (nx < 0 || nx >= ms.width || ny < 0 || ny >= ms.height) continue;
-                    if (!isPassable(terrainContext.groundType[ms.toIndex(nx, ny)])) continue;
-                }
-
-                // Occupancy check
-                if (state.getEntityAt(nx, ny)) continue;
-
-                state.addEntity(EntityType.Unit, spawnDef.unitType, nx, ny, entity.player, selectable);
-                spawned++;
-            }
+            state.addEntity(
+                EntityType.Unit, spawnDef.unitType, tile.x, tile.y,
+                entity.player, spawnDef.selectable
+            );
+            spawned++;
         }
     }
 }

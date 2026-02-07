@@ -1,0 +1,8 @@
+{
+  "threshold": 5,
+  "reporters": ["console"],
+  "ignore": ["node_modules", "dist", "**/*.d.ts", "tests/**"],
+  "format": ["typescript", "vue"],
+  "absolute": true,
+  "gitignore": true
+}

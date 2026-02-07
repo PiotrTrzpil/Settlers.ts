@@ -39,7 +39,7 @@ export class GamePage {
 
     constructor(page: Page) {
         this.page = page;
-        this.canvas = page.locator('canvas');
+        this.canvas = page.locator('canvas.cav');
         this.gameUi = page.locator('[data-testid="game-ui"]');
         this.entityCount = page.locator('[data-testid="entity-count"]');
         this.modeIndicator = page.locator('[data-testid="mode-indicator"]');

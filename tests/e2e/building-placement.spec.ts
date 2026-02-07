@@ -53,8 +53,7 @@ test.describe('Pointer Event Pipeline', { tag: '@smoke' }, () => {
     test('canvas click sets hoveredTile via tileClick event', async({ gp }) => {
         const page = gp.page;
 
-        const canvas = page.locator('canvas');
-        await canvas.click({ position: { x: 400, y: 400 } });
+        await gp.canvas.click({ position: { x: 400, y: 400 } });
 
         const tileInfo = page.locator('[data-testid="tile-info"]');
         await expect(tileInfo).toBeVisible({ timeout: 5000 });

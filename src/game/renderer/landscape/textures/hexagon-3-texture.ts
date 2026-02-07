@@ -15,7 +15,10 @@ export class Hexagon3Texture extends LandscapeTextureBase implements ILandscapeT
     private t2: LandscapeType;
     private t3: LandscapeType;
 
-    constructor(layout: AtlasLayout, t1: LandscapeType, t2: LandscapeType, t3: LandscapeType, x1: number, y1: number, x2: number, y2: number) {
+    constructor(
+        layout: AtlasLayout, t1: LandscapeType, t2: LandscapeType, t3: LandscapeType,
+        x1: number, y1: number, x2: number, y2: number
+    ) {
         super(layout);
 
         this.srcX1 = x1 * TextureBlockSizeX;

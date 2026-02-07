@@ -23,13 +23,21 @@ test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () 
     test('should load unit sprites from sprite registry', async({ page }) => {
         const gp = new GamePage(page);
 
-        // Collect console logs
-        const consoleLogs: string[] = [];
-        page.on('console', msg => consoleLogs.push(`[${msg.type()}] ${msg.text()}`));
-
         // Load the game (needs real game assets, not test map)
         await gp.goto({ testMap: false });
         await gp.waitForReady(5, 30_000);
+
+        // Wait for sprite manager to have sprites loaded (async loading)
+        await page.waitForFunction(
+            () => {
+                const renderer = (window as any).__settlers_entity_renderer__;
+                if (!renderer) return false;
+                const spriteManager = (renderer as any).spriteManager;
+                return spriteManager?.hasSprites === true;
+            },
+            null,
+            { timeout: 30_000 }
+        );
 
         // Check what unit sprites are loaded using the public API
         const loadedUnits = await page.evaluate(() => {
@@ -65,25 +73,15 @@ test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () 
             };
         });
 
-        // Check that console logs show units loaded
-        const spriteRelatedLogs = consoleLogs.filter(log =>
-            log.includes('SpriteRenderManager') || log.includes('Unit')
-        );
-        // Match either old format "Unit sprites loaded: X units" or new timing format "Units: Xms (X loaded)"
-        const unitLoadedLog = spriteRelatedLogs.find(log =>
-            log.includes('unit types') || log.includes('Units:')
-        );
-        expect(unitLoadedLog).toBeDefined();
-
-        // Parse how many units loaded from the log (either format)
-        const match = unitLoadedLog?.match(/(\d+)\s+unit types/) || unitLoadedLog?.match(/\((\d+) loaded\)/);
-        if (match) {
-            expect(parseInt(match[1], 10)).toBeGreaterThan(0);
-        }
-
-        // The direct API check may fail due to renderer timing issues in headless Chrome
-        // but if the logs show loading, the feature works
+        // Verify the sprite registry loaded via API (more reliable than console logs)
         expect(loadedUnits).not.toHaveProperty('error');
+
+        // Check that at least some unit types loaded
+        if ('loadedByType' in loadedUnits) {
+            const loadedCount = Object.values(loadedUnits.loadedByType).filter(Boolean).length;
+            // At least bearer (type 0) should be loaded
+            expect(loadedCount).toBeGreaterThan(0);
+        }
     });
 
     test('should render swordsman with texture not just color dot', async({ page }) => {

@@ -99,7 +99,10 @@ export class LandscapeTextureMap {
      * swapFirstPair=false: first pair is (type4,type3) then (type3,type4) (formerly addTextureGradient2)
      * swapFirstPair=true:  first pair is (type3,type4) then (type4,type3) (formerly addTextureGradient3)
      */
-    private addTextureGradientReverse(type1: LandscapeType, type2: LandscapeType, type3: LandscapeType, type4: LandscapeType, row: number, swapFirstPair: boolean) {
+    private addTextureGradientReverse(
+        type1: LandscapeType, type2: LandscapeType, type3: LandscapeType, type4: LandscapeType,
+        row: number, swapFirstPair: boolean
+    ) {
         const L = this.layout;
         const firstA = swapFirstPair ? type3 : type4;
         const firstB = swapFirstPair ? type4 : type3;
@@ -220,11 +223,17 @@ export class LandscapeTextureMap {
 
         // https://github.com/tomsoftware/sied3/blob/master/src/clTexturesLoadHelper.cpp
         // [grass] 16 -> 20 -> 65 -> 64 [desert] @ 44..47
-        this.addTextureGradientReverse(LandscapeType.Grass, LandscapeType.DesertToGras2, LandscapeType.DesertToGras1, LandscapeType.Desert, 44, true);
+        this.addTextureGradientReverse(
+            LandscapeType.Grass, LandscapeType.DesertToGras2, LandscapeType.DesertToGras1,
+            LandscapeType.Desert, 44, true
+        );
 
         // ///////
         // [mud] 80 -> 81 -> 21 -> 16 [gras] @ 48..51
-        this.addTextureGradientReverse(LandscapeType.Grass, LandscapeType.MudToGras2, LandscapeType.MudToGras1, LandscapeType.Mud, 48, false);
+        this.addTextureGradientReverse(
+            LandscapeType.Grass, LandscapeType.MudToGras2, LandscapeType.MudToGras1,
+            LandscapeType.Mud, 48, false
+        );
 
         this.addTexture(new BigLandscapeTexture(L, LandscapeType.Mud, 52));
 

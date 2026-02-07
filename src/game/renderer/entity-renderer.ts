@@ -416,6 +416,127 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.disable(gl.BLEND);
     }
 
+    /** Get sprite entry for a building entity */
+    private getBuildingSprite(entity: Entity): { sprite: SpriteEntry | null; progress: number } {
+        if (!this.spriteManager) return { sprite: null, progress: 1 };
+
+        const buildingState = this.buildingStates.get(entity.id);
+        const visualState = getBuildingVisualState(buildingState);
+        const buildingType = entity.subType as BuildingType;
+
+        let sprite: SpriteEntry | null;
+        if (visualState.useConstructionSprite) {
+            sprite = this.spriteManager.getBuildingConstruction(buildingType)
+                ?? this.spriteManager.getBuilding(buildingType);
+        } else {
+            const animatedEntry = this.spriteManager.getAnimatedBuilding(buildingType);
+            sprite = (animatedEntry && entity.animationState)
+                ? getAnimatedSprite(entity.animationState, animatedEntry.animationData, animatedEntry.staticSprite)
+                : this.spriteManager.getBuilding(buildingType);
+        }
+
+        return { sprite, progress: visualState.verticalProgress };
+    }
+
+    /** Get sprite entry for a map object entity */
+    private getMapObjectSprite(entity: Entity): SpriteEntry | null {
+        if (!this.spriteManager) return null;
+
+        const mapObjectType = entity.subType as MapObjectType;
+        const animatedEntry = this.spriteManager.getAnimatedMapObject(mapObjectType);
+
+        if (animatedEntry && entity.animationState) {
+            return getAnimatedSprite(entity.animationState, animatedEntry.animationData, animatedEntry.staticSprite);
+        }
+        return this.spriteManager.getMapObject(mapObjectType);
+    }
+
+    /** Get sprite entry for a unit entity (returns null if transitioning) */
+    private getUnitSprite(entity: Entity): SpriteEntry | null | 'transitioning' {
+        if (!this.spriteManager) return null;
+
+        const animState = entity.animationState;
+        if (animState?.directionTransitionProgress !== undefined && animState.previousDirection !== undefined) {
+            return 'transitioning';
+        }
+
+        const direction = animState?.direction ?? 0;
+        return this.spriteManager.getUnit(entity.subType as UnitType, direction);
+    }
+
+    /**
+     * Result of resolving an entity's sprite for rendering.
+     */
+    private resolveEntitySprite(entity: Entity): {
+        skip: boolean;
+        transitioning: boolean;
+        sprite: SpriteEntry | null;
+        progress: number;
+    } {
+        if (entity.type === EntityType.Building) {
+            const result = this.getBuildingSprite(entity);
+            return {
+                skip: result.progress <= 0,
+                transitioning: false,
+                sprite: result.sprite,
+                progress: result.progress
+            };
+        }
+        if (entity.type === EntityType.MapObject) {
+            return {
+                skip: false,
+                transitioning: false,
+                sprite: this.getMapObjectSprite(entity),
+                progress: 1
+            };
+        }
+        if (entity.type === EntityType.StackedResource) {
+            return {
+                skip: false,
+                transitioning: false,
+                sprite: this.spriteManager?.getResource(entity.subType as EMaterialType) ?? null,
+                progress: 1
+            };
+        }
+        if (entity.type === EntityType.Unit) {
+            const result = this.getUnitSprite(entity);
+            if (result === 'transitioning') {
+                return { skip: false, transitioning: true, sprite: null, progress: 1 };
+            }
+            return { skip: false, transitioning: false, sprite: result, progress: 1 };
+        }
+        return { skip: true, transitioning: false, sprite: null, progress: 1 };
+    }
+
+    /** Render construction background sprite during CompletedRising phase */
+    private renderConstructionBackground(
+        gl: WebGL2RenderingContext,
+        sp: ShaderProgram,
+        entity: Entity,
+        viewPoint: IViewPoint,
+        batchOffset: number
+    ): number {
+        if (!this.spriteManager || !this.spriteBatchData) return batchOffset;
+
+        const buildingState = this.buildingStates.get(entity.id);
+        const visualState = getBuildingVisualState(buildingState);
+
+        if (visualState.phase !== BuildingConstructionPhase.CompletedRising) return batchOffset;
+
+        const constructionSprite = this.spriteManager.getBuildingConstruction(entity.subType as BuildingType);
+        if (!constructionSprite) return batchOffset;
+
+        if (batchOffset + FLOATS_PER_ENTITY > this.spriteBatchData.length) {
+            this.flushSpriteBatch(gl, sp, batchOffset);
+            batchOffset = 0;
+        }
+
+        const worldPos = TilePicker.tileToWorld(
+            entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y
+        );
+        return this.fillSpriteQuad(batchOffset, worldPos.worldX, worldPos.worldY, constructionSprite, 1, 1, 1, 1);
+    }
+
     /**
      * Draw entities using the sprite shader and atlas texture (batched).
      */
@@ -435,144 +556,35 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         sp.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
 
         let batchOffset = 0;
-        this.transitioningUnits.length = 0; // Clear and reuse array
+        this.transitioningUnits.length = 0;
 
-        // Use depth-sorted entities for correct painter's algorithm rendering
         for (const entity of this.sortedEntities) {
-
-            let spriteEntry: SpriteEntry | null = null;
-            let verticalProgress = 1.0; // Full visibility by default
-
+            // Handle building construction background before sprite resolution
             if (entity.type === EntityType.Building) {
-
-                // Get building construction state
-                const buildingState = this.buildingStates.get(entity.id);
-                const visualState = getBuildingVisualState(buildingState);
-
-                const buildingType = entity.subType as BuildingType;
-
-                // During CompletedRising, render construction sprite at full height behind
-                if (visualState.phase === BuildingConstructionPhase.CompletedRising) {
-                    const constructionSprite = this.spriteManager.getBuildingConstruction(buildingType);
-                    if (constructionSprite) {
-                        if (batchOffset + FLOATS_PER_ENTITY > this.spriteBatchData.length) {
-                            this.flushSpriteBatch(gl, sp, batchOffset);
-                            batchOffset = 0;
-                        }
-                        const bgWorldPos = TilePicker.tileToWorld(
-                            entity.x, entity.y,
-                            this.groundHeight, this.mapSize,
-                            viewPoint.x, viewPoint.y
-                        );
-                        batchOffset = this.fillSpriteQuad(
-                            batchOffset, bgWorldPos.worldX, bgWorldPos.worldY,
-                            constructionSprite, 1.0, 1.0, 1.0, 1.0
-                        );
-                    }
-                }
-
-                // Choose sprite based on construction state
-                if (visualState.useConstructionSprite) {
-                    spriteEntry = this.spriteManager.getBuildingConstruction(buildingType)
-                        ?? this.spriteManager.getBuilding(buildingType);
-                } else {
-                    const animatedEntry = this.spriteManager.getAnimatedBuilding(buildingType);
-                    spriteEntry = (animatedEntry && entity.animationState)
-                        ? getAnimatedSprite(entity.animationState, animatedEntry.animationData, animatedEntry.staticSprite)
-                        : this.spriteManager.getBuilding(buildingType);
-                }
-
-                verticalProgress = visualState.verticalProgress;
-
-                // Skip rendering if building is not visible yet (verticalProgress is 0)
-                if (verticalProgress <= 0) {
-                    continue;
-                }
-            } else if (entity.type === EntityType.MapObject) {
-                const mapObjectType = entity.subType as MapObjectType;
-                const animatedEntry = this.spriteManager.getAnimatedMapObject(mapObjectType);
-
-                if (animatedEntry && entity.animationState) {
-                    // Use animated sprite based on current frame
-                    spriteEntry = getAnimatedSprite(
-                        entity.animationState,
-                        animatedEntry.animationData,
-                        animatedEntry.staticSprite
-                    );
-                } else {
-                    // Use static sprite
-                    spriteEntry = this.spriteManager.getMapObject(mapObjectType);
-                }
-            } else if (entity.type === EntityType.StackedResource) {
-                // Render stacked resources (dropped goods)
-                spriteEntry = this.spriteManager.getResource(entity.subType as EMaterialType);
-            } else if (entity.type === EntityType.Unit) {
-                // Check if unit is in a direction transition (needs blend shader)
-                const animState = entity.animationState;
-                if (animState?.directionTransitionProgress !== undefined &&
-                    animState.previousDirection !== undefined) {
-                    // Collect for blend rendering (handled after regular batch)
-                    this.transitioningUnits.push(entity);
-                    continue;
-                }
-
-                // Render units (settlers, soldiers) with direction from animation state
-                const direction = animState?.direction ?? 0;
-                spriteEntry = this.spriteManager.getUnit(entity.subType as UnitType, direction);
-            } else {
-                continue;
+                batchOffset = this.renderConstructionBackground(gl, sp, entity, viewPoint, batchOffset);
             }
 
-            if (!spriteEntry) continue;
+            const resolved = this.resolveEntitySprite(entity);
+            if (resolved.skip) continue;
+            if (resolved.transitioning) { this.transitioningUnits.push(entity); continue }
+            if (!resolved.sprite) continue;
 
-            // Check batch capacity BEFORE adding to avoid buffer overflow
             if (batchOffset + FLOATS_PER_ENTITY > this.spriteBatchData.length) {
                 this.flushSpriteBatch(gl, sp, batchOffset);
                 batchOffset = 0;
             }
 
-            // Use interpolated position for units (smooth movement), static for others
-            let worldPos: { worldX: number; worldY: number };
-            if (entity.type === EntityType.Unit) {
-                worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
-            } else {
-                worldPos = TilePicker.tileToWorld(
-                    entity.x, entity.y,
-                    this.groundHeight, this.mapSize,
-                    viewPoint.x, viewPoint.y
-                );
-            }
+            const worldPos = entity.type === EntityType.Unit
+                ? this.getInterpolatedWorldPos(entity, viewPoint)
+                : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
 
-            // Use partial sprite rendering for construction animation
-            if (verticalProgress < 1.0) {
-                batchOffset = this.fillSpriteQuadPartial(
-                    batchOffset,
-                    worldPos.worldX,
-                    worldPos.worldY,
-                    spriteEntry,
-                    1.0, 1.0, 1.0, 1.0,
-                    verticalProgress
-                );
-            } else {
-                batchOffset = this.fillSpriteQuad(
-                    batchOffset,
-                    worldPos.worldX,
-                    worldPos.worldY,
-                    spriteEntry,
-                    1.0, 1.0, 1.0, 1.0
-                );
-            }
+            batchOffset = resolved.progress < 1.0
+                ? this.fillSpriteQuadPartial(batchOffset, worldPos.worldX, worldPos.worldY, resolved.sprite, 1, 1, 1, 1, resolved.progress)
+                : this.fillSpriteQuad(batchOffset, worldPos.worldX, worldPos.worldY, resolved.sprite, 1, 1, 1, 1);
         }
 
-        // Flush remaining sprites
-        if (batchOffset > 0) {
-            this.flushSpriteBatch(gl, sp, batchOffset);
-        }
-
-        // Render units with direction transitions using blend shader
-        if (this.transitioningUnits.length > 0) {
-            this.drawTransitioningUnits(gl, projection, viewPoint, this.transitioningUnits);
-        }
+        if (batchOffset > 0) this.flushSpriteBatch(gl, sp, batchOffset);
+        if (this.transitioningUnits.length > 0) this.drawTransitioningUnits(gl, projection, viewPoint, this.transitioningUnits);
     }
 
     /**
@@ -909,6 +921,31 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         return offset;
     }
 
+    /** Check if entity has a sprite and should be skipped in color rendering */
+    private hasTexturedSprite(entity: Entity): boolean {
+        if (!this.spriteManager) return false;
+
+        switch (entity.type) {
+        case EntityType.Building:
+            return !!this.spriteManager.getBuilding(entity.subType as BuildingType);
+        case EntityType.MapObject:
+            return !!this.spriteManager.getMapObject(entity.subType as MapObjectType);
+        case EntityType.StackedResource:
+            return !!this.spriteManager.getResource(entity.subType as EMaterialType);
+        case EntityType.Unit:
+            return !!this.spriteManager.getUnit(entity.subType as UnitType);
+        default:
+            return false;
+        }
+    }
+
+    /** Get scale for entity type */
+    private getEntityScale(entityType: EntityType): number {
+        if (entityType === EntityType.Building) return BUILDING_SCALE;
+        if (entityType === EntityType.StackedResource) return RESOURCE_SCALE;
+        return UNIT_SCALE;
+    }
+
     /**
      * Draw entities using the color shader (solid quads).
      */
@@ -926,57 +963,26 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.disableVertexAttribArray(this.aEntityPos);
         gl.disableVertexAttribArray(this.aColor);
 
-        // Use depth-sorted entities for correct painter's algorithm rendering
         for (const entity of this.sortedEntities) {
-            // Skip textured buildings if they're handled by sprite renderer
-            if (texturedBuildingsHandled && entity.type === EntityType.Building) {
-                const hasSprite = this.spriteManager?.getBuilding(entity.subType as BuildingType);
-                if (hasSprite) continue;
-            }
-
-            // Handle map objects - use colored dots if no sprite available
+            // Handle map objects specially - draw dot fallback if no sprite
             if (entity.type === EntityType.MapObject) {
-                if (texturedBuildingsHandled) {
-                    const hasSprite = this.spriteManager?.getMapObject(entity.subType as MapObjectType);
-                    if (hasSprite) continue;
+                if (!texturedBuildingsHandled || !this.hasTexturedSprite(entity)) {
+                    this.drawMapObjectDot(gl, entity, viewPoint);
                 }
-                // Draw colored dot fallback for map objects without textures
-                this.drawMapObjectDot(gl, entity, viewPoint);
                 continue;
             }
 
-            // Skip textured stacked resources
-            if (texturedBuildingsHandled && entity.type === EntityType.StackedResource) {
-                const hasSprite = this.spriteManager?.getResource(entity.subType as EMaterialType);
-                if (hasSprite) continue;
-            }
-
-            // Skip textured units
-            if (texturedBuildingsHandled && entity.type === EntityType.Unit) {
-                const hasSprite = this.spriteManager?.getUnit(entity.subType as UnitType);
-                if (hasSprite) continue;
-            }
+            // Skip entities handled by sprite renderer
+            if (texturedBuildingsHandled && this.hasTexturedSprite(entity)) continue;
 
             const isSelected = this.selectedEntityIds.has(entity.id);
             const playerColor = PLAYER_COLORS[entity.player % PLAYER_COLORS.length];
             const color = isSelected ? SELECTED_COLOR : playerColor;
-            let scale = UNIT_SCALE;
-            if (entity.type === EntityType.Building) {
-                scale = BUILDING_SCALE;
-            } else if (entity.type === EntityType.StackedResource) {
-                scale = RESOURCE_SCALE;
-            }
+            const scale = this.getEntityScale(entity.type);
 
-            let worldPos: { worldX: number; worldY: number };
-            if (entity.type === EntityType.Unit) {
-                worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
-            } else {
-                worldPos = TilePicker.tileToWorld(
-                    entity.x, entity.y,
-                    this.groundHeight, this.mapSize,
-                    viewPoint.x, viewPoint.y
-                );
-            }
+            const worldPos = entity.type === EntityType.Unit
+                ? this.getInterpolatedWorldPos(entity, viewPoint)
+                : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
 
             gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
             this.fillQuadVertices(0, 0, scale);

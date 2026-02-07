@@ -166,6 +166,27 @@ export class GfxImageExporter {
     }
 
     /**
+     * Build export filename for an image
+     */
+    private buildExportFilename(
+        index: number,
+        image: IGfxImage,
+        includeMetadata: boolean,
+        padLength = 5
+    ): string {
+        let filename = `${index.toString().padStart(padLength, '0')}`;
+
+        if (includeMetadata) {
+            filename += `_${image.width}x${image.height}`;
+            if (image.left !== 0 || image.top !== 0) {
+                filename += `_offset${image.left}x${image.top}`;
+            }
+        }
+
+        return filename + '.png';
+    }
+
+    /**
      * Export a single image to PNG
      */
     async exportImage(
@@ -229,17 +250,9 @@ export class GfxImageExporter {
                         continue;
                     }
 
-                    let filename = `${index.toString().padStart(5, '0')}`;
-
-                    if (options.includeMetadata) {
-                        filename += `_${image.width}x${image.height}`;
-                        if (image.left !== 0 || image.top !== 0) {
-                            filename += `_offset${image.left}x${image.top}`;
-                        }
-                    }
-
-                    filename += '.png';
-
+                    const filename = this.buildExportFilename(
+                        index, image, options.includeMetadata ?? false, 5
+                    );
                     const outputPath = this.fileWriter.join(outputDir, filename);
                     await this.exportImage(image, outputPath);
 
@@ -306,14 +319,9 @@ export class GfxImageExporter {
                         continue;
                     }
 
-                    let filename = `${index.toString().padStart(3, '0')}`;
-
-                    if (options.includeMetadata) {
-                        filename += `_${image.width}x${image.height}`;
-                    }
-
-                    filename += '.png';
-
+                    const filename = this.buildExportFilename(
+                        index, image, options.includeMetadata ?? false, 3
+                    );
                     const outputPath = this.fileWriter.join(outputDir, filename);
                     await this.exportImage(image, outputPath);
 

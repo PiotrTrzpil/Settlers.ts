@@ -4,7 +4,19 @@ import { canPlaceBuildingFootprint, isPassable } from '../systems/placement';
 import { restoreOriginalTerrain } from '../systems/terrain-leveling';
 import { TerritoryMap } from '../buildings/territory';
 import { MapSize } from '@/utilities/map-size';
-import { Command, FORMATION_OFFSETS } from './command-types';
+import {
+    Command,
+    FORMATION_OFFSETS,
+    PlaceBuildingCommand,
+    SpawnUnitCommand,
+    MoveUnitCommand,
+    SelectCommand,
+    SelectAtTileCommand,
+    ToggleSelectionCommand,
+    SelectAreaCommand,
+    MoveSelectedUnitsCommand,
+    RemoveEntityCommand,
+} from './command-types';
 
 // Re-export Command type and related types for backward compatibility
 export type { Command } from './command-types';
@@ -27,6 +39,218 @@ export {
     isMovementCommand,
 } from './command-types';
 
+interface CommandContext {
+    state: GameState;
+    groundType: Uint8Array;
+    groundHeight: Uint8Array;
+    mapSize: MapSize;
+    territory?: TerritoryMap;
+}
+
+function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): boolean {
+    const { state, groundType, groundHeight, mapSize, territory } = ctx;
+
+    const hasBuildings = state.entities.some(
+        e => e.type === EntityType.Building && e.player === cmd.player
+    );
+
+    const territoryToUse = territory ?? new TerritoryMap(mapSize);
+    const hasExistingBuildings = territory ? hasBuildings : false;
+
+    if (!canPlaceBuildingFootprint(
+        groundType, groundHeight, mapSize, state.tileOccupancy,
+        territoryToUse, cmd.x, cmd.y, cmd.player, hasExistingBuildings, cmd.buildingType
+    )) {
+        return false;
+    }
+
+    state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
+    spawnWorkerForBuilding(state, cmd, mapSize);
+    return true;
+}
+
+function spawnWorkerForBuilding(state: GameState, cmd: PlaceBuildingCommand, mapSize: MapSize): void {
+    const workerType = BUILDING_UNIT_TYPE[cmd.buildingType];
+    if (workerType === undefined) return;
+
+    for (const [dx, dy] of EXTENDED_OFFSETS) {
+        const nx = cmd.x + dx;
+        const ny = cmd.y + dy;
+        if (nx >= 0 && nx < mapSize.width && ny >= 0 && ny < mapSize.height) {
+            if (!state.getEntityAt(nx, ny)) {
+                state.addEntity(EntityType.Unit, workerType, nx, ny, cmd.player);
+                return;
+            }
+        }
+    }
+}
+
+function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): boolean {
+    const { state, groundType, mapSize } = ctx;
+
+    const isTileValid = (x: number, y: number) =>
+        x >= 0 && x < mapSize.width && y >= 0 && y < mapSize.height &&
+        isPassable(groundType[mapSize.toIndex(x, y)]) &&
+        !state.getEntityAt(x, y);
+
+    let spawnX = cmd.x;
+    let spawnY = cmd.y;
+
+    if (!isTileValid(spawnX, spawnY)) {
+        const found = findValidSpawnTile(cmd.x, cmd.y, isTileValid);
+        if (!found) return false;
+        spawnX = found.x;
+        spawnY = found.y;
+    }
+
+    state.addEntity(EntityType.Unit, cmd.unitType, spawnX, spawnY, cmd.player);
+    return true;
+}
+
+function findValidSpawnTile(
+    x: number, y: number,
+    isValid: (x: number, y: number) => boolean
+): { x: number; y: number } | null {
+    for (const [dx, dy] of EXTENDED_OFFSETS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (isValid(nx, ny)) {
+            return { x: nx, y: ny };
+        }
+    }
+    return null;
+}
+
+function executeMoveUnit(ctx: CommandContext, cmd: MoveUnitCommand): boolean {
+    return ctx.state.movement.moveUnit(cmd.entityId, cmd.targetX, cmd.targetY);
+}
+
+function executeSelect(ctx: CommandContext, cmd: SelectCommand): boolean {
+    const { state } = ctx;
+
+    if (cmd.entityId !== null) {
+        const ent = state.getEntity(cmd.entityId);
+        if (ent && ent.selectable === false) {
+            state.selectedEntityId = null;
+            state.selectedEntityIds.clear();
+            return true;
+        }
+    }
+
+    state.selectedEntityId = cmd.entityId;
+    state.selectedEntityIds.clear();
+    if (cmd.entityId !== null) {
+        state.selectedEntityIds.add(cmd.entityId);
+    }
+    return true;
+}
+
+function executeSelectAtTile(ctx: CommandContext, cmd: SelectAtTileCommand): boolean {
+    const { state } = ctx;
+    const rawEntity = state.getEntityAt(cmd.x, cmd.y);
+    const entity = rawEntity?.selectable !== false ? rawEntity : undefined;
+
+    if (cmd.addToSelection) {
+        return toggleEntityInSelection(state, entity);
+    }
+
+    // Replace selection
+    state.selectedEntityIds.clear();
+    state.selectedEntityId = entity?.id ?? null;
+    if (entity) {
+        state.selectedEntityIds.add(entity.id);
+    }
+    return true;
+}
+
+function toggleEntityInSelection(
+    state: GameState,
+    entity: { id: number } | undefined
+): boolean {
+    if (!entity) return true;
+
+    if (state.selectedEntityIds.has(entity.id)) {
+        state.selectedEntityIds.delete(entity.id);
+        if (state.selectedEntityId === entity.id) {
+            state.selectedEntityId = state.selectedEntityIds.size > 0
+                ? state.selectedEntityIds.values().next().value!
+                : null;
+        }
+    } else {
+        state.selectedEntityIds.add(entity.id);
+        if (state.selectedEntityId === null) {
+            state.selectedEntityId = entity.id;
+        }
+    }
+    return true;
+}
+
+function executeToggleSelection(ctx: CommandContext, cmd: ToggleSelectionCommand): boolean {
+    const { state } = ctx;
+    const entity = state.getEntity(cmd.entityId);
+    if (!entity || entity.selectable === false) return false;
+
+    return toggleEntityInSelection(state, entity);
+}
+
+function executeSelectArea(ctx: CommandContext, cmd: SelectAreaCommand): boolean {
+    const { state } = ctx;
+    const allEntities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
+    const entities = allEntities.filter(e => e.selectable !== false);
+
+    // Prefer selecting units over buildings
+    const units = entities.filter(e => e.type === EntityType.Unit);
+    const toSelect = units.length > 0 ? units : entities;
+
+    state.selectedEntityIds.clear();
+    for (const e of toSelect) {
+        state.selectedEntityIds.add(e.id);
+    }
+    state.selectedEntityId = toSelect.length > 0 ? toSelect[0].id : null;
+    return true;
+}
+
+function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCommand): boolean {
+    const { state } = ctx;
+
+    const selectedUnits: number[] = [];
+    for (const entityId of state.selectedEntityIds) {
+        const e = state.getEntity(entityId);
+        if (e && e.type === EntityType.Unit) {
+            selectedUnits.push(entityId);
+        }
+    }
+    if (selectedUnits.length === 0) return false;
+
+    let anyMoved = false;
+    for (let i = 0; i < selectedUnits.length; i++) {
+        const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
+        const targetX = cmd.targetX + offset[0];
+        const targetY = cmd.targetY + offset[1];
+
+        if (state.movement.moveUnit(selectedUnits[i], targetX, targetY)) {
+            anyMoved = true;
+        }
+    }
+    return anyMoved;
+}
+
+function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): boolean {
+    const { state, groundType, groundHeight, mapSize } = ctx;
+    const entity = state.getEntity(cmd.entityId);
+    if (!entity) return false;
+
+    if (entity.type === EntityType.Building) {
+        const bs = state.buildingStates.get(cmd.entityId);
+        if (bs) {
+            restoreOriginalTerrain(bs, groundType, groundHeight, mapSize);
+        }
+    }
+
+    state.removeEntity(cmd.entityId);
+    return true;
+}
+
 /**
  * Execute a player command against the game state.
  * Returns true if the command was successfully executed.
@@ -39,213 +263,27 @@ export function executeCommand(
     mapSize: MapSize,
     territory?: TerritoryMap
 ): boolean {
+    const ctx: CommandContext = { state, groundType, groundHeight, mapSize, territory };
+
     switch (cmd.type) {
-    case 'place_building': {
-        // Check if player already has buildings (for territory rules)
-        const hasBuildings = state.entities.some(
-            e => e.type === EntityType.Building && e.player === cmd.player
-        );
-
-        // Use footprint-aware placement validation with territory checks
-        // Territory is optional - if not provided, only basic placement rules apply
-        if (territory) {
-            if (!canPlaceBuildingFootprint(
-                groundType, groundHeight, mapSize, state.tileOccupancy,
-                territory, cmd.x, cmd.y, cmd.player, hasBuildings, cmd.buildingType
-            )) {
-                return false;
-            }
-        } else {
-            // Fallback: basic footprint validation without territory
-            // Create a dummy territory for validation that always returns NO_OWNER
-            const dummyTerritory = new TerritoryMap(mapSize);
-            if (!canPlaceBuildingFootprint(
-                groundType, groundHeight, mapSize, state.tileOccupancy,
-                dummyTerritory, cmd.x, cmd.y, cmd.player, false, cmd.buildingType
-            )) {
-                return false;
-            }
-        }
-        state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
-
-        // Auto-spawn the associated worker unit adjacent to the building
-        const workerType = BUILDING_UNIT_TYPE[cmd.buildingType];
-        if (workerType !== undefined) {
-            for (const [dx, dy] of EXTENDED_OFFSETS) {
-                const nx = cmd.x + dx;
-                const ny = cmd.y + dy;
-                if (nx >= 0 && nx < mapSize.width && ny >= 0 && ny < mapSize.height) {
-                    if (!state.getEntityAt(nx, ny)) {
-                        state.addEntity(EntityType.Unit, workerType, nx, ny, cmd.player);
-                        break;
-                    }
-                }
-            }
-        }
-
-        return true;
-    }
-
-    case 'spawn_unit': {
-        // Spawn at the given tile, or find adjacent free & passable tile
-        let spawnX = cmd.x;
-        let spawnY = cmd.y;
-
-        const isTileValid = (x: number, y: number) =>
-            x >= 0 && x < mapSize.width && y >= 0 && y < mapSize.height &&
-            isPassable(groundType[mapSize.toIndex(x, y)]) &&
-            !state.getEntityAt(x, y);
-
-        if (!isTileValid(spawnX, spawnY)) {
-            let found = false;
-            for (const [dx, dy] of EXTENDED_OFFSETS) {
-                const nx = spawnX + dx;
-                const ny = spawnY + dy;
-                if (isTileValid(nx, ny)) {
-                    spawnX = nx;
-                    spawnY = ny;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) return false;
-        }
-
-        state.addEntity(EntityType.Unit, cmd.unitType, spawnX, spawnY, cmd.player);
-        return true;
-    }
-
-    case 'move_unit': {
-        // Delegate to the MovementSystem
-        return state.movement.moveUnit(cmd.entityId, cmd.targetX, cmd.targetY);
-    }
-
-    case 'select': {
-        // Respect selectable flag (undefined = selectable, false = not selectable)
-        if (cmd.entityId !== null) {
-            const ent = state.getEntity(cmd.entityId);
-            if (ent && ent.selectable === false) {
-                // Can't select unselectable entities - treat as deselect
-                state.selectedEntityId = null;
-                state.selectedEntityIds.clear();
-                return true;
-            }
-        }
-        state.selectedEntityId = cmd.entityId;
-        state.selectedEntityIds.clear();
-        if (cmd.entityId !== null) {
-            state.selectedEntityIds.add(cmd.entityId);
-        }
-        return true;
-    }
-
-    case 'select_at_tile': {
-        const rawEntity = state.getEntityAt(cmd.x, cmd.y);
-        // Skip unselectable entities
-        const entity = rawEntity?.selectable !== false ? rawEntity : undefined;
-        if (cmd.addToSelection) {
-            if (entity) {
-                // Toggle: remove if already selected, add if not
-                if (state.selectedEntityIds.has(entity.id)) {
-                    state.selectedEntityIds.delete(entity.id);
-                    if (state.selectedEntityId === entity.id) {
-                        // Set primary to first remaining, or null
-                        state.selectedEntityId = state.selectedEntityIds.size > 0
-                            ? state.selectedEntityIds.values().next().value!
-                            : null;
-                    }
-                } else {
-                    state.selectedEntityIds.add(entity.id);
-                    if (state.selectedEntityId === null) {
-                        state.selectedEntityId = entity.id;
-                    }
-                }
-            }
-        } else {
-            // Replace selection
-            state.selectedEntityIds.clear();
-            state.selectedEntityId = entity?.id ?? null;
-            if (entity) {
-                state.selectedEntityIds.add(entity.id);
-            }
-        }
-        return true;
-    }
-
-    case 'toggle_selection': {
-        const entity = state.getEntity(cmd.entityId);
-        if (!entity || entity.selectable === false) return false;
-        if (state.selectedEntityIds.has(cmd.entityId)) {
-            state.selectedEntityIds.delete(cmd.entityId);
-            if (state.selectedEntityId === cmd.entityId) {
-                state.selectedEntityId = state.selectedEntityIds.size > 0
-                    ? state.selectedEntityIds.values().next().value!
-                    : null;
-            }
-        } else {
-            state.selectedEntityIds.add(cmd.entityId);
-            if (state.selectedEntityId === null) {
-                state.selectedEntityId = cmd.entityId;
-            }
-        }
-        return true;
-    }
-
-    case 'select_area': {
-        const allEntities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
-        const entities = allEntities.filter(e => e.selectable !== false);
-        // Prefer selecting units over buildings
-        const units = entities.filter(e => e.type === EntityType.Unit);
-        const toSelect = units.length > 0 ? units : entities;
-
-        state.selectedEntityIds.clear();
-        for (const e of toSelect) {
-            state.selectedEntityIds.add(e.id);
-        }
-        state.selectedEntityId = toSelect.length > 0 ? toSelect[0].id : null;
-        return true;
-    }
-
-    case 'move_selected_units': {
-        // Move all selected units toward target with formation offsets
-        const selectedUnits: number[] = [];
-        for (const entityId of state.selectedEntityIds) {
-            const e = state.getEntity(entityId);
-            if (e && e.type === EntityType.Unit) {
-                selectedUnits.push(entityId);
-            }
-        }
-        if (selectedUnits.length === 0) return false;
-
-        let anyMoved = false;
-        for (let i = 0; i < selectedUnits.length; i++) {
-            const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
-            const targetX = cmd.targetX + offset[0];
-            const targetY = cmd.targetY + offset[1];
-
-            if (state.movement.moveUnit(selectedUnits[i], targetX, targetY)) {
-                anyMoved = true;
-            }
-        }
-        return anyMoved;
-    }
-
-    case 'remove_entity': {
-        const entity = state.getEntity(cmd.entityId);
-        if (!entity) return false;
-
-        // Restore terrain before removing a building that modified it
-        if (entity.type === EntityType.Building) {
-            const bs = state.buildingStates.get(cmd.entityId);
-            if (bs) {
-                restoreOriginalTerrain(bs, groundType, groundHeight, mapSize);
-            }
-        }
-
-        state.removeEntity(cmd.entityId);
-        return true;
-    }
-
+    case 'place_building':
+        return executePlaceBuilding(ctx, cmd);
+    case 'spawn_unit':
+        return executeSpawnUnit(ctx, cmd);
+    case 'move_unit':
+        return executeMoveUnit(ctx, cmd);
+    case 'select':
+        return executeSelect(ctx, cmd);
+    case 'select_at_tile':
+        return executeSelectAtTile(ctx, cmd);
+    case 'toggle_selection':
+        return executeToggleSelection(ctx, cmd);
+    case 'select_area':
+        return executeSelectArea(ctx, cmd);
+    case 'move_selected_units':
+        return executeMoveSelectedUnits(ctx, cmd);
+    case 'remove_entity':
+        return executeRemoveEntity(ctx, cmd);
     default:
         return false;
     }

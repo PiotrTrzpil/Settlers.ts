@@ -25,6 +25,180 @@ import {
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { SelectionBox } from '@/game/input/render-state';
 
+/** Context object for render callback - avoids excessive callback parameters */
+interface RenderContext {
+    game: Game | null;
+    entityRenderer: EntityRenderer | null;
+    landscapeRenderer: LandscapeRenderer | null;
+    inputManager: InputManager | null;
+    debugGrid: boolean;
+    showTerritoryBorders: boolean;
+    layerVisibility: LayerVisibility;
+}
+
+/**
+ * Create the render callback that runs each frame.
+ */
+function createRenderCallback(
+    getContext: () => RenderContext,
+    renderer: Renderer,
+    selectionBox: Ref<SelectionBox | null>
+): (alpha: number, deltaSec: number) => void {
+    return (alpha: number, deltaSec: number) => {
+        const ctx = getContext();
+        const { game: g, entityRenderer, landscapeRenderer, inputManager } = ctx;
+
+        if (entityRenderer && g) {
+            inputManager?.update(deltaSec);
+
+            entityRenderer.entities = g.state.entities;
+            entityRenderer.selectedEntityId = g.state.selectedEntityId;
+            entityRenderer.selectedEntityIds = g.state.selectedEntityIds;
+            entityRenderer.unitStates = g.state.unitStates;
+            entityRenderer.buildingStates = g.state.buildingStates;
+            entityRenderer.resourceStates = g.state.resourceStates;
+            entityRenderer.territoryMap = ctx.showTerritoryBorders ? g.territory : null;
+            entityRenderer.territoryVersion = g.territoryVersion;
+            entityRenderer.renderAlpha = alpha;
+            entityRenderer.layerVisibility = ctx.layerVisibility;
+
+            const renderState = inputManager?.getRenderState();
+            const inPlacementMode = debugStats.state.mode === 'place_building';
+            entityRenderer.buildingIndicatorsEnabled = inPlacementMode;
+
+            if (inPlacementMode) {
+                entityRenderer.buildingIndicatorsPlayer = g.currentPlayer;
+                entityRenderer.buildingIndicatorsHasBuildings = g.state.entities.some(
+                    ent => ent.type === EntityType.Building && ent.player === g.currentPlayer
+                );
+                entityRenderer.territoryMap = g.territory;
+                entityRenderer.previewBuildingType = g.placeBuildingType;
+
+                const preview = renderState?.preview;
+                if (preview?.type === 'building') {
+                    entityRenderer.previewTile = { x: preview.x, y: preview.y };
+                    entityRenderer.previewValid = preview.valid;
+                }
+            } else {
+                entityRenderer.previewTile = null;
+                entityRenderer.previewBuildingType = null;
+            }
+
+            const preview = renderState?.preview;
+            if (preview?.type === 'selection_box') {
+                selectionBox.value = preview;
+            } else {
+                selectionBox.value = null;
+            }
+
+            if (renderState?.cursor && renderer.canvas) {
+                renderer.canvas.style.cursor = renderState.cursor;
+            }
+        }
+
+        if (landscapeRenderer) {
+            landscapeRenderer.debugGrid = ctx.debugGrid;
+        }
+
+        if (g) {
+            debugStats.updateFromGame(g);
+        }
+
+        debugStats.state.cameraX = Math.round(renderer.viewPoint.x * 10) / 10;
+        debugStats.state.cameraY = Math.round(renderer.viewPoint.y * 10) / 10;
+        debugStats.state.zoom = Math.round(renderer.viewPoint.zoomValue * 100) / 100;
+        renderer.viewPoint.zoomSpeed = debugStats.state.zoomSpeed;
+        renderer.viewPoint.panSpeed = debugStats.state.panSpeed;
+        debugStats.state.canvasWidth = renderer.canvas.width;
+        debugStats.state.canvasHeight = renderer.canvas.height;
+
+        renderer.drawOnce();
+    };
+}
+
+/**
+ * Configure the PlaceBuildingMode with validation and debug stats integration.
+ */
+function configurePlaceBuildingMode(
+    getGame: () => Game | null,
+    onTileClick: (tile: { x: number; y: number }) => void
+): PlaceBuildingMode {
+    const placeBuildingMode = new PlaceBuildingMode();
+    const originalOnPointerMove = placeBuildingMode.onPointerMove.bind(placeBuildingMode);
+
+    placeBuildingMode.onPointerMove = (data, context) => {
+        if (data.tileX !== undefined && data.tileY !== undefined) {
+            onTileClick({ x: data.tileX, y: data.tileY });
+            debugStats.state.hasTile = true;
+            debugStats.state.tileX = data.tileX;
+            debugStats.state.tileY = data.tileY;
+
+            const game = getGame();
+            if (game) {
+                const idx = game.mapSize.toIndex(data.tileX, data.tileY);
+                debugStats.state.tileGroundType = game.groundType[idx];
+                debugStats.state.tileGroundHeight = game.groundHeight[idx];
+            }
+        }
+
+        const modeData = context.getModeData<PlaceBuildingModeData>();
+        if (modeData && !modeData.validatePlacement) {
+            modeData.validatePlacement = (x, y, buildingType) => {
+                const game = getGame();
+                if (!game) return false;
+
+                const hasBuildings = game.state.entities.some(
+                    ent => ent.type === EntityType.Building && ent.player === game.currentPlayer
+                );
+
+                return canPlaceBuildingWithTerritory(
+                    game.groundType, game.groundHeight, game.mapSize,
+                    game.state.tileOccupancy, game.territory,
+                    x, y, game.currentPlayer, hasBuildings, buildingType
+                );
+            };
+            context.setModeData(modeData);
+        }
+
+        return originalOnPointerMove(data, context);
+    };
+
+    return placeBuildingMode;
+}
+
+/**
+ * Initialize renderers asynchronously (landscape first for camera, then sprites).
+ */
+async function initRenderersAsync(
+    gl: WebGL2RenderingContext,
+    landscapeRenderer: LandscapeRenderer,
+    entityRenderer: EntityRenderer,
+    game: Game
+): Promise<void> {
+    const t0 = performance.now();
+    await landscapeRenderer.init(gl);
+    debugStats.state.loadTimings.landscape = Math.round(performance.now() - t0);
+    debugStats.state.gameLoaded = true;
+
+    await entityRenderer.init(gl);
+    debugStats.state.rendererReady = true;
+
+    const animProvider = entityRenderer.getAnimationProvider();
+    if (animProvider) {
+        game.gameLoop.setAnimationProvider(animProvider);
+    }
+}
+
+/** Expose objects for e2e tests */
+function exposeForE2E(
+    viewPoint: any, landscapeRenderer: any, entityRenderer: any, inputManager: any
+): void {
+    (window as any).__settlers_viewpoint__ = viewPoint;
+    (window as any).__settlers_landscape__ = landscapeRenderer;
+    (window as any).__settlers_entity_renderer__ = entityRenderer;
+    (window as any).__settlers_input__ = inputManager;
+}
+
 interface UseRendererOptions {
     canvas: Ref<HTMLCanvasElement | null>;
     getGame: () => Game | null;
@@ -115,59 +289,8 @@ export function useRenderer({
             },
         });
 
-        // Register SelectMode - now self-contained, no overrides needed
-        const selectMode = new SelectMode();
-        inputManager.registerMode(selectMode);
-
-        // Create PlaceBuildingMode - use built-in behavior with validator hook
-        // The mode handles placement logic correctly; we just need to provide validation
-        const placeBuildingMode = new PlaceBuildingMode();
-
-        // Store original onPointerMove to extend it (not replace)
-        const originalOnPointerMove = placeBuildingMode.onPointerMove.bind(placeBuildingMode);
-
-        // Extend onPointerMove to update debug stats and set validator
-        placeBuildingMode.onPointerMove = (data, context) => {
-            // Update debug stats first
-            if (data.tileX !== undefined && data.tileY !== undefined) {
-                onTileClick({ x: data.tileX, y: data.tileY });
-                debugStats.state.hasTile = true;
-                debugStats.state.tileX = data.tileX;
-                debugStats.state.tileY = data.tileY;
-
-                const game = getGame();
-                if (game) {
-                    const idx = game.mapSize.toIndex(data.tileX, data.tileY);
-                    debugStats.state.tileGroundType = game.groundType[idx];
-                    debugStats.state.tileGroundHeight = game.groundHeight[idx];
-                }
-            }
-
-            // Ensure validator is set (it checks placement with territory rules)
-            const modeData = context.getModeData<PlaceBuildingModeData>();
-            if (modeData && !modeData.validatePlacement) {
-                modeData.validatePlacement = (x, y, buildingType) => {
-                    const game = getGame();
-                    if (!game) return false;
-
-                    const hasBuildings = game.state.entities.some(
-                        ent => ent.type === EntityType.Building && ent.player === game.currentPlayer
-                    );
-
-                    return canPlaceBuildingWithTerritory(
-                        game.groundType, game.groundHeight, game.mapSize,
-                        game.state.tileOccupancy, game.territory,
-                        x, y, game.currentPlayer, hasBuildings, buildingType
-                    );
-                };
-                context.setModeData(modeData);
-            }
-
-            // Call original handler (it does positioning, validation, and sets previewValid)
-            return originalOnPointerMove(data, context);
-        };
-
-        inputManager.registerMode(placeBuildingMode);
+        inputManager.registerMode(new SelectMode());
+        inputManager.registerMode(configurePlaceBuildingMode(getGame, onTileClick));
         inputManager.attach();
 
         // Connect camera mode to the ViewPoint
@@ -205,123 +328,36 @@ export function useRenderer({
         renderer.add(entityRenderer);
 
         // Initialize renderers asynchronously
-        // Landscape first (essential for camera), then sprites in background
-        (async() => {
-            const gl = renderer!.gl;
-            if (!gl) return;
-
-            // Initialize landscape first for immediate camera control
-            const t0 = performance.now();
-            await landscapeRenderer!.init(gl);
-            debugStats.state.loadTimings.landscape = Math.round(performance.now() - t0);
-            debugStats.state.gameLoaded = true;
-
-            // Load sprites in background (non-blocking)
-            await entityRenderer!.init(gl);
-            debugStats.state.rendererReady = true;
-
-            // Set up animation provider after sprites are loaded
-            const animProvider = entityRenderer?.getAnimationProvider();
-            if (animProvider && game) {
-                game.gameLoop.setAnimationProvider(animProvider);
-            }
-        })();
+        const gl = renderer.gl;
+        if (gl) {
+            initRenderersAsync(gl, landscapeRenderer, entityRenderer, game);
+        }
 
         const landTile = game.findLandTile();
         if (landTile) {
             renderer.viewPoint.setPosition(landTile.x, landTile.y);
         }
 
-        // Expose for e2e tests
-        (window as any).__settlers_viewpoint__ = renderer.viewPoint;
-        (window as any).__settlers_landscape__ = landscapeRenderer;
-        (window as any).__settlers_entity_renderer__ = entityRenderer;
-        (window as any).__settlers_input__ = inputManager;
+        exposeForE2E(renderer.viewPoint, landscapeRenderer, entityRenderer, inputManager);
 
         // Set up terrain modification callback
         game.gameLoop.setTerrainModifiedCallback(() => {
             landscapeRenderer?.markTerrainDirty();
         });
 
-        const r = renderer;
-        game.gameLoop.setRenderCallback((alpha: number, deltaSec: number) => {
-            const g = getGame();
-            if (entityRenderer && g) {
-                // Update input manager
-                inputManager?.update(deltaSec);
-
-                entityRenderer.entities = g.state.entities;
-                entityRenderer.selectedEntityId = g.state.selectedEntityId;
-                entityRenderer.selectedEntityIds = g.state.selectedEntityIds;
-                entityRenderer.unitStates = g.state.unitStates;
-                entityRenderer.buildingStates = g.state.buildingStates;
-                entityRenderer.resourceStates = g.state.resourceStates;
-                entityRenderer.territoryMap = getShowTerritoryBorders() ? g.territory : null;
-                entityRenderer.territoryVersion = g.territoryVersion;
-                entityRenderer.renderAlpha = alpha;
-                entityRenderer.layerVisibility = getLayerVisibility();
-
-                // Get render state from input manager
-                const renderState = inputManager?.getRenderState();
-
-                // Building placement indicators - read from debugStats (single source of truth)
-                const inPlacementMode = debugStats.state.mode === 'place_building';
-                entityRenderer.buildingIndicatorsEnabled = inPlacementMode;
-
-                if (inPlacementMode) {
-                    entityRenderer.buildingIndicatorsPlayer = g.currentPlayer;
-                    entityRenderer.buildingIndicatorsHasBuildings = g.state.entities.some(
-                        ent => ent.type === EntityType.Building && ent.player === g.currentPlayer
-                    );
-                    entityRenderer.territoryMap = g.territory;
-
-                    // Always set building type from game state for indicators
-                    // This ensures indicators show immediately when entering placement mode
-                    entityRenderer.previewBuildingType = g.placeBuildingType;
-
-                    // Get building preview position from render state (mouse position)
-                    const preview = renderState?.preview;
-                    if (preview?.type === 'building') {
-                        entityRenderer.previewTile = { x: preview.x, y: preview.y };
-                        entityRenderer.previewValid = preview.valid;
-                    }
-                } else {
-                    entityRenderer.previewTile = null;
-                    entityRenderer.previewBuildingType = null;
-                }
-
-                // Update selection box state for overlay rendering
-                const preview = renderState?.preview;
-                if (preview?.type === 'selection_box') {
-                    selectionBox.value = preview;
-                } else {
-                    selectionBox.value = null;
-                }
-
-                // Update cursor based on render state
-                if (renderState?.cursor && r.canvas) {
-                    r.canvas.style.cursor = renderState.cursor;
-                }
-            }
-
-            if (landscapeRenderer) {
-                landscapeRenderer.debugGrid = getDebugGrid();
-            }
-
-            if (g) {
-                debugStats.updateFromGame(g);
-            }
-
-            debugStats.state.cameraX = Math.round(r.viewPoint.x * 10) / 10;
-            debugStats.state.cameraY = Math.round(r.viewPoint.y * 10) / 10;
-            debugStats.state.zoom = Math.round(r.viewPoint.zoomValue * 100) / 100;
-            r.viewPoint.zoomSpeed = debugStats.state.zoomSpeed;
-            r.viewPoint.panSpeed = debugStats.state.panSpeed;
-            debugStats.state.canvasWidth = r.canvas.width;
-            debugStats.state.canvasHeight = r.canvas.height;
-
-            r.drawOnce();
-        });
+        game.gameLoop.setRenderCallback(createRenderCallback(
+            () => ({
+                game: getGame(),
+                entityRenderer,
+                landscapeRenderer,
+                inputManager,
+                debugGrid: getDebugGrid(),
+                showTerritoryBorders: getShowTerritoryBorders(),
+                layerVisibility: getLayerVisibility(),
+            }),
+            renderer,
+            selectionBox
+        ));
 
         game.start();
     }

@@ -15,36 +15,69 @@ export class Decompress extends Packer {
         Object.seal(this);
     }
 
+    /** Build a new Huffman table from the input stream */
+    private buildNewHuffmanTable(inData: BitReader): IndexValueTable {
+        const newIndex: number[] = [];
+        const newValues: number[] = [];
+        let base = 0;
+        let length = 0;
+
+        for (let i = 0; i < 16; i++) {
+            length--;
+            let bitValue = 0;
+            do {
+                length++;
+                bitValue = inData.read(1);
+            } while (bitValue === 0);
+
+            newIndex.push(length);
+            newValues.push(base);
+            base += (1 << length);
+        }
+
+        return new IndexValueTable(newIndex, newValues);
+    }
+
+    /** Handle end-of-stream codeword. Returns 'done' | 'continue' | 'error' */
+    private handleEndOfStream(inData: BitReader, writer: StreamWriter): 'done' | 'continue' | 'error' {
+        if (inData.sourceLeftLength() > 2) {
+            if (writer.eof()) {
+                Decompress.log.error(
+                    `End-of-stream but Data buffer is not empty (${inData.sourceLeftLength()} IN bytes left; ${writer.getLeftSize()} OUT bytes left)? Out of sync!`
+                );
+                return 'error';
+            }
+            inData.resetBitBuffer();
+            return 'continue';
+        }
+
+        if (!writer.eof()) {
+            Decompress.log.error(
+                `Done decompress (${inData.sourceLeftLength()} IN bytes left; ${writer.getLeftSize()} OUT bytes left)!`
+            );
+        }
+        return 'done';
+    }
+
     public unpack(inDataSrc: BinaryReader, inOffset: number, inLength: number, outLength: number): BinaryReader {
         const inData = new BitReader(inDataSrc, inOffset, inLength);
-
         const writer = new StreamWriter(outLength);
-
         let huffmanTable = Packer.DefaultHuffmanTable;
-
         let done = false;
-
         const codeTable = Packer.createSymbolDirectory();
 
         while (!inData.eof()) {
-            // -------
-            // - read code type
             const codeType = inData.read(4);
-
             if (codeType < 0) {
                 Decompress.log.error('CodeType == 0 -> out of sync!');
                 break;
             }
 
-            // -------
-            // - read Code Word
             const codeWordLength = huffmanTable.index[codeType];
             let codeWordIndex = huffmanTable.value[codeType];
 
             if (codeWordLength > 0) {
-                // - the codeword is bigger then 4 bits -> read more!
                 codeWordIndex += inData.read(codeWordLength);
-
                 if (codeWordIndex >= 0x0112) {
                     Decompress.log.error('CodeType(' + codeWordIndex + ') >= 0x0112 -> out of sync!');
                     break;
@@ -52,81 +85,29 @@ export class Decompress extends Packer {
             }
 
             const codeWord = codeTable.codeTable[codeWordIndex];
-
-            // -------
-            // - Histogram of code using
             codeTable.inc(codeWord);
 
-            // -------
-            // - execute codeword
+            // Execute codeword
             if (codeWord < 0x0100) {
-                if (writer.eof()) {
-                    Decompress.log.error('OutBuffer is to small!');
-                    break;
-                }
-
-                // - this is a normal letter
+                if (writer.eof()) { Decompress.log.error('OutBuffer is to small!'); break }
                 writer.setByte(codeWord);
             } else if (codeWord === 0x110) {
-                // - create new entropy encoding table
                 codeTable.generateCodes();
-
-                const newIndex: number[] = [];
-                const newValues: number[] = [];
-
-                let base = 0;
-                let length = 0;
-
-                for (let i = 0; i < 16; i++) {
-                    length--;
-
-                    let bitValue = 0;
-                    do {
-                        length++;
-                        bitValue = inData.read(1);
-                    } while (bitValue === 0);
-
-                    newIndex.push(length);
-                    newValues.push(base);
-
-                    base += (1 << length);
-                }
-
-                huffmanTable = new IndexValueTable(newIndex, newValues);
+                huffmanTable = this.buildNewHuffmanTable(inData);
             } else if (codeWord === 0x0111) {
-                if (inData.sourceLeftLength() > 2) {
-                    // - sometimes there is a end-of-stream (eos) codeword (Codeword == 273) if the out data is "too" long.
-                    if (writer.eof()) {
-                        Decompress.log.error('End-of-stream but Data buffer is not empty (' + inData.sourceLeftLength() + ' IN bytes left; ' + writer.getLeftSize() + ' OUT bytes left)? Out of sync!');
-                        break;
-                    }
-
-                    // - in this case we ignore this eos and read the next part
-                    inData.resetBitBuffer();
-                } else {
-                    if (!writer.eof()) {
-                        Decompress.log.error('Done decompress (' + inData.sourceLeftLength() + ' IN bytes left; ' + writer.getLeftSize() + ' OUT bytes left)!');
-                    }
-
-                    // - end of data indicator
-                    done = true;
-                    break;
-                }
-            } else {
-                // - copy from dictionary
-                if (!this.fromDictionary(inData, writer, codeWord)) {
-                    Decompress.log.error('Bad dictionary entry!');
-                    break;
-                }
+                const result = this.handleEndOfStream(inData, writer);
+                if (result === 'done') { done = true; break }
+                if (result === 'error') break;
+            } else if (!this.fromDictionary(inData, writer, codeWord)) {
+                Decompress.log.error('Bad dictionary entry!');
+                break;
             }
         }
 
-        // - did an Error happen?
         if (!done) {
             Decompress.log.error('Unexpected End of Data in ' + inDataSrc.filename + ' eof: ' + inData.toString());
         }
 
-        // - create new Reader from Data and return it
         return writer.getReader();
     }
 

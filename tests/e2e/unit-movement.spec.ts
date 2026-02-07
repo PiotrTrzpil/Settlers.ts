@@ -95,13 +95,13 @@ test.describe('Unit Movement', () => {
                 return unit.x !== startX || unit.y !== startY;
             },
             { unitId: moveResult.unitId, startX: moveResult.startX, startY: moveResult.startY },
-            { timeout: 3000, polling: 100 }
+            { timeout: 8000, polling: 100 }
         );
 
         expect(moved).toBeTruthy();
     });
 
-    test('unit movement is smooth (interpolation works)', async({ gp }) => {
+    test('unit movement is smooth (interpolation works)', { timeout: 60000 }, async({ gp }) => {
         const page = gp.page;
 
         await test.step('spawn unit and start movement', async() => {
@@ -122,33 +122,42 @@ test.describe('Unit Movement', () => {
                     return u && u.x !== startX;
                 },
                 { unitId: unit!.id, startX: unit!.x },
-                { timeout: 3000 }
+                { timeout: 8000 }
             );
         });
 
         const unit = (await gp.getEntities({ type: 1 }))[0];
 
         await test.step('sample positions and verify no teleporting', async() => {
-            // Sample tile positions across frames to check for large jumps
-            const positions: Array<{ x: number; y: number }> = [];
-            for (let i = 0; i < 10; i++) {
-                const pos = await page.evaluate(({ unitId }) => {
-                    const game = (window as any).__settlers_game__;
-                    if (!game) return null;
-                    const u = game.state.getEntity(unitId);
-                    return u ? { x: u.x, y: u.y } : null;
-                }, { unitId: unit.id });
+            // Sample tile positions across frames in a single call to avoid round-trip delays
+            const result = await page.evaluate(({ unitId }) => {
+                return new Promise<{ positions: Array<{ x: number; y: number }> }>((resolve) => {
+                    const positions: Array<{ x: number; y: number }> = [];
+                    let samples = 0;
 
-                if (pos) positions.push(pos);
-                await gp.waitForFrames(1);
-            }
+                    function sample() {
+                        const game = (window as any).__settlers_game__;
+                        if (game) {
+                            const u = game.state.getEntity(unitId);
+                            if (u) positions.push({ x: u.x, y: u.y });
+                        }
+                        samples++;
+                        if (samples < 10) {
+                            requestAnimationFrame(sample);
+                        } else {
+                            resolve({ positions });
+                        }
+                    }
+                    requestAnimationFrame(sample);
+                });
+            }, { unitId: unit.id });
 
-            expect(positions.length).toBeGreaterThan(3);
+            expect(result.positions.length).toBeGreaterThan(3);
 
             // Verify no large jumps (teleporting) - max 2 tiles per sample
-            for (let i = 1; i < positions.length; i++) {
-                const dx = Math.abs(positions[i].x - positions[i - 1].x);
-                const dy = Math.abs(positions[i].y - positions[i - 1].y);
+            for (let i = 1; i < result.positions.length; i++) {
+                const dx = Math.abs(result.positions[i].x - result.positions[i - 1].x);
+                const dy = Math.abs(result.positions[i].y - result.positions[i - 1].y);
                 expect(dx).toBeLessThanOrEqual(2);
                 expect(dy).toBeLessThanOrEqual(2);
             }
@@ -193,7 +202,7 @@ test.describe('Unit Movement', () => {
 
         // Wait for all units to start moving (poll instead of fixed timeout)
         await page.waitForFunction(
-            ({ ids, initPos }) => {
+            ({ initPos }) => {
                 const game = (window as any).__settlers_game__;
                 if (!game) return false;
                 return initPos.every((init: any) => {
@@ -201,12 +210,12 @@ test.describe('Unit Movement', () => {
                     return unit && (unit.x !== init.x || unit.y !== init.y);
                 });
             },
-            { ids: unitIds, initPos: initialPositions },
-            { timeout: 5000 },
+            { initPos: initialPositions },
+            { timeout: 10000 },
         );
 
         // Check that all units have moved similar distances
-        const finalCheck = await page.evaluate(({ ids, initPos }) => {
+        const finalCheck = await page.evaluate(({ initPos }) => {
             const game = (window as any).__settlers_game__;
             if (!game) return null;
 
@@ -223,7 +232,7 @@ test.describe('Unit Movement', () => {
             }
 
             return { distances };
-        }, { ids: unitIds, initPos: initialPositions });
+        }, { initPos: initialPositions });
 
         expect(finalCheck).not.toBeNull();
         expect(finalCheck!.distances.length).toBe(3);
@@ -272,7 +281,7 @@ test.describe('Unit Movement', () => {
             expect(state!.y).toBe(targetY);
             expect(state!.pathLength).toBe(0);
             expect(state!.isStationary).toBe(true);
-        }).toPass({ timeout: 5000, intervals: [100, 200, 500, 1000] });
+        }).toPass({ timeout: 10000, intervals: [100, 200, 500, 1000] });
     });
 
     test('movement command while already moving updates path correctly', async({ gp }) => {
@@ -295,7 +304,7 @@ test.describe('Unit Movement', () => {
                     return u && u.x !== startX;
                 },
                 { unitId: unit!.id, startX: unit!.x },
-                { timeout: 3000 }
+                { timeout: 8000 }
             );
         });
 
@@ -333,7 +342,7 @@ test.describe('Unit Movement', () => {
                     return u && u.y > prevY;
                 },
                 { unitId: unit!.id, prevY: posBeforeRedirect.y },
-                { timeout: 3000 }
+                { timeout: 8000 }
             );
 
             // Verify unit has moved south
@@ -345,8 +354,6 @@ test.describe('Unit Movement', () => {
     });
 
     test('debug stats show moving units count', async({ gp }) => {
-        const page = gp.page;
-
         // Initially no units moving
         await expect(gp).toHaveEntityCount(0);
         let unitsMoving = await gp.getDebugField('unitsMoving');

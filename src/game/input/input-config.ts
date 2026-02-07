@@ -141,6 +141,25 @@ export function findBindingsForAction(
     return config.bindings.filter(b => b.action === action);
 }
 
+/** Check if required modifiers are pressed */
+function checkRequiredModifiers(
+    binding: KeyBinding,
+    shiftKey: boolean,
+    ctrlKey: boolean,
+    altKey: boolean
+): boolean {
+    if (binding.shift && !shiftKey) return false;
+    if (binding.ctrl && !ctrlKey) return false;
+    if (binding.alt && !altKey) return false;
+    return true;
+}
+
+/** Check if unwanted modifiers are pressed when binding has no modifier requirements */
+function hasUnwantedModifiers(binding: KeyBinding, ctrlKey: boolean, altKey: boolean): boolean {
+    const noModifiersRequired = !binding.shift && !binding.ctrl && !binding.alt;
+    return noModifiersRequired && (ctrlKey || altKey);
+}
+
 /**
  * Check if a key event matches a binding.
  */
@@ -151,24 +170,13 @@ export function matchesKeyBinding(
     ctrlKey: boolean,
     altKey: boolean
 ): boolean {
-    // Must have a key to match
     if (!binding.key && !binding.altKey) return false;
 
-    // Check key match
     const keyMatches = binding.key === code || binding.altKey === code;
     if (!keyMatches) return false;
 
-    // Check modifiers
-    if (binding.shift && !shiftKey) return false;
-    if (binding.ctrl && !ctrlKey) return false;
-    if (binding.alt && !altKey) return false;
-
-    // If binding requires no modifier but one is pressed, don't match
-    // (unless the binding explicitly requires that modifier)
-    if (!binding.shift && !binding.ctrl && !binding.alt) {
-        // Allow shift for camera movement but not for other actions
-        if (ctrlKey || altKey) return false;
-    }
+    if (!checkRequiredModifiers(binding, shiftKey, ctrlKey, altKey)) return false;
+    if (hasUnwantedModifiers(binding, ctrlKey, altKey)) return false;
 
     return true;
 }

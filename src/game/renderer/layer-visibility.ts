@@ -222,39 +222,38 @@ export const FALLBACK_ENTITY_COLORS: Record<string, [number, number, number, num
     pile: [0.65, 0.5, 0.3, 1.0], // Light wood
 };
 
+const DEFAULT_FALLBACK_COLOR: [number, number, number, number] = [0.5, 0.5, 0.5, 1.0];
+
+/** Lookup table mapping MapObjectType to fallback colors */
+const MAP_OBJECT_COLOR_LOOKUP: Partial<Record<MapObjectType, [number, number, number, number]>> = {
+    [MapObjectType.TreePine]: FALLBACK_ENTITY_COLORS.tree_pine,
+    [MapObjectType.TreeOak]: FALLBACK_ENTITY_COLORS.tree_oak,
+    [MapObjectType.TreeBirch]: FALLBACK_ENTITY_COLORS.tree_birch,
+    [MapObjectType.TreePalm]: FALLBACK_ENTITY_COLORS.tree_palm,
+    [MapObjectType.TreeCypress]: FALLBACK_ENTITY_COLORS.tree_cypress,
+    [MapObjectType.TreeDead]: FALLBACK_ENTITY_COLORS.tree_dead,
+    [MapObjectType.StoneSmall]: FALLBACK_ENTITY_COLORS.stone_small,
+    [MapObjectType.StoneMedium]: FALLBACK_ENTITY_COLORS.stone_medium,
+    [MapObjectType.StoneLarge]: FALLBACK_ENTITY_COLORS.stone_large,
+    [MapObjectType.IronDeposit]: FALLBACK_ENTITY_COLORS.deposit_iron,
+    [MapObjectType.GoldDeposit]: FALLBACK_ENTITY_COLORS.deposit_gold,
+    [MapObjectType.CoalDeposit]: FALLBACK_ENTITY_COLORS.deposit_coal,
+    [MapObjectType.StoneDeposit]: FALLBACK_ENTITY_COLORS.deposit_stone,
+    [MapObjectType.SulfurDeposit]: FALLBACK_ENTITY_COLORS.deposit_sulfur,
+    [MapObjectType.GemsDeposit]: FALLBACK_ENTITY_COLORS.deposit_gems,
+    [MapObjectType.Bush]: FALLBACK_ENTITY_COLORS.plant_bush,
+    [MapObjectType.Mushroom]: FALLBACK_ENTITY_COLORS.plant_mushroom,
+    [MapObjectType.Flowers]: FALLBACK_ENTITY_COLORS.plant_flowers,
+    [MapObjectType.Corn]: FALLBACK_ENTITY_COLORS.plant_corn,
+    [MapObjectType.Wheat]: FALLBACK_ENTITY_COLORS.plant_wheat,
+    [MapObjectType.Stump]: FALLBACK_ENTITY_COLORS.stump,
+    [MapObjectType.FallenTree]: FALLBACK_ENTITY_COLORS.fallen_tree,
+    [MapObjectType.Pile]: FALLBACK_ENTITY_COLORS.pile,
+};
+
 /** Get fallback color for a MapObjectType */
 export function getMapObjectFallbackColor(objectType: MapObjectType): [number, number, number, number] {
-    switch (objectType) {
-    case MapObjectType.TreePine: return FALLBACK_ENTITY_COLORS.tree_pine;
-    case MapObjectType.TreeOak: return FALLBACK_ENTITY_COLORS.tree_oak;
-    case MapObjectType.TreeBirch: return FALLBACK_ENTITY_COLORS.tree_birch;
-    case MapObjectType.TreePalm: return FALLBACK_ENTITY_COLORS.tree_palm;
-    case MapObjectType.TreeCypress: return FALLBACK_ENTITY_COLORS.tree_cypress;
-    case MapObjectType.TreeDead: return FALLBACK_ENTITY_COLORS.tree_dead;
-
-    case MapObjectType.StoneSmall: return FALLBACK_ENTITY_COLORS.stone_small;
-    case MapObjectType.StoneMedium: return FALLBACK_ENTITY_COLORS.stone_medium;
-    case MapObjectType.StoneLarge: return FALLBACK_ENTITY_COLORS.stone_large;
-
-    case MapObjectType.IronDeposit: return FALLBACK_ENTITY_COLORS.deposit_iron;
-    case MapObjectType.GoldDeposit: return FALLBACK_ENTITY_COLORS.deposit_gold;
-    case MapObjectType.CoalDeposit: return FALLBACK_ENTITY_COLORS.deposit_coal;
-    case MapObjectType.StoneDeposit: return FALLBACK_ENTITY_COLORS.deposit_stone;
-    case MapObjectType.SulfurDeposit: return FALLBACK_ENTITY_COLORS.deposit_sulfur;
-    case MapObjectType.GemsDeposit: return FALLBACK_ENTITY_COLORS.deposit_gems;
-
-    case MapObjectType.Bush: return FALLBACK_ENTITY_COLORS.plant_bush;
-    case MapObjectType.Mushroom: return FALLBACK_ENTITY_COLORS.plant_mushroom;
-    case MapObjectType.Flowers: return FALLBACK_ENTITY_COLORS.plant_flowers;
-    case MapObjectType.Corn: return FALLBACK_ENTITY_COLORS.plant_corn;
-    case MapObjectType.Wheat: return FALLBACK_ENTITY_COLORS.plant_wheat;
-
-    case MapObjectType.Stump: return FALLBACK_ENTITY_COLORS.stump;
-    case MapObjectType.FallenTree: return FALLBACK_ENTITY_COLORS.fallen_tree;
-    case MapObjectType.Pile: return FALLBACK_ENTITY_COLORS.pile;
-
-    default: return [0.5, 0.5, 0.5, 1.0]; // Default gray
-    }
+    return MAP_OBJECT_COLOR_LOOKUP[objectType] ?? DEFAULT_FALLBACK_COLOR;
 }
 
 /** Size multiplier for different object types (for dot rendering) */

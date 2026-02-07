@@ -40,6 +40,66 @@ class BucketPriorityQueue {
     }
 }
 
+const FLAG_OPEN = 1;
+const FLAG_CLOSED = 2;
+
+interface PathContext {
+    groundType: Uint8Array;
+    groundHeight: Uint8Array;
+    mapWidth: number;
+    mapHeight: number;
+    goalX: number;
+    goalY: number;
+    tileOccupancy: Map<string, number>;
+    gCost: Float32Array;
+    parent: Int32Array;
+    flags: Uint8Array;
+    openQueue: BucketPriorityQueue;
+}
+
+/** Check if a neighbor tile can be entered */
+function canEnterTile(
+    nx: number, ny: number, nIdx: number,
+    ctx: PathContext
+): boolean {
+    if (ctx.flags[nIdx] & FLAG_CLOSED) return false;
+    if (!isPassable(ctx.groundType[nIdx])) return false;
+
+    // Allow entering the goal even if occupied
+    const isGoal = nx === ctx.goalX && ny === ctx.goalY;
+    if (!isGoal && ctx.tileOccupancy.has(tileKey(nx, ny))) return false;
+
+    return true;
+}
+
+/** Process a single neighbor in the A* expansion */
+function processNeighbor(
+    cx: number, cy: number, currentIdx: number, d: number,
+    ctx: PathContext
+): void {
+    const [dx, dy] = GRID_DELTAS[d];
+    const nx = cx + dx;
+    const ny = cy + dy;
+
+    if (nx < 0 || nx >= ctx.mapWidth || ny < 0 || ny >= ctx.mapHeight) return;
+
+    const nIdx = nx + ny * ctx.mapWidth;
+    if (!canEnterTile(nx, ny, nIdx, ctx)) return;
+
+    const currentHeight = ctx.groundHeight[currentIdx];
+    const neighborHeight = ctx.groundHeight[nIdx];
+    const moveCost = 1 + Math.abs(currentHeight - neighborHeight);
+    const tentativeG = ctx.gCost[currentIdx] + moveCost;
+
+    if (tentativeG < ctx.gCost[nIdx]) {
+        ctx.gCost[nIdx] = tentativeG;
+        ctx.parent[nIdx] = currentIdx;
+        ctx.flags[nIdx] |= FLAG_OPEN;
+        const h = hexDistance(nx, ny, ctx.goalX, ctx.goalY);
+        ctx.openQueue.insert(nIdx, tentativeG + h);
+    }
+}
+
 /**
  * A* pathfinding on the hex tile grid.
  *
@@ -62,46 +122,36 @@ export function findPath(
     mapHeight: number,
     tileOccupancy: Map<string, number>
 ): TileCoord[] | null {
-    if (startX === goalX && startY === goalY) {
-        return [];
-    }
+    if (startX === goalX && startY === goalY) return [];
 
-    // Check goal is passable
     const goalIdx = goalX + goalY * mapWidth;
-    if (!isPassable(groundType[goalIdx])) {
-        return null;
-    }
+    if (!isPassable(groundType[goalIdx])) return null;
 
     const totalTiles = mapWidth * mapHeight;
-
-    // Flat arrays for costs — Float32Array avoids Map overhead
     const gCost = new Float32Array(totalTiles);
     gCost.fill(Infinity);
 
-    // Parent tracking — integer index, -1 = no parent
     const parent = new Int32Array(totalTiles);
     parent.fill(-1);
 
-    // Bitset-style open/closed tracking using Uint8Array
-    // Bit 0 = in open set, Bit 1 = in closed set
     const flags = new Uint8Array(totalTiles);
-    const FLAG_OPEN = 1;
-    const FLAG_CLOSED = 2;
-
     const openQueue = new BucketPriorityQueue();
 
+    const ctx: PathContext = {
+        groundType, groundHeight, mapWidth, mapHeight,
+        goalX, goalY, tileOccupancy, gCost, parent, flags, openQueue
+    };
+
     const startIdx = startX + startY * mapWidth;
-    const startH = hexDistance(startX, startY, goalX, goalY);
     gCost[startIdx] = 0;
     flags[startIdx] = FLAG_OPEN;
-    openQueue.insert(startIdx, startH);
+    openQueue.insert(startIdx, hexDistance(startX, startY, goalX, goalY));
 
     let nodesSearched = 0;
 
     while (openQueue.size > 0 && nodesSearched < MAX_SEARCH_NODES) {
         const currentIdx = openQueue.popMin();
 
-        // Skip if already closed (bucket queue may have stale entries)
         if (flags[currentIdx] & FLAG_CLOSED) continue;
         flags[currentIdx] = FLAG_CLOSED;
         nodesSearched++;
@@ -109,58 +159,16 @@ export function findPath(
         const cx = currentIdx % mapWidth;
         const cy = (currentIdx - cx) / mapWidth;
 
-        // Goal check
         if (cx === goalX && cy === goalY) {
             return reconstructPathFromArrays(currentIdx, parent, mapWidth);
         }
 
-        const currentG = gCost[currentIdx];
-        const currentHeight = groundHeight[currentIdx];
-
-        // Expand all 6 hex neighbors
         for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-            const [dx, dy] = GRID_DELTAS[d];
-            const nx = cx + dx;
-            const ny = cy + dy;
-
-            // Bounds check
-            if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) {
-                continue;
-            }
-
-            const nIdx = nx + ny * mapWidth;
-
-            // Skip if already closed
-            if (flags[nIdx] & FLAG_CLOSED) continue;
-
-            // Check passability
-            if (!isPassable(groundType[nIdx])) continue;
-
-            // Don't path through occupied tiles (except the goal)
-            if (nx !== goalX || ny !== goalY) {
-                if (tileOccupancy.has(tileKey(nx, ny))) {
-                    continue;
-                }
-            }
-
-            // Cost: base 1 + height difference penalty
-            const neighborHeight = groundHeight[nIdx];
-            const heightDiff = Math.abs(currentHeight - neighborHeight);
-            const moveCost = 1 + heightDiff;
-
-            const tentativeG = currentG + moveCost;
-
-            if (tentativeG < gCost[nIdx]) {
-                gCost[nIdx] = tentativeG;
-                parent[nIdx] = currentIdx;
-                flags[nIdx] |= FLAG_OPEN;
-                const h = hexDistance(nx, ny, goalX, goalY);
-                openQueue.insert(nIdx, tentativeG + h);
-            }
+            processNeighbor(cx, cy, currentIdx, d, ctx);
         }
     }
 
-    return null; // No path found
+    return null;
 }
 
 /**

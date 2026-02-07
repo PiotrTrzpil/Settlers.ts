@@ -147,67 +147,125 @@ export class MovementSystem {
         }
     }
 
+    /** Check if the waypoint is blocked by a unit and try to resolve it */
+    private handleBlockedWaypoint(
+        controller: MovementController,
+        wp: TileCoord,
+        deltaSec: number
+    ): boolean {
+        if (!this.tileOccupancy) return false;
+
+        const blockingEntityId = this.tileOccupancy.get(tileKey(wp.x, wp.y));
+        if (blockingEntityId === undefined || blockingEntityId === controller.entityId) {
+            return false;
+        }
+
+        const blockingEntity = this.getEntity?.(blockingEntityId);
+        if (!blockingEntity || blockingEntity.type !== EntityType.Unit) {
+            return false;
+        }
+
+        if (!this.tryResolveObstacle(controller, blockingEntityId)) {
+            controller.setBlocked(deltaSec);
+            return true;
+        }
+
+        // After resolution, re-check if waypoint is still blocked
+        const stillBlocked = this.tileOccupancy.get(tileKey(wp.x, wp.y));
+        if (stillBlocked !== undefined && stillBlocked !== controller.entityId) {
+            controller.setBlocked(deltaSec);
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * Update a single movement controller.
      */
     private updateController(controller: MovementController, deltaSec: number): void {
-        // Advance progress
         controller.advanceProgress(deltaSec);
 
-        // Process moves while progress >= 1 and path remains
         while (controller.canMove()) {
             const wp = controller.nextWaypoint;
             if (!wp) break;
 
-            // Check if next waypoint is blocked by another unit
-            if (this.tileOccupancy) {
-                const blockingEntityId = this.tileOccupancy.get(tileKey(wp.x, wp.y));
-                if (blockingEntityId !== undefined && blockingEntityId !== controller.entityId) {
-                    const blockingEntity = this.getEntity?.(blockingEntityId);
-                    if (blockingEntity && blockingEntity.type === EntityType.Unit) {
-                        const resolved = this.tryResolveObstacle(
-                            controller,
-                            blockingEntityId
-                        );
-                        if (!resolved) {
-                            // Wait and retry next tick
-                            controller.setBlocked(deltaSec);
-                            break;
-                        }
-                        // After resolution, re-check if waypoint is still valid
-                        const stillBlocked = this.tileOccupancy.get(tileKey(wp.x, wp.y));
-                        if (stillBlocked !== undefined && stillBlocked !== controller.entityId) {
-                            controller.setBlocked(deltaSec);
-                            break;
-                        }
-                    }
-                }
-            }
+            if (this.handleBlockedWaypoint(controller, wp, deltaSec)) break;
 
-            // Execute the move
             const newPos = controller.executeMove();
             if (newPos && this.updatePosition) {
                 this.updatePosition(controller.entityId, newPos.x, newPos.y);
             }
         }
 
-        // Finalize tick (handle path/transit completion)
         controller.finalizeTick();
+    }
+
+    /** Check if terrain data is available for pathfinding */
+    private hasTerrainData(): boolean {
+        return !!(this.groundType && this.groundHeight && this.mapWidth && this.mapHeight);
+    }
+
+    /** Try to repair the path by recalculating a portion of it */
+    private tryPathRepair(controller: MovementController): boolean {
+        if (!this.hasTerrainData() || !this.tileOccupancy) return false;
+
+        const remainingSteps = controller.path.length - controller.pathIndex;
+
+        if (remainingSteps > PATH_REPAIR_DISTANCE) {
+            return this.repairPathPrefix(controller);
+        }
+        return this.repairFullPath(controller);
+    }
+
+    /** Recalculate a prefix of the path */
+    private repairPathPrefix(controller: MovementController): boolean {
+        const prefixTargetIdx = Math.min(
+            controller.pathIndex + PATH_REPAIR_DISTANCE,
+            controller.path.length - 1
+        );
+        const prefixTarget = controller.path[prefixTargetIdx];
+        const newPrefix = findPath(
+            controller.tileX, controller.tileY,
+            prefixTarget.x, prefixTarget.y,
+            this.groundType!, this.groundHeight!,
+            this.mapWidth!, this.mapHeight!,
+            this.tileOccupancy!
+        );
+        if (newPrefix && newPrefix.length > 0) {
+            controller.replacePathPrefix(newPrefix, prefixTargetIdx + 1);
+            return true;
+        }
+        return false;
+    }
+
+    /** Recalculate the entire remaining path */
+    private repairFullPath(controller: MovementController): boolean {
+        const goal = controller.path[controller.path.length - 1];
+        const newPath = findPath(
+            controller.tileX, controller.tileY,
+            goal.x, goal.y,
+            this.groundType!, this.groundHeight!,
+            this.mapWidth!, this.mapHeight!,
+            this.tileOccupancy!
+        );
+        if (newPath && newPath.length > 0) {
+            controller.replacePath(newPath);
+            return true;
+        }
+        return false;
     }
 
     /**
      * Try to resolve an obstacle blocking the path.
-     * Strategies:
-     *   a) Find a 1-tile detour around the obstacle
-     *   b) Recalculate a prefix of the path
-     *   c) Push the blocking unit (lower entity ID yields)
+     * Strategies: detour, path repair, or push.
      */
     private tryResolveObstacle(
         controller: MovementController,
         blockingEntityId: number
     ): boolean {
-        // Strategy a: Try a 1-tile detour around the obstacle
-        if (this.groundType && this.groundHeight && this.mapWidth && this.mapHeight) {
+        // Strategy a: Try a 1-tile detour
+        if (this.hasTerrainData()) {
             const detour = this.findDetour(controller);
             if (detour) {
                 controller.insertDetour(detour);
@@ -215,47 +273,35 @@ export class MovementSystem {
             }
         }
 
-        // Strategy b: Recalculate a prefix of the path
-        if (this.groundType && this.groundHeight && this.mapWidth && this.mapHeight && this.tileOccupancy) {
-            const remainingSteps = controller.path.length - controller.pathIndex;
-
-            if (remainingSteps > PATH_REPAIR_DISTANCE) {
-                // Recalculate prefix
-                const prefixTargetIdx = Math.min(
-                    controller.pathIndex + PATH_REPAIR_DISTANCE,
-                    controller.path.length - 1
-                );
-                const prefixTarget = controller.path[prefixTargetIdx];
-                const newPrefix = findPath(
-                    controller.tileX, controller.tileY,
-                    prefixTarget.x, prefixTarget.y,
-                    this.groundType, this.groundHeight,
-                    this.mapWidth, this.mapHeight,
-                    this.tileOccupancy
-                );
-                if (newPrefix && newPrefix.length > 0) {
-                    controller.replacePathPrefix(newPrefix, prefixTargetIdx + 1);
-                    return true;
-                }
-            } else {
-                // Few steps left — recalculate entire remaining path
-                const goal = controller.path[controller.path.length - 1];
-                const newPath = findPath(
-                    controller.tileX, controller.tileY,
-                    goal.x, goal.y,
-                    this.groundType, this.groundHeight,
-                    this.mapWidth, this.mapHeight,
-                    this.tileOccupancy
-                );
-                if (newPath && newPath.length > 0) {
-                    controller.replacePath(newPath);
-                    return true;
-                }
-            }
-        }
+        // Strategy b: Recalculate path
+        if (this.tryPathRepair(controller)) return true;
 
         // Strategy c: Push the blocking unit
         return this.pushUnit(controller.entityId, blockingEntityId);
+    }
+
+    /** Check if a tile is a valid detour candidate */
+    private isValidDetourTile(neighbor: TileCoord, blockedWp: TileCoord): boolean {
+        if (!this.groundType || !this.mapWidth || !this.mapHeight || !this.tileOccupancy) {
+            return false;
+        }
+
+        if (neighbor.x === blockedWp.x && neighbor.y === blockedWp.y) return false;
+        if (neighbor.x < 0 || neighbor.x >= this.mapWidth) return false;
+        if (neighbor.y < 0 || neighbor.y >= this.mapHeight) return false;
+
+        const nIdx = neighbor.x + neighbor.y * this.mapWidth;
+        if (!isPassable(this.groundType[nIdx])) return false;
+        if (this.tileOccupancy.has(tileKey(neighbor.x, neighbor.y))) return false;
+
+        return true;
+    }
+
+    /** Check if neighbor is adjacent to the rejoin point */
+    private isAdjacentToRejoin(neighbor: TileCoord, rejoinWp: TileCoord): boolean {
+        const rdx = neighbor.x - rejoinWp.x;
+        const rdy = neighbor.y - rejoinWp.y;
+        return GRID_DELTAS.some(([gx, gy]) => gx === rdx && gy === rdy);
     }
 
     /**
@@ -269,7 +315,6 @@ export class MovementSystem {
         const blockedWp = controller.nextWaypoint;
         if (!blockedWp) return null;
 
-        // The tile we want to rejoin the path at
         const nextIdx = controller.pathIndex + 1;
         const rejoinWp = nextIdx < controller.path.length
             ? controller.path[nextIdx]
@@ -278,31 +323,8 @@ export class MovementSystem {
         const neighbors = getAllNeighbors({ x: controller.tileX, y: controller.tileY });
 
         for (const neighbor of neighbors) {
-            // Skip the blocked tile itself
-            if (neighbor.x === blockedWp.x && neighbor.y === blockedWp.y) continue;
-
-            // Bounds check
-            if (neighbor.x < 0 || neighbor.x >= this.mapWidth ||
-                neighbor.y < 0 || neighbor.y >= this.mapHeight) {
-                continue;
-            }
-
-            const nIdx = neighbor.x + neighbor.y * this.mapWidth;
-
-            // Must be passable
-            if (!isPassable(this.groundType[nIdx])) continue;
-
-            // Must not be occupied
-            if (this.tileOccupancy.has(tileKey(neighbor.x, neighbor.y))) continue;
-
-            // Check that this detour tile is a hex neighbor of the rejoin point
-            const rdx = neighbor.x - rejoinWp.x;
-            const rdy = neighbor.y - rejoinWp.y;
-            const isAdjacentToRejoin = GRID_DELTAS.some(([gx, gy]) => gx === rdx && gy === rdy);
-
-            if (isAdjacentToRejoin) {
-                return neighbor;
-            }
+            if (!this.isValidDetourTile(neighbor, blockedWp)) continue;
+            if (this.isAdjacentToRejoin(neighbor, rejoinWp)) return neighbor;
         }
 
         return null;

@@ -196,7 +196,11 @@
             <span>Debug grid</span>
           </label>
           <label class="control-row">
-            <input type="checkbox" :checked="showTerritoryBorders" @change="$emit('update:showTerritoryBorders', ($event.target as HTMLInputElement).checked)" />
+            <input
+              type="checkbox"
+              :checked="showTerritoryBorders"
+              @change="$emit('update:showTerritoryBorders', ($event.target as HTMLInputElement).checked)"
+            />
             <span>Territory borders</span>
           </label>
           <div class="control-buttons">
@@ -274,18 +278,11 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, ref, onMounted, onUnmounted } from 'vue';
+import { reactive, computed } from 'vue';
 import { debugStats } from '@/game/debug-stats';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
-import {
-    type ObjectCategory,
-    countMapObjectsByCategory,
-    populateMapObjects,
-    spawnTestObjects,
-    clearMapObjects,
-    analyzeObjectTypes
-} from '@/game/systems/map-objects';
 import type { Game } from '@/game/game';
+import { useDebugMapObjects } from './use-debug-map-objects';
 
 defineProps<{
     debugGrid: boolean;
@@ -317,77 +314,15 @@ const sections = reactive({
     mapObjects: false,
 });
 
-// Map objects functionality
-const mapObjectCounts = ref({ trees: 0, stones: 0, resources: 0, plants: 0, other: 0 });
-const hasObjectTypeData = ref(false);
-
-function getGame(): Game | null {
-    return (window as any).__settlers_game__ ?? null;
-}
-
-function updateMapObjectCounts() {
-    const game = getGame();
-    if (!game) return;
-
-    hasObjectTypeData.value = game.objectType !== null;
-    const counts = countMapObjectsByCategory(game.state);
-    mapObjectCounts.value = {
-        trees: counts.get('trees') ?? 0,
-        stones: counts.get('stones') ?? 0,
-        resources: counts.get('resources') ?? 0,
-        plants: counts.get('plants') ?? 0,
-        other: counts.get('other') ?? 0,
-    };
-}
-
-function spawnCategory(category: ObjectCategory) {
-    const game = getGame();
-    if (!game) return;
-
-    if (game.objectType) {
-        // Use real map data
-        populateMapObjects(game.state, game.objectType, game.groundType, game.mapSize, { category });
-    } else {
-        // Use test objects
-        spawnTestObjects(game.state, game.groundType, game.mapSize, category, 50);
-    }
-    updateMapObjectCounts();
-}
-
-function spawnAllFromMap() {
-    const game = getGame();
-    if (!game) return;
-
-    if (game.objectType) {
-        // Log analysis first for debugging
-        analyzeObjectTypes(game.objectType);
-        populateMapObjects(game.state, game.objectType, game.groundType, game.mapSize);
-    } else {
-        // Spawn test objects for each category
-        for (const cat of ['trees', 'stones', 'resources', 'plants'] as ObjectCategory[]) {
-            spawnTestObjects(game.state, game.groundType, game.mapSize, cat, 30);
-        }
-    }
-    updateMapObjectCounts();
-}
-
-function clearAllMapObjects() {
-    const game = getGame();
-    if (!game) return;
-
-    clearMapObjects(game.state);
-    updateMapObjectCounts();
-}
-
-// Update counts periodically
-let countUpdateInterval: ReturnType<typeof setInterval> | null = null;
-onMounted(() => {
-    updateMapObjectCounts();
-    countUpdateInterval = setInterval(updateMapObjectCounts, 1000);
-});
-onUnmounted(() => {
-    if (countUpdateInterval) clearInterval(countUpdateInterval);
-});
+// Map objects functionality (extracted to composable)
+const getGame = (): Game | null => (window as any).__settlers_game__ ?? null;
+const {
+    mapObjectCounts,
+    hasObjectTypeData,
+    spawnCategory,
+    spawnAllFromMap,
+    clearAllMapObjects,
+} = useDebugMapObjects(getGame);
 
 const slotPermLabel = computed(() => {
     const perm = RIVER_SLOT_PERMS[stats.riverSlotPermutation % RIVER_SLOT_PERMS.length];
@@ -415,7 +350,8 @@ function applyRiverConfig() {
 }
 
 function cycleSlotPerm(dir: number) {
-    stats.riverSlotPermutation = ((stats.riverSlotPermutation + dir) % RIVER_SLOT_PERMS.length + RIVER_SLOT_PERMS.length) % RIVER_SLOT_PERMS.length;
+    const len = RIVER_SLOT_PERMS.length;
+    stats.riverSlotPermutation = ((stats.riverSlotPermutation + dir) % len + len) % len;
     applyRiverConfig();
 }
 

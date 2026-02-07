@@ -9,7 +9,10 @@ export class BinaryReader {
     public readonly length: number;
     public pos: number;
 
-    constructor(dataArray?: BinaryReader | Uint8Array | ArrayBuffer, offset = 0, length: number | null = null, filename: string | null = null) {
+    constructor(
+        dataArray?: BinaryReader | Uint8Array | ArrayBuffer,
+        offset = 0, length: number | null = null, filename: string | null = null
+    ) {
         if (offset === null) {
             offset = 0;
         }

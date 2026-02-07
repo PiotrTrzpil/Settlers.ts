@@ -42,8 +42,8 @@ test.describe('Map View Page', { tag: '@smoke' }, () => {
 
         // Map selector label should be visible
         await expect(page.locator('text=Map:')).toBeVisible();
-        // Canvas should be present
-        await expect(page.locator('canvas')).toBeVisible();
+        // Main game canvas should be present
+        await expect(page.locator('canvas.cav')).toBeVisible();
     });
 
     test('debug panel can be expanded and checkbox toggled', async({ page }) => {

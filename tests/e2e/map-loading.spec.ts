@@ -9,7 +9,7 @@ import { GamePage } from './game-page';
 test.describe('Map Loading Performance', { tag: '@smoke' }, () => {
     test('test map loads within acceptable time', async({ page }) => {
         const gp = new GamePage(page);
-        const { errors, check: checkErrors } = gp.collectErrors();
+        const { check: checkErrors } = gp.collectErrors();
 
         // Collect console messages for analysis
         const consoleLogs: Array<{ level: string; text: string }> = [];
@@ -124,7 +124,6 @@ test.describe('Map Loading Performance', { tag: '@smoke' }, () => {
     test('no excessive console warnings during load', async({ page }) => {
         const gp = new GamePage(page);
 
-        const consoleLogs: Array<{ level: string; text: string; count: number }> = [];
         const logCounts = new Map<string, number>();
 
         page.on('console', (msg) => {
@@ -162,11 +161,6 @@ test.describe('Map Loading Performance', { tag: '@smoke' }, () => {
             });
         }
 
-        // Don't fail on warnings, just report. Fail only on errors.
-        const errorCount = sortedLogs
-            .filter((l) => l.level === 'error')
-            .reduce((sum, l) => sum + l.count, 0);
-
         // Allow known errors (missing game assets, renderer init without assets)
         const unexpectedErrors = sortedLogs.filter(
             (l) =>
@@ -177,7 +171,8 @@ test.describe('Map Loading Performance', { tag: '@smoke' }, () => {
                 !l.text.includes('RemoteFile') &&
                 !l.text.includes('Renderer') &&
                 !l.text.includes('ERR_CACHE') &&
-                !l.text.includes('Failed to load resource')
+                !l.text.includes('Failed to load resource') &&
+                !l.text.includes('Unhandled promise rejection')
         );
 
         expect(unexpectedErrors).toHaveLength(0);

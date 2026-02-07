@@ -166,80 +166,51 @@ export class BuildingIndicatorRenderer {
         this.shaderProgram = null;
     }
 
-    /**
-     * Compute placement status for placing a building with top-left at (x, y).
-     * Checks the entire building footprint.
-     */
-    public computePlacementStatus(x: number, y: number): PlacementStatus {
-        if (this.buildingType === null) {
-            return PlacementStatus.InvalidTerrain;
-        }
+    /** Check if footprint is within map bounds */
+    private isFootprintInBounds(footprint: TileCoord[]): boolean {
+        return footprint.every(t =>
+            t.x >= 0 && t.x < this.mapSize.width && t.y >= 0 && t.y < this.mapSize.height
+        );
+    }
 
-        const footprint = getBuildingFootprint(x, y, this.buildingType);
+    /** Check individual tile for basic placement requirements */
+    private checkTileBasics(tile: TileCoord): PlacementStatus | null {
+        const idx = this.mapSize.toIndex(tile.x, tile.y);
+        if (!isBuildable(this.groundType[idx])) return PlacementStatus.InvalidTerrain;
+        if (this.tileOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
 
-        // Check if entire footprint is within map bounds
-        for (const tile of footprint) {
-            if (tile.x < 0 || tile.x >= this.mapSize.width ||
-                tile.y < 0 || tile.y >= this.mapSize.height) {
-                return PlacementStatus.InvalidTerrain;
-            }
-        }
-
-        // Check all tiles in footprint for basic requirements
-        for (const tile of footprint) {
-            const idx = this.mapSize.toIndex(tile.x, tile.y);
-
-            // Check terrain type
-            if (!isBuildable(this.groundType[idx])) {
-                return PlacementStatus.InvalidTerrain;
-            }
-
-            // Check occupancy
-            if (this.tileOccupancy.has(tileKey(tile.x, tile.y))) {
-                return PlacementStatus.Occupied;
-            }
-
-            // Check territory (if enabled)
-            if (ENABLE_TERRITORY_CHECKS && this.territory && this.hasBuildings) {
-                const owner = this.territory.getOwner(tile.x, tile.y);
-                if (owner !== this.player && owner !== NO_OWNER) {
-                    return PlacementStatus.EnemyTerritory;
-                }
-            }
-        }
-
-        // For territory: at least one tile must be in own territory or adjacent to it
         if (ENABLE_TERRITORY_CHECKS && this.territory && this.hasBuildings) {
-            let hasValidTerritory = false;
-            for (const tile of footprint) {
-                const owner = this.territory.getOwner(tile.x, tile.y);
-                if (owner === this.player) {
-                    hasValidTerritory = true;
-                    break;
-                }
-                // Check if adjacent to own territory
-                for (const [dx, dy] of CARDINAL_OFFSETS) {
-                    const nx = tile.x + dx;
-                    const ny = tile.y + dy;
-                    if (nx >= 0 && nx < this.mapSize.width &&
-                        ny >= 0 && ny < this.mapSize.height) {
-                        if (this.territory.isOwnedBy(nx, ny, this.player)) {
-                            hasValidTerritory = true;
-                            break;
-                        }
-                    }
-                }
-                if (hasValidTerritory) break;
-            }
-            if (!hasValidTerritory) {
-                return PlacementStatus.OutsideTerritory;
-            }
+            const owner = this.territory.getOwner(tile.x, tile.y);
+            if (owner !== this.player && owner !== NO_OWNER) return PlacementStatus.EnemyTerritory;
         }
+        return null;
+    }
 
-        // Check slope across entire footprint
-        // Get min and max height within footprint
-        let minHeight = 255;
-        let maxHeight = 0;
+    /** Check if a tile is adjacent to player's territory */
+    private isAdjacentToOwnTerritory(tile: TileCoord): boolean {
+        if (!this.territory) return false;
+        for (const [dx, dy] of CARDINAL_OFFSETS) {
+            const nx = tile.x + dx;
+            const ny = tile.y + dy;
+            if (nx < 0 || nx >= this.mapSize.width || ny < 0 || ny >= this.mapSize.height) continue;
+            if (this.territory.isOwnedBy(nx, ny, this.player)) return true;
+        }
+        return false;
+    }
+
+    /** Check if any footprint tile has valid territory access */
+    private hasValidTerritoryAccess(footprint: TileCoord[]): boolean {
+        if (!this.territory) return true;
+        for (const tile of footprint) {
+            if (this.territory.getOwner(tile.x, tile.y) === this.player) return true;
+            if (this.isAdjacentToOwnTerritory(tile)) return true;
+        }
+        return false;
+    }
+
+    /** Compute slope difficulty rating */
+    private computeSlopeDifficulty(footprint: TileCoord[]): PlacementStatus {
+        let minHeight = 255, maxHeight = 0;
         for (const tile of footprint) {
             const h = this.groundHeight[this.mapSize.toIndex(tile.x, tile.y)];
             minHeight = Math.min(minHeight, h);
@@ -247,18 +218,33 @@ export class BuildingIndicatorRenderer {
         }
 
         const heightDiff = maxHeight - minHeight;
-        if (heightDiff > MAX_SLOPE_DIFF) {
-            return PlacementStatus.TooSteep;
+        if (heightDiff > MAX_SLOPE_DIFF) return PlacementStatus.TooSteep;
+        if (heightDiff === 0) return PlacementStatus.Easy;
+        if (heightDiff === 1) return PlacementStatus.Medium;
+        return PlacementStatus.Difficult;
+    }
+
+    /**
+     * Compute placement status for placing a building with top-left at (x, y).
+     * Checks the entire building footprint.
+     */
+    public computePlacementStatus(x: number, y: number): PlacementStatus {
+        if (this.buildingType === null) return PlacementStatus.InvalidTerrain;
+
+        const footprint = getBuildingFootprint(x, y, this.buildingType);
+
+        if (!this.isFootprintInBounds(footprint)) return PlacementStatus.InvalidTerrain;
+
+        for (const tile of footprint) {
+            const issue = this.checkTileBasics(tile);
+            if (issue !== null) return issue;
         }
 
-        // Slope-based difficulty rating
-        if (heightDiff === 0) {
-            return PlacementStatus.Easy;
-        } else if (heightDiff === 1) {
-            return PlacementStatus.Medium;
-        } else {
-            return PlacementStatus.Difficult;
+        if (ENABLE_TERRITORY_CHECKS && this.territory && this.hasBuildings) {
+            if (!this.hasValidTerritoryAccess(footprint)) return PlacementStatus.OutsideTerritory;
         }
+
+        return this.computeSlopeDifficulty(footprint);
     }
 
     /**
