@@ -77,8 +77,8 @@ test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () 
         expect(loadedUnits).not.toHaveProperty('error');
 
         // Check that at least some unit types loaded
-        if ('loadedByType' in loadedUnits) {
-            const loadedCount = Object.values(loadedUnits.loadedByType).filter(Boolean).length;
+        if ('loadedByType' in loadedUnits && loadedUnits.loadedByType) {
+            const loadedCount = Object.values(loadedUnits.loadedByType as Record<number, boolean>).filter(Boolean).length;
             // At least bearer (type 0) should be loaded
             expect(loadedCount).toBeGreaterThan(0);
         }

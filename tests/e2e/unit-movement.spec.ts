@@ -101,7 +101,8 @@ test.describe('Unit Movement', () => {
         expect(moved).toBeTruthy();
     });
 
-    test('unit movement is smooth (interpolation works)', { timeout: 60000 }, async({ gp }) => {
+    test('unit movement is smooth (interpolation works)', async({ gp }) => {
+        test.setTimeout(60000);
         const page = gp.page;
 
         await test.step('spawn unit and start movement', async() => {
