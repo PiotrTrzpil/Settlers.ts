@@ -20,8 +20,10 @@ import { SpriteRenderManager } from './sprite-render-manager';
 import { BuildingIndicatorRenderer } from './building-indicator-renderer';
 import { SpriteBatchRenderer } from './sprite-batch-renderer';
 import { SelectionOverlayRenderer } from './selection-overlay-renderer';
-import { EntityDepthSorter, DepthSortContext } from './entity-depth-sorter';
 import { getAnimatedSprite } from '../systems/animation';
+import { FrameContext, type IFrameContext } from './frame-context';
+import { OptimizedDepthSorter, type OptimizedSortContext } from './optimized-depth-sorter';
+import { profiler } from './debug/render-profiler';
 import {
     LayerVisibility,
     DEFAULT_LAYER_VISIBILITY,
@@ -53,14 +55,6 @@ export interface PlacementPreviewState {
     variation?: number;
 }
 
-/** Rectangular bounds for culling */
-interface Bounds {
-    minX: number;
-    maxX: number;
-    minY: number;
-    maxY: number;
-}
-
 import {
     TEXTURE_UNIT_SPRITE_ATLAS,
     BASE_QUAD,
@@ -88,8 +82,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     public spriteManager: SpriteRenderManager | null = null;
     private spriteBatchRenderer: SpriteBatchRenderer;
     private selectionOverlayRenderer: SelectionOverlayRenderer;
-    private depthSorter: EntityDepthSorter;
+    private depthSorter: OptimizedDepthSorter;
     private buildingIndicatorRenderer: BuildingIndicatorRenderer;
+
+    // Frame context for cached per-frame computations (world positions, bounds)
+    private frameContext: IFrameContext | null = null;
 
     // Debug logging state
     private lastViewPointX = 0;
@@ -224,7 +221,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         );
         this.spriteBatchRenderer = new SpriteBatchRenderer();
         this.selectionOverlayRenderer = new SelectionOverlayRenderer();
-        this.depthSorter = new EntityDepthSorter();
+        this.depthSorter = new OptimizedDepthSorter();
 
         if (fileManager) {
             this.spriteManager = new SpriteRenderManager(fileManager, TEXTURE_UNIT_SPRITE_ATLAS);
@@ -348,6 +345,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (!this.dynamicBuffer) return;
         if (this.entities.length === 0 && !this.previewTile && !this.buildingIndicatorsEnabled) return;
 
+        profiler.beginFrame();
+
         // Enable blending for semi-transparent entities
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -382,12 +381,14 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.sortEntitiesByDepth(viewPoint);
 
         // Draw entities (textured or color fallback)
+        profiler.beginPhase('draw');
         if (this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
             this.drawTexturedEntities(gl, projection, viewPoint);
             this.drawColorEntities(gl, projection, viewPoint, true);
         } else {
             this.drawColorEntities(gl, projection, viewPoint, false);
         }
+        profiler.endPhase('draw');
 
         // Draw selection frames (color shader) - must be after entities
         this.selectionOverlayRenderer.drawSelectionFrames(
@@ -399,6 +400,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.drawPlacementPreview(gl, projection, viewPoint);
 
         gl.disable(gl.BLEND);
+        profiler.endFrame();
     }
 
     /** Get sprite entry for a building entity */
@@ -512,9 +514,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             if (resolved.transitioning) { this.transitioningUnits.push(entity); continue }
             if (!resolved.sprite) continue;
 
-            const worldPos = entity.type === EntityType.Unit
-                ? this.getInterpolatedWorldPos(entity, viewPoint)
-                : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
+            // Use cached world position from frame context
+            const cachedPos = this.frameContext?.getWorldPos(entity);
+            const worldPos = cachedPos
+                ? { worldX: cachedPos.worldX, worldY: cachedPos.worldY }
+                : (entity.type === EntityType.Unit
+                    ? this.getInterpolatedWorldPos(entity, viewPoint)
+                    : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y));
 
             // Add random visual offset for MapObjects (trees, stones) to break up the grid
             if (entity.type === EntityType.MapObject) {
@@ -578,7 +584,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
             if (!oldSprite || !newSprite) continue;
 
-            const worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
+            // Use cached world position from frame context
+            const cachedPos = this.frameContext?.getWorldPos(entity);
+            const worldPos = cachedPos ?? this.getInterpolatedWorldPos(entity, viewPoint);
             this.spriteBatchRenderer.addBlendSprite(gl, worldPos.worldX, worldPos.worldY, oldSprite, newSprite, blendFactor, 1, 1, 1, 1);
         }
 
@@ -644,9 +652,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const color = isSelected ? [1.0, 1.0, 0.0, 1.0] : playerColor;
             const scale = this.getEntityScale(entity.type);
 
-            const worldPos = entity.type === EntityType.Unit
+            // Use cached world position from frame context
+            const cachedPos = this.frameContext?.getWorldPos(entity);
+            const worldPos = cachedPos ?? (entity.type === EntityType.Unit
                 ? this.getInterpolatedWorldPos(entity, viewPoint)
-                : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
+                : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y));
 
             gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
             this.fillQuadVertices(0, 0, scale);
@@ -676,93 +686,47 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         };
     }
 
-    /** Bounds rectangle type */
-    private static readonly TILE_MARGIN = 10;
-    private static readonly SAFE_MARGIN = 2.0;
-
-    /** Calculate visible world bounds from viewpoint. */
-    private getVisibleWorldBounds(viewPoint: IViewPoint): Bounds {
-        const { zoom, aspectRatio: aspect } = viewPoint;
-        const margin = EntityRenderer.SAFE_MARGIN;
-        return {
-            minX: (-1 + zoom) * aspect / zoom - margin,
-            maxX: (1 + zoom) * aspect / zoom + margin,
-            minY: (zoom - 1) / zoom - margin,
-            maxY: (zoom + 1) / zoom + margin,
-        };
-    }
-
-    /** Calculate visible tile bounds from world bounds. */
-    private getVisibleTileBounds(wb: Bounds, vp: IViewPoint): Bounds {
-        const c1 = this.getWorldToTile(wb.minX, wb.minY, vp);
-        const c2 = this.getWorldToTile(wb.maxX, wb.minY, vp);
-        const c3 = this.getWorldToTile(wb.maxX, wb.maxY, vp);
-        const c4 = this.getWorldToTile(wb.minX, wb.maxY, vp);
-        const m = EntityRenderer.TILE_MARGIN;
-        return {
-            minX: Math.floor(Math.min(c1.x, c2.x, c3.x, c4.x)) - m,
-            maxX: Math.ceil(Math.max(c1.x, c2.x, c3.x, c4.x)) + m,
-            minY: Math.floor(Math.min(c1.y, c2.y, c3.y, c4.y)) - m,
-            maxY: Math.ceil(Math.max(c1.y, c2.y, c3.y, c4.y)) + m,
-        };
-    }
-
-    /** Check if entity is within tile bounds. */
-    private isInTileBounds(entity: Entity, b: Bounds): boolean {
-        return entity.x >= b.minX && entity.x <= b.maxX &&
-               entity.y >= b.minY && entity.y <= b.maxY;
-    }
-
-    /** Check if world position is within bounds. */
-    private isInWorldBounds(pos: { worldX: number; worldY: number }, b: Bounds): boolean {
-        return pos.worldX >= b.minX && pos.worldX <= b.maxX &&
-               pos.worldY >= b.minY && pos.worldY <= b.maxY;
-    }
-
-    /** Get world position for entity. */
-    private getEntityWorldPos(entity: Entity, vp: IViewPoint): { worldX: number; worldY: number } {
-        if (entity.type === EntityType.Unit) {
-            return this.getInterpolatedWorldPos(entity, vp);
-        }
-        return TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, vp.x, vp.y);
-    }
-
     /** Sort entities by depth for correct painter's algorithm rendering. */
     private sortEntitiesByDepth(viewPoint: IViewPoint): void {
-        const t0 = performance.now();
-        const worldBounds = this.getVisibleWorldBounds(viewPoint);
-        const tileBounds = this.getVisibleTileBounds(worldBounds, viewPoint);
-
         // Update camera tracking
         this.lastViewPointX = viewPoint.x;
         this.lastViewPointY = viewPoint.y;
         this.lastZoom = viewPoint.zoom;
 
-        // Filter visible entities
+        // Create frame context - computes bounds once, caches all world positions
+        profiler.beginPhase('cull');
+        this.frameContext = FrameContext.create({
+            viewPoint,
+            entities: this.entities,
+            unitStates: this.unitStates,
+            groundHeight: this.groundHeight,
+            mapSize: this.mapSize,
+            alpha: this.renderAlpha,
+            isEntityVisible: (entity) => this.isEntityVisible(entity),
+        });
+        profiler.endPhase('cull');
+
+        // Copy visible entities to sortedEntities array
         this.sortedEntities.length = 0;
-        for (const entity of this.entities) {
-            if (!this.isInTileBounds(entity, tileBounds)) continue;
-            if (!this.isEntityVisible(entity)) continue;
-            const worldPos = this.getEntityWorldPos(entity, viewPoint);
-            if (!this.isInWorldBounds(worldPos, worldBounds)) continue;
+        for (const entity of this.frameContext.visibleEntities) {
             this.sortedEntities.push(entity);
         }
 
-        // Log slow frames (sampled)
-        const duration = performance.now() - t0;
-        if (duration > 16.0 && Math.random() < 0.01) {
-            console.warn(`Entity Sort Slow: ${duration.toFixed(2)}ms`);
-        }
+        // Record culling metrics
+        profiler.recordEntities(
+            this.entities.length,
+            this.frameContext.visibleEntities.length,
+            this.frameContext.culledCount
+        );
 
-        // Sort by depth
-        const ctx: DepthSortContext = {
-            mapSize: this.mapSize,
-            groundHeight: this.groundHeight,
-            viewPoint,
-            unitStates: this.unitStates,
-            spriteManager: this.spriteManager
+        // Sort by depth using optimized radix sort
+        profiler.beginPhase('sort');
+        const sortCtx: OptimizedSortContext = {
+            spriteManager: this.spriteManager,
+            getWorldPos: (entity) => this.frameContext!.getWorldPos(entity),
         };
-        this.depthSorter.sortByDepth(this.sortedEntities, ctx);
+        this.depthSorter.sortByDepth(this.sortedEntities, sortCtx);
+        profiler.endPhase('sort');
     }
 
     /**
@@ -879,33 +843,14 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const color = getMapObjectFallbackColor(objectType);
         const scale = getMapObjectDotScale(objectType);
 
-        const worldPos = TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
+        // Use cached world position from frame context
+        const cachedPos = this.frameContext?.getWorldPos(entity);
+        const worldPos = cachedPos ?? TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
 
         gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
         this.fillQuadVertices(0, 0, scale);
         gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
         gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
-    }
-
-    private getWorldToTile(worldX: number, worldY: number, viewPoint: IViewPoint): { x: number, y: number } {
-        // Constants from coordinate-system.ts
-        const TILE_CENTER_X = 0.25;
-        const TILE_CENTER_Y = 0.5;
-
-        const vpIntX = Math.floor(viewPoint.x);
-        const vpIntY = Math.floor(viewPoint.y);
-        const vpFracX = viewPoint.x - vpIntX;
-        const vpFracY = viewPoint.y - vpIntY;
-
-        // Note: We ignore height here, effectively assuming height=0.
-        // This gives us a base tile. For culling, we add a margin anyway.
-        const instancePosY = worldY * 2 - TILE_CENTER_Y + vpFracY;
-        const tileY = instancePosY + vpIntY;
-
-        const instancePosX = worldX - TILE_CENTER_X + instancePosY * 0.5 + vpFracX - vpFracY * 0.5;
-        const tileX = instancePosX + vpIntX;
-
-        return { x: tileX, y: tileY };
     }
 }
