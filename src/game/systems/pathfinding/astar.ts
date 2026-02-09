@@ -95,8 +95,17 @@ function canEnterTile(
 
 /**
  * Compute the priority for a node (f = g + h + tie-breaker).
+ *
+ * @param cx Current X (where we're coming from)
+ * @param cy Current Y (where we're coming from)
+ * @param nx Neighbor X (where we're going)
+ * @param ny Neighbor Y (where we're going)
+ * @param gCost Cost to reach neighbor
+ * @param direction Direction of move (0-5)
+ * @param ctx Search context
  */
 function computePriority(
+    cx: number, cy: number,
     nx: number, ny: number,
     gCost: number,
     direction: number,
@@ -110,7 +119,8 @@ function computePriority(
     const epsilonTieBreaker = h * epsilon;
 
     // Tie-breaker 2: Prefer moves aligned with goal direction
-    const targetDir = getApproxDirection(nx, ny, ctx.goalX, ctx.goalY);
+    // Compare move direction with ideal direction FROM CURRENT POSITION to goal
+    const targetDir = getApproxDirection(cx, cy, ctx.goalX, ctx.goalY);
     let dirDiff = Math.abs(direction - targetDir);
     if (dirDiff > 3) dirDiff = 6 - dirDiff;
     const directionPenalty = dirDiff * 0.1;
@@ -148,7 +158,7 @@ function processNeighbor(
         ctx.parent[nIdx] = currentIdx;
         ctx.flags[nIdx] |= FLAG_OPEN;
 
-        const priority = computePriority(nx, ny, tentativeG, direction, ctx);
+        const priority = computePriority(cx, cy, nx, ny, tentativeG, direction, ctx);
         ctx.openQueue.insert(nIdx, priority);
     }
 }
