@@ -14,6 +14,7 @@ import type {
 import { PlacementStatus } from './types';
 import { validateBuildingPlacement } from './internal/building-validator';
 import { validateResourcePlacement } from './internal/resource-validator';
+import { validateUnitPlacement } from './internal/unit-validator';
 
 /**
  * Validate entity placement with detailed status.
@@ -39,6 +40,9 @@ export function validatePlacement(
 
     case 'resource':
         return validateResourcePlacement(x, y, ctx);
+
+    case 'unit':
+        return validateUnitPlacement(x, y, ctx);
 
     default:
         // Unknown entity type - reject

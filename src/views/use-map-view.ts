@@ -42,16 +42,6 @@ function createTestGame(fileManager: FileManager): Game {
     return g;
 }
 
-/** Find a spawn position for a unit (camera center or any land tile) */
-function findSpawnPosition(
-    game: Game,
-    inputManager: InputManager | null | undefined
-): TileCoord | null {
-    const centerTile = inputManager?.getCenterTile();
-    if (centerTile) return centerTile;
-    return game.findLandTile();
-}
-
 /** Load a map file and create a Game instance */
 async function loadMapFile(
     file: IFileSource,
@@ -284,6 +274,19 @@ function createModeToggler(
             }
         },
 
+        setPlaceUnitMode(unitType: UnitType): void {
+            const game = getGame();
+            const inputManager = getInputManager();
+            if (!game || !inputManager) return;
+
+            if (debugStats.state.mode === 'place_unit' &&
+                debugStats.state.placeUnitType === unitType) {
+                inputManager.switchMode('select');
+            } else {
+                inputManager.switchMode('place_unit', { unitType });
+            }
+        },
+
         setSelectMode(): void {
             getInputManager()?.switchMode('select');
         }
@@ -306,20 +309,6 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
             if (g.gameLoop.isRunning) g.stop();
             else g.start();
         },
-
-        spawnUnit(unitType: number, inputManager: InputManager | null): void {
-            const g = getGame();
-            if (!g) return;
-            const pos = findSpawnPosition(g, inputManager);
-            if (!pos) return;
-            g.execute({
-                type: 'spawn_unit',
-                unitType: unitType as UnitType,
-                x: pos.x, y: pos.y,
-                player: g.currentPlayer
-            });
-            triggerRef(game);
-        }
     };
 }
 
@@ -366,6 +355,7 @@ export function useMapView(
     const currentMode = computed(() => debugStats.state.mode);
     const placeBuildingType = computed(() => debugStats.state.placeBuildingType);
     const placeResourceType = computed(() => debugStats.state.placeResourceType);
+    const placeUnitType = computed(() => debugStats.state.placeUnitType);
 
     const layerCounts = computed<LayerCounts>(() => {
         if (!game.value) {
@@ -433,10 +423,10 @@ export function useMapView(
 
     const setPlaceMode = modeToggler.setPlaceMode;
     const setPlaceResourceMode = (rt: EMaterialType) => modeToggler.setPlaceResourceMode(rt, resourceAmount.value);
+    const setPlaceUnitMode = (ut: UnitType) => modeToggler.setPlaceUnitMode(ut);
     const setSelectMode = modeToggler.setSelectMode;
     const removeSelected = gameActions.removeSelected;
     const togglePause = gameActions.togglePause;
-    const spawnUnit = (ut: number) => gameActions.spawnUnit(ut, getInputManager?.() ?? null);
 
     async function load(file: IFileSource) {
         const fm = getFileManager();
@@ -467,6 +457,7 @@ export function useMapView(
         currentMode,
         placeBuildingType,
         placeResourceType,
+        placeUnitType,
         availableBuildings,
         availableUnits,
         availableResources,
@@ -476,10 +467,10 @@ export function useMapView(
         onTileClick,
         setPlaceMode,
         setPlaceResourceMode,
+        setPlaceUnitMode,
         setSelectMode,
         removeSelected,
         togglePause,
-        spawnUnit,
         updateLayerVisibility
     };
 }

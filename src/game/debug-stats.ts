@@ -67,6 +67,7 @@ export interface DebugStatsState {
     mode: string;
     placeBuildingType: number;
     placeResourceType: number;
+    placeUnitType: number;
     selectedEntityId: number | null;
     selectedCount: number;
 
@@ -203,6 +204,7 @@ class DebugStats {
             mode: 'select',
             placeBuildingType: 0,
             placeResourceType: 0,
+            placeUnitType: 0,
             selectedEntityId: null,
             selectedCount: 0,
             musicEnabled: true,
