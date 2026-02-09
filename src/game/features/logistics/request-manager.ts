@@ -28,6 +28,8 @@ export interface RequestManagerEvents {
     requestAssigned: { request: ResourceRequest; carrierId: number; sourceBuilding: number };
     /** Emitted when a request is fulfilled */
     requestFulfilled: { request: ResourceRequest };
+    /** Emitted when a request is reset to pending (e.g., carrier dropped it) */
+    requestReset: { request: ResourceRequest; reason: 'carrier_removed' | 'source_unavailable' };
 }
 
 /**
@@ -241,13 +243,13 @@ export class RequestManager {
     }
 
     /**
-     * Cancel all requests assigned to a carrier.
+     * Reset all requests assigned to a carrier back to pending.
      * Useful when a carrier is removed or reassigned.
      *
      * @param carrierId Entity ID of the carrier
-     * @returns Number of requests cancelled
+     * @returns Number of requests reset
      */
-    cancelRequestsForCarrier(carrierId: number): number {
+    resetRequestsForCarrier(carrierId: number): number {
         let count = 0;
 
         for (const request of this.requests.values()) {
@@ -257,6 +259,37 @@ export class RequestManager {
                 request.assignedCarrier = null;
                 request.sourceBuilding = null;
                 count++;
+                this.emit('requestReset', { request, reason: 'carrier_removed' });
+            }
+        }
+
+        return count;
+    }
+
+    /**
+     * @deprecated Use resetRequestsForCarrier instead
+     */
+    cancelRequestsForCarrier(carrierId: number): number {
+        return this.resetRequestsForCarrier(carrierId);
+    }
+
+    /**
+     * Reset all requests that were sourcing from a specific building.
+     * Useful when a source building is destroyed or its inventory depleted.
+     *
+     * @param buildingId Entity ID of the source building
+     * @returns Number of requests reset
+     */
+    resetRequestsFromSource(buildingId: number): number {
+        let count = 0;
+
+        for (const request of this.requests.values()) {
+            if (request.sourceBuilding === buildingId && request.status === RequestStatus.InProgress) {
+                request.status = RequestStatus.Pending;
+                request.assignedCarrier = null;
+                request.sourceBuilding = null;
+                count++;
+                this.emit('requestReset', { request, reason: 'source_unavailable' });
             }
         }
 
@@ -314,6 +347,43 @@ export class RequestManager {
             }
         }
         return false;
+    }
+
+    /**
+     * Update the priority of a pending request.
+     * Cannot change priority of in-progress requests.
+     *
+     * @param requestId ID of the request
+     * @param priority New priority level
+     * @returns True if priority was updated
+     */
+    updatePriority(requestId: number, priority: RequestPriority): boolean {
+        const request = this.requests.get(requestId);
+        if (!request) return false;
+
+        // Only allow priority updates for pending requests
+        if (request.status !== RequestStatus.Pending) return false;
+
+        request.priority = priority;
+        return true;
+    }
+
+    /**
+     * Get all requests that are sourcing from a specific building.
+     *
+     * @param buildingId Entity ID of the source building
+     * @returns Array of in-progress requests using this source
+     */
+    getRequestsFromSource(buildingId: number): ResourceRequest[] {
+        const result: ResourceRequest[] = [];
+
+        for (const request of this.requests.values()) {
+            if (request.sourceBuilding === buildingId && request.status === RequestStatus.InProgress) {
+                result.push(request);
+            }
+        }
+
+        return result;
     }
 
     /**

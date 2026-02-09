@@ -27,6 +27,13 @@ export interface FulfillmentMatch {
 }
 
 /**
+ * Default distance multiplier for preferring full-supply sources.
+ * If a source with full quantity is within this multiple of the nearest source's distance,
+ * prefer the full-supply source to avoid multiple trips.
+ */
+export const DEFAULT_FULL_SUPPLY_DISTANCE_FACTOR = 1.5;
+
+/**
  * Options for matching.
  */
 export interface MatchOptions {
@@ -34,6 +41,12 @@ export interface MatchOptions {
     playerId?: number;
     /** Require at least one hub to service both buildings */
     requireServiceArea?: boolean;
+    /**
+     * Distance factor for preferring full-supply sources.
+     * A source with full quantity is preferred if within this multiple of nearest distance.
+     * Default: 1.5 (prefer full supply if within 50% extra distance)
+     */
+    fullSupplyDistanceFactor?: number;
 }
 
 /**
@@ -56,7 +69,11 @@ export function matchRequestToSupply(
     serviceAreaManager: ServiceAreaManager,
     options: MatchOptions = {},
 ): FulfillmentMatch | null {
-    const { playerId, requireServiceArea = true } = options;
+    const {
+        playerId,
+        requireServiceArea = true,
+        fullSupplyDistanceFactor = DEFAULT_FULL_SUPPLY_DISTANCE_FACTOR,
+    } = options;
 
     // Get the destination building position
     const destBuilding = gameState.getEntity(request.buildingId);
@@ -136,8 +153,8 @@ export function matchRequestToSupply(
     for (const candidate of candidates) {
         if (candidate.supply.availableAmount >= request.amount) {
             // Found one with enough - check if it's close enough to be worth it
-            // If this full-supply source is within 1.5x the distance of nearest, prefer it
-            if (candidate.distance <= bestCandidate.distance * 1.5) {
+            // If this full-supply source is within the configured distance factor, prefer it
+            if (candidate.distance <= bestCandidate.distance * fullSupplyDistanceFactor) {
                 bestCandidate = candidate;
                 break;
             }

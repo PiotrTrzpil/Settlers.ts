@@ -70,3 +70,9 @@ export {
     canPotentiallyFulfill,
     estimateFulfillmentDistance,
 } from './fulfillment-matcher';
+
+// Inventory reservations (prevents race conditions)
+export {
+    type InventoryReservation,
+    InventoryReservationManager,
+} from './inventory-reservation';

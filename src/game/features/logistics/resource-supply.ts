@@ -47,13 +47,21 @@ export function getAvailableSupplies(
     materialType: EMaterialType,
     options: SupplySearchOptions = {},
 ): ResourceSupply[] {
-    const { minAmount = 1 } = options;
+    const { playerId, minAmount = 1 } = options;
     const supplies: ResourceSupply[] = [];
 
     // Get all buildings that have this material in their output
     const buildingIds = gameState.inventoryManager.getBuildingsWithOutput(materialType, minAmount);
 
     for (const buildingId of buildingIds) {
+        // Filter by player if specified
+        if (playerId !== undefined) {
+            const building = gameState.getEntity(buildingId);
+            if (!building || building.player !== playerId) {
+                continue;
+            }
+        }
+
         const amount = gameState.inventoryManager.getOutputAmount(buildingId, materialType);
         if (amount >= minAmount) {
             supplies.push({

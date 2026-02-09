@@ -11,6 +11,7 @@ import {
     getSuppliesInServiceArea,
     hasAnySupply,
     getTotalSupply,
+    InventoryReservationManager,
 } from '@/game/features/logistics';
 import { EMaterialType } from '@/game/economy/material-type';
 import { GameState } from '@/game/game-state';
@@ -164,7 +165,7 @@ describe('Resource Request System', () => {
             });
         });
 
-        describe('cancelRequestsForCarrier', () => {
+        describe('resetRequestsForCarrier', () => {
             it('should reset in-progress requests to pending', () => {
                 const r1 = requestManager.addRequest(100, EMaterialType.LOG, 1);
                 const r2 = requestManager.addRequest(101, EMaterialType.STONE, 2);
@@ -172,12 +173,50 @@ describe('Resource Request System', () => {
                 requestManager.assignRequest(r1.id, 200, 300);
                 requestManager.assignRequest(r2.id, 201, 300); // Same carrier
 
-                const cancelled = requestManager.cancelRequestsForCarrier(300);
+                const reset = requestManager.resetRequestsForCarrier(300);
 
-                expect(cancelled).toBe(2);
+                expect(reset).toBe(2);
                 expect(r1.status).toBe(RequestStatus.Pending);
                 expect(r1.assignedCarrier).toBeNull();
                 expect(r2.status).toBe(RequestStatus.Pending);
+            });
+        });
+
+        describe('resetRequestsFromSource', () => {
+            it('should reset requests sourcing from a building', () => {
+                const r1 = requestManager.addRequest(100, EMaterialType.LOG, 1);
+                const r2 = requestManager.addRequest(101, EMaterialType.STONE, 2);
+
+                requestManager.assignRequest(r1.id, 200, 300); // Source building 200
+                requestManager.assignRequest(r2.id, 200, 301); // Same source building
+
+                const reset = requestManager.resetRequestsFromSource(200);
+
+                expect(reset).toBe(2);
+                expect(r1.status).toBe(RequestStatus.Pending);
+                expect(r1.sourceBuilding).toBeNull();
+                expect(r2.status).toBe(RequestStatus.Pending);
+            });
+        });
+
+        describe('updatePriority', () => {
+            it('should update priority of pending request', () => {
+                const request = requestManager.addRequest(100, EMaterialType.LOG, 1, RequestPriority.Normal);
+
+                const result = requestManager.updatePriority(request.id, RequestPriority.High);
+
+                expect(result).toBe(true);
+                expect(request.priority).toBe(RequestPriority.High);
+            });
+
+            it('should not update priority of in-progress request', () => {
+                const request = requestManager.addRequest(100, EMaterialType.LOG, 1, RequestPriority.Normal);
+                requestManager.assignRequest(request.id, 200, 300);
+
+                const result = requestManager.updatePriority(request.id, RequestPriority.High);
+
+                expect(result).toBe(false);
+                expect(request.priority).toBe(RequestPriority.Normal);
             });
         });
 
@@ -550,5 +589,152 @@ describe('Priority and Ordering', () => {
 
         expect(pending[0].id).toBe(first.id);
         expect(pending[1].id).toBe(second.id);
+    });
+});
+
+describe('Inventory Reservation System', () => {
+    let reservationManager: InventoryReservationManager;
+
+    beforeEach(() => {
+        reservationManager = new InventoryReservationManager();
+    });
+
+    describe('createReservation', () => {
+        it('should create a reservation with correct properties', () => {
+            const reservation = reservationManager.createReservation(100, EMaterialType.LOG, 5, 1);
+
+            expect(reservation).not.toBeNull();
+            expect(reservation!.buildingId).toBe(100);
+            expect(reservation!.materialType).toBe(EMaterialType.LOG);
+            expect(reservation!.amount).toBe(5);
+            expect(reservation!.requestId).toBe(1);
+        });
+
+        it('should reject zero or negative amounts', () => {
+            const r1 = reservationManager.createReservation(100, EMaterialType.LOG, 0, 1);
+            const r2 = reservationManager.createReservation(100, EMaterialType.LOG, -5, 2);
+
+            expect(r1).toBeNull();
+            expect(r2).toBeNull();
+        });
+    });
+
+    describe('getReservedAmount', () => {
+        it('should sum reservations for same building and material', () => {
+            reservationManager.createReservation(100, EMaterialType.LOG, 5, 1);
+            reservationManager.createReservation(100, EMaterialType.LOG, 3, 2);
+
+            const reserved = reservationManager.getReservedAmount(100, EMaterialType.LOG);
+
+            expect(reserved).toBe(8);
+        });
+
+        it('should not include reservations for different buildings', () => {
+            reservationManager.createReservation(100, EMaterialType.LOG, 5, 1);
+            reservationManager.createReservation(101, EMaterialType.LOG, 3, 2);
+
+            const reserved = reservationManager.getReservedAmount(100, EMaterialType.LOG);
+
+            expect(reserved).toBe(5);
+        });
+
+        it('should not include reservations for different materials', () => {
+            reservationManager.createReservation(100, EMaterialType.LOG, 5, 1);
+            reservationManager.createReservation(100, EMaterialType.STONE, 3, 2);
+
+            const reserved = reservationManager.getReservedAmount(100, EMaterialType.LOG);
+
+            expect(reserved).toBe(5);
+        });
+    });
+
+    describe('getAvailableAmount', () => {
+        it('should subtract reserved amount from actual', () => {
+            reservationManager.createReservation(100, EMaterialType.LOG, 5, 1);
+
+            const available = reservationManager.getAvailableAmount(100, EMaterialType.LOG, 10);
+
+            expect(available).toBe(5);
+        });
+
+        it('should not go below zero', () => {
+            reservationManager.createReservation(100, EMaterialType.LOG, 15, 1);
+
+            const available = reservationManager.getAvailableAmount(100, EMaterialType.LOG, 10);
+
+            expect(available).toBe(0);
+        });
+    });
+
+    describe('releaseReservation', () => {
+        it('should release reservation and update totals', () => {
+            const reservation = reservationManager.createReservation(100, EMaterialType.LOG, 5, 1);
+
+            const released = reservationManager.releaseReservation(reservation!.id);
+
+            expect(released).toBe(true);
+            expect(reservationManager.getReservedAmount(100, EMaterialType.LOG)).toBe(0);
+        });
+    });
+
+    describe('releaseReservationForRequest', () => {
+        it('should release reservation by request ID', () => {
+            reservationManager.createReservation(100, EMaterialType.LOG, 5, 1);
+
+            const released = reservationManager.releaseReservationForRequest(1);
+
+            expect(released).toBe(true);
+            expect(reservationManager.getReservedAmount(100, EMaterialType.LOG)).toBe(0);
+        });
+    });
+
+    describe('releaseReservationsForBuilding', () => {
+        it('should release all reservations for a building', () => {
+            reservationManager.createReservation(100, EMaterialType.LOG, 5, 1);
+            reservationManager.createReservation(100, EMaterialType.STONE, 3, 2);
+            reservationManager.createReservation(101, EMaterialType.LOG, 7, 3);
+
+            const released = reservationManager.releaseReservationsForBuilding(100);
+
+            expect(released).toBe(2);
+            expect(reservationManager.size).toBe(1);
+        });
+    });
+});
+
+describe('Player Filtering', () => {
+    let gameState: GameState;
+
+    beforeEach(() => {
+        gameState = new GameState();
+    });
+
+    function createBuildingWithInventory(
+        buildingType: BuildingType,
+        x: number,
+        y: number,
+        player: number,
+    ) {
+        const building = gameState.addEntity(EntityType.Building, buildingType, x, y, player);
+        gameState.inventoryManager.createInventory(building.id, buildingType);
+        return building;
+    }
+
+    it('should filter supplies by player ID', () => {
+        const player0Building = createBuildingWithInventory(BuildingType.WoodcutterHut, 10, 10, 0);
+        gameState.inventoryManager.depositOutput(player0Building.id, EMaterialType.LOG, 5);
+
+        const player1Building = createBuildingWithInventory(BuildingType.WoodcutterHut, 20, 20, 1);
+        gameState.inventoryManager.depositOutput(player1Building.id, EMaterialType.LOG, 3);
+
+        const suppliesPlayer0 = getAvailableSupplies(gameState, EMaterialType.LOG, { playerId: 0 });
+        const suppliesPlayer1 = getAvailableSupplies(gameState, EMaterialType.LOG, { playerId: 1 });
+        const suppliesAll = getAvailableSupplies(gameState, EMaterialType.LOG);
+
+        expect(suppliesPlayer0.length).toBe(1);
+        expect(suppliesPlayer0[0].buildingId).toBe(player0Building.id);
+        expect(suppliesPlayer1.length).toBe(1);
+        expect(suppliesPlayer1[0].buildingId).toBe(player1Building.id);
+        expect(suppliesAll.length).toBe(2);
     });
 });
