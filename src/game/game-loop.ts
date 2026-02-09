@@ -1,7 +1,7 @@
 import { GameState } from './game-state';
 import { updateAnimations, AnimationDataProvider } from './systems/animation';
 import { IdleBehaviorSystem } from './systems/idle-behavior';
-import { LumberjackSystem } from './systems/lumberjack-system';
+import { WoodcuttingSystem } from './systems/woodcutting-system';
 import { LogHandler } from '@/utilities/log-handler';
 import { debugStats } from './debug-stats';
 import { gameSettings } from './game-settings';
@@ -76,8 +76,8 @@ export class GameLoop {
     /** Logistics dispatcher - connects resource requests to carriers */
     public readonly logisticsDispatcher!: LogisticsDispatcher;
 
-    /** Lumberjack AI system */
-    public readonly lumberjackSystem: LumberjackSystem;
+    /** Woodcutting AI system */
+    public readonly woodcuttingSystem: WoodcuttingSystem;
 
     /** Inventory visualizer - syncs building outputs to visual stacked resources */
     public readonly inventoryVisualizer: InventoryVisualizer;
@@ -130,9 +130,9 @@ export class GameLoop {
         this.logisticsDispatcher.registerEvents(eventBus);
         this.registerSystem(this.logisticsDispatcher);
 
-        // 6. Lumberjack AI — issues movement commands (runs after carrier)
-        this.lumberjackSystem = new LumberjackSystem(gameState);
-        this.registerSystem(this.lumberjackSystem);
+        // 6. Woodcutting AI — issues movement commands (runs after carrier)
+        this.woodcuttingSystem = new WoodcuttingSystem(gameState);
+        this.registerSystem(this.woodcuttingSystem);
 
         // 7. Inventory visualizer — syncs building output to visual stacked resources
         this.inventoryVisualizer = new InventoryVisualizer(

@@ -86,7 +86,7 @@ const availableBuildings = [
     { type: BuildingType.LivingHouse, id: 'livinghouse', name: 'Living House', icon: '🛖' },
 
     // --- Wood & Stone ---
-    { type: BuildingType.WoodcutterHut, id: 'lumberjack', name: 'Lumberjack', icon: '🪓' },
+    { type: BuildingType.WoodcutterHut, id: 'woodcutter', name: 'Woodcutter Hut', icon: '🪓' },
     { type: BuildingType.ForesterHut, id: 'forester', name: 'Forester', icon: '🌲' },
     { type: BuildingType.Sawmill, id: 'sawmill', name: 'Sawmill', icon: '🪚' },
     { type: BuildingType.StonecutterHut, id: 'stonecutter', name: 'Stonecutter', icon: '🪨' },
@@ -137,8 +137,13 @@ const availableBuildings = [
 /** Units available in the UI */
 const availableUnits = [
     { type: UnitType.Carrier, id: 'carrier', name: 'Carrier', icon: '🧑' },
-    { type: UnitType.Woodcutter, id: 'woodcutter', name: 'Woodcutter', icon: '🪓' },
     { type: UnitType.Builder, id: 'builder', name: 'Builder', icon: '👷' },
+    { type: UnitType.Woodcutter, id: 'woodcutter', name: 'Woodcutter', icon: '🪓' },
+    { type: UnitType.Miner, id: 'miner', name: 'Miner', icon: '⛏️' },
+    { type: UnitType.Forester, id: 'forester', name: 'Forester', icon: '🌲' },
+    { type: UnitType.Farmer, id: 'farmer', name: 'Farmer', icon: '🌾' },
+    { type: UnitType.Smith, id: 'smith', name: 'Smith', icon: '🔨' },
+    { type: UnitType.Digger, id: 'digger', name: 'Digger', icon: '🕳️' },
     { type: UnitType.Swordsman, id: 'swordsman', name: 'Swordsman', icon: '⚔️' },
     { type: UnitType.Bowman, id: 'bowman', name: 'Bowman', icon: '🏹' },
     { type: UnitType.Priest, id: 'priest', name: 'Priest', icon: '🙏' },

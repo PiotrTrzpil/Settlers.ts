@@ -19,11 +19,12 @@ import {
     TREE_TEXTURE_OFFSET,
     TREE_VARIATION_COUNT,
     CARRIER_MATERIAL_JOB_INDICES,
+    WORKER_JOB_INDICES,
 } from './sprite-metadata';
 import { SpriteLoader, type LoadedGfxFileSet } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
 import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
-import { ANIMATION_DEFAULTS, AnimationData, carrySequenceKey } from '../animation';
+import { ANIMATION_DEFAULTS, ANIMATION_SEQUENCES, AnimationData, carrySequenceKey } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy';
 import {
@@ -871,6 +872,9 @@ export class SpriteRenderManager {
             SpriteRenderManager.log.debug(`Loaded ${carrierCount} carrier material variants for ${Race[race]}`);
         }
 
+        // Load worker-specific animations (e.g., woodcutter chopping)
+        await this.loadWorkerAnimations(fileSet, atlas, registry);
+
         return loadedCount > 0;
     }
 
@@ -940,6 +944,78 @@ export class SpriteRenderManager {
         );
 
         return loadedCount;
+    }
+
+    /**
+     * Load worker-specific animation sequences (e.g., woodcutter chopping).
+     * These are registered as additional sequences on existing units.
+     */
+    private async loadWorkerAnimations(
+        fileSet: LoadedGfxFileSet,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry
+    ): Promise<void> {
+        // Load woodcutter work animation: chopping (56) + cutting log on ground (57)
+        const choppingJobIndex = WORKER_JOB_INDICES.woodcutter.chopping;
+        const cuttingLogJobIndex = WORKER_JOB_INDICES.woodcutter.cuttingLogOnGround;
+
+        const choppingJob = fileSet.jilReader!.getItem(choppingJobIndex);
+        const cuttingLogJob = fileSet.jilReader!.getItem(cuttingLogJobIndex);
+
+        if (!choppingJob && !cuttingLogJob) {
+            SpriteRenderManager.log.debug(`Woodcutter work jobs ${choppingJobIndex}/${cuttingLogJobIndex} not found`);
+            return;
+        }
+
+        // Get direction count from whichever job exists
+        const dirCount = choppingJob
+            ? fileSet.dilReader!.getItems(choppingJob.offset, choppingJob.length).length
+            : fileSet.dilReader!.getItems(cuttingLogJob!.offset, cuttingLogJob!.length).length;
+
+        const directionFrames = new Map<number, SpriteEntry[]>();
+
+        for (let dir = 0; dir < dirCount; dir++) {
+            const frames: SpriteEntry[] = [];
+
+            // First: chopping animation (hitting the tree)
+            if (choppingJob) {
+                const choppingAnim = await this.spriteLoader.loadJobAnimation(
+                    fileSet, choppingJobIndex, dir, atlas
+                );
+                if (choppingAnim && choppingAnim.frames.length > 0) {
+                    frames.push(...choppingAnim.frames.map(f => f.entry));
+                }
+            }
+
+            // Second: cutting log on ground animation
+            if (cuttingLogJob) {
+                const cuttingLogAnim = await this.spriteLoader.loadJobAnimation(
+                    fileSet, cuttingLogJobIndex, dir, atlas
+                );
+                if (cuttingLogAnim && cuttingLogAnim.frames.length > 0) {
+                    frames.push(...cuttingLogAnim.frames.map(f => f.entry));
+                }
+            }
+
+            if (frames.length > 0) {
+                directionFrames.set(dir, frames);
+            }
+        }
+
+        if (directionFrames.size > 0) {
+            registry.registerAnimationSequence(
+                EntityType.Unit,
+                UnitType.Woodcutter,
+                ANIMATION_SEQUENCES.WORK,
+                directionFrames,
+                ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                true // loop
+            );
+            const totalFrames = directionFrames.get(0)?.length ?? 0;
+            SpriteRenderManager.log.debug(
+                `Loaded woodcutter work animation: ${directionFrames.size} directions, ${totalFrames} frames each`
+            );
+        }
     }
 
     /**

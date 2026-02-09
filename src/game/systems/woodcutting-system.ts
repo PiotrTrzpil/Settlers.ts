@@ -3,20 +3,21 @@ import { EntityType, UnitType, MapObjectType, Entity } from '../entity';
 import { OBJECT_TYPE_CATEGORY } from './map-objects';
 import { LogHandler } from '@/utilities/log-handler';
 import { MovementController } from './movement/movement-controller';
-import { getAllNeighbors } from './hex-directions';
+import { getAllNeighbors, getApproxDirection } from './hex-directions';
 import type { TickSystem } from '../tick-system';
+import { ANIMATION_SEQUENCES, createAnimationState, setAnimationSequence } from '../animation';
 
-const log = new LogHandler('LumberjackSystem');
+const log = new LogHandler('WoodcuttingSystem');
 
-enum LumberjackState {
+enum WoodcuttingState {
     IDLE = 0,
     MOVING = 1,
     CHOPPING = 2,
     RETURNING = 3, // Future: Return to hut
 }
 
-interface LumberjackData {
-    state: LumberjackState;
+interface WoodcuttingData {
+    state: WoodcuttingState;
     targetEntityId: number | null;
     chopTimer: number;
 }
@@ -24,8 +25,8 @@ interface LumberjackData {
 const CHOP_DURATION = 2.0; // Seconds to chop a tree
 const SEARCH_RADIUS = 30; // Tiles
 
-export class LumberjackSystem implements TickSystem {
-    private lumberjackData = new Map<number, LumberjackData>();
+export class WoodcuttingSystem implements TickSystem {
+    private woodcutterData = new Map<number, WoodcuttingData>();
     private gameState: GameState;
 
     constructor(gameState: GameState) {
@@ -38,44 +39,44 @@ export class LumberjackSystem implements TickSystem {
     }
 
     public update(state: GameState, deltaSec: number): void {
-        const lumberjacks = state.entities.filter(e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter);
+        const woodcutters = state.entities.filter(e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter);
 
-        for (const unit of lumberjacks) {
-            let data = this.lumberjackData.get(unit.id);
+        for (const unit of woodcutters) {
+            let data = this.woodcutterData.get(unit.id);
             if (!data) {
-                data = { state: LumberjackState.IDLE, targetEntityId: null, chopTimer: 0 };
-                this.lumberjackData.set(unit.id, data);
+                data = { state: WoodcuttingState.IDLE, targetEntityId: null, chopTimer: 0 };
+                this.woodcutterData.set(unit.id, data);
             }
 
             this.updateUnit(state, unit, data, deltaSec);
         }
 
         // Cleanup removed units
-        for (const id of this.lumberjackData.keys()) {
+        for (const id of this.woodcutterData.keys()) {
             if (!state.getEntity(id)) {
-                this.lumberjackData.delete(id);
+                this.woodcutterData.delete(id);
             }
         }
     }
 
-    private updateUnit(state: GameState, unit: Entity, data: LumberjackData, deltaSec: number): void {
+    private updateUnit(state: GameState, unit: Entity, data: WoodcuttingData, deltaSec: number): void {
         const controller = state.movement.getController(unit.id);
         if (!controller) return;
 
         switch (data.state) {
-        case LumberjackState.IDLE:
+        case WoodcuttingState.IDLE:
             this.handleIdle(state, unit, data);
             break;
-        case LumberjackState.MOVING:
+        case WoodcuttingState.MOVING:
             this.handleMoving(state, unit, data, controller);
             break;
-        case LumberjackState.CHOPPING:
+        case WoodcuttingState.CHOPPING:
             this.handleChopping(state, unit, data, deltaSec);
             break;
         }
     }
 
-    private handleIdle(state: GameState, unit: Entity, data: LumberjackData): void {
+    private handleIdle(state: GameState, unit: Entity, data: WoodcuttingData): void {
         const tree = this.findNearestTree(state, unit.x, unit.y);
         if (tree) {
             // log.debug(`Unit ${unit.id} found tree ${tree.id} at ${tree.x},${tree.y}`);
@@ -96,7 +97,7 @@ export class LumberjackSystem implements TickSystem {
 
             for (const n of neighbors) {
                 if (state.movement.moveUnit(unit.id, n.x, n.y)) {
-                    data.state = LumberjackState.MOVING;
+                    data.state = WoodcuttingState.MOVING;
                     moved = true;
                     break;
                 }
@@ -105,29 +106,51 @@ export class LumberjackSystem implements TickSystem {
             if (!moved) {
                 // If no neighbor is reachable, maybe try the tree itself (might fail if solid)
                 if (state.movement.moveUnit(unit.id, tree.x, tree.y)) {
-                    data.state = LumberjackState.MOVING;
+                    data.state = WoodcuttingState.MOVING;
                 } else {
                     // Start chopping if already adjacent
                     const dist = Math.abs(unit.x - tree.x) + Math.abs(unit.y - tree.y);
                     if (dist <= 1) {
-                        data.state = LumberjackState.CHOPPING;
-                        data.chopTimer = CHOP_DURATION;
+                        this.startChopping(unit, tree, data);
                     }
                 }
             }
         }
     }
 
-    private handleMoving(state: GameState, unit: Entity, data: LumberjackData, controller: MovementController): void {
+    private startChopping(unit: Entity, target: Entity, data: WoodcuttingData): void {
+        data.state = WoodcuttingState.CHOPPING;
+        data.chopTimer = CHOP_DURATION;
+
+        // Set work animation facing the tree
+        const direction = getApproxDirection(unit.x, unit.y, target.x, target.y);
+
+        if (!unit.animationState) {
+            unit.animationState = createAnimationState(ANIMATION_SEQUENCES.WORK, direction);
+        }
+        setAnimationSequence(unit.animationState, ANIMATION_SEQUENCES.WORK, direction);
+    }
+
+    private stopChopping(unit: Entity, data: WoodcuttingData): void {
+        data.state = WoodcuttingState.IDLE;
+        data.targetEntityId = null;
+
+        // Return to default animation
+        if (unit.animationState) {
+            setAnimationSequence(unit.animationState, ANIMATION_SEQUENCES.DEFAULT);
+        }
+    }
+
+    private handleMoving(state: GameState, unit: Entity, data: WoodcuttingData, controller: MovementController): void {
         if (!data.targetEntityId) {
-            data.state = LumberjackState.IDLE;
+            data.state = WoodcuttingState.IDLE;
             return;
         }
 
         const target = state.getEntity(data.targetEntityId);
         if (!target) {
             controller.clearPath();
-            data.state = LumberjackState.IDLE;
+            data.state = WoodcuttingState.IDLE;
             data.targetEntityId = null;
             return;
         }
@@ -136,15 +159,14 @@ export class LumberjackSystem implements TickSystem {
             const dist = Math.abs(unit.x - target.x) + Math.abs(unit.y - target.y);
             // Allow distance 1 (adjacent) or 0 (on top)
             if (dist <= 1) {
-                data.state = LumberjackState.CHOPPING;
-                data.chopTimer = CHOP_DURATION;
+                this.startChopping(unit, target, data);
             } else {
-                data.state = LumberjackState.IDLE;
+                data.state = WoodcuttingState.IDLE;
             }
         }
     }
 
-    private handleChopping(state: GameState, unit: Entity, data: LumberjackData, deltaSec: number): void {
+    private handleChopping(state: GameState, unit: Entity, data: WoodcuttingData, deltaSec: number): void {
         data.chopTimer -= deltaSec;
         if (data.chopTimer <= 0) {
             if (data.targetEntityId) {
@@ -154,8 +176,7 @@ export class LumberjackSystem implements TickSystem {
                     state.removeEntity(target.id);
                 }
             }
-            data.state = LumberjackState.IDLE;
-            data.targetEntityId = null;
+            this.stopChopping(unit, data);
         }
     }
 

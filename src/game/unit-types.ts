@@ -16,6 +16,11 @@ export enum UnitType {
     Thief = 7,
     Geologist = 8,
     Woodcutter = 9,
+    Miner = 10,
+    Forester = 11,
+    Farmer = 12,
+    Smith = 13,
+    Digger = 14,  // Landscaper/Shovelworker
 }
 
 /**
@@ -63,6 +68,11 @@ export const UNIT_TYPE_CONFIG: Record<UnitType, UnitTypeConfig> = {
     [UnitType.Thief]: { name: 'Thief', category: UnitCategory.Specialist, speed: 3 },
     [UnitType.Geologist]: { name: 'Geologist', category: UnitCategory.Specialist, speed: 1.5 },
     [UnitType.Woodcutter]: { name: 'Woodcutter', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Miner]: { name: 'Miner', category: UnitCategory.Worker, speed: 1.5 },
+    [UnitType.Forester]: { name: 'Forester', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Farmer]: { name: 'Farmer', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Smith]: { name: 'Smith', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Digger]: { name: 'Digger', category: UnitCategory.Worker, speed: 2 },
 };
 
 /** Categories that allow player selection */

@@ -122,11 +122,15 @@ export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
     [UnitType.Woodcutter]: 5,   // Woodcutter
     [UnitType.Swordsman]: 227,  // Lvl1 swordsman (first of pair 227/228)
     [UnitType.Bowman]: 236,     // Lvl1 bowman standing (236-240 = set1, 242-246 = set2)
-    // TODO: Identify job indices by inspecting settler JIL files (20-24.jil)
-    [UnitType.Priest]: -1,      // Not yet identified
-    [UnitType.Pioneer]: -1,     // Not yet identified
-    [UnitType.Thief]: -1,       // Not yet identified
-    [UnitType.Geologist]: -1,   // Not yet identified
+    [UnitType.Digger]: 50,      // Digger/Landscaper walk
+    [UnitType.Smith]: 52,       // Smith idle
+    [UnitType.Miner]: 60,       // Miner walk
+    [UnitType.Forester]: 62,    // Forester idle
+    [UnitType.Farmer]: 65,      // Farmer idle
+    [UnitType.Priest]: 287,     // Priest idle/walk (288 is alternate?)
+    [UnitType.Geologist]: 290,  // Geologist idle
+    [UnitType.Pioneer]: 298,    // Pioneer idle
+    [UnitType.Thief]: -1,       // TODO: Not yet identified
 };
 
 /**
@@ -181,6 +185,22 @@ export const WORKER_JOB_INDICES = {
         withGrain: 66,
         seeding1: 67,
         seeding2: 68,
+    },
+    // Priest
+    priest: {
+        idle: 287,
+        alternate: 288,  // Unknown purpose
+    },
+    // Geologist
+    geologist: {
+        idle: 290,
+        working: [291, 292, 293, 294, 295, 296, 297],  // Different work phases
+    },
+    // Pioneer
+    pioneer: {
+        idle: 298,
+        working1: 299,
+        working2: 300,
     },
 } as const;
 
@@ -436,7 +456,8 @@ export function getUnitSpriteMap(race: Race): Partial<Record<UnitType, UnitSprit
     const result: Partial<Record<UnitType, UnitSpriteInfo>> = {};
 
     for (const [typeStr, jobIndex] of Object.entries(UNIT_JOB_INDICES)) {
-        if (jobIndex !== undefined) {
+        // Skip undefined and negative indices (not yet identified)
+        if (jobIndex !== undefined && jobIndex >= 0) {
             result[Number(typeStr) as UnitType] = {
                 file: fileNum,
                 index: jobIndex,

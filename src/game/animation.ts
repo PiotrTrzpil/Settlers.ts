@@ -17,6 +17,8 @@ export const ANIMATION_SEQUENCES = {
     WALK: 'walk',
     /** Prefix for carry-walk animations, suffixed with material type number */
     CARRY_PREFIX: 'carry_',
+    /** Working animation (e.g., chopping, mining) */
+    WORK: 'work',
 } as const;
 
 /**
