@@ -68,15 +68,14 @@ export function parseBuildings(reader: BinaryReader): MapBuildingData[] {
             reader.readByte();
         }
 
-        // Validate building type
+        // Validate building type - skip silently if invalid (chunk format may differ)
         if (!isValidBuildingType(buildingType)) {
-            log.debug(`Skipping invalid building type ${buildingType} at (${x}, ${y})`);
             continue;
         }
 
-        // Validate coordinates (basic sanity check)
-        if (x > 10000 || y > 10000) {
-            log.debug(`Skipping building with suspicious coordinates (${x}, ${y})`);
+        // Validate coordinates - must be within reasonable map bounds
+        // and have at least some minimal value (buildings at 0,0 are suspicious)
+        if (x > 10000 || y > 10000 || (x < 10 && y < 10)) {
             continue;
         }
 
@@ -86,8 +85,6 @@ export function parseBuildings(reader: BinaryReader): MapBuildingData[] {
             buildingType: buildingType as S4BuildingType,
             player,
         });
-
-        log.debug(`  Building at (${x}, ${y}): type=${S4BuildingType[buildingType] ?? buildingType}, player=${player}`);
 
         // Safety check
         if (reader.getOffset() === startPos) {
@@ -105,6 +102,6 @@ export function parseBuildings(reader: BinaryReader): MapBuildingData[] {
  */
 function isValidBuildingType(value: number): boolean {
     // Valid building types are 1-82 (see S4BuildingType enum)
-    // Also accept 0 as NONE
-    return value >= 0 && value <= 82;
+    // 0 (NONE) is not a valid building type
+    return value >= 1 && value <= 82;
 }

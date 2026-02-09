@@ -91,10 +91,7 @@ export function parseStacks(reader: BinaryReader): MapStackData[] {
 
         skipRemainingBytes(reader, startPos, entrySize);
 
-        if (!isValidStackEntry(x, y, materialType, amount)) {
-            log.debug(`Skipping invalid stack at (${x}, ${y}): type=${materialType}, amount=${amount}`);
-            continue;
-        }
+        if (!isValidStackEntry(x, y, materialType, amount)) continue;
 
         stacks.push({
             x,
@@ -102,8 +99,6 @@ export function parseStacks(reader: BinaryReader): MapStackData[] {
             materialType: materialType as S4GoodType,
             amount,
         });
-
-        log.debug(`  Stack at (${x}, ${y}): type=${S4GoodType[materialType] ?? materialType}, amount=${amount}`);
 
         if (reader.getOffset() === startPos) {
             log.error('Parser stuck, breaking');

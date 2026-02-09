@@ -4,9 +4,10 @@ import { OriginalMapFile } from '@/resources/map/original/original-map-file';
 import { MapChunk } from '@/resources/map/original/map-chunk';
 import { MapChunkType } from '@/resources/map/original/map-chunk-type';
 import type { IMapLoader } from '@/resources/map/imap-loader';
+import type { MapEntityData } from '@/resources/map/map-entity-data';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
-import { getGroundTypeName, parseResourceValue } from '@/resources/map/s4-types';
+import { getGroundTypeName, parseResourceValue, S4Tribe, S4SettlerType, S4BuildingType, S4GoodType } from '@/resources/map/s4-types';
 
 const log = new LogHandler('MapFileView');
 
@@ -211,6 +212,85 @@ function calculateStats(loader: IMapLoader): MapStats | null {
     };
 }
 
+/** Process entity data into display summary */
+function processEntityData(entityData: MapEntityData | undefined): EntitySummary | null {
+    if (!entityData) return null;
+
+    const summary: EntitySummary = {
+        players: [],
+        settlers: [],
+        buildings: [],
+        stacks: [],
+        totals: {
+            players: entityData.players.length,
+            settlers: entityData.settlers.length,
+            buildings: entityData.buildings.length,
+            stacks: entityData.stacks.length,
+        },
+    };
+
+    // Process players
+    for (const p of entityData.players) {
+        summary.players.push({
+            index: p.playerIndex,
+            tribe: S4Tribe[p.tribe] ?? `Unknown(${p.tribe})`,
+            startX: p.startX,
+            startY: p.startY,
+        });
+    }
+
+    // Aggregate settlers by type and player
+    const settlerMap = new Map<string, { type: string; count: number; player: number }>();
+    for (const s of entityData.settlers) {
+        const key = `${s.settlerType}-${s.player}`;
+        const existing = settlerMap.get(key);
+        if (existing) {
+            existing.count++;
+        } else {
+            settlerMap.set(key, {
+                type: S4SettlerType[s.settlerType] ?? `Unknown(${s.settlerType})`,
+                count: 1,
+                player: s.player,
+            });
+        }
+    }
+    summary.settlers = Array.from(settlerMap.values()).sort((a, b) => b.count - a.count);
+
+    // Aggregate buildings by type and player
+    const buildingMap = new Map<string, { type: string; count: number; player: number }>();
+    for (const b of entityData.buildings) {
+        const key = `${b.buildingType}-${b.player}`;
+        const existing = buildingMap.get(key);
+        if (existing) {
+            existing.count++;
+        } else {
+            buildingMap.set(key, {
+                type: S4BuildingType[b.buildingType] ?? `Unknown(${b.buildingType})`,
+                count: 1,
+                player: b.player,
+            });
+        }
+    }
+    summary.buildings = Array.from(buildingMap.values()).sort((a, b) => b.count - a.count);
+
+    // Aggregate stacks by material type
+    const stackMap = new Map<number, { type: string; totalAmount: number }>();
+    for (const s of entityData.stacks) {
+        const existing = stackMap.get(s.materialType);
+        if (existing) {
+            existing.totalAmount += s.amount;
+        } else {
+            stackMap.set(s.materialType, {
+                type: S4GoodType[s.materialType] ?? `Unknown(${s.materialType})`,
+                totalAmount: s.amount,
+            });
+        }
+    }
+    summary.stacks = Array.from(stackMap.values()).sort((a, b) => b.totalAmount - a.totalAmount);
+
+    return summary;
+}
+
 /** Format file size in human-readable format */
 export function formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -236,6 +316,36 @@ export function groupChunksByCategory(chunks: ChunkInfo[]): Record<ChunkInfo['ca
     return groups;
 }
 
+/** Processed entity summary for display */
+export interface EntitySummary {
+    players: Array<{
+        index: number;
+        tribe: string;
+        startX?: number;
+        startY?: number;
+    }>;
+    settlers: Array<{
+        type: string;
+        count: number;
+        player: number;
+    }>;
+    buildings: Array<{
+        type: string;
+        count: number;
+        player: number;
+    }>;
+    stacks: Array<{
+        type: string;
+        totalAmount: number;
+    }>;
+    totals: {
+        players: number;
+        settlers: number;
+        buildings: number;
+        stacks: number;
+    };
+}
+
 export interface UseMapFileViewReturn {
     // State
     fileName: Ref<string | null>;
@@ -244,6 +354,7 @@ export interface UseMapFileViewReturn {
     chunks: Ref<ChunkInfo[]>;
     selectedChunk: Ref<ChunkInfo | null>;
     stats: Ref<MapStats | null>;
+    entitySummary: Ref<EntitySummary | null>;
     metadata: ComputedRef<MapMetadata | null>;
     isLoading: Ref<boolean>;
     error: Ref<string | null>;
@@ -267,6 +378,7 @@ export function useMapFileView(
     const chunks = ref<ChunkInfo[]>([]);
     const selectedChunk = ref<ChunkInfo | null>(null);
     const stats = ref<MapStats | null>(null);
+    const entitySummary = ref<EntitySummary | null>(null);
     const isLoading = ref(false);
     const error = ref<string | null>(null);
 
@@ -330,6 +442,7 @@ export function useMapFileView(
             }
 
             stats.value = calculateStats(loader);
+            entitySummary.value = processEntityData(loader.entityData);
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             log.error('Failed to load file', e instanceof Error ? e : new Error(message));
@@ -338,6 +451,7 @@ export function useMapFileView(
             mapFile.value = null;
             chunks.value = [];
             stats.value = null;
+            entitySummary.value = null;
         } finally {
             isLoading.value = false;
         }
@@ -364,6 +478,7 @@ export function useMapFileView(
         chunks,
         selectedChunk,
         stats,
+        entitySummary,
         metadata,
         isLoading,
         error,

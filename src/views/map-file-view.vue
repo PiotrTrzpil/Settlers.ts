@@ -129,6 +129,78 @@
           </div>
         </section>
 
+        <!-- Entity Data (from chunk parsers) -->
+        <section v-if="entitySummary" class="card entity-data-card">
+          <h2>Entity Data</h2>
+
+          <!-- Players -->
+          <div v-if="entitySummary.players.length > 0" class="entity-section">
+            <h3>Players <span class="entity-count">({{ entitySummary.totals.players }})</span></h3>
+            <div class="entity-list players-list">
+              <div v-for="p in entitySummary.players" :key="p.index" class="entity-row player-row">
+                <span class="player-index">P{{ p.index }}</span>
+                <span class="player-tribe">{{ p.tribe }}</span>
+                <span v-if="p.startX && p.startY" class="player-pos">({{ p.startX }}, {{ p.startY }})</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Buildings -->
+          <div v-if="entitySummary.buildings.length > 0" class="entity-section">
+            <h3>Buildings <span class="entity-count">({{ entitySummary.totals.buildings }})</span></h3>
+            <div class="entity-list">
+              <div v-for="(b, idx) in entitySummary.buildings.slice(0, 10)" :key="'bld-' + idx" class="entity-row">
+                <span class="entity-type">{{ b.type }}</span>
+                <span class="entity-player">P{{ b.player }}</span>
+                <span class="entity-amount">×{{ b.count }}</span>
+              </div>
+              <div v-if="entitySummary.buildings.length > 10" class="entity-more">
+                +{{ entitySummary.buildings.length - 10 }} more types...
+              </div>
+            </div>
+          </div>
+
+          <!-- Settlers -->
+          <div v-if="entitySummary.settlers.length > 0" class="entity-section">
+            <h3>Settlers <span class="entity-count">({{ entitySummary.totals.settlers }})</span></h3>
+            <div class="entity-list">
+              <div v-for="(s, idx) in entitySummary.settlers.slice(0, 10)" :key="'stl-' + idx" class="entity-row">
+                <span class="entity-type">{{ s.type }}</span>
+                <span class="entity-player">P{{ s.player }}</span>
+                <span class="entity-amount">×{{ s.count }}</span>
+              </div>
+              <div v-if="entitySummary.settlers.length > 10" class="entity-more">
+                +{{ entitySummary.settlers.length - 10 }} more types...
+              </div>
+            </div>
+          </div>
+
+          <!-- Stacks -->
+          <div v-if="entitySummary.stacks.length > 0" class="entity-section">
+            <h3>Material Stacks <span class="entity-count">({{ entitySummary.totals.stacks }})</span></h3>
+            <div class="entity-list">
+              <div v-for="(st, idx) in entitySummary.stacks.slice(0, 10)" :key="'stk-' + idx" class="entity-row">
+                <span class="entity-type">{{ st.type }}</span>
+                <span class="entity-amount">{{ st.totalAmount }} total</span>
+              </div>
+              <div v-if="entitySummary.stacks.length > 10" class="entity-more">
+                +{{ entitySummary.stacks.length - 10 }} more types...
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty state -->
+          <div
+            v-if="entitySummary.totals.players === 0
+              && entitySummary.totals.buildings === 0
+              && entitySummary.totals.settlers === 0
+              && entitySummary.totals.stacks === 0"
+            class="entity-empty"
+          >
+            No entity data found in map chunks
+          </div>
+        </section>
+
         <!-- Terrain Statistics -->
         <section v-if="stats && stats.terrain.length > 0" class="card stats-card">
           <h2>Terrain Types <span class="stat-total">({{ stats.totalTerrain.toLocaleString() }} tiles)</span></h2>
@@ -224,11 +296,11 @@ const {
     mapLoader,
     selectedChunk,
     stats,
+    entitySummary,
     metadata,
     isLoading,
     error,
     groupedChunks,
-    previewChunk,
     onFileSelect,
     selectChunk,
 } = useMapFileView(() => props.fileManager);
@@ -660,6 +732,107 @@ function getBarWidth(count: number, total: number): string {
   overflow-x: auto;
   max-height: 200px;
   overflow-y: auto;
+}
+
+/* Entity Data card */
+.entity-data-card {
+  background: linear-gradient(135deg, #1a1209, #1a1a12);
+}
+
+.entity-section {
+  margin-bottom: 16px;
+}
+
+.entity-section:last-child {
+  margin-bottom: 0;
+}
+
+.entity-section h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c8a96e;
+}
+
+.entity-count {
+  font-weight: 400;
+  color: #6a5030;
+}
+
+.entity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.entity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #0d0a05;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.players-list .entity-row {
+  background: #1a1a0a;
+  border-left: 2px solid #d4a030;
+}
+
+.entity-type {
+  flex: 1;
+  color: #c8a96e;
+}
+
+.entity-player {
+  padding: 1px 6px;
+  background: #2a2a1a;
+  border-radius: 3px;
+  color: #8a8040;
+  font-size: 10px;
+}
+
+.entity-amount {
+  color: #6a5030;
+  min-width: 50px;
+  text-align: right;
+}
+
+.player-index {
+  padding: 2px 6px;
+  background: #d4a030;
+  color: #1a1209;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 10px;
+}
+
+.player-tribe {
+  flex: 1;
+  color: #c8a96e;
+}
+
+.player-pos {
+  color: #6a5030;
+  font-size: 10px;
+}
+
+.entity-more {
+  padding: 4px 8px;
+  color: #6a5030;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.entity-empty {
+  padding: 12px;
+  color: #6a5030;
+  font-size: 12px;
+  text-align: center;
+  font-style: italic;
 }
 
 /* Scrollbar styling */

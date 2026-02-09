@@ -9,6 +9,10 @@ import { S4Tribe, S4BuildingType, S4SettlerType, S4GoodType } from './s4-types';
 export interface MapPlayerInfo {
     playerIndex: number;
     tribe: S4Tribe;
+    /** Starting X position (if available in map data) */
+    startX?: number;
+    /** Starting Y position (if available in map data) */
+    startY?: number;
 }
 
 /** Building data from MapBuildings chunk (type 8) */

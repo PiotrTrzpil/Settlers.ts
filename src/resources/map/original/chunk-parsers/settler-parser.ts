@@ -68,17 +68,9 @@ export function parseSettlers(reader: BinaryReader): MapSettlerData[] {
             reader.readByte();
         }
 
-        // Validate settler type
-        if (!isValidSettlerType(settlerType)) {
-            log.debug(`Skipping invalid settler type ${settlerType} at (${x}, ${y})`);
-            continue;
-        }
-
-        // Validate coordinates (basic sanity check)
-        if (x > 10000 || y > 10000) {
-            log.debug(`Skipping settler with suspicious coordinates (${x}, ${y})`);
-            continue;
-        }
+        // Validate settler type and coordinates
+        if (!isValidSettlerType(settlerType)) continue;
+        if (x > 10000 || y > 10000) continue;
 
         settlers.push({
             x,
@@ -86,8 +78,6 @@ export function parseSettlers(reader: BinaryReader): MapSettlerData[] {
             settlerType: settlerType as S4SettlerType,
             player,
         });
-
-        log.debug(`  Settler at (${x}, ${y}): type=${S4SettlerType[settlerType] ?? settlerType}, player=${player}`);
 
         // Safety check
         if (reader.getOffset() === startPos) {
