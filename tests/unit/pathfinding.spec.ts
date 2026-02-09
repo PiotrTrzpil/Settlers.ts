@@ -259,6 +259,68 @@ describe('Hex Distance', () => {
     });
 });
 
+describe('Path smoothness', () => {
+    let map: TestMap;
+
+    beforeEach(() => {
+        map = createTestMap();
+    });
+
+    /** Count direction changes in a path */
+    function countDirectionChanges(path: { x: number; y: number }[], startX: number, startY: number): number {
+        if (path.length < 2) return 0;
+
+        let changes = 0;
+        let prevDx = path[0].x - startX;
+        let prevDy = path[0].y - startY;
+
+        for (let i = 1; i < path.length; i++) {
+            const dx = path[i].x - path[i - 1].x;
+            const dy = path[i].y - path[i - 1].y;
+            if (dx !== prevDx || dy !== prevDy) {
+                changes++;
+            }
+            prevDx = dx;
+            prevDy = dy;
+        }
+        return changes;
+    }
+
+    it('should produce a straight path for due east movement', () => {
+        const path = findPath(5, 5, 15, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        expect(path).not.toBe(null);
+        // Should be exactly 10 steps east with no zigzags
+        expect(path!.length).toBe(10);
+        const changes = countDirectionChanges(path!, 5, 5);
+        expect(changes).toBe(0); // Perfect straight line has 0 direction changes
+    });
+
+    it('should produce a straight path for diagonal movement', () => {
+        // Move NE diagonal - hex distance is 10
+        const path = findPath(5, 15, 15, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        expect(path).not.toBe(null);
+        expect(path!.length).toBe(10); // Hex distance of 10
+        // For diagonal, some direction changes are necessary, but should be minimal
+        const changes = countDirectionChanges(path!, 5, 15);
+        // A smooth diagonal path might need 1-2 direction changes max
+        expect(changes).toBeLessThanOrEqual(2);
+    });
+
+    it('should find optimal length path on open terrain', () => {
+        // Long diagonal path from (10, 10) to (40, 25)
+        // Hex distance = max(|30|, |15|, |-45|) = 45
+        const path = findPath(10, 10, 40, 25, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        expect(path).not.toBe(null);
+        const hexDist = hexDistance(10, 10, 40, 25);
+        // Path length should equal hex distance (optimal)
+        expect(path!.length).toBe(hexDist);
+        // For hex grids, direction changes are expected for non-cardinal directions
+        // Just verify we don't have more changes than path length (which would be degenerate)
+        const changes = countDirectionChanges(path!, 10, 10);
+        expect(changes).toBeLessThan(path!.length);
+    });
+});
+
 describe('Pathfinding with 6 directions', () => {
     let map: TestMap;
 
