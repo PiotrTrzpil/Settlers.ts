@@ -29,8 +29,6 @@ import {
     LayerVisibility,
     DEFAULT_LAYER_VISIBILITY,
     isMapObjectVisible,
-    getMapObjectFallbackColor,
-    getMapObjectDotScale,
 } from './layer-visibility';
 
 
@@ -669,11 +667,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.disableVertexAttribArray(this.aColor);
 
         for (const entity of this.sortedEntities) {
-            // Handle map objects specially
+            // Map objects are only rendered via sprite batch (no dot fallback)
             if (entity.type === EntityType.MapObject) {
-                if (!texturedBuildingsHandled || !this.hasTexturedSprite(entity)) {
-                    this.drawMapObjectDot(gl, entity, viewPoint);
-                }
                 continue;
             }
 
@@ -868,22 +863,4 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
     }
 
-    /**
-     * Draw a colored dot for a map object without sprite texture.
-     */
-    private drawMapObjectDot(gl: WebGL2RenderingContext, entity: Entity, viewPoint: IViewPoint): void {
-        const objectType = entity.subType as MapObjectType;
-        const color = getMapObjectFallbackColor(objectType);
-        const scale = getMapObjectDotScale(objectType);
-
-        // Use cached world position from frame context
-        const cachedPos = this.frameContext?.getWorldPos(entity);
-        const worldPos = cachedPos ?? TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
-
-        gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
-        this.fillQuadVertices(0, 0, scale);
-        gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-        gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-    }
 }
