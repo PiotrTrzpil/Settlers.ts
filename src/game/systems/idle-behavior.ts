@@ -91,7 +91,7 @@ export class IdleBehaviorSystem implements TickSystem {
 
     /**
      * Handle unit stopping movement.
-     * Stops animation cycling and shows static pose.
+     * Switches to default/standing pose.
      */
     private onMovementStopped(entityId: number): void {
         const entity = this.gameState.getEntity(entityId);
@@ -99,7 +99,8 @@ export class IdleBehaviorSystem implements TickSystem {
 
         const animState = this.ensureAnimationState(entity);
 
-        // Stop animation, show frame 0
+        // Switch to default/standing sequence and stop animation
+        animState.sequenceKey = ANIMATION_SEQUENCES.DEFAULT;
         animState.playing = false;
         animState.currentFrame = 0;
     }

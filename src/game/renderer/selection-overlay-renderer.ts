@@ -57,6 +57,8 @@ export class SelectionOverlayRenderer {
 
         for (const entity of sortedEntities) {
             if (!selectedEntityIds.has(entity.id)) continue;
+            // Skip frames for units - they use dots instead
+            if (entity.type === EntityType.Unit) continue;
 
             const scale = this.getEntityScale(entity.type);
             const worldPos = this.getWorldPos(entity, ctx);
@@ -201,8 +203,9 @@ export class SelectionOverlayRenderer {
             const worldPos = this.getInterpolatedWorldPos(entity, ctx);
 
             // Draw larger dot on the unit sprite (offset upward to appear above sprite)
-            const spriteTopOffset = 0.7; // Offset upward to be above the sprite head
-            gl.vertexAttrib2f(aEntityPos, worldPos.worldX, worldPos.worldY + spriteTopOffset);
+            // Note: negative Y offset moves up in world coordinates
+            const spriteTopOffset = 0.7;
+            gl.vertexAttrib2f(aEntityPos, worldPos.worldX, worldPos.worldY - spriteTopOffset);
             gl.vertexAttrib4f(
                 aColor,
                 SELECTION_DOT_COLOR[0],
