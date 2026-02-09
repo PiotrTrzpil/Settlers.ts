@@ -20,9 +20,10 @@ Architectural rules and conventions for Settlers.ts. These rules ensure consiste
 6. [Query & Mutation Rules](#6-query--mutation-rules)
 7. [Code Organization Rules](#7-code-organization-rules)
 8. [Determinism Rules](#8-determinism-rules)
-9. [Error Handling Rules](#9-error-handling-rules)
-10. [Testing Rules](#10-testing-rules)
-11. [Naming Conventions](#11-naming-conventions)
+9. [Avoiding Over-Engineering](#9-avoiding-over-engineering)
+10. [Error Handling Rules](#10-error-handling-rules)
+11. [Testing Rules](#11-testing-rules)
+12. [Naming Conventions](#12-naming-conventions)
 
 ---
 
@@ -501,9 +502,88 @@ const value = Math.random();
 
 ---
 
-## 9. Error Handling Rules
+## 9. Avoiding Over-Engineering
 
-### Rule 9.1: TickSystems Must Not Throw
+### Rule 9.1: Don't Handle Scenarios That Can't Happen
+
+Defensive code that handles "impossible" scenarios masks bugs and adds complexity:
+
+```typescript
+// BAD — defensive code for scenario that shouldn't happen
+if (existingEntityId !== undefined) {
+    const entity = this.gameState.getEntity(existingEntityId);
+    if (entity && entity.type === EntityType.StackedResource) {
+        // Normal case
+        this.gameState.setResourceQuantity(existingEntityId, quantity);
+    } else {
+        // "Defensive" handling — but WHY would this entity not exist?
+        // This hides bugs and adds untested code paths
+        visualState.visualStacks.delete(materialType);
+    }
+}
+
+// GOOD — trust the invariant, crash loudly if violated
+if (existingEntityId !== undefined) {
+    this.gameState.setResourceQuantity(existingEntityId, quantity);
+}
+```
+
+**Why:**
+- If the scenario truly can't happen, the code is dead weight
+- If it CAN happen, it's a bug that should be fixed at the source
+- Defensive code creates untested paths that may have their own bugs
+- Silent recovery masks the root cause, making debugging harder
+
+### Rule 9.2: Validate at Boundaries, Trust Internals
+
+Add validation where external data enters the system. Trust internal invariants:
+
+```typescript
+// GOOD — validate external input
+function handleUserCommand(cmd: unknown): void {
+    if (!isValidCommand(cmd)) {
+        log.warn('Invalid command from user');
+        return;
+    }
+    executeCommand(cmd);
+}
+
+// GOOD — internal code trusts validated data
+function processCarrierJob(carrier: CarrierState, job: CarrierJob): void {
+    // No need to check if carrier or job are valid —
+    // they came from our own state management
+    const building = this.gameState.getEntity(job.fromBuilding)!;
+    // ...
+}
+```
+
+### Rule 9.3: Delete Rather Than Deprecate
+
+When removing functionality, delete the code. Don't leave "just in case" fallbacks:
+
+```typescript
+// BAD — keeping unused code "just in case"
+function doThing() {
+    if (USE_NEW_IMPLEMENTATION) {
+        newImplementation();
+    } else {
+        legacyImplementation();  // Never runs, never tested
+    }
+}
+
+// GOOD — delete the old code
+function doThing() {
+    newImplementation();
+}
+```
+
+**Git preserves history.** If you need old code back, use `git log` or `git blame`.
+
+---
+
+## 10. Error Handling Rules
+
+### Rule 10.1: TickSystems Must Not Throw
 
 TickSystems MUST catch and log errors, not crash the game loop:
 
@@ -558,9 +638,9 @@ function createBuildingState(entityId: number, buildingType: BuildingType): void
 
 ---
 
-## 10. Testing Rules
+## 11. Testing Rules
 
-### Rule 10.1: Test Through Public APIs
+### Rule 11.1: Test Through Public APIs
 
 Tests should use the same code paths a player would:
 
@@ -574,7 +654,7 @@ Tests should use the same code paths a player would:
 - Access private members via `(obj as any).privateField`
 - Skip the command pipeline for entity creation
 
-### Rule 10.2: Unit vs E2E Boundary
+### Rule 11.2: Unit vs E2E Boundary
 
 | Test type | Purpose | Examples |
 |-----------|---------|----------|
@@ -583,7 +663,7 @@ Tests should use the same code paths a player would:
 
 If a test only calls `game.execute()` and checks state without UI interaction, it should be a unit test.
 
-### Rule 10.3: Deterministic Waiting
+### Rule 11.3: Deterministic Waiting
 
 Never use `waitForTimeout()`. Use deterministic waiting:
 
@@ -597,7 +677,7 @@ await gp.waitForUnitsMoving(1);
 await page.waitForTimeout(500);
 ```
 
-### Rule 10.4: Test Both Odd and Even Y Rows
+### Rule 11.4: Test Both Odd and Even Y Rows
 
 Hex coordinate math differs for odd/even Y rows. Always test both:
 
@@ -610,9 +690,9 @@ it('should work for both odd and even Y rows', () => {
 
 ---
 
-## 11. Naming Conventions
+## 12. Naming Conventions
 
-### Rule 11.1: Match Settlers 4 XML Names
+### Rule 12.1: Match Settlers 4 XML Names
 
 Use names from the original game's XML data files:
 
@@ -631,7 +711,7 @@ Use names from the original game's XML data files:
 - `LOG` (not TRUNK), `BOARD` (not PLANK)
 - `GRAIN` (not CROP), `IRONBAR` (not IRON)
 
-### Rule 11.2: Event Domain Prefixes
+### Rule 12.2: Event Domain Prefixes
 
 Use consistent domain prefixes for events:
 
@@ -643,7 +723,7 @@ Use consistent domain prefixes for events:
 | `terrain:` | `modified` |
 | `selection:` | `changed` |
 
-### Rule 11.3: Boolean Function Prefixes
+### Rule 12.3: Boolean Function Prefixes
 
 | Prefix | Returns | Example |
 |--------|---------|---------|
