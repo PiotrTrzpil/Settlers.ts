@@ -9,6 +9,8 @@ import { GamePage } from './game-page';
  */
 
 test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () => {
+    // Note: @requires-assets project provides 60s timeout
+
     // Bypass cache for large GFX files to avoid ERR_CACHE_WRITE_FAILURE
     test.beforeEach(async({ page }) => {
         await page.route('**/*.gfx', async route => {
@@ -104,9 +106,9 @@ test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () 
             return;
         }
 
-        // Spawn a swordsman
-        await gp.spawnSwordsman();
-        await gp.waitForEntityCountAbove(0);
+        // Spawn a swordsman via game.execute()
+        const unit = await gp.spawnUnit(6); // Swordsman = UnitType 6
+        expect(unit).not.toBeNull();
 
         // Check that swordsman entity exists
         await expect(gp).toHaveEntity({ type: 1 }); // EntityType.Unit

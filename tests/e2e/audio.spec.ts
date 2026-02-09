@@ -8,7 +8,7 @@
 
 import { test, expect } from './fixtures';
 
-test.describe('Audio System', () => {
+test.describe('Audio System', { tag: '@smoke' }, () => {
     test('should have music enabled by default', async({ gp }) => {
         // Unlock audio context via user interaction
         await gp.unlockAudio();
