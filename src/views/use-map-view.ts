@@ -68,32 +68,32 @@ async function loadMapFile(
 /** Buildings available in the UI - organized by category */
 const availableBuildings = [
     // --- Storage ---
-    { type: BuildingType.Warehouse, id: 'warehouse', name: 'Warehouse', icon: '📦' },
+    { type: BuildingType.StorageArea, id: 'warehouse', name: 'Warehouse', icon: '📦' },
 
     // --- Residential ---
-    { type: BuildingType.SmallHouse, id: 'smallhouse', name: 'Small House', icon: '🏠' },
-    { type: BuildingType.MediumHouse, id: 'mediumhouse', name: 'Medium House', icon: '🏡' },
-    { type: BuildingType.LargeHouse, id: 'largehouse', name: 'Large House', icon: '🏘️' },
+    { type: BuildingType.ResidenceSmall, id: 'smallhouse', name: 'Small House', icon: '🏠' },
+    { type: BuildingType.ResidenceMedium, id: 'mediumhouse', name: 'Medium House', icon: '🏡' },
+    { type: BuildingType.ResidenceBig, id: 'largehouse', name: 'Large House', icon: '🏘️' },
     { type: BuildingType.LivingHouse, id: 'livinghouse', name: 'Living House', icon: '🛖' },
 
     // --- Wood & Stone ---
-    { type: BuildingType.Lumberjack, id: 'lumberjack', name: 'Lumberjack', icon: '🪓' },
-    { type: BuildingType.Forester, id: 'forester', name: 'Forester', icon: '🌲' },
+    { type: BuildingType.WoodcutterHut, id: 'lumberjack', name: 'Lumberjack', icon: '🪓' },
+    { type: BuildingType.ForesterHut, id: 'forester', name: 'Forester', icon: '🌲' },
     { type: BuildingType.Sawmill, id: 'sawmill', name: 'Sawmill', icon: '🪚' },
-    { type: BuildingType.Stonecutter, id: 'stonecutter', name: 'Stonecutter', icon: '🪨' },
+    { type: BuildingType.StonecutterHut, id: 'stonecutter', name: 'Stonecutter', icon: '🪨' },
     { type: BuildingType.StoneMine, id: 'stonemine', name: 'Stone Mine', icon: '⛰️' },
 
     // --- Food Production ---
-    { type: BuildingType.Farm, id: 'farm', name: 'Farm', icon: '🌾' },
-    { type: BuildingType.Windmill, id: 'windmill', name: 'Windmill', icon: '🌀' },
+    { type: BuildingType.GrainFarm, id: 'farm', name: 'Farm', icon: '🌾' },
+    { type: BuildingType.Mill, id: 'windmill', name: 'Windmill', icon: '🌀' },
     { type: BuildingType.Bakery, id: 'bakery', name: 'Bakery', icon: '🍞' },
-    { type: BuildingType.Fishery, id: 'fishery', name: 'Fishery', icon: '🐟' },
-    { type: BuildingType.Hunter, id: 'hunter', name: 'Hunter', icon: '🏹' },
-    { type: BuildingType.PigFarm, id: 'pigfarm', name: 'Pig Farm', icon: '🐷' },
+    { type: BuildingType.FisherHut, id: 'fishery', name: 'Fishery', icon: '🐟' },
+    { type: BuildingType.HunterHut, id: 'hunter', name: 'Hunter', icon: '🏹' },
+    { type: BuildingType.AnimalRanch, id: 'pigfarm', name: 'Pig Farm', icon: '🐷' },
     { type: BuildingType.Slaughterhouse, id: 'slaughterhouse', name: 'Slaughter', icon: '🥩' },
-    { type: BuildingType.Waterworks, id: 'waterworks', name: 'Waterworks', icon: '💧' },
+    { type: BuildingType.WaterworkHut, id: 'waterworks', name: 'Waterworks', icon: '💧' },
     { type: BuildingType.WinePress, id: 'winepress', name: 'Wine Press', icon: '🍷' },
-    { type: BuildingType.DonkeyFarm, id: 'donkeyfarm', name: 'Donkey Farm', icon: '🫏' },
+    { type: BuildingType.DonkeyRanch, id: 'donkeyfarm', name: 'Donkey Farm', icon: '🫏' },
 
     // --- Mining & Smelting ---
     { type: BuildingType.CoalMine, id: 'coalmine', name: 'Coal Mine', icon: '⛏️' },
@@ -101,7 +101,7 @@ const availableBuildings = [
     { type: BuildingType.GoldMine, id: 'goldmine', name: 'Gold Mine', icon: '🪙' },
     { type: BuildingType.SulfurMine, id: 'sulfurmine', name: 'Sulfur Mine', icon: '💛' },
     { type: BuildingType.IronSmelter, id: 'ironsmelter', name: 'Iron Smelter', icon: '🔥' },
-    { type: BuildingType.GoldSmelter, id: 'goldsmelter', name: 'Gold Smelter', icon: '✨' },
+    { type: BuildingType.SmeltGold, id: 'goldsmelter', name: 'Gold Smelter', icon: '✨' },
 
     // --- Crafting ---
     { type: BuildingType.WeaponSmith, id: 'weaponsmith', name: 'Weaponsmith', icon: '⚔️' },
@@ -110,14 +110,14 @@ const availableBuildings = [
 
     // --- Military ---
     { type: BuildingType.Barrack, id: 'barrack', name: 'Barrack', icon: '🛡️' },
-    { type: BuildingType.Tower, id: 'tower', name: 'Tower', icon: '🗼' },
-    { type: BuildingType.LargeTower, id: 'largetower', name: 'Large Tower', icon: '🏰' },
-    { type: BuildingType.ScoutTower, id: 'scouttower', name: 'Scout Tower', icon: '👁️' },
+    { type: BuildingType.GuardTowerSmall, id: 'tower', name: 'Tower', icon: '🗼' },
+    { type: BuildingType.GuardTowerBig, id: 'largetower', name: 'Large Tower', icon: '🏰' },
+    { type: BuildingType.LookoutTower, id: 'scouttower', name: 'Scout Tower', icon: '👁️' },
     { type: BuildingType.Castle, id: 'castle', name: 'Castle', icon: '🏯' },
     { type: BuildingType.SiegeWorkshop, id: 'siegeworkshop', name: 'Siege Works', icon: '⚙️' },
 
     // --- Special ---
-    { type: BuildingType.Healer, id: 'healer', name: 'Healer', icon: '💊' },
+    { type: BuildingType.HealerHut, id: 'healer', name: 'Healer', icon: '💊' },
     { type: BuildingType.SmallTemple, id: 'smalltemple', name: 'Small Temple', icon: '⛩️' },
     { type: BuildingType.LargeTemple, id: 'largetemple', name: 'Large Temple', icon: '🕌' },
     { type: BuildingType.Shipyard, id: 'shipyard', name: 'Shipyard', icon: '⛵' },

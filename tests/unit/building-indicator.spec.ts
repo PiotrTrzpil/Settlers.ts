@@ -52,7 +52,7 @@ describe('BuildingIndicatorRenderer', () => {
         });
 
         it('should return Medium for slight slope (difference 1) within footprint', () => {
-            renderer.buildingType = BuildingType.Lumberjack;
+            renderer.buildingType = BuildingType.WoodcutterHut;
             groundHeight[mapSize.toIndex(4, 4)] = 100;
             groundHeight[mapSize.toIndex(5, 4)] = 101;
             groundHeight[mapSize.toIndex(4, 5)] = 100;
@@ -61,7 +61,7 @@ describe('BuildingIndicatorRenderer', () => {
         });
 
         it('should return Difficult for moderate slope (difference 2) within footprint', () => {
-            renderer.buildingType = BuildingType.Lumberjack;
+            renderer.buildingType = BuildingType.WoodcutterHut;
             groundHeight[mapSize.toIndex(4, 4)] = 100;
             groundHeight[mapSize.toIndex(5, 4)] = 102;
             groundHeight[mapSize.toIndex(4, 5)] = 100;
@@ -70,7 +70,7 @@ describe('BuildingIndicatorRenderer', () => {
         });
 
         it('should return TooSteep for steep slope (difference > 2) within footprint', () => {
-            renderer.buildingType = BuildingType.Lumberjack;
+            renderer.buildingType = BuildingType.WoodcutterHut;
             groundHeight[mapSize.toIndex(4, 4)] = 100;
             groundHeight[mapSize.toIndex(5, 4)] = 103;
             groundHeight[mapSize.toIndex(4, 5)] = 100;

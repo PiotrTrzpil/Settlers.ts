@@ -40,16 +40,16 @@ describe('Game Session: multi-system integration sweep', () => {
         const state = createGameState();
 
         // ── Place a Lumberjack (produces TRUNK) ──
-        expect(placeBuilding(state, map, 20, 20, BuildingType.Lumberjack, 0)).toBe(true);
+        expect(placeBuilding(state, map, 20, 20, BuildingType.WoodcutterHut, 0)).toBe(true);
 
         // Lumberjack auto-spawns a worker
-        const lumberjackEntities = state.entities.filter(e => e.type === EntityType.Building && e.subType === BuildingType.Lumberjack);
+        const lumberjackEntities = state.entities.filter(e => e.type === EntityType.Building && e.subType === BuildingType.WoodcutterHut);
         expect(lumberjackEntities).toHaveLength(1);
         const workers = state.entities.filter(e => e.type === EntityType.Unit);
         expect(workers).toHaveLength(1);
 
         // ── Verify production chain data ──
-        const lumberjackChain = BUILDING_PRODUCTIONS.get(BuildingType.Lumberjack)!;
+        const lumberjackChain = BUILDING_PRODUCTIONS.get(BuildingType.WoodcutterHut)!;
         expect(lumberjackChain.output).toBe(EMaterialType.TRUNK);
         expect(lumberjackChain.inputs).toHaveLength(0); // No inputs needed
 
@@ -65,7 +65,7 @@ describe('Game Session: multi-system integration sweep', () => {
         expect(trunkConsumers).toContain(BuildingType.Sawmill);
 
         // ── Verify construction costs use standard materials ──
-        const lumberjackCost = CONSTRUCTION_COSTS.get(BuildingType.Lumberjack)!;
+        const lumberjackCost = CONSTRUCTION_COSTS.get(BuildingType.WoodcutterHut)!;
         expect(lumberjackCost.length).toBeGreaterThan(0);
         for (const cost of lumberjackCost) {
             expect(isMaterialDroppable(cost.material)).toBe(true);
@@ -83,9 +83,9 @@ describe('Game Session: multi-system integration sweep', () => {
         const state = createGameState();
 
         // ── Build phase: place multiple buildings ──
-        expect(placeBuilding(state, map, 10, 10, BuildingType.Warehouse, 0)).toBe(true);
-        expect(placeBuilding(state, map, 20, 20, BuildingType.Lumberjack, 0)).toBe(true);
-        expect(placeBuilding(state, map, 30, 30, BuildingType.Tower, 1)).toBe(true);
+        expect(placeBuilding(state, map, 10, 10, BuildingType.StorageArea, 0)).toBe(true);
+        expect(placeBuilding(state, map, 20, 20, BuildingType.WoodcutterHut, 0)).toBe(true);
+        expect(placeBuilding(state, map, 30, 30, BuildingType.GuardTowerSmall, 1)).toBe(true);
 
         // Warehouse (no auto-spawn) + Lumberjack (auto-spawn worker) + Tower (no auto-spawn)
         const buildings = state.entities.filter(e => e.type === EntityType.Building);
@@ -188,7 +188,7 @@ describe('Game Session: multi-system integration sweep', () => {
         const state = createGameState();
 
         // Place a building and a unit in the same area
-        placeBuilding(state, map, 10, 10, BuildingType.Warehouse, 0);
+        placeBuilding(state, map, 10, 10, BuildingType.StorageArea, 0);
         spawnUnit(state, map, 11, 10, 2, 0); // Swordsman (selectable - Military category)
 
         // Area select covering both
@@ -219,7 +219,7 @@ describe('Game Session: multi-system integration sweep', () => {
         const state = createGameState();
 
         // Create a cluster of entities
-        placeBuilding(state, map, 20, 20, BuildingType.Warehouse, 0);
+        placeBuilding(state, map, 20, 20, BuildingType.StorageArea, 0);
         spawnUnit(state, map, 21, 20, 0, 0);
         spawnUnit(state, map, 22, 20, 0, 0);
         // Far-away entity

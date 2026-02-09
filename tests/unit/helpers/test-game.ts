@@ -35,7 +35,7 @@ export function addBuilding(
     state: GameState,
     x: number,
     y: number,
-    buildingType: BuildingType | number = BuildingType.Lumberjack,
+    buildingType: BuildingType | number = BuildingType.WoodcutterHut,
     player = 0,
 ): Entity {
     return state.addEntity(EntityType.Building, buildingType, x, y, player);
@@ -87,7 +87,7 @@ export function placeBuilding(
     map: TestMap,
     x: number,
     y: number,
-    buildingType: number = BuildingType.Lumberjack,
+    buildingType: number = BuildingType.WoodcutterHut,
     player = 0,
     eventBus: EventBus = new EventBus(),
 ): boolean {

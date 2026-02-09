@@ -85,10 +85,10 @@ describe('Production Chains', () => {
     });
 
     it('should include key production buildings', () => {
-        expect(BUILDING_PRODUCTIONS.has(BuildingType.Lumberjack)).toBe(true);
+        expect(BUILDING_PRODUCTIONS.has(BuildingType.WoodcutterHut)).toBe(true);
         expect(BUILDING_PRODUCTIONS.has(BuildingType.Sawmill)).toBe(true);
-        expect(BUILDING_PRODUCTIONS.has(BuildingType.Stonecutter)).toBe(true);
-        expect(BUILDING_PRODUCTIONS.has(BuildingType.Farm)).toBe(true);
+        expect(BUILDING_PRODUCTIONS.has(BuildingType.StonecutterHut)).toBe(true);
+        expect(BUILDING_PRODUCTIONS.has(BuildingType.GrainFarm)).toBe(true);
         expect(BUILDING_PRODUCTIONS.has(BuildingType.CoalMine)).toBe(true);
         expect(BUILDING_PRODUCTIONS.has(BuildingType.IronSmelter)).toBe(true);
         expect(BUILDING_PRODUCTIONS.has(BuildingType.WeaponSmith)).toBe(true);
@@ -111,15 +111,15 @@ describe('getBuildingTypesRequestingMaterial', () => {
     it('should return multiple buildings for COAL', () => {
         const buildings = getBuildingTypesRequestingMaterial(EMaterialType.COAL);
         expect(buildings).toContain(BuildingType.IronSmelter);
-        expect(buildings).toContain(BuildingType.GoldSmelter);
+        expect(buildings).toContain(BuildingType.SmeltGold);
         expect(buildings).toContain(BuildingType.WeaponSmith);
         expect(buildings).toContain(BuildingType.ToolSmith);
     });
 
     it('should return Windmill and PigFarm for CROP', () => {
         const buildings = getBuildingTypesRequestingMaterial(EMaterialType.CROP);
-        expect(buildings).toContain(BuildingType.Windmill);
-        expect(buildings).toContain(BuildingType.PigFarm);
+        expect(buildings).toContain(BuildingType.Mill);
+        expect(buildings).toContain(BuildingType.AnimalRanch);
     });
 
     it('should return empty array for materials not consumed by any building', () => {

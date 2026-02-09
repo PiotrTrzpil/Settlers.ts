@@ -30,7 +30,7 @@ describe('populateMapBuildings', () => {
         const entity1 = state.getEntityAt(10, 10);
         expect(entity1).toBeDefined();
         expect(entity1!.type).toBe(EntityType.Building);
-        expect(entity1!.subType).toBe(BuildingType.Lumberjack);
+        expect(entity1!.subType).toBe(BuildingType.WoodcutterHut);
         expect(entity1!.player).toBe(0);
 
         // Check second building
@@ -105,7 +105,7 @@ describe('populateMapBuildings', () => {
 
 describe('mapS4BuildingType', () => {
     it('should map known S4 building types to internal types', () => {
-        expect(mapS4BuildingType(S4BuildingType.WOODCUTTERHUT)).toBe(BuildingType.Lumberjack);
+        expect(mapS4BuildingType(S4BuildingType.WOODCUTTERHUT)).toBe(BuildingType.WoodcutterHut);
         expect(mapS4BuildingType(S4BuildingType.SAWMILL)).toBe(BuildingType.Sawmill);
         expect(mapS4BuildingType(S4BuildingType.BARRACKS)).toBe(BuildingType.Barrack);
         expect(mapS4BuildingType(S4BuildingType.CASTLE)).toBe(BuildingType.Castle);

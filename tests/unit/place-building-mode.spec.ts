@@ -57,8 +57,8 @@ describe('PlaceBuildingMode', () => {
     describe('mode entry and exit', () => {
         it('should initialize with building type and switch to select if missing', () => {
             // Valid entry
-            mode.onEnter(mockContext, { buildingType: BuildingType.Lumberjack, player: 1 });
-            expect(modeData?.buildingType).toBe(BuildingType.Lumberjack);
+            mode.onEnter(mockContext, { buildingType: BuildingType.WoodcutterHut, player: 1 });
+            expect(modeData?.buildingType).toBe(BuildingType.WoodcutterHut);
 
             // Invalid entry - switches to select
             switchedToMode = null;
@@ -67,7 +67,7 @@ describe('PlaceBuildingMode', () => {
         });
 
         it('should clear mode data on exit', () => {
-            mode.onEnter(mockContext, { buildingType: BuildingType.Farm });
+            mode.onEnter(mockContext, { buildingType: BuildingType.GrainFarm });
             mode.onExit(mockContext);
             expect(modeData).toBeUndefined();
         });
@@ -75,7 +75,7 @@ describe('PlaceBuildingMode', () => {
 
     describe('cancel actions', () => {
         beforeEach(() => {
-            mode.onEnter(mockContext, { buildingType: BuildingType.Lumberjack });
+            mode.onEnter(mockContext, { buildingType: BuildingType.WoodcutterHut });
         });
 
         it('should switch to select on ESC/cancel and right-click', () => {
@@ -85,7 +85,7 @@ describe('PlaceBuildingMode', () => {
 
             // Right-click
             switchedToMode = null;
-            mode.onEnter(mockContext, { buildingType: BuildingType.Lumberjack });
+            mode.onEnter(mockContext, { buildingType: BuildingType.WoodcutterHut });
             mode.onPointerUp(createPointerData({ button: MouseButton.Right }), mockContext);
             expect(switchedToMode).toBe('select');
         });
@@ -131,13 +131,13 @@ describe('PlaceBuildingMode', () => {
 
     describe('preview positioning', () => {
         beforeEach(() => {
-            mode.onEnter(mockContext, { buildingType: BuildingType.Lumberjack });
+            mode.onEnter(mockContext, { buildingType: BuildingType.WoodcutterHut });
         });
 
         it('should center preview on cursor using building size', () => {
             mode.onPointerMove(createPointerData({ tileX: 25, tileY: 30 }), mockContext);
 
-            const size = getBuildingSize(BuildingType.Lumberjack);
+            const size = getBuildingSize(BuildingType.WoodcutterHut);
             const expectedX = Math.round(25 - (size.width - 1) / 2);
             const expectedY = Math.round(30 - (size.height - 1) / 2);
 
@@ -166,7 +166,7 @@ describe('PlaceBuildingMode', () => {
 
     describe('render state', () => {
         it('should return appropriate cursor and preview based on validity', () => {
-            mode.onEnter(mockContext, { buildingType: BuildingType.Farm });
+            mode.onEnter(mockContext, { buildingType: BuildingType.GrainFarm });
 
             // Valid preview
             modeData!.previewValid = true;

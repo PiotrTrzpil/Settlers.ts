@@ -173,7 +173,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const state = createGameState();
 
         // Place a warehouse (no auto-spawn) to occupy tile
-        placeBuilding(state, map, 10, 10, BuildingType.Warehouse);
+        placeBuilding(state, map, 10, 10, BuildingType.StorageArea);
         expect(state.entities).toHaveLength(1);
         expect(state.getEntityAt(10, 10)).toBeDefined();
 

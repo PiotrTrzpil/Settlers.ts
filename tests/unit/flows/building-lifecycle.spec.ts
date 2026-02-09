@@ -41,14 +41,14 @@ describe('Building Lifecycle: place → construct → remove', () => {
         const state = createGameState();
 
         // ── Step 1: Place a building via command system ──
-        const placed = placeBuilding(state, map, 20, 20, BuildingType.Lumberjack, 0);
+        const placed = placeBuilding(state, map, 20, 20, BuildingType.WoodcutterHut, 0);
         expect(placed).toBe(true);
 
         const building = state.entities.find(e => e.type === EntityType.Building);
         expect(building).toBeDefined();
         expect(building!.x).toBe(20);
         expect(building!.y).toBe(20);
-        expect(building!.subType).toBe(BuildingType.Lumberjack);
+        expect(building!.subType).toBe(BuildingType.WoodcutterHut);
 
         // Lumberjack auto-spawns a worker
         const worker = state.entities.find(e => e.type === EntityType.Unit);
@@ -82,7 +82,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         tickConstruction(state, 0.5, ctx);
 
         // Footprint tiles should have construction ground type
-        const footprint = getBuildingFootprint(20, 20, BuildingType.Lumberjack);
+        const footprint = getBuildingFootprint(20, 20, BuildingType.WoodcutterHut);
         for (const tile of footprint) {
             expect(map.groundType[map.mapSize.toIndex(tile.x, tile.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
         }
@@ -128,23 +128,23 @@ describe('Building Lifecycle: place → construct → remove', () => {
 
         // Water → fails
         setTerrainAt(map, 10, 10, TERRAIN.WATER);
-        expect(placeBuilding(state, map, 10, 10, BuildingType.Lumberjack)).toBe(false);
+        expect(placeBuilding(state, map, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
         expect(state.entities).toHaveLength(0);
 
         // Rock → fails
         setTerrainAt(map, 10, 10, TERRAIN.ROCK);
-        expect(placeBuilding(state, map, 10, 10, BuildingType.Lumberjack)).toBe(false);
+        expect(placeBuilding(state, map, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
 
         // Beach → fails (not buildable)
         setTerrainAt(map, 10, 10, TERRAIN.BEACH);
-        expect(placeBuilding(state, map, 10, 10, BuildingType.Lumberjack)).toBe(false);
+        expect(placeBuilding(state, map, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
 
         // Grass → succeeds
         setTerrainAt(map, 10, 10, TERRAIN.GRASS);
-        expect(placeBuilding(state, map, 10, 10, BuildingType.Lumberjack)).toBe(true);
+        expect(placeBuilding(state, map, 10, 10, BuildingType.WoodcutterHut)).toBe(true);
 
         // Occupied → fails
-        expect(placeBuilding(state, map, 10, 10, BuildingType.Warehouse)).toBe(false);
+        expect(placeBuilding(state, map, 10, 10, BuildingType.StorageArea)).toBe(false);
     });
 
     it('terrain capture and restoration preserves varied heights', () => {
@@ -158,7 +158,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         const originalHeights = new Uint8Array(map.groundHeight);
 
         const state = createGameState();
-        const building = addBuilding(state, 10, 10, BuildingType.Lumberjack, 0);
+        const building = addBuilding(state, 10, 10, BuildingType.WoodcutterHut, 0);
         const bs = state.buildingStates.get(building.id)!;
 
         // Capture terrain
@@ -168,7 +168,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         applyTerrainLeveling(bs, map.groundType, map.groundHeight, map.mapSize, 1.0);
 
         // Footprint tiles should be leveled
-        const footprint = getBuildingFootprint(10, 10, BuildingType.Lumberjack);
+        const footprint = getBuildingFootprint(10, 10, BuildingType.WoodcutterHut);
         const targetHeight = bs.originalTerrain!.targetHeight;
         for (const tile of footprint) {
             expect(map.groundHeight[map.mapSize.toIndex(tile.x, tile.y)]).toBe(targetHeight);
@@ -191,7 +191,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         const map = createTestMap(64, 64, { flatHeight: 100 });
         const state = createGameState();
 
-        addBuilding(state, 10, 10, BuildingType.Lumberjack, 0);
+        addBuilding(state, 10, 10, BuildingType.WoodcutterHut, 0);
         const bs = [...state.buildingStates.values()][0];
         bs.totalDuration = 10;
 

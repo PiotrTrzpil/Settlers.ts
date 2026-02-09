@@ -24,21 +24,21 @@ export interface ConstructionCost {
  */
 export const BUILDING_PRODUCTIONS: ReadonlyMap<BuildingType, ProductionChain> = new Map([
     // Wood industry
-    [BuildingType.Lumberjack, { inputs: [], output: EMaterialType.TRUNK }],
+    [BuildingType.WoodcutterHut, { inputs: [], output: EMaterialType.TRUNK }],
     [BuildingType.Sawmill, { inputs: [EMaterialType.TRUNK], output: EMaterialType.PLANK }],
-    [BuildingType.Forester, { inputs: [], output: EMaterialType.NO_MATERIAL }],
+    [BuildingType.ForesterHut, { inputs: [], output: EMaterialType.NO_MATERIAL }],
 
     // Stone
-    [BuildingType.Stonecutter, { inputs: [], output: EMaterialType.STONE }],
+    [BuildingType.StonecutterHut, { inputs: [], output: EMaterialType.STONE }],
 
     // Food industry
-    [BuildingType.Farm, { inputs: [], output: EMaterialType.CROP }],
-    [BuildingType.Windmill, { inputs: [EMaterialType.CROP], output: EMaterialType.FLOUR }],
+    [BuildingType.GrainFarm, { inputs: [], output: EMaterialType.CROP }],
+    [BuildingType.Mill, { inputs: [EMaterialType.CROP], output: EMaterialType.FLOUR }],
     [BuildingType.Bakery, { inputs: [EMaterialType.FLOUR, EMaterialType.WATER], output: EMaterialType.BREAD }],
-    [BuildingType.Fishery, { inputs: [], output: EMaterialType.FISH }],
-    [BuildingType.PigFarm, { inputs: [EMaterialType.CROP], output: EMaterialType.PIG }],
+    [BuildingType.FisherHut, { inputs: [], output: EMaterialType.FISH }],
+    [BuildingType.AnimalRanch, { inputs: [EMaterialType.CROP], output: EMaterialType.PIG }],
     [BuildingType.Slaughterhouse, { inputs: [EMaterialType.PIG], output: EMaterialType.MEAT }],
-    [BuildingType.Waterworks, { inputs: [], output: EMaterialType.WATER }],
+    [BuildingType.WaterworkHut, { inputs: [], output: EMaterialType.WATER }],
 
     // Mining (mines consume food — BREAD is the canonical food input)
     [BuildingType.CoalMine, { inputs: [EMaterialType.BREAD], output: EMaterialType.COAL }],
@@ -47,7 +47,7 @@ export const BUILDING_PRODUCTIONS: ReadonlyMap<BuildingType, ProductionChain> = 
 
     // Metal industry
     [BuildingType.IronSmelter, { inputs: [EMaterialType.IRONORE, EMaterialType.COAL], output: EMaterialType.IRON }],
-    [BuildingType.GoldSmelter, { inputs: [EMaterialType.GOLDORE, EMaterialType.COAL], output: EMaterialType.GOLD }],
+    [BuildingType.SmeltGold, { inputs: [EMaterialType.GOLDORE, EMaterialType.COAL], output: EMaterialType.GOLD }],
     [BuildingType.WeaponSmith, { inputs: [EMaterialType.IRON, EMaterialType.COAL], output: EMaterialType.SWORD }],
     [BuildingType.ToolSmith, { inputs: [EMaterialType.IRON, EMaterialType.COAL], output: EMaterialType.AXE }],
 
@@ -64,7 +64,7 @@ export const BUILDING_PRODUCTIONS: ReadonlyMap<BuildingType, ProductionChain> = 
  */
 export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly ConstructionCost[]> = new Map([
     // Military
-    [BuildingType.Tower, [
+    [BuildingType.GuardTowerSmall, [
         { material: EMaterialType.PLANK, count: 4 },
         { material: EMaterialType.STONE, count: 6 },
     ]],
@@ -74,13 +74,13 @@ export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly Construction
     ]],
 
     // Storage
-    [BuildingType.Warehouse, [
+    [BuildingType.StorageArea, [
         { material: EMaterialType.PLANK, count: 4 },
         { material: EMaterialType.STONE, count: 4 },
     ]],
 
     // Wood industry
-    [BuildingType.Lumberjack, [
+    [BuildingType.WoodcutterHut, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 1 },
     ]],
@@ -88,22 +88,22 @@ export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly Construction
         { material: EMaterialType.PLANK, count: 3 },
         { material: EMaterialType.STONE, count: 2 },
     ]],
-    [BuildingType.Forester, [
+    [BuildingType.ForesterHut, [
         { material: EMaterialType.PLANK, count: 2 },
     ]],
 
     // Stone
-    [BuildingType.Stonecutter, [
+    [BuildingType.StonecutterHut, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 1 },
     ]],
 
     // Food industry
-    [BuildingType.Farm, [
+    [BuildingType.GrainFarm, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 3 },
     ]],
-    [BuildingType.Windmill, [
+    [BuildingType.Mill, [
         { material: EMaterialType.PLANK, count: 3 },
         { material: EMaterialType.STONE, count: 2 },
     ]],
@@ -111,11 +111,11 @@ export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly Construction
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 2 },
     ]],
-    [BuildingType.Fishery, [
+    [BuildingType.FisherHut, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 1 },
     ]],
-    [BuildingType.PigFarm, [
+    [BuildingType.AnimalRanch, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 2 },
     ]],
@@ -123,7 +123,7 @@ export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly Construction
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 2 },
     ]],
-    [BuildingType.Waterworks, [
+    [BuildingType.WaterworkHut, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 1 },
     ]],
@@ -144,7 +144,7 @@ export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly Construction
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 3 },
     ]],
-    [BuildingType.GoldSmelter, [
+    [BuildingType.SmeltGold, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 3 },
     ]],
@@ -170,11 +170,11 @@ export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly Construction
     ]],
 
     // Additional buildings
-    [BuildingType.Hunter, [
+    [BuildingType.HunterHut, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 1 },
     ]],
-    [BuildingType.DonkeyFarm, [
+    [BuildingType.DonkeyRanch, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 2 },
     ]],
@@ -184,7 +184,7 @@ export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly Construction
     [BuildingType.SulfurMine, [
         { material: EMaterialType.PLANK, count: 3 },
     ]],
-    [BuildingType.Healer, [
+    [BuildingType.HealerHut, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 2 },
     ]],
@@ -198,25 +198,25 @@ export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly Construction
     ]],
 
     // Houses
-    [BuildingType.SmallHouse, [
+    [BuildingType.ResidenceSmall, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 2 },
     ]],
-    [BuildingType.MediumHouse, [
+    [BuildingType.ResidenceMedium, [
         { material: EMaterialType.PLANK, count: 3 },
         { material: EMaterialType.STONE, count: 3 },
     ]],
-    [BuildingType.LargeHouse, [
+    [BuildingType.ResidenceBig, [
         { material: EMaterialType.PLANK, count: 4 },
         { material: EMaterialType.STONE, count: 4 },
     ]],
 
     // Military structures
-    [BuildingType.ScoutTower, [
+    [BuildingType.LookoutTower, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 4 },
     ]],
-    [BuildingType.LargeTower, [
+    [BuildingType.GuardTowerBig, [
         { material: EMaterialType.PLANK, count: 6 },
         { material: EMaterialType.STONE, count: 8 },
     ]],

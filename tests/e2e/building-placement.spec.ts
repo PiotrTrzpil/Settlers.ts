@@ -131,7 +131,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         expect(result.countAfter).toBeGreaterThan(result.countBefore);
         expect(result.building).not.toBeNull();
         expect(result.building!.type).toBe(2); // EntityType.Building
-        expect(result.building!.subType).toBe(1); // BuildingType.Lumberjack
+        expect(result.building!.subType).toBe(1); // BuildingType.WoodcutterHut
         expect(result.building!.x).toBe(result.expectedPos!.x);
         expect(result.building!.y).toBe(result.expectedPos!.y);
         expect(result.building!.player).toBe(0);

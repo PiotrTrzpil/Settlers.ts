@@ -26,9 +26,9 @@ export const DEFAULT_CONSTRUCTION_DURATION = 10;
  */
 export const BUILDING_SPAWN_ON_COMPLETE: Record<number, BuildingSpawnConfig | undefined> = {
     [BuildingType.Barrack]: { unitType: UnitType.Swordsman, count: 3 },
-    [BuildingType.SmallHouse]: { unitType: UnitType.Carrier, count: 2 },
-    [BuildingType.MediumHouse]: { unitType: UnitType.Carrier, count: 4 },
-    [BuildingType.LargeHouse]: { unitType: UnitType.Carrier, count: 6 },
+    [BuildingType.ResidenceSmall]: { unitType: UnitType.Carrier, count: 2 },
+    [BuildingType.ResidenceMedium]: { unitType: UnitType.Carrier, count: 4 },
+    [BuildingType.ResidenceBig]: { unitType: UnitType.Carrier, count: 6 },
 };
 
 /**

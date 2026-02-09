@@ -101,6 +101,6 @@ export function getUnitTypesInCategory(category: UnitCategory): UnitType[] {
 
 /** Which unit type each building auto-spawns at placement time (undefined = no auto-spawn) */
 export const BUILDING_UNIT_TYPE: Record<number, UnitType | undefined> = {
-    [BuildingType.Lumberjack]: UnitType.Builder,
-    [BuildingType.Warehouse]: undefined,
+    [BuildingType.WoodcutterHut]: UnitType.Builder,
+    [BuildingType.StorageArea]: undefined,
 };
