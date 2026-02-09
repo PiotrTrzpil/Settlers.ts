@@ -3,6 +3,7 @@ import { updateAnimations, AnimationDataProvider } from './systems/animation';
 import { updateIdleBehavior } from './systems/idle-behavior';
 import { LogHandler } from '@/utilities/log-handler';
 import { debugStats } from './debug-stats';
+import { gameSettings } from './game-settings';
 import { MapSize } from '@/utilities/map-size';
 import type { TickSystem } from './tick-system';
 import { BuildingConstructionSystem } from './features/building-construction';
@@ -155,8 +156,10 @@ export class GameLoop {
             this.accumulator += deltaSec;
 
             // Fixed timestep simulation - always runs to keep game state consistent
+            // Scale tick duration by game speed setting for faster/slower gameplay
+            const scaledDt = TICK_DURATION * gameSettings.state.gameSpeed;
             while (this.accumulator >= TICK_DURATION) {
-                this.tick(TICK_DURATION);
+                this.tick(scaledDt);
                 this.accumulator -= TICK_DURATION;
             }
 

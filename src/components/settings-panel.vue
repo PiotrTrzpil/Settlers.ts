@@ -6,6 +6,21 @@
     </button>
 
     <div v-if="open" class="settings-sections">
+      <!-- Game Settings -->
+      <section class="settings-section">
+        <h3 class="section-header" @click="sections.game = !sections.game">
+          <span class="caret">{{ sections.game ? '&#x25BC;' : '&#x25B6;' }}</span>
+          Game
+        </h3>
+        <div v-if="sections.game" class="section-body">
+          <SettingsSlider
+            label="Game speed"
+            v-model="settings.gameSpeed"
+            :min="0.25" :max="4" :step="0.25"
+          />
+        </div>
+      </section>
+
       <!-- Camera Settings -->
       <section class="settings-section">
         <h3 class="section-header" @click="sections.camera = !sections.camera">
@@ -96,6 +111,7 @@ const open = computed({
 });
 
 const sections = reactive({
+    game: true,
     camera: true,
     audio: true,
     display: true,

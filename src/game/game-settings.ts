@@ -7,6 +7,9 @@ const SETTINGS_STORAGE_KEY = 'settlers_game_settings';
  * persisted to localStorage and restored on game start.
  */
 export interface GameSettings {
+    // Game
+    gameSpeed: number;
+
     // Camera
     zoomSpeed: number;
     panSpeed: number;
@@ -29,6 +32,9 @@ export interface GameSettings {
 
 /** Default values for all settings */
 const DEFAULT_SETTINGS: GameSettings = {
+    // Game
+    gameSpeed: 1.0,
+
     // Camera
     zoomSpeed: 0.05,
     panSpeed: 40,
