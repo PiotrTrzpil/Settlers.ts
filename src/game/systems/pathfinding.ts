@@ -1,8 +1,10 @@
-import { TileCoord, tileKey } from '../entity';
+import { tileKey, TileCoord } from '../entity';
 import { isPassable } from './placement';
-import { GRID_DELTAS, NUMBER_OF_DIRECTIONS, hexDistance } from './hex-directions';
+import { GRID_DELTAS, NUMBER_OF_DIRECTIONS, hexDistance, getApproxDirection } from './hex-directions';
 
 const MAX_SEARCH_NODES = 2000;
+const COST_SCALE = 10;
+const MOVE_COST = 10;
 
 /**
  * Bucket queue for A* — O(1) insert, amortized O(1) popMin.
@@ -51,6 +53,7 @@ interface PathContext {
     goalX: number;
     goalY: number;
     tileOccupancy: Map<string, number>;
+    ignoreOccupancy: boolean;
     gCost: Float32Array;
     parent: Int32Array;
     flags: Uint8Array;
@@ -67,7 +70,7 @@ function canEnterTile(
 
     // Allow entering the goal even if occupied
     const isGoal = nx === ctx.goalX && ny === ctx.goalY;
-    if (!isGoal && ctx.tileOccupancy.has(tileKey(nx, ny))) return false;
+    if (!ctx.ignoreOccupancy && !isGoal && ctx.tileOccupancy.has(tileKey(nx, ny))) return false;
 
     return true;
 }
@@ -88,15 +91,31 @@ function processNeighbor(
 
     const currentHeight = ctx.groundHeight[currentIdx];
     const neighborHeight = ctx.groundHeight[nIdx];
-    const moveCost = 1 + Math.abs(currentHeight - neighborHeight);
+    // const moveCost = 1 + Math.abs(currentHeight - neighborHeight);
+    const moveCost = MOVE_COST; // Constant cost to match Settlers 3 / Remake behavior
     const tentativeG = ctx.gCost[currentIdx] + moveCost;
 
     if (tentativeG < ctx.gCost[nIdx]) {
         ctx.gCost[nIdx] = tentativeG;
         ctx.parent[nIdx] = currentIdx;
         ctx.flags[nIdx] |= FLAG_OPEN;
-        const h = hexDistance(nx, ny, ctx.goalX, ctx.goalY);
-        ctx.openQueue.insert(nIdx, tentativeG + h);
+
+        const h = hexDistance(nx, ny, ctx.goalX, ctx.goalY) * COST_SCALE;
+
+        // Tie-breaker: prefer direction towards goal
+        // This helps avoid zigzag paths on uniform cost grids
+        const targetDir = getApproxDirection(cx, cy, ctx.goalX, ctx.goalY);
+        // Calculate difference between current direction 'd' and ideal direction
+        // d is 0-5. targetDir is 0-5.
+        // We want the smallest difference in a circle (mod 6).
+        let diff = Math.abs(d - targetDir);
+        if (diff > 3) diff = 6 - diff;
+
+        // Add small penalty for deviation (0 for straight, 1 for slight turn, etc.)
+        // This is much smaller than MOVE_COST (10), so it only affects equal-length paths.
+        const tieBreaker = diff;
+
+        ctx.openQueue.insert(nIdx, tentativeG + h + tieBreaker);
     }
 }
 
@@ -120,7 +139,8 @@ export function findPath(
     groundHeight: Uint8Array,
     mapWidth: number,
     mapHeight: number,
-    tileOccupancy: Map<string, number>
+    tileOccupancy: Map<string, number>,
+    ignoreOccupancy: boolean = false
 ): TileCoord[] | null {
     if (startX === goalX && startY === goalY) return [];
 
@@ -139,13 +159,13 @@ export function findPath(
 
     const ctx: PathContext = {
         groundType, groundHeight, mapWidth, mapHeight,
-        goalX, goalY, tileOccupancy, gCost, parent, flags, openQueue
+        goalX, goalY, tileOccupancy, ignoreOccupancy, gCost, parent, flags, openQueue
     };
 
     const startIdx = startX + startY * mapWidth;
     gCost[startIdx] = 0;
     flags[startIdx] = FLAG_OPEN;
-    openQueue.insert(startIdx, hexDistance(startX, startY, goalX, goalY));
+    openQueue.insert(startIdx, hexDistance(startX, startY, goalX, goalY) * COST_SCALE);
 
     let nodesSearched = 0;
 

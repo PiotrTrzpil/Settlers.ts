@@ -127,7 +127,8 @@ export class MovementController {
         if (!this.isInTransit) {
             this._prevTileX = this._tileX;
             this._prevTileY = this._tileY;
-            this._progress = 0;
+            // Start at 1 to trigger immediate first step execution in next update
+            this._progress = 1;
         }
         // If in transit, keep current progress to avoid visual jump
 
@@ -282,6 +283,8 @@ export class MovementController {
         this._prevTileX = x;
         this._prevTileY = y;
         this._progress = 0;
+        // Don't reset _lastDirection here, as we might want to preserve facing if just snapping position?
+        // But if it's a spawn, 0 is a fine default.
     }
 
     /**
@@ -303,7 +306,9 @@ export class MovementController {
 
         // Start from 0 progress for smooth transition
         this._progress = 0;
-        this._state = 'idle';
+
+        // Set state to moving so the renderer interpolates this forced move
+        this._state = 'moving';
     }
 
     /**
@@ -332,25 +337,36 @@ export class MovementController {
 
     // === Direction Calculation ===
 
+    /** Last calculated movement direction */
+    private _lastDirection: number = 0; // Default to RIGHT (0)
+
     /**
      * Compute the movement direction from previous to current tile.
      * Returns a direction index: 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT
+     * If stationary, returns the last known direction.
      */
     computeMovementDirection(): number {
         const dx = this._tileX - this._prevTileX;
         const dy = this._tileY - this._prevTileY;
 
-        // If not moving, return -1 (no direction change)
-        if (dx === 0 && dy === 0) return -1;
+        // If not moving (visually), return last known direction
+        if (dx === 0 && dy === 0) {
+            return this._lastDirection;
+        }
 
         // Map dx,dy to one of 4 directions
         // RIGHT (dx > 0, dy <= 0): direction 0
         // RIGHT_BOTTOM (dx >= 0, dy > 0): direction 1
         // LEFT_BOTTOM (dx < 0, dy > 0): direction 2
         // LEFT (dx < 0, dy <= 0): direction 3
-        if (dx > 0 && dy <= 0) return 0; // RIGHT
-        if (dx >= 0 && dy > 0) return 1; // RIGHT_BOTTOM
-        if (dx < 0 && dy > 0) return 2;  // LEFT_BOTTOM
-        return 3; // LEFT
+
+        let newDir = 0;
+        if (dx > 0 && dy <= 0) newDir = 0; // RIGHT
+        else if (dx >= 0 && dy > 0) newDir = 1; // RIGHT_BOTTOM
+        else if (dx < 0 && dy > 0) newDir = 2;  // LEFT_BOTTOM
+        else newDir = 3; // LEFT
+
+        this._lastDirection = newDir;
+        return newDir;
     }
 }

@@ -122,7 +122,8 @@ export class MovementSystem {
             targetX, targetY,
             this.groundType, this.groundHeight,
             this.mapWidth, this.mapHeight,
-            this.tileOccupancy
+            this.tileOccupancy,
+            true // ignoreOccupancy: Initial plan should ignore transient units
         );
 
         if (!path || path.length === 0) return false;
@@ -230,7 +231,8 @@ export class MovementSystem {
             prefixTarget.x, prefixTarget.y,
             this.groundType!, this.groundHeight!,
             this.mapWidth!, this.mapHeight!,
-            this.tileOccupancy!
+            this.tileOccupancy!,
+            false // ignoreOccupancy: Repair should respect current obstacles
         );
         if (newPrefix && newPrefix.length > 0) {
             controller.replacePathPrefix(newPrefix, prefixTargetIdx + 1);
@@ -247,7 +249,8 @@ export class MovementSystem {
             goal.x, goal.y,
             this.groundType!, this.groundHeight!,
             this.mapWidth!, this.mapHeight!,
-            this.tileOccupancy!
+            this.tileOccupancy!,
+            false // ignoreOccupancy: Repair should respect current obstacles
         );
         if (newPath && newPath.length > 0) {
             controller.replacePath(newPath);
