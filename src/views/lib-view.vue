@@ -33,7 +33,7 @@
           </div>
           <div class="detail-row">
             <span class="detail-label">Compressed:</span>
-            <span class="detail-value">{{ formatSize(selectedItem.compressedLength) }}</span>
+            <span class="detail-value">{{ formatSize(selectedItem.length) }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">Decompressed:</span>
@@ -101,9 +101,9 @@ function formatSize(bytes: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function getCompressionRatio(item: LibFileItem): string {
+function getCompressionRatio(item: { length: number; decompressedLength: number }): string {
     if (item.decompressedLength === 0) return '0';
-    const ratio = ((1 - item.compressedLength / item.decompressedLength) * 100);
+    const ratio = ((1 - item.length / item.decompressedLength) * 100);
     return ratio.toFixed(1);
 }
 
