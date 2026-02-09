@@ -18,13 +18,18 @@ export class CameraMode extends BaseInputMode {
     private config: InputConfig;
     private viewPoint: IViewPoint | null = null;
 
-    // Drag state
+    // Drag state - we store the context, position is computed at render time
     private isDraggingCamera = false;
     private dragButton: MouseButton | null = null;
-    private dragStartX = 0;
-    private dragStartY = 0;
-    private dragStartPosX = 0;
-    private dragStartPosY = 0;
+    /** Screen position where drag started */
+    private dragStartScreenX = 0;
+    private dragStartScreenY = 0;
+    /** Camera position where drag started */
+    private dragStartCameraX = 0;
+    private dragStartCameraY = 0;
+    /** Current mouse screen position (updated by pointer events) */
+    private currentScreenX = 0;
+    private currentScreenY = 0;
     /** Track if actual camera movement occurred during drag */
     private didMoveCamera = false;
 
@@ -89,10 +94,13 @@ export class CameraMode extends BaseInputMode {
         if (data.button === MouseButton.Middle || data.button === MouseButton.Right) {
             this.isDraggingCamera = true;
             this.dragButton = data.button;
-            this.dragStartX = data.screenX;
-            this.dragStartY = data.screenY;
-            this.dragStartPosX = this.viewPoint.x;
-            this.dragStartPosY = this.viewPoint.y;
+            // Store the starting context - position will be computed at render time
+            this.dragStartScreenX = data.screenX;
+            this.dragStartScreenY = data.screenY;
+            this.dragStartCameraX = this.viewPoint.x;
+            this.dragStartCameraY = this.viewPoint.y;
+            this.currentScreenX = data.screenX;
+            this.currentScreenY = data.screenY;
             this.didMoveCamera = false;
             return HANDLED;
         }
@@ -113,37 +121,20 @@ export class CameraMode extends BaseInputMode {
     }
 
     onPointerMove(data: PointerData, _context: InputContext): InputResult {
-        if (!this.viewPoint || !this.isDraggingCamera) return UNHANDLED;
+        if (!this.isDraggingCamera) return UNHANDLED;
 
-        // Calculate drag offset from start position
-        const dpx = data.screenX - this.dragStartX;
-        const dpy = data.screenY - this.dragStartY;
+        // Just store the current mouse position - camera position is computed in onUpdate
+        this.currentScreenX = data.screenX;
+        this.currentScreenY = data.screenY;
 
-        // Only move if we've exceeded a small threshold to avoid accidental micro-movements
+        // Check if we've exceeded threshold for "real" movement
+        const dpx = data.screenX - this.dragStartScreenX;
+        const dpy = data.screenY - this.dragStartScreenY;
         const moveThreshold = 3;
-        if (Math.abs(dpx) < moveThreshold && Math.abs(dpy) < moveThreshold) {
-            return HANDLED;
+        if (Math.abs(dpx) >= moveThreshold || Math.abs(dpy) >= moveThreshold) {
+            this.didMoveCamera = true;
         }
 
-        // Mark that actual camera movement occurred
-        this.didMoveCamera = true;
-
-        // Scale factor converts pixel movement to viewPoint units
-        // Derived from the isometric projection to keep tiles "sticky" under cursor
-        // This matches ViewPoint's original formula
-        const height = this.viewPoint.canvasHeight;
-        const scale = 20 * this.viewPoint.zoomValue / height;
-        const invertFactor = this.config.invertPan ? -1 : 1;
-
-        // For isometric projection: moving vertically in screen space
-        // moves both viewPointX and viewPointY
-        const deltaX = -scale * (dpx + dpy) * invertFactor;
-        const deltaY = -scale * 2 * dpy * invertFactor;
-
-        this.viewPoint.setRawPosition(
-            this.dragStartPosX + deltaX,
-            this.dragStartPosY + deltaY
-        );
         return HANDLED;
     }
 
@@ -170,12 +161,35 @@ export class CameraMode extends BaseInputMode {
     onUpdate(deltaTime: number, context: InputContext): void {
         if (!this.viewPoint) return;
 
+        // MOUSE DRAG: Compute camera position from current mouse position (frame-synchronized)
+        if (this.isDraggingCamera) {
+            const dpx = this.currentScreenX - this.dragStartScreenX;
+            const dpy = this.currentScreenY - this.dragStartScreenY;
+
+            // Scale factor converts pixel movement to viewPoint units
+            const height = this.viewPoint.canvasHeight;
+            const scale = 20 * this.viewPoint.zoomValue / height;
+            const invertFactor = this.config.invertPan ? -1 : 1;
+
+            // For isometric projection: moving vertically in screen space
+            // moves both viewPointX and viewPointY
+            const deltaX = -scale * (dpx + dpy) * invertFactor;
+            const deltaY = -scale * 2 * dpy * invertFactor;
+
+            // Set position directly - computed fresh each frame from mouse position
+            this.viewPoint.setRawPosition(
+                this.dragStartCameraX + deltaX,
+                this.dragStartCameraY + deltaY
+            );
+            return; // Don't process keyboard while dragging
+        }
+
+        // KEYBOARD PAN: Velocity-based, inherently smooth
         const speed = gameSettings.state.panSpeed * this.viewPoint.zoomValue * deltaTime;
 
         let dx = 0;
         let dy = 0;
 
-        // Handle WASD/Arrow keys for camera pan
         if (context.state.isKeyPressed('KeyW') || context.state.isKeyPressed('ArrowUp')) {
             dy -= speed * 2;
             dx -= speed;
@@ -193,7 +207,6 @@ export class CameraMode extends BaseInputMode {
 
         if (dx !== 0 || dy !== 0) {
             const factor = this.config.invertPan ? -1 : 1;
-            // Use moveTarget for consistent velocity independent of interpolation state
             this.viewPoint.moveTarget(dx * factor, dy * factor);
         }
     }

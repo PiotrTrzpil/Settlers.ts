@@ -19,12 +19,10 @@ export interface ViewPointOptions {
 const PAN_KEYS = new Set(['w', 'a', 's', 'd']);
 
 /**
- * Camera smoothing factors - higher = snappier, lower = smoother.
- * DRAG: Very high for mouse drag so terrain sticks to cursor (~99% in ~33ms = 2 frames)
- * KEYBOARD: Lower for keyboard pan for smooth acceleration/deceleration (~99% in ~230ms)
+ * Camera smoothing factor for keyboard panning.
+ * Higher = snappier, lower = smoother. At 20, reaches ~99% in ~230ms.
  */
-const SMOOTHING_DRAG = 140;     // Near-instant for mouse drag
-const SMOOTHING_KEYBOARD = 20;  // Smooth for keyboard pan
+const SMOOTHING_KEYBOARD = 20;
 
 export class ViewPoint implements IViewPoint {
     private posX = 0;
@@ -39,11 +37,11 @@ export class ViewPoint implements IViewPoint {
     private keysDown = new Set<string>();
     private externalInput: boolean;
 
-    // Target position for smooth camera interpolation (external input mode only)
+    // Target position for smooth keyboard panning interpolation
     private targetX = 0;
     private targetY = 0;
-    // Current smoothing factor (changes based on input type)
-    private smoothingFactor = SMOOTHING_DRAG;
+    // Whether keyboard panning is active (triggers interpolation)
+    private keyboardPanActive = false;
 
     /** Zoom speed - reads directly from game settings */
     public get zoomSpeed(): number {
@@ -97,12 +95,16 @@ export class ViewPoint implements IViewPoint {
     }
 
     /**
-     * Set target position (for mouse drag - uses high smoothing so terrain sticks to cursor).
+     * Set position directly (for mouse drag - no interpolation, terrain sticks to cursor).
      */
     public setRawPosition(posX: number, posY: number, deltaX = 0, deltaY = 0): void {
-        this.targetX = posX + deltaX;
-        this.targetY = posY + deltaY;
-        this.smoothingFactor = SMOOTHING_DRAG;  // Fast for mouse drag
+        const x = posX + deltaX;
+        const y = posY + deltaY;
+        // Set both actual and target - bypasses interpolation entirely
+        this.posX = x;
+        this.posY = y;
+        this.targetX = x;
+        this.targetY = y;
         this.deltaX = 0;
         this.deltaY = 0;
     }
@@ -111,12 +113,11 @@ export class ViewPoint implements IViewPoint {
      * Move the target position by a delta (for keyboard panning).
      * This updates the target directly without reading from the interpolated position,
      * ensuring consistent velocity regardless of interpolation state.
-     * Uses slower smoothing for smooth keyboard pan feel.
      */
     public moveTarget(dx: number, dy: number): void {
         this.targetX += dx;
         this.targetY += dy;
-        this.smoothingFactor = SMOOTHING_KEYBOARD;  // Smooth for keyboard
+        this.keyboardPanActive = true;
     }
 
     /**
@@ -233,27 +234,27 @@ export class ViewPoint implements IViewPoint {
 
     /**
      * Advance camera state by dt seconds. Call once per frame.
-     * For external input: interpolates actual position toward target for smooth movement.
-     * For legacy input: handles keyboard-driven panning.
+     * For external input with keyboard panning: interpolates toward target.
+     * For legacy input: handles keyboard-driven panning directly.
      */
     public update(dt: number): void {
-        if (this.externalInput) {
-            // Smooth interpolation toward target position
+        if (this.externalInput && this.keyboardPanActive) {
+            // Smooth interpolation toward target for keyboard panning
             // Using exponential smoothing: pos = pos + (target - pos) * (1 - e^(-smoothing * dt))
-            // This is frame-rate independent and always converges
-            const factor = 1 - Math.exp(-this.smoothingFactor * dt);
+            const factor = 1 - Math.exp(-SMOOTHING_KEYBOARD * dt);
 
             const dx = this.targetX - this.posX;
             const dy = this.targetY - this.posY;
 
-            // Only update if there's meaningful difference (avoid micro-jitter)
+            // Only update if there's meaningful difference
             if (Math.abs(dx) > 0.0001 || Math.abs(dy) > 0.0001) {
                 this.posX += dx * factor;
                 this.posY += dy * factor;
             } else {
-                // Snap to target when close enough
+                // Snap to target and stop interpolating
                 this.posX = this.targetX;
                 this.posY = this.targetY;
+                this.keyboardPanActive = false;
             }
             return;
         }
