@@ -10,6 +10,7 @@ import type { TickSystem } from './tick-system';
 import { BuildingConstructionSystem } from './features/building-construction';
 import { CarrierSystem } from './features/carriers';
 import { hasInventory, isProductionBuilding } from './features/inventory';
+import { LogisticsDispatcher } from './features/logistics';
 import { EventBus } from './event-bus';
 import type { FrameRenderTiming } from './renderer/renderer';
 import { BuildingType } from './entity';
@@ -72,6 +73,9 @@ export class GameLoop {
     /** Carrier logistics system */
     public readonly carrierSystem: CarrierSystem;
 
+    /** Logistics dispatcher - connects resource requests to carriers */
+    public readonly logisticsDispatcher!: LogisticsDispatcher;
+
     /** Lumberjack AI system */
     public readonly lumberjackSystem: LumberjackSystem;
 
@@ -114,7 +118,17 @@ export class GameLoop {
         this.carrierSystem.registerEvents(eventBus);
         this.registerSystem(this.carrierSystem);
 
-        // 5. Lumberjack AI — issues movement commands (runs after carrier)
+        // 5. Logistics dispatcher — assigns carriers to pending requests
+        this.logisticsDispatcher = new LogisticsDispatcher({
+            gameState: gameState,
+            carrierSystem: this.carrierSystem,
+            requestManager: gameState.requestManager,
+            serviceAreaManager: gameState.serviceAreaManager,
+        });
+        this.logisticsDispatcher.registerEvents(eventBus);
+        this.registerSystem(this.logisticsDispatcher);
+
+        // 6. Lumberjack AI — issues movement commands (runs after carrier)
         this.lumberjackSystem = new LumberjackSystem(gameState);
         this.registerSystem(this.lumberjackSystem);
 

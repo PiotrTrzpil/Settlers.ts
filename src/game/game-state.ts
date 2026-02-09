@@ -6,6 +6,7 @@ import { MovementSystem, MovementController } from './systems/movement/index';
 import { CarrierManager } from './features/carriers';
 import { BuildingInventoryManager } from './features/inventory';
 import { ServiceAreaManager } from './features/service-areas';
+import { RequestManager } from './features/logistics';
 
 /**
  * Legacy UnitState interface for backward compatibility.
@@ -105,6 +106,9 @@ export class GameState {
 
     /** Service area manager for logistics hubs */
     public readonly serviceAreaManager: ServiceAreaManager = new ServiceAreaManager();
+
+    /** Resource request manager for logistics matching */
+    public readonly requestManager: RequestManager = new RequestManager();
 
     /** Building construction state tracking */
     public buildingStates: Map<number, BuildingState> = new Map();

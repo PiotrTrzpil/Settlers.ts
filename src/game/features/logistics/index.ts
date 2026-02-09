@@ -76,3 +76,9 @@ export {
     type InventoryReservation,
     InventoryReservationManager,
 } from './inventory-reservation';
+
+// Logistics dispatcher (connects requests to carriers)
+export {
+    LogisticsDispatcher,
+    type LogisticsDispatcherConfig,
+} from './logistics-dispatcher';
