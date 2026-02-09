@@ -1,0 +1,374 @@
+/**
+ * Request Manager
+ *
+ * Manages the queue of resource requests from buildings.
+ * Tracks pending, in-progress, and fulfilled requests.
+ */
+
+import { EMaterialType } from '../../economy/material-type';
+import {
+    ResourceRequest,
+    RequestPriority,
+    RequestStatus,
+    createResourceRequest,
+    compareRequests,
+    canAssignRequest,
+    isRequestActive,
+} from './resource-request';
+
+/**
+ * Events emitted by the RequestManager.
+ */
+export interface RequestManagerEvents {
+    /** Emitted when a new request is added */
+    requestAdded: { request: ResourceRequest };
+    /** Emitted when a request is removed/cancelled */
+    requestRemoved: { requestId: number };
+    /** Emitted when a request is assigned to a carrier */
+    requestAssigned: { request: ResourceRequest; carrierId: number; sourceBuilding: number };
+    /** Emitted when a request is fulfilled */
+    requestFulfilled: { request: ResourceRequest };
+}
+
+/**
+ * Callback type for request event listeners.
+ */
+export type RequestEventListener<K extends keyof RequestManagerEvents> = (
+    data: RequestManagerEvents[K]
+) => void;
+
+/**
+ * Manages resource requests from buildings.
+ *
+ * Provides methods to add, remove, query, and fulfill requests.
+ * Maintains requests sorted by priority and timestamp.
+ */
+export class RequestManager {
+    /** All requests indexed by ID */
+    private requests: Map<number, ResourceRequest> = new Map();
+
+    /** Next request ID */
+    private nextId = 1;
+
+    /** Event listeners */
+    private listeners: {
+        [K in keyof RequestManagerEvents]?: Set<RequestEventListener<K>>;
+    } = {};
+
+    /**
+     * Add a new resource request.
+     *
+     * @param buildingId Entity ID of the requesting building
+     * @param materialType Type of material requested
+     * @param amount Amount of material requested
+     * @param priority Priority level (defaults to Normal)
+     * @returns The created request
+     */
+    addRequest(
+        buildingId: number,
+        materialType: EMaterialType,
+        amount: number,
+        priority: RequestPriority = RequestPriority.Normal,
+    ): ResourceRequest {
+        const request = createResourceRequest(
+            this.nextId++,
+            buildingId,
+            materialType,
+            amount,
+            priority,
+        );
+
+        this.requests.set(request.id, request);
+        this.emit('requestAdded', { request });
+
+        return request;
+    }
+
+    /**
+     * Remove a request by ID.
+     *
+     * @param requestId ID of the request to remove
+     * @returns True if the request was removed
+     */
+    removeRequest(requestId: number): boolean {
+        const request = this.requests.get(requestId);
+        if (!request) return false;
+
+        // Mark as cancelled if still active
+        if (isRequestActive(request)) {
+            request.status = RequestStatus.Cancelled;
+        }
+
+        this.requests.delete(requestId);
+        this.emit('requestRemoved', { requestId });
+
+        return true;
+    }
+
+    /**
+     * Get a request by ID.
+     *
+     * @param requestId ID of the request
+     * @returns The request or undefined
+     */
+    getRequest(requestId: number): ResourceRequest | undefined {
+        return this.requests.get(requestId);
+    }
+
+    /**
+     * Get all requests for a specific building.
+     *
+     * @param buildingId Entity ID of the building
+     * @param activeOnly If true, only return active requests (default: true)
+     * @returns Array of requests for this building
+     */
+    getRequestsForBuilding(buildingId: number, activeOnly: boolean = true): ResourceRequest[] {
+        const result: ResourceRequest[] = [];
+
+        for (const request of this.requests.values()) {
+            if (request.buildingId !== buildingId) continue;
+            if (activeOnly && !isRequestActive(request)) continue;
+            result.push(request);
+        }
+
+        return result;
+    }
+
+    /**
+     * Get all pending requests sorted by priority and timestamp.
+     *
+     * @returns Array of pending requests, sorted by priority then timestamp
+     */
+    getPendingRequests(): ResourceRequest[] {
+        const pending: ResourceRequest[] = [];
+
+        for (const request of this.requests.values()) {
+            if (canAssignRequest(request)) {
+                pending.push(request);
+            }
+        }
+
+        // Sort by priority (ascending) then timestamp (ascending)
+        pending.sort(compareRequests);
+
+        return pending;
+    }
+
+    /**
+     * Get all in-progress requests.
+     *
+     * @returns Array of requests currently being fulfilled
+     */
+    getInProgressRequests(): ResourceRequest[] {
+        const inProgress: ResourceRequest[] = [];
+
+        for (const request of this.requests.values()) {
+            if (request.status === RequestStatus.InProgress) {
+                inProgress.push(request);
+            }
+        }
+
+        return inProgress;
+    }
+
+    /**
+     * Mark a request as being fulfilled by a carrier.
+     *
+     * @param requestId ID of the request
+     * @param sourceBuilding Entity ID of the building providing the material
+     * @param carrierId Entity ID of the carrier fulfilling the request
+     * @returns True if the request was assigned
+     */
+    assignRequest(
+        requestId: number,
+        sourceBuilding: number,
+        carrierId: number,
+    ): boolean {
+        const request = this.requests.get(requestId);
+        if (!request || !canAssignRequest(request)) return false;
+
+        request.status = RequestStatus.InProgress;
+        request.assignedCarrier = carrierId;
+        request.sourceBuilding = sourceBuilding;
+
+        this.emit('requestAssigned', { request, carrierId, sourceBuilding });
+
+        return true;
+    }
+
+    /**
+     * Mark a request as fulfilled.
+     * Removes the request from the active queue.
+     *
+     * @param requestId ID of the request
+     * @returns True if the request was fulfilled
+     */
+    fulfillRequest(requestId: number): boolean {
+        const request = this.requests.get(requestId);
+        if (!request) return false;
+        if (request.status !== RequestStatus.InProgress) return false;
+
+        request.status = RequestStatus.Fulfilled;
+        this.emit('requestFulfilled', { request });
+
+        // Remove fulfilled requests to prevent memory buildup
+        this.requests.delete(requestId);
+
+        return true;
+    }
+
+    /**
+     * Cancel all requests for a building.
+     * Useful when a building is destroyed.
+     *
+     * @param buildingId Entity ID of the building
+     * @returns Number of requests cancelled
+     */
+    cancelRequestsForBuilding(buildingId: number): number {
+        const toRemove: number[] = [];
+
+        for (const request of this.requests.values()) {
+            if (request.buildingId === buildingId) {
+                toRemove.push(request.id);
+            }
+        }
+
+        for (const id of toRemove) {
+            this.removeRequest(id);
+        }
+
+        return toRemove.length;
+    }
+
+    /**
+     * Cancel all requests assigned to a carrier.
+     * Useful when a carrier is removed or reassigned.
+     *
+     * @param carrierId Entity ID of the carrier
+     * @returns Number of requests cancelled
+     */
+    cancelRequestsForCarrier(carrierId: number): number {
+        let count = 0;
+
+        for (const request of this.requests.values()) {
+            if (request.assignedCarrier === carrierId && request.status === RequestStatus.InProgress) {
+                // Reset to pending so another carrier can pick it up
+                request.status = RequestStatus.Pending;
+                request.assignedCarrier = null;
+                request.sourceBuilding = null;
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /**
+     * Get count of pending requests.
+     */
+    getPendingCount(): number {
+        let count = 0;
+        for (const request of this.requests.values()) {
+            if (canAssignRequest(request)) count++;
+        }
+        return count;
+    }
+
+    /**
+     * Get count of in-progress requests.
+     */
+    getInProgressCount(): number {
+        let count = 0;
+        for (const request of this.requests.values()) {
+            if (request.status === RequestStatus.InProgress) count++;
+        }
+        return count;
+    }
+
+    /**
+     * Get total count of all active requests.
+     */
+    getActiveCount(): number {
+        let count = 0;
+        for (const request of this.requests.values()) {
+            if (isRequestActive(request)) count++;
+        }
+        return count;
+    }
+
+    /**
+     * Check if a building has any pending requests for a specific material.
+     *
+     * @param buildingId Entity ID of the building
+     * @param materialType Type of material
+     * @returns True if there's a pending request for this material
+     */
+    hasPendingRequest(buildingId: number, materialType: EMaterialType): boolean {
+        for (const request of this.requests.values()) {
+            if (
+                request.buildingId === buildingId &&
+                request.materialType === materialType &&
+                canAssignRequest(request)
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Clear all requests.
+     * Useful for testing or game reset.
+     */
+    clear(): void {
+        const ids = Array.from(this.requests.keys());
+        this.requests.clear();
+        for (const id of ids) {
+            this.emit('requestRemoved', { requestId: id });
+        }
+    }
+
+    // === Event System ===
+
+    /**
+     * Subscribe to a request event.
+     */
+    on<K extends keyof RequestManagerEvents>(
+        event: K,
+        listener: RequestEventListener<K>,
+    ): void {
+        if (!this.listeners[event]) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            this.listeners[event] = new Set() as any;
+        }
+        (this.listeners[event] as Set<RequestEventListener<K>>).add(listener);
+    }
+
+    /**
+     * Unsubscribe from a request event.
+     */
+    off<K extends keyof RequestManagerEvents>(
+        event: K,
+        listener: RequestEventListener<K>,
+    ): void {
+        const listeners = this.listeners[event] as Set<RequestEventListener<K>> | undefined;
+        if (listeners) {
+            listeners.delete(listener);
+        }
+    }
+
+    /**
+     * Emit a request event.
+     */
+    private emit<K extends keyof RequestManagerEvents>(
+        event: K,
+        data: RequestManagerEvents[K],
+    ): void {
+        const listeners = this.listeners[event] as Set<RequestEventListener<K>> | undefined;
+        if (listeners) {
+            for (const listener of listeners) {
+                listener(data);
+            }
+        }
+    }
+}
