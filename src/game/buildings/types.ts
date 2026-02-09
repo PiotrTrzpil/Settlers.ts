@@ -4,6 +4,11 @@
  */
 
 import type { TileCoord } from '../coordinates';
+import {
+    getGameDataLoader,
+    getBuildingFootprintAt,
+    type RaceId,
+} from '@/resources/game-data';
 
 export enum BuildingType {
     WoodcutterHut = 1,
@@ -47,6 +52,61 @@ export enum BuildingType {
     WinePress = 40,
     SiegeWorkshop = 41,
     LargeDecoration = 42,
+}
+
+/**
+ * Map BuildingType enum values to XML building IDs.
+ * Note: Some buildings have race-specific variants in XML (SHIPYARDA-H, PORTA-H)
+ * but we use a single BuildingType for them.
+ */
+export const BUILDING_TYPE_TO_XML_ID: Partial<Record<BuildingType, string>> = {
+    [BuildingType.WoodcutterHut]: 'BUILDING_WOODCUTTERHUT',
+    [BuildingType.StorageArea]: 'BUILDING_STORAGEAREA',
+    [BuildingType.Sawmill]: 'BUILDING_SAWMILL',
+    [BuildingType.StonecutterHut]: 'BUILDING_STONECUTTERHUT',
+    [BuildingType.GrainFarm]: 'BUILDING_GRAINFARM',
+    [BuildingType.Mill]: 'BUILDING_MILL',
+    [BuildingType.Bakery]: 'BUILDING_BAKERY',
+    [BuildingType.FisherHut]: 'BUILDING_FISHERHUT',
+    [BuildingType.AnimalRanch]: 'BUILDING_ANIMALRANCH',
+    [BuildingType.Slaughterhouse]: 'BUILDING_SLAUGHTERHOUSE',
+    [BuildingType.WaterworkHut]: 'BUILDING_WATERWORKHUT',
+    [BuildingType.CoalMine]: 'BUILDING_COALMINE',
+    [BuildingType.IronMine]: 'BUILDING_IRONMINE',
+    [BuildingType.GoldMine]: 'BUILDING_GOLDMINE',
+    [BuildingType.IronSmelter]: 'BUILDING_SMELTIRON',
+    [BuildingType.SmeltGold]: 'BUILDING_SMELTGOLD',
+    [BuildingType.WeaponSmith]: 'BUILDING_WEAPONSMITH',
+    [BuildingType.ToolSmith]: 'BUILDING_TOOLSMITH',
+    [BuildingType.Barrack]: 'BUILDING_BARRACKS',
+    [BuildingType.ForesterHut]: 'BUILDING_FORESTERHUT',
+    [BuildingType.LivingHouse]: 'BUILDING_RESIDENCESMALL',
+    [BuildingType.GuardTowerSmall]: 'BUILDING_GUARDTOWERSMALL',
+    [BuildingType.HunterHut]: 'BUILDING_HUNTERHUT',
+    [BuildingType.DonkeyRanch]: 'BUILDING_DONKEYRANCH',
+    [BuildingType.StoneMine]: 'BUILDING_STONEMINE',
+    [BuildingType.SulfurMine]: 'BUILDING_SULFURMINE',
+    [BuildingType.HealerHut]: 'BUILDING_HEALERHUT',
+    [BuildingType.ResidenceSmall]: 'BUILDING_RESIDENCESMALL',
+    [BuildingType.ResidenceMedium]: 'BUILDING_RESIDENCEMEDIUM',
+    [BuildingType.ResidenceBig]: 'BUILDING_RESIDENCEBIG',
+    [BuildingType.GuardTowerBig]: 'BUILDING_GUARDTOWERBIG',
+    [BuildingType.Castle]: 'BUILDING_CASTLE',
+    [BuildingType.AmmunitionMaker]: 'BUILDING_AMMOMAKERHUT',
+    [BuildingType.SmallTemple]: 'BUILDING_SMALLTEMPLE',
+    [BuildingType.LargeTemple]: 'BUILDING_BIGTEMPLE',
+    [BuildingType.LookoutTower]: 'BUILDING_LOOKOUTTOWER',
+    [BuildingType.Shipyard]: 'BUILDING_SHIPYARDA',
+    [BuildingType.WinePress]: 'BUILDING_VINYARD',
+    [BuildingType.SiegeWorkshop]: 'BUILDING_VEHICLEHALL',
+};
+
+/**
+ * Get the XML building ID for a BuildingType.
+ * Returns undefined for types without XML mapping (e.g., decorations).
+ */
+export function getBuildingXmlId(buildingType: BuildingType): string | undefined {
+    return BUILDING_TYPE_TO_XML_ID[buildingType];
 }
 
 /**
@@ -116,10 +176,66 @@ export function getBuildingSize(buildingType: BuildingType): BuildingSize {
 }
 
 /**
- * Get all tile coordinates that a building occupies.
- * The input (x, y) is the top-left corner of the building footprint.
+ * Get the hotspot (anchor point) offset for a building type.
+ * The hotspot is used to align the building sprite with its placement position.
+ *
+ * Returns {x, y} offset in tile coordinates from the top-left of the footprint bitmask
+ * to the building's anchor/placement point.
+ *
+ * @param buildingType Type of building
+ * @param raceId Optional race ID (defaults to RACE_ROMAN)
+ * @returns Hotspot offset {x, y} in tile units, or null if not available
  */
-export function getBuildingFootprint(x: number, y: number, buildingType: BuildingType): TileCoord[] {
+export function getBuildingHotspot(
+    buildingType: BuildingType,
+    raceId: RaceId = 'RACE_ROMAN'
+): { x: number; y: number } | null {
+    const loader = getGameDataLoader();
+    if (!loader.isLoaded()) return null;
+
+    const xmlId = getBuildingXmlId(buildingType);
+    if (!xmlId) return null;
+
+    const buildingInfo = loader.getBuilding(raceId, xmlId);
+    if (!buildingInfo) return null;
+
+    return {
+        x: buildingInfo.hotSpotX,
+        y: buildingInfo.hotSpotY,
+    };
+}
+
+/**
+ * Get all tile coordinates that a building occupies.
+ * The input (x, y) is the building's placement/anchor position.
+ *
+ * If game data is loaded and the building has XML footprint data, uses the
+ * actual bitmask footprint. Otherwise falls back to simple rectangular footprint.
+ *
+ * @param x Building placement X coordinate
+ * @param y Building placement Y coordinate
+ * @param buildingType Type of building
+ * @param raceId Optional race ID for race-specific buildings (defaults to RACE_ROMAN)
+ */
+export function getBuildingFootprint(
+    x: number,
+    y: number,
+    buildingType: BuildingType,
+    raceId: RaceId = 'RACE_ROMAN'
+): TileCoord[] {
+    // Try to get real footprint from game data
+    const loader = getGameDataLoader();
+    if (loader.isLoaded()) {
+        const xmlId = getBuildingXmlId(buildingType);
+        if (xmlId) {
+            const buildingInfo = loader.getBuilding(raceId, xmlId);
+            if (buildingInfo && buildingInfo.buildingPosLines.length > 0) {
+                return getBuildingFootprintAt(buildingInfo, x, y);
+            }
+        }
+    }
+
+    // Fallback to simple rectangular footprint
     const size = getBuildingSize(buildingType);
     const tiles: TileCoord[] = [];
     for (let dy = 0; dy < size.height; dy++) {

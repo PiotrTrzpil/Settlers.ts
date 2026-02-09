@@ -28,3 +28,11 @@ export type {
     ObjectInfo,
 } from './types';
 export { raceIdToIndex } from './types';
+
+// Footprint decoder
+export {
+    decodeBuildingFootprint,
+    getBuildingFootprintFromInfo,
+    getBuildingFootprintAt,
+    getFootprintBounds,
+} from './footprint-decoder';

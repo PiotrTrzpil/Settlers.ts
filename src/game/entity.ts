@@ -31,8 +31,11 @@ export type { BuildingSize } from './buildings';
 export {
     BuildingType,
     BUILDING_SIZE,
+    BUILDING_TYPE_TO_XML_ID,
     getBuildingSize,
     getBuildingFootprint,
+    getBuildingHotspot,
+    getBuildingXmlId,
 } from './buildings';
 
 // Unit types and configuration
