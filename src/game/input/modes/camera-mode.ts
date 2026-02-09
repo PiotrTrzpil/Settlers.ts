@@ -193,10 +193,8 @@ export class CameraMode extends BaseInputMode {
 
         if (dx !== 0 || dy !== 0) {
             const factor = this.config.invertPan ? -1 : 1;
-            this.viewPoint.setRawPosition(
-                this.viewPoint.x + dx * factor,
-                this.viewPoint.y + dy * factor
-            );
+            // Use moveTarget for consistent velocity independent of interpolation state
+            this.viewPoint.moveTarget(dx * factor, dy * factor);
         }
     }
 

@@ -18,6 +18,12 @@ export interface ViewPointOptions {
  */
 const PAN_KEYS = new Set(['w', 'a', 's', 'd']);
 
+/**
+ * Camera smoothing factor - higher = snappier, lower = smoother.
+ * At 25, camera reaches ~99% of target in ~185ms (smooth but responsive).
+ */
+const CAMERA_SMOOTHING = 25;
+
 export class ViewPoint implements IViewPoint {
     private posX = 0;
     private posY = 0;
@@ -30,6 +36,10 @@ export class ViewPoint implements IViewPoint {
     private canvas: HTMLCanvasElement;
     private keysDown = new Set<string>();
     private externalInput: boolean;
+
+    // Target position for smooth camera interpolation (external input mode only)
+    private targetX = 0;
+    private targetY = 0;
 
     /** Zoom speed - reads directly from game settings */
     public get zoomSpeed(): number {
@@ -64,8 +74,12 @@ export class ViewPoint implements IViewPoint {
         // at world (aspect, 1) which corresponds to pixelCoord (aspect+1, 2).
         // So to center tile (tileX, tileY) we need:
         const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
-        this.posX = tileX + Math.floor(tileY / 2) - aspect - 1;
-        this.posY = tileY - 2;
+        const newX = tileX + Math.floor(tileY / 2) - aspect - 1;
+        const newY = tileY - 2;
+        this.posX = newX;
+        this.posY = newY;
+        this.targetX = newX;
+        this.targetY = newY;
         this.deltaX = 0;
         this.deltaY = 0;
     }
@@ -80,12 +94,30 @@ export class ViewPoint implements IViewPoint {
 
     /**
      * Set position and delta directly (for external input control).
+     * When using external input, this sets the target position for smooth interpolation.
      */
     public setRawPosition(posX: number, posY: number, deltaX = 0, deltaY = 0): void {
-        this.posX = posX;
-        this.posY = posY;
-        this.deltaX = deltaX;
-        this.deltaY = deltaY;
+        if (this.externalInput) {
+            // Set target position - actual position will interpolate toward it
+            this.targetX = posX + deltaX;
+            this.targetY = posY + deltaY;
+        } else {
+            // Legacy mode - set position directly
+            this.posX = posX;
+            this.posY = posY;
+            this.deltaX = deltaX;
+            this.deltaY = deltaY;
+        }
+    }
+
+    /**
+     * Move the target position by a delta (for keyboard panning).
+     * This updates the target directly without reading from the interpolated position,
+     * ensuring consistent velocity regardless of interpolation state.
+     */
+    public moveTarget(dx: number, dy: number): void {
+        this.targetX += dx;
+        this.targetY += dy;
     }
 
     /**
@@ -200,8 +232,34 @@ export class ViewPoint implements IViewPoint {
         this.keysDown.delete(e.key.toLowerCase());
     };
 
-    /** Advance keyboard-driven panning by dt seconds. Call once per frame. */
+    /**
+     * Advance camera state by dt seconds. Call once per frame.
+     * For external input: interpolates actual position toward target for smooth movement.
+     * For legacy input: handles keyboard-driven panning.
+     */
     public update(dt: number): void {
+        if (this.externalInput) {
+            // Smooth interpolation toward target position
+            // Using exponential smoothing: pos = pos + (target - pos) * (1 - e^(-smoothing * dt))
+            // This is frame-rate independent and always converges
+            const factor = 1 - Math.exp(-CAMERA_SMOOTHING * dt);
+
+            const dx = this.targetX - this.posX;
+            const dy = this.targetY - this.posY;
+
+            // Only update if there's meaningful difference (avoid micro-jitter)
+            if (Math.abs(dx) > 0.0001 || Math.abs(dy) > 0.0001) {
+                this.posX += dx * factor;
+                this.posY += dy * factor;
+            } else {
+                // Snap to target when close enough
+                this.posX = this.targetX;
+                this.posY = this.targetY;
+            }
+            return;
+        }
+
+        // Legacy keyboard panning (non-external input mode)
         if (this.keysDown.size === 0) return;
 
         const speed = this.panSpeed * this.zoomValue * dt;

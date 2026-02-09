@@ -24,4 +24,8 @@ export interface IViewPoint extends IViewPointReadonly {
     readonly canvasHeight: number;
     /** Set position directly (for external input control) */
     setRawPosition(posX: number, posY: number, deltaX?: number, deltaY?: number): void;
+    /** Move target position by a delta (for keyboard panning with smooth interpolation) */
+    moveTarget(dx: number, dy: number): void;
+    /** Update camera interpolation (call once per frame with delta time in seconds) */
+    update(dt: number): void;
 }

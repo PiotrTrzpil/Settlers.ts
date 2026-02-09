@@ -115,6 +115,9 @@ function createRenderCallback(
         const ctx = getContext();
         const { game: g, entityRenderer: er, landscapeRenderer, inputManager } = ctx;
 
+        // Update camera interpolation for smooth panning
+        renderer.viewPoint.update(deltaSec);
+
         if (er && g) {
             inputManager?.update(deltaSec);
             syncEntityRendererState(er, g, ctx, alpha);
