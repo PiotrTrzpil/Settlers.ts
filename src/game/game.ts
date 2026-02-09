@@ -7,6 +7,8 @@ import { GameLoop } from './game-loop';
 import { Command, executeCommand } from './commands/command';
 import { TerritoryMap } from './buildings/territory';
 import { isBuildable } from './systems/placement';
+import { populateMapObjects } from './systems/map-objects';
+import { SoundManager } from './audio/sound-manager';
 
 /** contains the game state */
 export class Game {
@@ -16,6 +18,7 @@ export class Game {
     /** Raw object type data from landscape (null for test maps) */
     public objectType: Uint8Array | null = null;
     public fileManager: FileManager;
+    public readonly mapLoader: IMapLoader;
     public state: GameState;
     public gameLoop: GameLoop;
     public territory: TerritoryMap;
@@ -37,6 +40,7 @@ export class Game {
     public constructor(fileManager: FileManager, mapLoader: IMapLoader) {
         const start = performance.now();
         this.fileManager = fileManager;
+        this.mapLoader = mapLoader;
         this.mapSize = mapLoader.mapSize;
         this.groundHeight = mapLoader.landscape.getGroundHeight();
         this.groundType = mapLoader.landscape.getGroundType();
@@ -46,7 +50,34 @@ export class Game {
         this.gameLoop = new GameLoop(this.state);
         this.gameLoop.setTerrainData(this.groundType, this.groundHeight, this.mapSize.width, this.mapSize.height);
         this.territory = new TerritoryMap(this.mapSize);
+
+        if (this.objectType) {
+            populateMapObjects(this.state, this.objectType, this.groundType, this.mapSize);
+        }
+
+        // Initialize Audio
+        this.soundManager.init(this.fileManager).then(() => {
+            if (!this.soundManager.currentMusicId) {
+                console.log('Game: SoundManager initialized, requesting music...');
+                this.soundManager.playRandomMusic('Roman');
+            }
+        });
+
+        // Debug helper
+        (window as any).debugSound = () => {
+            const sm = this.soundManager as any;
+            console.log('--- Sound Debug ---');
+            console.log('Current Music ID:', sm.currentMusicId);
+            console.log('Music Volume:', sm.musicVolume);
+            console.log('Master Volume:', sm.masterVolume);
+            console.log('Audio Context State:', Howler.ctx ? Howler.ctx.state : 'No Context');
+        };
+
         console.log(`Game\tMap loaded: ${this.mapSize.width}x${this.mapSize.height} in ${Math.round(performance.now() - start)}ms`);
+    }
+
+    public get soundManager(): SoundManager {
+        return SoundManager.getInstance();
     }
 
     /** Execute a command against the game state, then update territory if needed */

@@ -52,7 +52,7 @@ export const BUILDING_PRODUCTIONS: ReadonlyMap<BuildingType, ProductionChain> = 
     [BuildingType.ToolSmith, { inputs: [EMaterialType.IRON, EMaterialType.COAL], output: EMaterialType.AXE }],
 
     // Wine
-    [BuildingType.Winegrower, { inputs: [], output: EMaterialType.WINE }],
+    [BuildingType.WinePress, { inputs: [], output: EMaterialType.WINE }],
 
     // Military — barrack converts weapons to soldiers, no material output
     [BuildingType.Barrack, { inputs: [EMaterialType.SWORD], output: EMaterialType.NO_MATERIAL }],
@@ -164,10 +164,6 @@ export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly Construction
     ]],
 
     // Wine
-    [BuildingType.Winegrower, [
-        { material: EMaterialType.PLANK, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
     [BuildingType.WinePress, [
         { material: EMaterialType.PLANK, count: 2 },
         { material: EMaterialType.STONE, count: 2 },

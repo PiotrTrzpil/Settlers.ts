@@ -29,7 +29,7 @@ export const BUILDING_TERRITORY_RADIUS: Record<number, number> = {
     [BuildingType.Forester]: 6,
     [BuildingType.LivingHouse]: 4,
     [BuildingType.Tower]: 10,
-    [BuildingType.Winegrower]: 6,
+    [BuildingType.WinePress]: 6,
 };
 
 /**

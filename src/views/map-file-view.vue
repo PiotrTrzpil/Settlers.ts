@@ -25,6 +25,23 @@
       :height="mapContent.mapSize.height"
     />
 
+    <div v-if="stats" class="stats-container">
+      <h3>Map Statistics</h3>
+      <div class="stats-row">
+        <div class="stats-col">
+          <h4>Objects (Byte 2)</h4>
+          <div v-for="(count, type) in stats.objects" :key="'obj'+type">
+            Type {{type}}: {{count}}
+          </div>
+        </div>
+        <div class="stats-col">
+          <h4>Resources (Byte 3)</h4>
+          <div v-for="(count, type) in stats.resources" :key="'res'+type">
+            Type {{type}}: {{count}}
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -82,6 +99,40 @@ async function load(file: IFileSource) {
 
     mapChunks.value = fillChunkList(mapContent.value as any as OriginalMapFile);
     mapInfo.value = mapContent.value.toString();
+    
+    updateStats(mapContent.value);
+}
+
+const stats = ref<{objects: Record<number, number>, resources: Record<number, number>} | null>(null);
+
+function updateStats(loader: IMapLoader) {
+    const l = loader.landscape;
+    if (!l) return;
+
+    stats.value = {
+        objects: {},
+        resources: {}
+    };
+
+    if (l.getObjectType) {
+        const data = l.getObjectType();
+        stats.value.objects = analyzeBytes(data);
+    }
+    
+    if (l.getResourceType) {
+        const data = l.getResourceType();
+        stats.value.resources = analyzeBytes(data);
+    }
+}
+
+function analyzeBytes(data: Uint8Array): Record<number, number> {
+    const counts: Record<number, number> = {};
+    for (let i = 0; i < data.length; i++) {
+        const val = data[i];
+        if (val === 0) continue;
+        counts[val] = (counts[val] || 0) + 1;
+    }
+    return counts;
 }
 
 function fillChunkList(map: OriginalMapFile) {
@@ -98,5 +149,24 @@ function fillChunkList(map: OriginalMapFile) {
 <style scoped>
 .mulit-row{
     font-family:"Courier New", Courier, monospace
+}
+
+.stats-container {
+    margin-top: 20px;
+    border-top: 1px solid #ccc;
+    padding-top: 10px;
+}
+
+.stats-row {
+    display: flex;
+    gap: 20px;
+}
+
+.stats-col {
+    flex: 1;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #eee;
+    padding: 5px;
 }
 </style>

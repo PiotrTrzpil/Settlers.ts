@@ -45,6 +45,10 @@ export enum EMaterialType {
     GEMS = 30,
     OFFICER_GEAR = 31,  // Leader helmets/equipment
     BATTLE_AXE = 32,    // Heavy battle axes (different from tool axe)
+    AGAVE = 33,         // Mayan crop/plant
+    BLOWGUN = 34,       // Mayan weapon
+    GOAT = 35,          // Mayan livestock
+    MEAD = 36,          // Honey wine
 
     // Special
     NO_MATERIAL = 26,
@@ -107,6 +111,10 @@ export const MATERIAL_CONFIGS: ReadonlyMap<EMaterialType, MaterialTypeConfig> = 
     [EMaterialType.DONKEY, { droppable: false, defaultPriorityIndex: 29, distributionConfigurable: false }],
     [EMaterialType.GEMS, { droppable: true, defaultPriorityIndex: 30, distributionConfigurable: false }],
     [EMaterialType.OFFICER_GEAR, { droppable: true, defaultPriorityIndex: 31, distributionConfigurable: false }],
+    [EMaterialType.AGAVE, { droppable: true, defaultPriorityIndex: 11, distributionConfigurable: true }], // Similar to CROP
+    [EMaterialType.BLOWGUN, { droppable: true, defaultPriorityIndex: 23, distributionConfigurable: false }], // Similar to BOW
+    [EMaterialType.GOAT, { droppable: false, defaultPriorityIndex: 32, distributionConfigurable: false }], // Livestock
+    [EMaterialType.MEAD, { droppable: true, defaultPriorityIndex: 15, distributionConfigurable: true }], // Alcohol
 
     // Non-droppable
     [EMaterialType.NO_MATERIAL, { droppable: false, defaultPriorityIndex: -1, distributionConfigurable: false }],

@@ -27,6 +27,11 @@
             :class="{ active: activeTab === 'units' }"
             @click="activeTab = 'units'"
           >Units</button>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'resources' }"
+            @click="activeTab = 'resources'"
+          >Resources</button>
         </div>
 
         <!-- Buildings tab -->
@@ -63,6 +68,28 @@
           >
             <span class="btn-icon">{{ u.icon }}</span>
             <span class="btn-label">{{ u.name }}</span>
+          </button>
+        </div>
+
+        <!-- Resources tab -->
+        <div v-if="activeTab === 'resources'" class="tab-content" data-testid="resource-palette">
+          <div class="resource-params">
+            <label>Amount:</label>
+            <input type="number" v-model.number="resourceAmount" min="1" max="8" class="amount-input" />
+          </div>
+          <button
+            v-for="r in availableResources"
+            :key="r.type"
+            class="sidebar-btn"
+            :data-testid="'btn-resource-' + r.id"
+            :class="{ active: currentMode === 'place_resource' && placeResourceType === r.type }"
+            @click="setPlaceResourceMode(r.type)"
+          >
+             <span class="btn-icon">
+                <img v-if="resourceIcons[r.type]" :src="resourceIcons[r.type]" class="resource-icon" />
+                <span v-else>{{ r.icon }}</span>
+             </span>
+             <span class="btn-label">{{ r.name }}</span>
           </button>
         </div>
 
@@ -143,6 +170,7 @@
             :debugGrid="showDebug"
             :showTerritoryBorders="showTerritoryBorders"
             :paused="isPaused"
+            :currentRace="currentRace"
             @update:debugGrid="showDebug = $event"
             @update:showTerritoryBorders="showTerritoryBorders = $event"
             @togglePause="togglePause()"
@@ -199,19 +227,24 @@ const {
     showDebug,
     showTerritoryBorders,
     activeTab,
+    resourceAmount,
+    resourceIcons,
     hoveredTile,
     selectedEntity,
     selectionCount,
     isPaused,
     currentMode,
     placeBuildingType,
+    placeResourceType,
     availableBuildings,
     availableUnits,
+    availableResources,
     layerVisibility,
     layerCounts,
     onFileSelect,
     onTileClick,
     setPlaceMode,
+    setPlaceResourceMode,
     setSelectMode,
     removeSelected,
     togglePause,
@@ -310,6 +343,27 @@ async function onRaceChange() {
   overflow-y: auto;
 }
 
+.resource-params {
+  padding: 8px;
+  background: #2c1e0e;
+  border-bottom: 1px solid #4a3218;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #c8a96e;
+  flex-shrink: 0;
+}
+
+.amount-input {
+  width: 40px;
+  background: #1a1209;
+  border: 1px solid #4a3218;
+  color: #e8c87e;
+  border-radius: 3px;
+  padding: 2px 4px;
+}
+
 /* ===== SIDEBAR BUTTONS ===== */
 .sidebar-btn {
   display: flex;
@@ -360,6 +414,14 @@ async function onRaceChange() {
   max-height: 20px;
   object-fit: contain;
   image-rendering: pixelated;
+}
+
+.resource-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(1px 1px 0 rgba(0,0,0,0.5));
 }
 
 .btn-label {

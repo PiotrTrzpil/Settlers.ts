@@ -8,6 +8,7 @@ import {
     Command,
     FORMATION_OFFSETS,
     PlaceBuildingCommand,
+    PlaceResourceCommand,
     SpawnUnitCommand,
     MoveUnitCommand,
     SelectCommand,
@@ -35,6 +36,7 @@ export {
     FORMATION_OFFSETS,
     isBuildingCommand,
     isUnitCommand,
+    isResourceCommand,
     isSelectionCommand,
     isMovementCommand,
 } from './command-types';
@@ -251,6 +253,36 @@ function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): boo
     return true;
 }
 
+function executePlaceResource(ctx: CommandContext, cmd: PlaceResourceCommand): boolean {
+    const { state, mapSize, groundType } = ctx;
+
+    if (cmd.x < 0 || cmd.x >= mapSize.width || cmd.y < 0 || cmd.y >= mapSize.height) {
+        return false;
+    }
+
+    // Check passability (not sea/rock)
+    if (!isPassable(groundType[mapSize.toIndex(cmd.x, cmd.y)])) {
+        return false;
+    }
+
+    // Check if tile is occupied
+    if (state.getEntityAt(cmd.x, cmd.y)) {
+        return false;
+    }
+
+    // Create a StackedResource entity for the material
+    const entity = state.addEntity(EntityType.StackedResource, cmd.materialType, cmd.x, cmd.y, 0);
+
+    // Update quantity in resource state
+    const resourceState = state.resourceStates.get(entity.id);
+    if (resourceState) {
+        resourceState.quantity = cmd.amount;
+    }
+
+    return true;
+}
+
+
 /**
  * Execute a player command against the game state.
  * Returns true if the command was successfully executed.
@@ -268,6 +300,8 @@ export function executeCommand(
     switch (cmd.type) {
     case 'place_building':
         return executePlaceBuilding(ctx, cmd);
+    case 'place_resource':
+        return executePlaceResource(ctx, cmd);
     case 'spawn_unit':
         return executeSpawnUnit(ctx, cmd);
     case 'move_unit':

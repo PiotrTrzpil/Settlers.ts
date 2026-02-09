@@ -29,6 +29,23 @@ export interface BuildingPreview {
 }
 
 /**
+ * Resource placement preview data.
+ */
+export interface ResourcePreview {
+    type: 'resource';
+    /** Material type being placed */
+    materialType: import('../economy/material-type').EMaterialType;
+    /** X position */
+    x: number;
+    /** Y position */
+    y: number;
+    /** Whether placement is valid */
+    valid: boolean;
+    /** Quantity of resources to preview (1-8) */
+    amount?: number;
+}
+
+/**
  * Selection box during drag selection.
  */
 export interface SelectionBox {
@@ -81,7 +98,7 @@ export interface PathPreview {
 /**
  * Union type for all preview types.
  */
-export type ModePreview = BuildingPreview | SelectionBox | PathPreview;
+export type ModePreview = BuildingPreview | SelectionBox | PathPreview | ResourcePreview;
 
 /**
  * Complete render state returned by a mode.

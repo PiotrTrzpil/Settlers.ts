@@ -3,6 +3,7 @@ import { GameState } from '../game-state';
 import { MapSize } from '@/utilities/map-size';
 import { isBuildable } from './placement';
 import { LogHandler } from '@/utilities/log-handler';
+import { TREE_VARIATION_COUNT } from '../renderer/sprite-metadata';
 
 const log = new LogHandler('MapObjects');
 
@@ -15,78 +16,63 @@ export const OBJECT_CATEGORIES: readonly ObjectCategory[] = ['trees', 'stones', 
 /** Mapping from MapObjectType to its category */
 export const OBJECT_TYPE_CATEGORY: Record<MapObjectType, ObjectCategory> = {
     // Trees
-    [MapObjectType.TreePine]: 'trees',
     [MapObjectType.TreeOak]: 'trees',
+    [MapObjectType.TreeBeech]: 'trees',
+    [MapObjectType.TreeAsh]: 'trees',
+    [MapObjectType.TreeLinden]: 'trees',
     [MapObjectType.TreeBirch]: 'trees',
-    [MapObjectType.TreePalm]: 'trees',
-    [MapObjectType.TreeCypress]: 'trees',
+    [MapObjectType.TreePoplar]: 'trees',
+    [MapObjectType.TreeChestnut]: 'trees',
+    [MapObjectType.TreeMaple]: 'trees',
+    [MapObjectType.TreeFir]: 'trees',
+    [MapObjectType.TreeSpruce]: 'trees',
+    [MapObjectType.TreeCoconut]: 'trees',
+    [MapObjectType.TreeDate]: 'trees',
+    [MapObjectType.TreeWalnut]: 'trees',
+    [MapObjectType.TreeCorkOak]: 'trees',
+    [MapObjectType.TreePine]: 'trees',
+    [MapObjectType.TreePine2]: 'trees',
+    [MapObjectType.TreeOliveLarge]: 'trees',
+    [MapObjectType.TreeOliveSmall]: 'trees',
     [MapObjectType.TreeDead]: 'trees',
-
-    // Stones
-    [MapObjectType.StoneSmall]: 'stones',
-    [MapObjectType.StoneMedium]: 'stones',
-    [MapObjectType.StoneLarge]: 'stones',
-
     // Resources
-    [MapObjectType.IronDeposit]: 'resources',
-    [MapObjectType.GoldDeposit]: 'resources',
-    [MapObjectType.CoalDeposit]: 'resources',
-    [MapObjectType.StoneDeposit]: 'resources',
-    [MapObjectType.SulfurDeposit]: 'resources',
-    [MapObjectType.GemsDeposit]: 'resources',
-
-    // Plants
-    [MapObjectType.Bush]: 'plants',
-    [MapObjectType.Mushroom]: 'plants',
-    [MapObjectType.Flowers]: 'plants',
-    [MapObjectType.Corn]: 'plants',
-    [MapObjectType.Wheat]: 'plants',
-
-    // Other
-    [MapObjectType.Stump]: 'other',
-    [MapObjectType.FallenTree]: 'other',
-    [MapObjectType.Pile]: 'other',
+    [MapObjectType.ResourceCoal]: 'resources',
+    [MapObjectType.ResourceGold]: 'resources',
+    [MapObjectType.ResourceIron]: 'resources',
+    [MapObjectType.ResourceStone]: 'resources',
+    [MapObjectType.ResourceSulfur]: 'resources',
 };
 
 /**
  * Registry mapping raw landscape byte values to MapObjectType.
- *
- * NOTE: These mappings are placeholders and need verification against actual
- * Settlers 4 map data. Use analyzeObjectTypes() to discover real values.
- *
- * The raw values in Settlers 4 maps likely encode:
- * - Object type (tree species, stone size, etc.)
- * - Object variant/state (growth stage, orientation)
- *
- * TODO: Reverse-engineer actual mappings from real map files.
+ * Verified against S4ModApi S4_TREE_ENUM
  */
 export const RAW_TO_OBJECT_TYPE: Map<number, MapObjectType> = new Map([
-    // Placeholder mappings - adjust based on analyzeObjectTypes() output
-    // Trees (guessed range 1-20)
-    [1, MapObjectType.TreePine],
-    [2, MapObjectType.TreeOak],
-    [3, MapObjectType.TreeBirch],
-    [4, MapObjectType.TreePalm],
-    [5, MapObjectType.TreeCypress],
-    [6, MapObjectType.TreeDead],
+    // Trees (S4ModApi S4_TREE_ENUM)
+    [1, MapObjectType.TreeOak],
+    [2, MapObjectType.TreeBeech],
+    [3, MapObjectType.TreeAsh],
+    [4, MapObjectType.TreeLinden],
+    [5, MapObjectType.TreeBirch],
+    [6, MapObjectType.TreePoplar],
+    [7, MapObjectType.TreeChestnut],
+    [8, MapObjectType.TreeMaple],
+    [9, MapObjectType.TreeFir],
+    [10, MapObjectType.TreeSpruce],
+    [11, MapObjectType.TreeCoconut],
+    [12, MapObjectType.TreeDate],
+    [13, MapObjectType.TreeWalnut],
+    [14, MapObjectType.TreeCorkOak],
+    [15, MapObjectType.TreePine],
+    [16, MapObjectType.TreePine2],
+    [17, MapObjectType.TreeOliveLarge],
+    [18, MapObjectType.TreeOliveSmall],
 
-    // Stones (guessed range 21-30)
-    [21, MapObjectType.StoneSmall],
-    [22, MapObjectType.StoneMedium],
-    [23, MapObjectType.StoneLarge],
-
-    // Resources (guessed range 31-50)
-    [31, MapObjectType.IronDeposit],
-    [32, MapObjectType.GoldDeposit],
-    [33, MapObjectType.CoalDeposit],
-    [34, MapObjectType.StoneDeposit],
-    [35, MapObjectType.SulfurDeposit],
-    [36, MapObjectType.GemsDeposit],
-
-    // Plants (guessed range 51-70)
-    [51, MapObjectType.Bush],
-    [52, MapObjectType.Mushroom],
-    [53, MapObjectType.Flowers],
+    // Community / Siedler-Portal known values (Secondary / Magic Bytes)
+    // Keeping these for now as requested user inputs, but S4ModApi suggests 1-18 is the primary range
+    [0xC4, MapObjectType.TreeOak],
+    [0xC5, MapObjectType.TreePine],
+    [0xC6, MapObjectType.TreeCoconut], // Palm -> Coconut/Date
 ]);
 
 /** Get all MapObjectTypes for a given category */
@@ -195,7 +181,8 @@ export function populateMapObjects(
             if (allowedTypes && !allowedTypes.has(mappedType)) continue;
 
             // Spawn the object
-            state.addEntity(EntityType.MapObject, mappedType, x, y, 0);
+            const variation = Math.floor(Math.random() * TREE_VARIATION_COUNT);
+            state.addEntity(EntityType.MapObject, mappedType, x, y, 0, undefined, variation);
             count++;
         }
     }
@@ -240,8 +227,10 @@ export function spawnTestObjects(
         if (state.getEntityAt(x, y)) continue;
 
         // Cycle through types in category
+        // Cycle through types in category
         const objectType = types[i % types.length];
-        state.addEntity(EntityType.MapObject, objectType, x, y, 0);
+        const variation = Math.floor(Math.random() * TREE_VARIATION_COUNT);
+        state.addEntity(EntityType.MapObject, objectType, x, y, 0, undefined, variation);
         spawned++;
     }
 

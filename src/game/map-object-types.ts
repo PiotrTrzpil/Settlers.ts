@@ -4,36 +4,35 @@
  */
 
 export enum MapObjectType {
-    // Trees
-    TreePine = 0,
-    TreeOak = 1,
-    TreeBirch = 2,
-    TreePalm = 3,
-    TreeCypress = 4,
-    TreeDead = 5,
+    // Trees (S4ModApi S4_TREE_ENUM)
+    TreeOak = 0,        // 1
+    TreeBeech = 1,      // 2
+    TreeAsh = 2,        // 3
+    TreeLinden = 3,     // 4
+    TreeBirch = 4,      // 5
+    TreePoplar = 5,     // 6
+    TreeChestnut = 6,   // 7
+    TreeMaple = 7,      // 8
+    TreeFir = 8,        // 9
+    TreeSpruce = 9,     // 10
+    TreeCoconut = 10,   // 11
+    TreeDate = 11,      // 12
+    TreeWalnut = 12,    // 13
+    TreeCorkOak = 13,   // 14
+    TreePine = 14,      // 15
+    TreePine2 = 15,     // 16
+    TreeOliveLarge = 16,// 17
+    TreeOliveSmall = 17,// 18
 
-    // Stones
-    StoneSmall = 10,
-    StoneMedium = 11,
-    StoneLarge = 12,
+    // Tree aliases for code compatibility or specific tribe variations
+    TreePalm = 10,      // Alias for Coconut/Date generic
+    TreeCypress = 8,    // Alias for Fir/Spruce generic
+    TreeDead = 18,      // Placeholder for now
 
-    // Resources (mineable)
-    IronDeposit = 20,
-    GoldDeposit = 21,
-    CoalDeposit = 22,
-    StoneDeposit = 23,
-    SulfurDeposit = 24,
-    GemsDeposit = 25,
-
-    // Plants
-    Bush = 30,
-    Mushroom = 31,
-    Flowers = 32,
-    Corn = 33,
-    Wheat = 34,
-
-    // Other objects
-    Stump = 40,
-    FallenTree = 41,
-    Pile = 42,
+    // Resources (Placeholder IDs for now)
+    ResourceCoal = 100,
+    ResourceGold = 101,
+    ResourceIron = 102,
+    ResourceStone = 103,
+    ResourceSulfur = 104,
 }

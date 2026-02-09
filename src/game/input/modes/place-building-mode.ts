@@ -2,6 +2,7 @@ import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult 
 import { InputAction, MouseButton, type PointerData } from '../input-actions';
 import { BuildingType, getBuildingSize } from '../../entity';
 import { CursorType, type ModeRenderState } from '../render-state';
+import { LogHandler } from '../../../utilities/log-handler';
 
 /**
  * Data specific to building placement mode.
@@ -22,6 +23,7 @@ export interface PlaceBuildingModeData {
  * Building placement mode - for placing new buildings on the map.
  */
 export class PlaceBuildingMode extends BaseInputMode {
+    private static readonly log = new LogHandler('PlaceBuildingMode');
     readonly name = 'place_building';
     readonly displayName = 'Place Building';
 
@@ -82,8 +84,13 @@ export class PlaceBuildingMode extends BaseInputMode {
 
                 // Exit placement mode after successful placement
                 if (success) {
+                    PlaceBuildingMode.log.info(`Placed building ${BuildingType[modeData.buildingType]} at ${modeData.previewX},${modeData.previewY}`);
                     context.switchMode('select');
+                } else {
+                    PlaceBuildingMode.log.warn(`Failed to place building at ${modeData.previewX},${modeData.previewY} (Command failed)`);
                 }
+            } else {
+                PlaceBuildingMode.log.warn(`Cannot place building at ${data.tileX},${data.tileY} (Invalid position)`);
             }
             return HANDLED;
         }

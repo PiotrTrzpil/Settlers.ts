@@ -51,4 +51,8 @@ export class OriginalLandscape implements IMapLandscape {
     public getObjectType(): Uint8Array {
         return this.getSlice(2);
     }
+
+    public getResourceType(): Uint8Array {
+        return this.getSlice(3);
+    }
 }

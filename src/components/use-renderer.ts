@@ -13,13 +13,15 @@ import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { EntityType, type TileCoord } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
-import { canPlaceBuildingWithTerritory } from '@/game/systems/placement';
+import { canPlaceBuildingWithTerritory, isPassable } from '@/game/systems/placement';
 import { debugStats } from '@/game/debug-stats';
 import {
     InputManager,
     SelectMode,
     PlaceBuildingMode,
     type PlaceBuildingModeData,
+    PlaceResourceMode,
+    type PlaceResourceModeData,
     getDefaultInputConfig,
 } from '@/game/input';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
@@ -36,9 +38,55 @@ interface RenderContext {
     layerVisibility: LayerVisibility;
 }
 
-/**
- * Create the render callback that runs each frame.
- */
+/** Update entity renderer state from game */
+function syncEntityRendererState(
+    er: EntityRenderer, g: Game, ctx: RenderContext, alpha: number
+): void {
+    er.entities = g.state.entities;
+    er.selectedEntityId = g.state.selectedEntityId;
+    er.selectedEntityIds = g.state.selectedEntityIds;
+    er.unitStates = g.state.unitStates;
+    er.buildingStates = g.state.buildingStates;
+    er.resourceStates = g.state.resourceStates;
+    er.territoryMap = ctx.showTerritoryBorders ? g.territory : null;
+    er.territoryVersion = g.territoryVersion;
+    er.renderAlpha = alpha;
+    er.layerVisibility = ctx.layerVisibility;
+}
+
+/** Handle placement mode rendering state */
+function updatePlacementModeState(er: EntityRenderer, g: Game, renderState: any): void {
+    const mode = debugStats.state.mode;
+    er.buildingIndicatorsPlayer = g.currentPlayer;
+    er.buildingIndicatorsHasBuildings = g.state.entities.some(
+        ent => ent.type === EntityType.Building && ent.player === g.currentPlayer
+    );
+    er.territoryMap = g.territory;
+    er.previewBuildingType = g.placeBuildingType;
+    er.previewMaterialType = (mode === 'place_resource') ? debugStats.state.placeResourceType : null;
+
+    const preview = renderState?.preview;
+    if (preview?.type === 'building' || preview?.type === 'resource') {
+        er.previewTile = { x: preview.x, y: preview.y };
+        er.previewValid = preview.valid;
+        er.previewVariation = (preview.type === 'resource')
+            ? Math.max(0, Math.min((preview.amount ?? 1) - 1, 7))
+            : null;
+    } else {
+        er.previewTile = null;
+        er.previewVariation = null;
+    }
+}
+
+/** Clear placement mode state */
+function clearPlacementModeState(er: EntityRenderer): void {
+    er.previewTile = null;
+    er.previewBuildingType = null;
+    er.previewMaterialType = null;
+    er.previewVariation = null;
+}
+
+/** Create the render callback that runs each frame. */
 function createRenderCallback(
     getContext: () => RenderContext,
     renderer: Renderer,
@@ -46,63 +94,33 @@ function createRenderCallback(
 ): (alpha: number, deltaSec: number) => void {
     return (alpha: number, deltaSec: number) => {
         const ctx = getContext();
-        const { game: g, entityRenderer, landscapeRenderer, inputManager } = ctx;
+        const { game: g, entityRenderer: er, landscapeRenderer, inputManager } = ctx;
 
-        if (entityRenderer && g) {
+        if (er && g) {
             inputManager?.update(deltaSec);
-
-            entityRenderer.entities = g.state.entities;
-            entityRenderer.selectedEntityId = g.state.selectedEntityId;
-            entityRenderer.selectedEntityIds = g.state.selectedEntityIds;
-            entityRenderer.unitStates = g.state.unitStates;
-            entityRenderer.buildingStates = g.state.buildingStates;
-            entityRenderer.resourceStates = g.state.resourceStates;
-            entityRenderer.territoryMap = ctx.showTerritoryBorders ? g.territory : null;
-            entityRenderer.territoryVersion = g.territoryVersion;
-            entityRenderer.renderAlpha = alpha;
-            entityRenderer.layerVisibility = ctx.layerVisibility;
+            syncEntityRendererState(er, g, ctx, alpha);
 
             const renderState = inputManager?.getRenderState();
-            const inPlacementMode = debugStats.state.mode === 'place_building';
-            entityRenderer.buildingIndicatorsEnabled = inPlacementMode;
+            const mode = debugStats.state.mode;
+            const inPlacementMode = mode === 'place_building' || mode === 'place_resource';
+            er.buildingIndicatorsEnabled = inPlacementMode;
 
             if (inPlacementMode) {
-                entityRenderer.buildingIndicatorsPlayer = g.currentPlayer;
-                entityRenderer.buildingIndicatorsHasBuildings = g.state.entities.some(
-                    ent => ent.type === EntityType.Building && ent.player === g.currentPlayer
-                );
-                entityRenderer.territoryMap = g.territory;
-                entityRenderer.previewBuildingType = g.placeBuildingType;
-
-                const preview = renderState?.preview;
-                if (preview?.type === 'building') {
-                    entityRenderer.previewTile = { x: preview.x, y: preview.y };
-                    entityRenderer.previewValid = preview.valid;
-                }
+                updatePlacementModeState(er, g, renderState);
             } else {
-                entityRenderer.previewTile = null;
-                entityRenderer.previewBuildingType = null;
+                clearPlacementModeState(er);
             }
 
-            const preview = renderState?.preview;
-            if (preview?.type === 'selection_box') {
-                selectionBox.value = preview;
-            } else {
-                selectionBox.value = null;
-            }
+            selectionBox.value = (renderState?.preview?.type === 'selection_box')
+                ? renderState.preview : null;
 
             if (renderState?.cursor && renderer.canvas) {
                 renderer.canvas.style.cursor = renderState.cursor;
             }
         }
 
-        if (landscapeRenderer) {
-            landscapeRenderer.debugGrid = ctx.debugGrid;
-        }
-
-        if (g) {
-            debugStats.updateFromGame(g);
-        }
+        if (landscapeRenderer) landscapeRenderer.debugGrid = ctx.debugGrid;
+        if (g) debugStats.updateFromGame(g);
 
         debugStats.state.cameraX = Math.round(renderer.viewPoint.x * 10) / 10;
         debugStats.state.cameraY = Math.round(renderer.viewPoint.y * 10) / 10;
@@ -163,7 +181,57 @@ function configurePlaceBuildingMode(
         return originalOnPointerMove(data, context);
     };
 
+
     return placeBuildingMode;
+}
+
+/**
+ * Configure PlaceResourceMode with debug stats integration
+ */
+function configurePlaceResourceMode(
+    getGame: () => Game | null,
+    onTileClick: (tile: { x: number; y: number }) => void
+): PlaceResourceMode {
+    const placeResourceMode = new PlaceResourceMode();
+    const originalOnPointerMove = placeResourceMode.onPointerMove.bind(placeResourceMode);
+
+    placeResourceMode.onPointerMove = (data, context) => {
+        if (data.tileX !== undefined && data.tileY !== undefined) {
+            onTileClick({ x: data.tileX, y: data.tileY });
+            debugStats.state.hasTile = true;
+            debugStats.state.tileX = data.tileX;
+            debugStats.state.tileY = data.tileY;
+
+            const game = getGame();
+            if (game) {
+                const idx = game.mapSize.toIndex(data.tileX, data.tileY);
+                debugStats.state.tileGroundType = game.groundType[idx];
+                debugStats.state.tileGroundHeight = game.groundHeight[idx];
+            }
+        }
+
+        const modeData = context.getModeData<PlaceResourceModeData>();
+        if (modeData && !modeData.validatePlacement) {
+            modeData.validatePlacement = (x, y) => {
+                const game = getGame();
+                if (!game) return false;
+                if (x < 0 || y < 0 || x >= game.mapSize.width || y >= game.mapSize.height) return false;
+
+                const idx = game.mapSize.toIndex(x, y);
+                // Must be passable (not sea/rock)
+                if (!isPassable(game.groundType[idx])) return false;
+                // Must not be occupied
+                if (game.state.getEntityAt(x, y)) return false;
+
+                return true;
+            };
+            context.setModeData(modeData);
+        }
+
+        return originalOnPointerMove(data, context);
+    };
+
+    return placeResourceMode;
 }
 
 /**
@@ -206,6 +274,32 @@ interface UseRendererOptions {
     getShowTerritoryBorders: () => boolean;
     getLayerVisibility: () => LayerVisibility;
     onTileClick: (tile: { x: number; y: number }) => void;
+}
+
+/** Handle mode changes and update debug stats */
+function handleModeChange(
+    getGame: () => Game | null
+): (oldMode: string, newMode: string, data?: any) => void {
+    return (_oldMode, newMode, data) => {
+        debugStats.state.mode = newMode;
+
+        // Update building type
+        debugStats.state.placeBuildingType =
+            (newMode === 'place_building' && data?.buildingType !== undefined)
+                ? data.buildingType : 0;
+
+        // Update resource type
+        debugStats.state.placeResourceType =
+            (newMode === 'place_resource' && data?.resourceType !== undefined)
+                ? data.resourceType : 0;
+
+        // Sync with game for backward compatibility
+        const game = getGame();
+        if (game) {
+            game.mode = newMode as any;
+            game.placeBuildingType = debugStats.state.placeBuildingType;
+        }
+    };
 }
 
 export function useRenderer({
@@ -271,26 +365,12 @@ export function useRenderer({
             tileResolver: resolveTile,
             commandExecutor: executeCommand,
             initialMode: 'select',
-            onModeChange: (_oldMode, newMode, data) => {
-                // Update debugStats as the central source of truth for mode
-                debugStats.state.mode = newMode;
-                if (newMode === 'place_building' && data?.buildingType !== undefined) {
-                    debugStats.state.placeBuildingType = data.buildingType;
-                } else if (newMode !== 'place_building') {
-                    debugStats.state.placeBuildingType = 0;
-                }
-
-                // Also update game.mode for backward compatibility with renderer
-                const game = getGame();
-                if (game) {
-                    game.mode = newMode as any;
-                    game.placeBuildingType = debugStats.state.placeBuildingType;
-                }
-            },
+            onModeChange: handleModeChange(getGame),
         });
 
         inputManager.registerMode(new SelectMode());
         inputManager.registerMode(configurePlaceBuildingMode(getGame, onTileClick));
+        inputManager.registerMode(configurePlaceResourceMode(getGame, onTileClick));
         inputManager.attach();
 
         // Connect camera mode to the ViewPoint

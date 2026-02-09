@@ -1,9 +1,10 @@
-import { ref, shallowRef, triggerRef, computed, watch, onMounted, reactive } from 'vue';
+import { ref, shallowRef, triggerRef, computed, watch, onMounted, onUnmounted, reactive } from 'vue';
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
 import { createTestMapLoader } from '@/game/test-map-factory';
 import { Entity, EntityType, TileCoord, UnitType, BuildingType, MapObjectType } from '@/game/entity';
+import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy/material-type';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
 import {
@@ -16,6 +17,7 @@ import {
 } from '@/game/renderer/layer-visibility';
 import { debugStats } from '@/game/debug-stats';
 import type { InputManager } from '@/game/input';
+import { EntityRenderer } from '@/game/renderer/entity-renderer';
 
 /** Entity counts per layer for display in the layer panel */
 export interface LayerCounts {
@@ -152,7 +154,6 @@ const availableBuildings = [
     { type: BuildingType.PigFarm, id: 'pigfarm', name: 'Pig Farm', icon: '🐷' },
     { type: BuildingType.Slaughterhouse, id: 'slaughterhouse', name: 'Slaughter', icon: '🥩' },
     { type: BuildingType.Waterworks, id: 'waterworks', name: 'Waterworks', icon: '💧' },
-    { type: BuildingType.Winegrower, id: 'winegrower', name: 'Winegrower', icon: '🍇' },
     { type: BuildingType.WinePress, id: 'winepress', name: 'Wine Press', icon: '🍷' },
     { type: BuildingType.DonkeyFarm, id: 'donkeyfarm', name: 'Donkey Farm', icon: '🫏' },
 
@@ -189,6 +190,7 @@ const availableBuildings = [
 /** Units available in the UI */
 const availableUnits = [
     { type: UnitType.Bearer, id: 'bearer', name: 'Bearer', icon: '🧑' },
+    { type: UnitType.Lumberjack, id: 'lumberjack', name: 'Lumberjack', icon: '🪓' },
     { type: UnitType.Builder, id: 'builder', name: 'Builder', icon: '👷' },
     { type: UnitType.Swordsman, id: 'swordsman', name: 'Swordsman', icon: '⚔️' },
     { type: UnitType.Bowman, id: 'bowman', name: 'Bowman', icon: '🏹' },
@@ -198,6 +200,127 @@ const availableUnits = [
     { type: UnitType.Thief, id: 'thief', name: 'Thief', icon: '🥷' },
     { type: UnitType.Geologist, id: 'geologist', name: 'Geologist', icon: '🔍' },
 ];
+
+/** Resources available in the UI (derived from droppable materials) */
+const availableResources = DROPPABLE_MATERIALS.map(type => {
+    const name = EMaterialType[type].charAt(0) + EMaterialType[type].slice(1).toLowerCase().replace('_', ' ');
+    return {
+        type,
+        id: EMaterialType[type].toLowerCase(),
+        name,
+        icon: '📦' // Placeholder, will be replaced by texture
+    };
+});
+
+/** Update resource icons from the sprite manager */
+function updateResourceIconsFromManager(
+    game: Game | null,
+    resourceIcons: Ref<Record<number, string>>
+): void {
+    const g = game as any;
+    if (!g?.renderer) return;
+
+    const renderer = g.renderer as unknown as EntityRenderer;
+    if (!renderer.spriteManager?.hasSprites) return;
+
+    const manager = renderer.spriteManager;
+    const atlas = manager.spriteAtlas;
+    if (!atlas) return;
+
+    let changed = false;
+    for (const r of availableResources) {
+        if (resourceIcons.value[r.type]) continue;
+        const entry = manager.getResource(r.type, 0);
+        if (!entry) continue;
+
+        const imageData = atlas.extractRegion(entry.atlasRegion);
+        if (!imageData) continue;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = imageData.width;
+        canvas.height = imageData.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.putImageData(imageData, 0, 0);
+            resourceIcons.value[r.type] = canvas.toDataURL();
+            changed = true;
+        }
+    }
+    if (changed) triggerRef(resourceIcons);
+}
+
+/** Create mode toggle handler */
+function createModeToggler(
+    getGame: () => Game | null,
+    getInputManager: () => InputManager | null
+) {
+    return {
+        setPlaceMode(buildingType: number): void {
+            const game = getGame();
+            const inputManager = getInputManager();
+            if (!game || !inputManager) return;
+
+            if (debugStats.state.mode === 'place_building' &&
+                debugStats.state.placeBuildingType === buildingType) {
+                inputManager.switchMode('select');
+            } else {
+                inputManager.switchMode('place_building', {
+                    buildingType,
+                    player: game.currentPlayer,
+                });
+            }
+        },
+
+        setPlaceResourceMode(resourceType: EMaterialType, amount: number): void {
+            const inputManager = getInputManager();
+            if (!getGame() || !inputManager) return;
+
+            if (debugStats.state.mode === 'place_resource' &&
+                debugStats.state.placeResourceType === resourceType) {
+                inputManager.switchMode('select');
+            } else {
+                inputManager.switchMode('place_resource', { resourceType, amount });
+            }
+        },
+
+        setSelectMode(): void {
+            getInputManager()?.switchMode('select');
+        }
+    };
+}
+
+/** Create game action handlers */
+function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | null>) {
+    return {
+        removeSelected(): void {
+            const g = getGame();
+            if (!g || g.state.selectedEntityId === null) return;
+            g.execute({ type: 'remove_entity', entityId: g.state.selectedEntityId });
+            triggerRef(game);
+        },
+
+        togglePause(): void {
+            const g = getGame();
+            if (!g) return;
+            if (g.gameLoop.isRunning) g.stop();
+            else g.start();
+        },
+
+        spawnUnit(unitType: number, inputManager: InputManager | null): void {
+            const g = getGame();
+            if (!g) return;
+            const pos = findSpawnPosition(g, inputManager);
+            if (!pos) return;
+            g.execute({
+                type: 'spawn_unit',
+                unitType: unitType as UnitType,
+                x: pos.x, y: pos.y,
+                player: g.currentPlayer
+            });
+            triggerRef(game);
+        }
+    };
+}
 
 export function useMapView(
     getFileManager: () => FileManager,
@@ -220,8 +343,11 @@ export function useMapView(
         set: (value: boolean) => { debugStats.state.territoryBordersEnabled = value }
     });
 
-    const activeTab = ref<'buildings' | 'units'>('buildings');
+    const activeTab = ref<'buildings' | 'units' | 'resources'>('buildings');
+    const resourceAmount = ref(1);
     const hoveredTile = ref<TileCoord | null>(null);
+    const resourceIcons = ref<Record<number, string>>({});
+    let iconUpdateInterval: number | null = null;
 
     // Layer visibility state (loaded from localStorage)
     const layerVisibility = reactive<LayerVisibility>(loadLayerVisibility());
@@ -242,6 +368,7 @@ export function useMapView(
     // Mode state - use debugStats as the single source of truth (reactive and instant)
     const currentMode = computed(() => debugStats.state.mode);
     const placeBuildingType = computed(() => debugStats.state.placeBuildingType);
+    const placeResourceType = computed(() => debugStats.state.placeResourceType);
 
     const layerCounts = computed<LayerCounts>(() => {
         if (!game.value) {
@@ -268,8 +395,31 @@ export function useMapView(
     }
 
     const initializeMap = () => isTestMap ? loadTestMap() : autoLoadFirstMap();
-    onMounted(initializeMap);
+
+    onMounted(() => {
+        initializeMap();
+        iconUpdateInterval = window.setInterval(updateResourceIcons, 1000);
+    });
+    // Cleanup interval
+    // Cleanup interval
+    onUnmounted(() => {
+        if (iconUpdateInterval) clearInterval(iconUpdateInterval);
+    });
     watch(getFileManager, initializeMap);
+
+    // Update resource placement mode when amount changes
+    watch(resourceAmount, () => {
+        if (debugStats.state.mode === 'place_resource' && debugStats.state.placeResourceType) {
+            const inputManager = getInputManager?.();
+            if (inputManager) {
+                // Re-enter mode with new amount
+                inputManager.switchMode('place_resource', {
+                    resourceType: debugStats.state.placeResourceType,
+                    amount: resourceAmount.value
+                });
+            }
+        }
+    });
 
     function onFileSelect(file: IFileSource) {
         fileName.value = file.name;
@@ -280,62 +430,16 @@ export function useMapView(
         hoveredTile.value = tile;
     }
 
-    function setPlaceMode(buildingType: number) {
-        if (!game.value) return;
-        const inputManager = getInputManager?.();
-        if (!inputManager) return;
+    // Create mode and action handlers
+    const modeToggler = createModeToggler(() => game.value, () => getInputManager?.() ?? null);
+    const gameActions = createGameActions(() => game.value, game);
 
-        // Toggle behavior: if already placing this building type, exit to select mode
-        // Use debugStats as the single source of truth for mode state
-        if (debugStats.state.mode === 'place_building' && debugStats.state.placeBuildingType === buildingType) {
-            inputManager.switchMode('select');
-        } else {
-            inputManager.switchMode('place_building', {
-                buildingType,
-                player: game.value.currentPlayer,
-            });
-        }
-    }
-
-    function setSelectMode() {
-        if (!game.value) return;
-        const inputManager = getInputManager?.();
-        if (inputManager) {
-            inputManager.switchMode('select');
-        }
-    }
-
-    function removeSelected(): void {
-        if (!game.value || game.value.state.selectedEntityId === null) return;
-        game.value.execute({
-            type: 'remove_entity',
-            entityId: game.value.state.selectedEntityId
-        });
-        triggerRef(game);
-    }
-
-    function togglePause(): void {
-        if (!game.value) return;
-        if (game.value.gameLoop.isRunning) {
-            game.value.stop();
-        } else {
-            game.value.start();
-        }
-    }
-
-    function spawnUnit(unitType: number) {
-        if (!game.value) return;
-        const pos = findSpawnPosition(game.value, getInputManager?.());
-        if (!pos) return;
-        game.value.execute({
-            type: 'spawn_unit',
-            unitType: unitType as UnitType,
-            x: pos.x,
-            y: pos.y,
-            player: game.value.currentPlayer
-        });
-        triggerRef(game);
-    }
+    const setPlaceMode = modeToggler.setPlaceMode;
+    const setPlaceResourceMode = (rt: EMaterialType) => modeToggler.setPlaceResourceMode(rt, resourceAmount.value);
+    const setSelectMode = modeToggler.setSelectMode;
+    const removeSelected = gameActions.removeSelected;
+    const togglePause = gameActions.togglePause;
+    const spawnUnit = (ut: number) => gameActions.spawnUnit(ut, getInputManager?.() ?? null);
 
     async function load(file: IFileSource) {
         const fm = getFileManager();
@@ -347,6 +451,10 @@ export function useMapView(
         }
     }
 
+    function updateResourceIcons() {
+        updateResourceIconsFromManager(game.value, resourceIcons);
+    }
+
     return {
         fileName,
         mapInfo,
@@ -354,19 +462,24 @@ export function useMapView(
         showDebug,
         showTerritoryBorders,
         activeTab,
+        resourceAmount,
+        resourceIcons,
         hoveredTile,
         selectedEntity,
         selectionCount,
         isPaused,
         currentMode,
         placeBuildingType,
+        placeResourceType,
         availableBuildings,
         availableUnits,
+        availableResources,
         layerVisibility,
         layerCounts,
         onFileSelect,
         onTileClick,
         setPlaceMode,
+        setPlaceResourceMode,
         setSelectMode,
         removeSelected,
         togglePause,

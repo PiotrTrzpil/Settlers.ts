@@ -56,6 +56,7 @@ export {
 // Built-in Modes
 export { SelectMode } from './modes/select-mode';
 export { PlaceBuildingMode, type PlaceBuildingModeData } from './modes/place-building-mode';
+export { PlaceResourceMode, type PlaceResourceModeData } from './modes/place-resource-mode';
 export { CameraMode } from './modes/camera-mode';
 
 // Input Manager

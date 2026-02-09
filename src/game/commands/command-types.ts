@@ -24,6 +24,14 @@ export interface PlaceBuildingCommand {
     player: number;
 }
 
+export interface PlaceResourceCommand {
+    type: 'place_resource';
+    materialType: number; // EMaterialType
+    amount: number;
+    x: number;
+    y: number;
+}
+
 export interface RemoveEntityCommand {
     type: 'remove_entity';
     entityId: number;
@@ -84,6 +92,7 @@ export interface SelectAreaCommand {
  */
 export type Command =
     | PlaceBuildingCommand
+    | PlaceResourceCommand
     | SpawnUnitCommand
     | MoveUnitCommand
     | SelectCommand
@@ -101,6 +110,13 @@ export function isBuildingCommand(cmd: Command): cmd is PlaceBuildingCommand | R
 }
 
 /**
+ * Type guard for resource-related commands.
+ */
+export function isResourceCommand(cmd: Command): cmd is PlaceResourceCommand {
+    return cmd.type === 'place_resource';
+}
+
+/**
  * Type guard for unit-related commands.
  */
 export function isUnitCommand(cmd: Command): cmd is SpawnUnitCommand | MoveUnitCommand | MoveSelectedUnitsCommand {
@@ -112,7 +128,7 @@ export function isUnitCommand(cmd: Command): cmd is SpawnUnitCommand | MoveUnitC
  */
 export function isSelectionCommand(cmd: Command): cmd is SelectCommand | SelectAtTileCommand | ToggleSelectionCommand | SelectAreaCommand {
     return cmd.type === 'select' || cmd.type === 'select_at_tile' ||
-           cmd.type === 'toggle_selection' || cmd.type === 'select_area';
+        cmd.type === 'toggle_selection' || cmd.type === 'select_area';
 }
 
 /**

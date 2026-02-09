@@ -62,6 +62,7 @@ export interface DebugStatsState {
     // Game mode (written by InputManager onModeChange callback)
     mode: string;
     placeBuildingType: number;
+    placeResourceType: number;
     selectedEntityId: number | null;
     selectedCount: number;
 
@@ -194,6 +195,7 @@ class DebugStats {
             hasTile: false,
             mode: 'select',
             placeBuildingType: 0,
+            placeResourceType: 0,
             selectedEntityId: null,
             selectedCount: 0,
             riverSlotPermutation: savedSettings.riverSlotPermutation,
