@@ -22,6 +22,48 @@ export enum CarrierStatus {
 }
 
 /**
+ * Fatigue level categories based on fatigue value.
+ * Higher fatigue = worse condition.
+ */
+export enum FatigueLevel {
+    /** 0-25: Full speed, can take any job */
+    Fresh = 0,
+    /** 26-50: Slightly slower, can still work */
+    Tired = 1,
+    /** 51-75: Very slow, will finish current job then rest */
+    Exhausted = 2,
+    /** 76-100: Cannot work, must rest */
+    Collapsed = 3,
+}
+
+/** Fatigue thresholds for each level */
+export const FATIGUE_THRESHOLDS = {
+    [FatigueLevel.Fresh]: 0,
+    [FatigueLevel.Tired]: 26,
+    [FatigueLevel.Exhausted]: 51,
+    [FatigueLevel.Collapsed]: 76,
+} as const;
+
+/**
+ * Get the fatigue level category from a numeric fatigue value.
+ */
+export function getFatigueLevel(fatigue: number): FatigueLevel {
+    if (fatigue >= FATIGUE_THRESHOLDS[FatigueLevel.Collapsed]) return FatigueLevel.Collapsed;
+    if (fatigue >= FATIGUE_THRESHOLDS[FatigueLevel.Exhausted]) return FatigueLevel.Exhausted;
+    if (fatigue >= FATIGUE_THRESHOLDS[FatigueLevel.Tired]) return FatigueLevel.Tired;
+    return FatigueLevel.Fresh;
+}
+
+/**
+ * Check if a carrier can accept new jobs based on fatigue level.
+ * Collapsed carriers cannot work. Exhausted carriers will finish current job but won't take new ones.
+ */
+export function canAcceptNewJob(fatigue: number): boolean {
+    const level = getFatigueLevel(fatigue);
+    return level === FatigueLevel.Fresh || level === FatigueLevel.Tired;
+}
+
+/**
  * Job types that a carrier can be assigned.
  */
 export type CarrierJob =

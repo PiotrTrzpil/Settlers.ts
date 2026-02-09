@@ -6,6 +6,7 @@
 import type { BuildingState } from './features/building-construction';
 import type { BuildingType } from './buildings/types';
 import type { UnitType } from './unit-types';
+import type { CarrierJob } from './features/carriers';
 
 /** Event map defining all game events and their payloads */
 export interface GameEvents {
@@ -57,6 +58,41 @@ export interface GameEvents {
         entityId: number;
         direction: number;
         previousDirection: number;
+    };
+
+    // === Carrier Events ===
+
+    /** Emitted when a carrier is registered with a tavern */
+    'carrier:created': {
+        entityId: number;
+        homeBuilding: number;
+    };
+
+    /** Emitted when a carrier is removed from the system */
+    'carrier:removed': {
+        entityId: number;
+        homeBuilding: number;
+        /** True if carrier was removed while on a job */
+        hadActiveJob: boolean;
+    };
+
+    /** Emitted when a job is assigned to a carrier */
+    'carrier:jobAssigned': {
+        entityId: number;
+        job: CarrierJob;
+    };
+
+    /** Emitted when a carrier completes their current job */
+    'carrier:jobCompleted': {
+        entityId: number;
+        completedJob: CarrierJob;
+    };
+
+    /** Emitted when a carrier's status changes */
+    'carrier:statusChanged': {
+        entityId: number;
+        previousStatus: number;
+        newStatus: number;
     };
 }
 

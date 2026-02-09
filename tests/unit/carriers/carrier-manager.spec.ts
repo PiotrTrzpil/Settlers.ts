@@ -7,6 +7,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
     CarrierManager,
     CarrierStatus,
+    FatigueLevel,
+    FATIGUE_THRESHOLDS,
+    getFatigueLevel,
+    canAcceptNewJob,
     type CarrierJob,
 } from '@/game/features/carriers';
 import { EMaterialType } from '@/game/economy';
@@ -127,7 +131,7 @@ describe('CarrierManager', () => {
     });
 
     describe('getAvailableCarriers', () => {
-        it('should return only idle carriers without jobs', () => {
+        it('should return only idle carriers without jobs and low fatigue', () => {
             manager.createCarrier(1, 100); // Will remain idle (available)
             const carrier2 = manager.createCarrier(2, 100);
             const carrier3 = manager.createCarrier(3, 100);
@@ -163,11 +167,97 @@ describe('CarrierManager', () => {
             expect(available).toHaveLength(1);
             expect(available[0].homeBuilding).toBe(100);
         });
+
+        it('should exclude carriers with high fatigue (Exhausted or Collapsed)', () => {
+            manager.createCarrier(1, 100); // Fresh, available
+            const carrier2 = manager.createCarrier(2, 100);
+            const carrier3 = manager.createCarrier(3, 100);
+
+            carrier2.fatigue = FATIGUE_THRESHOLDS[FatigueLevel.Exhausted]; // Too tired
+            carrier3.fatigue = FATIGUE_THRESHOLDS[FatigueLevel.Collapsed]; // Way too tired
+
+            const available = manager.getAvailableCarriers(100);
+
+            expect(available).toHaveLength(1);
+            expect(available[0].entityId).toBe(1);
+        });
+
+        it('should include carriers with moderate fatigue (Tired)', () => {
+            const carrier = manager.createCarrier(1, 100);
+            carrier.fatigue = FATIGUE_THRESHOLDS[FatigueLevel.Tired]; // Tired but can work
+
+            const available = manager.getAvailableCarriers(100);
+
+            expect(available).toHaveLength(1);
+        });
+    });
+
+    describe('getBusyCarriers', () => {
+        it('should return carriers with active jobs', () => {
+            manager.createCarrier(1, 100); // Idle
+            const carrier2 = manager.createCarrier(2, 100);
+            carrier2.currentJob = { type: 'return_home' };
+
+            const busy = manager.getBusyCarriers(100);
+
+            expect(busy).toHaveLength(1);
+            expect(busy[0].entityId).toBe(2);
+        });
+
+        it('should return carriers that are not idle', () => {
+            manager.createCarrier(1, 100); // Idle
+            const carrier2 = manager.createCarrier(2, 100);
+            carrier2.status = CarrierStatus.Resting;
+
+            const busy = manager.getBusyCarriers(100);
+
+            expect(busy).toHaveLength(1);
+            expect(busy[0].entityId).toBe(2);
+        });
     });
 
     // ---------------------------------------------------------------------------
     // Job Assignment
     // ---------------------------------------------------------------------------
+
+    describe('canAssignJobTo', () => {
+        it('should return true for idle carrier with no job and low fatigue', () => {
+            manager.createCarrier(1, 100);
+            expect(manager.canAssignJobTo(1)).toBe(true);
+        });
+
+        it('should return false for non-existent carrier', () => {
+            expect(manager.canAssignJobTo(999)).toBe(false);
+        });
+
+        it('should return false for carrier with job', () => {
+            const carrier = manager.createCarrier(1, 100);
+            carrier.currentJob = { type: 'return_home' };
+
+            expect(manager.canAssignJobTo(1)).toBe(false);
+        });
+
+        it('should return false for non-idle carrier', () => {
+            const carrier = manager.createCarrier(1, 100);
+            carrier.status = CarrierStatus.Resting;
+
+            expect(manager.canAssignJobTo(1)).toBe(false);
+        });
+
+        it('should return false for exhausted carrier', () => {
+            const carrier = manager.createCarrier(1, 100);
+            carrier.fatigue = FATIGUE_THRESHOLDS[FatigueLevel.Exhausted];
+
+            expect(manager.canAssignJobTo(1)).toBe(false);
+        });
+
+        it('should return true for tired carrier', () => {
+            const carrier = manager.createCarrier(1, 100);
+            carrier.fatigue = FATIGUE_THRESHOLDS[FatigueLevel.Tired];
+
+            expect(manager.canAssignJobTo(1)).toBe(true);
+        });
+    });
 
     describe('assignJob', () => {
         it('should assign pickup job to idle carrier', () => {
@@ -185,7 +275,8 @@ describe('CarrierManager', () => {
             expect(assigned).toBe(true);
             const carrier = manager.getCarrier(1)!;
             expect(carrier.currentJob).toEqual(job);
-            expect(carrier.status).toBe(CarrierStatus.Walking);
+            // Note: assignJob does NOT change status - caller controls status
+            expect(carrier.status).toBe(CarrierStatus.Idle);
         });
 
         it('should assign deliver job to idle carrier', () => {
@@ -245,30 +336,40 @@ describe('CarrierManager', () => {
 
             expect(assigned).toBe(false);
         });
+
+        it('should not assign job to exhausted carrier', () => {
+            const carrier = manager.createCarrier(1, 100);
+            carrier.fatigue = FATIGUE_THRESHOLDS[FatigueLevel.Exhausted];
+
+            const assigned = manager.assignJob(1, { type: 'return_home' });
+
+            expect(assigned).toBe(false);
+        });
     });
 
     describe('completeJob', () => {
-        it('should complete a job and return carrier to idle', () => {
+        it('should complete a job and return the completed job', () => {
             const carrier = manager.createCarrier(1, 100);
-            manager.assignJob(1, { type: 'return_home' });
+            const job: CarrierJob = { type: 'return_home' };
+            carrier.currentJob = job;
 
-            const completed = manager.completeJob(1);
+            const completedJob = manager.completeJob(1);
 
-            expect(completed).toBe(true);
+            expect(completedJob).toEqual(job);
             expect(carrier.currentJob).toBeNull();
-            expect(carrier.status).toBe(CarrierStatus.Idle);
+            // Note: completeJob does NOT change status - caller controls status
         });
 
-        it('should return false for non-existent carrier', () => {
+        it('should return null for non-existent carrier', () => {
             const completed = manager.completeJob(999);
-            expect(completed).toBe(false);
+            expect(completed).toBeNull();
         });
 
-        it('should return false for carrier without job', () => {
+        it('should return null for carrier without job', () => {
             manager.createCarrier(1, 100);
 
             const completed = manager.completeJob(1);
-            expect(completed).toBe(false);
+            expect(completed).toBeNull();
         });
     });
 
@@ -288,6 +389,16 @@ describe('CarrierManager', () => {
         it('should return false for non-existent carrier', () => {
             const result = manager.setStatus(999, CarrierStatus.Walking);
             expect(result).toBe(false);
+        });
+
+        it('should return true when status is already the same', () => {
+            const carrier = manager.createCarrier(1, 100);
+            carrier.status = CarrierStatus.Walking;
+
+            const result = manager.setStatus(1, CarrierStatus.Walking);
+
+            expect(result).toBe(true);
+            expect(carrier.status).toBe(CarrierStatus.Walking);
         });
     });
 
@@ -343,6 +454,42 @@ describe('CarrierManager', () => {
         });
     });
 
+    describe('addFatigue', () => {
+        it('should add fatigue to carrier', () => {
+            const carrier = manager.createCarrier(1, 100);
+            carrier.fatigue = 30;
+
+            manager.addFatigue(1, 20);
+
+            expect(carrier.fatigue).toBe(50);
+        });
+
+        it('should subtract fatigue when amount is negative', () => {
+            const carrier = manager.createCarrier(1, 100);
+            carrier.fatigue = 50;
+
+            manager.addFatigue(1, -20);
+
+            expect(carrier.fatigue).toBe(30);
+        });
+
+        it('should clamp result to valid range', () => {
+            const carrier = manager.createCarrier(1, 100);
+            carrier.fatigue = 90;
+
+            manager.addFatigue(1, 50);
+            expect(carrier.fatigue).toBe(100);
+
+            manager.addFatigue(1, -200);
+            expect(carrier.fatigue).toBe(0);
+        });
+
+        it('should return false for non-existent carrier', () => {
+            const result = manager.addFatigue(999, 10);
+            expect(result).toBe(false);
+        });
+    });
+
     // ---------------------------------------------------------------------------
     // Tavern Reassignment
     // ---------------------------------------------------------------------------
@@ -362,6 +509,25 @@ describe('CarrierManager', () => {
         it('should return false for non-existent carrier', () => {
             const result = manager.reassignToTavern(999, 200);
             expect(result).toBe(false);
+        });
+
+        it('should return true when already at target tavern', () => {
+            const carrier = manager.createCarrier(1, 100);
+
+            const result = manager.reassignToTavern(1, 100);
+
+            expect(result).toBe(true);
+            expect(carrier.homeBuilding).toBe(100);
+        });
+
+        it('should prevent reassignment when carrier has active job', () => {
+            const carrier = manager.createCarrier(1, 100);
+            carrier.currentJob = { type: 'return_home' };
+
+            const result = manager.reassignToTavern(1, 200);
+
+            expect(result).toBe(false);
+            expect(carrier.homeBuilding).toBe(100);
         });
     });
 
@@ -403,6 +569,56 @@ describe('CarrierManager', () => {
             expect(manager.hasCarrier(2)).toBe(false);
             expect(manager.getCarriersForTavern(100)).toHaveLength(0);
             expect(manager.getCarriersForTavern(200)).toHaveLength(0);
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Fatigue Level Functions
+// ---------------------------------------------------------------------------
+
+describe('Fatigue Level Functions', () => {
+    describe('getFatigueLevel', () => {
+        it('should return Fresh for fatigue 0-25', () => {
+            expect(getFatigueLevel(0)).toBe(FatigueLevel.Fresh);
+            expect(getFatigueLevel(25)).toBe(FatigueLevel.Fresh);
+        });
+
+        it('should return Tired for fatigue 26-50', () => {
+            expect(getFatigueLevel(26)).toBe(FatigueLevel.Tired);
+            expect(getFatigueLevel(50)).toBe(FatigueLevel.Tired);
+        });
+
+        it('should return Exhausted for fatigue 51-75', () => {
+            expect(getFatigueLevel(51)).toBe(FatigueLevel.Exhausted);
+            expect(getFatigueLevel(75)).toBe(FatigueLevel.Exhausted);
+        });
+
+        it('should return Collapsed for fatigue 76-100', () => {
+            expect(getFatigueLevel(76)).toBe(FatigueLevel.Collapsed);
+            expect(getFatigueLevel(100)).toBe(FatigueLevel.Collapsed);
+        });
+    });
+
+    describe('canAcceptNewJob', () => {
+        it('should return true for Fresh fatigue', () => {
+            expect(canAcceptNewJob(0)).toBe(true);
+            expect(canAcceptNewJob(25)).toBe(true);
+        });
+
+        it('should return true for Tired fatigue', () => {
+            expect(canAcceptNewJob(26)).toBe(true);
+            expect(canAcceptNewJob(50)).toBe(true);
+        });
+
+        it('should return false for Exhausted fatigue', () => {
+            expect(canAcceptNewJob(51)).toBe(false);
+            expect(canAcceptNewJob(75)).toBe(false);
+        });
+
+        it('should return false for Collapsed fatigue', () => {
+            expect(canAcceptNewJob(76)).toBe(false);
+            expect(canAcceptNewJob(100)).toBe(false);
         });
     });
 });

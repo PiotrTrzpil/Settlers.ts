@@ -4,7 +4,14 @@
  */
 
 import type { EventBus } from '../../event-bus';
-import { CarrierStatus, type CarrierState, type CarrierJob, createCarrierState } from './carrier-state';
+import { EMaterialType } from '../../economy';
+import {
+    CarrierStatus,
+    type CarrierState,
+    type CarrierJob,
+    createCarrierState,
+    canAcceptNewJob,
+} from './carrier-state';
 
 /**
  * Manages carrier state for all carrier units.
@@ -17,14 +24,14 @@ export class CarrierManager {
     /** Index of tavern ID -> Set of carrier entity IDs */
     private carriersByTavern: Map<number, Set<number>> = new Map();
 
-    /** Optional event bus for emitting carrier events (used by future carrier system) */
-    private _eventBus: EventBus | undefined;
+    /** Event bus for emitting carrier events */
+    private eventBus: EventBus | undefined;
 
     /**
      * Register event bus for emitting carrier events.
      */
     registerEvents(eventBus: EventBus): void {
-        this._eventBus = eventBus;
+        this.eventBus = eventBus;
     }
 
     /**
@@ -47,11 +54,14 @@ export class CarrierManager {
         }
         this.carriersByTavern.get(homeBuilding)!.add(entityId);
 
+        this.eventBus?.emit('carrier:created', { entityId, homeBuilding });
+
         return state;
     }
 
     /**
      * Remove a carrier from the system.
+     * If the carrier has an active job, it will be abandoned (goods may be lost).
      * @param entityId - The entity ID of the carrier to remove
      * @returns true if the carrier was removed, false if it didn't exist
      */
@@ -59,16 +69,22 @@ export class CarrierManager {
         const state = this.carriers.get(entityId);
         if (!state) return false;
 
+        const hadActiveJob = state.currentJob !== null;
+        const homeBuilding = state.homeBuilding;
+
         // Remove from tavern index
-        const tavernCarriers = this.carriersByTavern.get(state.homeBuilding);
+        const tavernCarriers = this.carriersByTavern.get(homeBuilding);
         if (tavernCarriers) {
             tavernCarriers.delete(entityId);
             if (tavernCarriers.size === 0) {
-                this.carriersByTavern.delete(state.homeBuilding);
+                this.carriersByTavern.delete(homeBuilding);
             }
         }
 
         this.carriers.delete(entityId);
+
+        this.eventBus?.emit('carrier:removed', { entityId, homeBuilding, hadActiveJob });
+
         return true;
     }
 
@@ -108,51 +124,83 @@ export class CarrierManager {
     }
 
     /**
-     * Get available (idle) carriers for a specific tavern.
+     * Get available carriers for a specific tavern (idle, no job, not too fatigued).
      * @param tavernId - The entity ID of the tavern
-     * @returns Array of idle carrier states for that tavern
+     * @returns Array of available carrier states for that tavern
      */
     getAvailableCarriers(tavernId: number): CarrierState[] {
         return this.getCarriersForTavern(tavernId).filter(
-            carrier => carrier.status === CarrierStatus.Idle && carrier.currentJob === null
+            carrier => this.canAssignJobTo(carrier.entityId)
         );
     }
 
     /**
-     * Assign a job to a carrier.
-     * @param carrierId - The entity ID of the carrier
-     * @param job - The job to assign
-     * @returns true if the job was assigned, false if carrier not found or already has a job
+     * Get carriers that are currently busy (have a job or not idle).
+     * @param tavernId - The entity ID of the tavern
+     * @returns Array of busy carrier states for that tavern
      */
-    assignJob(carrierId: number, job: CarrierJob): boolean {
+    getBusyCarriers(tavernId: number): CarrierState[] {
+        return this.getCarriersForTavern(tavernId).filter(
+            carrier => carrier.currentJob !== null || carrier.status !== CarrierStatus.Idle
+        );
+    }
+
+    /**
+     * Check if a job can be assigned to a carrier.
+     * @param carrierId - The entity ID of the carrier
+     * @returns true if the carrier can accept a new job
+     */
+    canAssignJobTo(carrierId: number): boolean {
         const state = this.carriers.get(carrierId);
         if (!state) return false;
 
-        // Can only assign job to idle carriers
-        if (state.status !== CarrierStatus.Idle || state.currentJob !== null) {
-            return false;
-        }
+        // Must be idle with no current job
+        if (state.status !== CarrierStatus.Idle) return false;
+        if (state.currentJob !== null) return false;
 
-        state.currentJob = job;
-        state.status = CarrierStatus.Walking;
+        // Must not be too fatigued
+        if (!canAcceptNewJob(state.fatigue)) return false;
 
         return true;
     }
 
     /**
-     * Mark a carrier's current job as complete and return to idle.
+     * Assign a job to a carrier.
+     * Does NOT automatically change carrier status - caller should set status appropriately.
      * @param carrierId - The entity ID of the carrier
-     * @returns true if the job was completed, false if carrier not found or had no job
+     * @param job - The job to assign
+     * @returns true if the job was assigned, false if carrier not found or cannot accept jobs
      */
-    completeJob(carrierId: number): boolean {
-        const state = this.carriers.get(carrierId);
-        if (!state) return false;
-        if (state.currentJob === null) return false;
+    assignJob(carrierId: number, job: CarrierJob): boolean {
+        if (!this.canAssignJobTo(carrierId)) {
+            return false;
+        }
 
-        state.currentJob = null;
-        state.status = CarrierStatus.Idle;
+        const state = this.carriers.get(carrierId)!;
+        state.currentJob = job;
+
+        this.eventBus?.emit('carrier:jobAssigned', { entityId: carrierId, job });
 
         return true;
+    }
+
+    /**
+     * Mark a carrier's current job as complete.
+     * Does NOT automatically change status - caller should set status appropriately.
+     * @param carrierId - The entity ID of the carrier
+     * @returns The completed job, or null if carrier not found or had no job
+     */
+    completeJob(carrierId: number): CarrierJob | null {
+        const state = this.carriers.get(carrierId);
+        if (!state) return null;
+        if (state.currentJob === null) return null;
+
+        const completedJob = state.currentJob;
+        state.currentJob = null;
+
+        this.eventBus?.emit('carrier:jobCompleted', { entityId: carrierId, completedJob });
+
+        return completedJob;
     }
 
     /**
@@ -165,7 +213,17 @@ export class CarrierManager {
         const state = this.carriers.get(carrierId);
         if (!state) return false;
 
+        const previousStatus = state.status;
+        if (previousStatus === status) return true; // No change needed
+
         state.status = status;
+
+        this.eventBus?.emit('carrier:statusChanged', {
+            entityId: carrierId,
+            previousStatus,
+            newStatus: status,
+        });
+
         return true;
     }
 
@@ -176,7 +234,7 @@ export class CarrierManager {
      * @param amount - The amount being carried
      * @returns true if updated, false if carrier not found
      */
-    setCarrying(carrierId: number, material: import('../../economy').EMaterialType | null, amount: number): boolean {
+    setCarrying(carrierId: number, material: EMaterialType | null, amount: number): boolean {
         const state = this.carriers.get(carrierId);
         if (!state) return false;
 
@@ -200,16 +258,34 @@ export class CarrierManager {
     }
 
     /**
+     * Add fatigue to a carrier.
+     * @param carrierId - The entity ID of the carrier
+     * @param amount - Amount to add (positive) or remove (negative)
+     * @returns true if updated, false if carrier not found
+     */
+    addFatigue(carrierId: number, amount: number): boolean {
+        const state = this.carriers.get(carrierId);
+        if (!state) return false;
+
+        return this.setFatigue(carrierId, state.fatigue + amount);
+    }
+
+    /**
      * Reassign a carrier to a different tavern.
+     * Cannot reassign while carrier has an active job.
      * @param carrierId - The entity ID of the carrier
      * @param newTavernId - The entity ID of the new home tavern
-     * @returns true if reassigned, false if carrier not found
+     * @returns true if reassigned, false if carrier not found or has active job
      */
     reassignToTavern(carrierId: number, newTavernId: number): boolean {
         const state = this.carriers.get(carrierId);
         if (!state) return false;
 
+        // Prevent reassignment while on a job
+        if (state.currentJob !== null) return false;
+
         const oldTavernId = state.homeBuilding;
+        if (oldTavernId === newTavernId) return true; // Already at this tavern
 
         // Remove from old tavern index
         const oldTavernCarriers = this.carriersByTavern.get(oldTavernId);
