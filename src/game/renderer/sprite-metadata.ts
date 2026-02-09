@@ -131,6 +131,24 @@ export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
 };
 
 /**
+ * JIL job indices for bearers carrying specific materials, in settler files (20-24.jil).
+ * Each material a bearer can carry has its own set of 6-direction walk frames.
+ *
+ * To discover indices: open the JIL viewer (/jil-view) with a settler file (e.g. 20.jil),
+ * browse jobs visually, and fill in entries here. The indices are the same across all races.
+ *
+ * Job 1 is the empty bearer (already in UNIT_JOB_INDICES).
+ * The values below map EMaterialType -> JIL job index for the carrying-walk animation.
+ */
+export const CARRIER_MATERIAL_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
+    // TODO: Fill in by inspecting settler JIL files via /jil-view.
+    // Example entries (verify visually before uncommenting):
+    // [EMaterialType.TRUNK]: 2,
+    // [EMaterialType.PLANK]: 3,
+    // [EMaterialType.STONE]: 4,
+};
+
+/**
  * Soldier unit job indices by type and level.
  * Structure varies by unit type due to different animation needs.
  */
@@ -728,6 +746,35 @@ export class SpriteMetadataRegistry {
             animationData,
             isAnimated: directionFrames.size > 0,
         });
+    }
+
+    /**
+     * Register an additional animation sequence on an already-registered animated entity.
+     * Used to add carry-walk variants for bearers: each material type gets its own
+     * sequence key (e.g. 'carry_0' for trunk) with its own set of direction frames.
+     *
+     * The entity must already be registered via registerAnimatedEntity.
+     */
+    public registerAnimationSequence(
+        entityType: EntityType,
+        subType: number,
+        sequenceKey: string,
+        directionFrames: Map<number, SpriteEntry[]>,
+        frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+        loop: boolean = true
+    ): void {
+        const entry = this.animatedEntities.get(entityType)?.get(subType);
+        if (!entry) return;
+
+        const directionMap = new Map<number, AnimationSequence>();
+        for (const [direction, frames] of directionFrames) {
+            if (frames.length === 0) continue;
+            directionMap.set(direction, { frames, frameDurationMs, loop });
+        }
+
+        if (directionMap.size > 0) {
+            entry.animationData.sequences.set(sequenceKey, directionMap);
+        }
     }
 
     /**

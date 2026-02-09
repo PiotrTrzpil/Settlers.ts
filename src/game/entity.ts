@@ -65,6 +65,12 @@ export interface Entity {
      * Default is 0.
      */
     variation?: number;
+    /**
+     * Material type being carried by a bearer unit.
+     * undefined means the bearer is empty (not carrying anything).
+     * Only meaningful for UnitType.Bearer entities.
+     */
+    carriedMaterial?: import('./economy/material-type').EMaterialType;
 }
 
 export interface UnitState {

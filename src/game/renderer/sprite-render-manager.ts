@@ -18,11 +18,12 @@ import {
     SETTLER_FILE_NUMBERS,
     TREE_TEXTURE_OFFSET,
     TREE_VARIATION_COUNT,
+    CARRIER_MATERIAL_JOB_INDICES,
 } from './sprite-metadata';
-import { SpriteLoader } from './sprite-loader';
+import { SpriteLoader, type LoadedGfxFileSet } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
 import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
-import { ANIMATION_DEFAULTS, AnimationData } from '../animation';
+import { ANIMATION_DEFAULTS, AnimationData, carrySequenceKey } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy/material-type';
 import {
@@ -863,7 +864,82 @@ export class SpriteRenderManager {
         );
 
         SpriteRenderManager.log.debug(`Loaded ${loadedCount} animated units for ${Race[race]}`);
+
+        // Load carrier material variants (bearer carrying different goods)
+        const carrierCount = await this.loadCarrierVariants(fileSet, atlas, registry);
+        if (carrierCount > 0) {
+            SpriteRenderManager.log.debug(`Loaded ${carrierCount} carrier material variants for ${Race[race]}`);
+        }
+
         return loadedCount > 0;
+    }
+
+    /**
+     * Load carrier (bearer) sprite variants for each material type.
+     * Each material has its own JIL job with 6 directions of walk frames.
+     * These are registered as additional animation sequences on the Bearer entity
+     * under keys like 'carry_0' (trunk), 'carry_9' (plank), etc.
+     */
+    private async loadCarrierVariants(
+        fileSet: LoadedGfxFileSet,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry
+    ): Promise<number> {
+        const entries = Object.entries(CARRIER_MATERIAL_JOB_INDICES) as [string, number | undefined][];
+        const tasks: Array<{ materialType: EMaterialType; jobIndex: number }> = [];
+
+        for (const [typeStr, jobIndex] of entries) {
+            if (jobIndex === undefined) continue;
+            tasks.push({ materialType: Number(typeStr) as EMaterialType, jobIndex });
+        }
+
+        if (tasks.length === 0) return 0;
+
+        let loadedCount = 0;
+
+        await processBatchedWithHandler(
+            tasks,
+            async({ materialType, jobIndex }) => {
+                const jobItem = fileSet.jilReader!.getItem(jobIndex);
+                if (!jobItem) {
+                    SpriteRenderManager.log.debug(
+                        `Carrier job ${jobIndex} not found for material ${EMaterialType[materialType]}`
+                    );
+                    return null;
+                }
+
+                const dirItems = fileSet.dilReader!.getItems(jobItem.offset, jobItem.length);
+                const directionFrames = new Map<number, SpriteEntry[]>();
+
+                for (let dir = 0; dir < dirItems.length; dir++) {
+                    const animation = await this.spriteLoader.loadJobAnimation(
+                        fileSet, jobIndex, dir, atlas
+                    );
+                    if (animation && animation.frames.length > 0) {
+                        directionFrames.set(dir, animation.frames.map(f => f.entry));
+                    }
+                }
+
+                return { materialType, directionFrames };
+            },
+            (result) => {
+                if (!result || result.directionFrames.size === 0) return;
+
+                const seqKey = carrySequenceKey(result.materialType);
+                registry.registerAnimationSequence(
+                    EntityType.Unit,
+                    UnitType.Bearer,
+                    seqKey,
+                    result.directionFrames,
+                    ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                    true
+                );
+
+                loadedCount++;
+            }
+        );
+
+        return loadedCount;
     }
 
     /**

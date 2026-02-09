@@ -15,7 +15,24 @@ export const ANIMATION_SEQUENCES = {
     DEFAULT: 'default',
     /** Walking/movement animation */
     WALK: 'walk',
+    /** Prefix for carry-walk animations, suffixed with material type number */
+    CARRY_PREFIX: 'carry_',
 } as const;
+
+/**
+ * Get the animation sequence key for a bearer carrying a specific material.
+ * Returns a key like 'carry_0' (trunk), 'carry_9' (plank), etc.
+ */
+export function carrySequenceKey(materialType: number): string {
+    return `${ANIMATION_SEQUENCES.CARRY_PREFIX}${materialType}`;
+}
+
+/**
+ * Check if a sequence key is a carry sequence.
+ */
+export function isCarrySequence(sequenceKey: string): boolean {
+    return sequenceKey.startsWith(ANIMATION_SEQUENCES.CARRY_PREFIX);
+}
 
 /**
  * Default animation timing constants (in milliseconds).
