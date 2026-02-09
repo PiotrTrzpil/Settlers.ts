@@ -16,6 +16,7 @@ import type { GameState } from '../../game-state';
 import type { CarrierSystem } from '../carriers';
 import type { RequestManager } from './request-manager';
 import type { ServiceAreaManager } from '../service-areas';
+import { getHubsServingBothPositions } from '../service-areas/service-area-queries';
 import { matchRequestToSupply } from './fulfillment-matcher';
 import { RequestStatus } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
@@ -31,6 +32,12 @@ export interface LogisticsDispatcherConfig {
 
 /** Maximum number of job assignments per tick (to avoid frame drops) */
 const MAX_ASSIGNMENTS_PER_TICK = 5;
+
+/** Request timeout in milliseconds - requests older than this are considered stalled */
+const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
+
+/** How often to check for stalled requests (in milliseconds) */
+const STALL_CHECK_INTERVAL_MS = 5_000; // Check every 5 seconds
 
 /**
  * System that coordinates resource requests with carrier assignments.
@@ -51,6 +58,9 @@ export class LogisticsDispatcher implements TickSystem {
 
     /** Track which carriers have active requests (carrierId -> requestId) */
     private readonly carrierToRequest: Map<number, number> = new Map();
+
+    /** Accumulated time since last stall check (in ms) */
+    private timeSinceStallCheck: number = 0;
 
     /** Event handlers for cleanup */
     private deliveryCompleteHandler: ((payload: {
@@ -111,10 +121,48 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
-     * Main tick - assign pending requests to available carriers.
+     * Main tick - assign pending requests to available carriers and check for stalls.
      */
-    tick(_dt: number): void {
+    tick(dt: number): void {
         this.assignPendingRequests();
+
+        // Periodically check for stalled requests
+        this.timeSinceStallCheck += dt * 1000;
+        if (this.timeSinceStallCheck >= STALL_CHECK_INTERVAL_MS) {
+            this.timeSinceStallCheck = 0;
+            this.checkForStalledRequests();
+        }
+    }
+
+    /**
+     * Check for requests that have been in-progress too long (stalled).
+     * These are reset to pending so they can be reassigned.
+     */
+    private checkForStalledRequests(): void {
+        const stalledRequests = this.requestManager.getStalledRequests(REQUEST_TIMEOUT_MS);
+
+        for (const request of stalledRequests) {
+            // Find the carrier assigned to this request
+            const carrierId = request.assignedCarrier;
+
+            // Log warning about the stalled request
+            console.warn(
+                `[Logistics] Request #${request.id} stalled after ${REQUEST_TIMEOUT_MS / 1000}s: ` +
+                `material=${request.materialType}, building=${request.buildingId}, carrier=${carrierId}. ` +
+                'Resetting to pending.',
+            );
+
+            // Release reservation if it exists
+            this.reservationManager.releaseReservationForRequest(request.id);
+
+            // Clear carrier-to-request mapping if we have one
+            if (carrierId !== null) {
+                this.carrierToRequest.delete(carrierId);
+            }
+
+            // Reset the request to pending
+            this.requestManager.resetRequest(request.id, 'timeout');
+        }
     }
 
     /**
@@ -197,7 +245,7 @@ export class LogisticsDispatcher implements TickSystem {
 
     /**
      * Find an available carrier that can serve both source and destination buildings.
-     * The carrier must be in the service area of both buildings and be idle/available.
+     * The carrier must belong to a hub whose service area covers both buildings.
      */
     private findAvailableCarrier(
         sourceBuildingId: number,
@@ -213,11 +261,29 @@ export class LogisticsDispatcher implements TickSystem {
         // Get player from destination building (the one requesting)
         const playerId = destBuilding.player;
 
-        // Find taverns that can serve both buildings
+        // Find hubs (taverns/warehouses) whose service areas cover both buildings
+        const validHubs = new Set(getHubsServingBothPositions(
+            sourceBuilding.x,
+            sourceBuilding.y,
+            destBuilding.x,
+            destBuilding.y,
+            this.serviceAreaManager,
+            { playerId },
+        ));
+
+        if (validHubs.size === 0) {
+            return null;
+        }
+
+        // Find an available carrier whose home is one of the valid hubs
         const carrierManager = this.carrierSystem.getCarrierManager();
 
-        // Get all idle carriers for this player
         for (const carrier of carrierManager.getAllCarriers()) {
+            // Carrier's home must be a hub that serves both buildings
+            if (!validHubs.has(carrier.homeBuilding)) {
+                continue;
+            }
+
             // Must be able to accept new jobs (not exhausted/collapsed)
             if (!canAcceptNewJob(carrier.fatigue)) {
                 continue;
@@ -228,31 +294,13 @@ export class LogisticsDispatcher implements TickSystem {
                 continue;
             }
 
-            // Carrier's home building (tavern) must be in service area that covers both buildings
+            // Verify home building belongs to the right player
             const homeBuilding = this.gameState.getEntity(carrier.homeBuilding);
             if (!homeBuilding || homeBuilding.player !== playerId) {
                 continue;
             }
 
-            // Check if this carrier's tavern can serve both locations
-            const serviceArea = this.serviceAreaManager.getServiceArea(carrier.homeBuilding);
-            if (!serviceArea) {
-                continue;
-            }
-
-            // Simple distance check - both buildings should be within service radius
-            const toSource = this.hexDistance(
-                serviceArea.centerX, serviceArea.centerY,
-                sourceBuilding.x, sourceBuilding.y,
-            );
-            const toDest = this.hexDistance(
-                serviceArea.centerX, serviceArea.centerY,
-                destBuilding.x, destBuilding.y,
-            );
-
-            if (toSource <= serviceArea.radius && toDest <= serviceArea.radius) {
-                return { entityId: carrier.entityId };
-            }
+            return { entityId: carrier.entityId };
         }
 
         return null;
@@ -264,15 +312,6 @@ export class LogisticsDispatcher implements TickSystem {
     private getRequestPlayerId(buildingId: number): number {
         const building = this.gameState.getEntity(buildingId);
         return building?.player ?? 0;
-    }
-
-    /**
-     * Simple hex distance calculation.
-     */
-    private hexDistance(x1: number, y1: number, x2: number, y2: number): number {
-        const dx = Math.abs(x2 - x1);
-        const dy = Math.abs(y2 - y1);
-        return Math.max(dx, dy, Math.abs(dx - dy));
     }
 
     /**
@@ -328,28 +367,97 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
-     * Clean up when a building is destroyed.
-     * Cancels requests to/from the building and releases reservations.
+     * Unified cleanup coordinator for building destruction.
+     *
+     * When a building is destroyed, the logistics system must clean up all
+     * related state to prevent orphaned references and resource leaks.
+     *
+     * This method coordinates cleanup across all logistics subsystems:
+     *
+     * 1. **Request Cancellation** (RequestManager)
+     *    - Cancel requests TO the building (destination no longer exists)
+     *    - Reset requests FROM the building (source no longer exists)
+     *    - Reset requests return to Pending so they can be reassigned
+     *
+     * 2. **Reservation Release** (InventoryReservationManager)
+     *    - Release all material reservations at the building
+     *    - This frees up inventory that was "soft-held" for pending pickups
+     *
+     * 3. **Carrier Mapping Cleanup** (carrierToRequest map)
+     *    - Remove mappings for carriers working on affected requests
+     *    - This prevents stale lookups when carriers complete/fail
+     *
+     * 4. **Event Emission** (EventBus)
+     *    - Emit logistics:buildingCleanedUp so other systems can react
      *
      * @param buildingId Entity ID of the destroyed building
+     * @returns Summary of cleanup actions taken
      */
-    handleBuildingDestroyed(buildingId: number): void {
-        // Cancel all requests TO this building (it can no longer receive materials)
-        this.requestManager.cancelRequestsForBuilding(buildingId);
+    handleBuildingDestroyed(buildingId: number): BuildingCleanupResult {
+        const result: BuildingCleanupResult = {
+            buildingId,
+            requestsCancelled: 0,
+            requestsReset: 0,
+            reservationsReleased: 0,
+            carrierMappingsCleared: 0,
+        };
 
-        // Reset requests FROM this building (carriers can't pick up from it anymore)
-        this.requestManager.resetRequestsFromSource(buildingId);
+        // Step 1a: Cancel all requests TO this building (it can no longer receive materials)
+        result.requestsCancelled = this.requestManager.cancelRequestsForBuilding(buildingId);
 
-        // Release any reservations at this building
-        this.reservationManager.releaseReservationsForBuilding(buildingId);
+        // Step 1b: Reset requests FROM this building (carriers can't pick up from it anymore)
+        result.requestsReset = this.requestManager.resetRequestsFromSource(buildingId);
 
-        // Find and remove any carrier-to-request mappings for carriers
+        // Step 2: Release any reservations at this building
+        result.reservationsReleased = this.reservationManager.releaseReservationsForBuilding(buildingId);
+
+        // Step 3: Find and remove any carrier-to-request mappings for carriers
         // that were assigned to this building's requests
+        const mappingsToRemove: number[] = [];
         for (const [carrierId, requestId] of this.carrierToRequest.entries()) {
             const request = this.requestManager.getRequest(requestId);
-            if (request && (request.buildingId === buildingId || request.sourceBuilding === buildingId)) {
-                this.carrierToRequest.delete(carrierId);
+            // Request may already be deleted if it was cancelled, so also check
+            // if requestId was in the cancelled set by checking if request is gone
+            if (!request || request.buildingId === buildingId || request.sourceBuilding === buildingId) {
+                mappingsToRemove.push(carrierId);
             }
         }
+        for (const carrierId of mappingsToRemove) {
+            this.carrierToRequest.delete(carrierId);
+            result.carrierMappingsCleared++;
+        }
+
+        // Step 4: Emit event for other systems
+        this.eventBus?.emit('logistics:buildingCleanedUp', result);
+
+        // Log summary if any cleanup was performed
+        if (result.requestsCancelled > 0 || result.requestsReset > 0 ||
+            result.reservationsReleased > 0 || result.carrierMappingsCleared > 0) {
+            console.debug(
+                `[Logistics] Building ${buildingId} cleanup: ` +
+                `${result.requestsCancelled} cancelled, ${result.requestsReset} reset, ` +
+                `${result.reservationsReleased} reservations released, ` +
+                `${result.carrierMappingsCleared} carrier mappings cleared`,
+            );
+        }
+
+        return result;
     }
+}
+
+/**
+ * Result of building destruction cleanup.
+ * Useful for debugging and testing.
+ */
+export interface BuildingCleanupResult {
+    /** Entity ID of the destroyed building */
+    buildingId: number;
+    /** Number of requests to this building that were cancelled */
+    requestsCancelled: number;
+    /** Number of requests from this building that were reset to pending */
+    requestsReset: number;
+    /** Number of inventory reservations that were released */
+    reservationsReleased: number;
+    /** Number of carrier-to-request mappings that were cleared */
+    carrierMappingsCleared: number;
 }

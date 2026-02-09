@@ -16,7 +16,7 @@ import {
     DROP_ANIMATION_DURATION_MS,
 } from '@/game/features/carriers';
 import { EMaterialType } from '@/game/economy';
-import { createGameState, addBuilding, addUnit } from '../helpers/test-game';
+import { createGameState, addBuilding, addUnit, initializeAnimationState } from '../helpers/test-game';
 import { createTestMap } from '../helpers/test-map';
 import type { GameState } from '@/game/game-state';
 import type { TestMap } from '../helpers/test-map';
@@ -245,14 +245,7 @@ describe('CarrierAnimationController', () => {
     describe('animation timing', () => {
         it('should track pickup animation timer', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            // Initialize animation state on entity
-            carrier.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
+            initializeAnimationState(carrier);
 
             const startTime = 1000;
             animationController.playPickupAnimation(carrier.id, gameState, startTime);
@@ -263,13 +256,7 @@ describe('CarrierAnimationController', () => {
 
         it('should track drop animation timer', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            carrier.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
+            initializeAnimationState(carrier);
 
             const startTime = 1000;
             animationController.playDropAnimation(carrier.id, gameState, startTime);
@@ -280,13 +267,7 @@ describe('CarrierAnimationController', () => {
 
         it('should report animation incomplete before duration', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            carrier.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
+            initializeAnimationState(carrier);
 
             const startTime = 1000;
             animationController.playPickupAnimation(carrier.id, gameState, startTime);
@@ -298,13 +279,7 @@ describe('CarrierAnimationController', () => {
 
         it('should report animation complete after duration', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            carrier.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
+            initializeAnimationState(carrier);
 
             const startTime = 1000;
             animationController.playPickupAnimation(carrier.id, gameState, startTime);
@@ -316,13 +291,7 @@ describe('CarrierAnimationController', () => {
 
         it('should report remaining time correctly', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            carrier.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
+            initializeAnimationState(carrier);
 
             const startTime = 1000;
             animationController.playDropAnimation(carrier.id, gameState, startTime);
@@ -334,13 +303,7 @@ describe('CarrierAnimationController', () => {
 
         it('should return 0 remaining time after completion', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            carrier.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
+            initializeAnimationState(carrier);
 
             const startTime = 1000;
             animationController.playDropAnimation(carrier.id, gameState, startTime);
@@ -358,13 +321,7 @@ describe('CarrierAnimationController', () => {
     describe('timer management', () => {
         it('should clear animation timer', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            carrier.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
+            initializeAnimationState(carrier);
 
             animationController.playPickupAnimation(carrier.id, gameState, 1000);
             animationController.clearAnimationTimer(carrier.id);
@@ -375,20 +332,8 @@ describe('CarrierAnimationController', () => {
         it('should get all carriers with active animations', () => {
             const { entity: carrier1 } = addUnit(gameState, 5, 5);
             const { entity: carrier2 } = addUnit(gameState, 10, 10);
-            carrier1.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
-            carrier2.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
+            initializeAnimationState(carrier1);
+            initializeAnimationState(carrier2);
 
             animationController.playPickupAnimation(carrier1.id, gameState, 1000);
             animationController.playDropAnimation(carrier2.id, gameState, 1000);
@@ -402,20 +347,8 @@ describe('CarrierAnimationController', () => {
         it('should clear all timers', () => {
             const { entity: carrier1 } = addUnit(gameState, 5, 5);
             const { entity: carrier2 } = addUnit(gameState, 10, 10);
-            carrier1.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
-            carrier2.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
+            initializeAnimationState(carrier1);
+            initializeAnimationState(carrier2);
 
             animationController.playPickupAnimation(carrier1.id, gameState, 1000);
             animationController.playDropAnimation(carrier2.id, gameState, 1000);
@@ -432,19 +365,14 @@ describe('CarrierAnimationController', () => {
     describe('animation sequences', () => {
         it('should set carrying animation with material type', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            carrier.animationState = {
-                sequenceKey: 'default',
-                currentFrame: 0,
-                elapsedMs: 0,
-                direction: 0,
-                playing: false,
-            };
+            initializeAnimationState(carrier);
 
             animationController.setCarryingAnimation(carrier.id, EMaterialType.LOG, gameState);
 
             // Animation state should be updated to the carry sequence
-            expect(carrier.animationState.sequenceKey).toBe('carry_0'); // LOG is 0
-            expect(carrier.animationState.playing).toBe(true);
+            expect(carrier.animationState).toBeDefined();
+            expect(carrier.animationState!.sequenceKey).toBe('carry_0'); // LOG is 0
+            expect(carrier.animationState!.playing).toBe(true);
         });
 
         it('should clear carrying animation', () => {

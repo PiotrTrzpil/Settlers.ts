@@ -56,6 +56,8 @@ export interface ResourceRequest {
     assignedCarrier: number | null;
     /** Entity ID of the source building (if matched) */
     sourceBuilding: number | null;
+    /** Timestamp when the request was assigned to a carrier (for timeout detection) */
+    assignedAt: number | null;
 }
 
 /**
@@ -85,6 +87,7 @@ export function createResourceRequest(
         status: RequestStatus.Pending,
         assignedCarrier: null,
         sourceBuilding: null,
+        assignedAt: null,
     };
 }
 

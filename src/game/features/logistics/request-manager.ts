@@ -17,6 +17,11 @@ import {
 } from './resource-request';
 
 /**
+ * Reasons why a request was reset to pending.
+ */
+export type RequestResetReason = 'carrier_removed' | 'source_unavailable' | 'timeout';
+
+/**
  * Events emitted by the RequestManager.
  */
 export interface RequestManagerEvents {
@@ -28,8 +33,8 @@ export interface RequestManagerEvents {
     requestAssigned: { request: ResourceRequest; carrierId: number; sourceBuilding: number };
     /** Emitted when a request is fulfilled */
     requestFulfilled: { request: ResourceRequest };
-    /** Emitted when a request is reset to pending (e.g., carrier dropped it) */
-    requestReset: { request: ResourceRequest; reason: 'carrier_removed' | 'source_unavailable' };
+    /** Emitted when a request is reset to pending (e.g., carrier dropped it, timeout) */
+    requestReset: { request: ResourceRequest; reason: RequestResetReason };
 }
 
 /**
@@ -192,6 +197,7 @@ export class RequestManager {
         request.status = RequestStatus.InProgress;
         request.assignedCarrier = carrierId;
         request.sourceBuilding = sourceBuilding;
+        request.assignedAt = Date.now();
 
         this.emit('requestAssigned', { request, carrierId, sourceBuilding });
 
@@ -258,6 +264,7 @@ export class RequestManager {
                 request.status = RequestStatus.Pending;
                 request.assignedCarrier = null;
                 request.sourceBuilding = null;
+                request.assignedAt = null;
                 count++;
                 this.emit('requestReset', { request, reason: 'carrier_removed' });
             }
@@ -288,12 +295,57 @@ export class RequestManager {
                 request.status = RequestStatus.Pending;
                 request.assignedCarrier = null;
                 request.sourceBuilding = null;
+                request.assignedAt = null;
                 count++;
                 this.emit('requestReset', { request, reason: 'source_unavailable' });
             }
         }
 
         return count;
+    }
+
+    /**
+     * Reset a single request back to pending.
+     *
+     * @param requestId ID of the request to reset
+     * @param reason Reason for the reset
+     * @returns True if the request was reset
+     */
+    resetRequest(requestId: number, reason: RequestResetReason): boolean {
+        const request = this.requests.get(requestId);
+        if (!request || request.status !== RequestStatus.InProgress) {
+            return false;
+        }
+
+        request.status = RequestStatus.Pending;
+        request.assignedCarrier = null;
+        request.sourceBuilding = null;
+        request.assignedAt = null;
+        this.emit('requestReset', { request, reason });
+
+        return true;
+    }
+
+    /**
+     * Get all in-progress requests that have been assigned longer than the given duration.
+     *
+     * @param maxAgeMs Maximum age in milliseconds before a request is considered stalled
+     * @returns Array of requests that have exceeded the timeout
+     */
+    getStalledRequests(maxAgeMs: number): ResourceRequest[] {
+        const now = Date.now();
+        const stalled: ResourceRequest[] = [];
+
+        for (const request of this.requests.values()) {
+            if (request.status === RequestStatus.InProgress && request.assignedAt !== null) {
+                const age = now - request.assignedAt;
+                if (age > maxAgeMs) {
+                    stalled.push(request);
+                }
+            }
+        }
+
+        return stalled;
     }
 
     /**

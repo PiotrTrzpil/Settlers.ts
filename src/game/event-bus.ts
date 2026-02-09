@@ -7,6 +7,7 @@ import type { BuildingState } from './features/building-construction';
 import type { BuildingType } from './buildings/types';
 import type { UnitType } from './unit-types';
 import type { CarrierJob } from './features/carriers';
+import type { BuildingCleanupResult } from './features/logistics/logistics-dispatcher';
 
 /** Event map defining all game events and their payloads */
 export interface GameEvents {
@@ -136,6 +137,11 @@ export interface GameEvents {
         entityId: number;
         homeBuilding: number;
     };
+
+    // === Logistics Events ===
+
+    /** Emitted when logistics cleanup completes after a building is destroyed */
+    'logistics:buildingCleanedUp': BuildingCleanupResult;
 }
 
 type EventHandler<T> = (payload: T) => void;
