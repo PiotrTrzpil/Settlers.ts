@@ -61,7 +61,7 @@ describe('Command System – edge cases', () => {
     describe('select_area', () => {
         it('should prefer units over buildings in area', () => {
             addBuilding(state, 10, 10, 0);
-            addUnit(state, 11, 10, { subType: 1 }); // Builder (selectable)
+            addUnit(state, 11, 10, { subType: 2 }); // Swordsman (selectable - Military category)
 
             executeCommand(state, {
                 type: 'select_area', x1: 9, y1: 9, x2: 12, y2: 11,

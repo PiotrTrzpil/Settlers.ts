@@ -137,21 +137,36 @@ export class GameState {
 
     /**
      * Add an entity to the game state.
-     * For units, selectable and speed default to the UnitTypeConfig values
-     * unless explicitly overridden.
+     * Selectability rules:
+     * - Units: determined by UnitCategory (Military and Religious are selectable)
+     * - Buildings: selectable
+     * - MapObject/StackedResource: NOT selectable
+     * Speed defaults to UnitTypeConfig value for units.
      */
     public addEntity(
         type: EntityType, subType: number, x: number, y: number,
         player: number, selectable?: boolean, variation?: number
     ): Entity {
-        // Determine selectability: explicit override > unit type config > true
+        // Determine selectability: explicit override > type-based rules
         let resolvedSelectable: boolean | undefined;
         if (selectable !== undefined) {
             resolvedSelectable = selectable;
-        } else if (type === EntityType.Unit) {
-            resolvedSelectable = isUnitTypeSelectable(subType as UnitType);
+        } else {
+            switch (type) {
+            case EntityType.Unit:
+                resolvedSelectable = isUnitTypeSelectable(subType as UnitType);
+                break;
+            case EntityType.Building:
+                // Buildings are always selectable
+                resolvedSelectable = true;
+                break;
+            case EntityType.MapObject:
+            case EntityType.StackedResource:
+                // Map objects and resources are never selectable
+                resolvedSelectable = false;
+                break;
+            }
         }
-        // Leave undefined for non-unit entities (treated as true by selection logic)
 
         const entity: Entity = {
             id: this.nextId++,

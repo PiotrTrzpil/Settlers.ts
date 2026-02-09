@@ -94,7 +94,7 @@ describe('Game Session: multi-system integration sweep', () => {
         expect(units.length).toBeGreaterThanOrEqual(1);
 
         // ── Spawn additional units ──
-        expect(spawnUnit(state, map, 15, 15, 1, 0)).toBe(true); // Builder (selectable)
+        expect(spawnUnit(state, map, 15, 15, 2, 0)).toBe(true); // Swordsman (selectable - Military category)
         const spawnedUnit = state.entities.find(
             e => e.type === EntityType.Unit && e.x === 15 && e.y === 15
         );
@@ -189,7 +189,7 @@ describe('Game Session: multi-system integration sweep', () => {
 
         // Place a building and a unit in the same area
         placeBuilding(state, map, 10, 10, BuildingType.Warehouse, 0);
-        spawnUnit(state, map, 11, 10, 1, 0); // Builder (selectable)
+        spawnUnit(state, map, 11, 10, 2, 0); // Swordsman (selectable - Military category)
 
         // Area select covering both
         executeCommand(
