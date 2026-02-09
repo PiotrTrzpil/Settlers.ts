@@ -30,6 +30,7 @@ import {
     DEFAULT_LAYER_VISIBILITY,
     isMapObjectVisible,
 } from './layer-visibility';
+import type { IRenderContext } from './render-context';
 
 
 import vertCode from './shaders/entity-vert.glsl';
@@ -283,6 +284,25 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      */
     public getAnimationProvider(): import('../systems/animation').AnimationDataProvider | null {
         return this.spriteManager?.asAnimationProvider() ?? null;
+    }
+
+    /**
+     * Set render context from an IRenderContext interface.
+     * This is the preferred way to update renderer state, providing a clean
+     * separation between game state and rendering.
+     *
+     * @param ctx The render context containing all data needed for rendering
+     */
+    public setContext(ctx: IRenderContext): void {
+        this.entities = ctx.entities as Entity[];
+        this.selectedEntityId = ctx.selection.primaryId;
+        this.selectedEntityIds = ctx.selection.ids as Set<number>;
+        this.unitStates = ctx.unitStates;
+        this.buildingStates = ctx.buildingStates as Map<number, BuildingState>;
+        this.resourceStates = ctx.resourceStates as Map<number, StackedResourceState>;
+        this.renderAlpha = ctx.alpha;
+        this.layerVisibility = ctx.layerVisibility;
+        this.placementPreview = ctx.placementPreview;
     }
 
     /**
