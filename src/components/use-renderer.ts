@@ -11,21 +11,25 @@ import { LandscapeRenderer } from '@/game/renderer/landscape/landscape-renderer'
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
-import { EntityType, type TileCoord } from '@/game/entity';
+import { type TileCoord } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
-import { canPlaceBuildingWithTerritory, isPassable } from '@/game/systems/placement';
+import {
+    canPlaceBuildingFootprint,
+    canPlaceResource,
+} from '@/game/systems/placement';
 import { debugStats } from '@/game/debug-stats';
 import {
     InputManager,
     SelectMode,
     PlaceBuildingMode,
-    type PlaceBuildingModeData,
     PlaceResourceMode,
+    type PlaceBuildingModeData,
     type PlaceResourceModeData,
     getDefaultInputConfig,
+    type PlacementEntityType,
 } from '@/game/input';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
-import type { SelectionBox } from '@/game/input/render-state';
+import type { SelectionBox, PlacementPreview } from '@/game/input/render-state';
 
 /** Context object for render callback - avoids excessive callback parameters */
 interface RenderContext {
@@ -34,7 +38,6 @@ interface RenderContext {
     landscapeRenderer: LandscapeRenderer | null;
     inputManager: InputManager | null;
     debugGrid: boolean;
-    showTerritoryBorders: boolean;
     layerVisibility: LayerVisibility;
 }
 
@@ -48,42 +51,55 @@ function syncEntityRendererState(
     er.unitStates = g.state.unitStates;
     er.buildingStates = g.state.buildingStates;
     er.resourceStates = g.state.resourceStates;
-    er.territoryMap = ctx.showTerritoryBorders ? g.territory : null;
-    er.territoryVersion = g.territoryVersion;
     er.renderAlpha = alpha;
     er.layerVisibility = ctx.layerVisibility;
 }
 
-/** Handle placement mode rendering state */
-function updatePlacementModeState(er: EntityRenderer, g: Game, renderState: any): void {
-    const mode = debugStats.state.mode;
-    er.buildingIndicatorsPlayer = g.currentPlayer;
-    er.buildingIndicatorsHasBuildings = g.state.entities.some(
-        ent => ent.type === EntityType.Building && ent.player === g.currentPlayer
-    );
-    er.territoryMap = g.territory;
-    er.previewBuildingType = g.placeBuildingType;
-    er.previewMaterialType = (mode === 'place_resource') ? debugStats.state.placeResourceType : null;
+/** Handle placement mode rendering state using consolidated preview */
+function updatePlacementModeState(er: EntityRenderer, renderState: any): void {
+    const preview = renderState?.preview as PlacementPreview | undefined;
 
-    const preview = renderState?.preview;
-    if (preview?.type === 'building' || preview?.type === 'resource') {
-        er.previewTile = { x: preview.x, y: preview.y };
-        er.previewValid = preview.valid;
-        er.previewVariation = (preview.type === 'resource')
-            ? Math.max(0, Math.min((preview.amount ?? 1) - 1, 7))
-            : null;
+    // Handle new unified PlacementPreview type
+    if (preview?.type === 'placement') {
+        const amount = (preview.extra?.amount as number) ?? 1;
+        const variation = preview.entityType === 'resource'
+            ? Math.max(0, Math.min(amount - 1, 7))
+            : undefined;
+
+        er.placementPreview = {
+            tile: { x: preview.x, y: preview.y },
+            valid: preview.valid,
+            entityType: preview.entityType,
+            subType: preview.subType,
+            variation,
+        };
+    }
+    // Handle legacy BuildingPreview/ResourcePreview types for backward compatibility
+    else if (preview?.type === 'building' || preview?.type === 'resource') {
+        const entityType = preview.type as PlacementEntityType;
+        const subType = preview.type === 'building'
+            ? (preview as any).buildingType
+            : (preview as any).materialType;
+        const amount = preview.type === 'resource' ? ((preview as any).amount ?? 1) : 1;
+        const variation = preview.type === 'resource'
+            ? Math.max(0, Math.min(amount - 1, 7))
+            : undefined;
+
+        er.placementPreview = {
+            tile: { x: preview.x, y: preview.y },
+            valid: preview.valid,
+            entityType,
+            subType,
+            variation,
+        };
     } else {
-        er.previewTile = null;
-        er.previewVariation = null;
+        er.placementPreview = null;
     }
 }
 
 /** Clear placement mode state */
 function clearPlacementModeState(er: EntityRenderer): void {
-    er.previewTile = null;
-    er.previewBuildingType = null;
-    er.previewMaterialType = null;
-    er.previewVariation = null;
+    er.placementPreview = null;
 }
 
 /** Create the render callback that runs each frame. */
@@ -106,7 +122,7 @@ function createRenderCallback(
             er.buildingIndicatorsEnabled = inPlacementMode;
 
             if (inPlacementMode) {
-                updatePlacementModeState(er, g, renderState);
+                updatePlacementModeState(er, renderState);
             } else {
                 clearPlacementModeState(er);
             }
@@ -129,13 +145,34 @@ function createRenderCallback(
         debugStats.state.cameraX = Math.round(renderer.viewPoint.x * 10) / 10;
         debugStats.state.cameraY = Math.round(renderer.viewPoint.y * 10) / 10;
         debugStats.state.zoom = Math.round(renderer.viewPoint.zoomValue * 100) / 100;
-        renderer.viewPoint.zoomSpeed = debugStats.state.zoomSpeed;
-        renderer.viewPoint.panSpeed = debugStats.state.panSpeed;
         debugStats.state.canvasWidth = renderer.canvas.width;
         debugStats.state.canvasHeight = renderer.canvas.height;
 
         renderer.drawOnce();
     };
+}
+
+/**
+ * Update debug stats with tile information during pointer move.
+ * Shared by all placement modes.
+ */
+function updateTileDebugStats(
+    tileX: number,
+    tileY: number,
+    getGame: () => Game | null,
+    onTileClick: (tile: { x: number; y: number }) => void
+): void {
+    onTileClick({ x: tileX, y: tileY });
+    debugStats.state.hasTile = true;
+    debugStats.state.tileX = tileX;
+    debugStats.state.tileY = tileY;
+
+    const game = getGame();
+    if (game) {
+        const idx = game.mapSize.toIndex(tileX, tileY);
+        debugStats.state.tileGroundType = game.groundType[idx];
+        debugStats.state.tileGroundHeight = game.groundHeight[idx];
+    }
 }
 
 /**
@@ -145,38 +182,23 @@ function configurePlaceBuildingMode(
     getGame: () => Game | null,
     onTileClick: (tile: { x: number; y: number }) => void
 ): PlaceBuildingMode {
-    const placeBuildingMode = new PlaceBuildingMode();
-    const originalOnPointerMove = placeBuildingMode.onPointerMove.bind(placeBuildingMode);
+    const mode = new PlaceBuildingMode();
+    const originalOnPointerMove = mode.onPointerMove.bind(mode);
 
-    placeBuildingMode.onPointerMove = (data, context) => {
+    mode.onPointerMove = (data, context) => {
         if (data.tileX !== undefined && data.tileY !== undefined) {
-            onTileClick({ x: data.tileX, y: data.tileY });
-            debugStats.state.hasTile = true;
-            debugStats.state.tileX = data.tileX;
-            debugStats.state.tileY = data.tileY;
-
-            const game = getGame();
-            if (game) {
-                const idx = game.mapSize.toIndex(data.tileX, data.tileY);
-                debugStats.state.tileGroundType = game.groundType[idx];
-                debugStats.state.tileGroundHeight = game.groundHeight[idx];
-            }
+            updateTileDebugStats(data.tileX, data.tileY, getGame, onTileClick);
         }
 
         const modeData = context.getModeData<PlaceBuildingModeData>();
         if (modeData && !modeData.validatePlacement) {
-            modeData.validatePlacement = (x, y, buildingType) => {
+            modeData.validatePlacement = (x: number, y: number, buildingType) => {
                 const game = getGame();
                 if (!game) return false;
 
-                const hasBuildings = game.state.entities.some(
-                    ent => ent.type === EntityType.Building && ent.player === game.currentPlayer
-                );
-
-                return canPlaceBuildingWithTerritory(
+                return canPlaceBuildingFootprint(
                     game.groundType, game.groundHeight, game.mapSize,
-                    game.state.tileOccupancy, game.territory,
-                    x, y, game.currentPlayer, hasBuildings, buildingType
+                    game.state.tileOccupancy, x, y, buildingType
                 );
             };
             context.setModeData(modeData);
@@ -185,49 +207,37 @@ function configurePlaceBuildingMode(
         return originalOnPointerMove(data, context);
     };
 
-
-    return placeBuildingMode;
+    return mode;
 }
 
 /**
- * Configure PlaceResourceMode with debug stats integration
+ * Configure PlaceResourceMode with validation and debug stats integration.
+ * Uses centralized canPlaceResource validation.
  */
 function configurePlaceResourceMode(
     getGame: () => Game | null,
     onTileClick: (tile: { x: number; y: number }) => void
 ): PlaceResourceMode {
-    const placeResourceMode = new PlaceResourceMode();
-    const originalOnPointerMove = placeResourceMode.onPointerMove.bind(placeResourceMode);
+    const mode = new PlaceResourceMode();
+    const originalOnPointerMove = mode.onPointerMove.bind(mode);
 
-    placeResourceMode.onPointerMove = (data, context) => {
+    mode.onPointerMove = (data, context) => {
         if (data.tileX !== undefined && data.tileY !== undefined) {
-            onTileClick({ x: data.tileX, y: data.tileY });
-            debugStats.state.hasTile = true;
-            debugStats.state.tileX = data.tileX;
-            debugStats.state.tileY = data.tileY;
-
-            const game = getGame();
-            if (game) {
-                const idx = game.mapSize.toIndex(data.tileX, data.tileY);
-                debugStats.state.tileGroundType = game.groundType[idx];
-                debugStats.state.tileGroundHeight = game.groundHeight[idx];
-            }
+            updateTileDebugStats(data.tileX, data.tileY, getGame, onTileClick);
         }
 
         const modeData = context.getModeData<PlaceResourceModeData>();
         if (modeData && !modeData.validatePlacement) {
-            modeData.validatePlacement = (x, y) => {
+            modeData.validatePlacement = (x: number, y: number) => {
                 const game = getGame();
                 if (!game) return false;
-                if (x < 0 || y < 0 || x >= game.mapSize.width || y >= game.mapSize.height) return false;
 
-                const idx = game.mapSize.toIndex(x, y);
-                // Must be passable (not sea/rock)
-                if (!isPassable(game.groundType[idx])) return false;
-                // Must not be occupied
-                if (game.state.getEntityAt(x, y)) return false;
-
-                return true;
+                return canPlaceResource(
+                    game.groundType,
+                    game.mapSize,
+                    game.state.tileOccupancy,
+                    x, y
+                );
             };
             context.setModeData(modeData);
         }
@@ -235,7 +245,7 @@ function configurePlaceResourceMode(
         return originalOnPointerMove(data, context);
     };
 
-    return placeResourceMode;
+    return mode;
 }
 
 /**
@@ -275,7 +285,6 @@ interface UseRendererOptions {
     canvas: Ref<HTMLCanvasElement | null>;
     getGame: () => Game | null;
     getDebugGrid: () => boolean;
-    getShowTerritoryBorders: () => boolean;
     getLayerVisibility: () => LayerVisibility;
     onTileClick: (tile: { x: number; y: number }) => void;
 }
@@ -310,7 +319,6 @@ export function useRenderer({
     canvas,
     getGame,
     getDebugGrid,
-    getShowTerritoryBorders,
     getLayerVisibility,
     onTileClick,
 }: UseRendererOptions) {
@@ -436,7 +444,6 @@ export function useRenderer({
                 landscapeRenderer,
                 inputManager,
                 debugGrid: getDebugGrid(),
-                showTerritoryBorders: getShowTerritoryBorders(),
                 layerVisibility: getLayerVisibility(),
             }),
             renderer,

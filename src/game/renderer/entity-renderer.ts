@@ -6,7 +6,6 @@ import { UnitStateLookup } from '../game-state';
 import { getBuildingVisualState } from '../buildings/construction';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
-import { TerritoryMap } from '../buildings/territory';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
 import { SpriteEntry, Race } from './sprite-metadata';
@@ -17,7 +16,6 @@ import {
 } from './tint-utils';
 import { MapObjectType } from '../entity';
 import { EMaterialType } from '../economy/material-type';
-import { TerritoryBorderRenderer } from './territory-border-renderer';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { BuildingIndicatorRenderer } from './building-indicator-renderer';
 import { SpriteBatchRenderer } from './sprite-batch-renderer';
@@ -35,6 +33,25 @@ import {
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
+
+import type { PlacementEntityType } from '../input/render-state';
+
+/**
+ * Consolidated placement preview state.
+ * Replaces the previous 5 separate preview fields.
+ */
+export interface PlacementPreviewState {
+    /** Tile position for the preview */
+    tile: TileCoord;
+    /** Whether placement is valid at this position */
+    valid: boolean;
+    /** Entity type being placed */
+    entityType: PlacementEntityType;
+    /** Specific subtype (BuildingType or EMaterialType as number) */
+    subType: number;
+    /** Variation/direction for sprite rendering (0-7 for resources) */
+    variation?: number;
+}
 
 /** Rectangular bounds for culling */
 interface Bounds {
@@ -72,7 +89,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private spriteBatchRenderer: SpriteBatchRenderer;
     private selectionOverlayRenderer: SelectionOverlayRenderer;
     private depthSorter: EntityDepthSorter;
-    private territoryBorderRenderer: TerritoryBorderRenderer;
     private buildingIndicatorRenderer: BuildingIndicatorRenderer;
 
     // Debug logging state
@@ -94,21 +110,82 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Resource states for stacked resources (quantity tracking)
     public resourceStates: Map<number, StackedResourceState> = new Map();
 
-    // Building placement preview
-    public previewTile: TileCoord | null = null;
-    public previewValid = false;
-    public previewBuildingType: BuildingType | null = null;
-    public previewMaterialType: EMaterialType | null = null;
-    public previewVariation: number | null = null;
+    // Consolidated placement preview state
+    public placementPreview: PlacementPreviewState | null = null;
 
-    // Territory visualization
-    public territoryMap: TerritoryMap | null = null;
-    public territoryVersion = 0;
+    // Legacy preview fields - maintained for backward compatibility
+    // These map to/from the consolidated placementPreview state
+    public get previewTile(): TileCoord | null {
+        return this.placementPreview?.tile ?? null;
+    }
+    public set previewTile(value: TileCoord | null) {
+        if (value === null) {
+            this.placementPreview = null;
+        } else if (this.placementPreview) {
+            this.placementPreview.tile = value;
+        }
+    }
+
+    public get previewValid(): boolean {
+        return this.placementPreview?.valid ?? false;
+    }
+    public set previewValid(value: boolean) {
+        if (this.placementPreview) {
+            this.placementPreview.valid = value;
+        }
+    }
+
+    public get previewBuildingType(): BuildingType | null {
+        if (this.placementPreview?.entityType === 'building') {
+            return this.placementPreview.subType as BuildingType;
+        }
+        return null;
+    }
+    public set previewBuildingType(value: BuildingType | null) {
+        if (value !== null) {
+            this.placementPreview = {
+                tile: this.placementPreview?.tile ?? { x: 0, y: 0 },
+                valid: this.placementPreview?.valid ?? false,
+                entityType: 'building',
+                subType: value,
+                variation: this.placementPreview?.variation,
+            };
+        } else if (this.placementPreview?.entityType === 'building') {
+            this.placementPreview = null;
+        }
+    }
+
+    public get previewMaterialType(): EMaterialType | null {
+        if (this.placementPreview?.entityType === 'resource') {
+            return this.placementPreview.subType as EMaterialType;
+        }
+        return null;
+    }
+    public set previewMaterialType(value: EMaterialType | null) {
+        if (value !== null) {
+            this.placementPreview = {
+                tile: this.placementPreview?.tile ?? { x: 0, y: 0 },
+                valid: this.placementPreview?.valid ?? false,
+                entityType: 'resource',
+                subType: value,
+                variation: this.placementPreview?.variation,
+            };
+        } else if (this.placementPreview?.entityType === 'resource') {
+            this.placementPreview = null;
+        }
+    }
+
+    public get previewVariation(): number | null {
+        return this.placementPreview?.variation ?? null;
+    }
+    public set previewVariation(value: number | null) {
+        if (this.placementPreview && value !== null) {
+            this.placementPreview.variation = value;
+        }
+    }
 
     // Building placement indicators mode
     public buildingIndicatorsEnabled = false;
-    public buildingIndicatorsPlayer = 0;
-    public buildingIndicatorsHasBuildings = false;
 
     // Render interpolation alpha for smooth sub-tick movement (0-1)
     public renderAlpha = 0;
@@ -140,7 +217,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         super();
         this.mapSize = mapSize;
         this.groundHeight = groundHeight;
-        this.territoryBorderRenderer = new TerritoryBorderRenderer(mapSize, groundHeight);
         this.buildingIndicatorRenderer = new BuildingIndicatorRenderer(
             mapSize,
             groundType ?? new Uint8Array(mapSize.width * mapSize.height),
@@ -249,9 +325,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Update indicator renderer state
         this.buildingIndicatorRenderer.enabled = this.buildingIndicatorsEnabled;
         this.buildingIndicatorRenderer.hoveredTile = this.previewTile;
-        this.buildingIndicatorRenderer.player = this.buildingIndicatorsPlayer;
-        this.buildingIndicatorRenderer.hasBuildings = this.buildingIndicatorsHasBuildings;
-        this.buildingIndicatorRenderer.territory = this.territoryMap;
         this.buildingIndicatorRenderer.buildingType = this.previewBuildingType;
 
         // Build tile occupancy map including full building footprints
@@ -268,12 +341,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
         this.buildingIndicatorRenderer.tileOccupancy = this.tileOccupancy;
 
-        this.buildingIndicatorRenderer.draw(gl, projection, viewPoint, this.territoryVersion);
+        this.buildingIndicatorRenderer.draw(gl, projection, viewPoint);
     }
 
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         if (!this.dynamicBuffer) return;
-        if (this.entities.length === 0 && !this.previewTile && !this.territoryMap && !this.buildingIndicatorsEnabled) return;
+        if (this.entities.length === 0 && !this.previewTile && !this.buildingIndicatorsEnabled) return;
 
         // Enable blending for semi-transparent entities
         gl.enable(gl.BLEND);
@@ -293,12 +366,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Entity position set per-entity as constant attribute
         gl.disableVertexAttribArray(this.aEntityPos);
         gl.disableVertexAttribArray(this.aColor);
-
-        // Draw territory borders (color shader)
-        this.territoryBorderRenderer.draw(
-            gl, viewPoint, this.territoryMap, this.territoryVersion,
-            this.aEntityPos, this.aColor
-        );
 
         // Draw path indicators for selected unit (color shader)
         const selectionCtx = {
@@ -698,17 +765,23 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.depthSorter.sortByDepth(this.sortedEntities, ctx);
     }
 
-    /** Draw a ghost building at the preview tile when in placement mode */
+    /**
+     * Draw a ghost entity at the preview tile when in placement mode.
+     * Supports buildings, resources, and can be extended for other entity types.
+     */
     private drawPlacementPreview(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        if (!this.previewTile) return;
+        const preview = this.placementPreview;
+        if (!preview) return;
+
+        const { tile, valid, entityType, subType, variation } = preview;
 
         const worldPos = TilePicker.tileToWorld(
-            this.previewTile.x, this.previewTile.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y
+            tile.x, tile.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y
         );
 
-        // Apply MapObject offset for resource previews to match entity rendering
-        if (this.previewMaterialType !== null) {
-            const seed = this.previewTile.x * 12.9898 + this.previewTile.y * 78.233;
+        // Apply position offset for resource previews to match entity rendering
+        if (entityType === 'resource') {
+            const seed = tile.x * 12.9898 + tile.y * 78.233;
             // +/- 0.4 world units match the offset in drawTexturedEntities
             const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.8 - 0.4;
             const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.8 - 0.4;
@@ -716,45 +789,53 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             worldPos.worldY += offsetY;
         }
 
-        // Try to use sprite preview if available (Building)
-        if (this.previewBuildingType !== null && this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
-            const spriteEntry = this.spriteManager.getBuilding(this.previewBuildingType);
-            if (spriteEntry) {
-                const tint = this.previewValid ? TINT_PREVIEW_VALID : TINT_PREVIEW_INVALID;
+        const tint = valid ? TINT_PREVIEW_VALID : TINT_PREVIEW_INVALID;
 
+        // Try to render with sprite based on entity type
+        if (this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
+            const spriteEntry = this.getPreviewSprite(entityType, subType, variation);
+            if (spriteEntry) {
                 this.spriteBatchRenderer.beginSpriteBatch(gl, projection);
-                this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, spriteEntry, tint[0], tint[1], tint[2], tint[3]);
+                this.spriteBatchRenderer.addSprite(
+                    gl, worldPos.worldX, worldPos.worldY, spriteEntry,
+                    tint[0], tint[1], tint[2], tint[3]
+                );
                 this.spriteBatchRenderer.endSpriteBatch(gl);
                 return;
             }
-        }
-
-        // Try to use sprite preview if available (Resource/Material)
-        if (this.previewMaterialType !== null && this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
-            // Use getResource for material sprites (amount determined by variation/direction)
-            const spriteEntry = this.spriteManager.getResource(this.previewMaterialType, this.previewVariation ?? 0);
-            if (spriteEntry) {
-                const tint = this.previewValid ? TINT_PREVIEW_VALID : TINT_PREVIEW_INVALID;
-
-                this.spriteBatchRenderer.beginSpriteBatch(gl, projection);
-                this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, spriteEntry, tint[0], tint[1], tint[2], tint[3]);
-                this.spriteBatchRenderer.endSpriteBatch(gl);
-                return;
-            }
-
-            // If no sprite, we fall back to color dot?
         }
 
         // Fallback to color preview
         this.shaderProgram.use();
         gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
 
-        const color = this.previewValid ? PREVIEW_VALID_COLOR : PREVIEW_INVALID_COLOR;
+        const color = valid ? PREVIEW_VALID_COLOR : PREVIEW_INVALID_COLOR;
         gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
         this.fillQuadVertices(0, 0, BUILDING_SCALE);
         gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
         gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+
+    /**
+     * Get the sprite for a placement preview based on entity type.
+     * Extensible for new entity types.
+     */
+    private getPreviewSprite(
+        entityType: PlacementEntityType,
+        subType: number,
+        variation?: number
+    ): SpriteEntry | null {
+        if (!this.spriteManager) return null;
+
+        switch (entityType) {
+        case 'building':
+            return this.spriteManager.getBuilding(subType as BuildingType);
+        case 'resource':
+            return this.spriteManager.getResource(subType as EMaterialType, variation ?? 0);
+        default:
+            return null;
+        }
     }
 
     private fillQuadVertices(worldX: number, worldY: number, scale: number): void {

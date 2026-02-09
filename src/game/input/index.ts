@@ -45,6 +45,8 @@ export {
 export {
     CursorType,
     type ModeRenderState,
+    type PlacementPreview,
+    type PlacementEntityType,
     type BuildingPreview,
     type SelectionBox,
     type PathPreview,
@@ -53,10 +55,25 @@ export {
     createDefaultRenderState,
 } from './render-state';
 
+// Base Placement Mode
+export {
+    BasePlacementMode,
+    type PlacementModeData,
+    type PlacementModeEnterData,
+} from './modes/place-mode-base';
+
 // Built-in Modes
 export { SelectMode } from './modes/select-mode';
-export { PlaceBuildingMode, type PlaceBuildingModeData } from './modes/place-building-mode';
-export { PlaceResourceMode, type PlaceResourceModeData } from './modes/place-resource-mode';
+export {
+    PlaceBuildingMode,
+    type PlaceBuildingModeData,
+    type PlaceBuildingEnterData,
+} from './modes/place-building-mode';
+export {
+    PlaceResourceMode,
+    type PlaceResourceModeData,
+    type PlaceResourceEnterData,
+} from './modes/place-resource-mode';
 export { CameraMode } from './modes/camera-mode';
 
 // Input Manager

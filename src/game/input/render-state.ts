@@ -1,6 +1,12 @@
 import type { BuildingType } from '../entity';
 
 /**
+ * Supported placement entity types.
+ * Extend this union when adding new placeable entity types.
+ */
+export type PlacementEntityType = 'building' | 'resource';
+
+/**
  * Cursor types for different interaction states.
  */
 export enum CursorType {
@@ -14,7 +20,28 @@ export enum CursorType {
 }
 
 /**
+ * Unified placement preview data.
+ * Works for any placeable entity type (buildings, resources, units, etc).
+ */
+export interface PlacementPreview {
+    type: 'placement';
+    /** Entity category being placed */
+    entityType: PlacementEntityType;
+    /** Specific subtype (BuildingType, EMaterialType, etc as number) */
+    subType: number;
+    /** Anchor X position */
+    x: number;
+    /** Anchor Y position */
+    y: number;
+    /** Whether placement is valid at this position */
+    valid: boolean;
+    /** Additional type-specific data (amount, rotation, etc) */
+    extra?: Record<string, unknown>;
+}
+
+/**
  * Building placement preview data.
+ * @deprecated Use PlacementPreview with entityType='building' instead
  */
 export interface BuildingPreview {
     type: 'building';
@@ -30,6 +57,7 @@ export interface BuildingPreview {
 
 /**
  * Resource placement preview data.
+ * @deprecated Use PlacementPreview with entityType='resource' instead
  */
 export interface ResourcePreview {
     type: 'resource';
@@ -98,7 +126,7 @@ export interface PathPreview {
 /**
  * Union type for all preview types.
  */
-export type ModePreview = BuildingPreview | SelectionBox | PathPreview | ResourcePreview;
+export type ModePreview = PlacementPreview | BuildingPreview | SelectionBox | PathPreview | ResourcePreview;
 
 /**
  * Complete render state returned by a mode.

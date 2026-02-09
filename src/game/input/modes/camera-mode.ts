@@ -3,6 +3,7 @@ import { InputAction, MouseButton, type PointerData } from '../input-actions';
 import type { InputConfig } from '../input-config';
 import { CursorType, type ModeRenderState } from '../render-state';
 import type { IViewPoint } from '@/game/renderer/i-view-point';
+import { gameSettings } from '@/game/game-settings';
 
 /**
  * Camera mode - handles camera panning and zooming.
@@ -150,7 +151,8 @@ export class CameraMode extends BaseInputMode {
         if (!this.viewPoint || data.wheelDelta === undefined) return UNHANDLED;
 
         const delta = this.config.invertZoom ? -data.wheelDelta : data.wheelDelta;
-        const zoomFactor = delta > 0 ? (1 + this.config.cameraZoomSpeed) : (1 - this.config.cameraZoomSpeed);
+        const zoomSpeed = gameSettings.state.zoomSpeed;
+        const zoomFactor = delta > 0 ? (1 + zoomSpeed) : (1 - zoomSpeed);
 
         // Calculate new zoom
         const newZoom = Math.max(
@@ -168,7 +170,7 @@ export class CameraMode extends BaseInputMode {
     onUpdate(deltaTime: number, context: InputContext): void {
         if (!this.viewPoint) return;
 
-        const speed = this.config.cameraPanSpeed * this.viewPoint.zoomValue * deltaTime;
+        const speed = gameSettings.state.panSpeed * this.viewPoint.zoomValue * deltaTime;
 
         let dx = 0;
         let dy = 0;

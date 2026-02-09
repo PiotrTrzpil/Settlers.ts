@@ -1,175 +1,130 @@
-import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
-import { InputAction, MouseButton, type PointerData } from '../input-actions';
+import { BasePlacementMode, type PlacementModeData, type PlacementModeEnterData } from './place-mode-base';
+import type { InputContext } from '../input-mode';
 import { BuildingType, getBuildingSize } from '../../entity';
-import { CursorType, type ModeRenderState } from '../render-state';
-import { LogHandler } from '../../../utilities/log-handler';
+import type { PlacementEntityType } from '../render-state';
 
 /**
- * Data specific to building placement mode.
+ * Building-specific mode data.
+ * Extends base placement data with building type.
  */
-export interface PlaceBuildingModeData {
-    /** The building type being placed */
+export interface PlaceBuildingModeData extends PlacementModeData<BuildingType> {
+    // Building type is stored in subType
+    // Kept for backward compatibility in external code
     buildingType: BuildingType;
-    /** Current preview position (anchor/top-left) */
-    previewX: number;
-    previewY: number;
-    /** Whether current preview position is valid */
-    previewValid: boolean;
-    /** Validation function */
-    validatePlacement?: (x: number, y: number, buildingType: BuildingType) => boolean;
+}
+
+/**
+ * Enter data for building placement mode.
+ */
+export interface PlaceBuildingEnterData extends PlacementModeEnterData<BuildingType> {
+    /** The building type to place (alias for subType) */
+    buildingType: BuildingType;
 }
 
 /**
  * Building placement mode - for placing new buildings on the map.
+ *
+ * Key behaviors:
+ * - Preview position is centered on cursor based on building footprint size
+ * - Supports multi-tile building footprints
+ * - Validates terrain, occupancy, and slope
  */
-export class PlaceBuildingMode extends BaseInputMode {
-    private static readonly log = new LogHandler('PlaceBuildingMode');
+export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
     readonly name = 'place_building';
     readonly displayName = 'Place Building';
+    readonly entityType: PlacementEntityType = 'building';
 
-    private currentPlayer = 0;
+    protected getCommandType(): string {
+        return 'place_building';
+    }
 
-    onEnter(context: InputContext, data?: { buildingType: BuildingType; player?: number }): void {
-        if (!data?.buildingType) {
-            // No building type specified, switch back to select
+    protected getSubTypeName(subType: BuildingType): string {
+        return BuildingType[subType] ?? `Building#${subType}`;
+    }
+
+    /**
+     * Calculate anchor position by centering the building footprint on cursor.
+     */
+    protected resolveAnchorPosition(
+        tileX: number,
+        tileY: number,
+        buildingType: BuildingType
+    ): { x: number; y: number } {
+        const size = getBuildingSize(buildingType);
+        return {
+            x: Math.round(tileX - (size.width - 1) / 2),
+            y: Math.round(tileY - (size.height - 1) / 2),
+        };
+    }
+
+    protected createPlacementCommand(
+        x: number,
+        y: number,
+        data: PlacementModeData<BuildingType>
+    ): Record<string, unknown> {
+        return {
+            type: this.getCommandType(),
+            buildingType: data.subType,
+            x,
+            y,
+            player: this.currentPlayer,
+        };
+    }
+
+    /**
+     * Initialize mode data from validated enter data.
+     * Note: onEnter ensures buildingType is always defined before calling this.
+     */
+    protected override initializeModeData(
+        enterData: PlaceBuildingEnterData
+    ): PlaceBuildingModeData {
+        // buildingType is guaranteed by onEnter validation
+        const buildingType = enterData.buildingType;
+
+        return {
+            subType: buildingType,
+            buildingType,
+            previewX: 0,
+            previewY: 0,
+            previewValid: false,
+            extra: {},
+        };
+    }
+
+    /**
+     * Handle enter with backward-compatible data format.
+     */
+    override onEnter(
+        context: InputContext,
+        enterData?: PlacementModeEnterData<BuildingType>
+    ): void {
+        // Support both buildingType and subType for backward compatibility
+        const legacyData = enterData as PlaceBuildingEnterData | undefined;
+        const buildingType = legacyData?.buildingType ?? enterData?.subType;
+
+        // Validate before calling super (consistent with PlaceResourceMode)
+        if (buildingType === undefined) {
             context.switchMode('select');
             return;
         }
 
-        this.currentPlayer = data.player ?? 0;
+        const normalizedData: PlaceBuildingEnterData = {
+            ...enterData,
+            subType: buildingType,
+            buildingType,
+        };
 
-        context.setModeData<PlaceBuildingModeData>({
-            buildingType: data.buildingType,
-            previewX: 0,
-            previewY: 0,
-            previewValid: false,
-        });
-    }
-
-    onExit(context: InputContext): void {
-        // Clear preview
-        context.setModeData<PlaceBuildingModeData | undefined>(undefined);
-    }
-
-    onAction(action: InputAction, context: InputContext): InputResult {
-        switch (action) {
-        case InputAction.CancelPlacement:
-        case InputAction.DeselectAll:
-            context.switchMode('select');
-            return HANDLED;
-
-        case InputAction.RotateBuilding:
-            // Future: implement building rotation
-            return HANDLED;
-
-        default:
-            return UNHANDLED;
-        }
-    }
-
-    onPointerUp(data: PointerData, context: InputContext): InputResult {
-        const modeData = context.getModeData<PlaceBuildingModeData>();
-        if (!modeData) return UNHANDLED;
-
-        if (data.button === MouseButton.Left) {
-            // Try to place building
-            if (modeData.previewValid) {
-                const success = context.executeCommand({
-                    type: 'place_building',
-                    buildingType: modeData.buildingType,
-                    x: modeData.previewX,
-                    y: modeData.previewY,
-                    player: this.currentPlayer,
-                });
-
-                // Exit placement mode after successful placement
-                if (success) {
-                    PlaceBuildingMode.log.info(`Placed building ${BuildingType[modeData.buildingType]} at ${modeData.previewX},${modeData.previewY}`);
-                    context.switchMode('select');
-                } else {
-                    PlaceBuildingMode.log.warn(`Failed to place building at ${modeData.previewX},${modeData.previewY} (Command failed)`);
-                }
-            } else {
-                PlaceBuildingMode.log.warn(`Cannot place building at ${data.tileX},${data.tileY} (Invalid position)`);
-            }
-            return HANDLED;
-        }
-
-        if (data.button === MouseButton.Right) {
-            // Right click cancels placement
-            context.switchMode('select');
-            return HANDLED;
-        }
-
-        return UNHANDLED;
-    }
-
-    onPointerMove(data: PointerData, context: InputContext): InputResult {
-        const modeData = context.getModeData<PlaceBuildingModeData>();
-        if (!modeData || data.tileX === undefined || data.tileY === undefined) {
-            return UNHANDLED;
-        }
-
-        // Calculate building anchor position (top-left, centered on cursor)
-        const size = getBuildingSize(modeData.buildingType);
-        const anchorX = Math.round(data.tileX - (size.width - 1) / 2);
-        const anchorY = Math.round(data.tileY - (size.height - 1) / 2);
-
-        // Update preview position
-        modeData.previewX = anchorX;
-        modeData.previewY = anchorY;
-
-        // Validate placement if validator is available
-        if (modeData.validatePlacement) {
-            modeData.previewValid = modeData.validatePlacement(anchorX, anchorY, modeData.buildingType);
-        } else {
-            // Default to valid if no validator
-            modeData.previewValid = true;
-        }
-
-        context.setModeData(modeData);
-        return HANDLED;
+        super.onEnter(context, normalizedData);
     }
 
     /**
      * Set the placement validator function.
+     * Overloaded for backward compatibility with building-specific signature.
      */
-    setValidator(
+    override setValidator(
         context: InputContext,
         validator: (x: number, y: number, buildingType: BuildingType) => boolean
     ): void {
-        const modeData = context.getModeData<PlaceBuildingModeData>();
-        if (modeData) {
-            modeData.validatePlacement = validator;
-            context.setModeData(modeData);
-        }
-    }
-
-    override getRenderState(context: InputContext): ModeRenderState {
-        const modeData = context.getModeData<PlaceBuildingModeData>();
-
-        if (!modeData) {
-            return {
-                cursor: CursorType.Crosshair,
-            };
-        }
-
-        return {
-            cursor: modeData.previewValid ? CursorType.Crosshair : CursorType.NotAllowed,
-            preview: {
-                type: 'building',
-                buildingType: modeData.buildingType,
-                x: modeData.previewX,
-                y: modeData.previewY,
-                valid: modeData.previewValid,
-            },
-            hoverTile: {
-                x: modeData.previewX,
-                y: modeData.previewY,
-            },
-            statusText: modeData.previewValid
-                ? `Place ${BuildingType[modeData.buildingType]}`
-                : 'Cannot place here',
-        };
+        super.setValidator(context, validator);
     }
 }

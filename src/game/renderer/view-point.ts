@@ -1,4 +1,5 @@
 import { IViewPoint } from './i-view-point';
+import { gameSettings } from '@/game/game-settings';
 
 /**
  * ViewPoint options for configuration.
@@ -25,12 +26,20 @@ export class ViewPoint implements IViewPoint {
     private downX = 0;
     private downY = 0;
     public zoomValue = 1;
-    public zoomSpeed = 0.05;
     private mouseIsMoving = false;
     private canvas: HTMLCanvasElement;
     private keysDown = new Set<string>();
-    public panSpeed = 40;
     private externalInput: boolean;
+
+    /** Zoom speed - reads directly from game settings */
+    public get zoomSpeed(): number {
+        return gameSettings.state.zoomSpeed;
+    }
+
+    /** Pan speed - reads directly from game settings */
+    public get panSpeed(): number {
+        return gameSettings.state.panSpeed;
+    }
 
     /** callback on mouse move */
     public onMove: (() => void) | null = null;
