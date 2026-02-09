@@ -21,14 +21,16 @@ import {
 } from '../helpers/test-game';
 import { EntityType, BuildingType } from '@/game/entity';
 // Movement is handled via state.movement.update(dt)
-import { executeCommand } from '@/game/commands/command';
+import { executeCommand } from '@/game/commands';
 import { EventBus } from '@/game/event-bus';
 import {
     BUILDING_PRODUCTIONS,
     CONSTRUCTION_COSTS,
     getBuildingTypesRequestingMaterial,
-} from '@/game/economy/building-production';
-import { EMaterialType, isMaterialDroppable, getMaterialPriority } from '@/game/economy/material-type';
+    EMaterialType,
+    isMaterialDroppable,
+    getMaterialPriority,
+} from '@/game/economy';
 import { isPassable, isBuildable, canPlaceBuilding } from '@/game/features/placement';
 import { findPath } from '@/game/systems/pathfinding';
 

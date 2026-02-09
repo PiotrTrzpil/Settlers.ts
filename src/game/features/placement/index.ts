@@ -9,7 +9,8 @@
  * - Validators: validatePlacement, canPlaceEntity
  * - Factories: createPlacementValidator, createDetailedPlacementValidator
  * - Terrain: isPassable, isBuildable (for movement, pathfinding)
- * - Legacy: canPlaceBuildingFootprint, canPlaceResource (backward compatibility)
+ * - Slope: MAX_SLOPE_DIFF, computeSlopeDifficulty (for indicator renderer)
+ * - Convenience: canPlaceBuildingFootprint, canPlaceResource, canPlaceUnit
  */
 
 // Types
@@ -22,21 +23,20 @@ export type {
 } from './types';
 export { PlacementStatus } from './types';
 
-// Unified validators
+// Unified validators and convenience wrappers
 export {
     validatePlacement,
     canPlaceEntity,
     createPlacementValidator,
     createDetailedPlacementValidator,
+    canPlaceBuildingFootprint,
+    canPlaceBuilding,
+    canPlaceResource,
+    canPlaceUnit,
 } from './placement-validator';
 
 // Terrain checks (needed by movement, pathfinding, etc.)
-export { isPassable, isBuildable } from './internal/terrain';
-
-// Legacy/convenience exports (backward compatibility)
-export { canPlaceBuildingFootprint, canPlaceBuilding } from './internal/building-validator';
-export { canPlaceResource } from './internal/resource-validator';
-export { canPlaceUnit } from './internal/unit-validator';
+export { isPassable, isBuildable } from './terrain';
 
 // Slope utilities (for indicator renderer)
-export { MAX_SLOPE_DIFF, computeSlopeDifficulty } from './internal/slope';
+export { MAX_SLOPE_DIFF, computeSlopeDifficulty } from './slope';

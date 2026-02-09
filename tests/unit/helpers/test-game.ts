@@ -61,7 +61,7 @@ export function addUnitWithPath(
 
 // ─── Command execution helpers ──────────────────────────────────────
 
-import { executeCommand } from '@/game/commands/command';
+import { executeCommand } from '@/game/commands';
 import { EventBus } from '@/game/event-bus';
 import { BuildingConstructionSystem } from '@/game/features/building-construction';
 

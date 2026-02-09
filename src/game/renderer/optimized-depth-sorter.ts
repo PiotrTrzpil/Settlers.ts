@@ -12,7 +12,7 @@
  */
 
 import { Entity, EntityType, BuildingType, UnitType, MapObjectType } from '../entity';
-import { EMaterialType } from '../economy/material-type';
+import { EMaterialType } from '../economy';
 import { SpriteEntry } from './sprite-metadata';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { WorldPos } from './frame-context';

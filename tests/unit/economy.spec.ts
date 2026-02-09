@@ -5,12 +5,10 @@ import {
     DROPPABLE_MATERIALS,
     isMaterialDroppable,
     getMaterialPriority,
-} from '@/game/economy/material-type';
-import {
     BUILDING_PRODUCTIONS,
     CONSTRUCTION_COSTS,
     getBuildingTypesRequestingMaterial,
-} from '@/game/economy/building-production';
+} from '@/game/economy';
 import { BuildingType } from '@/game/entity';
 
 describe('Material Types', () => {

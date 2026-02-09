@@ -1,6 +1,6 @@
 import { BasePlacementMode, type PlacementModeData, type PlacementModeEnterData } from './place-mode-base';
 import type { InputContext } from '../input-mode';
-import { EMaterialType } from '../../economy/material-type';
+import { EMaterialType } from '../../economy';
 import type { PlacementEntityType } from '../render-state';
 
 /**

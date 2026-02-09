@@ -1,5 +1,5 @@
 import { Entity, EntityType, UnitType, BuildingState, BuildingConstructionPhase, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE, isUnitTypeSelectable, getUnitTypeSpeed } from './entity';
-import { EMaterialType } from './economy/material-type';
+import { EMaterialType } from './economy';
 import { MovementSystem, MovementController } from './systems/movement/index';
 
 /** Default building construction duration in seconds */

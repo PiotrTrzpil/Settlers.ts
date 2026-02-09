@@ -4,7 +4,7 @@ import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
 import { createTestMapLoader } from '@/game/test-map-factory';
 import { Entity, TileCoord, UnitType, BuildingType } from '@/game/entity';
-import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy/material-type';
+import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
 import {

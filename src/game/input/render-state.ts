@@ -62,7 +62,7 @@ export interface BuildingPreview {
 export interface ResourcePreview {
     type: 'resource';
     /** Material type being placed */
-    materialType: import('../economy/material-type').EMaterialType;
+    materialType: import('../economy').EMaterialType;
     /** X position */
     x: number;
     /** Y position */
