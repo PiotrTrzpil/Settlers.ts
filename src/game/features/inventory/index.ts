@@ -43,3 +43,6 @@ export {
     isProductionBuilding,
     consumesMaterials,
 } from './inventory-configs';
+
+// Inventory visualization
+export { InventoryVisualizer } from './inventory-visualizer';

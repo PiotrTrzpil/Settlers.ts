@@ -9,7 +9,7 @@ import { MapSize } from '@/utilities/map-size';
 import type { TickSystem } from './tick-system';
 import { BuildingConstructionSystem } from './features/building-construction';
 import { CarrierSystem } from './features/carriers';
-import { hasInventory, isProductionBuilding } from './features/inventory';
+import { hasInventory, isProductionBuilding, InventoryVisualizer } from './features/inventory';
 import { LogisticsDispatcher } from './features/logistics';
 import { EventBus } from './event-bus';
 import type { FrameRenderTiming } from './renderer/renderer';
@@ -79,6 +79,9 @@ export class GameLoop {
     /** Lumberjack AI system */
     public readonly lumberjackSystem: LumberjackSystem;
 
+    /** Inventory visualizer - syncs building outputs to visual stacked resources */
+    public readonly inventoryVisualizer: InventoryVisualizer;
+
     constructor(gameState: GameState, eventBus: EventBus) {
         this.gameState = gameState;
         this.eventBus = eventBus;
@@ -131,6 +134,12 @@ export class GameLoop {
         // 6. Lumberjack AI — issues movement commands (runs after carrier)
         this.lumberjackSystem = new LumberjackSystem(gameState);
         this.registerSystem(this.lumberjackSystem);
+
+        // 7. Inventory visualizer — syncs building output to visual stacked resources
+        this.inventoryVisualizer = new InventoryVisualizer(
+            gameState,
+            gameState.inventoryManager
+        );
 
         // Wire up entity removal callback for cleanup
         gameState.onEntityRemoved = (entityId: number) => {
@@ -201,6 +210,9 @@ export class GameLoop {
 
         // Clean up logistics state (requests to/from this building, reservations)
         this.logisticsDispatcher.handleBuildingDestroyed(entityId);
+
+        // Clean up visual inventory stacks
+        this.inventoryVisualizer.removeBuilding(entityId);
     }
 
     /** Provide terrain data so movement obstacle resolution can function */
