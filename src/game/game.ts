@@ -5,7 +5,7 @@ import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
 import { Command, executeCommand } from './commands';
 import { isBuildable } from './features/placement';
-import { populateMapObjectsFromEntityData } from './systems/map-objects';
+import { populateMapObjectsFromEntityData, expandTrees } from './systems/map-objects';
 import { populateMapBuildings } from './systems/map-buildings';
 import { SoundManager } from './audio';
 import { Race } from './renderer/sprite-metadata';
@@ -57,11 +57,19 @@ export class Game {
 
         // Populate map objects (trees) from entity data chunk (type 6)
         if (mapLoader.entityData?.objects?.length) {
-            const count = populateMapObjectsFromEntityData(
+            const seedCount = populateMapObjectsFromEntityData(
                 this.state, mapLoader.entityData.objects, this.groundType, this.mapSize
             );
-            if (count > 0) {
-                console.log(`Game: Loaded ${count} trees from map data`);
+            if (seedCount > 0) {
+                console.log(`Game: Loaded ${seedCount} seed trees from map data`);
+
+                // Expand seed trees into forests
+                const expandedCount = expandTrees(this.state, this.groundType, this.mapSize, {
+                    radius: 12,
+                    density: 0.7,
+                    minSpacing: 1,
+                });
+                console.log(`Game: Expanded into ${expandedCount} additional trees`);
             }
         }
 
