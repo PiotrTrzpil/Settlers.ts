@@ -47,7 +47,6 @@ export class GameLoop {
     private mapHeight: number | undefined;
     private mapSize: MapSize | undefined;
     private onRender: ((alpha: number, deltaSec: number) => void) | null = null;
-    private onTerrainModified: (() => void) | null = null;
     private animationProvider: AnimationDataProvider | null = null;
 
     /** Registered tick systems */
@@ -71,10 +70,12 @@ export class GameLoop {
 
         // Register all tick systems in execution order:
         // 1. Movement — updates unit positions (must run first)
+        gameState.movement.setEventBus(eventBus);
         this.registerSystem(gameState.movement);
 
-        // 2. Idle behavior — updates animation based on movement state
+        // 2. Idle behavior — updates animation based on movement events
         this.idleBehaviorSystem = new IdleBehaviorSystem(gameState);
+        this.idleBehaviorSystem.registerEvents(eventBus);
         this.registerSystem(this.idleBehaviorSystem);
 
         // 3. Building construction — terrain modification, phase transitions
@@ -132,11 +133,6 @@ export class GameLoop {
     /** Set the render callback, called every animation frame with interpolation alpha and delta time */
     public setRenderCallback(callback: (alpha: number, deltaSec: number) => void): void {
         this.onRender = callback;
-    }
-
-    /** Set callback for when terrain is modified (e.g., during building construction) */
-    public setTerrainModifiedCallback(callback: () => void): void {
-        this.onTerrainModified = callback;
     }
 
     /** Set the animation data provider for updating entity animations */
@@ -228,7 +224,6 @@ export class GameLoop {
                 groundType: this.groundType,
                 groundHeight: this.groundHeight,
                 mapSize: this.mapSize,
-                onTerrainModified: this.onTerrainModified ?? undefined,
             });
         } else {
             this.constructionSystem.setTerrainContext(undefined);

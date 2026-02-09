@@ -1,26 +1,24 @@
 /**
- * Idle behavior and animation direction system.
+ * Idle behavior and animation system.
  *
- * This system is responsible for updating unit animation states based on
- * movement state. It is fully decoupled from the movement system:
- * - Movement system handles logical tile movement
- * - This system handles visual animation direction and idle behavior
+ * Event-driven architecture:
+ * - Subscribes to movement events (started, stopped, direction changed)
+ * - Reacts to state changes instead of polling
+ * - Tick only handles time-based logic (direction transitions, idle turns)
  *
  * Responsibilities:
- * - Direction changes during movement (based on dx/dy from controller)
+ * - Start/stop walk animation based on movement events
+ * - Smooth direction transitions when direction changes
  * - Random idle turns after standing still for a while
- * - Smooth direction transitions
- * - Tracking idle time per unit (independent of movement state)
  */
 
 import type { GameState } from '../game-state';
 import { Entity, EntityType, UnitType } from '../entity';
-import { MovementController } from './movement/movement-controller';
+import type { EventBus } from '../event-bus';
 import {
     AnimationState,
     ANIMATION_SEQUENCES,
     carrySequenceKey,
-    isCarrySequence,
     createAnimationState,
     setAnimationSequence,
     startDirectionTransition,
@@ -30,16 +28,21 @@ import type { TickSystem } from '../tick-system';
 
 /**
  * Per-unit idle animation state.
- * Tracked separately from movement to maintain decoupling.
  */
 interface IdleAnimationState {
     idleTime: number;
     nextIdleTurnTime: number;
 }
 
+/** Number of sprite directions (matches hex grid) */
+const NUM_DIRECTIONS = 6;
+
 /**
- * IdleBehaviorSystem — manages animation direction and idle turning for all units.
- * Implements TickSystem for registration with GameLoop.
+ * IdleBehaviorSystem — manages unit animations via movement events.
+ *
+ * Architecture:
+ * - Movement events trigger animation state changes (no polling)
+ * - Tick only updates time-based logic (transitions, idle turns)
  */
 export class IdleBehaviorSystem implements TickSystem {
     private idleStates = new Map<number, IdleAnimationState>();
@@ -49,7 +52,78 @@ export class IdleBehaviorSystem implements TickSystem {
         this.gameState = gameState;
     }
 
-    /** TickSystem interface */
+    /**
+     * Subscribe to movement events from the event bus.
+     * Call this after construction to wire up event handling.
+     */
+    registerEvents(eventBus: EventBus): void {
+        eventBus.on('unit:movementStarted', ({ entityId, direction }) => {
+            this.onMovementStarted(entityId, direction);
+        });
+
+        eventBus.on('unit:movementStopped', ({ entityId }) => {
+            this.onMovementStopped(entityId);
+        });
+
+        eventBus.on('unit:directionChanged', ({ entityId, direction, previousDirection }) => {
+            this.onDirectionChanged(entityId, direction, previousDirection);
+        });
+    }
+
+    /**
+     * Handle unit starting to move.
+     * Starts walk animation and sets direction.
+     */
+    private onMovementStarted(entityId: number, direction: number): void {
+        const entity = this.gameState.getEntity(entityId);
+        if (!entity || entity.type !== EntityType.Unit) return;
+
+        const animState = this.ensureAnimationState(entity);
+
+        // Start walk animation
+        const targetSeq = getWalkSequenceKey(entity);
+        setAnimationSequence(animState, targetSeq, direction);
+
+        // Reset idle state
+        const idleState = this.getIdleState(entityId);
+        idleState.idleTime = 0;
+    }
+
+    /**
+     * Handle unit stopping movement.
+     * Stops animation cycling and shows static pose.
+     */
+    private onMovementStopped(entityId: number): void {
+        const entity = this.gameState.getEntity(entityId);
+        if (!entity || entity.type !== EntityType.Unit) return;
+
+        const animState = this.ensureAnimationState(entity);
+
+        // Stop animation, show frame 0
+        animState.playing = false;
+        animState.currentFrame = 0;
+    }
+
+    /**
+     * Handle direction change during movement.
+     * Starts smooth transition to new direction.
+     */
+    private onDirectionChanged(entityId: number, direction: number, _previousDirection: number): void {
+        const entity = this.gameState.getEntity(entityId);
+        if (!entity || entity.type !== EntityType.Unit) return;
+
+        const animState = this.ensureAnimationState(entity);
+
+        // Start smooth direction transition
+        if (direction !== animState.direction) {
+            startDirectionTransition(animState, direction);
+        }
+    }
+
+    /**
+     * TickSystem interface — handles time-based updates only.
+     * Animation state changes happen via events, not here.
+     */
     tick(dt: number): void {
         const deltaMs = dt * 1000;
 
@@ -57,16 +131,40 @@ export class IdleBehaviorSystem implements TickSystem {
             const entity = this.gameState.getEntity(controller.entityId);
             if (!entity || entity.type !== EntityType.Unit) continue;
 
-            const idleState = this.getIdleState(controller.entityId);
-            entity.animationState = updateUnitAnimation(
-                entity,
-                controller,
-                idleState,
-                entity.animationState,
-                deltaMs,
-                dt
-            );
+            const animState = entity.animationState;
+            if (!animState) continue;
+
+            // Update direction transitions (smooth blending)
+            updateDirectionTransition(animState, deltaMs);
+
+            // Handle idle turning (only when idle)
+            if (controller.state === 'idle') {
+                this.updateIdleTurn(controller.entityId, animState, dt);
+            }
         }
+    }
+
+    /**
+     * Update idle turn timer and trigger random turns.
+     */
+    private updateIdleTurn(entityId: number, animState: AnimationState, deltaSec: number): void {
+        const idleState = this.getIdleState(entityId);
+        idleState.idleTime += deltaSec;
+
+        if (idleState.idleTime >= idleState.nextIdleTurnTime) {
+            const newDirection = getAdjacentDirection(animState.direction);
+            startDirectionTransition(animState, newDirection);
+            idleState.idleTime = 0;
+            idleState.nextIdleTurnTime = 2 + Math.random() * 4;
+        }
+    }
+
+    /** Ensure entity has animation state, creating if needed. */
+    private ensureAnimationState(entity: Entity): AnimationState {
+        if (!entity.animationState) {
+            entity.animationState = createAnimationState(ANIMATION_SEQUENCES.DEFAULT, 0);
+        }
+        return entity.animationState;
     }
 
     /** Clean up idle state for removed entities. */
@@ -101,73 +199,8 @@ function getWalkSequenceKey(entity: Entity): string {
 }
 
 /**
- * Update animation state for a single unit based on its movement controller.
- *
- * @param entity The unit entity (for checking carriedMaterial)
- * @param controller The unit's movement controller (provides movement state)
- * @param idleState The unit's idle animation state (owned by this system)
- * @param animState The current animation state (or undefined to create new)
- * @param deltaMs Time since last update in milliseconds
- * @param deltaSec Time since last update in seconds
- * @returns Updated animation state
- */
-function updateUnitAnimation(
-    entity: Entity,
-    controller: MovementController,
-    idleState: IdleAnimationState,
-    animState: AnimationState | undefined,
-    deltaMs: number,
-    deltaSec: number
-): AnimationState {
-    // Create animation state if not present
-    if (!animState) {
-        animState = createAnimationState(ANIMATION_SEQUENCES.DEFAULT, 0);
-    }
-
-    // Update any in-progress direction transitions
-    updateDirectionTransition(animState, deltaMs);
-
-    // If moving, update direction and animation sequence
-    if (controller.state === 'moving' && controller.isInTransit) {
-        const newDir = controller.computeMovementDirection();
-        if (newDir !== -1 && newDir !== animState.direction) {
-            startDirectionTransition(animState, newDir);
-        }
-        // Ensure correct walk/carry animation is playing
-        const targetSeq = getWalkSequenceKey(entity);
-        if (animState.sequenceKey !== targetSeq) {
-            setAnimationSequence(animState, targetSeq, animState.direction);
-        }
-        // Reset idle state when moving
-        idleState.idleTime = 0;
-    }
-    // If idle, handle random direction changes
-    else if (controller.state === 'idle' && !controller.isInTransit) {
-        // Switch back to idle/default animation when stopped
-        if (animState.sequenceKey === ANIMATION_SEQUENCES.WALK || isCarrySequence(animState.sequenceKey)) {
-            setAnimationSequence(animState, ANIMATION_SEQUENCES.DEFAULT, animState.direction);
-        }
-
-        idleState.idleTime += deltaSec;
-
-        if (idleState.idleTime >= idleState.nextIdleTurnTime) {
-            const newDirection = getAdjacentDirection(animState.direction);
-            startDirectionTransition(animState, newDirection);
-            idleState.idleTime = 0;
-            idleState.nextIdleTurnTime = 2 + Math.random() * 4;
-        }
-    }
-
-    return animState;
-}
-
-/** Number of sprite directions (matches hex grid) */
-const NUM_DIRECTIONS = 6;
-
-/**
  * Get an adjacent direction for idle turning.
  * Randomly chooses clockwise (+1) or counter-clockwise (-1) rotation.
- * Wraps around since all 6 directions are visually adjacent on the hex grid.
  */
 function getAdjacentDirection(currentDirection: number): number {
     const offset = Math.random() < 0.5 ? 1 : -1;
