@@ -24,7 +24,6 @@
   "dependencies": {
     "@vueuse/core": "^14.2.0",
     "howler": "^2.2.4",
-    "stats.js": "^0.17.0",
     "vue": "^3.4.0",
     "vue-router": "^4.3.0"
   },
@@ -36,7 +35,6 @@
     "@rollup/pluginutils": "^5.3.0",
     "@types/howler": "^2.2.12",
     "@types/node": "^25.2.0",
-    "@types/stats.js": "^0.17.4",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "@vitejs/plugin-vue": "^5.0.0",
