@@ -5,7 +5,7 @@ import { cleanupIdleState } from './systems/idle-behavior';
 import { LumberjackSystem } from './systems/lumberjack-system';
 
 /** Default building construction duration in seconds */
-export const DEFAULT_CONSTRUCTION_DURATION = 30;
+export const DEFAULT_CONSTRUCTION_DURATION = 10;
 
 /**
  * Legacy UnitState interface for backward compatibility.
