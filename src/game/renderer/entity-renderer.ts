@@ -20,7 +20,8 @@ import { SpriteRenderManager } from './sprite-render-manager';
 import { BuildingIndicatorRenderer } from './building-indicator-renderer';
 import { SpriteBatchRenderer } from './sprite-batch-renderer';
 import { SelectionOverlayRenderer } from './selection-overlay-renderer';
-import { getAnimatedSprite } from '../systems/animation';
+import { getAnimatedSprite, getAnimatedSpriteForDirection } from '../systems/animation';
+import { AnimationState } from '../animation';
 import { FrameContext, type IFrameContext } from './frame-context';
 import { OptimizedDepthSorter, type OptimizedSortContext } from './optimized-depth-sorter';
 import { profiler } from './debug/render-profiler';
@@ -403,6 +404,23 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         profiler.endFrame();
     }
 
+    /**
+     * Get animated sprite for any entity type using the unified animation API.
+     * Returns the current animation frame or falls back to static sprite.
+     */
+    private getAnimatedEntitySprite(entity: Entity, fallbackSprite: SpriteEntry | null): SpriteEntry | null {
+        if (!this.spriteManager || !entity.animationState) {
+            return fallbackSprite;
+        }
+
+        const animatedEntry = this.spriteManager.getAnimatedEntity(entity.type, entity.subType);
+        if (!animatedEntry) {
+            return fallbackSprite;
+        }
+
+        return getAnimatedSprite(entity.animationState, animatedEntry.animationData, animatedEntry.staticSprite);
+    }
+
     /** Get sprite entry for a building entity */
     private getBuildingSprite(entity: Entity): { sprite: SpriteEntry | null; progress: number } {
         if (!this.spriteManager) return { sprite: null, progress: 1 };
@@ -416,10 +434,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             sprite = this.spriteManager.getBuildingConstruction(buildingType)
                 ?? this.spriteManager.getBuilding(buildingType);
         } else {
-            const animatedEntry = this.spriteManager.getAnimatedBuilding(buildingType);
-            sprite = (animatedEntry && entity.animationState)
-                ? getAnimatedSprite(entity.animationState, animatedEntry.animationData, animatedEntry.staticSprite)
-                : this.spriteManager.getBuilding(buildingType);
+            const fallback = this.spriteManager.getBuilding(buildingType);
+            sprite = this.getAnimatedEntitySprite(entity, fallback);
         }
 
         return { sprite, progress: visualState.verticalProgress };
@@ -430,15 +446,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (!this.spriteManager) return null;
 
         const mapObjectType = entity.subType as MapObjectType;
-        const animatedEntry = this.spriteManager.getAnimatedMapObject(mapObjectType);
-
-        if (animatedEntry && entity.animationState) {
-            return getAnimatedSprite(entity.animationState, animatedEntry.animationData, animatedEntry.staticSprite);
-        }
-        if (mapObjectType !== undefined) {
-            return this.spriteManager.getMapObject(mapObjectType, entity.variation);
-        }
-        return null;
+        const fallback = this.spriteManager.getMapObject(mapObjectType, entity.variation);
+        return this.getAnimatedEntitySprite(entity, fallback);
     }
 
     /** Get sprite entry for a unit entity (returns null if transitioning) */
@@ -451,7 +460,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
 
         const direction = animState?.direction ?? 0;
-        return this.spriteManager.getUnit(entity.subType as UnitType, direction);
+        const unitType = entity.subType as UnitType;
+        const fallback = this.spriteManager.getUnit(unitType, direction);
+
+        return this.getAnimatedEntitySprite(entity, fallback);
     }
 
     /**
@@ -566,6 +578,25 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /**
+     * Get the current animation frame sprite for a unit at a specific direction.
+     * Used for direction transitions where we need sprites for two different directions.
+     * Uses the unified animation API for O(1) lookup.
+     */
+    private getUnitSpriteForDirection(unitType: UnitType, animState: AnimationState, direction: number): SpriteEntry | null {
+        if (!this.spriteManager) return null;
+
+        const fallback = this.spriteManager.getUnit(unitType, direction);
+        const animatedEntry = this.spriteManager.getAnimatedEntity(EntityType.Unit, unitType);
+
+        if (!animatedEntry) {
+            return fallback;
+        }
+
+        // Use the helper from systems/animation that handles direction lookup
+        return getAnimatedSpriteForDirection(animState, animatedEntry.animationData, direction, fallback);
+    }
+
+    /**
      * Draw units that are transitioning between directions using the blend shader.
      */
     private drawTransitioningUnits(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
@@ -578,9 +609,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const oldDir = animState.previousDirection!;
             const newDir = animState.direction;
             const blendFactor = animState.directionTransitionProgress!;
+            const unitType = entity.subType as UnitType;
 
-            const oldSprite = this.spriteManager.getUnit(entity.subType as UnitType, oldDir);
-            const newSprite = this.spriteManager.getUnit(entity.subType as UnitType, newDir);
+            // Get animated sprites for both directions at current frame
+            const oldSprite = this.getUnitSpriteForDirection(unitType, animState, oldDir);
+            const newSprite = this.getUnitSpriteForDirection(unitType, animState, newDir);
 
             if (!oldSprite || !newSprite) continue;
 

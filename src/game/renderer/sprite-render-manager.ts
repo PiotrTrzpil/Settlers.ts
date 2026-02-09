@@ -14,7 +14,6 @@ import {
     getMapObjectSpriteMap,
     getResourceSpriteMap,
     BUILDING_DIRECTION,
-    UNIT_DIRECTION,
     AnimatedSpriteEntry,
     SETTLER_FILE_NUMBERS,
     TREE_TEXTURE_OFFSET,
@@ -22,7 +21,7 @@ import {
 } from './sprite-metadata';
 import { SpriteLoader } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
-import { BuildingType, MapObjectType, UnitType } from '../entity';
+import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
 import { ANIMATION_DEFAULTS, AnimationData } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy/material-type';
@@ -181,61 +180,73 @@ export class SpriteRenderManager {
         return this._spriteRegistry?.getMapObject(type, variation) ?? null;
     }
 
+    // ========== Unified Animation API ==========
+
     /**
-     * Get animated building data (if available).
+     * Get animated entity data for any entity type. O(1) lookup.
      */
-    public getAnimatedBuilding(type: BuildingType): AnimatedSpriteEntry | null {
-        return this._spriteRegistry?.getAnimatedBuilding(type) ?? null;
+    public getAnimatedEntity(entityType: EntityType, subType: number): AnimatedSpriteEntry | null {
+        return this._spriteRegistry?.getAnimatedEntity(entityType, subType) ?? null;
     }
 
     /**
-     * Check if a building has animation frames.
+     * Check if any entity type has animation frames. O(1) lookup.
      */
-    public hasBuildingAnimation(type: BuildingType): boolean {
-        return this._spriteRegistry?.hasBuildingAnimation(type) ?? false;
+    public hasAnimation(entityType: EntityType, subType: number): boolean {
+        return this._spriteRegistry?.hasAnimation(entityType, subType) ?? false;
     }
 
     /**
-     * Get animated map object data (if available).
+     * Get animation data for any entity type. O(1) lookup.
      */
-    public getAnimatedMapObject(type: MapObjectType): AnimatedSpriteEntry | null {
-        return this._spriteRegistry?.getAnimatedMapObject(type) ?? null;
-    }
-
-    /**
-     * Check if a map object has animation frames.
-     */
-    public hasMapObjectAnimation(type: MapObjectType): boolean {
-        return this._spriteRegistry?.hasMapObjectAnimation(type) ?? false;
-    }
-
-    /**
-     * Get animation data for a building type.
-     */
-    public getBuildingAnimationData(type: BuildingType): AnimationData | null {
-        const entry = this._spriteRegistry?.getAnimatedBuilding(type);
-        return entry?.animationData ?? null;
-    }
-
-    /**
-     * Get animation data for a map object type.
-     */
-    public getMapObjectAnimationData(type: MapObjectType): AnimationData | null {
-        const entry = this._spriteRegistry?.getAnimatedMapObject(type);
+    public getAnimationData(entityType: EntityType, subType: number): AnimationData | null {
+        const entry = this._spriteRegistry?.getAnimatedEntity(entityType, subType);
         return entry?.animationData ?? null;
     }
 
     /**
      * Returns this manager as an AnimationDataProvider.
-     * Allows the animation system to query animation data without direct coupling.
+     * Implements the unified interface for the animation system.
      */
     public asAnimationProvider(): AnimationDataProvider {
         return {
-            getBuildingAnimationData: (type: BuildingType) => this.getBuildingAnimationData(type),
-            getMapObjectAnimationData: (type: MapObjectType) => this.getMapObjectAnimationData(type),
-            hasBuildingAnimation: (type: BuildingType) => this.hasBuildingAnimation(type),
-            hasMapObjectAnimation: (type: MapObjectType) => this.hasMapObjectAnimation(type),
+            getAnimationData: (entityType: EntityType, subType: number) =>
+                this.getAnimationData(entityType, subType),
+            hasAnimation: (entityType: EntityType, subType: number) =>
+                this.hasAnimation(entityType, subType),
         };
+    }
+
+    // ========== Legacy Wrappers (for backwards compatibility) ==========
+
+    /** @deprecated Use getAnimatedEntity(EntityType.Building, type) instead */
+    public getAnimatedBuilding(type: BuildingType): AnimatedSpriteEntry | null {
+        return this.getAnimatedEntity(EntityType.Building, type);
+    }
+
+    /** @deprecated Use hasAnimation(EntityType.Building, type) instead */
+    public hasBuildingAnimation(type: BuildingType): boolean {
+        return this.hasAnimation(EntityType.Building, type);
+    }
+
+    /** @deprecated Use getAnimatedEntity(EntityType.MapObject, type) instead */
+    public getAnimatedMapObject(type: MapObjectType): AnimatedSpriteEntry | null {
+        return this.getAnimatedEntity(EntityType.MapObject, type);
+    }
+
+    /** @deprecated Use hasAnimation(EntityType.MapObject, type) instead */
+    public hasMapObjectAnimation(type: MapObjectType): boolean {
+        return this.hasAnimation(EntityType.MapObject, type);
+    }
+
+    /** @deprecated Use getAnimatedEntity(EntityType.Unit, type) instead */
+    public getAnimatedUnit(type: UnitType): AnimatedSpriteEntry | null {
+        return this.getAnimatedEntity(EntityType.Unit, type);
+    }
+
+    /** @deprecated Use hasAnimation(EntityType.Unit, type) instead */
+    public hasUnitAnimation(type: UnitType): boolean {
+        return this.hasAnimation(EntityType.Unit, type);
     }
 
     /**
@@ -773,7 +784,7 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Load unit sprites (all 4 directions per unit).
+     * Load unit sprites with all animation frames for all available directions.
      */
     private async loadUnitSprites(
         race: Race,
@@ -783,19 +794,76 @@ export class SpriteRenderManager {
         const fileSet = await this.spriteLoader.loadFileSet(`${SETTLER_FILE_NUMBERS[race]}`);
         if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
 
-        const DIRECTIONS = [
-            UNIT_DIRECTION.RIGHT, UNIT_DIRECTION.RIGHT_BOTTOM,
-            UNIT_DIRECTION.LEFT_BOTTOM, UNIT_DIRECTION.LEFT,
-        ];
+        const spriteMap = getUnitSpriteMap(race);
+        const unitInfos: Array<{ unitType: UnitType; jobIndex: number }> = [];
 
-        return this.loadSpritesFromMap(
-            getUnitSpriteMap(race),
-            (type, info) => DIRECTIONS.map(dir => ({ type, dir, jobIndex: info.index })),
-            ({ dir, jobIndex }) => this.spriteLoader.loadJobSprite(
-                fileSet, { jobIndex, directionIndex: dir, frameIndex: 0 }, atlas
-            ),
-            ({ type, dir }, sprite) => registry.registerUnit(type, dir, sprite.entry)
+        for (const [typeStr, info] of Object.entries(spriteMap)) {
+            if (!info) continue;
+            unitInfos.push({
+                unitType: Number(typeStr) as UnitType,
+                jobIndex: info.index,
+            });
+        }
+
+        let loadedCount = 0;
+
+        await processBatchedWithHandler(
+            unitInfos,
+            async({ unitType, jobIndex }) => {
+                // Get how many directions this job has from the DIL
+                const jobItem = fileSet.jilReader!.getItem(jobIndex);
+                if (!jobItem) {
+                    SpriteRenderManager.log.debug(`Job ${jobIndex} not found for unit ${UnitType[unitType]}`);
+                    return null;
+                }
+
+                const dirItems = fileSet.dilReader!.getItems(jobItem.offset, jobItem.length);
+                const directionCount = dirItems.length;
+
+                // Load all frames for all directions
+                const directionFrames = new Map<number, SpriteEntry[]>();
+
+                for (let dir = 0; dir < directionCount; dir++) {
+                    const animation = await this.spriteLoader.loadJobAnimation(
+                        fileSet,
+                        jobIndex,
+                        dir,
+                        atlas
+                    );
+
+                    if (animation && animation.frames.length > 0) {
+                        directionFrames.set(dir, animation.frames.map(f => f.entry));
+                    }
+                }
+
+                return { unitType, jobIndex, directionFrames, directionCount };
+            },
+            (result) => {
+                if (!result || result.directionFrames.size === 0) return;
+
+                const { unitType, directionFrames } = result;
+
+                // Register animated unit with all directions and frames
+                registry.registerAnimatedUnit(
+                    unitType,
+                    directionFrames,
+                    ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                    true // loop
+                );
+
+                // Also register static sprites (first frame of each direction) for fallback
+                for (const [dir, frames] of directionFrames) {
+                    if (frames.length > 0) {
+                        registry.registerUnit(unitType, dir, frames[0]);
+                    }
+                }
+
+                loadedCount++;
+            }
         );
+
+        SpriteRenderManager.log.debug(`Loaded ${loadedCount} animated units for ${Race[race]}`);
+        return loadedCount > 0;
     }
 
     /**

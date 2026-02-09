@@ -1,4 +1,4 @@
-import { BuildingType, MapObjectType, UnitType } from '../entity';
+import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
 import { EMaterialType } from '../economy/material-type';
 import { AtlasRegion } from './entity-texture-atlas';
 import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS } from '../animation';
@@ -523,13 +523,16 @@ export interface AnimatedSpriteEntry {
 export class SpriteMetadataRegistry {
     private buildings: Map<BuildingType, BuildingSpriteEntries> = new Map();
     private mapObjects: Map<MapObjectType, SpriteEntry[]> = new Map();
-    /** Animated building sprites (completed state only for now) */
-    private animatedBuildings: Map<BuildingType, AnimatedSpriteEntry> = new Map();
-    /** Animated map objects (trees swaying, etc.) */
-    private animatedMapObjects: Map<MapObjectType, AnimatedSpriteEntry> = new Map();
     private resources: Map<EMaterialType, Map<number, SpriteEntry>> = new Map();
-    /** Unit sprites indexed by type and direction (0-3: RIGHT, RIGHT_BOTTOM, LEFT_BOTTOM, LEFT) */
+    /** Unit sprites indexed by type and direction (static, first frame only for fallback) */
     private units: Map<UnitType, Map<number, SpriteEntry>> = new Map();
+
+    /**
+     * Unified animated entities storage.
+     * Maps EntityType -> subType -> AnimatedSpriteEntry
+     * Replaces separate animatedBuildings, animatedMapObjects, animatedUnits maps.
+     */
+    private animatedEntities: Map<EntityType, Map<number, AnimatedSpriteEntry>> = new Map();
 
     /**
      * Register sprite entries for a building type (both construction and completed).
@@ -649,6 +652,109 @@ export class SpriteMetadataRegistry {
         return dirMap.get(direction) ?? dirMap.get(0) ?? null;
     }
 
+    // ========== Unified Animation API ==========
+
+    /**
+     * Register an animated entity with multiple directions and frames.
+     * This is the unified method that replaces registerAnimatedBuilding,
+     * registerAnimatedMapObject, and registerAnimatedUnit.
+     *
+     * @param entityType The entity type (Building, Unit, MapObject, etc.)
+     * @param subType The specific type (BuildingType, UnitType, etc.)
+     * @param directionFrames Map of direction index -> array of frames
+     * @param frameDurationMs Duration per frame in milliseconds
+     * @param loop Whether the animation loops
+     */
+    public registerAnimatedEntity(
+        entityType: EntityType,
+        subType: number,
+        directionFrames: Map<number, SpriteEntry[]>,
+        frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+        loop: boolean = true
+    ): void {
+        if (directionFrames.size === 0) return;
+
+        // Build direction map for all directions
+        const directionMap = new Map<number, AnimationSequence>();
+        let firstFrame: SpriteEntry | null = null;
+
+        for (const [direction, frames] of directionFrames) {
+            if (frames.length === 0) continue;
+
+            if (!firstFrame) {
+                firstFrame = frames[0];
+            }
+
+            directionMap.set(direction, {
+                frames,
+                frameDurationMs,
+                loop,
+            });
+        }
+
+        if (!firstFrame) return;
+
+        const sequences = new Map<string, Map<number, AnimationSequence>>();
+        sequences.set('default', directionMap);
+
+        const animationData: AnimationData = {
+            sequences,
+            defaultSequence: 'default',
+        };
+
+        // Get or create the subType map for this entity type
+        let subTypeMap = this.animatedEntities.get(entityType);
+        if (!subTypeMap) {
+            subTypeMap = new Map();
+            this.animatedEntities.set(entityType, subTypeMap);
+        }
+
+        subTypeMap.set(subType, {
+            staticSprite: firstFrame,
+            animationData,
+            isAnimated: directionFrames.size > 0,
+        });
+    }
+
+    /**
+     * Get animated entity data. Unified method for all entity types.
+     * O(1) lookup using nested Maps.
+     */
+    public getAnimatedEntity(entityType: EntityType, subType: number): AnimatedSpriteEntry | null {
+        return this.animatedEntities.get(entityType)?.get(subType) ?? null;
+    }
+
+    /**
+     * Check if an entity type/subtype has animation data.
+     * O(1) lookup.
+     */
+    public hasAnimation(entityType: EntityType, subType: number): boolean {
+        const entry = this.animatedEntities.get(entityType)?.get(subType);
+        return entry?.isAnimated ?? false;
+    }
+
+    // ========== Legacy Wrappers (for backwards compatibility) ==========
+
+    /** @deprecated Use registerAnimatedEntity instead */
+    public registerAnimatedUnit(
+        type: UnitType,
+        directionFrames: Map<number, SpriteEntry[]>,
+        frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+        loop: boolean = true
+    ): void {
+        this.registerAnimatedEntity(EntityType.Unit, type, directionFrames, frameDurationMs, loop);
+    }
+
+    /** @deprecated Use getAnimatedEntity instead */
+    public getAnimatedUnit(type: UnitType): AnimatedSpriteEntry | null {
+        return this.getAnimatedEntity(EntityType.Unit, type);
+    }
+
+    /** @deprecated Use hasAnimation instead */
+    public hasUnitAnimation(type: UnitType): boolean {
+        return this.hasAnimation(EntityType.Unit, type);
+    }
+
     /**
      * Check if any building sprites have been registered.
      */
@@ -698,9 +804,7 @@ export class SpriteMetadataRegistry {
         return this.units.size;
     }
 
-    /**
-     * Register an animated building sprite (completed state with multiple frames).
-     */
+    /** @deprecated Use registerAnimatedEntity instead */
     public registerAnimatedBuilding(
         type: BuildingType,
         frames: SpriteEntry[],
@@ -709,49 +813,22 @@ export class SpriteMetadataRegistry {
         loop: boolean = true
     ): void {
         if (frames.length === 0) return;
-
-        const sequence: AnimationSequence = {
-            frames,
-            frameDurationMs,
-            loop,
-        };
-
-        const directionMap = new Map<number, AnimationSequence>();
-        directionMap.set(direction, sequence);
-
-        const sequences = new Map<string, Map<number, AnimationSequence>>();
-        sequences.set('default', directionMap);
-
-        const animationData: AnimationData = {
-            sequences,
-            defaultSequence: 'default',
-        };
-
-        this.animatedBuildings.set(type, {
-            staticSprite: frames[0],
-            animationData,
-            isAnimated: frames.length > 1,
-        });
+        const directionFrames = new Map<number, SpriteEntry[]>();
+        directionFrames.set(direction, frames);
+        this.registerAnimatedEntity(EntityType.Building, type, directionFrames, frameDurationMs, loop);
     }
 
-    /**
-     * Get animated building data.
-     */
+    /** @deprecated Use getAnimatedEntity instead */
     public getAnimatedBuilding(type: BuildingType): AnimatedSpriteEntry | null {
-        return this.animatedBuildings.get(type) ?? null;
+        return this.getAnimatedEntity(EntityType.Building, type);
     }
 
-    /**
-     * Check if a building has animation data.
-     */
+    /** @deprecated Use hasAnimation instead */
     public hasBuildingAnimation(type: BuildingType): boolean {
-        const entry = this.animatedBuildings.get(type);
-        return entry?.isAnimated ?? false;
+        return this.hasAnimation(EntityType.Building, type);
     }
 
-    /**
-     * Register an animated map object sprite.
-     */
+    /** @deprecated Use registerAnimatedEntity instead */
     public registerAnimatedMapObject(
         type: MapObjectType,
         frames: SpriteEntry[],
@@ -759,44 +836,19 @@ export class SpriteMetadataRegistry {
         loop: boolean = true
     ): void {
         if (frames.length === 0) return;
-
-        const sequence: AnimationSequence = {
-            frames,
-            frameDurationMs,
-            loop,
-        };
-
-        const directionMap = new Map<number, AnimationSequence>();
-        directionMap.set(0, sequence);
-
-        const sequences = new Map<string, Map<number, AnimationSequence>>();
-        sequences.set('default', directionMap);
-
-        const animationData: AnimationData = {
-            sequences,
-            defaultSequence: 'default',
-        };
-
-        this.animatedMapObjects.set(type, {
-            staticSprite: frames[0],
-            animationData,
-            isAnimated: frames.length > 1,
-        });
+        const directionFrames = new Map<number, SpriteEntry[]>();
+        directionFrames.set(0, frames);
+        this.registerAnimatedEntity(EntityType.MapObject, type, directionFrames, frameDurationMs, loop);
     }
 
-    /**
-     * Get animated map object data.
-     */
+    /** @deprecated Use getAnimatedEntity instead */
     public getAnimatedMapObject(type: MapObjectType): AnimatedSpriteEntry | null {
-        return this.animatedMapObjects.get(type) ?? null;
+        return this.getAnimatedEntity(EntityType.MapObject, type);
     }
 
-    /**
-     * Check if a map object has animation data.
-     */
+    /** @deprecated Use hasAnimation instead */
     public hasMapObjectAnimation(type: MapObjectType): boolean {
-        const entry = this.animatedMapObjects.get(type);
-        return entry?.isAnimated ?? false;
+        return this.hasAnimation(EntityType.MapObject, type);
     }
 
     /**
@@ -812,8 +864,7 @@ export class SpriteMetadataRegistry {
     public clear(): void {
         this.buildings.clear();
         this.mapObjects.clear();
-        this.animatedBuildings.clear();
-        this.animatedMapObjects.clear();
+        this.animatedEntities.clear();
         this.resources.clear();
         this.units.clear();
     }
@@ -823,31 +874,63 @@ export class SpriteMetadataRegistry {
      * Converts Maps to arrays for JSON compatibility.
      */
     public serialize(): any {
-        // Helper to serialize nested AnimationData maps
-        const serializeAnimData = (entries: Map<any, AnimatedSpriteEntry>) => {
-            return mapToArray(entries).map(([key, entry]) => {
-                const sequences = mapToArray(entry.animationData.sequences).map(([seqKey, dirMap]) => {
-                    return [seqKey, mapToArray(dirMap)] as [string, Array<[number, AnimationSequence]>];
-                });
-
-                return [key, {
-                    ...entry,
-                    animationData: {
-                        ...entry.animationData,
-                        sequences // transformed sequences
-                    }
-                }];
+        // Helper to serialize AnimatedSpriteEntry (nested AnimationData maps)
+        const serializeAnimEntry = (entry: AnimatedSpriteEntry) => {
+            const sequences = mapToArray(entry.animationData.sequences).map(([seqKey, dirMap]) => {
+                return [seqKey, mapToArray(dirMap)] as [string, Array<[number, AnimationSequence]>];
             });
+            return {
+                ...entry,
+                animationData: {
+                    ...entry.animationData,
+                    sequences
+                }
+            };
         };
+
+        // Serialize unified animated entities map
+        const serializedAnimatedEntities = mapToArray(this.animatedEntities).map(([entityType, subTypeMap]) => {
+            return [entityType, mapToArray(subTypeMap).map(([subType, entry]) => [subType, serializeAnimEntry(entry)])];
+        });
 
         return {
             buildings: mapToArray(this.buildings),
             mapObjects: mapToArray(this.mapObjects),
             resources: mapToArray(this.resources).map(([k, v]) => [k, mapToArray(v)]),
             units: mapToArray(this.units).map(([k, v]) => [k, mapToArray(v)]),
-            animatedBuildings: serializeAnimData(this.animatedBuildings),
-            animatedMapObjects: serializeAnimData(this.animatedMapObjects),
+            animatedEntities: serializedAnimatedEntities,
         };
+    }
+
+    /** Helper to deserialize an AnimatedSpriteEntry from cached data */
+    private static deserializeAnimEntry(entryData: any): AnimatedSpriteEntry {
+        const sequences = new Map<string, Map<number, AnimationSequence>>();
+        if (entryData.animationData?.sequences) {
+            for (const [seqKey, dirArr] of entryData.animationData.sequences) {
+                sequences.set(seqKey, arrayToMap(dirArr));
+            }
+        }
+        return {
+            ...entryData,
+            animationData: { ...entryData.animationData, sequences }
+        };
+    }
+
+    /** Helper to deserialize legacy animated entity format into unified map */
+    private static deserializeLegacyAnimated(
+        legacyData: Array<[number, any]> | undefined,
+        entityType: EntityType,
+        targetMap: Map<EntityType, Map<number, AnimatedSpriteEntry>>
+    ): void {
+        if (!legacyData) return;
+        let subTypeMap = targetMap.get(entityType);
+        if (!subTypeMap) {
+            subTypeMap = new Map();
+            targetMap.set(entityType, subTypeMap);
+        }
+        for (const [type, entryData] of legacyData) {
+            subTypeMap.set(type, SpriteMetadataRegistry.deserializeAnimEntry(entryData));
+        }
     }
 
     /**
@@ -856,57 +939,38 @@ export class SpriteMetadataRegistry {
     public static deserialize(data: any): SpriteMetadataRegistry {
         const registry = new SpriteMetadataRegistry();
 
-        if (data.buildings) {
-            registry.buildings = arrayToMap(data.buildings);
-        }
-
-        if (data.mapObjects) {
-            registry.mapObjects = arrayToMap(data.mapObjects);
-        }
+        if (data.buildings) registry.buildings = arrayToMap(data.buildings);
+        if (data.mapObjects) registry.mapObjects = arrayToMap(data.mapObjects);
 
         if (data.resources) {
             registry.resources = new Map(
-                (data.resources as Array<[EMaterialType, Array<[number, SpriteEntry]>]>).map(([k, v]) => [k, arrayToMap(v)])
+                (data.resources as Array<[EMaterialType, Array<[number, SpriteEntry]>]>)
+                    .map(([k, v]) => [k, arrayToMap(v)])
             );
         }
 
         if (data.units) {
             registry.units = new Map(
-                (data.units as Array<[UnitType, Array<[number, SpriteEntry]>]>).map(([k, v]) => [k, arrayToMap(v)])
+                (data.units as Array<[UnitType, Array<[number, SpriteEntry]>]>)
+                    .map(([k, v]) => [k, arrayToMap(v)])
             );
         }
 
-        // Helper to deserialize nested AnimationData maps
-        const deserializeAnimData = (
-            arr: Array<[any, any]>,
-            targetMap: Map<any, AnimatedSpriteEntry>
-        ) => {
-            for (const [key, entryData] of arr) {
-                // Reconstruct sequences Map<string, Map<number, AnimationSequence>>
-                const sequences = new Map<string, Map<number, AnimationSequence>>();
-                if (entryData.animationData && Array.isArray(entryData.animationData.sequences)) {
-                    for (const [seqKey, dirArr] of entryData.animationData.sequences) {
-                        sequences.set(seqKey, arrayToMap(dirArr));
-                    }
+        // Deserialize unified animated entities
+        if (data.animatedEntities) {
+            for (const [entityType, subTypeArr] of data.animatedEntities) {
+                const subTypeMap = new Map<number, AnimatedSpriteEntry>();
+                for (const [subType, entryData] of subTypeArr) {
+                    subTypeMap.set(subType, SpriteMetadataRegistry.deserializeAnimEntry(entryData));
                 }
-
-                targetMap.set(key, {
-                    ...entryData,
-                    animationData: {
-                        ...entryData.animationData,
-                        sequences
-                    }
-                });
+                registry.animatedEntities.set(entityType, subTypeMap);
             }
-        };
-
-        if (data.animatedBuildings) {
-            deserializeAnimData(data.animatedBuildings, registry.animatedBuildings);
         }
 
-        if (data.animatedMapObjects) {
-            deserializeAnimData(data.animatedMapObjects, registry.animatedMapObjects);
-        }
+        // Legacy support: deserialize old format if present
+        SpriteMetadataRegistry.deserializeLegacyAnimated(data.animatedBuildings, EntityType.Building, registry.animatedEntities);
+        SpriteMetadataRegistry.deserializeLegacyAnimated(data.animatedMapObjects, EntityType.MapObject, registry.animatedEntities);
+        SpriteMetadataRegistry.deserializeLegacyAnimated(data.animatedUnits, EntityType.Unit, registry.animatedEntities);
 
         return registry;
     }
