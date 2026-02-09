@@ -14,11 +14,15 @@
  */
 
 import { GameState } from '../game-state';
-import { EntityType } from '../entity';
+import { Entity, EntityType, UnitType } from '../entity';
 import { MovementController } from './movement/movement-controller';
 import {
     AnimationState,
+    ANIMATION_SEQUENCES,
+    carrySequenceKey,
+    isCarrySequence,
     createAnimationState,
+    setAnimationSequence,
     startDirectionTransition,
     updateDirectionTransition
 } from '../animation';
@@ -73,6 +77,7 @@ export function updateIdleBehavior(state: GameState, deltaSec: number): void {
 
         const idleState = getIdleState(controller.entityId);
         entity.animationState = updateUnitAnimation(
+            entity,
             controller,
             idleState,
             entity.animationState,
@@ -83,8 +88,21 @@ export function updateIdleBehavior(state: GameState, deltaSec: number): void {
 }
 
 /**
+ * Determine the correct walk sequence key for a unit.
+ * Bearers carrying a material use a material-specific carry sequence;
+ * all other units (and empty bearers) use the generic walk sequence.
+ */
+function getWalkSequenceKey(entity: Entity): string {
+    if (entity.subType === UnitType.Bearer && entity.carriedMaterial !== undefined) {
+        return carrySequenceKey(entity.carriedMaterial);
+    }
+    return ANIMATION_SEQUENCES.WALK;
+}
+
+/**
  * Update animation state for a single unit based on its movement controller.
  *
+ * @param entity The unit entity (for checking carriedMaterial)
  * @param controller The unit's movement controller (provides movement state)
  * @param idleState The unit's idle animation state (owned by this system)
  * @param animState The current animation state (or undefined to create new)
@@ -93,6 +111,7 @@ export function updateIdleBehavior(state: GameState, deltaSec: number): void {
  * @returns Updated animation state
  */
 function updateUnitAnimation(
+    entity: Entity,
     controller: MovementController,
     idleState: IdleAnimationState,
     animState: AnimationState | undefined,
@@ -101,23 +120,33 @@ function updateUnitAnimation(
 ): AnimationState {
     // Create animation state if not present
     if (!animState) {
-        animState = createAnimationState('idle', 0);
+        animState = createAnimationState(ANIMATION_SEQUENCES.DEFAULT, 0);
     }
 
     // Update any in-progress direction transitions
     updateDirectionTransition(animState, deltaMs);
 
-    // If moving, update direction based on movement
+    // If moving, update direction and animation sequence
     if (controller.state === 'moving' && controller.isInTransit) {
         const newDir = controller.computeMovementDirection();
         if (newDir !== -1 && newDir !== animState.direction) {
             startDirectionTransition(animState, newDir);
+        }
+        // Ensure correct walk/carry animation is playing
+        const targetSeq = getWalkSequenceKey(entity);
+        if (animState.sequenceKey !== targetSeq) {
+            setAnimationSequence(animState, targetSeq, animState.direction);
         }
         // Reset idle state when moving
         idleState.idleTime = 0;
     }
     // If idle, handle random direction changes
     else if (controller.state === 'idle' && !controller.isInTransit) {
+        // Switch back to idle/default animation when stopped
+        if (animState.sequenceKey === ANIMATION_SEQUENCES.WALK || isCarrySequence(animState.sequenceKey)) {
+            setAnimationSequence(animState, ANIMATION_SEQUENCES.DEFAULT, animState.direction);
+        }
+
         idleState.idleTime += deltaSec;
 
         if (idleState.idleTime >= idleState.nextIdleTurnTime) {

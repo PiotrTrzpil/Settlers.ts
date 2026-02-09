@@ -11,6 +11,7 @@ import { EntityType } from '../entity';
 import {
     AnimationState,
     AnimationData,
+    ANIMATION_SEQUENCES,
     createAnimationState,
     updateAnimationState,
     getCurrentAnimationSprite,
@@ -85,7 +86,7 @@ export function updateAnimations(
         // Slow path: check if entity should be animated (runs once per entity)
         if (animationProvider.hasAnimation(entity.type, entity.subType)) {
             const defaultDir = DEFAULT_ANIMATION_DIRECTION[entity.type] ?? 0;
-            entity.animationState = createAnimationState('default', defaultDir);
+            entity.animationState = createAnimationState(ANIMATION_SEQUENCES.DEFAULT, defaultDir);
         }
     }
 }
@@ -151,6 +152,6 @@ export function initializeEntityAnimation(
 
     if (animationProvider.hasAnimation(entity.type, entity.subType)) {
         const defaultDir = DEFAULT_ANIMATION_DIRECTION[entity.type] ?? 0;
-        entity.animationState = createAnimationState('default', defaultDir);
+        entity.animationState = createAnimationState(ANIMATION_SEQUENCES.DEFAULT, defaultDir);
     }
 }
