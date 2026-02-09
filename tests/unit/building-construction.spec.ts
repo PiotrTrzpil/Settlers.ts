@@ -9,9 +9,8 @@ import { describe, it, expect } from 'vitest';
 import { BuildingType, getBuildingFootprint, EntityType } from '@/game/entity';
 import {
     BuildingConstructionPhase,
-    type BuildingState,
     type TerrainContext,
-    BuildingConstructionSystem,
+    type BuildingState,
     getBuildingVisualState,
     captureOriginalTerrain,
     applyTerrainLeveling,
@@ -20,38 +19,7 @@ import {
 } from '@/game/features/building-construction';
 import { GameState } from '@/game/game-state';
 import { createTestMap, TERRAIN } from './helpers/test-map';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function makeBuildingState(
-    tileX: number,
-    tileY: number,
-    buildingType: BuildingType,
-    overrides: Partial<BuildingState> = {},
-): BuildingState {
-    return {
-        entityId: 1,
-        buildingType,
-        phase: BuildingConstructionPhase.TerrainLeveling,
-        phaseProgress: 0,
-        totalDuration: 30,
-        elapsedTime: 0,
-        tileX,
-        tileY,
-        originalTerrain: null,
-        terrainModified: false,
-        ...overrides,
-    };
-}
-
-/** Create a BuildingConstructionSystem with terrain context, tick it once. */
-function tickConstruction(gameState: GameState, dt: number, ctx: TerrainContext): void {
-    const system = new BuildingConstructionSystem(gameState);
-    system.setTerrainContext(ctx);
-    system.tick(dt);
-}
+import { makeBuildingState, tickConstruction } from './helpers/test-game';
 
 // ---------------------------------------------------------------------------
 // Terrain Leveling

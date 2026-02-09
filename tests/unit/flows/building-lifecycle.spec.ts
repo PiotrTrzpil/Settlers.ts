@@ -15,11 +15,11 @@ import {
     addBuilding,
     placeBuilding,
     removeEntity,
+    tickConstruction,
 } from '../helpers/test-game';
 import { EntityType, BuildingType, getBuildingFootprint } from '@/game/entity';
 import {
     BuildingConstructionPhase,
-    BuildingConstructionSystem,
     captureOriginalTerrain,
     applyTerrainLeveling,
     restoreOriginalTerrain,
@@ -27,13 +27,6 @@ import {
     CONSTRUCTION_SITE_GROUND_TYPE,
     type TerrainContext,
 } from '@/game/features/building-construction';
-
-/** Create a BuildingConstructionSystem with terrain context, tick it once. */
-function tickConstruction(state: ReturnType<typeof createGameState>, dt: number, ctx: TerrainContext): void {
-    const system = new BuildingConstructionSystem(state);
-    system.setTerrainContext(ctx);
-    system.tick(dt);
-}
 
 describe('Building Lifecycle: place → construct → remove', () => {
     it('full lifecycle from placement through construction to removal', () => {

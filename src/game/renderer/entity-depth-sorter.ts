@@ -1,8 +1,4 @@
-import { IViewPoint } from './i-view-point';
 import { Entity, EntityType, BuildingType, UnitType, MapObjectType } from '../entity';
-import { UnitStateLookup } from '../game-state';
-import { MapSize } from '@/utilities/map-size';
-import { TilePicker } from '../input/tile-picker';
 import { SpriteEntry } from './sprite-metadata';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { EMaterialType } from '../economy';
@@ -12,15 +8,12 @@ import {
     DEPTH_FACTOR_UNIT,
     DEPTH_FACTOR_RESOURCE,
 } from './entity-renderer-constants';
+import { getEntityWorldPos, type WorldPositionContext } from './world-position';
 
 /**
  * Context needed for depth sorting entities.
  */
-export interface DepthSortContext {
-    mapSize: MapSize;
-    groundHeight: Uint8Array;
-    viewPoint: IViewPoint;
-    unitStates: UnitStateLookup;
+export interface DepthSortContext extends WorldPositionContext {
     spriteManager: SpriteRenderManager | null;
 }
 
@@ -54,7 +47,7 @@ export class EntityDepthSorter {
         // Compute depth keys for all entities
         for (let i = 0; i < count; i++) {
             const entity = entities[i];
-            const worldPos = this.getWorldPos(entity, ctx);
+            const worldPos = getEntityWorldPos(entity, ctx);
             const spriteEntry = this.getSpriteEntry(entity, ctx.spriteManager);
             this.depthKeys[i] = this.computeDepthKey(entity, worldPos.worldY, spriteEntry);
             this.sortIndices[i] = i;
@@ -72,55 +65,6 @@ export class EntityDepthSorter {
         for (let i = 0; i < count; i++) {
             entities[i] = this.sortTempEntities[i];
         }
-    }
-
-    /**
-     * Get world position for an entity (with interpolation for units).
-     */
-    private getWorldPos(entity: Entity, ctx: DepthSortContext): { worldX: number; worldY: number } {
-        if (entity.type === EntityType.Unit) {
-            return this.getInterpolatedWorldPos(entity, ctx);
-        }
-        return TilePicker.tileToWorld(
-            entity.x, entity.y,
-            ctx.groundHeight, ctx.mapSize,
-            ctx.viewPoint.x, ctx.viewPoint.y
-        );
-    }
-
-    /**
-     * Get the interpolated world position for a unit.
-     */
-    private getInterpolatedWorldPos(entity: Entity, ctx: DepthSortContext): { worldX: number; worldY: number } {
-        const unitState = ctx.unitStates.get(entity.id);
-
-        const isStationary = !unitState ||
-            (unitState.prevX === entity.x && unitState.prevY === entity.y);
-
-        if (isStationary) {
-            return TilePicker.tileToWorld(
-                entity.x, entity.y,
-                ctx.groundHeight, ctx.mapSize,
-                ctx.viewPoint.x, ctx.viewPoint.y
-            );
-        }
-
-        const prevPos = TilePicker.tileToWorld(
-            unitState.prevX, unitState.prevY,
-            ctx.groundHeight, ctx.mapSize,
-            ctx.viewPoint.x, ctx.viewPoint.y
-        );
-        const currPos = TilePicker.tileToWorld(
-            entity.x, entity.y,
-            ctx.groundHeight, ctx.mapSize,
-            ctx.viewPoint.x, ctx.viewPoint.y
-        );
-
-        const t = Math.max(0, Math.min(unitState.moveProgress, 1));
-        return {
-            worldX: prevPos.worldX + (currPos.worldX - prevPos.worldX) * t,
-            worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t
-        };
     }
 
     /**

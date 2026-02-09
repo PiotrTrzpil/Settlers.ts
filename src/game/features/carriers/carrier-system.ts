@@ -16,7 +16,7 @@
  */
 
 import type { TickSystem } from '../../tick-system';
-import type { EventBus } from '../../event-bus';
+import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
 import { CarrierManager } from './carrier-manager';
@@ -74,9 +74,8 @@ export class CarrierSystem implements TickSystem {
     /** Maps carrier entity ID to their pending delivery destination */
     private readonly pendingDeliveries: Map<number, number> = new Map();
 
-    /** Handler references for unsubscribing */
-    private movementStoppedHandler: ((payload: { entityId: number; direction: number }) => void) | undefined;
-    private carrierRemovedHandler: ((payload: { entityId: number; homeBuilding: number; hadActiveJob: boolean }) => void) | undefined;
+    /** Event subscription manager for cleanup */
+    private readonly subscriptions = new EventSubscriptionManager();
 
     constructor(config: CarrierSystemConfig) {
         this.carrierManager = config.carrierManager;
@@ -95,32 +94,21 @@ export class CarrierSystem implements TickSystem {
         this.carrierManager.registerEvents(eventBus);
 
         // Listen for movement stopped events to handle arrivals
-        this.movementStoppedHandler = (payload) => {
+        this.subscriptions.subscribe(eventBus, 'unit:movementStopped', (payload) => {
             this.handleMovementStopped(payload.entityId);
-        };
-        eventBus.on('unit:movementStopped', this.movementStoppedHandler);
+        });
 
         // Listen for carrier removal to cleanup pending state
-        this.carrierRemovedHandler = (payload) => {
+        this.subscriptions.subscribe(eventBus, 'carrier:removed', (payload) => {
             this.handleCarrierRemoved(payload.entityId);
-        };
-        eventBus.on('carrier:removed', this.carrierRemovedHandler);
+        });
     }
 
     /**
      * Unregister event handlers.
      */
     unregisterEvents(): void {
-        if (this.eventBus) {
-            if (this.movementStoppedHandler) {
-                this.eventBus.off('unit:movementStopped', this.movementStoppedHandler);
-                this.movementStoppedHandler = undefined;
-            }
-            if (this.carrierRemovedHandler) {
-                this.eventBus.off('carrier:removed', this.carrierRemovedHandler);
-                this.carrierRemovedHandler = undefined;
-            }
-        }
+        this.subscriptions.unsubscribeAll();
     }
 
     /**

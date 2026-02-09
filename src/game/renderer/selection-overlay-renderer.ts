@@ -1,8 +1,6 @@
-import { IViewPoint } from './i-view-point';
 import { Entity, EntityType } from '../entity';
-import { UnitStateLookup } from '../game-state';
-import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
+import { getEntityWorldPos, getInterpolatedWorldPos, type WorldPositionContext } from './world-position';
 import {
     FRAME_COLOR,
     FRAME_CORNER_COLOR,
@@ -25,12 +23,7 @@ import {
 /**
  * Context needed for rendering selection overlays.
  */
-export interface SelectionRenderContext {
-    mapSize: MapSize;
-    groundHeight: Uint8Array;
-    viewPoint: IViewPoint;
-    unitStates: UnitStateLookup;
-}
+export type SelectionRenderContext = WorldPositionContext;
 
 /**
  * Renders selection-related overlays: selection frames and unit paths.
@@ -61,7 +54,7 @@ export class SelectionOverlayRenderer {
             if (entity.type === EntityType.Unit) continue;
 
             const scale = this.getEntityScale(entity.type);
-            const worldPos = this.getWorldPos(entity, ctx);
+            const worldPos = getEntityWorldPos(entity, ctx);
 
             gl.vertexAttrib2f(aEntityPos, worldPos.worldX, worldPos.worldY);
 
@@ -200,7 +193,7 @@ export class SelectionOverlayRenderer {
             if (entity.type !== EntityType.Unit) continue;
 
             // Get interpolated world position (where sprite is rendered)
-            const worldPos = this.getInterpolatedWorldPos(entity, ctx);
+            const worldPos = getInterpolatedWorldPos(entity, ctx);
 
             // Draw larger dot on the unit sprite (offset upward to appear above sprite)
             // Note: negative Y offset moves up in world coordinates
@@ -244,55 +237,6 @@ export class SelectionOverlayRenderer {
         if (entityType === EntityType.Building) return BUILDING_SCALE;
         if (entityType === EntityType.StackedResource) return RESOURCE_SCALE;
         return UNIT_SCALE;
-    }
-
-    /**
-     * Get world position for an entity (with interpolation for units).
-     */
-    private getWorldPos(entity: Entity, ctx: SelectionRenderContext): { worldX: number; worldY: number } {
-        if (entity.type === EntityType.Unit) {
-            return this.getInterpolatedWorldPos(entity, ctx);
-        }
-        return TilePicker.tileToWorld(
-            entity.x, entity.y,
-            ctx.groundHeight, ctx.mapSize,
-            ctx.viewPoint.x, ctx.viewPoint.y
-        );
-    }
-
-    /**
-     * Get the interpolated world position for a unit.
-     */
-    private getInterpolatedWorldPos(entity: Entity, ctx: SelectionRenderContext): { worldX: number; worldY: number } {
-        const unitState = ctx.unitStates.get(entity.id);
-
-        const isStationary = !unitState ||
-            (unitState.prevX === entity.x && unitState.prevY === entity.y);
-
-        if (isStationary) {
-            return TilePicker.tileToWorld(
-                entity.x, entity.y,
-                ctx.groundHeight, ctx.mapSize,
-                ctx.viewPoint.x, ctx.viewPoint.y
-            );
-        }
-
-        const prevPos = TilePicker.tileToWorld(
-            unitState.prevX, unitState.prevY,
-            ctx.groundHeight, ctx.mapSize,
-            ctx.viewPoint.x, ctx.viewPoint.y
-        );
-        const currPos = TilePicker.tileToWorld(
-            entity.x, entity.y,
-            ctx.groundHeight, ctx.mapSize,
-            ctx.viewPoint.x, ctx.viewPoint.y
-        );
-
-        const t = Math.max(0, Math.min(unitState.moveProgress, 1));
-        return {
-            worldX: prevPos.worldX + (currPos.worldX - prevPos.worldX) * t,
-            worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t
-        };
     }
 
     /**

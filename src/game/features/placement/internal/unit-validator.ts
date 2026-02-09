@@ -3,10 +3,8 @@
  * Validates single-tile unit placement (similar to resources but for units).
  */
 
-import { tileKey } from '../../../entity';
 import type { PlacementContext, PlacementResult } from '../types';
-import { PlacementStatus } from '../types';
-import { isPassable } from './terrain';
+import { validateSingleTilePlacement, canPlaceSingleTile } from './single-tile-validator';
 
 /**
  * Validate unit placement with detailed status.
@@ -25,25 +23,7 @@ export function validateUnitPlacement(
     y: number,
     ctx: PlacementContext
 ): PlacementResult {
-    // Bounds check
-    if (x < 0 || y < 0 || x >= ctx.mapSize.width || y >= ctx.mapSize.height) {
-        return { canPlace: false, status: PlacementStatus.InvalidTerrain };
-    }
-
-    const idx = ctx.mapSize.toIndex(x, y);
-
-    // Must be passable terrain (not water, rock)
-    if (!isPassable(ctx.groundType[idx])) {
-        return { canPlace: false, status: PlacementStatus.InvalidTerrain };
-    }
-
-    // Must not be occupied
-    if (ctx.tileOccupancy.has(tileKey(x, y))) {
-        return { canPlace: false, status: PlacementStatus.Occupied };
-    }
-
-    // Units don't care about slope - always "Easy" if valid
-    return { canPlace: true, status: PlacementStatus.Easy };
+    return validateSingleTilePlacement(x, y, ctx);
 }
 
 /**
@@ -57,11 +37,5 @@ export function canPlaceUnit(
     x: number,
     y: number
 ): boolean {
-    const ctx: PlacementContext = {
-        groundType,
-        groundHeight: new Uint8Array(0), // Not needed for units
-        mapSize,
-        tileOccupancy,
-    };
-    return validateUnitPlacement(x, y, ctx).canPlace;
+    return canPlaceSingleTile(groundType, mapSize, tileOccupancy, x, y);
 }

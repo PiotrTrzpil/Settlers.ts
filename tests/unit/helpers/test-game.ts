@@ -7,12 +7,59 @@
 
 import { GameState, UnitStateView } from '@/game/game-state';
 import { EntityType, BuildingType, type Entity } from '@/game/entity';
-import { type TestMap } from './test-map';
+import { createTestMap, type TestMap } from './test-map';
+import { EventBus } from '@/game/event-bus';
 
 // ─── GameState factory ──────────────────────────────────────────────
 
 export function createGameState(): GameState {
     return new GameState();
+}
+
+// ─── Unified test context ───────────────────────────────────────────
+
+/**
+ * Complete test context with all common test objects.
+ * Reduces boilerplate in test files that need multiple objects.
+ *
+ * @example
+ * ```ts
+ * let ctx: TestContext;
+ * beforeEach(() => { ctx = createTestContext(); });
+ *
+ * it('test', () => {
+ *     const building = addBuilding(ctx.state, 5, 5, BuildingType.WoodcutterHut);
+ *     // ...
+ * });
+ * ```
+ */
+export interface TestContext {
+    state: GameState;
+    map: TestMap;
+    eventBus: EventBus;
+}
+
+/**
+ * Create a complete test context with GameState, TestMap, and EventBus.
+ * The state is initialized with terrain data from the map.
+ *
+ * @param mapWidth - Map width (default: 64)
+ * @param mapHeight - Map height (default: 64)
+ */
+export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
+    const state = new GameState();
+    const map = createTestMap(mapWidth, mapHeight);
+    const eventBus = new EventBus();
+
+    // Initialize terrain data on state
+    state.setTerrainData(
+        map.groundType,
+        map.groundHeight,
+        map.mapSize.width,
+        map.mapSize.height,
+    );
+
+    return { state, map, eventBus };
 }
 
 // ─── Entity creation helpers ────────────────────────────────────────
@@ -120,11 +167,53 @@ export function createReturnHomeJob(): CarrierJob {
     return { type: 'return_home' };
 }
 
+// ─── Building construction helpers ──────────────────────────────────
+
+import {
+    BuildingConstructionPhase,
+    BuildingConstructionSystem,
+    type BuildingState,
+    type TerrainContext,
+} from '@/game/features/building-construction';
+
+/**
+ * Create a BuildingState object for testing building construction.
+ * Useful for testing terrain leveling and construction phases.
+ */
+export function makeBuildingState(
+    tileX: number,
+    tileY: number,
+    buildingType: BuildingType,
+    overrides: Partial<BuildingState> = {},
+): BuildingState {
+    return {
+        entityId: 1,
+        buildingType,
+        phase: BuildingConstructionPhase.TerrainLeveling,
+        phaseProgress: 0,
+        totalDuration: 30,
+        elapsedTime: 0,
+        tileX,
+        tileY,
+        originalTerrain: null,
+        terrainModified: false,
+        ...overrides,
+    };
+}
+
+/**
+ * Create a BuildingConstructionSystem with terrain context and tick it.
+ * Used for testing construction progression.
+ */
+export function tickConstruction(gameState: GameState, dt: number, ctx: TerrainContext): void {
+    const system = new BuildingConstructionSystem(gameState);
+    system.setTerrainContext(ctx);
+    system.tick(dt);
+}
+
 // ─── Command execution helpers ──────────────────────────────────────
 
 import { executeCommand } from '@/game/commands';
-import { EventBus } from '@/game/event-bus';
-import { BuildingConstructionSystem } from '@/game/features/building-construction';
 
 /**
  * Create an EventBus wired up with a BuildingConstructionSystem for terrain restoration.

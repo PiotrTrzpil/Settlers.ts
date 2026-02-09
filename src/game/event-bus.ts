@@ -176,3 +176,63 @@ export class EventBus {
         this.handlers.clear();
     }
 }
+
+/**
+ * Helper class to manage event subscriptions and unsubscribe all at once.
+ * Reduces boilerplate when a system needs to track multiple event handlers.
+ *
+ * @example
+ * ```ts
+ * class MySystem {
+ *     private subscriptions = new EventSubscriptionManager();
+ *
+ *     registerEvents(eventBus: EventBus): void {
+ *         this.subscriptions.subscribe(eventBus, 'unit:movementStopped', (payload) => {
+ *             this.handleMovementStopped(payload.entityId);
+ *         });
+ *     }
+ *
+ *     unregisterEvents(): void {
+ *         this.subscriptions.unsubscribeAll();
+ *     }
+ * }
+ * ```
+ */
+export class EventSubscriptionManager {
+    private subscriptions: Array<{
+        eventBus: EventBus;
+        event: keyof GameEvents;
+        handler: EventHandler<any>;
+    }> = [];
+
+    /**
+     * Subscribe to an event and track the subscription for later cleanup.
+     */
+    subscribe<K extends keyof GameEvents>(
+        eventBus: EventBus,
+        event: K,
+        handler: EventHandler<GameEvents[K]>,
+    ): void {
+        eventBus.on(event, handler);
+        this.subscriptions.push({ eventBus, event, handler });
+    }
+
+    /**
+     * Unsubscribe from all tracked events.
+     * Call this in unregisterEvents() to clean up all handlers.
+     */
+    unsubscribeAll(): void {
+        for (const { eventBus, event, handler } of this.subscriptions) {
+            eventBus.off(event, handler);
+        }
+        this.subscriptions = [];
+    }
+
+    /**
+     * Get the number of active subscriptions.
+     * Useful for testing/debugging.
+     */
+    get count(): number {
+        return this.subscriptions.length;
+    }
+}

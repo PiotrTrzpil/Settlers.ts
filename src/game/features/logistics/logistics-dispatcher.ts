@@ -11,7 +11,7 @@
  */
 
 import type { TickSystem } from '../../tick-system';
-import type { EventBus } from '../../event-bus';
+import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import type { GameState } from '../../game-state';
 import type { CarrierSystem } from '../carriers';
 import type { RequestManager } from './request-manager';
@@ -62,20 +62,8 @@ export class LogisticsDispatcher implements TickSystem {
     /** Accumulated time since last stall check (in ms) */
     private timeSinceStallCheck: number = 0;
 
-    /** Event handlers for cleanup */
-    private deliveryCompleteHandler: ((payload: {
-        entityId: number;
-        toBuilding: number;
-        material: number;
-        amount: number;
-        overflow: number;
-    }) => void) | undefined;
-
-    private carrierRemovedHandler: ((payload: {
-        entityId: number;
-        homeBuilding: number;
-        hadActiveJob: boolean;
-    }) => void) | undefined;
+    /** Event subscription manager for cleanup */
+    private readonly subscriptions = new EventSubscriptionManager();
 
     constructor(config: LogisticsDispatcherConfig) {
         this.gameState = config.gameState;
@@ -92,32 +80,21 @@ export class LogisticsDispatcher implements TickSystem {
         this.eventBus = eventBus;
 
         // Listen for delivery completions to fulfill requests
-        this.deliveryCompleteHandler = (payload) => {
+        this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', (payload) => {
             this.handleDeliveryComplete(payload.entityId);
-        };
-        eventBus.on('carrier:deliveryComplete', this.deliveryCompleteHandler);
+        });
 
         // Listen for carrier removal to reset requests
-        this.carrierRemovedHandler = (payload) => {
+        this.subscriptions.subscribe(eventBus, 'carrier:removed', (payload) => {
             this.handleCarrierRemoved(payload.entityId);
-        };
-        eventBus.on('carrier:removed', this.carrierRemovedHandler);
+        });
     }
 
     /**
      * Unregister event handlers.
      */
     unregisterEvents(): void {
-        if (this.eventBus) {
-            if (this.deliveryCompleteHandler) {
-                this.eventBus.off('carrier:deliveryComplete', this.deliveryCompleteHandler);
-                this.deliveryCompleteHandler = undefined;
-            }
-            if (this.carrierRemovedHandler) {
-                this.eventBus.off('carrier:removed', this.carrierRemovedHandler);
-                this.carrierRemovedHandler = undefined;
-            }
-        }
+        this.subscriptions.unsubscribeAll();
     }
 
     /**
