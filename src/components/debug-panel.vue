@@ -83,6 +83,12 @@
             <span class="stat-label">Sprite count</span>
             <span class="stat-value">{{ stats.loadTimings.spriteCount }}</span>
           </div>
+          <div class="stat-row">
+            <span class="stat-label">Cache</span>
+            <span class="stat-value" :class="cacheClass">
+              {{ cacheLabel }}
+            </span>
+          </div>
         </div>
       </section>
 
@@ -333,6 +339,20 @@ const fpsClass = computed(() => {
     if (stats.fps >= 30) return 'fps-ok';
     return 'fps-bad';
 });
+
+const cacheLabel = computed(() => {
+    if (!stats.loadTimings.cacheHit) return 'MISS';
+    if (stats.loadTimings.cacheSource === 'module') return 'HIT (HMR)';
+    if (stats.loadTimings.cacheSource === 'indexeddb') return 'HIT (IDB)';
+    return 'HIT';
+});
+
+const cacheClass = computed(() => {
+    if (!stats.loadTimings.cacheHit) return 'cache-miss';
+    if (stats.loadTimings.cacheSource === 'module') return 'cache-hit-hmr';
+    if (stats.loadTimings.cacheSource === 'indexeddb') return 'cache-hit-idb';
+    return 'cache-hit-hmr';
+});
 </script>
 
 <style scoped>
@@ -446,6 +466,10 @@ const fpsClass = computed(() => {
 .fps-good { color: #80c080; }
 .fps-ok { color: #d4a030; }
 .fps-bad { color: #d04040; }
+
+.cache-hit-hmr { color: #80c080; font-weight: bold; }
+.cache-hit-idb { color: #80b0c0; font-weight: bold; }
+.cache-miss { color: #7a6a4a; }
 
 .total-row {
   margin-top: 4px;

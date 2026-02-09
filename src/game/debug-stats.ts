@@ -18,6 +18,10 @@ export interface LoadTimings {
     totalSprites: number;
     atlasSize: string;
     spriteCount: number;
+    /** True if sprites were restored from cache */
+    cacheHit: boolean;
+    /** Cache source: 'module' (HMR), 'indexeddb' (refresh), or null (miss) */
+    cacheSource: 'module' | 'indexeddb' | null;
 }
 
 export interface DebugStatsState {
@@ -171,6 +175,8 @@ class DebugStats {
                 totalSprites: 0,
                 atlasSize: '',
                 spriteCount: 0,
+                cacheHit: false,
+                cacheSource: null,
             },
             fps: 0,
             frameTimeMs: 0,

@@ -1,6 +1,15 @@
 import { type Page, type Locator, expect } from '@playwright/test';
 
 /**
+ * Mirrors LoadTimings from src/game/debug-stats.ts.
+ */
+interface LoadTimings {
+    totalSprites: number;
+    cacheHit: boolean;
+    cacheSource: 'module' | 'indexeddb' | null;
+}
+
+/**
  * Mirrors DebugStatsState from src/game/debug-stats.ts.
  * Only the fields tests actually need — kept minimal to avoid drift.
  */
@@ -26,6 +35,8 @@ interface SettlersDebug {
     musicEnabled: boolean;
     musicPlaying: boolean;
     currentMusicId: string | null;
+    // Load timings
+    loadTimings: LoadTimings;
 }
 
 /**
@@ -527,5 +538,32 @@ export class GamePage {
         await this.canvas.click();
         // Wait for potential audio context resume
         await this.page.waitForTimeout(100);
+    }
+
+    // ── Sprite cache helpers ─────────────────────────────────
+
+    /** Get sprite load timings from debug state. */
+    async getLoadTimings(): Promise<LoadTimings> {
+        return this.page.evaluate(() => {
+            const d = (window as any).__settlers_debug__;
+            return {
+                totalSprites: d?.loadTimings?.totalSprites ?? 0,
+                cacheHit: d?.loadTimings?.cacheHit ?? false,
+                cacheSource: d?.loadTimings?.cacheSource ?? null,
+            };
+        });
+    }
+
+    /** Clear the IndexedDB sprite atlas cache. */
+    async clearSpriteCache(): Promise<void> {
+        await this.page.evaluate(async() => {
+            const DB_NAME = 'settlers-atlas-cache';
+            return new Promise<void>((resolve) => {
+                const request = indexedDB.deleteDatabase(DB_NAME);
+                request.onsuccess = () => resolve();
+                request.onerror = () => resolve();
+                request.onblocked = () => resolve();
+            });
+        });
     }
 }

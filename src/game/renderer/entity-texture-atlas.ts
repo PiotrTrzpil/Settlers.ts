@@ -1,5 +1,6 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { ShaderTexture } from './shader-texture';
+import type { CachedSlot } from './sprite-atlas-cache';
 
 /**
  * Padding in pixels around each sprite to prevent texture bleeding
@@ -397,5 +398,90 @@ export class EntityTextureAtlas extends ShaderTexture {
                 this.imgData[idx + 3] = 255; // A
             }
         }
+    }
+
+    /**
+     * Get the raw image data for caching.
+     */
+    public getImageData(): Uint8Array {
+        return this.imgData;
+    }
+
+    /**
+     * Get the slot layout for caching.
+     */
+    public getSlots(): CachedSlot[] {
+        return this.slots.map(s => ({
+            x: s.x,
+            y: s.y,
+            width: s.width,
+            height: s.height,
+        }));
+    }
+
+    /**
+     * Get the maximum size for caching.
+     */
+    public getMaxSize(): number {
+        return this.maxSize;
+    }
+
+    /**
+     * Restore atlas state from cached data.
+     * This allows skipping sprite decoding on HMR by restoring
+     * previously decoded atlas data.
+     *
+     * @param imgData Raw RGBA pixel data
+     * @param width Atlas width
+     * @param height Atlas height
+     * @param slots Slot layout for row-based packing
+     */
+    public restoreFromCache(
+        imgData: Uint8Array,
+        width: number,
+        height: number,
+        slots: CachedSlot[]
+    ): void {
+        const start = performance.now();
+
+        this.imgData = imgData;
+        this.atlasWidth = width;
+        this.atlasHeight = height;
+
+        // Restore slots
+        this.slots = slots.map(s => {
+            const slot = new Slot(s.y, s.width, s.height);
+            slot.x = s.x;
+            return slot;
+        });
+
+        // Clear reserved regions - they'll be repopulated via registry
+        this.reservedRegions = [];
+
+        // Reset GPU state to force re-upload
+        this.gpuWidth = 0;
+        this.gpuHeight = 0;
+
+        const elapsed = performance.now() - start;
+        EntityTextureAtlas.log.debug(
+            `Restored atlas from cache: ${width}x${height} in ${elapsed.toFixed(1)}ms`
+        );
+    }
+
+    /**
+     * Create a new atlas instance restored from cached data.
+     * Static factory method for cleaner cache restoration.
+     */
+    public static fromCache(
+        imgData: Uint8Array,
+        width: number,
+        height: number,
+        maxSize: number,
+        slots: CachedSlot[],
+        textureUnit: number
+    ): EntityTextureAtlas {
+        const atlas = new EntityTextureAtlas(maxSize, textureUnit);
+        atlas.restoreFromCache(imgData, width, height, slots);
+        return atlas;
     }
 }

@@ -9,6 +9,10 @@ export default defineConfig({
         vue(),
         glsl()
     ],
+    define: {
+        // Build timestamp for cache invalidation on server restart
+        __BUILD_TIME__: JSON.stringify(Date.now().toString()),
+    },
     resolve: {
         alias: {
             '@': resolve(__dirname, 'src')

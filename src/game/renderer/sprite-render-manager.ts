@@ -26,6 +26,13 @@ import { BuildingType, MapObjectType, UnitType } from '../entity';
 import { ANIMATION_DEFAULTS, AnimationData } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy/material-type';
+import {
+    getAtlasCache,
+    setAtlasCache,
+    getIndexedDBCache,
+    setIndexedDBCache,
+    type CachedAtlasData,
+} from './sprite-atlas-cache';
 
 /** Simple timer for measuring phases */
 function createTimer() {
@@ -294,9 +301,136 @@ export class SpriteRenderManager {
     }
 
     /**
+     * Try to restore sprites from the module-level cache (sync, for HMR).
+     * Returns true if cache was hit and sprites restored successfully.
+     */
+    private tryRestoreFromModuleCache(gl: WebGL2RenderingContext, race: Race): boolean {
+        const cached = getAtlasCache(race);
+        if (!cached) return false;
+
+        this.restoreFromCachedData(gl, cached, 'module');
+        return true;
+    }
+
+    /**
+     * Try to restore sprites from IndexedDB cache (async, for page refresh).
+     * Returns true if cache was hit and sprites restored successfully.
+     */
+    private async tryRestoreFromIndexedDB(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
+        const cached = await getIndexedDBCache(race);
+        if (!cached) {
+            return false;
+        }
+
+        this.restoreFromCachedData(gl, cached, 'indexeddb');
+
+        // Also populate module cache for future HMR hits
+        setAtlasCache(race, cached);
+
+        return true;
+    }
+
+    /**
+     * Common restore logic for both cache tiers.
+     */
+    private restoreFromCachedData(
+        gl: WebGL2RenderingContext,
+        cached: CachedAtlasData,
+        source: 'module' | 'indexeddb'
+    ): void {
+        const start = performance.now();
+
+        // Restore atlas from cached data
+        const atlas = EntityTextureAtlas.fromCache(
+            cached.imgData,
+            cached.width,
+            cached.height,
+            cached.maxSize,
+            cached.slots,
+            cached.textureUnit
+        );
+
+        // Restore registry from serialized data
+        const registry = SpriteMetadataRegistry.deserialize(cached.registryData);
+
+        // Upload to GPU
+        atlas.update(gl);
+
+        // Set as active
+        this._spriteAtlas = atlas;
+        this._spriteRegistry = registry;
+
+        const elapsed = performance.now() - start;
+
+        // Record cache hit in debug stats
+        const lt = debugStats.state.loadTimings;
+        Object.assign(lt, {
+            filePreload: 0,
+            atlasAlloc: 0,
+            buildings: 0,
+            mapObjects: 0,
+            resources: 0,
+            units: 0,
+            gpuUpload: Math.round(elapsed),
+            totalSprites: Math.round(elapsed),
+            atlasSize: `${atlas.width}x${atlas.height}`,
+            spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
+                registry.getResourceCount() + registry.getUnitCount(),
+            cacheHit: true,
+            cacheSource: source,
+        });
+
+        const sourceLabel = source === 'module' ? 'module cache (HMR)' : 'IndexedDB (refresh)';
+        SpriteRenderManager.log.debug(
+            `Restored sprites from ${sourceLabel} for ${Race[cached.race]} in ${elapsed.toFixed(1)}ms ` +
+            `(${atlas.width}x${atlas.height}, ${registry.getBuildingCount()} buildings)`
+        );
+    }
+
+    /**
+     * Save current atlas and registry to both cache tiers.
+     */
+    private async saveToCache(race: Race): Promise<void> {
+        if (!this._spriteAtlas || !this._spriteRegistry) {
+            return;
+        }
+
+        const cacheData: CachedAtlasData = {
+            imgData: this._spriteAtlas.getImageData(),
+            width: this._spriteAtlas.width,
+            height: this._spriteAtlas.height,
+            maxSize: this._spriteAtlas.getMaxSize(),
+            slots: this._spriteAtlas.getSlots(),
+            registryData: this._spriteRegistry.serialize(),
+            race,
+            textureUnit: this.textureUnit,
+            timestamp: Date.now(),
+        };
+
+        // Save to module cache (sync, for HMR)
+        setAtlasCache(race, cacheData);
+
+        // Save to IndexedDB (async, for page refresh) - don't await to avoid blocking
+        setIndexedDBCache(race, cacheData).catch(e => {
+            SpriteRenderManager.log.debug(`IndexedDB save failed (non-fatal): ${e}`);
+        });
+    }
+
+    /**
      * Load sprites for a specific race.
      */
     private async loadSpritesForRace(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
+        // Tier 1: Try module-level cache (instant, survives HMR)
+        if (this.tryRestoreFromModuleCache(gl, race)) {
+            return true;
+        }
+
+        // Tier 2: Try IndexedDB cache (fast, survives page refresh)
+        if (await this.tryRestoreFromIndexedDB(gl, race)) {
+            return true;
+        }
+
+        // Tier 3: Full load from files
         const t = createTimer();
         const spriteMap = getBuildingSpriteMap(race);
 
@@ -366,6 +500,10 @@ export class SpriteRenderManager {
         atlas.update(gl);
         const gpuUpload = t.lap();
 
+        // Save to module-level cache for HMR
+        this.saveToCache(race);
+        const cacheTime = t.lap();
+
         // Record timings to debug stats
         const lt = debugStats.state.loadTimings;
         Object.assign(lt, {
@@ -374,12 +512,14 @@ export class SpriteRenderManager {
             atlasSize: `${atlas.width}x${atlas.height}`,
             spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
                 registry.getResourceCount() + registry.getUnitCount(),
+            cacheHit: false,
+            cacheSource: null,
         });
 
         SpriteRenderManager.log.debug(
             `Sprite loading (ms): preload=${filePreload}, buildings=${buildings}, ` +
             `mapObj=${mapObjects}, resources=${resources}, units=${units}, ` +
-            `gpu=${gpuUpload}, TOTAL=${t.total()}, workers=${getDecoderPool().getDecodeCount()}`
+            `gpu=${gpuUpload}, cache=${cacheTime}, TOTAL=${t.total()}, workers=${getDecoderPool().getDecodeCount()}`
         );
 
         return registry.hasBuildingSprites() || registry.hasMapObjectSprites() ||
