@@ -9,7 +9,7 @@ import { watch, onMounted, onUnmounted, ref, type Ref } from 'vue';
 import { Game } from '@/game/game';
 import { LandscapeRenderer } from '@/game/renderer/landscape/landscape-renderer';
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
-import { Renderer } from '@/game/renderer/renderer';
+import { Renderer, type FrameRenderTiming } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { type TileCoord } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
@@ -127,13 +127,13 @@ function clearPlacementModeState(er: EntityRenderer): void {
     er.placementPreview = null;
 }
 
-/** Create the render callback that runs each frame. */
+/** Create the render callback that runs each frame. Returns render timing data. */
 function createRenderCallback(
     getContext: () => CallbackContext,
     renderer: Renderer,
     selectionBox: Ref<SelectionBox | null>
-): (alpha: number, deltaSec: number) => void {
-    return (alpha: number, deltaSec: number) => {
+): (alpha: number, deltaSec: number) => FrameRenderTiming | null {
+    return (alpha: number, deltaSec: number): FrameRenderTiming | null => {
         const ctx = getContext();
         const { game: g, entityRenderer: er, landscapeRenderer, inputManager } = ctx;
 
@@ -177,6 +177,9 @@ function createRenderCallback(
         debugStats.state.canvasHeight = renderer.canvas.height;
 
         renderer.drawOnce();
+
+        // Return render timing for the game loop to aggregate
+        return renderer.getLastRenderTiming();
     };
 }
 

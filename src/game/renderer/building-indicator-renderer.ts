@@ -33,12 +33,9 @@ const INDICATOR_DOT_SCALE = 0.4;
 const HOVER_DOT_SCALE = 0.5;
 const HOVER_RING_SCALE = 0.6;
 
-// Base quad for dot rendering
-const BASE_QUAD = new Float32Array([
-    -0.5, -0.5, 0.5, -0.5,
-    -0.5, 0.5, -0.5, 0.5,
-    0.5, -0.5, 0.5, 0.5
-]);
+// Maximum indicators to batch (6 vertices * 6 floats per vertex)
+const MAX_BATCH_INDICATORS = 2000;
+const FLOATS_PER_INDICATOR = 6 * 6; // 6 vertices, 6 floats each (x, y, r, g, b, a)
 
 /**
  * Check if a placement status allows building (shows an indicator).
@@ -67,14 +64,14 @@ export class BuildingIndicatorRenderer {
 
     // Cached attribute locations
     private aPosition = -1;
-    private aEntityPos = -1;
     private aColor = -1;
 
-    // Reusable vertex buffer
-    private vertexData = new Float32Array(6 * 2);
+    // Batched vertex buffer (x, y, r, g, b, a per vertex, 6 vertices per quad)
+    private batchBuffer: Float32Array = new Float32Array(MAX_BATCH_INDICATORS * FLOATS_PER_INDICATOR);
+    private batchCount = 0;
 
-    // Cached indicator data (recomputed when viewport changes significantly)
-    private indicatorCache: Map<string, PlacementStatus> = new Map();
+    // Cached indicator data with numeric coords (avoid string parsing in draw loop)
+    private indicatorCache: Array<{ x: number; y: number; status: PlacementStatus }> = [];
     private cacheViewX = 0;
     private cacheViewY = 0;
     private cacheZoom = 0;
@@ -110,7 +107,6 @@ export class BuildingIndicatorRenderer {
         this.shaderProgram.create();
 
         this.aPosition = this.shaderProgram.getAttribLocation('a_position');
-        this.aEntityPos = this.shaderProgram.getAttribLocation('a_entityPos');
         this.aColor = this.shaderProgram.getAttribLocation('a_color');
 
         this.dynamicBuffer = gl.createBuffer();
@@ -197,9 +193,10 @@ export class BuildingIndicatorRenderer {
 
     /**
      * Rebuild the indicator cache for visible tiles.
+     * Only stores buildable tiles to minimize draw loop iterations.
      */
     private rebuildCache(viewPoint: IViewPoint): void {
-        this.indicatorCache.clear();
+        this.indicatorCache.length = 0;
 
         // Compute visible tile range based on viewport
         // zoom = 0.1 / zoomValue, so smaller zoom = more zoomed out = larger visible area
@@ -219,7 +216,10 @@ export class BuildingIndicatorRenderer {
         for (let y = minY; y <= maxY; y++) {
             for (let x = minX; x <= maxX; x++) {
                 const status = this.computePlacementStatus(x, y);
-                this.indicatorCache.set(tileKey(x, y), status);
+                // Only store buildable tiles (skip invalid ones entirely)
+                if (isBuildableStatus(status)) {
+                    this.indicatorCache.push({ x, y, status });
+                }
             }
         }
 
@@ -231,7 +231,7 @@ export class BuildingIndicatorRenderer {
     }
 
     /**
-     * Draw building placement indicators.
+     * Draw building placement indicators using batched rendering.
      */
     public draw(
         gl: WebGL2RenderingContext,
@@ -247,26 +247,21 @@ export class BuildingIndicatorRenderer {
             this.rebuildCache(viewPoint);
         }
 
+        if (this.indicatorCache.length === 0) {
+            return;
+        }
+
         // Setup shader
         this.shaderProgram.use();
         this.shaderProgram.setMatrix('projection', projection);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
-        gl.enableVertexAttribArray(this.aPosition);
-        gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
-        gl.disableVertexAttribArray(this.aEntityPos);
-        gl.disableVertexAttribArray(this.aColor);
+        // Build batched vertex data
+        this.batchCount = 0;
 
-        // Draw only buildable indicators (skip invalid tiles - no dot shown)
-        for (const [key, status] of this.indicatorCache) {
-            // Only show indicators for tiles where building is possible
-            if (!isBuildableStatus(status)) {
-                continue;
-            }
+        for (const indicator of this.indicatorCache) {
+            if (this.batchCount >= MAX_BATCH_INDICATORS) break;
 
-            const [xStr, yStr] = key.split(',');
-            const x = parseInt(xStr, 10);
-            const y = parseInt(yStr, 10);
+            const { x, y, status } = indicator;
 
             const isHovered = this.hoveredTile &&
                               this.hoveredTile.x === x &&
@@ -278,37 +273,64 @@ export class BuildingIndicatorRenderer {
                 viewPoint.x, viewPoint.y
             );
 
-            // Draw indicator dot
             const color = isHovered ? HOVER_COLOR : STATUS_COLORS[status];
             const scale = isHovered ? HOVER_DOT_SCALE : INDICATOR_DOT_SCALE;
 
-            gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
-            this.fillQuadVertices(0, 0, scale);
-            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-            gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            this.addQuadToBatch(worldPos.worldX, worldPos.worldY, scale, color);
 
-            // Draw hover ring
-            if (isHovered) {
-                this.fillQuadVertices(0, 0, HOVER_RING_SCALE);
-                gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-                gl.vertexAttrib4f(this.aColor,
-                    HOVER_RING_COLOR[0], HOVER_RING_COLOR[1],
-                    HOVER_RING_COLOR[2], HOVER_RING_COLOR[3]);
-                gl.drawArrays(gl.TRIANGLES, 0, 6);
+            // Add hover ring as additional quad
+            if (isHovered && this.batchCount < MAX_BATCH_INDICATORS) {
+                this.addQuadToBatch(worldPos.worldX, worldPos.worldY, HOVER_RING_SCALE, HOVER_RING_COLOR);
             }
         }
+
+        if (this.batchCount === 0) return;
+
+        // Upload and draw all indicators in one call
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, this.batchBuffer.subarray(0, this.batchCount * FLOATS_PER_INDICATOR), gl.DYNAMIC_DRAW);
+
+        // Position attribute: 2 floats at offset 0, stride 6 floats
+        gl.enableVertexAttribArray(this.aPosition);
+        gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 6 * 4, 0);
+
+        // Color attribute: 4 floats at offset 2, stride 6 floats
+        gl.enableVertexAttribArray(this.aColor);
+        gl.vertexAttribPointer(this.aColor, 4, gl.FLOAT, false, 6 * 4, 2 * 4);
+
+        gl.drawArrays(gl.TRIANGLES, 0, this.batchCount * 6);
+
+        gl.disableVertexAttribArray(this.aColor);
     }
 
     /**
-     * Fill quad vertices into the vertex buffer.
+     * Add a quad to the batch buffer.
      */
-    private fillQuadVertices(worldX: number, worldY: number, scale: number): void {
-        const verts = this.vertexData;
+    private addQuadToBatch(worldX: number, worldY: number, scale: number, color: number[]): void {
+        const offset = this.batchCount * FLOATS_PER_INDICATOR;
+        const halfScale = scale * 0.5;
+
+        // 6 vertices for 2 triangles (x, y, r, g, b, a per vertex)
+        const positions = [
+            worldX - halfScale, worldY - halfScale,
+            worldX + halfScale, worldY - halfScale,
+            worldX - halfScale, worldY + halfScale,
+            worldX - halfScale, worldY + halfScale,
+            worldX + halfScale, worldY - halfScale,
+            worldX + halfScale, worldY + halfScale,
+        ];
+
         for (let i = 0; i < 6; i++) {
-            verts[i * 2] = BASE_QUAD[i * 2] * scale + worldX;
-            verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1] * scale + worldY;
+            const vertOffset = offset + i * 6;
+            this.batchBuffer[vertOffset] = positions[i * 2];
+            this.batchBuffer[vertOffset + 1] = positions[i * 2 + 1];
+            this.batchBuffer[vertOffset + 2] = color[0];
+            this.batchBuffer[vertOffset + 3] = color[1];
+            this.batchBuffer[vertOffset + 4] = color[2];
+            this.batchBuffer[vertOffset + 5] = color[3];
         }
+
+        this.batchCount++;
     }
 
     /**
@@ -342,6 +364,6 @@ export class BuildingIndicatorRenderer {
      * Invalidate cache to force recalculation.
      */
     public invalidateCache(): void {
-        this.indicatorCache.clear();
+        this.indicatorCache.length = 0;
     }
 }

@@ -1,6 +1,33 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { IRenderer } from './i-renderer';
 import { ViewPoint } from './view-point';
+import type { EntityRenderer } from './entity-renderer';
+
+/** Detailed render timing for a single frame */
+export interface FrameRenderTiming {
+    /** Total GPU render time in ms */
+    render: number;
+    /** Landscape render time in ms */
+    landscape: number;
+    /** All entities draw time in ms */
+    entities: number;
+    /** Entity culling and sorting time in ms */
+    cullSort: number;
+    /** Number of visible entities */
+    visibleCount: number;
+    /** Number of draw calls */
+    drawCalls: number;
+    /** Number of sprites rendered */
+    spriteCount: number;
+    /** Building indicators draw time in ms */
+    indicators: number;
+    /** Textured sprites draw time in ms */
+    textured: number;
+    /** Color fallback draw time in ms */
+    color: number;
+    /** Selection overlay draw time in ms */
+    selection: number;
+}
 
 declare let WebGLDebugUtils: any;
 
@@ -26,6 +53,13 @@ export class Renderer {
 
     // Pre-allocated projection matrix to avoid GC pressure during rendering
     private readonly projectionMatrix = new Float32Array(16);
+
+    /** Timing data from the last draw call */
+    private lastRenderTiming: FrameRenderTiming = {
+        render: 0, landscape: 0, entities: 0, cullSort: 0,
+        visibleCount: 0, drawCalls: 0, spriteCount: 0,
+        indicators: 0, textured: 0, color: 0, selection: 0,
+    };
 
     /** Get the WebGL2 context */
     public get gl(): WebGL2RenderingContext | null {
@@ -138,10 +172,49 @@ export class Renderer {
         m[14] = 0;
         m[15] = 1;
 
-        // draw all renderers
-        for (const r of this.renderers) {
+        // draw all renderers with timing
+        const frameStart = performance.now();
+        let landscapeTime = 0;
+        let entityTiming = {
+            cullSort: 0, entities: 0, visibleCount: 0, drawCalls: 0, spriteCount: 0,
+            indicators: 0, textured: 0, color: 0, selection: 0,
+        };
+
+        for (let i = 0; i < this.renderers.length; i++) {
+            const r = this.renderers[i];
+            const start = performance.now();
             r.draw(gl, m, this.viewPoint);
+            const elapsed = performance.now() - start;
+
+            // First renderer is typically LandscapeRenderer
+            if (i === 0) {
+                landscapeTime = elapsed;
+            }
+            // Second renderer is typically EntityRenderer - collect detailed timing
+            if (i === 1 && 'getLastFrameTiming' in r) {
+                entityTiming = (r as EntityRenderer).getLastFrameTiming();
+            }
         }
+
+        const totalTime = performance.now() - frameStart;
+
+        // Store timing for retrieval by game loop
+        this.lastRenderTiming.render = totalTime;
+        this.lastRenderTiming.landscape = landscapeTime;
+        this.lastRenderTiming.cullSort = entityTiming.cullSort;
+        this.lastRenderTiming.entities = entityTiming.entities;
+        this.lastRenderTiming.visibleCount = entityTiming.visibleCount;
+        this.lastRenderTiming.drawCalls = entityTiming.drawCalls;
+        this.lastRenderTiming.spriteCount = entityTiming.spriteCount;
+        this.lastRenderTiming.indicators = entityTiming.indicators;
+        this.lastRenderTiming.textured = entityTiming.textured;
+        this.lastRenderTiming.color = entityTiming.color;
+        this.lastRenderTiming.selection = entityTiming.selection;
+    }
+
+    /** Get timing data from the last draw call */
+    public getLastRenderTiming(): FrameRenderTiming {
+        return this.lastRenderTiming;
     }
 
     /** Initializes all sub-renderers and triggers the first draw */

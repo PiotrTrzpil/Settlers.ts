@@ -46,6 +46,12 @@ export const FRAME_PADDING = 1.3; // Frame size relative to entity scale
 export const FRAME_THICKNESS = 0.025; // Thickness of frame border lines
 export const FRAME_CORNER_LENGTH = 0.35; // Corner accent length (fraction of frame side)
 
+// Selection dot parameters
+export const SELECTION_DOT_SCALE = 0.15; // Larger dot on unit sprite
+export const SELECTION_ORIGIN_DOT_SCALE = 0.10; // Smaller dot at logical origin
+export const SELECTION_DOT_COLOR = [0.2, 0.9, 1.0, 1.0]; // Cyan dot on sprite
+export const SELECTION_ORIGIN_DOT_COLOR = [1.0, 0.4, 0.2, 1.0]; // Orange dot at origin
+
 // Maximum entities for batch buffer allocation
 export const MAX_BATCH_ENTITIES = 500;
 // 6 vertices per quad, 8 floats per vertex (posX, posY, texU, texV, r, g, b, a)

@@ -205,6 +205,18 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Reusable occupancy map for building indicators
     private tileOccupancy: Map<string, number> = new Map();
 
+    // Per-frame timing (for debugStats reporting)
+    private frameCullSortTime = 0;
+    private frameDrawTime = 0;
+    private frameDrawCalls = 0;
+    private frameSpriteCount = 0;
+
+    // Detailed timing breakdown
+    private frameIndicatorsTime = 0;
+    private frameTexturedTime = 0;
+    private frameColorTime = 0;
+    private frameSelectionTime = 0;
+
     constructor(
         mapSize: MapSize,
         groundHeight: Uint8Array,
@@ -343,6 +355,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.buildingIndicatorRenderer.hoveredTile = this.previewTile;
         this.buildingIndicatorRenderer.buildingType = this.previewBuildingType;
 
+        // Skip expensive occupancy map building when indicators are disabled
+        if (!this.buildingIndicatorsEnabled) {
+            return;
+        }
+
         // Build tile occupancy map including full building footprints
         this.tileOccupancy.clear();
         for (const e of this.entities) {
@@ -364,14 +381,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (!this.dynamicBuffer) return;
         if (this.entities.length === 0 && !this.previewTile && !this.buildingIndicatorsEnabled) return;
 
+        const frameStart = performance.now();
         profiler.beginFrame();
+
+        // Reset per-frame counters
+        this.frameDrawCalls = 0;
+        this.frameSpriteCount = 0;
 
         // Enable blending for semi-transparent entities
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
         // Draw building placement indicators (behind everything)
+        const indicatorsStart = performance.now();
         this.drawBuildingIndicators(gl, projection, viewPoint);
+        this.frameIndicatorsTime = performance.now() - indicatorsStart;
 
         // Use color shader for non-textured elements
         super.drawBase(gl, projection);
@@ -397,29 +421,82 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         );
 
         // Sort entities by depth for correct painter's algorithm rendering
+        const cullSortStart = performance.now();
         this.sortEntitiesByDepth(viewPoint);
+        this.frameCullSortTime = performance.now() - cullSortStart;
 
         // Draw entities (textured or color fallback)
+        const drawStart = performance.now();
         profiler.beginPhase('draw');
         if (this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
+            const texturedStart = performance.now();
             this.drawTexturedEntities(gl, projection, viewPoint);
+            this.frameTexturedTime = performance.now() - texturedStart;
+
+            const colorStart = performance.now();
             this.drawColorEntities(gl, projection, viewPoint, true);
+            this.frameColorTime = performance.now() - colorStart;
         } else {
+            this.frameTexturedTime = 0;
+            const colorStart = performance.now();
             this.drawColorEntities(gl, projection, viewPoint, false);
+            this.frameColorTime = performance.now() - colorStart;
         }
         profiler.endPhase('draw');
+        this.frameDrawTime = performance.now() - drawStart;
 
         // Draw selection frames (color shader) - must be after entities
+        const selectionStart = performance.now();
         this.selectionOverlayRenderer.drawSelectionFrames(
             gl, this.dynamicBuffer!, this.sortedEntities, this.selectedEntityIds,
             this.aEntityPos, this.aColor, selectionCtx
         );
+
+        // Draw selection dots for selected units (on top of frames)
+        this.selectionOverlayRenderer.drawSelectionDots(
+            gl, this.dynamicBuffer!, this.sortedEntities, this.selectedEntityIds,
+            this.aEntityPos, this.aColor, selectionCtx
+        );
+        this.frameSelectionTime = performance.now() - selectionStart;
 
         // Draw placement preview
         this.drawPlacementPreview(gl, projection, viewPoint);
 
         gl.disable(gl.BLEND);
         profiler.endFrame();
+
+        // Store entity timing for collection by main Renderer
+        this.lastEntityDrawTime = performance.now() - frameStart;
+    }
+
+    /** Last frame's entity draw time (ms) - for debug stats collection */
+    private lastEntityDrawTime = 0;
+
+    /** Get timing data from the last frame for debug stats */
+    public getLastFrameTiming(): {
+        cullSort: number;
+        entities: number;
+        visibleCount: number;
+        drawCalls: number;
+        spriteCount: number;
+        // Detailed breakdown
+        indicators: number;
+        textured: number;
+        color: number;
+        selection: number;
+        } {
+        return {
+            cullSort: this.frameCullSortTime,
+            entities: this.lastEntityDrawTime,
+            visibleCount: this.sortedEntities.length,
+            drawCalls: this.frameDrawCalls,
+            spriteCount: this.frameSpriteCount,
+            // Detailed breakdown
+            indicators: this.frameIndicatorsTime,
+            textured: this.frameTexturedTime,
+            color: this.frameColorTime,
+            selection: this.frameSelectionTime,
+        };
     }
 
     /**
@@ -569,9 +646,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             } else {
                 this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, resolved.sprite, 1, 1, 1, 1);
             }
+            this.frameSpriteCount++;
         }
 
-        this.spriteBatchRenderer.endSpriteBatch(gl);
+        this.frameDrawCalls += this.spriteBatchRenderer.endSpriteBatch(gl);
 
         // Draw transitioning units with blend shader
         if (this.transitioningUnits.length > 0) {

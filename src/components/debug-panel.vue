@@ -32,6 +32,80 @@
         </div>
       </section>
 
+      <!-- Render Timings -->
+      <section class="debug-section">
+        <h3 class="section-header" @click="sections.renderTimings = !sections.renderTimings">
+          <span class="caret">{{ sections.renderTimings ? '&#x25BC;' : '&#x25B6;' }}</span>
+          Frame Timings
+        </h3>
+        <div v-if="sections.renderTimings" class="section-body">
+          <div class="stat-row total-row">
+            <span class="stat-label">Frame</span>
+            <span class="stat-value">{{ stats.renderTimings.frame }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Ticks</span>
+            <span class="stat-value">{{ stats.renderTimings.ticks }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Animations</span>
+            <span class="stat-value">{{ stats.renderTimings.animations }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Callback</span>
+            <span class="stat-value">{{ stats.renderTimings.callback }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Other</span>
+            <span class="stat-value">{{ stats.renderTimings.other }} ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Render</span>
+            <span class="stat-value">{{ stats.renderTimings.render }} ms</span>
+          </div>
+          <div class="stat-row sub-stat">
+            <span class="stat-label">Landscape</span>
+            <span class="stat-value">{{ stats.renderTimings.landscape }} ms</span>
+          </div>
+          <div class="stat-row sub-stat">
+            <span class="stat-label">Cull/Sort</span>
+            <span class="stat-value">{{ stats.renderTimings.cullSort }} ms</span>
+          </div>
+          <div class="stat-row sub-stat">
+            <span class="stat-label">Entities</span>
+            <span class="stat-value">{{ stats.renderTimings.entities }} ms</span>
+          </div>
+          <div class="stat-row sub-stat depth-2">
+            <span class="stat-label">Indicators</span>
+            <span class="stat-value">{{ stats.renderTimings.indicators }} ms</span>
+          </div>
+          <div class="stat-row sub-stat depth-2">
+            <span class="stat-label">Textured</span>
+            <span class="stat-value">{{ stats.renderTimings.textured }} ms</span>
+          </div>
+          <div class="stat-row sub-stat depth-2">
+            <span class="stat-label">Color</span>
+            <span class="stat-value">{{ stats.renderTimings.color }} ms</span>
+          </div>
+          <div class="stat-row sub-stat depth-2">
+            <span class="stat-label">Selection</span>
+            <span class="stat-value">{{ stats.renderTimings.selection }} ms</span>
+          </div>
+          <div class="stat-row sub-stat">
+            <span class="stat-label">Visible</span>
+            <span class="stat-value">{{ stats.renderTimings.visibleCount }}</span>
+          </div>
+          <div class="stat-row sub-stat">
+            <span class="stat-label">Sprites</span>
+            <span class="stat-value">{{ stats.renderTimings.spriteCount }}</span>
+          </div>
+          <div class="stat-row sub-stat">
+            <span class="stat-label">Draw calls</span>
+            <span class="stat-value">{{ stats.renderTimings.drawCalls }}</span>
+          </div>
+        </div>
+      </section>
+
       <!-- Load Timings -->
       <section class="debug-section">
         <h3 class="section-header" @click="sections.loadTimings = !sections.loadTimings">
@@ -284,6 +358,7 @@ const open = computed({
 
 const sections = reactive({
     perf: true,
+    renderTimings: false,
     loadTimings: false,
     entities: true,
     camera: true,
@@ -470,6 +545,27 @@ const cacheClass = computed(() => {
 .cache-hit-hmr { color: #80c080; font-weight: bold; }
 .cache-hit-idb { color: #80b0c0; font-weight: bold; }
 .cache-miss { color: #7a6a4a; }
+
+.sub-stat {
+  padding-left: 12px;
+}
+.sub-stat .stat-label {
+  color: #5a4a3a;
+  font-size: 10px;
+}
+.sub-stat .stat-value {
+  color: #a08050;
+  font-size: 10px;
+}
+.sub-stat.depth-2 {
+  padding-left: 24px;
+}
+.sub-stat.depth-2 .stat-label {
+  color: #4a3a2a;
+}
+.sub-stat.depth-2 .stat-value {
+  color: #8a6a40;
+}
 
 .total-row {
   margin-top: 4px;

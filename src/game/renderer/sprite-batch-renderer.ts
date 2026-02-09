@@ -226,11 +226,14 @@ export class SpriteBatchRenderer {
 
     /**
      * End the sprite batch and flush remaining sprites.
+     * @returns Number of draw calls made (0 or 1)
      */
-    public endSpriteBatch(gl: WebGL2RenderingContext): void {
+    public endSpriteBatch(gl: WebGL2RenderingContext): number {
         if (this.batchOffset > 0) {
             this.flushSpriteBatch(gl);
+            return 1;
         }
+        return 0;
     }
 
     /**

@@ -16,6 +16,10 @@ import {
     FRAME_THICKNESS,
     FRAME_CORNER_LENGTH,
     BASE_QUAD,
+    SELECTION_DOT_SCALE,
+    SELECTION_ORIGIN_DOT_SCALE,
+    SELECTION_DOT_COLOR,
+    SELECTION_ORIGIN_DOT_COLOR,
 } from './entity-renderer-constants';
 
 /**
@@ -169,6 +173,64 @@ export class SelectionOverlayRenderer {
                 gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
             }
+        }
+    }
+
+    /**
+     * Draw selection indicator dots on selected units.
+     * Shows a larger dot on the unit sprite and a smaller dot at the logical origin.
+     */
+    public drawSelectionDots(
+        gl: WebGL2RenderingContext,
+        buffer: WebGLBuffer,
+        sortedEntities: Entity[],
+        selectedEntityIds: Set<number>,
+        aEntityPos: number,
+        aColor: number,
+        ctx: SelectionRenderContext
+    ): void {
+        if (selectedEntityIds.size === 0) return;
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+
+        for (const entity of sortedEntities) {
+            if (!selectedEntityIds.has(entity.id)) continue;
+            if (entity.type !== EntityType.Unit) continue;
+
+            // Get interpolated world position (where sprite is rendered)
+            const worldPos = this.getInterpolatedWorldPos(entity, ctx);
+
+            // Draw larger dot on the unit sprite (offset upward to appear above sprite)
+            const spriteTopOffset = 0.7; // Offset upward to be above the sprite head
+            gl.vertexAttrib2f(aEntityPos, worldPos.worldX, worldPos.worldY + spriteTopOffset);
+            gl.vertexAttrib4f(
+                aColor,
+                SELECTION_DOT_COLOR[0],
+                SELECTION_DOT_COLOR[1],
+                SELECTION_DOT_COLOR[2],
+                SELECTION_DOT_COLOR[3]
+            );
+            this.fillQuadVertices(0, 0, SELECTION_DOT_SCALE);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            // Draw smaller dot at logical origin (current tile position)
+            const originPos = TilePicker.tileToWorld(
+                entity.x, entity.y,
+                ctx.groundHeight, ctx.mapSize,
+                ctx.viewPoint.x, ctx.viewPoint.y
+            );
+            gl.vertexAttrib2f(aEntityPos, originPos.worldX, originPos.worldY);
+            gl.vertexAttrib4f(
+                aColor,
+                SELECTION_ORIGIN_DOT_COLOR[0],
+                SELECTION_ORIGIN_DOT_COLOR[1],
+                SELECTION_ORIGIN_DOT_COLOR[2],
+                SELECTION_ORIGIN_DOT_COLOR[3]
+            );
+            this.fillQuadVertices(0, 0, SELECTION_ORIGIN_DOT_SCALE);
+            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
     }
 

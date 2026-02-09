@@ -9,6 +9,7 @@ import { MapSize } from '@/utilities/map-size';
 import type { TickSystem } from './tick-system';
 import { BuildingConstructionSystem } from './features/building-construction';
 import { EventBus } from './event-bus';
+import type { FrameRenderTiming } from './renderer/renderer';
 
 const TICK_RATE = 30;
 const TICK_DURATION = 1 / TICK_RATE;
@@ -46,7 +47,8 @@ export class GameLoop {
     private mapWidth: number | undefined;
     private mapHeight: number | undefined;
     private mapSize: MapSize | undefined;
-    private onRender: ((alpha: number, deltaSec: number) => void) | null = null;
+    /** Render callback - returns render timing if available */
+    private onRender: ((alpha: number, deltaSec: number) => FrameRenderTiming | null) | null = null;
     private animationProvider: AnimationDataProvider | null = null;
 
     /** Registered tick systems */
@@ -130,8 +132,11 @@ export class GameLoop {
         this.gameState.setTerrainData(groundType, groundHeight, mapWidth, mapHeight);
     }
 
-    /** Set the render callback, called every animation frame with interpolation alpha and delta time */
-    public setRenderCallback(callback: (alpha: number, deltaSec: number) => void): void {
+    /**
+     * Set the render callback, called every animation frame with interpolation alpha and delta time.
+     * The callback should return render timing data if available (from Renderer.getLastRenderTiming()).
+     */
+    public setRenderCallback(callback: (alpha: number, deltaSec: number) => FrameRenderTiming | null): void {
         this.onRender = callback;
     }
 
@@ -168,6 +173,43 @@ export class GameLoop {
         return this.running;
     }
 
+    /** Record detailed timing breakdown for debug stats */
+    private recordFrameTiming(
+        frameStart: number,
+        ticksTime: number,
+        animationsTime: number,
+        callbackTime: number,
+        renderTiming: FrameRenderTiming | null
+    ): void {
+        // Record FPS and get frame period for timing breakdown
+        const framePeriod = debugStats.recordFrame();
+        const workTime = performance.now() - frameStart;
+        const renderTime = renderTiming?.render ?? 0;
+        // Callback overhead is time in callback minus actual GPU render time
+        const callbackOverhead = Math.max(0, callbackTime - renderTime);
+        // "Other" accounts for browser overhead, vsync waiting, rAF scheduling
+        const otherTime = Math.max(0, framePeriod - workTime);
+
+        debugStats.recordRenderTiming({
+            frame: framePeriod,
+            ticks: ticksTime,
+            animations: animationsTime,
+            callback: callbackOverhead,
+            other: otherTime,
+            render: renderTime,
+            landscape: renderTiming?.landscape ?? 0,
+            entities: renderTiming?.entities ?? 0,
+            cullSort: renderTiming?.cullSort ?? 0,
+            visibleCount: renderTiming?.visibleCount ?? 0,
+            drawCalls: renderTiming?.drawCalls ?? 0,
+            spriteCount: renderTiming?.spriteCount ?? 0,
+            indicators: renderTiming?.indicators ?? 0,
+            textured: renderTiming?.textured ?? 0,
+            color: renderTiming?.color ?? 0,
+            selection: renderTiming?.selection ?? 0,
+        });
+    }
+
     private frame(now: number): void {
         if (!this.running) return;
 
@@ -175,9 +217,11 @@ export class GameLoop {
         const timeSinceLastRender = now - this.lastRenderTime;
         const shouldRender = this.pageVisible || timeSinceLastRender >= BACKGROUND_FRAME_DURATION;
 
-        if (shouldRender) {
-            debugStats.recordFrame(now);
-        }
+        const frameStart = performance.now();
+        let ticksTime = 0;
+        let animationsTime = 0;
+        let callbackTime = 0;
+        let renderTiming: FrameRenderTiming | null = null;
 
         try {
             const deltaSec = Math.min((now - this.lastTime) / 1000, 0.1); // cap at 100ms
@@ -185,28 +229,32 @@ export class GameLoop {
             this.accumulator += deltaSec;
 
             // Fixed timestep simulation - always runs to keep game state consistent
-            // Scale tick duration by game speed setting for faster/slower gameplay
             const scaledDt = TICK_DURATION * gameSettings.state.gameSpeed;
+            const tickStart = performance.now();
             while (this.accumulator >= TICK_DURATION) {
                 this.tick(scaledDt);
                 this.accumulator -= TICK_DURATION;
             }
+            ticksTime = performance.now() - tickStart;
 
             // Only update animations and render when not throttled
             if (shouldRender) {
                 // Update animations (runs every rendered frame for smooth animation)
+                const animStart = performance.now();
                 if (this.animationProvider) {
-                    const deltaMs = deltaSec * 1000;
-                    updateAnimations(this.gameState, deltaMs, this.animationProvider);
+                    updateAnimations(this.gameState, deltaSec * 1000, this.animationProvider);
                 }
+                animationsTime = performance.now() - animStart;
 
                 // Render with interpolation alpha for smooth sub-tick visuals
+                const callbackStart = performance.now();
                 if (this.onRender) {
-                    const alpha = this.accumulator / TICK_DURATION;
-                    this.onRender(alpha, deltaSec);
+                    renderTiming = this.onRender(this.accumulator / TICK_DURATION, deltaSec);
                 }
+                callbackTime = performance.now() - callbackStart;
 
                 this.lastRenderTime = now;
+                this.recordFrameTiming(frameStart, ticksTime, animationsTime, callbackTime, renderTiming);
             }
         } catch (e) {
             GameLoop.log.error('Error in game frame', e instanceof Error ? e : new Error(String(e)));
