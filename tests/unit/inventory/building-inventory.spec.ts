@@ -1,10 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     createSlot,
     canAccept,
+    canAcceptAny,
     canProvide,
     deposit,
+    depositWithResult,
     withdraw,
+    withdrawWithResult,
     getAvailableSpace,
     isEmpty,
     isFull,
@@ -427,6 +430,203 @@ describe('BuildingInventoryManager', () => {
             expect(ids).toContain(100);
             expect(ids).toContain(200);
             expect(ids).toHaveLength(2);
+        });
+    });
+
+    describe('canStartProduction', () => {
+        it('should return true when all inputs are available', () => {
+            manager.createInventory(100, BuildingType.Sawmill);
+            manager.depositInput(100, EMaterialType.LOG, 1);
+
+            expect(manager.canStartProduction(100)).toBe(true);
+        });
+
+        it('should return false when inputs are missing', () => {
+            manager.createInventory(100, BuildingType.Sawmill);
+            // No logs deposited
+            expect(manager.canStartProduction(100)).toBe(false);
+        });
+
+        it('should check all inputs for multi-input buildings', () => {
+            manager.createInventory(100, BuildingType.Bakery);
+            manager.depositInput(100, EMaterialType.FLOUR, 1);
+            // Missing water
+            expect(manager.canStartProduction(100)).toBe(false);
+
+            manager.depositInput(100, EMaterialType.WATER, 1);
+            expect(manager.canStartProduction(100)).toBe(true);
+        });
+
+        it('should return false for non-existent building', () => {
+            expect(manager.canStartProduction(999)).toBe(false);
+        });
+    });
+
+    describe('canStoreOutput', () => {
+        it('should return true when output slot has space', () => {
+            manager.createInventory(100, BuildingType.Sawmill);
+            expect(manager.canStoreOutput(100)).toBe(true);
+        });
+
+        it('should return false when output slot is full', () => {
+            manager.createInventory(100, BuildingType.WoodcutterHut);
+            // Fill the output slot
+            const inventory = manager.getInventory(100)!;
+            inventory.outputSlots[0].currentAmount = inventory.outputSlots[0].maxCapacity;
+
+            expect(manager.canStoreOutput(100)).toBe(false);
+        });
+    });
+
+    describe('change callbacks', () => {
+        it('should notify listeners on deposit', () => {
+            const callback = vi.fn();
+            manager.onChange(callback);
+            manager.createInventory(100, BuildingType.Sawmill);
+
+            manager.depositInput(100, EMaterialType.LOG, 3);
+
+            expect(callback).toHaveBeenCalledWith(100, EMaterialType.LOG, 'input', 0, 3);
+        });
+
+        it('should notify listeners on withdraw', () => {
+            const callback = vi.fn();
+            manager.onChange(callback);
+            manager.createInventory(100, BuildingType.Sawmill);
+            manager.depositOutput(100, EMaterialType.BOARD, 5);
+
+            callback.mockClear();
+            manager.withdrawOutput(100, EMaterialType.BOARD, 2);
+
+            expect(callback).toHaveBeenCalledWith(100, EMaterialType.BOARD, 'output', 5, 3);
+        });
+
+        it('should not notify when no actual change', () => {
+            const callback = vi.fn();
+            manager.onChange(callback);
+            manager.createInventory(100, BuildingType.Sawmill);
+
+            // Deposit 0
+            manager.depositInput(100, EMaterialType.LOG, 0);
+
+            expect(callback).not.toHaveBeenCalled();
+        });
+
+        it('should allow removing callbacks', () => {
+            const callback = vi.fn();
+            manager.onChange(callback);
+            manager.createInventory(100, BuildingType.Sawmill);
+
+            manager.offChange(callback);
+            manager.depositInput(100, EMaterialType.LOG, 3);
+
+            expect(callback).not.toHaveBeenCalled();
+        });
+    });
+});
+
+describe('Edge Cases and Input Validation', () => {
+    describe('createSlot edge cases', () => {
+        it('should enforce minimum capacity of 1', () => {
+            const slot = createSlot(EMaterialType.LOG, 0);
+            expect(slot.maxCapacity).toBe(1);
+        });
+
+        it('should floor fractional capacity', () => {
+            const slot = createSlot(EMaterialType.LOG, 10.7);
+            expect(slot.maxCapacity).toBe(10);
+        });
+    });
+
+    describe('deposit edge cases', () => {
+        it('should treat negative amounts as 0', () => {
+            const slot = createSlot(EMaterialType.LOG, 10);
+            const overflow = deposit(slot, -5);
+            expect(slot.currentAmount).toBe(0);
+            expect(overflow).toBe(0);
+        });
+
+        it('should treat NaN as 0', () => {
+            const slot = createSlot(EMaterialType.LOG, 10);
+            const overflow = deposit(slot, NaN);
+            expect(slot.currentAmount).toBe(0);
+            expect(overflow).toBe(0);
+        });
+
+        it('should treat Infinity as 0', () => {
+            const slot = createSlot(EMaterialType.LOG, 10);
+            const overflow = deposit(slot, Infinity);
+            expect(slot.currentAmount).toBe(0);
+            expect(overflow).toBe(0);
+        });
+
+        it('should floor fractional amounts', () => {
+            const slot = createSlot(EMaterialType.LOG, 10);
+            deposit(slot, 3.7);
+            expect(slot.currentAmount).toBe(3);
+        });
+    });
+
+    describe('withdraw edge cases', () => {
+        it('should treat negative amounts as 0', () => {
+            const slot = createSlot(EMaterialType.LOG, 10);
+            slot.currentAmount = 5;
+            const withdrawn = withdraw(slot, -3);
+            expect(slot.currentAmount).toBe(5);
+            expect(withdrawn).toBe(0);
+        });
+
+        it('should treat NaN as 0', () => {
+            const slot = createSlot(EMaterialType.LOG, 10);
+            slot.currentAmount = 5;
+            const withdrawn = withdraw(slot, NaN);
+            expect(slot.currentAmount).toBe(5);
+            expect(withdrawn).toBe(0);
+        });
+    });
+
+    describe('depositWithResult', () => {
+        it('should return detailed result with deposited and overflow', () => {
+            const slot = createSlot(EMaterialType.LOG, 10);
+            slot.currentAmount = 7;
+
+            const result = depositWithResult(slot, 5);
+
+            expect(result.deposited).toBe(3);
+            expect(result.overflow).toBe(2);
+            expect(slot.currentAmount).toBe(10);
+        });
+    });
+
+    describe('withdrawWithResult', () => {
+        it('should return detailed result with withdrawn and shortfall', () => {
+            const slot = createSlot(EMaterialType.LOG, 10);
+            slot.currentAmount = 3;
+
+            const result = withdrawWithResult(slot, 5);
+
+            expect(result.withdrawn).toBe(3);
+            expect(result.shortfall).toBe(2);
+            expect(slot.currentAmount).toBe(0);
+        });
+    });
+
+    describe('canAcceptAny', () => {
+        it('should return true when slot has any space', () => {
+            const slot = createSlot(EMaterialType.LOG, 10);
+            slot.currentAmount = 9;
+            expect(canAcceptAny(slot, EMaterialType.LOG)).toBe(true);
+        });
+
+        it('should return false when slot is full', () => {
+            const slot = createSlot(EMaterialType.LOG, 10);
+            slot.currentAmount = 10;
+            expect(canAcceptAny(slot, EMaterialType.LOG)).toBe(false);
+        });
+
+        it('should return false for wrong material type', () => {
+            const slot = createSlot(EMaterialType.LOG, 10);
+            expect(canAcceptAny(slot, EMaterialType.STONE)).toBe(false);
         });
     });
 });
