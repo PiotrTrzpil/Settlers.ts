@@ -57,7 +57,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
 
             const ok = game.execute({
                 type: 'place_resource',
-                materialType: 0, // TRUNK (wood)
+                materialType: 0, // LOG (wood)
                 amount: 3,
                 x, y
             });
@@ -85,7 +85,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         expect(result.countAfter).toBeGreaterThan(result.countBefore);
         expect(result.resource).not.toBeNull();
         expect(result.resource!.type).toBe(4); // EntityType.StackedResource
-        expect(result.resource!.subType).toBe(0); // EMaterialType.TRUNK
+        expect(result.resource!.subType).toBe(0); // EMaterialType.LOG
         expect(result.resource!.x).toBe(result.expectedPos!.x);
         expect(result.resource!.y).toBe(result.expectedPos!.y);
         expect(result.resource!.amount).toBe(3);
@@ -160,7 +160,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
 
                     if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
 
-                    const materialType = placed % 3; // Rotate: TRUNK, STONE, COAL
+                    const materialType = placed % 3; // Rotate: LOG, STONE, COAL
                     const ok = game.execute({
                         type: 'place_resource',
                         materialType,
@@ -222,7 +222,7 @@ test.describe('Resource Rendering', () => {
             return;
         }
 
-        const resource = await gp.placeResource(0, passableTile.x, passableTile.y, 4); // TRUNK with amount 4
+        const resource = await gp.placeResource(0, passableTile.x, passableTile.y, 4); // LOG with amount 4
         expect(resource).not.toBeNull();
 
         await gp.waitForFrames(10);
@@ -324,7 +324,7 @@ test.describe('Resource Amount', () => {
 
                 const ok = game.execute({
                     type: 'place_resource',
-                    materialType: 0, // TRUNK
+                    materialType: 0, // LOG
                     amount: amounts[i],
                     x: tx, y: ty
                 });

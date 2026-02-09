@@ -27,9 +27,9 @@ describe('Material Types', () => {
     });
 
     it('should mark standard materials as droppable', () => {
-        expect(isMaterialDroppable(EMaterialType.PLANK)).toBe(true);
+        expect(isMaterialDroppable(EMaterialType.BOARD)).toBe(true);
         expect(isMaterialDroppable(EMaterialType.STONE)).toBe(true);
-        expect(isMaterialDroppable(EMaterialType.TRUNK)).toBe(true);
+        expect(isMaterialDroppable(EMaterialType.LOG)).toBe(true);
         expect(isMaterialDroppable(EMaterialType.SWORD)).toBe(true);
         expect(isMaterialDroppable(EMaterialType.BREAD)).toBe(true);
     });
@@ -94,19 +94,19 @@ describe('Production Chains', () => {
         expect(BUILDING_PRODUCTIONS.has(BuildingType.WeaponSmith)).toBe(true);
     });
 
-    // Note: Lumberjack→TRUNK and Sawmill→PLANK chain tests are covered by
+    // Note: WoodcutterHut→LOG and Sawmill→BOARD chain tests are covered by
     // game-session flow test.
 
-    it('should map IronSmelter to IRON output with IRONORE and COAL inputs', () => {
+    it('should map IronSmelter to IRONBAR output with IRONORE and COAL inputs', () => {
         const chain = BUILDING_PRODUCTIONS.get(BuildingType.IronSmelter)!;
-        expect(chain.output).toBe(EMaterialType.IRON);
+        expect(chain.output).toBe(EMaterialType.IRONBAR);
         expect(chain.inputs).toContain(EMaterialType.IRONORE);
         expect(chain.inputs).toContain(EMaterialType.COAL);
     });
 });
 
 describe('getBuildingTypesRequestingMaterial', () => {
-    // Note: TRUNK→Sawmill lookup is covered by game-session flow test.
+    // Note: LOG→Sawmill lookup is covered by game-session flow test.
 
     it('should return multiple buildings for COAL', () => {
         const buildings = getBuildingTypesRequestingMaterial(EMaterialType.COAL);
@@ -116,14 +116,14 @@ describe('getBuildingTypesRequestingMaterial', () => {
         expect(buildings).toContain(BuildingType.ToolSmith);
     });
 
-    it('should return Windmill and PigFarm for CROP', () => {
-        const buildings = getBuildingTypesRequestingMaterial(EMaterialType.CROP);
+    it('should return Mill and AnimalRanch for GRAIN', () => {
+        const buildings = getBuildingTypesRequestingMaterial(EMaterialType.GRAIN);
         expect(buildings).toContain(BuildingType.Mill);
         expect(buildings).toContain(BuildingType.AnimalRanch);
     });
 
     it('should return empty array for materials not consumed by any building', () => {
-        const buildings = getBuildingTypesRequestingMaterial(EMaterialType.GOLD);
+        const buildings = getBuildingTypesRequestingMaterial(EMaterialType.GOLDBAR);
         expect(buildings).toHaveLength(0);
     });
 
@@ -175,11 +175,11 @@ describe('Construction Costs', () => {
         }
     });
 
-    it('should use PLANK and/or STONE as construction materials', () => {
+    it('should use BOARD and/or STONE as construction materials', () => {
         for (const [, costs] of CONSTRUCTION_COSTS) {
             const materials = costs.map((c) => c.material);
             const usesBuildingMaterials =
-                materials.includes(EMaterialType.PLANK) ||
+                materials.includes(EMaterialType.BOARD) ||
                 materials.includes(EMaterialType.STONE);
             expect(usesBuildingMaterials).toBe(true);
         }

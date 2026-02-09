@@ -5,20 +5,20 @@
 
 export enum EMaterialType {
     // Raw resources
-    TRUNK = 0,
+    LOG = 0,
     STONE = 1,
     COAL = 2,
     IRONORE = 3,
     GOLDORE = 4,
-    CROP = 5,
+    GRAIN = 5,
     PIG = 6,
     WATER = 7,
     FISH = 8,
 
     // Processed materials
-    PLANK = 9,
-    IRON = 10,
-    GOLD = 11,
+    BOARD = 9,
+    IRONBAR = 10,
+    GOLDBAR = 11,
     FLOUR = 12,
     BREAD = 13,
     MEAT = 14,
@@ -26,11 +26,11 @@ export enum EMaterialType {
 
     // Tools
     AXE = 16,
-    PICK = 17,
+    PICKAXE = 17,
     SAW = 18,
     HAMMER = 19,
     SCYTHE = 20,
-    FISHINGROD = 21,
+    ROD = 21,
 
     // Weapons
     SWORD = 22,
@@ -43,8 +43,8 @@ export enum EMaterialType {
     SULFUR = 28,
     DONKEY = 29,
     GEMS = 30,
-    OFFICER_GEAR = 31,  // Leader helmets/equipment
-    BATTLE_AXE = 32,    // Heavy battle axes (different from tool axe)
+    ARMOR = 31,  // Leader helmets/equipment
+    BATTLEAXE = 32,    // Heavy battle axes (different from tool axe)
     AGAVE = 33,         // Mayan crop/plant
     BLOWGUN = 34,       // Mayan weapon
     GOAT = 35,          // Mayan livestock
@@ -65,7 +65,7 @@ export interface MaterialTypeConfig {
 
 export const MATERIAL_CONFIGS: ReadonlyMap<EMaterialType, MaterialTypeConfig> = new Map([
     // Building materials — highest transport priority
-    [EMaterialType.PLANK, { droppable: true, defaultPriorityIndex: 0, distributionConfigurable: true }],
+    [EMaterialType.BOARD, { droppable: true, defaultPriorityIndex: 0, distributionConfigurable: true }],
     [EMaterialType.STONE, { droppable: true, defaultPriorityIndex: 1, distributionConfigurable: true }],
 
     // Food — critical for mines
@@ -79,12 +79,12 @@ export const MATERIAL_CONFIGS: ReadonlyMap<EMaterialType, MaterialTypeConfig> = 
     [EMaterialType.GOLDORE, { droppable: true, defaultPriorityIndex: 7, distributionConfigurable: false }],
 
     // Metals
-    [EMaterialType.IRON, { droppable: true, defaultPriorityIndex: 8, distributionConfigurable: true }],
-    [EMaterialType.GOLD, { droppable: true, defaultPriorityIndex: 9, distributionConfigurable: false }],
+    [EMaterialType.IRONBAR, { droppable: true, defaultPriorityIndex: 8, distributionConfigurable: true }],
+    [EMaterialType.GOLDBAR, { droppable: true, defaultPriorityIndex: 9, distributionConfigurable: false }],
 
     // Intermediate resources
-    [EMaterialType.TRUNK, { droppable: true, defaultPriorityIndex: 10, distributionConfigurable: false }],
-    [EMaterialType.CROP, { droppable: true, defaultPriorityIndex: 11, distributionConfigurable: true }],
+    [EMaterialType.LOG, { droppable: true, defaultPriorityIndex: 10, distributionConfigurable: false }],
+    [EMaterialType.GRAIN, { droppable: true, defaultPriorityIndex: 11, distributionConfigurable: true }],
     [EMaterialType.FLOUR, { droppable: true, defaultPriorityIndex: 12, distributionConfigurable: false }],
     [EMaterialType.PIG, { droppable: true, defaultPriorityIndex: 13, distributionConfigurable: false }],
     [EMaterialType.WATER, { droppable: true, defaultPriorityIndex: 14, distributionConfigurable: false }],
@@ -92,26 +92,26 @@ export const MATERIAL_CONFIGS: ReadonlyMap<EMaterialType, MaterialTypeConfig> = 
 
     // Tools
     [EMaterialType.AXE, { droppable: true, defaultPriorityIndex: 16, distributionConfigurable: false }],
-    [EMaterialType.PICK, { droppable: true, defaultPriorityIndex: 17, distributionConfigurable: false }],
+    [EMaterialType.PICKAXE, { droppable: true, defaultPriorityIndex: 17, distributionConfigurable: false }],
     [EMaterialType.SAW, { droppable: true, defaultPriorityIndex: 18, distributionConfigurable: false }],
     [EMaterialType.HAMMER, { droppable: true, defaultPriorityIndex: 19, distributionConfigurable: false }],
     [EMaterialType.SCYTHE, { droppable: true, defaultPriorityIndex: 20, distributionConfigurable: false }],
-    [EMaterialType.FISHINGROD, { droppable: true, defaultPriorityIndex: 21, distributionConfigurable: false }],
+    [EMaterialType.ROD, { droppable: true, defaultPriorityIndex: 21, distributionConfigurable: false }],
 
     // Weapons
     [EMaterialType.SWORD, { droppable: true, defaultPriorityIndex: 22, distributionConfigurable: false }],
     [EMaterialType.BOW, { droppable: true, defaultPriorityIndex: 23, distributionConfigurable: false }],
     [EMaterialType.SPEAR, { droppable: true, defaultPriorityIndex: 24, distributionConfigurable: false }],
     [EMaterialType.BLADE, { droppable: true, defaultPriorityIndex: 25, distributionConfigurable: false }],
-    [EMaterialType.BATTLE_AXE, { droppable: true, defaultPriorityIndex: 26, distributionConfigurable: false }],
+    [EMaterialType.BATTLEAXE, { droppable: true, defaultPriorityIndex: 26, distributionConfigurable: false }],
 
     // Additional resources
     [EMaterialType.GRAPES, { droppable: true, defaultPriorityIndex: 27, distributionConfigurable: false }],
     [EMaterialType.SULFUR, { droppable: true, defaultPriorityIndex: 28, distributionConfigurable: false }],
     [EMaterialType.DONKEY, { droppable: false, defaultPriorityIndex: 29, distributionConfigurable: false }],
     [EMaterialType.GEMS, { droppable: true, defaultPriorityIndex: 30, distributionConfigurable: false }],
-    [EMaterialType.OFFICER_GEAR, { droppable: true, defaultPriorityIndex: 31, distributionConfigurable: false }],
-    [EMaterialType.AGAVE, { droppable: true, defaultPriorityIndex: 11, distributionConfigurable: true }], // Similar to CROP
+    [EMaterialType.ARMOR, { droppable: true, defaultPriorityIndex: 31, distributionConfigurable: false }],
+    [EMaterialType.AGAVE, { droppable: true, defaultPriorityIndex: 11, distributionConfigurable: true }], // Similar to GRAIN
     [EMaterialType.BLOWGUN, { droppable: true, defaultPriorityIndex: 23, distributionConfigurable: false }], // Similar to BOW
     [EMaterialType.GOAT, { droppable: false, defaultPriorityIndex: 32, distributionConfigurable: false }], // Livestock
     [EMaterialType.MEAD, { droppable: true, defaultPriorityIndex: 15, distributionConfigurable: true }], // Alcohol

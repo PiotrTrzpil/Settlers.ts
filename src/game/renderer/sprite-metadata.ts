@@ -142,8 +142,8 @@ export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
 export const CARRIER_MATERIAL_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
     // TODO: Fill in by inspecting settler JIL files via /jil-view.
     // Example entries (verify visually before uncommenting):
-    // [EMaterialType.TRUNK]: 2,
-    // [EMaterialType.PLANK]: 3,
+    // [EMaterialType.LOG]: 2,
+    // [EMaterialType.BOARD]: 3,
     // [EMaterialType.STONE]: 4,
 };
 
@@ -292,31 +292,31 @@ export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
     // Job 0: Placeholder
     [EMaterialType.AGAVE]: 1,          // Mayan plant (new assignment)
     [EMaterialType.IRONORE]: 2,
-    [EMaterialType.OFFICER_GEAR]: 3,  // Leader helmets/equipment
+    [EMaterialType.ARMOR]: 3,  // Leader helmets/equipment
     [EMaterialType.AXE]: 4,
-    [EMaterialType.BATTLE_AXE]: 5,    // Heavy battle axes
+    [EMaterialType.BATTLEAXE]: 5,    // Heavy battle axes
     [EMaterialType.BLOWGUN]: 6,       // Mayan blowpipe (new assignment)
-    [EMaterialType.PLANK]: 7,
+    [EMaterialType.BOARD]: 7,
     [EMaterialType.BOW]: 8,           // Bows (updated)
     [EMaterialType.BREAD]: 9,         // Bread (updated)
     [EMaterialType.COAL]: 10,         // Coal lumps (updated)
     [EMaterialType.FISH]: 11,         // Fish (updated)
     [EMaterialType.FLOUR]: 12,        // Flour sacks (updated)
     [EMaterialType.GOAT]: 13,         // Mayan livestock (new assignment)
-    [EMaterialType.GOLD]: 14,         // Gold bars (new assignment)
+    [EMaterialType.GOLDBAR]: 14,         // Gold bars (new assignment)
     [EMaterialType.GOLDORE]: 15,      // Gold ore (new assignment)
-    [EMaterialType.CROP]: 16,         // Wheat
+    [EMaterialType.GRAIN]: 16,         // Wheat
     [EMaterialType.MEAD]: 17,         // Honey wine (new assignment)
     [EMaterialType.HAMMER]: 18,       // Hammers (new assignment)
     [EMaterialType.SULFUR]: 19,       // Sulfur (assuming "yellow liquid")
     // [EMaterialType.FISH]: 20,      // REMOVE - Conflict
     [EMaterialType.WINE]: 21,         // Wine barrels
-    [EMaterialType.TRUNK]: 22,        // Logs
-    [EMaterialType.PICK]: 23,         // Pickaxes
+    [EMaterialType.LOG]: 22,        // Logs
+    [EMaterialType.PICKAXE]: 23,         // Pickaxes
     [EMaterialType.SAW]: 24,          // Saws
     // [EMaterialType.HAMMER]: 25,    // REMOVE - Conflict with 18
     [EMaterialType.SCYTHE]: 26,       // Scythes
-    [EMaterialType.FISHINGROD]: 27,   // Fishing rods
+    [EMaterialType.ROD]: 27,   // Fishing rods
     [EMaterialType.WATER]: 28,        // Water buckets
     [EMaterialType.PIG]: 29,          // Pigs (may not have sprite)
     [EMaterialType.GRAPES]: 30,       // Grapes

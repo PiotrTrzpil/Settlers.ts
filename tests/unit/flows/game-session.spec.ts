@@ -39,7 +39,7 @@ describe('Game Session: multi-system integration sweep', () => {
         const map = createTestMap(64, 64, { flatHeight: 100 });
         const state = createGameState();
 
-        // ── Place a Lumberjack (produces TRUNK) ──
+        // ── Place a WoodcutterHut (produces LOG) ──
         expect(placeBuilding(state, map, 20, 20, BuildingType.WoodcutterHut, 0)).toBe(true);
 
         // Lumberjack auto-spawns a worker
@@ -50,18 +50,18 @@ describe('Game Session: multi-system integration sweep', () => {
 
         // ── Verify production chain data ──
         const lumberjackChain = BUILDING_PRODUCTIONS.get(BuildingType.WoodcutterHut)!;
-        expect(lumberjackChain.output).toBe(EMaterialType.TRUNK);
+        expect(lumberjackChain.output).toBe(EMaterialType.LOG);
         expect(lumberjackChain.inputs).toHaveLength(0); // No inputs needed
 
-        // ── Place a Sawmill (consumes TRUNK, produces PLANK) ──
+        // ── Place a Sawmill (consumes LOG, produces BOARD) ──
         expect(placeBuilding(state, map, 25, 20, BuildingType.Sawmill, 0)).toBe(true);
 
         const sawmillChain = BUILDING_PRODUCTIONS.get(BuildingType.Sawmill)!;
-        expect(sawmillChain.output).toBe(EMaterialType.PLANK);
-        expect(sawmillChain.inputs).toContain(EMaterialType.TRUNK);
+        expect(sawmillChain.output).toBe(EMaterialType.BOARD);
+        expect(sawmillChain.inputs).toContain(EMaterialType.LOG);
 
-        // ── Verify TRUNK is consumed by Sawmill ──
-        const trunkConsumers = getBuildingTypesRequestingMaterial(EMaterialType.TRUNK);
+        // ── Verify LOG is consumed by Sawmill ──
+        const trunkConsumers = getBuildingTypesRequestingMaterial(EMaterialType.LOG);
         expect(trunkConsumers).toContain(BuildingType.Sawmill);
 
         // ── Verify construction costs use standard materials ──
@@ -73,7 +73,7 @@ describe('Game Session: multi-system integration sweep', () => {
         }
 
         // ── Verify material priority ordering ──
-        expect(getMaterialPriority(EMaterialType.PLANK)).toBe(0);
+        expect(getMaterialPriority(EMaterialType.BOARD)).toBe(0);
         expect(getMaterialPriority(EMaterialType.STONE)).toBe(1);
         expect(getMaterialPriority(EMaterialType.NO_MATERIAL)).toBe(-1);
     });
