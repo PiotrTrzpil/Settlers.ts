@@ -25,7 +25,6 @@ import { LayerVisibility, DEFAULT_LAYER_VISIBILITY } from '@/game/renderer/layer
 const props = defineProps<{
     game: Game | null;
     debugGrid: boolean;
-    showTerritoryBorders: boolean;
     layerVisibility?: LayerVisibility;
 }>();
 
@@ -39,7 +38,6 @@ const { setRace, getRace, getInputManager, selectionBox } = useRenderer({
     canvas: cav,
     getGame: () => props.game,
     getDebugGrid: () => props.debugGrid,
-    getShowTerritoryBorders: () => props.showTerritoryBorders,
     getLayerVisibility: () => props.layerVisibility ?? DEFAULT_LAYER_VISIBILITY,
     onTileClick: (tile) => emit('tileClick', tile)
 });

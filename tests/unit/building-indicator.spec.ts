@@ -5,7 +5,6 @@ import {
     isBuildableStatus,
 } from '@/game/renderer/building-indicator-renderer';
 import { MapSize } from '@/utilities/map-size';
-import { TerritoryMap } from '@/game/buildings/territory';
 import { BuildingType } from '@/game/entity';
 import { TERRAIN } from './helpers/test-map';
 
@@ -83,15 +82,6 @@ describe('BuildingIndicatorRenderer', () => {
             renderer.tileOccupancy.set('5,5', 1);
             expect(renderer.computePlacementStatus(5, 5)).toBe(PlacementStatus.Occupied);
         });
-
-        // Territory checks are currently disabled (ENABLE_TERRITORY_CHECKS = false)
-        it.skip('should return EnemyTerritory when in enemy territory', () => {
-            renderer.hasBuildings = true;
-            renderer.player = 0;
-            renderer.territory = new TerritoryMap(mapSize);
-            renderer.territory.owner[mapSize.toIndex(5, 5)] = 1;
-            expect(renderer.computePlacementStatus(5, 5)).toBe(PlacementStatus.EnemyTerritory);
-        });
     });
 
     describe('getStatusDescription', () => {
@@ -108,10 +98,6 @@ describe('BuildingIndicatorRenderer', () => {
                 .toBe('Cannot build: Invalid terrain');
             expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.Occupied))
                 .toBe('Cannot build: Occupied');
-            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.EnemyTerritory))
-                .toBe('Cannot build: Enemy territory');
-            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.OutsideTerritory))
-                .toBe('Cannot build: Outside territory');
         });
     });
 
@@ -135,8 +121,6 @@ describe('BuildingIndicatorRenderer', () => {
         it('should return false for non-buildable statuses (no indicator shown)', () => {
             expect(isBuildableStatus(PlacementStatus.InvalidTerrain)).toBe(false);
             expect(isBuildableStatus(PlacementStatus.Occupied)).toBe(false);
-            expect(isBuildableStatus(PlacementStatus.EnemyTerritory)).toBe(false);
-            expect(isBuildableStatus(PlacementStatus.OutsideTerritory)).toBe(false);
             expect(isBuildableStatus(PlacementStatus.TooSteep)).toBe(false);
         });
     });

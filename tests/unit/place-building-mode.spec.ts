@@ -175,7 +175,7 @@ describe('PlaceBuildingMode', () => {
 
             let state = mode.getRenderState(mockContext);
             expect(state.cursor).toBe(CursorType.Crosshair);
-            expect(state.preview).toMatchObject({ type: 'building', valid: true });
+            expect(state.preview).toMatchObject({ type: 'placement', entityType: 'building', valid: true });
             expect(state.statusText).toContain('Place');
 
             // Invalid preview

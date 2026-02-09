@@ -1,11 +1,9 @@
 import { FileManager } from '@/utilities/file-manager';
 import { IMapLoader } from '@/resources/map/imap-loader';
 import { MapSize } from '@/utilities/map-size';
-import { EntityType } from './entity';
 import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
 import { Command, executeCommand } from './commands/command';
-import { TerritoryMap } from './buildings/territory';
 import { isBuildable } from './systems/placement';
 import { populateMapObjects } from './systems/map-objects';
 import { SoundManager } from './audio/sound-manager';
@@ -22,9 +20,6 @@ export class Game {
     public readonly mapLoader: IMapLoader;
     public state: GameState;
     public gameLoop: GameLoop;
-    public territory: TerritoryMap;
-    /** Incremented when territory changes, so renderers can cache-invalidate */
-    public territoryVersion = 0;
 
     /** Current interaction mode */
     public mode: 'select' | 'place_building' | 'move' = 'select';
@@ -50,7 +45,6 @@ export class Game {
         this.state = new GameState();
         this.gameLoop = new GameLoop(this.state);
         this.gameLoop.setTerrainData(this.groundType, this.groundHeight, this.mapSize.width, this.mapSize.height);
-        this.territory = new TerritoryMap(this.mapSize);
 
         if (this.objectType) {
             populateMapObjects(this.state, this.objectType, this.groundType, this.mapSize);
@@ -81,25 +75,11 @@ export class Game {
         return SoundManager.getInstance();
     }
 
-    /** Execute a command against the game state, then update territory if needed */
+    /** Execute a command against the game state */
     public execute(cmd: Command): boolean {
-        const result = executeCommand(
-            this.state, cmd, this.groundType, this.groundHeight, this.mapSize, this.territory
+        return executeCommand(
+            this.state, cmd, this.groundType, this.groundHeight, this.mapSize
         );
-
-        // Rebuild territory when buildings change
-        if (result && (cmd.type === 'place_building' || cmd.type === 'remove_entity')) {
-            this.rebuildTerritory();
-        }
-
-        return result;
-    }
-
-    /** Rebuild territory map from current building entities */
-    public rebuildTerritory(): void {
-        const buildings = this.state.entities.filter(e => e.type === EntityType.Building);
-        this.territory.rebuild(buildings);
-        this.territoryVersion++;
     }
 
     /** Find the first buildable land tile, spiraling out from map center */
@@ -126,7 +106,7 @@ export class Game {
     }
 
     /**
-     * Remove all entities via the command pipeline and rebuild territory.
+     * Remove all entities via the command pipeline.
      * Each entity goes through the full remove_entity command flow
      * (terrain restoration, movement cleanup, selection cleanup, etc.).
      */

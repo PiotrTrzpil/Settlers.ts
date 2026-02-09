@@ -1,6 +1,6 @@
 import { CARDINAL_OFFSETS, tileKey, BuildingType, getBuildingFootprint } from '../entity';
 import { MapSize } from '@/utilities/map-size';
-import { TerritoryMap, NO_OWNER } from '../buildings/territory';
+import type { PlacementEntityType } from '../input/render-state';
 
 /**
  * Terrain passability and buildability based on LandscapeType enum values.
@@ -80,60 +80,6 @@ export function canPlaceBuilding(
     return true;
 }
 
-/**
- * Check if a building can be placed, considering territory ownership.
- * The first building per player is free (no territory required).
- * Subsequent buildings must be within the player's territory or adjacent to it.
- *
- * NOTE: Territory checks are currently disabled for easier testing.
- * Set ENABLE_TERRITORY_CHECKS = true to re-enable.
- */
-const ENABLE_TERRITORY_CHECKS = false;
-
-export function canPlaceBuildingWithTerritory(
-    groundType: Uint8Array,
-    groundHeight: Uint8Array,
-    mapSize: MapSize,
-    tileOccupancy: Map<string, number>,
-    territory: TerritoryMap,
-    x: number,
-    y: number,
-    player: number,
-    hasBuildings: boolean,
-    buildingType?: BuildingType
-): boolean {
-    // If building type is specified, use multi-tile validation
-    if (buildingType !== undefined) {
-        return canPlaceBuildingFootprint(
-            groundType, groundHeight, mapSize, tileOccupancy,
-            territory, x, y, player, hasBuildings, buildingType
-        );
-    }
-
-    // Legacy single-tile validation
-    if (!canPlaceBuilding(groundType, groundHeight, mapSize, tileOccupancy, x, y)) {
-        return false;
-    }
-
-    if (!ENABLE_TERRITORY_CHECKS || !hasBuildings) {
-        return true;
-    }
-
-    // Check territory ownership
-    const tile = { x, y };
-    if (isInEnemyTerritory(tile, territory, player)) {
-        return false;
-    }
-
-    // Allow building in own territory or unclaimed land adjacent to own territory
-    const owner = territory.getOwner(x, y);
-    if (owner === NO_OWNER && !isAdjacentToOwnTerritory(tile, territory, player, mapSize)) {
-        return false;
-    }
-
-    return true;
-}
-
 interface TileCoord { x: number; y: number }
 
 /** Check if all footprint tiles are within map bounds */
@@ -154,46 +100,6 @@ function isTileBuildable(
     if (!isBuildable(groundType[idx])) return false;
     if (tileOccupancy.has(tileKey(tile.x, tile.y))) return false;
     return true;
-}
-
-/** Check if a tile is in enemy territory */
-function isInEnemyTerritory(
-    tile: TileCoord,
-    territory: TerritoryMap,
-    player: number
-): boolean {
-    const owner = territory.getOwner(tile.x, tile.y);
-    return owner !== player && owner !== NO_OWNER;
-}
-
-/** Check if a tile is adjacent to player's territory */
-function isAdjacentToOwnTerritory(
-    tile: TileCoord,
-    territory: TerritoryMap,
-    player: number,
-    mapSize: MapSize
-): boolean {
-    for (const [dx, dy] of CARDINAL_OFFSETS) {
-        const nx = tile.x + dx;
-        const ny = tile.y + dy;
-        if (nx < 0 || nx >= mapSize.width || ny < 0 || ny >= mapSize.height) continue;
-        if (territory.isOwnedBy(nx, ny, player)) return true;
-    }
-    return false;
-}
-
-/** Check if any footprint tile has valid territory access */
-function hasValidTerritoryAccess(
-    footprint: TileCoord[],
-    territory: TerritoryMap,
-    player: number,
-    mapSize: MapSize
-): boolean {
-    for (const tile of footprint) {
-        if (territory.getOwner(tile.x, tile.y) === player) return true;
-        if (isAdjacentToOwnTerritory(tile, territory, player, mapSize)) return true;
-    }
-    return false;
 }
 
 /** Check slope across entire footprint */
@@ -221,11 +127,8 @@ export function canPlaceBuildingFootprint(
     groundHeight: Uint8Array,
     mapSize: MapSize,
     tileOccupancy: Map<string, number>,
-    territory: TerritoryMap,
     x: number,
     y: number,
-    player: number,
-    hasBuildings: boolean,
     buildingType: BuildingType
 ): boolean {
     const footprint = getBuildingFootprint(x, y, buildingType);
@@ -234,14 +137,124 @@ export function canPlaceBuildingFootprint(
 
     for (const tile of footprint) {
         if (!isTileBuildable(tile, groundType, mapSize, tileOccupancy)) return false;
-        if (ENABLE_TERRITORY_CHECKS && hasBuildings && isInEnemyTerritory(tile, territory, player)) {
-            return false;
-        }
-    }
-
-    if (ENABLE_TERRITORY_CHECKS && hasBuildings) {
-        if (!hasValidTerritoryAccess(footprint, territory, player, mapSize)) return false;
     }
 
     return isFootprintSlopeValid(footprint, groundHeight, mapSize);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Resource Placement Validation
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Check if a resource can be placed at tile (x, y).
+ * Rules:
+ * 1. Position is within map bounds
+ * 2. Terrain is passable (not water, rock)
+ * 3. Tile is not occupied
+ */
+export function canPlaceResource(
+    groundType: Uint8Array,
+    mapSize: MapSize,
+    tileOccupancy: Map<string, number>,
+    x: number,
+    y: number
+): boolean {
+    // Bounds check
+    if (x < 0 || y < 0 || x >= mapSize.width || y >= mapSize.height) {
+        return false;
+    }
+
+    const idx = mapSize.toIndex(x, y);
+
+    // Must be passable terrain
+    if (!isPassable(groundType[idx])) {
+        return false;
+    }
+
+    // Must not be occupied
+    if (tileOccupancy.has(tileKey(x, y))) {
+        return false;
+    }
+
+    return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Unified Placement Validation
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Game context for placement validation.
+ * Provides all necessary data to validate any placement type.
+ */
+export interface PlacementContext {
+    groundType: Uint8Array;
+    groundHeight: Uint8Array;
+    mapSize: MapSize;
+    tileOccupancy: Map<string, number>;
+}
+
+/**
+ * Unified placement validation for any entity type.
+ * Delegates to type-specific validators.
+ *
+ * @param entityType The type of entity being placed
+ * @param subType The specific subtype (BuildingType, EMaterialType, etc)
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @param ctx Game context for validation
+ * @returns true if placement is valid
+ */
+export function canPlaceEntity(
+    entityType: PlacementEntityType,
+    subType: number,
+    x: number,
+    y: number,
+    ctx: PlacementContext
+): boolean {
+    switch (entityType) {
+    case 'building':
+        return canPlaceBuildingFootprint(
+            ctx.groundType,
+            ctx.groundHeight,
+            ctx.mapSize,
+            ctx.tileOccupancy,
+            x,
+            y,
+            subType as BuildingType
+        );
+
+    case 'resource':
+        return canPlaceResource(
+            ctx.groundType,
+            ctx.mapSize,
+            ctx.tileOccupancy,
+            x,
+            y
+        );
+
+    default:
+        // Unknown entity type - reject
+        return false;
+    }
+}
+
+/**
+ * Create a placement validator function for use with placement modes.
+ * Captures game context and returns a function matching the mode's validator signature.
+ *
+ * @param entityType The entity type being validated
+ * @param getContext Function to get current game context
+ * @returns Validator function for the placement mode
+ */
+export function createPlacementValidator(
+    entityType: PlacementEntityType,
+    getContext: () => PlacementContext | null
+): (x: number, y: number, subType: number) => boolean {
+    return (x: number, y: number, subType: number) => {
+        const ctx = getContext();
+        if (!ctx) return false;
+        return canPlaceEntity(entityType, subType, x, y, ctx);
+    };
 }

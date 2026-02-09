@@ -2,7 +2,7 @@
  * Integration test: Building Lifecycle
  *
  * Sweeps across: Command System → GameState → BuildingConstruction →
- *                TerrainLeveling → Territory → Entity Removal
+ *                TerrainLeveling → Entity Removal
  *
  * Tests the full lifecycle of a building from placement to removal,
  * verifying that all subsystems interact correctly.
@@ -17,7 +17,6 @@ import {
     removeEntity,
 } from '../helpers/test-game';
 import { EntityType, BuildingType, BuildingConstructionPhase, getBuildingFootprint } from '@/game/entity';
-import { TerritoryMap, NO_OWNER } from '@/game/buildings/territory';
 import {
     captureOriginalTerrain,
     applyTerrainLeveling,
@@ -30,7 +29,7 @@ import {
     type TerrainContext,
 } from '@/game/buildings/construction';
 
-describe('Building Lifecycle: place → construct → territory → remove', () => {
+describe('Building Lifecycle: place → construct → remove', () => {
     it('full lifecycle from placement through construction to removal', () => {
         const map = createTestMap(64, 64, { flatHeight: 100 });
         const state = createGameState();
@@ -101,18 +100,7 @@ describe('Building Lifecycle: place → construct → territory → remove', () 
         visual = getBuildingVisualState(bs);
         expect(visual.isCompleted).toBe(true);
 
-        // ── Step 4: Territory claims ──
-        const territory = new TerritoryMap(map.mapSize);
-        territory.rebuild(state.entities.filter(e => e.type === EntityType.Building));
-
-        // Building should claim territory around it
-        expect(territory.getOwner(20, 20)).toBe(0);
-        expect(territory.isOwnedBy(20, 20, 0)).toBe(true);
-
-        // Far away should be unowned
-        expect(territory.getOwner(60, 60)).toBe(NO_OWNER);
-
-        // ── Step 5: Remove building and verify cleanup ──
+        // ── Step 4: Remove building and verify cleanup ──
         const removed = removeEntity(state, map, building!.id);
         expect(removed).toBe(true);
 
@@ -126,43 +114,6 @@ describe('Building Lifecycle: place → construct → territory → remove', () 
         for (const tile of footprint) {
             expect(map.groundType[map.mapSize.toIndex(tile.x, tile.y)]).toBe(TERRAIN.GRASS);
         }
-
-        // Territory cleared after rebuild
-        territory.rebuild(state.entities.filter(e => e.type === EntityType.Building));
-        expect(territory.getOwner(20, 20)).toBe(NO_OWNER);
-    });
-
-    it('multiple buildings compete for territory, removal updates ownership', () => {
-        const map = createTestMap(64, 64, { flatHeight: 100 });
-        const state = createGameState();
-
-        // Place two buildings for different players
-        placeBuilding(state, map, 15, 15, BuildingType.Tower, 0);
-        placeBuilding(state, map, 30, 15, BuildingType.Tower, 1);
-
-        const buildings = state.entities.filter(e => e.type === EntityType.Building);
-        expect(buildings).toHaveLength(2);
-
-        // Build territory
-        const territory = new TerritoryMap(map.mapSize);
-        territory.rebuild(buildings);
-
-        // Each player owns their building's tile
-        expect(territory.getOwner(15, 15)).toBe(0);
-        expect(territory.getOwner(30, 15)).toBe(1);
-
-        // Midpoint ownership depends on distance
-        expect(territory.getOwner(22, 15)).toBe(0); // closer to player 0
-        expect(territory.getOwner(23, 15)).toBe(1); // closer to player 1
-
-        // Remove player 0's tower
-        removeEntity(state, map, buildings[0].id);
-        const remainingBuildings = state.entities.filter(e => e.type === EntityType.Building);
-        territory.rebuild(remainingBuildings);
-
-        // Player 0's territory is now unowned or claimed by player 1
-        expect(territory.getOwner(15, 15)).toBe(NO_OWNER);
-        expect(territory.getOwner(30, 15)).toBe(1);
     });
 
     it('building placement fails on invalid terrain, succeeds on valid', () => {

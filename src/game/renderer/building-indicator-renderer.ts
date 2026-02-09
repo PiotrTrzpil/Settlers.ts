@@ -1,8 +1,7 @@
 import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
-import { TileCoord, CARDINAL_OFFSETS, tileKey, BuildingType, getBuildingFootprint } from '../entity';
-import { TerritoryMap, NO_OWNER } from '../buildings/territory';
+import { TileCoord, tileKey, BuildingType, getBuildingFootprint } from '../entity';
 import { isBuildable } from '../systems/placement';
 import { ShaderProgram } from './shader-program';
 
@@ -17,18 +16,14 @@ export enum PlacementStatus {
     InvalidTerrain = 0,
     /** Cannot place - tile is occupied */
     Occupied = 1,
-    /** Cannot place - enemy territory */
-    EnemyTerritory = 2,
-    /** Cannot place - outside territory and not adjacent */
-    OutsideTerritory = 3,
     /** Cannot place - slope too steep */
-    TooSteep = 4,
+    TooSteep = 2,
     /** Can place - difficult (high slope) */
-    Difficult = 5,
+    Difficult = 3,
     /** Can place - medium difficulty */
-    Medium = 6,
+    Medium = 4,
     /** Can place - easy (flat terrain) */
-    Easy = 7,
+    Easy = 5,
 }
 
 /**
@@ -38,8 +33,6 @@ export enum PlacementStatus {
 const STATUS_COLORS: Record<PlacementStatus, number[]> = {
     [PlacementStatus.InvalidTerrain]: [0.6, 0.1, 0.1, 0.8],     // Dark red
     [PlacementStatus.Occupied]: [0.7, 0.2, 0.2, 0.8],           // Red
-    [PlacementStatus.EnemyTerritory]: [0.8, 0.2, 0.4, 0.8],     // Magenta-red
-    [PlacementStatus.OutsideTerritory]: [0.7, 0.3, 0.2, 0.8],   // Orange-red
     [PlacementStatus.TooSteep]: [0.9, 0.3, 0.1, 0.8],           // Dark orange
     [PlacementStatus.Difficult]: [0.9, 0.7, 0.1, 0.8],          // Yellow-orange
     [PlacementStatus.Medium]: [0.7, 0.9, 0.2, 0.8],             // Yellow-green
@@ -52,9 +45,6 @@ const HOVER_RING_COLOR = [1.0, 1.0, 0.3, 0.7];
 
 // Maximum slope difference for building placement
 const MAX_SLOPE_DIFF = 2;
-
-// Territory checks disabled for easier testing (matches placement.ts)
-const ENABLE_TERRITORY_CHECKS = false;
 
 // Indicator dot size (shader multiplies by 0.4, so effective size = scale * 0.4)
 const INDICATOR_DOT_SCALE = 0.4;
@@ -71,7 +61,7 @@ const BASE_QUAD = new Float32Array([
 /**
  * Check if a placement status allows building (shows an indicator).
  * Only Easy, Medium, and Difficult statuses show indicators.
- * Invalid tiles (terrain, occupied, territory, steep) show NO indicator.
+ * Invalid tiles (terrain, occupied, steep) show NO indicator.
  */
 export function isBuildableStatus(status: PlacementStatus): boolean {
     return status === PlacementStatus.Easy ||
@@ -106,20 +96,14 @@ export class BuildingIndicatorRenderer {
     private cacheViewX = 0;
     private cacheViewY = 0;
     private cacheZoom = 0;
-    private cacheTerritoryVersion = 0;
-    private cachePlayer = -1;
-    private cacheHasBuildings = false;
     private cacheBuildingType: BuildingType | null = null;
 
     // Public state - set by use-renderer
     public enabled = false;
     public hoveredTile: TileCoord | null = null;
-    public player = 0;
-    public hasBuildings = false;
     public buildingType: BuildingType | null = null;
 
     // External dependencies
-    public territory: TerritoryMap | null = null;
     public tileOccupancy: Map<string, number> = new Map();
 
     constructor(
@@ -178,34 +162,7 @@ export class BuildingIndicatorRenderer {
         const idx = this.mapSize.toIndex(tile.x, tile.y);
         if (!isBuildable(this.groundType[idx])) return PlacementStatus.InvalidTerrain;
         if (this.tileOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
-
-        if (ENABLE_TERRITORY_CHECKS && this.territory && this.hasBuildings) {
-            const owner = this.territory.getOwner(tile.x, tile.y);
-            if (owner !== this.player && owner !== NO_OWNER) return PlacementStatus.EnemyTerritory;
-        }
         return null;
-    }
-
-    /** Check if a tile is adjacent to player's territory */
-    private isAdjacentToOwnTerritory(tile: TileCoord): boolean {
-        if (!this.territory) return false;
-        for (const [dx, dy] of CARDINAL_OFFSETS) {
-            const nx = tile.x + dx;
-            const ny = tile.y + dy;
-            if (nx < 0 || nx >= this.mapSize.width || ny < 0 || ny >= this.mapSize.height) continue;
-            if (this.territory.isOwnedBy(nx, ny, this.player)) return true;
-        }
-        return false;
-    }
-
-    /** Check if any footprint tile has valid territory access */
-    private hasValidTerritoryAccess(footprint: TileCoord[]): boolean {
-        if (!this.territory) return true;
-        for (const tile of footprint) {
-            if (this.territory.getOwner(tile.x, tile.y) === this.player) return true;
-            if (this.isAdjacentToOwnTerritory(tile)) return true;
-        }
-        return false;
     }
 
     /** Compute slope difficulty rating */
@@ -240,33 +197,26 @@ export class BuildingIndicatorRenderer {
             if (issue !== null) return issue;
         }
 
-        if (ENABLE_TERRITORY_CHECKS && this.territory && this.hasBuildings) {
-            if (!this.hasValidTerritoryAccess(footprint)) return PlacementStatus.OutsideTerritory;
-        }
-
         return this.computeSlopeDifficulty(footprint);
     }
 
     /**
      * Check if cache is still valid.
      */
-    private isCacheValid(viewPoint: IViewPoint, territoryVersion: number): boolean {
+    private isCacheValid(viewPoint: IViewPoint): boolean {
         const viewDist = Math.abs(viewPoint.x - this.cacheViewX) +
                         Math.abs(viewPoint.y - this.cacheViewY);
         const zoomDiff = Math.abs(viewPoint.zoom - this.cacheZoom);
 
         return viewDist < 5 &&
                zoomDiff < 0.01 &&
-               territoryVersion === this.cacheTerritoryVersion &&
-               this.player === this.cachePlayer &&
-               this.hasBuildings === this.cacheHasBuildings &&
                this.buildingType === this.cacheBuildingType;
     }
 
     /**
      * Rebuild the indicator cache for visible tiles.
      */
-    private rebuildCache(viewPoint: IViewPoint, territoryVersion: number): void {
+    private rebuildCache(viewPoint: IViewPoint): void {
         this.indicatorCache.clear();
 
         // Compute visible tile range based on viewport
@@ -295,9 +245,6 @@ export class BuildingIndicatorRenderer {
         this.cacheViewX = viewPoint.x;
         this.cacheViewY = viewPoint.y;
         this.cacheZoom = viewPoint.zoom;
-        this.cacheTerritoryVersion = territoryVersion;
-        this.cachePlayer = this.player;
-        this.cacheHasBuildings = this.hasBuildings;
         this.cacheBuildingType = this.buildingType;
     }
 
@@ -307,16 +254,15 @@ export class BuildingIndicatorRenderer {
     public draw(
         gl: WebGL2RenderingContext,
         projection: Float32Array,
-        viewPoint: IViewPoint,
-        territoryVersion: number
+        viewPoint: IViewPoint
     ): void {
         if (!this.enabled || !this.shaderProgram || !this.dynamicBuffer) {
             return;
         }
 
         // Rebuild cache if needed
-        if (!this.isCacheValid(viewPoint, territoryVersion)) {
-            this.rebuildCache(viewPoint, territoryVersion);
+        if (!this.isCacheValid(viewPoint)) {
+            this.rebuildCache(viewPoint);
         }
 
         // Setup shader
@@ -399,10 +345,6 @@ export class BuildingIndicatorRenderer {
             return 'Cannot build: Invalid terrain';
         case PlacementStatus.Occupied:
             return 'Cannot build: Occupied';
-        case PlacementStatus.EnemyTerritory:
-            return 'Cannot build: Enemy territory';
-        case PlacementStatus.OutsideTerritory:
-            return 'Cannot build: Outside territory';
         case PlacementStatus.TooSteep:
             return 'Cannot build: Too steep';
         case PlacementStatus.Difficult:
@@ -419,6 +361,5 @@ export class BuildingIndicatorRenderer {
      */
     public invalidateCache(): void {
         this.indicatorCache.clear();
-        this.cacheTerritoryVersion = -1;
     }
 }

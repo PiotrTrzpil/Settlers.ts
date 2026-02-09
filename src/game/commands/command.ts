@@ -2,7 +2,6 @@ import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE } from '../entity';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../systems/placement';
 import { restoreOriginalTerrain } from '../systems/terrain-leveling';
-import { TerritoryMap } from '../buildings/territory';
 import { MapSize } from '@/utilities/map-size';
 import {
     Command,
@@ -46,22 +45,14 @@ interface CommandContext {
     groundType: Uint8Array;
     groundHeight: Uint8Array;
     mapSize: MapSize;
-    territory?: TerritoryMap;
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): boolean {
-    const { state, groundType, groundHeight, mapSize, territory } = ctx;
-
-    const hasBuildings = state.entities.some(
-        e => e.type === EntityType.Building && e.player === cmd.player
-    );
-
-    const territoryToUse = territory ?? new TerritoryMap(mapSize);
-    const hasExistingBuildings = territory ? hasBuildings : false;
+    const { state, groundType, groundHeight, mapSize } = ctx;
 
     if (!canPlaceBuildingFootprint(
         groundType, groundHeight, mapSize, state.tileOccupancy,
-        territoryToUse, cmd.x, cmd.y, cmd.player, hasExistingBuildings, cmd.buildingType
+        cmd.x, cmd.y, cmd.buildingType
     )) {
         return false;
     }
@@ -292,10 +283,9 @@ export function executeCommand(
     cmd: Command,
     groundType: Uint8Array,
     groundHeight: Uint8Array,
-    mapSize: MapSize,
-    territory?: TerritoryMap
+    mapSize: MapSize
 ): boolean {
-    const ctx: CommandContext = { state, groundType, groundHeight, mapSize, territory };
+    const ctx: CommandContext = { state, groundType, groundHeight, mapSize };
 
     switch (cmd.type) {
     case 'place_building':

@@ -2,11 +2,11 @@
  * Integration test: Game Session Flow
  *
  * Sweeps across all major subsystems in a single session-like flow:
- *   GameState → Commands → Placement → Economy → Territory →
+ *   GameState → Commands → Placement → Economy →
  *   Pathfinding → Movement → Selection → Construction → Removal
  *
  * Mimics what happens during an actual game: player places buildings,
- * spawns units, selects entities, moves units around, and manages territory.
+ * spawns units, selects entities, and moves units around.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -21,7 +21,6 @@ import {
 } from '../helpers/test-game';
 import { EntityType, BuildingType } from '@/game/entity';
 // Movement is handled via state.movement.update(dt)
-import { TerritoryMap } from '@/game/buildings/territory';
 import { executeCommand } from '@/game/commands/command';
 import {
     BUILDING_PRODUCTIONS,
@@ -90,16 +89,6 @@ describe('Game Session: multi-system integration sweep', () => {
         expect(buildings).toHaveLength(3);
         const units = state.entities.filter(e => e.type === EntityType.Unit);
         expect(units.length).toBeGreaterThanOrEqual(1);
-
-        // ── Territory: two players have separate territories ──
-        const territory = new TerritoryMap(map.mapSize);
-        territory.rebuild(buildings);
-
-        // Tower (player 1) at (30,30) claims nearby tiles
-        expect(territory.getOwner(30, 30)).toBe(1);
-        expect(territory.isOwnedBy(30, 30, 1)).toBe(true);
-        // Lumberjack (player 0) at (20,20) has smaller radius but claims nearby
-        expect(territory.getOwner(20, 20)).toBe(0);
 
         // ── Spawn additional units ──
         expect(spawnUnit(state, map, 15, 15, 1, 0)).toBe(true); // Builder (selectable)
