@@ -6,7 +6,7 @@
  */
 
 import { TileCoord, tileKey } from '../../entity';
-import { isPassable } from '../placement';
+import { isPassable } from '../../features/placement';
 import { GRID_DELTAS, NUMBER_OF_DIRECTIONS } from '../hex-directions';
 import { MovementController } from './movement-controller';
 

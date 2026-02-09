@@ -4,7 +4,7 @@ import { MapSize } from '@/utilities/map-size';
 import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
 import { Command, executeCommand } from './commands/command';
-import { isBuildable } from './systems/placement';
+import { isBuildable } from './features/placement';
 import { populateMapObjects } from './systems/map-objects';
 import { SoundManager } from './audio/sound-manager';
 import { Race } from './renderer/sprite-metadata';

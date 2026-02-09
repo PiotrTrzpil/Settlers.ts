@@ -1,7 +1,7 @@
 import { EntityType, TileCoord, tileKey } from '../../entity';
 import { MovementController } from './movement-controller';
 import { findPath } from '../pathfinding';
-import { isPassable } from '../placement';
+import { isPassable } from '../../features/placement';
 import { GRID_DELTAS, getAllNeighbors } from '../hex-directions';
 import { findRandomFreeDirection, shouldYieldToPush } from './push-utils';
 

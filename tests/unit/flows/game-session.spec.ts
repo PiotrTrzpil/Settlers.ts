@@ -28,7 +28,7 @@ import {
     getBuildingTypesRequestingMaterial,
 } from '@/game/economy/building-production';
 import { EMaterialType, isMaterialDroppable, getMaterialPriority } from '@/game/economy/material-type';
-import { isPassable, isBuildable, canPlaceBuilding } from '@/game/systems/placement';
+import { isPassable, isBuildable, canPlaceBuilding } from '@/game/features/placement';
 import { findPath } from '@/game/systems/pathfinding';
 
 describe('Game Session: multi-system integration sweep', () => {

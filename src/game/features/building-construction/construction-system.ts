@@ -10,7 +10,7 @@ import type { EventBus } from '../../event-bus';
 import { EntityType } from '../../entity';
 import { BuildingType } from '../../buildings/types';
 import { UnitType } from '../../unit-types';
-import { isPassable } from '../../systems/placement';
+import { isPassable } from '../placement';
 import { BuildingConstructionPhase, type BuildingState, type BuildingSpawnConfig, type TerrainContext } from './types';
 import { determinePhase, calculatePhaseProgress } from './internal/phase-transitions';
 import { captureOriginalTerrain, applyTerrainLeveling, restoreOriginalTerrain } from './internal/terrain-capture';

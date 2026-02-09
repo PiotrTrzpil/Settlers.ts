@@ -1,6 +1,6 @@
 import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE } from '../entity';
 import { GameState } from '../game-state';
-import { canPlaceBuildingFootprint, isPassable } from '../systems/placement';
+import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
 import { MapSize } from '@/utilities/map-size';
 import type { EventBus } from '../event-bus';
 import {

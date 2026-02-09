@@ -1,7 +1,7 @@
 import { EntityType, MapObjectType } from '../entity';
 import { GameState } from '../game-state';
 import { MapSize } from '@/utilities/map-size';
-import { isBuildable } from './placement';
+import { isBuildable } from '../features/placement';
 import { LogHandler } from '@/utilities/log-handler';
 import { TREE_VARIATION_COUNT } from '../renderer/sprite-metadata';
 

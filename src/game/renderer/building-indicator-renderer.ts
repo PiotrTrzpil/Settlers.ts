@@ -2,29 +2,14 @@ import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { TileCoord, tileKey, BuildingType, getBuildingFootprint } from '../entity';
-import { isBuildable } from '../systems/placement';
+import { isBuildable, PlacementStatus, MAX_SLOPE_DIFF } from '../features/placement';
 import { ShaderProgram } from './shader-program';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
 
-/**
- * Placement indicator status for a tile.
- */
-export enum PlacementStatus {
-    /** Cannot place - invalid terrain (water, rock, etc.) */
-    InvalidTerrain = 0,
-    /** Cannot place - tile is occupied */
-    Occupied = 1,
-    /** Cannot place - slope too steep */
-    TooSteep = 2,
-    /** Can place - difficult (high slope) */
-    Difficult = 3,
-    /** Can place - medium difficulty */
-    Medium = 4,
-    /** Can place - easy (flat terrain) */
-    Easy = 5,
-}
+// Re-export PlacementStatus for backward compatibility
+export { PlacementStatus } from '../features/placement';
 
 /**
  * Color mapping for placement indicators (RGBA, 0-1 range).
@@ -42,9 +27,6 @@ const STATUS_COLORS: Record<PlacementStatus, number[]> = {
 // Hover highlight - brighter version
 const HOVER_COLOR = [1.0, 1.0, 1.0, 0.9];
 const HOVER_RING_COLOR = [1.0, 1.0, 0.3, 0.7];
-
-// Maximum slope difference for building placement
-const MAX_SLOPE_DIFF = 2;
 
 // Indicator dot size (shader multiplies by 0.4, so effective size = scale * 0.4)
 const INDICATOR_DOT_SCALE = 0.4;
