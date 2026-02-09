@@ -392,6 +392,61 @@ describe('Job Completion Handlers', () => {
     });
 
     // ---------------------------------------------------------------------------
+    // Edge Cases: Building Destroyed
+    // ---------------------------------------------------------------------------
+
+    describe('building destroyed edge cases', () => {
+        it('should handle pickup when source building is destroyed', () => {
+            // Create carrier with pickup job pointing to non-existent building
+            const carrier = createCarrierWithJob({
+                type: 'pickup',
+                fromBuilding: 999, // Building doesn't exist
+                material: EMaterialType.LOG,
+                amount: 1,
+            });
+
+            const result = handlePickupCompletion(
+                carrier,
+                carrierManager,
+                inventoryManager,
+                300,
+                eventBus,
+            );
+
+            expect(result.success).toBe(false);
+            expect(result.nextJob?.type).toBe('return_home');
+            expect(result.error).toContain('no inventory');
+        });
+
+        it('should handle delivery when destination building is destroyed', () => {
+            // Create carrier with deliver job pointing to non-existent building
+            const carrier = createCarrierWithJob({
+                type: 'deliver',
+                toBuilding: 999, // Building doesn't exist
+                material: EMaterialType.LOG,
+                amount: 1,
+            });
+            carrier.carryingMaterial = EMaterialType.LOG;
+            carrier.carryingAmount = 1;
+
+            const result = handleDeliveryCompletion(
+                carrier,
+                carrierManager,
+                inventoryManager,
+                eventBus,
+            );
+
+            expect(result.success).toBe(false);
+            expect(result.nextJob?.type).toBe('return_home');
+            expect(result.error).toContain('no inventory');
+
+            // Carrier should no longer be carrying goods (they're lost)
+            const updatedCarrier = carrierManager.getCarrier(1)!;
+            expect(updatedCarrier.carryingMaterial).toBeNull();
+        });
+    });
+
+    // ---------------------------------------------------------------------------
     // handleJobCompletion (dispatcher)
     // ---------------------------------------------------------------------------
 

@@ -28,7 +28,7 @@ export {
 export { CarrierManager } from './carrier-manager';
 
 // System (TickSystem)
-export { CarrierSystem, type PendingDelivery } from './carrier-system';
+export { CarrierSystem, type CarrierSystemConfig } from './carrier-system';
 
 // Job completion handlers
 export {

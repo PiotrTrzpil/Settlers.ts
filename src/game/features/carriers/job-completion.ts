@@ -1,10 +1,14 @@
 /**
  * Carrier Job Completion Handlers
  *
- * Handles the completion of each phase of a carrier's job:
- * - Pickup: Transfer material from building to carrier, create deliver job
- * - Deliver: Transfer material from carrier to building, return home or idle
- * - Return Home: Set carrier to idle state
+ * Pure functions that handle the completion of each phase of a carrier's job.
+ * These functions update state through the CarrierManager API and return
+ * information about what job should come next.
+ *
+ * Design principles:
+ * - Pure functions with explicit dependencies
+ * - All state changes go through manager APIs (no direct mutation)
+ * - Return result objects for caller to decide next action
  */
 
 import type { EventBus } from '../../event-bus';
@@ -19,23 +23,27 @@ import type { BuildingInventoryManager } from '../inventory';
 export interface JobCompletionResult {
     /** Whether the completion was successful */
     success: boolean;
-    /** The next job assigned (if any) */
+    /** The next job to assign (caller is responsible for assignment) */
     nextJob: CarrierJob | null;
     /** Error message if unsuccessful */
     error?: string;
+    /** Amount actually transferred (for pickup/delivery) */
+    amountTransferred?: number;
 }
 
 /**
  * Handle completion of a pickup job.
- * Withdraws material from source building, updates carrier carrying state,
- * and creates a deliver job.
+ * Withdraws material from source building and updates carrier carrying state.
  *
- * @param carrier The carrier state
+ * IMPORTANT: This function does NOT assign the next job. The caller is responsible
+ * for assigning the returned nextJob to maintain clean separation of concerns.
+ *
+ * @param carrier The carrier state (read-only reference)
  * @param carrierManager Manager to update carrier state
  * @param inventoryManager Manager to handle inventory transfers
- * @param destinationBuildingId Building to deliver to
+ * @param destinationBuildingId Building to deliver to (for creating deliver job)
  * @param eventBus Optional event bus for emitting events
- * @returns Result of the completion
+ * @returns Result with success status and next job to assign
  */
 export function handlePickupCompletion(
     carrier: CarrierState,
@@ -54,6 +62,18 @@ export function handlePickupCompletion(
         };
     }
 
+    // Verify source building has inventory
+    const inventory = inventoryManager.getInventory(job.fromBuilding);
+    if (!inventory) {
+        // Building no longer exists or has no inventory
+        carrierManager.completeJob(carrier.entityId);
+        return {
+            success: false,
+            nextJob: { type: 'return_home' },
+            error: 'Source building has no inventory (may have been destroyed)',
+        };
+    }
+
     // Withdraw material from source building
     const withdrawn = inventoryManager.withdrawOutput(
         job.fromBuilding,
@@ -62,14 +82,11 @@ export function handlePickupCompletion(
     );
 
     if (withdrawn === 0) {
-        // Material no longer available - cancel job and return home
+        // Material no longer available - job fails
         carrierManager.completeJob(carrier.entityId);
-        const returnJob: CarrierJob = { type: 'return_home' };
-        carrierManager.assignJob(carrier.entityId, returnJob);
-
         return {
             success: false,
-            nextJob: returnJob,
+            nextJob: { type: 'return_home' },
             error: 'Material no longer available at source',
         };
     }
@@ -88,7 +105,7 @@ export function handlePickupCompletion(
         fromBuilding: job.fromBuilding,
     });
 
-    // Create deliver job
+    // Create deliver job for caller to assign
     const deliverJob: CarrierJob = {
         type: 'deliver',
         toBuilding: destinationBuildingId,
@@ -96,28 +113,25 @@ export function handlePickupCompletion(
         amount: withdrawn,
     };
 
-    // Assign the deliver job (bypass canAssignJobTo check since we're transitioning)
-    const carrierState = carrierManager.getCarrier(carrier.entityId);
-    if (carrierState) {
-        carrierState.currentJob = deliverJob;
-    }
-
     return {
         success: true,
         nextJob: deliverJob,
+        amountTransferred: withdrawn,
     };
 }
 
 /**
  * Handle completion of a deliver job.
- * Deposits material to destination building, clears carrier carrying state,
- * and creates a return_home job or sets to idle.
+ * Deposits material to destination building and clears carrier carrying state.
  *
- * @param carrier The carrier state
+ * IMPORTANT: This function does NOT assign the next job. The caller is responsible
+ * for assigning the returned nextJob.
+ *
+ * @param carrier The carrier state (read-only reference)
  * @param carrierManager Manager to update carrier state
  * @param inventoryManager Manager to handle inventory transfers
  * @param eventBus Optional event bus for emitting events
- * @returns Result of the completion
+ * @returns Result with success status and next job to assign
  */
 export function handleDeliveryCompletion(
     carrier: CarrierState,
@@ -135,6 +149,29 @@ export function handleDeliveryCompletion(
         };
     }
 
+    // Verify destination building has inventory
+    const inventory = inventoryManager.getInventory(job.toBuilding);
+    if (!inventory) {
+        // Building no longer exists - drop goods and return home
+        // TODO: In future, could drop goods on ground as stacked resource
+        carrierManager.setCarrying(carrier.entityId, null, 0);
+        carrierManager.completeJob(carrier.entityId);
+
+        eventBus?.emit('carrier:deliveryComplete', {
+            entityId: carrier.entityId,
+            material: job.material,
+            amount: 0,
+            toBuilding: job.toBuilding,
+            overflow: job.amount, // All goods lost
+        });
+
+        return {
+            success: false,
+            nextJob: { type: 'return_home' },
+            error: 'Destination building has no inventory (may have been destroyed)',
+        };
+    }
+
     // Deposit material to destination building
     const deposited = inventoryManager.depositInput(
         job.toBuilding,
@@ -142,14 +179,11 @@ export function handleDeliveryCompletion(
         job.amount,
     );
 
-    // Handle overflow - if building can't accept all, drop on ground (for now just log)
+    // Calculate overflow
     const overflow = job.amount - deposited;
-    if (overflow > 0) {
-        // TODO: Handle overflow - drop goods or find alternative destination
-        console.warn(
-            `Carrier ${carrier.entityId} could not deliver ${overflow} ${job.material} - destination full`,
-        );
-    }
+
+    // TODO: Handle overflow properly - for now goods are lost
+    // Future: drop on ground, find alternative destination, or return to source
 
     // Clear carrier carrying state
     carrierManager.setCarrying(carrier.entityId, null, 0);
@@ -166,16 +200,10 @@ export function handleDeliveryCompletion(
         overflow,
     });
 
-    // Create return_home job
-    const returnJob: CarrierJob = { type: 'return_home' };
-    const carrierState = carrierManager.getCarrier(carrier.entityId);
-    if (carrierState) {
-        carrierState.currentJob = returnJob;
-    }
-
     return {
         success: true,
-        nextJob: returnJob,
+        nextJob: { type: 'return_home' },
+        amountTransferred: deposited,
     };
 }
 
@@ -183,10 +211,10 @@ export function handleDeliveryCompletion(
  * Handle completion of a return_home job.
  * Sets carrier to idle status, ready for new jobs.
  *
- * @param carrier The carrier state
+ * @param carrier The carrier state (read-only reference)
  * @param carrierManager Manager to update carrier state
  * @param eventBus Optional event bus for emitting events
- * @returns Result of the completion
+ * @returns Result with success status (nextJob is always null)
  */
 export function handleReturnHomeCompletion(
     carrier: CarrierState,
@@ -225,12 +253,12 @@ export function handleReturnHomeCompletion(
  * Handle job completion based on current job type.
  * Dispatches to the appropriate completion handler.
  *
- * @param carrier The carrier state
+ * @param carrier The carrier state (read-only reference)
  * @param carrierManager Manager to update carrier state
  * @param inventoryManager Manager to handle inventory transfers
  * @param destinationBuildingId For pickup jobs, the building to deliver to
  * @param eventBus Optional event bus for emitting events
- * @returns Result of the completion
+ * @returns Result with success status and next job to assign
  */
 export function handleJobCompletion(
     carrier: CarrierState,

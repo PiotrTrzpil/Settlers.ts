@@ -106,7 +106,11 @@ export class GameLoop {
         };
 
         // 4. Carrier system — manages carrier fatigue and behavior
-        this.carrierSystem = new CarrierSystem(gameState.carrierManager);
+        this.carrierSystem = new CarrierSystem({
+            carrierManager: gameState.carrierManager,
+            inventoryManager: gameState.inventoryManager,
+            gameState: gameState,
+        });
         this.carrierSystem.registerEvents(eventBus);
         this.registerSystem(this.carrierSystem);
 
