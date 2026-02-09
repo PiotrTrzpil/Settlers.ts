@@ -1,5 +1,6 @@
 import { reactive, watch } from 'vue';
-import { EntityType } from './entity';
+import { EntityType, MapObjectType } from './entity';
+import { isResourceDeposit, getEnvironmentSubLayer, EnvironmentSubLayer } from './renderer/layer-visibility';
 import type { Game } from './game';
 
 const WINDOW_SIZE = 60;
@@ -44,6 +45,12 @@ export interface DebugStatsState {
     entityCount: number;
     buildingCount: number;
     unitCount: number;
+    resourceCount: number;
+    environmentCount: number;
+    treeCount: number;
+    stoneCount: number;
+    plantCount: number;
+    otherCount: number;
     unitsMoving: number;
     totalPathSteps: number;
 
@@ -187,6 +194,12 @@ class DebugStats {
             entityCount: 0,
             buildingCount: 0,
             unitCount: 0,
+            resourceCount: 0,
+            environmentCount: 0,
+            treeCount: 0,
+            stoneCount: 0,
+            plantCount: 0,
+            otherCount: 0,
             unitsMoving: 0,
             totalPathSteps: 0,
             cameraX: 0,
@@ -296,12 +309,49 @@ class DebugStats {
 
         let buildings = 0;
         let units = 0;
+        let resources = 0;
+        let environment = 0;
+        let trees = 0;
+        let stones = 0;
+        let plants = 0;
+        let other = 0;
+
         for (const e of gameState.entities) {
-            if (e.type === EntityType.Building) buildings++;
-            else if (e.type === EntityType.Unit) units++;
+            switch (e.type) {
+            case EntityType.Building:
+                buildings++;
+                break;
+            case EntityType.Unit:
+                units++;
+                break;
+            case EntityType.StackedResource:
+                resources++;
+                break;
+            case EntityType.MapObject: {
+                const objType = e.subType as MapObjectType;
+                if (isResourceDeposit(objType)) {
+                    resources++;
+                } else {
+                    environment++;
+                    switch (getEnvironmentSubLayer(objType)) {
+                    case EnvironmentSubLayer.Trees: trees++; break;
+                    case EnvironmentSubLayer.Stones: stones++; break;
+                    case EnvironmentSubLayer.Plants: plants++; break;
+                    case EnvironmentSubLayer.Other: other++; break;
+                    }
+                }
+                break;
+            }
+            }
         }
         this.state.buildingCount = buildings;
         this.state.unitCount = units;
+        this.state.resourceCount = resources;
+        this.state.environmentCount = environment;
+        this.state.treeCount = trees;
+        this.state.stoneCount = stones;
+        this.state.plantCount = plants;
+        this.state.otherCount = other;
 
         let moving = 0;
         let pathSteps = 0;

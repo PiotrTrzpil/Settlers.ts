@@ -3,7 +3,7 @@ import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
 import { createTestMapLoader } from '@/game/test-map-factory';
-import { Entity, EntityType, TileCoord, UnitType, BuildingType, MapObjectType } from '@/game/entity';
+import { Entity, TileCoord, UnitType, BuildingType } from '@/game/entity';
 import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy/material-type';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
@@ -11,9 +11,6 @@ import {
     LayerVisibility,
     loadLayerVisibility,
     saveLayerVisibility,
-    isResourceDeposit,
-    getEnvironmentSubLayer,
-    EnvironmentSubLayer,
 } from '@/game/renderer/layer-visibility';
 import { debugStats } from '@/game/debug-stats';
 import { gameSettings } from '@/game/game-settings';
@@ -67,56 +64,6 @@ async function loadMapFile(
     }
 }
 
-/** Count entities per layer from the game state */
-function countEntitiesByLayer(entities: readonly Entity[]): LayerCounts {
-    const counts: LayerCounts = {
-        buildings: 0,
-        units: 0,
-        resources: 0,
-        environment: 0,
-        trees: 0,
-        stones: 0,
-        plants: 0,
-        other: 0,
-    };
-
-    for (const entity of entities) {
-        switch (entity.type) {
-        case EntityType.Building:
-            counts.buildings++;
-            break;
-        case EntityType.Unit:
-            counts.units++;
-            break;
-        case EntityType.MapObject: {
-            const objType = entity.subType as MapObjectType;
-            if (isResourceDeposit(objType)) {
-                counts.resources++;
-            } else {
-                counts.environment++;
-                const subLayer = getEnvironmentSubLayer(objType);
-                switch (subLayer) {
-                case EnvironmentSubLayer.Trees:
-                    counts.trees++;
-                    break;
-                case EnvironmentSubLayer.Stones:
-                    counts.stones++;
-                    break;
-                case EnvironmentSubLayer.Plants:
-                    counts.plants++;
-                    break;
-                case EnvironmentSubLayer.Other:
-                    counts.other++;
-                    break;
-                }
-            }
-            break;
-        }
-        }
-    }
-
-    return counts;
-}
 
 /** Buildings available in the UI - organized by category */
 const availableBuildings = [
@@ -357,12 +304,17 @@ export function useMapView(
     const placeResourceType = computed(() => debugStats.state.placeResourceType);
     const placeUnitType = computed(() => debugStats.state.placeUnitType);
 
-    const layerCounts = computed<LayerCounts>(() => {
-        if (!game.value) {
-            return { buildings: 0, units: 0, resources: 0, environment: 0, trees: 0, stones: 0, plants: 0, other: 0 };
-        }
-        return countEntitiesByLayer(game.value.state.entities);
-    });
+    // Use debugStats as single source of truth for entity counts (reactive and updated each frame)
+    const layerCounts = computed<LayerCounts>(() => ({
+        buildings: debugStats.state.buildingCount,
+        units: debugStats.state.unitCount,
+        resources: debugStats.state.resourceCount,
+        environment: debugStats.state.environmentCount,
+        trees: debugStats.state.treeCount,
+        stones: debugStats.state.stoneCount,
+        plants: debugStats.state.plantCount,
+        other: debugStats.state.otherCount,
+    }));
 
     function loadTestMap(): void {
         if (game.value) return;
