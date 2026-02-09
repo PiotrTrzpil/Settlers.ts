@@ -819,7 +819,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     /**
      * Get the sprite for a placement preview based on entity type.
-     * Extensible for new entity types.
+     * Uses exhaustive switch to ensure all PlacementEntityType values are handled.
+     * Adding a new type to PlacementEntityType will cause a compile error here
+     * until the case is added.
      */
     private getPreviewSprite(
         entityType: PlacementEntityType,
@@ -833,8 +835,15 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return this.spriteManager.getBuilding(subType as BuildingType);
         case 'resource':
             return this.spriteManager.getResource(subType as EMaterialType, variation ?? 0);
-        default:
-            return null;
+        case 'unit':
+            // Units use direction 0 (facing right) for preview
+            return this.spriteManager.getUnit(subType as UnitType, 0);
+        default: {
+            // Exhaustive check: if this errors, a new PlacementEntityType was added
+            // but not handled above. Add a case for it.
+            const _exhaustive: never = entityType;
+            return _exhaustive;
+        }
         }
     }
 
