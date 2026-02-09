@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BuildingConstructionPhase, EntityType } from '@/game/entity';
-import { executeCommand } from '@/game/commands/command';
+import { EntityType } from '@/game/entity';
+import { BuildingConstructionPhase } from '@/game/features/building-construction';
+import { executeCommand } from '@/game/commands';
 import { captureOriginalTerrain, applyTerrainLeveling, CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
 import { createTestMap, TERRAIN, setTerrainAt, blockColumn, type TestMap } from './helpers/test-map';
 import { createGameState, addUnit, addBuilding, createTestEventBus } from './helpers/test-game';
 import type { GameState } from '@/game/game-state';
+import { EventBus } from '@/game/event-bus';
 
 // Note: Happy-path command tests (place_building, spawn_unit, select, deselect,
 // area select, remove entity) are covered by flow integration tests in flows/.
@@ -13,10 +15,12 @@ import type { GameState } from '@/game/game-state';
 describe('Command System – edge cases', () => {
     let state: GameState;
     let map: TestMap;
+    let eventBus: EventBus;
 
     beforeEach(() => {
         state = createGameState();
         map = createTestMap();
+        eventBus = new EventBus();
     });
 
     describe('place_building', () => {
@@ -25,7 +29,7 @@ describe('Command System – edge cases', () => {
             const result = executeCommand(state, {
                 type: 'place_building',
                 buildingType: 1, x: 10, y: 10, player: 0,
-            }, map.groundType, map.groundHeight, map.mapSize);
+            }, map.groundType, map.groundHeight, map.mapSize, eventBus);
 
             expect(result).toBe(false);
             expect(state.entities).toHaveLength(0);
@@ -36,20 +40,20 @@ describe('Command System – edge cases', () => {
         it('should fail for non-existent unit', () => {
             const result = executeCommand(state, {
                 type: 'move_unit', entityId: 999, targetX: 10, targetY: 5,
-            }, map.groundType, map.groundHeight, map.mapSize);
+            }, map.groundType, map.groundHeight, map.mapSize, eventBus);
             expect(result).toBe(false);
         });
 
         it('should fail when no path exists', () => {
             executeCommand(state, {
                 type: 'spawn_unit', unitType: 0, x: 5, y: 5, player: 0,
-            }, map.groundType, map.groundHeight, map.mapSize);
+            }, map.groundType, map.groundHeight, map.mapSize, eventBus);
 
             blockColumn(map, 15);
 
             const result = executeCommand(state, {
                 type: 'move_unit', entityId: state.entities[0].id, targetX: 20, targetY: 5,
-            }, map.groundType, map.groundHeight, map.mapSize);
+            }, map.groundType, map.groundHeight, map.mapSize, eventBus);
             expect(result).toBe(false);
         });
     });
@@ -61,7 +65,7 @@ describe('Command System – edge cases', () => {
 
             executeCommand(state, {
                 type: 'select_area', x1: 9, y1: 9, x2: 12, y2: 11,
-            }, map.groundType, map.groundHeight, map.mapSize);
+            }, map.groundType, map.groundHeight, map.mapSize, eventBus);
 
             expect(state.selectedEntityIds.size).toBe(1);
             const selectedId = Array.from(state.selectedEntityIds)[0];
@@ -73,7 +77,7 @@ describe('Command System – edge cases', () => {
         it('should fail for non-existent entity', () => {
             const result = executeCommand(state, {
                 type: 'remove_entity', entityId: 999,
-            }, map.groundType, map.groundHeight, map.mapSize);
+            }, map.groundType, map.groundHeight, map.mapSize, eventBus);
             expect(result).toBe(false);
         });
 

@@ -25,7 +25,7 @@ import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-
 import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
 import { ANIMATION_DEFAULTS, AnimationData, carrySequenceKey } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
-import { EMaterialType } from '../economy/material-type';
+import { EMaterialType } from '../economy';
 import {
     getAtlasCache,
     setAtlasCache,

@@ -13,7 +13,7 @@
  * - Tracking idle time per unit (independent of movement state)
  */
 
-import { GameState } from '../game-state';
+import type { GameState } from '../game-state';
 import { Entity, EntityType, UnitType } from '../entity';
 import { MovementController } from './movement/movement-controller';
 import {
@@ -26,6 +26,7 @@ import {
     startDirectionTransition,
     updateDirectionTransition
 } from '../animation';
+import type { TickSystem } from '../tick-system';
 
 /**
  * Per-unit idle animation state.
@@ -36,54 +37,54 @@ interface IdleAnimationState {
     nextIdleTurnTime: number;
 }
 
-/** Map of entity ID to idle animation state */
-const idleStates = new Map<number, IdleAnimationState>();
-
 /**
- * Get or create idle state for an entity.
+ * IdleBehaviorSystem — manages animation direction and idle turning for all units.
+ * Implements TickSystem for registration with GameLoop.
  */
-function getIdleState(entityId: number): IdleAnimationState {
-    let state = idleStates.get(entityId);
-    if (!state) {
-        state = {
-            idleTime: 0,
-            nextIdleTurnTime: 2 + Math.random() * 4,
-        };
-        idleStates.set(entityId, state);
+export class IdleBehaviorSystem implements TickSystem {
+    private idleStates = new Map<number, IdleAnimationState>();
+    private gameState: GameState;
+
+    constructor(gameState: GameState) {
+        this.gameState = gameState;
     }
-    return state;
-}
 
-/**
- * Clean up idle state for removed entities.
- * Call this when entities are removed from the game.
- */
-export function cleanupIdleState(entityId: number): void {
-    idleStates.delete(entityId);
-}
+    /** TickSystem interface */
+    tick(dt: number): void {
+        const deltaMs = dt * 1000;
 
-/**
- * Updates animation direction for all units based on their movement state.
- *
- * @param state The game state containing entities and movement controllers
- * @param deltaSec Time elapsed since last update in seconds
- */
-export function updateIdleBehavior(state: GameState, deltaSec: number): void {
-    const deltaMs = deltaSec * 1000;
+        for (const controller of this.gameState.movement.getAllControllers()) {
+            const entity = this.gameState.getEntity(controller.entityId);
+            if (!entity || entity.type !== EntityType.Unit) continue;
 
-    for (const controller of state.movement.getAllControllers()) {
-        const entity = state.getEntity(controller.entityId);
-        if (!entity || entity.type !== EntityType.Unit) continue;
+            const idleState = this.getIdleState(controller.entityId);
+            entity.animationState = updateUnitAnimation(
+                entity,
+                controller,
+                idleState,
+                entity.animationState,
+                deltaMs,
+                dt
+            );
+        }
+    }
 
-        const idleState = getIdleState(controller.entityId);
-        entity.animationState = updateUnitAnimation(
-            entity,
-            controller,
-            idleState,
-            entity.animationState,
-            deltaMs,
-            deltaSec
-        );
+    /** Clean up idle state for removed entities. */
+    cleanupIdleState(entityId: number): void {
+        this.idleStates.delete(entityId);
+    }
+
+    /** Get or create idle state for an entity. */
+    private getIdleState(entityId: number): IdleAnimationState {
+        let state = this.idleStates.get(entityId);
+        if (!state) {
+            state = {
+                idleTime: 0,
+                nextIdleTurnTime: 2 + Math.random() * 4,
+            };
+            this.idleStates.set(entityId, state);
+        }
+        return state;
     }
 }
 

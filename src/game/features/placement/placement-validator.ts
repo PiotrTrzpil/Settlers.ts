@@ -12,9 +12,13 @@ import type {
     DetailedPlacementValidator,
 } from './types';
 import { PlacementStatus } from './types';
-import { validateBuildingPlacement } from './internal/building-validator';
-import { validateResourcePlacement } from './internal/resource-validator';
-import { validateUnitPlacement } from './internal/unit-validator';
+import { validateBuildingPlacement, canPlaceBuildingFootprint, canPlaceBuilding } from './internal/building-validator';
+import { validateResourcePlacement, canPlaceResource } from './internal/resource-validator';
+import { validateUnitPlacement, canPlaceUnit } from './internal/unit-validator';
+
+// Re-export convenience validators as part of the public API.
+// These are used by commands, use-renderer, and tests.
+export { canPlaceBuildingFootprint, canPlaceBuilding, canPlaceResource, canPlaceUnit };
 
 /**
  * Validate entity placement with detailed status.

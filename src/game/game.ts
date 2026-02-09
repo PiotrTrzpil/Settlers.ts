@@ -3,10 +3,10 @@ import { IMapLoader } from '@/resources/map/imap-loader';
 import { MapSize } from '@/utilities/map-size';
 import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
-import { Command, executeCommand } from './commands/command';
+import { Command, executeCommand } from './commands';
 import { isBuildable } from './features/placement';
 import { populateMapObjects } from './systems/map-objects';
-import { SoundManager } from './audio/sound-manager';
+import { SoundManager } from './audio';
 import { Race } from './renderer/sprite-metadata';
 import { EventBus } from './event-bus';
 

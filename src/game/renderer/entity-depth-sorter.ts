@@ -5,7 +5,7 @@ import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { SpriteEntry } from './sprite-metadata';
 import { SpriteRenderManager } from './sprite-render-manager';
-import { EMaterialType } from '../economy/material-type';
+import { EMaterialType } from '../economy';
 import {
     DEPTH_FACTOR_BUILDING,
     DEPTH_FACTOR_MAP_OBJECT,

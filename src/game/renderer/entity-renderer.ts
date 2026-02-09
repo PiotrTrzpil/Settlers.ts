@@ -15,7 +15,7 @@ import {
     TINT_PREVIEW_INVALID,
 } from './tint-utils';
 import { MapObjectType } from '../entity';
-import { EMaterialType } from '../economy/material-type';
+import { EMaterialType } from '../economy';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { BuildingIndicatorRenderer } from './building-indicator-renderer';
 import { SpriteBatchRenderer } from './sprite-batch-renderer';

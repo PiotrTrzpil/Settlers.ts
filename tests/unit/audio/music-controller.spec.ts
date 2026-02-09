@@ -30,8 +30,7 @@ vi.mock('howler', () => {
 });
 
 // Must import after mock setup
-import { MusicController } from '@/game/audio/music-controller';
-import { IAudioManager } from '@/game/audio/audio-definitions';
+import { MusicController, IAudioManager } from '@/game/audio';
 import { Race } from '@/game/renderer/sprite-metadata';
 
 describe('MusicController', () => {

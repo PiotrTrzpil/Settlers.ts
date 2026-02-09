@@ -105,7 +105,7 @@ import { IndexFileItem } from '@/resources/gfx/index-file-item';
 import { pad, loadGfxFileSet, parseGfxReaders, renderImageToCanvas } from '@/utilities/view-helpers';
 import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, GFX_FILE_NUMBERS } from '@/game/renderer/sprite-metadata';
 import { BuildingType } from '@/game/entity';
-import { EMaterialType } from '@/game/economy/material-type';
+import { EMaterialType } from '@/game/economy';
 import { useCompositeGridView } from '@/composables/useGridView';
 
 import FileBrowser from '@/components/file-browser.vue';

@@ -1,4 +1,5 @@
-import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE, BuildingConstructionPhase } from '../entity';
+import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE } from '../entity';
+import { BuildingConstructionPhase } from '../features/building-construction';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
 import { MapSize } from '@/utilities/map-size';
@@ -46,7 +47,7 @@ interface CommandContext {
     groundType: Uint8Array;
     groundHeight: Uint8Array;
     mapSize: MapSize;
-    eventBus?: EventBus;
+    eventBus: EventBus;
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): boolean {
@@ -71,7 +72,7 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): b
         }
     }
 
-    ctx.eventBus?.emit('building:placed', {
+    ctx.eventBus.emit('building:placed', {
         entityId: entity.id,
         buildingType: cmd.buildingType,
         x: cmd.x,
@@ -93,7 +94,7 @@ function spawnWorkerForBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand, 
         if (nx >= 0 && nx < mapSize.width && ny >= 0 && ny < mapSize.height) {
             if (!ctx.state.getEntityAt(nx, ny)) {
                 const entity = ctx.state.addEntity(EntityType.Unit, workerType, nx, ny, cmd.player);
-                ctx.eventBus?.emit('unit:spawned', {
+                ctx.eventBus.emit('unit:spawned', {
                     entityId: entity.id,
                     unitType: workerType,
                     x: nx,
@@ -126,7 +127,7 @@ function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): boolean {
 
     const entity = state.addEntity(EntityType.Unit, cmd.unitType, spawnX, spawnY, cmd.player);
 
-    ctx.eventBus?.emit('unit:spawned', {
+    ctx.eventBus.emit('unit:spawned', {
         entityId: entity.id,
         unitType: cmd.unitType,
         x: spawnX,
@@ -272,7 +273,7 @@ function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): boo
 
     if (entity.type === EntityType.Building) {
         const bs = state.buildingStates.get(cmd.entityId);
-        if (bs && ctx.eventBus) {
+        if (bs) {
             ctx.eventBus.emit('building:removed', { entityId: cmd.entityId, buildingState: bs });
         }
     }
@@ -321,7 +322,7 @@ export function executeCommand(
     groundType: Uint8Array,
     groundHeight: Uint8Array,
     mapSize: MapSize,
-    eventBus?: EventBus
+    eventBus: EventBus
 ): boolean {
     const ctx: CommandContext = { state, groundType, groundHeight, mapSize, eventBus };
 

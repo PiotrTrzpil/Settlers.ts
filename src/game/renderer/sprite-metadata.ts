@@ -1,5 +1,5 @@
 import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
-import { EMaterialType } from '../economy/material-type';
+import { EMaterialType } from '../economy';
 import { AtlasRegion } from './entity-texture-atlas';
 import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS, ANIMATION_SEQUENCES } from '../animation';
 import { mapToArray, arrayToMap } from './sprite-metadata-helpers';

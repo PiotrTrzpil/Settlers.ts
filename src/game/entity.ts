@@ -35,10 +35,6 @@ export {
     getBuildingFootprint,
 } from './buildings';
 
-// Building construction (from feature module)
-export type { CapturedTerrainTile, ConstructionSiteOriginalTerrain, BuildingState, BuildingSpawnConfig } from './features/building-construction';
-export { BuildingConstructionPhase, BUILDING_SPAWN_ON_COMPLETE } from './features/building-construction';
-
 // Unit types and configuration
 export type { UnitTypeConfig } from './unit-types';
 export {
