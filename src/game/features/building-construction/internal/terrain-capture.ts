@@ -1,5 +1,5 @@
 /**
- * Terrain leveling system for building construction.
+ * Terrain capture and leveling for building construction.
  * Handles ground type and height modifications during construction.
  *
  * When a building is constructed, ALL tiles in its footprint get their ground
@@ -7,15 +7,11 @@
  * of the footprint are also captured so their heights can be smoothly leveled.
  */
 
-import {
-    CARDINAL_OFFSETS,
-    BuildingState,
-    ConstructionSiteOriginalTerrain,
-    CapturedTerrainTile,
-    getBuildingFootprint,
-} from '../entity';
+import { CARDINAL_OFFSETS } from '../../../coordinates';
+import { getBuildingFootprint } from '../../../buildings/types';
+import type { BuildingState, ConstructionSiteOriginalTerrain, CapturedTerrainTile } from '../types';
 import { MapSize } from '@/utilities/map-size';
-import { LandscapeType } from '../renderer/landscape/landscape-type';
+import { LandscapeType } from '../../../renderer/landscape/landscape-type';
 
 /** Ground type used for construction sites (raw/leveled earth) */
 export const CONSTRUCTION_SITE_GROUND_TYPE = LandscapeType.DustyWay;

@@ -1,9 +1,10 @@
 /**
  * Building construction state types.
- * Separated to avoid circular dependencies with building-construction.ts.
+ * Defines all types for tracking construction progress.
  */
 
-import { BuildingType } from './types';
+import { BuildingType } from '../../buildings/types';
+import { UnitType } from '../../unit-types';
 
 /**
  * Phases of building construction.
@@ -51,7 +52,6 @@ export interface ConstructionSiteOriginalTerrain {
 
 /**
  * State tracking for building construction progress.
- * Similar to UnitState for movement interpolation.
  */
 export interface BuildingState {
     entityId: number;
@@ -72,4 +72,42 @@ export interface BuildingState {
     originalTerrain: ConstructionSiteOriginalTerrain | null;
     /** Whether terrain modification has been applied */
     terrainModified: boolean;
+}
+
+/**
+ * Which unit type (and count) each building spawns when construction completes.
+ */
+export interface BuildingSpawnConfig {
+    unitType: UnitType;
+    count: number;
+    /** Override default selectability from UNIT_TYPE_CONFIG (undefined = use default) */
+    selectable?: boolean;
+}
+
+/**
+ * Terrain modification context for construction.
+ * Pass this to enable terrain leveling during construction.
+ */
+export interface TerrainContext {
+    groundType: Uint8Array;
+    groundHeight: Uint8Array;
+    mapSize: import('@/utilities/map-size').MapSize;
+    /** Callback to notify that terrain has changed and needs re-upload to GPU */
+    onTerrainModified?: () => void;
+}
+
+/**
+ * Visual state for rendering a building.
+ */
+export interface BuildingVisualState {
+    /** Should show the construction sprite (true) or completed sprite (false) */
+    useConstructionSprite: boolean;
+    /** Vertical visibility (0.0 = hidden, 1.0 = fully visible) for "rising" effect */
+    verticalProgress: number;
+    /** Overall construction progress (0.0 to 1.0) */
+    overallProgress: number;
+    /** Is the building fully completed */
+    isCompleted: boolean;
+    /** Current phase for debugging/display */
+    phase: BuildingConstructionPhase;
 }

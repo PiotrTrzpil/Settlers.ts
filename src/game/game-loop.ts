@@ -1,10 +1,12 @@
 import { GameState } from './game-state';
-import { updateBuildingConstruction, TerrainContext } from './buildings/construction';
 import { updateAnimations, AnimationDataProvider } from './systems/animation';
 import { updateIdleBehavior } from './systems/idle-behavior';
 import { LogHandler } from '@/utilities/log-handler';
 import { debugStats } from './debug-stats';
 import { MapSize } from '@/utilities/map-size';
+import type { TickSystem } from './tick-system';
+import { BuildingConstructionSystem } from './features/building-construction';
+import { EventBus } from './event-bus';
 import Stats from 'stats.js';
 
 const TICK_RATE = 30;
@@ -34,9 +36,29 @@ export class GameLoop {
     private onTerrainModified: (() => void) | null = null;
     private animationProvider: AnimationDataProvider | null = null;
 
-    constructor(gameState: GameState) {
+    /** Registered tick systems */
+    private systems: TickSystem[] = [];
+
+    /** Event bus for inter-system communication */
+    public readonly eventBus: EventBus;
+
+    /** Building construction system (registered as TickSystem) */
+    public readonly constructionSystem: BuildingConstructionSystem;
+
+    constructor(gameState: GameState, eventBus: EventBus) {
         this.gameState = gameState;
+        this.eventBus = eventBus;
         this.initStats();
+
+        // Create and register the building construction system
+        this.constructionSystem = new BuildingConstructionSystem(gameState);
+        this.constructionSystem.registerEvents(eventBus);
+        this.registerSystem(this.constructionSystem);
+    }
+
+    /** Register a tick system to be updated each tick */
+    public registerSystem(system: TickSystem): void {
+        this.systems.push(system);
     }
 
     /** Initialize stats.js panel (shows FPS graph in top-left corner) */
@@ -141,18 +163,23 @@ export class GameLoop {
         this.gameState.movement.update(dt);
         updateIdleBehavior(this.gameState, dt);
 
-        // Create terrain context for building construction if terrain data is available
-        let terrainContext: TerrainContext | undefined;
+        // Update terrain context for building construction if terrain data is available
         if (this.groundType && this.groundHeight && this.mapSize) {
-            terrainContext = {
+            this.constructionSystem.setTerrainContext({
                 groundType: this.groundType,
                 groundHeight: this.groundHeight,
                 mapSize: this.mapSize,
                 onTerrainModified: this.onTerrainModified ?? undefined,
-            };
+            });
+        } else {
+            this.constructionSystem.setTerrainContext(undefined);
         }
 
-        updateBuildingConstruction(this.gameState, dt, terrainContext);
+        // Run all registered tick systems
+        for (const system of this.systems) {
+            system.tick(dt);
+        }
+
         this.gameState.lumberjackSystem.update(this.gameState, dt);
     }
 }

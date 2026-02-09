@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { canPlaceBuilding } from '@/game/systems/placement';
+import { canPlaceBuilding } from '@/game/features/placement';
 import { createTestMap, TERRAIN, setTerrainAt, setHeightAt, type TestMap } from './helpers/test-map';
 
 // Note: isPassable and isBuildable terrain-type tests are covered by the

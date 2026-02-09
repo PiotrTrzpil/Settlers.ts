@@ -1,9 +1,9 @@
 import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
-import { Entity, EntityType, BuildingState, StackedResourceState, TileCoord, BuildingType, BuildingConstructionPhase, getBuildingFootprint, UnitType } from '../entity';
+import { Entity, EntityType, StackedResourceState, TileCoord, BuildingType, getBuildingFootprint, UnitType } from '../entity';
 import { UnitStateLookup } from '../game-state';
-import { getBuildingVisualState } from '../buildings/construction';
+import { getBuildingVisualState, BuildingConstructionPhase, type BuildingState } from '../features/building-construction';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { LogHandler } from '@/utilities/log-handler';

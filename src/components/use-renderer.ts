@@ -16,7 +16,7 @@ import { Race } from '@/game/renderer/sprite-metadata';
 import {
     canPlaceBuildingFootprint,
     canPlaceResource,
-} from '@/game/systems/placement';
+} from '@/game/features/placement';
 import { debugStats } from '@/game/debug-stats';
 import {
     InputManager,

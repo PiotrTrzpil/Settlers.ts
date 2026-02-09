@@ -1,8 +1,8 @@
 import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE } from '../entity';
 import { GameState } from '../game-state';
-import { canPlaceBuildingFootprint, isPassable } from '../systems/placement';
-import { restoreOriginalTerrain } from '../systems/terrain-leveling';
+import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
 import { MapSize } from '@/utilities/map-size';
+import type { EventBus } from '../event-bus';
 import {
     Command,
     FORMATION_OFFSETS,
@@ -45,6 +45,7 @@ interface CommandContext {
     groundType: Uint8Array;
     groundHeight: Uint8Array;
     mapSize: MapSize;
+    eventBus?: EventBus;
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): boolean {
@@ -57,12 +58,21 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): b
         return false;
     }
 
-    state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
-    spawnWorkerForBuilding(state, cmd, mapSize);
+    const entity = state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
+
+    ctx.eventBus?.emit('building:placed', {
+        entityId: entity.id,
+        buildingType: cmd.buildingType,
+        x: cmd.x,
+        y: cmd.y,
+        player: cmd.player,
+    });
+
+    spawnWorkerForBuilding(ctx, cmd, mapSize);
     return true;
 }
 
-function spawnWorkerForBuilding(state: GameState, cmd: PlaceBuildingCommand, mapSize: MapSize): void {
+function spawnWorkerForBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand, mapSize: MapSize): void {
     const workerType = BUILDING_UNIT_TYPE[cmd.buildingType];
     if (workerType === undefined) return;
 
@@ -70,8 +80,15 @@ function spawnWorkerForBuilding(state: GameState, cmd: PlaceBuildingCommand, map
         const nx = cmd.x + dx;
         const ny = cmd.y + dy;
         if (nx >= 0 && nx < mapSize.width && ny >= 0 && ny < mapSize.height) {
-            if (!state.getEntityAt(nx, ny)) {
-                state.addEntity(EntityType.Unit, workerType, nx, ny, cmd.player);
+            if (!ctx.state.getEntityAt(nx, ny)) {
+                const entity = ctx.state.addEntity(EntityType.Unit, workerType, nx, ny, cmd.player);
+                ctx.eventBus?.emit('unit:spawned', {
+                    entityId: entity.id,
+                    unitType: workerType,
+                    x: nx,
+                    y: ny,
+                    player: cmd.player,
+                });
                 return;
             }
         }
@@ -96,7 +113,16 @@ function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): boolean {
         spawnY = found.y;
     }
 
-    state.addEntity(EntityType.Unit, cmd.unitType, spawnX, spawnY, cmd.player);
+    const entity = state.addEntity(EntityType.Unit, cmd.unitType, spawnX, spawnY, cmd.player);
+
+    ctx.eventBus?.emit('unit:spawned', {
+        entityId: entity.id,
+        unitType: cmd.unitType,
+        x: spawnX,
+        y: spawnY,
+        player: cmd.player,
+    });
+
     return true;
 }
 
@@ -229,14 +255,14 @@ function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCom
 }
 
 function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): boolean {
-    const { state, groundType, groundHeight, mapSize } = ctx;
+    const { state } = ctx;
     const entity = state.getEntity(cmd.entityId);
     if (!entity) return false;
 
     if (entity.type === EntityType.Building) {
         const bs = state.buildingStates.get(cmd.entityId);
-        if (bs) {
-            restoreOriginalTerrain(bs, groundType, groundHeight, mapSize);
+        if (bs && ctx.eventBus) {
+            ctx.eventBus.emit('building:removed', { entityId: cmd.entityId, buildingState: bs });
         }
     }
 
@@ -283,9 +309,10 @@ export function executeCommand(
     cmd: Command,
     groundType: Uint8Array,
     groundHeight: Uint8Array,
-    mapSize: MapSize
+    mapSize: MapSize,
+    eventBus?: EventBus
 ): boolean {
-    const ctx: CommandContext = { state, groundType, groundHeight, mapSize };
+    const ctx: CommandContext = { state, groundType, groundHeight, mapSize, eventBus };
 
     switch (cmd.type) {
     case 'place_building':

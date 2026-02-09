@@ -1,5 +1,5 @@
 import { tileKey, TileCoord } from '../entity';
-import { isPassable } from './placement';
+import { isPassable } from '../features/placement';
 import { GRID_DELTAS, NUMBER_OF_DIRECTIONS, hexDistance, getApproxDirection } from './hex-directions';
 
 const MAX_SEARCH_NODES = 2000;

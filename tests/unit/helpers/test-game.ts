@@ -62,6 +62,24 @@ export function addUnitWithPath(
 // ─── Command execution helpers ──────────────────────────────────────
 
 import { executeCommand } from '@/game/commands/command';
+import { EventBus } from '@/game/event-bus';
+import { BuildingConstructionSystem } from '@/game/features/building-construction';
+
+/**
+ * Create an EventBus wired up with a BuildingConstructionSystem for terrain restoration.
+ * Used by test helpers that need building removal to restore terrain.
+ */
+export function createTestEventBus(state: GameState, map: TestMap): EventBus {
+    const eventBus = new EventBus();
+    const system = new BuildingConstructionSystem(state);
+    system.setTerrainContext({
+        groundType: map.groundType,
+        groundHeight: map.groundHeight,
+        mapSize: map.mapSize,
+    });
+    system.registerEvents(eventBus);
+    return eventBus;
+}
 
 /** Execute a place_building command. Returns success boolean. */
 export function placeBuilding(
@@ -143,12 +161,15 @@ export function removeEntity(
     state: GameState,
     map: TestMap,
     entityId: number,
+    eventBus?: EventBus,
 ): boolean {
+    const bus = eventBus ?? createTestEventBus(state, map);
     return executeCommand(
         state,
         { type: 'remove_entity', entityId },
         map.groundType,
         map.groundHeight,
         map.mapSize,
+        bus,
     );
 }
