@@ -1,8 +1,9 @@
-import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE } from '../entity';
+import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE, BuildingConstructionPhase } from '../entity';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
 import { MapSize } from '@/utilities/map-size';
 import type { EventBus } from '../event-bus';
+import { gameSettings } from '../game-settings';
 import {
     Command,
     FORMATION_OFFSETS,
@@ -59,6 +60,16 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): b
     }
 
     const entity = state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
+
+    // If "place as completed" is enabled, immediately mark building as completed
+    if (gameSettings.state.placeBuildingsCompleted) {
+        const buildingState = state.buildingStates.get(entity.id);
+        if (buildingState) {
+            buildingState.phase = BuildingConstructionPhase.Completed;
+            buildingState.phaseProgress = 1;
+            buildingState.elapsedTime = buildingState.totalDuration;
+        }
+    }
 
     ctx.eventBus?.emit('building:placed', {
         entityId: entity.id,

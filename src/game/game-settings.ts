@@ -20,6 +20,9 @@ export interface GameSettings {
     // Display
     showDebugGrid: boolean;
 
+    // Building placement
+    placeBuildingsCompleted: boolean;
+
     // UI state (persisted)
     settingsPanelOpen: boolean;
 }
@@ -38,6 +41,9 @@ const DEFAULT_SETTINGS: GameSettings = {
 
     // Display
     showDebugGrid: false,
+
+    // Building placement
+    placeBuildingsCompleted: false,
 
     // UI state
     settingsPanelOpen: false,
