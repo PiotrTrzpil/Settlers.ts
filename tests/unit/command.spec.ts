@@ -3,7 +3,7 @@ import { BuildingConstructionPhase, EntityType } from '@/game/entity';
 import { executeCommand } from '@/game/commands/command';
 import { captureOriginalTerrain, applyTerrainLeveling, CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/systems/terrain-leveling';
 import { createTestMap, TERRAIN, setTerrainAt, blockColumn, type TestMap } from './helpers/test-map';
-import { createGameState, addUnit, addBuilding } from './helpers/test-game';
+import { createGameState, addUnit, addBuilding, createTestEventBus } from './helpers/test-game';
 import type { GameState } from '@/game/game-state';
 
 // Note: Happy-path command tests (place_building, spawn_unit, select, deselect,
@@ -98,9 +98,10 @@ describe('Command System – edge cases', () => {
 
             expect(map.groundType[map.mapSize.toIndex(10, 10)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
 
+            const eventBus = createTestEventBus(state, map);
             executeCommand(state, {
                 type: 'remove_entity', entityId: building.id,
-            }, map.groundType, map.groundHeight, map.mapSize);
+            }, map.groundType, map.groundHeight, map.mapSize, eventBus);
 
             for (let dy = -1; dy <= 2; dy++) {
                 for (let dx = -1; dx <= 2; dx++) {

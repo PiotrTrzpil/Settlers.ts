@@ -8,6 +8,7 @@ import { isBuildable } from './systems/placement';
 import { populateMapObjects } from './systems/map-objects';
 import { SoundManager } from './audio/sound-manager';
 import { Race } from './renderer/sprite-metadata';
+import { EventBus } from './event-bus';
 
 /** contains the game state */
 export class Game {
@@ -19,6 +20,7 @@ export class Game {
     public fileManager: FileManager;
     public readonly mapLoader: IMapLoader;
     public state: GameState;
+    public readonly eventBus: EventBus;
     public gameLoop: GameLoop;
 
     /** Current interaction mode */
@@ -43,7 +45,8 @@ export class Game {
         this.objectType = mapLoader.landscape.getObjectType?.() ?? null;
 
         this.state = new GameState();
-        this.gameLoop = new GameLoop(this.state);
+        this.eventBus = new EventBus();
+        this.gameLoop = new GameLoop(this.state, this.eventBus);
         this.gameLoop.setTerrainData(this.groundType, this.groundHeight, this.mapSize.width, this.mapSize.height);
 
         if (this.objectType) {
@@ -78,7 +81,8 @@ export class Game {
     /** Execute a command against the game state */
     public execute(cmd: Command): boolean {
         return executeCommand(
-            this.state, cmd, this.groundType, this.groundHeight, this.mapSize
+            this.state, cmd, this.groundType, this.groundHeight, this.mapSize,
+            this.eventBus
         );
     }
 

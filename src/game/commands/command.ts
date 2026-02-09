@@ -1,8 +1,8 @@
 import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE } from '../entity';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../systems/placement';
-import { restoreOriginalTerrain } from '../systems/terrain-leveling';
 import { MapSize } from '@/utilities/map-size';
+import type { EventBus } from '../event-bus';
 import {
     Command,
     FORMATION_OFFSETS,
@@ -45,6 +45,7 @@ interface CommandContext {
     groundType: Uint8Array;
     groundHeight: Uint8Array;
     mapSize: MapSize;
+    eventBus?: EventBus;
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): boolean {
@@ -229,14 +230,14 @@ function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCom
 }
 
 function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): boolean {
-    const { state, groundType, groundHeight, mapSize } = ctx;
+    const { state } = ctx;
     const entity = state.getEntity(cmd.entityId);
     if (!entity) return false;
 
     if (entity.type === EntityType.Building) {
         const bs = state.buildingStates.get(cmd.entityId);
-        if (bs) {
-            restoreOriginalTerrain(bs, groundType, groundHeight, mapSize);
+        if (bs && ctx.eventBus) {
+            ctx.eventBus.emit('building:removed', { entityId: cmd.entityId, buildingState: bs });
         }
     }
 
@@ -283,9 +284,10 @@ export function executeCommand(
     cmd: Command,
     groundType: Uint8Array,
     groundHeight: Uint8Array,
-    mapSize: MapSize
+    mapSize: MapSize,
+    eventBus?: EventBus
 ): boolean {
-    const ctx: CommandContext = { state, groundType, groundHeight, mapSize };
+    const ctx: CommandContext = { state, groundType, groundHeight, mapSize, eventBus };
 
     switch (cmd.type) {
     case 'place_building':

@@ -12,10 +12,10 @@ export {
     getBuildingFootprint,
 } from './types';
 
-// Building construction state
+// Building construction state (from feature module via state.ts)
 export type { CapturedTerrainTile, ConstructionSiteOriginalTerrain, BuildingState } from './state';
 export { BuildingConstructionPhase } from './state';
 
-// Building construction system and spawn config
+// Building construction system and spawn config (from feature module via construction.ts)
 export type { BuildingSpawnConfig } from './construction';
 export { BUILDING_SPAWN_ON_COMPLETE, getBuildingVisualState } from './construction';
