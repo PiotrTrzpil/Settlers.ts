@@ -33,9 +33,11 @@ import {
 } from '@/game/input';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { SelectionBox, PlacementPreview } from '@/game/input/render-state';
+import { createRenderContext } from '@/game/renderer/render-context';
+import { getBuildingVisualState } from '@/game/features/building-construction';
 
 /** Context object for render callback - avoids excessive callback parameters */
-interface RenderContext {
+interface CallbackContext {
     game: Game | null;
     entityRenderer: EntityRenderer | null;
     landscapeRenderer: LandscapeRenderer | null;
@@ -44,18 +46,38 @@ interface RenderContext {
     layerVisibility: LayerVisibility;
 }
 
-/** Update entity renderer state from game */
+/** Update entity renderer state from game using RenderContext interface */
 function syncEntityRendererState(
-    er: EntityRenderer, g: Game, ctx: RenderContext, alpha: number
+    er: EntityRenderer,
+    g: Game,
+    ctx: CallbackContext,
+    alpha: number,
+    viewPoint: import('@/game/renderer/i-view-point').IViewPoint
 ): void {
-    er.entities = g.state.entities;
-    er.selectedEntityId = g.state.selectedEntityId;
-    er.selectedEntityIds = g.state.selectedEntityIds;
-    er.unitStates = g.state.unitStates;
-    er.buildingStates = g.state.buildingStates;
-    er.resourceStates = g.state.resourceStates;
-    er.renderAlpha = alpha;
-    er.layerVisibility = ctx.layerVisibility;
+    // Build render context using the builder pattern
+    const renderContext = createRenderContext()
+        .entities(g.state.entities)
+        .unitStates(g.state.unitStates)
+        .resourceStates(g.state.resourceStates)
+        .buildingStates(g.state.buildingStates)
+        .buildingVisualStateGetter((entityId) => {
+            const state = g.state.buildingStates.get(entityId);
+            return getBuildingVisualState(state);
+        })
+        .selection({
+            primaryId: g.state.selectedEntityId,
+            ids: g.state.selectedEntityIds,
+        })
+        .alpha(alpha)
+        .layerVisibility(ctx.layerVisibility)
+        .groundHeight(g.groundHeight)
+        .groundType(g.groundType)
+        .mapSize(g.mapSize.width, g.mapSize.height)
+        .viewPoint(viewPoint)
+        .build();
+
+    // Use the new setContext method
+    er.setContext(renderContext);
 }
 
 /** Handle placement mode rendering state using consolidated preview */
@@ -107,7 +129,7 @@ function clearPlacementModeState(er: EntityRenderer): void {
 
 /** Create the render callback that runs each frame. */
 function createRenderCallback(
-    getContext: () => RenderContext,
+    getContext: () => CallbackContext,
     renderer: Renderer,
     selectionBox: Ref<SelectionBox | null>
 ): (alpha: number, deltaSec: number) => void {
@@ -120,7 +142,7 @@ function createRenderCallback(
 
         if (er && g) {
             inputManager?.update(deltaSec);
-            syncEntityRendererState(er, g, ctx, alpha);
+            syncEntityRendererState(er, g, ctx, alpha, renderer.viewPoint);
 
             const renderState = inputManager?.getRenderState();
             const mode = debugStats.state.mode;
@@ -482,8 +504,8 @@ export function useRenderer({
 
         exposeForE2E(renderer.viewPoint, landscapeRenderer, entityRenderer, inputManager);
 
-        // Set up terrain modification callback
-        game.gameLoop.setTerrainModifiedCallback(() => {
+        // Subscribe to terrain modification events
+        game.eventBus.on('terrain:modified', () => {
             landscapeRenderer?.markTerrainDirty();
         });
 
