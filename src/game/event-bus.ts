@@ -4,10 +4,37 @@
  */
 
 import type { BuildingState } from './features/building-construction';
+import type { BuildingType } from './buildings/types';
+import type { UnitType } from './unit-types';
 
 /** Event map defining all game events and their payloads */
 export interface GameEvents {
-    'building:removed': { entityId: number; buildingState: BuildingState };
+    /** Emitted when a building is successfully placed (construction begins) */
+    'building:placed': {
+        entityId: number;
+        buildingType: BuildingType;
+        x: number;
+        y: number;
+        player: number;
+    };
+    /** Emitted when building construction completes */
+    'building:completed': {
+        entityId: number;
+        buildingState: BuildingState;
+    };
+    /** Emitted when a building is removed/cancelled */
+    'building:removed': {
+        entityId: number;
+        buildingState: BuildingState;
+    };
+    /** Emitted when a unit is spawned */
+    'unit:spawned': {
+        entityId: number;
+        unitType: UnitType;
+        x: number;
+        y: number;
+        player: number;
+    };
 }
 
 type EventHandler<T> = (payload: T) => void;

@@ -35,6 +35,7 @@ export const BUILDING_SPAWN_ON_COMPLETE: Record<number, BuildingSpawnConfig | un
 export class BuildingConstructionSystem implements TickSystem {
     private state: GameState;
     private terrainContext: TerrainContext | undefined;
+    private eventBus: EventBus | undefined;
 
     constructor(state: GameState) {
         this.state = state;
@@ -47,6 +48,7 @@ export class BuildingConstructionSystem implements TickSystem {
 
     /** Register event handlers with the event bus */
     registerEvents(eventBus: EventBus): void {
+        this.eventBus = eventBus;
         eventBus.on('building:removed', ({ buildingState }) => {
             this.onBuildingRemoved(buildingState);
         });
@@ -96,7 +98,11 @@ export class BuildingConstructionSystem implements TickSystem {
             ) || terrainModified;
         }
 
-        if (newPhase === BuildingConstructionPhase.Completed) {
+        if (newPhase === BuildingConstructionPhase.Completed && previousPhase !== BuildingConstructionPhase.Completed) {
+            this.eventBus?.emit('building:completed', {
+                entityId: buildingState.entityId,
+                buildingState,
+            });
             this.spawnUnitsOnBuildingComplete(buildingState);
         }
 
@@ -192,10 +198,19 @@ export class BuildingConstructionSystem implements TickSystem {
                 if (spawned >= spawnDef.count) break;
                 if (!this.isValidSpawnTile(tile.x, tile.y)) continue;
 
-                this.state.addEntity(
+                const spawnedEntity = this.state.addEntity(
                     EntityType.Unit, spawnDef.unitType, tile.x, tile.y,
                     entity.player, spawnDef.selectable
                 );
+
+                this.eventBus?.emit('unit:spawned', {
+                    entityId: spawnedEntity.id,
+                    unitType: spawnDef.unitType,
+                    x: tile.x,
+                    y: tile.y,
+                    player: entity.player,
+                });
+
                 spawned++;
             }
         }

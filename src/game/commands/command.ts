@@ -58,12 +58,21 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): b
         return false;
     }
 
-    state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
-    spawnWorkerForBuilding(state, cmd, mapSize);
+    const entity = state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
+
+    ctx.eventBus?.emit('building:placed', {
+        entityId: entity.id,
+        buildingType: cmd.buildingType,
+        x: cmd.x,
+        y: cmd.y,
+        player: cmd.player,
+    });
+
+    spawnWorkerForBuilding(ctx, cmd, mapSize);
     return true;
 }
 
-function spawnWorkerForBuilding(state: GameState, cmd: PlaceBuildingCommand, mapSize: MapSize): void {
+function spawnWorkerForBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand, mapSize: MapSize): void {
     const workerType = BUILDING_UNIT_TYPE[cmd.buildingType];
     if (workerType === undefined) return;
 
@@ -71,8 +80,15 @@ function spawnWorkerForBuilding(state: GameState, cmd: PlaceBuildingCommand, map
         const nx = cmd.x + dx;
         const ny = cmd.y + dy;
         if (nx >= 0 && nx < mapSize.width && ny >= 0 && ny < mapSize.height) {
-            if (!state.getEntityAt(nx, ny)) {
-                state.addEntity(EntityType.Unit, workerType, nx, ny, cmd.player);
+            if (!ctx.state.getEntityAt(nx, ny)) {
+                const entity = ctx.state.addEntity(EntityType.Unit, workerType, nx, ny, cmd.player);
+                ctx.eventBus?.emit('unit:spawned', {
+                    entityId: entity.id,
+                    unitType: workerType,
+                    x: nx,
+                    y: ny,
+                    player: cmd.player,
+                });
                 return;
             }
         }
@@ -97,7 +113,16 @@ function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): boolean {
         spawnY = found.y;
     }
 
-    state.addEntity(EntityType.Unit, cmd.unitType, spawnX, spawnY, cmd.player);
+    const entity = state.addEntity(EntityType.Unit, cmd.unitType, spawnX, spawnY, cmd.player);
+
+    ctx.eventBus?.emit('unit:spawned', {
+        entityId: entity.id,
+        unitType: cmd.unitType,
+        x: spawnX,
+        y: spawnY,
+        player: cmd.player,
+    });
+
     return true;
 }
 
