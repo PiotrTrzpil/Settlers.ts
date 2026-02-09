@@ -19,6 +19,7 @@ import { MovementController } from './movement/movement-controller';
 import {
     AnimationState,
     createAnimationState,
+    setAnimationSequence,
     startDirectionTransition,
     updateDirectionTransition
 } from '../animation';
@@ -101,23 +102,32 @@ function updateUnitAnimation(
 ): AnimationState {
     // Create animation state if not present
     if (!animState) {
-        animState = createAnimationState('idle', 0);
+        animState = createAnimationState('default', 0);
     }
 
     // Update any in-progress direction transitions
     updateDirectionTransition(animState, deltaMs);
 
-    // If moving, update direction based on movement
+    // If moving, update direction and animation sequence
     if (controller.state === 'moving' && controller.isInTransit) {
         const newDir = controller.computeMovementDirection();
         if (newDir !== -1 && newDir !== animState.direction) {
             startDirectionTransition(animState, newDir);
+        }
+        // Ensure walk animation is playing
+        if (animState.sequenceKey !== 'walk') {
+            setAnimationSequence(animState, 'walk', animState.direction);
         }
         // Reset idle state when moving
         idleState.idleTime = 0;
     }
     // If idle, handle random direction changes
     else if (controller.state === 'idle' && !controller.isInTransit) {
+        // Switch back to idle/default animation when stopped
+        if (animState.sequenceKey === 'walk') {
+            setAnimationSequence(animState, 'default', animState.direction);
+        }
+
         idleState.idleTime += deltaSec;
 
         if (idleState.idleTime >= idleState.nextIdleTurnTime) {

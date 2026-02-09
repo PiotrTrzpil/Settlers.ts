@@ -703,6 +703,14 @@ export class SpriteMetadataRegistry {
         const sequences = new Map<string, Map<number, AnimationSequence>>();
         sequences.set('default', directionMap);
 
+        // For units, also register 'walk' as an alias so the idle-behavior
+        // system can switch between 'default' (idle) and 'walk' sequences.
+        // Currently both point to the same animation data; separate idle/walk
+        // sprites can be loaded independently in the future.
+        if (entityType === EntityType.Unit) {
+            sequences.set('walk', directionMap);
+        }
+
         const animationData: AnimationData = {
             sequences,
             defaultSequence: 'default',
