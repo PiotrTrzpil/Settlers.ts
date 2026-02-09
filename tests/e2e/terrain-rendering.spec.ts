@@ -45,9 +45,11 @@ test.describe('Terrain Rendering', { tag: '@screenshot' }, () => {
         expect(debug.gameLoaded).toBe(true);
         expect(debug.rendererReady).toBe(true);
 
-        // Entity count starts at zero on fresh test map
-        await expect(gp.entityCount).toHaveAttribute('data-count', '0');
-        await expect(gp).toHaveEntityCount(0);
+        // Test map has some randomly generated trees (environment objects)
+        // but should have way fewer entities than a real campaign map (120k+)
+        const entityCount = await gp.getEntityCount();
+        expect(entityCount).toBeLessThan(1000); // Test map has ~500 trees max
+        expect(entityCount).toBeGreaterThan(0);  // Should have some environment objects
 
         // Mode defaults to select
         await expect(gp).toHaveMode('select');

@@ -264,7 +264,12 @@ export function useMapView(
     getInputManager?: () => InputManager | null
 ) {
     const route = useRoute();
-    const isTestMap = route.query.testMap === 'true';
+    // Check if testMap query param is present - use computed for reactivity
+    // in case the route isn't fully resolved when the composable first runs
+    const isTestMap = computed(() => {
+        const param = route.query.testMap;
+        return param === 'true' || param === '';
+    });
 
     const fileName = ref<string | null>(null);
     const mapInfo = ref('');
@@ -333,7 +338,7 @@ export function useMapView(
         }
     }
 
-    const initializeMap = () => isTestMap ? loadTestMap() : autoLoadFirstMap();
+    const initializeMap = () => isTestMap.value ? loadTestMap() : autoLoadFirstMap();
 
     onMounted(() => {
         initializeMap();
@@ -361,6 +366,10 @@ export function useMapView(
     });
 
     function onFileSelect(file: IFileSource) {
+        // Don't process file selection in test map mode - prevents file-browser
+        // auto-select from triggering map loading that overwrites the test map
+        if (isTestMap.value) return;
+
         fileName.value = file.name;
         void load(file);
     }
@@ -381,6 +390,11 @@ export function useMapView(
     const togglePause = gameActions.togglePause;
 
     async function load(file: IFileSource) {
+        // Don't load map files if we're in test map mode - the test map is
+        // already loaded synchronously and we don't want async file loading
+        // to overwrite it (race condition from file-browser auto-select)
+        if (isTestMap.value) return;
+
         const fm = getFileManager();
         if (!fm) return;
         const result = await loadMapFile(file, fm);

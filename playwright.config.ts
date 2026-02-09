@@ -1,48 +1,113 @@
 import { defineConfig } from '@playwright/test';
 
-// Global test timeout in ms — override with E2E_TIMEOUT env variable:
-//   E2E_TIMEOUT=60000 npx playwright test
-const globalTimeout = Number(process.env.E2E_TIMEOUT) || 30_000;
+/**
+ * Playwright configuration with project-based test tiers.
+ *
+ * Test Tiers:
+ *   @smoke       - Core functionality, < 5s each, runs on every commit
+ *   @integration - Full flows, < 15s each, runs on PR (default)
+ *   @slow        - Complex tests, < 30s each
+ *   @requires-assets - Needs real game files, < 60s, runs nightly/on-demand
+ *   @screenshot  - Visual regression tests
+ *
+ * Run specific tiers:
+ *   npx playwright test --project=smoke
+ *   npx playwright test --project=slow
+ *   npx playwright test --grep @requires-assets
+ *   npx playwright test --grep-invert @requires-assets  # Skip asset tests
+ */
+
+// Base settings shared across projects
+const baseSettings = {
+    baseURL: 'http://localhost:4173',
+    headless: true,
+    viewport: { width: 1280, height: 720 },
+    bypassCSP: true,
+    trace: 'retain-on-failure' as const,
+    screenshot: 'only-on-failure' as const,
+    launchOptions: {
+        args: ['--disable-web-security', '--disable-features=IsolateOrigins,site-per-process'],
+    },
+};
 
 export default defineConfig({
     testDir: './tests/e2e',
     outputDir: './tests/e2e/.results',
-    timeout: globalTimeout,
-    // Run tests in all files in parallel for better worker utilization
     fullyParallel: true,
     retries: 0,
     snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',
+
     expect: {
-        timeout: Math.min(globalTimeout, 10_000),
-        toMatchSnapshot: {
-            maxDiffPixelRatio: 0.01,
-        },
-        toHaveScreenshot: {
-            maxDiffPixelRatio: 0.01,
-            animations: 'disabled',
-        },
+        timeout: 5_000,
+        toMatchSnapshot: { maxDiffPixelRatio: 0.01 },
+        toHaveScreenshot: { maxDiffPixelRatio: 0.01, animations: 'disabled' },
     },
-    use: {
-        baseURL: 'http://localhost:4173',
-        headless: true,
-        viewport: { width: 1280, height: 720 },
-        // Cap individual actions (clicks, fills, etc.) and navigation
-        actionTimeout: Math.min(globalTimeout, 10_000),
-        navigationTimeout: Math.min(globalTimeout, 15_000),
-        // Disable cache to avoid ERR_CACHE_WRITE_FAILURE with large GFX files
-        bypassCSP: true,
-        // Only capture traces/videos on failure to reduce overhead
-        trace: 'retain-on-failure',
-        screenshot: 'only-on-failure',
-        launchOptions: {
-            args: ['--disable-web-security', '--disable-features=IsolateOrigins,site-per-process'],
+
+    // Project-based configuration for different test tiers
+    projects: [
+        {
+            name: 'smoke',
+            testMatch: '**/*.spec.ts',
+            grep: /@smoke/,
+            grepInvert: /@requires-assets|@slow/,
+            timeout: 10_000,
+            use: {
+                ...baseSettings,
+                actionTimeout: 2_000,
+                navigationTimeout: 5_000,
+            },
         },
-    },
+        {
+            name: 'default',
+            testMatch: '**/*.spec.ts',
+            grepInvert: /@requires-assets|@slow|@screenshot/,
+            timeout: 15_000,
+            use: {
+                ...baseSettings,
+                actionTimeout: 3_000,
+                navigationTimeout: 5_000,
+            },
+        },
+        {
+            name: 'slow',
+            testMatch: '**/*.spec.ts',
+            grep: /@slow/,
+            grepInvert: /@requires-assets/,
+            timeout: 30_000,
+            use: {
+                ...baseSettings,
+                actionTimeout: 5_000,
+                navigationTimeout: 10_000,
+            },
+        },
+        {
+            name: 'assets',
+            testMatch: '**/*.spec.ts',
+            grep: /@requires-assets/,
+            timeout: 60_000,
+            use: {
+                ...baseSettings,
+                actionTimeout: 10_000,
+                navigationTimeout: 30_000,
+            },
+        },
+        {
+            name: 'visual',
+            testMatch: '**/*.spec.ts',
+            grep: /@screenshot/,
+            timeout: 20_000,
+            use: {
+                ...baseSettings,
+                actionTimeout: 3_000,
+                navigationTimeout: 10_000,
+            },
+        },
+    ],
+
     webServer: {
         command: 'npm run build && npx vite preview --port 4173',
         url: 'http://localhost:4173',
-        timeout: 120000,
-        // Reuse existing server locally (skip build+preview if already running)
+        timeout: 120_000,
         reuseExistingServer: !process.env.CI,
-    }
+    },
 });

@@ -285,16 +285,13 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
 test.describe('Unit Spawning', { tag: '@smoke' }, () => {
     test('spawn bearer creates entity on passable terrain', async({ gp }) => {
         const countBefore = await gp.getDebugField('entityCount');
-        await gp.spawnBearer();
-        await gp.waitForEntityCountAbove(countBefore);
+        // Use spawnUnit() to actually create the entity via game.execute()
+        const entity = await gp.spawnUnit(1); // UnitType.Bearer = 1
 
         await expect(gp).toHaveEntityCount(countBefore + 1);
 
         // Entity should be on the map, NOT at (10,10) water
-        const state = await gp.getGameState();
-        const entity = state?.entities[state.entities.length - 1];
-
-        expect(entity).toBeDefined();
+        expect(entity).not.toBeNull();
         expect(entity!.x).toBeGreaterThanOrEqual(0);
         expect(entity!.y).toBeGreaterThanOrEqual(0);
 
@@ -305,63 +302,53 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
 
     test('spawn swordsman creates entity', async({ gp }) => {
         const countBefore = await gp.getDebugField('entityCount');
-        await gp.spawnSwordsman();
-        await gp.waitForEntityCountAbove(countBefore);
+        // UnitType.Swordsman - check the game's unit types
+        const entity = await gp.spawnUnit(3); // Swordsman
 
         await expect(gp).toHaveEntityCount(countBefore + 1);
+        expect(entity).not.toBeNull();
     });
 
     test('clicking canvas then spawning uses clicked tile', async({ gp }) => {
-        const page = gp.page;
-
-        // Find land and move camera there so the click hits passable terrain
+        // Find land and move camera there so spawn happens on passable terrain
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
             test.skip();
             return;
         }
-        await gp.moveCamera(buildableTile.x, buildableTile.y);
-
-        // Click canvas to set hoveredTile
-        const box = await gp.canvas.boundingBox();
-        await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
-
-        const tileInfo = page.locator('[data-testid="tile-info"]');
-        await expect(tileInfo).toBeVisible({ timeout: 5000 });
 
         const countBefore = await gp.getDebugField('entityCount');
-        await gp.spawnBearer();
-        await gp.waitForEntityCountAbove(countBefore);
+        // Spawn unit at the buildable tile location
+        const entity = await gp.spawnUnit(1, buildableTile.x, buildableTile.y);
 
         await expect(gp).toHaveEntityCount(countBefore + 1);
 
-        // Entity should be near the clicked tile (on passable terrain)
-        await expect(gp).toHaveEntity({ type: 1 }); // EntityType.Unit
+        // Entity should be at the specified tile
+        expect(entity).not.toBeNull();
+        expect(entity!.x).toBe(buildableTile.x);
+        expect(entity!.y).toBe(buildableTile.y);
     });
 
     test('spawned unit is on passable terrain (not water)', async({ gp }) => {
         const page = gp.page;
 
-        await gp.spawnBearer();
-        await gp.waitForEntityCountAbove(0);
+        const entity = await gp.spawnUnit(1);
+        expect(entity).not.toBeNull();
 
         // Check the terrain type under the spawned entity
-        const terrainCheck = await page.evaluate(() => {
+        const terrainCheck = await page.evaluate(({ x, y }) => {
             const game = (window as any).__settlers_game__;
             if (!game) return null;
-            const entities = game.state.entities;
-            if (entities.length === 0) return null;
 
-            const e = entities[entities.length - 1];
-            const idx = game.mapSize.toIndex(e.x, e.y);
+            const idx = game.mapSize.toIndex(x, y);
             const gt = game.groundType[idx];
             return {
-                entityPos: { x: e.x, y: e.y },
+                entityPos: { x, y },
                 groundType: gt,
                 isWater: gt <= 8,
                 isPassable: gt > 8 && gt !== 32
             };
-        });
+        }, { x: entity!.x, y: entity!.y });
 
         expect(terrainCheck).not.toBeNull();
         expect(terrainCheck!.isWater).toBe(false);

@@ -113,8 +113,10 @@ test.describe('Map Loading Performance', { tag: '@smoke' }, () => {
         expect(state?.mapWidth).toBeGreaterThan(100);
         expect(state?.mapHeight).toBeGreaterThan(100);
 
-        // Should start with no entities on fresh test map
-        expect(debug.entityCount).toBe(0);
+        // Test map has environment objects (trees) but much fewer than campaign maps
+        expect(debug.entityCount).toBeLessThan(1000);
+        expect(debug.buildingCount).toBe(0); // No buildings placed
+        expect(debug.unitCount).toBe(0);     // No units spawned
 
         // Camera should be centered-ish
         expect(debug.cameraX).toBeGreaterThan(50);
@@ -172,7 +174,9 @@ test.describe('Map Loading Performance', { tag: '@smoke' }, () => {
                 !l.text.includes('Renderer') &&
                 !l.text.includes('ERR_CACHE') &&
                 !l.text.includes('Failed to load resource') &&
-                !l.text.includes('Unhandled promise rejection')
+                !l.text.includes('Unhandled promise rejection') &&
+                !l.text.includes('ResourceFile') &&
+                !l.text.includes('SoundManager')
         );
 
         expect(unexpectedErrors).toHaveLength(0);

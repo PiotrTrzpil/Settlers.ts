@@ -11,8 +11,9 @@ import { GamePage } from './game-page';
  * Note: These tests require real game assets (GFX files) to be available.
  * They won't work with testMap mode which uses procedural textures.
  */
-test.describe('Sprite Atlas Cache', () => {
+test.describe('Sprite Atlas Cache', { tag: ['@requires-assets', '@slow'] }, () => {
     test('IndexedDB cache speeds up page refresh', async({ page }) => {
+        // Note: @requires-assets project provides 60s timeout
         const gp = new GamePage(page);
 
         // Clear any existing cache to ensure clean state

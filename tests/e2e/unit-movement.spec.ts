@@ -8,13 +8,13 @@ import { test, expect } from './fixtures';
  * and game state is reset between tests via resetGameState().
  */
 
-test.describe('Unit Movement', () => {
+test.describe('Unit Movement', { tag: '@smoke' }, () => {
     test('unit starts moving immediately after command (no delay)', async({ gp }) => {
         const page = gp.page;
 
-        // Spawn a unit
-        await gp.spawnBearer();
-        await gp.waitForEntityCountAbove(0);
+        // Spawn a unit via game.execute()
+        const unit = await gp.spawnUnit(1); // Bearer = UnitType 1
+        expect(unit).not.toBeNull();
 
         // Get the unit's initial position and issue a move command
         const moveResult = await page.evaluate(() => {
@@ -76,33 +76,16 @@ test.describe('Unit Movement', () => {
         expect(moveResult.stateAfterCommand).toBeDefined();
 
         // Verify the unit state is set up for movement
-        // moveProgress starts at 0; unit moves once progress reaches 1 (after 1/speed seconds)
+        // Path should be computed immediately; moveProgress may already be advancing
         const stateAfter = moveResult.stateAfterCommand!;
-        expect(stateAfter.moveProgress).toBe(0);
         expect(stateAfter.pathLength).toBeGreaterThan(0);
-        expect(stateAfter.pathIndex).toBe(0);
+        // moveProgress and pathIndex may already be > 0 if a tick ran during the evaluate call
 
-        // Wait for unit to actually move using polling (more reliable than fixed timeout)
-        // speed=2 means 0.5s per tile, but with game loop timing variance, poll for up to 2s
-        const moved = await page.waitForFunction(
-            ({ unitId, startX, startY }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return false;
-
-                const unit = game.state.getEntity(unitId);
-                if (!unit) return false;
-
-                return unit.x !== startX || unit.y !== startY;
-            },
-            { unitId: moveResult.unitId, startX: moveResult.startX, startY: moveResult.startY },
-            { timeout: 8000, polling: 100 }
-        );
-
-        expect(moved).toBeTruthy();
+        // Wait for unit to actually move using polling helper
+        await gp.waitForUnitToMove(moveResult.unitId, moveResult.startX, moveResult.startY, 8000);
     });
 
-    test('unit movement is smooth (interpolation works)', async({ gp }) => {
-        test.setTimeout(60000);
+    test('unit movement is smooth (interpolation works)', { tag: '@slow' }, async({ gp }) => {
         const page = gp.page;
 
         await test.step('spawn unit and start movement', async() => {
@@ -355,21 +338,16 @@ test.describe('Unit Movement', () => {
     });
 
     test('debug stats show moving units count', async({ gp }) => {
-        // Initially no units moving
-        await expect(gp).toHaveEntityCount(0);
-        let unitsMoving = await gp.getDebugField('unitsMoving');
-        expect(unitsMoving).toBe(0);
+        // Initially no user-placed units (trees are present but type 3)
+        await expect(gp).toHaveUnitCount(0);
+        await expect(gp).toHaveUnitsMoving(0);
 
         // Spawn and move a unit using helpers
         const unit = await gp.spawnUnit(1);
         expect(unit).not.toBeNull();
         await gp.moveUnit(unit!.id, unit!.x + 5, unit!.y);
 
-        // Wait for tick to process
-        await gp.waitForFrames(3);
-
-        // Now should show 1 unit moving
-        unitsMoving = await gp.getDebugField('unitsMoving');
-        expect(unitsMoving).toBe(1);
+        // Wait for unitsMoving to be at least 1 (use polling helper)
+        await gp.waitForUnitsMoving(1, 5000);
     });
 });

@@ -109,30 +109,29 @@ export class GamePage {
     // ── State reset ───────────────────────────────────────────
 
     /**
-     * Remove all entities and reset mode to 'select'.
-     * Uses the proper game command pipeline (game.execute) for entity removal
-     * and InputManager.switchMode for mode changes (with full exit/enter lifecycle).
+     * Remove user-placed entities (buildings, units, resources) but preserve
+     * environment objects (trees, stones). Resets mode to 'select'.
      */
     async resetGameState(): Promise<void> {
         await this.page.evaluate(() => {
             const game = (window as any).__settlers_game__;
             if (!game) return;
-            // Remove all entities through the game's public API, which uses
-            // the command pipeline (terrain restoration, etc.)
-            game.removeAllEntities();
-            // Reset mode via InputManager — goes through proper onExit/onEnter
-            // lifecycle so mode data is cleaned up and callbacks fire.
+            // Remove only user-placed entities (type 1=Unit, 2=Building, 4=Resource)
+            // Keep environment objects (type 3) which are part of the map
+            const userEntities = game.state.entities.filter(
+                (e: any) => e.type === 1 || e.type === 2 || e.type === 4
+            );
+            for (const e of userEntities) {
+                game.execute({ type: 'remove_entity', entityId: e.id });
+            }
+            // Reset mode via InputManager
             const input = (window as any).__settlers_input__;
             if (input && input.getModeName() !== 'select') {
                 input.switchMode('select');
             }
         });
-        // Wait for cleanup to propagate
-        await this.page.waitForFunction(
-            () => (window as any).__settlers_debug__?.entityCount === 0,
-            null,
-            { timeout: 5000 },
-        );
+        // Quick wait for state to settle
+        await this.waitForFrames(2, 3000);
     }
 
     // ── Debug bridge reads ──────────────────────────────────
@@ -170,17 +169,6 @@ export class GamePage {
 
     async clickButton(testId: string): Promise<void> {
         await this.page.locator(`[data-testid="${testId}"]`).click();
-    }
-
-    async spawnBearer(): Promise<void> {
-        // Switch to Units tab first
-        await this.page.locator('.tab-btn', { hasText: 'Units' }).click();
-        await this.clickButton('btn-spawn-bearer');
-    }
-
-    async spawnSwordsman(): Promise<void> {
-        await this.page.locator('.tab-btn', { hasText: 'Units' }).click();
-        await this.clickButton('btn-spawn-swordsman');
     }
 
     async pause(): Promise<void> {
@@ -286,6 +274,97 @@ export class GamePage {
         await this.page.waitForFunction(
             (min) => (window as any).__settlers_debug__?.entityCount > min,
             n,
+            { timeout },
+        );
+    }
+
+    // ── Polling helpers ─────────────────────────────────────────
+    // Use these instead of point-in-time assertions when timing is uncertain
+
+    /** Wait for unit count to reach expected value. */
+    async waitForUnitCount(expected: number, timeout = 5000): Promise<void> {
+        await this.page.waitForFunction(
+            (n) => (window as any).__settlers_debug__?.unitCount === n,
+            expected,
+            { timeout },
+        );
+    }
+
+    /** Wait for building count to reach expected value. */
+    async waitForBuildingCount(expected: number, timeout = 5000): Promise<void> {
+        await this.page.waitForFunction(
+            (n) => (window as any).__settlers_debug__?.buildingCount === n,
+            expected,
+            { timeout },
+        );
+    }
+
+    /** Wait for at least N units to be moving. */
+    async waitForUnitsMoving(minMoving: number, timeout = 5000): Promise<void> {
+        await this.page.waitForFunction(
+            (n) => (window as any).__settlers_debug__?.unitsMoving >= n,
+            minMoving,
+            { timeout },
+        );
+    }
+
+    /** Wait for no units to be moving (all stationary). */
+    async waitForNoUnitsMoving(timeout = 5000): Promise<void> {
+        await this.page.waitForFunction(
+            () => (window as any).__settlers_debug__?.unitsMoving === 0,
+            null,
+            { timeout },
+        );
+    }
+
+    /**
+     * Wait for a specific unit to reach its destination.
+     * Destination is considered reached when unit is at target AND path is empty.
+     */
+    async waitForUnitAtDestination(
+        unitId: number,
+        targetX: number,
+        targetY: number,
+        timeout = 10000
+    ): Promise<void> {
+        await this.page.waitForFunction(
+            ({ id, tx, ty }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return false;
+                const unit = game.state.getEntity(id);
+                const unitState = game.state.unitStates.get(id);
+                return unit && unit.x === tx && unit.y === ty &&
+                    unitState && unitState.path.length === 0;
+            },
+            { id: unitId, tx: targetX, ty: targetY },
+            { timeout },
+        );
+    }
+
+    /**
+     * Wait for a unit to move away from its starting position.
+     * Useful for verifying movement has started.
+     */
+    async waitForUnitToMove(unitId: number, startX: number, startY: number, timeout = 5000): Promise<void> {
+        await this.page.waitForFunction(
+            ({ id, sx, sy }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return false;
+                const unit = game.state.getEntity(id);
+                return unit && (unit.x !== sx || unit.y !== sy);
+            },
+            { id: unitId, sx: startX, sy: startY },
+            { timeout },
+        );
+    }
+
+    /**
+     * Wait for mode to change to expected value.
+     */
+    async waitForMode(expectedMode: string, timeout = 5000): Promise<void> {
+        await this.page.waitForFunction(
+            (mode) => (window as any).__settlers_debug__?.mode === mode,
+            expectedMode,
             { timeout },
         );
     }
