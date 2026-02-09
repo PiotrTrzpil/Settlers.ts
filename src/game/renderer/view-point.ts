@@ -19,10 +19,12 @@ export interface ViewPointOptions {
 const PAN_KEYS = new Set(['w', 'a', 's', 'd']);
 
 /**
- * Camera smoothing factor - higher = snappier, lower = smoother.
- * At 25, camera reaches ~99% of target in ~185ms (smooth but responsive).
+ * Camera smoothing factors - higher = snappier, lower = smoother.
+ * DRAG: Very high for mouse drag so terrain sticks to cursor (~99% in ~33ms = 2 frames)
+ * KEYBOARD: Lower for keyboard pan for smooth acceleration/deceleration (~99% in ~230ms)
  */
-const CAMERA_SMOOTHING = 25;
+const SMOOTHING_DRAG = 140;     // Near-instant for mouse drag
+const SMOOTHING_KEYBOARD = 20;  // Smooth for keyboard pan
 
 export class ViewPoint implements IViewPoint {
     private posX = 0;
@@ -40,6 +42,8 @@ export class ViewPoint implements IViewPoint {
     // Target position for smooth camera interpolation (external input mode only)
     private targetX = 0;
     private targetY = 0;
+    // Current smoothing factor (changes based on input type)
+    private smoothingFactor = SMOOTHING_DRAG;
 
     /** Zoom speed - reads directly from game settings */
     public get zoomSpeed(): number {
@@ -93,31 +97,26 @@ export class ViewPoint implements IViewPoint {
     }
 
     /**
-     * Set position and delta directly (for external input control).
-     * When using external input, this sets the target position for smooth interpolation.
+     * Set target position (for mouse drag - uses high smoothing so terrain sticks to cursor).
      */
     public setRawPosition(posX: number, posY: number, deltaX = 0, deltaY = 0): void {
-        if (this.externalInput) {
-            // Set target position - actual position will interpolate toward it
-            this.targetX = posX + deltaX;
-            this.targetY = posY + deltaY;
-        } else {
-            // Legacy mode - set position directly
-            this.posX = posX;
-            this.posY = posY;
-            this.deltaX = deltaX;
-            this.deltaY = deltaY;
-        }
+        this.targetX = posX + deltaX;
+        this.targetY = posY + deltaY;
+        this.smoothingFactor = SMOOTHING_DRAG;  // Fast for mouse drag
+        this.deltaX = 0;
+        this.deltaY = 0;
     }
 
     /**
      * Move the target position by a delta (for keyboard panning).
      * This updates the target directly without reading from the interpolated position,
      * ensuring consistent velocity regardless of interpolation state.
+     * Uses slower smoothing for smooth keyboard pan feel.
      */
     public moveTarget(dx: number, dy: number): void {
         this.targetX += dx;
         this.targetY += dy;
+        this.smoothingFactor = SMOOTHING_KEYBOARD;  // Smooth for keyboard
     }
 
     /**
@@ -242,7 +241,7 @@ export class ViewPoint implements IViewPoint {
             // Smooth interpolation toward target position
             // Using exponential smoothing: pos = pos + (target - pos) * (1 - e^(-smoothing * dt))
             // This is frame-rate independent and always converges
-            const factor = 1 - Math.exp(-CAMERA_SMOOTHING * dt);
+            const factor = 1 - Math.exp(-this.smoothingFactor * dt);
 
             const dx = this.targetX - this.posX;
             const dy = this.targetY - this.posY;
