@@ -114,7 +114,7 @@ foreach ($lib in @("game.lib", "gfx.lib")) {
 }
 
 # Copy asset folders
-foreach ($folder in @("Gfx", "Map", "Save", "GameData", "Snd", "Txt")) {
+foreach ($folder in @("Gfx", "Map", "Save", "GameData", "Config", "Snd", "Txt", "Script")) {
     $src = Join-Path $SourcePath $folder
     if (Test-Path $src) {
         $count = (Get-ChildItem $src -Recurse -File -ErrorAction SilentlyContinue).Count

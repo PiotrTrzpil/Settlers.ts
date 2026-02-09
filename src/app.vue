@@ -21,6 +21,7 @@ import { FileManager } from './utilities/file-manager';
 import { FileListProvider } from './utilities/file-list-provider';
 import { LibFileProvider } from './utilities/lib-file-provider';
 import { LogHandler } from './utilities/log-handler';
+import { getGameDataLoader } from './resources/game-data';
 
 const log = new LogHandler('App');
 const fileManager = ref<FileManager | null>(null);
@@ -37,6 +38,11 @@ onMounted(async() => {
         fileManager.value = fm;
 
         log.debug('Read FileManager sources done!');
+
+        // Load game data XML files (non-blocking, logs on failure)
+        getGameDataLoader().load().catch(e => {
+            log.warn('Failed to load game data (non-critical): ' + e);
+        });
     } catch (e) {
         log.error('Failed to initialize file manager', e instanceof Error ? e : new Error(String(e)));
     }
