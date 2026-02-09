@@ -29,6 +29,9 @@ const BACKGROUND_FRAME_DURATION = 1000 / BACKGROUND_FPS;
 export class GameLoop {
     private static log = new LogHandler('GameLoop');
 
+    /** Track active loops to detect HMR leaks */
+    private static activeLoops = 0;
+
     private accumulator = 0;
     private lastTime = 0;
     private running = false;
@@ -150,9 +153,17 @@ export class GameLoop {
         this.running = true;
         this.lastTime = performance.now();
         this.animRequest = requestAnimationFrame((t) => this.frame(t));
+
+        GameLoop.activeLoops++;
+        if (GameLoop.activeLoops > 1) {
+            GameLoop.log.error(`Multiple game loops active (${GameLoop.activeLoops})! This indicates a cleanup leak.`);
+        }
     }
 
     public stop(): void {
+        if (this.running) {
+            GameLoop.activeLoops = Math.max(0, GameLoop.activeLoops - 1);
+        }
         this.running = false;
         if (this.animRequest) {
             cancelAnimationFrame(this.animRequest);

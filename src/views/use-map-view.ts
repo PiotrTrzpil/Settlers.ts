@@ -322,9 +322,10 @@ export function useMapView(
     }));
 
     function loadTestMap(): void {
-        if (game.value) return;
         const fm = getFileManager();
         if (!fm) return;
+        // Destroy old game before creating new one to prevent multiple game loops
+        game.value?.destroy();
         mapInfo.value = 'Test map (synthetic 256x256)';
         game.value = createTestGame(fm);
     }
@@ -399,6 +400,8 @@ export function useMapView(
         if (!fm) return;
         const result = await loadMapFile(file, fm);
         if (result.game) {
+            // Destroy old game before replacing to prevent multiple game loops
+            game.value?.destroy();
             game.value = result.game;
             mapInfo.value = result.mapInfo;
         }
