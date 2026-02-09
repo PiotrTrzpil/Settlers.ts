@@ -37,6 +37,7 @@ pnpm lint             # ESLint (src/**/*.ts,*.vue)
 - **GLSL imports**: Shader files use `import x from './shaders/file.glsl'` via vite-plugin-glsl
 - **Type declarations**: Ambient types live in `src/types/` (env.d.ts, glsl.d.ts, shims-vue.d.ts)
 - **Feature modules**: New features should follow the patterns in `docs/feature-module-architecture.md` (registration, events, minimal public API)
+- **Architecture rules**: Read `docs/SYSTEM_DESIGN_RULES.md` for all architectural invariants, naming conventions, and code organization rules
 
 ## Game assets
 

@@ -17,6 +17,7 @@ import { EMaterialType } from '@/game/economy/material-type';
 import { GameState } from '@/game/game-state';
 import { EntityType, BuildingType } from '@/game/entity';
 import { ServiceAreaManager } from '@/game/features/service-areas';
+import { addBuildingWithInventory } from '../helpers/test-game';
 
 describe('Resource Request System', () => {
     let requestManager: RequestManager;
@@ -262,25 +263,10 @@ describe('Resource Supply System', () => {
         gameState = new GameState();
     });
 
-    /**
-     * Helper to create a building with inventory.
-     * Without GameLoop, we need to manually create the inventory.
-     */
-    function createBuildingWithInventory(
-        buildingType: BuildingType,
-        x: number,
-        y: number,
-        player: number = 0,
-    ) {
-        const building = gameState.addEntity(EntityType.Building, buildingType, x, y, player);
-        gameState.inventoryManager.createInventory(building.id, buildingType);
-        return building;
-    }
-
     describe('getAvailableSupplies', () => {
         it('should find buildings with material in output', () => {
             // Create a building with inventory
-            const building = createBuildingWithInventory(BuildingType.WoodcutterHut, 10, 10, 0);
+            const building = addBuildingWithInventory(gameState, 10, 10, BuildingType.WoodcutterHut, 0);
 
             // Deposit some logs in output
             gameState.inventoryManager.depositOutput(building.id, EMaterialType.LOG, 5);
@@ -300,7 +286,7 @@ describe('Resource Supply System', () => {
         });
 
         it('should respect minAmount filter', () => {
-            const building = createBuildingWithInventory(BuildingType.WoodcutterHut, 10, 10, 0);
+            const building = addBuildingWithInventory(gameState, 10, 10, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(building.id, EMaterialType.LOG, 3);
 
             const suppliesMin5 = getAvailableSupplies(gameState, EMaterialType.LOG, { minAmount: 5 });
@@ -320,11 +306,11 @@ describe('Resource Supply System', () => {
             serviceAreaManager.createServiceArea(hub.id, 0, 10, 10, 15);
 
             // Create building inside service area
-            const insideBuilding = createBuildingWithInventory(BuildingType.WoodcutterHut, 15, 10, 0);
+            const insideBuilding = addBuildingWithInventory(gameState, 15, 10, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(insideBuilding.id, EMaterialType.LOG, 5);
 
             // Create building outside service area
-            const outsideBuilding = createBuildingWithInventory(BuildingType.WoodcutterHut, 50, 50, 0);
+            const outsideBuilding = addBuildingWithInventory(gameState, 50, 50, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(outsideBuilding.id, EMaterialType.LOG, 5);
 
             const supplies = getSuppliesInServiceArea(
@@ -341,7 +327,7 @@ describe('Resource Supply System', () => {
 
     describe('hasAnySupply', () => {
         it('should return true when supply exists', () => {
-            const building = createBuildingWithInventory(BuildingType.WoodcutterHut, 10, 10, 0);
+            const building = addBuildingWithInventory(gameState, 10, 10, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(building.id, EMaterialType.LOG, 1);
 
             expect(hasAnySupply(gameState, EMaterialType.LOG)).toBe(true);
@@ -354,8 +340,8 @@ describe('Resource Supply System', () => {
 
     describe('getTotalSupply', () => {
         it('should sum supplies across all buildings', () => {
-            const b1 = createBuildingWithInventory(BuildingType.WoodcutterHut, 10, 10, 0);
-            const b2 = createBuildingWithInventory(BuildingType.WoodcutterHut, 20, 20, 0);
+            const b1 = addBuildingWithInventory(gameState, 10, 10, BuildingType.WoodcutterHut, 0);
+            const b2 = addBuildingWithInventory(gameState, 20, 20, BuildingType.WoodcutterHut, 0);
 
             gameState.inventoryManager.depositOutput(b1.id, EMaterialType.LOG, 5);
             gameState.inventoryManager.depositOutput(b2.id, EMaterialType.LOG, 3);
@@ -378,21 +364,6 @@ describe('Fulfillment Matcher', () => {
         requestManager = new RequestManager();
     });
 
-    /**
-     * Helper to create a building with inventory.
-     * Without GameLoop, we need to manually create the inventory.
-     */
-    function createBuildingWithInventory(
-        buildingType: BuildingType,
-        x: number,
-        y: number,
-        player: number = 0,
-    ) {
-        const building = gameState.addEntity(EntityType.Building, buildingType, x, y, player);
-        gameState.inventoryManager.createInventory(building.id, buildingType);
-        return building;
-    }
-
     describe('matchRequestToSupply', () => {
         it('should match request to nearest supply within service area', () => {
             // Create hub at center with service area
@@ -400,13 +371,13 @@ describe('Fulfillment Matcher', () => {
             serviceAreaManager.createServiceArea(hub.id, 0, 20, 20, 30);
 
             // Create destination (sawmill needing logs)
-            const sawmill = createBuildingWithInventory(BuildingType.Sawmill, 15, 20, 0);
+            const sawmill = addBuildingWithInventory(gameState, 15, 20, BuildingType.Sawmill, 0);
 
             // Create two woodcutters at different distances
-            const nearWoodcutter = createBuildingWithInventory(BuildingType.WoodcutterHut, 18, 20, 0);
+            const nearWoodcutter = addBuildingWithInventory(gameState, 18, 20, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(nearWoodcutter.id, EMaterialType.LOG, 5);
 
-            const farWoodcutter = createBuildingWithInventory(BuildingType.WoodcutterHut, 25, 20, 0);
+            const farWoodcutter = addBuildingWithInventory(gameState, 25, 20, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(farWoodcutter.id, EMaterialType.LOG, 5);
 
             // Create request
@@ -424,7 +395,7 @@ describe('Fulfillment Matcher', () => {
             const hub = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 20, 20, 0);
             serviceAreaManager.createServiceArea(hub.id, 0, 20, 20, 30);
 
-            const sawmill = createBuildingWithInventory(BuildingType.Sawmill, 15, 20, 0);
+            const sawmill = addBuildingWithInventory(gameState, 15, 20, BuildingType.Sawmill, 0);
             const request = requestManager.addRequest(sawmill.id, EMaterialType.LOG, 4);
 
             const match = matchRequestToSupply(request, gameState, serviceAreaManager);
@@ -436,10 +407,10 @@ describe('Fulfillment Matcher', () => {
             const hub = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 20, 20, 0);
             serviceAreaManager.createServiceArea(hub.id, 0, 20, 20, 5); // Small radius
 
-            const sawmill = createBuildingWithInventory(BuildingType.Sawmill, 22, 20, 0);
+            const sawmill = addBuildingWithInventory(gameState, 22, 20, BuildingType.Sawmill, 0);
 
             // Woodcutter far outside service area
-            const woodcutter = createBuildingWithInventory(BuildingType.WoodcutterHut, 50, 50, 0);
+            const woodcutter = addBuildingWithInventory(gameState, 50, 50, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(woodcutter.id, EMaterialType.LOG, 5);
 
             const request = requestManager.addRequest(sawmill.id, EMaterialType.LOG, 4);
@@ -453,7 +424,7 @@ describe('Fulfillment Matcher', () => {
             serviceAreaManager.createServiceArea(hub.id, 0, 20, 20, 30);
 
             // Building has material in its own output
-            const building = createBuildingWithInventory(BuildingType.Sawmill, 15, 20, 0);
+            const building = addBuildingWithInventory(gameState, 15, 20, BuildingType.Sawmill, 0);
             gameState.inventoryManager.depositOutput(building.id, EMaterialType.LOG, 5);
 
             const request = requestManager.addRequest(building.id, EMaterialType.LOG, 4);
@@ -464,9 +435,9 @@ describe('Fulfillment Matcher', () => {
 
         it('should work without requiring service area when option is false', () => {
             // No service areas created
-            const sawmill = createBuildingWithInventory(BuildingType.Sawmill, 15, 20, 0);
+            const sawmill = addBuildingWithInventory(gameState, 15, 20, BuildingType.Sawmill, 0);
 
-            const woodcutter = createBuildingWithInventory(BuildingType.WoodcutterHut, 50, 50, 0);
+            const woodcutter = addBuildingWithInventory(gameState, 50, 50, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(woodcutter.id, EMaterialType.LOG, 5);
 
             const request = requestManager.addRequest(sawmill.id, EMaterialType.LOG, 4);
@@ -484,16 +455,16 @@ describe('Fulfillment Matcher', () => {
             const hub = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 20, 20, 0);
             serviceAreaManager.createServiceArea(hub.id, 0, 20, 20, 30);
 
-            const sawmill = createBuildingWithInventory(BuildingType.Sawmill, 20, 20, 0);
+            const sawmill = addBuildingWithInventory(gameState, 20, 20, BuildingType.Sawmill, 0);
 
             // Create woodcutters at distinct distances for reliable ordering
-            const wcNear = createBuildingWithInventory(BuildingType.WoodcutterHut, 22, 20, 0);
+            const wcNear = addBuildingWithInventory(gameState, 22, 20, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(wcNear.id, EMaterialType.LOG, 3);
 
-            const wcFar = createBuildingWithInventory(BuildingType.WoodcutterHut, 27, 20, 0);
+            const wcFar = addBuildingWithInventory(gameState, 27, 20, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(wcFar.id, EMaterialType.LOG, 5);
 
-            const wcMid = createBuildingWithInventory(BuildingType.WoodcutterHut, 24, 20, 0);
+            const wcMid = addBuildingWithInventory(gameState, 24, 20, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(wcMid.id, EMaterialType.LOG, 2);
 
             const request = requestManager.addRequest(sawmill.id, EMaterialType.LOG, 4);
@@ -512,8 +483,8 @@ describe('Fulfillment Matcher', () => {
 
     describe('canPotentiallyFulfill', () => {
         it('should return true when supply exists elsewhere', () => {
-            const sawmill = createBuildingWithInventory(BuildingType.Sawmill, 15, 20, 0);
-            const woodcutter = createBuildingWithInventory(BuildingType.WoodcutterHut, 25, 20, 0);
+            const sawmill = addBuildingWithInventory(gameState, 15, 20, BuildingType.Sawmill, 0);
+            const woodcutter = addBuildingWithInventory(gameState, 25, 20, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(woodcutter.id, EMaterialType.LOG, 5);
 
             const request = requestManager.addRequest(sawmill.id, EMaterialType.LOG, 4);
@@ -528,7 +499,7 @@ describe('Fulfillment Matcher', () => {
         });
 
         it('should return false when only supply is at destination', () => {
-            const building = createBuildingWithInventory(BuildingType.Sawmill, 15, 20, 0);
+            const building = addBuildingWithInventory(gameState, 15, 20, BuildingType.Sawmill, 0);
             gameState.inventoryManager.depositOutput(building.id, EMaterialType.LOG, 5);
 
             const request = requestManager.addRequest(building.id, EMaterialType.LOG, 4);
@@ -539,12 +510,12 @@ describe('Fulfillment Matcher', () => {
 
     describe('estimateFulfillmentDistance', () => {
         it('should return minimum distance to any supply', () => {
-            const sawmill = createBuildingWithInventory(BuildingType.Sawmill, 20, 20, 0);
+            const sawmill = addBuildingWithInventory(gameState, 20, 20, BuildingType.Sawmill, 0);
 
-            const wc1 = createBuildingWithInventory(BuildingType.WoodcutterHut, 25, 20, 0);
+            const wc1 = addBuildingWithInventory(gameState, 25, 20, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(wc1.id, EMaterialType.LOG, 5);
 
-            const wc2 = createBuildingWithInventory(BuildingType.WoodcutterHut, 22, 20, 0);
+            const wc2 = addBuildingWithInventory(gameState, 22, 20, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(wc2.id, EMaterialType.LOG, 5);
 
             const request = requestManager.addRequest(sawmill.id, EMaterialType.LOG, 4);
@@ -554,7 +525,7 @@ describe('Fulfillment Matcher', () => {
         });
 
         it('should return Infinity when no supply exists', () => {
-            const sawmill = createBuildingWithInventory(BuildingType.Sawmill, 20, 20, 0);
+            const sawmill = addBuildingWithInventory(gameState, 20, 20, BuildingType.Sawmill, 0);
             const request = requestManager.addRequest(sawmill.id, EMaterialType.LOG, 4);
 
             const distance = estimateFulfillmentDistance(request, gameState);
@@ -709,22 +680,11 @@ describe('Player Filtering', () => {
         gameState = new GameState();
     });
 
-    function createBuildingWithInventory(
-        buildingType: BuildingType,
-        x: number,
-        y: number,
-        player: number,
-    ) {
-        const building = gameState.addEntity(EntityType.Building, buildingType, x, y, player);
-        gameState.inventoryManager.createInventory(building.id, buildingType);
-        return building;
-    }
-
     it('should filter supplies by player ID', () => {
-        const player0Building = createBuildingWithInventory(BuildingType.WoodcutterHut, 10, 10, 0);
+        const player0Building = addBuildingWithInventory(gameState, 10, 10, BuildingType.WoodcutterHut, 0);
         gameState.inventoryManager.depositOutput(player0Building.id, EMaterialType.LOG, 5);
 
-        const player1Building = createBuildingWithInventory(BuildingType.WoodcutterHut, 20, 20, 1);
+        const player1Building = addBuildingWithInventory(gameState, 20, 20, BuildingType.WoodcutterHut, 1);
         gameState.inventoryManager.depositOutput(player1Building.id, EMaterialType.LOG, 3);
 
         const suppliesPlayer0 = getAvailableSupplies(gameState, EMaterialType.LOG, { playerId: 0 });

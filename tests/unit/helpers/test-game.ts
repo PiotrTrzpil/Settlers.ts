@@ -41,6 +41,39 @@ export function addBuilding(
     return state.addEntity(EntityType.Building, buildingType, x, y, player);
 }
 
+/**
+ * Add a building with its inventory initialized.
+ * Without GameLoop, we need to manually create the inventory.
+ */
+export function addBuildingWithInventory(
+    state: GameState,
+    x: number,
+    y: number,
+    buildingType: BuildingType | number = BuildingType.WoodcutterHut,
+    player = 0,
+): Entity {
+    const building = state.addEntity(EntityType.Building, buildingType, x, y, player);
+    state.inventoryManager.createInventory(building.id, buildingType as BuildingType);
+    return building;
+}
+
+/**
+ * Initialize animation state on an entity.
+ * Required before using CarrierAnimationController or other animation APIs.
+ */
+export function initializeAnimationState(
+    entity: Entity,
+    options: { sequenceKey?: string; direction?: number } = {},
+): void {
+    entity.animationState = {
+        sequenceKey: options.sequenceKey ?? 'default',
+        currentFrame: 0,
+        elapsedMs: 0,
+        direction: options.direction ?? 0,
+        playing: false,
+    };
+}
+
 /** Set up a unit with a pre-assigned path for movement testing. */
 export function addUnitWithPath(
     state: GameState,
@@ -57,6 +90,34 @@ export function addUnitWithPath(
         controller.startPath(path);
     }
     return { entity, unitState };
+}
+
+// ─── Test data builders ─────────────────────────────────────────────
+
+import { EMaterialType } from '@/game/economy/material-type';
+import type { CarrierJob } from '@/game/features/carriers';
+
+/** Create a pickup job for carrier testing. */
+export function createPickupJob(
+    fromBuilding: number,
+    material: EMaterialType = EMaterialType.LOG,
+    amount = 1,
+): CarrierJob {
+    return { type: 'pickup', fromBuilding, material, amount };
+}
+
+/** Create a deliver job for carrier testing. */
+export function createDeliverJob(
+    toBuilding: number,
+    material: EMaterialType = EMaterialType.LOG,
+    amount = 1,
+): CarrierJob {
+    return { type: 'deliver', toBuilding, material, amount };
+}
+
+/** Create a return_home job for carrier testing. */
+export function createReturnHomeJob(): CarrierJob {
+    return { type: 'return_home' };
 }
 
 // ─── Command execution helpers ──────────────────────────────────────

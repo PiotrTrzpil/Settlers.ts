@@ -491,7 +491,48 @@ This prevents fixture setup from eating into test time.
 
 ## Unit Tests (Vitest)
 
+### Shared Test Helpers
+
+Use the shared helpers in `tests/unit/helpers/` to reduce boilerplate:
+
+**`test-game.ts`** — GameState and entity factories:
+```typescript
+import {
+    createGameState,
+    addUnit,
+    addBuilding,
+    addBuildingWithInventory,
+    addUnitWithPath,
+    initializeAnimationState,
+    createPickupJob,
+    createDeliverJob,
+    createReturnHomeJob,
+    placeBuilding,
+    spawnUnit,
+    moveUnit,
+    removeEntity,
+    createTestEventBus,
+} from '../helpers/test-game';
+
+// Usage
+const state = createGameState();
+const { entity, unitState } = addUnit(state, 10, 10);
+const building = addBuildingWithInventory(state, 15, 15, BuildingType.Sawmill);
+initializeAnimationState(entity);
+const job = createPickupJob(building.id, EMaterialType.LOG, 5);
+```
+
+**`test-map.ts`** — Map and terrain fixtures:
+```typescript
+import { createTestMap, TERRAIN, setTerrainAt, blockColumn } from '../helpers/test-map';
+
+const testMap = createTestMap(64, 64);  // 64x64 grass map
+setTerrainAt(testMap, 10, 10, TERRAIN.WATER);
+blockColumn(testMap, 5, 0, 10);  // Block tiles for pathfinding tests
+```
+
 ### Keep Tests Focused
+
 **Prefer fewer, more comprehensive tests over many granular ones.**
 
 Bad (39 tests for simple mode):
@@ -514,13 +555,56 @@ it('should initialize with building type and switch to select if missing', () =>
 ```
 
 ### Test Structure
-Use `describe` blocks to group related tests:
+
+Use `describe` blocks to group related tests by behavior:
 ```typescript
-describe('PlaceBuildingMode', () => {
-    describe('mode entry and exit', () => { ... });
-    describe('cancel actions', () => { ... });
-    describe('building placement', () => { ... });
+describe('CarrierManager', () => {
+    describe('createCarrier', () => { ... });
+    describe('removeCarrier', () => { ... });
+    describe('canAssignJobTo', () => { ... });
+    describe('assignJob', () => { ... });
 });
+```
+
+### Standard Setup Pattern
+
+Use `beforeEach` for common setup:
+```typescript
+describe('CarrierMovementController', () => {
+    let carrierManager: CarrierManager;
+    let gameState: GameState;
+    let testMap: TestMap;
+
+    beforeEach(() => {
+        carrierManager = new CarrierManager();
+        gameState = createGameState();
+        testMap = createTestMap(64, 64);
+        gameState.setTerrainData(
+            testMap.groundType,
+            testMap.groundHeight,
+            testMap.mapSize.width,
+            testMap.mapSize.height,
+        );
+    });
+
+    // Tests can assume fresh state
+});
+```
+
+### Test Data Builders
+
+Use builder functions for complex test objects:
+```typescript
+// GOOD — use shared builders
+const job = createPickupJob(200, EMaterialType.LOG, 5);
+
+// BAD — inline object literals everywhere
+const job: CarrierJob = {
+    type: 'pickup',
+    fromBuilding: 200,
+    material: EMaterialType.LOG,
+    amount: 5,
+};
 ```
 
 ### Mock Patterns
@@ -538,7 +622,72 @@ function createPointerData(overrides: Partial<PointerData> = {}): PointerData {
 }
 ```
 
+### Named Constants Over Magic Numbers
+
+Use named constants for test fixture IDs:
+```typescript
+// GOOD — clear what IDs represent
+const TAVERN_ID = 100;
+const SAWMILL_ID = 200;
+const CARRIER_ID = 1;
+
+const tavern = addBuilding(state, 5, 5, BuildingType.ResidenceSmall);
+const sawmill = addBuildingWithInventory(state, 10, 10, BuildingType.Sawmill);
+
+// BAD — magic numbers
+manager.assignJob(1, { fromBuilding: 200, ... });
+```
+
+### Use Public APIs, Not Direct Mutation
+
+Test through public APIs instead of directly mutating state:
+```typescript
+// GOOD — use manager API
+manager.setStatus(carrierId, CarrierStatus.Walking);
+manager.assignJob(carrierId, job);
+
+// BAD — direct mutation
+const carrier = manager.getCarrier(carrierId)!;
+carrier.status = CarrierStatus.Walking;
+carrier.currentJob = job;
+```
+
+### Test Contracts, Not Implementation Details
+
+**Prefer testing return values and observable behavior over internal state.**
+
+Tests coupled to implementation details break when refactoring, even if behavior is unchanged.
+
+```typescript
+// GOOD — test the contract (return value)
+const result = manager.assignJob(carrierId, job);
+expect(result).toBe(true);
+
+// Then verify observable behavior through public API
+const carrier = manager.getCarrier(carrierId);
+expect(carrier?.currentJob?.type).toBe('pickup');
+
+// BAD — reaching into private/internal state
+expect((manager as any).pendingAssignments.size).toBe(1);
+expect(manager['internalQueue'].length).toBe(0);
+```
+
+**What to test:**
+- Return values from public methods
+- State accessible through public getters
+- Events emitted (subscribe and verify)
+- Side effects visible through other public APIs
+
+**What NOT to test:**
+- Private fields or methods
+- Internal data structures
+- Implementation-specific intermediate states
+- Execution order of private helpers
+
+This makes tests resilient to refactoring — you can change *how* something works as long as *what* it does remains the same.
+
 ### Use TDD for Bug Fixes
+
 When fixing coordinate/math bugs, write a failing test first:
 ```typescript
 it('should round-trip through screenToTile and tileToWorld', () => {
@@ -549,6 +698,40 @@ it('should round-trip through screenToTile and tileToWorld', () => {
     }
 });
 ```
+
+### Test Both Success and Error Cases
+
+Cover both happy path and error scenarios:
+```typescript
+describe('assignJob', () => {
+    it('should assign job to idle carrier', () => {
+        manager.createCarrier(1, 100);
+        const assigned = manager.assignJob(1, job);
+        expect(assigned).toBe(true);
+    });
+
+    it('should reject assignment for non-existent carrier', () => {
+        const assigned = manager.assignJob(999, job);
+        expect(assigned).toBe(false);
+    });
+
+    it('should reject assignment for busy carrier', () => {
+        manager.createCarrier(1, 100);
+        manager.assignJob(1, job);
+        const assigned = manager.assignJob(1, anotherJob);
+        expect(assigned).toBe(false);
+    });
+});
+```
+
+### Anti-Patterns to Avoid
+
+1. **Duplicating helpers** — If you write a helper function, check if it belongs in `test-game.ts`
+2. **Direct state mutation** — Use manager/system APIs instead of setting properties
+3. **Magic numbers** — Use named constants for IDs and values
+4. **Inline object literals** — Use test data builders for repeated structures
+5. **Test interdependency** — Each test must be independent and repeatable
+6. **Testing implementation details** — Test behavior through public APIs
 
 ---
 
