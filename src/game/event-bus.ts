@@ -94,6 +94,40 @@ export interface GameEvents {
         previousStatus: number;
         newStatus: number;
     };
+
+    /** Emitted when a carrier arrives at a building for pickup */
+    'carrier:arrivedForPickup': {
+        entityId: number;
+        buildingId: number;
+    };
+
+    /** Emitted when a carrier arrives at a building for delivery */
+    'carrier:arrivedForDelivery': {
+        entityId: number;
+        buildingId: number;
+    };
+
+    /** Emitted when a carrier arrives at their home tavern */
+    'carrier:arrivedHome': {
+        entityId: number;
+        homeBuilding: number;
+    };
+
+    /** Emitted when a carrier completes a pickup (material transferred) */
+    'carrier:pickupComplete': {
+        entityId: number;
+        buildingId: number;
+        material: number;
+        amount: number;
+    };
+
+    /** Emitted when a carrier completes a delivery (material transferred) */
+    'carrier:deliveryComplete': {
+        entityId: number;
+        buildingId: number;
+        material: number;
+        amount: number;
+    };
 }
 
 type EventHandler<T> = (payload: T) => void;
