@@ -23,6 +23,8 @@
   },
   "dependencies": {
     "@vueuse/core": "^14.2.0",
+    "fengari": "^0.1.5",
+    "fengari-interop": "^0.1.4",
     "howler": "^2.2.4",
     "vue": "^3.4.0",
     "vue-router": "^4.3.0"
