@@ -1,9 +1,10 @@
-import { GameState } from '../game-state';
+import type { GameState } from '../game-state';
 import { EntityType, UnitType, MapObjectType, Entity } from '../entity';
 import { OBJECT_TYPE_CATEGORY } from './map-objects';
 import { LogHandler } from '@/utilities/log-handler';
 import { MovementController } from './movement/movement-controller';
 import { getAllNeighbors } from './hex-directions';
+import type { TickSystem } from '../tick-system';
 
 const log = new LogHandler('LumberjackSystem');
 
@@ -23,8 +24,18 @@ interface LumberjackData {
 const CHOP_DURATION = 2.0; // Seconds to chop a tree
 const SEARCH_RADIUS = 30; // Tiles
 
-export class LumberjackSystem {
+export class LumberjackSystem implements TickSystem {
     private lumberjackData = new Map<number, LumberjackData>();
+    private gameState: GameState;
+
+    constructor(gameState: GameState) {
+        this.gameState = gameState;
+    }
+
+    /** TickSystem interface */
+    tick(dt: number): void {
+        this.update(this.gameState, dt);
+    }
 
     public update(state: GameState, deltaSec: number): void {
         const lumberjacks = state.entities.filter(e => e.type === EntityType.Unit && e.subType === UnitType.Lumberjack);

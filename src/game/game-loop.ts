@@ -1,6 +1,7 @@
 import { GameState } from './game-state';
 import { updateAnimations, AnimationDataProvider } from './systems/animation';
-import { updateIdleBehavior } from './systems/idle-behavior';
+import { IdleBehaviorSystem } from './systems/idle-behavior';
+import { LumberjackSystem } from './systems/lumberjack-system';
 import { LogHandler } from '@/utilities/log-handler';
 import { debugStats } from './debug-stats';
 import { gameSettings } from './game-settings';
@@ -58,14 +59,37 @@ export class GameLoop {
     /** Building construction system (registered as TickSystem) */
     public readonly constructionSystem: BuildingConstructionSystem;
 
+    /** Idle behavior system for animation direction updates */
+    public readonly idleBehaviorSystem: IdleBehaviorSystem;
+
+    /** Lumberjack AI system */
+    public readonly lumberjackSystem: LumberjackSystem;
+
     constructor(gameState: GameState, eventBus: EventBus) {
         this.gameState = gameState;
         this.eventBus = eventBus;
 
-        // Create and register the building construction system
+        // Register all tick systems in execution order:
+        // 1. Movement — updates unit positions (must run first)
+        this.registerSystem(gameState.movement);
+
+        // 2. Idle behavior — updates animation based on movement state
+        this.idleBehaviorSystem = new IdleBehaviorSystem(gameState);
+        this.registerSystem(this.idleBehaviorSystem);
+
+        // 3. Building construction — terrain modification, phase transitions
         this.constructionSystem = new BuildingConstructionSystem(gameState);
         this.constructionSystem.registerEvents(eventBus);
         this.registerSystem(this.constructionSystem);
+
+        // 4. Lumberjack AI — issues movement commands (runs after construction)
+        this.lumberjackSystem = new LumberjackSystem(gameState);
+        this.registerSystem(this.lumberjackSystem);
+
+        // Wire up entity removal callback for idle state cleanup
+        gameState.onEntityRemoved = (entityId: number) => {
+            this.idleBehaviorSystem.cleanupIdleState(entityId);
+        };
 
         // Set up page visibility tracking for background throttling
         this.visibilityHandler = () => {
@@ -188,9 +212,6 @@ export class GameLoop {
 
     private tick(dt: number): void {
         debugStats.recordTick();
-        // Update unit movement using the new MovementSystem
-        this.gameState.movement.update(dt);
-        updateIdleBehavior(this.gameState, dt);
 
         // Update terrain context for building construction if terrain data is available
         if (this.groundType && this.groundHeight && this.mapSize) {
@@ -204,11 +225,9 @@ export class GameLoop {
             this.constructionSystem.setTerrainContext(undefined);
         }
 
-        // Run all registered tick systems
+        // Run all registered tick systems in order
         for (const system of this.systems) {
             system.tick(dt);
         }
-
-        this.gameState.lumberjackSystem.update(this.gameState, dt);
     }
 }

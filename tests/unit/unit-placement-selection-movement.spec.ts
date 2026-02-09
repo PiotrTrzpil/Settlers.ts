@@ -4,6 +4,7 @@ import { GameState } from '@/game/game-state';
 import { EntityType, UnitType } from '@/game/entity';
 import { executeCommand } from '@/game/commands/command';
 import { MapSize } from '@/utilities/map-size';
+import { EventBus } from '@/game/event-bus';
 
 /**
  * Comprehensive tests for the unit placement, selection, and movement systems.
@@ -15,6 +16,7 @@ describe('Unit Placement, Selection & Movement', () => {
     let mapSize: MapSize;
     let groundType: Uint8Array;
     let groundHeight: Uint8Array;
+    let eventBus: EventBus;
 
     beforeEach(() => {
         state = new GameState();
@@ -22,6 +24,7 @@ describe('Unit Placement, Selection & Movement', () => {
         groundType = new Uint8Array(64 * 64);
         groundHeight = new Uint8Array(64 * 64);
         groundType.fill(16); // all grass (passable & buildable)
+        eventBus = new EventBus();
         // Set terrain data for the movement system (required for pathfinding)
         state.setTerrainData(groundType, groundHeight, mapSize.width, mapSize.height);
     });
@@ -36,7 +39,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             expect(state.entities).toHaveLength(1);
@@ -53,7 +56,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 20,
                 y: 20,
                 player: 0,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             expect(state.entities[0].subType).toBe(UnitType.Swordsman);
@@ -66,7 +69,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             const unitState = state.unitStates.get(state.entities[0].id);
@@ -85,7 +88,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             // Spawn second unit at same location
             const result = executeCommand(state, {
@@ -94,7 +97,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             expect(state.entities).toHaveLength(2);
@@ -117,7 +120,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 1,
                 y: 1,
                 player: 0,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(false);
         });
@@ -129,7 +132,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 15,
                 y: 15,
                 player: 0,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.getEntityAt(15, 15)).toBeDefined();
             expect(state.getEntityAt(15, 15)!.type).toBe(EntityType.Unit);
@@ -142,7 +145,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             executeCommand(state, {
                 type: 'spawn_unit',
@@ -150,7 +153,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 20,
                 y: 20,
                 player: 1,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.entities[0].player).toBe(0);
             expect(state.entities[1].player).toBe(1);
@@ -165,7 +168,7 @@ describe('Unit Placement, Selection & Movement', () => {
                     x: 10 + i * 2,
                     y: 10,
                     player: 0,
-                }, groundType, groundHeight, mapSize);
+                }, groundType, groundHeight, mapSize, eventBus);
                 expect(result).toBe(true);
             }
             expect(state.entities).toHaveLength(types.length);
@@ -183,7 +186,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 addToSelection: false,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             expect(state.selectedEntityId).toBe(unit.id);
@@ -201,7 +204,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 20,
                 y: 20,
                 addToSelection: false,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             expect(state.selectedEntityId).toBe(null);
@@ -218,7 +221,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 addToSelection: false,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityId).toBe(unit1.id);
 
@@ -228,7 +231,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 20,
                 y: 20,
                 addToSelection: false,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityId).toBe(unit2.id);
             expect(state.selectedEntityIds.size).toBe(1);
@@ -246,7 +249,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 addToSelection: false,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             // Shift+click unit2
             executeCommand(state, {
@@ -254,7 +257,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 20,
                 y: 20,
                 addToSelection: true,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityIds.size).toBe(2);
             expect(state.selectedEntityIds.has(unit1.id)).toBe(true);
@@ -276,7 +279,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 addToSelection: true,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityIds.size).toBe(1);
             expect(state.selectedEntityIds.has(unit1.id)).toBe(false);
@@ -297,7 +300,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 addToSelection: true,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             // Primary should switch to remaining entity
             expect(state.selectedEntityId).toBe(unit2.id);
@@ -311,7 +314,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 addToSelection: false,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityId).toBe(building.id);
         });
@@ -326,7 +329,7 @@ describe('Unit Placement, Selection & Movement', () => {
             const result = executeCommand(state, {
                 type: 'toggle_selection',
                 entityId: unit.id,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             expect(state.selectedEntityIds.has(unit.id)).toBe(true);
@@ -340,7 +343,7 @@ describe('Unit Placement, Selection & Movement', () => {
             const result = executeCommand(state, {
                 type: 'toggle_selection',
                 entityId: unit.id,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             expect(state.selectedEntityIds.has(unit.id)).toBe(false);
@@ -351,7 +354,7 @@ describe('Unit Placement, Selection & Movement', () => {
             const result = executeCommand(state, {
                 type: 'toggle_selection',
                 entityId: 999,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(false);
         });
@@ -362,7 +365,7 @@ describe('Unit Placement, Selection & Movement', () => {
             executeCommand(state, {
                 type: 'toggle_selection',
                 entityId: unit.id,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityId).toBe(unit.id);
         });
@@ -377,7 +380,7 @@ describe('Unit Placement, Selection & Movement', () => {
             executeCommand(state, {
                 type: 'toggle_selection',
                 entityId: unit2.id,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityId).toBe(unit1.id); // Primary unchanged
             expect(state.selectedEntityIds.size).toBe(2);
@@ -396,7 +399,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 type: 'move_selected_units',
                 targetX: 10,
                 targetY: 5,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             const unitState = state.unitStates.get(unit.id);
@@ -415,7 +418,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 type: 'move_selected_units',
                 targetX: 20,
                 targetY: 20,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             const us1 = state.unitStates.get(unit1.id);
@@ -438,7 +441,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 type: 'move_selected_units',
                 targetX: 20,
                 targetY: 20,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             // No units to move
             expect(result).toBe(false);
@@ -449,7 +452,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 type: 'move_selected_units',
                 targetX: 20,
                 targetY: 20,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(false);
         });
@@ -465,7 +468,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 type: 'move_selected_units',
                 targetX: 20,
                 targetY: 20,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             const unitState = state.unitStates.get(unit.id);
@@ -485,7 +488,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 type: 'move_selected_units',
                 targetX: 10,
                 targetY: 5,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             const unitState = state.unitStates.get(unit.id)!;
             const pathLength = unitState.path.length;
@@ -560,7 +563,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 5,
                 y: 5,
                 player: 0,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             const unit = state.entities[0];
             expect(unit).toBeDefined();
@@ -571,7 +574,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 5,
                 y: 5,
                 addToSelection: false,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityId).toBe(unit.id);
 
@@ -580,7 +583,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 type: 'move_selected_units',
                 targetX: 15,
                 targetY: 5,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             const unitState = state.unitStates.get(unit.id)!;
             expect(unitState.path.length).toBeGreaterThan(0);
@@ -603,7 +606,7 @@ describe('Unit Placement, Selection & Movement', () => {
                     x: 5 + i,
                     y: 5,
                     player: 0,
-                }, groundType, groundHeight, mapSize);
+                }, groundType, groundHeight, mapSize, eventBus);
             }
             expect(state.entities).toHaveLength(3);
 
@@ -614,7 +617,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 y1: 4,
                 x2: 8,
                 y2: 6,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityIds.size).toBe(3);
 
@@ -623,7 +626,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 type: 'move_selected_units',
                 targetX: 15,
                 targetY: 10,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             // All should have paths
             for (const entity of state.entities) {
@@ -662,7 +665,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 5,
                 y: 5,
                 player: 0,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             executeCommand(state, {
                 type: 'spawn_unit',
@@ -670,7 +673,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             const unit1 = state.entities[0];
             const unit2 = state.entities[1];
@@ -681,7 +684,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: unit1.x,
                 y: unit1.y,
                 addToSelection: false,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityIds.size).toBe(1);
 
@@ -691,7 +694,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: unit2.x,
                 y: unit2.y,
                 addToSelection: true,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityIds.size).toBe(2);
 
@@ -700,7 +703,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 type: 'move_selected_units',
                 targetX: 25,
                 targetY: 25,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(true);
             expect(state.unitStates.get(unit1.id)!.path.length).toBeGreaterThan(0);
@@ -722,7 +725,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 y1: 4,
                 x2: 8,
                 y2: 8,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityIds.size).toBe(2);
         });
@@ -737,7 +740,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 y1: 9,
                 x2: 12,
                 y2: 11,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityIds.size).toBe(1);
             const selectedId = Array.from(state.selectedEntityIds)[0];
@@ -755,7 +758,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 y1: 20,
                 x2: 30,
                 y2: 30,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityIds.size).toBe(0);
             expect(state.selectedEntityId).toBe(null);
@@ -772,7 +775,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 y1: 8,
                 x2: 4,
                 y2: 4,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityIds.size).toBe(2);
         });
@@ -789,7 +792,7 @@ describe('Unit Placement, Selection & Movement', () => {
             executeCommand(state, {
                 type: 'select',
                 entityId: null,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityId).toBe(null);
             expect(state.selectedEntityIds.size).toBe(0);
@@ -803,7 +806,7 @@ describe('Unit Placement, Selection & Movement', () => {
             executeCommand(state, {
                 type: 'remove_entity',
                 entityId: unit.id,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityId).toBe(null);
             expect(state.selectedEntityIds.size).toBe(0);
@@ -816,7 +819,7 @@ describe('Unit Placement, Selection & Movement', () => {
             executeCommand(state, {
                 type: 'remove_entity',
                 entityId: unit.id,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.unitStates.has(unit.id)).toBe(false);
         });
@@ -828,7 +831,7 @@ describe('Unit Placement, Selection & Movement', () => {
             executeCommand(state, {
                 type: 'remove_entity',
                 entityId: unit.id,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.getEntityAt(5, 5)).toBeUndefined();
         });
@@ -846,7 +849,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 addToSelection: false,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityId).toBe(null);
             expect(state.selectedEntityIds.size).toBe(0);
@@ -862,7 +865,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 5,
                 y: 5,
                 addToSelection: false,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
             expect(state.selectedEntityIds.size).toBe(1);
 
             // Shift+click the unselectable one
@@ -871,7 +874,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 addToSelection: true,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             // Should still only have the selectable one
             expect(state.selectedEntityIds.size).toBe(1);
@@ -889,7 +892,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 y1: 4,
                 x2: 8,
                 y2: 8,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             // Should only select the 2 selectable units
             expect(state.selectedEntityIds.size).toBe(2);
@@ -901,7 +904,7 @@ describe('Unit Placement, Selection & Movement', () => {
             executeCommand(state, {
                 type: 'select',
                 entityId: unit.id,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(state.selectedEntityId).toBe(null);
             expect(state.selectedEntityIds.size).toBe(0);
@@ -913,7 +916,7 @@ describe('Unit Placement, Selection & Movement', () => {
             const result = executeCommand(state, {
                 type: 'toggle_selection',
                 entityId: unit.id,
-            }, groundType, groundHeight, mapSize);
+            }, groundType, groundHeight, mapSize, eventBus);
 
             expect(result).toBe(false);
             expect(state.selectedEntityIds.size).toBe(0);

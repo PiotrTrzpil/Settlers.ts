@@ -4,6 +4,7 @@ import { findPath } from '../pathfinding';
 import { isPassable } from '../../features/placement';
 import { GRID_DELTAS, getAllNeighbors } from '../hex-directions';
 import { findRandomFreeDirection, shouldYieldToPush } from './push-utils';
+import type { TickSystem } from '../../tick-system';
 
 /** How many steps ahead to look when doing prefix path repair */
 const PATH_REPAIR_DISTANCE = 10;
@@ -23,7 +24,7 @@ export type GetEntityFn = (entityId: number) => { type: EntityType; x: number; y
  * MovementSystem manages all unit movement controllers and coordinates
  * their updates, collision resolution, and pathfinding.
  */
-export class MovementSystem {
+export class MovementSystem implements TickSystem {
     private controllers: Map<number, MovementController> = new Map();
 
     // Map terrain and occupancy data
@@ -136,6 +137,11 @@ export class MovementSystem {
         }
 
         return true;
+    }
+
+    /** TickSystem interface — delegates to update(). */
+    tick(dt: number): void {
+        this.update(dt);
     }
 
     /**

@@ -89,6 +89,7 @@ export function placeBuilding(
     y: number,
     buildingType: number = BuildingType.Lumberjack,
     player = 0,
+    eventBus: EventBus = new EventBus(),
 ): boolean {
     return executeCommand(
         state,
@@ -96,6 +97,7 @@ export function placeBuilding(
         map.groundType,
         map.groundHeight,
         map.mapSize,
+        eventBus,
     );
 }
 
@@ -107,6 +109,7 @@ export function spawnUnit(
     y: number,
     unitType = 0,
     player = 0,
+    eventBus: EventBus = new EventBus(),
 ): boolean {
     return executeCommand(
         state,
@@ -114,6 +117,7 @@ export function spawnUnit(
         map.groundType,
         map.groundHeight,
         map.mapSize,
+        eventBus,
     );
 }
 
@@ -124,6 +128,7 @@ export function moveUnit(
     entityId: number,
     targetX: number,
     targetY: number,
+    eventBus: EventBus = new EventBus(),
 ): boolean {
     // Ensure terrain data is set for the movement system
     state.setTerrainData(
@@ -138,6 +143,7 @@ export function moveUnit(
         map.groundType,
         map.groundHeight,
         map.mapSize,
+        eventBus,
     );
 }
 
@@ -146,6 +152,7 @@ export function selectEntity(
     state: GameState,
     map: TestMap,
     entityId: number | null,
+    eventBus: EventBus = new EventBus(),
 ): boolean {
     return executeCommand(
         state,
@@ -153,6 +160,7 @@ export function selectEntity(
         map.groundType,
         map.groundHeight,
         map.mapSize,
+        eventBus,
     );
 }
 

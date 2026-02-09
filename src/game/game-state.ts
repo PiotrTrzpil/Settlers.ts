@@ -1,8 +1,6 @@
 import { Entity, EntityType, UnitType, BuildingState, BuildingConstructionPhase, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE, isUnitTypeSelectable, getUnitTypeSpeed } from './entity';
 import { EMaterialType } from './economy/material-type';
 import { MovementSystem, MovementController } from './systems/movement/index';
-import { cleanupIdleState } from './systems/idle-behavior';
-import { LumberjackSystem } from './systems/lumberjack-system';
 
 /** Default building construction duration in seconds */
 export const DEFAULT_CONSTRUCTION_DURATION = 10;
@@ -110,7 +108,8 @@ export class GameState {
     /** Spatial lookup: "x,y" -> entityId */
     public tileOccupancy: Map<string, number> = new Map();
 
-    public readonly lumberjackSystem = new LumberjackSystem();
+    /** Optional callback invoked when an entity is removed (for system cleanup) */
+    public onEntityRemoved: ((entityId: number) => void) | null = null;
 
     constructor() {
         this.unitStates = new UnitStateMap(this.movement);
@@ -228,7 +227,7 @@ export class GameState {
         }
 
         this.movement.removeController(id);
-        cleanupIdleState(id);
+        this.onEntityRemoved?.(id);
         this.buildingStates.delete(id);
         this.resourceStates.delete(id);
 

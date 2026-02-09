@@ -22,6 +22,7 @@ import {
 import { EntityType, BuildingType } from '@/game/entity';
 // Movement is handled via state.movement.update(dt)
 import { executeCommand } from '@/game/commands/command';
+import { EventBus } from '@/game/event-bus';
 import {
     BUILDING_PRODUCTIONS,
     CONSTRUCTION_COSTS,
@@ -111,7 +112,7 @@ describe('Game Session: multi-system integration sweep', () => {
         executeCommand(
             state,
             { type: 'select_area', x1: 14, y1: 14, x2: 16, y2: 16 },
-            map.groundType, map.groundHeight, map.mapSize,
+            map.groundType, map.groundHeight, map.mapSize, new EventBus(),
         );
         // Should select the unit at (15,15), prefer units over buildings
         expect(state.selectedEntityIds.size).toBeGreaterThanOrEqual(1);
@@ -192,7 +193,7 @@ describe('Game Session: multi-system integration sweep', () => {
         executeCommand(
             state,
             { type: 'select_area', x1: 9, y1: 9, x2: 12, y2: 11 },
-            map.groundType, map.groundHeight, map.mapSize,
+            map.groundType, map.groundHeight, map.mapSize, new EventBus(),
         );
 
         // Should prefer units
@@ -205,7 +206,7 @@ describe('Game Session: multi-system integration sweep', () => {
         executeCommand(
             state,
             { type: 'select_area', x1: 50, y1: 50, x2: 60, y2: 60 },
-            map.groundType, map.groundHeight, map.mapSize,
+            map.groundType, map.groundHeight, map.mapSize, new EventBus(),
         );
         expect(state.selectedEntityIds.size).toBe(0);
         expect(state.selectedEntityId).toBeNull();
