@@ -77,9 +77,9 @@
       <!-- Main content area -->
       <main class="main-content">
         <!-- Map preview if available -->
-        <section v-if="previewChunk" class="card preview-card">
+        <section v-if="mapLoader" class="card preview-card">
           <h2>Map Preview</h2>
-          <map-preview :chunk="previewChunk" :mapSize="mapLoader?.mapSize" />
+          <map-preview :mapLoader="mapLoader" />
         </section>
 
         <!-- Resource Summary -->

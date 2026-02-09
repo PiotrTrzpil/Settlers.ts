@@ -17,12 +17,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, useTemplateRef } from 'vue';
-import type { MapChunk } from '@/resources/map/original/map-chunk';
+import type { IMapLoader } from '@/resources/map/imap-loader';
 import { getGroundTypeColor } from '@/resources/map/s4-types';
 
 const props = defineProps<{
-    chunk: MapChunk;
-    mapSize?: { width: number; height: number } | null;
+    mapLoader: IMapLoader | null;
 }>();
 
 const canvas = useTemplateRef<HTMLCanvasElement>('canvas');
@@ -31,32 +30,27 @@ const hasPreviewData = ref(false);
 
 function renderPreview() {
     const canvasEl = canvas.value;
-    if (!canvasEl || !props.chunk) return;
+    if (!canvasEl || !props.mapLoader) return;
 
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
 
     try {
-        const reader = props.chunk.getReader();
-        const buffer = reader.getBuffer();
-
-        if (buffer.length === 0) {
+        const landscape = props.mapLoader.landscape;
+        if (!landscape) {
             hasPreviewData.value = false;
             return;
         }
 
-        // Try to determine map dimensions
-        let width = props.mapSize?.width ?? 256;
-        let height = props.mapSize?.height ?? 256;
-
-        // If buffer is smaller, adjust dimensions
-        const totalPixels = buffer.length;
-        if (totalPixels < width * height) {
-            // Assume square map
-            const side = Math.floor(Math.sqrt(totalPixels));
-            width = side;
-            height = side;
+        const groundData = landscape.getGroundType();
+        if (!groundData || groundData.length === 0) {
+            hasPreviewData.value = false;
+            return;
         }
+
+        const mapSize = props.mapLoader.mapSize;
+        const width = mapSize?.width ?? 256;
+        const height = mapSize?.height ?? 256;
 
         // Set canvas size with max limit for performance
         const maxSize = 300;
@@ -73,7 +67,7 @@ function renderPreview() {
         const imageData = ctx.createImageData(displayWidth, displayHeight);
         const data = imageData.data;
 
-        // Render the map preview
+        // Render the map preview using terrain data
         for (let y = 0; y < displayHeight; y++) {
             for (let x = 0; x < displayWidth; x++) {
                 // Map display coordinates to source coordinates
@@ -83,9 +77,9 @@ function renderPreview() {
 
                 const pixelIdx = (y * displayWidth + x) * 4;
 
-                if (srcIdx < buffer.length) {
-                    const value = buffer[srcIdx];
-                    const [r, g, b] = getGroundTypeColor(value);
+                if (srcIdx < groundData.length) {
+                    const terrainType = groundData[srcIdx];
+                    const [r, g, b] = getGroundTypeColor(terrainType);
                     data[pixelIdx] = r;
                     data[pixelIdx + 1] = g;
                     data[pixelIdx + 2] = b;
@@ -110,14 +104,14 @@ function renderPreview() {
 
 function onMouseMove(event: MouseEvent) {
     const canvasEl = canvas.value;
-    if (!canvasEl || !props.mapSize) return;
+    if (!canvasEl || !props.mapLoader?.mapSize) return;
 
     const rect = canvasEl.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
-    const scaleX = props.mapSize.width / canvasEl.width;
-    const scaleY = props.mapSize.height / canvasEl.height;
+    const scaleX = props.mapLoader.mapSize.width / canvasEl.width;
+    const scaleY = props.mapLoader.mapSize.height / canvasEl.height;
 
     hoveredCoord.value = {
         x: Math.floor(x * scaleX),
@@ -129,7 +123,7 @@ onMounted(() => {
     renderPreview();
 });
 
-watch(() => props.chunk, () => {
+watch(() => props.mapLoader, () => {
     renderPreview();
 });
 </script>
