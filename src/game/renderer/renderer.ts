@@ -66,6 +66,8 @@ export class Renderer {
     }
 
     public destroy(): void {
+        // Clean up all child renderers first
+        this.clear();
         this._gl = null;
         this.viewPoint.destroy();
     }
@@ -140,8 +142,11 @@ export class Renderer {
         this.renderers.push(newRenderer);
     }
 
-    /** Clear all renderers (call before adding new ones on game change) */
+    /** Clear all renderers, destroying their GPU resources (call before adding new ones on game change) */
     public clear(): void {
+        for (const r of this.renderers) {
+            r.destroy?.();
+        }
         this.renderers = [];
     }
 }

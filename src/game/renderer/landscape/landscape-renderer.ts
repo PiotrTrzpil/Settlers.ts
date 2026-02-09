@@ -270,6 +270,25 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         }
     }
 
+    /**
+     * Clean up all GPU resources.
+     */
+    public destroy(): void {
+        // Free WebGL textures
+        this.landTypeBuffer?.free();
+        this.landTypeBuffer = null;
+
+        this.landHeightBuffer?.free();
+        this.landHeightBuffer = null;
+
+        this.texture.free();
+
+        // Clear cached data
+        this.cachedInstancePos = null;
+
+        LandscapeRenderer.log.debug('LandscapeRenderer resources cleaned up');
+    }
+
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
 
         super.drawBase(gl, projection);

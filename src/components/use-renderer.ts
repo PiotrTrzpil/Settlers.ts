@@ -464,7 +464,12 @@ export function useRenderer({
         initRenderer();
     });
 
-    watch(getGame, () => {
+    watch(getGame, (newGame, oldGame) => {
+        // Stop the previous game loop before initializing the new one
+        // This prevents multiple game loops running simultaneously
+        if (oldGame && oldGame !== newGame) {
+            oldGame.stop();
+        }
         initRenderer();
     });
 
