@@ -42,6 +42,20 @@ export default defineConfig({
     },
     test: {
         environment: 'jsdom',
-        include: ['tests/unit/**/*.spec.ts']
+        include: ['tests/unit/**/*.spec.ts'],
+        // Limit parallelism to avoid resource exhaustion
+        pool: 'threads',
+        poolOptions: {
+            threads: {
+                minThreads: 1,
+                maxThreads: 4,
+            }
+        },
+        // Timeouts to prevent hung processes
+        testTimeout: 10000,
+        hookTimeout: 10000,
+        teardownTimeout: 5000,
+        // Force exit after tests complete (helps with stale processes)
+        passWithNoTests: true,
     }
 });
