@@ -14,41 +14,27 @@
           Main Layers
         </h3>
         <div v-if="sections.main" class="section-body">
-          <!-- Buildings -->
-          <label class="layer-row">
-            <input
-              type="checkbox"
-              :checked="visibility.buildings"
-              @change="updateLayer('buildings', ($event.target as HTMLInputElement).checked)"
-            />
-            <span class="layer-emoji">🏠</span>
-            <span>Buildings</span>
-            <span class="layer-count" v-if="props.counts">{{ props.counts.buildings }}</span>
-          </label>
-
-          <!-- Units -->
-          <label class="layer-row">
-            <input
-              type="checkbox"
-              :checked="visibility.units"
-              @change="updateLayer('units', ($event.target as HTMLInputElement).checked)"
-            />
-            <span class="layer-emoji">👷</span>
-            <span>Units</span>
-            <span class="layer-count" v-if="props.counts">{{ props.counts.units }}</span>
-          </label>
-
-          <!-- Resources -->
-          <label class="layer-row">
-            <input
-              type="checkbox"
-              :checked="visibility.resources"
-              @change="updateLayer('resources', ($event.target as HTMLInputElement).checked)"
-            />
-            <span class="layer-emoji">💎</span>
-            <span>Resources</span>
-            <span class="layer-count" v-if="props.counts">{{ props.counts.resources }}</span>
-          </label>
+          <LayerCheckbox
+            v-model="visibility.buildings"
+            label="Buildings"
+            emoji="🏠"
+            :count="props.counts?.buildings"
+            @update:modelValue="saveAndEmit()"
+          />
+          <LayerCheckbox
+            v-model="visibility.units"
+            label="Units"
+            emoji="👷"
+            :count="props.counts?.units"
+            @update:modelValue="saveAndEmit()"
+          />
+          <LayerCheckbox
+            v-model="visibility.resources"
+            label="Resources"
+            emoji="💎"
+            :count="props.counts?.resources"
+            @update:modelValue="saveAndEmit()"
+          />
         </div>
       </section>
 
@@ -63,68 +49,53 @@
           <span class="layer-count header-count" v-if="props.counts">{{ props.counts.environment }}</span>
         </h3>
         <div v-if="sections.environment" class="section-body">
-          <!-- Environment master toggle -->
-          <label class="layer-row master-toggle">
-            <input
-              type="checkbox"
-              :checked="visibility.environment"
-              :indeterminate="isEnvironmentPartial"
-              @change="toggleEnvironmentMaster(($event.target as HTMLInputElement).checked)"
-            />
-            <span class="layer-emoji">🌍</span>
-            <span>All Environment</span>
-            <span class="layer-count" v-if="props.counts">{{ props.counts.environment }}</span>
-          </label>
+          <LayerCheckbox
+            v-model="visibility.environment"
+            label="All Environment"
+            emoji="🌍"
+            :count="props.counts?.environment"
+            :indeterminate="isEnvironmentPartial"
+            master
+            @update:modelValue="onEnvironmentMasterChange"
+          />
 
-          <!-- Sub-layers (indented) -->
           <div class="sub-layers" :class="{ disabled: !visibility.environment }">
-            <label class="layer-row sub-layer">
-              <input
-                type="checkbox"
-                :checked="visibility.environmentLayers.trees"
-                :disabled="!visibility.environment"
-                @change="updateSubLayer('trees', ($event.target as HTMLInputElement).checked)"
-              />
-              <span class="layer-emoji">🌲</span>
-              <span>Trees</span>
-              <span class="layer-count" v-if="props.counts">{{ props.counts.trees }}</span>
-            </label>
-
-            <label class="layer-row sub-layer">
-              <input
-                type="checkbox"
-                :checked="visibility.environmentLayers.stones"
-                :disabled="!visibility.environment"
-                @change="updateSubLayer('stones', ($event.target as HTMLInputElement).checked)"
-              />
-              <span class="layer-emoji">🪨</span>
-              <span>Stones</span>
-              <span class="layer-count" v-if="props.counts">{{ props.counts.stones }}</span>
-            </label>
-
-            <label class="layer-row sub-layer">
-              <input
-                type="checkbox"
-                :checked="visibility.environmentLayers.plants"
-                :disabled="!visibility.environment"
-                @change="updateSubLayer('plants', ($event.target as HTMLInputElement).checked)"
-              />
-              <span class="layer-emoji">🌿</span>
-              <span>Plants</span>
-              <span class="layer-count" v-if="props.counts">{{ props.counts.plants }}</span>
-            </label>
-
-            <label class="layer-row sub-layer">
-              <input
-                type="checkbox"
-                :checked="visibility.environmentLayers.other"
-                :disabled="!visibility.environment"
-                @change="updateSubLayer('other', ($event.target as HTMLInputElement).checked)"
-              />
-              <span class="layer-emoji">📦</span>
-              <span>Other</span>
-              <span class="layer-count" v-if="props.counts">{{ props.counts.other }}</span>
-            </label>
+            <LayerCheckbox
+              v-model="visibility.environmentLayers.trees"
+              label="Trees"
+              emoji="🌲"
+              :count="props.counts?.trees"
+              :disabled="!visibility.environment"
+              sub
+              @update:modelValue="saveAndEmit()"
+            />
+            <LayerCheckbox
+              v-model="visibility.environmentLayers.stones"
+              label="Stones"
+              emoji="🪨"
+              :count="props.counts?.stones"
+              :disabled="!visibility.environment"
+              sub
+              @update:modelValue="saveAndEmit()"
+            />
+            <LayerCheckbox
+              v-model="visibility.environmentLayers.plants"
+              label="Plants"
+              emoji="🌿"
+              :count="props.counts?.plants"
+              :disabled="!visibility.environment"
+              sub
+              @update:modelValue="saveAndEmit()"
+            />
+            <LayerCheckbox
+              v-model="visibility.environmentLayers.other"
+              label="Other"
+              emoji="📦"
+              :count="props.counts?.other"
+              :disabled="!visibility.environment"
+              sub
+              @update:modelValue="saveAndEmit()"
+            />
           </div>
         </div>
       </section>
@@ -132,12 +103,8 @@
       <!-- Quick actions -->
       <section class="layer-section">
         <div class="quick-actions">
-          <button class="action-btn" @click="showAll" title="Show all layers">
-            Show All
-          </button>
-          <button class="action-btn" @click="hideAll" title="Hide all layers">
-            Hide All
-          </button>
+          <SettingsButton @click="showAll" title="Show all layers">Show All</SettingsButton>
+          <SettingsButton @click="hideAll" title="Hide all layers">Hide All</SettingsButton>
         </div>
       </section>
     </div>
@@ -153,6 +120,8 @@ import {
 } from '@/game/renderer/layer-visibility';
 import { debugStats } from '@/game/debug-stats';
 import type { LayerCounts } from '@/views/use-map-view';
+import LayerCheckbox from './LayerCheckbox.vue';
+import SettingsButton from './settings/SettingsButton.vue';
 
 const props = defineProps<{
     counts?: LayerCounts;
@@ -207,18 +176,7 @@ const environmentStatusText = computed(() => {
 });
 
 // Methods
-function updateLayer(layer: 'buildings' | 'units' | 'resources', value: boolean): void {
-    visibility[layer] = value;
-    saveAndEmit();
-}
-
-function updateSubLayer(subLayer: 'trees' | 'stones' | 'plants' | 'other', value: boolean): void {
-    visibility.environmentLayers[subLayer] = value;
-    saveAndEmit();
-}
-
-function toggleEnvironmentMaster(value: boolean): void {
-    visibility.environment = value;
+function onEnvironmentMasterChange(value: boolean): void {
     if (value) {
         // If turning on, enable all sub-layers
         visibility.environmentLayers.trees = true;
@@ -373,29 +331,8 @@ emit('update:visibility', { ...visibility, environmentLayers: { ...visibility.en
   padding: 2px 10px 6px;
 }
 
-.layer-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 0;
-  cursor: pointer;
-  color: #a08050;
-  transition: color 0.15s;
-}
-
-.layer-row:hover {
-  color: #c8a96e;
-}
-
-.layer-emoji {
-  font-size: 12px;
-  width: 16px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.layer-count {
-  margin-left: auto;
+.header-count {
+  margin-left: 4px;
   padding: 1px 5px;
   background: #1a1a2a;
   border: 1px solid #2a2a4a;
@@ -404,28 +341,6 @@ emit('update:visibility', { ...visibility, environmentLayers: { ...visibility.en
   font-size: 9px;
   min-width: 20px;
   text-align: center;
-}
-
-.header-count {
-  margin-left: 4px;
-}
-
-.layer-row input[type="checkbox"] {
-  accent-color: #d4a030;
-  cursor: pointer;
-}
-
-.layer-row input[type="checkbox"]:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.master-toggle {
-  font-weight: bold;
-  color: #b09060;
-  border-bottom: 1px solid #2a1e0e;
-  padding-bottom: 5px;
-  margin-bottom: 2px;
 }
 
 .sub-layers {
@@ -438,58 +353,6 @@ emit('update:visibility', { ...visibility, environmentLayers: { ...visibility.en
   opacity: 0.5;
 }
 
-.sub-layer {
-  font-size: 10px;
-}
-
-/* Layer icons (colored dots) */
-.layer-icon {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.building-icon {
-  background: linear-gradient(135deg, #8b6914 0%, #5c4a0f 100%);
-  border: 1px solid #a07a1a;
-}
-
-.unit-icon {
-  background: linear-gradient(135deg, #4a90d0 0%, #2a60a0 100%);
-  border: 1px solid #5aa0e0;
-}
-
-.resource-icon {
-  background: linear-gradient(135deg, #d4a030 0%, #a07820 100%);
-  border: 1px solid #e4b040;
-}
-
-.env-icon {
-  background: linear-gradient(135deg, #3a8030 0%, #2a6020 100%);
-  border: 1px solid #4a9040;
-}
-
-.tree-icon {
-  background: linear-gradient(135deg, #2a6020 0%, #1a4010 100%);
-  border: 1px solid #3a7030;
-}
-
-.stone-icon {
-  background: linear-gradient(135deg, #707070 0%, #505050 100%);
-  border: 1px solid #808080;
-}
-
-.plant-icon {
-  background: linear-gradient(135deg, #80b060 0%, #608040 100%);
-  border: 1px solid #90c070;
-}
-
-.other-icon {
-  background: linear-gradient(135deg, #6a5030 0%, #4a3020 100%);
-  border: 1px solid #7a6040;
-}
-
 /* Quick actions */
 .quick-actions {
   display: flex;
@@ -497,24 +360,8 @@ emit('update:visibility', { ...visibility, environmentLayers: { ...visibility.en
   padding: 6px 10px;
 }
 
-.action-btn {
+.quick-actions :deep(button) {
   flex: 1;
-  padding: 4px 6px;
-  background: #2c1e0e;
-  color: #c8a96e;
-  border: 1px solid #4a3218;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 9px;
-  font-family: monospace;
-  font-weight: bold;
-  text-transform: uppercase;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.action-btn:hover {
-  background: #3a2810;
-  border-color: #6a4a20;
 }
 
 /* Scrollbar */

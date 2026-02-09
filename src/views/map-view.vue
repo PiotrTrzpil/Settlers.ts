@@ -36,10 +36,7 @@
 
         <!-- Buildings tab -->
         <div v-if="activeTab === 'buildings'" class="tab-content building-list" data-testid="building-palette">
-          <label class="building-option">
-            <input type="checkbox" v-model="placeBuildingsCompleted" />
-            <span>Place as completed</span>
-          </label>
+          <SettingsCheckbox v-model="placeBuildingsCompleted" label="Place as completed" />
           <button
             v-for="b in availableBuildings"
             :key="b.type"
@@ -216,6 +213,7 @@ import RendererViewer from '@/components/renderer-viewer.vue';
 import DebugPanel from '@/components/debug-panel.vue';
 import LayerPanel from '@/components/layer-panel.vue';
 import SettingsPanel from '@/components/settings-panel.vue';
+import SettingsCheckbox from '@/components/settings/SettingsCheckbox.vue';
 
 const props = defineProps<{
     fileManager: FileManager;
@@ -371,9 +369,6 @@ async function onRaceChange() {
   border-color: #6a4a20;
 }
 
-.building-option input[type="checkbox"] {
-  accent-color: #d4a030;
-}
 
 .resource-params {
   padding: 8px;

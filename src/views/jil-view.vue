@@ -11,10 +11,7 @@
       <span class="info">{{ jilList.length }} jobs</span>
       <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
       <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridSprites)">Grid</button>
-      <label v-if="viewMode === 'single'" class="animate-toggle">
-        <input type="checkbox" v-model="doAnimation" />
-        Animate
-      </label>
+      <SettingsCheckbox v-if="viewMode === 'single'" v-model="doAnimation" label="Animate" />
     </div>
 
     <!-- Grid View: All job sprites in a grid with multiple directions -->
@@ -112,6 +109,7 @@ import { EMaterialType } from '@/game/economy/material-type';
 import { useCompositeGridView } from '@/composables/useGridView';
 
 import FileBrowser from '@/components/file-browser.vue';
+import SettingsCheckbox from '@/components/settings/SettingsCheckbox.vue';
 
 const log = new LogHandler('JilView');
 

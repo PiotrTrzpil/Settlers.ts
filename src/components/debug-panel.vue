@@ -193,18 +193,21 @@
                 <button class="perm-btn" @click="cycleSlotPerm(1)">&gt;</button>
               </span>
             </div>
-            <label class="control-row">
-              <input type="checkbox" :checked="stats.riverFlipInner" @change="setRiverFlip('riverFlipInner', $event)" />
-              <span>Flip inner (River3&#x2194;River1)</span>
-            </label>
-            <label class="control-row">
-              <input type="checkbox" :checked="stats.riverFlipOuter" @change="setRiverFlip('riverFlipOuter', $event)" />
-              <span>Flip outer (Grass&#x2194;River4)</span>
-            </label>
-            <label class="control-row">
-              <input type="checkbox" :checked="stats.riverFlipMiddle" @change="setRiverFlip('riverFlipMiddle', $event)" />
-              <span>Flip middle (River4&#x2194;River3)</span>
-            </label>
+            <SettingsCheckbox
+              v-model="stats.riverFlipInner"
+              label="Flip inner (River3↔River1)"
+              @update:modelValue="applyRiverConfig()"
+            />
+            <SettingsCheckbox
+              v-model="stats.riverFlipOuter"
+              label="Flip outer (Grass↔River4)"
+              @update:modelValue="applyRiverConfig()"
+            />
+            <SettingsCheckbox
+              v-model="stats.riverFlipMiddle"
+              label="Flip middle (River4↔River3)"
+              @update:modelValue="applyRiverConfig()"
+            />
             <div class="stat-row">
               <span class="stat-label dim">{{ configIndex }}/48</span>
             </div>
@@ -260,6 +263,7 @@ import { debugStats } from '@/game/debug-stats';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
 import type { Game } from '@/game/game';
 import { useDebugMapObjects } from './use-debug-map-objects';
+import SettingsCheckbox from './settings/SettingsCheckbox.vue';
 
 const props = defineProps<{
     paused: boolean;
@@ -329,10 +333,6 @@ function cycleSlotPerm(dir: number) {
     applyRiverConfig();
 }
 
-function setRiverFlip(key: 'riverFlipInner' | 'riverFlipOuter' | 'riverFlipMiddle', e: Event) {
-    stats[key] = (e.target as HTMLInputElement).checked;
-    applyRiverConfig();
-}
 
 const fpsClass = computed(() => {
     if (stats.fps >= 55) return 'fps-good';
@@ -480,36 +480,6 @@ const cacheClass = computed(() => {
 
 .total-row .stat-value {
   color: #e0c080;
-}
-
-.slider-value {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.slider-value input[type="range"] {
-  width: 60px;
-  height: 4px;
-  accent-color: #d4a030;
-  cursor: pointer;
-}
-
-.control-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 0;
-  cursor: pointer;
-  color: #a08050;
-}
-
-.control-row:hover {
-  color: #c8a96e;
-}
-
-.control-row input[type="checkbox"] {
-  accent-color: #d4a030;
 }
 
 .control-buttons {
