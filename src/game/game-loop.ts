@@ -185,7 +185,7 @@ export class GameLoop {
     }
 
     /**
-     * Handle entity removal - cleans up carrier state, inventory, and service areas.
+     * Handle entity removal - cleans up carrier state, inventory, service areas, and logistics.
      */
     private handleEntityRemoved(entityId: number): void {
         // Clean up carrier state if this was a carrier
@@ -198,6 +198,9 @@ export class GameLoop {
 
         // Clean up inventory if this building had one
         this.gameState.inventoryManager.removeInventory(entityId);
+
+        // Clean up logistics state (requests to/from this building, reservations)
+        this.logisticsDispatcher.handleBuildingDestroyed(entityId);
     }
 
     /** Provide terrain data so movement obstacle resolution can function */

@@ -135,7 +135,7 @@ export class LogisticsDispatcher implements TickSystem {
                 continue;
             }
 
-            // Try to match this request to a supply
+            // Try to match this request to a supply (accounting for already-reserved inventory)
             const match = matchRequestToSupply(
                 request,
                 this.gameState,
@@ -143,6 +143,7 @@ export class LogisticsDispatcher implements TickSystem {
                 {
                     playerId: this.getRequestPlayerId(request.buildingId),
                     requireServiceArea: true,
+                    reservationManager: this.reservationManager,
                 },
             );
 
@@ -302,11 +303,11 @@ export class LogisticsDispatcher implements TickSystem {
             return;
         }
 
-        // Reset the request so it can be re-assigned
-        this.requestManager.resetRequestsForCarrier(carrierId);
-
-        // Release reservations
+        // Release the reservation FIRST (before modifying request state)
         this.reservationManager.releaseReservationForRequest(requestId);
+
+        // Reset the request so it can be re-assigned to another carrier
+        this.requestManager.resetRequestsForCarrier(carrierId);
 
         // Clear the mapping
         this.carrierToRequest.delete(carrierId);
@@ -324,5 +325,31 @@ export class LogisticsDispatcher implements TickSystem {
      */
     getCarrierToRequestMap(): ReadonlyMap<number, number> {
         return this.carrierToRequest;
+    }
+
+    /**
+     * Clean up when a building is destroyed.
+     * Cancels requests to/from the building and releases reservations.
+     *
+     * @param buildingId Entity ID of the destroyed building
+     */
+    handleBuildingDestroyed(buildingId: number): void {
+        // Cancel all requests TO this building (it can no longer receive materials)
+        this.requestManager.cancelRequestsForBuilding(buildingId);
+
+        // Reset requests FROM this building (carriers can't pick up from it anymore)
+        this.requestManager.resetRequestsFromSource(buildingId);
+
+        // Release any reservations at this building
+        this.reservationManager.releaseReservationsForBuilding(buildingId);
+
+        // Find and remove any carrier-to-request mappings for carriers
+        // that were assigned to this building's requests
+        for (const [carrierId, requestId] of this.carrierToRequest.entries()) {
+            const request = this.requestManager.getRequest(requestId);
+            if (request && (request.buildingId === buildingId || request.sourceBuilding === buildingId)) {
+                this.carrierToRequest.delete(carrierId);
+            }
+        }
     }
 }

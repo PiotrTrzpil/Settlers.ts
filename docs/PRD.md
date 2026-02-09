@@ -211,6 +211,7 @@ The game should emphasize:
 - Each tavern has a configurable service area (radius)
 - Carriers serve buildings within their tavern's area
 - Multiple taverns can overlap — system assigns nearest available carrier
+- IMPORTANT: tavers are for now represented by 3 residence types - small, mid, large
 
 **Supply Lines:**
 - Default: Automatic within tavern service areas

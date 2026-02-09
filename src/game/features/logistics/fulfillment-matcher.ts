@@ -11,6 +11,7 @@ import type { ServiceAreaManager } from '../service-areas/service-area-manager';
 import { getHubsServingBothPositions } from '../service-areas/service-area-queries';
 import type { ResourceRequest } from './resource-request';
 import { getAvailableSupplies, type ResourceSupply } from './resource-supply';
+import type { InventoryReservationManager } from './inventory-reservation';
 
 /**
  * Result of a successful match between a request and a supply.
@@ -47,6 +48,11 @@ export interface MatchOptions {
      * Default: 1.5 (prefer full supply if within 50% extra distance)
      */
     fullSupplyDistanceFactor?: number;
+    /**
+     * Reservation manager to account for already-reserved inventory.
+     * If provided, reserved amounts are subtracted from available supply.
+     */
+    reservationManager?: InventoryReservationManager;
 }
 
 /**
@@ -73,6 +79,7 @@ export function matchRequestToSupply(
         playerId,
         requireServiceArea = true,
         fullSupplyDistanceFactor = DEFAULT_FULL_SUPPLY_DISTANCE_FACTOR,
+        reservationManager,
     } = options;
 
     // Get the destination building position
@@ -94,6 +101,8 @@ export function matchRequestToSupply(
     // Score each supply by distance, filtering by service area reachability
     const candidates: Array<{
         supply: ResourceSupply;
+        /** Effective available amount (accounting for reservations) */
+        effectiveAmount: number;
         distance: number;
         serviceHubs: number[];
     }> = [];
@@ -106,6 +115,21 @@ export function matchRequestToSupply(
 
         const sourceBuilding = gameState.getEntity(supply.buildingId);
         if (!sourceBuilding) {
+            continue;
+        }
+
+        // Calculate effective available amount (accounting for reservations)
+        let effectiveAmount = supply.availableAmount;
+        if (reservationManager) {
+            const reserved = reservationManager.getReservedAmount(
+                supply.buildingId,
+                request.materialType,
+            );
+            effectiveAmount = Math.max(0, effectiveAmount - reserved);
+        }
+
+        // Skip if no effective supply after reservations
+        if (effectiveAmount <= 0) {
             continue;
         }
 
@@ -134,6 +158,7 @@ export function matchRequestToSupply(
 
         candidates.push({
             supply,
+            effectiveAmount,
             distance,
             serviceHubs,
         });
@@ -149,9 +174,9 @@ export function matchRequestToSupply(
     // Find the best candidate: prefer one with sufficient quantity, but accept partial
     let bestCandidate = candidates[0];
 
-    // Look for a candidate with enough material
+    // Look for a candidate with enough material (accounting for reservations)
     for (const candidate of candidates) {
-        if (candidate.supply.availableAmount >= request.amount) {
+        if (candidate.effectiveAmount >= request.amount) {
             // Found one with enough - check if it's close enough to be worth it
             // If this full-supply source is within the configured distance factor, prefer it
             if (candidate.distance <= bestCandidate.distance * fullSupplyDistanceFactor) {
@@ -163,7 +188,7 @@ export function matchRequestToSupply(
 
     return {
         sourceBuilding: bestCandidate.supply.buildingId,
-        amount: Math.min(bestCandidate.supply.availableAmount, request.amount),
+        amount: Math.min(bestCandidate.effectiveAmount, request.amount),
         distance: bestCandidate.distance,
         serviceHubs: bestCandidate.serviceHubs,
     };
@@ -186,7 +211,7 @@ export function findAllMatches(
     serviceAreaManager: ServiceAreaManager,
     options: MatchOptions = {},
 ): FulfillmentMatch[] {
-    const { playerId, requireServiceArea = true } = options;
+    const { playerId, requireServiceArea = true, reservationManager } = options;
 
     const destBuilding = gameState.getEntity(request.buildingId);
     if (!destBuilding) {
@@ -207,6 +232,21 @@ export function findAllMatches(
 
         const sourceBuilding = gameState.getEntity(supply.buildingId);
         if (!sourceBuilding) {
+            continue;
+        }
+
+        // Calculate effective available amount (accounting for reservations)
+        let effectiveAmount = supply.availableAmount;
+        if (reservationManager) {
+            const reserved = reservationManager.getReservedAmount(
+                supply.buildingId,
+                request.materialType,
+            );
+            effectiveAmount = Math.max(0, effectiveAmount - reserved);
+        }
+
+        // Skip if no effective supply
+        if (effectiveAmount <= 0) {
             continue;
         }
 
@@ -232,7 +272,7 @@ export function findAllMatches(
 
         matches.push({
             sourceBuilding: supply.buildingId,
-            amount: Math.min(supply.availableAmount, request.amount),
+            amount: Math.min(effectiveAmount, request.amount),
             distance,
             serviceHubs,
         });
