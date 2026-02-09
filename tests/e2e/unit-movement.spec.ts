@@ -13,7 +13,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         const page = gp.page;
 
         // Spawn a unit via game.execute()
-        const unit = await gp.spawnUnit(1); // Bearer = UnitType 1
+        const unit = await gp.spawnUnit(0); // Carrier = UnitType 0
         expect(unit).not.toBeNull();
 
         // Get the unit's initial position and issue a move command

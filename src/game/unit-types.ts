@@ -6,16 +6,31 @@
 import { BuildingType } from './buildings';
 
 export enum UnitType {
-    Bearer = 0,
+    Carrier = 0,
     Builder = 1,
     Swordsman = 2,
     Bowman = 3,
-    Pikeman = 4,
+    // Removed: Pikeman = 4 (doesn't exist in S4, race-specific variants are Axewarrior/Blowgunwarrior)
     Priest = 5,
     Pioneer = 6,
     Thief = 7,
     Geologist = 8,
-    Lumberjack = 9,
+    Woodcutter = 9,
+}
+
+/**
+ * Upper-level unit categories.
+ * Determines selectability and general behavior grouping.
+ */
+export enum UnitCategory {
+    /** Worker units - not selectable, perform automated tasks (Carrier, Builder, Woodcutter) */
+    Worker = 'worker',
+    /** Military units - selectable, can fight (Swordsman, Bowman) */
+    Military = 'military',
+    /** Religious units - selectable, special abilities (Priest) */
+    Religious = 'religious',
+    /** Specialist units - not selectable, perform specific jobs (Pioneer, Thief, Geologist) */
+    Specialist = 'specialist',
 }
 
 /**
@@ -25,12 +40,10 @@ export enum UnitType {
 export interface UnitTypeConfig {
     /** Display name for UI */
     name: string;
+    /** Upper-level category determining selectability and behavior grouping */
+    category: UnitCategory;
     /** Default movement speed in tiles/second */
     speed: number;
-    /** Whether units of this type are selectable by the player */
-    selectable: boolean;
-    /** Whether this is a military unit (can fight) */
-    military: boolean;
 }
 
 /**
@@ -41,26 +54,49 @@ export interface UnitTypeConfig {
  * 3. Optionally add it to BUILDING_SPAWN_ON_COMPLETE if a building produces it
  */
 export const UNIT_TYPE_CONFIG: Record<UnitType, UnitTypeConfig> = {
-    [UnitType.Bearer]: { name: 'Bearer', speed: 2, selectable: false, military: false },
-    [UnitType.Builder]: { name: 'Builder', speed: 2, selectable: true, military: false },
-    [UnitType.Swordsman]: { name: 'Swordsman', speed: 2, selectable: true, military: true },
-    [UnitType.Bowman]: { name: 'Bowman', speed: 2.2, selectable: true, military: true },
-    [UnitType.Pikeman]: { name: 'Pikeman', speed: 1.8, selectable: true, military: true },
-    [UnitType.Priest]: { name: 'Priest', speed: 1.5, selectable: true, military: false },
-    [UnitType.Pioneer]: { name: 'Pioneer', speed: 2, selectable: true, military: false },
-    [UnitType.Thief]: { name: 'Thief', speed: 3, selectable: true, military: false },
-    [UnitType.Geologist]: { name: 'Geologist', speed: 1.5, selectable: true, military: false },
-    [UnitType.Lumberjack]: { name: 'Lumberjack', speed: 2, selectable: true, military: false },
+    [UnitType.Carrier]: { name: 'Carrier', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Builder]: { name: 'Builder', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Swordsman]: { name: 'Swordsman', category: UnitCategory.Military, speed: 2 },
+    [UnitType.Bowman]: { name: 'Bowman', category: UnitCategory.Military, speed: 2.2 },
+    [UnitType.Priest]: { name: 'Priest', category: UnitCategory.Religious, speed: 1.5 },
+    [UnitType.Pioneer]: { name: 'Pioneer', category: UnitCategory.Specialist, speed: 2 },
+    [UnitType.Thief]: { name: 'Thief', category: UnitCategory.Specialist, speed: 3 },
+    [UnitType.Geologist]: { name: 'Geologist', category: UnitCategory.Specialist, speed: 1.5 },
+    [UnitType.Woodcutter]: { name: 'Woodcutter', category: UnitCategory.Worker, speed: 2 },
 };
 
-/** Get the default selectable state for a unit type. */
+/** Categories that allow player selection */
+const SELECTABLE_CATEGORIES: ReadonlySet<UnitCategory> = new Set([
+    UnitCategory.Military,
+    UnitCategory.Religious,
+]);
+
+/** Get the category for a unit type. */
+export function getUnitCategory(unitType: UnitType): UnitCategory {
+    return UNIT_TYPE_CONFIG[unitType]?.category ?? UnitCategory.Worker;
+}
+
+/** Check if a unit type is selectable (Military and Religious categories). */
 export function isUnitTypeSelectable(unitType: UnitType): boolean {
-    return UNIT_TYPE_CONFIG[unitType]?.selectable ?? true;
+    const category = getUnitCategory(unitType);
+    return SELECTABLE_CATEGORIES.has(category);
+}
+
+/** Check if a unit type is military (can fight). */
+export function isUnitTypeMilitary(unitType: UnitType): boolean {
+    return getUnitCategory(unitType) === UnitCategory.Military;
 }
 
 /** Get the default speed for a unit type. */
 export function getUnitTypeSpeed(unitType: UnitType): number {
     return UNIT_TYPE_CONFIG[unitType]?.speed ?? 2;
+}
+
+/** Get all unit types in a specific category. */
+export function getUnitTypesInCategory(category: UnitCategory): UnitType[] {
+    return Object.entries(UNIT_TYPE_CONFIG)
+        .filter(([, config]) => config.category === category)
+        .map(([type]) => Number(type) as UnitType);
 }
 
 /** Which unit type each building auto-spawns at placement time (undefined = no auto-spawn) */

@@ -117,13 +117,12 @@ export const NUM_UNIT_DIRECTIONS = 6;
  */
 export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
     // Job 0: Unknown/placeholder
-    [UnitType.Bearer]: 1,      // Carrier without goods
+    [UnitType.Carrier]: 1,      // Carrier without goods
     [UnitType.Builder]: 19,    // Construction worker
-    [UnitType.Lumberjack]: 5,  // As requested by user
+    [UnitType.Woodcutter]: 5,  // As requested by user
     [UnitType.Swordsman]: 227, // Lvl1 swordsman (first of pair 227/228)
     [UnitType.Bowman]: 236,    // Lvl1 bowman standing (236-240 = set1, 242-246 = set2)
     // TODO: Identify remaining unit job indices by inspecting JIL files
-    // [UnitType.Pikeman]: ?,
     // [UnitType.Priest]: ?,
     // [UnitType.Pioneer]: ?,
     // [UnitType.Thief]: ?,
@@ -131,13 +130,13 @@ export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
 };
 
 /**
- * JIL job indices for bearers carrying specific materials, in settler files (20-24.jil).
- * Each material a bearer can carry has its own set of 6-direction walk frames.
+ * JIL job indices for carriers carrying specific materials, in settler files (20-24.jil).
+ * Each material a carrier can carry has its own set of 6-direction walk frames.
  *
  * To discover indices: open the JIL viewer (/jil-view) with a settler file (e.g. 20.jil),
  * browse jobs visually, and fill in entries here. The indices are the same across all races.
  *
- * Job 1 is the empty bearer (already in UNIT_JOB_INDICES).
+ * Job 1 is the empty carrier (already in UNIT_JOB_INDICES).
  * The values below map EMaterialType -> JIL job index for the carrying-walk animation.
  */
 export const CARRIER_MATERIAL_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
@@ -782,7 +781,7 @@ export class SpriteMetadataRegistry {
 
     /**
      * Register an additional animation sequence on an already-registered animated entity.
-     * Used to add carry-walk variants for bearers: each material type gets its own
+     * Used to add carry-walk variants for carriers: each material type gets its own
      * sequence key (e.g. 'carry_0' for trunk) with its own set of direction frames.
      *
      * The entity must already be registered via registerAnimatedEntity.

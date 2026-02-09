@@ -189,11 +189,11 @@ export class IdleBehaviorSystem implements TickSystem {
 
 /**
  * Determine the correct walk sequence key for a unit.
- * Bearers carrying a material use a material-specific carry sequence;
- * all other units (and empty bearers) use the generic walk sequence.
+ * Carriers carrying a material use a material-specific carry sequence;
+ * all other units (and empty carriers) use the generic walk sequence.
  */
 function getWalkSequenceKey(entity: Entity): string {
-    if (entity.subType === UnitType.Bearer && entity.carriedMaterial !== undefined) {
+    if (entity.subType === UnitType.Carrier && entity.carriedMaterial !== undefined) {
         return carrySequenceKey(entity.carriedMaterial);
     }
     return ANIMATION_SEQUENCES.WALK;

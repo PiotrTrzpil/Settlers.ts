@@ -29,7 +29,7 @@ export enum InputAction {
     RotateBuilding = 'rotate_building',
 
     // Unit spawning
-    SpawnBearer = 'spawn_bearer',
+    SpawnCarrier = 'spawn_carrier',
     SpawnSwordsman = 'spawn_swordsman',
 
     // UI

@@ -32,10 +32,10 @@ describe('Unit Placement, Selection & Movement', () => {
     // ── Unit Placement (spawn_unit) ────────────────────────────────────
 
     describe('Unit Placement (spawn_unit)', () => {
-        it('should spawn a bearer at the given position', () => {
+        it('should spawn a carrier at the given position', () => {
             const result = executeCommand(state, {
                 type: 'spawn_unit',
-                unitType: UnitType.Bearer,
+                unitType: UnitType.Carrier,
                 x: 10,
                 y: 10,
                 player: 0,
@@ -44,7 +44,7 @@ describe('Unit Placement, Selection & Movement', () => {
             expect(result).toBe(true);
             expect(state.entities).toHaveLength(1);
             expect(state.entities[0].type).toBe(EntityType.Unit);
-            expect(state.entities[0].subType).toBe(UnitType.Bearer);
+            expect(state.entities[0].subType).toBe(UnitType.Carrier);
             expect(state.entities[0].x).toBe(10);
             expect(state.entities[0].y).toBe(10);
         });
@@ -65,7 +65,7 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should create unit state with default speed', () => {
             const result = executeCommand(state, {
                 type: 'spawn_unit',
-                unitType: UnitType.Bearer,
+                unitType: UnitType.Carrier,
                 x: 10,
                 y: 10,
                 player: 0,
@@ -84,7 +84,7 @@ describe('Unit Placement, Selection & Movement', () => {
             // Place first unit
             executeCommand(state, {
                 type: 'spawn_unit',
-                unitType: UnitType.Bearer,
+                unitType: UnitType.Carrier,
                 x: 10,
                 y: 10,
                 player: 0,
@@ -116,7 +116,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
             const result = executeCommand(state, {
                 type: 'spawn_unit',
-                unitType: UnitType.Bearer,
+                unitType: UnitType.Carrier,
                 x: 1,
                 y: 1,
                 player: 0,
@@ -128,7 +128,7 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should register tile occupancy for spawned unit', () => {
             executeCommand(state, {
                 type: 'spawn_unit',
-                unitType: UnitType.Bearer,
+                unitType: UnitType.Carrier,
                 x: 15,
                 y: 15,
                 player: 0,
@@ -141,7 +141,7 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should spawn units for different players', () => {
             executeCommand(state, {
                 type: 'spawn_unit',
-                unitType: UnitType.Bearer,
+                unitType: UnitType.Carrier,
                 x: 10,
                 y: 10,
                 player: 0,
@@ -149,7 +149,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
             executeCommand(state, {
                 type: 'spawn_unit',
-                unitType: UnitType.Bearer,
+                unitType: UnitType.Carrier,
                 x: 20,
                 y: 20,
                 player: 1,
@@ -160,7 +160,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should spawn all unit types', () => {
-            const types = [UnitType.Bearer, UnitType.Builder, UnitType.Swordsman, UnitType.Bowman, UnitType.Pikeman, UnitType.Priest];
+            const types = [UnitType.Carrier, UnitType.Builder, UnitType.Swordsman, UnitType.Bowman, UnitType.Priest];
             for (let i = 0; i < types.length; i++) {
                 const result = executeCommand(state, {
                     type: 'spawn_unit',
@@ -480,7 +480,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Unit Movement Integration', () => {
         it('should move unit along path over multiple ticks', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Bearer, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0);
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
@@ -506,10 +506,10 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should update tile occupancy during movement', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Bearer, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0);
             const controller = state.movement.getController(unit.id)!;
             controller.startPath([{ x: 6, y: 5 }, { x: 7, y: 5 }]);
-            // Default speed is 2 for Bearer
+            // Default speed is 2 for Carrier
 
             // Progress starts at 1 when path set. 0.5s at speed 2 adds 1 -> moves 2 tiles.
             state.movement.update(0.5);
@@ -520,12 +520,12 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should track previous position for interpolation', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Bearer, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0);
             const controller = state.movement.getController(unit.id)!;
             const unitState = state.unitStates.get(unit.id)!;
             // Longer path to test incremental movement
             controller.startPath([{ x: 6, y: 5 }, { x: 7, y: 5 }, { x: 8, y: 5 }]);
-            // Default speed is 2 for Bearer
+            // Default speed is 2 for Carrier
 
             // Progress starts at 1 when path set. 0.5s at speed 2 adds 1 -> moves 2 tiles.
             state.movement.update(0.5);
@@ -536,7 +536,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should reset state after path completion', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Bearer, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0);
             const controller = state.movement.getController(unit.id)!;
             const unitState = state.unitStates.get(unit.id)!;
             controller.startPath([{ x: 6, y: 5 }]);
@@ -842,7 +842,7 @@ describe('Unit Placement, Selection & Movement', () => {
     describe('Unselectable Entities', () => {
         it('should not select unselectable entity via select_at_tile', () => {
             // Spawn unselectable unit
-            state.addEntity(EntityType.Unit, UnitType.Bearer, 10, 10, 0, false);
+            state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
 
             executeCommand(state, {
                 type: 'select_at_tile',
@@ -857,7 +857,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
         it('should not add unselectable entity with shift+click', () => {
             const selectable = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
-            state.addEntity(EntityType.Unit, UnitType.Bearer, 10, 10, 0, false);
+            state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
 
             // Select the selectable one
             executeCommand(state, {
@@ -883,7 +883,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
         it('should exclude unselectable entities from box selection', () => {
             state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
-            state.addEntity(EntityType.Unit, UnitType.Bearer, 7, 7, 0, false); // unselectable
+            state.addEntity(EntityType.Unit, UnitType.Carrier, 7, 7, 0, false); // unselectable
             state.addEntity(EntityType.Unit, UnitType.Swordsman, 6, 6, 0);
 
             executeCommand(state, {
@@ -899,7 +899,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should not select unselectable entity via select command', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Bearer, 10, 10, 0, false);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
 
             executeCommand(state, {
                 type: 'select',
@@ -911,7 +911,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should not toggle unselectable entity via toggle_selection', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Bearer, 10, 10, 0, false);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
 
             const result = executeCommand(state, {
                 type: 'toggle_selection',
@@ -928,7 +928,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should track selectable=false on entity', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Bearer, 10, 10, 0, false);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
             expect(unit.selectable).toBe(false);
         });
     });

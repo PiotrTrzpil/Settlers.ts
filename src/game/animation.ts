@@ -20,7 +20,7 @@ export const ANIMATION_SEQUENCES = {
 } as const;
 
 /**
- * Get the animation sequence key for a bearer carrying a specific material.
+ * Get the animation sequence key for a carrier carrying a specific material.
  * Returns a key like 'carry_0' (trunk), 'carry_9' (plank), etc.
  */
 export function carrySequenceKey(materialType: number): string {

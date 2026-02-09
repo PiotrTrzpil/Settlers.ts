@@ -127,12 +127,11 @@ const availableBuildings = [
 
 /** Units available in the UI */
 const availableUnits = [
-    { type: UnitType.Bearer, id: 'bearer', name: 'Bearer', icon: '🧑' },
-    { type: UnitType.Lumberjack, id: 'lumberjack', name: 'Lumberjack', icon: '🪓' },
+    { type: UnitType.Carrier, id: 'carrier', name: 'Carrier', icon: '🧑' },
+    { type: UnitType.Woodcutter, id: 'woodcutter', name: 'Woodcutter', icon: '🪓' },
     { type: UnitType.Builder, id: 'builder', name: 'Builder', icon: '👷' },
     { type: UnitType.Swordsman, id: 'swordsman', name: 'Swordsman', icon: '⚔️' },
     { type: UnitType.Bowman, id: 'bowman', name: 'Bowman', icon: '🏹' },
-    { type: UnitType.Pikeman, id: 'pikeman', name: 'Pikeman', icon: '🔱' },
     { type: UnitType.Priest, id: 'priest', name: 'Priest', icon: '🙏' },
     { type: UnitType.Pioneer, id: 'pioneer', name: 'Pioneer', icon: '🚩' },
     { type: UnitType.Thief, id: 'thief', name: 'Thief', icon: '🥷' },

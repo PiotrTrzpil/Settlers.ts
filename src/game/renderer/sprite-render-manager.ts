@@ -865,7 +865,7 @@ export class SpriteRenderManager {
 
         SpriteRenderManager.log.debug(`Loaded ${loadedCount} animated units for ${Race[race]}`);
 
-        // Load carrier material variants (bearer carrying different goods)
+        // Load carrier material variants (carrier carrying different goods)
         const carrierCount = await this.loadCarrierVariants(fileSet, atlas, registry);
         if (carrierCount > 0) {
             SpriteRenderManager.log.debug(`Loaded ${carrierCount} carrier material variants for ${Race[race]}`);
@@ -875,9 +875,9 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Load carrier (bearer) sprite variants for each material type.
+     * Load carrier sprite variants for each material type.
      * Each material has its own JIL job with 6 directions of walk frames.
-     * These are registered as additional animation sequences on the Bearer entity
+     * These are registered as additional animation sequences on the Carrier entity
      * under keys like 'carry_0' (trunk), 'carry_9' (plank), etc.
      */
     private async loadCarrierVariants(
@@ -928,7 +928,7 @@ export class SpriteRenderManager {
                 const seqKey = carrySequenceKey(result.materialType);
                 registry.registerAnimationSequence(
                     EntityType.Unit,
-                    UnitType.Bearer,
+                    UnitType.Carrier,
                     seqKey,
                     result.directionFrames,
                     ANIMATION_DEFAULTS.FRAME_DURATION_MS,

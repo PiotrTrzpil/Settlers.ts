@@ -283,10 +283,10 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
 // --- Unit Spawning ---
 
 test.describe('Unit Spawning', { tag: '@smoke' }, () => {
-    test('spawn bearer creates entity on passable terrain', async({ gp }) => {
+    test('spawn carrier creates entity on passable terrain', async({ gp }) => {
         const countBefore = await gp.getDebugField('entityCount');
         // Use spawnUnit() to actually create the entity via game.execute()
-        const entity = await gp.spawnUnit(1); // UnitType.Bearer = 1
+        const entity = await gp.spawnUnit(0); // UnitType.Carrier = 0
 
         await expect(gp).toHaveEntityCount(countBefore + 1);
 

@@ -39,9 +39,13 @@ export {
 export type { UnitTypeConfig } from './unit-types';
 export {
     UnitType,
+    UnitCategory,
     UNIT_TYPE_CONFIG,
+    getUnitCategory,
     isUnitTypeSelectable,
+    isUnitTypeMilitary,
     getUnitTypeSpeed,
+    getUnitTypesInCategory,
     BUILDING_UNIT_TYPE,
 } from './unit-types';
 
@@ -62,9 +66,9 @@ export interface Entity {
      */
     variation?: number;
     /**
-     * Material type being carried by a bearer unit.
-     * undefined means the bearer is empty (not carrying anything).
-     * Only meaningful for UnitType.Bearer entities.
+     * Material type being carried by a carrier unit.
+     * undefined means the carrier is empty (not carrying anything).
+     * Only meaningful for UnitType.Carrier entities.
      */
     carriedMaterial?: import('./economy/material-type').EMaterialType;
 }

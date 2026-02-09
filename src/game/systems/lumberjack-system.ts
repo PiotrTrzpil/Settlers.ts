@@ -38,7 +38,7 @@ export class LumberjackSystem implements TickSystem {
     }
 
     public update(state: GameState, deltaSec: number): void {
-        const lumberjacks = state.entities.filter(e => e.type === EntityType.Unit && e.subType === UnitType.Lumberjack);
+        const lumberjacks = state.entities.filter(e => e.type === EntityType.Unit && e.subType === UnitType.Woodcutter);
 
         for (const unit of lumberjacks) {
             let data = this.lumberjackData.get(unit.id);

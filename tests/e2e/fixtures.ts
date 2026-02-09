@@ -6,8 +6,8 @@
  *   testMapPage (worker-scoped)
  *       └── gp (test-scoped, minimal reset)
  *           ├── gpWithBuilding (has Lumberjack placed)
- *           ├── gpWithUnit (has Bearer spawned)
- *           └── gpWithMovingUnit (has Bearer moving east)
+ *           ├── gpWithUnit (has Carrier spawned)
+ *           └── gpWithMovingUnit (has Carrier moving east)
  *
  * ## Usage
  *
@@ -48,9 +48,9 @@ type TestFixtures = {
     gp: GamePage;
     /** GamePage with a Lumberjack building already placed. */
     gpWithBuilding: GamePage;
-    /** GamePage with a Bearer unit already spawned. */
+    /** GamePage with a Carrier unit already spawned. */
     gpWithUnit: GamePage;
-    /** GamePage with a Bearer unit already spawned and moving east. */
+    /** GamePage with a Carrier unit already spawned and moving east. */
     gpWithMovingUnit: GamePage;
     /** GamePage at a specific camera position (center of map). */
     gpCentered: GamePage;
@@ -112,12 +112,12 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         await use(gp);
     }, { timeout: 5_000 }],
 
-    /** Preset: reset state + spawn a Bearer unit */
+    /** Preset: reset state + spawn a Carrier unit */
     gpWithUnit: [async({ testMapPage }, use) => {
         const gp = new GamePage(testMapPage);
         await gp.resetGameState();
 
-        // Spawn a bearer at map center
+        // Spawn a carrier at map center
         await gp.spawnUnit(1);
 
         // Wait for entity to appear
@@ -125,7 +125,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         await use(gp);
     }, { timeout: 5_000 }],
 
-    /** Preset: reset state + spawn a Bearer and start moving east */
+    /** Preset: reset state + spawn a Carrier and start moving east */
     gpWithMovingUnit: [async({ testMapPage }, use) => {
         const gp = new GamePage(testMapPage);
         await gp.resetGameState();

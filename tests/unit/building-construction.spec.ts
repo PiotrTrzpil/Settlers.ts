@@ -510,7 +510,7 @@ describe('Barracks unit spawning on construction complete', () => {
         expect(units).toHaveLength(0);
     });
 
-    it('should spawn unselectable bearers from SmallHouse', () => {
+    it('should spawn unselectable carriers from SmallHouse', () => {
         const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
         const gameState = new GameState();
         const house = gameState.addEntity(EntityType.Building, BuildingType.SmallHouse, 10, 10, 0);
@@ -533,7 +533,7 @@ describe('Barracks unit spawning on construction complete', () => {
         }
     });
 
-    it('should spawn unselectable bearers from MediumHouse', () => {
+    it('should spawn unselectable carriers from MediumHouse', () => {
         const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
         const gameState = new GameState();
         const house = gameState.addEntity(EntityType.Building, BuildingType.MediumHouse, 10, 10, 0);
@@ -555,7 +555,7 @@ describe('Barracks unit spawning on construction complete', () => {
         }
     });
 
-    it('should spawn unselectable bearers from LargeHouse', () => {
+    it('should spawn unselectable carriers from LargeHouse', () => {
         const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
         const gameState = new GameState();
         const house = gameState.addEntity(EntityType.Building, BuildingType.LargeHouse, 10, 10, 0);

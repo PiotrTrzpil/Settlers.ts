@@ -81,7 +81,7 @@ test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () 
         // Check that at least some unit types loaded
         if ('loadedByType' in loadedUnits && loadedUnits.loadedByType) {
             const loadedCount = Object.values(loadedUnits.loadedByType as Record<number, boolean>).filter(Boolean).length;
-            // At least bearer (type 0) should be loaded
+            // At least carrier (type 0) should be loaded
             expect(loadedCount).toBeGreaterThan(0);
         }
     });
@@ -151,7 +151,7 @@ test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () 
             const totalJobs = fileSet.jilReader.length;
 
             // Test specific job indices - these are the JIL job numbers for units
-            // Bearer=#1, Builder=#19, Swordsman=#227, Bowman=#236
+            // Carrier=#1, Builder=#19, Swordsman=#227, Bowman=#236
             const testIndices = [1, 19, 227, 236];
             const results: Record<number, { exists: boolean; offset?: number; length?: number }> = {};
 
@@ -173,7 +173,7 @@ test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () 
             return;
         }
 
-        // Job 1 (Bearer) should exist
+        // Job 1 (Carrier) should exist
         expect(jilTest.testResults[1].exists).toBe(true);
 
         // Job 19 (Builder) should exist
