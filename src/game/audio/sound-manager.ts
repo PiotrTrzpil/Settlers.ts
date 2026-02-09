@@ -171,11 +171,12 @@ export class SoundManager implements IAudioManager {
 
     /**
      * Load a sound into the cache if not already present.
+     * Music is NOT cached because we manage its lifecycle separately (fade in/out, unload).
      */
     public loadSound(config: SoundConfig): Howl | null {
-        // For music, we might want to avoid caching endlessly if memory is an issue,
-        // but for now let's keep it simple.
-        if (this.sounds.has(config.id)) {
+        // Don't cache music - it's managed by MusicController with fading/unloading
+        // Caching caused overlapping audio when the same track was requested while fading out
+        if (config.type !== SoundType.Music && this.sounds.has(config.id)) {
             return this.sounds.get(config.id)!;
         }
 
@@ -223,7 +224,10 @@ export class SoundManager implements IAudioManager {
             }
         });
 
-        this.sounds.set(config.id, sound);
+        // Only cache SFX, not music (music is managed by MusicController)
+        if (config.type !== SoundType.Music) {
+            this.sounds.set(config.id, sound);
+        }
         return sound;
     }
 

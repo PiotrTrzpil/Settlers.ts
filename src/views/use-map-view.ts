@@ -1,4 +1,4 @@
-import { ref, shallowRef, triggerRef, computed, watch, onMounted, onUnmounted, reactive } from 'vue';
+import { ref, shallowRef, triggerRef, computed, watch, onMounted, onUnmounted, reactive, type Ref, type ShallowRef } from 'vue';
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
