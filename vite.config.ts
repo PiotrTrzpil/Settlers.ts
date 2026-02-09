@@ -2,20 +2,33 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import glsl from 'vite-plugin-glsl';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { resolve } from 'path';
+
+// Only include polyfills in browser builds, not in test environment
+const isTest = process.env.VITEST === 'true';
 
 export default defineConfig({
     plugins: [
         vue(),
-        glsl()
-    ],
+        glsl(),
+        // Polyfill Node.js core modules for browser (required by fengari Lua VM)
+        // Disabled in test mode to allow real Node.js fs/path etc.
+        !isTest && nodePolyfills({
+            globals: {
+                process: true,
+                Buffer: true,
+                global: true,
+            },
+        }),
+    ].filter(Boolean),
     define: {
         // Build timestamp for cache invalidation on server restart
         __BUILD_TIME__: JSON.stringify(Date.now().toString()),
     },
     resolve: {
         alias: {
-            '@': resolve(__dirname, 'src')
+            '@': resolve(__dirname, 'src'),
         }
     },
     server: {

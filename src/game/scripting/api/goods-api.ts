@@ -32,9 +32,11 @@ export const S4_GOOD_TYPES = {
     AXE: 10,
     SAW: 11,
     PICK: 12,
+    PICKAXE: 12,   // Alias for script compatibility
     HAMMER: 13,
     SHOVEL: 14,
     FISHINGROD: 15,
+    ROD: 15,       // Alias for script compatibility
     SCYTHE: 16,
     BOW: 17,
     CROSSBOW: 18,
@@ -111,7 +113,6 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
         log.debug(`AddGoods: ${amount}x type ${goodType} at (${x}, ${y})`);
 
         // Create stack entity
-        // Note: The actual implementation would need a proper stack/inventory system
         const entity = context.gameState.addEntity(
             EntityType.StackedResource,
             goodType,
@@ -119,6 +120,11 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
             y,
             0 // Goods don't belong to a specific player initially
         );
+
+        // Set the quantity
+        if (amount > 1) {
+            context.gameState.setResourceQuantity(entity.id, amount);
+        }
 
         return entity.id;
     });
@@ -146,6 +152,30 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
             }
         }
         return null;
+    });
+
+    // Goods.AddPileEx(x, y, goodType, amount) - Alias for AddGoods (S4 script compatibility)
+    // Creates a resource pile at the specified location
+    runtime.registerFunction('Goods', 'AddPileEx', (
+        x: number, y: number, goodType: number, amount: number
+    ) => {
+        log.debug(`AddPileEx: ${amount}x type ${goodType} at (${x}, ${y})`);
+
+        // Create stack entity
+        const entity = context.gameState.addEntity(
+            EntityType.StackedResource,
+            goodType,
+            x,
+            y,
+            0 // Goods don't belong to a specific player initially
+        );
+
+        // Set the quantity (defaults to 1, so only update if different)
+        if (amount > 1) {
+            context.gameState.setResourceQuantity(entity.id, amount);
+        }
+
+        return entity.id;
     });
 
     log.debug('Goods API registered');

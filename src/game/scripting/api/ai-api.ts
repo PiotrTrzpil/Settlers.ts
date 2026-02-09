@@ -91,5 +91,23 @@ export function registerAIAPI(runtime: LuaRuntime, _context: AIAPIContext): void
         return true;
     });
 
+    // AI.SetPlayerVar(player, varName, val1, val2?, val3?) - Set AI player variable
+    // Used in scripts for configuring AI behavior parameters
+    // Examples:
+    //   AI.SetPlayerVar(2, "AttackMode", 0, 2, 2)
+    //   AI.SetPlayerVar(2, "AttackDelay", 500, 50, 10)
+    //   AI.SetPlayerVar(2, "SoldierLimitAbsolute", 50, 100, 300)
+    runtime.registerFunction('AI', 'SetPlayerVar', (
+        player: number,
+        varName: string,
+        val1: number,
+        val2?: number,
+        val3?: number
+    ) => {
+        log.debug(`AI.SetPlayerVar: player ${player}, ${varName} = [${val1}, ${val2}, ${val3}]`);
+        // TODO: Store and use these values when AI system is implemented
+        return true;
+    });
+
     log.debug('AI API registered');
 }

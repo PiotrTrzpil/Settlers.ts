@@ -3,6 +3,8 @@ import { IMapLandscape } from '@/resources/map/imap-landscape';
 import { GeneralMapInformation } from '@/resources/map/general-map-information';
 import { MapSize } from '@/utilities/map-size';
 import { LandscapeType } from './renderer/landscape/landscape-type';
+import type { MapEntityData, MapObjectData } from '@/resources/map/map-entity-data';
+import { S4TreeType } from '@/resources/map/s4-types';
 
 const MAP_SIZE = 256;
 
@@ -46,7 +48,8 @@ export function createTestMapLoader(): IMapLoader {
     const groundType = new Uint8Array(total);
     const groundHeight = new Uint8Array(total);
 
-    const objectType = new Uint8Array(total);
+    // Trees are now stored as entity objects, not in a tile array
+    const treeObjects: MapObjectData[] = [];
 
     for (let y = 0; y < MAP_SIZE; y++) {
         const terrainType = getTerrainForRow(y);
@@ -56,9 +59,13 @@ export function createTestMapLoader(): IMapLoader {
             // Gentle sine-wave height variation
             groundHeight[idx] = Math.floor(10 + 5 * Math.sin(x * 0.1) + 3 * Math.sin(y * 0.15));
 
-            // Add some trees (ID 1-18) randomly on grass
+            // Add some trees (S4TreeType 1-18) randomly on grass
             if (terrainType === LandscapeType.Grass && Math.random() < 0.05) {
-                objectType[idx] = Math.floor(Math.random() * 18) + 1;
+                treeObjects.push({
+                    x,
+                    y,
+                    objectType: (Math.floor(Math.random() * 18) + 1) as S4TreeType,
+                });
             }
         }
     }
@@ -66,14 +73,22 @@ export function createTestMapLoader(): IMapLoader {
     const landscape: IMapLandscape = {
         getGroundType: () => groundType,
         getGroundHeight: () => groundHeight,
-        getObjectType: () => objectType,
     };
 
     const general = new GeneralMapInformation();
+
+    const entityData: MapEntityData = {
+        players: [],
+        buildings: [],
+        settlers: [],
+        stacks: [],
+        objects: treeObjects,
+    };
 
     return {
         landscape,
         general,
         mapSize,
+        entityData,
     };
 }

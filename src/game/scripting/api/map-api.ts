@@ -6,6 +6,7 @@
 import { LogHandler } from '@/utilities/log-handler';
 import type { LuaRuntime } from '../lua-runtime';
 import type { IMapLandscape } from '@/resources/map/imap-landscape';
+import { isPassable, isBuildable } from '@/game/features/placement';
 
 const log = new LogHandler('MapAPI');
 
@@ -100,17 +101,19 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
         return 0;
     });
 
-    // Map.GetResourceAt(x, y) - Returns resource type at position
+    // Map.GetResourceAt(x, y) - Returns resource/gameplay attributes at position
+    // Note: In S4ModApi, byte 3 is gameplayAttributes (founding stone, fog of war),
+    // but the map file format may store resource data here. Returns raw byte value.
     runtime.registerFunction('Map', 'GetResourceAt', (x: number, y: number) => {
         // Bounds check
         if (x < 0 || x >= context.mapWidth || y < 0 || y >= context.mapHeight) {
             return 0;
         }
 
-        if (context.landscape?.getResourceType) {
-            const resources = context.landscape.getResourceType();
+        if (context.landscape?.getGameplayAttributes) {
+            const attributes = context.landscape.getGameplayAttributes();
             const idx = y * context.mapWidth + x;
-            return resources[idx] || 0;
+            return attributes[idx] || 0;
         }
 
         return 0;
@@ -121,7 +124,7 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
         return x >= 0 && x < context.mapWidth && y >= 0 && y < context.mapHeight;
     });
 
-    // Map.IsWalkable(x, y) - Check if a tile is walkable
+    // Map.IsWalkable(x, y) - Check if a tile is walkable (units can traverse)
     runtime.registerFunction('Map', 'IsWalkable', (x: number, y: number) => {
         // Bounds check
         if (x < 0 || x >= context.mapWidth || y < 0 || y >= context.mapHeight) {
@@ -139,9 +142,30 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
             terrainType = context.groundType[idx] || 0;
         }
 
-        // Water types are typically not walkable (0 is usually water)
-        // This is a simplified check - actual walkability depends on more factors
-        return terrainType !== 0;
+        // Use the placement module's passability check
+        return isPassable(terrainType);
+    });
+
+    // Map.IsBuildable(x, y) - Check if a tile can have buildings placed on it
+    runtime.registerFunction('Map', 'IsBuildable', (x: number, y: number) => {
+        // Bounds check
+        if (x < 0 || x >= context.mapWidth || y < 0 || y >= context.mapHeight) {
+            return false;
+        }
+
+        let terrainType = 0;
+
+        if (context.landscape) {
+            const types = context.landscape.getGroundType();
+            const idx = y * context.mapWidth + x;
+            terrainType = types[idx] || 0;
+        } else if (context.groundType) {
+            const idx = y * context.mapWidth + x;
+            terrainType = context.groundType[idx] || 0;
+        }
+
+        // Use the placement module's buildability check
+        return isBuildable(terrainType);
     });
 
     // Map.GetOwner(x, y) - Returns player who owns territory at position

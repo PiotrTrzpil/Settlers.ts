@@ -171,16 +171,17 @@ function calculateStats(loader: IMapLoader): MapStats | null {
         terrainList.sort((a, b) => b.count - a.count);
     }
 
-    // Analyze objects (byte 2 - terrainAttributes)
-    if (l.getObjectType) {
-        const data = l.getObjectType();
+    // Analyze terrain attributes (byte 2 - dark land, pond, sun level)
+    // Note: Trees are NOT stored here - they're in MapObjects chunk (type 6)
+    if (l.getTerrainAttributes) {
+        const data = l.getTerrainAttributes();
         Object.assign(objectCounts, analyzeBytes(data));
         totalObjects = Object.values(objectCounts).reduce((a, b) => a + b, 0);
     }
 
-    // Analyze resources (byte 3 - resource layer)
-    if (l.getResourceType) {
-        const data = l.getResourceType();
+    // Analyze gameplay attributes (byte 3 - founding stone, fog of war)
+    if (l.getGameplayAttributes) {
+        const data = l.getGameplayAttributes();
         const resourceCounts = analyzeBytes(data);
 
         for (const [val, count] of Object.entries(resourceCounts)) {

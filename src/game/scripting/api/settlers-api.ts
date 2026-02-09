@@ -108,6 +108,8 @@ function mapS4ToInternalType(s4Type: number): number {
 
 export interface SettlersAPIContext {
     gameState: GameState;
+    /** Optional: move a unit to a target position (uses pathfinding) */
+    moveUnit?: (entityId: number, targetX: number, targetY: number) => boolean;
 }
 
 /**
@@ -193,6 +195,56 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
             return true;
         }
         return false;
+    });
+
+    // Settlers.MoveTo(entityId, x, y) - Move a settler to a position
+    runtime.registerFunction('Settlers', 'MoveTo', (entityId: number, x: number, y: number) => {
+        const entity = context.gameState.getEntity(entityId);
+        if (!entity || entity.type !== EntityType.Unit) {
+            log.debug(`MoveTo: entity ${entityId} not found or not a unit`);
+            return false;
+        }
+
+        if (context.moveUnit) {
+            log.debug(`MoveTo: moving ${entityId} to (${x}, ${y})`);
+            return context.moveUnit(entityId, x, y);
+        }
+
+        log.debug(`MoveTo: movement system not available`);
+        return false;
+    });
+
+    // Settlers.GetPosition(entityId) - Get settler's current position
+    runtime.registerFunction('Settlers', 'GetPosition', (entityId: number) => {
+        const entity = context.gameState.getEntity(entityId);
+        if (entity && entity.type === EntityType.Unit) {
+            return { x: entity.x, y: entity.y };
+        }
+        return null;
+    });
+
+    // Settlers.IsAlive(entityId) - Check if settler exists
+    runtime.registerFunction('Settlers', 'IsAlive', (entityId: number) => {
+        const entity = context.gameState.getEntity(entityId);
+        return entity !== undefined && entity.type === EntityType.Unit;
+    });
+
+    // Settlers.GetType(entityId) - Get settler's type
+    runtime.registerFunction('Settlers', 'GetType', (entityId: number) => {
+        const entity = context.gameState.getEntity(entityId);
+        if (entity && entity.type === EntityType.Unit) {
+            return entity.subType;
+        }
+        return -1;
+    });
+
+    // Settlers.GetPlayer(entityId) - Get settler's owner player
+    runtime.registerFunction('Settlers', 'GetPlayer', (entityId: number) => {
+        const entity = context.gameState.getEntity(entityId);
+        if (entity && entity.type === EntityType.Unit) {
+            return entity.player;
+        }
+        return -1;
     });
 
     log.debug('Settlers API registered');

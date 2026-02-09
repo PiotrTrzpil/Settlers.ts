@@ -31,6 +31,15 @@ export interface LayerCounts {
 
 const log = new LogHandler('MapView');
 
+/** Check if Lua scripting is enabled in localStorage */
+function isLuaEnabled(): boolean {
+    try {
+        return localStorage.getItem('settlers_luaEnabled') === 'true';
+    } catch {
+        return false;
+    }
+}
+
 /** Create a test map Game instance */
 function createTestGame(fileManager: FileManager): Game {
     const mapContent = createTestMapLoader();
@@ -403,6 +412,16 @@ export function useMapView(
             game.value?.destroy();
             game.value = result.game;
             mapInfo.value = result.mapInfo;
+
+            // Load and execute mission script for this map (non-blocking)
+            // Only if Lua scripting is enabled in settings
+            if (isLuaEnabled()) {
+                result.game.loadScript(file.name).then(scriptResult => {
+                    if (scriptResult.success) {
+                        log.info(`Script loaded: ${scriptResult.scriptPath}`);
+                    }
+                });
+            }
         }
     }
 

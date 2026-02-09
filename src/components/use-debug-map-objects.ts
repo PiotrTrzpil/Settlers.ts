@@ -4,8 +4,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import type { Game } from '@/game/game';
 import {
-    populateMapObjects,
-    analyzeObjectTypes,
+    populateMapObjectsFromEntityData,
     clearMapObjects,
     spawnTestObjects,
     countMapObjectsByCategory,
@@ -20,7 +19,8 @@ export function useDebugMapObjects(getGame: () => Game | null) {
         const game = getGame();
         if (!game) return;
 
-        hasObjectTypeData.value = game.objectType !== null;
+        // Check if map has entity data with objects (trees)
+        hasObjectTypeData.value = (game.mapLoader.entityData?.objects?.length ?? 0) > 0;
         const counts = countMapObjectsByCategory(game.state);
         mapObjectCounts.value = {
             trees: counts.get('trees') ?? 0,
@@ -35,11 +35,9 @@ export function useDebugMapObjects(getGame: () => Game | null) {
         const game = getGame();
         if (!game) return;
 
-        if (game.objectType) {
-            populateMapObjects(game.state, game.objectType, game.groundType, game.mapSize, { category });
-        } else {
-            spawnTestObjects(game.state, game.groundType, game.mapSize, category, 50);
-        }
+        // For now, only spawn test objects since category-based spawning from entity data
+        // would require filtering. Trees are loaded automatically on game start.
+        spawnTestObjects(game.state, game.groundType, game.mapSize, category, 50);
         updateMapObjectCounts();
     }
 
@@ -47,9 +45,9 @@ export function useDebugMapObjects(getGame: () => Game | null) {
         const game = getGame();
         if (!game) return;
 
-        if (game.objectType) {
-            analyzeObjectTypes(game.objectType);
-            populateMapObjects(game.state, game.objectType, game.groundType, game.mapSize);
+        const entityObjects = game.mapLoader.entityData?.objects;
+        if (entityObjects && entityObjects.length > 0) {
+            populateMapObjectsFromEntityData(game.state, entityObjects, game.groundType, game.mapSize);
         } else {
             for (const cat of ['trees', 'stones', 'resources', 'plants'] as ObjectCategory[]) {
                 spawnTestObjects(game.state, game.groundType, game.mapSize, cat, 30);

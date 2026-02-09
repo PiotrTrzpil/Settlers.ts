@@ -48,11 +48,20 @@ export class OriginalLandscape implements IMapLandscape {
         return this.getSlice(1);
     }
 
-    public getObjectType(): Uint8Array {
+    /**
+     * Returns terrain attributes (byte 2 of WorldField).
+     * Contains: dark land flag (bit 6), pond flag (bit 5), sun level (bits 0-4).
+     * Note: Trees are NOT stored here - they're in MapObjects chunk (type 6).
+     */
+    public getTerrainAttributes(): Uint8Array {
         return this.getSlice(2);
     }
 
-    public getResourceType(): Uint8Array {
+    /**
+     * Returns gameplay attributes (byte 3 of WorldField).
+     * Contains: founding stone flag (bit 7), fog of war level (bits 0-5).
+     */
+    public getGameplayAttributes(): Uint8Array {
         return this.getSlice(3);
     }
 }

@@ -7,3 +7,4 @@ export { parsePlayerInformation } from './player-info-parser';
 export { parseBuildings } from './building-parser';
 export { parseSettlers } from './settler-parser';
 export { parseStacks } from './stack-parser';
+export { parseMapObjects } from './object-parser';

@@ -5,24 +5,27 @@ import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
 import { Command, executeCommand } from './commands';
 import { isBuildable } from './features/placement';
-import { populateMapObjects } from './systems/map-objects';
+import { populateMapObjectsFromEntityData } from './systems/map-objects';
 import { populateMapBuildings } from './systems/map-buildings';
 import { SoundManager } from './audio';
 import { Race } from './renderer/sprite-metadata';
 import { EventBus } from './event-bus';
+// Scripting is loaded dynamically to avoid bundling Lua when disabled
+// import { ScriptService, type ScriptLoadResult } from './scripting';
+type ScriptLoadResult = { success: boolean; scriptPath: string | null; error?: string };
 
 /** contains the game state */
 export class Game {
     public mapSize: MapSize;
     public groundHeight: Uint8Array;
     public groundType: Uint8Array;
-    /** Raw object type data from landscape (null for test maps) */
-    public objectType: Uint8Array | null = null;
     public fileManager: FileManager;
     public readonly mapLoader: IMapLoader;
     public state: GameState;
     public readonly eventBus: EventBus;
     public gameLoop: GameLoop;
+    // Script service is optional - only loaded when Lua is enabled
+    private scriptService: unknown = null;
 
     /** Current interaction mode */
     public mode: 'select' | 'place_building' | 'move' = 'select';
@@ -43,15 +46,23 @@ export class Game {
         this.mapSize = mapLoader.mapSize;
         this.groundHeight = mapLoader.landscape.getGroundHeight();
         this.groundType = mapLoader.landscape.getGroundType();
-        this.objectType = mapLoader.landscape.getObjectType?.() ?? null;
 
         this.state = new GameState();
         this.eventBus = new EventBus();
         this.gameLoop = new GameLoop(this.state, this.eventBus);
         this.gameLoop.setTerrainData(this.groundType, this.groundHeight, this.mapSize.width, this.mapSize.height);
 
-        if (this.objectType) {
-            populateMapObjects(this.state, this.objectType, this.groundType, this.mapSize);
+        // Scripting system is initialized lazily when loadScript is called
+        // This avoids bundling Lua/wasmoon when scripting is disabled
+
+        // Populate map objects (trees) from entity data chunk (type 6)
+        if (mapLoader.entityData?.objects?.length) {
+            const count = populateMapObjectsFromEntityData(
+                this.state, mapLoader.entityData.objects, this.groundType, this.mapSize
+            );
+            if (count > 0) {
+                console.log(`Game: Loaded ${count} trees from map data`);
+            }
         }
 
         // Populate buildings from map entity data (if available)
@@ -130,6 +141,49 @@ export class Game {
         }
     }
 
+    /**
+     * Load and execute a mission script for the current map.
+     *
+     * @param mapFilename The map filename to derive script path from
+     * @returns Load result with success status
+     */
+    /**
+     * Load and execute a Lua script for the map.
+     * Scripting is only loaded when enabled in settings.
+     */
+    public async loadScript(mapFilename: string): Promise<ScriptLoadResult> {
+        // Check if Lua scripting is enabled
+        try {
+            if (localStorage.getItem('settlers_luaEnabled') !== 'true') {
+                return { success: false, scriptPath: null, error: 'Lua scripting disabled' };
+            }
+        } catch {
+            return { success: false, scriptPath: null, error: 'Lua scripting disabled' };
+        }
+
+        // Dynamically import scripting module to avoid bundling when disabled
+        try {
+            const { ScriptService } = await import('./scripting');
+
+            if (!this.scriptService) {
+                const service = new ScriptService({
+                    gameState: this.state,
+                    mapWidth: this.mapSize.width,
+                    mapHeight: this.mapSize.height,
+                    landscape: this.mapLoader.landscape,
+                });
+                await service.initialize();
+                this.gameLoop.registerSystem(service);
+                this.scriptService = service;
+            }
+
+            return (this.scriptService as any).loadScriptForMap(mapFilename);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            return { success: false, scriptPath: null, error: msg };
+        }
+    }
+
     /** Start the game loop */
     public start(): void {
         this.gameLoop.start();
@@ -142,6 +196,9 @@ export class Game {
 
     /** Destroy the game and clean up all resources */
     public destroy(): void {
+        if (this.scriptService && typeof (this.scriptService as any).destroy === 'function') {
+            (this.scriptService as any).destroy();
+        }
         this.gameLoop.destroy();
     }
 }

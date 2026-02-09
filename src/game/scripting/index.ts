@@ -52,6 +52,10 @@ export type { ScriptSource } from './script-loader';
 // Compatibility
 export { applyLuaCompatShim, LUA_COMPAT_SHIM } from './lua-compat';
 
+// Script service (high-level integration)
+export { ScriptService, deriveScriptPath } from './script-service';
+export type { ScriptLoadResult } from './script-service';
+
 // API constants (for external use)
 export {
     RACE_CONSTANTS,

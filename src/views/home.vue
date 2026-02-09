@@ -4,6 +4,13 @@
 
     <div v-if="isValidSettlers">
       <button class="play-btn" @click="$router.push('/map-view')">Play</button>
+
+      <div class="options">
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="luaEnabled" @change="saveLuaSetting" />
+          Enable Lua scripting (experimental)
+        </label>
+      </div>
     </div>
     <div v-else>
       ❌ Please select your Settlers 4 directory!
@@ -40,6 +47,23 @@ const props = defineProps<{
 }>();
 
 const isValidSettlers = ref(false);
+const luaEnabled = ref(loadLuaSetting());
+
+function loadLuaSetting(): boolean {
+    try {
+        return localStorage.getItem('settlers_luaEnabled') === 'true';
+    } catch {
+        return false;
+    }
+}
+
+function saveLuaSetting(): void {
+    try {
+        localStorage.setItem('settlers_luaEnabled', String(luaEnabled.value));
+    } catch {
+        // localStorage not available
+    }
+}
 
 function checkIsValidSettlers() {
     if (!props.fileManager) {
@@ -89,5 +113,28 @@ checkIsValidSettlers();
 
 .play-btn:hover {
   background: #388E3C;
+}
+
+.options {
+  margin-top: 16px;
+  padding: 12px;
+  background: #2a2a2a;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #aaa;
+  font-size: 0.9em;
+}
+
+.checkbox-label input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 </style>

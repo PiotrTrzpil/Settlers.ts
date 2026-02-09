@@ -93,10 +93,29 @@ export function registerGameAPI(runtime: LuaRuntime, context: GameAPIContext): v
     });
 
     // Game.IsAreaOwned(player, x, y, range) - Check if player owns area
-    runtime.registerFunction('Game', 'IsAreaOwned', (player: number, x: number, y: number, range: number) => {
+    runtime.registerFunction('Game', 'IsAreaOwned', (_player: number, _x: number, _y: number, _range: number) => {
         // TODO: Implement territory ownership check
         // For now, always return false
         return false;
+    });
+
+    // Game.PlayerRace(player) - Get player's race/tribe
+    // Returns: 0=Roman, 1=Viking, 2=Maya, 3=Dark, 4=Trojan
+    runtime.registerFunction('Game', 'PlayerRace', (player: number) => {
+        // TODO: Look up player race from player data
+        // For now, return Roman (0) as default
+        log.debug(`PlayerRace: player ${player} -> 0 (Roman, default)`);
+        return RACE_CONSTANTS.RACE_ROMAN;
+    });
+
+    // Game.MapWidth() - Get map width
+    runtime.registerFunction('Game', 'MapWidth', () => {
+        return context.mapWidth;
+    });
+
+    // Game.MapHeight() - Get map height
+    runtime.registerFunction('Game', 'MapHeight', () => {
+        return context.mapHeight;
     });
 
     log.debug('Game API registered');

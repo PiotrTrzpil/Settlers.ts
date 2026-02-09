@@ -4,6 +4,8 @@ import { MapSize } from '@/utilities/map-size';
 import { isBuildable } from '../features/placement';
 import { LogHandler } from '@/utilities/log-handler';
 import { TREE_VARIATION_COUNT } from '../renderer/sprite-metadata';
+import type { MapObjectData } from '@/resources/map/map-entity-data';
+import { S4TreeType } from '@/resources/map/s4-types';
 
 const log = new LogHandler('MapObjects');
 
@@ -74,6 +76,18 @@ export const RAW_TO_OBJECT_TYPE: Map<number, MapObjectType> = new Map([
     [0xC5, MapObjectType.TreePine],
     [0xC6, MapObjectType.TreeCoconut], // Palm -> Coconut/Date
 ]);
+
+/**
+ * Convert S4TreeType (from map file) to MapObjectType (internal game type).
+ * S4TreeType values 1-18 map directly to MapObjectType tree values 0-17.
+ */
+export function s4TreeTypeToMapObjectType(s4Type: S4TreeType): MapObjectType | null {
+    // S4TreeType uses 1-18, MapObjectType uses 0-17 for trees
+    if (s4Type >= S4TreeType.OAK && s4Type <= S4TreeType.OLIVE_SMALL) {
+        return (s4Type - 1) as MapObjectType;
+    }
+    return null;
+}
 
 /** Get all MapObjectTypes for a given category */
 export function getTypesForCategory(category: ObjectCategory): MapObjectType[] {
@@ -188,6 +202,55 @@ export function populateMapObjects(
     }
 
     log.debug(`Populated ${count} map objects${category ? ` (${category})` : ''}`);
+    return count;
+}
+
+/**
+ * Populate map objects from parsed entity data (MapObjects chunk).
+ * This is the CORRECT way to load trees - from the MapObjects chunk (type 6),
+ * not from landscape byte 2 which contains terrain attributes.
+ *
+ * @param state - Game state to add entities to
+ * @param objects - Parsed map object data from MapObjects chunk
+ * @param groundType - Ground type data (for buildability check)
+ * @param mapSize - Map dimensions
+ * @returns Number of objects spawned
+ */
+export function populateMapObjectsFromEntityData(
+    state: GameState,
+    objects: MapObjectData[],
+    groundType: Uint8Array,
+    mapSize: MapSize
+): number {
+    let count = 0;
+
+    for (const obj of objects) {
+        const { x, y, objectType: s4TreeType } = obj;
+
+        // Validate coordinates
+        if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) {
+            continue;
+        }
+
+        const idx = mapSize.toIndex(x, y);
+
+        // Skip unbuildable terrain (water, etc.)
+        if (!isBuildable(groundType[idx])) continue;
+
+        // Skip already occupied tiles
+        if (state.getEntityAt(x, y)) continue;
+
+        // Convert S4TreeType to MapObjectType
+        const mappedType = s4TreeTypeToMapObjectType(s4TreeType);
+        if (mappedType === null) continue;
+
+        // Spawn the object with random variation
+        const variation = Math.floor(Math.random() * TREE_VARIATION_COUNT);
+        state.addEntity(EntityType.MapObject, mappedType, x, y, 0, undefined, variation);
+        count++;
+    }
+
+    log.debug(`Populated ${count} map objects from ${objects.length} tile entries`);
     return count;
 }
 

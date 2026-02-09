@@ -14,6 +14,7 @@ import {
     parseBuildings,
     parseSettlers,
     parseStacks,
+    parseMapObjects,
 } from '../chunk-parsers';
 
 /** load a .map or a .edm map */
@@ -85,6 +86,14 @@ export class OriginalMapLoader extends OriginalMapFile implements IMapLoader {
         if (stackReader) {
             data.stacks = parseStacks(stackReader);
             this.logLoader.debug(`Parsed ${data.stacks.length} stacks`);
+        }
+
+        // Parse map objects - trees, decorations (chunk type 6)
+        // This is tile-based data, need to pass map dimensions
+        const objectReader = this.getChunkReader(MapChunkType.MapObjects);
+        if (objectReader) {
+            data.objects = parseMapObjects(objectReader, this.mapSize.width, this.mapSize.height);
+            this.logLoader.debug(`Parsed ${data.objects.length} map objects (trees)`);
         }
 
         return data;

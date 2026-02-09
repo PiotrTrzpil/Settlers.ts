@@ -3,7 +3,7 @@
  * Interfaces for parsed entity data from map file chunks
  */
 
-import { S4Tribe, S4BuildingType, S4SettlerType, S4GoodType } from './s4-types';
+import { S4Tribe, S4BuildingType, S4SettlerType, S4GoodType, S4TreeType } from './s4-types';
 
 /** Player information from MapPlayerInformation chunk (type 2) */
 export interface MapPlayerInfo {
@@ -39,12 +39,21 @@ export interface MapStackData {
     amount: number;
 }
 
+/** Map object data from MapObjects chunk (type 6) - trees, decorations, etc. */
+export interface MapObjectData {
+    x: number;
+    y: number;
+    objectType: S4TreeType;
+}
+
 /** Aggregated entity data from all entity chunks */
 export interface MapEntityData {
     players: MapPlayerInfo[];
     buildings: MapBuildingData[];
     settlers: MapSettlerData[];
     stacks: MapStackData[];
+    /** Map objects (trees, decorations) from MapObjects chunk (type 6) */
+    objects: MapObjectData[];
 }
 
 /** Create an empty MapEntityData object */
@@ -54,5 +63,6 @@ export function createEmptyEntityData(): MapEntityData {
         buildings: [],
         settlers: [],
         stacks: [],
+        objects: [],
     };
 }

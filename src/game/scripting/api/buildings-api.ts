@@ -226,5 +226,67 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
         return false;
     });
 
+    // Buildings.AddBuildingEx(x, y, player, buildingType) - Alias for AddBuilding (S4 script compatibility)
+    runtime.registerFunction('Buildings', 'AddBuildingEx', (
+        x: number, y: number, player: number, buildingType: number
+    ) => {
+        const internalType = mapS4ToInternalType(buildingType);
+        log.debug(`AddBuildingEx: type ${buildingType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`);
+
+        const entity = context.gameState.addEntity(
+            EntityType.Building,
+            internalType,
+            x,
+            y,
+            player
+        );
+
+        return entity.id;
+    });
+
+    // Buildings.GetState(entityId) - Get building construction state
+    // Returns: 0 = BUILD (under construction), 1 = STANDARD (completed)
+    runtime.registerFunction('Buildings', 'GetState', (entityId: number) => {
+        const entity = context.gameState.getEntity(entityId);
+        if (!entity || entity.type !== EntityType.Building) {
+            return -1;
+        }
+
+        const isComplete = isBuildingCompleted(context.gameState, entityId);
+        return isComplete ? BUILDING_STATE_CONSTANTS.STANDARD : BUILDING_STATE_CONSTANTS.BUILD;
+    });
+
+    // Buildings.IsComplete(entityId) - Check if building is fully constructed
+    runtime.registerFunction('Buildings', 'IsComplete', (entityId: number) => {
+        return isBuildingCompleted(context.gameState, entityId);
+    });
+
+    // Buildings.GetPosition(entityId) - Get building position
+    runtime.registerFunction('Buildings', 'GetPosition', (entityId: number) => {
+        const entity = context.gameState.getEntity(entityId);
+        if (entity && entity.type === EntityType.Building) {
+            return { x: entity.x, y: entity.y };
+        }
+        return null;
+    });
+
+    // Buildings.GetType(entityId) - Get building type
+    runtime.registerFunction('Buildings', 'GetType', (entityId: number) => {
+        const entity = context.gameState.getEntity(entityId);
+        if (entity && entity.type === EntityType.Building) {
+            return entity.subType;
+        }
+        return -1;
+    });
+
+    // Buildings.GetPlayer(entityId) - Get building owner
+    runtime.registerFunction('Buildings', 'GetPlayer', (entityId: number) => {
+        const entity = context.gameState.getEntity(entityId);
+        if (entity && entity.type === EntityType.Building) {
+            return entity.player;
+        }
+        return -1;
+    });
+
     log.debug('Buildings API registered');
 }
