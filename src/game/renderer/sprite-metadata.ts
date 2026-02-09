@@ -237,92 +237,102 @@ export interface BuildingSpriteInfo {
  * These indices map to building sprites via JIL -> DIL -> GIL -> GFX.
  */
 export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
-    // Job indices for buildings - same across all races
-    // These can be verified/edited via the /building-sprites view
-    // or by browsing JIL files in /jil-view
-    [BuildingType.WoodcutterHut]: 1,
-    [BuildingType.ForesterHut]: 2,
-    [BuildingType.Sawmill]: 3,
-    [BuildingType.StonecutterHut]: 4,
-    [BuildingType.WaterworkHut]: 5,
-    [BuildingType.FisherHut]: 6,
-    [BuildingType.HunterHut]: 7,
-    [BuildingType.Slaughterhouse]: 8,
-    [BuildingType.Mill]: 9,
-    [BuildingType.Bakery]: 10,
-    [BuildingType.GrainFarm]: 11,
-    [BuildingType.AnimalRanch]: 12,
-    [BuildingType.DonkeyRanch]: 13,
-    [BuildingType.StoneMine]: 14,
-    [BuildingType.IronMine]: 15,
-    [BuildingType.GoldMine]: 16,
-    [BuildingType.CoalMine]: 17,
-    [BuildingType.SulfurMine]: 18,
-    [BuildingType.SmeltGold]: 19,
-    [BuildingType.IronSmelter]: 20,
-    [BuildingType.ToolSmith]: 21,
-    [BuildingType.WeaponSmith]: 22,
-    [BuildingType.SiegeWorkshop]: 23,  // Siege engine maker (uncertain)
-    [BuildingType.LargeDecoration]: 33,
-    [BuildingType.StorageArea]: 34,
-    [BuildingType.Barrack]: 24,
-    [BuildingType.LivingHouse]: 26,
-    [BuildingType.HealerHut]: 27,
-    [BuildingType.AmmunitionMaker]: 28,
-
-    [BuildingType.ResidenceSmall]: 40,
-    [BuildingType.ResidenceMedium]: 41,
-    [BuildingType.ResidenceBig]: 42,
-    [BuildingType.SmallTemple]: 43,
-    [BuildingType.LargeTemple]: 44,
-    [BuildingType.LookoutTower]: 45,
-    [BuildingType.GuardTowerSmall]: 46,
-    [BuildingType.GuardTowerBig]: 47,
-    [BuildingType.Castle]: 48,
-    [BuildingType.Shipyard]: 52,  // 52-63, 76-79 are shipyard orientations
-    [BuildingType.Decoration]: 64,  // 64-75 are decorations
+    // JIL indices match S4BuildingType values from s4-types.ts
+    // Reference: src/resources/map/s4-types.ts S4BuildingType enum
+    [BuildingType.WoodcutterHut]: 1,   // S4BuildingType.WOODCUTTERHUT
+    [BuildingType.ForesterHut]: 2,     // S4BuildingType.FORESTERHUT
+    [BuildingType.Sawmill]: 3,         // S4BuildingType.SAWMILL
+    [BuildingType.StonecutterHut]: 4,  // S4BuildingType.STONECUTTERHUT
+    [BuildingType.WaterworkHut]: 5,    // S4BuildingType.WATERWORKHUT
+    [BuildingType.FisherHut]: 6,       // S4BuildingType.FISHERHUT
+    [BuildingType.HunterHut]: 7,       // S4BuildingType.HUNTERHUT
+    [BuildingType.Slaughterhouse]: 8,  // S4BuildingType.SLAUGHTERHOUSE
+    [BuildingType.Mill]: 9,            // S4BuildingType.MILL
+    [BuildingType.Bakery]: 10,         // S4BuildingType.BAKERY
+    [BuildingType.GrainFarm]: 11,      // S4BuildingType.GRAINFARM
+    [BuildingType.AnimalRanch]: 12,    // S4BuildingType.ANIMALRANCH
+    [BuildingType.DonkeyRanch]: 13,    // S4BuildingType.DONKEYRANCH
+    [BuildingType.StoneMine]: 14,      // S4BuildingType.STONEMINE
+    [BuildingType.IronMine]: 15,       // S4BuildingType.IRONMINE
+    [BuildingType.GoldMine]: 16,       // S4BuildingType.GOLDMINE
+    [BuildingType.CoalMine]: 17,       // S4BuildingType.COALMINE
+    [BuildingType.SulfurMine]: 18,     // S4BuildingType.SULFURMINE
+    [BuildingType.SmeltGold]: 19,      // S4BuildingType.SMELTGOLD
+    [BuildingType.IronSmelter]: 20,    // S4BuildingType.SMELTIRON
+    [BuildingType.ToolSmith]: 21,      // S4BuildingType.TOOLSMITH
+    [BuildingType.WeaponSmith]: 22,    // S4BuildingType.WEAPONSMITH
+    [BuildingType.SiegeWorkshop]: 23,  // S4BuildingType.VEHICLEHALL
+    [BuildingType.Barrack]: 24,        // S4BuildingType.BARRACKS
+    // CHARCOALMAKER = 25 (not in BuildingType)
+    [BuildingType.LivingHouse]: 26,    // S4BuildingType.TRAININGCENTER
+    [BuildingType.HealerHut]: 27,      // S4BuildingType.HEALERHUT
+    [BuildingType.AmmunitionMaker]: 28, // S4BuildingType.AMMOMAKERHUT
+    // GUNPOWDERMAKERHUT = 29, LANDSCAPEMAKERHUT = 30 (not in BuildingType)
+    [BuildingType.Shipyard]: 31,       // S4BuildingType.SHIPYARD
+    // PORT = 32, MARKETPLACE = 33 (not in BuildingType)
+    [BuildingType.StorageArea]: 34,    // S4BuildingType.STORAGEAREA
+    [BuildingType.WinePress]: 35,      // S4BuildingType.VINYARD
+    // AGAVEFARMERHUT = 36, TEQUILAMAKERHUT = 37, BEEKEEPERHUT = 38, MEADMAKERHUT = 39 (not in BuildingType)
+    [BuildingType.ResidenceSmall]: 40, // S4BuildingType.RESIDENCESMALL
+    [BuildingType.ResidenceMedium]: 41, // S4BuildingType.RESIDENCEMEDIUM
+    [BuildingType.ResidenceBig]: 42,   // S4BuildingType.RESIDENCEBIG
+    [BuildingType.SmallTemple]: 43,    // S4BuildingType.SMALLTEMPLE
+    [BuildingType.LargeTemple]: 44,    // S4BuildingType.BIGTEMPLE
+    [BuildingType.LookoutTower]: 45,   // S4BuildingType.LOOKOUTTOWER
+    [BuildingType.GuardTowerSmall]: 46, // S4BuildingType.GUARDTOWERSMALL
+    [BuildingType.GuardTowerBig]: 47,  // S4BuildingType.GUARDTOWERBIG
+    [BuildingType.Castle]: 48,         // S4BuildingType.CASTLE
+    // MUSHROOMFARM = 49, DARKTEMPLE = 50, FORTRESS = 51 (race-specific)
+    // 52-63: Shipyard orientations, 64-75: Decorations
+    [BuildingType.Decoration]: 64,
+    [BuildingType.LargeDecoration]: 65, // Large decorations start after small
 };
 
 /**
  * Mapping from EMaterialType to JIL job index in file 3.jil (resources).
- * These indices need to be verified by visually inspecting the GFX file.
- * Resource sprites use the JIL job system like buildings.
+ * JIL indices match S4GoodType values (alphabetically ordered goods).
+ * Reference: src/resources/map/s4-types.ts S4GoodType enum.
  */
 export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
-    // Job 0: Placeholder
-    [EMaterialType.AGAVE]: 1,          // Mayan plant (new assignment)
-    [EMaterialType.IRONORE]: 2,
-    [EMaterialType.ARMOR]: 3,  // Leader helmets/equipment
-    [EMaterialType.AXE]: 4,
-    [EMaterialType.BATTLEAXE]: 5,    // Heavy battle axes
-    [EMaterialType.BLOWGUN]: 6,       // Mayan blowpipe (new assignment)
-    [EMaterialType.BOARD]: 7,
-    [EMaterialType.BOW]: 8,           // Bows (updated)
-    [EMaterialType.BREAD]: 9,         // Bread (updated)
-    [EMaterialType.COAL]: 10,         // Coal lumps (updated)
-    [EMaterialType.FISH]: 11,         // Fish (updated)
-    [EMaterialType.FLOUR]: 12,        // Flour sacks (updated)
-    [EMaterialType.GOAT]: 13,         // Mayan livestock (new assignment)
-    [EMaterialType.GOLDBAR]: 14,         // Gold bars (new assignment)
-    [EMaterialType.GOLDORE]: 15,      // Gold ore (new assignment)
-    [EMaterialType.GRAIN]: 16,         // Wheat
-    [EMaterialType.MEAD]: 17,         // Honey wine (new assignment)
-    [EMaterialType.HAMMER]: 18,       // Hammers (new assignment)
-    [EMaterialType.SULFUR]: 19,       // Sulfur (assuming "yellow liquid")
-    // [EMaterialType.FISH]: 20,      // REMOVE - Conflict
-    [EMaterialType.WINE]: 21,         // Wine barrels
-    [EMaterialType.LOG]: 22,        // Logs
-    [EMaterialType.PICKAXE]: 23,         // Pickaxes
-    [EMaterialType.SAW]: 24,          // Saws
-    // [EMaterialType.HAMMER]: 25,    // REMOVE - Conflict with 18
-    [EMaterialType.SCYTHE]: 26,       // Scythes
-    [EMaterialType.ROD]: 27,   // Fishing rods
-    [EMaterialType.WATER]: 28,        // Water buckets
-    [EMaterialType.PIG]: 29,          // Pigs (may not have sprite)
-    [EMaterialType.GRAPES]: 30,       // Grapes
-    // [EMaterialType.SULFUR]: 31,    // REMOVE - Conflict with 19
-    [EMaterialType.GEMS]: 32,         // Gems
-    [EMaterialType.BLADE]: 33,        // Blades
+    // S4GoodType values are the JIL job indices (alphabetically ordered)
+    [EMaterialType.AGAVE]: 1,      // S4GoodType.AGAVE
+    // AMMO = 2 (not in EMaterialType)
+    [EMaterialType.ARMOR]: 3,      // S4GoodType.ARMOR
+    [EMaterialType.AXE]: 4,        // S4GoodType.AXE
+    [EMaterialType.BATTLEAXE]: 5,  // S4GoodType.BATTLEAXE
+    [EMaterialType.BLOWGUN]: 6,    // S4GoodType.BLOWGUN
+    [EMaterialType.BOARD]: 7,      // S4GoodType.BOARD
+    [EMaterialType.BOW]: 8,        // S4GoodType.BOW
+    [EMaterialType.BREAD]: 9,      // S4GoodType.BREAD
+    [EMaterialType.COAL]: 10,      // S4GoodType.COAL
+    [EMaterialType.FISH]: 11,      // S4GoodType.FISH
+    [EMaterialType.FLOUR]: 12,     // S4GoodType.FLOUR
+    [EMaterialType.GOAT]: 13,      // S4GoodType.GOAT
+    [EMaterialType.GOLDBAR]: 14,   // S4GoodType.GOLDBAR
+    [EMaterialType.GOLDORE]: 15,   // S4GoodType.GOLDORE
+    [EMaterialType.GRAIN]: 16,     // S4GoodType.GRAIN
+    // GUNPOWDER = 17 (not in EMaterialType)
+    [EMaterialType.HAMMER]: 18,    // S4GoodType.HAMMER
+    // HONEY = 19 (not in EMaterialType)
+    [EMaterialType.IRONBAR]: 20,   // S4GoodType.IRONBAR
+    [EMaterialType.IRONORE]: 21,   // S4GoodType.IRONORE
+    [EMaterialType.LOG]: 22,       // S4GoodType.LOG
+    [EMaterialType.MEAD]: 23,      // S4GoodType.MEAD
+    [EMaterialType.MEAT]: 24,      // S4GoodType.MEAT
+    [EMaterialType.PICKAXE]: 25,   // S4GoodType.PICKAXE
+    [EMaterialType.PIG]: 26,       // S4GoodType.PIG
+    [EMaterialType.ROD]: 27,       // S4GoodType.ROD
+    [EMaterialType.SAW]: 28,       // S4GoodType.SAW
+    [EMaterialType.SCYTHE]: 29,    // S4GoodType.SCYTHE
+    // SHEEP = 30 (not in EMaterialType)
+    // SHOVEL = 31 (not in EMaterialType)
+    [EMaterialType.STONE]: 32,     // S4GoodType.STONE
+    [EMaterialType.SULFUR]: 33,    // S4GoodType.SULFUR
+    [EMaterialType.SWORD]: 34,     // S4GoodType.SWORD
+    // TEQUILA = 35 (not in EMaterialType)
+    [EMaterialType.WATER]: 36,     // S4GoodType.WATER
+    [EMaterialType.WINE]: 37,      // S4GoodType.WINE
+    // Types not in S4GoodType: SPEAR, BLADE, GRAPES, DONKEY, GEMS
 };
 
 /**

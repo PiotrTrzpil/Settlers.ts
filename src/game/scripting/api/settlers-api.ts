@@ -92,9 +92,9 @@ export const S4_SETTLER_TYPES = {
 function mapS4ToInternalType(s4Type: number): number {
     // Map implemented types
     const mapping: Record<number, UnitType> = {
-        [S4_SETTLER_TYPES.CARRIER]: UnitType.Bearer,
+        [S4_SETTLER_TYPES.CARRIER]: UnitType.Carrier,
         [S4_SETTLER_TYPES.BUILDER]: UnitType.Builder,
-        [S4_SETTLER_TYPES.WOODCUTTER]: UnitType.Lumberjack,
+        [S4_SETTLER_TYPES.WOODCUTTER]: UnitType.Woodcutter,
         [S4_SETTLER_TYPES.SWORDSMAN_01]: UnitType.Swordsman,
         [S4_SETTLER_TYPES.BOWMAN_01]: UnitType.Bowman,
         [S4_SETTLER_TYPES.PRIEST]: UnitType.Priest,
