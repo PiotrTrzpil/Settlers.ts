@@ -130,4 +130,9 @@ export class Game {
     public stop(): void {
         this.gameLoop.stop();
     }
+
+    /** Destroy the game and clean up all resources */
+    public destroy(): void {
+        this.gameLoop.destroy();
+    }
 }

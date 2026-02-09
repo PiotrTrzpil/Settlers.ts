@@ -517,7 +517,7 @@ export function useRenderer({
 
     onUnmounted(() => {
         const game = getGame();
-        if (game) game.stop();
+        if (game) game.destroy();
 
         inputManager?.destroy();
         inputManager = null;
