@@ -19,6 +19,9 @@ export class ShaderProgram implements ShaderObject {
     /** Cached WebGL buffers keyed by attribute name to avoid leaking GPU memory */
     private bufferCache: Map<string, WebGLBuffer> = new Map();
 
+    /** Pre-allocated vector for uniform2fv to avoid per-frame allocations */
+    private readonly vec2Temp = new Float32Array(2);
+
     constructor() {
         Object.seal(this);
     }
@@ -129,7 +132,10 @@ export class ShaderProgram implements ShaderObject {
             return;
         }
 
-        gl.uniform2fv(uniformLocation, [a1, a2]);
+        // Use pre-allocated array to avoid per-frame allocations
+        this.vec2Temp[0] = a1;
+        this.vec2Temp[1] = a2;
+        gl.uniform2fv(uniformLocation, this.vec2Temp);
     }
 
     public setArrayFloat(name: string, values: Float32Array, size: number, divisor = 0): void {

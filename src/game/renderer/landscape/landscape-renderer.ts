@@ -19,6 +19,9 @@ const TEXTURE_UNIT_LANDSCAPE = 0;
 const TEXTURE_UNIT_LAND_TYPE = 1;
 const TEXTURE_UNIT_LAND_HEIGHT = 2;
 
+// Pre-allocated static arrays to avoid per-frame allocations
+const BASE_VERTICES_INDEX = new Float32Array([0, 1, 2, 3, 4, 5]);
+
 export class LandscapeRenderer extends RendererBase implements IRenderer {
     private static log = new LogHandler('LandscapeRenderer');
     private numVertices = 0;
@@ -338,7 +341,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         //       /  A \\  /
         //      /------\\/
         //     1       2 4
-        sp.setArrayFloat('baseVerticesIndex', new Float32Array([0, 1, 2, 3, 4, 5]), 1);
+        sp.setArrayFloat('baseVerticesIndex', BASE_VERTICES_INDEX, 1);
 
         // ///////////
         // update texture data

@@ -1,6 +1,5 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { IRenderer } from './i-renderer';
-import { Matrix } from './landscape/matrix';
 import { ViewPoint } from './view-point';
 
 declare let WebGLDebugUtils: any;
@@ -24,6 +23,9 @@ export class Renderer {
     private renderers: IRenderer[] = [];
     private animRequest = 0;
     public viewPoint: ViewPoint;
+
+    // Pre-allocated projection matrix to avoid GC pressure during rendering
+    private readonly projectionMatrix = new Float32Array(16);
 
     /** Get the WebGL2 context */
     public get gl(): WebGL2RenderingContext | null {
@@ -111,14 +113,34 @@ export class Renderer {
 
         const zoomV = this.viewPoint.zoom;
         const aspect = canvas.width / canvas.height;
-        const projection = Matrix
-            .createOrthographic(-aspect, aspect, 1, -1, -1, 1)
-            .scale(zoomV, zoomV, 1.0)
-            .translate(-zoomV, zoomV, 0);
+
+        // Compute projection matrix in-place to avoid allocations
+        // Equivalent to: orthographic(-aspect, aspect, 1, -1, -1, 1) * scale(zoomV) * translate(-zoomV, zoomV, 0)
+        // ortho: 2/(right-left)=1/aspect, 2/(top-bottom)=-1, 2/(near-far)=-1
+        // Note: top=-1, bottom=1 in original ortho, so Y is inverted (sy = -zoomV)
+        const m = this.projectionMatrix;
+        const sx = zoomV / aspect;
+        const sy = -zoomV;  // Negative because top < bottom in ortho params
+        m[0] = sx;
+        m[1] = 0;
+        m[2] = 0;
+        m[3] = 0;
+        m[4] = 0;
+        m[5] = sy;
+        m[6] = 0;
+        m[7] = 0;
+        m[8] = 0;
+        m[9] = 0;
+        m[10] = -1;
+        m[11] = 0;
+        m[12] = -zoomV;  // translate X component
+        m[13] = zoomV;   // translate Y component
+        m[14] = 0;
+        m[15] = 1;
 
         // draw all renderers
         for (const r of this.renderers) {
-            r.draw(gl, projection.mat, this.viewPoint);
+            r.draw(gl, m, this.viewPoint);
         }
     }
 
