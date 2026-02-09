@@ -8,9 +8,6 @@ const yieldToEventLoop = (): Promise<void> =>
 
 const DEFAULT_BATCH_SIZE = 5;
 
-/** Threshold for logging slow batches (ms) */
-const _SLOW_BATCH_THRESHOLD_MS = 16; // One frame at 60fps
-
 /**
  * Process items in parallel batches, yielding between batches.
  * Uses index-based iteration to avoid creating slice arrays.
@@ -24,7 +21,6 @@ export async function processBatched<T, R>(
     let resultIdx = 0;
 
     for (let i = 0; i < items.length; i += batchSize) {
-        const _batchStart = performance.now();
         const batchEnd = Math.min(i + batchSize, items.length);
         const batchCount = batchEnd - i;
 

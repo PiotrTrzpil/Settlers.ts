@@ -265,7 +265,7 @@ import type { Game } from '@/game/game';
 import { useDebugMapObjects } from './use-debug-map-objects';
 import SettingsCheckbox from './settings/SettingsCheckbox.vue';
 
-const props = defineProps<{
+defineProps<{
     paused: boolean;
     currentRace: number; // Race enum
 }>();

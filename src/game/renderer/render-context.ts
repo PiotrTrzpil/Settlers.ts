@@ -182,10 +182,7 @@ export class RenderContextBuilder {
             unitStates: this._unitStates,
             resourceStates: this._resourceStates,
             buildingStates,
-            getBuildingVisualState: (entityId: number) => {
-                const state = buildingStates.get(entityId);
-                return buildingVisualStateGetter(entityId);
-            },
+            getBuildingVisualState: buildingVisualStateGetter,
             selection: this._selection,
             placementPreview: this._placementPreview,
             alpha: this._alpha,
