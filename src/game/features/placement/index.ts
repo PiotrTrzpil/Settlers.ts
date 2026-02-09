@@ -36,6 +36,7 @@ export { isPassable, isBuildable } from './internal/terrain';
 // Legacy/convenience exports (backward compatibility)
 export { canPlaceBuildingFootprint, canPlaceBuilding } from './internal/building-validator';
 export { canPlaceResource } from './internal/resource-validator';
+export { canPlaceUnit } from './internal/unit-validator';
 
 // Slope utilities (for indicator renderer)
 export { MAX_SLOPE_DIFF, computeSlopeDifficulty } from './internal/slope';

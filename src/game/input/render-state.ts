@@ -4,7 +4,7 @@ import type { BuildingType } from '../entity';
  * Supported placement entity types.
  * Extend this union when adding new placeable entity types.
  */
-export type PlacementEntityType = 'building' | 'resource';
+export type PlacementEntityType = 'building' | 'resource' | 'unit';
 
 /**
  * Cursor types for different interaction states.

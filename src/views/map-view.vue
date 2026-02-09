@@ -64,7 +64,8 @@
             :key="u.type"
             class="sidebar-btn"
             :data-testid="'btn-spawn-' + u.id"
-            @click="spawnUnit(u.type)"
+            :class="{ active: currentMode === 'place_unit' && placeUnitType === u.type }"
+            @click="setPlaceUnitMode(u.type)"
           >
             <span class="btn-icon">{{ u.icon }}</span>
             <span class="btn-label">{{ u.name }}</span>
@@ -231,6 +232,7 @@ const {
     currentMode,
     placeBuildingType,
     placeResourceType,
+    placeUnitType,
     availableBuildings,
     availableUnits,
     availableResources,
@@ -240,10 +242,10 @@ const {
     onTileClick,
     setPlaceMode,
     setPlaceResourceMode,
+    setPlaceUnitMode,
     setSelectMode,
     removeSelected,
     togglePause,
-    spawnUnit,
     updateLayerVisibility
 } = useMapView(
     () => props.fileManager,

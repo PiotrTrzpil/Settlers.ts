@@ -16,6 +16,7 @@ import { Race } from '@/game/renderer/sprite-metadata';
 import {
     canPlaceBuildingFootprint,
     canPlaceResource,
+    canPlaceUnit,
 } from '@/game/features/placement';
 import { debugStats } from '@/game/debug-stats';
 import {
@@ -23,8 +24,10 @@ import {
     SelectMode,
     PlaceBuildingMode,
     PlaceResourceMode,
+    PlaceUnitMode,
     type PlaceBuildingModeData,
     type PlaceResourceModeData,
+    type PlaceUnitModeData,
     getDefaultInputConfig,
     type PlacementEntityType,
 } from '@/game/input';
@@ -118,7 +121,7 @@ function createRenderCallback(
 
             const renderState = inputManager?.getRenderState();
             const mode = debugStats.state.mode;
-            const inPlacementMode = mode === 'place_building' || mode === 'place_resource';
+            const inPlacementMode = mode === 'place_building' || mode === 'place_resource' || mode === 'place_unit';
             er.buildingIndicatorsEnabled = inPlacementMode;
 
             if (inPlacementMode) {
@@ -249,6 +252,44 @@ function configurePlaceResourceMode(
 }
 
 /**
+ * Configure PlaceUnitMode with validation and debug stats integration.
+ * Uses centralized canPlaceUnit validation.
+ */
+function configurePlaceUnitMode(
+    getGame: () => Game | null,
+    onTileClick: (tile: { x: number; y: number }) => void
+): PlaceUnitMode {
+    const mode = new PlaceUnitMode();
+    const originalOnPointerMove = mode.onPointerMove.bind(mode);
+
+    mode.onPointerMove = (data, context) => {
+        if (data.tileX !== undefined && data.tileY !== undefined) {
+            updateTileDebugStats(data.tileX, data.tileY, getGame, onTileClick);
+        }
+
+        const modeData = context.getModeData<PlaceUnitModeData>();
+        if (modeData && !modeData.validatePlacement) {
+            modeData.validatePlacement = (x: number, y: number) => {
+                const game = getGame();
+                if (!game) return false;
+
+                return canPlaceUnit(
+                    game.groundType,
+                    game.mapSize,
+                    game.state.tileOccupancy,
+                    x, y
+                );
+            };
+            context.setModeData(modeData);
+        }
+
+        return originalOnPointerMove(data, context);
+    };
+
+    return mode;
+}
+
+/**
  * Initialize renderers asynchronously (landscape first for camera, then sprites).
  */
 async function initRenderersAsync(
@@ -305,6 +346,11 @@ function handleModeChange(
         debugStats.state.placeResourceType =
             (newMode === 'place_resource' && data?.resourceType !== undefined)
                 ? data.resourceType : 0;
+
+        // Update unit type
+        debugStats.state.placeUnitType =
+            (newMode === 'place_unit' && data?.unitType !== undefined)
+                ? data.unitType : 0;
 
         // Sync with game for backward compatibility
         const game = getGame();
@@ -383,6 +429,7 @@ export function useRenderer({
         inputManager.registerMode(new SelectMode());
         inputManager.registerMode(configurePlaceBuildingMode(getGame, onTileClick));
         inputManager.registerMode(configurePlaceResourceMode(getGame, onTileClick));
+        inputManager.registerMode(configurePlaceUnitMode(getGame, onTileClick));
         inputManager.attach();
 
         // Connect camera mode to the ViewPoint

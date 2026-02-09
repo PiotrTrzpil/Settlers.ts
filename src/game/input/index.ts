@@ -74,6 +74,11 @@ export {
     type PlaceResourceModeData,
     type PlaceResourceEnterData,
 } from './modes/place-resource-mode';
+export {
+    PlaceUnitMode,
+    type PlaceUnitModeData,
+    type PlaceUnitEnterData,
+} from './modes/place-unit-mode';
 export { CameraMode } from './modes/camera-mode';
 
 // Input Manager
