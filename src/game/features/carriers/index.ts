@@ -24,3 +24,6 @@ export {
 
 // Manager
 export { CarrierManager } from './carrier-manager';
+
+// System (TickSystem)
+export { CarrierSystem } from './carrier-system';

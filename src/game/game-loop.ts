@@ -8,8 +8,11 @@ import { gameSettings } from './game-settings';
 import { MapSize } from '@/utilities/map-size';
 import type { TickSystem } from './tick-system';
 import { BuildingConstructionSystem } from './features/building-construction';
+import { CarrierSystem } from './features/carriers';
+import { hasInventory, isProductionBuilding } from './features/inventory';
 import { EventBus } from './event-bus';
 import type { FrameRenderTiming } from './renderer/renderer';
+import { BuildingType } from './entity';
 
 const TICK_RATE = 30;
 const TICK_DURATION = 1 / TICK_RATE;
@@ -66,6 +69,9 @@ export class GameLoop {
     /** Idle behavior system for animation direction updates */
     public readonly idleBehaviorSystem: IdleBehaviorSystem;
 
+    /** Carrier logistics system */
+    public readonly carrierSystem: CarrierSystem;
+
     /** Lumberjack AI system */
     public readonly lumberjackSystem: LumberjackSystem;
 
@@ -93,17 +99,25 @@ export class GameLoop {
         gameState.buildingStates = this.constructionSystem.buildingStates;
 
         // Delegate building state creation to the construction system
+        // Also wire up inventory and service area creation
         gameState.onBuildingCreated = (entityId, buildingType, x, y) => {
             this.constructionSystem.createBuildingState(entityId, buildingType, x, y);
+            this.handleBuildingCreated(entityId, buildingType as BuildingType, x, y);
         };
 
-        // 4. Lumberjack AI — issues movement commands (runs after construction)
+        // 4. Carrier system — manages carrier fatigue and behavior
+        this.carrierSystem = new CarrierSystem(gameState.carrierManager);
+        this.carrierSystem.registerEvents(eventBus);
+        this.registerSystem(this.carrierSystem);
+
+        // 5. Lumberjack AI — issues movement commands (runs after carrier)
         this.lumberjackSystem = new LumberjackSystem(gameState);
         this.registerSystem(this.lumberjackSystem);
 
-        // Wire up entity removal callback for idle state cleanup
+        // Wire up entity removal callback for cleanup
         gameState.onEntityRemoved = (entityId: number) => {
             this.idleBehaviorSystem.cleanupIdleState(entityId);
+            this.handleEntityRemoved(entityId);
         };
 
         // Set up page visibility tracking for background throttling
@@ -121,6 +135,51 @@ export class GameLoop {
     /** Register a tick system to be updated each tick */
     public registerSystem(system: TickSystem): void {
         this.systems.push(system);
+    }
+
+    /**
+     * Building types that act as logistics hubs (taverns/carrier bases).
+     * These buildings get service areas when created.
+     */
+    private static readonly SERVICE_AREA_BUILDINGS: ReadonlySet<BuildingType> = new Set([
+        BuildingType.ResidenceSmall,
+        BuildingType.ResidenceMedium,
+        BuildingType.ResidenceBig,
+        BuildingType.StorageArea,
+    ]);
+
+    /**
+     * Handle building creation - creates inventory and service area as needed.
+     */
+    private handleBuildingCreated(entityId: number, buildingType: BuildingType, x: number, y: number): void {
+        const entity = this.gameState.getEntity(entityId);
+        const playerId = entity?.player ?? 0;
+
+        // Create service area for logistics hubs (taverns/warehouses)
+        if (GameLoop.SERVICE_AREA_BUILDINGS.has(buildingType)) {
+            this.gameState.serviceAreaManager.createServiceArea(entityId, playerId, x, y);
+        }
+
+        // Create inventory for buildings with input/output slots
+        if (hasInventory(buildingType) || isProductionBuilding(buildingType)) {
+            this.gameState.inventoryManager.createInventory(entityId, buildingType);
+        }
+    }
+
+    /**
+     * Handle entity removal - cleans up carrier state, inventory, and service areas.
+     */
+    private handleEntityRemoved(entityId: number): void {
+        // Clean up carrier state if this was a carrier
+        if (this.gameState.carrierManager.hasCarrier(entityId)) {
+            this.gameState.carrierManager.removeCarrier(entityId);
+        }
+
+        // Clean up service area if this building had one
+        this.gameState.serviceAreaManager.removeServiceArea(entityId);
+
+        // Clean up inventory if this building had one
+        this.gameState.inventoryManager.removeInventory(entityId);
     }
 
     /** Provide terrain data so movement obstacle resolution can function */

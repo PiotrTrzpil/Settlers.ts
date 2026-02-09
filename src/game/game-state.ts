@@ -3,6 +3,9 @@ import type { BuildingState } from './features/building-construction';
 import { BuildingConstructionPhase, DEFAULT_CONSTRUCTION_DURATION } from './features/building-construction';
 import { EMaterialType } from './economy';
 import { MovementSystem, MovementController } from './systems/movement/index';
+import { CarrierManager } from './features/carriers';
+import { BuildingInventoryManager } from './features/inventory';
+import { ServiceAreaManager } from './features/service-areas';
 
 /**
  * Legacy UnitState interface for backward compatibility.
@@ -93,6 +96,15 @@ export class GameState {
 
     /** Legacy adapter for backward compatibility - wraps movement system */
     public readonly unitStates: UnitStateMap;
+
+    /** Carrier state manager */
+    public readonly carrierManager: CarrierManager = new CarrierManager();
+
+    /** Building inventory manager */
+    public readonly inventoryManager: BuildingInventoryManager = new BuildingInventoryManager();
+
+    /** Service area manager for logistics hubs */
+    public readonly serviceAreaManager: ServiceAreaManager = new ServiceAreaManager();
 
     /** Building construction state tracking */
     public buildingStates: Map<number, BuildingState> = new Map();
