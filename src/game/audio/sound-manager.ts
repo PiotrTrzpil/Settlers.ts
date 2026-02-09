@@ -5,6 +5,8 @@ import { FileManager } from '@/utilities/file-manager';
 import { SilFileReader } from '@/resources/gfx/sil-file-reader';
 import { SndFileReader } from '@/resources/gfx/snd-file-reader';
 import { MusicController } from './music-controller';
+import { SfxPoolManager } from './sfx-pool';
+import { Race } from '@/game/renderer/sprite-metadata';
 
 /**
  * Manages all audio playback using Howler.js.
@@ -19,7 +21,10 @@ export class SoundManager implements IAudioManager {
     private static log = new LogHandler('SoundManager');
 
     private sounds: Map<string, Howl> = new Map();
+    /** Store config references for cached sounds to look up base volume */
+    private soundConfigs: Map<string, SoundConfig> = new Map();
     private musicController: MusicController;
+    private sfxPoolManager: SfxPoolManager;
 
     private musicVolume = 0.5;
     private sfxVolume = 1.0;
@@ -32,6 +37,10 @@ export class SoundManager implements IAudioManager {
 
     private constructor() {
         this.musicController = new MusicController(this);
+        this.sfxPoolManager = new SfxPoolManager(
+            (config) => this.createHowlForConfig(config),
+            () => this.sfxVolume * this.masterVolume
+        );
     }
 
     public static getInstance(): SoundManager {
@@ -58,9 +67,6 @@ export class SoundManager implements IAudioManager {
 
         SoundManager.log.debug('SoundManager initialized');
 
-        // Cleanup any strict mode / browser policy things?
-        // Howler handles this mostly.
-
         // Setup global unlock for AudioContext
         this.setupAudioUnlock();
 
@@ -70,6 +76,49 @@ export class SoundManager implements IAudioManager {
         } catch (e) {
             SoundManager.log.warn('Failed to load default sound archive: ' + e);
         }
+
+        // Preload sounds marked for preloading and register pools
+        this.preloadConfiguredSounds();
+    }
+
+    /**
+     * Preload sounds marked with preload: true in SOUND_LIBRARY.
+     * Also registers pooled sounds with poolSize > 0.
+     */
+    private preloadConfiguredSounds(): void {
+        let preloadCount = 0;
+        let poolCount = 0;
+
+        for (const config of SOUND_LIBRARY) {
+            // Register pooled sounds
+            if (config.poolSize && config.poolSize > 0) {
+                this.sfxPoolManager.registerPool(config, config.poolSize);
+                poolCount++;
+            }
+
+            // Preload sounds (skip music, it's loaded on demand)
+            if (config.preload && config.type !== SoundType.Music) {
+                this.loadSound(config);
+                preloadCount++;
+            }
+        }
+
+        if (preloadCount > 0 || poolCount > 0) {
+            SoundManager.log.debug(`Preloaded ${preloadCount} sounds, registered ${poolCount} pools`);
+        }
+    }
+
+    /**
+     * Preload specific sounds by ID.
+     */
+    public preloadSounds(soundIds: string[]): void {
+        for (const id of soundIds) {
+            const config = SOUND_LIBRARY.find(s => s.id === id);
+            if (config) {
+                this.loadSound(config);
+            }
+        }
+        SoundManager.log.debug(`Preloaded ${soundIds.length} sounds on demand`);
     }
 
     public get isMusicEnabled(): boolean {
@@ -137,6 +186,13 @@ export class SoundManager implements IAudioManager {
             sound.unload();
         });
         this.sounds.clear();
+        this.soundConfigs.clear();
+
+        // Unload SFX pools
+        this.sfxPoolManager.unload();
+
+        // Dispose SndReader to revoke blob URLs and free memory
+        this.sndReader?.dispose();
 
         this.fileManager = null;
         this.silReader = null;
@@ -172,6 +228,7 @@ export class SoundManager implements IAudioManager {
     /**
      * Load a sound into the cache if not already present.
      * Music is NOT cached because we manage its lifecycle separately (fade in/out, unload).
+     * Sounds are created with neutral volume (1.0) - apply volume at play time.
      */
     public loadSound(config: SoundConfig): Howl | null {
         // Don't cache music - it's managed by MusicController with fading/unloading
@@ -179,8 +236,6 @@ export class SoundManager implements IAudioManager {
         if (config.type !== SoundType.Music && this.sounds.has(config.id)) {
             return this.sounds.get(config.id)!;
         }
-
-        const vol = (config.volume ?? 1.0) * (config.type === SoundType.Music ? this.musicVolume : this.sfxVolume);
 
         let src: string | string[] = [config.path];
         let format: string[] | undefined;
@@ -201,14 +256,13 @@ export class SoundManager implements IAudioManager {
             }
         }
 
+        // Create with neutral volume - apply config/category/master volume at play time
         const sound = new Howl({
             src: src,
             format: format,
             loop: config.loop,
-            volume: vol,
+            volume: 1.0,
             autoplay: false,
-            // Use Web Audio API (default) to avoid HTML5 pool exhaustion
-            // html5: config.type === SoundType.Music, 
             onloaderror: (id, err) => {
                 SoundManager.log.error(`Failed to load sound ${config.id}: ${err}`);
             },
@@ -227,8 +281,55 @@ export class SoundManager implements IAudioManager {
         // Only cache SFX, not music (music is managed by MusicController)
         if (config.type !== SoundType.Music) {
             this.sounds.set(config.id, sound);
+            this.soundConfigs.set(config.id, config);
         }
         return sound;
+    }
+
+    /**
+     * Get the effective volume for a sound.
+     */
+    public getEffectiveVolume(config: SoundConfig): number {
+        const baseVol = config.volume ?? 1.0;
+        const categoryVol = config.type === SoundType.Music ? this.musicVolume : this.sfxVolume;
+        return baseVol * categoryVol * this.masterVolume;
+    }
+
+    /**
+     * Create a Howl instance without caching (used for SFX pools).
+     */
+    private createHowlForConfig(config: SoundConfig): Howl | null {
+        let src: string | string[] = [config.path];
+        let format: string[] | undefined;
+
+        if (config.type === SoundType.SFX && config.path.startsWith('Snd:')) {
+            if (!this.sndReader) return null;
+            const index = parseInt(config.path.split(':')[1]);
+            const blobUrl = this.sndReader.getSound(index);
+            if (!blobUrl) return null;
+            src = [blobUrl];
+            format = ['wav'];
+        }
+
+        return new Howl({
+            src,
+            format,
+            loop: config.loop,
+            volume: (config.volume ?? 1.0) * this.sfxVolume * this.masterVolume,
+            autoplay: false,
+        });
+    }
+
+    /**
+     * Register a sound for pooling (rapid-fire sounds like combat).
+     * @param soundId The sound ID from SOUND_LIBRARY
+     * @param poolSize Number of concurrent instances (default: 4)
+     */
+    public registerPooledSound(soundId: string, poolSize = 4): void {
+        const config = SOUND_LIBRARY.find(s => s.id === soundId);
+        if (config) {
+            this.sfxPoolManager.registerPool(config, poolSize);
+        }
     }
 
     public stopMusic(): void {
@@ -239,7 +340,7 @@ export class SoundManager implements IAudioManager {
         this.musicController.playMusic(soundId, fadeDuration);
     }
 
-    public playRandomMusic(race: string): void {
+    public playRandomMusic(race: Race): void {
         this.musicController.playRandomMusic(race);
     }
 
@@ -254,21 +355,27 @@ export class SoundManager implements IAudioManager {
 
     /**
      * Play a sound effect at a specific world position.
+     * Uses pooled sounds if registered, otherwise plays directly.
      * @param soundId The ID of the sound to play (from SOUND_LIBRARY)
      * @param x World X position
      * @param y World Y position
      * @param index Optional direct index for testing raw sounds from archive
      */
     public playSfx(soundId: string, x?: number, y?: number, index?: number): void {
+        // Check for pooled sound first (for rapid-fire sounds)
+        if (soundId && index === undefined && this.sfxPoolManager.play(soundId, x, y)) {
+            return; // Played via pool
+        }
+
         let sound: Howl | null = null;
-        let baseVol = this.sfxVolume;
+        let effectiveVol = this.sfxVolume * this.masterVolume;
 
         // Allow playing by ID
         if (soundId) {
             const config = SOUND_LIBRARY.find(s => s.id === soundId);
             if (config) {
                 sound = this.loadSound(config);
-                baseVol *= (config.volume ?? 1.0);
+                effectiveVol = this.getEffectiveVolume(config);
             }
         }
 
@@ -279,7 +386,7 @@ export class SoundManager implements IAudioManager {
                 sound = new Howl({
                     src: [blobUrl],
                     format: ['wav'],
-                    volume: this.sfxVolume
+                    volume: 1.0, // Neutral, we set volume below
                 });
             }
         }
@@ -289,7 +396,7 @@ export class SoundManager implements IAudioManager {
         }
 
         const id = sound.play();
-        sound.volume(baseVol * this.masterVolume, id);
+        sound.volume(effectiveVol, id);
 
         if (x !== undefined && y !== undefined) {
             sound.pos(x, y, 0, id);
@@ -308,6 +415,7 @@ export class SoundManager implements IAudioManager {
         this.masterVolume = Math.max(0, Math.min(1, vol));
         Howler.volume(this.masterVolume);
         this.musicController.updateVolume();
+        this.sfxPoolManager.updateVolume();
         this.saveSettings();
     }
 
@@ -315,5 +423,15 @@ export class SoundManager implements IAudioManager {
         this.musicVolume = Math.max(0, Math.min(1, vol));
         this.musicController.updateVolume();
         this.saveSettings();
+    }
+
+    public setSfxVolume(vol: number): void {
+        this.sfxVolume = Math.max(0, Math.min(1, vol));
+        this.sfxPoolManager.updateVolume();
+        this.saveSettings();
+    }
+
+    public getSfxVolume(): number {
+        return this.sfxVolume;
     }
 }

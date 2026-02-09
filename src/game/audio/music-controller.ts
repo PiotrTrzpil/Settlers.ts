@@ -1,6 +1,7 @@
 import { Howl } from 'howler';
 import { LogHandler } from '@/utilities/log-handler';
 import { SoundType, SOUND_LIBRARY, IAudioManager } from './audio-definitions';
+import { Race } from '@/game/renderer/sprite-metadata';
 
 export class MusicController {
     private static log = new LogHandler('MusicController');
@@ -9,8 +10,17 @@ export class MusicController {
     private currentMusic: Howl | null = null;
     private _currentMusicId: string | null = null;
     private fadingOutMusic: Howl | null = null;
-    private currentRacePlaylist: string | null = null;
+    private currentRacePlaylist: Race | null = null;
     private lastMusicId: string | null = null;
+
+    /** Music prefix mapping by race */
+    private static readonly RACE_MUSIC_PREFIX: Record<Race, string> = {
+        [Race.Roman]: 'MUSIC_ROMAN',
+        [Race.Viking]: 'MUSIC_VIKING',
+        [Race.Mayan]: 'MUSIC_MAYAN',
+        [Race.DarkTribe]: 'MUSIC_DARK',
+        [Race.Trojan]: 'MUSIC_TROJAN',
+    };
 
     // Pending music for autoplay policy
     private pendingMusicId: string | null = null;
@@ -72,7 +82,7 @@ export class MusicController {
             } else if (this.lastMusicId) {
                 this.playMusic(this.lastMusicId);
             } else {
-                this.playRandomMusic('Roman');
+                this.playRandomMusic(Race.Roman);
             }
         }
     }
@@ -190,16 +200,10 @@ export class MusicController {
         MusicController.log.debug(`Playing music: ${soundId}`);
     }
 
-    public playRandomMusic(race: string): void {
+    public playRandomMusic(race: Race): void {
         this.currentRacePlaylist = race; // Set context for auto-advance
 
-        // Map race string to prefix (e.g. 'roman' -> 'MUSIC_ROMAN')
-        let prefix = 'MUSIC_ROMAN';
-        const r = race.toLowerCase();
-        if (r.includes('viking')) prefix = 'MUSIC_VIKING';
-        else if (r.includes('mayan')) prefix = 'MUSIC_MAYAN';
-        else if (r.includes('trojan')) prefix = 'MUSIC_TROJAN';
-        else if (r.includes('dark')) prefix = 'MUSIC_DARK';
+        const prefix = MusicController.RACE_MUSIC_PREFIX[race];
 
         // Filter: Match prefix, is music, NOT a battle track
         const tracks = SOUND_LIBRARY.filter(s =>
@@ -218,7 +222,7 @@ export class MusicController {
             const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
             this.playMusic(randomTrack.id);
         } else {
-            MusicController.log.warn(`No music found for race: ${race}`);
+            MusicController.log.warn(`No music found for race: ${Race[race]}`);
         }
     }
 

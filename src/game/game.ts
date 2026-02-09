@@ -9,6 +9,7 @@ import { TerritoryMap } from './buildings/territory';
 import { isBuildable } from './systems/placement';
 import { populateMapObjects } from './systems/map-objects';
 import { SoundManager } from './audio/sound-manager';
+import { Race } from './renderer/sprite-metadata';
 
 /** contains the game state */
 export class Game {
@@ -59,7 +60,7 @@ export class Game {
         this.soundManager.init(this.fileManager).then(() => {
             if (!this.soundManager.currentMusicId) {
                 console.log('Game: SoundManager initialized, requesting music...');
-                this.soundManager.playRandomMusic('Roman');
+                this.soundManager.playRandomMusic(Race.Roman);
             }
         });
 

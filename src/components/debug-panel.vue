@@ -370,7 +370,7 @@ function updateMusicVolume(e: Event) {
 }
 
 function playRandomMusic() {
-    getGame()?.soundManager.playRandomMusic(RACE_NAMES[props.currentRace as Race]);
+    getGame()?.soundManager.playRandomMusic(props.currentRace as Race);
 }
 
 // Map objects functionality (extracted to composable)

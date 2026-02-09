@@ -120,7 +120,11 @@ function createRenderCallback(
         }
 
         if (landscapeRenderer) landscapeRenderer.debugGrid = ctx.debugGrid;
-        if (g) debugStats.updateFromGame(g);
+        if (g) {
+            debugStats.updateFromGame(g);
+            // Update spatial audio listener position to camera center
+            g.soundManager.updateListener(renderer.viewPoint.x, renderer.viewPoint.y);
+        }
 
         debugStats.state.cameraX = Math.round(renderer.viewPoint.x * 10) / 10;
         debugStats.state.cameraY = Math.round(renderer.viewPoint.y * 10) / 10;

@@ -17,6 +17,10 @@ export interface SoundConfig {
     type: SoundType;
     volume?: number;
     loop?: boolean;
+    /** If true, preload during initialization */
+    preload?: boolean;
+    /** Pool size for rapid-fire SFX (e.g., combat sounds) */
+    poolSize?: number;
 }
 
 /**
