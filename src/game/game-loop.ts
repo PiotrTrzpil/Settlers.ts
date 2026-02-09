@@ -89,6 +89,7 @@ export class GameLoop {
         // Register all tick systems in execution order:
         // 1. Movement — updates unit positions (must run first)
         gameState.movement.setEventBus(eventBus);
+        gameState.movement.setRng(gameState.rng);
         this.registerSystem(gameState.movement);
 
         // 2. Idle behavior — updates animation based on movement events
@@ -97,18 +98,16 @@ export class GameLoop {
         this.registerSystem(this.idleBehaviorSystem);
 
         // 3. Building construction — terrain modification, phase transitions
-        this.constructionSystem = new BuildingConstructionSystem(gameState);
+        this.constructionSystem = new BuildingConstructionSystem({
+            gameState,
+            buildingStateManager: gameState.buildingStateManager,
+        });
         this.constructionSystem.registerEvents(eventBus);
         this.registerSystem(this.constructionSystem);
 
-        // Share the construction system's buildingStates map with GameState
-        // so existing code (commands, renderer) can access it via state.buildingStates
-        gameState.buildingStates = this.constructionSystem.buildingStates;
-
-        // Delegate building state creation to the construction system
-        // Also wire up inventory and service area creation
+        // Wire up inventory and service area creation
+        // (Building state creation is handled directly by GameState.addEntity)
         gameState.onBuildingCreated = (entityId, buildingType, x, y) => {
-            this.constructionSystem.createBuildingState(entityId, buildingType, x, y);
             this.handleBuildingCreated(entityId, buildingType as BuildingType, x, y);
         };
 

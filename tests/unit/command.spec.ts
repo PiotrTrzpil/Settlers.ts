@@ -93,7 +93,7 @@ describe('Command System – edge cases', () => {
             const originalGroundHeight = new Uint8Array(map.groundHeight);
 
             const building = addBuilding(state, 10, 10, 1);
-            const bs = state.buildingStates.get(building.id)!;
+            const bs = state.buildingStateManager.getBuildingState(building.id)!;
 
             bs.originalTerrain = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
             bs.terrainModified = true;

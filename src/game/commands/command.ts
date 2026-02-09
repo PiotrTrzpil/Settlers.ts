@@ -64,7 +64,7 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): b
 
     // If "place as completed" is enabled, immediately mark building as completed
     if (gameSettings.state.placeBuildingsCompleted) {
-        const buildingState = state.buildingStates.get(entity.id);
+        const buildingState = state.buildingStateManager.getBuildingState(entity.id);
         if (buildingState) {
             buildingState.phase = BuildingConstructionPhase.Completed;
             buildingState.phaseProgress = 1;
@@ -272,7 +272,7 @@ function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): boo
     if (!entity) return false;
 
     if (entity.type === EntityType.Building) {
-        const bs = state.buildingStates.get(cmd.entityId);
+        const bs = state.buildingStateManager.getBuildingState(cmd.entityId);
         if (bs) {
             ctx.eventBus.emit('building:removed', { entityId: cmd.entityId, buildingState: bs });
         }

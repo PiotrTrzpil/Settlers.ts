@@ -51,7 +51,7 @@ describe('populateMapBuildings', () => {
         const entity = state.getEntityAt(10, 10);
         expect(entity).toBeDefined();
 
-        const buildingState = state.buildingStates.get(entity!.id);
+        const buildingState = state.buildingStateManager.getBuildingState(entity!.id);
         expect(buildingState).toBeDefined();
         expect(buildingState!.phase).toBe(BuildingConstructionPhase.Completed);
         expect(buildingState!.phaseProgress).toBe(1.0);

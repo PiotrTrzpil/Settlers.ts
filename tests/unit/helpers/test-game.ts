@@ -9,6 +9,12 @@ import { GameState, UnitStateView } from '@/game/game-state';
 import { EntityType, BuildingType, type Entity } from '@/game/entity';
 import { createTestMap, type TestMap } from './test-map';
 import { EventBus } from '@/game/event-bus';
+import {
+    BuildingConstructionPhase,
+    BuildingConstructionSystem,
+    type BuildingState,
+    type TerrainContext,
+} from '@/game/features/building-construction';
 
 // ─── GameState factory ──────────────────────────────────────────────
 
@@ -42,6 +48,7 @@ export interface TestContext {
 /**
  * Create a complete test context with GameState, TestMap, and EventBus.
  * The state is initialized with terrain data from the map.
+ * Building states are automatically created by GameState.addEntity().
  *
  * @param mapWidth - Map width (default: 64)
  * @param mapHeight - Map height (default: 64)
@@ -169,13 +176,6 @@ export function createReturnHomeJob(): CarrierJob {
 
 // ─── Building construction helpers ──────────────────────────────────
 
-import {
-    BuildingConstructionPhase,
-    BuildingConstructionSystem,
-    type BuildingState,
-    type TerrainContext,
-} from '@/game/features/building-construction';
-
 /**
  * Create a BuildingState object for testing building construction.
  * Useful for testing terrain leveling and construction phases.
@@ -206,7 +206,10 @@ export function makeBuildingState(
  * Used for testing construction progression.
  */
 export function tickConstruction(gameState: GameState, dt: number, ctx: TerrainContext): void {
-    const system = new BuildingConstructionSystem(gameState);
+    const system = new BuildingConstructionSystem({
+        gameState,
+        buildingStateManager: gameState.buildingStateManager,
+    });
     system.setTerrainContext(ctx);
     system.tick(dt);
 }
@@ -221,7 +224,10 @@ import { executeCommand } from '@/game/commands';
  */
 export function createTestEventBus(state: GameState, map: TestMap): EventBus {
     const eventBus = new EventBus();
-    const system = new BuildingConstructionSystem(state);
+    const system = new BuildingConstructionSystem({
+        gameState: state,
+        buildingStateManager: state.buildingStateManager,
+    });
     system.setTerrainContext({
         groundType: map.groundType,
         groundHeight: map.groundHeight,

@@ -55,13 +55,14 @@ function syncEntityRendererState(
     viewPoint: import('@/game/renderer/i-view-point').IViewPoint
 ): void {
     // Build render context using the builder pattern
+    const buildingStates = g.state.buildingStateManager.buildingStates;
     const renderContext = createRenderContext()
         .entities(g.state.entities)
         .unitStates(g.state.unitStates)
         .resourceStates(g.state.resourceStates)
-        .buildingStates(g.state.buildingStates)
+        .buildingStates(buildingStates)
         .buildingVisualStateGetter((entityId) => {
-            const state = g.state.buildingStates.get(entityId);
+            const state = g.state.buildingStateManager.getBuildingState(entityId);
             return getBuildingVisualState(state);
         })
         .selection({

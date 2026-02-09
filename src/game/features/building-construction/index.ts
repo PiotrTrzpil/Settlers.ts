@@ -22,16 +22,19 @@ export type {
 } from './types';
 export { BuildingConstructionPhase } from './types';
 
+// Manager (owns building states, lives on GameState)
+export { BuildingStateManager, DEFAULT_CONSTRUCTION_DURATION } from './building-state-manager';
+
 // System (for registration with GameLoop)
-export { BuildingConstructionSystem, BUILDING_SPAWN_ON_COMPLETE, DEFAULT_CONSTRUCTION_DURATION } from './construction-system';
+export { BuildingConstructionSystem, BUILDING_SPAWN_ON_COMPLETE } from './construction-system';
 
 // Queries (for renderers)
 export { getBuildingVisualState } from './visual-state';
 
-// Terrain functions (re-exported for backward compatibility and tests)
+// Terrain functions (for testing terrain modification)
 export {
     captureOriginalTerrain,
     applyTerrainLeveling,
     restoreOriginalTerrain,
     CONSTRUCTION_SITE_GROUND_TYPE,
-} from './internal/terrain-capture';
+} from './terrain';

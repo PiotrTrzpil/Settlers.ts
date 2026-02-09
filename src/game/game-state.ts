@@ -1,12 +1,12 @@
 import { Entity, EntityType, UnitType, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE, isUnitTypeSelectable, getUnitTypeSpeed } from './entity';
-import type { BuildingState } from './features/building-construction';
-import { BuildingConstructionPhase, DEFAULT_CONSTRUCTION_DURATION } from './features/building-construction';
 import { EMaterialType } from './economy';
 import { MovementSystem, MovementController } from './systems/movement/index';
 import { CarrierManager } from './features/carriers';
 import { BuildingInventoryManager } from './features/inventory';
+import { BuildingStateManager } from './features/building-construction';
 import { ServiceAreaManager } from './features/service-areas';
 import { RequestManager } from './features/logistics';
+import { SeededRng, createGameRng } from './rng';
 
 /**
  * Legacy UnitState interface for backward compatibility.
@@ -110,8 +110,12 @@ export class GameState {
     /** Resource request manager for logistics matching */
     public readonly requestManager: RequestManager = new RequestManager();
 
-    /** Building construction state tracking */
-    public buildingStates: Map<number, BuildingState> = new Map();
+    /** Building construction state manager */
+    public readonly buildingStateManager: BuildingStateManager = new BuildingStateManager();
+
+    /** Seeded RNG for deterministic game logic - use this instead of Math.random() */
+    public readonly rng: SeededRng;
+
     /** Stacked resource state tracking (quantity of items in each stack) */
     public resourceStates: Map<number, StackedResourceState> = new Map();
     /** Primary selection (first selected entity or single selection) */
@@ -129,7 +133,8 @@ export class GameState {
     /** Optional callback for building creation (delegates to BuildingConstructionSystem when wired up) */
     public onBuildingCreated: ((entityId: number, buildingType: number, x: number, y: number) => void) | null = null;
 
-    constructor() {
+    constructor(seed?: number) {
+        this.rng = createGameRng(seed);
         this.unitStates = new UnitStateMap(this.movement);
 
         // Set up movement system callbacks
@@ -214,24 +219,10 @@ export class GameState {
         }
 
         if (type === EntityType.Building) {
-            if (this.onBuildingCreated) {
-                // Delegate to BuildingConstructionSystem (production path)
-                this.onBuildingCreated(entity.id, subType, x, y);
-            } else {
-                // Standalone fallback for tests without GameLoop
-                this.buildingStates.set(entity.id, {
-                    entityId: entity.id,
-                    buildingType: subType as BuildingType,
-                    phase: BuildingConstructionPhase.TerrainLeveling,
-                    phaseProgress: 0,
-                    totalDuration: DEFAULT_CONSTRUCTION_DURATION,
-                    elapsedTime: 0,
-                    tileX: x,
-                    tileY: y,
-                    originalTerrain: null,
-                    terrainModified: false,
-                });
-            }
+            // Create building state directly (GameState owns buildingStateManager)
+            this.buildingStateManager.createBuildingState(entity.id, subType as BuildingType, x, y);
+            // Notify listeners for additional setup (inventory, service areas)
+            this.onBuildingCreated?.(entity.id, subType, x, y);
         }
 
         if (type === EntityType.StackedResource) {
@@ -267,7 +258,6 @@ export class GameState {
 
         this.movement.removeController(id);
         this.onEntityRemoved?.(id);
-        this.buildingStates.delete(id);
         this.resourceStates.delete(id);
 
         this.selectedEntityIds.delete(id);

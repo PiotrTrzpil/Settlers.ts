@@ -52,7 +52,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         expect(state.tileOccupancy.get('20,20')).toBe(building!.id);
 
         // ── Step 3: Simulate construction phases ──
-        const bs = state.buildingStates.get(building!.id)!;
+        const bs = state.buildingStateManager.getBuildingState(building!.id)!;
         expect(bs).toBeDefined();
         bs.totalDuration = 10;
 
@@ -152,7 +152,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
 
         const state = createGameState();
         const building = addBuilding(state, 10, 10, BuildingType.WoodcutterHut, 0);
-        const bs = state.buildingStates.get(building.id)!;
+        const bs = state.buildingStateManager.getBuildingState(building.id)!;
 
         // Capture terrain
         bs.originalTerrain = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
@@ -185,7 +185,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         const state = createGameState();
 
         addBuilding(state, 10, 10, BuildingType.WoodcutterHut, 0);
-        const bs = [...state.buildingStates.values()][0];
+        const bs = [...state.buildingStateManager.buildingStates.values()][0];
         bs.totalDuration = 10;
 
         let terrainNotifications = 0;
