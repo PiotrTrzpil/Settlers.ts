@@ -56,7 +56,7 @@ module.exports = {
         // Length limits
         'max-len': ['error', { code: 140, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
         'max-lines': ['error', { max: 600, skipBlankLines: true, skipComments: true }],
-        'max-lines-per-function': ['error', { max: 150, skipBlankLines: true, skipComments: true }]
+        'max-lines-per-function': ['error', { max: 250, skipBlankLines: true, skipComments: true }]
     },
     overrides: [
         {

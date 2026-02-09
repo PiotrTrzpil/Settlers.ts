@@ -16,18 +16,24 @@ import {
     placeBuilding,
     removeEntity,
 } from '../helpers/test-game';
-import { EntityType, BuildingType, BuildingConstructionPhase, getBuildingFootprint } from '@/game/entity';
+import { EntityType, BuildingType, getBuildingFootprint } from '@/game/entity';
 import {
+    BuildingConstructionPhase,
+    BuildingConstructionSystem,
     captureOriginalTerrain,
     applyTerrainLeveling,
     restoreOriginalTerrain,
-    CONSTRUCTION_SITE_GROUND_TYPE,
-} from '@/game/systems/terrain-leveling';
-import {
-    updateBuildingConstruction,
     getBuildingVisualState,
+    CONSTRUCTION_SITE_GROUND_TYPE,
     type TerrainContext,
-} from '@/game/buildings/construction';
+} from '@/game/features/building-construction';
+
+/** Create a BuildingConstructionSystem with terrain context, tick it once. */
+function tickConstruction(state: ReturnType<typeof createGameState>, dt: number, ctx: TerrainContext): void {
+    const system = new BuildingConstructionSystem(state);
+    system.setTerrainContext(ctx);
+    system.tick(dt);
+}
 
 describe('Building Lifecycle: place → construct → remove', () => {
     it('full lifecycle from placement through construction to removal', () => {
@@ -65,7 +71,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         };
 
         // Phase 1: TerrainLeveling (0-20%) - Poles phase is skipped (duration=0)
-        updateBuildingConstruction(state, 0.5, ctx);
+        tickConstruction(state, 0.5, ctx);
         expect(bs.phase).toBe(BuildingConstructionPhase.TerrainLeveling);
         let visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(true);
@@ -73,7 +79,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         expect(bs.originalTerrain).not.toBeNull();
 
         // Advance through terrain leveling
-        updateBuildingConstruction(state, 0.5, ctx);
+        tickConstruction(state, 0.5, ctx);
 
         // Footprint tiles should have construction ground type
         const footprint = getBuildingFootprint(20, 20, BuildingType.Lumberjack);
@@ -82,20 +88,20 @@ describe('Building Lifecycle: place → construct → remove', () => {
         }
 
         // Phase 2: ConstructionRising (20-55%)
-        updateBuildingConstruction(state, 2.0, ctx);
+        tickConstruction(state, 2.0, ctx);
         expect(bs.phase).toBe(BuildingConstructionPhase.ConstructionRising);
         visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(true);
         expect(visual.verticalProgress).toBeGreaterThan(0);
 
         // Phase 3: CompletedRising (55-100%)
-        updateBuildingConstruction(state, 4.0, ctx);
+        tickConstruction(state, 4.0, ctx);
         expect(bs.phase).toBe(BuildingConstructionPhase.CompletedRising);
         visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(false);
 
         // Phase 4: Completed
-        updateBuildingConstruction(state, 5.0, ctx);
+        tickConstruction(state, 5.0, ctx);
         expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
         visual = getBuildingVisualState(bs);
         expect(visual.isCompleted).toBe(true);
@@ -198,7 +204,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         };
 
         // TerrainLeveling starts immediately (Poles phase is skipped)
-        updateBuildingConstruction(state, 0.5, ctx);
+        tickConstruction(state, 0.5, ctx);
         expect(terrainNotifications).toBeGreaterThan(0); // Terrain mods during TerrainLeveling
     });
 });

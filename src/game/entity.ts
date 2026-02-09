@@ -26,15 +26,18 @@ export enum EntityType {
 // Map object types
 export { MapObjectType } from './map-object-types';
 
-// Building types, sizes, and construction state
-export type { BuildingSize, CapturedTerrainTile, ConstructionSiteOriginalTerrain, BuildingState } from './buildings';
+// Building types and sizes
+export type { BuildingSize } from './buildings';
 export {
     BuildingType,
     BUILDING_SIZE,
     getBuildingSize,
     getBuildingFootprint,
-    BuildingConstructionPhase,
 } from './buildings';
+
+// Building construction (from feature module)
+export type { CapturedTerrainTile, ConstructionSiteOriginalTerrain, BuildingState, BuildingSpawnConfig } from './features/building-construction';
+export { BuildingConstructionPhase, BUILDING_SPAWN_ON_COMPLETE } from './features/building-construction';
 
 // Unit types and configuration
 export type { UnitTypeConfig } from './unit-types';
@@ -45,10 +48,6 @@ export {
     getUnitTypeSpeed,
     BUILDING_UNIT_TYPE,
 } from './unit-types';
-
-// Building construction (spawn config)
-export type { BuildingSpawnConfig } from './buildings';
-export { BUILDING_SPAWN_ON_COMPLETE } from './buildings';
 
 export interface Entity {
     id: number;

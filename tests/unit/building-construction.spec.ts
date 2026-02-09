@@ -6,18 +6,18 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { BuildingType, BuildingConstructionPhase, type BuildingState, getBuildingFootprint, EntityType } from '@/game/entity';
+import { BuildingType, getBuildingFootprint, EntityType } from '@/game/entity';
 import {
+    BuildingConstructionPhase,
+    type BuildingState,
+    type TerrainContext,
+    BuildingConstructionSystem,
+    getBuildingVisualState,
     captureOriginalTerrain,
     applyTerrainLeveling,
     restoreOriginalTerrain,
     CONSTRUCTION_SITE_GROUND_TYPE,
-} from '@/game/systems/terrain-leveling';
-import {
-    getBuildingVisualState,
-    updateBuildingConstruction,
-    type TerrainContext,
-} from '@/game/buildings/construction';
+} from '@/game/features/building-construction';
 import { GameState } from '@/game/game-state';
 import { createTestMap, TERRAIN } from './helpers/test-map';
 
@@ -44,6 +44,13 @@ function makeBuildingState(
         terrainModified: false,
         ...overrides,
     };
+}
+
+/** Create a BuildingConstructionSystem with terrain context, tick it once. */
+function tickConstruction(gameState: GameState, dt: number, ctx: TerrainContext): void {
+    const system = new BuildingConstructionSystem(gameState);
+    system.setTerrainContext(ctx);
+    system.tick(dt);
 }
 
 // ---------------------------------------------------------------------------
@@ -313,7 +320,7 @@ describe('Building Construction Phases', () => {
         });
     });
 
-    describe('updateBuildingConstruction with terrain', () => {
+    describe('BuildingConstructionSystem with terrain', () => {
         it('should transition through all phases and modify terrain', () => {
             const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
             groundType.fill(TERRAIN.GRASS);
@@ -334,7 +341,7 @@ describe('Building Construction Phases', () => {
 
             // Phase 1: TerrainLeveling starts immediately (0-20% = 0-2s)
             // First tick captures terrain and starts leveling
-            updateBuildingConstruction(gameState, 0.5, ctx);
+            tickConstruction(gameState, 0.5, ctx);
             expect(bs.phase).toBe(BuildingConstructionPhase.TerrainLeveling);
             expect(bs.originalTerrain).not.toBeNull();
             expect(terrainNotified).toBe(true);
@@ -346,15 +353,15 @@ describe('Building Construction Phases', () => {
             }
 
             // Phase 2: ConstructionRising (20-55% = 2-5.5s)
-            updateBuildingConstruction(gameState, 2.0, ctx);
+            tickConstruction(gameState, 2.0, ctx);
             expect(bs.phase).toBe(BuildingConstructionPhase.ConstructionRising);
 
             // Phase 3: CompletedRising (55-100% = 5.5-10s)
-            updateBuildingConstruction(gameState, 4.0, ctx);
+            tickConstruction(gameState, 4.0, ctx);
             expect(bs.phase).toBe(BuildingConstructionPhase.CompletedRising);
 
             // Phase 4: Completed
-            updateBuildingConstruction(gameState, 5.0, ctx);
+            tickConstruction(gameState, 5.0, ctx);
             expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
         });
     });
@@ -382,7 +389,7 @@ describe('Barracks unit spawning on construction complete', () => {
 
         // Fast-forward to just before completion
         bs.elapsedTime = bs.totalDuration - 0.1;
-        updateBuildingConstruction(gameState, 0.2, ctx);
+        tickConstruction(gameState, 0.2, ctx);
 
         // Building should now be completed
         expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
@@ -410,7 +417,7 @@ describe('Barracks unit spawning on construction complete', () => {
 
         // Complete the building
         bs.elapsedTime = bs.totalDuration - 0.1;
-        updateBuildingConstruction(gameState, 0.2, ctx);
+        tickConstruction(gameState, 0.2, ctx);
 
         const units = gameState.entities.filter(e => e.type === EntityType.Unit);
         for (const unit of units) {
@@ -432,7 +439,7 @@ describe('Barracks unit spawning on construction complete', () => {
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;
-        updateBuildingConstruction(gameState, 0.2, ctx);
+        tickConstruction(gameState, 0.2, ctx);
 
         expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
         // Lumberjack auto-spawns at placement time (via BUILDING_UNIT_TYPE), not on completion
@@ -466,7 +473,7 @@ describe('Barracks unit spawning on construction complete', () => {
 
         // Complete the building
         bs.elapsedTime = bs.totalDuration - 0.1;
-        updateBuildingConstruction(gameState, 0.2, ctx);
+        tickConstruction(gameState, 0.2, ctx);
 
         // Should have spawned fewer than 3 units (only 2 free tiles available)
         const units = gameState.entities.filter(e => e.type === EntityType.Unit);
@@ -496,7 +503,7 @@ describe('Barracks unit spawning on construction complete', () => {
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;
-        updateBuildingConstruction(gameState, 0.2, ctx);
+        tickConstruction(gameState, 0.2, ctx);
 
         // No units should spawn since all surrounding tiles are water
         const units = gameState.entities.filter(e => e.type === EntityType.Unit);
@@ -516,7 +523,7 @@ describe('Barracks unit spawning on construction complete', () => {
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;
-        updateBuildingConstruction(gameState, 0.2, ctx);
+        tickConstruction(gameState, 0.2, ctx);
 
         expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
         const units = gameState.entities.filter(e => e.type === EntityType.Unit);
@@ -539,7 +546,7 @@ describe('Barracks unit spawning on construction complete', () => {
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;
-        updateBuildingConstruction(gameState, 0.2, ctx);
+        tickConstruction(gameState, 0.2, ctx);
 
         const units = gameState.entities.filter(e => e.type === EntityType.Unit);
         expect(units).toHaveLength(4); // MediumHouse spawns 4
@@ -561,7 +568,7 @@ describe('Barracks unit spawning on construction complete', () => {
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;
-        updateBuildingConstruction(gameState, 0.2, ctx);
+        tickConstruction(gameState, 0.2, ctx);
 
         const units = gameState.entities.filter(e => e.type === EntityType.Unit);
         expect(units).toHaveLength(6); // LargeHouse spawns 6
@@ -583,7 +590,7 @@ describe('Barracks unit spawning on construction complete', () => {
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;
-        updateBuildingConstruction(gameState, 0.2, ctx);
+        tickConstruction(gameState, 0.2, ctx);
 
         const units = gameState.entities.filter(e => e.type === EntityType.Unit);
         expect(units).toHaveLength(3);

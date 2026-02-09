@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { BuildingConstructionPhase, EntityType } from '@/game/entity';
 import { executeCommand } from '@/game/commands/command';
-import { captureOriginalTerrain, applyTerrainLeveling, CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/systems/terrain-leveling';
+import { captureOriginalTerrain, applyTerrainLeveling, CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
 import { createTestMap, TERRAIN, setTerrainAt, blockColumn, type TestMap } from './helpers/test-map';
 import { createGameState, addUnit, addBuilding, createTestEventBus } from './helpers/test-game';
 import type { GameState } from '@/game/game-state';

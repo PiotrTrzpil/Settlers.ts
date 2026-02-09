@@ -3,7 +3,7 @@
  * Features register event handlers instead of being called directly.
  */
 
-import type { BuildingState } from './features/building-construction/types';
+import type { BuildingState } from './features/building-construction';
 
 /** Event map defining all game events and their payloads */
 export interface GameEvents {
