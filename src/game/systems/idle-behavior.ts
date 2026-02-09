@@ -18,6 +18,7 @@ import { EntityType } from '../entity';
 import { MovementController } from './movement/movement-controller';
 import {
     AnimationState,
+    ANIMATION_SEQUENCES,
     createAnimationState,
     setAnimationSequence,
     startDirectionTransition,
@@ -102,7 +103,7 @@ function updateUnitAnimation(
 ): AnimationState {
     // Create animation state if not present
     if (!animState) {
-        animState = createAnimationState('default', 0);
+        animState = createAnimationState(ANIMATION_SEQUENCES.DEFAULT, 0);
     }
 
     // Update any in-progress direction transitions
@@ -115,8 +116,8 @@ function updateUnitAnimation(
             startDirectionTransition(animState, newDir);
         }
         // Ensure walk animation is playing
-        if (animState.sequenceKey !== 'walk') {
-            setAnimationSequence(animState, 'walk', animState.direction);
+        if (animState.sequenceKey !== ANIMATION_SEQUENCES.WALK) {
+            setAnimationSequence(animState, ANIMATION_SEQUENCES.WALK, animState.direction);
         }
         // Reset idle state when moving
         idleState.idleTime = 0;
@@ -124,8 +125,8 @@ function updateUnitAnimation(
     // If idle, handle random direction changes
     else if (controller.state === 'idle' && !controller.isInTransit) {
         // Switch back to idle/default animation when stopped
-        if (animState.sequenceKey === 'walk') {
-            setAnimationSequence(animState, 'default', animState.direction);
+        if (animState.sequenceKey === ANIMATION_SEQUENCES.WALK) {
+            setAnimationSequence(animState, ANIMATION_SEQUENCES.DEFAULT, animState.direction);
         }
 
         idleState.idleTime += deltaSec;

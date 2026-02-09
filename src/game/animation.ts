@@ -6,6 +6,18 @@
 import { SpriteEntry } from './renderer/sprite-metadata';
 
 /**
+ * Well-known animation sequence keys.
+ * Shared between idle-behavior (producer) and sprite-metadata (registrar)
+ * so the contract isn't just magic strings.
+ */
+export const ANIMATION_SEQUENCES = {
+    /** Default/idle animation */
+    DEFAULT: 'default',
+    /** Walking/movement animation */
+    WALK: 'walk',
+} as const;
+
+/**
  * Default animation timing constants (in milliseconds).
  */
 export const ANIMATION_DEFAULTS = {

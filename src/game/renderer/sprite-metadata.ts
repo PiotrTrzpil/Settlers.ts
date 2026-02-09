@@ -1,7 +1,7 @@
 import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
 import { EMaterialType } from '../economy/material-type';
 import { AtlasRegion } from './entity-texture-atlas';
-import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS } from '../animation';
+import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS, ANIMATION_SEQUENCES } from '../animation';
 import { mapToArray, arrayToMap } from './sprite-metadata-helpers';
 
 /** Conversion factor from sprite pixels to world-space units */
@@ -701,19 +701,19 @@ export class SpriteMetadataRegistry {
         if (!firstFrame) return;
 
         const sequences = new Map<string, Map<number, AnimationSequence>>();
-        sequences.set('default', directionMap);
+        sequences.set(ANIMATION_SEQUENCES.DEFAULT, directionMap);
 
         // For units, also register 'walk' as an alias so the idle-behavior
         // system can switch between 'default' (idle) and 'walk' sequences.
         // Currently both point to the same animation data; separate idle/walk
         // sprites can be loaded independently in the future.
         if (entityType === EntityType.Unit) {
-            sequences.set('walk', directionMap);
+            sequences.set(ANIMATION_SEQUENCES.WALK, directionMap);
         }
 
         const animationData: AnimationData = {
             sequences,
-            defaultSequence: 'default',
+            defaultSequence: ANIMATION_SEQUENCES.DEFAULT,
         };
 
         // Get or create the subType map for this entity type
