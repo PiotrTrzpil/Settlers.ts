@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { JSDOM } from 'jsdom';
 
@@ -13,8 +13,14 @@ import { parseObjectInfo } from '@/resources/game-data/object-info-parser';
 
 const GAME_DATA_PATH = join(__dirname, '../../public/Siedler4/GameData');
 
+/** Check if game data files exist (they're gitignored game assets) */
+const hasGameDataFiles = existsSync(join(GAME_DATA_PATH, 'buildingInfo.xml'));
+
 describe('Game Data XML Parsers', () => {
-    describe('buildingInfo.xml parser', () => {
+    // These tests require game data files which are gitignored (original game assets)
+    const describeWithData = hasGameDataFiles ? describe : describe.skip;
+
+    describeWithData('buildingInfo.xml parser', () => {
         let xmlContent: string;
         let parsed: ReturnType<typeof parseBuildingInfo>;
 
@@ -119,7 +125,7 @@ describe('Game Data XML Parsers', () => {
         });
     });
 
-    describe('jobInfo.xml parser', () => {
+    describeWithData('jobInfo.xml parser', () => {
         let xmlContent: string;
         let parsed: ReturnType<typeof parseJobInfo>;
 
@@ -171,7 +177,7 @@ describe('Game Data XML Parsers', () => {
         });
     });
 
-    describe('objectInfo.xml parser', () => {
+    describeWithData('objectInfo.xml parser', () => {
         let xmlContent: string;
         let parsed: ReturnType<typeof parseObjectInfo>;
 
