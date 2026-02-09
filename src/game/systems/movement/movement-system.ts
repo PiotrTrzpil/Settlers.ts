@@ -1,10 +1,11 @@
 import { EntityType, TileCoord, tileKey } from '../../entity';
-import { MovementController } from './movement-controller';
+import { MovementController, MovementState } from './movement-controller';
 import { findPath } from '../pathfinding';
 import { isPassable } from '../../features/placement';
 import { GRID_DELTAS, getAllNeighbors } from '../hex-directions';
 import { findRandomFreeDirection, shouldYieldToPush } from './push-utils';
 import type { TickSystem } from '../../tick-system';
+import type { EventBus } from '../../event-bus';
 
 /** How many steps ahead to look when doing prefix path repair */
 const PATH_REPAIR_DISTANCE = 10;
@@ -24,6 +25,12 @@ export type GetEntityFn = (entityId: number) => { type: EntityType; x: number; y
  * MovementSystem manages all unit movement controllers and coordinates
  * their updates, collision resolution, and pathfinding.
  */
+/** Tracks previous state for change detection */
+interface ControllerSnapshot {
+    state: MovementState;
+    direction: number;
+}
+
 export class MovementSystem implements TickSystem {
     private controllers: Map<number, MovementController> = new Map();
 
@@ -37,6 +44,12 @@ export class MovementSystem implements TickSystem {
     // Callbacks for game state interaction
     private updatePosition?: UpdatePositionFn;
     private getEntity?: GetEntityFn;
+
+    // Event bus for notifying other systems of movement changes
+    private eventBus?: EventBus;
+
+    // Previous state snapshots for change detection
+    private prevSnapshots: Map<number, ControllerSnapshot> = new Map();
 
     /**
      * Set the terrain data for pathfinding and collision.
@@ -69,6 +82,13 @@ export class MovementSystem implements TickSystem {
     }
 
     /**
+     * Set the event bus for emitting movement events.
+     */
+    setEventBus(eventBus: EventBus): void {
+        this.eventBus = eventBus;
+    }
+
+    /**
      * Create a new movement controller for a unit.
      */
     createController(entityId: number, x: number, y: number, speed: number): MovementController {
@@ -89,6 +109,7 @@ export class MovementSystem implements TickSystem {
      */
     removeController(entityId: number): void {
         this.controllers.delete(entityId);
+        this.prevSnapshots.delete(entityId);
     }
 
     /**
@@ -191,6 +212,11 @@ export class MovementSystem implements TickSystem {
      * Update a single movement controller.
      */
     private updateController(controller: MovementController, deltaSec: number): void {
+        // Capture state before update for change detection
+        const prevSnapshot = this.prevSnapshots.get(controller.entityId);
+        const prevState = prevSnapshot?.state ?? controller.state;
+        const prevDirection = prevSnapshot?.direction ?? controller.direction;
+
         controller.advanceProgress(deltaSec);
 
         while (controller.canMove()) {
@@ -206,6 +232,54 @@ export class MovementSystem implements TickSystem {
         }
 
         controller.finalizeTick();
+
+        // Emit events for state/direction changes
+        this.emitMovementEvents(controller, prevState, prevDirection);
+
+        // Update snapshot for next tick
+        this.prevSnapshots.set(controller.entityId, {
+            state: controller.state,
+            direction: controller.direction,
+        });
+    }
+
+    /**
+     * Emit movement events when state or direction changes.
+     */
+    private emitMovementEvents(
+        controller: MovementController,
+        prevState: MovementState,
+        prevDirection: number
+    ): void {
+        if (!this.eventBus) return;
+
+        const entityId = controller.entityId;
+        const newState = controller.state;
+        const newDirection = controller.direction;
+
+        // Emit direction change event
+        if (newDirection !== prevDirection) {
+            this.eventBus.emit('unit:directionChanged', {
+                entityId,
+                direction: newDirection,
+                previousDirection: prevDirection,
+            });
+        }
+
+        // Emit state change events
+        if (newState !== prevState) {
+            if (newState === 'moving' && prevState !== 'moving') {
+                this.eventBus.emit('unit:movementStarted', {
+                    entityId,
+                    direction: newDirection,
+                });
+            } else if (newState === 'idle' && prevState !== 'idle') {
+                this.eventBus.emit('unit:movementStopped', {
+                    entityId,
+                    direction: newDirection,
+                });
+            }
+        }
     }
 
     /** Check if terrain data is available for pathfinding */

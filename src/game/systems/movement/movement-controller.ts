@@ -44,6 +44,9 @@ export class MovementController {
     /** Time spent blocked in seconds (for timeout handling) */
     private _blockedTime: number = 0;
 
+    /** Current facing direction (0-5 for hex directions, updated when steps are taken) */
+    private _direction: number = EDirection.EAST;
+
     constructor(entityId: number, x: number, y: number, speed: number) {
         this.entityId = entityId;
         this._tileX = x;
@@ -109,6 +112,11 @@ export class MovementController {
     /** Get next waypoint, or null if no more waypoints */
     get nextWaypoint(): TileCoord | null {
         return this._pathIndex < this._path.length ? this._path[this._pathIndex] : null;
+    }
+
+    /** Current facing direction (0-5 for hex directions). Updated when movement steps occur. */
+    get direction(): number {
+        return this._direction;
     }
 
     // === Path Management ===
@@ -213,6 +221,9 @@ export class MovementController {
         this._tileX = wp.x;
         this._tileY = wp.y;
 
+        // Update facing direction based on movement
+        this._direction = getApproxDirection(this._prevTileX, this._prevTileY, this._tileX, this._tileY);
+
         // Advance path
         this._pathIndex++;
 
@@ -284,8 +295,7 @@ export class MovementController {
         this._prevTileX = x;
         this._prevTileY = y;
         this._progress = 0;
-        // Don't reset _lastDirection here, as we might want to preserve facing if just snapping position?
-        // But if it's a spawn, 0 is a fine default.
+        // Preserve current facing direction on position sync (teleport/spawn)
     }
 
     /**
@@ -300,6 +310,9 @@ export class MovementController {
         // Update to new position
         this._tileX = newX;
         this._tileY = newY;
+
+        // Update facing direction based on push direction
+        this._direction = getApproxDirection(this._prevTileX, this._prevTileY, this._tileX, this._tileY);
 
         // Clear path (pushed units lose their current path)
         this._path = [];
@@ -336,28 +349,4 @@ export class MovementController {
         this._pathIndex = 0;
     }
 
-    // === Direction Calculation ===
-
-    /** Last calculated movement direction (0-5 for 6 hex directions) */
-    private _lastDirection: number = EDirection.EAST;
-
-    /**
-     * Compute the movement direction from previous to current tile.
-     * Returns a direction index 0-5 matching EDirection (hex grid directions).
-     * If stationary, returns the last known direction.
-     */
-    computeMovementDirection(): number {
-        const dx = this._tileX - this._prevTileX;
-        const dy = this._tileY - this._prevTileY;
-
-        // If not moving (visually), return last known direction
-        if (dx === 0 && dy === 0) {
-            return this._lastDirection;
-        }
-
-        // Use hex grid direction calculation for 6 directions
-        const newDir = getApproxDirection(this._prevTileX, this._prevTileY, this._tileX, this._tileY);
-        this._lastDirection = newDir;
-        return newDir;
-    }
 }
