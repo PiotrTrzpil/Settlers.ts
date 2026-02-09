@@ -10,12 +10,30 @@ export class LogHandler {
     }
 
     /** log an error */
-    public error(msg: string, exception?: Error) : void {
+    public error(msg: string, exception?: Error): void {
         LogHandler.manager.push({
             type: LogType.Error,
             source: this._moduleName,
             msg,
             exception
+        });
+    }
+
+    /** log a warning */
+    public warn(msg: string): void {
+        LogHandler.manager.push({
+            type: LogType.Warn,
+            source: this._moduleName,
+            msg
+        });
+    }
+
+    /** log an info message */
+    public info(msg: string): void {
+        LogHandler.manager.push({
+            type: LogType.Info,
+            source: this._moduleName,
+            msg
         });
     }
 

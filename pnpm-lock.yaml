@@ -11,6 +11,9 @@ importers:
       '@vueuse/core':
         specifier: ^14.2.0
         version: 14.2.0(vue@3.5.27(typescript@5.4.5))
+      howler:
+        specifier: ^2.2.4
+        version: 2.2.4
       stats.js:
         specifier: ^0.17.0
         version: 0.17.0
@@ -27,6 +30,9 @@ importers:
       '@rollup/pluginutils':
         specifier: ^5.3.0
         version: 5.3.0(rollup@4.57.1)
+      '@types/howler':
+        specifier: ^2.2.12
+        version: 2.2.12
       '@types/node':
         specifier: ^25.2.0
         version: 25.2.0
@@ -837,6 +843,9 @@ packages:
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
+
+  '@types/howler@2.2.12':
+    resolution: {integrity: sha512-hy769UICzOSdK0Kn1FBk4gN+lswcj1EKRkmiDtMkUGvFfYJzgaDXmVXkSShS2m89ERAatGIPnTUlp2HhfkVo5g==}
 
   '@types/json5@0.0.29':
     resolution: {integrity: sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==}
@@ -2021,6 +2030,9 @@ packages:
   he@1.2.0:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
     hasBin: true
+
+  howler@2.2.4:
+    resolution: {integrity: sha512-iARIBPgcQrwtEr+tALF+rapJ8qSc+Set2GJQl7xT1MQzWaVkFebdJhR3alVlSiUf5U7nAANKuj3aWpwerocD5w==}
 
   html-encoding-sniffer@4.0.0:
     resolution: {integrity: sha512-Y22oTqIU4uuPgEemfz7NDJz6OeKf12Lsu+QC+s3BVpda64lTiMYCyGwg5ki4vFxkMwQdeZDl2adZoqUgdFuTgQ==}
@@ -3946,6 +3958,8 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
+  '@types/howler@2.2.12': {}
+
   '@types/json5@0.0.29': {}
 
   '@types/node@25.2.0':
@@ -5352,6 +5366,8 @@ snapshots:
       function-bind: 1.1.2
 
   he@1.2.0: {}
+
+  howler@2.2.4: {}
 
   html-encoding-sniffer@4.0.0:
     dependencies:

@@ -273,21 +273,52 @@
           </div>
         </div>
       </section>
+
+      <!-- Audio -->
+      <section class="debug-section">
+        <h3 class="section-header" @click="sections.audio = !sections.audio">
+          <span class="caret">{{ sections.audio ? '&#x25BC;' : '&#x25B6;' }}</span>
+          Audio
+        </h3>
+        <div v-if="sections.audio" class="section-body">
+          <label class="control-row">
+            <input type="checkbox" :checked="audioState.musicEnabled" @change="toggleMusic" />
+            <span>Enable Music</span>
+          </label>
+          <div class="stat-row">
+            <span class="stat-label">Volume</span>
+            <span class="stat-value slider-value">
+              <input type="range" min="0" max="1" step="0.1"
+                :value="audioState.musicVolume"
+                @input="updateMusicVolume" />
+              {{ audioState.musicVolume.toFixed(1) }}
+            </span>
+          </div>
+          <div class="control-buttons">
+            <button class="ctrl-btn" @click="playRandomMusic">
+              Next Track ({{ currentRaceName }})
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+/* eslint-disable max-lines */
 import { reactive, computed } from 'vue';
 import { debugStats } from '@/game/debug-stats';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
+import { RACE_NAMES, Race } from '@/game/renderer/sprite-metadata';
 import type { Game } from '@/game/game';
 import { useDebugMapObjects } from './use-debug-map-objects';
 
-defineProps<{
+const props = defineProps<{
     debugGrid: boolean;
     showTerritoryBorders: boolean;
     paused: boolean;
+    currentRace: number; // Race enum
 }>();
 
 defineEmits<{
@@ -312,7 +343,35 @@ const sections = reactive({
     tile: true,
     controls: true,
     mapObjects: false,
+    audio: true,
 });
+
+// Audio state
+const audioState = reactive({
+    musicEnabled: true,
+    musicVolume: 0.5
+});
+
+
+const currentRaceName = computed(() => {
+    return RACE_NAMES[props.currentRace as Race] || 'Unknown';
+});
+
+function toggleMusic(e: Event) {
+    const enabled = (e.target as HTMLInputElement).checked;
+    audioState.musicEnabled = enabled;
+    getGame()?.soundManager.toggleMusic(enabled);
+}
+
+function updateMusicVolume(e: Event) {
+    const vol = parseFloat((e.target as HTMLInputElement).value);
+    audioState.musicVolume = vol;
+    getGame()?.soundManager.setMusicVolume(vol);
+}
+
+function playRandomMusic() {
+    getGame()?.soundManager.playRandomMusic(RACE_NAMES[props.currentRace as Race]);
+}
 
 // Map objects functionality (extracted to composable)
 const getGame = (): Game | null => (window as any).__settlers_game__ ?? null;

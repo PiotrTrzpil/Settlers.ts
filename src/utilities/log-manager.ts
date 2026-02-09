@@ -1,6 +1,8 @@
 export enum LogType {
     Error,
-    Debug
+    Debug,
+    Warn,
+    Info
 }
 
 export interface ILogMessage {
