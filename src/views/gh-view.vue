@@ -61,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, useTemplateRef, nextTick } from 'vue';
+import { ref, useTemplateRef, nextTick, watch } from 'vue';
 import { GhFileReader } from '@/resources/gfx/gh-file-reader';
 import { IGfxImage } from '@/resources/gfx/igfx-image';
 import { ImageType } from '@/resources/gfx/image-type';
@@ -141,8 +141,15 @@ function onSelectItem() {
     renderImageToCanvas(img, ghCav.value);
 }
 
-// Re-render grid when toggled on
+// Re-render when view mode changes
 watchGridMode(renderAllGridImages, () => ghContent.value.length > 0);
+
+// Render single view when switching to single mode
+watch(viewMode, (newMode) => {
+    if (newMode === 'single' && selectedItem.value) {
+        nextTick(() => onSelectItem());
+    }
+});
 </script>
 
 <style src="@/styles/file-viewer.css"></style>
