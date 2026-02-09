@@ -28,8 +28,8 @@
         }"
         @click="selectJobFromGrid(item)"
       >
-        <div class="direction-grid" :class="'dirs-' + Math.min(getDirectionCount(item.index), 4)">
-          <div v-for="dir in Math.min(getDirectionCount(item.index), 4)" :key="dir" class="direction-cell">
+        <div class="direction-grid" :class="'dirs-' + Math.min(getDirectionCount(item.index), 6)">
+          <div v-for="dir in Math.min(getDirectionCount(item.index), 6)" :key="dir" class="direction-cell">
             <canvas
               :ref="el => setCanvasRef(el as HTMLCanvasElement, `${item.index}-${dir - 1}`)"
               width="200"
@@ -304,8 +304,8 @@ function renderAllGridSprites() {
         const dirItems = dilFileReader.value.getItems(item.offset, item.length);
         if (dirItems.length === 0) continue;
 
-        // Render only existing directions (up to 4)
-        const maxDirs = Math.min(4, dirItems.length);
+        // Render only existing directions (up to 6)
+        const maxDirs = Math.min(6, dirItems.length);
         for (let dirIdx = 0; dirIdx < maxDirs; dirIdx++) {
             const canvas = canvasRefs.get(`${item.index}-${dirIdx}`);
             if (!canvas) continue;
@@ -345,7 +345,7 @@ watchGridMode(renderAllGridSprites, () => jilList.value.length > 0);
 <style scoped>
 /* JIL-specific overrides for larger sprites with multiple directions */
 .grid-container {
-  grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(550px, 1fr));
 }
 
 .grid-item {
@@ -357,7 +357,9 @@ watchGridMode(renderAllGridSprites, () => jilList.value.length > 0);
 .direction-grid.dirs-1 .grid-canvas,
 .direction-grid.dirs-2 .grid-canvas,
 .direction-grid.dirs-3 .grid-canvas,
-.direction-grid.dirs-4 .grid-canvas {
+.direction-grid.dirs-4 .grid-canvas,
+.direction-grid.dirs-5 .grid-canvas,
+.direction-grid.dirs-6 .grid-canvas {
   width: auto;
   height: auto;
   max-width: none;

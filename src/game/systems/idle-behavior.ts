@@ -131,20 +131,15 @@ function updateUnitAnimation(
     return animState;
 }
 
+/** Number of sprite directions (matches hex grid) */
+const NUM_DIRECTIONS = 6;
+
 /**
  * Get an adjacent direction for idle turning.
- * Avoids jarring left↔right transitions by not wrapping around.
+ * Randomly chooses clockwise (+1) or counter-clockwise (-1) rotation.
+ * Wraps around since all 6 directions are visually adjacent on the hex grid.
  */
 function getAdjacentDirection(currentDirection: number): number {
-    if (currentDirection === 0) {
-        // RIGHT can only turn to RIGHT_BOTTOM
-        return 1;
-    } else if (currentDirection === 3) {
-        // LEFT can only turn to LEFT_BOTTOM
-        return 2;
-    } else {
-        // Directions 1 and 2 can go either way
-        const offset = Math.random() < 0.5 ? 1 : -1;
-        return currentDirection + offset;
-    }
+    const offset = Math.random() < 0.5 ? 1 : -1;
+    return ((currentDirection + offset) % NUM_DIRECTIONS + NUM_DIRECTIONS) % NUM_DIRECTIONS;
 }

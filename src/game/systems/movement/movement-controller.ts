@@ -1,4 +1,5 @@
 import { TileCoord } from '../../entity';
+import { getApproxDirection, EDirection } from '../hex-directions';
 
 /**
  * Movement state machine states.
@@ -337,12 +338,12 @@ export class MovementController {
 
     // === Direction Calculation ===
 
-    /** Last calculated movement direction */
-    private _lastDirection: number = 0; // Default to RIGHT (0)
+    /** Last calculated movement direction (0-5 for 6 hex directions) */
+    private _lastDirection: number = EDirection.EAST;
 
     /**
      * Compute the movement direction from previous to current tile.
-     * Returns a direction index: 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT
+     * Returns a direction index 0-5 matching EDirection (hex grid directions).
      * If stationary, returns the last known direction.
      */
     computeMovementDirection(): number {
@@ -354,18 +355,8 @@ export class MovementController {
             return this._lastDirection;
         }
 
-        // Map dx,dy to one of 4 directions
-        // RIGHT (dx > 0, dy <= 0): direction 0
-        // RIGHT_BOTTOM (dx >= 0, dy > 0): direction 1
-        // LEFT_BOTTOM (dx < 0, dy > 0): direction 2
-        // LEFT (dx < 0, dy <= 0): direction 3
-
-        let newDir = 0;
-        if (dx > 0 && dy <= 0) newDir = 0; // RIGHT
-        else if (dx >= 0 && dy > 0) newDir = 1; // RIGHT_BOTTOM
-        else if (dx < 0 && dy > 0) newDir = 2;  // LEFT_BOTTOM
-        else newDir = 3; // LEFT
-
+        // Use hex grid direction calculation for 6 directions
+        const newDir = getApproxDirection(this._prevTileX, this._prevTileY, this._tileX, this._tileY);
         this._lastDirection = newDir;
         return newDir;
     }

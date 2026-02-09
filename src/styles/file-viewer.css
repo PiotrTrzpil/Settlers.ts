@@ -232,6 +232,19 @@
   height: 70px;
 }
 
+.direction-grid.dirs-5,
+.direction-grid.dirs-6 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.direction-grid.dirs-5 .grid-canvas,
+.direction-grid.dirs-6 .grid-canvas {
+  width: 60px;
+  height: 60px;
+}
+
 .direction-cell {
   display: flex;
   flex-direction: column;

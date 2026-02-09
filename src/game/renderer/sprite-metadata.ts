@@ -89,25 +89,31 @@ export const SETTLER_FILE_NUMBERS: Record<Race, number> = {
 
 /**
  * Direction indices for unit sprites in DIL files.
- * Units have 4 directions for walking/facing.
+ * Units have 6 directions matching the hex grid.
  */
 export const UNIT_DIRECTION = {
-    /** Facing right (D0) */
-    RIGHT: 0,
-    /** Facing right+bottom diagonal (D1) */
-    RIGHT_BOTTOM: 1,
-    /** Facing left+bottom diagonal (D2) */
-    LEFT_BOTTOM: 2,
-    /** Facing left (D3) */
-    LEFT: 3,
+    /** Facing north-east (D0) */
+    NORTH_EAST: 0,
+    /** Facing east (D1) */
+    EAST: 1,
+    /** Facing south-east (D2) */
+    SOUTH_EAST: 2,
+    /** Facing south-west (D3) */
+    SOUTH_WEST: 3,
+    /** Facing west (D4) */
+    WEST: 4,
+    /** Facing north-west (D5) */
+    NORTH_WEST: 5,
 } as const;
+
+export const NUM_UNIT_DIRECTIONS = 6;
 
 /**
  * Mapping from UnitType to JIL job index in settler files (20-24.jil).
  * The job index is the same across all race files - only the GFX file number differs.
  * These indices map to unit sprites via JIL -> DIL -> GIL -> GFX.
  *
- * Each job has 4 directions (D0-D3) with multiple animation frames per direction.
+ * Each job has 6 directions (D0-D5) matching hex grid directions.
  */
 export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
     // Job 0: Unknown/placeholder
