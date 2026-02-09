@@ -1,4 +1,5 @@
-import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE, BuildingConstructionPhase } from '../entity';
+import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE } from '../entity';
+import { BuildingConstructionPhase } from '../features/building-construction';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
 import { MapSize } from '@/utilities/map-size';

@@ -8,7 +8,7 @@
  * - Types: BuildingState, BuildingVisualState, BuildingConstructionPhase, TerrainContext
  * - System: BuildingConstructionSystem (registers with GameLoop as TickSystem)
  * - Queries: getBuildingVisualState (for renderers)
- * - Constants: BUILDING_SPAWN_ON_COMPLETE
+ * - Constants: BUILDING_SPAWN_ON_COMPLETE, DEFAULT_CONSTRUCTION_DURATION
  */
 
 // Types
@@ -23,7 +23,7 @@ export type {
 export { BuildingConstructionPhase } from './types';
 
 // System (for registration with GameLoop)
-export { BuildingConstructionSystem, BUILDING_SPAWN_ON_COMPLETE } from './construction-system';
+export { BuildingConstructionSystem, BUILDING_SPAWN_ON_COMPLETE, DEFAULT_CONSTRUCTION_DURATION } from './construction-system';
 
 // Queries (for renderers)
 export { getBuildingVisualState } from './visual-state';

@@ -82,6 +82,15 @@ export class GameLoop {
         this.constructionSystem.registerEvents(eventBus);
         this.registerSystem(this.constructionSystem);
 
+        // Share the construction system's buildingStates map with GameState
+        // so existing code (commands, renderer) can access it via state.buildingStates
+        gameState.buildingStates = this.constructionSystem.buildingStates;
+
+        // Delegate building state creation to the construction system
+        gameState.onBuildingCreated = (entityId, buildingType, x, y) => {
+            this.constructionSystem.createBuildingState(entityId, buildingType, x, y);
+        };
+
         // 4. Lumberjack AI — issues movement commands (runs after construction)
         this.lumberjackSystem = new LumberjackSystem(gameState);
         this.registerSystem(this.lumberjackSystem);

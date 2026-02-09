@@ -1,9 +1,8 @@
-import { Entity, EntityType, UnitType, BuildingState, BuildingConstructionPhase, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE, isUnitTypeSelectable, getUnitTypeSpeed } from './entity';
+import { Entity, EntityType, UnitType, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE, isUnitTypeSelectable, getUnitTypeSpeed } from './entity';
+import type { BuildingState } from './features/building-construction';
+import { BuildingConstructionPhase, DEFAULT_CONSTRUCTION_DURATION } from './features/building-construction';
 import { EMaterialType } from './economy';
 import { MovementSystem, MovementController } from './systems/movement/index';
-
-/** Default building construction duration in seconds */
-export const DEFAULT_CONSTRUCTION_DURATION = 10;
 
 /**
  * Legacy UnitState interface for backward compatibility.
@@ -111,6 +110,9 @@ export class GameState {
     /** Optional callback invoked when an entity is removed (for system cleanup) */
     public onEntityRemoved: ((entityId: number) => void) | null = null;
 
+    /** Optional callback for building creation (delegates to BuildingConstructionSystem when wired up) */
+    public onBuildingCreated: ((entityId: number, buildingType: number, x: number, y: number) => void) | null = null;
+
     constructor() {
         this.unitStates = new UnitStateMap(this.movement);
 
@@ -181,18 +183,24 @@ export class GameState {
         }
 
         if (type === EntityType.Building) {
-            this.buildingStates.set(entity.id, {
-                entityId: entity.id,
-                buildingType: subType as BuildingType,
-                phase: BuildingConstructionPhase.TerrainLeveling, // Start immediately with terrain leveling
-                phaseProgress: 0,
-                totalDuration: DEFAULT_CONSTRUCTION_DURATION,
-                elapsedTime: 0,
-                tileX: x,
-                tileY: y,
-                originalTerrain: null,
-                terrainModified: false,
-            });
+            if (this.onBuildingCreated) {
+                // Delegate to BuildingConstructionSystem (production path)
+                this.onBuildingCreated(entity.id, subType, x, y);
+            } else {
+                // Standalone fallback for tests without GameLoop
+                this.buildingStates.set(entity.id, {
+                    entityId: entity.id,
+                    buildingType: subType as BuildingType,
+                    phase: BuildingConstructionPhase.TerrainLeveling,
+                    phaseProgress: 0,
+                    totalDuration: DEFAULT_CONSTRUCTION_DURATION,
+                    elapsedTime: 0,
+                    tileX: x,
+                    tileY: y,
+                    originalTerrain: null,
+                    terrainModified: false,
+                });
+            }
         }
 
         if (type === EntityType.StackedResource) {

@@ -1,5 +1,6 @@
 /**
  * BuildingConstructionSystem - Manages building construction as a TickSystem.
+ * Owns all building construction state (buildingStates map).
  * Registers with the GameLoop instead of being called directly.
  * Listens for building:removed events to restore terrain.
  */
@@ -14,6 +15,9 @@ import { isPassable } from '../placement';
 import { BuildingConstructionPhase, type BuildingState, type BuildingSpawnConfig, type TerrainContext } from './types';
 import { determinePhase, calculatePhaseProgress } from './internal/phase-transitions';
 import { captureOriginalTerrain, applyTerrainLeveling, restoreOriginalTerrain } from './internal/terrain-capture';
+
+/** Default building construction duration in seconds */
+export const DEFAULT_CONSTRUCTION_DURATION = 10;
 
 /**
  * Which unit type (and count) each building spawns when construction completes.
@@ -37,8 +41,61 @@ export class BuildingConstructionSystem implements TickSystem {
     private terrainContext: TerrainContext | undefined;
     private eventBus: EventBus | undefined;
 
+    /** Canonical store for all building construction states */
+    private _buildingStates: Map<number, BuildingState>;
+
     constructor(state: GameState) {
         this.state = state;
+        // Share the state's existing buildingStates map.
+        // In production, GameLoop will also set state.buildingStates = this.buildingStates
+        // to ensure both references point to the same Map object.
+        this._buildingStates = state.buildingStates;
+    }
+
+    // ── Building state CRUD ──
+
+    /** The building states map (shared with GameState for backward compatibility) */
+    public get buildingStates(): Map<number, BuildingState> {
+        return this._buildingStates;
+    }
+
+    /** Get a building's construction state */
+    public getBuildingState(entityId: number): BuildingState | undefined {
+        return this._buildingStates.get(entityId);
+    }
+
+    /** Check if a building state exists */
+    public hasBuildingState(entityId: number): boolean {
+        return this._buildingStates.has(entityId);
+    }
+
+    /** Create a new building construction state */
+    public createBuildingState(
+        entityId: number,
+        buildingType: BuildingType,
+        x: number,
+        y: number,
+        totalDuration: number = DEFAULT_CONSTRUCTION_DURATION
+    ): BuildingState {
+        const bs: BuildingState = {
+            entityId,
+            buildingType,
+            phase: BuildingConstructionPhase.TerrainLeveling,
+            phaseProgress: 0,
+            totalDuration,
+            elapsedTime: 0,
+            tileX: x,
+            tileY: y,
+            originalTerrain: null,
+            terrainModified: false,
+        };
+        this._buildingStates.set(entityId, bs);
+        return bs;
+    }
+
+    /** Remove a building's construction state */
+    public removeBuildingState(entityId: number): void {
+        this._buildingStates.delete(entityId);
     }
 
     /** Set terrain context for terrain modification during construction */
@@ -58,7 +115,7 @@ export class BuildingConstructionSystem implements TickSystem {
     tick(dt: number): void {
         let terrainModified = false;
 
-        for (const buildingState of this.state.buildingStates.values()) {
+        for (const buildingState of this._buildingStates.values()) {
             if (buildingState.phase === BuildingConstructionPhase.Completed) continue;
 
             if (this.updateSingleBuilding(buildingState, dt)) {
