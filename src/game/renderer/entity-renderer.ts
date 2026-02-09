@@ -869,16 +869,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             tile.x, tile.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y
         );
 
-        // Apply position offset for resource previews to match entity rendering
-        if (entityType === 'resource') {
-            const seed = tile.x * 12.9898 + tile.y * 78.233;
-            // +/- 0.4 world units match the offset in drawTexturedEntities
-            const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.8 - 0.4;
-            const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.8 - 0.4;
-            worldPos.worldX += offsetX;
-            worldPos.worldY += offsetY;
-        }
-
         const tint = valid ? TINT_PREVIEW_VALID : TINT_PREVIEW_INVALID;
 
         // Try to render with sprite based on entity type

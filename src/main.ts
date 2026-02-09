@@ -11,6 +11,23 @@ if (import.meta.hot) {
         log.debug('HMR error detected, reloading page...');
         window.location.reload();
     });
+
+    // Force reload for renderer files - instances don't auto-update on HMR
+    import.meta.hot.on('vite:beforeUpdate', (payload) => {
+        const rendererPaths = [
+            '/src/game/renderer/entity-renderer.ts',
+            '/src/game/renderer/landscape/landscape-renderer.ts',
+            '/src/game/renderer/sprite-batch-renderer.ts',
+            '/src/game/renderer/renderer.ts',
+        ];
+        const needsReload = payload.updates?.some((update: { path: string }) =>
+            rendererPaths.some(p => update.path.endsWith(p))
+        );
+        if (needsReload) {
+            log.debug('Renderer file changed, forcing full reload...');
+            window.location.reload();
+        }
+    });
 }
 
 window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {

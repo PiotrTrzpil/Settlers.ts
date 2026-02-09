@@ -6,6 +6,7 @@ import { GameLoop } from './game-loop';
 import { Command, executeCommand } from './commands';
 import { isBuildable } from './features/placement';
 import { populateMapObjects } from './systems/map-objects';
+import { populateMapBuildings } from './systems/map-buildings';
 import { SoundManager } from './audio';
 import { Race } from './renderer/sprite-metadata';
 import { EventBus } from './event-bus';
@@ -51,6 +52,14 @@ export class Game {
 
         if (this.objectType) {
             populateMapObjects(this.state, this.objectType, this.groundType, this.mapSize);
+        }
+
+        // Populate buildings from map entity data (if available)
+        if (mapLoader.entityData?.buildings?.length) {
+            const count = populateMapBuildings(this.state, mapLoader.entityData.buildings);
+            if (count > 0) {
+                console.log(`Game: Loaded ${count} buildings from map data`);
+            }
         }
 
         // Initialize Audio
