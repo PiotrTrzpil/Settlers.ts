@@ -350,6 +350,10 @@ function computeTileWorldPos(
     out.worldY = (TILE_CENTER_Y + instanceY - hWorld - vpFracY) * 0.5;
 }
 
+// Pre-allocated temp objects for unit interpolation (avoids per-unit allocation)
+const _interpPrev: MutableWorldPos = { worldX: 0, worldY: 0 };
+const _interpCurr: MutableWorldPos = { worldX: 0, worldY: 0 };
+
 /**
  * Compute interpolated world position for a moving unit.
  */
@@ -372,13 +376,10 @@ function computeUnitWorldPos(
     // Interpolate between previous and current position
     const t = Math.max(0, Math.min(unitState.moveProgress, 1));
 
-    // Get both positions (using inline calculation to avoid allocations)
-    const prev: MutableWorldPos = { worldX: 0, worldY: 0 };
-    const curr: MutableWorldPos = { worldX: 0, worldY: 0 };
+    // Get both positions using pre-allocated objects
+    computeTileWorldPos(unitState.prevX, unitState.prevY, groundHeight, mapSize, viewPoint, _interpPrev);
+    computeTileWorldPos(entity.x, entity.y, groundHeight, mapSize, viewPoint, _interpCurr);
 
-    computeTileWorldPos(unitState.prevX, unitState.prevY, groundHeight, mapSize, viewPoint, prev);
-    computeTileWorldPos(entity.x, entity.y, groundHeight, mapSize, viewPoint, curr);
-
-    out.worldX = prev.worldX + (curr.worldX - prev.worldX) * t;
-    out.worldY = prev.worldY + (curr.worldY - prev.worldY) * t;
+    out.worldX = _interpPrev.worldX + (_interpCurr.worldX - _interpPrev.worldX) * t;
+    out.worldY = _interpPrev.worldY + (_interpCurr.worldY - _interpPrev.worldY) * t;
 }
