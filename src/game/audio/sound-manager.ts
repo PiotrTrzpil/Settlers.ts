@@ -54,12 +54,27 @@ export class SoundManager implements IAudioManager {
         return this.musicController.currentMusicId;
     }
 
+    /** Tracks if init is currently in progress to prevent race conditions */
+    private initPromise: Promise<void> | null = null;
+
     public async init(fileManager: FileManager): Promise<void> {
+        // If already initialized, return immediately
         if (this.fileManager) {
             SoundManager.log.debug('SoundManager already initialized, skipping re-init');
             return;
         }
 
+        // If init is in progress, wait for it
+        if (this.initPromise) {
+            SoundManager.log.debug('SoundManager init already in progress, waiting...');
+            return this.initPromise;
+        }
+
+        this.initPromise = this.doInit(fileManager);
+        return this.initPromise;
+    }
+
+    private async doInit(fileManager: FileManager): Promise<void> {
         this.fileManager = fileManager;
 
         // Load persisted settings
@@ -154,16 +169,38 @@ export class SoundManager implements IAudioManager {
     }
 
     private setupAudioUnlock(): void {
-        const unlock = () => {
+        let unlocking = false; // Prevent multiple concurrent unlock attempts
+
+        const removeListeners = () => {
+            document.removeEventListener('click', unlock);
+            document.removeEventListener('keydown', unlock);
+            document.removeEventListener('touchstart', unlock);
+        };
+
+        const unlock = async() => {
+            // Guard against multiple rapid calls
+            if (unlocking) {
+                return;
+            }
+
             if (Howler.ctx && Howler.ctx.state === 'suspended') {
-                Howler.ctx.resume().then(() => {
+                unlocking = true;
+
+                // Remove listeners IMMEDIATELY to prevent duplicate calls
+                removeListeners();
+
+                try {
+                    await Howler.ctx.resume();
                     SoundManager.log.info('AudioContext resumed via user interaction');
                     this.musicController.retryPendingMusic();
-                    // Remove listeners once unlocked
-                    document.removeEventListener('click', unlock);
-                    document.removeEventListener('keydown', unlock);
-                    document.removeEventListener('touchstart', unlock);
-                });
+                } catch (err) {
+                    SoundManager.log.warn('Failed to resume AudioContext: ' + err);
+                    unlocking = false;
+                    // Re-add listeners on failure
+                    document.addEventListener('click', unlock);
+                    document.addEventListener('keydown', unlock);
+                    document.addEventListener('touchstart', unlock);
+                }
             }
         };
 
@@ -263,17 +300,20 @@ export class SoundManager implements IAudioManager {
             loop: config.loop,
             volume: 1.0,
             autoplay: false,
-            onloaderror: (id, err) => {
+            onloaderror: (_id, err) => {
                 SoundManager.log.error(`Failed to load sound ${config.id}: ${err}`);
             },
-            onplayerror: (id, err) => {
+            onplayerror: async(_id, err) => {
                 SoundManager.log.error(`Failed to play sound ${config.id}: ${err}`);
                 // Unlock audio context if needed
                 if (Howler.ctx && Howler.ctx.state === 'suspended') {
-                    Howler.ctx.resume().then(() => {
+                    try {
+                        await Howler.ctx.resume();
                         SoundManager.log.info('Audio context resumed from error handler');
                         this.musicController.retryPendingMusic();
-                    });
+                    } catch (resumeErr) {
+                        SoundManager.log.warn('Failed to resume audio context: ' + resumeErr);
+                    }
                 }
             }
         });

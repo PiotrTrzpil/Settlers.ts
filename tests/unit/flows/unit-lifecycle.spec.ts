@@ -1,3 +1,4 @@
+/* eslint-disable max-lines-per-function */
 /**
  * Integration test: Unit Lifecycle
  *
@@ -63,11 +64,12 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         expect(unitState!.path[unitState!.path.length - 1]).toEqual({ x: 10, y: 5 });
 
         // ── Step 3: Simulate movement updates ──
-        // At speed 2, 0.5s = 1 tile
+        // Progress starts at 1 when path is set (for immediate responsiveness).
+        // At speed 2, 0.5s adds 1 to progress -> total 2 -> moves 2 tiles.
         state.movement.update(0.5);
-        expect(unit.x).toBe(6);
+        expect(unit.x).toBe(7);
         expect(unit.y).toBe(5);
-        expect(unitState!.prevX).toBe(5); // Previous position tracked for interpolation
+        expect(unitState!.prevX).toBe(6); // Previous position tracked for interpolation
 
         // Continue movement to completion
         state.movement.update(5.0); // Enough time to finish
@@ -112,11 +114,11 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
     });
 
     it('multiple units move independently and respect occupancy', () => {
-        const map = createTestMap();
+        createTestMap(); // Needed for test setup
         const state = createGameState();
 
-        const { entity: u1, unitState: us1 } = addUnitWithPath(state, 0, 0, [{ x: 1, y: 0 }], 2);
-        const { entity: u2, unitState: us2 } = addUnitWithPath(state, 10, 10, [{ x: 11, y: 10 }, { x: 12, y: 10 }], 4);
+        const { entity: u1 } = addUnitWithPath(state, 0, 0, [{ x: 1, y: 0 }], 2);
+        const { entity: u2 } = addUnitWithPath(state, 10, 10, [{ x: 11, y: 10 }, { x: 12, y: 10 }], 4);
 
         state.movement.update(0.5);
 
@@ -258,9 +260,10 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
 
     it('movement updates smooth interpolation tracking', () => {
         const state = createGameState();
+        // Longer path to test incremental movement
         const { entity, unitState } = addUnitWithPath(
             state, 5, 5,
-            [{ x: 6, y: 5 }, { x: 7, y: 5 }],
+            [{ x: 6, y: 5 }, { x: 7, y: 5 }, { x: 8, y: 5 }, { x: 9, y: 5 }],
             2,
         );
 
@@ -268,17 +271,22 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         expect(unitState.prevX).toBe(5);
         expect(unitState.prevY).toBe(5);
 
-        // Move one tile
+        // Progress starts at 1 when path set. At speed 2, 0.5s adds 1 -> moves 2 tiles.
         state.movement.update(0.5);
-        expect(entity.x).toBe(6);
-        expect(unitState.prevX).toBe(5);
+        expect(entity.x).toBe(7);
+        expect(unitState.prevX).toBe(6); // Tracks previous tile during movement
         expect(unitState.prevY).toBe(5);
 
-        // Complete path
-        state.movement.update(1.0);
-        expect(entity.x).toBe(7);
-        // After completion, prev syncs to current
+        // Continue movement: 0.5s adds 1 -> moves 1 tile (progress was 0, now 1)
+        state.movement.update(0.5);
+        expect(entity.x).toBe(8);
         expect(unitState.prevX).toBe(7);
+
+        // Complete path: 0.5s adds 1 -> moves 1 tile
+        state.movement.update(0.5);
+        expect(entity.x).toBe(9);
+        // prev tracks the tile before current (used for interpolation)
+        expect(unitState.prevX).toBe(8);
         expect(unitState.prevY).toBe(5);
     });
 });

@@ -22,6 +22,10 @@ interface SettlersDebug {
     mode: string;
     selectedEntityId: number | null;
     selectedCount: number;
+    // Audio state
+    musicEnabled: boolean;
+    musicPlaying: boolean;
+    currentMusicId: string | null;
 }
 
 /**
@@ -103,7 +107,7 @@ export class GamePage {
             const game = (window as any).__settlers_game__;
             if (!game) return;
             // Remove all entities through the game's public API, which uses
-            // the command pipeline (terrain restoration, territory rebuild, etc.)
+            // the command pipeline (terrain restoration, etc.)
             game.removeAllEntities();
             // Reset mode via InputManager — goes through proper onExit/onEnter
             // lifecycle so mode data is cleaned up and callbacks fire.
@@ -284,11 +288,11 @@ export class GamePage {
     async placeBuilding(buildingType: number, x: number, y: number, player = 0): Promise<{
         id: number; type: number; subType: number; x: number; y: number; player: number;
     } | null> {
-        return this.page.evaluate(({ bt, x, y, p }) => {
+        return this.page.evaluate(({ bt, posX, posY, p }) => {
             const game = (window as any).__settlers_game__;
             if (!game) return null;
             const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
-            const ok = game.execute({ type: 'place_building', buildingType: bt, x, y, player: p });
+            const ok = game.execute({ type: 'place_building', buildingType: bt, x: posX, y: posY, player: p });
             if (!ok) return null;
             const newEntity = game.state.entities.find(
                 (e: any) => !idsBefore.has(e.id) && e.type === 2
@@ -296,7 +300,75 @@ export class GamePage {
             return newEntity
                 ? { id: newEntity.id, type: newEntity.type, subType: newEntity.subType, x: newEntity.x, y: newEntity.y, player: newEntity.player }
                 : null;
-        }, { bt: buildingType, x, y, p: player });
+        }, { bt: buildingType, posX: x, posY: y, p: player });
+    }
+
+    /**
+     * Place a resource via game.execute() command pipeline.
+     * Returns the created entity info, or null if placement failed.
+     */
+    async placeResource(materialType: number, x: number, y: number, amount = 1): Promise<{
+        id: number; type: number; subType: number; x: number; y: number; amount: number;
+    } | null> {
+        return this.page.evaluate(({ mt, posX, posY, amt }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
+            const ok = game.execute({ type: 'place_resource', materialType: mt, x: posX, y: posY, amount: amt });
+            if (!ok) return null;
+            const newEntity = game.state.entities.find(
+                (e: any) => !idsBefore.has(e.id) && e.type === 4 // EntityType.StackedResource
+            );
+            if (!newEntity) return null;
+            const resourceState = game.state.resourceStates.get(newEntity.id);
+            return {
+                id: newEntity.id,
+                type: newEntity.type,
+                subType: newEntity.subType,
+                x: newEntity.x,
+                y: newEntity.y,
+                amount: resourceState?.quantity ?? amt
+            };
+        }, { mt: materialType, posX: x, posY: y, amt: amount });
+    }
+
+    /**
+     * Find a passable tile (suitable for resource placement) by spiraling from map center.
+     * Resources require passable terrain without existing occupancy.
+     */
+    async findPassableTile(): Promise<{ x: number; y: number } | null> {
+        return this.page.evaluate(() => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            const w = game.mapSize.width;
+            const h = game.mapSize.height;
+            const cx = Math.floor(w / 2);
+            const cy = Math.floor(h / 2);
+
+            for (let r = 0; r < Math.max(w, h) / 2; r++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    for (let dy = -r; dy <= r; dy++) {
+                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+                        const tx = cx + dx;
+                        const ty = cy + dy;
+                        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+
+                        const idx = game.mapSize.toIndex(tx, ty);
+                        const gt = game.groundType[idx];
+                        // Check if passable terrain (not water, not blocked)
+                        const isPassable = gt > 8 && gt !== 32;
+                        // Check if not already occupied
+                        const key = `${tx},${ty}`;
+                        const isOccupied = game.state.tileOccupancy?.has(key);
+
+                        if (isPassable && !isOccupied) {
+                            return { x: tx, y: ty };
+                        }
+                    }
+                }
+            }
+            return null;
+        });
     }
 
     /**
@@ -307,11 +379,11 @@ export class GamePage {
     async spawnUnit(unitType = 1, x?: number, y?: number, player = 0): Promise<{
         id: number; type: number; subType: number; x: number; y: number;
     } | null> {
-        return this.page.evaluate(({ ut, x, y, p }) => {
+        return this.page.evaluate(({ ut, posX, posY, p }) => {
             const game = (window as any).__settlers_game__;
             if (!game) return null;
-            const spawnX = x ?? Math.floor(game.mapSize.width / 2);
-            const spawnY = y ?? Math.floor(game.mapSize.height / 2);
+            const spawnX = posX ?? Math.floor(game.mapSize.width / 2);
+            const spawnY = posY ?? Math.floor(game.mapSize.height / 2);
             const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
             game.execute({ type: 'spawn_unit', unitType: ut, x: spawnX, y: spawnY, player: p });
             const newEntity = game.state.entities.find(
@@ -320,7 +392,7 @@ export class GamePage {
             return newEntity
                 ? { id: newEntity.id, type: newEntity.type, subType: newEntity.subType, x: newEntity.x, y: newEntity.y }
                 : null;
-        }, { ut: unitType, x, y, p: player });
+        }, { ut: unitType, posX: x, posY: y, p: player });
     }
 
     /**
@@ -419,5 +491,41 @@ export class GamePage {
                 expect(unexpected).toHaveLength(0);
             },
         };
+    }
+
+    // ── Audio controls ──────────────────────────────────────
+
+    /** Get current audio state from debug bridge. */
+    async getAudioState(): Promise<{
+        musicEnabled: boolean;
+        musicPlaying: boolean;
+        currentMusicId: string | null;
+    }> {
+        return this.page.evaluate(() => {
+            const d = (window as any).__settlers_debug__;
+            return {
+                musicEnabled: d?.musicEnabled ?? false,
+                musicPlaying: d?.musicPlaying ?? false,
+                currentMusicId: d?.currentMusicId ?? null,
+            };
+        });
+    }
+
+    /** Toggle music on or off via SoundManager. */
+    async toggleMusic(enabled: boolean): Promise<void> {
+        await this.page.evaluate((e) => {
+            const game = (window as any).__settlers_game__;
+            game?.soundManager?.toggleMusic(e);
+        }, enabled);
+        // Wait for state to propagate
+        await this.waitForFrames(2);
+    }
+
+    /** Trigger user interaction to unlock AudioContext. */
+    async unlockAudio(): Promise<void> {
+        // Click on the canvas to trigger user interaction
+        await this.canvas.click();
+        // Wait for potential audio context resume
+        await this.page.waitForTimeout(100);
     }
 }

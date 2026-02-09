@@ -51,10 +51,20 @@ export class LogManager {
         if (typeof msg.msg !== 'string') {
             console.dir(msg.msg);
         } else {
-            if (msg.type === LogType.Debug) {
-                console.log(msg.source + '\t' + msg.msg);
-            } else {
-                console.error(msg.source + '\t' + msg.msg);
+            const formatted = msg.source + '\t' + msg.msg;
+            switch (msg.type) {
+            case LogType.Error:
+                console.error(formatted);
+                break;
+            case LogType.Warn:
+                console.warn(formatted);
+                break;
+            case LogType.Info:
+                console.info(formatted);
+                break;
+            case LogType.Debug:
+                console.log(formatted);
+                break;
             }
         }
 

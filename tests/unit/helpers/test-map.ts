@@ -2,7 +2,7 @@
  * Shared test helpers for creating map/terrain test fixtures.
  *
  * Eliminates duplicate setup code across pathfinding, placement, command,
- * building-construction, building-indicator, territory, and coordinate tests.
+ * building-construction, building-indicator, and coordinate tests.
  */
 
 import { MapSize } from '@/utilities/map-size';
