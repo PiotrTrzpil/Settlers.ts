@@ -22,7 +22,7 @@
         class="grid-item"
         :class="{
           selected: selectedJil?.index === item.index,
-          mapped: getBuildingForJob(item.index) !== null,
+          mapped: getBuildingForJob(item.index) !== null || getCarrierJobInfo(item.index)?.isMapped,
           'single-dir': getDirectionCount(item.index) === 1,
           'multi-dir': getDirectionCount(item.index) > 1
         }"
@@ -44,6 +44,10 @@
           <span v-if="getBuildingForJob(item.index)" class="building-name">
             {{ getBuildingForJob(item.index) }}
           </span>
+          <span v-else-if="getCarrierJobInfo(item.index)"
+                :class="getCarrierJobInfo(item.index)?.isMapped ? 'carrier-mapped' : 'carrier-unmapped'">
+            {{ getCarrierJobInfo(item.index)?.material }}
+          </span>
         </div>
       </div>
     </div>
@@ -55,7 +59,7 @@
           <label>Job (JIL):</label>
           <select v-model="selectedJil" @change="onSelectJil">
             <option v-for="item of jilList" :key="item.index" :value="item">
-              #{{ pad(item.index, 3) }} {{ getBuildingForJob(item.index) || '' }} - Size: {{ pad(item.length, 3) }}
+              #{{ pad(item.index, 3) }} {{ getJobLabel(item.index) }} - Size: {{ pad(item.length, 3) }}
             </option>
           </select>
         </div>
@@ -103,9 +107,12 @@ import { LogHandler } from '@/utilities/log-handler';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { IndexFileItem } from '@/resources/gfx/index-file-item';
 import { pad, loadGfxFileSet, parseGfxReaders, renderImageToCanvas } from '@/utilities/view-helpers';
-import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, GFX_FILE_NUMBERS } from '@/game/renderer/sprite-metadata';
+import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, GFX_FILE_NUMBERS, CARRIER_MATERIAL_JOB_INDICES, SETTLER_FILE_NUMBERS } from '@/game/renderer/sprite-metadata';
 import { BuildingType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
+
+// Settler files (20-24.jil) contain carrier sprites with materials
+const SETTLER_FILE_IDS = new Set(Object.values(SETTLER_FILE_NUMBERS));
 import { useCompositeGridView } from '@/composables/useGridView';
 
 import FileBrowser from '@/components/file-browser.vue';
@@ -165,9 +172,44 @@ for (const [typeStr, jobIndex] of Object.entries(RESOURCE_JOB_INDICES)) {
     }
 }
 
+// Build reverse lookup from job index to carrier material name (mapped materials)
+const jobToCarrierMaterial = new Map<number, string>();
+for (const [typeStr, jobIndex] of Object.entries(CARRIER_MATERIAL_JOB_INDICES)) {
+    if (jobIndex !== undefined) {
+        const materialType = Number(typeStr) as EMaterialType;
+        jobToCarrierMaterial.set(jobIndex, EMaterialType[materialType]);
+    }
+}
+
 // Building files are race-specific: 10=Roman, 11=Viking, 12=Mayan, 14=Trojan
 // Dark Tribe (13) uses different mappings
 const BUILDING_FILE_IDS = new Set([10, 11, 12, 14]);
+
+// Info about carrier job mapping status
+interface CarrierJobInfo {
+    material: string;
+    isMapped: boolean;
+}
+
+function getCarrierJobInfo(jobIndex: number): CarrierJobInfo | null {
+    const fileId = getCurrentFileId();
+    if (fileId === null || !SETTLER_FILE_IDS.has(fileId)) return null;
+
+    // Job 1 is empty carrier (already in UNIT_JOB_INDICES as Carrier)
+    if (jobIndex === 1) {
+        return { material: 'Empty Carrier', isMapped: true };
+    }
+
+    // Check if this job index is mapped to a material in CARRIER_MATERIAL_JOB_INDICES
+    const material = jobToCarrierMaterial.get(jobIndex);
+    if (material) {
+        return { material: `Carrier: ${material}`, isMapped: true };
+    }
+
+    // For settler files, show "Not mapped" for unmapped jobs so user can identify
+    // which carrier sprites still need to be added to CARRIER_MATERIAL_JOB_INDICES
+    return { material: 'Not mapped', isMapped: false };
+}
 
 function getCurrentFileId(): number | null {
     if (!fileName.value) return null;
@@ -195,6 +237,19 @@ function getNameForJob(jobIndex: number): string | null {
 // Keep for backwards compatibility
 function getBuildingForJob(jobIndex: number): string | null {
     return getNameForJob(jobIndex);
+}
+
+// Get a combined label for dropdown display
+function getJobLabel(jobIndex: number): string {
+    const buildingName = getBuildingForJob(jobIndex);
+    if (buildingName) return buildingName;
+
+    const carrierInfo = getCarrierJobInfo(jobIndex);
+    if (carrierInfo) {
+        return carrierInfo.isMapped ? carrierInfo.material : '[?]';
+    }
+
+    return '';
 }
 
 function onFileSelect(file: IFileSource) {
@@ -343,6 +398,18 @@ watchGridMode(renderAllGridSprites, () => jilList.value.length > 0);
 <style src="@/styles/file-viewer.css"></style>
 
 <style scoped>
+/* Carrier job status labels */
+.carrier-mapped {
+  color: #4caf50;
+  font-weight: bold;
+  font-size: 0.85em;
+}
+
+.carrier-unmapped {
+  color: #ff9800;
+  font-size: 0.8em;
+  opacity: 0.8;
+}
 /* JIL-specific overrides for larger sprites with multiple directions */
 .grid-container {
   grid-template-columns: repeat(auto-fill, minmax(550px, 1fr));

@@ -117,35 +117,72 @@ export const NUM_UNIT_DIRECTIONS = 6;
  */
 export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
     // Job 0: Unknown/placeholder
-    [UnitType.Carrier]: 1,      // Carrier without goods
-    [UnitType.Builder]: 19,    // Construction worker
-    [UnitType.Woodcutter]: 5,  // As requested by user
-    [UnitType.Swordsman]: 227, // Lvl1 swordsman (first of pair 227/228)
-    [UnitType.Bowman]: 236,    // Lvl1 bowman standing (236-240 = set1, 242-246 = set2)
-    // TODO: Identify remaining unit job indices by inspecting JIL files
-    // [UnitType.Priest]: ?,
-    // [UnitType.Pioneer]: ?,
-    // [UnitType.Thief]: ?,
-    // [UnitType.Geologist]: ?,
+    [UnitType.Carrier]: 1,      // Carrier without goods (walk cycle)
+    [UnitType.Builder]: 19,     // Construction worker
+    [UnitType.Woodcutter]: 5,   // Woodcutter
+    [UnitType.Swordsman]: 227,  // Lvl1 swordsman (first of pair 227/228)
+    [UnitType.Bowman]: 236,     // Lvl1 bowman standing (236-240 = set1, 242-246 = set2)
+    // TODO: Identify job indices by inspecting settler JIL files (20-24.jil)
+    [UnitType.Priest]: -1,      // Not yet identified
+    [UnitType.Pioneer]: -1,     // Not yet identified
+    [UnitType.Thief]: -1,       // Not yet identified
+    [UnitType.Geologist]: -1,   // Not yet identified
 };
 
 /**
- * JIL job indices for carriers carrying specific materials, in settler files (20-24.jil).
- * Each material a carrier can carry has its own set of 6-direction walk frames.
- *
- * To discover indices: open the JIL viewer (/jil-view) with a settler file (e.g. 20.jil),
- * browse jobs visually, and fill in entries here. The indices are the same across all races.
- *
- * Job 1 is the empty carrier (already in UNIT_JOB_INDICES).
- * The values below map EMaterialType -> JIL job index for the carrying-walk animation.
+ * Additional carrier animation job indices (not walk cycles).
+ * Jobs 44-48: Carrier idle animations
+ * Job 49: Striking carrier (on strike/protesting)
  */
-export const CARRIER_MATERIAL_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
-    // TODO: Fill in by inspecting settler JIL files via /jil-view.
-    // Example entries (verify visually before uncommenting):
-    // [EMaterialType.LOG]: 2,
-    // [EMaterialType.BOARD]: 3,
-    // [EMaterialType.STONE]: 4,
-};
+export const CARRIER_IDLE_JOB_INDICES = [44, 45, 46, 47, 48];
+export const CARRIER_STRIKE_JOB_INDEX = 49;
+
+/**
+ * Worker job indices for various professions and their animation states.
+ * These are in settler files (20-24.jil).
+ */
+export const WORKER_JOB_INDICES = {
+    // Digger/Landscaper (uses shovel)
+    digger: {
+        walk: 50,
+        working: 51,
+    },
+    // Smithy worker
+    smith: {
+        idle: 52,
+    },
+    // Builder
+    builder: {
+        walk: 53,  // Note: also at job 19
+    },
+    // Woodcutter
+    woodcutter: {
+        walk: 54,  // Note: also at job 5
+        withLog: 55,
+        chopping: 56,
+        cuttingLogOnGround: 57,
+    },
+    // Miner
+    miner: {
+        idle: 58,
+        working: 59,
+        walk: 60,
+        withStone: 61,
+    },
+    // Forester
+    forester: {
+        idle: 62,
+        withPlant: 63,
+        planting: 64,
+    },
+    // Farmer
+    farmer: {
+        idle: 65,
+        withGrain: 66,
+        seeding1: 67,
+        seeding2: 68,
+    },
+} as const;
 
 /**
  * Soldier unit job indices by type and level.
@@ -313,7 +350,7 @@ export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
     [EMaterialType.GRAIN]: 16,     // S4GoodType.GRAIN
     // GUNPOWDER = 17 (not in EMaterialType)
     [EMaterialType.HAMMER]: 18,    // S4GoodType.HAMMER
-    // HONEY = 19 (not in EMaterialType)
+    [EMaterialType.HONEY]: 19,     // S4GoodType.HONEY
     [EMaterialType.IRONBAR]: 20,   // S4GoodType.IRONBAR
     [EMaterialType.IRONORE]: 21,   // S4GoodType.IRONORE
     [EMaterialType.LOG]: 22,       // S4GoodType.LOG
@@ -324,16 +361,32 @@ export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
     [EMaterialType.ROD]: 27,       // S4GoodType.ROD
     [EMaterialType.SAW]: 28,       // S4GoodType.SAW
     [EMaterialType.SCYTHE]: 29,    // S4GoodType.SCYTHE
-    // SHEEP = 30 (not in EMaterialType)
-    // SHOVEL = 31 (not in EMaterialType)
+    [EMaterialType.SHEEP]: 30,     // S4GoodType.SHEEP
+    [EMaterialType.SHOVEL]: 31,    // S4GoodType.SHOVEL
     [EMaterialType.STONE]: 32,     // S4GoodType.STONE
     [EMaterialType.SULFUR]: 33,    // S4GoodType.SULFUR
     [EMaterialType.SWORD]: 34,     // S4GoodType.SWORD
     // TEQUILA = 35 (not in EMaterialType)
     [EMaterialType.WATER]: 36,     // S4GoodType.WATER
     [EMaterialType.WINE]: 37,      // S4GoodType.WINE
-    // Types not in S4GoodType: SPEAR, BLADE, GRAPES, DONKEY, GEMS
+    [EMaterialType.CATAPULT]: 38,  // Siege ammunition
+    [EMaterialType.GOOSE]: 39,     // Livestock (geese)
 };
+
+/**
+ * JIL job indices for carriers carrying specific materials, in settler files (20-24.jil).
+ * Each material a carrier can carry has its own set of 6-direction walk frames.
+ *
+ * Job 1 is the empty carrier (already in UNIT_JOB_INDICES).
+ * Carrier job indices follow the same pattern as resource JIL indices (3.jil) but +1.
+ * E.g., AGAVE resource is job #1, carrier with AGAVE is job #2.
+ */
+export const CARRIER_MATERIAL_JOB_INDICES: Partial<Record<EMaterialType, number>> =
+    Object.fromEntries(
+        Object.entries(RESOURCE_JOB_INDICES)
+            .filter(([, idx]) => idx !== undefined)
+            .map(([type, idx]) => [Number(type), idx! + 1])
+    ) as Partial<Record<EMaterialType, number>>;
 
 /**
  * Sprite information for a resource type (dropped goods).

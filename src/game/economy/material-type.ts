@@ -35,23 +35,23 @@ export enum EMaterialType {
     // Weapons
     SWORD = 22,
     BOW = 23,
-    SPEAR = 24,
-    BLADE = 25,
 
     // Additional resources
-    GRAPES = 27,
-    SULFUR = 28,
-    DONKEY = 29,
-    GEMS = 30,
-    ARMOR = 31,  // Leader helmets/equipment
-    BATTLEAXE = 32,    // Heavy battle axes (different from tool axe)
-    AGAVE = 33,         // Mayan crop/plant
-    BLOWGUN = 34,       // Mayan weapon
-    GOAT = 35,          // Mayan livestock
-    MEAD = 36,          // Honey wine
+    SULFUR = 24,
+    ARMOR = 25,  // Leader helmets/equipment
+    BATTLEAXE = 26,    // Heavy battle axes (different from tool axe)
+    AGAVE = 27,         // Mayan crop/plant
+    BLOWGUN = 28,       // Mayan weapon
+    GOAT = 29,          // Mayan livestock
+    MEAD = 30,          // Honey wine
+    HONEY = 31,         // Raw honey (for mead)
+    SHEEP = 32,         // Livestock
+    SHOVEL = 33,        // Tool for pioneers/landscapers
+    CATAPULT = 34,      // Siege ammunition
+    GOOSE = 35,         // Livestock (geese)
 
     // Special
-    NO_MATERIAL = 26,
+    NO_MATERIAL = 99,
 }
 
 export interface MaterialTypeConfig {
@@ -101,20 +101,20 @@ export const MATERIAL_CONFIGS: ReadonlyMap<EMaterialType, MaterialTypeConfig> = 
     // Weapons
     [EMaterialType.SWORD, { droppable: true, defaultPriorityIndex: 22, distributionConfigurable: false }],
     [EMaterialType.BOW, { droppable: true, defaultPriorityIndex: 23, distributionConfigurable: false }],
-    [EMaterialType.SPEAR, { droppable: true, defaultPriorityIndex: 24, distributionConfigurable: false }],
-    [EMaterialType.BLADE, { droppable: true, defaultPriorityIndex: 25, distributionConfigurable: false }],
-    [EMaterialType.BATTLEAXE, { droppable: true, defaultPriorityIndex: 26, distributionConfigurable: false }],
+    [EMaterialType.BATTLEAXE, { droppable: true, defaultPriorityIndex: 24, distributionConfigurable: false }],
 
     // Additional resources
-    [EMaterialType.GRAPES, { droppable: true, defaultPriorityIndex: 27, distributionConfigurable: false }],
-    [EMaterialType.SULFUR, { droppable: true, defaultPriorityIndex: 28, distributionConfigurable: false }],
-    [EMaterialType.DONKEY, { droppable: false, defaultPriorityIndex: 29, distributionConfigurable: false }],
-    [EMaterialType.GEMS, { droppable: true, defaultPriorityIndex: 30, distributionConfigurable: false }],
-    [EMaterialType.ARMOR, { droppable: true, defaultPriorityIndex: 31, distributionConfigurable: false }],
+    [EMaterialType.SULFUR, { droppable: true, defaultPriorityIndex: 25, distributionConfigurable: false }],
+    [EMaterialType.ARMOR, { droppable: true, defaultPriorityIndex: 26, distributionConfigurable: false }],
     [EMaterialType.AGAVE, { droppable: true, defaultPriorityIndex: 11, distributionConfigurable: true }], // Similar to GRAIN
     [EMaterialType.BLOWGUN, { droppable: true, defaultPriorityIndex: 23, distributionConfigurable: false }], // Similar to BOW
     [EMaterialType.GOAT, { droppable: false, defaultPriorityIndex: 32, distributionConfigurable: false }], // Livestock
     [EMaterialType.MEAD, { droppable: true, defaultPriorityIndex: 15, distributionConfigurable: true }], // Alcohol
+    [EMaterialType.HONEY, { droppable: true, defaultPriorityIndex: 15, distributionConfigurable: false }], // For mead
+    [EMaterialType.SHEEP, { droppable: false, defaultPriorityIndex: 33, distributionConfigurable: false }], // Livestock
+    [EMaterialType.SHOVEL, { droppable: true, defaultPriorityIndex: 21, distributionConfigurable: false }], // Tool
+    [EMaterialType.CATAPULT, { droppable: true, defaultPriorityIndex: 26, distributionConfigurable: false }], // Siege
+    [EMaterialType.GOOSE, { droppable: false, defaultPriorityIndex: 34, distributionConfigurable: false }], // Livestock
 
     // Non-droppable
     [EMaterialType.NO_MATERIAL, { droppable: false, defaultPriorityIndex: -1, distributionConfigurable: false }],
