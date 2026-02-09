@@ -36,6 +36,10 @@
 
         <!-- Buildings tab -->
         <div v-if="activeTab === 'buildings'" class="tab-content building-list" data-testid="building-palette">
+          <label class="building-option">
+            <input type="checkbox" v-model="placeBuildingsCompleted" />
+            <span>Place as completed</span>
+          </label>
           <button
             v-for="b in availableBuildings"
             :key="b.type"
@@ -205,6 +209,7 @@ import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
 import { useBuildingIcons } from '@/composables/useBuildingIcons';
 import { Race, RACE_NAMES, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
+import { gameSettings } from '@/game/game-settings';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
@@ -263,6 +268,12 @@ const availableRaces = AVAILABLE_RACES.map(race => ({
 // Building icons
 const fileManagerRef = computed(() => props.fileManager);
 const { getIconUrl } = useBuildingIcons(fileManagerRef, currentRace);
+
+// Building placement option
+const placeBuildingsCompleted = computed({
+    get: () => gameSettings.state.placeBuildingsCompleted,
+    set: (value: boolean) => { gameSettings.state.placeBuildingsCompleted = value }
+});
 
 async function onRaceChange() {
     const renderer = rendererRef.value;
@@ -338,6 +349,30 @@ async function onRaceChange() {
   gap: 2px;
   padding: 6px;
   overflow-y: auto;
+}
+
+.building-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  background: #2c1e0e;
+  border: 1px solid #4a3218;
+  border-radius: 3px;
+  color: #c8a96e;
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.building-option:hover {
+  background: #3a2810;
+  border-color: #6a4a20;
+}
+
+.building-option input[type="checkbox"] {
+  accent-color: #d4a030;
 }
 
 .resource-params {
