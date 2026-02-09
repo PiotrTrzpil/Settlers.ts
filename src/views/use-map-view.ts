@@ -16,6 +16,7 @@ import {
     EnvironmentSubLayer,
 } from '@/game/renderer/layer-visibility';
 import { debugStats } from '@/game/debug-stats';
+import { gameSettings } from '@/game/game-settings';
 import type { InputManager } from '@/game/input';
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
 
@@ -333,14 +334,10 @@ export function useMapView(
     const mapInfo = ref('');
     const game = shallowRef<Game | null>(null);
 
-    // Use debug stats for persisted settings
+    // Use game settings for persisted display settings
     const showDebug = computed({
-        get: () => debugStats.state.debugGridEnabled,
-        set: (value: boolean) => { debugStats.state.debugGridEnabled = value }
-    });
-    const showTerritoryBorders = computed({
-        get: () => debugStats.state.territoryBordersEnabled,
-        set: (value: boolean) => { debugStats.state.territoryBordersEnabled = value }
+        get: () => gameSettings.state.showDebugGrid,
+        set: (value: boolean) => { gameSettings.state.showDebugGrid = value }
     });
 
     const activeTab = ref<'buildings' | 'units' | 'resources'>('buildings');
@@ -460,7 +457,6 @@ export function useMapView(
         mapInfo,
         game,
         showDebug,
-        showTerritoryBorders,
         activeTab,
         resourceAmount,
         resourceIcons,

@@ -66,6 +66,11 @@ export interface DebugStatsState {
     selectedEntityId: number | null;
     selectedCount: number;
 
+    // Audio state (for e2e tests)
+    musicEnabled: boolean;
+    musicPlaying: boolean;
+    currentMusicId: string | null;
+
     // River texture debug
     riverSlotPermutation: number;
     riverFlipInner: boolean;
@@ -75,7 +80,6 @@ export interface DebugStatsState {
     // Debug panel UI state (persisted)
     debugPanelOpen: boolean;
     debugGridEnabled: boolean;
-    territoryBordersEnabled: boolean;
 
     // Layer panel UI state (persisted)
     layerPanelOpen: boolean;
@@ -91,7 +95,6 @@ interface PersistedDebugSettings {
     riverFlipMiddle: boolean;
     debugPanelOpen: boolean;
     debugGridEnabled: boolean;
-    territoryBordersEnabled: boolean;
     layerPanelOpen: boolean;
 }
 
@@ -105,7 +108,6 @@ const DEFAULT_SETTINGS: PersistedDebugSettings = {
     riverFlipMiddle: false,
     debugPanelOpen: false,
     debugGridEnabled: false,
-    territoryBordersEnabled: true,
     layerPanelOpen: false,
 };
 
@@ -124,7 +126,6 @@ function loadDebugSettings(): PersistedDebugSettings {
             riverFlipMiddle: parsed.riverFlipMiddle ?? DEFAULT_SETTINGS.riverFlipMiddle,
             debugPanelOpen: parsed.debugPanelOpen ?? DEFAULT_SETTINGS.debugPanelOpen,
             debugGridEnabled: parsed.debugGridEnabled ?? DEFAULT_SETTINGS.debugGridEnabled,
-            territoryBordersEnabled: parsed.territoryBordersEnabled ?? DEFAULT_SETTINGS.territoryBordersEnabled,
             layerPanelOpen: parsed.layerPanelOpen ?? DEFAULT_SETTINGS.layerPanelOpen,
         };
     } catch (e) {
@@ -198,13 +199,15 @@ class DebugStats {
             placeResourceType: 0,
             selectedEntityId: null,
             selectedCount: 0,
+            musicEnabled: true,
+            musicPlaying: false,
+            currentMusicId: null,
             riverSlotPermutation: savedSettings.riverSlotPermutation,
             riverFlipInner: savedSettings.riverFlipInner,
             riverFlipOuter: savedSettings.riverFlipOuter,
             riverFlipMiddle: savedSettings.riverFlipMiddle,
             debugPanelOpen: savedSettings.debugPanelOpen,
             debugGridEnabled: savedSettings.debugGridEnabled,
-            territoryBordersEnabled: savedSettings.territoryBordersEnabled,
             layerPanelOpen: savedSettings.layerPanelOpen,
         });
 
@@ -221,8 +224,7 @@ class DebugStats {
         const settingsKeys: (keyof PersistedDebugSettings)[] = [
             'zoomSpeed', 'panSpeed', 'riverSlotPermutation',
             'riverFlipInner', 'riverFlipOuter', 'riverFlipMiddle',
-            'debugPanelOpen', 'debugGridEnabled', 'territoryBordersEnabled',
-            'layerPanelOpen'
+            'debugPanelOpen', 'debugGridEnabled', 'layerPanelOpen'
         ];
 
         for (const key of settingsKeys) {
@@ -245,7 +247,6 @@ class DebugStats {
             riverFlipMiddle: this.state.riverFlipMiddle,
             debugPanelOpen: this.state.debugPanelOpen,
             debugGridEnabled: this.state.debugGridEnabled,
-            territoryBordersEnabled: this.state.territoryBordersEnabled,
             layerPanelOpen: this.state.layerPanelOpen,
         });
     }
@@ -310,6 +311,12 @@ class DebugStats {
         // to ensure immediate updates without frame delay
         this.state.selectedEntityId = gameState.selectedEntityId;
         this.state.selectedCount = gameState.selectedEntityIds.size;
+
+        // Update audio state
+        const soundManager = game.soundManager;
+        this.state.musicEnabled = soundManager.isMusicEnabled;
+        this.state.currentMusicId = soundManager.currentMusicId;
+        this.state.musicPlaying = soundManager.currentMusicId !== null;
     }
 }
 

@@ -154,25 +154,21 @@
           ref="rendererRef"
           :game="game"
           :debugGrid="showDebug"
-          :showTerritoryBorders="showTerritoryBorders"
           :layerVisibility="layerVisibility"
           @tileClick="onTileClick"
           class="game-canvas"
         />
 
-        <!-- Right panel container (layers + debug) -->
+        <!-- Right panel container (layers + settings + debug) -->
         <div class="right-panels">
           <layer-panel
             :counts="layerCounts"
             @update:visibility="updateLayerVisibility"
           />
+          <settings-panel />
           <debug-panel
-            :debugGrid="showDebug"
-            :showTerritoryBorders="showTerritoryBorders"
             :paused="isPaused"
             :currentRace="currentRace"
-            @update:debugGrid="showDebug = $event"
-            @update:showTerritoryBorders="showTerritoryBorders = $event"
             @togglePause="togglePause()"
           />
         </div>
@@ -195,7 +191,6 @@
       <renderer-viewer
         :game="game"
         :debugGrid="showDebug"
-        :showTerritoryBorders="showTerritoryBorders"
         :layerVisibility="layerVisibility"
         @tileClick="onTileClick"
       />
@@ -214,6 +209,7 @@ import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
 import DebugPanel from '@/components/debug-panel.vue';
 import LayerPanel from '@/components/layer-panel.vue';
+import SettingsPanel from '@/components/settings-panel.vue';
 
 const props = defineProps<{
     fileManager: FileManager;
@@ -225,7 +221,6 @@ const rendererRef = useTemplateRef<InstanceType<typeof RendererViewer>>('rendere
 const {
     game,
     showDebug,
-    showTerritoryBorders,
     activeTab,
     resourceAmount,
     resourceIcons,

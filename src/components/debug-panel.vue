@@ -3,7 +3,6 @@
     <button class="debug-toggle-btn" @click="open = !open" title="Debug Panel">
       <span class="toggle-icon">{{ open ? '&#x25BC;' : '&#x25B6;' }}</span>
       <span class="toggle-label">Debug</span>
-      <span class="fps-badge" v-if="!open">{{ stats.fps }} fps</span>
     </button>
 
     <div v-if="open" class="debug-sections">
@@ -133,24 +132,6 @@
             <span class="stat-value">{{ stats.zoom }}x</span>
           </div>
           <div class="stat-row">
-            <span class="stat-label">Zoom speed</span>
-            <span class="stat-value slider-value">
-              <input type="range" min="0.01" max="0.10" step="0.01"
-                :value="stats.zoomSpeed"
-                @input="stats.zoomSpeed = parseFloat(($event.target as HTMLInputElement).value)" />
-              {{ stats.zoomSpeed.toFixed(2) }}
-            </span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Pan speed</span>
-            <span class="stat-value slider-value">
-              <input type="range" min="5" max="100" step="5"
-                :value="stats.panSpeed"
-                @input="stats.panSpeed = parseFloat(($event.target as HTMLInputElement).value)" />
-              {{ stats.panSpeed }}
-            </span>
-          </div>
-          <div class="stat-row">
             <span class="stat-label">Canvas</span>
             <span class="stat-value">{{ stats.canvasWidth }} x {{ stats.canvasHeight }}</span>
           </div>
@@ -191,18 +172,6 @@
           Controls
         </h3>
         <div v-if="sections.controls" class="section-body">
-          <label class="control-row">
-            <input type="checkbox" :checked="debugGrid" @change="$emit('update:debugGrid', ($event.target as HTMLInputElement).checked)" />
-            <span>Debug grid</span>
-          </label>
-          <label class="control-row">
-            <input
-              type="checkbox"
-              :checked="showTerritoryBorders"
-              @change="$emit('update:showTerritoryBorders', ($event.target as HTMLInputElement).checked)"
-            />
-            <span>Territory borders</span>
-          </label>
           <div class="control-buttons">
             <button class="ctrl-btn" @click="$emit('togglePause')">
               {{ paused ? 'Resume' : 'Pause' }}
@@ -274,33 +243,6 @@
         </div>
       </section>
 
-      <!-- Audio -->
-      <section class="debug-section">
-        <h3 class="section-header" @click="sections.audio = !sections.audio">
-          <span class="caret">{{ sections.audio ? '&#x25BC;' : '&#x25B6;' }}</span>
-          Audio
-        </h3>
-        <div v-if="sections.audio" class="section-body">
-          <label class="control-row">
-            <input type="checkbox" :checked="audioState.musicEnabled" @change="toggleMusic" />
-            <span>Enable Music</span>
-          </label>
-          <div class="stat-row">
-            <span class="stat-label">Volume</span>
-            <span class="stat-value slider-value">
-              <input type="range" min="0" max="1" step="0.1"
-                :value="audioState.musicVolume"
-                @input="updateMusicVolume" />
-              {{ audioState.musicVolume.toFixed(1) }}
-            </span>
-          </div>
-          <div class="control-buttons">
-            <button class="ctrl-btn" @click="playRandomMusic">
-              Next Track ({{ currentRaceName }})
-            </button>
-          </div>
-        </div>
-      </section>
     </div>
   </div>
 </template>
@@ -310,20 +252,15 @@
 import { reactive, computed } from 'vue';
 import { debugStats } from '@/game/debug-stats';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
-import { RACE_NAMES, Race } from '@/game/renderer/sprite-metadata';
 import type { Game } from '@/game/game';
 import { useDebugMapObjects } from './use-debug-map-objects';
 
 const props = defineProps<{
-    debugGrid: boolean;
-    showTerritoryBorders: boolean;
     paused: boolean;
     currentRace: number; // Race enum
 }>();
 
 defineEmits<{
-    (e: 'update:debugGrid', value: boolean): void;
-    (e: 'update:showTerritoryBorders', value: boolean): void;
     (e: 'togglePause'): void;
 }>();
 
@@ -343,35 +280,7 @@ const sections = reactive({
     tile: true,
     controls: true,
     mapObjects: false,
-    audio: true,
 });
-
-// Audio state
-const audioState = reactive({
-    musicEnabled: true,
-    musicVolume: 0.5
-});
-
-
-const currentRaceName = computed(() => {
-    return RACE_NAMES[props.currentRace as Race] || 'Unknown';
-});
-
-function toggleMusic(e: Event) {
-    const enabled = (e.target as HTMLInputElement).checked;
-    audioState.musicEnabled = enabled;
-    getGame()?.soundManager.toggleMusic(enabled);
-}
-
-function updateMusicVolume(e: Event) {
-    const vol = parseFloat((e.target as HTMLInputElement).value);
-    audioState.musicVolume = vol;
-    getGame()?.soundManager.setMusicVolume(vol);
-}
-
-function playRandomMusic() {
-    getGame()?.soundManager.playRandomMusic(props.currentRace as Race);
-}
 
 // Map objects functionality (extracted to composable)
 const getGame = (): Game | null => (window as any).__settlers_game__ ?? null;
@@ -469,17 +378,6 @@ const fpsClass = computed(() => {
 .toggle-icon {
   font-size: 8px;
   width: 10px;
-}
-
-.fps-badge {
-  margin-left: auto;
-  padding: 1px 5px;
-  background: #1a2a1a;
-  border: 1px solid #2a4a2a;
-  border-radius: 2px;
-  color: #80c080;
-  font-weight: normal;
-  font-size: 10px;
 }
 
 .debug-sections {
