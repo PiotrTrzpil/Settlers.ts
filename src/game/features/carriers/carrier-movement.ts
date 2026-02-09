@@ -5,12 +5,17 @@
  * - Issue movement commands to the movement system
  * - Find approach positions for buildings (adjacent walkable tiles)
  * - Track pending movements for arrival handling
+ *
+ * Design decisions:
+ * - Does NOT handle carrier state changes (status, jobs) - that's CarrierSystem's job
+ * - Uses movement system's moveUnit() for pathfinding - doesn't implement own pathfinding
+ * - Pending movements are cleared by the system after arrival is handled
  */
 
 import type { GameState } from '../../game-state';
 import type { CarrierManager } from './carrier-manager';
 import { CarrierStatus } from './carrier-state';
-import { getAllNeighbors } from '../../systems/hex-directions';
+import { getAllNeighbors, hexDistance } from '../../systems/hex-directions';
 import { EntityType } from '../../entity';
 
 /**
@@ -21,6 +26,18 @@ export interface PendingMovement {
     targetBuildingId: number;
     /** 'pickup' | 'deliver' | 'return_home' */
     movementType: 'pickup' | 'deliver' | 'return_home';
+    /** Position carrier is moving towards (for validation) */
+    targetX: number;
+    targetY: number;
+}
+
+/**
+ * Result of a movement start operation.
+ */
+export interface MovementStartResult {
+    success: boolean;
+    /** Reason for failure if success is false */
+    failureReason?: 'carrier_not_found' | 'building_not_found' | 'no_approach_position' | 'pathfinding_failed';
 }
 
 /**
@@ -46,13 +63,13 @@ export class CarrierMovementController {
      * @param carrierId Entity ID of the carrier
      * @param targetBuildingId Entity ID of the building to pick up from
      * @param gameState Game state for position lookup
-     * @returns true if movement was successfully started
+     * @returns Result with success flag and failure reason if applicable
      */
     startPickupMovement(
         carrierId: number,
         targetBuildingId: number,
         gameState: GameState,
-    ): boolean {
+    ): MovementStartResult {
         const result = this.startMovementToBuilding(
             carrierId,
             targetBuildingId,
@@ -60,7 +77,7 @@ export class CarrierMovementController {
             gameState,
         );
 
-        if (result) {
+        if (result.success) {
             this.carrierManager.setStatus(carrierId, CarrierStatus.Walking);
         }
 
@@ -73,13 +90,13 @@ export class CarrierMovementController {
      * @param carrierId Entity ID of the carrier
      * @param targetBuildingId Entity ID of the building to deliver to
      * @param gameState Game state for position lookup
-     * @returns true if movement was successfully started
+     * @returns Result with success flag and failure reason if applicable
      */
     startDeliveryMovement(
         carrierId: number,
         targetBuildingId: number,
         gameState: GameState,
-    ): boolean {
+    ): MovementStartResult {
         const result = this.startMovementToBuilding(
             carrierId,
             targetBuildingId,
@@ -87,7 +104,7 @@ export class CarrierMovementController {
             gameState,
         );
 
-        if (result) {
+        if (result.success) {
             this.carrierManager.setStatus(carrierId, CarrierStatus.Walking);
         }
 
@@ -99,11 +116,13 @@ export class CarrierMovementController {
      *
      * @param carrierId Entity ID of the carrier
      * @param gameState Game state for position lookup
-     * @returns true if movement was successfully started
+     * @returns Result with success flag and failure reason if applicable
      */
-    startReturnMovement(carrierId: number, gameState: GameState): boolean {
+    startReturnMovement(carrierId: number, gameState: GameState): MovementStartResult {
         const carrier = this.carrierManager.getCarrier(carrierId);
-        if (!carrier) return false;
+        if (!carrier) {
+            return { success: false, failureReason: 'carrier_not_found' };
+        }
 
         const result = this.startMovementToBuilding(
             carrierId,
@@ -112,11 +131,23 @@ export class CarrierMovementController {
             gameState,
         );
 
-        if (result) {
+        if (result.success) {
             this.carrierManager.setStatus(carrierId, CarrierStatus.Walking);
         }
 
         return result;
+    }
+
+    /**
+     * Cancel a pending movement for a carrier.
+     * Does NOT stop the actual movement (unit will continue to destination),
+     * but clears the pending movement record so arrival won't be handled.
+     *
+     * @param carrierId Entity ID of the carrier
+     * @returns true if a pending movement was cancelled
+     */
+    cancelMovement(carrierId: number): boolean {
+        return this.pendingMovements.delete(carrierId);
     }
 
     /**
@@ -127,23 +158,33 @@ export class CarrierMovementController {
         targetBuildingId: number,
         movementType: 'pickup' | 'deliver' | 'return_home',
         gameState: GameState,
-    ): boolean {
+    ): MovementStartResult {
         const carrier = this.carrierManager.getCarrier(carrierId);
-        if (!carrier) return false;
+        if (!carrier) {
+            return { success: false, failureReason: 'carrier_not_found' };
+        }
 
         const targetBuilding = gameState.getEntity(targetBuildingId);
-        if (!targetBuilding) return false;
+        if (!targetBuilding) {
+            return { success: false, failureReason: 'building_not_found' };
+        }
+
+        // Get carrier's current position for smarter approach selection
+        const carrierEntity = gameState.getEntity(carrierId);
+        const carrierX = carrierEntity?.x ?? 0;
+        const carrierY = carrierEntity?.y ?? 0;
 
         // Find an adjacent walkable tile to approach the building
         const approachPos = this.findApproachPosition(
             targetBuilding.x,
             targetBuilding.y,
+            carrierX,
+            carrierY,
             gameState,
         );
 
         if (!approachPos) {
-            // No walkable tile adjacent to the building
-            return false;
+            return { success: false, failureReason: 'no_approach_position' };
         }
 
         // Issue movement command to the movement system
@@ -154,7 +195,7 @@ export class CarrierMovementController {
         );
 
         if (!moveSuccess) {
-            return false;
+            return { success: false, failureReason: 'pathfinding_failed' };
         }
 
         // Track this pending movement
@@ -162,47 +203,47 @@ export class CarrierMovementController {
             carrierId,
             targetBuildingId,
             movementType,
+            targetX: approachPos.x,
+            targetY: approachPos.y,
         });
 
-        return true;
+        return { success: true };
     }
 
     /**
      * Find an adjacent walkable tile to approach a building.
      *
-     * Prioritizes tiles closer to center of map (arbitrary but consistent).
+     * Prioritizes tiles closest to the carrier's current position.
      * Returns null if no walkable neighbor exists.
      *
      * @param buildingX Building anchor X coordinate
      * @param buildingY Building anchor Y coordinate
+     * @param carrierX Carrier's current X coordinate
+     * @param carrierY Carrier's current Y coordinate
      * @param gameState Game state for terrain and occupancy checks
      * @returns Approach position or null if none found
      */
     findApproachPosition(
         buildingX: number,
         buildingY: number,
+        carrierX: number,
+        carrierY: number,
         gameState: GameState,
     ): { x: number; y: number } | null {
         const neighbors = getAllNeighbors({ x: buildingX, y: buildingY });
 
-        // Filter to walkable, unoccupied tiles
+        // Filter to walkable tiles (not occupied by buildings)
         const walkable = neighbors.filter(pos => {
-            // Check bounds (assume movement system handles this, but be safe)
+            // Check bounds
             if (pos.x < 0 || pos.y < 0) return false;
 
-            // Check if tile is passable terrain
-            // We need the terrain data from the movement system
-            // For now, check if a unit is NOT occupying the tile
-            const occupied = gameState.tileOccupancy.has(`${pos.x},${pos.y}`);
-            if (occupied) {
-                // Check if it's occupied by a building (can't walk there)
-                // or by a unit (might be able to wait or push)
-                const occupant = gameState.getEntityAt(pos.x, pos.y);
-                if (occupant && occupant.type === EntityType.Building) {
-                    return false;
-                }
+            // Check if tile is occupied by a building
+            const occupant = gameState.getEntityAt(pos.x, pos.y);
+            if (occupant && occupant.type === EntityType.Building) {
+                return false;
             }
 
+            // Units on the tile are OK - pathfinding/movement system handles them
             return true;
         });
 
@@ -210,7 +251,13 @@ export class CarrierMovementController {
             return null;
         }
 
-        // Return the first available position (could prioritize by distance to carrier)
+        // Sort by distance to carrier and pick closest
+        walkable.sort((a, b) => {
+            const distA = hexDistance(a.x, a.y, carrierX, carrierY);
+            const distB = hexDistance(b.x, b.y, carrierX, carrierY);
+            return distA - distB;
+        });
+
         return walkable[0];
     }
 

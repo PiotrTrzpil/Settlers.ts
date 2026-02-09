@@ -50,7 +50,8 @@ describe('CarrierMovementController', () => {
             // Add a building at (10, 10)
             addBuilding(gameState, 10, 10, BuildingType.WoodcutterHut, 0);
 
-            const pos = movementController.findApproachPosition(10, 10, gameState);
+            // Carrier at (5, 5) approaching building at (10, 10)
+            const pos = movementController.findApproachPosition(10, 10, 5, 5, gameState);
 
             expect(pos).not.toBeNull();
             // Should be one of the 6 hex neighbors of (10, 10)
@@ -72,7 +73,8 @@ describe('CarrierMovementController', () => {
             addBuilding(gameState, 9, 10, BuildingType.WoodcutterHut, 0);
             // Leave (10, 9) free
 
-            const pos = movementController.findApproachPosition(10, 10, gameState);
+            // Carrier at (10, 5) approaching from north
+            const pos = movementController.findApproachPosition(10, 10, 10, 5, gameState);
 
             // Only (10, 9) should be available
             expect(pos).toEqual({ x: 10, y: 9 });
@@ -88,7 +90,8 @@ describe('CarrierMovementController', () => {
             addBuilding(gameState, 9, 10, BuildingType.WoodcutterHut, 0);
             addBuilding(gameState, 10, 9, BuildingType.WoodcutterHut, 0);
 
-            const pos = movementController.findApproachPosition(10, 10, gameState);
+            // Carrier at (5, 5), all neighbors blocked
+            const pos = movementController.findApproachPosition(10, 10, 5, 5, gameState);
 
             expect(pos).toBeNull();
         });
@@ -109,11 +112,13 @@ describe('CarrierMovementController', () => {
 
             expect(movementController.hasPendingMovement(carrier.id)).toBe(true);
             const pending = movementController.getPendingMovement(carrier.id);
-            expect(pending).toEqual({
-                carrierId: carrier.id,
-                targetBuildingId: target.id,
-                movementType: 'pickup',
-            });
+            expect(pending).toBeDefined();
+            expect(pending?.carrierId).toBe(carrier.id);
+            expect(pending?.targetBuildingId).toBe(target.id);
+            expect(pending?.movementType).toBe('pickup');
+            // Also has targetX/targetY for approach position
+            expect(typeof pending?.targetX).toBe('number');
+            expect(typeof pending?.targetY).toBe('number');
         });
 
         it('should track pending movements after starting delivery', () => {
@@ -198,22 +203,24 @@ describe('CarrierMovementController', () => {
     // ---------------------------------------------------------------------------
 
     describe('error cases', () => {
-        it('should return false if carrier does not exist', () => {
+        it('should return failure result if carrier does not exist', () => {
             const target = addBuilding(gameState, 10, 10, BuildingType.WoodcutterHut, 0);
 
             const result = movementController.startPickupMovement(999, target.id, gameState);
 
-            expect(result).toBe(false);
+            expect(result.success).toBe(false);
+            expect(result.failureReason).toBe('carrier_not_found');
         });
 
-        it('should return false if target building does not exist', () => {
+        it('should return failure result if target building does not exist', () => {
             const tavern = addBuilding(gameState, 5, 5, BuildingType.ResidenceSmall, 0);
             const { entity: carrier } = addUnit(gameState, 6, 6);
             carrierManager.createCarrier(carrier.id, tavern.id);
 
             const result = movementController.startPickupMovement(carrier.id, 999, gameState);
 
-            expect(result).toBe(false);
+            expect(result.success).toBe(false);
+            expect(result.failureReason).toBe('building_not_found');
         });
     });
 });
