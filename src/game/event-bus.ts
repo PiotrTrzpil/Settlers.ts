@@ -95,25 +95,43 @@ export interface GameEvents {
         newStatus: number;
     };
 
-    /** Emitted when a carrier completes a pickup */
-    'carrier:pickupComplete': {
+    /** Emitted when a carrier arrives at a building for pickup */
+    'carrier:arrivedForPickup': {
         entityId: number;
-        material: number;
-        amount: number;
-        fromBuilding: number;
+        buildingId: number;
     };
 
-    /** Emitted when a carrier completes a delivery */
-    'carrier:deliveryComplete': {
+    /** Emitted when a carrier arrives at a building for delivery */
+    'carrier:arrivedForDelivery': {
         entityId: number;
+        buildingId: number;
+    };
+
+    /** Emitted when a carrier arrives at their home tavern */
+    'carrier:arrivedHome': {
+        entityId: number;
+        homeBuilding: number;
+    };
+
+    /** Emitted when a carrier completes a pickup (material transferred) */
+    'carrier:pickupComplete': {
+        entityId: number;
+        fromBuilding: number;
         material: number;
         amount: number;
+    };
+
+    /** Emitted when a carrier completes a delivery (material transferred) */
+    'carrier:deliveryComplete': {
+        entityId: number;
         toBuilding: number;
+        material: number;
+        amount: number;
         /** Amount that couldn't be delivered (destination full) */
         overflow: number;
     };
 
-    /** Emitted when a carrier returns to their home tavern */
+    /** Emitted when a carrier returns to their home tavern and becomes idle/resting */
     'carrier:returnedHome': {
         entityId: number;
         homeBuilding: number;
