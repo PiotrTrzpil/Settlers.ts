@@ -719,7 +719,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             this.frameContext.culledCount
         );
 
-        // Sort by depth using optimized radix sort
+        // Sort by depth using optimized sorter
         profiler.beginPhase('sort');
         const sortCtx: OptimizedSortContext = {
             spriteManager: this.spriteManager,
