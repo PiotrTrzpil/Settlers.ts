@@ -35,6 +35,29 @@ export interface GameEvents {
         y: number;
         player: number;
     };
+    /** Emitted when terrain is modified (e.g., during building construction leveling) */
+    'terrain:modified': Record<string, never>;
+
+    // === Movement Events ===
+
+    /** Emitted when a unit starts moving */
+    'unit:movementStarted': {
+        entityId: number;
+        direction: number;
+    };
+
+    /** Emitted when a unit stops moving (becomes idle) */
+    'unit:movementStopped': {
+        entityId: number;
+        direction: number;
+    };
+
+    /** Emitted when a unit's facing direction changes during movement */
+    'unit:directionChanged': {
+        entityId: number;
+        direction: number;
+        previousDirection: number;
+    };
 }
 
 type EventHandler<T> = (payload: T) => void;
