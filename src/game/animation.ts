@@ -96,6 +96,7 @@ export interface AnimationData {
 
 /**
  * Creates a default animation state.
+ * Defaults to not playing (static pose) - movement events will start animation.
  */
 export function createAnimationState(
     sequenceKey: string = 'default',
@@ -106,7 +107,7 @@ export function createAnimationState(
         currentFrame: 0,
         elapsedMs: 0,
         direction,
-        playing: true,
+        playing: false,
     };
 }
 

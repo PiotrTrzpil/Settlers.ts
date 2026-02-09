@@ -719,14 +719,46 @@ export class SpriteMetadataRegistry {
         if (!firstFrame) return;
 
         const sequences = new Map<string, Map<number, AnimationSequence>>();
-        sequences.set(ANIMATION_SEQUENCES.DEFAULT, directionMap);
 
-        // For units, also register 'walk' as an alias so the idle-behavior
-        // system can switch between 'default' (idle) and 'walk' sequences.
-        // Currently both point to the same animation data; separate idle/walk
-        // sprites can be loaded independently in the future.
+        // For units, create separate idle and walk sequences:
+        // - Idle (DEFAULT): only frame 0 (standing pose)
+        // - Walk: frames 1+ (walk cycle, excluding standing frame)
         if (entityType === EntityType.Unit) {
-            sequences.set(ANIMATION_SEQUENCES.WALK, directionMap);
+            // Idle sequence: just frame 0 for each direction
+            const idleDirectionMap = new Map<number, AnimationSequence>();
+            for (const [direction, frames] of directionFrames) {
+                if (frames.length > 0) {
+                    idleDirectionMap.set(direction, {
+                        frames: [frames[0]],
+                        frameDurationMs,
+                        loop: false, // Single frame, no loop needed
+                    });
+                }
+            }
+            sequences.set(ANIMATION_SEQUENCES.DEFAULT, idleDirectionMap);
+
+            // Walk sequence: frames 1+ (skip standing frame)
+            const walkDirectionMap = new Map<number, AnimationSequence>();
+            for (const [direction, frames] of directionFrames) {
+                if (frames.length > 1) {
+                    walkDirectionMap.set(direction, {
+                        frames: frames.slice(1), // Skip frame 0
+                        frameDurationMs,
+                        loop,
+                    });
+                } else if (frames.length === 1) {
+                    // Fallback: if only 1 frame, use it for walk too
+                    walkDirectionMap.set(direction, {
+                        frames,
+                        frameDurationMs,
+                        loop,
+                    });
+                }
+            }
+            sequences.set(ANIMATION_SEQUENCES.WALK, walkDirectionMap);
+        } else {
+            // Non-units: use all frames for default sequence
+            sequences.set(ANIMATION_SEQUENCES.DEFAULT, directionMap);
         }
 
         const animationData: AnimationData = {
