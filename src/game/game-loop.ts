@@ -153,5 +153,6 @@ export class GameLoop {
         }
 
         updateBuildingConstruction(this.gameState, dt, terrainContext);
+        this.gameState.lumberjackSystem.update(this.gameState, dt);
     }
 }

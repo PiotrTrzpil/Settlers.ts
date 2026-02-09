@@ -9,7 +9,7 @@ const yieldToEventLoop = (): Promise<void> =>
 const DEFAULT_BATCH_SIZE = 5;
 
 /** Threshold for logging slow batches (ms) */
-const SLOW_BATCH_THRESHOLD_MS = 16; // One frame at 60fps
+const _SLOW_BATCH_THRESHOLD_MS = 16; // One frame at 60fps
 
 /**
  * Process items in parallel batches, yielding between batches.
@@ -24,7 +24,7 @@ export async function processBatched<T, R>(
     let resultIdx = 0;
 
     for (let i = 0; i < items.length; i += batchSize) {
-        const batchStart = performance.now();
+        const _batchStart = performance.now();
         const batchEnd = Math.min(i + batchSize, items.length);
         const batchCount = batchEnd - i;
 
@@ -41,10 +41,10 @@ export async function processBatched<T, R>(
             results[resultIdx++] = batchResults[j];
         }
 
-        const batchTime = performance.now() - batchStart;
-        if (batchTime > SLOW_BATCH_THRESHOLD_MS) {
-            console.info(`[Batch] batch ${Math.floor(i / batchSize) + 1} (${batchCount} items) took ${batchTime.toFixed(1)}ms`);
-        }
+        // const batchTime = performance.now() - batchStart;
+        // if (batchTime > SLOW_BATCH_THRESHOLD_MS) {
+        //     console.info(`[Batch] batch ${Math.floor(i / batchSize) + 1} (${batchCount} items) took ${batchTime.toFixed(1)}ms`);
+        // }
 
         if (batchEnd < items.length) {
             await yieldToEventLoop();

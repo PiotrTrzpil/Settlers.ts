@@ -64,8 +64,8 @@ class Slot {
     }
 }
 
-/** Maximum atlas size (16384x16384 = 1GB) - needed for all sprites with 4 directions */
-const MAX_ATLAS_SIZE = 16384;
+/** Maximum atlas size (32768x32768 = 4GB) - increased to fit all tree textures */
+const MAX_ATLAS_SIZE = 32768;
 
 /** Initial atlas size - start at 8192 to avoid expensive grow operations during loading.
  * 8192x8192 = 256MB which is acceptable for modern systems. */
@@ -141,25 +141,29 @@ export class EntityTextureAtlas extends ShaderTexture {
         const paddedWidth = width + ATLAS_PADDING * 2;
         const paddedHeight = height + ATLAS_PADDING * 2;
 
-        // Find an existing slot with matching padded height and enough space
-        let slot = this.slots.find(s => s.height === paddedHeight && s.leftSize >= paddedWidth);
+        // Bucket height to improve row sharing (reduces waste from slight height variations)
+        // Round up to nearest 16 pixels
+        const bucketHeight = Math.ceil(paddedHeight / 16) * 16;
+
+        // Find an existing slot with matching bucketed height and enough space
+        let slot = this.slots.find(s => s.height === bucketHeight && s.leftSize >= paddedWidth);
 
         if (!slot) {
             // Need to create a new slot (row)
             const freeY = this.slots.length > 0 ? this.slots[this.slots.length - 1].bottom : 0;
 
-            // Check if we have vertical space
-            if (freeY + paddedHeight > this.atlasHeight) {
+            // Check if we have vertical space (using bucketHeight)
+            if (freeY + bucketHeight > this.atlasHeight) {
                 // Try to grow the atlas
                 if (!this.grow()) {
-                    EntityTextureAtlas.log.error(`Atlas full: cannot fit ${width}x${height} sprite (max size reached)`);
+                    EntityTextureAtlas.log.error(`Atlas full: cannot fit ${width}x${height} sprite (max size reached or alloc failed)`);
                     return null;
                 }
                 // After growing, retry finding/creating a slot
                 return this.reserve(width, height);
             }
 
-            slot = new Slot(freeY, this.atlasWidth, paddedHeight);
+            slot = new Slot(freeY, this.atlasWidth, bucketHeight);
             this.slots.push(slot);
         }
 
@@ -197,7 +201,13 @@ export class EntityTextureAtlas extends ShaderTexture {
         EntityTextureAtlas.log.debug(`Growing atlas from ${this.atlasWidth} to ${newSize}`);
 
         const byteLength = newSize * newSize * 4;
-        const newData = new Uint8Array(byteLength);
+        let newData: Uint8Array;
+        try {
+            newData = new Uint8Array(byteLength);
+        } catch (e) {
+            EntityTextureAtlas.log.error(`Failed to allocate atlas memory ${newSize}x${newSize} (${byteLength} bytes): ${e}`);
+            return false;
+        }
 
         this.fillTransparent(newData, newSize * newSize);
 
@@ -232,7 +242,7 @@ export class EntityTextureAtlas extends ShaderTexture {
         }
 
         const elapsed = performance.now() - start;
-        console.warn(`[Atlas] grow ${this.atlasWidth/2} -> ${newSize} took ${elapsed.toFixed(1)}ms (${this.reservedRegions.length} regions)`);
+        console.warn(`[Atlas] grow ${this.atlasWidth / 2} -> ${newSize} took ${elapsed.toFixed(1)}ms (${this.reservedRegions.length} regions)`);
 
         return true;
     }
@@ -277,6 +287,83 @@ export class EntityTextureAtlas extends ShaderTexture {
     }
 
     /**
+     * Extract a region of the atlas as ImageData (for UI display).
+     */
+    public extractRegion(region: AtlasRegion): ImageData | null {
+        if (!this.imgData) return null;
+
+        const { x, y, width, height } = region;
+        const totalW = this.atlasWidth;
+
+        // Validate bounds
+        if (x < 0 || y < 0 || x + width > totalW || y + height > this.atlasHeight) {
+            EntityTextureAtlas.log.error(`extractRegion out of bounds: ${x},${y} ${width}x${height} in ${totalW}x${this.atlasHeight}`);
+            return null;
+        }
+
+        try {
+            const data = new Uint8ClampedArray(width * height * 4);
+
+            for (let row = 0; row < height; row++) {
+                const srcStart = ((y + row) * totalW + x) * 4;
+                const srcEnd = srcStart + width * 4;
+                const dstStart = row * width * 4;
+
+                // Copy row data
+                data.set(this.imgData.subarray(srcStart, srcEnd), dstStart);
+            }
+
+            return new ImageData(data, width, height);
+        } catch (e) {
+            EntityTextureAtlas.log.error(`Failed to extract region: ${e}`);
+            return null;
+        }
+    }
+
+    private gpuWidth = 0;
+    private gpuHeight = 0;
+
+    /**
+     * Update the atlas texture on the GPU.
+     * Call this periodically during loading to show progressive updates.
+     */
+    public update(gl: WebGL2RenderingContext): void {
+        super.bind(gl);
+
+        // If size changed or not yet uploaded, do full upload
+        if (this.atlasWidth !== this.gpuWidth || this.atlasHeight !== this.gpuHeight) {
+            gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                0,
+                gl.RGBA8,
+                this.atlasWidth,
+                this.atlasHeight,
+                0,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                this.imgData
+            );
+            this.gpuWidth = this.atlasWidth;
+            this.gpuHeight = this.atlasHeight;
+        } else {
+            // Size same, just re-upload content
+            // TODO: Optimize with texSubImage2D for dirty rows only
+            gl.texSubImage2D(
+                gl.TEXTURE_2D,
+                0,
+                0,
+                0,
+                this.atlasWidth,
+                this.atlasHeight,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                this.imgData
+            );
+        }
+    }
+
+    /**
      * Upload the atlas to the GPU as an RGBA8 texture.
      * Uses NEAREST filtering to preserve pixel-art style.
      */
@@ -291,20 +378,7 @@ export class EntityTextureAtlas extends ShaderTexture {
             `${this.reservedRegions.length} sprites, ${utilization}% height used`
         );
 
-        super.bind(gl);
-
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
-        gl.texImage2D(
-            gl.TEXTURE_2D,
-            0,
-            gl.RGBA8,
-            this.atlasWidth,
-            this.atlasHeight,
-            0,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            this.imgData
-        );
+        this.update(gl);
     }
 
     /**

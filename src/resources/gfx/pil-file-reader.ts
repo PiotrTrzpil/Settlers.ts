@@ -15,6 +15,10 @@ export class PilFileReader extends ResourceFile {
         return this.offsetTable[gfxImageIndex];
     }
 
+    public get length(): number {
+        return this.offsetTable.length;
+    }
+
     constructor(resourceReader: BinaryReader) {
         super();
 

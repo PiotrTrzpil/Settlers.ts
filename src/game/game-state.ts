@@ -2,6 +2,7 @@ import { Entity, EntityType, UnitType, BuildingState, BuildingConstructionPhase,
 import { EMaterialType } from './economy/material-type';
 import { MovementSystem, MovementController } from './systems/movement/index';
 import { cleanupIdleState } from './systems/idle-behavior';
+import { LumberjackSystem } from './systems/lumberjack-system';
 
 /** Default building construction duration in seconds */
 export const DEFAULT_CONSTRUCTION_DURATION = 30;
@@ -34,7 +35,7 @@ export interface UnitStateLookup {
  * Provides backward-compatible read access to movement state.
  */
 class UnitStateAdapter implements UnitStateView {
-    constructor(private controller: MovementController) {}
+    constructor(private controller: MovementController) { }
 
     get entityId(): number { return this.controller.entityId }
     get path(): ReadonlyArray<{ x: number; y: number }> { return this.controller.path }
@@ -50,7 +51,7 @@ class UnitStateAdapter implements UnitStateView {
  * Wraps MovementSystem for backward compatibility with existing code.
  */
 class UnitStateMap implements UnitStateLookup {
-    constructor(private movementSystem: MovementSystem) {}
+    constructor(private movementSystem: MovementSystem) { }
 
     get(entityId: number): UnitStateView | undefined {
         const controller = this.movementSystem.getController(entityId);
@@ -109,6 +110,8 @@ export class GameState {
     /** Spatial lookup: "x,y" -> entityId */
     public tileOccupancy: Map<string, number> = new Map();
 
+    public readonly lumberjackSystem = new LumberjackSystem();
+
     constructor() {
         this.unitStates = new UnitStateMap(this.movement);
 
@@ -136,7 +139,10 @@ export class GameState {
      * For units, selectable and speed default to the UnitTypeConfig values
      * unless explicitly overridden.
      */
-    public addEntity(type: EntityType, subType: number, x: number, y: number, player: number, selectable?: boolean): Entity {
+    public addEntity(
+        type: EntityType, subType: number, x: number, y: number,
+        player: number, selectable?: boolean, variation?: number
+    ): Entity {
         // Determine selectability: explicit override > unit type config > true
         let resolvedSelectable: boolean | undefined;
         if (selectable !== undefined) {
@@ -154,6 +160,7 @@ export class GameState {
             player,
             subType,
             selectable: resolvedSelectable,
+            variation: variation ?? 0,
         };
 
         this.entities.push(entity);

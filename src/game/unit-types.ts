@@ -15,6 +15,7 @@ export enum UnitType {
     Pioneer = 6,
     Thief = 7,
     Geologist = 8,
+    Lumberjack = 9,
 }
 
 /**
@@ -49,6 +50,7 @@ export const UNIT_TYPE_CONFIG: Record<UnitType, UnitTypeConfig> = {
     [UnitType.Pioneer]: { name: 'Pioneer', speed: 2, selectable: true, military: false },
     [UnitType.Thief]: { name: 'Thief', speed: 3, selectable: true, military: false },
     [UnitType.Geologist]: { name: 'Geologist', speed: 1.5, selectable: true, military: false },
+    [UnitType.Lumberjack]: { name: 'Lumberjack', speed: 2, selectable: true, military: false },
 };
 
 /** Get the default selectable state for a unit type. */

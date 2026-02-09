@@ -11,12 +11,16 @@ export class PaletteCollection extends ResourceFile {
     private pilFile: PilFileReader;
     private paletteFileOffset: number;
 
-    public getPalette():Palette {
+    public getPalette(): Palette {
         return this.palette;
     }
 
-    public getOffset(gfxImageIndex: number):number {
+    public getOffset(gfxImageIndex: number): number {
         return (this.pilFile.getOffset(gfxImageIndex) - this.paletteFileOffset) / 2;
+    }
+
+    public get length(): number {
+        return this.pilFile.length;
     }
 
     public constructor(pa6File: BinaryReader, pilFile: PilFileReader) {

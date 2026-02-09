@@ -36,6 +36,14 @@ import {
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
 
+/** Rectangular bounds for culling */
+interface Bounds {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+}
+
 import {
     TEXTURE_UNIT_SPRITE_ATLAS,
     BASE_QUAD,
@@ -60,12 +68,17 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private groundHeight: Uint8Array;
 
     // Extracted managers and renderers
-    private spriteManager: SpriteRenderManager | null = null;
+    public spriteManager: SpriteRenderManager | null = null;
     private spriteBatchRenderer: SpriteBatchRenderer;
     private selectionOverlayRenderer: SelectionOverlayRenderer;
     private depthSorter: EntityDepthSorter;
     private territoryBorderRenderer: TerritoryBorderRenderer;
     private buildingIndicatorRenderer: BuildingIndicatorRenderer;
+
+    // Debug logging state
+    private lastViewPointX = 0;
+    private lastViewPointY = 0;
+    private lastZoom = 0;
 
     // Entity data to render (set externally each frame)
     public entities: Entity[] = [];
@@ -85,6 +98,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     public previewTile: TileCoord | null = null;
     public previewValid = false;
     public previewBuildingType: BuildingType | null = null;
+    public previewMaterialType: EMaterialType | null = null;
+    public previewVariation: number | null = null;
 
     // Territory visualization
     public territoryMap: TerritoryMap | null = null;
@@ -351,7 +366,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (animatedEntry && entity.animationState) {
             return getAnimatedSprite(entity.animationState, animatedEntry.animationData, animatedEntry.staticSprite);
         }
-        return this.spriteManager.getMapObject(mapObjectType);
+        if (mapObjectType !== undefined) {
+            return this.spriteManager.getMapObject(mapObjectType, entity.variation);
+        }
+        return null;
     }
 
     /** Get sprite entry for a unit entity (returns null if transitioning) */
@@ -384,9 +402,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return { skip: false, transitioning: false, sprite: this.getMapObjectSprite(entity), progress: 1 };
         }
         if (entity.type === EntityType.StackedResource) {
+            const state = this.resourceStates.get(entity.id);
+            const quantity = state?.quantity ?? 1;
+            const direction = Math.max(0, Math.min(quantity - 1, 7)); // 1->D0 ... 8->D7
+
             return {
                 skip: false, transitioning: false,
-                sprite: this.spriteManager?.getResource(entity.subType as EMaterialType) ?? null, progress: 1
+                sprite: this.spriteManager?.getResource(entity.subType as EMaterialType, direction) ?? null, progress: 1
             };
         }
         if (entity.type === EntityType.Unit) {
@@ -426,6 +448,16 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const worldPos = entity.type === EntityType.Unit
                 ? this.getInterpolatedWorldPos(entity, viewPoint)
                 : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
+
+            // Add random visual offset for MapObjects (trees, stones) to break up the grid
+            if (entity.type === EntityType.MapObject) {
+                const seed = entity.x * 12.9898 + entity.y * 78.233;
+                // +/- 0.4 world units (approx 25 pixels) to make it noticeable
+                const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.8 - 0.4;
+                const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.8 - 0.4;
+                worldPos.worldX += offsetX;
+                worldPos.worldY += offsetY;
+            }
 
             if (resolved.progress < 1.0) {
                 this.spriteBatchRenderer.addSpritePartial(
@@ -577,19 +609,85 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         };
     }
 
-    /**
-     * Sort entities by depth for correct painter's algorithm rendering.
-     */
+    /** Bounds rectangle type */
+    private static readonly TILE_MARGIN = 10;
+    private static readonly SAFE_MARGIN = 2.0;
+
+    /** Calculate visible world bounds from viewpoint. */
+    private getVisibleWorldBounds(viewPoint: IViewPoint): Bounds {
+        const { zoom, aspectRatio: aspect } = viewPoint;
+        const margin = EntityRenderer.SAFE_MARGIN;
+        return {
+            minX: (-1 + zoom) * aspect / zoom - margin,
+            maxX: (1 + zoom) * aspect / zoom + margin,
+            minY: (zoom - 1) / zoom - margin,
+            maxY: (zoom + 1) / zoom + margin,
+        };
+    }
+
+    /** Calculate visible tile bounds from world bounds. */
+    private getVisibleTileBounds(wb: Bounds, vp: IViewPoint): Bounds {
+        const c1 = this.getWorldToTile(wb.minX, wb.minY, vp);
+        const c2 = this.getWorldToTile(wb.maxX, wb.minY, vp);
+        const c3 = this.getWorldToTile(wb.maxX, wb.maxY, vp);
+        const c4 = this.getWorldToTile(wb.minX, wb.maxY, vp);
+        const m = EntityRenderer.TILE_MARGIN;
+        return {
+            minX: Math.floor(Math.min(c1.x, c2.x, c3.x, c4.x)) - m,
+            maxX: Math.ceil(Math.max(c1.x, c2.x, c3.x, c4.x)) + m,
+            minY: Math.floor(Math.min(c1.y, c2.y, c3.y, c4.y)) - m,
+            maxY: Math.ceil(Math.max(c1.y, c2.y, c3.y, c4.y)) + m,
+        };
+    }
+
+    /** Check if entity is within tile bounds. */
+    private isInTileBounds(entity: Entity, b: Bounds): boolean {
+        return entity.x >= b.minX && entity.x <= b.maxX &&
+               entity.y >= b.minY && entity.y <= b.maxY;
+    }
+
+    /** Check if world position is within bounds. */
+    private isInWorldBounds(pos: { worldX: number; worldY: number }, b: Bounds): boolean {
+        return pos.worldX >= b.minX && pos.worldX <= b.maxX &&
+               pos.worldY >= b.minY && pos.worldY <= b.maxY;
+    }
+
+    /** Get world position for entity. */
+    private getEntityWorldPos(entity: Entity, vp: IViewPoint): { worldX: number; worldY: number } {
+        if (entity.type === EntityType.Unit) {
+            return this.getInterpolatedWorldPos(entity, vp);
+        }
+        return TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, vp.x, vp.y);
+    }
+
+    /** Sort entities by depth for correct painter's algorithm rendering. */
     private sortEntitiesByDepth(viewPoint: IViewPoint): void {
-        // Filter visible entities into sortedEntities
+        const t0 = performance.now();
+        const worldBounds = this.getVisibleWorldBounds(viewPoint);
+        const tileBounds = this.getVisibleTileBounds(worldBounds, viewPoint);
+
+        // Update camera tracking
+        this.lastViewPointX = viewPoint.x;
+        this.lastViewPointY = viewPoint.y;
+        this.lastZoom = viewPoint.zoom;
+
+        // Filter visible entities
         this.sortedEntities.length = 0;
         for (const entity of this.entities) {
-            if (this.isEntityVisible(entity)) {
-                this.sortedEntities.push(entity);
-            }
+            if (!this.isInTileBounds(entity, tileBounds)) continue;
+            if (!this.isEntityVisible(entity)) continue;
+            const worldPos = this.getEntityWorldPos(entity, viewPoint);
+            if (!this.isInWorldBounds(worldPos, worldBounds)) continue;
+            this.sortedEntities.push(entity);
         }
 
-        // Sort by depth using the depth sorter
+        // Log slow frames (sampled)
+        const duration = performance.now() - t0;
+        if (duration > 16.0 && Math.random() < 0.01) {
+            console.warn(`Entity Sort Slow: ${duration.toFixed(2)}ms`);
+        }
+
+        // Sort by depth
         const ctx: DepthSortContext = {
             mapSize: this.mapSize,
             groundHeight: this.groundHeight,
@@ -608,7 +706,17 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             this.previewTile.x, this.previewTile.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y
         );
 
-        // Try to use sprite preview if available
+        // Apply MapObject offset for resource previews to match entity rendering
+        if (this.previewMaterialType !== null) {
+            const seed = this.previewTile.x * 12.9898 + this.previewTile.y * 78.233;
+            // +/- 0.4 world units match the offset in drawTexturedEntities
+            const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.8 - 0.4;
+            const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.8 - 0.4;
+            worldPos.worldX += offsetX;
+            worldPos.worldY += offsetY;
+        }
+
+        // Try to use sprite preview if available (Building)
         if (this.previewBuildingType !== null && this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
             const spriteEntry = this.spriteManager.getBuilding(this.previewBuildingType);
             if (spriteEntry) {
@@ -619,6 +727,22 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 this.spriteBatchRenderer.endSpriteBatch(gl);
                 return;
             }
+        }
+
+        // Try to use sprite preview if available (Resource/Material)
+        if (this.previewMaterialType !== null && this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
+            // Use getResource for material sprites (amount determined by variation/direction)
+            const spriteEntry = this.spriteManager.getResource(this.previewMaterialType, this.previewVariation ?? 0);
+            if (spriteEntry) {
+                const tint = this.previewValid ? TINT_PREVIEW_VALID : TINT_PREVIEW_INVALID;
+
+                this.spriteBatchRenderer.beginSpriteBatch(gl, projection);
+                this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, spriteEntry, tint[0], tint[1], tint[2], tint[3]);
+                this.spriteBatchRenderer.endSpriteBatch(gl);
+                return;
+            }
+
+            // If no sprite, we fall back to color dot?
         }
 
         // Fallback to color preview
@@ -672,5 +796,26 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
         gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+
+    private getWorldToTile(worldX: number, worldY: number, viewPoint: IViewPoint): { x: number, y: number } {
+        // Constants from coordinate-system.ts
+        const TILE_CENTER_X = 0.25;
+        const TILE_CENTER_Y = 0.5;
+
+        const vpIntX = Math.floor(viewPoint.x);
+        const vpIntY = Math.floor(viewPoint.y);
+        const vpFracX = viewPoint.x - vpIntX;
+        const vpFracY = viewPoint.y - vpIntY;
+
+        // Note: We ignore height here, effectively assuming height=0.
+        // This gives us a base tile. For culling, we add a margin anyway.
+        const instancePosY = worldY * 2 - TILE_CENTER_Y + vpFracY;
+        const tileY = instancePosY + vpIntY;
+
+        const instancePosX = worldX - TILE_CENTER_X + instancePosY * 0.5 + vpFracX - vpFracY * 0.5;
+        const tileX = instancePosX + vpIntX;
+
+        return { x: tileX, y: tileY };
     }
 }

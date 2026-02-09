@@ -128,7 +128,7 @@ export class SpriteLoader {
         );
 
         const parseTime = performance.now() - parseStart;
-        if (parseTime > SpriteLoader.SLOW_OP_THRESHOLD_MS) {
+        if (parseTime > 50) {
             console.warn(`[SpriteLoader] parseFileSet(${fileId}) took ${parseTime.toFixed(1)}ms (gil=${gilReader.length} images)`);
         }
 
@@ -222,10 +222,18 @@ export class SpriteLoader {
     public async loadDirectSprite(
         fileSet: LoadedGfxFileSet,
         gilIndex: number,
-        paletteIndex: number,
+        paletteIndex: number | null,
         atlas: EntityTextureAtlas
     ): Promise<LoadedSprite | null> {
-        const gfxImage = this.getDirectImage(fileSet, gilIndex, paletteIndex);
+        let gfxImage: GfxImage | null;
+
+        if (paletteIndex !== null) {
+            gfxImage = this.getDirectImage(fileSet, gilIndex, paletteIndex);
+        } else {
+            // Auto-detect palette using GfxFileReader's logic (reverse lookup via JIL/DIL)
+            gfxImage = fileSet.gfxReader.getImage(gilIndex);
+        }
+
         if (!gfxImage) return null;
         return this.packSpriteIntoAtlas(gfxImage, atlas);
     }
@@ -533,6 +541,6 @@ export const GFX_FILES = {
     DARK_TRIBE: 14,
     /** Landscape textures */
     LANDSCAPE: 2,
-    /** Map objects (trees, stones, resources) - typically file 6 or 20 */
-    MAP_OBJECTS: 20,
+    /** Map objects (trees, stones, resources) - typically file 5 */
+    MAP_OBJECTS: 5,
 } as const;

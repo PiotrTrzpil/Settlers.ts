@@ -69,32 +69,17 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
 /** Map MapObjectType to its environment sub-layer category */
 export function getEnvironmentSubLayer(objectType: MapObjectType): EnvironmentSubLayer {
     // Trees
-    if (objectType >= MapObjectType.TreePine && objectType <= MapObjectType.TreeDead) {
+    if (objectType >= 0 && objectType <= 18) { // S4_TREE_ENUM range
         return EnvironmentSubLayer.Trees;
     }
 
-    // Stones
-    if (objectType >= MapObjectType.StoneSmall && objectType <= MapObjectType.StoneLarge) {
-        return EnvironmentSubLayer.Stones;
-    }
-
-    // Resource deposits (rendered in Resources layer, not Environment)
-    if (objectType >= MapObjectType.IronDeposit && objectType <= MapObjectType.GemsDeposit) {
-        return EnvironmentSubLayer.Other; // Will be filtered by Resources layer instead
-    }
-
-    // Plants
-    if (objectType >= MapObjectType.Bush && objectType <= MapObjectType.Wheat) {
-        return EnvironmentSubLayer.Plants;
-    }
-
-    // Other (Stump, FallenTree, Pile)
+    // Other types (Stones, plants) to be re-added once S4ModApi mapping is verified
     return EnvironmentSubLayer.Other;
 }
 
 /** Check if a MapObjectType is a resource deposit */
-export function isResourceDeposit(objectType: MapObjectType): boolean {
-    return objectType >= MapObjectType.IronDeposit && objectType <= MapObjectType.GemsDeposit;
+export function isResourceDeposit(_objectType: MapObjectType): boolean {
+    return false; // No resource deposits mapped currently
 }
 
 // ============================================================================
@@ -226,29 +211,29 @@ const DEFAULT_FALLBACK_COLOR: [number, number, number, number] = [0.5, 0.5, 0.5,
 
 /** Lookup table mapping MapObjectType to fallback colors */
 const MAP_OBJECT_COLOR_LOOKUP: Partial<Record<MapObjectType, [number, number, number, number]>> = {
+    // Trees
     [MapObjectType.TreePine]: FALLBACK_ENTITY_COLORS.tree_pine,
-    [MapObjectType.TreeOak]: FALLBACK_ENTITY_COLORS.tree_oak,
+    [MapObjectType.TreeOak]: FALLBACK_ENTITY_COLORS.tree_deciduous,
     [MapObjectType.TreeBirch]: FALLBACK_ENTITY_COLORS.tree_birch,
-    [MapObjectType.TreePalm]: FALLBACK_ENTITY_COLORS.tree_palm,
-    [MapObjectType.TreeCypress]: FALLBACK_ENTITY_COLORS.tree_cypress,
+    // [MapObjectType.TreePalm]: FALLBACK_ENTITY_COLORS.tree_palm, // Duplicate of TreeCoconut (10)
+    // [MapObjectType.TreeCypress]: FALLBACK_ENTITY_COLORS.tree_cypress, // Duplicate of TreeFir (8)
     [MapObjectType.TreeDead]: FALLBACK_ENTITY_COLORS.tree_dead,
-    [MapObjectType.StoneSmall]: FALLBACK_ENTITY_COLORS.stone_small,
-    [MapObjectType.StoneMedium]: FALLBACK_ENTITY_COLORS.stone_medium,
-    [MapObjectType.StoneLarge]: FALLBACK_ENTITY_COLORS.stone_large,
-    [MapObjectType.IronDeposit]: FALLBACK_ENTITY_COLORS.deposit_iron,
-    [MapObjectType.GoldDeposit]: FALLBACK_ENTITY_COLORS.deposit_gold,
-    [MapObjectType.CoalDeposit]: FALLBACK_ENTITY_COLORS.deposit_coal,
-    [MapObjectType.StoneDeposit]: FALLBACK_ENTITY_COLORS.deposit_stone,
-    [MapObjectType.SulfurDeposit]: FALLBACK_ENTITY_COLORS.deposit_sulfur,
-    [MapObjectType.GemsDeposit]: FALLBACK_ENTITY_COLORS.deposit_gems,
-    [MapObjectType.Bush]: FALLBACK_ENTITY_COLORS.plant_bush,
-    [MapObjectType.Mushroom]: FALLBACK_ENTITY_COLORS.plant_mushroom,
-    [MapObjectType.Flowers]: FALLBACK_ENTITY_COLORS.plant_flowers,
-    [MapObjectType.Corn]: FALLBACK_ENTITY_COLORS.plant_corn,
-    [MapObjectType.Wheat]: FALLBACK_ENTITY_COLORS.plant_wheat,
-    [MapObjectType.Stump]: FALLBACK_ENTITY_COLORS.stump,
-    [MapObjectType.FallenTree]: FALLBACK_ENTITY_COLORS.fallen_tree,
-    [MapObjectType.Pile]: FALLBACK_ENTITY_COLORS.pile,
+    // Add missing S4 trees if needed, mapping to generic colors
+    [MapObjectType.TreeBeech]: FALLBACK_ENTITY_COLORS.tree_deciduous,
+    [MapObjectType.TreeAsh]: FALLBACK_ENTITY_COLORS.tree_deciduous,
+    [MapObjectType.TreeLinden]: FALLBACK_ENTITY_COLORS.tree_deciduous,
+    [MapObjectType.TreePoplar]: FALLBACK_ENTITY_COLORS.tree_deciduous,
+    [MapObjectType.TreeChestnut]: FALLBACK_ENTITY_COLORS.tree_deciduous,
+    [MapObjectType.TreeMaple]: FALLBACK_ENTITY_COLORS.tree_deciduous,
+    [MapObjectType.TreeFir]: FALLBACK_ENTITY_COLORS.tree_pine,
+    [MapObjectType.TreeSpruce]: FALLBACK_ENTITY_COLORS.tree_pine,
+    [MapObjectType.TreeCoconut]: FALLBACK_ENTITY_COLORS.tree_palm,
+    [MapObjectType.TreeDate]: FALLBACK_ENTITY_COLORS.tree_palm,
+    [MapObjectType.TreeWalnut]: FALLBACK_ENTITY_COLORS.tree_deciduous,
+    [MapObjectType.TreeCorkOak]: FALLBACK_ENTITY_COLORS.tree_deciduous,
+    [MapObjectType.TreePine2]: FALLBACK_ENTITY_COLORS.tree_pine,
+    [MapObjectType.TreeOliveLarge]: FALLBACK_ENTITY_COLORS.tree_deciduous,
+    [MapObjectType.TreeOliveSmall]: FALLBACK_ENTITY_COLORS.tree_deciduous,
 };
 
 /** Get fallback color for a MapObjectType */
@@ -259,23 +244,8 @@ export function getMapObjectFallbackColor(objectType: MapObjectType): [number, n
 /** Size multiplier for different object types (for dot rendering) */
 export function getMapObjectDotScale(objectType: MapObjectType): number {
     // Trees are taller
-    if (objectType >= MapObjectType.TreePine && objectType <= MapObjectType.TreeDead) {
+    if (objectType >= 0 && objectType <= 18) {
         return 0.35;
-    }
-
-    // Stones vary by size
-    if (objectType === MapObjectType.StoneSmall) return 0.15;
-    if (objectType === MapObjectType.StoneMedium) return 0.22;
-    if (objectType === MapObjectType.StoneLarge) return 0.3;
-
-    // Resource deposits are medium-sized
-    if (objectType >= MapObjectType.IronDeposit && objectType <= MapObjectType.GemsDeposit) {
-        return 0.25;
-    }
-
-    // Plants are smaller
-    if (objectType >= MapObjectType.Bush && objectType <= MapObjectType.Wheat) {
-        return 0.18;
     }
 
     // Default

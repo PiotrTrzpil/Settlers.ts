@@ -14,7 +14,7 @@ export class Palette {
         this.palette[index] = r | (g << 8) | (b << 16) | (255 << 24);
     }
 
-    public getColor(index: number):number {
+    public getColor(index: number): number {
         return this.palette[index];
     }
 
@@ -23,7 +23,7 @@ export class Palette {
         return this.palette;
     }
 
-    public read3BytePalette(buffer: Uint8Array, pos: number):number {
+    public read3BytePalette(buffer: Uint8Array, pos: number): number {
         for (let i = 0; i < this.palette.length; i++) {
             const r = buffer[pos++];
             const g = buffer[pos++];
@@ -35,16 +35,29 @@ export class Palette {
         return pos;
     }
 
-    public read16BitPalette(buffer: BinaryReader, pos = 0) : number {
+    public read16BitPalette(buffer: BinaryReader, pos = 0): number {
         buffer.setOffset(pos);
 
         for (let i = 0; i < this.palette.length; i++) {
             const value1 = buffer.readByte();
             const value2 = buffer.readByte();
 
-            const r = value2 & 0xF8;
-            const g = ((value1 >> 3) | (value2 << 5)) & 0xFC;
-            const b = (value1 << 3) & 0xF8;
+            // Extract 5-6-5 components (assuming Little Endian ordering of bytes/bits logic from original)
+            // Original logic:
+            // R: value2 & 0xF8 (Top 5 bits of byte 2)
+            // G: ((value1 >> 3) | (value2 << 5)) & 0xFC (Top 3 of byte 1 | Bottom 3 of byte 2)
+            // B: (value1 << 3) & 0xF8 (Bottom 5 bits of byte 1)
+
+            let r = value2 & 0xF8;
+            let g = ((value1 >> 3) | (value2 << 5)) & 0xFC;
+            let b = (value1 << 3) & 0xF8;
+
+            // Fix color artifacts by replicating higher bits into the lower empty bits
+            // This converts 5/6-bit color to full 8-bit range (e.g. 0..31 -> 0..255)
+            // instead of just shifting (0..31 -> 0..248), which causes banding.
+            r |= (r >> 5);
+            g |= (g >> 6);
+            b |= (b >> 5);
 
             this.setRGB(i, r, g, b);
         }

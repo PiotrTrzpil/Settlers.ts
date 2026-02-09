@@ -203,7 +203,7 @@ describe('screenToTile and tileToWorld round-trip', () => {
     const picker = new TilePicker(mockCanvas);
 
     it('should round-trip tile coords through tileToWorld and screenToTile', () => {
-        const viewPoint = { x: 320, y: 320, zoom: 0.1 };
+        const viewPoint = { x: 320, y: 320, zoom: 0.1, aspectRatio: 1 };
 
         // Test tiles near the viewpoint - include both odd and even Y (affects stagger)
         const testTiles = [
@@ -267,11 +267,11 @@ describe('screenToTile and tileToWorld round-trip', () => {
     it('should work with different viewpoint positions', () => {
         // Test with viewpoints at various positions including odd/even Y
         const viewPoints = [
-            { x: 100, y: 100, zoom: 0.1 },   // Even Y viewpoint
-            { x: 100, y: 101, zoom: 0.1 },   // Odd Y viewpoint
-            { x: 500, y: 500, zoom: 0.1 },   // Even Y viewpoint
-            { x: 500, y: 501, zoom: 0.1 },   // Odd Y viewpoint
-            { x: 320, y: 319, zoom: 0.1 },   // Odd Y viewpoint (near center)
+            { x: 100, y: 100, zoom: 0.1, aspectRatio: 1 },   // Even Y viewpoint
+            { x: 100, y: 101, zoom: 0.1, aspectRatio: 1 },   // Odd Y viewpoint
+            { x: 500, y: 500, zoom: 0.1, aspectRatio: 1 },   // Even Y viewpoint
+            { x: 500, y: 501, zoom: 0.1, aspectRatio: 1 },   // Odd Y viewpoint
+            { x: 320, y: 319, zoom: 0.1, aspectRatio: 1 },   // Odd Y viewpoint (near center)
         ];
 
         for (const viewPoint of viewPoints) {
@@ -336,7 +336,10 @@ describe('screenToTile and tileToWorld round-trip', () => {
         //   tileStaggerX = instX + viewStaggerX
         //   tileX = tileStaggerX - floor(tileY/2)
 
-        const viewPoint = { x: 320, y: 320, zoom: 0.1 };
+        //   tileStaggerX = instX + viewStaggerX
+        //   tileX = tileStaggerX - floor(tileY/2)
+
+        const viewPoint = { x: 320, y: 320, zoom: 0.1, aspectRatio: 1 };
         const viewStaggerX = viewPoint.x + Math.floor(viewPoint.y / 2); // 320 + 160 = 480
 
         // Pick a test tile
@@ -375,7 +378,7 @@ describe('screenToTile and tileToWorld round-trip', () => {
 
 describe('Coordinate Bug Analysis', () => {
     const mapSize = new MapSize(640, 640);
-    const groundHeight = new Uint8Array(mapSize.width * mapSize.height).fill(128);
+    const _groundHeight = new Uint8Array(mapSize.width * mapSize.height).fill(128);
 
     it('should identify the tileToWorld bug', () => {
         // From test output:
@@ -386,7 +389,7 @@ describe('Coordinate Bug Analysis', () => {
 
         // Ghost tile (162, 321), viewPoint (319, 319):
         const ghostTile = { x: 162, y: 321 };
-        const viewPoint = { x: 319, y: 319 };
+        const viewPoint = { x: 319, y: 319, zoom: 0.1, aspectRatio: 1 };
 
         // CORRECTED FORMULA:
         // tileStaggerX = 162 + floor(321/2) = 162 + 160 = 322
@@ -462,53 +465,36 @@ describe('Coordinate Bug Analysis', () => {
     });
 });
 
-describe('tileToWorld must match shader formula', () => {
-    const mapSize = new MapSize(640, 640);
-    const groundHeight = new Uint8Array(mapSize.width * mapSize.height).fill(128);
-    const heightScaled = 128 * 20 / 255; // same as shader: mapHeight * 20
+// Shared helper: Computes world position exactly as the landscape shader does.
+const SHADER_TILE_MAP_SIZE = new MapSize(640, 640);
+const SHADER_TILE_HEIGHT = new Uint8Array(SHADER_TILE_MAP_SIZE.width * SHADER_TILE_MAP_SIZE.height).fill(128);
+const SHADER_HEIGHT_SCALED = 128 * 20 / 255;
 
-    /**
-     * Computes world position exactly as the landscape shader does.
-     * From landscape-vert.glsl:
-     *   vec2 vpInt = floor(viewPoint);
-     *   vec2 vpFrac = viewPoint - vpInt;
-     *   vec2 pixelCoord = instancePos + vpInt;
-     *   worldX = baseVerticesPos.x + instancePos.x - instancePos.y * 0.5 - vpFrac.x + vpFrac.y * 0.5
-     *   worldY = (baseVerticesPos.y + instancePos.y - mapHeight - vpFrac.y) * 0.5
-     *
-     * For tile center, baseVerticesPos ≈ (0.25, 0.5)
-     */
-    function shaderWorldPos(
-        tileX: number,
-        tileY: number,
-        viewPointX: number,
-        viewPointY: number
-    ): { worldX: number; worldY: number } {
-        const vpIntX = Math.floor(viewPointX);
-        const vpIntY = Math.floor(viewPointY);
-        const vpFracX = viewPointX - vpIntX;
-        const vpFracY = viewPointY - vpIntY;
+function shaderWorldPos(
+    tileX: number,
+    tileY: number,
+    viewPointX: number,
+    viewPointY: number
+): { worldX: number; worldY: number } {
+    const vpIntX = Math.floor(viewPointX);
+    const vpIntY = Math.floor(viewPointY);
+    const vpFracX = viewPointX - vpIntX;
+    const vpFracY = viewPointY - vpIntY;
+    const instancePosX = tileX - vpIntX;
+    const instancePosY = tileY - vpIntY;
+    const worldX = 0.25 + instancePosX - instancePosY * 0.5 - vpFracX + vpFracY * 0.5;
+    const worldY = (0.5 + instancePosY - SHADER_HEIGHT_SCALED - vpFracY) * 0.5;
+    return { worldX, worldY };
+}
 
-        // instancePos is relative to floor(viewPoint)
-        const instancePosX = tileX - vpIntX;
-        const instancePosY = tileY - vpIntY;
-
-        // Tile center is at baseVerticesPos = (0.25, 0.5)
-        const worldX = 0.25 + instancePosX - instancePosY * 0.5 - vpFracX + vpFracY * 0.5;
-        const worldY = (0.5 + instancePosY - heightScaled - vpFracY) * 0.5;
-
-        return { worldX, worldY };
-    }
-
+describe('tileToWorld shader matching - basic', () => {
     it('should match shader with integer viewPoint', () => {
         const tile = { x: 320, y: 320 };
         const viewPoint = { x: 320, y: 320 };
 
         const shaderPos = shaderWorldPos(tile.x, tile.y, viewPoint.x, viewPoint.y);
         const tilePickerPos = TilePicker.tileToWorld(
-            tile.x, tile.y,
-            groundHeight, mapSize,
-            viewPoint.x, viewPoint.y
+            tile.x, tile.y, SHADER_TILE_HEIGHT, SHADER_TILE_MAP_SIZE, viewPoint.x, viewPoint.y
         );
 
         expect(tilePickerPos.worldX).toBeCloseTo(shaderPos.worldX, 5);
@@ -516,42 +502,27 @@ describe('tileToWorld must match shader formula', () => {
     });
 
     it('should match shader with fractional viewPoint (zoom drift bug)', () => {
-        // This test exposes the bug: when viewPoint has fractional values
-        // (which happens during zoom), tileToWorld diverges from shader.
         const tile = { x: 320, y: 320 };
-
-        // Simulate viewPoint after zooming (fractional values)
         const viewPoints = [
             { x: 320.3, y: 320.7 },
             { x: 319.5, y: 320.5 },
-            { x: 320.0, y: 319.5 },  // This one crosses odd/even Y boundary in stagger calc!
+            { x: 320.0, y: 319.5 },
             { x: 320.8, y: 321.2 },
         ];
 
         for (const vp of viewPoints) {
             const shaderPos = shaderWorldPos(tile.x, tile.y, vp.x, vp.y);
             const tilePickerPos = TilePicker.tileToWorld(
-                tile.x, tile.y,
-                groundHeight, mapSize,
-                vp.x, vp.y
+                tile.x, tile.y, SHADER_TILE_HEIGHT, SHADER_TILE_MAP_SIZE, vp.x, vp.y
             );
-
-            console.log(`ViewPoint (${vp.x}, ${vp.y}):`);
-            console.log(`  Shader:     (${shaderPos.worldX.toFixed(3)}, ${shaderPos.worldY.toFixed(3)})`);
-            console.log(`  TilePicker: (${tilePickerPos.worldX.toFixed(3)}, ${tilePickerPos.worldY.toFixed(3)})`);
-
             expect(tilePickerPos.worldX).toBeCloseTo(shaderPos.worldX, 5);
             expect(tilePickerPos.worldY).toBeCloseTo(shaderPos.worldY, 5);
         }
     });
 
     it('should produce stable relative positions when zoom changes', () => {
-        // When zoom changes, the relative position between two tiles should stay constant
-        // (they should just scale together, not shift horizontally)
         const tile1 = { x: 320, y: 320 };
         const tile2 = { x: 325, y: 322 };
-
-        // Simulate different viewPoints that might occur during zoom
         const viewPoints = [
             { x: 320.0, y: 320.0 },
             { x: 320.5, y: 320.5 },
@@ -562,112 +533,86 @@ describe('tileToWorld must match shader formula', () => {
         const relativePosFromTilePicker: { dx: number; dy: number }[] = [];
 
         for (const vp of viewPoints) {
-            // Shader positions
             const s1 = shaderWorldPos(tile1.x, tile1.y, vp.x, vp.y);
             const s2 = shaderWorldPos(tile2.x, tile2.y, vp.x, vp.y);
             relativePosFromShader.push({ dx: s2.worldX - s1.worldX, dy: s2.worldY - s1.worldY });
 
-            // TilePicker positions
-            const t1 = TilePicker.tileToWorld(tile1.x, tile1.y, groundHeight, mapSize, vp.x, vp.y);
-            const t2 = TilePicker.tileToWorld(tile2.x, tile2.y, groundHeight, mapSize, vp.x, vp.y);
+            const t1 = TilePicker.tileToWorld(tile1.x, tile1.y, SHADER_TILE_HEIGHT, SHADER_TILE_MAP_SIZE, vp.x, vp.y);
+            const t2 = TilePicker.tileToWorld(tile2.x, tile2.y, SHADER_TILE_HEIGHT, SHADER_TILE_MAP_SIZE, vp.x, vp.y);
             relativePosFromTilePicker.push({ dx: t2.worldX - t1.worldX, dy: t2.worldY - t1.worldY });
         }
 
-        // Shader relative positions should be constant (tiles don't drift relative to each other)
         for (let i = 1; i < relativePosFromShader.length; i++) {
             expect(relativePosFromShader[i].dx).toBeCloseTo(relativePosFromShader[0].dx, 5);
             expect(relativePosFromShader[i].dy).toBeCloseTo(relativePosFromShader[0].dy, 5);
         }
-
-        // TilePicker should also produce constant relative positions
         for (let i = 1; i < relativePosFromTilePicker.length; i++) {
             expect(relativePosFromTilePicker[i].dx).toBeCloseTo(relativePosFromTilePicker[0].dx, 5);
             expect(relativePosFromTilePicker[i].dy).toBeCloseTo(relativePosFromTilePicker[0].dy, 5);
         }
     });
+});
 
+describe('tileToWorld shader matching - edge cases', () => {
     it('should handle map edges correctly', () => {
-        // Test tiles at map corners with viewPoint near center
         const viewPoint = { x: 320, y: 320 };
         const cornerTiles = [
-            { x: 0, y: 0 },           // Top-left corner
-            { x: 639, y: 0 },         // Top-right corner
-            { x: 0, y: 639 },         // Bottom-left corner
-            { x: 639, y: 639 },       // Bottom-right corner
+            { x: 0, y: 0 }, { x: 639, y: 0 }, { x: 0, y: 639 }, { x: 639, y: 639 },
         ];
 
         for (const tile of cornerTiles) {
             const shaderPos = shaderWorldPos(tile.x, tile.y, viewPoint.x, viewPoint.y);
             const tilePickerPos = TilePicker.tileToWorld(
-                tile.x, tile.y, groundHeight, mapSize, viewPoint.x, viewPoint.y
+                tile.x, tile.y, SHADER_TILE_HEIGHT, SHADER_TILE_MAP_SIZE, viewPoint.x, viewPoint.y
             );
-
             expect(tilePickerPos.worldX).toBeCloseTo(shaderPos.worldX, 5);
             expect(tilePickerPos.worldY).toBeCloseTo(shaderPos.worldY, 5);
         }
     });
 
     it('should handle viewPoint near map edges', () => {
-        // ViewPoint near edge of map - could have tiles with negative instancePos
         const edgeViewPoints = [
-            { x: 5, y: 5 },           // Near top-left
-            { x: 635, y: 635 },       // Near bottom-right
-            { x: 5, y: 635 },         // Near bottom-left
-            { x: 635, y: 5 },         // Near top-right
+            { x: 5, y: 5 }, { x: 635, y: 635 }, { x: 5, y: 635 }, { x: 635, y: 5 },
         ];
-
-        const tile = { x: 320, y: 320 }; // Center tile
+        const tile = { x: 320, y: 320 };
 
         for (const vp of edgeViewPoints) {
             const shaderPos = shaderWorldPos(tile.x, tile.y, vp.x, vp.y);
             const tilePickerPos = TilePicker.tileToWorld(
-                tile.x, tile.y, groundHeight, mapSize, vp.x, vp.y
+                tile.x, tile.y, SHADER_TILE_HEIGHT, SHADER_TILE_MAP_SIZE, vp.x, vp.y
             );
-
             expect(tilePickerPos.worldX).toBeCloseTo(shaderPos.worldX, 5);
             expect(tilePickerPos.worldY).toBeCloseTo(shaderPos.worldY, 5);
         }
     });
 
     it('should handle tiles far from viewPoint', () => {
-        // Large distances - common when zoomed out
         const viewPoint = { x: 320, y: 320 };
-        const farTiles = [
-            { x: 50, y: 50 },     // 270+ tiles away
-            { x: 600, y: 600 },   // 280+ tiles away
-            { x: 100, y: 500 },   // Diagonal far
-        ];
+        const farTiles = [{ x: 50, y: 50 }, { x: 600, y: 600 }, { x: 100, y: 500 }];
 
         for (const tile of farTiles) {
             const shaderPos = shaderWorldPos(tile.x, tile.y, viewPoint.x, viewPoint.y);
             const tilePickerPos = TilePicker.tileToWorld(
-                tile.x, tile.y, groundHeight, mapSize, viewPoint.x, viewPoint.y
+                tile.x, tile.y, SHADER_TILE_HEIGHT, SHADER_TILE_MAP_SIZE, viewPoint.x, viewPoint.y
             );
-
             expect(tilePickerPos.worldX).toBeCloseTo(shaderPos.worldX, 5);
             expect(tilePickerPos.worldY).toBeCloseTo(shaderPos.worldY, 5);
         }
     });
 
     it('should handle varying terrain heights', () => {
-        // Create terrain with varying heights
-        const variedHeight = new Uint8Array(mapSize.width * mapSize.height);
+        const variedHeight = new Uint8Array(SHADER_TILE_MAP_SIZE.width * SHADER_TILE_MAP_SIZE.height);
         for (let i = 0; i < variedHeight.length; i++) {
-            variedHeight[i] = (i % 256); // Heights from 0-255
+            variedHeight[i] = (i % 256);
         }
 
         const viewPoint = { x: 320.5, y: 320.5 };
-        const testTiles = [
-            { x: 320, y: 320 },
-            { x: 321, y: 321 },
-            { x: 322, y: 320 },
-        ];
+        const testTiles = [{ x: 320, y: 320 }, { x: 321, y: 321 }, { x: 322, y: 320 }];
 
         for (const tile of testTiles) {
-            const idx = mapSize.toIndex(tile.x, tile.y);
+            const idx = SHADER_TILE_MAP_SIZE.toIndex(tile.x, tile.y);
             const heightAtTile = variedHeight[idx] * 20 / 255;
 
-            // Manual shader calculation with height
             const vpIntX = Math.floor(viewPoint.x);
             const vpIntY = Math.floor(viewPoint.y);
             const vpFracX = viewPoint.x - vpIntX;
@@ -678,9 +623,8 @@ describe('tileToWorld must match shader formula', () => {
             const expectedWorldY = (0.5 + instancePosY - heightAtTile - vpFracY) * 0.5;
 
             const tilePickerPos = TilePicker.tileToWorld(
-                tile.x, tile.y, variedHeight, mapSize, viewPoint.x, viewPoint.y
+                tile.x, tile.y, variedHeight, SHADER_TILE_MAP_SIZE, viewPoint.x, viewPoint.y
             );
-
             expect(tilePickerPos.worldX).toBeCloseTo(expectedWorldX, 5);
             expect(tilePickerPos.worldY).toBeCloseTo(expectedWorldY, 5);
         }
@@ -703,7 +647,7 @@ describe('screenToTile on varying terrain', () => {
         tileY: number,
         groundHeight: Uint8Array,
         mapSize: MapSize,
-        viewPoint: { x: number; y: number; zoom: number },
+        viewPoint: { x: number; y: number; zoom: number; aspectRatio: number },
     ) {
         const worldPos = TilePicker.tileToWorld(
             tileX, tileY, groundHeight, mapSize, viewPoint.x, viewPoint.y,
@@ -747,7 +691,7 @@ describe('screenToTile on varying terrain', () => {
     it('should round-trip on flat terrain', () => {
         const mapSize = new MapSize(640, 640);
         const groundHeight = new Uint8Array(mapSize.width * mapSize.height).fill(128);
-        const vp = { x: 320, y: 320, zoom: 0.1 };
+        const vp = { x: 320, y: 320, zoom: 0.1, aspectRatio: 1 };
 
         for (const [dx, dy] of [[0, 0], [3, 2], [-2, 3], [5, -4]]) {
             expectRoundTrip(320 + dx, 320 + dy, groundHeight, mapSize, vp);
@@ -757,7 +701,7 @@ describe('screenToTile on varying terrain', () => {
     it('should round-trip on high terrain (max height)', () => {
         const mapSize = new MapSize(640, 640);
         const groundHeight = new Uint8Array(mapSize.width * mapSize.height).fill(255);
-        const vp = { x: 320, y: 320, zoom: 0.1 };
+        const vp = { x: 320, y: 320, zoom: 0.1, aspectRatio: 1 };
 
         for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1]]) {
             expectRoundTrip(320 + dx, 320 + dy, groundHeight, mapSize, vp);
@@ -773,7 +717,7 @@ describe('screenToTile on varying terrain', () => {
             }
         }
 
-        const vp = { x: 320, y: 320, zoom: 0.1 };
+        const vp = { x: 320, y: 320, zoom: 0.1, aspectRatio: 1 };
 
         for (const [dx, dy] of [[0, 0], [0, 5], [0, -5], [3, 3], [-3, -3], [5, -2]]) {
             expectRoundTrip(320 + dx, 320 + dy, groundHeight, mapSize, vp);
@@ -789,7 +733,7 @@ describe('screenToTile on varying terrain', () => {
             }
         }
 
-        const vp = { x: 320, y: 320, zoom: 0.1 };
+        const vp = { x: 320, y: 320, zoom: 0.1, aspectRatio: 1 };
 
         for (const [dx, dy] of [[0, 0], [0, 3], [0, -3], [3, 3], [-3, -3], [5, -2]]) {
             expectRoundTrip(320 + dx, 320 + dy, groundHeight, mapSize, vp);
@@ -811,7 +755,7 @@ describe('screenToTile on varying terrain', () => {
             }
         }
 
-        const vp = { x: 320, y: 320, zoom: 0.1 };
+        const vp = { x: 320, y: 320, zoom: 0.1, aspectRatio: 1 };
 
         for (let dy = -3; dy <= 3; dy++) {
             for (let dx = -3; dx <= 3; dx++) {
@@ -829,7 +773,7 @@ describe('screenToTile on varying terrain', () => {
             }
         }
 
-        const vp = { x: 320.3, y: 320.7, zoom: 0.1 };
+        const vp = { x: 320.3, y: 320.7, zoom: 0.1, aspectRatio: 1 };
 
         for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1], [-1, -1], [2, -1]]) {
             expectRoundTrip(320 + dx, 320 + dy, groundHeight, mapSize, vp);

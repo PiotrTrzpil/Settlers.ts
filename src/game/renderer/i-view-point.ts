@@ -9,6 +9,8 @@ export interface IViewPointReadonly {
     readonly y: number;
     /** Zoom level for shader (0.1/zoomValue) */
     readonly zoom: number;
+    /** Aspect ratio (width / height) */
+    readonly aspectRatio: number;
 }
 
 /**

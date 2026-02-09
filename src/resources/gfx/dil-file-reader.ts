@@ -24,7 +24,7 @@ export class DilFileReader extends IndexFile {
             }
 
             if (offsetTable[i] > offset) {
-                DilFileReader.log.debug(gilIndex + ' --> ' + lastGood);
+                // DilFileReader.log.debug(gilIndex + ' --> ' + lastGood);
                 return lastGood;
             }
             lastGood = i;

@@ -17,6 +17,8 @@ import {
     UNIT_DIRECTION,
     AnimatedSpriteEntry,
     SETTLER_FILE_NUMBERS,
+    TREE_TEXTURE_OFFSET,
+    TREE_VARIATION_COUNT,
 } from './sprite-metadata';
 import { SpriteLoader } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
@@ -165,8 +167,11 @@ export class SpriteRenderManager {
     /**
      * Get a map object sprite entry by type.
      */
-    public getMapObject(type: MapObjectType): SpriteEntry | null {
-        return this._spriteRegistry?.getMapObject(type) ?? null;
+    /**
+     * Get a map object sprite entry by type (and optional variation).
+     */
+    public getMapObject(type: MapObjectType, variation?: number): SpriteEntry | null {
+        return this._spriteRegistry?.getMapObject(type, variation) ?? null;
     }
 
     /**
@@ -229,8 +234,11 @@ export class SpriteRenderManager {
     /**
      * Get a resource/material sprite entry by type.
      */
-    public getResource(type: EMaterialType): SpriteEntry | null {
-        return this._spriteRegistry?.getResource(type) ?? null;
+    /**
+     * Get a resource/material sprite entry by type.
+     */
+    public getResource(type: EMaterialType, direction: number = 0): SpriteEntry | null {
+        return this._spriteRegistry?.getResource(type, direction) ?? null;
     }
 
     /**
@@ -319,10 +327,18 @@ export class SpriteRenderManager {
         ]);
         const filePreload = t.lap();
 
-        const atlas = new EntityTextureAtlas(8192, this.textureUnit);
+        const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        const effectiveMax = Math.min(32768, maxTextureSize);
+        SpriteRenderManager.log.debug(`Atlas max size set to ${effectiveMax} (HW: ${maxTextureSize})`);
+
+        const atlas = new EntityTextureAtlas(effectiveMax, this.textureUnit);
         const atlasAlloc = t.lap();
 
         const registry = new SpriteMetadataRegistry();
+
+        // Expose atlas and registry immediately for progressive rendering
+        this._spriteAtlas = atlas;
+        this._spriteRegistry = registry;
 
         // Load all sprite categories
         let loadedAny = false;
@@ -333,7 +349,7 @@ export class SpriteRenderManager {
         }
         const buildings = t.lap();
 
-        const mapObjectsLoaded = await this.loadMapObjectSprites(atlas, registry);
+        const mapObjectsLoaded = await this.loadMapObjectSprites(gl, atlas, registry);
         const mapObjects = t.lap();
 
         const resourcesLoaded = await this.loadResourceSprites(atlas, registry);
@@ -346,11 +362,9 @@ export class SpriteRenderManager {
             return false;
         }
 
-        atlas.load(gl);
+        // Final full upload to ensure everything is on GPU
+        atlas.update(gl);
         const gpuUpload = t.lap();
-
-        this._spriteAtlas = atlas;
-        this._spriteRegistry = registry;
 
         // Record timings to debug stats
         const lt = debugStats.state.loadTimings;
@@ -359,7 +373,7 @@ export class SpriteRenderManager {
             totalSprites: t.total(),
             atlasSize: `${atlas.width}x${atlas.height}`,
             spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
-                         registry.getResourceCount() + registry.getUnitCount(),
+                registry.getResourceCount() + registry.getUnitCount(),
         });
 
         SpriteRenderManager.log.debug(
@@ -369,7 +383,7 @@ export class SpriteRenderManager {
         );
 
         return registry.hasBuildingSprites() || registry.hasMapObjectSprites() ||
-               registry.hasResourceSprites() || registry.hasUnitSprites();
+            registry.hasResourceSprites() || registry.hasUnitSprites();
     }
 
     /**
@@ -488,20 +502,114 @@ export class SpriteRenderManager {
      * Load map object sprites.
      */
     private async loadMapObjectSprites(
+        gl: WebGL2RenderingContext,
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry
     ): Promise<boolean> {
-        const fileSet = await this.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.MAP_OBJECTS}`);
-        if (!fileSet) return false;
+        // Load both file sets potentially needed
+        const [fileSet5, fileSet3] = await Promise.all([
+            this.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.MAP_OBJECTS}`),
+            this.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.RESOURCES}`)
+        ]);
+
+        if (!fileSet5) return false;
+
+        SpriteRenderManager.log.debug(`Loaded MapObjects GFX: ${fileSet5.gilReader.length} images`);
+
+        // Counter for periodic updates
+        let loadCount = 0;
+        const UPDATE_INTERVAL = 20;
+        let lastAtlasWidth = atlas.width;
+        let lastAtlasHeight = atlas.height;
+        const loadedCounts = new Map<number, number>();
 
         return this.loadSpritesFromMap(
             getMapObjectSpriteMap(),
-            (type, info) => [{ type, index: info.index, palette: info.paletteIndex ?? 0 }],
-            ({ index, palette }) => this.spriteLoader.loadDirectSprite(fileSet, index, palette, atlas),
-            ({ type }, sprite) => registry.registerMapObject(type, sprite.entry)
-        );
+            (type, info) => {
+                const tasks = [];
+
+                if (info.file === GFX_FILE_NUMBERS.RESOURCES) {
+                    // Resource Map Object (File 3) - 8 directions for quantities 1-8
+                    for (let i = 0; i < 8; i++) {
+                        tasks.push({
+                            type,
+                            index: info.index,
+                            offset: 0,
+                            palette: info.paletteIndex ?? null,
+                            variation: i,
+                            file: info.file,
+                        });
+                    }
+                } else {
+                    // Standard Map Object (File 5) - Tree variations
+                    for (let i = 0; i < TREE_VARIATION_COUNT; i++) {
+                        const offset = TREE_TEXTURE_OFFSET.NORMAL_START + i;
+                        if (offset > TREE_TEXTURE_OFFSET.NORMAL_END) break;
+
+                        tasks.push({
+                            type,
+                            index: info.index,
+                            offset,
+                            palette: info.paletteIndex ?? null,
+                            variation: i,
+                            file: info.file ?? GFX_FILE_NUMBERS.MAP_OBJECTS,
+                        });
+                    }
+                }
+                return tasks;
+            },
+            async({ index, offset, palette, variation, file }) => {
+                if (file === GFX_FILE_NUMBERS.RESOURCES) {
+                    if (!fileSet3) return null;
+                    // For resources in file 3, we use loadJobSprite. 
+                    // Use variation as direction (0-7 mapped to quanity 1-8)
+                    const sprite = await this.spriteLoader.loadJobSprite(
+                        fileSet3,
+                        { jobIndex: index, directionIndex: variation },
+                        atlas
+                    );
+                    return { sprite: sprite ? sprite.entry : null, variation };
+                } else {
+                    // Standard File 5 object
+                    const sprite = await this.spriteLoader.loadDirectSprite(
+                        fileSet5,
+                        index + offset,
+                        palette,
+                        atlas
+                    );
+                    return { sprite: sprite ? sprite.entry : null, variation };
+                }
+            },
+            ({ type }, { sprite, variation }) => {
+                if (sprite) {
+                    registry.registerMapObject(type, sprite, variation);
+
+                    const current = loadedCounts.get(type) || 0;
+                    loadedCounts.set(type, current + 1);
+
+                    loadCount++;
+                    const atlasGrew = atlas.width !== lastAtlasWidth || atlas.height !== lastAtlasHeight;
+
+                    if (atlasGrew || loadCount % UPDATE_INTERVAL === 0) {
+                        if (atlasGrew) {
+                            SpriteRenderManager.log.debug(`Atlas grew detected (to ${atlas.width}x${atlas.height}), forcing immediate update`);
+                        }
+                        atlas.update(gl);
+                        lastAtlasWidth = atlas.width;
+                        lastAtlasHeight = atlas.height;
+                    }
+                }
+            }
+        ).then(result => {
+            // Only log warnings for standard map objects (trees) which expect multiple variations
+            SpriteRenderManager.log.debug('MapObject sprite loading complete.');
+            return result;
+        });
     }
 
+    /**
+     * Load resource sprites.
+     */
     /**
      * Load resource sprites.
      */
@@ -512,13 +620,15 @@ export class SpriteRenderManager {
         const fileSet = await this.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.RESOURCES}`);
         if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
 
+        const DIRECTIONS = [0, 1, 2, 3, 4, 5, 6, 7];
+
         return this.loadSpritesFromMap(
             getResourceSpriteMap(),
-            (type, info) => [{ type, jobIndex: info.index }],
-            ({ jobIndex }) => this.spriteLoader.loadJobSprite(
-                fileSet, { jobIndex, directionIndex: 0, frameIndex: 0 }, atlas
+            (type, info) => DIRECTIONS.map(dir => ({ type, dir, jobIndex: info.index })),
+            ({ dir, jobIndex }) => this.spriteLoader.loadJobSprite(
+                fileSet, { jobIndex, directionIndex: dir, frameIndex: 0 }, atlas
             ),
-            ({ type }, sprite) => registry.registerResource(type, sprite.entry)
+            ({ type, dir }, sprite) => registry.registerResource(type, dir, sprite.entry)
         );
     }
 

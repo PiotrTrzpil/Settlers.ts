@@ -46,6 +46,8 @@ export function createTestMapLoader(): IMapLoader {
     const groundType = new Uint8Array(total);
     const groundHeight = new Uint8Array(total);
 
+    const objectType = new Uint8Array(total);
+
     for (let y = 0; y < MAP_SIZE; y++) {
         const terrainType = getTerrainForRow(y);
         for (let x = 0; x < MAP_SIZE; x++) {
@@ -53,12 +55,18 @@ export function createTestMapLoader(): IMapLoader {
             groundType[idx] = terrainType;
             // Gentle sine-wave height variation
             groundHeight[idx] = Math.floor(10 + 5 * Math.sin(x * 0.1) + 3 * Math.sin(y * 0.15));
+
+            // Add some trees (ID 1-18) randomly on grass
+            if (terrainType === LandscapeType.Grass && Math.random() < 0.05) {
+                objectType[idx] = Math.floor(Math.random() * 18) + 1;
+            }
         }
     }
 
     const landscape: IMapLandscape = {
         getGroundType: () => groundType,
         getGroundHeight: () => groundHeight,
+        getObjectType: () => objectType,
     };
 
     const general = new GeneralMapInformation();

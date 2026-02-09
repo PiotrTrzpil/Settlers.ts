@@ -18,7 +18,7 @@ export class JilFileReader extends IndexFile {
 
         for (let i = 0; i < offsetTable.length; i++) {
             if (offsetTable[i] === offset) {
-                JilFileReader.log.debug(dirOffset + ' --> ' + i);
+                // JilFileReader.log.debug(dirOffset + ' --> ' + i);
                 return i;
             }
         }

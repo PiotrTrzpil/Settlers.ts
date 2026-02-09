@@ -43,6 +43,11 @@ export class ViewPoint implements IViewPoint {
         return this.canvas.clientHeight;
     }
 
+    public get aspectRatio(): number {
+        const h = this.canvas.clientHeight;
+        return h > 0 ? this.canvas.clientWidth / h : 1.0;
+    }
+
     /** Center the camera on a tile coordinate */
     public setPosition(tileX: number, tileY: number): void {
         // The shader maps tile (x, y) to instancePos (x + floor(y/2), y),

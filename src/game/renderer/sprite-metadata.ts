@@ -2,6 +2,7 @@ import { BuildingType, MapObjectType, UnitType } from '../entity';
 import { EMaterialType } from '../economy/material-type';
 import { AtlasRegion } from './entity-texture-atlas';
 import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS } from '../animation';
+import { mapToArray, arrayToMap } from './sprite-metadata-helpers';
 
 /** Conversion factor from sprite pixels to world-space units */
 export const PIXELS_TO_WORLD = 1.0 / 64.0;
@@ -112,6 +113,7 @@ export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
     // Job 0: Unknown/placeholder
     [UnitType.Bearer]: 1,      // Carrier without goods
     [UnitType.Builder]: 19,    // Construction worker
+    [UnitType.Lumberjack]: 5,  // As requested by user
     [UnitType.Swordsman]: 227, // Lvl1 swordsman (first of pair 227/228)
     [UnitType.Bowman]: 236,    // Lvl1 bowman standing (236-240 = set1, 242-246 = set2)
     // TODO: Identify remaining unit job indices by inspecting JIL files
@@ -215,48 +217,47 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
     // Job indices for buildings - same across all races
     // These can be verified/edited via the /building-sprites view
     // or by browsing JIL files in /jil-view
-    [BuildingType.Lumberjack]:    1,
-    [BuildingType.Forester]:      2,
-    [BuildingType.Sawmill]:       3,
-    [BuildingType.Stonecutter]:   4,
-    [BuildingType.Waterworks]:    5,
-    [BuildingType.Fishery]:       6,
-    [BuildingType.Hunter]:        7,
+    [BuildingType.Lumberjack]: 1,
+    [BuildingType.Forester]: 2,
+    [BuildingType.Sawmill]: 3,
+    [BuildingType.Stonecutter]: 4,
+    [BuildingType.Waterworks]: 5,
+    [BuildingType.Fishery]: 6,
+    [BuildingType.Hunter]: 7,
     [BuildingType.Slaughterhouse]: 8,
-    [BuildingType.Windmill]:      9,
-    [BuildingType.Bakery]:        10,
-    [BuildingType.Farm]:          11,
-    [BuildingType.PigFarm]:       12,
-    [BuildingType.DonkeyFarm]:    13,
-    [BuildingType.StoneMine]:     14,
-    [BuildingType.IronMine]:      15,
-    [BuildingType.GoldMine]:      16,
-    [BuildingType.CoalMine]:      17,
-    [BuildingType.SulfurMine]:    18,
-    [BuildingType.GoldSmelter]:   19,
-    [BuildingType.IronSmelter]:   20,
-    [BuildingType.ToolSmith]:     21,
-    [BuildingType.WeaponSmith]:   22,
+    [BuildingType.Windmill]: 9,
+    [BuildingType.Bakery]: 10,
+    [BuildingType.Farm]: 11,
+    [BuildingType.PigFarm]: 12,
+    [BuildingType.DonkeyFarm]: 13,
+    [BuildingType.StoneMine]: 14,
+    [BuildingType.IronMine]: 15,
+    [BuildingType.GoldMine]: 16,
+    [BuildingType.CoalMine]: 17,
+    [BuildingType.SulfurMine]: 18,
+    [BuildingType.GoldSmelter]: 19,
+    [BuildingType.IronSmelter]: 20,
+    [BuildingType.ToolSmith]: 21,
+    [BuildingType.WeaponSmith]: 22,
     [BuildingType.SiegeWorkshop]: 23,  // Siege engine maker (uncertain)
     [BuildingType.LargeDecoration]: 33,
-    [BuildingType.Warehouse]:     34,
-    [BuildingType.Barrack]:       24,
-    [BuildingType.LivingHouse]:   26,
-    [BuildingType.Healer]:        27,
+    [BuildingType.Warehouse]: 34,
+    [BuildingType.Barrack]: 24,
+    [BuildingType.LivingHouse]: 26,
+    [BuildingType.Healer]: 27,
     [BuildingType.AmmunitionMaker]: 28,
-    [BuildingType.Winegrower]:    29,
-    [BuildingType.WinePress]:     35,  // Wine processing (race-equivalent)
-    [BuildingType.SmallHouse]:    40,
-    [BuildingType.MediumHouse]:   41,
-    [BuildingType.LargeHouse]:    42,
-    [BuildingType.SmallTemple]:   43,
-    [BuildingType.LargeTemple]:   44,
-    [BuildingType.ScoutTower]:    45,
-    [BuildingType.Tower]:         46,
-    [BuildingType.LargeTower]:    47,
-    [BuildingType.Castle]:        48,
-    [BuildingType.Shipyard]:      52,  // 52-63, 76-79 are shipyard orientations
-    [BuildingType.Decoration]:    64,  // 64-75 are decorations
+
+    [BuildingType.SmallHouse]: 40,
+    [BuildingType.MediumHouse]: 41,
+    [BuildingType.LargeHouse]: 42,
+    [BuildingType.SmallTemple]: 43,
+    [BuildingType.LargeTemple]: 44,
+    [BuildingType.ScoutTower]: 45,
+    [BuildingType.Tower]: 46,
+    [BuildingType.LargeTower]: 47,
+    [BuildingType.Castle]: 48,
+    [BuildingType.Shipyard]: 52,  // 52-63, 76-79 are shipyard orientations
+    [BuildingType.Decoration]: 64,  // 64-75 are decorations
 };
 
 /**
@@ -266,36 +267,37 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
  */
 export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
     // Job 0: Placeholder
-    // Job 1: Unknown plant
+    [EMaterialType.AGAVE]: 1,          // Mayan plant (new assignment)
     [EMaterialType.IRONORE]: 2,
     [EMaterialType.OFFICER_GEAR]: 3,  // Leader helmets/equipment
     [EMaterialType.AXE]: 4,
     [EMaterialType.BATTLE_AXE]: 5,    // Heavy battle axes
+    [EMaterialType.BLOWGUN]: 6,       // Mayan blowpipe (new assignment)
     [EMaterialType.PLANK]: 7,
-    [EMaterialType.STONE]: 8,         // Stone blocks
-    [EMaterialType.COAL]: 9,          // Coal lumps
-    [EMaterialType.GOLDORE]: 10,      // Gold ore
-    [EMaterialType.IRON]: 11,         // Iron bars
-    [EMaterialType.GOLD]: 12,         // Gold bars
-    [EMaterialType.SWORD]: 13,        // Swords
-    [EMaterialType.BOW]: 14,          // Bows
-    [EMaterialType.SPEAR]: 15,        // Spears
+    [EMaterialType.BOW]: 8,           // Bows (updated)
+    [EMaterialType.BREAD]: 9,         // Bread (updated)
+    [EMaterialType.COAL]: 10,         // Coal lumps (updated)
+    [EMaterialType.FISH]: 11,         // Fish (updated)
+    [EMaterialType.FLOUR]: 12,        // Flour sacks (updated)
+    [EMaterialType.GOAT]: 13,         // Mayan livestock (new assignment)
+    [EMaterialType.GOLD]: 14,         // Gold bars (new assignment)
+    [EMaterialType.GOLDORE]: 15,      // Gold ore (new assignment)
     [EMaterialType.CROP]: 16,         // Wheat
-    [EMaterialType.FLOUR]: 17,        // Flour sacks
-    [EMaterialType.BREAD]: 18,        // Bread
-    [EMaterialType.MEAT]: 19,         // Meat
-    [EMaterialType.FISH]: 20,         // Fish
+    [EMaterialType.MEAD]: 17,         // Honey wine (new assignment)
+    [EMaterialType.HAMMER]: 18,       // Hammers (new assignment)
+    [EMaterialType.SULFUR]: 19,       // Sulfur (assuming "yellow liquid")
+    // [EMaterialType.FISH]: 20,      // REMOVE - Conflict
     [EMaterialType.WINE]: 21,         // Wine barrels
     [EMaterialType.TRUNK]: 22,        // Logs
     [EMaterialType.PICK]: 23,         // Pickaxes
     [EMaterialType.SAW]: 24,          // Saws
-    [EMaterialType.HAMMER]: 25,       // Hammers
+    // [EMaterialType.HAMMER]: 25,    // REMOVE - Conflict with 18
     [EMaterialType.SCYTHE]: 26,       // Scythes
     [EMaterialType.FISHINGROD]: 27,   // Fishing rods
     [EMaterialType.WATER]: 28,        // Water buckets
     [EMaterialType.PIG]: 29,          // Pigs (may not have sprite)
     [EMaterialType.GRAPES]: 30,       // Grapes
-    [EMaterialType.SULFUR]: 31,       // Sulfur
+    // [EMaterialType.SULFUR]: 31,    // REMOVE - Conflict with 19
     [EMaterialType.GEMS]: 32,         // Gems
     [EMaterialType.BLADE]: 33,        // Blades
 };
@@ -383,27 +385,58 @@ export function getBuildingSpriteMap(race: Race): Partial<Record<BuildingType, B
 export const BUILDING_SPRITE_MAP = getBuildingSpriteMap(Race.Roman);
 
 /**
+ * Texture offsets for tree map objects.
+ * Each tree type has blocks of textures for different states.
+ * Structure:
+ * 0-2: Zoom levels (Very Small, Small, Medium)
+ * 3-19: Normal tree frames (swaying animation?) - 17 frames
+ * 20-30: Falling/Cutting animation frames - 11 frames
+ */
+export const TREE_TEXTURE_OFFSET = {
+    ZOOM_VERY_SMALL: 0,
+    ZOOM_SMALL: 1,
+    ZOOM_MEDIUM: 2,
+    NORMAL_1: 3, // Default static
+    NORMAL_START: 3,
+    NORMAL_END: 19,
+    CUT_START: 20,
+    CUT_END: 30,
+} as const;
+
+/**
+ * Number of tree variations to load and use.
+ * Max available in GFX is 17 (NORMAL_END - NORMAL_START + 1).
+ * Set to 1 to disable variations.
+ */
+export const TREE_VARIATION_COUNT = 17;
+
+/** Stride between tree types in the GFX file (31 textures per tree) */
+export const TREE_SPRITE_STRIDE = 31;
+
+/**
  * Mapping from MapObjectType to GIL sprite index (direct index, not job-based).
- * Map objects typically use direct GIL indexing rather than JIL job indexing.
- * These indices need to be verified by visually inspecting the GFX files.
+ * Map objects use a stride-based layout in 5.gfx starting at index 1.
  */
 export const MAP_OBJECT_SPRITE_INDICES: Partial<Record<MapObjectType, number>> = {
-    // Trees - indices to be determined by visual inspection of GFX file 20
-    [MapObjectType.TreePine]: 0,
-    [MapObjectType.TreeOak]: 1,
-    [MapObjectType.TreeBirch]: 2,
-    [MapObjectType.TreePalm]: 3,
-    [MapObjectType.TreeCypress]: 4,
-    [MapObjectType.TreeDead]: 5,
-
-    // Stones
-    [MapObjectType.StoneSmall]: 10,
-    [MapObjectType.StoneMedium]: 11,
-    [MapObjectType.StoneLarge]: 12,
-
-    // Plants
-    [MapObjectType.Bush]: 30,
-    [MapObjectType.Mushroom]: 31,
+    [MapObjectType.TreeOak]: 1 + (0 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeBeech]: 1 + (1 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeAsh]: 1 + (2 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeLinden]: 1 + (3 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeBirch]: 1 + (4 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreePoplar]: 1 + (5 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeChestnut]: 1 + (6 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeMaple]: 1 + (7 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeFir]: 1 + (8 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeSpruce]: 1 + (9 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeCoconut]: 1 + (10 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeDate]: 1 + (11 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeWalnut]: 1 + (12 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeCorkOak]: 1 + (13 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreePine]: 1 + (14 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreePine2]: 1 + (15 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeOliveLarge]: 1 + (16 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeOliveSmall]: 1 + (17 * TREE_SPRITE_STRIDE),
+    [MapObjectType.TreeDead]: 1 + (18 * TREE_SPRITE_STRIDE),
 };
 
 /**
@@ -412,23 +445,48 @@ export const MAP_OBJECT_SPRITE_INDICES: Partial<Record<MapObjectType, number>> =
 export interface MapObjectSpriteInfo {
     /** GFX file number */
     file: number;
-    /** GIL sprite index (direct) */
+    /** Base GIL sprite index (start of the tree block) */
     index: number;
     /** Optional: palette index if different from sprite index */
     paletteIndex?: number;
 }
 
 /**
+ * Mapping from MapObjectType (Resource) to EMaterialType for sprite lookup.
+ * This allows using resource sprites (pile of ore) for map resources.
+ */
+const RESOURCE_MAP_OBJECTS: Partial<Record<MapObjectType, EMaterialType>> = {
+    [MapObjectType.ResourceCoal]: EMaterialType.COAL,
+    [MapObjectType.ResourceGold]: EMaterialType.GOLDORE,
+    [MapObjectType.ResourceIron]: EMaterialType.IRONORE,
+    [MapObjectType.ResourceStone]: EMaterialType.STONE,
+    [MapObjectType.ResourceSulfur]: EMaterialType.SULFUR,
+};
+
+/**
  * Get the map object sprite map.
+ * Includes both landscape objects (trees) and resource deposits.
  */
 export function getMapObjectSpriteMap(): Partial<Record<MapObjectType, MapObjectSpriteInfo>> {
     const result: Partial<Record<MapObjectType, MapObjectSpriteInfo>> = {};
 
+    // Standard map objects (Trees, etc.) from file 5
     for (const [typeStr, spriteIndex] of Object.entries(MAP_OBJECT_SPRITE_INDICES)) {
         if (spriteIndex !== undefined) {
             result[Number(typeStr) as MapObjectType] = {
                 file: GFX_FILE_NUMBERS.MAP_OBJECTS,
                 index: spriteIndex,
+            };
+        }
+    }
+
+    // Resource deposits using resource sprites from file 3
+    for (const [moTypeStr, matType] of Object.entries(RESOURCE_MAP_OBJECTS)) {
+        const jobIndex = RESOURCE_JOB_INDICES[matType];
+        if (jobIndex !== undefined) {
+            result[Number(moTypeStr) as MapObjectType] = {
+                file: GFX_FILE_NUMBERS.RESOURCES,
+                index: jobIndex,
             };
         }
     }
@@ -464,12 +522,12 @@ export interface AnimatedSpriteEntry {
  */
 export class SpriteMetadataRegistry {
     private buildings: Map<BuildingType, BuildingSpriteEntries> = new Map();
-    private mapObjects: Map<MapObjectType, SpriteEntry> = new Map();
+    private mapObjects: Map<MapObjectType, SpriteEntry[]> = new Map();
     /** Animated building sprites (completed state only for now) */
     private animatedBuildings: Map<BuildingType, AnimatedSpriteEntry> = new Map();
     /** Animated map objects (trees swaying, etc.) */
     private animatedMapObjects: Map<MapObjectType, AnimatedSpriteEntry> = new Map();
-    private resources: Map<EMaterialType, SpriteEntry> = new Map();
+    private resources: Map<EMaterialType, Map<number, SpriteEntry>> = new Map();
     /** Unit sprites indexed by type and direction (0-3: RIGHT, RIGHT_BOTTOM, LEFT_BOTTOM, LEFT) */
     private units: Map<UnitType, Map<number, SpriteEntry>> = new Map();
 
@@ -506,31 +564,64 @@ export class SpriteMetadataRegistry {
     /**
      * Register a sprite entry for a map object type.
      */
-    public registerMapObject(type: MapObjectType, entry: SpriteEntry): void {
-        this.mapObjects.set(type, entry);
+    /**
+     * Register a sprite entry for a map object type (with optional variation index).
+     */
+    public registerMapObject(type: MapObjectType, entry: SpriteEntry, variation: number = 0): void {
+        const entries = this.mapObjects.get(type) ?? [];
+        if (entries.length <= variation) {
+            entries.length = variation + 1;
+        }
+        entries[variation] = entry;
+        this.mapObjects.set(type, entries);
     }
 
     /**
-     * Look up the sprite entry for a map object type.
+     * Look up the sprite entry for a map object type (and optional variation).
      * Returns null if no sprite is registered for this type.
      */
-    public getMapObject(type: MapObjectType): SpriteEntry | null {
-        return this.mapObjects.get(type) ?? null;
+    public getMapObject(type: MapObjectType, variation: number = 0): SpriteEntry | null {
+        const entries = this.mapObjects.get(type);
+        if (!entries || entries.length === 0) return null;
+
+        // Filter out any potential holes in the array to get only valid loaded sprites
+        const available = entries.filter(e => e !== undefined && e !== null);
+
+        if (available.length === 0) return null;
+
+        // Use modulo to cycle through available variations safely
+        // This handles cases where we request var 15 but only have 1 or 2 variations loaded
+        return available[variation % available.length];
+    }
+
+    /**
+     * Get the number of variations available for a map object type.
+     */
+    public getMapObjectVariationCount(type: MapObjectType): number {
+        return this.mapObjects.get(type)?.length ?? 0;
     }
 
     /**
      * Register a sprite entry for a resource/material type.
      */
-    public registerResource(type: EMaterialType, entry: SpriteEntry): void {
-        this.resources.set(type, entry);
+    public registerResource(type: EMaterialType, direction: number, entry: SpriteEntry): void {
+        let dirMap = this.resources.get(type);
+        if (!dirMap) {
+            dirMap = new Map();
+            this.resources.set(type, dirMap);
+        }
+        dirMap.set(direction, entry);
     }
 
     /**
      * Look up the sprite entry for a resource/material type.
      * Returns null if no sprite is registered for this type.
      */
-    public getResource(type: EMaterialType): SpriteEntry | null {
-        return this.resources.get(type) ?? null;
+    public getResource(type: EMaterialType, direction: number = 0): SpriteEntry | null {
+        const dirMap = this.resources.get(type);
+        if (!dirMap) return null;
+        // Try requested direction, fall back to direction 0 if not found
+        return dirMap.get(direction) ?? dirMap.get(0) ?? null;
     }
 
     /**
@@ -725,5 +816,98 @@ export class SpriteMetadataRegistry {
         this.animatedMapObjects.clear();
         this.resources.clear();
         this.units.clear();
+    }
+
+    /**
+     * Serialize registry data for caching.
+     * Converts Maps to arrays for JSON compatibility.
+     */
+    public serialize(): any {
+        // Helper to serialize nested AnimationData maps
+        const serializeAnimData = (entries: Map<any, AnimatedSpriteEntry>) => {
+            return mapToArray(entries).map(([key, entry]) => {
+                const sequences = mapToArray(entry.animationData.sequences).map(([seqKey, dirMap]) => {
+                    return [seqKey, mapToArray(dirMap)] as [string, Array<[number, AnimationSequence]>];
+                });
+
+                return [key, {
+                    ...entry,
+                    animationData: {
+                        ...entry.animationData,
+                        sequences // transformed sequences
+                    }
+                }];
+            });
+        };
+
+        return {
+            buildings: mapToArray(this.buildings),
+            mapObjects: mapToArray(this.mapObjects),
+            resources: mapToArray(this.resources).map(([k, v]) => [k, mapToArray(v)]),
+            units: mapToArray(this.units).map(([k, v]) => [k, mapToArray(v)]),
+            animatedBuildings: serializeAnimData(this.animatedBuildings),
+            animatedMapObjects: serializeAnimData(this.animatedMapObjects),
+        };
+    }
+
+    /**
+     * Deserialize registry data from cache.
+     */
+    public static deserialize(data: any): SpriteMetadataRegistry {
+        const registry = new SpriteMetadataRegistry();
+
+        if (data.buildings) {
+            registry.buildings = arrayToMap(data.buildings);
+        }
+
+        if (data.mapObjects) {
+            registry.mapObjects = arrayToMap(data.mapObjects);
+        }
+
+        if (data.resources) {
+            registry.resources = new Map(
+                (data.resources as Array<[EMaterialType, Array<[number, SpriteEntry]>]>).map(([k, v]) => [k, arrayToMap(v)])
+            );
+        }
+
+        if (data.units) {
+            registry.units = new Map(
+                (data.units as Array<[UnitType, Array<[number, SpriteEntry]>]>).map(([k, v]) => [k, arrayToMap(v)])
+            );
+        }
+
+        // Helper to deserialize nested AnimationData maps
+        const deserializeAnimData = (
+            arr: Array<[any, any]>,
+            targetMap: Map<any, AnimatedSpriteEntry>
+        ) => {
+            for (const [key, entryData] of arr) {
+                // Reconstruct sequences Map<string, Map<number, AnimationSequence>>
+                const sequences = new Map<string, Map<number, AnimationSequence>>();
+                if (entryData.animationData && Array.isArray(entryData.animationData.sequences)) {
+                    for (const [seqKey, dirArr] of entryData.animationData.sequences) {
+                        sequences.set(seqKey, arrayToMap(dirArr));
+                    }
+                }
+
+                targetMap.set(key, {
+                    ...entryData,
+                    animationData: {
+                        ...entryData.animationData,
+                        sequences
+                    }
+                });
+            }
+        };
+
+        if (data.animatedBuildings) {
+            deserializeAnimData(data.animatedBuildings, registry.animatedBuildings);
+        }
+
+        if (data.animatedMapObjects) {
+            deserializeAnimData(data.animatedMapObjects, registry.animatedMapObjects);
+        }
+
+        return registry;
     }
 }
