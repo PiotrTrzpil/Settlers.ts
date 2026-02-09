@@ -16,8 +16,10 @@ import { Race } from '@/game/renderer/sprite-metadata';
  * - Volume control groups (Master, SFX, Music)
  * - Loading .snd archives for SFX
  */
+/** Global key for HMR-safe singleton storage */
+const SOUND_MANAGER_KEY = '__settlers_sound_manager__';
+
 export class SoundManager implements IAudioManager {
-    private static instance: SoundManager;
     private static log = new LogHandler('SoundManager');
 
     private sounds: Map<string, Howl> = new Map();
@@ -43,11 +45,19 @@ export class SoundManager implements IAudioManager {
         );
     }
 
+    /**
+     * Get the singleton instance. Stored on window to survive HMR module reloads.
+     */
     public static getInstance(): SoundManager {
-        if (!SoundManager.instance) {
-            SoundManager.instance = new SoundManager();
+        // Use window storage to survive HMR - when the module is hot-replaced,
+        // static class properties are reset, but window persists
+        const existing = (window as any)[SOUND_MANAGER_KEY] as SoundManager | undefined;
+        if (existing) {
+            return existing;
         }
-        return SoundManager.instance;
+        const instance = new SoundManager();
+        (window as any)[SOUND_MANAGER_KEY] = instance;
+        return instance;
     }
 
     public get currentMusicId(): string | null {
