@@ -363,6 +363,34 @@ class DebugStats {
     }
 
     /**
+     * Reset timing data when game is reloaded (e.g., during HMR).
+     * Call this before starting a new game to clear stale timing data.
+     */
+    public reset(): void {
+        this.frameTimes.length = 0;
+        this.lastFrameTime = 0;
+        this.tickCount = 0;
+        this.tickResetTime = 0;
+        this.lastRenderTimingUpdate = 0;
+        this.lastEntityCountUpdate = 0;
+
+        // Clear render timing samples
+        for (const key of Object.keys(this.renderSamples) as (keyof RenderTimingSamples)[]) {
+            this.renderSamples[key].length = 0;
+        }
+
+        // Reset state counters (but keep UI settings)
+        this.state.fps = 0;
+        this.state.frameTimeMs = 0;
+        this.state.frameTimeMin = 0;
+        this.state.frameTimeMax = 0;
+        this.state.ticksPerSec = 0;
+        this.state.frameCount = 0;
+        this.state.gameLoaded = false;
+        this.state.rendererReady = false;
+    }
+
+    /**
      * Record a frame for FPS calculation.
      * Uses performance.now() for actual wall-clock timing instead of the rAF
      * timestamp, which can be misleading when the main thread is blocked.

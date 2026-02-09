@@ -474,6 +474,9 @@ export function useRenderer({
         const game = getGame();
         if (game == null || renderer == null) return;
 
+        // Reset timing stats to clear stale data from previous game/HMR reload
+        debugStats.reset();
+
         renderer.clear();
 
         landscapeRenderer = new LandscapeRenderer(

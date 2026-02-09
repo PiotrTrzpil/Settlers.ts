@@ -102,6 +102,11 @@ export class Renderer {
     }
 
     public destroy(): void {
+        // Cancel any pending animation frame
+        if (this.animRequest) {
+            cancelAnimationFrame(this.animRequest);
+            this.animRequest = 0;
+        }
         // Clean up all child renderers first
         this.clear();
         this._gl = null;
