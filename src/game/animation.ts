@@ -38,14 +38,11 @@ export function isCarrySequence(sequenceKey: string): boolean {
 
 /**
  * Default animation timing constants (in milliseconds).
+ * All animations use the same speed for visual consistency.
  */
 export const ANIMATION_DEFAULTS = {
-    /** Default duration per frame for most animations */
-    FRAME_DURATION_MS: 120,
-    /** Faster animations (e.g., running) */
-    FAST_FRAME_DURATION_MS: 80,
-    /** Slower animations (e.g., idle, ambient) */
-    SLOW_FRAME_DURATION_MS: 200,
+    /** Duration per frame for all animations (matches JIL viewer) */
+    FRAME_DURATION_MS: 100,
 } as const;
 
 /**

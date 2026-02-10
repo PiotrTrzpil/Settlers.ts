@@ -3,8 +3,6 @@ import { GameState } from '../game-state';
 import { MapSize } from '@/utilities/map-size';
 import { isBuildable } from '../features/placement';
 import { LogHandler } from '@/utilities/log-handler';
-// Tree variations: 0 = normal/healthy, 1-3 = growth stages (mature to sapling)
-const TREE_HEALTHY_VARIATION = 0;
 import type { MapObjectData } from '@/resources/map/map-entity-data';
 import { S4TreeType, S4GroundType } from '@/resources/map/s4-types';
 
@@ -141,7 +139,7 @@ export function analyzeObjectTypes(objectType: Uint8Array): Map<number, number> 
 /**
  * Populate map objects from landscape object type data.
  *
- * @param state - Game state to add entities to (uses state.rng for deterministic variation)
+ * @param state - Game state to add entities to
  * @param objectType - Raw object type data from landscape
  * @param groundType - Ground type data (for buildability check)
  * @param mapSize - Map dimensions
@@ -195,9 +193,7 @@ export function populateMapObjects(
             // Filter by allowed types
             if (allowedTypes && !allowedTypes.has(mappedType)) continue;
 
-            // Spawn the object with deterministic variation from seeded RNG
-            const variation = TREE_HEALTHY_VARIATION;
-            state.addEntity(EntityType.MapObject, mappedType, x, y, 0, undefined, variation);
+            state.addEntity(EntityType.MapObject, mappedType, x, y, 0);
             count++;
         }
     }
@@ -211,7 +207,7 @@ export function populateMapObjects(
  * This is the CORRECT way to load trees - from the MapObjects chunk (type 6),
  * not from landscape byte 2 which contains terrain attributes.
  *
- * @param state - Game state to add entities to (uses state.rng for deterministic variation)
+ * @param state - Game state to add entities to
  * @param objects - Parsed map object data from MapObjects chunk
  * @param groundType - Ground type data (for buildability check)
  * @param mapSize - Map dimensions
@@ -245,9 +241,7 @@ export function populateMapObjectsFromEntityData(
         const mappedType = s4TreeTypeToMapObjectType(s4TreeType);
         if (mappedType === null) continue;
 
-        // Spawn the object with deterministic variation from seeded RNG
-        const variation = TREE_HEALTHY_VARIATION;
-        state.addEntity(EntityType.MapObject, mappedType, x, y, 0, undefined, variation);
+        state.addEntity(EntityType.MapObject, mappedType, x, y, 0);
         count++;
     }
 
@@ -259,7 +253,7 @@ export function populateMapObjectsFromEntityData(
  * Spawn test objects for a category (when no real map data is available).
  * Distributes objects pseudo-randomly across buildable terrain.
  *
- * @param state - Game state to add entities to (uses state.rng for deterministic variation)
+ * @param state - Game state to add entities to
  * @param groundType - Ground type data (for buildability check)
  * @param mapSize - Map dimensions
  * @param category - Category of objects to spawn
@@ -290,10 +284,9 @@ export function spawnTestObjects(
         if (!isBuildable(groundType[idx])) continue;
         if (state.getEntityAt(x, y)) continue;
 
-        // Cycle through types in category with deterministic variation
+        // Cycle through types in category
         const objectType = types[i % types.length];
-        const variation = TREE_HEALTHY_VARIATION;
-        state.addEntity(EntityType.MapObject, objectType, x, y, 0, undefined, variation);
+        state.addEntity(EntityType.MapObject, objectType, x, y, 0);
         spawned++;
     }
 
@@ -540,8 +533,7 @@ function tryPlaceTreeAt(
     const treeType = selectTreeTypeForExpansion(seedType, terrain, nx, ny, seed);
     if (!isTreeAllowedOnTerrain(treeType, terrain)) return false;
 
-    const variation = TREE_HEALTHY_VARIATION;
-    state.addEntity(EntityType.MapObject, treeType, nx, ny, 0, undefined, variation);
+    state.addEntity(EntityType.MapObject, treeType, nx, ny, 0);
     occupied.add(idx);
     return true;
 }

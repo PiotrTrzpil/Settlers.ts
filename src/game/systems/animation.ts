@@ -87,6 +87,10 @@ export function updateAnimations(
         if (animationProvider.hasAnimation(entity.type, entity.subType)) {
             const defaultDir = DEFAULT_ANIMATION_DIRECTION[entity.type] ?? 0;
             entity.animationState = createAnimationState(ANIMATION_SEQUENCES.DEFAULT, defaultDir);
+            // Auto-play for buildings and map objects (ambient animations)
+            if (shouldAutoPlay(entity.type)) {
+                entity.animationState.playing = true;
+            }
         }
     }
 }
@@ -141,6 +145,15 @@ export function getAnimatedSpriteForDirection(
 }
 
 /**
+ * Check if an entity type should auto-play animations.
+ * Buildings and MapObjects animate continuously.
+ * Units are controlled by movement events.
+ */
+function shouldAutoPlay(entityType: EntityType): boolean {
+    return entityType === EntityType.Building || entityType === EntityType.MapObject;
+}
+
+/**
  * Initializes animation state for an entity if it should be animated.
  * Call this when adding new entities to the game.
  */
@@ -153,5 +166,9 @@ export function initializeEntityAnimation(
     if (animationProvider.hasAnimation(entity.type, entity.subType)) {
         const defaultDir = DEFAULT_ANIMATION_DIRECTION[entity.type] ?? 0;
         entity.animationState = createAnimationState(ANIMATION_SEQUENCES.DEFAULT, defaultDir);
+        // Auto-play for buildings and map objects (ambient animations)
+        if (shouldAutoPlay(entity.type)) {
+            entity.animationState.playing = true;
+        }
     }
 }

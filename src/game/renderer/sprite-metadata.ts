@@ -1035,7 +1035,7 @@ export class SpriteMetadataRegistry {
     public registerAnimatedMapObject(
         type: MapObjectType,
         frames: SpriteEntry[],
-        frameDurationMs: number = ANIMATION_DEFAULTS.SLOW_FRAME_DURATION_MS,
+        frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
         loop: boolean = true
     ): void {
         if (frames.length === 0) return;

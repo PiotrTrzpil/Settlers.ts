@@ -687,7 +687,7 @@ export class SpriteRenderManager {
 
     /**
      * Load tree sprites using JIL/DIL structure.
-     * Trees have: D0-D2 = growth stages, D3 = normal, D4 = falling, D5 = canopy disappearing
+     * Trees have: D0-D2 = growth stages, D3 = normal (with sway animation), D4 = falling, D5 = canopy disappearing
      */
     private async loadTreeSprites(
         fileSet: LoadedGfxFileSet,
@@ -715,74 +715,40 @@ export class SpriteRenderManager {
         await processBatchedWithHandler(
             treeInfos,
             async({ treeType, jobIndex: baseJobIndex }) => {
-                // Each tree state is a separate job. Direction is always 0.
-                // Job = baseJobIndex + offset, e.g., Oak normal = 1 + 3 = job 4
+                // Tree lifecycle jobs (each is a separate JIL job, direction always 0):
+                //   +0: sapling, +1: small, +2: medium (growth stages)
+                //   +3: normal (full grown, animated sway)
+                //   +4: falling, +5-9: being cut, +10: canopy disappearing
 
-                // Load normal tree sprite (base + 3) - this is what healthy trees display
+                // Load normal tree animation (full grown with sway)
                 const normalJob = baseJobIndex + TREE_JOB_OFFSET.NORMAL;
-                const normalSprite = await this.spriteLoader.loadJobSprite(
+                const normalAnim = await this.spriteLoader.loadJobAnimation(
                     fileSet,
-                    { jobIndex: normalJob, directionIndex: 0 },
-                    atlas
-                );
-
-                // Load growth stages (base + 0, 1, 2) for future use
-                const growthSprites: SpriteEntry[] = [];
-                for (let offset = TREE_JOB_OFFSET.SAPLING; offset <= TREE_JOB_OFFSET.MEDIUM; offset++) {
-                    const sprite = await this.spriteLoader.loadJobSprite(
-                        fileSet,
-                        { jobIndex: baseJobIndex + offset, directionIndex: 0 },
-                        atlas
-                    );
-                    if (sprite) {
-                        growthSprites.push(sprite.entry);
-                    }
-                }
-
-                // Load falling animation (base + 4)
-                const fallingAnim = await this.spriteLoader.loadJobAnimation(
-                    fileSet,
-                    baseJobIndex + TREE_JOB_OFFSET.FALLING,
+                    normalJob,
                     0, // direction
                     atlas
                 );
 
-                // Load canopy disappearing animation (base + 5) - last frame is trunk only
-                const canopyAnim = await this.spriteLoader.loadJobAnimation(
-                    fileSet,
-                    baseJobIndex + TREE_JOB_OFFSET.CANOPY_DISAPPEARING,
-                    0, // direction
-                    atlas
-                );
+                // TODO: Load growth stages when forester system is implemented
+                // TODO: Load falling/cutting animations when woodcutter system needs them
 
-                return { treeType, normalSprite, growthSprites, fallingAnim, canopyAnim };
+                return { treeType, normalAnim };
             },
             (result) => {
                 if (!result) return;
 
-                const { treeType, normalSprite, growthSprites, fallingAnim, canopyAnim } = result;
+                const { treeType, normalAnim } = result;
 
-                // Register normal tree sprite (variation 0 = healthy tree)
-                if (normalSprite) {
-                    registry.registerMapObject(treeType, normalSprite.entry, 0);
+                // Register normal tree animation (full grown trees sway)
+                if (normalAnim && normalAnim.frames.length > 0) {
+                    const frames = normalAnim.frames.map(f => f.entry);
+                    registry.registerAnimatedMapObject(
+                        treeType,
+                        frames,
+                        ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                        true // loop
+                    );
                     loadedCount++;
-                }
-
-                // Register growth stages as variations 1-3 (for growing trees)
-                for (let i = 0; i < growthSprites.length; i++) {
-                    // Growth stages go in reverse order: mature=1, medium=2, sapling=3
-                    // So variation 1 is most grown (closest to normal), 3 is smallest
-                    registry.registerMapObject(treeType, growthSprites[growthSprites.length - 1 - i], i + 1);
-                    loadedCount++;
-                }
-
-                // Register animations for woodcutting system
-                // TODO: Register falling and canopy animations when tree cutting is implemented
-                if (fallingAnim && fallingAnim.frames.length > 0) {
-                    // Will be used for tree falling animation
-                }
-                if (canopyAnim && canopyAnim.frames.length > 0) {
-                    // Last frame is trunk only - useful for stumps/logs
                 }
             }
         );

@@ -57,6 +57,29 @@ Modules in Layer 1 (`pathfinding/`, `ai/behavior-tree/`, `coordinates/`) must no
 
 ## 2. Feature Module Rules
 
+### Rule 2.0: Features vs Systems
+
+Use **features/** for complex business domains. Use **systems/** for simple focused behavior.
+
+| Location | Complexity | Characteristics | Examples |
+|----------|------------|-----------------|----------|
+| `features/` | High | Multiple files, Manager + System split, events, cross-cutting integrations | carriers, logistics, building-construction |
+| `systems/` | Low | Single file or small folder, owns its own state, focused behavior | tree-system, woodcutting-system, idle-behavior |
+
+**When to use `features/`:**
+- Multiple interacting components (Manager, System, Controller)
+- Emits or subscribes to events
+- Complex state machines
+- Cross-cutting integrations with other modules
+
+**When to use `systems/`:**
+- Single TickSystem implementation
+- Simple state (just a Map of entity data)
+- No events needed
+- Focused, self-contained behavior
+
+**Note:** A system in `systems/` can own its own state. The Manager/System split is only required for complex features.
+
 ### Rule 2.1: Single Entry Point
 
 All external code imports only from `index.ts`:

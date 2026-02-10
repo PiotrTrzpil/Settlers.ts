@@ -342,9 +342,11 @@ export class GameLoop {
             // Only update animations and render when not throttled
             if (shouldRender) {
                 // Update animations (runs every rendered frame for smooth animation)
+                // Scale by game speed so animations match game pace
                 const animStart = performance.now();
                 if (this.animationProvider) {
-                    updateAnimations(this.gameState, deltaSec * 1000, this.animationProvider);
+                    const scaledDeltaMs = deltaSec * 1000 * gameSettings.state.gameSpeed;
+                    updateAnimations(this.gameState, scaledDeltaMs, this.animationProvider);
                 }
                 animationsTime = performance.now() - animStart;
 
