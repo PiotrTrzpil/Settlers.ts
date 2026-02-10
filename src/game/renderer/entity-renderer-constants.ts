@@ -26,10 +26,10 @@ export const BASE_QUAD = new Float32Array([
 ]);
 
 // Entity scale factors
-export const BUILDING_SCALE = 0.5;
-export const UNIT_SCALE = 0.3;
-export const RESOURCE_SCALE = 0.25;
-export const PATH_DOT_SCALE = 0.12;
+export const BUILDING_SCALE = 1.0;
+export const UNIT_SCALE = 0.6;
+export const RESOURCE_SCALE = 0.5;
+export const PATH_DOT_SCALE = 0.24;
 
 /**
  * Depth factors for different entity types.

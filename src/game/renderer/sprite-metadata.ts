@@ -6,7 +6,7 @@ import { mapToArray, arrayToMap } from './sprite-metadata-helpers';
 import { LogHandler } from '@/utilities/log-handler';
 
 /** Conversion factor from sprite pixels to world-space units */
-export const PIXELS_TO_WORLD = 1.0 / 64.0;
+export const PIXELS_TO_WORLD = 1.0 / 32.0;
 
 /**
  * Available races/civilizations with their GFX file numbers.
@@ -132,6 +132,7 @@ export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
     [UnitType.Geologist]: 290,  // Geologist idle
     [UnitType.Pioneer]: 298,    // Pioneer idle
     [UnitType.Thief]: -1,       // TODO: Not yet identified
+    [UnitType.SawmillWorker]: 96, // Sawmill worker idle
 };
 
 /**
@@ -236,6 +237,13 @@ export const WORKER_JOB_INDICES = {
         work: [249, 250, 251, 252],
     },
     // TODO: Add pikeman_1/2/3 when identified
+    // Sawmill worker
+    sawmillworker: {
+        idle: 96,
+        carry: [97, 98], // carrying, carrying2
+        work: [99],      // working
+        pickup: [100, 101], // picking up, picking up2
+    },
 } as const;
 
 /**
