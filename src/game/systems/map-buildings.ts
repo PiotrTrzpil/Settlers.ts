@@ -71,7 +71,7 @@ const DEFAULT_CONSTRUCTION_DURATION = 10;
 /**
  * Create a completed building state for a pre-existing building.
  */
-function createCompletedBuildingState(
+function _createCompletedBuildingState(
     entityId: number,
     buildingType: BuildingType,
     x: number,
@@ -149,13 +149,12 @@ export function populateMapBuildings(
         );
 
         // Override the building state to be completed (pre-existing building)
-        const completedState = createCompletedBuildingState(
-            entity.id,
-            buildingType,
-            buildingData.x,
-            buildingData.y
-        );
-        state.buildingStates.set(entity.id, completedState);
+        const buildingState = state.buildingStateManager.getBuildingState(entity.id);
+        if (buildingState) {
+            buildingState.phase = BuildingConstructionPhase.Completed;
+            buildingState.phaseProgress = 1;
+            buildingState.elapsedTime = buildingState.totalDuration;
+        }
 
         log.debug(`Created completed building: ${BuildingType[buildingType]} at (${buildingData.x}, ${buildingData.y}) for player ${buildingData.player}`);
         count++;

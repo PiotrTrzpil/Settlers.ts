@@ -30,6 +30,8 @@ import {
     handleReturnHomeCompletion,
     type JobCompletionResult,
 } from './job-completion';
+import { LogHandler } from '@/utilities/log-handler';
+import type { AnimationService } from '../../animation/index';
 
 /** Fatigue recovery rate per second when resting at home tavern */
 const FATIGUE_RECOVERY_RATE = 10;
@@ -47,6 +49,7 @@ export interface CarrierSystemConfig {
     carrierManager: CarrierManager;
     inventoryManager: BuildingInventoryManager;
     gameState: GameState;
+    animationService: AnimationService;
 }
 
 /**
@@ -60,6 +63,8 @@ export interface CarrierSystemConfig {
  * - Job completion processing
  */
 export class CarrierSystem implements TickSystem {
+    private static log = new LogHandler('CarrierSystem');
+
     private readonly carrierManager: CarrierManager;
     private readonly inventoryManager: BuildingInventoryManager;
     private readonly gameState: GameState;
@@ -82,7 +87,7 @@ export class CarrierSystem implements TickSystem {
         this.inventoryManager = config.inventoryManager;
         this.gameState = config.gameState;
         this.movementController = new CarrierMovementController(this.carrierManager);
-        this.animationController = new CarrierAnimationController();
+        this.animationController = new CarrierAnimationController(config.animationService);
     }
 
     /**
@@ -195,7 +200,7 @@ export class CarrierSystem implements TickSystem {
         // If carrying materials, they're lost
         if (carrier.carryingMaterial !== null) {
             this.carrierManager.setCarrying(carrier.entityId, null, 0);
-            this.animationController.clearCarryingAnimation(carrier.entityId, this.gameState);
+            this.animationController.clearCarryingAnimation(carrier.entityId);
         }
 
         // Return home
@@ -230,7 +235,6 @@ export class CarrierSystem implements TickSystem {
         // Start pickup animation
         this.animationController.playPickupAnimation(
             carrier.entityId,
-            this.gameState,
             this.currentTimeMs,
         );
 
@@ -257,7 +261,6 @@ export class CarrierSystem implements TickSystem {
         // Start drop animation
         this.animationController.playDropAnimation(
             carrier.entityId,
-            this.gameState,
             this.currentTimeMs,
         );
 
@@ -281,7 +284,7 @@ export class CarrierSystem implements TickSystem {
         }
 
         // Clear carrying animation (in case we were carrying something)
-        this.animationController.clearCarryingAnimation(carrier.entityId, this.gameState);
+        this.animationController.clearCarryingAnimation(carrier.entityId);
 
         // Emit arrival event
         this.eventBus?.emit('carrier:arrivedHome', {
@@ -338,7 +341,7 @@ export class CarrierSystem implements TickSystem {
         // Get the destination for this delivery
         const destinationId = this.pendingDeliveries.get(carrier.entityId);
         if (destinationId === undefined) {
-            console.warn(`CarrierSystem: No pending delivery destination for carrier ${carrier.entityId}`);
+            CarrierSystem.log.warn(` No pending delivery destination for carrier ${carrier.entityId}`);
             this.carrierManager.completeJob(carrier.entityId);
             this.startReturnHome(carrier.entityId);
             return;
@@ -358,7 +361,6 @@ export class CarrierSystem implements TickSystem {
             this.animationController.setCarryingAnimation(
                 carrier.entityId,
                 job.material,
-                this.gameState,
             );
 
             // Assign deliver job and start movement
@@ -392,7 +394,7 @@ export class CarrierSystem implements TickSystem {
         );
 
         // Clear carrying animation
-        this.animationController.clearCarryingAnimation(carrier.entityId, this.gameState);
+        this.animationController.clearCarryingAnimation(carrier.entityId);
 
         // Add fatigue from the delivery
         this.carrierManager.addFatigue(carrier.entityId, FATIGUE_PER_DELIVERY);
@@ -471,7 +473,7 @@ export class CarrierSystem implements TickSystem {
         // Clear any carried materials (goods are lost)
         if (carrier.carryingMaterial !== null) {
             this.carrierManager.setCarrying(carrierId, null, 0);
-            this.animationController.clearCarryingAnimation(carrierId, this.gameState);
+            this.animationController.clearCarryingAnimation(carrierId);
         }
 
         // Start return home
@@ -526,7 +528,7 @@ export class CarrierSystem implements TickSystem {
         }
 
         if (!result.success) {
-            console.warn(`CarrierSystem: Movement failed for carrier ${carrierId}: ${result.failureReason}`);
+            CarrierSystem.log.warn(` Movement failed for carrier ${carrierId}: ${result.failureReason}`);
         }
 
         return result.success;
@@ -578,11 +580,11 @@ export class CarrierSystem implements TickSystem {
     ): boolean {
         // Validate buildings exist
         if (!this.gameState.getEntity(fromBuildingId)) {
-            console.warn(`CarrierSystem: Source building ${fromBuildingId} not found`);
+            CarrierSystem.log.warn(` Source building ${fromBuildingId} not found`);
             return false;
         }
         if (!this.gameState.getEntity(toBuildingId)) {
-            console.warn(`CarrierSystem: Destination building ${toBuildingId} not found`);
+            CarrierSystem.log.warn(` Destination building ${toBuildingId} not found`);
             return false;
         }
 

@@ -21,6 +21,7 @@ import { matchRequestToSupply } from './fulfillment-matcher';
 import { RequestStatus } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
 import { canAcceptNewJob } from '../carriers';
+import { LogHandler } from '@/utilities/log-handler';
 
 /** Configuration for LogisticsDispatcher dependencies */
 export interface LogisticsDispatcherConfig {
@@ -48,6 +49,8 @@ const STALL_CHECK_INTERVAL_MS = 5_000; // Check every 5 seconds
  * - CarrierSystem: assigns carriers to pickup/deliver jobs
  */
 export class LogisticsDispatcher implements TickSystem {
+    private static log = new LogHandler('LogisticsDispatcher');
+
     private readonly gameState: GameState;
     private readonly carrierSystem: CarrierSystem;
     private readonly requestManager: RequestManager;
@@ -123,8 +126,8 @@ export class LogisticsDispatcher implements TickSystem {
             const carrierId = request.assignedCarrier;
 
             // Log warning about the stalled request
-            console.warn(
-                `[Logistics] Request #${request.id} stalled after ${REQUEST_TIMEOUT_MS / 1000}s: ` +
+            LogisticsDispatcher.log.warn(
+                `Request #${request.id} stalled after ${REQUEST_TIMEOUT_MS / 1000}s: ` +
                 `material=${request.materialType}, building=${request.buildingId}, carrier=${carrierId}. ` +
                 'Resetting to pending.',
             );
@@ -390,8 +393,12 @@ export class LogisticsDispatcher implements TickSystem {
 
         // Step 3: Find and remove any carrier-to-request mappings for carriers
         // that were assigned to this building's requests
+        // Sort carrier IDs for deterministic iteration order
+        const sortedCarrierIds = [...this.carrierToRequest.keys()].sort((a, b) => a - b);
         const mappingsToRemove: number[] = [];
-        for (const [carrierId, requestId] of this.carrierToRequest.entries()) {
+        for (const carrierId of sortedCarrierIds) {
+            const requestId = this.carrierToRequest.get(carrierId);
+            if (requestId === undefined) continue;
             const request = this.requestManager.getRequest(requestId);
             // Request may already be deleted if it was cancelled, so also check
             // if requestId was in the cancelled set by checking if request is gone

@@ -21,7 +21,8 @@ import { BuildingIndicatorRenderer } from './building-indicator-renderer';
 import { SpriteBatchRenderer } from './sprite-batch-renderer';
 import { SelectionOverlayRenderer } from './selection-overlay-renderer';
 import { getAnimatedSprite, getAnimatedSpriteForDirection } from '../systems/animation';
-import { AnimationState } from '../animation';
+import type { AnimationService } from '../animation/index';
+import type { AnimationState } from '../animation';
 import { FrameContext, type IFrameContext } from './frame-context';
 import { OptimizedDepthSorter, type OptimizedSortContext } from './optimized-depth-sorter';
 import { profiler } from './debug/render-profiler';
@@ -80,6 +81,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // Extracted managers and renderers
     public spriteManager: SpriteRenderManager | null = null;
+    private animationService: AnimationService | null = null;
     private spriteBatchRenderer: SpriteBatchRenderer;
     private selectionOverlayRenderer: SelectionOverlayRenderer;
     private depthSorter: OptimizedDepthSorter;
@@ -240,6 +242,20 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
     }
 
+    /**
+     * Set the animation service for reading animation state.
+     */
+    public setAnimationService(animationService: AnimationService): void {
+        this.animationService = animationService;
+    }
+
+    /**
+     * Get animation state for an entity from AnimationService.
+     */
+    private getAnimState(entityId: number): AnimationState | null {
+        return this.animationService?.getState(entityId) ?? null;
+    }
+
     public async init(gl: WebGL2RenderingContext): Promise<boolean> {
         this.glContext = gl;
 
@@ -289,13 +305,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     public async setRace(race: Race): Promise<boolean> {
         if (!this.spriteManager) return false;
         return this.spriteManager.setRace(race);
-    }
-
-    /**
-     * Get the animation data provider for use with the animation system.
-     */
-    public getAnimationProvider(): import('../systems/animation').AnimationDataProvider | null {
-        return this.spriteManager?.asAnimationProvider() ?? null;
     }
 
     /**
@@ -500,11 +509,16 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /**
-     * Get animated sprite for any entity type using the unified animation API.
+     * Get animated sprite for any entity type using AnimationService.
      * Returns the current animation frame or falls back to static sprite.
      */
     private getAnimatedEntitySprite(entity: Entity, fallbackSprite: SpriteEntry | null): SpriteEntry | null {
-        if (!this.spriteManager || !entity.animationState) {
+        if (!this.spriteManager) {
+            return fallbackSprite;
+        }
+
+        const animState = this.getAnimState(entity.id);
+        if (!animState) {
             return fallbackSprite;
         }
 
@@ -513,7 +527,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return fallbackSprite;
         }
 
-        return getAnimatedSprite(entity.animationState, animatedEntry.animationData, animatedEntry.staticSprite);
+        return getAnimatedSprite(animState, animatedEntry.animationData, animatedEntry.staticSprite);
     }
 
     /** Get sprite entry for a building entity */
@@ -541,15 +555,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (!this.spriteManager) return null;
 
         const mapObjectType = entity.subType as MapObjectType;
-        const fallback = this.spriteManager.getMapObject(mapObjectType, entity.variation);
-        return this.getAnimatedEntitySprite(entity, fallback);
+        const variation = entity.variation ?? 0;
+        const fallback = this.spriteManager.getMapObject(mapObjectType, variation);
+
+        // Only use animated sprite for normal trees (variation 3), others are static
+        if (variation === 3) {
+            return this.getAnimatedEntitySprite(entity, fallback);
+        }
+        return fallback;
     }
 
     /** Get sprite entry for a unit entity (returns null if transitioning) */
     private getUnitSprite(entity: Entity): SpriteEntry | null | 'transitioning' {
         if (!this.spriteManager) return null;
 
-        const animState = entity.animationState;
+        const animState = this.getAnimState(entity.id);
         if (animState?.directionTransitionProgress !== undefined && animState.previousDirection !== undefined) {
             return 'transitioning';
         }
@@ -630,11 +650,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y));
 
             // Add random visual offset for MapObjects (trees, stones) to break up the grid
-            if (entity.type === EntityType.MapObject) {
+            // Only apply to normal trees (variation 3, not being cut/growing) to avoid position mismatch with woodcutters
+            if (entity.type === EntityType.MapObject && (entity.variation === undefined || entity.variation === 3)) {
                 const seed = entity.x * 12.9898 + entity.y * 78.233;
-                // +/- 0.4 world units (approx 25 pixels) to make it noticeable
-                const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.8 - 0.4;
-                const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.8 - 0.4;
+                // +/- 0.15 world units - subtle offset that doesn't cause position mismatch issues
+                const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.3 - 0.15;
+                const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.3 - 0.15;
                 worldPos.worldX += offsetX;
                 worldPos.worldY += offsetY;
             }
@@ -701,10 +722,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.spriteBatchRenderer.beginBlendBatch(gl, projection);
 
         for (const entity of this.transitioningUnits) {
-            const animState = entity.animationState!;
-            const oldDir = animState.previousDirection!;
+            const animState = this.getAnimState(entity.id);
+            if (!animState?.previousDirection || animState.directionTransitionProgress === undefined) continue;
+
+            const oldDir = animState.previousDirection;
             const newDir = animState.direction;
-            const blendFactor = animState.directionTransitionProgress!;
+            const blendFactor = animState.directionTransitionProgress;
             const unitType = entity.subType as UnitType;
 
             // Get animated sprites for both directions at current frame

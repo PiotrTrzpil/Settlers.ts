@@ -111,23 +111,6 @@ export function addBuildingWithInventory(
     return building;
 }
 
-/**
- * Initialize animation state on an entity.
- * Required before using CarrierAnimationController or other animation APIs.
- */
-export function initializeAnimationState(
-    entity: Entity,
-    options: { sequenceKey?: string; direction?: number } = {},
-): void {
-    entity.animationState = {
-        sequenceKey: options.sequenceKey ?? 'default',
-        currentFrame: 0,
-        elapsedMs: 0,
-        direction: options.direction ?? 0,
-        playing: false,
-    };
-}
-
 /** Set up a unit with a pre-assigned path for movement testing. */
 export function addUnitWithPath(
     state: GameState,

@@ -241,6 +241,9 @@ export class RequestManager {
             }
         }
 
+        // Sort for deterministic event emission order
+        toRemove.sort((a, b) => a - b);
+
         for (const id of toRemove) {
             this.removeRequest(id);
         }
@@ -258,7 +261,11 @@ export class RequestManager {
     resetRequestsForCarrier(carrierId: number): number {
         let count = 0;
 
-        for (const request of this.requests.values()) {
+        // Sort by request ID for deterministic iteration
+        const sortedIds = [...this.requests.keys()].sort((a, b) => a - b);
+        for (const requestId of sortedIds) {
+            const request = this.requests.get(requestId);
+            if (!request) continue;
             if (request.assignedCarrier === carrierId && request.status === RequestStatus.InProgress) {
                 // Reset to pending so another carrier can pick it up
                 request.status = RequestStatus.Pending;
@@ -290,7 +297,11 @@ export class RequestManager {
     resetRequestsFromSource(buildingId: number): number {
         let count = 0;
 
-        for (const request of this.requests.values()) {
+        // Sort by request ID for deterministic iteration
+        const sortedIds = [...this.requests.keys()].sort((a, b) => a - b);
+        for (const requestId of sortedIds) {
+            const request = this.requests.get(requestId);
+            if (!request) continue;
             if (request.sourceBuilding === buildingId && request.status === RequestStatus.InProgress) {
                 request.status = RequestStatus.Pending;
                 request.assignedCarrier = null;

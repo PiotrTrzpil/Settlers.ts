@@ -82,8 +82,9 @@ export function registerGameAPI(runtime: LuaRuntime, context: GameAPIContext): v
     });
 
     // Game.Random(max) - Returns random integer 0 to max-1
+    // Uses seeded RNG from game state for determinism
     runtime.registerFunction('Game', 'Random', (max: number) => {
-        return Math.floor(Math.random() * max);
+        return context.gameState.rng.nextInt(max);
     });
 
     // Game.ShowClock(time) - Display countdown timer

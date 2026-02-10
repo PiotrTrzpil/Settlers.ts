@@ -150,6 +150,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
             unitA.id,
             controllerB,
             state.tileOccupancy,
+            state.rng,
             makeTerrain(map),
             (id, x, y) => state.updateEntityPosition(id, x, y),
         );
@@ -162,6 +163,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
             unitB.id,
             controllerA,
             state.tileOccupancy,
+            state.rng,
             makeTerrain(map),
             (id, x, y) => state.updateEntityPosition(id, x, y),
         );
@@ -240,6 +242,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const free = findRandomFreeDirection(
             10, 10,
             state.tileOccupancy,
+            state.rng,
             makeTerrain(map),
         );
         expect(free).not.toBeNull();
@@ -253,6 +256,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const blocked = findRandomFreeDirection(
             10, 10,
             state.tileOccupancy,
+            state.rng,
             makeTerrain(map),
         );
         expect(blocked).toBeNull();

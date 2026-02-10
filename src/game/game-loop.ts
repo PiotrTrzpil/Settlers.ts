@@ -1,7 +1,8 @@
 import { GameState } from './game-state';
-import { updateAnimations, AnimationDataProvider } from './systems/animation';
 import { IdleBehaviorSystem } from './systems/idle-behavior';
+import { TreeSystem } from './systems/tree-system';
 import { WoodcuttingSystem } from './systems/woodcutting-system';
+import { SettlerTaskSystem } from './systems/settler-tasks';
 import { LogHandler } from '@/utilities/log-handler';
 import { debugStats } from './debug-stats';
 import { gameSettings } from './game-settings';
@@ -13,7 +14,8 @@ import { hasInventory, isProductionBuilding, InventoryVisualizer } from './featu
 import { LogisticsDispatcher } from './features/logistics';
 import { EventBus } from './event-bus';
 import type { FrameRenderTiming } from './renderer/renderer';
-import { BuildingType } from './entity';
+import { BuildingType, MapObjectType } from './entity';
+import { AnimationService } from './animation/index';
 
 const TICK_RATE = 30;
 const TICK_DURATION = 1 / TICK_RATE;
@@ -41,6 +43,11 @@ export class GameLoop {
     private running = false;
     private animRequest = 0;
 
+    /** Error throttling - prevent console flooding */
+    private lastErrorTime = 0;
+    private suppressedErrorCount = 0;
+    private static readonly ERROR_THROTTLE_MS = 1000;
+
     /** Whether the page is currently visible */
     private pageVisible = !document.hidden;
     /** Time of last rendered frame (for background throttling) */
@@ -56,7 +63,6 @@ export class GameLoop {
     private mapSize: MapSize | undefined;
     /** Render callback - returns render timing if available */
     private onRender: ((alpha: number, deltaSec: number) => FrameRenderTiming | null) | null = null;
-    private animationProvider: AnimationDataProvider | null = null;
 
     /** Registered tick systems */
     private systems: TickSystem[] = [];
@@ -76,7 +82,16 @@ export class GameLoop {
     /** Logistics dispatcher - connects resource requests to carriers */
     public readonly logisticsDispatcher!: LogisticsDispatcher;
 
-    /** Woodcutting AI system */
+    /** Animation service - manages entity animations */
+    public readonly animationService: AnimationService;
+
+    /** Tree lifecycle system - growth and cutting states */
+    public readonly treeSystem: TreeSystem;
+
+    /** Settler task system - manages all settler behaviors */
+    public readonly settlerTaskSystem: SettlerTaskSystem;
+
+    /** Woodcutting domain system - work handler for tree cutting */
     public readonly woodcuttingSystem: WoodcuttingSystem;
 
     /** Inventory visualizer - syncs building outputs to visual stacked resources */
@@ -86,6 +101,9 @@ export class GameLoop {
         this.gameState = gameState;
         this.eventBus = eventBus;
 
+        // Create animation service first - other systems depend on it
+        this.animationService = new AnimationService();
+
         // Register all tick systems in execution order:
         // 1. Movement — updates unit positions (must run first)
         gameState.movement.setEventBus(eventBus);
@@ -93,7 +111,7 @@ export class GameLoop {
         this.registerSystem(gameState.movement);
 
         // 2. Idle behavior — updates animation based on movement events
-        this.idleBehaviorSystem = new IdleBehaviorSystem(gameState);
+        this.idleBehaviorSystem = new IdleBehaviorSystem(gameState, this.animationService);
         this.idleBehaviorSystem.registerEvents(eventBus);
         this.registerSystem(this.idleBehaviorSystem);
 
@@ -116,6 +134,7 @@ export class GameLoop {
             carrierManager: gameState.carrierManager,
             inventoryManager: gameState.inventoryManager,
             gameState: gameState,
+            animationService: this.animationService,
         });
         this.carrierSystem.registerEvents(eventBus);
         this.registerSystem(this.carrierSystem);
@@ -130,9 +149,24 @@ export class GameLoop {
         this.logisticsDispatcher.registerEvents(eventBus);
         this.registerSystem(this.logisticsDispatcher);
 
-        // 6. Woodcutting AI — issues movement commands (runs after carrier)
-        this.woodcuttingSystem = new WoodcuttingSystem(gameState);
-        this.registerSystem(this.woodcuttingSystem);
+        // 6. Tree system — manages tree growth and cutting states
+        this.treeSystem = new TreeSystem(gameState, this.animationService);
+        this.registerSystem(this.treeSystem);
+
+        // Wire up tree registration for map objects
+        gameState.onMapObjectCreated = (entityId, objectType, _x, _y) => {
+            this.handleMapObjectCreated(entityId, objectType);
+        };
+
+        // 7. Settler task system — manages all settler behaviors via task sequences
+        this.settlerTaskSystem = new SettlerTaskSystem(gameState, this.animationService);
+        this.registerSystem(this.settlerTaskSystem);
+
+        // Wire up idle behavior to defer to task system for managed settlers
+        this.idleBehaviorSystem.setManagedCheck((entityId) => this.settlerTaskSystem.isWorking(entityId));
+
+        // 8. Woodcutting domain — registers work handler with task system
+        this.woodcuttingSystem = new WoodcuttingSystem(gameState, this.treeSystem, this.settlerTaskSystem);
 
         // 7. Inventory visualizer — syncs building output to visual stacked resources
         this.inventoryVisualizer = new InventoryVisualizer(
@@ -193,6 +227,14 @@ export class GameLoop {
     }
 
     /**
+     * Handle map object creation - registers trees with TreeSystem.
+     */
+    private handleMapObjectCreated(entityId: number, objectType: number): void {
+        // Register trees with tree system (checks if it's a tree type internally)
+        this.treeSystem.register(entityId, objectType as MapObjectType);
+    }
+
+    /**
      * Handle entity removal - cleans up carrier state, inventory, service areas, and logistics.
      */
     private handleEntityRemoved(entityId: number): void {
@@ -234,11 +276,6 @@ export class GameLoop {
         this.onRender = callback;
     }
 
-    /** Set the animation data provider for updating entity animations */
-    public setAnimationProvider(provider: AnimationDataProvider | null): void {
-        this.animationProvider = provider;
-    }
-
     public start(): void {
         if (this.running) return;
         this.running = true;
@@ -273,6 +310,27 @@ export class GameLoop {
 
     public get isRunning(): boolean {
         return this.running;
+    }
+
+    /** Log errors with throttling to prevent console flooding */
+    private logThrottledError(message: string, error: unknown): void {
+        const now = performance.now();
+        const timeSinceLastError = now - this.lastErrorTime;
+
+        if (timeSinceLastError >= GameLoop.ERROR_THROTTLE_MS) {
+            // Enough time has passed, log the error
+            const err = error instanceof Error ? error : new Error(String(error));
+            if (this.suppressedErrorCount > 0) {
+                GameLoop.log.error(`${message} (${this.suppressedErrorCount} similar errors suppressed)`, err);
+                this.suppressedErrorCount = 0;
+            } else {
+                GameLoop.log.error(message, err);
+            }
+            this.lastErrorTime = now;
+        } else {
+            // Throttled - just count the suppressed error
+            this.suppressedErrorCount++;
+        }
     }
 
     /** Record detailed timing breakdown for debug stats */
@@ -344,10 +402,10 @@ export class GameLoop {
                 // Update animations (runs every rendered frame for smooth animation)
                 // Scale by game speed so animations match game pace
                 const animStart = performance.now();
-                if (this.animationProvider) {
-                    const scaledDeltaMs = deltaSec * 1000 * gameSettings.state.gameSpeed;
-                    updateAnimations(this.gameState, scaledDeltaMs, this.animationProvider);
-                }
+                const scaledDeltaMs = deltaSec * 1000 * gameSettings.state.gameSpeed;
+
+                // Update animation service
+                this.animationService.update(scaledDeltaMs);
                 animationsTime = performance.now() - animStart;
 
                 // Render with interpolation alpha for smooth sub-tick visuals
@@ -361,7 +419,7 @@ export class GameLoop {
                 this.recordFrameTiming(frameStart, ticksTime, animationsTime, callbackTime, renderTiming);
             }
         } catch (e) {
-            GameLoop.log.error('Error in game frame', e instanceof Error ? e : new Error(String(e)));
+            this.logThrottledError('Error in game frame', e);
         }
 
         this.animRequest = requestAnimationFrame((t) => this.frame(t));

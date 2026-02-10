@@ -983,7 +983,6 @@ export class SpriteRenderManager {
             unitType: UnitType;
             seqKey: string;
             frames: Map<number, SpriteEntry[]>;
-            debugInfo: string;
         };
 
         const batch = new SafeLoadBatch<WorkAnimData>();
@@ -1014,19 +1013,23 @@ export class SpriteRenderManager {
                         unitType,
                         seqKey: workSequenceKey(workIndex),
                         frames,
-                        debugInfo: `${workerKey} work.${workIndex}: ${frames.size} dirs, ${frames.get(0)?.length ?? 0} frames`,
                     });
                 }
             }
         }
 
+        let loadedCount = 0;
         batch.finalize(atlas, gl, (data) => {
             registry.registerAnimationSequence(
                 EntityType.Unit, data.unitType, data.seqKey,
                 data.frames, ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
             );
-            SpriteRenderManager.log.debug(`Loaded ${data.debugInfo}`);
+            loadedCount++;
         });
+
+        if (loadedCount > 0) {
+            SpriteRenderManager.log.debug(`Loaded ${loadedCount} worker animation sequences`);
+        }
     }
 
 }

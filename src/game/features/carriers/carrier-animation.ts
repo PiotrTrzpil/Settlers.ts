@@ -7,13 +7,9 @@
  * - Track animation delays for state transitions
  */
 
-import type { GameState } from '../../game-state';
 import type { EMaterialType } from '../../economy';
-import {
-    ANIMATION_SEQUENCES,
-    carrySequenceKey,
-    setAnimationSequence,
-} from '../../animation';
+import { ANIMATION_SEQUENCES, carrySequenceKey } from '../../animation';
+import type { AnimationService } from '../../animation/index';
 
 /** Duration of pickup/drop animations in milliseconds */
 export const PICKUP_ANIMATION_DURATION_MS = 500;
@@ -32,12 +28,17 @@ export interface AnimationTimer {
 /**
  * Controller that manages carrier animation states.
  *
- * This controller interfaces with the animation system to change
+ * This controller interfaces with AnimationService to change
  * animation sequences when carriers pick up or drop materials.
  */
 export class CarrierAnimationController {
     /** Active animation timers for pickup/drop */
     private activeTimers: Map<number, AnimationTimer> = new Map();
+    private animationService: AnimationService;
+
+    constructor(animationService: AnimationService) {
+        this.animationService = animationService;
+    }
 
     /**
      * Set the carrying animation for a carrier.
@@ -47,33 +48,19 @@ export class CarrierAnimationController {
      *
      * @param entityId Entity ID of the carrier
      * @param materialType Material being carried
-     * @param gameState Game state to access entity
      */
-    setCarryingAnimation(
-        entityId: number,
-        materialType: EMaterialType,
-        gameState: GameState,
-    ): void {
-        const entity = gameState.getEntity(entityId);
-        if (!entity || !entity.animationState) return;
-
-        // Use the carry sequence for this material
+    setCarryingAnimation(entityId: number, materialType: EMaterialType): void {
         const sequenceKey = carrySequenceKey(materialType);
-        setAnimationSequence(entity.animationState, sequenceKey);
+        this.animationService.play(entityId, sequenceKey, { loop: true });
     }
 
     /**
      * Clear the carrying animation and return to normal walk.
      *
      * @param entityId Entity ID of the carrier
-     * @param gameState Game state to access entity
      */
-    clearCarryingAnimation(entityId: number, gameState: GameState): void {
-        const entity = gameState.getEntity(entityId);
-        if (!entity || !entity.animationState) return;
-
-        // Return to default walk animation
-        setAnimationSequence(entity.animationState, ANIMATION_SEQUENCES.WALK);
+    clearCarryingAnimation(entityId: number): void {
+        this.animationService.play(entityId, ANIMATION_SEQUENCES.WALK, { loop: true });
     }
 
     /**
@@ -83,17 +70,9 @@ export class CarrierAnimationController {
      * to check when it finishes.
      *
      * @param entityId Entity ID of the carrier
-     * @param gameState Game state to access entity
      * @param currentTimeMs Current time in milliseconds
      */
-    playPickupAnimation(
-        entityId: number,
-        gameState: GameState,
-        currentTimeMs: number,
-    ): void {
-        const entity = gameState.getEntity(entityId);
-        if (!entity || !entity.animationState) return;
-
+    playPickupAnimation(entityId: number, currentTimeMs: number): void {
         // Start a timer for the pickup animation
         this.activeTimers.set(entityId, {
             carrierId: entityId,
@@ -102,10 +81,8 @@ export class CarrierAnimationController {
             durationMs: PICKUP_ANIMATION_DURATION_MS,
         });
 
-        // For now, we just use the default animation while "picking up"
-        // A more complete implementation would switch to a pickup-specific sequence
-        // if one exists in the sprite data
-        setAnimationSequence(entity.animationState, ANIMATION_SEQUENCES.DEFAULT);
+        // Use default animation while "picking up"
+        this.animationService.play(entityId, ANIMATION_SEQUENCES.DEFAULT);
     }
 
     /**
@@ -115,17 +92,9 @@ export class CarrierAnimationController {
      * to check when it finishes.
      *
      * @param entityId Entity ID of the carrier
-     * @param gameState Game state to access entity
      * @param currentTimeMs Current time in milliseconds
      */
-    playDropAnimation(
-        entityId: number,
-        gameState: GameState,
-        currentTimeMs: number,
-    ): void {
-        const entity = gameState.getEntity(entityId);
-        if (!entity || !entity.animationState) return;
-
+    playDropAnimation(entityId: number, currentTimeMs: number): void {
         // Start a timer for the drop animation
         this.activeTimers.set(entityId, {
             carrierId: entityId,
@@ -135,7 +104,7 @@ export class CarrierAnimationController {
         });
 
         // Use default animation during drop
-        setAnimationSequence(entity.animationState, ANIMATION_SEQUENCES.DEFAULT);
+        this.animationService.play(entityId, ANIMATION_SEQUENCES.DEFAULT);
     }
 
     /**

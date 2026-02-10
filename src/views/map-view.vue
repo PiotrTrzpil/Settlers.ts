@@ -207,6 +207,7 @@ import { useMapView } from './use-map-view';
 import { useBuildingIcons } from '@/composables/useBuildingIcons';
 import { Race, RACE_NAMES, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
 import { gameSettings } from '@/game/game-settings';
+import { SoundManager } from '@/game/audio/sound-manager';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
@@ -278,6 +279,8 @@ async function onRaceChange() {
     if (renderer && typeof renderer.setRace === 'function') {
         await renderer.setRace(currentRace.value);
     }
+    // Switch music to match the selected race
+    SoundManager.getInstance().playRandomMusic(currentRace.value);
 }
 </script>
 

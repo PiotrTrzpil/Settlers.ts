@@ -130,7 +130,7 @@ export interface BuildingsAPIContext {
  * Check if a building is in "completed" state
  */
 function isBuildingCompleted(gameState: GameState, entityId: number): boolean {
-    const buildingState = gameState.buildingStates.get(entityId);
+    const buildingState = gameState.buildingStateManager.getBuildingState(entityId);
     if (!buildingState) return false;
     return buildingState.phase === BuildingConstructionPhase.Completed;
 }

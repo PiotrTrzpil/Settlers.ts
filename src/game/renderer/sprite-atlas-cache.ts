@@ -208,8 +208,18 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
     return data;
 }
 
+/** Maximum size for IndexedDB storage (256MB) - larger atlases are skipped */
+const MAX_INDEXEDDB_SIZE = 256 * 1024 * 1024;
+
 /** Save atlas data to IndexedDB, clearing old caches on memory pressure */
 export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Promise<void> {
+    // Skip atlases that are too large for IndexedDB
+    if (data.imgData.length > MAX_INDEXEDDB_SIZE) {
+        const sizeMB = (data.imgData.length / 1024 / 1024).toFixed(0);
+        log.debug(`IndexedDB: skipping ${Race[race]} (${sizeMB}MB > 256MB limit)`);
+        return;
+    }
+
     const entry: IndexedDBAtlasEntry = {
         race,
         version: BUILD_VERSION,

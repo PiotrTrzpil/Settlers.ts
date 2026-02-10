@@ -9,6 +9,7 @@ import { TileCoord, tileKey } from '../../entity';
 import { isPassable } from '../../features/placement';
 import { GRID_DELTAS, NUMBER_OF_DIRECTIONS } from '../hex-directions';
 import { MovementController } from './movement-controller';
+import type { SeededRng } from '../../rng';
 
 /**
  * Interface for accessing tile occupancy data.
@@ -35,23 +36,22 @@ export interface TerrainAccessor {
  * @param x Current x position
  * @param y Current y position
  * @param occupancy Tile occupancy map
+ * @param rng Seeded random number generator for deterministic shuffling
  * @param terrain Optional terrain data for passability check
  */
 export function findRandomFreeDirection(
     x: number,
     y: number,
     occupancy: TileOccupancyAccessor,
+    rng: SeededRng,
     terrain?: TerrainAccessor,
 ): TileCoord | null {
-    // Create shuffled direction indices
+    // Create shuffled direction indices using seeded RNG
     const dirs: number[] = [];
     for (let i = 0; i < NUMBER_OF_DIRECTIONS; i++) dirs.push(i);
 
-    // Fisher-Yates shuffle
-    for (let i = dirs.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
-    }
+    // Fisher-Yates shuffle with seeded RNG
+    rng.shuffle(dirs);
 
     for (const d of dirs) {
         const [dx, dy] = GRID_DELTAS[d];
@@ -97,6 +97,7 @@ export function shouldYieldToPush(pushingEntityId: number, blockedEntityId: numb
  *
  * @param blockedController Controller of the unit being pushed
  * @param occupancy Tile occupancy map
+ * @param rng Seeded random number generator
  * @param terrain Optional terrain data
  * @param onPositionUpdate Callback to update entity position in game state
  * @returns true if push succeeded
@@ -104,6 +105,7 @@ export function shouldYieldToPush(pushingEntityId: number, blockedEntityId: numb
 export function executePush(
     blockedController: MovementController,
     occupancy: TileOccupancyAccessor,
+    rng: SeededRng,
     terrain: TerrainAccessor | undefined,
     onPositionUpdate: (entityId: number, x: number, y: number) => void,
 ): boolean {
@@ -111,6 +113,7 @@ export function executePush(
         blockedController.tileX,
         blockedController.tileY,
         occupancy,
+        rng,
         terrain,
     );
     if (!freeDir) return false;
@@ -131,6 +134,7 @@ export function executePush(
  * @param pushingEntityId Entity trying to push
  * @param blockedController Controller of the blocked entity
  * @param occupancy Tile occupancy map
+ * @param rng Seeded random number generator
  * @param terrain Optional terrain data
  * @param onPositionUpdate Callback to update entity position
  * @returns true if push succeeded
@@ -139,11 +143,12 @@ export function pushUnit(
     pushingEntityId: number,
     blockedController: MovementController,
     occupancy: TileOccupancyAccessor,
+    rng: SeededRng,
     terrain: TerrainAccessor | undefined,
     onPositionUpdate: (entityId: number, x: number, y: number) => void,
 ): boolean {
     if (!shouldYieldToPush(pushingEntityId, blockedController.entityId)) {
         return false;
     }
-    return executePush(blockedController, occupancy, terrain, onPositionUpdate);
+    return executePush(blockedController, occupancy, rng, terrain, onPositionUpdate);
 }

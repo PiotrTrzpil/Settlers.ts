@@ -3,6 +3,7 @@ import { EMaterialType } from '../economy';
 import { AtlasRegion } from './entity-texture-atlas';
 import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS, ANIMATION_SEQUENCES } from '../animation';
 import { mapToArray, arrayToMap } from './sprite-metadata-helpers';
+import { LogHandler } from '@/utilities/log-handler';
 
 /** Conversion factor from sprite pixels to world-space units */
 export const PIXELS_TO_WORLD = 1.0 / 64.0;
@@ -134,22 +135,29 @@ export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
 };
 
 /**
- * Additional carrier animation job indices (not walk cycles).
- * Jobs 44-48: Carrier idle animations
- * Job 49: Striking carrier (on strike/protesting)
- */
-export const CARRIER_IDLE_JOB_INDICES = [44, 45, 46, 47, 48];
-export const CARRIER_STRIKE_JOB_INDEX = 49;
-
-/**
  * Worker job indices for various professions and their animation states.
  * These are in settler files (20-24.jil).
+ *
+ * Generic keys:
+ * - idle: standing still (number or array for variants)
+ * - walk: walking animation
+ * - carry: walking while carrying something
+ * - work: array of work animation job indices (maps to work.0, work.1, etc.)
+ *
+ * Use -1 for unmapped animations (not yet identified in JIL files).
  */
 export const WORKER_JOB_INDICES = {
+    // Carrier (transports goods)
+    carrier: {
+        idle: [44, 45, 46, 47, 48],  // idle animation variants
+        walk: 1,
+        work: [49],  // striking/protesting
+    },
     // Digger/Landscaper (uses shovel)
     digger: {
+        idle: -1,  // TODO: unmapped
         walk: 50,
-        working: 51,
+        work: [51],  // digging
     },
     // Smithy worker
     smith: {
@@ -157,34 +165,34 @@ export const WORKER_JOB_INDICES = {
     },
     // Builder
     builder: {
+        idle: -1,  // TODO: unmapped (may share with walk pose)
         walk: 53,  // Note: also at job 19
     },
     // Woodcutter
     woodcutter: {
+        idle: -1,  // TODO: unmapped (may share with walk pose)
         walk: 54,  // Note: also at job 5
-        withLog: 55,
-        chopping: 56,
-        cuttingLogOnGround: 57,
+        carry: 55, // carrying log
+        work: [56, 57],  // [chopping standing tree, cutting fallen log]
     },
     // Miner
     miner: {
         idle: 58,
-        working: 59,
         walk: 60,
-        withStone: 61,
+        carry: 61, // carrying stone
+        work: [59],  // mining
     },
     // Forester
     forester: {
         idle: 62,
-        withPlant: 63,
-        planting: 64,
+        carry: 63, // carrying plant
+        work: [64],  // planting
     },
     // Farmer
     farmer: {
         idle: 65,
-        withGrain: 66,
-        seeding1: 67,
-        seeding2: 68,
+        carry: 66, // carrying grain
+        work: [67, 68],  // [seeding phase 1, seeding phase 2]
     },
     // Priest
     priest: {
@@ -194,38 +202,40 @@ export const WORKER_JOB_INDICES = {
     // Geologist
     geologist: {
         idle: 290,
-        working: [291, 292, 293, 294, 295, 296, 297],  // Different work phases
+        work: [291, 292, 293, 294, 295, 296, 297],  // Different work phases
     },
     // Pioneer
     pioneer: {
         idle: 298,
-        working1: 299,
-        working2: 300,
+        work: [299, 300],  // [working phase 1, working phase 2]
     },
-} as const;
-
-/**
- * Soldier unit job indices by type and level.
- * Structure varies by unit type due to different animation needs.
- */
-export const SOLDIER_JOB_INDICES = {
-    /** Swordsman: 2 variants per level (appear identical) */
-    swordsman: {
-        lvl1: [227, 228],
-        lvl2: [230, 231],
-        lvl3: [233, 234],
+    // Swordsman levels (2 variants per level, appear identical)
+    swordsman_1: {
+        idle: 227,
+        walk: 228,  // may be idle variant
     },
-    /**
-     * Bowman: Multiple animation states per level.
-     * First index is standing/idle, rest are shooting animation variants.
-     */
-    bowman: {
-        lvl1: [236, 237, 238, 239, 240],
-        lvl2: [242, 243, 244, 245, 246],
-        lvl3: [248, 249, 250, 251, 252],
+    swordsman_2: {
+        idle: 230,
+        walk: 231,
     },
-    // TODO: Add pikeman indices when identified
-    // pikeman: { lvl1: ?, lvl2: ?, lvl3: ? },
+    swordsman_3: {
+        idle: 233,
+        walk: 234,
+    },
+    // Bowman levels (first is idle, rest are shooting animations)
+    bowman_1: {
+        idle: 236,
+        work: [237, 238, 239, 240],  // shooting variants
+    },
+    bowman_2: {
+        idle: 242,
+        work: [243, 244, 245, 246],
+    },
+    bowman_3: {
+        idle: 248,
+        work: [249, 250, 251, 252],
+    },
+    // TODO: Add pikeman_1/2/3 when identified
 } as const;
 
 /**
@@ -565,14 +575,6 @@ export const TREE_JOB_INDICES: Partial<Record<MapObjectType, number>> = {
     [MapObjectType.TreeDead]: TREE_BASE_JOB + 18 * TREE_JOBS_PER_TYPE,
 };
 
-// Legacy: kept for backwards compatibility but no longer used
-/** @deprecated Use TREE_JOB_INDICES instead */
-export const MAP_OBJECT_SPRITE_INDICES: Partial<Record<MapObjectType, number>> = TREE_JOB_INDICES;
-/** @deprecated Trees now use JIL-based loading */
-export const TREE_VARIATION_COUNT = 1;
-/** @deprecated Trees now use JIL-based loading */
-export const TREE_SPRITE_STRIDE = 31;
-
 /**
  * Sprite information for a map object type.
  */
@@ -605,11 +607,11 @@ export function getMapObjectSpriteMap(): Partial<Record<MapObjectType, MapObject
     const result: Partial<Record<MapObjectType, MapObjectSpriteInfo>> = {};
 
     // Standard map objects (Trees, etc.) from file 5
-    for (const [typeStr, spriteIndex] of Object.entries(MAP_OBJECT_SPRITE_INDICES)) {
-        if (spriteIndex !== undefined) {
+    for (const [typeStr, jobIndex] of Object.entries(TREE_JOB_INDICES)) {
+        if (typeof jobIndex === 'number') {
             result[Number(typeStr) as MapObjectType] = {
                 file: GFX_FILE_NUMBERS.MAP_OBJECTS,
-                index: spriteIndex,
+                index: jobIndex,
             };
         }
     }
@@ -655,6 +657,8 @@ export interface AnimatedSpriteEntry {
  * Built during initialization after sprites are loaded and packed into the atlas.
  */
 export class SpriteMetadataRegistry {
+    private static log = new LogHandler('SpriteRegistry');
+
     private buildings: Map<BuildingType, BuildingSpriteEntries> = new Map();
     private mapObjects: Map<MapObjectType, SpriteEntry[]> = new Map();
     private resources: Map<EMaterialType, Map<number, SpriteEntry>> = new Map();
@@ -667,6 +671,9 @@ export class SpriteMetadataRegistry {
      * Replaces separate animatedBuildings, animatedMapObjects, animatedUnits maps.
      */
     private animatedEntities: Map<EntityType, Map<number, AnimatedSpriteEntry>> = new Map();
+
+    /** Track warnings to avoid spam during progressive loading */
+    private warnedTypes: Set<string> = new Set();
 
     /**
      * Register sprite entries for a building type (both construction and completed).
@@ -719,16 +726,18 @@ export class SpriteMetadataRegistry {
      */
     public getMapObject(type: MapObjectType, variation: number = 0): SpriteEntry | null {
         const entries = this.mapObjects.get(type);
-        if (!entries || entries.length === 0) return null;
+        if (!entries || entries.length === 0) {
+            // Silently return null - missing sprites are expected during progressive loading
+            return null;
+        }
 
-        // Filter out any potential holes in the array to get only valid loaded sprites
-        const available = entries.filter(e => e !== undefined && e !== null);
+        const entry = entries[variation];
+        if (entry === undefined || entry === null) {
+            // Silently return null - missing variations are expected
+            return null;
+        }
 
-        if (available.length === 0) return null;
-
-        // Use modulo to cycle through available variations safely
-        // This handles cases where we request var 15 but only have 1 or 2 variations loaded
-        return available[variation % available.length];
+        return entry;
     }
 
     /**
@@ -936,28 +945,6 @@ export class SpriteMetadataRegistry {
         return entry?.isAnimated ?? false;
     }
 
-    // ========== Legacy Wrappers (for backwards compatibility) ==========
-
-    /** @deprecated Use registerAnimatedEntity instead */
-    public registerAnimatedUnit(
-        type: UnitType,
-        directionFrames: Map<number, SpriteEntry[]>,
-        frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-        loop: boolean = true
-    ): void {
-        this.registerAnimatedEntity(EntityType.Unit, type, directionFrames, frameDurationMs, loop);
-    }
-
-    /** @deprecated Use getAnimatedEntity instead */
-    public getAnimatedUnit(type: UnitType): AnimatedSpriteEntry | null {
-        return this.getAnimatedEntity(EntityType.Unit, type);
-    }
-
-    /** @deprecated Use hasAnimation instead */
-    public hasUnitAnimation(type: UnitType): boolean {
-        return this.hasAnimation(EntityType.Unit, type);
-    }
-
     /**
      * Check if any building sprites have been registered.
      */
@@ -1007,53 +994,6 @@ export class SpriteMetadataRegistry {
         return this.units.size;
     }
 
-    /** @deprecated Use registerAnimatedEntity instead */
-    public registerAnimatedBuilding(
-        type: BuildingType,
-        frames: SpriteEntry[],
-        direction: number = 1,
-        frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-        loop: boolean = true
-    ): void {
-        if (frames.length === 0) return;
-        const directionFrames = new Map<number, SpriteEntry[]>();
-        directionFrames.set(direction, frames);
-        this.registerAnimatedEntity(EntityType.Building, type, directionFrames, frameDurationMs, loop);
-    }
-
-    /** @deprecated Use getAnimatedEntity instead */
-    public getAnimatedBuilding(type: BuildingType): AnimatedSpriteEntry | null {
-        return this.getAnimatedEntity(EntityType.Building, type);
-    }
-
-    /** @deprecated Use hasAnimation instead */
-    public hasBuildingAnimation(type: BuildingType): boolean {
-        return this.hasAnimation(EntityType.Building, type);
-    }
-
-    /** @deprecated Use registerAnimatedEntity instead */
-    public registerAnimatedMapObject(
-        type: MapObjectType,
-        frames: SpriteEntry[],
-        frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-        loop: boolean = true
-    ): void {
-        if (frames.length === 0) return;
-        const directionFrames = new Map<number, SpriteEntry[]>();
-        directionFrames.set(0, frames);
-        this.registerAnimatedEntity(EntityType.MapObject, type, directionFrames, frameDurationMs, loop);
-    }
-
-    /** @deprecated Use getAnimatedEntity instead */
-    public getAnimatedMapObject(type: MapObjectType): AnimatedSpriteEntry | null {
-        return this.getAnimatedEntity(EntityType.MapObject, type);
-    }
-
-    /** @deprecated Use hasAnimation instead */
-    public hasMapObjectAnimation(type: MapObjectType): boolean {
-        return this.hasAnimation(EntityType.MapObject, type);
-    }
-
     /**
      * Get the number of registered resource sprites.
      */
@@ -1070,6 +1010,7 @@ export class SpriteMetadataRegistry {
         this.animatedEntities.clear();
         this.resources.clear();
         this.units.clear();
+        this.warnedTypes.clear();
     }
 
     /**

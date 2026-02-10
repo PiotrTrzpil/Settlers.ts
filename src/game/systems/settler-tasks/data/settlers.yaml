@@ -1,0 +1,40 @@
+# Settler type definitions
+# Each settler has a search type, optional tool, and list of jobs
+
+woodcutter:
+  search: TREE
+  tool: AXE
+  jobs: [work]
+
+forester:
+  search: TREE_SEED_POS
+  jobs: [plant]
+
+farmer:
+  search: GRAIN
+  tool: SCYTHE
+  jobs: [plant, harvest]
+
+miner:
+  search: RESOURCE_POS
+  tool: PICKAXE
+  jobs: [work]
+
+carrier:
+  search: GOOD
+  jobs: [transport]
+
+builder:
+  search: CONSTRUCTION
+  tool: HAMMER
+  jobs: [build]
+
+digger:
+  search: TERRAIN
+  tool: SHOVEL
+  jobs: [dig]
+
+smith:
+  search: FORGE
+  tool: HAMMER
+  jobs: [work]

@@ -5,8 +5,10 @@ import { MapSize } from '@/utilities/map-size';
 import { LandscapeType } from './renderer/landscape/landscape-type';
 import type { MapEntityData, MapObjectData } from '@/resources/map/map-entity-data';
 import { S4TreeType } from '@/resources/map/s4-types';
+import { SeededRng } from './rng';
 
 const MAP_SIZE = 256;
+const TEST_MAP_SEED = 42; // Fixed seed for deterministic test maps
 
 /** Terrain band definitions as fractions of the map height */
 const TERRAIN_BANDS: ReadonlyArray<{ frac0: number; frac1: number; type: LandscapeType }> = [
@@ -41,12 +43,17 @@ function getTerrainForRow(row: number): LandscapeType {
  * Creates a synthetic, deterministic IMapLoader for E2E testing.
  * The 256x256 map has horizontal bands of every major terrain type
  * with gentle height variation.
+ *
+ * Uses a fixed seed RNG for deterministic tree placement.
  */
 export function createTestMapLoader(): IMapLoader {
     const mapSize = new MapSize(MAP_SIZE, MAP_SIZE);
     const total = MAP_SIZE * MAP_SIZE;
     const groundType = new Uint8Array(total);
     const groundHeight = new Uint8Array(total);
+
+    // Use seeded RNG for deterministic tree placement
+    const rng = new SeededRng(TEST_MAP_SEED);
 
     // Trees are now stored as entity objects, not in a tile array
     const treeObjects: MapObjectData[] = [];
@@ -59,12 +66,12 @@ export function createTestMapLoader(): IMapLoader {
             // Gentle sine-wave height variation
             groundHeight[idx] = Math.floor(10 + 5 * Math.sin(x * 0.1) + 3 * Math.sin(y * 0.15));
 
-            // Add some trees (S4TreeType 1-18) randomly on grass
-            if (terrainType === LandscapeType.Grass && Math.random() < 0.05) {
+            // Add some trees (S4TreeType 1-18) deterministically on grass
+            if (terrainType === LandscapeType.Grass && rng.next() < 0.05) {
                 treeObjects.push({
                     x,
                     y,
-                    objectType: (Math.floor(Math.random() * 18) + 1) as S4TreeType,
+                    objectType: (rng.nextInt(18) + 1) as S4TreeType,
                 });
             }
         }

@@ -1,19 +1,14 @@
 /**
- * Animation system - updates animation states for entities.
+ * Animation helper functions for sprite lookup.
  *
- * Provides a unified animation system that works with any entity type.
- * The core animation logic (AnimationState, AnimationData, etc.) is in animation.ts.
- * This module handles entity integration and the provider interface.
+ * These functions work with AnimationState from AnimationService
+ * and AnimationData from the sprite loading system.
  */
 
-import { GameState } from '../game-state';
 import { EntityType } from '../entity';
 import {
     AnimationState,
     AnimationData,
-    ANIMATION_SEQUENCES,
-    createAnimationState,
-    updateAnimationState,
     getCurrentAnimationSprite,
 } from '../animation';
 import { SpriteEntry } from '../renderer/sprite-metadata';
@@ -48,51 +43,6 @@ export interface AnimationDataProvider {
      * @param subType The specific type within that category
      */
     hasAnimation(entityType: EntityType, subType: number): boolean;
-}
-
-/**
- * Updates animation states for all animated entities.
- * Should be called once per frame (not per tick) for smooth animation.
- *
- * Performance: O(n) where n is entity count. Uses early exits and
- * Map lookups (O(1)) to minimize work per entity.
- *
- * @param gameState The game state containing entities
- * @param deltaMs Time elapsed since last update in milliseconds
- * @param animationProvider Provider for animation data
- */
-export function updateAnimations(
-    gameState: GameState,
-    deltaMs: number,
-    animationProvider: AnimationDataProvider | null
-): void {
-    if (!animationProvider) return;
-
-    for (const entity of gameState.entities) {
-        const animState = entity.animationState;
-
-        // Fast path: entity already has animation state
-        if (animState) {
-            // Get animation data (O(1) map lookup)
-            const animationData = animationProvider.getAnimationData(entity.type, entity.subType);
-            if (!animationData) continue;
-
-            // Get current sequence and update
-            const sequence = animationData.sequences.get(animState.sequenceKey)?.get(animState.direction);
-            updateAnimationState(animState, sequence, deltaMs);
-            continue;
-        }
-
-        // Slow path: check if entity should be animated (runs once per entity)
-        if (animationProvider.hasAnimation(entity.type, entity.subType)) {
-            const defaultDir = DEFAULT_ANIMATION_DIRECTION[entity.type] ?? 0;
-            entity.animationState = createAnimationState(ANIMATION_SEQUENCES.DEFAULT, defaultDir);
-            // Auto-play for buildings and map objects (ambient animations)
-            if (shouldAutoPlay(entity.type)) {
-                entity.animationState.playing = true;
-            }
-        }
-    }
 }
 
 /**
@@ -135,40 +85,20 @@ export function getAnimatedSpriteForDirection(
         return fallbackSprite;
     }
 
-    const sequence = animationData.sequences.get(animationState.sequenceKey)?.get(direction);
+    const directionMap = animationData.sequences.get(animationState.sequenceKey);
+    if (!directionMap) {
+        throw new Error(`Animation sequence '${animationState.sequenceKey}' not found. Available: ${[...animationData.sequences.keys()].join(', ')}`);
+    }
+
+    const sequence = directionMap?.get(direction);
     if (!sequence || sequence.frames.length === 0) {
         return fallbackSprite;
     }
 
-    const frameIndex = Math.min(animationState.currentFrame, sequence.frames.length - 1);
+    // Use modulo for looping animations (allows unbounded frame counter)
+    const frameIndex = sequence.loop
+        ? animationState.currentFrame % sequence.frames.length
+        : Math.min(animationState.currentFrame, sequence.frames.length - 1);
     return sequence.frames[frameIndex];
 }
 
-/**
- * Check if an entity type should auto-play animations.
- * Buildings and MapObjects animate continuously.
- * Units are controlled by movement events.
- */
-function shouldAutoPlay(entityType: EntityType): boolean {
-    return entityType === EntityType.Building || entityType === EntityType.MapObject;
-}
-
-/**
- * Initializes animation state for an entity if it should be animated.
- * Call this when adding new entities to the game.
- */
-export function initializeEntityAnimation(
-    entity: { type: EntityType; subType: number; animationState?: AnimationState },
-    animationProvider: AnimationDataProvider | null
-): void {
-    if (!animationProvider) return;
-
-    if (animationProvider.hasAnimation(entity.type, entity.subType)) {
-        const defaultDir = DEFAULT_ANIMATION_DIRECTION[entity.type] ?? 0;
-        entity.animationState = createAnimationState(ANIMATION_SEQUENCES.DEFAULT, defaultDir);
-        // Auto-play for buildings and map objects (ambient animations)
-        if (shouldAutoPlay(entity.type)) {
-            entity.animationState.playing = true;
-        }
-    }
-}

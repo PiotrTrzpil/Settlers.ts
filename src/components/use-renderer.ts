@@ -325,7 +325,7 @@ async function initRenderersAsync(
     gl: WebGL2RenderingContext,
     landscapeRenderer: LandscapeRenderer,
     entityRenderer: EntityRenderer,
-    game: Game
+    _game: Game
 ): Promise<void> {
     const t0 = performance.now();
     await landscapeRenderer.init(gl);
@@ -334,11 +334,6 @@ async function initRenderersAsync(
 
     await entityRenderer.init(gl);
     debugStats.state.rendererReady = true;
-
-    const animProvider = entityRenderer.getAnimationProvider();
-    if (animProvider) {
-        game.gameLoop.setAnimationProvider(animProvider);
-    }
 }
 
 /** Expose objects for e2e tests */
@@ -496,6 +491,7 @@ export function useRenderer({
             game.fileManager,
             game.groundType
         );
+        entityRenderer.setAnimationService(game.gameLoop.animationService);
         renderer.add(entityRenderer);
 
         // Initialize renderers asynchronously

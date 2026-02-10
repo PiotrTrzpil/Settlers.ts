@@ -388,7 +388,7 @@ describe('Path obstacle repair', () => {
             const controllerA = state.movement.getController(unitA.id)!;
 
             const result = pushUnit(
-                unitB.id, controllerA, state.tileOccupancy, makeTerrain(map),
+                unitB.id, controllerA, state.tileOccupancy, state.rng, makeTerrain(map),
                 (id, x, y) => state.updateEntityPosition(id, x, y)
             );
             expect(result).toBe(false);
@@ -400,7 +400,7 @@ describe('Path obstacle repair', () => {
             const controllerB = state.movement.getController(unitB.id)!;
 
             const result = pushUnit(
-                unitA.id, controllerB, state.tileOccupancy, makeTerrain(map),
+                unitA.id, controllerB, state.tileOccupancy, state.rng, makeTerrain(map),
                 (id, x, y) => state.updateEntityPosition(id, x, y)
             );
             expect(result).toBe(true);
@@ -414,7 +414,7 @@ describe('Path obstacle repair', () => {
             const controllerA = state.movement.getController(unitA.id)!;
 
             const result = pushUnit(
-                unitA.id, controllerA, state.tileOccupancy, makeTerrain(map),
+                unitA.id, controllerA, state.tileOccupancy, state.rng, makeTerrain(map),
                 (id, x, y) => state.updateEntityPosition(id, x, y)
             );
             expect(result).toBe(false);
@@ -425,7 +425,7 @@ describe('Path obstacle repair', () => {
         it('should find a free neighbor on open terrain', () => {
             addUnit(state, 10, 10);
 
-            const free = findRandomFreeDirection(10, 10, state.tileOccupancy, makeTerrain(map));
+            const free = findRandomFreeDirection(10, 10, state.tileOccupancy, state.rng, makeTerrain(map));
             expect(free).not.toBe(null);
         });
 
@@ -437,7 +437,7 @@ describe('Path obstacle repair', () => {
                 addUnit(state, n.x, n.y);
             }
 
-            const free = findRandomFreeDirection(10, 10, state.tileOccupancy, makeTerrain(map));
+            const free = findRandomFreeDirection(10, 10, state.tileOccupancy, state.rng, makeTerrain(map));
             expect(free).toBe(null);
         });
 
@@ -451,7 +451,7 @@ describe('Path obstacle repair', () => {
                 }
             }
 
-            const free = findRandomFreeDirection(10, 10, state.tileOccupancy, makeTerrain(map));
+            const free = findRandomFreeDirection(10, 10, state.tileOccupancy, state.rng, makeTerrain(map));
             expect(free).toBe(null);
         });
     });

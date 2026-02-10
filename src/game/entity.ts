@@ -59,8 +59,6 @@ export interface Entity {
     y: number;
     player: number;
     subType: number;
-    /** Optional animation state for animated entities */
-    animationState?: import('./animation').AnimationState;
     /** Whether this entity can be selected by the player. Defaults to true if not specified. */
     selectable?: boolean;
     /**

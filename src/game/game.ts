@@ -75,7 +75,10 @@ export class Game {
 
         // Populate buildings from map entity data (if available)
         if (mapLoader.entityData?.buildings?.length) {
-            const count = populateMapBuildings(this.state, mapLoader.entityData.buildings);
+            const count = populateMapBuildings(
+                this.state,
+                mapLoader.entityData.buildings
+            );
             if (count > 0) {
                 console.log(`Game: Loaded ${count} buildings from map data`);
             }

@@ -15,15 +15,8 @@
 import type { GameState } from '../game-state';
 import { Entity, EntityType, UnitType } from '../entity';
 import type { EventBus } from '../event-bus';
-import {
-    AnimationState,
-    ANIMATION_SEQUENCES,
-    carrySequenceKey,
-    createAnimationState,
-    setAnimationSequence,
-    startDirectionTransition,
-    updateDirectionTransition
-} from '../animation';
+import { ANIMATION_SEQUENCES, carrySequenceKey } from '../animation';
+import type { AnimationService } from '../animation/index';
 import type { TickSystem } from '../tick-system';
 
 /**
@@ -42,14 +35,31 @@ const NUM_DIRECTIONS = 6;
  *
  * Architecture:
  * - Movement events trigger animation state changes (no polling)
- * - Tick only updates time-based logic (transitions, idle turns)
+ * - Tick only updates time-based logic (idle turns)
+ * - Defers to other systems (e.g., SettlerTaskSystem) for managed units
  */
 export class IdleBehaviorSystem implements TickSystem {
     private idleStates = new Map<number, IdleAnimationState>();
     private gameState: GameState;
+    private animationService: AnimationService;
 
-    constructor(gameState: GameState) {
+    /**
+     * Optional callback to check if a unit's animation is managed by another system.
+     * If set and returns true, this system won't touch that unit's animation.
+     */
+    private isAnimationManaged?: (entityId: number) => boolean;
+
+    constructor(gameState: GameState, animationService: AnimationService) {
         this.gameState = gameState;
+        this.animationService = animationService;
+    }
+
+    /**
+     * Set callback to check if a unit is managed by another animation system.
+     * Managed units will be skipped for animation updates.
+     */
+    setManagedCheck(check: (entityId: number) => boolean): void {
+        this.isAnimationManaged = check;
     }
 
     /**
@@ -75,14 +85,15 @@ export class IdleBehaviorSystem implements TickSystem {
      * Starts walk animation and sets direction.
      */
     private onMovementStarted(entityId: number, direction: number): void {
+        // Skip if managed by another system (e.g., SettlerTaskSystem)
+        if (this.isAnimationManaged?.(entityId)) return;
+
         const entity = this.gameState.getEntity(entityId);
         if (!entity || entity.type !== EntityType.Unit) return;
 
-        const animState = this.ensureAnimationState(entity);
-
         // Start walk animation
-        const targetSeq = getWalkSequenceKey(entity);
-        setAnimationSequence(animState, targetSeq, direction);
+        const sequenceKey = getWalkSequenceKey(entity);
+        this.animationService.play(entityId, sequenceKey, { loop: true, direction });
 
         // Reset idle state
         const idleState = this.getIdleState(entityId);
@@ -94,31 +105,27 @@ export class IdleBehaviorSystem implements TickSystem {
      * Switches to default/standing pose.
      */
     private onMovementStopped(entityId: number): void {
+        // Skip if managed by another system (e.g., SettlerTaskSystem)
+        if (this.isAnimationManaged?.(entityId)) return;
+
         const entity = this.gameState.getEntity(entityId);
         if (!entity || entity.type !== EntityType.Unit) return;
 
-        const animState = this.ensureAnimationState(entity);
-
-        // Switch to default/standing sequence and stop animation
-        animState.sequenceKey = ANIMATION_SEQUENCES.DEFAULT;
-        animState.playing = false;
-        animState.currentFrame = 0;
+        // Set default sequence and hold on frame 0 (play sets sequence, stop freezes it)
+        this.animationService.play(entityId, ANIMATION_SEQUENCES.DEFAULT);
+        this.animationService.stop(entityId);
     }
 
     /**
      * Handle direction change during movement.
-     * Starts smooth transition to new direction.
+     * Sets new direction on animation.
      */
     private onDirectionChanged(entityId: number, direction: number, _previousDirection: number): void {
+        // Direction changes are fine even for managed units
         const entity = this.gameState.getEntity(entityId);
         if (!entity || entity.type !== EntityType.Unit) return;
 
-        const animState = this.ensureAnimationState(entity);
-
-        // Start smooth direction transition
-        if (direction !== animState.direction) {
-            startDirectionTransition(animState, direction);
-        }
+        this.animationService.setDirection(entityId, direction);
     }
 
     /**
@@ -126,21 +133,10 @@ export class IdleBehaviorSystem implements TickSystem {
      * Animation state changes happen via events, not here.
      */
     tick(dt: number): void {
-        const deltaMs = dt * 1000;
-
         for (const controller of this.gameState.movement.getAllControllers()) {
-            const entity = this.gameState.getEntity(controller.entityId);
-            if (!entity || entity.type !== EntityType.Unit) continue;
-
-            const animState = entity.animationState;
-            if (!animState) continue;
-
-            // Update direction transitions (smooth blending)
-            updateDirectionTransition(animState, deltaMs);
-
-            // Handle idle turning (only when idle)
-            if (controller.state === 'idle') {
-                this.updateIdleTurn(controller.entityId, animState, dt);
+            // Handle idle turning (only when idle and not managed by another system)
+            if (controller.state === 'idle' && !this.isAnimationManaged?.(controller.entityId)) {
+                this.updateIdleTurn(controller.entityId, dt);
             }
         }
     }
@@ -148,24 +144,18 @@ export class IdleBehaviorSystem implements TickSystem {
     /**
      * Update idle turn timer and trigger random turns.
      */
-    private updateIdleTurn(entityId: number, animState: AnimationState, deltaSec: number): void {
+    private updateIdleTurn(entityId: number, deltaSec: number): void {
         const idleState = this.getIdleState(entityId);
         idleState.idleTime += deltaSec;
 
         if (idleState.idleTime >= idleState.nextIdleTurnTime) {
-            const newDirection = getAdjacentDirection(animState.direction);
-            startDirectionTransition(animState, newDirection);
+            const animState = this.animationService.getState(entityId);
+            const currentDirection = animState?.direction ?? 0;
+            const newDirection = this.getAdjacentDirection(currentDirection);
+            this.animationService.setDirection(entityId, newDirection);
             idleState.idleTime = 0;
-            idleState.nextIdleTurnTime = 2 + Math.random() * 4;
+            idleState.nextIdleTurnTime = 2 + this.gameState.rng.next() * 4;
         }
-    }
-
-    /** Ensure entity has animation state, creating if needed. */
-    private ensureAnimationState(entity: Entity): AnimationState {
-        if (!entity.animationState) {
-            entity.animationState = createAnimationState(ANIMATION_SEQUENCES.DEFAULT, 0);
-        }
-        return entity.animationState;
     }
 
     /** Clean up idle state for removed entities. */
@@ -179,11 +169,20 @@ export class IdleBehaviorSystem implements TickSystem {
         if (!state) {
             state = {
                 idleTime: 0,
-                nextIdleTurnTime: 2 + Math.random() * 4,
+                nextIdleTurnTime: 2 + this.gameState.rng.next() * 4,
             };
             this.idleStates.set(entityId, state);
         }
         return state;
+    }
+
+    /**
+     * Get an adjacent direction for idle turning.
+     * Randomly chooses clockwise (+1) or counter-clockwise (-1) rotation.
+     */
+    private getAdjacentDirection(currentDirection: number): number {
+        const offset = this.gameState.rng.nextBool() ? 1 : -1;
+        return ((currentDirection + offset) % NUM_DIRECTIONS + NUM_DIRECTIONS) % NUM_DIRECTIONS;
     }
 }
 
@@ -199,11 +198,3 @@ function getWalkSequenceKey(entity: Entity): string {
     return ANIMATION_SEQUENCES.WALK;
 }
 
-/**
- * Get an adjacent direction for idle turning.
- * Randomly chooses clockwise (+1) or counter-clockwise (-1) rotation.
- */
-function getAdjacentDirection(currentDirection: number): number {
-    const offset = Math.random() < 0.5 ? 1 : -1;
-    return ((currentDirection + offset) % NUM_DIRECTIONS + NUM_DIRECTIONS) % NUM_DIRECTIONS;
-}

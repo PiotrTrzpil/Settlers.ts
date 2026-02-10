@@ -28,7 +28,8 @@
     "howler": "^2.2.4",
     "vue": "^3.4.0",
     "vue-router": "^4.3.0",
-    "wasmoon": "^1.16.0"
+    "wasmoon": "^1.16.0",
+    "yaml": "^2.8.2"
   },
   "lint-staged": {
     "*.{ts,vue}": "eslint --fix"

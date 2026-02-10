@@ -1,0 +1,127 @@
+# Job definitions - sequences of tasks
+# Each job is a list of tasks executed in order
+#
+# Animation actions are semantic names resolved via settlerAnim(unitType, action):
+#   - Universal: walk, idle, carry, pickup, dropoff
+#   - Specific: chop, harvest, plant, mine, hammer, dig
+
+woodcutter.work:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WORK_ON_ENTITY
+    anim: chop
+    duration: 10.0  # ~3s chopping standing tree, ~1s falling, ~5s cutting log, ~1s final
+
+  - task: PICKUP
+    anim: pickup
+    good: LOG
+
+  - task: GO_HOME
+    anim: carry
+
+  - task: DROPOFF
+    anim: dropoff
+
+forester.plant:
+  - task: SEARCH_POS
+    anim: walk
+
+  - task: GO_TO_POS
+    anim: walk
+
+  - task: WORK
+    anim: plant
+    duration: 2.0
+
+  - task: GO_HOME
+    anim: walk
+
+farmer.plant:
+  - task: SEARCH_POS
+    anim: walk
+
+  - task: GO_TO_POS
+    anim: walk
+
+  - task: WORK
+    anim: plant
+    duration: 2.0
+
+  - task: GO_HOME
+    anim: walk
+
+farmer.harvest:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WORK_ON_ENTITY
+    anim: harvest
+    duration: 2.0
+
+  - task: PICKUP
+    anim: pickup
+    good: GRAIN
+
+  - task: GO_HOME
+    anim: carry
+
+  - task: DROPOFF
+    anim: dropoff
+
+miner.work:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WORK_ON_ENTITY
+    anim: mine
+    duration: 4.0
+
+  - task: PICKUP
+    anim: pickup
+
+  - task: GO_HOME
+    anim: carry
+
+  - task: DROPOFF
+    anim: dropoff
+
+carrier.transport:
+  - task: GO_TO_SOURCE
+    anim: walk
+
+  - task: PICKUP
+    anim: pickup
+
+  - task: GO_TO_DEST
+    anim: carry
+
+  - task: DROPOFF
+    anim: dropoff
+
+builder.build:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WORK_ON_ENTITY
+    anim: hammer
+    duration: 0
+
+  - task: GO_HOME
+    anim: walk
+
+digger.dig:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WORK_ON_ENTITY
+    anim: dig
+    duration: 2.0
+
+  - task: GO_HOME
+    anim: walk
+
+smith.work:
+  - task: WORK
+    anim: hammer
+    duration: 5.0

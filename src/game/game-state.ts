@@ -133,6 +133,9 @@ export class GameState {
     /** Optional callback for building creation (delegates to BuildingConstructionSystem when wired up) */
     public onBuildingCreated: ((entityId: number, buildingType: number, x: number, y: number) => void) | null = null;
 
+    /** Optional callback for map object creation (e.g., trees register with TreeSystem) */
+    public onMapObjectCreated: ((entityId: number, objectType: number, x: number, y: number) => void) | null = null;
+
     constructor(seed?: number) {
         this.rng = createGameRng(seed);
         this.unitStates = new UnitStateMap(this.movement);
@@ -223,6 +226,11 @@ export class GameState {
             this.buildingStateManager.createBuildingState(entity.id, subType as BuildingType, x, y);
             // Notify listeners for additional setup (inventory, service areas)
             this.onBuildingCreated?.(entity.id, subType, x, y);
+        }
+
+        if (type === EntityType.MapObject) {
+            // Notify listeners (e.g., TreeSystem registers trees)
+            this.onMapObjectCreated?.(entity.id, subType, x, y);
         }
 
         if (type === EntityType.StackedResource) {

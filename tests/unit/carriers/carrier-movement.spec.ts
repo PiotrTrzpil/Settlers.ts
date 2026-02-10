@@ -16,11 +16,12 @@ import {
     DROP_ANIMATION_DURATION_MS,
 } from '@/game/features/carriers';
 import { EMaterialType } from '@/game/economy';
-import { createGameState, addBuilding, addUnit, initializeAnimationState } from '../helpers/test-game';
+import { createGameState, addBuilding, addUnit } from '../helpers/test-game';
 import { createTestMap } from '../helpers/test-map';
 import type { GameState } from '@/game/game-state';
 import type { TestMap } from '../helpers/test-map';
 import { BuildingType } from '@/game/entity';
+import { AnimationService } from '@/game/animation/animation-service';
 
 describe('CarrierMovementController', () => {
     let carrierManager: CarrierManager;
@@ -231,10 +232,12 @@ describe('CarrierMovementController', () => {
 
 describe('CarrierAnimationController', () => {
     let animationController: CarrierAnimationController;
+    let animationService: AnimationService;
     let gameState: GameState;
 
     beforeEach(() => {
-        animationController = new CarrierAnimationController();
+        animationService = new AnimationService();
+        animationController = new CarrierAnimationController(animationService);
         gameState = createGameState();
     });
 
@@ -245,10 +248,10 @@ describe('CarrierAnimationController', () => {
     describe('animation timing', () => {
         it('should track pickup animation timer', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            initializeAnimationState(carrier);
+            // AnimationService handles state creation
 
             const startTime = 1000;
-            animationController.playPickupAnimation(carrier.id, gameState, startTime);
+            animationController.playPickupAnimation(carrier.id, startTime);
 
             expect(animationController.hasActiveAnimation(carrier.id)).toBe(true);
             expect(animationController.getActiveAnimationType(carrier.id)).toBe('pickup');
@@ -256,10 +259,10 @@ describe('CarrierAnimationController', () => {
 
         it('should track drop animation timer', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            initializeAnimationState(carrier);
+            // AnimationService handles state creation
 
             const startTime = 1000;
-            animationController.playDropAnimation(carrier.id, gameState, startTime);
+            animationController.playDropAnimation(carrier.id, startTime);
 
             expect(animationController.hasActiveAnimation(carrier.id)).toBe(true);
             expect(animationController.getActiveAnimationType(carrier.id)).toBe('drop');
@@ -267,10 +270,10 @@ describe('CarrierAnimationController', () => {
 
         it('should report animation incomplete before duration', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            initializeAnimationState(carrier);
+            // AnimationService handles state creation
 
             const startTime = 1000;
-            animationController.playPickupAnimation(carrier.id, gameState, startTime);
+            animationController.playPickupAnimation(carrier.id, startTime);
 
             // Check before duration elapsed
             const checkTime = startTime + PICKUP_ANIMATION_DURATION_MS - 100;
@@ -279,10 +282,10 @@ describe('CarrierAnimationController', () => {
 
         it('should report animation complete after duration', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            initializeAnimationState(carrier);
+            // AnimationService handles state creation
 
             const startTime = 1000;
-            animationController.playPickupAnimation(carrier.id, gameState, startTime);
+            animationController.playPickupAnimation(carrier.id, startTime);
 
             // Check after duration elapsed
             const checkTime = startTime + PICKUP_ANIMATION_DURATION_MS + 100;
@@ -291,10 +294,10 @@ describe('CarrierAnimationController', () => {
 
         it('should report remaining time correctly', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            initializeAnimationState(carrier);
+            // AnimationService handles state creation
 
             const startTime = 1000;
-            animationController.playDropAnimation(carrier.id, gameState, startTime);
+            animationController.playDropAnimation(carrier.id, startTime);
 
             const checkTime = startTime + 100;
             const remaining = animationController.getRemainingAnimationTime(carrier.id, checkTime);
@@ -303,10 +306,10 @@ describe('CarrierAnimationController', () => {
 
         it('should return 0 remaining time after completion', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            initializeAnimationState(carrier);
+            // AnimationService handles state creation
 
             const startTime = 1000;
-            animationController.playDropAnimation(carrier.id, gameState, startTime);
+            animationController.playDropAnimation(carrier.id, startTime);
 
             const checkTime = startTime + DROP_ANIMATION_DURATION_MS + 500;
             const remaining = animationController.getRemainingAnimationTime(carrier.id, checkTime);
@@ -321,9 +324,9 @@ describe('CarrierAnimationController', () => {
     describe('timer management', () => {
         it('should clear animation timer', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            initializeAnimationState(carrier);
+            // AnimationService handles state creation
 
-            animationController.playPickupAnimation(carrier.id, gameState, 1000);
+            animationController.playPickupAnimation(carrier.id, 1000);
             animationController.clearAnimationTimer(carrier.id);
 
             expect(animationController.hasActiveAnimation(carrier.id)).toBe(false);
@@ -332,11 +335,10 @@ describe('CarrierAnimationController', () => {
         it('should get all carriers with active animations', () => {
             const { entity: carrier1 } = addUnit(gameState, 5, 5);
             const { entity: carrier2 } = addUnit(gameState, 10, 10);
-            initializeAnimationState(carrier1);
-            initializeAnimationState(carrier2);
+            // AnimationService handles state creation
 
-            animationController.playPickupAnimation(carrier1.id, gameState, 1000);
-            animationController.playDropAnimation(carrier2.id, gameState, 1000);
+            animationController.playPickupAnimation(carrier1.id, 1000);
+            animationController.playDropAnimation(carrier2.id, 1000);
 
             const activeCarriers = animationController.getCarriersWithActiveAnimations();
             expect(activeCarriers).toContain(carrier1.id);
@@ -347,11 +349,10 @@ describe('CarrierAnimationController', () => {
         it('should clear all timers', () => {
             const { entity: carrier1 } = addUnit(gameState, 5, 5);
             const { entity: carrier2 } = addUnit(gameState, 10, 10);
-            initializeAnimationState(carrier1);
-            initializeAnimationState(carrier2);
+            // AnimationService handles state creation
 
-            animationController.playPickupAnimation(carrier1.id, gameState, 1000);
-            animationController.playDropAnimation(carrier2.id, gameState, 1000);
+            animationController.playPickupAnimation(carrier1.id, 1000);
+            animationController.playDropAnimation(carrier2.id, 1000);
             animationController.clear();
 
             expect(animationController.getCarriersWithActiveAnimations()).toHaveLength(0);
@@ -365,31 +366,26 @@ describe('CarrierAnimationController', () => {
     describe('animation sequences', () => {
         it('should set carrying animation with material type', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            initializeAnimationState(carrier);
 
-            animationController.setCarryingAnimation(carrier.id, EMaterialType.LOG, gameState);
+            animationController.setCarryingAnimation(carrier.id, EMaterialType.LOG);
 
-            // Animation state should be updated to the carry sequence
-            expect(carrier.animationState).toBeDefined();
-            expect(carrier.animationState!.sequenceKey).toBe('carry_0'); // LOG is 0
-            expect(carrier.animationState!.playing).toBe(true);
+            // Animation state should be updated via AnimationService
+            const state = animationService.getState(carrier.id);
+            expect(state).not.toBeNull();
+            expect(state!.sequenceKey).toBe('carry_0'); // LOG is 0
+            expect(state!.playing).toBe(true);
         });
 
         it('should clear carrying animation', () => {
             const { entity: carrier } = addUnit(gameState, 5, 5);
-            carrier.animationState = {
-                sequenceKey: 'carry_0',
-                currentFrame: 5,
-                elapsedMs: 500,
-                direction: 2,
-                playing: true,
-            };
+            // Set up initial carrying state via AnimationService
+            animationService.play(carrier.id, 'carry_0', { loop: true });
 
-            animationController.clearCarryingAnimation(carrier.id, gameState);
+            animationController.clearCarryingAnimation(carrier.id);
 
-            expect(carrier.animationState.sequenceKey).toBe('walk');
-            expect(carrier.animationState.currentFrame).toBe(0);
-            expect(carrier.animationState.playing).toBe(true);
+            const state = animationService.getState(carrier.id);
+            expect(state!.sequenceKey).toBe('walk');
+            expect(state!.playing).toBe(true);
         });
     });
 
@@ -415,10 +411,10 @@ describe('CarrierAnimationController', () => {
             // Don't set animationState
 
             // Should not throw
-            animationController.setCarryingAnimation(carrier.id, EMaterialType.LOG, gameState);
-            animationController.clearCarryingAnimation(carrier.id, gameState);
-            animationController.playPickupAnimation(carrier.id, gameState, 1000);
-            animationController.playDropAnimation(carrier.id, gameState, 1000);
+            animationController.setCarryingAnimation(carrier.id, EMaterialType.LOG);
+            animationController.clearCarryingAnimation(carrier.id);
+            animationController.playPickupAnimation(carrier.id, 1000);
+            animationController.playDropAnimation(carrier.id, 1000);
         });
     });
 });

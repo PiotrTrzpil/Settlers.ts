@@ -17,8 +17,8 @@ export const ANIMATION_SEQUENCES = {
     WALK: 'walk',
     /** Prefix for carry-walk animations, suffixed with material type number */
     CARRY_PREFIX: 'carry_',
-    /** Working animation (e.g., chopping, mining) */
-    WORK: 'work',
+    /** Prefix for work animations, suffixed with index (e.g., 'work.0', 'work.1') */
+    WORK_PREFIX: 'work.',
 } as const;
 
 /**
@@ -34,6 +34,21 @@ export function carrySequenceKey(materialType: number): string {
  */
 export function isCarrySequence(sequenceKey: string): boolean {
     return sequenceKey.startsWith(ANIMATION_SEQUENCES.CARRY_PREFIX);
+}
+
+/**
+ * Get the animation sequence key for a work animation variant.
+ * Returns a key like 'work.0', 'work.1', etc.
+ */
+export function workSequenceKey(index: number): string {
+    return `${ANIMATION_SEQUENCES.WORK_PREFIX}${index}`;
+}
+
+/**
+ * Check if a sequence key is a work sequence.
+ */
+export function isWorkSequence(sequenceKey: string): boolean {
+    return sequenceKey.startsWith(ANIMATION_SEQUENCES.WORK_PREFIX);
 }
 
 /**
@@ -155,12 +170,18 @@ export function getCurrentAnimationSprite(
     if (!animationData) return null;
 
     const directionMap = animationData.sequences.get(state.sequenceKey);
-    if (!directionMap) return null;
+    if (!directionMap) {
+        throw new Error(`Animation sequence '${state.sequenceKey}' not found. Available: ${[...animationData.sequences.keys()].join(', ')}`);
+    }
 
     const sequence = directionMap.get(state.direction);
     if (!sequence || sequence.frames.length === 0) return null;
 
-    const frameIndex = Math.min(state.currentFrame, sequence.frames.length - 1);
+    // Use modulo for looping animations (allows unbounded frame counter)
+    // Use min for non-looping (clamp to last frame)
+    const frameIndex = sequence.loop
+        ? state.currentFrame % sequence.frames.length
+        : Math.min(state.currentFrame, sequence.frames.length - 1);
     return sequence.frames[frameIndex];
 }
 

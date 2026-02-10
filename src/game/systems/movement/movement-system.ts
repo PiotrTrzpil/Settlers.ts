@@ -6,6 +6,7 @@ import { GRID_DELTAS, getAllNeighbors } from '../hex-directions';
 import { findRandomFreeDirection, shouldYieldToPush } from './push-utils';
 import type { TickSystem } from '../../tick-system';
 import type { EventBus } from '../../event-bus';
+import type { SeededRng } from '../../rng';
 
 /** How many steps ahead to look when doing prefix path repair */
 const PATH_REPAIR_DISTANCE = 10;
@@ -48,6 +49,9 @@ export class MovementSystem implements TickSystem {
     // Event bus for notifying other systems of movement changes
     private eventBus?: EventBus;
 
+    // Seeded RNG for deterministic push behavior
+    private rng?: SeededRng;
+
     // Previous state snapshots for change detection
     private prevSnapshots: Map<number, ControllerSnapshot> = new Map();
 
@@ -86,6 +90,13 @@ export class MovementSystem implements TickSystem {
      */
     setEventBus(eventBus: EventBus): void {
         this.eventBus = eventBus;
+    }
+
+    /**
+     * Set the seeded RNG for deterministic push behavior.
+     */
+    setRng(rng: SeededRng): void {
+        this.rng = rng;
     }
 
     /**
@@ -170,8 +181,13 @@ export class MovementSystem implements TickSystem {
      * @param deltaSec Time since last tick in seconds
      */
     update(deltaSec: number): void {
-        for (const controller of this.controllers.values()) {
-            this.updateController(controller, deltaSec);
+        // Sort by entity ID for deterministic iteration order
+        const sortedIds = [...this.controllers.keys()].sort((a, b) => a - b);
+        for (const entityId of sortedIds) {
+            const controller = this.controllers.get(entityId);
+            if (controller) {
+                this.updateController(controller, deltaSec);
+            }
         }
     }
 
@@ -424,7 +440,7 @@ export class MovementSystem implements TickSystem {
         const blockedController = this.controllers.get(blockedEntityId);
         if (!blockedController) return false;
 
-        if (!this.tileOccupancy) return false;
+        if (!this.tileOccupancy || !this.rng) return false;
 
         const terrain = this.groundType && this.mapWidth && this.mapHeight
             ? { groundType: this.groundType, mapWidth: this.mapWidth, mapHeight: this.mapHeight }
@@ -434,6 +450,7 @@ export class MovementSystem implements TickSystem {
             blockedController.tileX,
             blockedController.tileY,
             this.tileOccupancy,
+            this.rng,
             terrain
         );
         if (!freeDir) return false;
