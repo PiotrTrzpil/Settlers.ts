@@ -125,3 +125,13 @@ smith.work:
   - task: WORK
     anim: hammer
     duration: 5.0
+
+# Building workers go to workplace, wait for materials, then produce
+# Worker IS the production - no worker = no production
+sawmillworker.station:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WORK_ON_ENTITY
+    anim: work
+    duration: 4.0

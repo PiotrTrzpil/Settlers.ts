@@ -20,6 +20,8 @@ export enum TaskType {
     SEARCH_POS = 'SEARCH_POS',
     /** Work on target entity (tree, stone, etc.) */
     WORK_ON_ENTITY = 'WORK_ON_ENTITY',
+    /** Stay at current position indefinitely (for building workers) */
+    STAY = 'STAY',
     /** Generic work at current position */
     WORK = 'WORK',
     /** Wait for duration */
@@ -43,6 +45,8 @@ export enum SearchType {
     CONSTRUCTION = 'CONSTRUCTION',
     TERRAIN = 'TERRAIN',
     FORGE = 'FORGE',
+    /** Worker goes to their assigned workplace building and stays there */
+    WORKPLACE = 'WORKPLACE',
 }
 
 /**
@@ -78,7 +82,8 @@ export type AnimationType =
     | 'plant'
     | 'mine'
     | 'hammer'
-    | 'dig';
+    | 'dig'
+    | 'work'; // Generic work (sawmill worker, etc.)
 
 /** A single task node in a job sequence */
 export interface TaskNode {
@@ -129,6 +134,8 @@ export interface SettlerJobState {
     homeId: number | null;
     /** Carried good type */
     carryingGood: EMaterialType | null;
+    /** Whether onWorkStart was called (for proper cleanup) */
+    workStarted?: boolean;
 }
 
 /** High-level settler state */
@@ -144,9 +151,11 @@ export enum SettlerState {
 /** Work handler provided by domain systems (e.g., WoodcuttingSystem) */
 export interface WorkHandler {
     /** Find a target for this settler */
-    findTarget(x: number, y: number): { entityId: number; x: number; y: number } | null;
-    /** Check if target is still valid */
+    findTarget(x: number, y: number, settlerId?: number): { entityId: number; x: number; y: number } | null;
+    /** Check if target is still valid / has materials to work with */
     canWork(targetId: number): boolean;
+    /** If true, worker waits (idles) when canWork is false instead of failing */
+    shouldWaitForWork?: boolean;
     /** Called when WORK_ON_ENTITY starts */
     onWorkStart?(targetId: number): void;
     /** Called each tick during WORK_ON_ENTITY, return true when done */

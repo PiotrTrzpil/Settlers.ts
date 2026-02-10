@@ -38,3 +38,7 @@ smith:
   search: FORGE
   tool: HAMMER
   jobs: [work]
+
+sawmillworker:
+  search: WORKPLACE
+  jobs: [station]

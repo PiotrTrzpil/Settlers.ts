@@ -223,6 +223,17 @@ export class BuildingInventoryManager {
     }
 
     /**
+     * Get amount in a building's input slot.
+     * @param buildingId Entity ID of the building
+     * @param materialType Material type to check
+     * @returns Amount in slot, or 0 if slot not found
+     */
+    getInputAmount(buildingId: number, materialType: EMaterialType): number {
+        const slot = this.getInputSlot(buildingId, materialType);
+        return slot?.currentAmount ?? 0;
+    }
+
+    /**
      * Get amount available in a building's output slot.
      * @param buildingId Entity ID of the building
      * @param materialType Material type to check
@@ -368,5 +379,41 @@ export class BuildingInventoryManager {
      */
     clear(): void {
         this.inventories.clear();
+    }
+
+    /**
+     * Get all inventories.
+     */
+    getAllInventories(): IterableIterator<BuildingInventory> {
+        return this.inventories.values();
+    }
+
+    /**
+     * Restore an inventory from serialized state (used by persistence).
+     */
+    restoreInventory(data: {
+        entityId: number;
+        buildingType: BuildingType;
+        inputSlots: Array<{ materialType: EMaterialType; current: number; max: number; reserved: number }>;
+        outputSlots: Array<{ materialType: EMaterialType; current: number; max: number; reserved: number }>;
+    }): void {
+        const inventory: BuildingInventory = {
+            buildingId: data.entityId,
+            buildingType: data.buildingType,
+            inputSlots: data.inputSlots.map(s => ({
+                materialType: s.materialType,
+                currentAmount: s.current,
+                maxCapacity: s.max,
+                reservedAmount: s.reserved,
+            })),
+            outputSlots: data.outputSlots.map(s => ({
+                materialType: s.materialType,
+                currentAmount: s.current,
+                maxCapacity: s.max,
+                reservedAmount: s.reserved,
+            })),
+        };
+
+        this.inventories.set(data.entityId, inventory);
     }
 }

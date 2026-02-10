@@ -27,6 +27,7 @@ const SETTLER_NAME_MAP: Record<string, UnitType> = {
     builder: UnitType.Builder,
     digger: UnitType.Digger,
     smith: UnitType.Smith,
+    sawmillworker: UnitType.SawmillWorker,
 };
 
 interface RawSettlerConfig {

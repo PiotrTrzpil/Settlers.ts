@@ -19,11 +19,13 @@ import type { TickSystem } from '../../tick-system';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
+import type { ServiceAreaManager } from '../service-areas';
 import { CarrierManager } from './carrier-manager';
 import { CarrierStatus, type CarrierState, type CarrierJob } from './carrier-state';
 import { CarrierMovementController, type MovementStartResult } from './carrier-movement';
 import { CarrierAnimationController } from './carrier-animation';
 import { EMaterialType } from '../../economy';
+import { UnitType } from '../../unit-types';
 import {
     handlePickupCompletion,
     handleDeliveryCompletion,
@@ -49,6 +51,7 @@ export interface CarrierSystemConfig {
     carrierManager: CarrierManager;
     inventoryManager: BuildingInventoryManager;
     gameState: GameState;
+    serviceAreaManager: ServiceAreaManager;
     animationService: AnimationService;
 }
 
@@ -68,6 +71,7 @@ export class CarrierSystem implements TickSystem {
     private readonly carrierManager: CarrierManager;
     private readonly inventoryManager: BuildingInventoryManager;
     private readonly gameState: GameState;
+    private readonly serviceAreaManager: ServiceAreaManager;
     private readonly movementController: CarrierMovementController;
     private readonly animationController: CarrierAnimationController;
 
@@ -86,6 +90,7 @@ export class CarrierSystem implements TickSystem {
         this.carrierManager = config.carrierManager;
         this.inventoryManager = config.inventoryManager;
         this.gameState = config.gameState;
+        this.serviceAreaManager = config.serviceAreaManager;
         this.movementController = new CarrierMovementController(this.carrierManager);
         this.animationController = new CarrierAnimationController(config.animationService);
     }
@@ -97,6 +102,11 @@ export class CarrierSystem implements TickSystem {
     registerEvents(eventBus: EventBus): void {
         this.eventBus = eventBus;
         this.carrierManager.registerEvents(eventBus);
+
+        // Listen for unit spawned to auto-register carriers
+        this.subscriptions.subscribe(eventBus, 'unit:spawned', (payload) => {
+            this.handleUnitSpawned(payload);
+        });
 
         // Listen for movement stopped events to handle arrivals
         this.subscriptions.subscribe(eventBus, 'unit:movementStopped', (payload) => {
@@ -215,6 +225,53 @@ export class CarrierSystem implements TickSystem {
         this.movementController.clearPendingMovement(entityId);
         this.animationController.clearAnimationTimer(entityId);
         this.pendingDeliveries.delete(entityId);
+    }
+
+    /**
+     * Handle unit spawned event.
+     * If it's a carrier, register it with the nearest hub.
+     */
+    private handleUnitSpawned(payload: { entityId: number; unitType: UnitType; x: number; y: number; player: number }): void {
+        if (payload.unitType !== UnitType.Carrier) {
+            return;
+        }
+
+        // Find nearest hub (residence) for this player
+        const nearestHub = this.findNearestHub(payload.x, payload.y, payload.player);
+        if (!nearestHub) {
+            CarrierSystem.log.warn(`No hub found for carrier ${payload.entityId} at (${payload.x}, ${payload.y}) for player ${payload.player}`);
+            return;
+        }
+
+        // Register the carrier with the hub
+        this.carrierManager.createCarrier(payload.entityId, nearestHub);
+        CarrierSystem.log.debug(`Registered carrier ${payload.entityId} with hub ${nearestHub}`);
+    }
+
+    /**
+     * Find the nearest hub (building with service area) for a player at a given position.
+     */
+    private findNearestHub(x: number, y: number, playerId: number): number | null {
+        const serviceAreas = this.serviceAreaManager.getServiceAreasForPlayer(playerId);
+        if (serviceAreas.length === 0) {
+            return null;
+        }
+
+        let nearestHub: number | null = null;
+        let nearestDistSq = Infinity;
+
+        for (const area of serviceAreas) {
+            const dx = area.centerX - x;
+            const dy = area.centerY - y;
+            const distSq = dx * dx + dy * dy;
+
+            if (distSq < nearestDistSq) {
+                nearestDistSq = distSq;
+                nearestHub = area.buildingId;
+            }
+        }
+
+        return nearestHub;
     }
 
     // === Arrival Handlers ===

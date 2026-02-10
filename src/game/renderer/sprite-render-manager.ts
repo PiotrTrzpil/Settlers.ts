@@ -1061,6 +1061,7 @@ export class SpriteRenderManager {
         bowman_1: UnitType.Bowman,
         bowman_2: UnitType.Bowman,
         bowman_3: UnitType.Bowman,
+        sawmillworker: UnitType.SawmillWorker,
     };
 
     /**

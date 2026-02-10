@@ -21,6 +21,7 @@ export enum UnitType {
     Farmer = 12,
     Smith = 13,
     Digger = 14,  // Landscaper/Shovelworker
+    SawmillWorker = 15,
 }
 
 /**
@@ -73,12 +74,14 @@ export const UNIT_TYPE_CONFIG: Record<UnitType, UnitTypeConfig> = {
     [UnitType.Farmer]: { name: 'Farmer', category: UnitCategory.Worker, speed: 2 },
     [UnitType.Smith]: { name: 'Smith', category: UnitCategory.Worker, speed: 2 },
     [UnitType.Digger]: { name: 'Digger', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.SawmillWorker]: { name: 'SawmillWorker', category: UnitCategory.Worker, speed: 2 },
 };
 
 /** Categories that allow player selection */
 const SELECTABLE_CATEGORIES: ReadonlySet<UnitCategory> = new Set([
     UnitCategory.Military,
     UnitCategory.Religious,
+    UnitCategory.Specialist,
 ]);
 
 /** Get the category for a unit type. */
@@ -114,3 +117,23 @@ export const BUILDING_UNIT_TYPE: Record<number, UnitType | undefined> = {
     [BuildingType.WoodcutterHut]: UnitType.Builder,
     [BuildingType.StorageArea]: undefined,
 };
+
+/**
+ * Mapping of worker unit types to the building type they work at.
+ * Used to find a worker's home building.
+ */
+export const WORKER_WORKPLACE: Partial<Record<UnitType, BuildingType>> = {
+    [UnitType.Woodcutter]: BuildingType.WoodcutterHut,
+    [UnitType.Forester]: BuildingType.ForesterHut,
+    [UnitType.Farmer]: BuildingType.GrainFarm,
+    [UnitType.Miner]: BuildingType.CoalMine, // Generic - actual mine determined at runtime
+    [UnitType.Smith]: BuildingType.WeaponSmith, // Generic - actual smith determined at runtime
+    [UnitType.SawmillWorker]: BuildingType.Sawmill,
+};
+
+/**
+ * Get the workplace building type for a worker unit type.
+ */
+export function getWorkerWorkplace(unitType: UnitType): BuildingType | undefined {
+    return WORKER_WORKPLACE[unitType];
+}

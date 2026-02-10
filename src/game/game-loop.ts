@@ -3,6 +3,7 @@ import { IdleBehaviorSystem } from './systems/idle-behavior';
 import { TreeSystem } from './systems/tree-system';
 import { WoodcuttingSystem } from './systems/woodcutting-system';
 import { SettlerTaskSystem } from './systems/settler-tasks';
+import { ProductionSystem } from './systems/production-system';
 import { LogHandler } from '@/utilities/log-handler';
 import { debugStats } from './debug-stats';
 import { gameSettings } from './game-settings';
@@ -97,6 +98,9 @@ export class GameLoop {
     /** Inventory visualizer - syncs building outputs to visual stacked resources */
     public readonly inventoryVisualizer: InventoryVisualizer;
 
+    /** Production system - handles building production cycles */
+    public readonly productionSystem: ProductionSystem;
+
     constructor(gameState: GameState, eventBus: EventBus) {
         this.gameState = gameState;
         this.eventBus = eventBus;
@@ -134,6 +138,7 @@ export class GameLoop {
             carrierManager: gameState.carrierManager,
             inventoryManager: gameState.inventoryManager,
             gameState: gameState,
+            serviceAreaManager: gameState.serviceAreaManager,
             animationService: this.animationService,
         });
         this.carrierSystem.registerEvents(eventBus);
@@ -168,7 +173,11 @@ export class GameLoop {
         // 8. Woodcutting domain — registers work handler with task system
         this.woodcuttingSystem = new WoodcuttingSystem(gameState, this.treeSystem, this.settlerTaskSystem);
 
-        // 7. Inventory visualizer — syncs building output to visual stacked resources
+        // 9. Production system — handles building production cycles (requests inputs, produces outputs)
+        this.productionSystem = new ProductionSystem(gameState);
+        this.registerSystem(this.productionSystem);
+
+        // 10. Inventory visualizer — syncs building output to visual stacked resources
         this.inventoryVisualizer = new InventoryVisualizer(
             gameState,
             gameState.inventoryManager
@@ -205,7 +214,6 @@ export class GameLoop {
         BuildingType.ResidenceSmall,
         BuildingType.ResidenceMedium,
         BuildingType.ResidenceBig,
-        BuildingType.StorageArea,
     ]);
 
     /**
