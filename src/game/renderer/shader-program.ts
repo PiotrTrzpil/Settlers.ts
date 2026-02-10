@@ -213,6 +213,20 @@ export class ShaderProgram implements ShaderObject {
         this.gl.uniform1i(location, textureId);
     }
 
+    public setUniformInt(name: string, value: number): void {
+        if ((!this.shaderProgram) || (!this.gl)) {
+            return;
+        }
+
+        const location = this.gl.getUniformLocation(this.shaderProgram, name);
+        if (location === null) {
+            ShaderProgram.log.debug(`Uniform '${name}' not found or optimized away`);
+            return;
+        }
+
+        this.gl.uniform1i(location, value);
+    }
+
     public free(): void {
         if (!this.gl) {
             return;

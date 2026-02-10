@@ -124,9 +124,12 @@ export class GfxImage implements IGfxImage {
     /**
      * Get palette indices (Uint16Array) for this sprite.
      * Used for synchronous indexed decoding (fallback when workers unavailable).
-     * Index 0 = transparent, 1 = shadow, others = paletteBaseOffset + paletteOffset + value.
+     * Index 0 = transparent, 1 = shadow, others = paletteOffset + value.
+     * paletteBaseOffset is added per-sprite in the shader to avoid Uint16 overflow.
+     *
+     * @param _paletteBaseOffset Deprecated, kept for API compatibility but ignored
      */
-    public getIndexData(paletteBaseOffset: number): Uint16Array {
+    public getIndexData(_paletteBaseOffset: number): Uint16Array {
         const length = this.width * this.height;
         const indices = new Uint16Array(length);
         const buffer = this.data.getBuffer();
@@ -146,14 +149,17 @@ export class GfxImage implements IGfxImage {
                         indices[j++] = value; // 0 = transparent, 1 = shadow
                     }
                 } else {
-                    indices[j++] = paletteBaseOffset + pOff + value;
+                    // Relative index: paletteOffset + value
+                    // paletteBaseOffset will be added in shader
+                    indices[j++] = pOff + value;
                 }
             }
         } else {
             // No encoding
             for (let j = 0; j < length && pos < bufferLength; j++) {
                 const value = buffer[pos++];
-                indices[j] = paletteBaseOffset + pOff + value;
+                // paletteBaseOffset added in shader
+                indices[j] = pOff + value;
             }
         }
 

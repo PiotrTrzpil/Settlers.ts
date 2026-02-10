@@ -26,7 +26,7 @@ declare const __BUILD_TIME__: string;
  * Schema version for cache invalidation.
  * Bump this when animation sequence names or sprite data format changes.
  */
-const CACHE_SCHEMA_VERSION = 5;  // v5: multi-row player palette rows
+const CACHE_SCHEMA_VERSION = 6;  // v6: fixed palette base offset calculation
 
 /** Current build version for cache invalidation */
 const BUILD_VERSION = typeof __BUILD_TIME__ !== 'undefined'

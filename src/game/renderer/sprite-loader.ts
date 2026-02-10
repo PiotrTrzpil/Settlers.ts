@@ -321,6 +321,7 @@ export class SpriteLoader {
             offsetY: -(gfxImage.top - SpriteLoader.TRIM_TOP) * PIXELS_TO_WORLD,
             widthWorld: gfxImage.width * PIXELS_TO_WORLD,
             heightWorld: trimmedHeight * PIXELS_TO_WORLD,
+            paletteBaseOffset,
         };
 
         return { image: gfxImage, region, entry };
@@ -379,6 +380,7 @@ export class SpriteLoader {
                 offsetY: -(gfxImage.top - SpriteLoader.TRIM_TOP) * PIXELS_TO_WORLD,
                 widthWorld: trimmedWidth * PIXELS_TO_WORLD,
                 heightWorld: trimmedHeight * PIXELS_TO_WORLD,
+                paletteBaseOffset,
             };
 
             return { image: gfxImage, region, entry };

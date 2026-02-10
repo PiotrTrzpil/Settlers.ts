@@ -253,6 +253,11 @@ export interface SpriteEntry {
     widthWorld: number;
     /** Sprite height in world-space units */
     heightWorld: number;
+    /**
+     * Base offset into combined palette texture for this sprite's GFX file.
+     * Added to sprite's relative palette indices in the shader.
+     */
+    paletteBaseOffset: number;
 }
 
 /**

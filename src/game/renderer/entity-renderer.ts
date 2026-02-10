@@ -19,6 +19,7 @@ import {
 import { MapObjectType } from '../entity';
 import { EMaterialType } from '../economy';
 import { SpriteRenderManager } from './sprite-render-manager';
+import { PALETTE_TEXTURE_WIDTH } from './palette-texture';
 import { BuildingIndicatorRenderer } from './building-indicator-renderer';
 import { SpriteBatchRenderer } from './sprite-batch-renderer';
 import { SelectionOverlayRenderer } from './selection-overlay-renderer';
@@ -633,7 +634,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.spriteManager.spriteAtlas!.bindForRendering(gl);
         this.spriteManager.paletteManager.bind(gl);
 
-        this.spriteBatchRenderer.beginSpriteBatch(gl, projection);
+        const paletteWidth = PALETTE_TEXTURE_WIDTH;
+        const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
+        this.spriteBatchRenderer.beginSpriteBatch(gl, projection, paletteWidth, rowsPerPlayer);
         this.transitioningUnits.length = 0;
 
         for (const entity of this.sortedEntities) {
@@ -738,7 +741,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private drawTransitioningUnits(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         if (!this.spriteManager) return;
 
-        this.spriteBatchRenderer.beginBlendBatch(gl, projection);
+        const paletteWidth = PALETTE_TEXTURE_WIDTH;
+        const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
+        this.spriteBatchRenderer.beginBlendBatch(gl, projection, paletteWidth, rowsPerPlayer);
 
         for (const entity of this.transitioningUnits) {
             const animState = this.getAnimState(entity.id);
@@ -923,7 +928,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
             const spriteEntry = this.getPreviewSprite(entityType, subType, variation);
             if (spriteEntry) {
-                this.spriteBatchRenderer.beginSpriteBatch(gl, projection);
+                const paletteWidth = PALETTE_TEXTURE_WIDTH;
+                const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
+                this.spriteBatchRenderer.beginSpriteBatch(gl, projection, paletteWidth, rowsPerPlayer);
                 this.spriteBatchRenderer.addSprite(
                     gl, worldPos.worldX, worldPos.worldY, spriteEntry,
                     0, tint[0], tint[1], tint[2], tint[3]

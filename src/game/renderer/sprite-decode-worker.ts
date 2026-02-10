@@ -3,7 +3,8 @@
  * Outputs Uint16Array of palette indices for the palettized R16UI atlas.
  *
  * Special index values: 0 = transparent, 1 = shadow.
- * All other indices = paletteBaseOffset + paletteOffset + raw value.
+ * All other indices = paletteOffset + raw value (relative to file's palette).
+ * The paletteBaseOffset is added per-sprite in the shader to avoid Uint16 overflow.
  */
 
 export interface DecodeRequest {
@@ -38,14 +39,14 @@ export interface DecodeResponse {
 
 /**
  * Decode RLE to palette indices (indexed mode).
- * Index 0 = transparent, index 1 = shadow, others = paletteBaseOffset + paletteOffset + value
+ * Index 0 = transparent, index 1 = shadow, others = paletteOffset + value
+ * (paletteBaseOffset is added per-sprite in the shader to avoid Uint16 overflow)
  */
 function decodeRLEIndexed(
     buffer: Uint8Array,
     pos: number,
     _length: number,
     paletteOffset: number,
-    paletteBaseOffset: number,
     skipPixels: number,
     outputLength: number
 ): Uint16Array {
@@ -74,8 +75,9 @@ function decodeRLEIndexed(
             }
         } else {
             if (srcIdx >= skipPixels) {
-                // Combined index: base + sprite palette offset + pixel value
-                indices[dstIdx++] = paletteBaseOffset + paletteOffset + value;
+                // Relative index: sprite palette offset + pixel value
+                // paletteBaseOffset will be added in shader
+                indices[dstIdx++] = paletteOffset + value;
             }
             srcIdx++;
         }
@@ -86,12 +88,12 @@ function decodeRLEIndexed(
 
 /**
  * Decode raw (no RLE) to palette indices (indexed mode).
+ * paletteBaseOffset is added per-sprite in the shader to avoid Uint16 overflow.
  */
 function decodeRawIndexed(
     buffer: Uint8Array,
     pos: number,
     paletteOffset: number,
-    paletteBaseOffset: number,
     skipPixels: number,
     outputLength: number
 ): Uint16Array {
@@ -105,8 +107,8 @@ function decodeRawIndexed(
         const value = buffer[pos];
         pos++;
         // Raw mode has no special transparent/shadow handling in original code.
-        // Every byte is a palette lookup.
-        indices[j++] = paletteBaseOffset + paletteOffset + value;
+        // Every byte is a palette lookup. paletteBaseOffset added in shader.
+        indices[j++] = paletteOffset + value;
     }
 
     return indices;
@@ -117,8 +119,8 @@ self.onmessage = (e: MessageEvent<DecodeRequest>) => {
         id, buffer, offset, width, height, imgType,
         paletteOffset,
         trimTop = 0, trimBottom = 0,
-        paletteBaseOffset = 0
     } = e.data;
+    // Note: paletteBaseOffset is no longer used here - it's added per-sprite in the shader
 
     const bufferView = new Uint8Array(buffer);
 
@@ -131,13 +133,13 @@ self.onmessage = (e: MessageEvent<DecodeRequest>) => {
     if (imgType !== 32) {
         indexData = decodeRLEIndexed(
             bufferView, offset, width * height,
-            paletteOffset, paletteBaseOffset,
+            paletteOffset,
             skipPixels, outputLength
         );
     } else {
         indexData = decodeRawIndexed(
             bufferView, offset,
-            paletteOffset, paletteBaseOffset,
+            paletteOffset,
             skipPixels, outputLength
         );
     }
