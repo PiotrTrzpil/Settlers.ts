@@ -33,9 +33,9 @@ const INDICATOR_DOT_SCALE = 0.4;
 const HOVER_DOT_SCALE = 0.5;
 const HOVER_RING_SCALE = 0.6;
 
-// Maximum indicators to batch (6 vertices * 6 floats per vertex)
+// Maximum indicators to batch (6 vertices * 8 floats per vertex)
 const MAX_BATCH_INDICATORS = 2000;
-const FLOATS_PER_INDICATOR = 6 * 6; // 6 vertices, 6 floats each (x, y, r, g, b, a)
+const FLOATS_PER_INDICATOR = 6 * 8; // 6 vertices, 8 floats each (offsetX, offsetY, entityX, entityY, r, g, b, a)
 
 /**
  * Check if a placement status allows building (shows an indicator).
@@ -64,6 +64,7 @@ export class BuildingIndicatorRenderer {
 
     // Cached attribute locations
     private aPosition = -1;
+    private aEntityPos = -1;
     private aColor = -1;
 
     // Batched vertex buffer (x, y, r, g, b, a per vertex, 6 vertices per quad)
@@ -107,6 +108,7 @@ export class BuildingIndicatorRenderer {
         this.shaderProgram.create();
 
         this.aPosition = this.shaderProgram.getAttribLocation('a_position');
+        this.aEntityPos = this.shaderProgram.getAttribLocation('a_entityPos');
         this.aColor = this.shaderProgram.getAttribLocation('a_color');
 
         this.dynamicBuffer = gl.createBuffer();
@@ -290,44 +292,59 @@ export class BuildingIndicatorRenderer {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, this.batchBuffer.subarray(0, this.batchCount * FLOATS_PER_INDICATOR), gl.DYNAMIC_DRAW);
 
-        // Position attribute: 2 floats at offset 0, stride 6 floats
-        gl.enableVertexAttribArray(this.aPosition);
-        gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 6 * 4, 0);
+        const stride = 8 * 4; // 8 floats per vertex
 
-        // Color attribute: 4 floats at offset 2, stride 6 floats
+        // Position offset attribute: 2 floats at offset 0
+        gl.enableVertexAttribArray(this.aPosition);
+        gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, stride, 0);
+
+        // Entity position attribute: 2 floats at offset 2
+        gl.enableVertexAttribArray(this.aEntityPos);
+        gl.vertexAttribPointer(this.aEntityPos, 2, gl.FLOAT, false, stride, 2 * 4);
+
+        // Color attribute: 4 floats at offset 4
         gl.enableVertexAttribArray(this.aColor);
-        gl.vertexAttribPointer(this.aColor, 4, gl.FLOAT, false, 6 * 4, 2 * 4);
+        gl.vertexAttribPointer(this.aColor, 4, gl.FLOAT, false, stride, 4 * 4);
 
         gl.drawArrays(gl.TRIANGLES, 0, this.batchCount * 6);
 
+        gl.disableVertexAttribArray(this.aEntityPos);
         gl.disableVertexAttribArray(this.aColor);
     }
 
     /**
      * Add a quad to the batch buffer.
+     * Vertex format: offsetX, offsetY, entityX, entityY, r, g, b, a
      */
     private addQuadToBatch(worldX: number, worldY: number, scale: number, color: number[]): void {
         const offset = this.batchCount * FLOATS_PER_INDICATOR;
         const halfScale = scale * 0.5;
 
-        // 6 vertices for 2 triangles (x, y, r, g, b, a per vertex)
-        const positions = [
-            worldX - halfScale, worldY - halfScale,
-            worldX + halfScale, worldY - halfScale,
-            worldX - halfScale, worldY + halfScale,
-            worldX - halfScale, worldY + halfScale,
-            worldX + halfScale, worldY - halfScale,
-            worldX + halfScale, worldY + halfScale,
+        // 6 vertices for 2 triangles - quad offsets relative to entity center
+        // Shader multiplies offsets by 0.4, so we compensate by dividing halfScale
+        const adjHalfScale = halfScale / 0.4;
+        const quadOffsets = [
+            -adjHalfScale, -adjHalfScale,
+            adjHalfScale, -adjHalfScale,
+            -adjHalfScale, adjHalfScale,
+            -adjHalfScale, adjHalfScale,
+            adjHalfScale, -adjHalfScale,
+            adjHalfScale, adjHalfScale,
         ];
 
         for (let i = 0; i < 6; i++) {
-            const vertOffset = offset + i * 6;
-            this.batchBuffer[vertOffset] = positions[i * 2];
-            this.batchBuffer[vertOffset + 1] = positions[i * 2 + 1];
-            this.batchBuffer[vertOffset + 2] = color[0];
-            this.batchBuffer[vertOffset + 3] = color[1];
-            this.batchBuffer[vertOffset + 4] = color[2];
-            this.batchBuffer[vertOffset + 5] = color[3];
+            const vertOffset = offset + i * 8;
+            // Quad offset (a_position)
+            this.batchBuffer[vertOffset] = quadOffsets[i * 2];
+            this.batchBuffer[vertOffset + 1] = quadOffsets[i * 2 + 1];
+            // Entity world position (a_entityPos)
+            this.batchBuffer[vertOffset + 2] = worldX;
+            this.batchBuffer[vertOffset + 3] = worldY;
+            // Color (a_color)
+            this.batchBuffer[vertOffset + 4] = color[0];
+            this.batchBuffer[vertOffset + 5] = color[1];
+            this.batchBuffer[vertOffset + 6] = color[2];
+            this.batchBuffer[vertOffset + 7] = color[3];
         }
 
         this.batchCount++;
