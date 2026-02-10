@@ -2,7 +2,7 @@ import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { TileCoord, tileKey, BuildingType, getBuildingFootprint } from '../entity';
-import { isBuildable, PlacementStatus, MAX_SLOPE_DIFF } from '../features/placement';
+import { isBuildable, PlacementStatus, computeSlopeDifficulty, computeHeightRange, MAX_SLOPE_DIFF } from '../features/placement';
 import { ShaderProgram } from './shader-program';
 
 import vertCode from './shaders/entity-vert.glsl';
@@ -12,16 +12,39 @@ import fragCode from './shaders/entity-frag.glsl';
 export { PlacementStatus } from '../features/placement';
 
 /**
- * Color mapping for placement indicators (RGBA, 0-1 range).
- * Green = good, Yellow = medium, Red = bad.
+ * Color mapping for non-buildable statuses (RGBA, 0-1 range).
  */
+const UNBUILDABLE_COLORS: Record<number, number[]> = {
+    [PlacementStatus.InvalidTerrain]: [0.3, 0.0, 0.0, 0.9],     // Very dark red - can't build
+    [PlacementStatus.Occupied]: [0.4, 0.0, 0.1, 0.9],           // Dark red - occupied
+    [PlacementStatus.TooSteep]: [0.5, 0.0, 0.1, 0.9],           // Dark cherry - too steep
+};
+
+/**
+ * 10-color gradient from deep green (flat) to deep cherry (steep).
+ * Index 0 = flattest (deep green), Index 9 = steepest buildable (deep cherry/red).
+ */
+const SLOPE_GRADIENT: number[][] = [
+    [0.0, 0.5, 0.1, 0.9],   // 0: Deep forest green - perfectly flat
+    [0.0, 0.7, 0.1, 0.9],   // 1: Dark green
+    [0.2, 0.8, 0.1, 0.9],   // 2: Green
+    [0.4, 0.8, 0.0, 0.9],   // 3: Yellow-green
+    [0.6, 0.7, 0.0, 0.9],   // 4: Olive/yellow
+    [0.8, 0.6, 0.0, 0.9],   // 5: Gold/orange
+    [0.9, 0.4, 0.0, 0.9],   // 6: Orange
+    [0.9, 0.2, 0.1, 0.9],   // 7: Red-orange
+    [0.8, 0.1, 0.1, 0.9],   // 8: Red
+    [0.6, 0.0, 0.15, 0.9],  // 9: Deep cherry - steepest buildable
+];
+
+/** Legacy STATUS_COLORS for compatibility with tests */
 const STATUS_COLORS: Record<PlacementStatus, number[]> = {
-    [PlacementStatus.InvalidTerrain]: [0.6, 0.1, 0.1, 0.8],     // Dark red
-    [PlacementStatus.Occupied]: [0.7, 0.2, 0.2, 0.8],           // Red
-    [PlacementStatus.TooSteep]: [0.9, 0.3, 0.1, 0.8],           // Dark orange
-    [PlacementStatus.Difficult]: [0.9, 0.7, 0.1, 0.8],          // Yellow-orange
-    [PlacementStatus.Medium]: [0.7, 0.9, 0.2, 0.8],             // Yellow-green
-    [PlacementStatus.Easy]: [0.2, 0.9, 0.3, 0.8],               // Green
+    [PlacementStatus.InvalidTerrain]: UNBUILDABLE_COLORS[PlacementStatus.InvalidTerrain],
+    [PlacementStatus.Occupied]: UNBUILDABLE_COLORS[PlacementStatus.Occupied],
+    [PlacementStatus.TooSteep]: UNBUILDABLE_COLORS[PlacementStatus.TooSteep],
+    [PlacementStatus.Difficult]: SLOPE_GRADIENT[7],
+    [PlacementStatus.Medium]: SLOPE_GRADIENT[4],
+    [PlacementStatus.Easy]: SLOPE_GRADIENT[0],
 };
 
 // Hover highlight - brighter version
@@ -49,6 +72,17 @@ export function isBuildableStatus(status: PlacementStatus): boolean {
 }
 
 /**
+ * Get gradient color based on height range.
+ * Maps height range 0 to MAX_SLOPE_DIFF onto the 10-color gradient.
+ */
+function getGradientColor(heightRange: number): number[] {
+    // Map heightRange (0 to MAX_SLOPE_DIFF) to index (0 to 9)
+    const normalizedSlope = Math.min(heightRange / MAX_SLOPE_DIFF, 1.0);
+    const index = Math.min(Math.floor(normalizedSlope * 10), 9);
+    return SLOPE_GRADIENT[index];
+}
+
+/**
  * Renders building placement indicators across the visible terrain.
  * Shows colored dots indicating where buildings can be placed and the
  * relative difficulty (based on slope/terrain).
@@ -72,7 +106,7 @@ export class BuildingIndicatorRenderer {
     private batchCount = 0;
 
     // Cached indicator data with numeric coords (avoid string parsing in draw loop)
-    private indicatorCache: Array<{ x: number; y: number; status: PlacementStatus }> = [];
+    private indicatorCache: Array<{ x: number; y: number; status: PlacementStatus; heightRange: number }> = [];
     private cacheViewX = 0;
     private cacheViewY = 0;
     private cacheZoom = 0;
@@ -145,20 +179,9 @@ export class BuildingIndicatorRenderer {
         return null;
     }
 
-    /** Compute slope difficulty rating */
-    private computeSlopeDifficulty(footprint: TileCoord[]): PlacementStatus {
-        let minHeight = 255, maxHeight = 0;
-        for (const tile of footprint) {
-            const h = this.groundHeight[this.mapSize.toIndex(tile.x, tile.y)];
-            minHeight = Math.min(minHeight, h);
-            maxHeight = Math.max(maxHeight, h);
-        }
-
-        const heightDiff = maxHeight - minHeight;
-        if (heightDiff > MAX_SLOPE_DIFF) return PlacementStatus.TooSteep;
-        if (heightDiff === 0) return PlacementStatus.Easy;
-        if (heightDiff === 1) return PlacementStatus.Medium;
-        return PlacementStatus.Difficult;
+    /** Compute slope difficulty rating using shared placement logic */
+    private computeSlopeDifficultyForFootprint(footprint: TileCoord[]): PlacementStatus {
+        return computeSlopeDifficulty(footprint, this.groundHeight, this.mapSize);
     }
 
     /**
@@ -177,7 +200,7 @@ export class BuildingIndicatorRenderer {
             if (issue !== null) return issue;
         }
 
-        return this.computeSlopeDifficulty(footprint);
+        return this.computeSlopeDifficultyForFootprint(footprint);
     }
 
     /**
@@ -220,7 +243,12 @@ export class BuildingIndicatorRenderer {
                 const status = this.computePlacementStatus(x, y);
                 // Only store buildable tiles (skip invalid ones entirely)
                 if (isBuildableStatus(status)) {
-                    this.indicatorCache.push({ x, y, status });
+                    // Compute height range for gradient color
+                    const footprint = this.buildingType !== null
+                        ? getBuildingFootprint(x, y, this.buildingType)
+                        : [{ x, y }];
+                    const heightRange = computeHeightRange(footprint, this.groundHeight, this.mapSize);
+                    this.indicatorCache.push({ x, y, status, heightRange });
                 }
             }
         }
@@ -263,7 +291,7 @@ export class BuildingIndicatorRenderer {
         for (const indicator of this.indicatorCache) {
             if (this.batchCount >= MAX_BATCH_INDICATORS) break;
 
-            const { x, y, status } = indicator;
+            const { x, y } = indicator;
 
             const isHovered = this.hoveredTile &&
                               this.hoveredTile.x === x &&
@@ -275,7 +303,7 @@ export class BuildingIndicatorRenderer {
                 viewPoint.x, viewPoint.y
             );
 
-            const color = isHovered ? HOVER_COLOR : STATUS_COLORS[status];
+            const color = isHovered ? HOVER_COLOR : getGradientColor(indicator.heightRange);
             const scale = isHovered ? HOVER_DOT_SCALE : INDICATOR_DOT_SCALE;
 
             this.addQuadToBatch(worldPos.worldX, worldPos.worldY, scale, color);

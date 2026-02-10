@@ -39,4 +39,4 @@ export {
 export { isPassable, isBuildable } from './terrain';
 
 // Slope utilities (for indicator renderer)
-export { MAX_SLOPE_DIFF, computeSlopeDifficulty } from './slope';
+export { MAX_SLOPE_DIFF, computeSlopeDifficulty, computeHeightRange } from './slope';

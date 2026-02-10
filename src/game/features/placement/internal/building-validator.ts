@@ -3,11 +3,11 @@
  * Validates building footprints including terrain, occupancy, and slope.
  */
 
-import { tileKey, getBuildingFootprint, CARDINAL_OFFSETS, type BuildingType } from '../../../entity';
+import { tileKey, getBuildingFootprint, type BuildingType } from '../../../entity';
 import type { PlacementContext, PlacementResult } from '../types';
 import { PlacementStatus } from '../types';
 import { isBuildable } from './terrain';
-import { computeSlopeDifficulty, MAX_SLOPE_DIFF } from './slope';
+import { computeSlopeDifficulty } from './slope';
 
 interface TileCoord {
     x: number;
@@ -95,12 +95,12 @@ export function canPlaceBuildingFootprint(
 
 /**
  * Check if a building can be placed at a single tile (x, y).
- * Checks terrain, occupancy, and slope against cardinal neighbors.
- * Used for simple 1x1 placement validation.
+ * Checks terrain and occupancy only - slope is checked by computeSlopeDifficulty
+ * for the full footprint, which is more lenient since terrain leveling handles slopes.
  */
 export function canPlaceBuilding(
     groundType: Uint8Array,
-    groundHeight: Uint8Array,
+    _groundHeight: Uint8Array,
     mapSize: PlacementContext['mapSize'],
     tileOccupancy: Map<string, number>,
     x: number,
@@ -116,20 +116,10 @@ export function canPlaceBuilding(
         return false;
     }
 
-    // Check slope: max height difference with 4 cardinal neighbors
-    const centerHeight = groundHeight[idx];
-
-    for (const [dx, dy] of CARDINAL_OFFSETS) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || nx >= mapSize.width || ny < 0 || ny >= mapSize.height) {
-            continue;
-        }
-        const neighborHeight = groundHeight[mapSize.toIndex(nx, ny)];
-        if (Math.abs(centerHeight - neighborHeight) > MAX_SLOPE_DIFF) {
-            return false;
-        }
-    }
+    // Slope is no longer checked here - terrain leveling during construction
+    // handles height differences, so we only check terrain type and occupancy.
+    // The full footprint slope check in validateBuildingPlacement uses
+    // computeSlopeDifficulty which is more sophisticated.
 
     return true;
 }
