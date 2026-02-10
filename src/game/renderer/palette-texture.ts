@@ -3,19 +3,22 @@ import { LogHandler } from '@/utilities/log-handler';
 /**
  * Manages a combined GPU palette texture for palettized atlas rendering.
  *
- * Layout: All palettes are concatenated horizontally into a single 1D-ish texture.
- * Each palette's colors occupy a contiguous range of texels.
+ * Layout: A 2D RGBA8 texture with width = totalColors, height = 1 + numPlayers.
+ *   Row 0: neutral palette (no player tinting)
+ *   Row 1: player 0 palette (tinted with player 0's color)
+ *   Row 2: player 1 palette (tinted with player 1's color)
+ *   ...
  *
  * Usage:
  *   1. registerPalette() for each GFX file set — returns the base offset
- *   2. upload() once all palettes are registered
- *   3. bind() before draw calls to make the palette available in shader
+ *   2. createPlayerPalettes(playerTints) — creates per-player tinted rows
+ *   3. upload() to push texture to GPU
+ *   4. bind() before draw calls
  *
  * The sprite atlas stores uint16 indices. For a given pixel:
- *   finalIndex = paletteBaseOffset + paletteOffset + pixelValue
- *   color = texelFetch(u_palette, ivec2(finalIndex, 0), 0)
+ *   color = texelFetch(u_palette, ivec2(int(index), playerRow), 0)
  *
- * Special indices (stored directly in atlas, no palette lookup):
+ * Special indices (handled in shader, not looked up):
  *   0 = transparent (discard)
  *   1 = shadow (semi-transparent black)
  */
@@ -29,23 +32,30 @@ export class PaletteTextureManager {
     private fileBaseOffsets = new Map<string, number>();
 
     /**
-     * Total number of colors across all registered palettes.
+     * Total number of colors across all registered palettes (= texture width).
      * Starts at 2 because indices 0 (transparent) and 1 (shadow)
      * are reserved — no valid palette lookup should produce those values.
      */
     private totalColors = 2;
 
-    /** Combined palette data: 4 bytes (RGBA) per color. May have excess capacity. */
+    /** Neutral palette data (row 0): 4 bytes (RGBA) per color. May have excess capacity. */
     private paletteBuffer: Uint8Array = new Uint8Array(4096 * 4);
 
     /** Number of valid bytes in paletteBuffer (= totalColors * 4) */
     private paletteUsedBytes = 2 * 4;
+
+    /** Full 2D palette data (all rows concatenated): set by createPlayerPalettes() */
+    private fullPaletteBuffer: Uint8Array | null = null;
+
+    /** Number of rows in the texture (1 = neutral only, 5 = neutral + 4 players) */
+    private paletteRows = 1;
 
     /** Whether GPU needs re-upload */
     private dirty = false;
 
     /** GPU texture width (for size tracking) */
     private gpuWidth = 0;
+    private gpuHeight = 0;
 
     constructor(textureUnit: number) {
         this.textureUnit = textureUnit;
@@ -87,12 +97,62 @@ export class PaletteTextureManager {
         this.paletteUsedBytes = neededBytes;
         this.fileBaseOffsets.set(fileId, baseOffset);
         this.dirty = true;
+        // Invalidate full palette (player rows need regeneration)
+        this.fullPaletteBuffer = null;
 
         PaletteTextureManager.log.debug(
             `Registered palette '${fileId}': ${colorCount} colors at offset ${baseOffset} (total: ${this.totalColors})`
         );
 
         return baseOffset;
+    }
+
+    /**
+     * Create per-player tinted palette rows.
+     * Call after all palettes are registered.
+     *
+     * @param playerTints Array of [r, g, b, a] multiplicative tints per player.
+     *   Values are typically close to 1.0 (e.g. [0.68, 0.84, 1.0, 1.0] for blue player).
+     */
+    public createPlayerPalettes(playerTints: readonly (readonly number[])[]): void {
+        const width = this.totalColors;
+        const numPlayers = playerTints.length;
+        this.paletteRows = 1 + numPlayers; // row 0 = neutral, rows 1..N = players
+
+        const rowBytes = width * 4;
+        const totalBytes = this.paletteRows * rowBytes;
+        this.fullPaletteBuffer = new Uint8Array(totalBytes);
+
+        // Row 0: copy neutral palette
+        const neutralData = this.paletteBuffer.subarray(0, this.paletteUsedBytes);
+        this.fullPaletteBuffer.set(neutralData, 0);
+
+        // Rows 1..N: create tinted copies
+        for (let p = 0; p < numPlayers; p++) {
+            const tint = playerTints[p];
+            const rowOffset = (p + 1) * rowBytes;
+
+            // Copy reserved indices 0,1 untinted (transparent/shadow)
+            this.fullPaletteBuffer.set(neutralData.subarray(0, 2 * 4), rowOffset);
+
+            // Tint all real palette colors (indices 2+)
+            for (let i = 2; i < width; i++) {
+                const srcOff = i * 4;
+                const dstOff = rowOffset + i * 4;
+                // Multiplicative tint: clamp to [0, 255]
+                this.fullPaletteBuffer[dstOff + 0] = Math.min(255, Math.round(neutralData[srcOff + 0] * tint[0]));
+                this.fullPaletteBuffer[dstOff + 1] = Math.min(255, Math.round(neutralData[srcOff + 1] * tint[1]));
+                this.fullPaletteBuffer[dstOff + 2] = Math.min(255, Math.round(neutralData[srcOff + 2] * tint[2]));
+                this.fullPaletteBuffer[dstOff + 3] = neutralData[srcOff + 3]; // keep original alpha
+            }
+        }
+
+        this.dirty = true;
+
+        PaletteTextureManager.log.debug(
+            `Created player palettes: ${this.paletteRows} rows x ${width} colors ` +
+            `(${(totalBytes / 1024).toFixed(1)}KB)`
+        );
     }
 
     /**
@@ -108,18 +168,23 @@ export class PaletteTextureManager {
         return this.totalColors;
     }
 
+    /** Get the number of palette rows (1 = neutral only, 5 = neutral + 4 players) */
+    public get rowCount(): number {
+        return this.paletteRows;
+    }
+
     /** Check if any palettes have been registered */
     public get hasData(): boolean {
         return this.totalColors > 0;
     }
 
     /**
-     * Upload palette texture to GPU. Call after all palettes are registered,
-     * or when new palettes are added.
+     * Upload palette texture to GPU. Call after all palettes are registered
+     * and createPlayerPalettes() has been called.
      */
     public upload(gl: WebGL2RenderingContext): void {
         if (this.totalColors === 0) return;
-        if (!this.dirty && this.gpuWidth === this.totalColors) return;
+        if (!this.dirty && this.gpuWidth === this.totalColors && this.gpuHeight === this.paletteRows) return;
 
         if (!this.texture) {
             this.texture = gl.createTexture();
@@ -134,25 +199,33 @@ export class PaletteTextureManager {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-        // Upload as a 1-pixel-tall RGBA8 texture (width = totalColors)
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
-        gl.texImage2D(
-            gl.TEXTURE_2D,
-            0,
-            gl.RGBA8,
-            this.totalColors,
-            1,
-            0,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            this.paletteBuffer.subarray(0, this.paletteUsedBytes)
-        );
+
+        if (this.fullPaletteBuffer) {
+            // Upload multi-row palette (neutral + player tinted rows)
+            gl.texImage2D(
+                gl.TEXTURE_2D, 0, gl.RGBA8,
+                this.totalColors, this.paletteRows,
+                0, gl.RGBA, gl.UNSIGNED_BYTE,
+                this.fullPaletteBuffer
+            );
+        } else {
+            // Upload single-row neutral palette
+            gl.texImage2D(
+                gl.TEXTURE_2D, 0, gl.RGBA8,
+                this.totalColors, 1,
+                0, gl.RGBA, gl.UNSIGNED_BYTE,
+                this.paletteBuffer.subarray(0, this.paletteUsedBytes)
+            );
+        }
 
         this.gpuWidth = this.totalColors;
+        this.gpuHeight = this.paletteRows;
         this.dirty = false;
 
         PaletteTextureManager.log.debug(
-            `Uploaded palette texture: ${this.totalColors} colors (${(this.totalColors * 4 / 1024).toFixed(1)}KB)`
+            `Uploaded palette texture: ${this.totalColors}x${this.paletteRows} ` +
+            `(${((this.totalColors * this.paletteRows * 4) / 1024).toFixed(1)}KB)`
         );
     }
 
@@ -168,9 +241,12 @@ export class PaletteTextureManager {
 
     /**
      * Get raw palette data for caching or CPU-side lookups.
-     * Returns a view of the used portion only (not excess capacity).
+     * Returns the full multi-row buffer if available, otherwise neutral only.
      */
     public getPaletteData(): Uint8Array | null {
+        if (this.fullPaletteBuffer) {
+            return this.fullPaletteBuffer;
+        }
         if (this.paletteUsedBytes === 0) return null;
         return this.paletteBuffer.subarray(0, this.paletteUsedBytes);
     }
@@ -189,16 +265,38 @@ export class PaletteTextureManager {
     /**
      * Restore palette manager from cached data.
      */
-    public restoreFromCache(paletteData: Uint8Array, offsets: Record<string, number>, totalColors: number): void {
-        this.paletteBuffer = paletteData;
-        this.paletteUsedBytes = totalColors * 4;
+    public restoreFromCache(
+        paletteData: Uint8Array,
+        offsets: Record<string, number>,
+        totalColors: number,
+        paletteRows?: number
+    ): void {
         this.totalColors = totalColors;
+        this.paletteUsedBytes = totalColors * 4;
         this.fileBaseOffsets.clear();
         for (const [key, value] of Object.entries(offsets)) {
             this.fileBaseOffsets.set(key, value);
         }
+
+        if (paletteRows && paletteRows > 1) {
+            // Multi-row palette (includes player tinted rows)
+            this.paletteRows = paletteRows;
+            this.fullPaletteBuffer = new Uint8Array(paletteData.length);
+            this.fullPaletteBuffer.set(paletteData);
+            // Extract neutral row (row 0) into paletteBuffer
+            this.paletteBuffer = new Uint8Array(this.paletteUsedBytes);
+            this.paletteBuffer.set(paletteData.subarray(0, this.paletteUsedBytes));
+        } else {
+            // Single-row neutral palette
+            this.paletteRows = 1;
+            this.fullPaletteBuffer = null;
+            this.paletteBuffer = new Uint8Array(paletteData.length);
+            this.paletteBuffer.set(paletteData);
+        }
+
         this.dirty = true;
         this.gpuWidth = 0;
+        this.gpuHeight = 0;
     }
 
     /**
@@ -213,7 +311,10 @@ export class PaletteTextureManager {
         this.paletteUsedBytes = 2 * 4;
         this.totalColors = 2;
         this.fileBaseOffsets.clear();
+        this.fullPaletteBuffer = null;
+        this.paletteRows = 1;
         this.dirty = false;
         this.gpuWidth = 0;
+        this.gpuHeight = 0;
     }
 }

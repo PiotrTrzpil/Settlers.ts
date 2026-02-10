@@ -55,5 +55,5 @@ export const SELECTION_ORIGIN_DOT_COLOR = [1.0, 0.4, 0.2, 1.0]; // Orange dot at
 
 // Maximum entities for batch buffer allocation
 export const MAX_BATCH_ENTITIES = 500;
-// 6 vertices per quad, 9 floats per vertex (posX, posY, texU, texV, texLayer, r, g, b, a)
-export const FLOATS_PER_ENTITY = 6 * 9;
+// 6 vertices per quad, 10 floats per vertex (posX, posY, texU, texV, texLayer, playerRow, r, g, b, a)
+export const FLOATS_PER_ENTITY = 6 * 10;

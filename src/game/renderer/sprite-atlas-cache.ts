@@ -26,7 +26,7 @@ declare const __BUILD_TIME__: string;
  * Schema version for cache invalidation.
  * Bump this when animation sequence names or sprite data format changes.
  */
-const CACHE_SCHEMA_VERSION = 4;  // v4: TEXTURE_2D_ARRAY multi-layer atlas
+const CACHE_SCHEMA_VERSION = 5;  // v5: multi-row player palette rows
 
 /** Current build version for cache invalidation */
 const BUILD_VERSION = typeof __BUILD_TIME__ !== 'undefined'
@@ -66,6 +66,8 @@ interface CachedAtlasBase {
     paletteOffsets?: Record<string, number>;
     /** Total number of colors in palette texture */
     paletteTotalColors?: number;
+    /** Number of palette rows (1=neutral, 5=neutral+4 players) */
+    paletteRows?: number;
 }
 
 /** Cached atlas data for in-memory use */
@@ -212,6 +214,7 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
         paletteOffsets: entry.paletteOffsets,
         paletteTotalColors: entry.paletteTotalColors,
         paletteData: entry.paletteBuffer ? new Uint8Array(entry.paletteBuffer) : undefined,
+        paletteRows: entry.paletteRows,
     };
 
     const ageMins = Math.round((Date.now() - entry.timestamp) / 60000);
@@ -251,6 +254,7 @@ export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Prom
             data.paletteData.byteOffset,
             data.paletteData.byteOffset + data.paletteData.byteLength
         ) : undefined,
+        paletteRows: data.paletteRows,
     };
 
     const sizeMB = (data.imgData.length / 1024 / 1024).toFixed(1);

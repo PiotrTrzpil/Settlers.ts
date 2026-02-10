@@ -28,6 +28,7 @@ import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
 import { ANIMATION_DEFAULTS, AnimationData, carrySequenceKey, workSequenceKey } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy';
+import { PLAYER_TINTS } from './tint-utils';
 import {
     getAtlasCache,
     setAtlasCache,
@@ -425,12 +426,13 @@ export class SpriteRenderManager {
         // Upload atlas to GPU
         atlas.update(gl);
 
-        // Restore palette texture from cache
+        // Restore palette texture from cache (including player rows if present)
         if (cached.paletteData && cached.paletteOffsets && cached.paletteTotalColors) {
             this._paletteManager.restoreFromCache(
                 cached.paletteData,
                 cached.paletteOffsets,
-                cached.paletteTotalColors
+                cached.paletteTotalColors,
+                cached.paletteRows
             );
             this._paletteManager.upload(gl);
         }
@@ -492,6 +494,7 @@ export class SpriteRenderManager {
             paletteOffsets: this._paletteManager.getFileBaseOffsets(),
             paletteTotalColors: this._paletteManager.colorCount,
             paletteData: this._paletteManager.getPaletteData() ?? undefined,
+            paletteRows: this._paletteManager.rowCount,
         };
 
         // Save to module cache (sync, for HMR)
@@ -644,7 +647,8 @@ export class SpriteRenderManager {
 
         atlas.update(gl);
 
-        // Upload palette texture to GPU
+        // Create player-tinted palette rows, then upload to GPU
+        this._paletteManager.createPlayerPalettes(PLAYER_TINTS);
         this._paletteManager.upload(gl);
 
         const gpuUpload = t.lap();
