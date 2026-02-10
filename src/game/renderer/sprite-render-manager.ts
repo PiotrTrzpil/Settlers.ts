@@ -879,33 +879,20 @@ export class SpriteRenderManager {
         await processBatchedWithHandler(
             unitInfos,
             async({ unitType, jobIndex }) => {
-                // Get how many directions this job has from the DIL
-                const jobItem = fileSet.jilReader!.getItem(jobIndex);
-                if (!jobItem) {
+                // Load all directions with all frames using helper
+                const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas);
+                if (!loadedDirs) {
                     SpriteRenderManager.log.debug(`Job ${jobIndex} not found for unit ${UnitType[unitType]}`);
                     return null;
                 }
 
-                const dirItems = fileSet.dilReader!.getItems(jobItem.offset, jobItem.length);
-                const directionCount = dirItems.length;
-
-                // Load all frames for all directions
+                // Convert LoadedSprite[] to SpriteEntry[]
                 const directionFrames = new Map<number, SpriteEntry[]>();
-
-                for (let dir = 0; dir < directionCount; dir++) {
-                    const animation = await this.spriteLoader.loadJobAnimation(
-                        fileSet,
-                        jobIndex,
-                        dir,
-                        atlas
-                    );
-
-                    if (animation && animation.frames.length > 0) {
-                        directionFrames.set(dir, animation.frames.map(f => f.entry));
-                    }
+                for (const [dir, sprites] of loadedDirs) {
+                    directionFrames.set(dir, sprites.map(s => s.entry));
                 }
 
-                return { unitType, jobIndex, directionFrames, directionCount };
+                return { unitType, jobIndex, directionFrames };
             },
             (result) => {
                 if (!result || result.directionFrames.size === 0) return;
@@ -971,24 +958,18 @@ export class SpriteRenderManager {
         await processBatchedWithHandler(
             tasks,
             async({ materialType, jobIndex }) => {
-                const jobItem = fileSet.jilReader!.getItem(jobIndex);
-                if (!jobItem) {
+                const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas);
+                if (!loadedDirs) {
                     SpriteRenderManager.log.debug(
                         `Carrier job ${jobIndex} not found for material ${EMaterialType[materialType]}`
                     );
                     return null;
                 }
 
-                const dirItems = fileSet.dilReader!.getItems(jobItem.offset, jobItem.length);
+                // Convert LoadedSprite[] to SpriteEntry[]
                 const directionFrames = new Map<number, SpriteEntry[]>();
-
-                for (let dir = 0; dir < dirItems.length; dir++) {
-                    const animation = await this.spriteLoader.loadJobAnimation(
-                        fileSet, jobIndex, dir, atlas
-                    );
-                    if (animation && animation.frames.length > 0) {
-                        directionFrames.set(dir, animation.frames.map(f => f.entry));
-                    }
+                for (const [dir, sprites] of loadedDirs) {
+                    directionFrames.set(dir, sprites.map(s => s.entry));
                 }
 
                 return { materialType, directionFrames };
@@ -1026,18 +1007,16 @@ export class SpriteRenderManager {
         const choppingJobIndex = WORKER_JOB_INDICES.woodcutter.chopping;
         const cuttingLogJobIndex = WORKER_JOB_INDICES.woodcutter.cuttingLogOnGround;
 
-        const choppingJob = fileSet.jilReader!.getItem(choppingJobIndex);
-        const cuttingLogJob = fileSet.jilReader!.getItem(cuttingLogJobIndex);
+        // Get direction count from whichever job exists
+        const choppingDirCount = this.spriteLoader.getDirectionCount(fileSet, choppingJobIndex);
+        const cuttingLogDirCount = this.spriteLoader.getDirectionCount(fileSet, cuttingLogJobIndex);
 
-        if (!choppingJob && !cuttingLogJob) {
+        if (choppingDirCount === 0 && cuttingLogDirCount === 0) {
             SpriteRenderManager.log.debug(`Woodcutter work jobs ${choppingJobIndex}/${cuttingLogJobIndex} not found`);
             return;
         }
 
-        // Get direction count from whichever job exists
-        const dirCount = choppingJob
-            ? fileSet.dilReader!.getItems(choppingJob.offset, choppingJob.length).length
-            : fileSet.dilReader!.getItems(cuttingLogJob!.offset, cuttingLogJob!.length).length;
+        const dirCount = choppingDirCount || cuttingLogDirCount;
 
         const directionFrames = new Map<number, SpriteEntry[]>();
 
@@ -1045,7 +1024,7 @@ export class SpriteRenderManager {
             const frames: SpriteEntry[] = [];
 
             // First: chopping animation (hitting the tree)
-            if (choppingJob) {
+            if (choppingDirCount > 0) {
                 const choppingAnim = await this.spriteLoader.loadJobAnimation(
                     fileSet, choppingJobIndex, dir, atlas
                 );
@@ -1055,7 +1034,7 @@ export class SpriteRenderManager {
             }
 
             // Second: cutting log on ground animation
-            if (cuttingLogJob) {
+            if (cuttingLogDirCount > 0) {
                 const cuttingLogAnim = await this.spriteLoader.loadJobAnimation(
                     fileSet, cuttingLogJobIndex, dir, atlas
                 );

@@ -495,6 +495,45 @@ export class SpriteLoader {
     }
 
     /**
+     * Get the number of directions for a job.
+     * Returns 0 if job doesn't exist or JIL/DIL not available.
+     */
+    public getDirectionCount(fileSet: LoadedGfxFileSet, jobIndex: number): number {
+        if (!fileSet.jilReader || !fileSet.dilReader) return 0;
+
+        const jobItem = fileSet.jilReader.getItem(jobIndex);
+        if (!jobItem) return 0;
+
+        const dirItems = fileSet.dilReader.getItems(jobItem.offset, jobItem.length);
+        return dirItems.length;
+    }
+
+    /**
+     * Load all directions for a job, each with all its animation frames.
+     * Returns a Map of direction index -> array of sprite entries.
+     * Useful for units and other multi-directional animated sprites.
+     */
+    public async loadJobAllDirections(
+        fileSet: LoadedGfxFileSet,
+        jobIndex: number,
+        atlas: EntityTextureAtlas
+    ): Promise<Map<number, LoadedSprite[]> | null> {
+        const directionCount = this.getDirectionCount(fileSet, jobIndex);
+        if (directionCount === 0) return null;
+
+        const result = new Map<number, LoadedSprite[]>();
+
+        for (let dir = 0; dir < directionCount; dir++) {
+            const animation = await this.loadJobAnimation(fileSet, jobIndex, dir, atlas);
+            if (animation && animation.frames.length > 0) {
+                result.set(dir, animation.frames);
+            }
+        }
+
+        return result.size > 0 ? result : null;
+    }
+
+    /**
      * Get the number of jobs in a file set.
      * Uses jilReader.length directly to get total count including null entries.
      */
