@@ -102,6 +102,13 @@ export class EntityTextureAtlas extends ShaderTexture {
     /** Cached GL context for immediate GPU upload on grow */
     private glContext: WebGL2RenderingContext | null = null;
 
+    /** Dirty region tracking — only upload changed pixels to GPU */
+    private dirtyMinX = 0;
+    private dirtyMinY = 0;
+    private dirtyMaxX = 0;
+    private dirtyMaxY = 0;
+    private hasDirtyRegion = false;
+
     constructor(maxSize: number, textureIndex: number) {
         super(textureIndex);
 
@@ -277,9 +284,28 @@ export class EntityTextureAtlas extends ShaderTexture {
             dst.set(indices.subarray(srcRowStart, srcRowStart + rowLen), dstRowStart);
         }
 
+        // Expand dirty region to include this blit
+        this.markDirty(region.x, region.y, region.width, region.height);
+
         const elapsed = performance.now() - start;
         if (elapsed > SLOW_OP_THRESHOLD_MS) {
             console.warn(`[Atlas] blitIndices ${region.width}x${region.height} took ${elapsed.toFixed(1)}ms`);
+        }
+    }
+
+    /** Expand the dirty region to include the given rectangle */
+    private markDirty(x: number, y: number, w: number, h: number): void {
+        if (!this.hasDirtyRegion) {
+            this.dirtyMinX = x;
+            this.dirtyMinY = y;
+            this.dirtyMaxX = x + w;
+            this.dirtyMaxY = y + h;
+            this.hasDirtyRegion = true;
+        } else {
+            this.dirtyMinX = Math.min(this.dirtyMinX, x);
+            this.dirtyMinY = Math.min(this.dirtyMinY, y);
+            this.dirtyMaxX = Math.max(this.dirtyMaxX, x + w);
+            this.dirtyMaxY = Math.max(this.dirtyMaxY, y + h);
         }
     }
 
@@ -288,7 +314,8 @@ export class EntityTextureAtlas extends ShaderTexture {
 
     /**
      * Update the atlas texture on the GPU.
-     * Call this periodically during loading to show progressive updates.
+     * Uses dirty-region tracking to only upload changed pixels,
+     * reducing GPU transfer from full atlas (128MB+) to just the modified rectangle.
      * Uses R16UI format (unsigned 16-bit integer per pixel).
      */
     public update(gl: WebGL2RenderingContext): void {
@@ -300,37 +327,51 @@ export class EntityTextureAtlas extends ShaderTexture {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
+
         // If size changed or not yet uploaded, do full upload
         if (this.atlasWidth !== this.gpuWidth || this.atlasHeight !== this.gpuHeight) {
-            gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
             gl.texImage2D(
                 gl.TEXTURE_2D,
                 0,
-                gl.R16UI,               // Internal format: 16-bit unsigned int
+                gl.R16UI,
                 this.atlasWidth,
                 this.atlasHeight,
                 0,
-                gl.RED_INTEGER,          // Format: single red integer channel
-                gl.UNSIGNED_SHORT,       // Type: unsigned 16-bit
-                this.imgData
-            );
-            this.gpuWidth = this.atlasWidth;
-            this.gpuHeight = this.atlasHeight;
-        } else {
-            // Size same, just re-upload content
-            gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
-            gl.texSubImage2D(
-                gl.TEXTURE_2D,
-                0,
-                0,
-                0,
-                this.atlasWidth,
-                this.atlasHeight,
                 gl.RED_INTEGER,
                 gl.UNSIGNED_SHORT,
                 this.imgData
             );
+            this.gpuWidth = this.atlasWidth;
+            this.gpuHeight = this.atlasHeight;
+            // Full upload covers everything — clear dirty region
+            this.hasDirtyRegion = false;
+        } else if (this.hasDirtyRegion) {
+            // Only upload the dirty sub-rectangle
+            const dirtyW = this.dirtyMaxX - this.dirtyMinX;
+            const dirtyH = this.dirtyMaxY - this.dirtyMinY;
+
+            // Use UNPACK_ROW_LENGTH to read a sub-rectangle from the full-width buffer
+            gl.pixelStorei(gl.UNPACK_ROW_LENGTH, this.atlasWidth);
+            const srcOffset = this.dirtyMinY * this.atlasWidth + this.dirtyMinX;
+
+            gl.texSubImage2D(
+                gl.TEXTURE_2D,
+                0,
+                this.dirtyMinX,      // xoffset in texture
+                this.dirtyMinY,      // yoffset in texture
+                dirtyW,              // width of sub-rectangle
+                dirtyH,              // height of sub-rectangle
+                gl.RED_INTEGER,
+                gl.UNSIGNED_SHORT,
+                this.imgData,
+                srcOffset            // element offset into source array
+            );
+
+            gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
+            this.hasDirtyRegion = false;
         }
+        // else: no changes, skip upload entirely
     }
 
     /**
@@ -365,6 +406,7 @@ export class EntityTextureAtlas extends ShaderTexture {
                 this.imgData[idx] = checker ? 3 : 2;
             }
         }
+        this.markDirty(0, 0, size, size);
     }
 
     /**
@@ -475,9 +517,10 @@ export class EntityTextureAtlas extends ShaderTexture {
         // Clear reserved regions - they'll be repopulated via registry
         this.reservedRegions = [];
 
-        // Reset GPU state to force re-upload
+        // Reset GPU state to force full re-upload
         this.gpuWidth = 0;
         this.gpuHeight = 0;
+        this.hasDirtyRegion = false;
 
         const elapsed = performance.now() - start;
         EntityTextureAtlas.log.debug(
