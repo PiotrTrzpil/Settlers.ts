@@ -16,6 +16,14 @@ import { debugStats } from '@/game/debug-stats';
 import { gameSettings } from '@/game/game-settings';
 import type { InputManager } from '@/game/input';
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
+import {
+    gameStatePersistence,
+    loadSnapshot,
+    restoreFromSnapshot,
+    clearSavedGameState,
+    setCurrentMapId,
+    saveInitialState,
+} from '@/game/game-state-persistence';
 
 /** Entity counts per layer for display in the layer panel */
 export interface LayerCounts {
@@ -134,8 +142,8 @@ const availableBuildings = [
     { type: BuildingType.LargeDecoration, id: 'largedeco', name: 'Large Deco', icon: '🌳' },
 ];
 
-/** Units available in the UI */
-const availableUnits = [
+/** Units available in the UI - must include ALL UnitType values */
+const availableUnits: { type: UnitType; id: string; name: string; icon: string }[] = [
     { type: UnitType.Carrier, id: 'carrier', name: 'Carrier', icon: '🧑' },
     { type: UnitType.Builder, id: 'builder', name: 'Builder', icon: '👷' },
     { type: UnitType.Woodcutter, id: 'woodcutter', name: 'Woodcutter', icon: '🪓' },
@@ -144,6 +152,7 @@ const availableUnits = [
     { type: UnitType.Farmer, id: 'farmer', name: 'Farmer', icon: '🌾' },
     { type: UnitType.Smith, id: 'smith', name: 'Smith', icon: '🔨' },
     { type: UnitType.Digger, id: 'digger', name: 'Digger', icon: '🕳️' },
+    { type: UnitType.SawmillWorker, id: 'sawmillworker', name: 'Sawmill Worker', icon: '🪚' },
     { type: UnitType.Swordsman, id: 'swordsman', name: 'Swordsman', icon: '⚔️' },
     { type: UnitType.Bowman, id: 'bowman', name: 'Bowman', icon: '🏹' },
     { type: UnitType.Priest, id: 'priest', name: 'Priest', icon: '🙏' },
@@ -151,6 +160,16 @@ const availableUnits = [
     { type: UnitType.Thief, id: 'thief', name: 'Thief', icon: '🥷' },
     { type: UnitType.Geologist, id: 'geologist', name: 'Geologist', icon: '🔍' },
 ];
+
+// Runtime check in development: ensure all UnitType values are in availableUnits
+if (import.meta.env.DEV) {
+    const unitTypesInArray = new Set(availableUnits.map(u => u.type));
+    const allUnitTypes = Object.values(UnitType).filter((v): v is UnitType => typeof v === 'number');
+    const missing = allUnitTypes.filter(t => !unitTypesInArray.has(t));
+    if (missing.length > 0) {
+        console.error('availableUnits is missing UnitTypes:', missing.map(t => UnitType[t]));
+    }
+}
 
 /** Resources available in the UI (derived from droppable materials) */
 const availableResources = DROPPABLE_MATERIALS.map(type => {
@@ -268,6 +287,27 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
             if (g.gameLoop.isRunning) g.stop();
             else g.start();
         },
+
+        resetGameState(): void {
+            const g = getGame();
+            if (!g) return;
+
+            // Clear saved state
+            clearSavedGameState();
+
+            // Restore to initial map state (trees, buildings, etc. from map load)
+            const restored = gameStatePersistence.restoreToInitialState(g);
+            if (!restored) {
+                // Fallback: if no initial state, just remove all entities
+                log.warn('No initial state available, removing all entities');
+                g.removeAllEntities();
+            }
+
+            // Force UI update
+            triggerRef(game);
+
+            log.info('Game state reset to initial map state');
+        },
     };
 }
 
@@ -326,16 +366,38 @@ export function useMapView(
         try {
             // Destroy old game first to prevent multiple game loops
             if (game.value) {
+                // Stop auto-saving before destroying
+                gameStatePersistence.stop();
                 game.value.destroy();
                 game.value = null;
             }
+
+            // Reset initial state tracking for new map
+            gameStatePersistence.resetForNewMap();
 
             if (options.isTestMap) {
                 // Load synthetic test map
                 mapInfo.value = 'Test map (synthetic 256x256)';
                 fileName.value = null;
                 mapLoadState.currentFile = '__test_map__';
+
+                // Set map ID for persistence BEFORE loading snapshot
+                setCurrentMapId('__test_map__');
+
                 game.value = createTestGame(fm);
+
+                // Save initial state BEFORE checking for saved game state
+                saveInitialState(game.value.state);
+
+                // Try to restore saved game state for test map too
+                const snapshot = loadSnapshot();
+                if (snapshot) {
+                    log.info('Restoring saved game state...');
+                    restoreFromSnapshot(game.value, snapshot);
+                }
+
+                // Start auto-saving (won't save initial state again since we already did)
+                gameStatePersistence.start(game.value.state);
                 return true;
             }
 
@@ -355,6 +417,22 @@ export function useMapView(
             mapLoadState.currentFile = file.name;
             mapInfo.value = result.mapInfo;
             game.value = result.game;
+
+            // Set map ID for persistence BEFORE loading snapshot
+            setCurrentMapId(file.name);
+
+            // Save initial state BEFORE checking for saved game state
+            saveInitialState(result.game.state);
+
+            // Try to restore saved game state (only restores if same map)
+            const snapshot = loadSnapshot();
+            if (snapshot) {
+                log.info('Restoring saved game state...');
+                restoreFromSnapshot(result.game, snapshot);
+            }
+
+            // Start auto-saving (won't save initial state again since we already did)
+            gameStatePersistence.start(result.game.state);
 
             // Load mission script (non-blocking, only if Lua enabled)
             if (isLuaEnabled()) {
@@ -504,6 +582,7 @@ export function useMapView(
     const setSelectMode = modeToggler.setSelectMode;
     const removeSelected = gameActions.removeSelected;
     const togglePause = gameActions.togglePause;
+    const resetGameState = gameActions.resetGameState;
 
     function updateResourceIcons() {
         updateResourceIconsFromManager(game.value, resourceIcons);
@@ -538,6 +617,7 @@ export function useMapView(
         setSelectMode,
         removeSelected,
         togglePause,
+        resetGameState,
         updateLayerVisibility
     };
 }
