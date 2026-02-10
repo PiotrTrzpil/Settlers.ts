@@ -12,8 +12,8 @@ import spriteFragCode from './shaders/entity-sprite-frag.glsl';
 import spriteBlendVertCode from './shaders/entity-sprite-blend-vert.glsl';
 import spriteBlendFragCode from './shaders/entity-sprite-blend-frag.glsl';
 
-// Blend shader constants
-const FLOATS_PER_BLEND_VERTEX = 11; // pos:2 + uv1:2 + uv2:2 + blend:1 + tint:4
+// Blend shader constants: pos:2 + uvl1:3 + uvl2:3 + blend:1 + tint:4 = 13
+const FLOATS_PER_BLEND_VERTEX = 13;
 const FLOATS_PER_BLEND_ENTITY = 6 * FLOATS_PER_BLEND_VERTEX;
 const MAX_BLEND_ENTITIES = 100;
 
@@ -250,6 +250,7 @@ export class SpriteBatchRenderer {
 
     /**
      * Fill sprite quad vertices into the batch buffer.
+     * Vertex format: pos(2) + uvl(3) + tint(4) = 9 floats per vertex
      */
     private fillSpriteQuad(
         offset: number,
@@ -271,38 +272,38 @@ export class SpriteBatchRenderer {
         const x1 = x0 + widthWorld;
         const y1 = y0 + heightWorld;
 
-        const { u0, v0, u1, v1 } = region;
+        const { u0, v0, u1, v1, layer } = region;
 
         // 6 vertices for 2 triangles (CCW winding)
         // Note: V coordinates flipped (v1 at top, v0 at bottom) to correct texture orientation
         // Vertex 0: top-left
         data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = v1;
+        data[offset++] = u0; data[offset++] = v1; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 1: bottom-left
         data[offset++] = x0; data[offset++] = y0;
-        data[offset++] = u0; data[offset++] = v0;
+        data[offset++] = u0; data[offset++] = v0; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 2: bottom-right
         data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1; data[offset++] = v0;
+        data[offset++] = u1; data[offset++] = v0; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 3: top-left (again)
         data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = v1;
+        data[offset++] = u0; data[offset++] = v1; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 4: bottom-right (again)
         data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1; data[offset++] = v0;
+        data[offset++] = u1; data[offset++] = v0; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 5: top-right
         data[offset++] = x1; data[offset++] = y1;
-        data[offset++] = u1; data[offset++] = v1;
+        data[offset++] = u1; data[offset++] = v1; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         return offset;
@@ -310,6 +311,7 @@ export class SpriteBatchRenderer {
 
     /**
      * Fill sprite quad vertices with partial vertical visibility (for "rising from ground" effect).
+     * Vertex format: pos(2) + uvl(3) + tint(4) = 9 floats per vertex
      */
     private fillSpriteQuadPartial(
         offset: number,
@@ -338,39 +340,39 @@ export class SpriteBatchRenderer {
         const visibleY0 = y1 - visibleHeight;
 
         // UV: v1 corresponds to the base (y1), v0 to the roof (y0).
-        const { u0, v0, u1, v1 } = region;
+        const { u0, v0, u1, v1, layer } = region;
         const visibleV0 = v1 - (v1 - v0) * verticalProgress;
 
         // 6 vertices for 2 triangles
 
         // Vertex 0: base-left (ground level)
         data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = v1;
+        data[offset++] = u0; data[offset++] = v1; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 1: visible-top-left (rises upward)
         data[offset++] = x0; data[offset++] = visibleY0;
-        data[offset++] = u0; data[offset++] = visibleV0;
+        data[offset++] = u0; data[offset++] = visibleV0; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 2: visible-top-right (rises upward)
         data[offset++] = x1; data[offset++] = visibleY0;
-        data[offset++] = u1; data[offset++] = visibleV0;
+        data[offset++] = u1; data[offset++] = visibleV0; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 3: base-left (again)
         data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = v1;
+        data[offset++] = u0; data[offset++] = v1; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 4: visible-top-right (again)
         data[offset++] = x1; data[offset++] = visibleY0;
-        data[offset++] = u1; data[offset++] = visibleV0;
+        data[offset++] = u1; data[offset++] = visibleV0; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 5: base-right (ground level)
         data[offset++] = x1; data[offset++] = y1;
-        data[offset++] = u1; data[offset++] = v1;
+        data[offset++] = u1; data[offset++] = v1; data[offset++] = layer;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         return offset;
@@ -378,6 +380,7 @@ export class SpriteBatchRenderer {
 
     /**
      * Fill blend sprite quad vertices into the batch buffer.
+     * Vertex format: pos(2) + uvl1(3) + uvl2(3) + blend(1) + tint(4) = 13 floats per vertex
      */
     private fillBlendSpriteQuad(
         offset: number,
@@ -404,52 +407,52 @@ export class SpriteBatchRenderer {
         const x1 = x0 + widthWorld;
         const y1 = y0 + heightWorld;
 
-        // UV coordinates for both sprites
-        const { u0: u0_1, v0: v0_1, u1: u1_1, v1: v1_1 } = region1;
-        const { u0: u0_2, v0: v0_2, u1: u1_2, v1: v1_2 } = region2;
+        // UV+layer coordinates for both sprites
+        const { u0: u0_1, v0: v0_1, u1: u1_1, v1: v1_1, layer: l1 } = region1;
+        const { u0: u0_2, v0: v0_2, u1: u1_2, v1: v1_2, layer: l2 } = region2;
 
         // 6 vertices for 2 triangles (CCW winding)
-        // Each vertex: pos(2) + uv1(2) + uv2(2) + blend(1) + tint(4) = 11 floats
+        // Each vertex: pos(2) + uvl1(3) + uvl2(3) + blend(1) + tint(4) = 13 floats
 
         // Vertex 0: top-left
         data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0_1; data[offset++] = v1_1;
-        data[offset++] = u0_2; data[offset++] = v1_2;
+        data[offset++] = u0_1; data[offset++] = v1_1; data[offset++] = l1;
+        data[offset++] = u0_2; data[offset++] = v1_2; data[offset++] = l2;
         data[offset++] = blendFactor;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 1: bottom-left
         data[offset++] = x0; data[offset++] = y0;
-        data[offset++] = u0_1; data[offset++] = v0_1;
-        data[offset++] = u0_2; data[offset++] = v0_2;
+        data[offset++] = u0_1; data[offset++] = v0_1; data[offset++] = l1;
+        data[offset++] = u0_2; data[offset++] = v0_2; data[offset++] = l2;
         data[offset++] = blendFactor;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 2: bottom-right
         data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1_1; data[offset++] = v0_1;
-        data[offset++] = u1_2; data[offset++] = v0_2;
+        data[offset++] = u1_1; data[offset++] = v0_1; data[offset++] = l1;
+        data[offset++] = u1_2; data[offset++] = v0_2; data[offset++] = l2;
         data[offset++] = blendFactor;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 3: top-left (again)
         data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0_1; data[offset++] = v1_1;
-        data[offset++] = u0_2; data[offset++] = v1_2;
+        data[offset++] = u0_1; data[offset++] = v1_1; data[offset++] = l1;
+        data[offset++] = u0_2; data[offset++] = v1_2; data[offset++] = l2;
         data[offset++] = blendFactor;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 4: bottom-right (again)
         data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1_1; data[offset++] = v0_1;
-        data[offset++] = u1_2; data[offset++] = v0_2;
+        data[offset++] = u1_1; data[offset++] = v0_1; data[offset++] = l1;
+        data[offset++] = u1_2; data[offset++] = v0_2; data[offset++] = l2;
         data[offset++] = blendFactor;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
         // Vertex 5: top-right
         data[offset++] = x1; data[offset++] = y1;
-        data[offset++] = u1_1; data[offset++] = v1_1;
-        data[offset++] = u1_2; data[offset++] = v1_2;
+        data[offset++] = u1_1; data[offset++] = v1_1; data[offset++] = l1;
+        data[offset++] = u1_2; data[offset++] = v1_2; data[offset++] = l2;
         data[offset++] = blendFactor;
         data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
 
@@ -465,18 +468,18 @@ export class SpriteBatchRenderer {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.spriteBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, this.spriteBatchData.subarray(0, this.batchOffset), gl.DYNAMIC_DRAW);
 
-        const stride = 8 * 4; // 8 floats * 4 bytes
+        const stride = 9 * 4; // 9 floats * 4 bytes
 
         gl.enableVertexAttribArray(this.aSpritePos);
         gl.vertexAttribPointer(this.aSpritePos, 2, gl.FLOAT, false, stride, 0);
 
         gl.enableVertexAttribArray(this.aSpriteTex);
-        gl.vertexAttribPointer(this.aSpriteTex, 2, gl.FLOAT, false, stride, 8);
+        gl.vertexAttribPointer(this.aSpriteTex, 3, gl.FLOAT, false, stride, 8);
 
         gl.enableVertexAttribArray(this.aSpriteTint);
-        gl.vertexAttribPointer(this.aSpriteTint, 4, gl.FLOAT, false, stride, 16);
+        gl.vertexAttribPointer(this.aSpriteTint, 4, gl.FLOAT, false, stride, 20);
 
-        const vertexCount = this.batchOffset / 8;
+        const vertexCount = this.batchOffset / 9;
         gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
 
         this.batchOffset = 0;
@@ -491,25 +494,25 @@ export class SpriteBatchRenderer {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.spriteBlendBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, this.spriteBlendBatchData.subarray(0, this.blendBatchOffset), gl.DYNAMIC_DRAW);
 
-        // Stride: 11 floats * 4 bytes = 44 bytes
-        const stride = 11 * 4;
+        // Stride: 13 floats * 4 bytes = 52 bytes
+        const stride = 13 * 4;
 
         gl.enableVertexAttribArray(this.aBlendPos);
         gl.vertexAttribPointer(this.aBlendPos, 2, gl.FLOAT, false, stride, 0);
 
         gl.enableVertexAttribArray(this.aBlendTex1);
-        gl.vertexAttribPointer(this.aBlendTex1, 2, gl.FLOAT, false, stride, 8);
+        gl.vertexAttribPointer(this.aBlendTex1, 3, gl.FLOAT, false, stride, 8);
 
         gl.enableVertexAttribArray(this.aBlendTex2);
-        gl.vertexAttribPointer(this.aBlendTex2, 2, gl.FLOAT, false, stride, 16);
+        gl.vertexAttribPointer(this.aBlendTex2, 3, gl.FLOAT, false, stride, 20);
 
         gl.enableVertexAttribArray(this.aBlendFactor);
-        gl.vertexAttribPointer(this.aBlendFactor, 1, gl.FLOAT, false, stride, 24);
+        gl.vertexAttribPointer(this.aBlendFactor, 1, gl.FLOAT, false, stride, 32);
 
         gl.enableVertexAttribArray(this.aBlendTint);
-        gl.vertexAttribPointer(this.aBlendTint, 4, gl.FLOAT, false, stride, 28);
+        gl.vertexAttribPointer(this.aBlendTint, 4, gl.FLOAT, false, stride, 36);
 
-        const vertexCount = this.blendBatchOffset / 11;
+        const vertexCount = this.blendBatchOffset / 13;
         gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
 
         this.blendBatchOffset = 0;

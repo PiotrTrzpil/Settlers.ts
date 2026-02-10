@@ -1,20 +1,20 @@
-// Entity sprite fragment shader — palettized atlas
-// Reads palette index from R16UI atlas, looks up color in palette texture,
+// Entity sprite fragment shader — palettized texture array atlas
+// Reads palette index from R16UI array layer, looks up color in palette texture,
 // applies player colour tinting.
 
 precision mediump float;
-precision highp usampler2D;
+precision highp usampler2DArray;
 
-in vec2 v_texcoord;
+in vec3 v_texcoord;   // (u, v, layer)
 in vec4 v_tint;
 
-uniform usampler2D u_spriteAtlas;  // R16UI — palette indices (unsigned int)
-uniform sampler2D u_palette;        // RGBA8 — color lookup table
+uniform usampler2DArray u_spriteAtlas;  // R16UI array — palette indices (unsigned int)
+uniform sampler2D u_palette;             // RGBA8 — color lookup table
 
 out vec4 fragColor;
 
 void main() {
-    // Read palette index from atlas (integer texture, no filtering)
+    // Read palette index from atlas layer (integer texture, no filtering)
     uint index = texture(u_spriteAtlas, v_texcoord).r;
 
     // Index 0 = transparent pixel (sprite background)

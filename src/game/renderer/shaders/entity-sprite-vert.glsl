@@ -1,13 +1,13 @@
 // Entity sprite vertex shader
-// Renders textured quads with per-vertex position, UV, and tint
+// Renders textured quads with per-vertex position, UV+layer, and tint
 
 in vec2 a_position;    // world-space quad vertex position
-in vec2 a_texcoord;    // atlas UV coordinate
+in vec3 a_texcoord;    // atlas UV coordinate (u, v, layer)
 in vec4 a_tint;        // player colour tint (RGBA)
 
 uniform mat4 projection;
 
-out vec2 v_texcoord;
+out vec3 v_texcoord;
 out vec4 v_tint;
 
 void main() {

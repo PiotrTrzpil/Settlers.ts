@@ -1,17 +1,17 @@
-// Entity sprite blending fragment shader — palettized atlas
+// Entity sprite blending fragment shader — palettized texture array atlas
 // Blends two sprite textures for smooth direction transitions.
-// Reads palette indices from R16UI atlas, looks up colors in palette texture.
+// Reads palette indices from R16UI array layers, looks up colors in palette texture.
 
 precision mediump float;
-precision highp usampler2D;
+precision highp usampler2DArray;
 
-in vec2 v_texcoord1;
-in vec2 v_texcoord2;
+in vec3 v_texcoord1;  // (u, v, layer) for old direction
+in vec3 v_texcoord2;  // (u, v, layer) for new direction
 in float v_blend;
 in vec4 v_tint;
 
-uniform usampler2D u_spriteAtlas;  // R16UI — palette indices (unsigned int)
-uniform sampler2D u_palette;        // RGBA8 — color lookup table
+uniform usampler2DArray u_spriteAtlas;  // R16UI array — palette indices (unsigned int)
+uniform sampler2D u_palette;             // RGBA8 — color lookup table
 
 out vec4 fragColor;
 

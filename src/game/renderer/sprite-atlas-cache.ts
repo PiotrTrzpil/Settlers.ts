@@ -26,7 +26,7 @@ declare const __BUILD_TIME__: string;
  * Schema version for cache invalidation.
  * Bump this when animation sequence names or sprite data format changes.
  */
-const CACHE_SCHEMA_VERSION = 3;  // v3: palettized R16UI atlas + palette texture
+const CACHE_SCHEMA_VERSION = 4;  // v4: TEXTURE_2D_ARRAY multi-layer atlas
 
 /** Current build version for cache invalidation */
 const BUILD_VERSION = typeof __BUILD_TIME__ !== 'undefined'
@@ -52,10 +52,12 @@ export interface CachedSlot {
 
 /** Base cached atlas data (shared between memory and IndexedDB) */
 interface CachedAtlasBase {
-    width: number;
-    height: number;
-    maxSize: number;
-    slots: CachedSlot[];
+    /** Number of layers in the texture array */
+    layerCount: number;
+    /** Maximum number of layers allowed */
+    maxLayers: number;
+    /** Per-layer slot packing state */
+    slots: CachedSlot[][];
     registryData: ReturnType<SpriteMetadataRegistry['serialize']>;
     race: Race;
     textureUnit: number;
@@ -110,7 +112,7 @@ export function getAtlasCache(race: Race): CachedAtlasData | null {
 /** Store atlas data in the module-level cache */
 export function setAtlasCache(race: Race, data: CachedAtlasData): void {
     moduleCache.set(race, { version: BUILD_VERSION, data });
-    log.debug(`Module cache: stored ${Race[race]} (${data.width}x${data.height}, ${(data.imgData.length / 1024 / 1024).toFixed(1)}MB)`);
+    log.debug(`Module cache: stored ${Race[race]} (${data.layerCount} layers, ${(data.imgData.length / 1024 / 1024).toFixed(1)}MB)`);
 }
 
 /** Clear cached atlas from module cache */
@@ -200,9 +202,8 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
 
     const data: CachedAtlasData = {
         imgData: new Uint8Array(entry.imgData),
-        width: entry.width,
-        height: entry.height,
-        maxSize: entry.maxSize,
+        layerCount: entry.layerCount,
+        maxLayers: entry.maxLayers,
         slots: entry.slots,
         registryData: entry.registryData,
         race: entry.race,
@@ -214,7 +215,7 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
     };
 
     const ageMins = Math.round((Date.now() - entry.timestamp) / 60000);
-    log.debug(`IndexedDB: loaded ${Race[race]} (${data.width}x${data.height}, age: ${ageMins}m)`);
+    log.debug(`IndexedDB: loaded ${Race[race]} (${data.layerCount} layers, age: ${ageMins}m)`);
 
     return data;
 }
@@ -238,9 +239,8 @@ export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Prom
             data.imgData.byteOffset,
             data.imgData.byteOffset + data.imgData.byteLength
         ),
-        width: data.width,
-        height: data.height,
-        maxSize: data.maxSize,
+        layerCount: data.layerCount,
+        maxLayers: data.maxLayers,
         slots: data.slots,
         registryData: data.registryData,
         textureUnit: data.textureUnit,
@@ -259,7 +259,7 @@ export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Prom
     const result = await tryPutWithRetry(entry);
 
     if (result !== null) {
-        log.debug(`IndexedDB: saved ${Race[race]} (${data.width}x${data.height}, ${sizeMB}MB)`);
+        log.debug(`IndexedDB: saved ${Race[race]} (${data.layerCount} layers, ${sizeMB}MB)`);
     } else {
         log.warn(`IndexedDB: failed to save ${Race[race]} (${sizeMB}MB) - cache disabled`);
     }

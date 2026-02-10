@@ -410,12 +410,11 @@ export class SpriteRenderManager {
             cached.imgData.byteLength / 2
         );
 
-        // Restore atlas from cached data
+        // Restore atlas from cached data (multi-layer)
         const atlas = EntityTextureAtlas.fromCache(
             imgData16,
-            cached.width,
-            cached.height,
-            cached.maxSize,
+            cached.layerCount,
+            cached.maxLayers,
             cached.slots,
             cached.textureUnit
         );
@@ -453,7 +452,7 @@ export class SpriteRenderManager {
             units: 0,
             gpuUpload: Math.round(elapsed),
             totalSprites: Math.round(elapsed),
-            atlasSize: `${atlas.width}x${atlas.height}`,
+            atlasSize: `${atlas.layerCount}x${atlas.width}x${atlas.height}`,
             spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
                 registry.getResourceCount() + registry.getUnitCount(),
             cacheHit: true,
@@ -463,7 +462,7 @@ export class SpriteRenderManager {
         const sourceLabel = source === 'module' ? 'module cache (HMR)' : 'IndexedDB (refresh)';
         SpriteRenderManager.log.debug(
             `Restored sprites from ${sourceLabel} for ${Race[cached.race]} in ${elapsed.toFixed(1)}ms ` +
-            `(${atlas.width}x${atlas.height}, ${registry.getBuildingCount()} buildings)`
+            `(${atlas.layerCount} layers, ${registry.getBuildingCount()} buildings)`
         );
     }
 
@@ -483,9 +482,8 @@ export class SpriteRenderManager {
 
         const cacheData: CachedAtlasData = {
             imgData: this._spriteAtlas.getImageDataBytes(),
-            width: this._spriteAtlas.width,
-            height: this._spriteAtlas.height,
-            maxSize: this._spriteAtlas.getMaxSize(),
+            layerCount: this._spriteAtlas.layerCount,
+            maxLayers: this._spriteAtlas.getMaxLayers(),
             slots: this._spriteAtlas.getSlots(),
             registryData: this._spriteRegistry.serialize(),
             race,
@@ -539,7 +537,7 @@ export class SpriteRenderManager {
         Object.assign(debugStats.state.loadTimings, {
             ...timings,
             totalSprites: timer.total(),
-            atlasSize: `${atlas.width}x${atlas.height}`,
+            atlasSize: `${atlas.layerCount}x${atlas.width}x${atlas.height}`,
             spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
                 registry.getResourceCount() + registry.getUnitCount(),
             cacheHit: false,
@@ -612,8 +610,9 @@ export class SpriteRenderManager {
         const filePreload = t.lap();
 
         // Create atlas and registry
-        const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-        const atlas = new EntityTextureAtlas(Math.min(32768, maxTextureSize), this.textureUnit);
+        // MAX_ARRAY_TEXTURE_LAYERS is typically 256-2048 in WebGL2
+        const maxArrayLayers = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
+        const atlas = new EntityTextureAtlas(Math.min(64, maxArrayLayers), this.textureUnit);
         const atlasAlloc = t.lap();
         const registry = new SpriteMetadataRegistry();
 
