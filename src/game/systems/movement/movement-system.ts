@@ -3,7 +3,7 @@ import { MovementController, MovementState } from './movement-controller';
 import { findPath } from '../pathfinding';
 import { isPassable } from '../../features/placement';
 import { GRID_DELTAS, getAllNeighbors } from '../hex-directions';
-import { findRandomFreeDirection, shouldYieldToPush } from './push-utils';
+import { findSmartFreeDirection, shouldYieldToPush } from './push-utils';
 import type { TickSystem } from '../../tick-system';
 import type { EventBus } from '../../event-bus';
 import type { SeededRng } from '../../rng';
@@ -249,6 +249,15 @@ export class MovementSystem implements TickSystem {
 
         controller.finalizeTick();
 
+        // Detect teleporting (visual position discontinuity)
+        const teleportDist = controller.detectTeleport();
+        if (teleportDist > 1.5) {
+            console.warn(`[MovementSystem] TELEPORT DETECTED! Entity ${controller.entityId} jumped ${teleportDist.toFixed(2)} tiles`);
+        }
+
+        // Update last visual position for next frame's teleport detection
+        controller.updateLastVisualPosition();
+
         // Emit events for state/direction changes
         this.emitMovementEvents(controller, prevState, prevDirection);
 
@@ -430,37 +439,70 @@ export class MovementSystem implements TickSystem {
     }
 
     /**
+     * Repath a controller from its current position to a goal.
+     */
+    private repathToGoal(controller: MovementController, goal: TileCoord): void {
+        if (!this.hasTerrainData() || !this.tileOccupancy) return;
+
+        // Don't repath if already at goal
+        if (controller.tileX === goal.x && controller.tileY === goal.y) return;
+
+        const newPath = findPath(
+            controller.tileX, controller.tileY,
+            goal.x, goal.y,
+            this.groundType!, this.groundHeight!,
+            this.mapWidth!, this.mapHeight!,
+            this.tileOccupancy,
+            true // ignoreOccupancy for planning
+        );
+
+        if (newPath && newPath.length > 0) {
+            controller.redirectPath(newPath);
+        }
+    }
+
+    /**
      * Push a blocking unit out of the way.
      * Only succeeds if the blocking unit's ID is higher than the pushing unit's ID.
+     * Prefers pushing in a direction that helps the blocked unit toward its goal.
+     * Immediately repaths the pushed unit to continue toward its original goal.
      */
     private pushUnit(pushingEntityId: number, blockedEntityId: number): boolean {
-        // Check if push is allowed (lower ID has priority)
         if (!shouldYieldToPush(pushingEntityId, blockedEntityId)) return false;
 
         const blockedController = this.controllers.get(blockedEntityId);
         if (!blockedController) return false;
 
+        // Don't push a unit that's mid-transit - would cause visual teleport
+        if (blockedController.isInTransit) return false;
+
         if (!this.tileOccupancy || !this.rng) return false;
 
-        const terrain = this.groundType && this.mapWidth && this.mapHeight
-            ? { groundType: this.groundType, mapWidth: this.mapWidth, mapHeight: this.mapHeight }
+        const terrain = this.hasTerrainData()
+            ? { groundType: this.groundType!, mapWidth: this.mapWidth!, mapHeight: this.mapHeight! }
             : undefined;
 
-        const freeDir = findRandomFreeDirection(
+        // Save the goal before pushing - unit should continue toward this
+        const goal = blockedController.goal;
+
+        const freeDir = findSmartFreeDirection(
             blockedController.tileX,
             blockedController.tileY,
             this.tileOccupancy,
             this.rng,
-            terrain
+            terrain,
+            goal?.x,
+            goal?.y
         );
         if (!freeDir) return false;
 
-        // Handle the push in the controller
+        // Execute the push
         blockedController.handlePush(freeDir.x, freeDir.y);
+        this.updatePosition?.(blockedEntityId, freeDir.x, freeDir.y);
 
-        // Update game state
-        if (this.updatePosition) {
-            this.updatePosition(blockedEntityId, freeDir.x, freeDir.y);
+        // Repath to continue toward original goal
+        if (goal) {
+            this.repathToGoal(blockedController, goal);
         }
 
         return true;

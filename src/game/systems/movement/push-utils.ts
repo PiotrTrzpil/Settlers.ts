@@ -29,6 +29,86 @@ export interface TerrainAccessor {
 }
 
 /**
+ * Check if a tile is a valid push destination.
+ */
+function isValidPushTile(
+    nx: number,
+    ny: number,
+    occupancy: TileOccupancyAccessor,
+    terrain?: TerrainAccessor,
+): boolean {
+    // Bounds check
+    if (terrain) {
+        if (nx < 0 || nx >= terrain.mapWidth || ny < 0 || ny >= terrain.mapHeight) {
+            return false;
+        }
+        // Passability check
+        const nIdx = nx + ny * terrain.mapWidth;
+        if (!isPassable(terrain.groundType[nIdx])) return false;
+    }
+    // Occupancy check
+    if (occupancy.has(tileKey(nx, ny))) return false;
+    return true;
+}
+
+/**
+ * Find a free hex neighbor for a pushed unit, preferring directions
+ * that help the unit continue toward its goal.
+ *
+ * @param x Current x position
+ * @param y Current y position
+ * @param occupancy Tile occupancy map
+ * @param rng Seeded random number generator for deterministic shuffling
+ * @param terrain Optional terrain data for passability check
+ * @param goalX Optional goal X position to prefer directions toward
+ * @param goalY Optional goal Y position to prefer directions toward
+ */
+export function findSmartFreeDirection(
+    x: number,
+    y: number,
+    occupancy: TileOccupancyAccessor,
+    rng: SeededRng,
+    terrain?: TerrainAccessor,
+    goalX?: number,
+    goalY?: number,
+): TileCoord | null {
+    // Collect all valid directions
+    const validDirs: { coord: TileCoord; score: number }[] = [];
+
+    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+        const [dx, dy] = GRID_DELTAS[d];
+        const nx = x + dx;
+        const ny = y + dy;
+
+        if (!isValidPushTile(nx, ny, occupancy, terrain)) continue;
+
+        // Score based on how well this direction helps toward the goal
+        let score = 0;
+        if (goalX !== undefined && goalY !== undefined) {
+            // Calculate distance change: positive = getting closer to goal
+            const currDist = Math.abs(x - goalX) + Math.abs(y - goalY);
+            const newDist = Math.abs(nx - goalX) + Math.abs(ny - goalY);
+            score = currDist - newDist; // Positive = closer to goal
+        }
+
+        validDirs.push({ coord: { x: nx, y: ny }, score });
+    }
+
+    if (validDirs.length === 0) return null;
+
+    // Sort by score (higher is better), then shuffle within same score for variety
+    validDirs.sort((a, b) => b.score - a.score);
+
+    // Among top-scoring directions (within 1 point), pick randomly
+    const topScore = validDirs[0].score;
+    const topDirs = validDirs.filter(d => d.score >= topScore - 1);
+
+    // Use RNG to pick from top directions for some variety
+    const idx = rng.nextInt(topDirs.length);
+    return topDirs[idx].coord;
+}
+
+/**
  * Find a random free hex neighbor for a pushed unit.
  * Checks all 6 hex neighbors in a randomized order and returns
  * the first that is passable and unoccupied.
@@ -58,19 +138,7 @@ export function findRandomFreeDirection(
         const nx = x + dx;
         const ny = y + dy;
 
-        // Bounds check (if terrain provided)
-        if (terrain) {
-            if (nx < 0 || nx >= terrain.mapWidth || ny < 0 || ny >= terrain.mapHeight) {
-                continue;
-            }
-
-            // Passability check
-            const nIdx = nx + ny * terrain.mapWidth;
-            if (!isPassable(terrain.groundType[nIdx])) continue;
-        }
-
-        // Occupancy check
-        if (occupancy.has(tileKey(nx, ny))) continue;
+        if (!isValidPushTile(nx, ny, occupancy, terrain)) continue;
 
         return { x: nx, y: ny };
     }

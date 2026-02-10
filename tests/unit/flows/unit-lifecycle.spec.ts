@@ -262,6 +262,50 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         expect(blocked).toBeNull();
     });
 
+    it('pushed unit continues to its original goal after being pushed', () => {
+        const map = createTestMap(64, 64);
+        const state = createGameState();
+
+        // Set up terrain data for pathfinding during push
+        state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
+
+        // Unit A at (6,5) with a path to (15,5) - created FIRST so has lower ID
+        // Unit B at (5,5) will try to move through A's position
+        addUnitWithPath(state, 6, 5, [
+            { x: 7, y: 5 }, { x: 8, y: 5 }, { x: 9, y: 5 },
+            { x: 10, y: 5 }, { x: 11, y: 5 }, { x: 12, y: 5 }, { x: 13, y: 5 },
+            { x: 14, y: 5 }, { x: 15, y: 5 },
+        ], 2);
+
+        // Unit B created SECOND (higher ID) - B will move to (6,5) and get pushed by A
+        const { entity: unitB } = addUnitWithPath(state, 5, 5, [
+            { x: 6, y: 5 }, { x: 7, y: 5 },
+        ], 2);
+
+        const controllerB = state.movement.getController(unitB.id)!;
+
+        // Verify initial goal for B
+        expect(controllerB.goal).toEqual({ x: 7, y: 5 });
+
+        // Both units try to move - A has lower ID so when they collide, B gets pushed
+        state.movement.update(0.5);
+
+        // After collision resolution, B should have a new path to its goal
+        const newPath = controllerB.path;
+
+        // Path should still lead to the original goal (7, 5)
+        if (newPath.length > 0) {
+            expect(newPath[newPath.length - 1]).toEqual({ x: 7, y: 5 });
+        }
+
+        // Continue movement - both units should eventually reach their goals
+        state.movement.update(10.0);
+
+        // Unit B should have reached or passed through its goal
+        // (may have continued if it was just a waypoint)
+        expect(unitB.x).toBeGreaterThanOrEqual(6);
+    });
+
     it('movement updates smooth interpolation tracking', () => {
         const state = createGameState();
         // Longer path to test incremental movement

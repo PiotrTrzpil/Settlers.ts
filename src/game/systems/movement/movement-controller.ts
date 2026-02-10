@@ -47,6 +47,10 @@ export class MovementController {
     /** Current facing direction (0-5 for hex directions, updated when steps are taken) */
     private _direction: number = EDirection.EAST;
 
+    /** Last computed visual position for teleport detection */
+    private _lastVisualX = 0;
+    private _lastVisualY = 0;
+
     constructor(entityId: number, x: number, y: number, speed: number) {
         this.entityId = entityId;
         this._tileX = x;
@@ -54,6 +58,42 @@ export class MovementController {
         this._prevTileX = x;
         this._prevTileY = y;
         this._speed = speed;
+        this._lastVisualX = x;
+        this._lastVisualY = y;
+    }
+
+    /**
+     * Compute the current visual position (fractional tile coordinates).
+     * This is what the renderer would display.
+     */
+    private computeVisualPosition(): { x: number; y: number } {
+        const t = Math.max(0, Math.min(this._progress, 1));
+        return {
+            x: this._prevTileX + (this._tileX - this._prevTileX) * t,
+            y: this._prevTileY + (this._tileY - this._prevTileY) * t,
+        };
+    }
+
+    /**
+     * Update the last visual position. Call this at the END of each tick
+     * after all state changes, so we can detect teleports on the next change.
+     */
+    updateLastVisualPosition(): void {
+        const pos = this.computeVisualPosition();
+        this._lastVisualX = pos.x;
+        this._lastVisualY = pos.y;
+    }
+
+    /**
+     * Check if the current visual position is continuous with the last visual position.
+     * A teleport is detected if the visual position jumps by more than a small threshold.
+     * @returns Distance jumped, or 0 if continuous
+     */
+    detectTeleport(): number {
+        const pos = this.computeVisualPosition();
+        const dx = pos.x - this._lastVisualX;
+        const dy = pos.y - this._lastVisualY;
+        return Math.sqrt(dx * dx + dy * dy);
     }
 
     // === State Getters ===
@@ -119,6 +159,11 @@ export class MovementController {
         return this._direction;
     }
 
+    /** Get the current goal (final waypoint), or null if no path. */
+    get goal(): TileCoord | null {
+        return this._path.length > 0 ? this._path[this._path.length - 1] : null;
+    }
+
     // === Path Management ===
 
     /**
@@ -127,6 +172,9 @@ export class MovementController {
      */
     startPath(path: TileCoord[]): void {
         if (path.length === 0) return;
+
+        // Check for potential teleport
+        const visualBefore = this.computeVisualPosition();
 
         this._path = [...path];
         this._pathIndex = 0;
@@ -142,6 +190,15 @@ export class MovementController {
         // If in transit, keep current progress to avoid visual jump
 
         this._blockedTime = 0;
+
+        // Verify no teleport occurred
+        const visualAfter = this.computeVisualPosition();
+        const dx = visualAfter.x - visualBefore.x;
+        const dy = visualAfter.y - visualBefore.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 0.1) {
+            console.warn(`[MovementController] startPath caused teleport! Entity ${this.entityId} jumped ${dist.toFixed(2)} tiles`);
+        }
     }
 
     /**
@@ -154,12 +211,24 @@ export class MovementController {
             return;
         }
 
+        // Capture visual position before change
+        const visualBefore = this.computeVisualPosition();
+
         this._path = [...path];
         this._pathIndex = 0;
         this._state = 'moving';
         this._blockedTime = 0;
 
         // Don't touch progress or prevTile - keep smooth motion
+
+        // Verify no teleport occurred
+        const visualAfter = this.computeVisualPosition();
+        const dx = visualAfter.x - visualBefore.x;
+        const dy = visualAfter.y - visualBefore.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 0.1) {
+            console.warn(`[MovementController] redirectPath caused teleport! Entity ${this.entityId} jumped ${dist.toFixed(2)} tiles`);
+        }
     }
 
     /**
@@ -177,12 +246,19 @@ export class MovementController {
     /**
      * Advance movement progress by delta time.
      * Call this every tick before processing moves.
+     * @param deltaSec Time since last tick
+     * @param maxProgress Optional cap on total progress (prevents teleporting on lag)
      * @returns The accumulated progress (may be > 1 if multiple moves are pending)
      */
-    advanceProgress(deltaSec: number): number {
+    advanceProgress(deltaSec: number, maxProgress?: number): number {
         // Only advance if moving or in visual transit
         if (this._state === 'moving' || this.isInTransit) {
             this._progress += this._speed * deltaSec;
+
+            // Cap progress to prevent teleporting on large delta times
+            if (maxProgress !== undefined && this._progress > maxProgress) {
+                this._progress = maxProgress;
+            }
         }
 
         return this._progress;
@@ -300,26 +376,27 @@ export class MovementController {
 
     /**
      * Handle being pushed by another unit.
-     * Sets up smooth interpolation to the new position.
+     * Only updates position and visual state - path management is handled by caller.
+     * IMPORTANT: Caller must ensure unit is NOT mid-transit to prevent teleporting.
      */
     handlePush(newX: number, newY: number): void {
-        // Capture old position for interpolation
+        // ASSERT: We should not be mid-transit when pushed
+        // If we are, log it and handle gracefully
+        if (this.isInTransit) {
+            console.warn(`[MovementController] handlePush called mid-transit for entity ${this.entityId}! ` +
+                `Visual pos: (${this._prevTileX},${this._prevTileY}) -> (${this._tileX},${this._tileY}) @ ${this._progress.toFixed(2)}`);
+        }
+
+        // When not mid-transit, prevTile === currTile, so visual is at currTile
+        // Set up push animation: from current tile to pushed position
         this._prevTileX = this._tileX;
         this._prevTileY = this._tileY;
-
-        // Update to new position
         this._tileX = newX;
         this._tileY = newY;
+        this._progress = 0;
 
         // Update facing direction based on push direction
         this._direction = getApproxDirection(this._prevTileX, this._prevTileY, this._tileX, this._tileY);
-
-        // Clear path (pushed units lose their current path)
-        this._path = [];
-        this._pathIndex = 0;
-
-        // Start from 0 progress for smooth transition
-        this._progress = 0;
 
         // Set state to moving so the renderer interpolates this forced move
         this._state = 'moving';

@@ -38,6 +38,7 @@ export { Interpolator, createTestInterpolator } from './interpolator';
 export {
     pushUnit,
     findRandomFreeDirection,
+    findSmartFreeDirection,
     shouldYieldToPush,
     executePush,
 } from './push-utils';
