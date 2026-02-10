@@ -1,10 +1,7 @@
 /**
  * Pool of Web Workers for parallel sprite decoding.
  * Distributes decode requests across workers and returns promises.
- *
- * Supports two decode modes:
- * - RGBA mode: decode() returns ImageData
- * - Indexed mode: decodeIndexed() returns Uint16Array of palette indices
+ * All decoding produces Uint16Array of palette indices for the R16UI atlas.
  */
 
 import type { DecodeRequest, DecodeResponse } from './sprite-decode-worker';
@@ -12,10 +9,9 @@ import type { DecodeRequest, DecodeResponse } from './sprite-decode-worker';
 // Vite worker import
 import DecodeWorker from './sprite-decode-worker?worker';
 
-/** Result from decode (RGBA) or decodeIndexed */
+/** Result from decodeIndexed */
 export interface DecodeResult {
-    imageData?: ImageData;
-    indices?: Uint16Array;
+    indices: Uint16Array;
     width: number;
     height: number;
 }
@@ -46,23 +42,12 @@ export class SpriteDecoderPool {
     }
 
     private handleMessage(e: MessageEvent<DecodeResponse>): void {
-        const { id, pixels, indices, width, height } = e.data;
+        const { id, indices, width, height } = e.data;
         const pending = this.pendingRequests.get(id);
         if (pending) {
             this.pendingRequests.delete(id);
             this.decodeCount++;
-
-            if (indices) {
-                // Indexed mode — return Uint16Array directly
-                pending.resolve({ indices, width, height });
-            } else if (pixels) {
-                // RGBA mode — wrap in ImageData
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const imageData = new ImageData(pixels as any, width, height);
-                pending.resolve({ imageData, width, height });
-            } else {
-                pending.reject(new Error(`Worker decode failed: no data returned for ${width}x${height}`));
-            }
+            pending.resolve({ indices, width, height });
         }
     }
 
@@ -126,11 +111,9 @@ export class SpriteDecoderPool {
             width,
             height,
             imgType,
-            paletteData: new Uint32Array(0), // Not needed for indexed mode
             paletteOffset,
             trimTop,
             trimBottom,
-            indexed: true,
             paletteBaseOffset,
         };
 
@@ -179,7 +162,6 @@ export class SpriteDecoderPool {
                     width: 0,
                     height: 0,
                     imgType: 0,
-                    paletteData: new Uint32Array(0),
                     paletteOffset: 0,
                 };
                 worker.postMessage(request);

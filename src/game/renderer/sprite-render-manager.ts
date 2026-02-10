@@ -332,6 +332,16 @@ export class SpriteRenderManager {
     }
 
     /**
+     * Extract a sprite region from the atlas as RGBA ImageData.
+     * Handles palette lookup internally — callers don't need to know about palettes.
+     */
+    public extractSpriteAsImageData(region: import('./entity-texture-atlas').AtlasRegion): ImageData | null {
+        if (!this._spriteAtlas) return null;
+        const paletteData = this._paletteManager.getPaletteData() ?? undefined;
+        return this._spriteAtlas.extractRegion(region, paletteData);
+    }
+
+    /**
      * Clean up GPU resources. Call when switching races or destroying.
      */
     public cleanup(): void {
@@ -545,17 +555,21 @@ export class SpriteRenderManager {
 
     /**
      * Register palettes from loaded file sets into the combined palette texture.
-     * Sets palette base offsets on the sprite loader for indexed decoding.
      */
     private async registerPalettesForFiles(fileIds: string[]): Promise<void> {
         for (const fileId of fileIds) {
             const fileSet = await this.spriteLoader.loadFileSet(fileId);
             if (fileSet) {
                 const paletteData = fileSet.paletteCollection.getPalette().getData();
-                const baseOffset = this._paletteManager.registerPalette(fileId, paletteData);
-                this.spriteLoader.setPaletteBaseOffset(fileId, baseOffset);
+                this._paletteManager.registerPalette(fileId, paletteData);
             }
         }
+    }
+
+    /** Get the palette base offset for a file, defaulting to 0 if unregistered. */
+    private getPaletteBaseOffset(fileId: string): number {
+        const offset = this._paletteManager.getBaseOffset(fileId);
+        return offset >= 0 ? offset : 0;
     }
 
     /**
@@ -661,9 +675,7 @@ export class SpriteRenderManager {
             return false;
         }
 
-        // Set palette base offset for indexed decoding
-        const baseOffset = this._paletteManager.getBaseOffset(fileId);
-        if (baseOffset >= 0) this.spriteLoader.setCurrentPaletteBaseOffset(baseOffset);
+        const paletteBase = this.getPaletteBaseOffset(fileId);
 
         try {
             type BuildingData = {
@@ -681,7 +693,7 @@ export class SpriteRenderManager {
                 const buildingType = Number(typeStr) as BuildingType;
 
                 const constructionSprite = await this.spriteLoader.loadJobSprite(
-                    fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.CONSTRUCTION }, atlas
+                    fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.CONSTRUCTION }, atlas, paletteBase
                 );
 
                 const frameCount = this.spriteLoader.getFrameCount(fileSet, info.index, BUILDING_DIRECTION.COMPLETED);
@@ -690,7 +702,7 @@ export class SpriteRenderManager {
 
                 if (frameCount > 1) {
                     const anim = await this.spriteLoader.loadJobAnimation(
-                        fileSet, info.index, BUILDING_DIRECTION.COMPLETED, atlas
+                        fileSet, info.index, BUILDING_DIRECTION.COMPLETED, atlas, paletteBase
                     );
                     if (anim?.frames.length) {
                         animationFrames = anim.frames.map(f => f.entry);
@@ -698,7 +710,7 @@ export class SpriteRenderManager {
                     }
                 } else {
                     completedSprite = await this.spriteLoader.loadJobSprite(
-                        fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.COMPLETED }, atlas
+                        fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.COMPLETED }, atlas, paletteBase
                     );
                 }
 
@@ -751,19 +763,16 @@ export class SpriteRenderManager {
 
         let loadCount = 0;
 
-        // Set palette base offset for map objects
-        const baseOffset5 = this._paletteManager.getBaseOffset(`${GFX_FILE_NUMBERS.MAP_OBJECTS}`);
-        if (baseOffset5 >= 0) this.spriteLoader.setCurrentPaletteBaseOffset(baseOffset5);
+        const paletteBase5 = this.getPaletteBaseOffset(`${GFX_FILE_NUMBERS.MAP_OBJECTS}`);
 
         // Load trees using JIL-based structure
-        const treeCount = await this.loadTreeSprites(fileSet5, atlas, registry, gl);
+        const treeCount = await this.loadTreeSprites(fileSet5, atlas, registry, gl, paletteBase5);
         loadCount += treeCount;
 
         // Load resource map objects (coal, iron, etc.) using direction-based structure
         if (fileSet3) {
-            const baseOffset3 = this._paletteManager.getBaseOffset(`${GFX_FILE_NUMBERS.RESOURCES}`);
-            if (baseOffset3 >= 0) this.spriteLoader.setCurrentPaletteBaseOffset(baseOffset3);
-            const resourceCount = await this.loadResourceMapObjects(fileSet3, atlas, registry);
+            const paletteBase3 = this.getPaletteBaseOffset(`${GFX_FILE_NUMBERS.RESOURCES}`);
+            const resourceCount = await this.loadResourceMapObjects(fileSet3, atlas, registry, paletteBase3);
             loadCount += resourceCount;
         }
 
@@ -785,7 +794,8 @@ export class SpriteRenderManager {
         fileSet: LoadedGfxFileSet,
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry,
-        gl: WebGL2RenderingContext
+        gl: WebGL2RenderingContext,
+        paletteBaseOffset: number
     ): Promise<number> {
         if (!fileSet.jilReader || !fileSet.dilReader) {
             SpriteRenderManager.log.debug('Tree JIL/DIL not available, skipping tree loading');
@@ -811,7 +821,7 @@ export class SpriteRenderManager {
             // Load all 11 stages for this tree type
             for (let offset = 0; offset <= 10; offset++) {
                 const anim = await this.spriteLoader.loadJobAnimation(
-                    fileSet, baseJobIndex + offset, 0, atlas
+                    fileSet, baseJobIndex + offset, 0, atlas, paletteBaseOffset
                 );
                 if (anim?.frames.length) {
                     batch.add({
@@ -850,7 +860,8 @@ export class SpriteRenderManager {
     private async loadResourceMapObjects(
         fileSet: LoadedGfxFileSet,
         atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry
+        registry: SpriteMetadataRegistry,
+        paletteBaseOffset: number
     ): Promise<number> {
         const mapObjectSpriteMap = getMapObjectSpriteMap();
         let loadedCount = 0;
@@ -865,7 +876,8 @@ export class SpriteRenderManager {
                 const sprite = await this.spriteLoader.loadJobSprite(
                     fileSet,
                     { jobIndex: info.index, directionIndex: dir },
-                    atlas
+                    atlas,
+                    paletteBaseOffset
                 );
                 if (sprite) {
                     registry.registerMapObject(type, sprite.entry, dir);
@@ -889,9 +901,7 @@ export class SpriteRenderManager {
         const fileSet = await this.spriteLoader.loadFileSet(fileId);
         if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
 
-        // Set palette base offset for indexed decoding
-        const baseOffset = this._paletteManager.getBaseOffset(fileId);
-        if (baseOffset >= 0) this.spriteLoader.setCurrentPaletteBaseOffset(baseOffset);
+        const paletteBase = this.getPaletteBaseOffset(fileId);
 
         type ResourceData = { type: EMaterialType; dir: number; entry: SpriteEntry };
         const batch = new SafeLoadBatch<ResourceData>();
@@ -902,7 +912,7 @@ export class SpriteRenderManager {
 
             for (let dir = 0; dir < 8; dir++) {
                 const sprite = await this.spriteLoader.loadJobSprite(
-                    fileSet, { jobIndex: info.index, directionIndex: dir, frameIndex: 0 }, atlas
+                    fileSet, { jobIndex: info.index, directionIndex: dir, frameIndex: 0 }, atlas, paletteBase
                 );
                 if (sprite) {
                     batch.add({ type, dir, entry: sprite.entry });
@@ -930,9 +940,7 @@ export class SpriteRenderManager {
         const fileSet = await this.spriteLoader.loadFileSet(fileId);
         if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
 
-        // Set palette base offset for indexed decoding
-        const baseOffset = this._paletteManager.getBaseOffset(fileId);
-        if (baseOffset >= 0) this.spriteLoader.setCurrentPaletteBaseOffset(baseOffset);
+        const paletteBase = this.getPaletteBaseOffset(fileId);
 
         type UnitData = { unitType: UnitType; directionFrames: Map<number, SpriteEntry[]> };
         const batch = new SafeLoadBatch<UnitData>();
@@ -941,7 +949,7 @@ export class SpriteRenderManager {
             if (!info) continue;
             const unitType = Number(typeStr) as UnitType;
 
-            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, info.index, atlas);
+            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, info.index, atlas, paletteBase);
             if (!loadedDirs) {
                 SpriteRenderManager.log.debug(`Job ${info.index} not found for unit ${UnitType[unitType]}`);
                 continue;
@@ -972,8 +980,8 @@ export class SpriteRenderManager {
         SpriteRenderManager.log.debug(`Loaded ${batch.count} animated units for ${Race[race]}`);
 
         // Load carrier variants and worker animations (also need safe pattern)
-        await this.loadCarrierVariants(fileSet, atlas, registry, gl);
-        await this.loadWorkerAnimations(fileSet, atlas, registry, gl);
+        await this.loadCarrierVariants(fileSet, atlas, registry, gl, paletteBase);
+        await this.loadWorkerAnimations(fileSet, atlas, registry, gl, paletteBase);
 
         return batch.count > 0;
     }
@@ -985,7 +993,8 @@ export class SpriteRenderManager {
         fileSet: LoadedGfxFileSet,
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry,
-        gl: WebGL2RenderingContext
+        gl: WebGL2RenderingContext,
+        paletteBaseOffset: number
     ): Promise<number> {
         type CarrierData = { materialType: EMaterialType; directionFrames: Map<number, SpriteEntry[]> };
         const batch = new SafeLoadBatch<CarrierData>();
@@ -994,7 +1003,7 @@ export class SpriteRenderManager {
             if (jobIndex === undefined) continue;
             const materialType = Number(typeStr) as EMaterialType;
 
-            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas);
+            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas, paletteBaseOffset);
             if (!loadedDirs) {
                 SpriteRenderManager.log.debug(`Carrier job ${jobIndex} not found for ${EMaterialType[materialType]}`);
                 continue;
@@ -1058,7 +1067,8 @@ export class SpriteRenderManager {
         fileSet: LoadedGfxFileSet,
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry,
-        gl: WebGL2RenderingContext
+        gl: WebGL2RenderingContext,
+        paletteBaseOffset: number
     ): Promise<void> {
         type WorkAnimData = {
             unitType: UnitType;
@@ -1083,7 +1093,7 @@ export class SpriteRenderManager {
 
                 const frames = new Map<number, SpriteEntry[]>();
                 for (let dir = 0; dir < dirCount; dir++) {
-                    const anim = await this.spriteLoader.loadJobAnimation(fileSet, jobIndex, dir, atlas);
+                    const anim = await this.spriteLoader.loadJobAnimation(fileSet, jobIndex, dir, atlas, paletteBaseOffset);
                     if (anim?.frames.length) {
                         frames.set(dir, anim.frames.map(f => f.entry));
                     }

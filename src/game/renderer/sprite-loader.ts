@@ -13,7 +13,6 @@ import { DilFileReader } from '@/resources/gfx/dil-file-reader';
 import { PilFileReader } from '@/resources/gfx/pil-file-reader';
 import { PaletteCollection } from '@/resources/gfx/palette-collection';
 import { GfxImage } from '@/resources/gfx/gfx-image';
-import type { IGfxImage } from '@/resources/gfx/igfx-image';
 import { EntityTextureAtlas, AtlasRegion } from './entity-texture-atlas';
 import { SpriteEntry, PIXELS_TO_WORLD } from './sprite-metadata';
 import { getDecoderPool } from './sprite-decoder-pool';
@@ -34,7 +33,7 @@ export interface LoadedGfxFileSet {
  * Result of loading a sprite into the atlas.
  */
 export interface LoadedSprite {
-    image: IGfxImage;
+    image: GfxImage;
     region: AtlasRegion;
     entry: SpriteEntry;
 }
@@ -72,21 +71,8 @@ export class SpriteLoader {
 
     private fileManager: FileManager;
 
-    /**
-     * Maps fileId -> paletteBaseOffset in the combined palette texture.
-     * Set by SpriteRenderManager after registering palettes.
-     */
-    private paletteBaseOffsets = new Map<string, number>();
-
     constructor(fileManager: FileManager) {
         this.fileManager = fileManager;
-    }
-
-    /**
-     * Set the palette base offset for a file set (used for indexed decoding).
-     */
-    public setPaletteBaseOffset(fileId: string, baseOffset: number): void {
-        this.paletteBaseOffsets.set(fileId, baseOffset);
     }
 
     /**
@@ -161,15 +147,18 @@ export class SpriteLoader {
     /**
      * Load a sprite by JIL job index and pack it into the atlas.
      * Decodes off main thread using worker pool.
+     *
+     * @param paletteBaseOffset Base offset for this file's palette in the combined texture
      */
     public async loadJobSprite(
         fileSet: LoadedGfxFileSet,
         config: JobSpriteConfig,
-        atlas: EntityTextureAtlas
+        atlas: EntityTextureAtlas,
+        paletteBaseOffset: number
     ): Promise<LoadedSprite | null> {
         const gfxImage = this.getJobImage(fileSet, config);
         if (!gfxImage) return null;
-        return this.packSpriteIntoAtlas(gfxImage, atlas);
+        return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset);
     }
 
     /**
@@ -231,24 +220,26 @@ export class SpriteLoader {
     /**
      * Load a sprite by direct GIL index and pack it into the atlas.
      * Decodes off main thread using worker pool.
+     *
+     * @param paletteBaseOffset Base offset for this file's palette in the combined texture
      */
     public async loadDirectSprite(
         fileSet: LoadedGfxFileSet,
         gilIndex: number,
         paletteIndex: number | null,
-        atlas: EntityTextureAtlas
+        atlas: EntityTextureAtlas,
+        paletteBaseOffset: number
     ): Promise<LoadedSprite | null> {
         let gfxImage: GfxImage | null;
 
         if (paletteIndex !== null) {
             gfxImage = this.getDirectImage(fileSet, gilIndex, paletteIndex);
         } else {
-            // Auto-detect palette using GfxFileReader's logic (reverse lookup via JIL/DIL)
             gfxImage = fileSet.gfxReader.getImage(gilIndex);
         }
 
         if (!gfxImage) return null;
-        return this.packSpriteIntoAtlas(gfxImage, atlas);
+        return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset);
     }
 
     /**
@@ -301,7 +292,9 @@ export class SpriteLoader {
      * Pack a GFX image into the atlas and create a SpriteEntry.
      * Synchronous fallback using indexed decoding — used only when workers unavailable.
      */
-    private packSpriteIntoAtlasFallback(gfxImage: GfxImage, atlas: EntityTextureAtlas): LoadedSprite | null {
+    private packSpriteIntoAtlasFallback(
+        gfxImage: GfxImage, atlas: EntityTextureAtlas, paletteBaseOffset: number
+    ): LoadedSprite | null {
         const trimmedHeight = gfxImage.height - SpriteLoader.TRIM_TOP - SpriteLoader.TRIM_BOTTOM;
         if (trimmedHeight <= 0) {
             SpriteLoader.log.debug(`Sprite too small after trimming: ${gfxImage.width}x${gfxImage.height}`);
@@ -314,8 +307,6 @@ export class SpriteLoader {
             return null;
         }
 
-        // Decode to palette indices synchronously on main thread
-        const paletteBaseOffset = this.currentPaletteBaseOffset;
         const rawIndices = gfxImage.getIndexData(paletteBaseOffset);
         const trimmedIndices = this.trimIndices(
             rawIndices, gfxImage.width, gfxImage.height,
@@ -338,18 +329,20 @@ export class SpriteLoader {
     /**
      * Pack a GFX image into the atlas asynchronously using worker pool.
      * Uses indexed decoding: outputs palette indices (Uint16Array) and blits into R16UI atlas.
+     *
+     * @param paletteBaseOffset Base offset for this file's palette in the combined texture
      */
-    private async packSpriteIntoAtlas(gfxImage: GfxImage, atlas: EntityTextureAtlas): Promise<LoadedSprite | null> {
+    private async packSpriteIntoAtlas(
+        gfxImage: GfxImage, atlas: EntityTextureAtlas, paletteBaseOffset: number
+    ): Promise<LoadedSprite | null> {
         const pool = getDecoderPool();
 
         if (!pool.isAvailable) {
-            // Fallback to sync if workers unavailable
-            return this.packSpriteIntoAtlasFallback(gfxImage, atlas);
+            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset);
         }
 
         const params = gfxImage.getDecodeParams();
 
-        // Calculate trimmed dimensions (known before decoding)
         const trimmedWidth = params.width;
         const trimmedHeight = params.height - SpriteLoader.TRIM_TOP - SpriteLoader.TRIM_BOTTOM;
 
@@ -358,7 +351,6 @@ export class SpriteLoader {
             return null;
         }
 
-        // Pre-reserve slot in atlas (we know final dimensions)
         const region = atlas.reserve(trimmedWidth, trimmedHeight);
 
         if (!region) {
@@ -367,11 +359,6 @@ export class SpriteLoader {
         }
 
         try {
-            // Look up the palette base offset for this file set
-            // (defaults to 0 if not registered — still works but will reference wrong palette entries)
-            const paletteBaseOffset = this.currentPaletteBaseOffset;
-
-            // Decode in worker as palette indices (indexed mode)
             const indices = await pool.decodeIndexed(
                 params.buffer,
                 params.offset,
@@ -397,22 +384,8 @@ export class SpriteLoader {
             return { image: gfxImage, region, entry };
         } catch (e) {
             SpriteLoader.log.debug(`Worker decode failed, falling back to sync: ${e}`);
-            return this.packSpriteIntoAtlasFallback(gfxImage, atlas);
+            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset);
         }
-    }
-
-    /**
-     * The palette base offset for the file currently being loaded.
-     * Set before each batch of sprite loads for a given file set.
-     */
-    private currentPaletteBaseOffset = 0;
-
-    /**
-     * Set the palette base offset for the current loading batch.
-     * Must be called before loading sprites from a file set.
-     */
-    public setCurrentPaletteBaseOffset(offset: number): void {
-        this.currentPaletteBaseOffset = offset;
     }
 
     /**
@@ -444,12 +417,15 @@ export class SpriteLoader {
     /**
      * Load all frames for a job/direction as an animation.
      * Decodes frames off main thread using worker pool.
+     *
+     * @param paletteBaseOffset Base offset for this file's palette in the combined texture
      */
     public async loadJobAnimation(
         fileSet: LoadedGfxFileSet,
         jobIndex: number,
         directionIndex: number,
-        atlas: EntityTextureAtlas
+        atlas: EntityTextureAtlas,
+        paletteBaseOffset: number
     ): Promise<LoadedAnimation | null> {
         if (!fileSet.jilReader || !fileSet.dilReader) {
             SpriteLoader.log.debug(`JIL/DIL not available for file ${fileSet.fileId}`);
@@ -493,7 +469,7 @@ export class SpriteLoader {
         }
 
         // Decode all frames in parallel using worker pool
-        const framePromises = frameImages.map(img => this.packSpriteIntoAtlas(img, atlas));
+        const framePromises = frameImages.map(img => this.packSpriteIntoAtlas(img, atlas, paletteBaseOffset));
         const results = await Promise.all(framePromises);
 
         const frames: LoadedSprite[] = results.filter((r): r is LoadedSprite => r !== null);
@@ -525,12 +501,14 @@ export class SpriteLoader {
     /**
      * Load all directions for a job, each with all its animation frames.
      * Returns a Map of direction index -> array of sprite entries.
-     * Useful for units and other multi-directional animated sprites.
+     *
+     * @param paletteBaseOffset Base offset for this file's palette in the combined texture
      */
     public async loadJobAllDirections(
         fileSet: LoadedGfxFileSet,
         jobIndex: number,
-        atlas: EntityTextureAtlas
+        atlas: EntityTextureAtlas,
+        paletteBaseOffset: number
     ): Promise<Map<number, LoadedSprite[]> | null> {
         const directionCount = this.getDirectionCount(fileSet, jobIndex);
         if (directionCount === 0) return null;
@@ -538,7 +516,7 @@ export class SpriteLoader {
         const result = new Map<number, LoadedSprite[]>();
 
         for (let dir = 0; dir < directionCount; dir++) {
-            const animation = await this.loadJobAnimation(fileSet, jobIndex, dir, atlas);
+            const animation = await this.loadJobAnimation(fileSet, jobIndex, dir, atlas, paletteBaseOffset);
             if (animation && animation.frames.length > 0) {
                 result.set(dir, animation.frames);
             }

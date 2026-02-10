@@ -28,11 +28,18 @@ export class PaletteTextureManager {
     /** Maps fileId -> base offset in the combined palette texture */
     private fileBaseOffsets = new Map<string, number>();
 
-    /** Total number of colors across all registered palettes */
-    private totalColors = 0;
+    /**
+     * Total number of colors across all registered palettes.
+     * Starts at 2 because indices 0 (transparent) and 1 (shadow)
+     * are reserved — no valid palette lookup should produce those values.
+     */
+    private totalColors = 2;
 
-    /** Combined palette data: 4 bytes (RGBA) per color */
-    private paletteData: Uint8Array | null = null;
+    /** Combined palette data: 4 bytes (RGBA) per color. May have excess capacity. */
+    private paletteBuffer: Uint8Array = new Uint8Array(4096 * 4);
+
+    /** Number of valid bytes in paletteBuffer (= totalColors * 4) */
+    private paletteUsedBytes = 2 * 4;
 
     /** Whether GPU needs re-upload */
     private dirty = false;
@@ -62,21 +69,22 @@ export class PaletteTextureManager {
         const colorCount = paletteData.length;
         const baseOffset = this.totalColors;
 
-        // Grow combined palette data
+        // Grow combined palette buffer if needed (capacity doubling)
         const newTotal = this.totalColors + colorCount;
-        const newData = new Uint8Array(newTotal * 4);
-
-        // Copy existing data
-        if (this.paletteData) {
-            newData.set(this.paletteData);
+        const neededBytes = newTotal * 4;
+        if (neededBytes > this.paletteBuffer.length) {
+            const newCapacity = Math.max(neededBytes, this.paletteBuffer.length * 2);
+            const grown = new Uint8Array(newCapacity);
+            grown.set(this.paletteBuffer.subarray(0, this.paletteUsedBytes));
+            this.paletteBuffer = grown;
         }
 
         // Append new palette data (Uint32Array -> Uint8Array view)
         const newColorsBytes = new Uint8Array(paletteData.buffer, paletteData.byteOffset, colorCount * 4);
-        newData.set(newColorsBytes, this.totalColors * 4);
+        this.paletteBuffer.set(newColorsBytes, this.paletteUsedBytes);
 
-        this.paletteData = newData;
         this.totalColors = newTotal;
+        this.paletteUsedBytes = neededBytes;
         this.fileBaseOffsets.set(fileId, baseOffset);
         this.dirty = true;
 
@@ -110,7 +118,7 @@ export class PaletteTextureManager {
      * or when new palettes are added.
      */
     public upload(gl: WebGL2RenderingContext): void {
-        if (!this.paletteData || this.totalColors === 0) return;
+        if (this.totalColors === 0) return;
         if (!this.dirty && this.gpuWidth === this.totalColors) return;
 
         if (!this.texture) {
@@ -137,7 +145,7 @@ export class PaletteTextureManager {
             0,
             gl.RGBA,
             gl.UNSIGNED_BYTE,
-            this.paletteData
+            this.paletteBuffer.subarray(0, this.paletteUsedBytes)
         );
 
         this.gpuWidth = this.totalColors;
@@ -159,10 +167,12 @@ export class PaletteTextureManager {
     }
 
     /**
-     * Get raw palette data for caching.
+     * Get raw palette data for caching or CPU-side lookups.
+     * Returns a view of the used portion only (not excess capacity).
      */
     public getPaletteData(): Uint8Array | null {
-        return this.paletteData;
+        if (this.paletteUsedBytes === 0) return null;
+        return this.paletteBuffer.subarray(0, this.paletteUsedBytes);
     }
 
     /**
@@ -180,7 +190,8 @@ export class PaletteTextureManager {
      * Restore palette manager from cached data.
      */
     public restoreFromCache(paletteData: Uint8Array, offsets: Record<string, number>, totalColors: number): void {
-        this.paletteData = paletteData;
+        this.paletteBuffer = paletteData;
+        this.paletteUsedBytes = totalColors * 4;
         this.totalColors = totalColors;
         this.fileBaseOffsets.clear();
         for (const [key, value] of Object.entries(offsets)) {
@@ -198,8 +209,9 @@ export class PaletteTextureManager {
             gl.deleteTexture(this.texture);
             this.texture = null;
         }
-        this.paletteData = null;
-        this.totalColors = 0;
+        this.paletteBuffer = new Uint8Array(4096 * 4);
+        this.paletteUsedBytes = 2 * 4;
+        this.totalColors = 2;
         this.fileBaseOffsets.clear();
         this.dirty = false;
         this.gpuWidth = 0;
