@@ -16,8 +16,8 @@ import {
     BUILDING_DIRECTION,
     AnimatedSpriteEntry,
     SETTLER_FILE_NUMBERS,
-    TREE_TEXTURE_OFFSET,
-    TREE_VARIATION_COUNT,
+    TREE_JOB_OFFSET,
+    TREE_JOB_INDICES,
     CARRIER_MATERIAL_JOB_INDICES,
     WORKER_JOB_INDICES,
 } from './sprite-metadata';
@@ -652,7 +652,7 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Load map object sprites.
+     * Load map object sprites (trees use JIL-based structure, resources use direction-based).
      */
     private async loadMapObjectSprites(
         gl: WebGL2RenderingContext,
@@ -669,95 +669,162 @@ export class SpriteRenderManager {
 
         SpriteRenderManager.log.debug(`Loaded MapObjects GFX: ${fileSet5.gilReader.length} images`);
 
-        // Counter for periodic updates
         let loadCount = 0;
-        const UPDATE_INTERVAL = 20;
-        let lastAtlasWidth = atlas.width;
-        let lastAtlasHeight = atlas.height;
-        const loadedCounts = new Map<number, number>();
 
-        return this.loadSpritesFromMap(
-            getMapObjectSpriteMap(),
-            (type, info) => {
-                const tasks = [];
+        // Load trees using JIL-based structure
+        const treeCount = await this.loadTreeSprites(fileSet5, atlas, registry, gl);
+        loadCount += treeCount;
 
-                if (info.file === GFX_FILE_NUMBERS.RESOURCES) {
-                    // Resource Map Object (File 3) - 8 directions for quantities 1-8
-                    for (let i = 0; i < 8; i++) {
-                        tasks.push({
-                            type,
-                            index: info.index,
-                            offset: 0,
-                            palette: info.paletteIndex ?? null,
-                            variation: i,
-                            file: info.file,
-                        });
-                    }
-                } else {
-                    // Standard Map Object (File 5) - Tree variations
-                    for (let i = 0; i < TREE_VARIATION_COUNT; i++) {
-                        const offset = TREE_TEXTURE_OFFSET.NORMAL_START + i;
-                        if (offset > TREE_TEXTURE_OFFSET.NORMAL_END) break;
+        // Load resource map objects (coal, iron, etc.) using direction-based structure
+        if (fileSet3) {
+            const resourceCount = await this.loadResourceMapObjects(fileSet3, atlas, registry);
+            loadCount += resourceCount;
+        }
 
-                        tasks.push({
-                            type,
-                            index: info.index,
-                            offset,
-                            palette: info.paletteIndex ?? null,
-                            variation: i,
-                            file: info.file ?? GFX_FILE_NUMBERS.MAP_OBJECTS,
-                        });
-                    }
-                }
-                return tasks;
-            },
-            async({ index, offset, palette, variation, file }) => {
-                if (file === GFX_FILE_NUMBERS.RESOURCES) {
-                    if (!fileSet3) return null;
-                    // For resources in file 3, we use loadJobSprite. 
-                    // Use variation as direction (0-7 mapped to quanity 1-8)
+        SpriteRenderManager.log.debug(`MapObject sprite loading complete: ${loadCount} sprites`);
+        return loadCount > 0;
+    }
+
+    /**
+     * Load tree sprites using JIL/DIL structure.
+     * Trees have: D0-D2 = growth stages, D3 = normal, D4 = falling, D5 = canopy disappearing
+     */
+    private async loadTreeSprites(
+        fileSet: LoadedGfxFileSet,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry,
+        gl: WebGL2RenderingContext
+    ): Promise<number> {
+        if (!fileSet.jilReader || !fileSet.dilReader) {
+            SpriteRenderManager.log.debug('Tree JIL/DIL not available, skipping tree loading');
+            return 0;
+        }
+
+        const treeInfos: Array<{ treeType: MapObjectType; jobIndex: number }> = [];
+        for (const [typeStr, jobIndex] of Object.entries(TREE_JOB_INDICES)) {
+            if (jobIndex !== undefined) {
+                treeInfos.push({
+                    treeType: Number(typeStr) as MapObjectType,
+                    jobIndex,
+                });
+            }
+        }
+
+        let loadedCount = 0;
+
+        await processBatchedWithHandler(
+            treeInfos,
+            async({ treeType, jobIndex: baseJobIndex }) => {
+                // Each tree state is a separate job. Direction is always 0.
+                // Job = baseJobIndex + offset, e.g., Oak normal = 1 + 3 = job 4
+
+                // Load normal tree sprite (base + 3) - this is what healthy trees display
+                const normalJob = baseJobIndex + TREE_JOB_OFFSET.NORMAL;
+                const normalSprite = await this.spriteLoader.loadJobSprite(
+                    fileSet,
+                    { jobIndex: normalJob, directionIndex: 0 },
+                    atlas
+                );
+
+                // Load growth stages (base + 0, 1, 2) for future use
+                const growthSprites: SpriteEntry[] = [];
+                for (let offset = TREE_JOB_OFFSET.SAPLING; offset <= TREE_JOB_OFFSET.MEDIUM; offset++) {
                     const sprite = await this.spriteLoader.loadJobSprite(
-                        fileSet3,
-                        { jobIndex: index, directionIndex: variation },
+                        fileSet,
+                        { jobIndex: baseJobIndex + offset, directionIndex: 0 },
                         atlas
                     );
-                    return { sprite: sprite ? sprite.entry : null, variation };
-                } else {
-                    // Standard File 5 object
-                    const sprite = await this.spriteLoader.loadDirectSprite(
-                        fileSet5,
-                        index + offset,
-                        palette,
-                        atlas
-                    );
-                    return { sprite: sprite ? sprite.entry : null, variation };
-                }
-            },
-            ({ type }, { sprite, variation }) => {
-                if (sprite) {
-                    registry.registerMapObject(type, sprite, variation);
-
-                    const current = loadedCounts.get(type) || 0;
-                    loadedCounts.set(type, current + 1);
-
-                    loadCount++;
-                    const atlasGrew = atlas.width !== lastAtlasWidth || atlas.height !== lastAtlasHeight;
-
-                    if (atlasGrew || loadCount % UPDATE_INTERVAL === 0) {
-                        if (atlasGrew) {
-                            SpriteRenderManager.log.debug(`Atlas grew detected (to ${atlas.width}x${atlas.height}), forcing immediate update`);
-                        }
-                        atlas.update(gl);
-                        lastAtlasWidth = atlas.width;
-                        lastAtlasHeight = atlas.height;
+                    if (sprite) {
+                        growthSprites.push(sprite.entry);
                     }
+                }
+
+                // Load falling animation (base + 4)
+                const fallingAnim = await this.spriteLoader.loadJobAnimation(
+                    fileSet,
+                    baseJobIndex + TREE_JOB_OFFSET.FALLING,
+                    0, // direction
+                    atlas
+                );
+
+                // Load canopy disappearing animation (base + 5) - last frame is trunk only
+                const canopyAnim = await this.spriteLoader.loadJobAnimation(
+                    fileSet,
+                    baseJobIndex + TREE_JOB_OFFSET.CANOPY_DISAPPEARING,
+                    0, // direction
+                    atlas
+                );
+
+                return { treeType, normalSprite, growthSprites, fallingAnim, canopyAnim };
+            },
+            (result) => {
+                if (!result) return;
+
+                const { treeType, normalSprite, growthSprites, fallingAnim, canopyAnim } = result;
+
+                // Register normal tree sprite (variation 0 = healthy tree)
+                if (normalSprite) {
+                    registry.registerMapObject(treeType, normalSprite.entry, 0);
+                    loadedCount++;
+                }
+
+                // Register growth stages as variations 1-3 (for growing trees)
+                for (let i = 0; i < growthSprites.length; i++) {
+                    // Growth stages go in reverse order: mature=1, medium=2, sapling=3
+                    // So variation 1 is most grown (closest to normal), 3 is smallest
+                    registry.registerMapObject(treeType, growthSprites[growthSprites.length - 1 - i], i + 1);
+                    loadedCount++;
+                }
+
+                // Register animations for woodcutting system
+                // TODO: Register falling and canopy animations when tree cutting is implemented
+                if (fallingAnim && fallingAnim.frames.length > 0) {
+                    // Will be used for tree falling animation
+                }
+                if (canopyAnim && canopyAnim.frames.length > 0) {
+                    // Last frame is trunk only - useful for stumps/logs
                 }
             }
-        ).then(result => {
-            // Only log warnings for standard map objects (trees) which expect multiple variations
-            SpriteRenderManager.log.debug('MapObject sprite loading complete.');
-            return result;
-        });
+        );
+
+        // Force atlas update after loading trees
+        atlas.update(gl);
+
+        SpriteRenderManager.log.debug(`Loaded ${loadedCount} tree sprites`);
+        return loadedCount;
+    }
+
+    /**
+     * Load resource map objects (coal, iron, gold, stone, sulfur deposits).
+     */
+    private async loadResourceMapObjects(
+        fileSet: LoadedGfxFileSet,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry
+    ): Promise<number> {
+        const mapObjectSpriteMap = getMapObjectSpriteMap();
+        let loadedCount = 0;
+
+        for (const [typeStr, info] of Object.entries(mapObjectSpriteMap)) {
+            if (!info || info.file !== GFX_FILE_NUMBERS.RESOURCES) continue;
+
+            const type = Number(typeStr) as MapObjectType;
+
+            // Load 8 directions for quantities 1-8
+            for (let dir = 0; dir < 8; dir++) {
+                const sprite = await this.spriteLoader.loadJobSprite(
+                    fileSet,
+                    { jobIndex: info.index, directionIndex: dir },
+                    atlas
+                );
+                if (sprite) {
+                    registry.registerMapObject(type, sprite.entry, dir);
+                    loadedCount++;
+                }
+            }
+        }
+
+        return loadedCount;
     }
 
     /**

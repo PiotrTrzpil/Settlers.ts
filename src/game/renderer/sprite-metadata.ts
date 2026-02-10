@@ -492,59 +492,86 @@ export function getBuildingSpriteMap(race: Race): Partial<Record<BuildingType, B
 export const BUILDING_SPRITE_MAP = getBuildingSpriteMap(Race.Roman);
 
 /**
- * Texture offsets for tree map objects.
- * Each tree type has blocks of textures for different states.
- * Structure:
- * 0-2: Zoom levels (Very Small, Small, Medium)
- * 3-19: Normal tree frames (swaying animation?) - 17 frames
- * 20-30: Falling/Cutting animation frames - 11 frames
+ * Tree job offsets within 5.jil.
+ * Each tree type has 11 consecutive jobs for different states.
+ * Each job has 1 direction (D0) with 1 or more frames.
+ *
+ * Structure per tree type (base job + offset):
+ * - +0: Sapling (smallest) - static
+ * - +1: Small tree - static
+ * - +2: Medium tree - static
+ * - +3: Normal (full grown) - animated or static
+ * - +4: Falling tree - animated
+ * - +5 to +9: Being cut phases (5 phases) - animated
+ * - +10: Canopy disappearing on ground (last frame = trunk only) - animated
  */
-export const TREE_TEXTURE_OFFSET = {
-    ZOOM_VERY_SMALL: 0,
-    ZOOM_SMALL: 1,
-    ZOOM_MEDIUM: 2,
-    NORMAL_1: 3, // Default static
-    NORMAL_START: 3,
-    NORMAL_END: 19,
-    CUT_START: 20,
-    CUT_END: 30,
+export const TREE_JOB_OFFSET = {
+    /** Sapling - smallest growth stage */
+    SAPLING: 0,
+    /** Small tree */
+    SMALL: 1,
+    /** Medium tree */
+    MEDIUM: 2,
+    /** Normal full-grown tree */
+    NORMAL: 3,
+    /** Falling tree - animated */
+    FALLING: 4,
+    /** Being cut phase 1 */
+    CUTTING_1: 5,
+    /** Being cut phase 2 */
+    CUTTING_2: 6,
+    /** Being cut phase 3 */
+    CUTTING_3: 7,
+    /** Being cut phase 4 */
+    CUTTING_4: 8,
+    /** Being cut phase 5 */
+    CUTTING_5: 9,
+    /** Canopy disappearing on ground - animated (last frame = trunk only) */
+    CANOPY_DISAPPEARING: 10,
 } as const;
 
-/**
- * Number of tree variations to load and use.
- * Max available in GFX is 17 (NORMAL_END - NORMAL_START + 1).
- * Set to 1 to disable variations.
- */
-export const TREE_VARIATION_COUNT = 17;
+/** Number of jobs per tree type */
+export const TREE_JOBS_PER_TYPE = 11;
 
-/** Stride between tree types in the GFX file (31 textures per tree) */
-export const TREE_SPRITE_STRIDE = 31;
+/** First tree job index in 5.jil */
+const TREE_BASE_JOB = 1;
 
 /**
- * Mapping from MapObjectType to GIL sprite index (direct index, not job-based).
- * Map objects use a stride-based layout in 5.gfx starting at index 1.
+ * Base JIL job indices for each tree type in 5.jil.
+ * Each tree type has TREE_JOBS_PER_TYPE consecutive jobs (see TREE_JOB_OFFSET).
+ * Actual job = baseIndex + TREE_JOB_OFFSET.X
+ *
+ * Example: Oak normal tree = 1 + TREE_JOB_OFFSET.NORMAL = 1 + 3 = job 4
  */
-export const MAP_OBJECT_SPRITE_INDICES: Partial<Record<MapObjectType, number>> = {
-    [MapObjectType.TreeOak]: 1 + (0 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeBeech]: 1 + (1 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeAsh]: 1 + (2 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeLinden]: 1 + (3 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeBirch]: 1 + (4 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreePoplar]: 1 + (5 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeChestnut]: 1 + (6 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeMaple]: 1 + (7 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeFir]: 1 + (8 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeSpruce]: 1 + (9 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeCoconut]: 1 + (10 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeDate]: 1 + (11 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeWalnut]: 1 + (12 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeCorkOak]: 1 + (13 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreePine]: 1 + (14 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreePine2]: 1 + (15 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeOliveLarge]: 1 + (16 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeOliveSmall]: 1 + (17 * TREE_SPRITE_STRIDE),
-    [MapObjectType.TreeDead]: 1 + (18 * TREE_SPRITE_STRIDE),
+export const TREE_JOB_INDICES: Partial<Record<MapObjectType, number>> = {
+    [MapObjectType.TreeOak]: TREE_BASE_JOB + 0 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeBeech]: TREE_BASE_JOB + 1 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeAsh]: TREE_BASE_JOB + 2 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeLinden]: TREE_BASE_JOB + 3 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeBirch]: TREE_BASE_JOB + 4 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreePoplar]: TREE_BASE_JOB + 5 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeChestnut]: TREE_BASE_JOB + 6 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeMaple]: TREE_BASE_JOB + 7 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeFir]: TREE_BASE_JOB + 8 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeSpruce]: TREE_BASE_JOB + 9 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeCoconut]: TREE_BASE_JOB + 10 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeDate]: TREE_BASE_JOB + 11 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeWalnut]: TREE_BASE_JOB + 12 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeCorkOak]: TREE_BASE_JOB + 13 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreePine]: TREE_BASE_JOB + 14 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreePine2]: TREE_BASE_JOB + 15 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeOliveLarge]: TREE_BASE_JOB + 16 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeOliveSmall]: TREE_BASE_JOB + 17 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeDead]: TREE_BASE_JOB + 18 * TREE_JOBS_PER_TYPE,
 };
+
+// Legacy: kept for backwards compatibility but no longer used
+/** @deprecated Use TREE_JOB_INDICES instead */
+export const MAP_OBJECT_SPRITE_INDICES: Partial<Record<MapObjectType, number>> = TREE_JOB_INDICES;
+/** @deprecated Trees now use JIL-based loading */
+export const TREE_VARIATION_COUNT = 1;
+/** @deprecated Trees now use JIL-based loading */
+export const TREE_SPRITE_STRIDE = 31;
 
 /**
  * Sprite information for a map object type.
