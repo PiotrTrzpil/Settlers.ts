@@ -130,4 +130,33 @@ export class BuildingStateManager {
     clear(): void {
         this.states.clear();
     }
+
+    /**
+     * Restore a building state from serialized data (used by persistence).
+     */
+    restoreBuildingState(data: {
+        entityId: number;
+        buildingType: BuildingType;
+        tileX: number;
+        tileY: number;
+        phase: BuildingConstructionPhase;
+        phaseProgress: number;
+        totalDuration: number;
+        elapsedTime: number;
+        terrainModified: boolean;
+    }): void {
+        const state: BuildingState = {
+            entityId: data.entityId,
+            buildingType: data.buildingType,
+            phase: data.phase,
+            phaseProgress: data.phaseProgress,
+            totalDuration: data.totalDuration,
+            elapsedTime: data.elapsedTime,
+            tileX: data.tileX,
+            tileY: data.tileY,
+            originalTerrain: null, // Not persisted - terrain is already modified
+            terrainModified: data.terrainModified,
+        };
+        this.states.set(data.entityId, state);
+    }
 }

@@ -35,6 +35,7 @@ import {
     isMapObjectVisible,
 } from './layer-visibility';
 import type { IRenderContext } from './render-context';
+import { gameSettings } from '../game-settings';
 
 
 import vertCode from './shaders/entity-vert.glsl';
@@ -651,7 +652,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             if (!resolved.sprite) continue;
 
             const worldPos = this.getEntityWorldPos(entity, viewPoint);
-            const playerRow = (entity.type === EntityType.Building || entity.type === EntityType.Unit) ? entity.player + 1 : 0;
+            const playerRow = (entity.type === EntityType.Building || entity.type === EntityType.Unit) ? this.getPlayerRow(entity) : 0;
             const isSelected = this.selectedEntityIds.has(entity.id);
             const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
 
@@ -675,6 +676,17 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (this.transitioningUnits.length > 0) {
             this.drawTransitioningUnits(gl, projection, viewPoint);
         }
+    }
+
+    /**
+     * Get the palette row for player tinting.
+     * Returns 0 (neutral) if player tinting is disabled, otherwise player + 1.
+     */
+    private getPlayerRow(entity: Entity): number {
+        if (gameSettings.state.disablePlayerTinting) {
+            return 0;
+        }
+        return entity.player + 1;
     }
 
     /** Compute world position for an entity, with MapObject jitter for visual variety. */
@@ -712,7 +724,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (!constructionSprite) return;
 
         const worldPos = TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
-        const playerRow = entity.player + 1;
+        const playerRow = this.getPlayerRow(entity);
         this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, constructionSprite, playerRow, 1, 1, 1, 1);
     }
 
@@ -763,7 +775,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             // Use cached world position from frame context
             const cachedPos = this.frameContext?.getWorldPos(entity);
             const worldPos = cachedPos ?? this.getInterpolatedWorldPos(entity, viewPoint);
-            const playerRow = entity.player + 1; // Units are always player-owned
+            const playerRow = this.getPlayerRow(entity);
             const isSelected = this.selectedEntityIds.has(entity.id);
             const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
             this.spriteBatchRenderer.addBlendSprite(

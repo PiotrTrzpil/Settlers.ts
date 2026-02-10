@@ -138,6 +138,40 @@ export class MovementSystem implements TickSystem {
     }
 
     /**
+     * Clear all controllers.
+     */
+    clear(): void {
+        this.controllers.clear();
+        this.prevSnapshots.clear();
+    }
+
+    /**
+     * Restore a movement controller from serialized data (used by persistence).
+     */
+    restoreController(data: {
+        entityId: number;
+        x: number;
+        y: number;
+        prevTileX: number;
+        prevTileY: number;
+        progress: number;
+        speed: number;
+        path: Array<{ x: number; y: number }>;
+        pathIndex: number;
+    }): void {
+        const controller = new MovementController(data.entityId, data.x, data.y, data.speed);
+        // Restore path if unit was moving
+        if (data.path.length > 0) {
+            controller.startPath(data.path);
+            // Fast-forward to saved position in path
+            for (let i = 0; i < data.pathIndex; i++) {
+                controller.executeMove();
+            }
+        }
+        this.controllers.set(data.entityId, controller);
+    }
+
+    /**
      * Issue a move command to a unit.
      * Calculates path and sets up the controller for movement.
      * @returns true if a valid path was found

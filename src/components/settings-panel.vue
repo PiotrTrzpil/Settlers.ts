@@ -81,6 +81,7 @@
         </h3>
         <div v-if="sections.display" class="section-body">
           <SettingsCheckbox label="Debug grid" v-model="settings.showDebugGrid" />
+          <SettingsCheckbox label="Disable player tinting" v-model="settings.disablePlayerTinting" />
         </div>
       </section>
 

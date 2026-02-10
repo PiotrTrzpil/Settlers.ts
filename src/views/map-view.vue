@@ -172,6 +172,7 @@
             :paused="isPaused"
             :currentRace="currentRace"
             @togglePause="togglePause()"
+            @resetGameState="resetGameState()"
           />
         </div>
       </div>
@@ -250,6 +251,7 @@ const {
     setSelectMode,
     removeSelected,
     togglePause,
+    resetGameState,
     updateLayerVisibility
 } = useMapView(
     () => props.fileManager,

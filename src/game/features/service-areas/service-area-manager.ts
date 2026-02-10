@@ -196,6 +196,27 @@ export class ServiceAreaManager {
         }
     }
 
+    /**
+     * Restore a service area from serialized data (used by persistence).
+     * Does not emit events to avoid duplicate notifications during load.
+     */
+    restoreServiceArea(data: {
+        buildingId: number;
+        playerId: number;
+        centerX: number;
+        centerY: number;
+        radius: number;
+    }): void {
+        const serviceArea = createServiceArea(
+            data.buildingId,
+            data.playerId,
+            data.centerX,
+            data.centerY,
+            data.radius
+        );
+        this.serviceAreas.set(data.buildingId, serviceArea);
+    }
+
     // === Event System ===
 
     /**

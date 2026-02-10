@@ -71,7 +71,7 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
             expect(serviceArea?.playerId).toBe(1);
         });
 
-        it('should create service area when StorageArea (warehouse) is created', () => {
+        it('should NOT create service area for StorageArea (not a logistics hub)', () => {
             const entity = gameState.addEntity(
                 EntityType.Building,
                 BuildingType.StorageArea,
@@ -79,9 +79,9 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
                 1
             );
 
+            // StorageArea is storage only, not a carrier hub
             const serviceArea = gameState.serviceAreaManager.getServiceArea(entity.id);
-            expect(serviceArea).toBeDefined();
-            expect(serviceArea?.buildingId).toBe(entity.id);
+            expect(serviceArea).toBeUndefined();
         });
 
         it('should NOT create service area for non-logistics buildings', () => {
@@ -266,14 +266,14 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
             );
             expect(gameState.inventoryManager.getInventory(woodcutter.id)).toBeDefined();
 
-            // 3. Create a warehouse - should get service area (inventory handled separately)
+            // 3. Create a warehouse - StorageArea does NOT get a service area (it's not a carrier hub)
             const warehouse = gameState.addEntity(
                 EntityType.Building,
                 BuildingType.StorageArea,
                 20, 10,
                 1
             );
-            expect(gameState.serviceAreaManager.getServiceArea(warehouse.id)).toBeDefined();
+            expect(gameState.serviceAreaManager.getServiceArea(warehouse.id)).toBeUndefined();
             // Note: StorageArea has empty slot config - it uses dynamic material handling
             // so hasInventory() returns false and no traditional inventory is created
 

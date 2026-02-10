@@ -456,8 +456,52 @@ export class RequestManager {
     clear(): void {
         const ids = Array.from(this.requests.keys());
         this.requests.clear();
+        this.nextId = 1;
         for (const id of ids) {
             this.emit('requestRemoved', { requestId: id });
+        }
+    }
+
+    /**
+     * Get all requests.
+     */
+    getAllRequests(): IterableIterator<ResourceRequest> {
+        return this.requests.values();
+    }
+
+    /**
+     * Restore a request from serialized data (used by persistence).
+     * Does not emit events to avoid duplicate notifications during load.
+     */
+    restoreRequest(data: {
+        id: number;
+        buildingId: number;
+        materialType: EMaterialType;
+        amount: number;
+        priority: RequestPriority;
+        timestamp: number;
+        status: RequestStatus;
+        assignedCarrier: number | null;
+        sourceBuilding: number | null;
+        assignedAt: number | null;
+    }): void {
+        const request: ResourceRequest = {
+            id: data.id,
+            buildingId: data.buildingId,
+            materialType: data.materialType,
+            amount: data.amount,
+            priority: data.priority,
+            timestamp: data.timestamp,
+            status: data.status,
+            assignedCarrier: data.assignedCarrier,
+            sourceBuilding: data.sourceBuilding,
+            assignedAt: data.assignedAt,
+        };
+        this.requests.set(data.id, request);
+
+        // Update nextId to avoid collisions
+        if (data.id >= this.nextId) {
+            this.nextId = data.id + 1;
         }
     }
 

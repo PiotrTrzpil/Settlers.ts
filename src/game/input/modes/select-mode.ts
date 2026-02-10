@@ -89,7 +89,7 @@ export class SelectMode extends BaseInputMode {
                 return HANDLED;
             }
 
-            // Single click - select entity at tile
+            // Single click - select entity at tile or deselect if clicking empty space
             if (data.tileX !== undefined && data.tileY !== undefined) {
                 context.executeCommand({
                     type: 'select_at_tile',
@@ -97,6 +97,9 @@ export class SelectMode extends BaseInputMode {
                     y: data.tileY,
                     addToSelection: data.shiftKey,
                 });
+            } else {
+                // Clicked outside valid tile area - deselect all
+                context.executeCommand({ type: 'select', entityId: null });
             }
             return HANDLED;
         }

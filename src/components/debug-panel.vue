@@ -256,6 +256,9 @@
             <button class="ctrl-btn" @click="$emit('togglePause')">
               {{ paused ? 'Resume' : 'Pause' }}
             </button>
+            <button class="ctrl-btn danger" @click="$emit('resetGameState')">
+              Reset State
+            </button>
           </div>
           <div class="river-debug">
             <span class="stat-label river-heading">River textures</span>
@@ -346,6 +349,7 @@ defineProps<{
 
 defineEmits<{
     (e: 'togglePause'): void;
+    (e: 'resetGameState'): void;
 }>();
 
 const stats = debugStats.state;
@@ -601,6 +605,17 @@ const cacheClass = computed(() => {
 .ctrl-btn:hover {
   background: #3a2810;
   border-color: #6a4a20;
+}
+
+.ctrl-btn.danger {
+  background: #3a1a1a;
+  border-color: #6a2020;
+  color: #d08080;
+}
+
+.ctrl-btn.danger:hover {
+  background: #4a2020;
+  border-color: #8a3030;
 }
 
 .river-heading {

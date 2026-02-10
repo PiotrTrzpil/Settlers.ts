@@ -328,4 +328,35 @@ export class CarrierManager {
         this.carriers.clear();
         this.carriersByTavern.clear();
     }
+
+    /**
+     * Restore a carrier from serialized state (used by persistence).
+     * Does not emit events to avoid duplicate notifications during load.
+     */
+    restoreCarrier(data: {
+        entityId: number;
+        homeBuilding: number;
+        status: CarrierStatus;
+        fatigue: number;
+        carryingMaterial: EMaterialType | null;
+        carryingAmount: number;
+    }): void {
+        const state: CarrierState = {
+            entityId: data.entityId,
+            homeBuilding: data.homeBuilding,
+            currentJob: null, // Jobs are not persisted - will be re-assigned
+            fatigue: data.fatigue,
+            carryingMaterial: data.carryingMaterial,
+            carryingAmount: data.carryingAmount,
+            status: data.status,
+        };
+
+        this.carriers.set(data.entityId, state);
+
+        // Add to tavern index
+        if (!this.carriersByTavern.has(data.homeBuilding)) {
+            this.carriersByTavern.set(data.homeBuilding, new Set());
+        }
+        this.carriersByTavern.get(data.homeBuilding)!.add(data.entityId);
+    }
 }
