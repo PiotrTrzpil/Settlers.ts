@@ -1,5 +1,23 @@
 # Palettized Atlas Implementation Plan
 
+## Status: IMPLEMENTED
+
+All phases have been implemented. The atlas now uses R16UI format (2 bytes/pixel)
+instead of RGBA8 (4 bytes/pixel), achieving 2x memory savings. Key changes:
+
+- `src/game/renderer/palette-texture.ts` - NEW: PaletteTextureManager
+- `src/game/renderer/entity-texture-atlas.ts` - R16UI format, blitIndices, extractRegion
+- `src/game/renderer/sprite-decode-worker.ts` - Indexed decode mode (Uint16Array output)
+- `src/game/renderer/sprite-decoder-pool.ts` - decodeIndexed method
+- `src/game/renderer/sprite-loader.ts` - Indexed pipeline, palette base offsets
+- `src/game/renderer/sprite-render-manager.ts` - Palette registration, upload, cache
+- `src/game/renderer/sprite-batch-renderer.ts` - u_palette binding
+- `src/game/renderer/entity-renderer.ts` - Palette bind before draw
+- `src/game/renderer/shaders/entity-sprite-frag.glsl` - usampler2D + palette lookup
+- `src/game/renderer/shaders/entity-sprite-blend-frag.glsl` - usampler2D + palette lookup
+- `src/game/renderer/sprite-atlas-cache.ts` - Schema v3, palette data in cache
+- `src/resources/gfx/gfx-image.ts` - getIndexData() for sync fallback
+
 ## Goal
 Reduce sprite atlas memory from 1GB to 256MB (4× reduction) by storing palette indices instead of RGBA colors.
 

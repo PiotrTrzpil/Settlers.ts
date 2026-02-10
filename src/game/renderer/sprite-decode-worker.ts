@@ -1,6 +1,9 @@
 /**
  * Web Worker for offloading sprite decoding from the main thread.
- * Handles RLE decoding and palette lookups.
+ * Outputs Uint16Array of palette indices for the palettized R16UI atlas.
+ *
+ * Special index values: 0 = transparent, 1 = shadow.
+ * All other indices = paletteBaseOffset + paletteOffset + raw value.
  */
 
 export interface DecodeRequest {
@@ -10,43 +13,48 @@ export interface DecodeRequest {
     width: number;
     height: number;
     imgType: number;
-    paletteData: Uint32Array;
     paletteOffset: number;
     /** Rows to skip from the top of the sprite (default 0) */
     trimTop?: number;
     /** Rows to skip from the bottom of the sprite (default 0) */
     trimBottom?: number;
+    /** Base offset into the combined palette texture */
+    paletteBaseOffset?: number;
 }
 
 export interface DecodeResponse {
     id: number;
-    /** Decoded pixels */
-    pixels?: Uint8ClampedArray;
+    /** Decoded palette indices */
+    indices: Uint16Array;
     /** Width */
     width: number;
     /** Height */
     height: number;
 }
 
+// =============================================================================
+// Indexed mode decoders — output Uint16Array of palette indices
+// =============================================================================
+
 /**
- * Decode with RLE encoding (imgType != 32)
- * Supports trimming: skips writing first trimTop*width pixels, stops after outputLength pixels.
+ * Decode RLE to palette indices (indexed mode).
+ * Index 0 = transparent, index 1 = shadow, others = paletteBaseOffset + paletteOffset + value
  */
-function decodeRLE(
+function decodeRLEIndexed(
     buffer: Uint8Array,
     pos: number,
-    length: number,
-    paletteData: Uint32Array,
+    _length: number,
     paletteOffset: number,
+    paletteBaseOffset: number,
     skipPixels: number,
     outputLength: number
-): Uint32Array {
-    const imgData = new Uint32Array(outputLength);
+): Uint16Array {
+    const indices = new Uint16Array(outputLength);
     const bufferLength = buffer.length;
     const totalPixels = skipPixels + outputLength;
 
-    let srcIdx = 0; // Position in the logical source (including skipped)
-    let dstIdx = 0; // Position in output buffer
+    let srcIdx = 0;
+    let dstIdx = 0;
 
     while (srcIdx < totalPixels && pos < bufferLength) {
         const value = buffer[pos];
@@ -57,57 +65,60 @@ function decodeRLE(
             const count = buffer[pos];
             pos++;
 
-            // Palette index 0 = transparent, index 1 = shadow
-            const color = value === 0 ? 0x00000000 : 0x40000000;
+            // 0 = transparent, 1 = shadow — stored directly as special indices
             for (let i = 0; i < count && srcIdx < totalPixels; i++) {
                 if (srcIdx >= skipPixels) {
-                    imgData[dstIdx++] = color;
+                    indices[dstIdx++] = value; // 0 or 1
                 }
                 srcIdx++;
             }
         } else {
             if (srcIdx >= skipPixels) {
-                const idx = paletteOffset + value;
-                imgData[dstIdx++] = idx < paletteData.length ? paletteData[idx] : 0;
+                // Combined index: base + sprite palette offset + pixel value
+                indices[dstIdx++] = paletteBaseOffset + paletteOffset + value;
             }
             srcIdx++;
         }
     }
 
-    return imgData;
+    return indices;
 }
 
 /**
- * Decode without RLE encoding (imgType == 32)
- * Supports trimming: skips first skipPixels in buffer, outputs outputLength pixels.
+ * Decode raw (no RLE) to palette indices (indexed mode).
  */
-function decodeRaw(
+function decodeRawIndexed(
     buffer: Uint8Array,
     pos: number,
-    paletteData: Uint32Array,
     paletteOffset: number,
+    paletteBaseOffset: number,
     skipPixels: number,
     outputLength: number
-): Uint32Array {
-    const imgData = new Uint32Array(outputLength);
+): Uint16Array {
+    const indices = new Uint16Array(outputLength);
     const bufferLength = buffer.length;
 
-    // Skip input bytes for trimmed top rows
     pos += skipPixels;
 
     let j = 0;
     while (j < outputLength && pos < bufferLength) {
         const value = buffer[pos];
         pos++;
-        const idx = paletteOffset + value;
-        imgData[j++] = idx < paletteData.length ? paletteData[idx] : 0;
+        // Raw mode has no special transparent/shadow handling in original code.
+        // Every byte is a palette lookup.
+        indices[j++] = paletteBaseOffset + paletteOffset + value;
     }
 
-    return imgData;
+    return indices;
 }
 
 self.onmessage = (e: MessageEvent<DecodeRequest>) => {
-    const { id, buffer, offset, width, height, imgType, paletteData, paletteOffset, trimTop = 0, trimBottom = 0 } = e.data;
+    const {
+        id, buffer, offset, width, height, imgType,
+        paletteOffset,
+        trimTop = 0, trimBottom = 0,
+        paletteBaseOffset = 0
+    } = e.data;
 
     const bufferView = new Uint8Array(buffer);
 
@@ -116,16 +127,21 @@ self.onmessage = (e: MessageEvent<DecodeRequest>) => {
     const skipPixels = trimTop * width;
     const outputLength = trimmedHeight * width;
 
-    let pixels32: Uint32Array;
+    let indexData: Uint16Array;
     if (imgType !== 32) {
-        pixels32 = decodeRLE(bufferView, offset, width * height, paletteData, paletteOffset, skipPixels, outputLength);
+        indexData = decodeRLEIndexed(
+            bufferView, offset, width * height,
+            paletteOffset, paletteBaseOffset,
+            skipPixels, outputLength
+        );
     } else {
-        pixels32 = decodeRaw(bufferView, offset, paletteData, paletteOffset, skipPixels, outputLength);
+        indexData = decodeRawIndexed(
+            bufferView, offset,
+            paletteOffset, paletteBaseOffset,
+            skipPixels, outputLength
+        );
     }
 
-    const pixels = new Uint8ClampedArray(pixels32.buffer);
-    const response: DecodeResponse = { id, pixels, width, height: trimmedHeight };
-
-    // Transfer the buffer back to avoid copying
-    self.postMessage(response, { transfer: [pixels.buffer] });
+    const response: DecodeResponse = { id, indices: indexData, width, height: trimmedHeight };
+    self.postMessage(response, { transfer: [indexData.buffer] });
 };

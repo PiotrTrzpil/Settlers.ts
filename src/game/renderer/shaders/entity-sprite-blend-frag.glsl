@@ -1,27 +1,41 @@
-// Entity sprite blending fragment shader
-// Blends two sprite textures for smooth direction transitions
+// Entity sprite blending fragment shader — palettized texture array atlas
+// Blends two sprite textures for smooth direction transitions.
+// Reads palette indices from R16UI array layers, looks up player-tinted colors.
 
 precision mediump float;
+precision highp usampler2DArray;
 
-in vec2 v_texcoord1;
-in vec2 v_texcoord2;
+in vec3 v_texcoord1;       // (u, v, layer) for old direction
+in vec3 v_texcoord2;       // (u, v, layer) for new direction
 in float v_blend;
-in vec4 v_tint;
+flat in float v_playerRow; // palette row (0=neutral, 1+=player)
+in vec4 v_tint;            // selection/highlight tint
 
-uniform sampler2D u_spriteAtlas;
+uniform usampler2DArray u_spriteAtlas;  // R16UI array — palette indices (unsigned int)
+uniform sampler2D u_palette;             // RGBA8 multi-row — color lookup table
 
 out vec4 fragColor;
 
-void main() {
-    vec4 texel1 = texture(u_spriteAtlas, v_texcoord1);
-    vec4 texel2 = texture(u_spriteAtlas, v_texcoord2);
+// Resolve a palette index to an RGBA color using the player's palette row
+vec4 resolveIndex(uint index) {
+    if (index == 0u) return vec4(0.0);                                                   // transparent
+    if (index == 1u) return vec4(0.0, 0.0, 0.0, 0.25);                                  // shadow
+    return texelFetch(u_palette, ivec2(int(index), int(v_playerRow)), 0);                // palette lookup
+}
 
-    // Blend the two textures based on transition progress
-    vec4 blended = mix(texel1, texel2, v_blend);
+void main() {
+    uint index1 = texture(u_spriteAtlas, v_texcoord1).r;
+    uint index2 = texture(u_spriteAtlas, v_texcoord2).r;
+
+    vec4 color1 = resolveIndex(index1);
+    vec4 color2 = resolveIndex(index2);
+
+    // Blend the two colors based on transition progress
+    vec4 blended = mix(color1, color2, v_blend);
 
     // Discard fully transparent pixels
     if (blended.a < 0.01) discard;
 
-    // Apply player colour tint
+    // Apply selection/highlight tint
     fragColor = blended * v_tint;
 }

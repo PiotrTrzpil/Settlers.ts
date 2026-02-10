@@ -20,44 +20,11 @@ export const TINT_PREVIEW_INVALID: readonly number[] = [0.3, 0.3, 0.3, 0.5];
 // Player tint strength (0 = no tint, 1 = full player color)
 const PLAYER_TINT_STRENGTH = 0.4;
 
-/**
- * Get the base player color for a player index.
- */
-export function getPlayerColor(playerIndex: number): readonly number[] {
-    return PLAYER_COLORS[playerIndex % PLAYER_COLORS.length];
-}
-
-// Pre-computed player tints to avoid per-frame allocations
-const PLAYER_TINTS: readonly (readonly number[])[] = PLAYER_COLORS.map(playerColor => {
+// Pre-computed player tints for palette row generation
+export const PLAYER_TINTS: readonly (readonly number[])[] = PLAYER_COLORS.map(playerColor => {
     const r = 1.0 + (playerColor[0] - 1.0) * PLAYER_TINT_STRENGTH;
     const g = 1.0 + (playerColor[1] - 1.0) * PLAYER_TINT_STRENGTH;
     const b = 1.0 + (playerColor[2] - 1.0) * PLAYER_TINT_STRENGTH;
     return [r, g, b, 1.0] as const;
 });
 
-/**
- * Compute sprite tint with player color influence.
- * Used for buildings and units that should show player ownership.
- * Returns a readonly array to avoid allocations - do not mutate!
- */
-export function computePlayerTint(playerIndex: number, isSelected: boolean): readonly number[] {
-    if (isSelected) {
-        return TINT_SELECTED;
-    }
-    return PLAYER_TINTS[playerIndex % PLAYER_TINTS.length];
-}
-
-/**
- * Compute sprite tint for entities without player ownership (map objects, resources).
- * Returns a readonly array to avoid allocations - do not mutate!
- */
-export function computeNeutralTint(isSelected: boolean): readonly number[] {
-    return isSelected ? TINT_SELECTED : TINT_NEUTRAL;
-}
-
-/**
- * Compute tint for building preview ghost.
- */
-export function computePreviewTint(isValid: boolean): readonly number[] {
-    return isValid ? TINT_PREVIEW_VALID : TINT_PREVIEW_INVALID;
-}

@@ -7,7 +7,7 @@ import { ShaderObject } from './shader-object';
 export class ShaderTexture implements ShaderObject {
     protected texture: WebGLTexture | null = null;
     private gl: WebGL2RenderingContext | null = null;
-    private textureIndex: number;
+    protected textureIndex: number;
 
     public constructor(textureIndex: number) {
         this.textureIndex = textureIndex;

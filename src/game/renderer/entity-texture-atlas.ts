@@ -11,19 +11,25 @@ const ATLAS_PADDING = 1;
 /** Log slow main-thread operations (threshold in ms) */
 const SLOW_OP_THRESHOLD_MS = 2;
 
+/** Fixed layer size — each layer is LAYER_SIZE x LAYER_SIZE pixels.
+ *  4096x4096 = 32MB per layer at 2 bytes/pixel (R16UI). */
+export const LAYER_SIZE = 4096;
+
 /**
- * Defines a region within the texture atlas, with both pixel coordinates
- * and normalized UV coordinates for shader use.
+ * Defines a region within the texture atlas, with both pixel coordinates,
+ * a layer index, and normalized UV coordinates for shader use.
  */
 export interface AtlasRegion {
-    /** Pixel X position in atlas */
+    /** Pixel X position in layer */
     x: number;
-    /** Pixel Y position in atlas */
+    /** Pixel Y position in layer */
     y: number;
     /** Region width in pixels */
     width: number;
     /** Region height in pixels */
     height: number;
+    /** Layer index in the texture array */
+    layer: number;
     /** Normalized U coordinate (top-left) */
     u0: number;
     /** Normalized V coordinate (top-left) */
@@ -35,7 +41,7 @@ export interface AtlasRegion {
 }
 
 /**
- * Internal slot for row-based packing within the atlas.
+ * Internal slot for row-based packing within a single layer.
  */
 class Slot {
     public x = 0;
@@ -65,434 +71,470 @@ class Slot {
     }
 }
 
-/** Maximum atlas size (32768x32768 = 4GB) - increased to fit all tree textures */
-const MAX_ATLAS_SIZE = 32768;
-
-/** Initial atlas size - start at 8192 to avoid expensive grow operations during loading.
- * 8192x8192 = 256MB which is acceptable for modern systems. */
-const INITIAL_ATLAS_SIZE = 8192;
+/** Dirty rectangle for per-layer tracking */
+interface DirtyRect {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+}
 
 /**
- * RGBA8 texture atlas for entity sprites (buildings, units).
- * Uses slot-based row packing similar to TextureMap16Bit but with
- * 32-bit RGBA format for transparency support.
+ * R16UI palettized texture array atlas for entity sprites (buildings, units).
+ * Uses TEXTURE_2D_ARRAY with fixed-size layers instead of a growable single texture.
  *
- * The atlas starts small and grows automatically when full,
- * reducing initial memory allocation.
+ * Each layer is LAYER_SIZE x LAYER_SIZE (4096x4096 = 32MB at 2 bytes/pixel).
+ * When a layer fills up, a new layer is added — no expensive grow/copy/UV-update.
+ *
+ * Each pixel stores a 16-bit unsigned integer palette index.
+ * Special indices: 0 = transparent, 1 = shadow.
+ * All other indices are looked up in a separate palette texture.
  */
 export class EntityTextureAtlas extends ShaderTexture {
     private static log = new LogHandler('EntityTextureAtlas');
 
-    private imgData: Uint8Array;
-    private atlasWidth: number;
-    private atlasHeight: number;
-    private slots: Slot[] = [];
+    /** Per-layer pixel data (Uint16Array of LAYER_SIZE*LAYER_SIZE each) */
+    private layers: Uint16Array[] = [];
 
-    /** Track all reserved regions so we can update UVs when growing */
+    /** Per-layer slot packing state */
+    private layerSlots: Slot[][] = [];
+
+    /** Per-layer dirty region tracking */
+    private dirtyRegions: (DirtyRect | null)[] = [];
+
+    /** Track all reserved regions (for cache serialization) */
     private reservedRegions: AtlasRegion[] = [];
 
-    /** Maximum size this atlas can grow to */
-    private maxSize: number;
+    /** Maximum number of layers (bounded by MAX_ARRAY_TEXTURE_LAYERS) */
+    private maxLayers: number;
 
-    /** Cached GL context for immediate GPU upload on grow */
+    /** Cached GL context for GPU operations */
     private glContext: WebGL2RenderingContext | null = null;
 
-    constructor(maxSize: number, textureIndex: number) {
+    /** Number of layers currently allocated on the GPU */
+    private gpuLayerCount = 0;
+
+    constructor(maxLayers: number, textureIndex: number, skipInitialLayer = false) {
         super(textureIndex);
+        this.maxLayers = maxLayers;
 
-        this.maxSize = Math.min(maxSize, MAX_ATLAS_SIZE);
-
-        // Start with small initial size
-        const initialSize = Math.min(INITIAL_ATLAS_SIZE, this.maxSize);
-        this.atlasWidth = initialSize;
-        this.atlasHeight = initialSize;
-
-        // 4 bytes per pixel (RGBA)
-        const byteLength = initialSize * initialSize * 4;
-        this.imgData = new Uint8Array(byteLength);
-
-        // Initialize with transparent magenta for debugging (visible if UV coords are wrong)
-        this.fillTransparent(this.imgData, initialSize * initialSize);
-    }
-
-    /** Fill array with transparent magenta (debug color) */
-    private fillTransparent(data: Uint8Array, pixelCount: number): void {
-        for (let i = 0; i < pixelCount; i++) {
-            data[i * 4 + 0] = 255; // R
-            data[i * 4 + 1] = 0;   // G
-            data[i * 4 + 2] = 255; // B
-            data[i * 4 + 3] = 0;   // A (transparent)
+        if (!skipInitialLayer) {
+            // Start with one layer (skip when restoring from cache)
+            this.addLayer();
         }
     }
 
     public get width(): number {
-        return this.atlasWidth;
+        return LAYER_SIZE;
     }
 
     public get height(): number {
-        return this.atlasHeight;
+        return LAYER_SIZE;
+    }
+
+    public get layerCount(): number {
+        return this.layers.length;
+    }
+
+    /** Add a new empty layer. Returns the layer index. */
+    private addLayer(): number {
+        const layerIndex = this.layers.length;
+        // 2 bytes per pixel (R16UI), zero-initialized (index 0 = transparent)
+        this.layers.push(new Uint16Array(LAYER_SIZE * LAYER_SIZE));
+        this.layerSlots.push([]);
+        this.dirtyRegions.push(null);
+        return layerIndex;
     }
 
     /**
      * Reserve a region in the atlas for a sprite of the given dimensions.
-     * Uses row-based slot packing: sprites of the same height share a row.
-     * Includes padding to prevent texture bleeding.
-     * Automatically grows the atlas if needed (up to maxSize).
-     * Returns null if the atlas is full and cannot grow.
+     * Uses row-based slot packing within layers.
+     * If the current layer is full, a new layer is added.
+     * Returns null if maximum layers are exhausted.
      */
     public reserve(width: number, height: number): AtlasRegion | null {
-        // Account for padding in slot size
         const paddedWidth = width + ATLAS_PADDING * 2;
         const paddedHeight = height + ATLAS_PADDING * 2;
 
-        // Bucket height to improve row sharing (reduces waste from slight height variations)
-        // Round up to nearest 16 pixels
+        // Bucket height to improve row sharing (round up to nearest 16 pixels)
         const bucketHeight = Math.ceil(paddedHeight / 16) * 16;
 
-        // Find an existing slot with matching bucketed height and enough space
-        let slot = this.slots.find(s => s.height === bucketHeight && s.leftSize >= paddedWidth);
+        // Try to fit in the last layer first
+        let layerIndex = this.layers.length - 1;
+        let slots = this.layerSlots[layerIndex];
+
+        // Find an existing slot with matching height and enough space
+        let slot = slots.find(s => s.height === bucketHeight && s.leftSize >= paddedWidth);
 
         if (!slot) {
-            // Need to create a new slot (row)
-            const freeY = this.slots.length > 0 ? this.slots[this.slots.length - 1].bottom : 0;
+            // Need a new row — check if we have vertical space in current layer
+            const freeY = slots.length > 0 ? slots[slots.length - 1].bottom : 0;
 
-            // Check if we have vertical space (using bucketHeight)
-            if (freeY + bucketHeight > this.atlasHeight) {
-                // Try to grow the atlas
-                if (!this.grow()) {
-                    EntityTextureAtlas.log.error(`Atlas full: cannot fit ${width}x${height} sprite (max size reached or alloc failed)`);
+            if (freeY + bucketHeight > LAYER_SIZE) {
+                // Current layer is full — add a new layer
+                if (this.layers.length >= this.maxLayers) {
+                    EntityTextureAtlas.log.error(
+                        `Atlas full: max layers (${this.maxLayers}) reached, cannot fit ${width}x${height}`
+                    );
                     return null;
                 }
-                // After growing, retry finding/creating a slot
-                return this.reserve(width, height);
-            }
 
-            slot = new Slot(freeY, this.atlasWidth, bucketHeight);
-            this.slots.push(slot);
+                layerIndex = this.addLayer();
+                slots = this.layerSlots[layerIndex];
+
+                // New layer always has space at Y=0
+                slot = new Slot(0, LAYER_SIZE, bucketHeight);
+                slots.push(slot);
+            } else {
+                slot = new Slot(freeY, LAYER_SIZE, bucketHeight);
+                slots.push(slot);
+            }
         }
 
         // Actual sprite position (inside the padding)
         const x = slot.x + ATLAS_PADDING;
         const y = slot.y + ATLAS_PADDING;
 
-        // Compute normalized UV coordinates with half-pixel inset to prevent bleeding
-        const halfPixelU = 0.5 / this.atlasWidth;
-        const halfPixelV = 0.5 / this.atlasHeight;
-        const u0 = x / this.atlasWidth + halfPixelU;
-        const v0 = y / this.atlasHeight + halfPixelV;
-        const u1 = (x + width) / this.atlasWidth - halfPixelU;
-        const v1 = (y + height) / this.atlasHeight - halfPixelV;
+        // Compute normalized UV coordinates with half-pixel inset
+        const halfPixelU = 0.5 / LAYER_SIZE;
+        const halfPixelV = 0.5 / LAYER_SIZE;
+        const u0 = x / LAYER_SIZE + halfPixelU;
+        const v0 = y / LAYER_SIZE + halfPixelV;
+        const u1 = (x + width) / LAYER_SIZE - halfPixelU;
+        const v1 = (y + height) / LAYER_SIZE - halfPixelV;
 
         slot.increase(paddedWidth);
 
-        const region = { x, y, width, height, u0, v0, u1, v1 };
+        const region: AtlasRegion = { x, y, width, height, layer: layerIndex, u0, v0, u1, v1 };
         this.reservedRegions.push(region);
         return region;
     }
 
     /**
-     * Grow the atlas to double its current size (up to maxSize).
-     * Copies existing pixel data and updates all reserved region UVs.
-     * Returns true if growth succeeded, false if already at max size.
+     * Copy palette index data into a reserved region of the atlas.
+     * The indices Uint16Array must have (region.width * region.height) elements.
      */
-    private grow(): boolean {
-        const start = performance.now();
-        const newSize = this.atlasWidth * 2;
-        if (newSize > this.maxSize) {
-            return false;
-        }
-
-        EntityTextureAtlas.log.debug(`Growing atlas from ${this.atlasWidth} to ${newSize}`);
-
-        const byteLength = newSize * newSize * 4;
-        let newData: Uint8Array;
-        try {
-            newData = new Uint8Array(byteLength);
-        } catch (e) {
-            EntityTextureAtlas.log.error(`Failed to allocate atlas memory ${newSize}x${newSize} (${byteLength} bytes): ${e}`);
-            return false;
-        }
-
-        this.fillTransparent(newData, newSize * newSize);
-
-        // Copy existing data row by row
-        const oldWidth = this.atlasWidth;
-        const oldHeight = this.atlasHeight;
-        for (let y = 0; y < oldHeight; y++) {
-            const srcStart = y * oldWidth * 4;
-            const srcEnd = srcStart + oldWidth * 4;
-            const dstStart = y * newSize * 4;
-            newData.set(this.imgData.subarray(srcStart, srcEnd), dstStart);
-        }
-
-        // Update atlas dimensions
-        this.atlasWidth = newSize;
-        this.atlasHeight = newSize;
-        this.imgData = newData;
-
-        // Update slot widths
-        for (const slot of this.slots) {
-            slot.width = newSize;
-        }
-
-        // Update all reserved region UVs (pixel positions stay the same)
-        for (const region of this.reservedRegions) {
-            const halfPixelU = 0.5 / this.atlasWidth;
-            const halfPixelV = 0.5 / this.atlasHeight;
-            region.u0 = region.x / this.atlasWidth + halfPixelU;
-            region.v0 = region.y / this.atlasHeight + halfPixelV;
-            region.u1 = (region.x + region.width) / this.atlasWidth - halfPixelU;
-            region.v1 = (region.y + region.height) / this.atlasHeight - halfPixelV;
-        }
-
-        // CRITICAL: Immediately upload to GPU to prevent rendering with
-        // mismatched UVs (new size) vs GPU texture (old size)
-        if (this.glContext) {
-            this.update(this.glContext);
-        }
-
-        const elapsed = performance.now() - start;
-        console.warn(`[Atlas] grow ${this.atlasWidth / 2} -> ${newSize} took ${elapsed.toFixed(1)}ms (${this.reservedRegions.length} regions)`);
-
-        return true;
-    }
-
-    /**
-     * Copy sprite pixel data into a reserved region of the atlas.
-     * The ImageData must match the region dimensions.
-     * Uses row-based copying for better performance.
-     */
-    public blit(region: AtlasRegion, imageData: ImageData): void {
-        if (imageData.width !== region.width || imageData.height !== region.height) {
+    public blitIndices(region: AtlasRegion, indices: Uint16Array): void {
+        if (indices.length !== region.width * region.height) {
             EntityTextureAtlas.log.error(
-                `Blit size mismatch: region ${region.width}x${region.height}, ` +
-                `image ${imageData.width}x${imageData.height}`
+                `Blit size mismatch: region ${region.width}x${region.height} (${region.width * region.height} pixels), ` +
+                `indices length ${indices.length}`
             );
             return;
         }
 
         const start = performance.now();
 
-        const src = imageData.data;
-        const dst = this.imgData;
-        const atlasW = this.atlasWidth;
-        const rowBytes = region.width * 4;
+        const dst = this.layers[region.layer];
+        const rowLen = region.width;
 
-        // Use row-based copying with TypedArray.set() for better performance
         for (let y = 0; y < region.height; y++) {
-            const srcRowStart = y * rowBytes;
-            const dstRowStart = ((region.y + y) * atlasW + region.x) * 4;
-
-            // Copy entire row at once using subarray view
-            dst.set(
-                src.subarray(srcRowStart, srcRowStart + rowBytes),
-                dstRowStart
-            );
+            const srcRowStart = y * rowLen;
+            const dstRowStart = (region.y + y) * LAYER_SIZE + region.x;
+            dst.set(indices.subarray(srcRowStart, srcRowStart + rowLen), dstRowStart);
         }
+
+        // Expand dirty region for this layer
+        this.markDirty(region.layer, region.x, region.y, region.width, region.height);
 
         const elapsed = performance.now() - start;
         if (elapsed > SLOW_OP_THRESHOLD_MS) {
-            console.warn(`[Atlas] blit ${region.width}x${region.height} took ${elapsed.toFixed(1)}ms`);
+            console.warn(`[Atlas] blitIndices L${region.layer} ${region.width}x${region.height} took ${elapsed.toFixed(1)}ms`);
+        }
+    }
+
+    /** Expand the dirty region for a specific layer */
+    private markDirty(layerIndex: number, x: number, y: number, w: number, h: number): void {
+        const existing = this.dirtyRegions[layerIndex];
+        if (!existing) {
+            this.dirtyRegions[layerIndex] = {
+                minX: x,
+                minY: y,
+                maxX: x + w,
+                maxY: y + h,
+            };
+        } else {
+            existing.minX = Math.min(existing.minX, x);
+            existing.minY = Math.min(existing.minY, y);
+            existing.maxX = Math.max(existing.maxX, x + w);
+            existing.maxY = Math.max(existing.maxY, y + h);
         }
     }
 
     /**
-     * Extract a region of the atlas as ImageData (for UI display).
-     */
-    public extractRegion(region: AtlasRegion): ImageData | null {
-        if (!this.imgData) return null;
-
-        const { x, y, width, height } = region;
-        const totalW = this.atlasWidth;
-
-        // Validate bounds
-        if (x < 0 || y < 0 || x + width > totalW || y + height > this.atlasHeight) {
-            EntityTextureAtlas.log.error(`extractRegion out of bounds: ${x},${y} ${width}x${height} in ${totalW}x${this.atlasHeight}`);
-            return null;
-        }
-
-        try {
-            const data = new Uint8ClampedArray(width * height * 4);
-
-            for (let row = 0; row < height; row++) {
-                const srcStart = ((y + row) * totalW + x) * 4;
-                const srcEnd = srcStart + width * 4;
-                const dstStart = row * width * 4;
-
-                // Copy row data
-                data.set(this.imgData.subarray(srcStart, srcEnd), dstStart);
-            }
-
-            return new ImageData(data, width, height);
-        } catch (e) {
-            EntityTextureAtlas.log.error(`Failed to extract region: ${e}`);
-            return null;
-        }
-    }
-
-    private gpuWidth = 0;
-    private gpuHeight = 0;
-
-    /**
-     * Update the atlas texture on the GPU.
-     * Call this periodically during loading to show progressive updates.
+     * Update the atlas texture array on the GPU.
+     * Allocates new layers with texImage3D when layer count changes.
+     * Uses per-layer dirty-region tracking for efficient sub-uploads.
      */
     public update(gl: WebGL2RenderingContext): void {
-        // Cache GL context for immediate upload on grow
         this.glContext = gl;
-        super.bind(gl);
+        this.bindAsArray(gl);
 
-        // If size changed or not yet uploaded, do full upload
-        if (this.atlasWidth !== this.gpuWidth || this.atlasHeight !== this.gpuHeight) {
-            gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
-            gl.texImage2D(
-                gl.TEXTURE_2D,
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
+
+        if (this.layers.length !== this.gpuLayerCount) {
+            // Layer count changed — reallocate the 3D texture
+            gl.texImage3D(
+                gl.TEXTURE_2D_ARRAY, 0,
+                gl.R16UI,
+                LAYER_SIZE, LAYER_SIZE, this.layers.length,
                 0,
-                gl.RGBA8,
-                this.atlasWidth,
-                this.atlasHeight,
-                0,
-                gl.RGBA,
-                gl.UNSIGNED_BYTE,
-                this.imgData
+                gl.RED_INTEGER, gl.UNSIGNED_SHORT,
+                null // Allocate without data
             );
-            this.gpuWidth = this.atlasWidth;
-            this.gpuHeight = this.atlasHeight;
+
+            // Upload all layers
+            for (let i = 0; i < this.layers.length; i++) {
+                gl.texSubImage3D(
+                    gl.TEXTURE_2D_ARRAY, 0,
+                    0, 0, i,
+                    LAYER_SIZE, LAYER_SIZE, 1,
+                    gl.RED_INTEGER, gl.UNSIGNED_SHORT,
+                    this.layers[i]
+                );
+            }
+
+            this.gpuLayerCount = this.layers.length;
+
+            // Full upload covers everything — clear all dirty regions
+            for (let i = 0; i < this.dirtyRegions.length; i++) {
+                this.dirtyRegions[i] = null;
+            }
         } else {
-            // Size same, just re-upload content
-            // TODO: Optimize with texSubImage2D for dirty rows only
-            gl.texSubImage2D(
-                gl.TEXTURE_2D,
-                0,
-                0,
-                0,
-                this.atlasWidth,
-                this.atlasHeight,
-                gl.RGBA,
-                gl.UNSIGNED_BYTE,
-                this.imgData
-            );
+            // Upload only dirty sub-rectangles per layer
+            for (let i = 0; i < this.dirtyRegions.length; i++) {
+                const dirty = this.dirtyRegions[i];
+                if (!dirty) continue;
+
+                const dirtyW = dirty.maxX - dirty.minX;
+                const dirtyH = dirty.maxY - dirty.minY;
+
+                gl.pixelStorei(gl.UNPACK_ROW_LENGTH, LAYER_SIZE);
+                const srcOffset = dirty.minY * LAYER_SIZE + dirty.minX;
+
+                gl.texSubImage3D(
+                    gl.TEXTURE_2D_ARRAY, 0,
+                    dirty.minX, dirty.minY, i,
+                    dirtyW, dirtyH, 1,
+                    gl.RED_INTEGER, gl.UNSIGNED_SHORT,
+                    this.layers[i], srcOffset
+                );
+
+                gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
+                this.dirtyRegions[i] = null;
+            }
         }
     }
 
     /**
-     * Upload the atlas to the GPU as an RGBA8 texture.
-     * Uses NEAREST filtering to preserve pixel-art style.
+     * Bind as TEXTURE_2D_ARRAY with full parameter setup (for upload).
+     */
+    private bindAsArray(gl: WebGL2RenderingContext): void {
+        if (!this.texture) {
+            this.texture = gl.createTexture();
+        }
+        gl.activeTexture(gl.TEXTURE0 + this.textureIndex);
+        gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.texture);
+
+        // R16UI requires NEAREST filtering (integer textures)
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+
+    /**
+     * Bind the atlas texture for rendering (lightweight, no param setup).
+     * Call before draw calls to ensure the atlas is on the correct texture unit.
+     */
+    public bindForRendering(gl: WebGL2RenderingContext): void {
+        if (!this.texture) return;
+        gl.activeTexture(gl.TEXTURE0 + this.textureIndex);
+        gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.texture);
+    }
+
+    /**
+     * Override free() since we use TEXTURE_2D_ARRAY (parent uses TEXTURE_2D).
+     */
+    public override free(): void {
+        if (this.glContext && this.texture) {
+            this.glContext.deleteTexture(this.texture);
+            this.texture = null;
+        }
+    }
+
+    /**
+     * Upload the atlas to the GPU. Log utilization stats.
      */
     public load(gl: WebGL2RenderingContext): void {
-        // Calculate utilization before upload
-        const usedHeight = this.slots.length > 0 ? this.slots[this.slots.length - 1].bottom : 0;
-        const utilization = (usedHeight / this.atlasHeight * 100).toFixed(1);
-        const memoryMB = (this.atlasWidth * this.atlasHeight * 4 / 1024 / 1024).toFixed(1);
+        let totalUsedHeight = 0;
+        for (const slots of this.layerSlots) {
+            totalUsedHeight += slots.length > 0 ? slots[slots.length - 1].bottom : 0;
+        }
+        const totalPixels = this.layers.length * LAYER_SIZE * LAYER_SIZE;
+        const memoryMB = (totalPixels * 2 / 1024 / 1024).toFixed(1);
 
         EntityTextureAtlas.log.debug(
-            `Atlas final: ${this.atlasWidth}x${this.atlasHeight} (${memoryMB}MB), ` +
-            `${this.reservedRegions.length} sprites, ${utilization}% height used`
+            `Atlas final: ${this.layers.length} layers @ ${LAYER_SIZE}x${LAYER_SIZE} (${memoryMB}MB), ` +
+            `${this.reservedRegions.length} sprites`
         );
 
         this.update(gl);
     }
 
     /**
-     * Fill the atlas with a procedural pattern for testing/fallback.
-     * Creates a visible checkerboard pattern.
+     * Fill the first layer with a procedural pattern for testing/fallback.
      */
     public fillProceduralPattern(): void {
-        const size = this.atlasWidth;
-        for (let y = 0; y < size; y++) {
-            for (let x = 0; x < size; x++) {
-                const idx = (y * size + x) * 4;
+        const layer = this.layers[0];
+        for (let y = 0; y < LAYER_SIZE; y++) {
+            for (let x = 0; x < LAYER_SIZE; x++) {
+                const idx = y * LAYER_SIZE + x;
                 const checker = ((x >> 4) + (y >> 4)) % 2;
-                this.imgData[idx + 0] = checker ? 200 : 100; // R
-                this.imgData[idx + 1] = checker ? 200 : 100; // G
-                this.imgData[idx + 2] = checker ? 200 : 100; // B
-                this.imgData[idx + 3] = 255; // A
+                layer[idx] = checker ? 3 : 2;
             }
         }
+        this.markDirty(0, 0, 0, LAYER_SIZE, LAYER_SIZE);
     }
 
     /**
-     * Get the raw image data for caching.
+     * Extract a region from the atlas and convert from palette indices to RGBA ImageData.
+     * Used for generating icon thumbnails (e.g. resource icons in UI).
      */
-    public getImageData(): Uint8Array {
-        return this.imgData;
+    public extractRegion(region: AtlasRegion, paletteData?: Uint8Array): ImageData | null {
+        if (region.layer >= this.layers.length) return null;
+        if (region.x + region.width > LAYER_SIZE || region.y + region.height > LAYER_SIZE) {
+            return null;
+        }
+
+        const layer = this.layers[region.layer];
+        const imageData = new ImageData(region.width, region.height);
+        const dst = new Uint32Array(imageData.data.buffer);
+
+        for (let y = 0; y < region.height; y++) {
+            const srcRow = (region.y + y) * LAYER_SIZE + region.x;
+            const dstRow = y * region.width;
+
+            for (let x = 0; x < region.width; x++) {
+                const index = layer[srcRow + x];
+
+                if (index === 0) {
+                    dst[dstRow + x] = 0x00000000; // transparent
+                } else if (index === 1) {
+                    dst[dstRow + x] = 0x40000000; // shadow
+                } else if (paletteData && index * 4 + 3 < paletteData.length) {
+                    const pi = index * 4;
+                    const r = paletteData[pi];
+                    const g = paletteData[pi + 1];
+                    const b = paletteData[pi + 2];
+                    const a = paletteData[pi + 3];
+                    dst[dstRow + x] = (a << 24) | (b << 16) | (g << 8) | r;
+                } else {
+                    dst[dstRow + x] = 0xFFFF00FF; // magenta for missing palette
+                }
+            }
+        }
+
+        return imageData;
     }
 
     /**
-     * Get the slot layout for caching.
+     * Get the raw image data as bytes for serialization (cache).
+     * Concatenates all layers into a single Uint8Array.
      */
-    public getSlots(): CachedSlot[] {
-        return this.slots.map(s => ({
-            x: s.x,
-            y: s.y,
-            width: s.width,
-            height: s.height,
-        }));
+    public getImageDataBytes(): Uint8Array {
+        const bytesPerLayer = LAYER_SIZE * LAYER_SIZE * 2;
+        const result = new Uint8Array(this.layers.length * bytesPerLayer);
+        for (let i = 0; i < this.layers.length; i++) {
+            const layerBytes = new Uint8Array(
+                this.layers[i].buffer,
+                this.layers[i].byteOffset,
+                this.layers[i].byteLength
+            );
+            result.set(layerBytes, i * bytesPerLayer);
+        }
+        return result;
     }
 
     /**
-     * Get the maximum size for caching.
+     * Get the slot layout for caching (per-layer).
      */
-    public getMaxSize(): number {
-        return this.maxSize;
+    public getSlots(): CachedSlot[][] {
+        return this.layerSlots.map(slots =>
+            slots.map(s => ({
+                x: s.x,
+                y: s.y,
+                width: s.width,
+                height: s.height,
+            }))
+        );
+    }
+
+    /**
+     * Get the maximum layer count for caching.
+     */
+    public getMaxLayers(): number {
+        return this.maxLayers;
     }
 
     /**
      * Restore atlas state from cached data.
-     * This allows skipping sprite decoding on HMR by restoring
-     * previously decoded atlas data.
-     *
-     * @param imgData Raw RGBA pixel data
-     * @param width Atlas width
-     * @param height Atlas height
-     * @param slots Slot layout for row-based packing
      */
     public restoreFromCache(
-        imgData: Uint8Array,
-        width: number,
-        height: number,
-        slots: CachedSlot[]
+        imgData: Uint16Array,
+        layerCount: number,
+        slots: CachedSlot[][],
     ): void {
         const start = performance.now();
 
-        this.imgData = imgData;
-        this.atlasWidth = width;
-        this.atlasHeight = height;
+        const pixelsPerLayer = LAYER_SIZE * LAYER_SIZE;
 
-        // Restore slots
-        this.slots = slots.map(s => {
-            const slot = new Slot(s.y, s.width, s.height);
-            slot.x = s.x;
-            return slot;
-        });
+        this.layers = [];
+        this.layerSlots = [];
+        this.dirtyRegions = [];
+
+        for (let i = 0; i < layerCount; i++) {
+            // Create a copy so we own the memory
+            const layerData = new Uint16Array(pixelsPerLayer);
+            layerData.set(imgData.subarray(i * pixelsPerLayer, (i + 1) * pixelsPerLayer));
+            this.layers.push(layerData);
+
+            // Restore slots for this layer
+            const layerSlotData = slots[i] || [];
+            this.layerSlots.push(layerSlotData.map(s => {
+                const slot = new Slot(s.y, s.width, s.height);
+                slot.x = s.x;
+                return slot;
+            }));
+
+            this.dirtyRegions.push(null);
+        }
 
         // Clear reserved regions - they'll be repopulated via registry
         this.reservedRegions = [];
 
-        // Reset GPU state to force re-upload
-        this.gpuWidth = 0;
-        this.gpuHeight = 0;
+        // Reset GPU state to force full re-upload
+        this.gpuLayerCount = 0;
 
         const elapsed = performance.now() - start;
         EntityTextureAtlas.log.debug(
-            `Restored atlas from cache: ${width}x${height} in ${elapsed.toFixed(1)}ms`
+            `Restored atlas from cache: ${layerCount} layers in ${elapsed.toFixed(1)}ms`
         );
     }
 
     /**
      * Create a new atlas instance restored from cached data.
-     * Static factory method for cleaner cache restoration.
      */
     public static fromCache(
-        imgData: Uint8Array,
-        width: number,
-        height: number,
-        maxSize: number,
-        slots: CachedSlot[],
+        imgData: Uint16Array,
+        layerCount: number,
+        maxLayers: number,
+        slots: CachedSlot[][],
         textureUnit: number
     ): EntityTextureAtlas {
-        const atlas = new EntityTextureAtlas(maxSize, textureUnit);
-        atlas.restoreFromCache(imgData, width, height, slots);
+        const atlas = new EntityTextureAtlas(maxLayers, textureUnit, true);
+        atlas.restoreFromCache(imgData, layerCount, slots);
         return atlas;
     }
+
 }

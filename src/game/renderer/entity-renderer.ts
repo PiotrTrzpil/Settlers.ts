@@ -11,6 +11,8 @@ import { FileManager } from '@/utilities/file-manager';
 import { SpriteEntry, Race } from './sprite-metadata';
 import {
     PLAYER_COLORS,
+    TINT_NEUTRAL,
+    TINT_SELECTED,
     TINT_PREVIEW_VALID,
     TINT_PREVIEW_INVALID,
 } from './tint-utils';
@@ -627,6 +629,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     ): void {
         if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
 
+        // Bind atlas and palette textures so shaders can sample them
+        this.spriteManager.spriteAtlas!.bindForRendering(gl);
+        this.spriteManager.paletteManager.bind(gl);
+
         this.spriteBatchRenderer.beginSpriteBatch(gl, projection);
         this.transitioningUnits.length = 0;
 
@@ -641,31 +647,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             if (resolved.transitioning) { this.transitioningUnits.push(entity); continue }
             if (!resolved.sprite) continue;
 
-            // Use cached world position from frame context
-            const cachedPos = this.frameContext?.getWorldPos(entity);
-            const worldPos = cachedPos
-                ? { worldX: cachedPos.worldX, worldY: cachedPos.worldY }
-                : (entity.type === EntityType.Unit
-                    ? this.getInterpolatedWorldPos(entity, viewPoint)
-                    : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y));
-
-            // Add random visual offset for MapObjects (trees, stones) to break up the grid
-            // Only apply to normal trees (variation 3, not being cut/growing) to avoid position mismatch with woodcutters
-            if (entity.type === EntityType.MapObject && (entity.variation === undefined || entity.variation === 3)) {
-                const seed = entity.x * 12.9898 + entity.y * 78.233;
-                // +/- 0.15 world units - subtle offset that doesn't cause position mismatch issues
-                const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.3 - 0.15;
-                const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.3 - 0.15;
-                worldPos.worldX += offsetX;
-                worldPos.worldY += offsetY;
-            }
+            const worldPos = this.getEntityWorldPos(entity, viewPoint);
+            const playerRow = (entity.type === EntityType.Building || entity.type === EntityType.Unit) ? entity.player + 1 : 0;
+            const isSelected = this.selectedEntityIds.has(entity.id);
+            const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
 
             if (resolved.progress < 1.0) {
                 this.spriteBatchRenderer.addSpritePartial(
-                    gl, worldPos.worldX, worldPos.worldY, resolved.sprite, 1, 1, 1, 1, resolved.progress
+                    gl, worldPos.worldX, worldPos.worldY, resolved.sprite,
+                    playerRow, tint[0], tint[1], tint[2], tint[3], resolved.progress
                 );
             } else {
-                this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, resolved.sprite, 1, 1, 1, 1);
+                this.spriteBatchRenderer.addSprite(
+                    gl, worldPos.worldX, worldPos.worldY, resolved.sprite,
+                    playerRow, tint[0], tint[1], tint[2], tint[3]
+                );
             }
             this.frameSpriteCount++;
         }
@@ -676,6 +672,28 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (this.transitioningUnits.length > 0) {
             this.drawTransitioningUnits(gl, projection, viewPoint);
         }
+    }
+
+    /** Compute world position for an entity, with MapObject jitter for visual variety. */
+    private getEntityWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {
+        const cachedPos = this.frameContext?.getWorldPos(entity);
+        const worldPos = cachedPos
+            ? { worldX: cachedPos.worldX, worldY: cachedPos.worldY }
+            : (entity.type === EntityType.Unit
+                ? this.getInterpolatedWorldPos(entity, viewPoint)
+                : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y));
+
+        // Add random visual offset for MapObjects (trees, stones) to break up the grid
+        // Only apply to normal trees (variation 3, not being cut/growing) to avoid position mismatch with woodcutters
+        if (entity.type === EntityType.MapObject && (entity.variation === undefined || entity.variation === 3)) {
+            const seed = entity.x * 12.9898 + entity.y * 78.233;
+            const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.3 - 0.15;
+            const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.3 - 0.15;
+            worldPos.worldX += offsetX;
+            worldPos.worldY += offsetY;
+        }
+
+        return worldPos;
     }
 
     /** Render construction background sprite during CompletedRising phase */
@@ -691,7 +709,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (!constructionSprite) return;
 
         const worldPos = TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
-        this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, constructionSprite, 1, 1, 1, 1);
+        const playerRow = entity.player + 1;
+        this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, constructionSprite, playerRow, 1, 1, 1, 1);
     }
 
     /**
@@ -739,7 +758,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             // Use cached world position from frame context
             const cachedPos = this.frameContext?.getWorldPos(entity);
             const worldPos = cachedPos ?? this.getInterpolatedWorldPos(entity, viewPoint);
-            this.spriteBatchRenderer.addBlendSprite(gl, worldPos.worldX, worldPos.worldY, oldSprite, newSprite, blendFactor, 1, 1, 1, 1);
+            const playerRow = entity.player + 1; // Units are always player-owned
+            const isSelected = this.selectedEntityIds.has(entity.id);
+            const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
+            this.spriteBatchRenderer.addBlendSprite(
+                gl, worldPos.worldX, worldPos.worldY, oldSprite, newSprite, blendFactor,
+                playerRow, tint[0], tint[1], tint[2], tint[3]
+            );
         }
 
         this.spriteBatchRenderer.endBlendBatch(gl);
@@ -901,7 +926,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 this.spriteBatchRenderer.beginSpriteBatch(gl, projection);
                 this.spriteBatchRenderer.addSprite(
                     gl, worldPos.worldX, worldPos.worldY, spriteEntry,
-                    tint[0], tint[1], tint[2], tint[3]
+                    0, tint[0], tint[1], tint[2], tint[3]
                 );
                 this.spriteBatchRenderer.endSpriteBatch(gl);
                 return;

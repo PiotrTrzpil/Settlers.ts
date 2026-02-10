@@ -175,8 +175,7 @@ function updateResourceIconsFromManager(
     if (!renderer.spriteManager?.hasSprites) return;
 
     const manager = renderer.spriteManager;
-    const atlas = manager.spriteAtlas;
-    if (!atlas) return;
+    if (!manager.spriteAtlas) return;
 
     let changed = false;
     for (const r of availableResources) {
@@ -184,7 +183,7 @@ function updateResourceIconsFromManager(
         const entry = manager.getResource(r.type, 0);
         if (!entry) continue;
 
-        const imageData = atlas.extractRegion(entry.atlasRegion);
+        const imageData = manager.extractSpriteAsImageData(entry.atlasRegion);
         if (!imageData) continue;
 
         const canvas = document.createElement('canvas');

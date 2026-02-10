@@ -1,6 +1,8 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
 import { EntityTextureAtlas } from './entity-texture-atlas';
+import { PaletteTextureManager } from './palette-texture';
+import { TEXTURE_UNIT_PALETTE } from './entity-renderer-constants';
 import { debugStats } from '@/game/debug-stats';
 import {
     SpriteMetadataRegistry,
@@ -26,6 +28,7 @@ import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
 import { ANIMATION_DEFAULTS, AnimationData, carrySequenceKey, workSequenceKey } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy';
+import { PLAYER_TINTS } from './tint-utils';
 import {
     getAtlasCache,
     setAtlasCache,
@@ -144,10 +147,19 @@ export class SpriteRenderManager {
     private _spriteRegistry: SpriteMetadataRegistry | null = null;
     private _currentRace: Race = Race.Roman;
 
+    /** Combined palette texture for palettized atlas rendering */
+    private _paletteManager: PaletteTextureManager;
+
     constructor(fileManager: FileManager, textureUnit: number) {
         this.fileManager = fileManager;
         this.textureUnit = textureUnit;
         this.spriteLoader = new SpriteLoader(fileManager);
+        this._paletteManager = new PaletteTextureManager(TEXTURE_UNIT_PALETTE);
+    }
+
+    /** Get the palette texture manager for binding during render */
+    get paletteManager(): PaletteTextureManager {
+        return this._paletteManager;
     }
 
     /** Get the sprite atlas (null if not loaded) */
@@ -321,11 +333,25 @@ export class SpriteRenderManager {
     }
 
     /**
+     * Extract a sprite region from the atlas as RGBA ImageData.
+     * Handles palette lookup internally — callers don't need to know about palettes.
+     */
+    public extractSpriteAsImageData(region: import('./entity-texture-atlas').AtlasRegion): ImageData | null {
+        if (!this._spriteAtlas) return null;
+        const paletteData = this._paletteManager.getPaletteData() ?? undefined;
+        return this._spriteAtlas.extractRegion(region, paletteData);
+    }
+
+    /**
      * Clean up GPU resources. Call when switching races or destroying.
      */
     public cleanup(): void {
         this._spriteRegistry?.clear();
         this._spriteAtlas = null;
+        if (this.glContext) {
+            this._paletteManager.destroy(this.glContext);
+        }
+        this._paletteManager = new PaletteTextureManager(TEXTURE_UNIT_PALETTE);
     }
 
     /**
@@ -378,12 +404,18 @@ export class SpriteRenderManager {
     ): void {
         const start = performance.now();
 
-        // Restore atlas from cached data
+        // Convert cached Uint8Array bytes back to Uint16Array for R16UI atlas
+        const imgData16 = new Uint16Array(
+            cached.imgData.buffer,
+            cached.imgData.byteOffset,
+            cached.imgData.byteLength / 2
+        );
+
+        // Restore atlas from cached data (multi-layer)
         const atlas = EntityTextureAtlas.fromCache(
-            cached.imgData,
-            cached.width,
-            cached.height,
-            cached.maxSize,
+            imgData16,
+            cached.layerCount,
+            cached.maxLayers,
             cached.slots,
             cached.textureUnit
         );
@@ -391,8 +423,19 @@ export class SpriteRenderManager {
         // Restore registry from serialized data
         const registry = SpriteMetadataRegistry.deserialize(cached.registryData);
 
-        // Upload to GPU
+        // Upload atlas to GPU
         atlas.update(gl);
+
+        // Restore palette texture from cache (including player rows if present)
+        if (cached.paletteData && cached.paletteOffsets && cached.paletteTotalColors) {
+            this._paletteManager.restoreFromCache(
+                cached.paletteData,
+                cached.paletteOffsets,
+                cached.paletteTotalColors,
+                cached.paletteRows
+            );
+            this._paletteManager.upload(gl);
+        }
 
         // Set as active
         this._spriteAtlas = atlas;
@@ -411,7 +454,7 @@ export class SpriteRenderManager {
             units: 0,
             gpuUpload: Math.round(elapsed),
             totalSprites: Math.round(elapsed),
-            atlasSize: `${atlas.width}x${atlas.height}`,
+            atlasSize: `${atlas.layerCount}x${atlas.width}x${atlas.height}`,
             spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
                 registry.getResourceCount() + registry.getUnitCount(),
             cacheHit: true,
@@ -421,7 +464,7 @@ export class SpriteRenderManager {
         const sourceLabel = source === 'module' ? 'module cache (HMR)' : 'IndexedDB (refresh)';
         SpriteRenderManager.log.debug(
             `Restored sprites from ${sourceLabel} for ${Race[cached.race]} in ${elapsed.toFixed(1)}ms ` +
-            `(${atlas.width}x${atlas.height}, ${registry.getBuildingCount()} buildings)`
+            `(${atlas.layerCount} layers, ${registry.getBuildingCount()} buildings)`
         );
     }
 
@@ -440,15 +483,18 @@ export class SpriteRenderManager {
         }
 
         const cacheData: CachedAtlasData = {
-            imgData: this._spriteAtlas.getImageData(),
-            width: this._spriteAtlas.width,
-            height: this._spriteAtlas.height,
-            maxSize: this._spriteAtlas.getMaxSize(),
+            imgData: this._spriteAtlas.getImageDataBytes(),
+            layerCount: this._spriteAtlas.layerCount,
+            maxLayers: this._spriteAtlas.getMaxLayers(),
             slots: this._spriteAtlas.getSlots(),
             registryData: this._spriteRegistry.serialize(),
             race,
             textureUnit: this.textureUnit,
             timestamp: Date.now(),
+            paletteOffsets: this._paletteManager.getFileBaseOffsets(),
+            paletteTotalColors: this._paletteManager.colorCount,
+            paletteData: this._paletteManager.getPaletteData() ?? undefined,
+            paletteRows: this._paletteManager.rowCount,
         };
 
         // Save to module cache (sync, for HMR)
@@ -494,7 +540,7 @@ export class SpriteRenderManager {
         Object.assign(debugStats.state.loadTimings, {
             ...timings,
             totalSprites: timer.total(),
-            atlasSize: `${atlas.width}x${atlas.height}`,
+            atlasSize: `${atlas.layerCount}x${atlas.width}x${atlas.height}`,
             spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
                 registry.getResourceCount() + registry.getUnitCount(),
             cacheHit: false,
@@ -506,6 +552,25 @@ export class SpriteRenderManager {
             `mapObj=${timings.mapObjects}, resources=${timings.resources}, units=${timings.units}, ` +
             `gpu=${timings.gpuUpload}, TOTAL=${timer.total()}, workers=${getDecoderPool().getDecodeCount()}`
         );
+    }
+
+    /**
+     * Register palettes from loaded file sets into the combined palette texture.
+     */
+    private async registerPalettesForFiles(fileIds: string[]): Promise<void> {
+        for (const fileId of fileIds) {
+            const fileSet = await this.spriteLoader.loadFileSet(fileId);
+            if (fileSet) {
+                const paletteData = fileSet.paletteCollection.getPalette().getData();
+                this._paletteManager.registerPalette(fileId, paletteData);
+            }
+        }
+    }
+
+    /** Get the palette base offset for a file, defaulting to 0 if unregistered. */
+    private getPaletteBaseOffset(fileId: string): number {
+        const offset = this._paletteManager.getBaseOffset(fileId);
+        return offset >= 0 ? offset : 0;
     }
 
     /**
@@ -543,11 +608,14 @@ export class SpriteRenderManager {
             ...allFileIds.map(id => this.spriteLoader.loadFileSet(id)),
             warmUpDecoderPool(),
         ]);
+
+        await this.registerPalettesForFiles(allFileIds);
         const filePreload = t.lap();
 
         // Create atlas and registry
-        const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-        const atlas = new EntityTextureAtlas(Math.min(32768, maxTextureSize), this.textureUnit);
+        // MAX_ARRAY_TEXTURE_LAYERS is typically 256-2048 in WebGL2
+        const maxArrayLayers = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
+        const atlas = new EntityTextureAtlas(Math.min(64, maxArrayLayers), this.textureUnit);
         const atlasAlloc = t.lap();
         const registry = new SpriteMetadataRegistry();
 
@@ -578,6 +646,11 @@ export class SpriteRenderManager {
         }
 
         atlas.update(gl);
+
+        // Create player-tinted palette rows, then upload to GPU
+        this._paletteManager.createPlayerPalettes(PLAYER_TINTS);
+        this._paletteManager.upload(gl);
+
         const gpuUpload = t.lap();
 
         this.saveToCache(race);
@@ -598,11 +671,14 @@ export class SpriteRenderManager {
         spriteMap: Partial<Record<BuildingType, { file: number; index: number }>>,
         gl: WebGL2RenderingContext
     ): Promise<boolean> {
-        const fileSet = await this.spriteLoader.loadFileSet(`${fileNum}`);
+        const fileId = `${fileNum}`;
+        const fileSet = await this.spriteLoader.loadFileSet(fileId);
         if (!fileSet?.jilReader || !fileSet?.dilReader) {
             SpriteRenderManager.log.debug(`GFX/JIL/DIL files not available for ${fileNum}`);
             return false;
         }
+
+        const paletteBase = this.getPaletteBaseOffset(fileId);
 
         try {
             type BuildingData = {
@@ -620,7 +696,7 @@ export class SpriteRenderManager {
                 const buildingType = Number(typeStr) as BuildingType;
 
                 const constructionSprite = await this.spriteLoader.loadJobSprite(
-                    fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.CONSTRUCTION }, atlas
+                    fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.CONSTRUCTION }, atlas, paletteBase
                 );
 
                 const frameCount = this.spriteLoader.getFrameCount(fileSet, info.index, BUILDING_DIRECTION.COMPLETED);
@@ -629,7 +705,7 @@ export class SpriteRenderManager {
 
                 if (frameCount > 1) {
                     const anim = await this.spriteLoader.loadJobAnimation(
-                        fileSet, info.index, BUILDING_DIRECTION.COMPLETED, atlas
+                        fileSet, info.index, BUILDING_DIRECTION.COMPLETED, atlas, paletteBase
                     );
                     if (anim?.frames.length) {
                         animationFrames = anim.frames.map(f => f.entry);
@@ -637,7 +713,7 @@ export class SpriteRenderManager {
                     }
                 } else {
                     completedSprite = await this.spriteLoader.loadJobSprite(
-                        fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.COMPLETED }, atlas
+                        fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.COMPLETED }, atlas, paletteBase
                     );
                 }
 
@@ -690,13 +766,16 @@ export class SpriteRenderManager {
 
         let loadCount = 0;
 
+        const paletteBase5 = this.getPaletteBaseOffset(`${GFX_FILE_NUMBERS.MAP_OBJECTS}`);
+
         // Load trees using JIL-based structure
-        const treeCount = await this.loadTreeSprites(fileSet5, atlas, registry, gl);
+        const treeCount = await this.loadTreeSprites(fileSet5, atlas, registry, gl, paletteBase5);
         loadCount += treeCount;
 
         // Load resource map objects (coal, iron, etc.) using direction-based structure
         if (fileSet3) {
-            const resourceCount = await this.loadResourceMapObjects(fileSet3, atlas, registry);
+            const paletteBase3 = this.getPaletteBaseOffset(`${GFX_FILE_NUMBERS.RESOURCES}`);
+            const resourceCount = await this.loadResourceMapObjects(fileSet3, atlas, registry, paletteBase3);
             loadCount += resourceCount;
         }
 
@@ -718,7 +797,8 @@ export class SpriteRenderManager {
         fileSet: LoadedGfxFileSet,
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry,
-        gl: WebGL2RenderingContext
+        gl: WebGL2RenderingContext,
+        paletteBaseOffset: number
     ): Promise<number> {
         if (!fileSet.jilReader || !fileSet.dilReader) {
             SpriteRenderManager.log.debug('Tree JIL/DIL not available, skipping tree loading');
@@ -744,7 +824,7 @@ export class SpriteRenderManager {
             // Load all 11 stages for this tree type
             for (let offset = 0; offset <= 10; offset++) {
                 const anim = await this.spriteLoader.loadJobAnimation(
-                    fileSet, baseJobIndex + offset, 0, atlas
+                    fileSet, baseJobIndex + offset, 0, atlas, paletteBaseOffset
                 );
                 if (anim?.frames.length) {
                     batch.add({
@@ -783,7 +863,8 @@ export class SpriteRenderManager {
     private async loadResourceMapObjects(
         fileSet: LoadedGfxFileSet,
         atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry
+        registry: SpriteMetadataRegistry,
+        paletteBaseOffset: number
     ): Promise<number> {
         const mapObjectSpriteMap = getMapObjectSpriteMap();
         let loadedCount = 0;
@@ -798,7 +879,8 @@ export class SpriteRenderManager {
                 const sprite = await this.spriteLoader.loadJobSprite(
                     fileSet,
                     { jobIndex: info.index, directionIndex: dir },
-                    atlas
+                    atlas,
+                    paletteBaseOffset
                 );
                 if (sprite) {
                     registry.registerMapObject(type, sprite.entry, dir);
@@ -818,8 +900,11 @@ export class SpriteRenderManager {
         registry: SpriteMetadataRegistry,
         gl: WebGL2RenderingContext
     ): Promise<boolean> {
-        const fileSet = await this.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.RESOURCES}`);
+        const fileId = `${GFX_FILE_NUMBERS.RESOURCES}`;
+        const fileSet = await this.spriteLoader.loadFileSet(fileId);
         if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
+
+        const paletteBase = this.getPaletteBaseOffset(fileId);
 
         type ResourceData = { type: EMaterialType; dir: number; entry: SpriteEntry };
         const batch = new SafeLoadBatch<ResourceData>();
@@ -830,7 +915,7 @@ export class SpriteRenderManager {
 
             for (let dir = 0; dir < 8; dir++) {
                 const sprite = await this.spriteLoader.loadJobSprite(
-                    fileSet, { jobIndex: info.index, directionIndex: dir, frameIndex: 0 }, atlas
+                    fileSet, { jobIndex: info.index, directionIndex: dir, frameIndex: 0 }, atlas, paletteBase
                 );
                 if (sprite) {
                     batch.add({ type, dir, entry: sprite.entry });
@@ -854,8 +939,11 @@ export class SpriteRenderManager {
         registry: SpriteMetadataRegistry,
         gl: WebGL2RenderingContext
     ): Promise<boolean> {
-        const fileSet = await this.spriteLoader.loadFileSet(`${SETTLER_FILE_NUMBERS[race]}`);
+        const fileId = `${SETTLER_FILE_NUMBERS[race]}`;
+        const fileSet = await this.spriteLoader.loadFileSet(fileId);
         if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
+
+        const paletteBase = this.getPaletteBaseOffset(fileId);
 
         type UnitData = { unitType: UnitType; directionFrames: Map<number, SpriteEntry[]> };
         const batch = new SafeLoadBatch<UnitData>();
@@ -864,7 +952,7 @@ export class SpriteRenderManager {
             if (!info) continue;
             const unitType = Number(typeStr) as UnitType;
 
-            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, info.index, atlas);
+            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, info.index, atlas, paletteBase);
             if (!loadedDirs) {
                 SpriteRenderManager.log.debug(`Job ${info.index} not found for unit ${UnitType[unitType]}`);
                 continue;
@@ -895,8 +983,8 @@ export class SpriteRenderManager {
         SpriteRenderManager.log.debug(`Loaded ${batch.count} animated units for ${Race[race]}`);
 
         // Load carrier variants and worker animations (also need safe pattern)
-        await this.loadCarrierVariants(fileSet, atlas, registry, gl);
-        await this.loadWorkerAnimations(fileSet, atlas, registry, gl);
+        await this.loadCarrierVariants(fileSet, atlas, registry, gl, paletteBase);
+        await this.loadWorkerAnimations(fileSet, atlas, registry, gl, paletteBase);
 
         return batch.count > 0;
     }
@@ -908,7 +996,8 @@ export class SpriteRenderManager {
         fileSet: LoadedGfxFileSet,
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry,
-        gl: WebGL2RenderingContext
+        gl: WebGL2RenderingContext,
+        paletteBaseOffset: number
     ): Promise<number> {
         type CarrierData = { materialType: EMaterialType; directionFrames: Map<number, SpriteEntry[]> };
         const batch = new SafeLoadBatch<CarrierData>();
@@ -917,7 +1006,7 @@ export class SpriteRenderManager {
             if (jobIndex === undefined) continue;
             const materialType = Number(typeStr) as EMaterialType;
 
-            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas);
+            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas, paletteBaseOffset);
             if (!loadedDirs) {
                 SpriteRenderManager.log.debug(`Carrier job ${jobIndex} not found for ${EMaterialType[materialType]}`);
                 continue;
@@ -981,7 +1070,8 @@ export class SpriteRenderManager {
         fileSet: LoadedGfxFileSet,
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry,
-        gl: WebGL2RenderingContext
+        gl: WebGL2RenderingContext,
+        paletteBaseOffset: number
     ): Promise<void> {
         type WorkAnimData = {
             unitType: UnitType;
@@ -1006,7 +1096,7 @@ export class SpriteRenderManager {
 
                 const frames = new Map<number, SpriteEntry[]>();
                 for (let dir = 0; dir < dirCount; dir++) {
-                    const anim = await this.spriteLoader.loadJobAnimation(fileSet, jobIndex, dir, atlas);
+                    const anim = await this.spriteLoader.loadJobAnimation(fileSet, jobIndex, dir, atlas, paletteBaseOffset);
                     if (anim?.frames.length) {
                         frames.set(dir, anim.frames.map(f => f.entry));
                     }
