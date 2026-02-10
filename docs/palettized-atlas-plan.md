@@ -328,10 +328,87 @@ const MAX_INDEXEDDB_SIZE = 256 * 1024 * 1024;
 
 ---
 
-## Open Questions
+## Research Findings (Phase 1 Complete)
 
-1. What is the actual max value of `paletteOffset + pixelValue`? Need to verify it fits in a byte (0-255).
+### Q1: What is the max value of `paletteOffset + pixelValue`?
 
-2. Do we need to support multiple palette textures, or can we combine all into one?
+**Answer: Can exceed 255!**
 
-3. Should we keep a fallback RGBA path for debugging/comparison?
+From `palette-collection.ts`:
+```typescript
+this.palette = new Palette(reader.length / 2);  // Can be > 256 colors!
+```
+
+The PA6 files contain multi-hundred color palettes. Each sprite gets a `paletteOffset` pointing into this larger palette, then adds the pixel value (0-255).
+
+**Implication:** Cannot use R8 format directly. Options:
+1. **R16 format** (16-bit) - 2× savings instead of 4×, simpler
+2. **R8 + per-vertex paletteOffset** - 4× savings, more complex shader/vertex setup
+
+### Q2: Do we need multiple palette textures?
+
+**Answer: One combined palette per GFX file set is sufficient.**
+
+Each file set (1.gfx/1.pa6, 5.gfx/5.pa6, etc.) has its own palette. Since we load all sprites for one race into a single atlas, we need to either:
+- Combine all palettes into one large texture
+- Track which palette each sprite uses
+
+**Recommendation:** Combine all palettes into a single texture with file-based offsets.
+
+### Q3: Fallback RGBA path?
+
+**Recommendation:** Keep existing RGBA decode path for debugging. Add a toggle:
+```typescript
+const USE_PALETTIZED_ATLAS = true;  // Feature flag
+```
+
+---
+
+## Revised Implementation: R16 Approach
+
+Since `paletteOffset + pixelValue` can exceed 255, we'll use **R16UI** (16-bit unsigned integer) format:
+
+- **Memory:** 2× savings (512MB instead of 1GB for 16384² atlas)
+- **IndexedDB:** Should fit within quota
+- **Complexity:** Simpler than per-vertex offset approach
+
+### Key Changes from Original Plan
+
+| Original | Revised |
+|----------|---------|
+| R8 format (1 byte/pixel) | R16UI format (2 bytes/pixel) |
+| 4× memory savings | 2× memory savings |
+| 256-color limit | 65536-color limit |
+| Complex offset handling | Direct index storage |
+
+### Shader Update (Revised)
+
+```glsl
+uniform usampler2D u_spriteAtlas;  // R16UI - palette indices (unsigned int)
+uniform sampler2D u_palette;        // RGBA - color lookup
+
+void main() {
+    uint index = texture(u_spriteAtlas, v_texCoord).r;
+
+    // Handle transparency (index 0)
+    if (index == 0u) discard;
+
+    // Handle shadow (index 1)
+    if (index == 1u) {
+        fragColor = vec4(0.0, 0.0, 0.0, 0.25);
+        return;
+    }
+
+    // Palette lookup
+    vec4 color = texelFetch(u_palette, ivec2(int(index), 0), 0);
+    fragColor = color;
+}
+```
+
+---
+
+## Open Questions (Remaining)
+
+1. What's the maximum combined palette size across all file sets? Need to verify < 65536.
+
+2. Should we pursue R8 + per-vertex offset later for additional 2× savings?

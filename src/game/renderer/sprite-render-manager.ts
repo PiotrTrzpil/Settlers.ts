@@ -934,10 +934,14 @@ export class SpriteRenderManager {
         }
 
         batch.finalize(atlas, gl, (data) => {
-            registry.registerAnimationSequence(
-                EntityType.Unit, UnitType.Carrier, carrySequenceKey(data.materialType),
-                data.directionFrames, ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
-            );
+            // Register carry animations for all unit types that can carry materials
+            const carryingUnitTypes = [UnitType.Carrier, UnitType.Woodcutter];
+            for (const unitType of carryingUnitTypes) {
+                registry.registerAnimationSequence(
+                    EntityType.Unit, unitType, carrySequenceKey(data.materialType),
+                    data.directionFrames, ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
+                );
+            }
         });
 
         if (batch.count > 0) {
