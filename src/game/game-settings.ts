@@ -28,6 +28,9 @@ export interface GameSettings {
 
     // UI state (persisted)
     settingsPanelOpen: boolean;
+
+    // Performance
+    cacheDisabled: boolean;
 }
 
 /** Default values for all settings */
@@ -53,6 +56,9 @@ const DEFAULT_SETTINGS: GameSettings = {
 
     // UI state
     settingsPanelOpen: false,
+
+    // Performance
+    cacheDisabled: false,
 };
 
 /** Load settings from localStorage, merging with defaults */

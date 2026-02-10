@@ -284,11 +284,130 @@ export function useMapView(
         return param === 'true' || param === '';
     });
 
+    // =========================================================================
+    // Map Loading State
+    // =========================================================================
+
     const fileName = ref<string | null>(null);
     const mapInfo = ref('');
     const game = shallowRef<Game | null>(null);
 
-    // Use game settings for persisted display settings
+    /** Tracks map loading state to prevent race conditions */
+    const mapLoadState = reactive({
+        isLoading: false,
+        currentFile: null as string | null,
+        initialized: false,
+    });
+
+    /**
+     * Central map loading function. All map loads go through here.
+     * Handles guards, cleanup, and state management in one place.
+     */
+    async function loadMap(file: IFileSource | null, options: { isTestMap?: boolean } = {}): Promise<boolean> {
+        const fm = getFileManager();
+        if (!fm) {
+            log.debug('Cannot load map: FileManager not available');
+            return false;
+        }
+
+        // Guard: prevent concurrent loads
+        if (mapLoadState.isLoading) {
+            log.debug(`Skipping map load${file ? ` for ${file.name}` : ''} - already loading`);
+            return false;
+        }
+
+        // Guard: don't reload same file
+        if (file && mapLoadState.currentFile === file.name) {
+            log.debug(`Skipping map load for ${file.name} - already loaded`);
+            return false;
+        }
+
+        mapLoadState.isLoading = true;
+
+        try {
+            // Destroy old game first to prevent multiple game loops
+            if (game.value) {
+                game.value.destroy();
+                game.value = null;
+            }
+
+            if (options.isTestMap) {
+                // Load synthetic test map
+                mapInfo.value = 'Test map (synthetic 256x256)';
+                fileName.value = null;
+                mapLoadState.currentFile = '__test_map__';
+                game.value = createTestGame(fm);
+                return true;
+            }
+
+            if (!file) {
+                log.debug('No map file provided');
+                return false;
+            }
+
+            // Load real map file
+            const result = await loadMapFile(file, fm);
+            if (!result.game) {
+                log.error(`Failed to load map: ${file.name}`);
+                return false;
+            }
+
+            fileName.value = file.name;
+            mapLoadState.currentFile = file.name;
+            mapInfo.value = result.mapInfo;
+            game.value = result.game;
+
+            // Load mission script (non-blocking, only if Lua enabled)
+            if (isLuaEnabled()) {
+                result.game.loadScript(file.name).then(scriptResult => {
+                    if (scriptResult.success) {
+                        log.info(`Script loaded: ${scriptResult.scriptPath}`);
+                    }
+                });
+            }
+
+            return true;
+        } finally {
+            mapLoadState.isLoading = false;
+        }
+    }
+
+    /**
+     * Initialize map on first load. Called once from onMounted.
+     * Subsequent file selections go through onFileSelect.
+     */
+    function initializeMap(): void {
+        // Only initialize once
+        if (mapLoadState.initialized) return;
+        mapLoadState.initialized = true;
+
+        if (isTestMap.value) {
+            void loadMap(null, { isTestMap: true });
+        } else {
+            // Auto-load first available map
+            const fm = getFileManager();
+            if (!fm) return;
+            const maps = fm.filter('.map');
+            if (maps.length > 0) {
+                void loadMap(maps[0]);
+            }
+        }
+    }
+
+    /**
+     * Handle user file selection from file browser.
+     */
+    function onFileSelect(file: IFileSource): void {
+        // In test map mode, ignore file browser selections
+        if (isTestMap.value) return;
+
+        void loadMap(file);
+    }
+
+    // =========================================================================
+    // UI State
+    // =========================================================================
+
     const showDebug = computed({
         get: () => gameSettings.state.showDebugGrid,
         set: (value: boolean) => { gameSettings.state.showDebugGrid = value }
@@ -308,6 +427,10 @@ export function useMapView(
         saveLayerVisibility(layerVisibility);
     }
 
+    // =========================================================================
+    // Computed State
+    // =========================================================================
+
     const selectedEntity = computed<Entity | undefined>(() =>
         game.value?.state.selectedEntityId != null
             ? game.value.state.getEntity(game.value.state.selectedEntityId)
@@ -316,13 +439,13 @@ export function useMapView(
     const selectionCount = computed(() => game.value?.state.selectedEntityIds.size ?? 0);
     const isPaused = computed(() => game.value ? !game.value.gameLoop.isRunning : false);
 
-    // Mode state - use debugStats as the single source of truth (reactive and instant)
+    // Mode state - use debugStats as the single source of truth
     const currentMode = computed(() => debugStats.state.mode);
     const placeBuildingType = computed(() => debugStats.state.placeBuildingType);
     const placeResourceType = computed(() => debugStats.state.placeResourceType);
     const placeUnitType = computed(() => debugStats.state.placeUnitType);
 
-    // Use debugStats as single source of truth for entity counts (reactive and updated each frame)
+    // Entity counts from debugStats
     const layerCounts = computed<LayerCounts>(() => ({
         buildings: debugStats.state.buildingCount,
         units: debugStats.state.unitCount,
@@ -334,43 +457,32 @@ export function useMapView(
         other: debugStats.state.otherCount,
     }));
 
-    function loadTestMap(): void {
-        const fm = getFileManager();
-        if (!fm) return;
-        // Destroy old game before creating new one to prevent multiple game loops
-        game.value?.destroy();
-        mapInfo.value = 'Test map (synthetic 256x256)';
-        game.value = createTestGame(fm);
-    }
-
-    function autoLoadFirstMap(): void {
-        const fm = getFileManager();
-        if (game.value || !fm) return;
-        const maps = fm.filter('.map');
-        if (maps.length > 0) {
-            onFileSelect(maps[0]);
-        }
-    }
-
-    const initializeMap = () => isTestMap.value ? loadTestMap() : autoLoadFirstMap();
+    // =========================================================================
+    // Lifecycle
+    // =========================================================================
 
     onMounted(() => {
         initializeMap();
         iconUpdateInterval = window.setInterval(updateResourceIcons, 1000);
     });
-    // Cleanup interval
-    // Cleanup interval
+
     onUnmounted(() => {
         if (iconUpdateInterval) clearInterval(iconUpdateInterval);
     });
-    watch(getFileManager, initializeMap);
+
+    // Re-initialize if FileManager changes (e.g., user selects new game directory)
+    watch(getFileManager, () => {
+        // Reset initialization flag to allow re-init with new FileManager
+        mapLoadState.initialized = false;
+        mapLoadState.currentFile = null;
+        initializeMap();
+    });
 
     // Update resource placement mode when amount changes
     watch(resourceAmount, () => {
         if (debugStats.state.mode === 'place_resource' && debugStats.state.placeResourceType) {
             const inputManager = getInputManager?.();
             if (inputManager) {
-                // Re-enter mode with new amount
                 inputManager.switchMode('place_resource', {
                     resourceType: debugStats.state.placeResourceType,
                     amount: resourceAmount.value
@@ -378,15 +490,6 @@ export function useMapView(
             }
         }
     });
-
-    function onFileSelect(file: IFileSource) {
-        // Don't process file selection in test map mode - prevents file-browser
-        // auto-select from triggering map loading that overwrites the test map
-        if (isTestMap.value) return;
-
-        fileName.value = file.name;
-        void load(file);
-    }
 
     function onTileClick(tile: TileCoord) {
         hoveredTile.value = tile;
@@ -402,33 +505,6 @@ export function useMapView(
     const setSelectMode = modeToggler.setSelectMode;
     const removeSelected = gameActions.removeSelected;
     const togglePause = gameActions.togglePause;
-
-    async function load(file: IFileSource) {
-        // Don't load map files if we're in test map mode - the test map is
-        // already loaded synchronously and we don't want async file loading
-        // to overwrite it (race condition from file-browser auto-select)
-        if (isTestMap.value) return;
-
-        const fm = getFileManager();
-        if (!fm) return;
-        const result = await loadMapFile(file, fm);
-        if (result.game) {
-            // Destroy old game before replacing to prevent multiple game loops
-            game.value?.destroy();
-            game.value = result.game;
-            mapInfo.value = result.mapInfo;
-
-            // Load and execute mission script for this map (non-blocking)
-            // Only if Lua scripting is enabled in settings
-            if (isLuaEnabled()) {
-                result.game.loadScript(file.name).then(scriptResult => {
-                    if (scriptResult.success) {
-                        log.info(`Script loaded: ${scriptResult.scriptPath}`);
-                    }
-                });
-            }
-        }
-    }
 
     function updateResourceIcons() {
         updateResourceIconsFromManager(game.value, resourceIcons);

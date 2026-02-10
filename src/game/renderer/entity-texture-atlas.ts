@@ -94,6 +94,9 @@ export class EntityTextureAtlas extends ShaderTexture {
     /** Maximum size this atlas can grow to */
     private maxSize: number;
 
+    /** Cached GL context for immediate GPU upload on grow */
+    private glContext: WebGL2RenderingContext | null = null;
+
     constructor(maxSize: number, textureIndex: number) {
         super(textureIndex);
 
@@ -242,6 +245,12 @@ export class EntityTextureAtlas extends ShaderTexture {
             region.v1 = (region.y + region.height) / this.atlasHeight - halfPixelV;
         }
 
+        // CRITICAL: Immediately upload to GPU to prevent rendering with
+        // mismatched UVs (new size) vs GPU texture (old size)
+        if (this.glContext) {
+            this.update(this.glContext);
+        }
+
         const elapsed = performance.now() - start;
         console.warn(`[Atlas] grow ${this.atlasWidth / 2} -> ${newSize} took ${elapsed.toFixed(1)}ms (${this.reservedRegions.length} regions)`);
 
@@ -329,6 +338,8 @@ export class EntityTextureAtlas extends ShaderTexture {
      * Call this periodically during loading to show progressive updates.
      */
     public update(gl: WebGL2RenderingContext): void {
+        // Cache GL context for immediate upload on grow
+        this.glContext = gl;
         super.bind(gl);
 
         // If size changed or not yet uploaded, do full upload

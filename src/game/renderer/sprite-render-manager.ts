@@ -1,7 +1,6 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
 import { EntityTextureAtlas } from './entity-texture-atlas';
-import { processBatchedWithHandler } from './batch-loader';
 import { debugStats } from '@/game/debug-stats';
 import {
     SpriteMetadataRegistry,
@@ -24,7 +23,7 @@ import {
 import { SpriteLoader, type LoadedGfxFileSet } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
 import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
-import { ANIMATION_DEFAULTS, ANIMATION_SEQUENCES, AnimationData, carrySequenceKey } from '../animation';
+import { ANIMATION_DEFAULTS, AnimationData, carrySequenceKey, workSequenceKey } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy';
 import {
@@ -32,6 +31,7 @@ import {
     setAtlasCache,
     getIndexedDBCache,
     setIndexedDBCache,
+    isCacheDisabled,
     type CachedAtlasData,
 } from './sprite-atlas-cache';
 
@@ -43,6 +43,66 @@ function createTimer() {
         lap: () => { const now = performance.now(); const elapsed = Math.round(now - last); last = now; return elapsed },
         total: () => Math.round(performance.now() - start),
     };
+}
+
+// =============================================================================
+// Safe Progressive Loading Pattern
+// =============================================================================
+//
+// To prevent black boxes during progressive rendering, sprites must only be
+// registered (made visible) AFTER GPU upload. The pattern is:
+//
+//   1. Load sprites (blits to CPU buffer, collects results)
+//   2. GPU upload (atlas.update)
+//   3. Register sprites (now safe to render)
+//
+// The SafeLoadBatch helper enforces this pattern.
+
+/**
+ * Helper for safe progressive sprite loading.
+ * Collects loaded sprites, then uploads to GPU, then registers.
+ * This prevents black boxes from rendering before GPU has pixel data.
+ */
+class SafeLoadBatch<T> {
+    private items: T[] = [];
+
+    /** Add a loaded item to the batch */
+    add(item: T): void {
+        this.items.push(item);
+    }
+
+    /** Add multiple loaded items */
+    addAll(items: T[]): void {
+        this.items.push(...items);
+    }
+
+    /**
+     * Finalize the batch: upload to GPU, then register all items.
+     * @param atlas - The texture atlas to upload
+     * @param gl - WebGL context for GPU upload
+     * @param register - Function to register each item (called after GPU upload)
+     */
+    finalize(
+        atlas: EntityTextureAtlas,
+        gl: WebGL2RenderingContext,
+        register: (item: T) => void
+    ): void {
+        if (this.items.length === 0) return;
+
+        // GPU upload first
+        atlas.update(gl);
+
+        // Now safe to register
+        for (const item of this.items) {
+            register(item);
+        }
+
+        this.items = [];
+    }
+
+    get count(): number {
+        return this.items.length;
+    }
 }
 
 /**
@@ -219,41 +279,6 @@ export class SpriteRenderManager {
         };
     }
 
-    // ========== Legacy Wrappers (for backwards compatibility) ==========
-
-    /** @deprecated Use getAnimatedEntity(EntityType.Building, type) instead */
-    public getAnimatedBuilding(type: BuildingType): AnimatedSpriteEntry | null {
-        return this.getAnimatedEntity(EntityType.Building, type);
-    }
-
-    /** @deprecated Use hasAnimation(EntityType.Building, type) instead */
-    public hasBuildingAnimation(type: BuildingType): boolean {
-        return this.hasAnimation(EntityType.Building, type);
-    }
-
-    /** @deprecated Use getAnimatedEntity(EntityType.MapObject, type) instead */
-    public getAnimatedMapObject(type: MapObjectType): AnimatedSpriteEntry | null {
-        return this.getAnimatedEntity(EntityType.MapObject, type);
-    }
-
-    /** @deprecated Use hasAnimation(EntityType.MapObject, type) instead */
-    public hasMapObjectAnimation(type: MapObjectType): boolean {
-        return this.hasAnimation(EntityType.MapObject, type);
-    }
-
-    /** @deprecated Use getAnimatedEntity(EntityType.Unit, type) instead */
-    public getAnimatedUnit(type: UnitType): AnimatedSpriteEntry | null {
-        return this.getAnimatedEntity(EntityType.Unit, type);
-    }
-
-    /** @deprecated Use hasAnimation(EntityType.Unit, type) instead */
-    public hasUnitAnimation(type: UnitType): boolean {
-        return this.hasAnimation(EntityType.Unit, type);
-    }
-
-    /**
-     * Get a resource/material sprite entry by type.
-     */
     /**
      * Get a resource/material sprite entry by type.
      */
@@ -275,7 +300,7 @@ export class SpriteRenderManager {
      */
     public getBuildingRenderEntry(type: BuildingType): BuildingRenderEntry {
         const sprites = this._spriteRegistry?.getBuildingSprites(type);
-        const animated = this._spriteRegistry?.getAnimatedBuilding(type) ?? null;
+        const animated = this._spriteRegistry?.getAnimatedEntity(EntityType.Building, type) ?? null;
         return {
             construction: sprites?.construction ?? null,
             completed: sprites?.completed ?? null,
@@ -288,7 +313,7 @@ export class SpriteRenderManager {
      */
     public getMapObjectRenderEntry(type: MapObjectType): MapObjectRenderEntry {
         const staticSprite = this._spriteRegistry?.getMapObject(type) ?? null;
-        const animated = this._spriteRegistry?.getAnimatedMapObject(type) ?? null;
+        const animated = this._spriteRegistry?.getAnimatedEntity(EntityType.MapObject, type) ?? null;
         return {
             static: staticSprite,
             animated,
@@ -408,6 +433,12 @@ export class SpriteRenderManager {
             return;
         }
 
+        // Skip saving if caching is disabled
+        if (isCacheDisabled()) {
+            SpriteRenderManager.log.debug('Cache disabled, skipping save');
+            return;
+        }
+
         const cacheData: CachedAtlasData = {
             imgData: this._spriteAtlas.getImageData(),
             width: this._spriteAtlas.width,
@@ -430,20 +461,63 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Load sprites for a specific race.
+     * Try to restore from cache (module or IndexedDB).
+     * Returns true if restored successfully.
      */
-    private async loadSpritesForRace(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
+    private async tryRestoreFromCache(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
+        if (isCacheDisabled()) {
+            SpriteRenderManager.log.debug('Cache disabled via settings, loading from files');
+            return false;
+        }
+
         // Tier 1: Try module-level cache (instant, survives HMR)
         if (this.tryRestoreFromModuleCache(gl, race)) {
             return true;
         }
 
         // Tier 2: Try IndexedDB cache (fast, survives page refresh)
-        if (await this.tryRestoreFromIndexedDB(gl, race)) {
+        return this.tryRestoreFromIndexedDB(gl, race);
+    }
+
+    /**
+     * Record sprite loading timings to debug stats.
+     */
+    private recordLoadTimings(
+        timings: {
+            filePreload: number; atlasAlloc: number; buildings: number;
+            mapObjects: number; resources: number; units: number; gpuUpload: number;
+        },
+        timer: ReturnType<typeof createTimer>,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry
+    ): void {
+        Object.assign(debugStats.state.loadTimings, {
+            ...timings,
+            totalSprites: timer.total(),
+            atlasSize: `${atlas.width}x${atlas.height}`,
+            spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
+                registry.getResourceCount() + registry.getUnitCount(),
+            cacheHit: false,
+            cacheSource: null,
+        });
+
+        SpriteRenderManager.log.debug(
+            `Sprite loading (ms): preload=${timings.filePreload}, buildings=${timings.buildings}, ` +
+            `mapObj=${timings.mapObjects}, resources=${timings.resources}, units=${timings.units}, ` +
+            `gpu=${timings.gpuUpload}, TOTAL=${timer.total()}, workers=${getDecoderPool().getDecodeCount()}`
+        );
+    }
+
+    /**
+     * Load sprites for a specific race.
+     */
+    private async loadSpritesForRace(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
+        // Try cache first
+        if (await this.tryRestoreFromCache(gl, race)) {
             return true;
         }
 
-        // Tier 3: Full load from files
+        // Full load from files
         const t = createTimer();
         const spriteMap = getBuildingSpriteMap(race);
 
@@ -458,39 +532,33 @@ export class SpriteRenderManager {
             return false;
         }
 
-        // Collect ALL file IDs and preload in parallel
+        // Preload all files and warm up workers in parallel
         const allFileIds = [
             ...Array.from(buildingFiles).map(String),
             `${GFX_FILE_NUMBERS.MAP_OBJECTS}`,
             `${GFX_FILE_NUMBERS.RESOURCES}`,
             `${SETTLER_FILE_NUMBERS[race]}`,
         ];
-
-        // Warm up decoder workers in parallel with file loading
-        // This ensures workers are ready before sprite decoding starts
         await Promise.all([
             ...allFileIds.map(id => this.spriteLoader.loadFileSet(id)),
             warmUpDecoderPool(),
         ]);
         const filePreload = t.lap();
 
+        // Create atlas and registry
         const maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-        const effectiveMax = Math.min(32768, maxTextureSize);
-        SpriteRenderManager.log.debug(`Atlas max size set to ${effectiveMax} (HW: ${maxTextureSize})`);
-
-        const atlas = new EntityTextureAtlas(effectiveMax, this.textureUnit);
+        const atlas = new EntityTextureAtlas(Math.min(32768, maxTextureSize), this.textureUnit);
         const atlasAlloc = t.lap();
-
         const registry = new SpriteMetadataRegistry();
 
-        // Expose atlas and registry immediately for progressive rendering
+        // Expose for progressive rendering
         this._spriteAtlas = atlas;
         this._spriteRegistry = registry;
 
         // Load all sprite categories
         let loadedAny = false;
         for (const fileNum of buildingFiles) {
-            if (await this.loadBuildingSprites(fileNum, atlas, registry, spriteMap)) {
+            if (await this.loadBuildingSprites(fileNum, atlas, registry, spriteMap, gl)) {
                 loadedAny = true;
             }
         }
@@ -499,41 +567,21 @@ export class SpriteRenderManager {
         const mapObjectsLoaded = await this.loadMapObjectSprites(gl, atlas, registry);
         const mapObjects = t.lap();
 
-        const resourcesLoaded = await this.loadResourceSprites(atlas, registry);
+        const resourcesLoaded = await this.loadResourceSprites(atlas, registry, gl);
         const resources = t.lap();
 
-        const unitsLoaded = await this.loadUnitSprites(race, atlas, registry);
+        const unitsLoaded = await this.loadUnitSprites(race, atlas, registry, gl);
         const units = t.lap();
 
         if (!loadedAny && !mapObjectsLoaded && !resourcesLoaded && !unitsLoaded) {
             return false;
         }
 
-        // Final full upload to ensure everything is on GPU
         atlas.update(gl);
         const gpuUpload = t.lap();
 
-        // Save to module-level cache for HMR
         this.saveToCache(race);
-        const cacheTime = t.lap();
-
-        // Record timings to debug stats
-        const lt = debugStats.state.loadTimings;
-        Object.assign(lt, {
-            filePreload, atlasAlloc, buildings, mapObjects, resources, units, gpuUpload,
-            totalSprites: t.total(),
-            atlasSize: `${atlas.width}x${atlas.height}`,
-            spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
-                registry.getResourceCount() + registry.getUnitCount(),
-            cacheHit: false,
-            cacheSource: null,
-        });
-
-        SpriteRenderManager.log.debug(
-            `Sprite loading (ms): preload=${filePreload}, buildings=${buildings}, ` +
-            `mapObj=${mapObjects}, resources=${resources}, units=${units}, ` +
-            `gpu=${gpuUpload}, cache=${cacheTime}, TOTAL=${t.total()}, workers=${getDecoderPool().getDecodeCount()}`
-        );
+        this.recordLoadTimings({ filePreload, atlasAlloc, buildings, mapObjects, resources, units, gpuUpload }, t, atlas, registry);
 
         return registry.hasBuildingSprites() || registry.hasMapObjectSprites() ||
             registry.hasResourceSprites() || registry.hasUnitSprites();
@@ -541,110 +589,81 @@ export class SpriteRenderManager {
 
     /**
      * Load building sprites from a GFX file set.
+     * Uses SafeLoadBatch to ensure GPU upload before registration.
      */
     private async loadBuildingSprites(
         fileNum: number,
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry,
-        spriteMap: Partial<Record<BuildingType, { file: number; index: number }>>
+        spriteMap: Partial<Record<BuildingType, { file: number; index: number }>>,
+        gl: WebGL2RenderingContext
     ): Promise<boolean> {
-        const fileId = `${fileNum}`;
-        const fileSet = await this.spriteLoader.loadFileSet(fileId);
-
-        if (!fileSet) {
-            SpriteRenderManager.log.debug(`GFX file set ${fileNum} not available`);
-            return false;
-        }
-
-        if (!fileSet.jilReader || !fileSet.dilReader) {
-            SpriteRenderManager.log.debug(`JIL/DIL files not available for ${fileNum}`);
+        const fileSet = await this.spriteLoader.loadFileSet(`${fileNum}`);
+        if (!fileSet?.jilReader || !fileSet?.dilReader) {
+            SpriteRenderManager.log.debug(`GFX/JIL/DIL files not available for ${fileNum}`);
             return false;
         }
 
         try {
-            // Collect building info for this file
-            const buildingInfos: Array<{ buildingType: BuildingType; jobIndex: number }> = [];
+            type BuildingData = {
+                buildingType: BuildingType;
+                constructionEntry: SpriteEntry | null;
+                completedEntry: SpriteEntry | null;
+                animationFrames: SpriteEntry[] | null;
+            };
 
+            const batch = new SafeLoadBatch<BuildingData>();
+
+            // Load all buildings for this file
             for (const [typeStr, info] of Object.entries(spriteMap)) {
                 if (!info || info.file !== fileNum) continue;
-                buildingInfos.push({
-                    buildingType: Number(typeStr) as BuildingType,
-                    jobIndex: info.index,
+                const buildingType = Number(typeStr) as BuildingType;
+
+                const constructionSprite = await this.spriteLoader.loadJobSprite(
+                    fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.CONSTRUCTION }, atlas
+                );
+
+                const frameCount = this.spriteLoader.getFrameCount(fileSet, info.index, BUILDING_DIRECTION.COMPLETED);
+                let completedSprite = null;
+                let animationFrames: SpriteEntry[] | null = null;
+
+                if (frameCount > 1) {
+                    const anim = await this.spriteLoader.loadJobAnimation(
+                        fileSet, info.index, BUILDING_DIRECTION.COMPLETED, atlas
+                    );
+                    if (anim?.frames.length) {
+                        animationFrames = anim.frames.map(f => f.entry);
+                        completedSprite = anim.frames[0];
+                    }
+                } else {
+                    completedSprite = await this.spriteLoader.loadJobSprite(
+                        fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.COMPLETED }, atlas
+                    );
+                }
+
+                batch.add({
+                    buildingType,
+                    constructionEntry: constructionSprite?.entry ?? null,
+                    completedEntry: completedSprite?.entry ?? null,
+                    animationFrames,
                 });
             }
 
-            // Process buildings in batches with yielding
-            await processBatchedWithHandler(
-                buildingInfos,
-                async({ buildingType, jobIndex }) => {
-                    // Load construction sprite (D0)
-                    const constructionSprite = await this.spriteLoader.loadJobSprite(
-                        fileSet,
-                        { jobIndex, directionIndex: BUILDING_DIRECTION.CONSTRUCTION },
-                        atlas
-                    );
+            // Finalize: GPU upload → register
+            batch.finalize(atlas, gl, (data) => {
+                if (!data.constructionEntry && !data.completedEntry) return;
 
-                    // Check if completed state has multiple frames (animation)
-                    const completedFrameCount = this.spriteLoader.getFrameCount(
-                        fileSet,
-                        jobIndex,
-                        BUILDING_DIRECTION.COMPLETED
-                    );
-
-                    let completedSprite = null;
-                    let animationFrames: SpriteEntry[] | null = null;
-
-                    if (completedFrameCount > 1) {
-                        // Load as animation
-                        const animation = await this.spriteLoader.loadJobAnimation(
-                            fileSet,
-                            jobIndex,
-                            BUILDING_DIRECTION.COMPLETED,
-                            atlas
-                        );
-
-                        if (animation && animation.frames.length > 0) {
-                            animationFrames = animation.frames.map(f => f.entry);
-                            completedSprite = animation.frames[0];
-                        }
-                    } else {
-                        // Load single frame
-                        completedSprite = await this.spriteLoader.loadJobSprite(
-                            fileSet,
-                            { jobIndex, directionIndex: BUILDING_DIRECTION.COMPLETED },
-                            atlas
-                        );
-                    }
-
-                    return { buildingType, jobIndex, constructionSprite, completedSprite, animationFrames };
-                },
-                ({ buildingType, jobIndex, constructionSprite, completedSprite, animationFrames }) => {
-                    if (!constructionSprite && !completedSprite) {
-                        SpriteRenderManager.log.debug(
-                            `Failed to load any sprite for building ${BuildingType[buildingType]} (job ${jobIndex})`
-                        );
-                        return;
-                    }
-
-                    if (animationFrames) {
-                        registry.registerAnimatedBuilding(
-                            buildingType,
-                            animationFrames,
-                            BUILDING_DIRECTION.COMPLETED,
-                            ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                            true // loop
-                        );
-                    }
-
-                    registry.registerBuilding(
-                        buildingType,
-                        constructionSprite?.entry ?? null,
-                        completedSprite?.entry ?? null
+                if (data.animationFrames) {
+                    const frames = new Map([[BUILDING_DIRECTION.COMPLETED, data.animationFrames]]);
+                    registry.registerAnimatedEntity(
+                        EntityType.Building, data.buildingType, frames,
+                        ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
                     );
                 }
-            );
+                registry.registerBuilding(data.buildingType, data.constructionEntry, data.completedEntry);
+            });
 
-            return true;
+            return batch.count > 0;
         } catch (e) {
             SpriteRenderManager.log.error(`Failed to load GFX file ${fileNum}: ${e}`);
             return false;
@@ -688,6 +707,12 @@ export class SpriteRenderManager {
     /**
      * Load tree sprites using JIL/DIL structure.
      * Trees have: D0-D2 = growth stages, D3 = normal (with sway animation), D4 = falling, D5 = canopy disappearing
+     *
+     * Loading is done progressively per tree type:
+     * 1. Load all stages for one tree type
+     * 2. Upload to GPU (atlas.update)
+     * 3. Register sprites (now safe to render)
+     * 4. Repeat for next tree type
      */
     private async loadTreeSprites(
         fileSet: LoadedGfxFileSet,
@@ -700,64 +725,56 @@ export class SpriteRenderManager {
             return 0;
         }
 
-        const treeInfos: Array<{ treeType: MapObjectType; jobIndex: number }> = [];
-        for (const [typeStr, jobIndex] of Object.entries(TREE_JOB_INDICES)) {
-            if (jobIndex !== undefined) {
-                treeInfos.push({
-                    treeType: Number(typeStr) as MapObjectType,
-                    jobIndex,
-                });
-            }
-        }
+        type TreeStageData = {
+            treeType: MapObjectType;
+            offset: number;
+            firstFrame: SpriteEntry;
+            allFrames: SpriteEntry[] | null;
+        };
 
-        let loadedCount = 0;
+        let totalLoaded = 0;
 
-        await processBatchedWithHandler(
-            treeInfos,
-            async({ treeType, jobIndex: baseJobIndex }) => {
-                // Tree lifecycle jobs (each is a separate JIL job, direction always 0):
-                //   +0: sapling, +1: small, +2: medium (growth stages)
-                //   +3: normal (full grown, animated sway)
-                //   +4: falling, +5-9: being cut, +10: canopy disappearing
+        // Process each tree type progressively (using SafeLoadBatch)
+        for (const [typeStr, baseJobIndex] of Object.entries(TREE_JOB_INDICES)) {
+            if (baseJobIndex === undefined) continue;
+            const treeType = Number(typeStr) as MapObjectType;
 
-                // Load normal tree animation (full grown with sway)
-                const normalJob = baseJobIndex + TREE_JOB_OFFSET.NORMAL;
-                const normalAnim = await this.spriteLoader.loadJobAnimation(
-                    fileSet,
-                    normalJob,
-                    0, // direction
-                    atlas
+            const batch = new SafeLoadBatch<TreeStageData>();
+
+            // Load all 11 stages for this tree type
+            for (let offset = 0; offset <= 10; offset++) {
+                const anim = await this.spriteLoader.loadJobAnimation(
+                    fileSet, baseJobIndex + offset, 0, atlas
                 );
-
-                // TODO: Load growth stages when forester system is implemented
-                // TODO: Load falling/cutting animations when woodcutter system needs them
-
-                return { treeType, normalAnim };
-            },
-            (result) => {
-                if (!result) return;
-
-                const { treeType, normalAnim } = result;
-
-                // Register normal tree animation (full grown trees sway)
-                if (normalAnim && normalAnim.frames.length > 0) {
-                    const frames = normalAnim.frames.map(f => f.entry);
-                    registry.registerAnimatedMapObject(
+                if (anim?.frames.length) {
+                    batch.add({
                         treeType,
-                        frames,
-                        ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                        true // loop
-                    );
-                    loadedCount++;
+                        offset,
+                        firstFrame: anim.frames[0].entry,
+                        allFrames: offset === TREE_JOB_OFFSET.NORMAL ? anim.frames.map(f => f.entry) : null,
+                    });
                 }
             }
-        );
 
-        // Force atlas update after loading trees
-        atlas.update(gl);
+            // GPU upload → register this tree type
+            batch.finalize(atlas, gl, (data) => {
+                registry.registerMapObject(data.treeType, data.firstFrame, data.offset);
+                if (data.allFrames) {
+                    registry.registerAnimatedEntity(
+                        EntityType.MapObject, data.treeType,
+                        new Map([[0, data.allFrames]]),
+                        ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
+                    );
+                }
+                totalLoaded++;
+            });
 
-        SpriteRenderManager.log.debug(`Loaded ${loadedCount} tree sprites`);
-        return loadedCount;
+            // Yield to allow rendering before next tree type
+            await new Promise(r => setTimeout(r, 0));
+        }
+
+        SpriteRenderManager.log.debug(`Loaded ${totalLoaded} tree sprites`);
+        return totalLoaded;
     }
 
     /**
@@ -794,263 +811,222 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Load resource sprites.
-     */
-    /**
-     * Load resource sprites.
+     * Load resource sprites using SafeLoadBatch pattern.
      */
     private async loadResourceSprites(
         atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry
+        registry: SpriteMetadataRegistry,
+        gl: WebGL2RenderingContext
     ): Promise<boolean> {
         const fileSet = await this.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.RESOURCES}`);
         if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
 
-        const DIRECTIONS = [0, 1, 2, 3, 4, 5, 6, 7];
+        type ResourceData = { type: EMaterialType; dir: number; entry: SpriteEntry };
+        const batch = new SafeLoadBatch<ResourceData>();
 
-        return this.loadSpritesFromMap(
-            getResourceSpriteMap(),
-            (type, info) => DIRECTIONS.map(dir => ({ type, dir, jobIndex: info.index })),
-            ({ dir, jobIndex }) => this.spriteLoader.loadJobSprite(
-                fileSet, { jobIndex, directionIndex: dir, frameIndex: 0 }, atlas
-            ),
-            ({ type, dir }, sprite) => registry.registerResource(type, dir, sprite.entry)
-        );
+        for (const [typeStr, info] of Object.entries(getResourceSpriteMap())) {
+            if (!info) continue;
+            const type = Number(typeStr) as EMaterialType;
+
+            for (let dir = 0; dir < 8; dir++) {
+                const sprite = await this.spriteLoader.loadJobSprite(
+                    fileSet, { jobIndex: info.index, directionIndex: dir, frameIndex: 0 }, atlas
+                );
+                if (sprite) {
+                    batch.add({ type, dir, entry: sprite.entry });
+                }
+            }
+        }
+
+        batch.finalize(atlas, gl, (data) => {
+            registry.registerResource(data.type, data.dir, data.entry);
+        });
+
+        return batch.count > 0;
     }
 
     /**
-     * Load unit sprites with all animation frames for all available directions.
+     * Load unit sprites with all animation frames using SafeLoadBatch pattern.
      */
     private async loadUnitSprites(
         race: Race,
         atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry
+        registry: SpriteMetadataRegistry,
+        gl: WebGL2RenderingContext
     ): Promise<boolean> {
         const fileSet = await this.spriteLoader.loadFileSet(`${SETTLER_FILE_NUMBERS[race]}`);
         if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
 
-        const spriteMap = getUnitSpriteMap(race);
-        const unitInfos: Array<{ unitType: UnitType; jobIndex: number }> = [];
+        type UnitData = { unitType: UnitType; directionFrames: Map<number, SpriteEntry[]> };
+        const batch = new SafeLoadBatch<UnitData>();
 
-        for (const [typeStr, info] of Object.entries(spriteMap)) {
+        for (const [typeStr, info] of Object.entries(getUnitSpriteMap(race))) {
             if (!info) continue;
-            unitInfos.push({
-                unitType: Number(typeStr) as UnitType,
-                jobIndex: info.index,
-            });
-        }
+            const unitType = Number(typeStr) as UnitType;
 
-        let loadedCount = 0;
-
-        await processBatchedWithHandler(
-            unitInfos,
-            async({ unitType, jobIndex }) => {
-                // Load all directions with all frames using helper
-                const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas);
-                if (!loadedDirs) {
-                    SpriteRenderManager.log.debug(`Job ${jobIndex} not found for unit ${UnitType[unitType]}`);
-                    return null;
-                }
-
-                // Convert LoadedSprite[] to SpriteEntry[]
-                const directionFrames = new Map<number, SpriteEntry[]>();
-                for (const [dir, sprites] of loadedDirs) {
-                    directionFrames.set(dir, sprites.map(s => s.entry));
-                }
-
-                return { unitType, jobIndex, directionFrames };
-            },
-            (result) => {
-                if (!result || result.directionFrames.size === 0) return;
-
-                const { unitType, directionFrames } = result;
-
-                // Register animated unit with all directions and frames
-                registry.registerAnimatedUnit(
-                    unitType,
-                    directionFrames,
-                    ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                    true // loop
-                );
-
-                // Also register static sprites (first frame of each direction) for fallback
-                for (const [dir, frames] of directionFrames) {
-                    if (frames.length > 0) {
-                        registry.registerUnit(unitType, dir, frames[0]);
-                    }
-                }
-
-                loadedCount++;
+            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, info.index, atlas);
+            if (!loadedDirs) {
+                SpriteRenderManager.log.debug(`Job ${info.index} not found for unit ${UnitType[unitType]}`);
+                continue;
             }
-        );
 
-        SpriteRenderManager.log.debug(`Loaded ${loadedCount} animated units for ${Race[race]}`);
+            const directionFrames = new Map<number, SpriteEntry[]>();
+            for (const [dir, sprites] of loadedDirs) {
+                directionFrames.set(dir, sprites.map(s => s.entry));
+            }
 
-        // Load carrier material variants (carrier carrying different goods)
-        const carrierCount = await this.loadCarrierVariants(fileSet, atlas, registry);
-        if (carrierCount > 0) {
-            SpriteRenderManager.log.debug(`Loaded ${carrierCount} carrier material variants for ${Race[race]}`);
+            if (directionFrames.size > 0) {
+                batch.add({ unitType, directionFrames });
+            }
         }
 
-        // Load worker-specific animations (e.g., woodcutter chopping)
-        await this.loadWorkerAnimations(fileSet, atlas, registry);
+        batch.finalize(atlas, gl, (data) => {
+            registry.registerAnimatedEntity(
+                EntityType.Unit, data.unitType, data.directionFrames,
+                ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
+            );
+            for (const [dir, frames] of data.directionFrames) {
+                if (frames.length > 0) {
+                    registry.registerUnit(data.unitType, dir, frames[0]);
+                }
+            }
+        });
 
-        return loadedCount > 0;
+        SpriteRenderManager.log.debug(`Loaded ${batch.count} animated units for ${Race[race]}`);
+
+        // Load carrier variants and worker animations (also need safe pattern)
+        await this.loadCarrierVariants(fileSet, atlas, registry, gl);
+        await this.loadWorkerAnimations(fileSet, atlas, registry, gl);
+
+        return batch.count > 0;
     }
 
     /**
-     * Load carrier sprite variants for each material type.
-     * Each material has its own JIL job with 6 directions of walk frames.
-     * These are registered as additional animation sequences on the Carrier entity
-     * under keys like 'carry_0' (trunk), 'carry_9' (plank), etc.
+     * Load carrier sprite variants for each material type using SafeLoadBatch.
      */
     private async loadCarrierVariants(
         fileSet: LoadedGfxFileSet,
         atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry
+        registry: SpriteMetadataRegistry,
+        gl: WebGL2RenderingContext
     ): Promise<number> {
-        const entries = Object.entries(CARRIER_MATERIAL_JOB_INDICES) as [string, number | undefined][];
-        const tasks: Array<{ materialType: EMaterialType; jobIndex: number }> = [];
+        type CarrierData = { materialType: EMaterialType; directionFrames: Map<number, SpriteEntry[]> };
+        const batch = new SafeLoadBatch<CarrierData>();
 
-        for (const [typeStr, jobIndex] of entries) {
+        for (const [typeStr, jobIndex] of Object.entries(CARRIER_MATERIAL_JOB_INDICES)) {
             if (jobIndex === undefined) continue;
-            tasks.push({ materialType: Number(typeStr) as EMaterialType, jobIndex });
+            const materialType = Number(typeStr) as EMaterialType;
+
+            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas);
+            if (!loadedDirs) {
+                SpriteRenderManager.log.debug(`Carrier job ${jobIndex} not found for ${EMaterialType[materialType]}`);
+                continue;
+            }
+
+            const directionFrames = new Map<number, SpriteEntry[]>();
+            for (const [dir, sprites] of loadedDirs) {
+                directionFrames.set(dir, sprites.map(s => s.entry));
+            }
+
+            if (directionFrames.size > 0) {
+                batch.add({ materialType, directionFrames });
+            }
         }
 
-        if (tasks.length === 0) return 0;
+        batch.finalize(atlas, gl, (data) => {
+            registry.registerAnimationSequence(
+                EntityType.Unit, UnitType.Carrier, carrySequenceKey(data.materialType),
+                data.directionFrames, ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
+            );
+        });
 
-        let loadedCount = 0;
-
-        await processBatchedWithHandler(
-            tasks,
-            async({ materialType, jobIndex }) => {
-                const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas);
-                if (!loadedDirs) {
-                    SpriteRenderManager.log.debug(
-                        `Carrier job ${jobIndex} not found for material ${EMaterialType[materialType]}`
-                    );
-                    return null;
-                }
-
-                // Convert LoadedSprite[] to SpriteEntry[]
-                const directionFrames = new Map<number, SpriteEntry[]>();
-                for (const [dir, sprites] of loadedDirs) {
-                    directionFrames.set(dir, sprites.map(s => s.entry));
-                }
-
-                return { materialType, directionFrames };
-            },
-            (result) => {
-                if (!result || result.directionFrames.size === 0) return;
-
-                const seqKey = carrySequenceKey(result.materialType);
-                registry.registerAnimationSequence(
-                    EntityType.Unit,
-                    UnitType.Carrier,
-                    seqKey,
-                    result.directionFrames,
-                    ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                    true
-                );
-
-                loadedCount++;
-            }
-        );
-
-        return loadedCount;
+        if (batch.count > 0) {
+            SpriteRenderManager.log.debug(`Loaded ${batch.count} carrier material variants`);
+        }
+        return batch.count;
     }
 
     /**
-     * Load worker-specific animation sequences (e.g., woodcutter chopping).
-     * These are registered as additional sequences on existing units.
+     * Mapping from WORKER_JOB_INDICES keys to UnitType.
+     * Used by loadWorkerAnimations to register work sequences.
+     */
+    private static readonly WORKER_KEY_TO_UNIT_TYPE: Record<string, UnitType> = {
+        carrier: UnitType.Carrier,
+        digger: UnitType.Digger,
+        smith: UnitType.Smith,
+        builder: UnitType.Builder,
+        woodcutter: UnitType.Woodcutter,
+        miner: UnitType.Miner,
+        forester: UnitType.Forester,
+        farmer: UnitType.Farmer,
+        priest: UnitType.Priest,
+        geologist: UnitType.Geologist,
+        pioneer: UnitType.Pioneer,
+        swordsman_1: UnitType.Swordsman,
+        swordsman_2: UnitType.Swordsman,
+        swordsman_3: UnitType.Swordsman,
+        bowman_1: UnitType.Bowman,
+        bowman_2: UnitType.Bowman,
+        bowman_3: UnitType.Bowman,
+    };
+
+    /**
+     * Load worker-specific animation sequences using SafeLoadBatch.
      */
     private async loadWorkerAnimations(
         fileSet: LoadedGfxFileSet,
         atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry
+        registry: SpriteMetadataRegistry,
+        gl: WebGL2RenderingContext
     ): Promise<void> {
-        // Load woodcutter work animation: chopping (56) + cutting log on ground (57)
-        const choppingJobIndex = WORKER_JOB_INDICES.woodcutter.chopping;
-        const cuttingLogJobIndex = WORKER_JOB_INDICES.woodcutter.cuttingLogOnGround;
+        type WorkAnimData = {
+            unitType: UnitType;
+            seqKey: string;
+            frames: Map<number, SpriteEntry[]>;
+            debugInfo: string;
+        };
 
-        // Get direction count from whichever job exists
-        const choppingDirCount = this.spriteLoader.getDirectionCount(fileSet, choppingJobIndex);
-        const cuttingLogDirCount = this.spriteLoader.getDirectionCount(fileSet, cuttingLogJobIndex);
+        const batch = new SafeLoadBatch<WorkAnimData>();
 
-        if (choppingDirCount === 0 && cuttingLogDirCount === 0) {
-            SpriteRenderManager.log.debug(`Woodcutter work jobs ${choppingJobIndex}/${cuttingLogJobIndex} not found`);
-            return;
-        }
+        for (const [workerKey, workerData] of Object.entries(WORKER_JOB_INDICES)) {
+            if (!('work' in workerData)) continue;
 
-        const dirCount = choppingDirCount || cuttingLogDirCount;
+            const unitType = SpriteRenderManager.WORKER_KEY_TO_UNIT_TYPE[workerKey];
+            if (unitType === undefined) continue;
 
-        const directionFrames = new Map<number, SpriteEntry[]>();
+            const workJobIndices = workerData.work as readonly number[];
 
-        for (let dir = 0; dir < dirCount; dir++) {
-            const frames: SpriteEntry[] = [];
+            for (let workIndex = 0; workIndex < workJobIndices.length; workIndex++) {
+                const jobIndex = workJobIndices[workIndex];
+                const dirCount = this.spriteLoader.getDirectionCount(fileSet, jobIndex);
+                if (dirCount === 0) continue;
 
-            // First: chopping animation (hitting the tree)
-            if (choppingDirCount > 0) {
-                const choppingAnim = await this.spriteLoader.loadJobAnimation(
-                    fileSet, choppingJobIndex, dir, atlas
-                );
-                if (choppingAnim && choppingAnim.frames.length > 0) {
-                    frames.push(...choppingAnim.frames.map(f => f.entry));
+                const frames = new Map<number, SpriteEntry[]>();
+                for (let dir = 0; dir < dirCount; dir++) {
+                    const anim = await this.spriteLoader.loadJobAnimation(fileSet, jobIndex, dir, atlas);
+                    if (anim?.frames.length) {
+                        frames.set(dir, anim.frames.map(f => f.entry));
+                    }
                 }
-            }
 
-            // Second: cutting log on ground animation
-            if (cuttingLogDirCount > 0) {
-                const cuttingLogAnim = await this.spriteLoader.loadJobAnimation(
-                    fileSet, cuttingLogJobIndex, dir, atlas
-                );
-                if (cuttingLogAnim && cuttingLogAnim.frames.length > 0) {
-                    frames.push(...cuttingLogAnim.frames.map(f => f.entry));
+                if (frames.size > 0) {
+                    batch.add({
+                        unitType,
+                        seqKey: workSequenceKey(workIndex),
+                        frames,
+                        debugInfo: `${workerKey} work.${workIndex}: ${frames.size} dirs, ${frames.get(0)?.length ?? 0} frames`,
+                    });
                 }
-            }
-
-            if (frames.length > 0) {
-                directionFrames.set(dir, frames);
             }
         }
 
-        if (directionFrames.size > 0) {
+        batch.finalize(atlas, gl, (data) => {
             registry.registerAnimationSequence(
-                EntityType.Unit,
-                UnitType.Woodcutter,
-                ANIMATION_SEQUENCES.WORK,
-                directionFrames,
-                ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                true // loop
+                EntityType.Unit, data.unitType, data.seqKey,
+                data.frames, ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
             );
-            const totalFrames = directionFrames.get(0)?.length ?? 0;
-            SpriteRenderManager.log.debug(
-                `Loaded woodcutter work animation: ${directionFrames.size} directions, ${totalFrames} frames each`
-            );
-        }
+            SpriteRenderManager.log.debug(`Loaded ${data.debugInfo}`);
+        });
     }
 
-    /**
-     * Generic sprite loading helper.
-     * Collects tasks from sprite map, loads in batches, registers results.
-     */
-    private async loadSpritesFromMap<K extends number, I, T extends { type: K }, R>(
-        spriteMap: Partial<Record<K, I>>,
-        expandTasks: (type: K, info: I) => T[],
-        load: (task: T) => Promise<R | null>,
-        register: (task: T, result: R) => void
-    ): Promise<boolean> {
-        const tasks: T[] = [];
-        for (const [typeStr, info] of Object.entries(spriteMap) as [string, I][]) {
-            if (info) tasks.push(...expandTasks(Number(typeStr) as K, info));
-        }
-
-        let count = 0;
-        await processBatchedWithHandler(
-            tasks,
-            load,
-            (result, task) => { if (result) { register(task, result); count++ } }
-        );
-        return count > 0;
-    }
 }

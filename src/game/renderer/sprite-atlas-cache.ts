@@ -22,8 +22,16 @@ const log = new LogHandler('SpriteAtlasCache');
 /** Build timestamp injected by Vite - changes on server restart */
 declare const __BUILD_TIME__: string;
 
+/**
+ * Schema version for cache invalidation.
+ * Bump this when animation sequence names or sprite data format changes.
+ */
+const CACHE_SCHEMA_VERSION = 2;  // v2: work.0/work.1 instead of work/work_ground
+
 /** Current build version for cache invalidation */
-const BUILD_VERSION = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'dev';
+const BUILD_VERSION = typeof __BUILD_TIME__ !== 'undefined'
+    ? `${__BUILD_TIME__}-v${CACHE_SCHEMA_VERSION}`
+    : `dev-v${CACHE_SCHEMA_VERSION}`;
 
 /** IndexedDB constants */
 const DB_NAME = 'settlers-atlas-cache';
@@ -69,16 +77,31 @@ interface IndexedDBAtlasEntry extends CachedAtlasBase {
 // Module-level cache (Tier 1 - survives HMR)
 // =============================================================================
 
-const moduleCache = new Map<Race, CachedAtlasData>();
+interface ModuleCacheEntry {
+    version: string;
+    data: CachedAtlasData;
+}
 
-/** Get cached atlas data from module cache (null if not found) */
+const moduleCache = new Map<Race, ModuleCacheEntry>();
+
+/** Get cached atlas data from module cache (null if not found or version mismatch) */
 export function getAtlasCache(race: Race): CachedAtlasData | null {
-    return moduleCache.get(race) ?? null;
+    const entry = moduleCache.get(race);
+    if (!entry) return null;
+
+    // Version check - invalidate if schema changed
+    if (entry.version !== BUILD_VERSION) {
+        log.debug(`Module cache: version mismatch for ${Race[race]} (cached: ${entry.version}, current: ${BUILD_VERSION})`);
+        moduleCache.delete(race);
+        return null;
+    }
+
+    return entry.data;
 }
 
 /** Store atlas data in the module-level cache */
 export function setAtlasCache(race: Race, data: CachedAtlasData): void {
-    moduleCache.set(race, data);
+    moduleCache.set(race, { version: BUILD_VERSION, data });
     log.debug(`Module cache: stored ${Race[race]} (${data.width}x${data.height}, ${(data.imgData.length / 1024 / 1024).toFixed(1)}MB)`);
 }
 
@@ -185,7 +208,7 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
     return data;
 }
 
-/** Save atlas data to IndexedDB */
+/** Save atlas data to IndexedDB, clearing old caches on memory pressure */
 export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Promise<void> {
     const entry: IndexedDBAtlasEntry = {
         race,
@@ -203,10 +226,61 @@ export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Prom
         timestamp: data.timestamp,
     };
 
-    const result = await withStore<IDBValidKey>('readwrite', store => store.put(entry));
+    const sizeMB = (data.imgData.length / 1024 / 1024).toFixed(1);
+
+    // Try to save, clearing old caches on memory errors
+    const result = await tryPutWithRetry(entry);
+
     if (result !== null) {
-        const sizeMB = (data.imgData.length / 1024 / 1024).toFixed(1);
         log.debug(`IndexedDB: saved ${Race[race]} (${data.width}x${data.height}, ${sizeMB}MB)`);
+    } else {
+        log.warn(`IndexedDB: failed to save ${Race[race]} (${sizeMB}MB) - cache disabled`);
+    }
+}
+
+/** Try to put entry, clearing old caches if we hit memory limits */
+async function tryPutWithRetry(entry: IndexedDBAtlasEntry): Promise<IDBValidKey | null> {
+    try {
+        const db = await openDB();
+        const store = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME);
+
+        return await new Promise((resolve) => {
+            const request = store.put(entry);
+
+            request.onerror = async() => {
+                const error = request.error;
+                const isMemoryError = error?.name === 'DataCloneError' ||
+                    error?.message?.includes('out of memory') ||
+                    error?.name === 'QuotaExceededError';
+
+                if (isMemoryError) {
+                    log.debug('IndexedDB: memory pressure detected, clearing old caches...');
+                    // Clear all other race caches to free space
+                    await clearOtherRaceCaches(entry.race);
+                    // Retry once
+                    const retryResult = await withStore<IDBValidKey>('readwrite', s => s.put(entry));
+                    resolve(retryResult);
+                } else {
+                    log.debug(`IndexedDB put failed: ${error}`);
+                    resolve(null);
+                }
+            };
+
+            request.onsuccess = () => resolve(request.result);
+        });
+    } catch (e) {
+        log.debug(`IndexedDB error during save: ${e}`);
+        return null;
+    }
+}
+
+/** Clear caches for all races except the specified one */
+async function clearOtherRaceCaches(keepRace: Race): Promise<void> {
+    const allRaces = [Race.Roman, Race.Viking, Race.Mayan, Race.DarkTribe, Race.Trojan];
+    for (const race of allRaces) {
+        if (race !== keepRace) {
+            await clearIndexedDBCache(race);
+        }
     }
 }
 
@@ -227,6 +301,29 @@ export async function clearAllIndexedDBCache(): Promise<void> {
 }
 
 // =============================================================================
+// Combined cache operations
+// =============================================================================
+
+/** Check if caching is disabled via settings */
+export function isCacheDisabled(): boolean {
+    try {
+        const stored = localStorage.getItem('settlers_game_settings');
+        if (!stored) return false;
+        const settings = JSON.parse(stored);
+        return settings.cacheDisabled === true;
+    } catch {
+        return false;
+    }
+}
+
+/** Clear all caches (both module and IndexedDB) */
+export async function clearAllCaches(): Promise<void> {
+    clearAllAtlasCache();
+    await clearAllIndexedDBCache();
+    log.info('All caches cleared');
+}
+
+// =============================================================================
 // Debug utilities
 // =============================================================================
 
@@ -235,9 +332,9 @@ export function getAtlasCacheStats(): { races: string[]; totalMemoryMB: number }
     const races: string[] = [];
     let totalBytes = 0;
 
-    for (const [race, data] of moduleCache) {
+    for (const [race, entry] of moduleCache) {
         races.push(Race[race]);
-        totalBytes += data.imgData.length;
+        totalBytes += entry.data.imgData.length;
     }
 
     return { races, totalMemoryMB: totalBytes / 1024 / 1024 };
