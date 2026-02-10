@@ -184,7 +184,8 @@ function updateResourceIconsFromManager(
         const entry = manager.getResource(r.type, 0);
         if (!entry) continue;
 
-        const imageData = atlas.extractRegion(entry.atlasRegion);
+        const paletteData = manager.paletteManager.getPaletteData() ?? undefined;
+        const imageData = atlas.extractRegion(entry.atlasRegion, paletteData);
         if (!imageData) continue;
 
         const canvas = document.createElement('canvas');

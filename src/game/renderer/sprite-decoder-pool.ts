@@ -1,6 +1,10 @@
 /**
  * Pool of Web Workers for parallel sprite decoding.
  * Distributes decode requests across workers and returns promises.
+ *
+ * Supports two decode modes:
+ * - RGBA mode: decode() returns ImageData
+ * - Indexed mode: decodeIndexed() returns Uint16Array of palette indices
  */
 
 import type { DecodeRequest, DecodeResponse } from './sprite-decode-worker';
@@ -8,8 +12,16 @@ import type { DecodeRequest, DecodeResponse } from './sprite-decode-worker';
 // Vite worker import
 import DecodeWorker from './sprite-decode-worker?worker';
 
+/** Result from decode (RGBA) or decodeIndexed */
+export interface DecodeResult {
+    imageData?: ImageData;
+    indices?: Uint16Array;
+    width: number;
+    height: number;
+}
+
 interface PendingRequest {
-    resolve: (pixels: ImageData) => void;
+    resolve: (result: DecodeResult) => void;
     reject: (error: Error) => void;
 }
 
@@ -34,21 +46,22 @@ export class SpriteDecoderPool {
     }
 
     private handleMessage(e: MessageEvent<DecodeResponse>): void {
-        const { id, pixels, width, height } = e.data;
+        const { id, pixels, indices, width, height } = e.data;
         const pending = this.pendingRequests.get(id);
         if (pending) {
             this.pendingRequests.delete(id);
             this.decodeCount++;
 
-            if (pixels) {
-                // Worker transfers the buffer, so pixels is already a valid Uint8ClampedArray.
-                // Create ImageData using the transferred buffer directly (no copy needed).
+            if (indices) {
+                // Indexed mode — return Uint16Array directly
+                pending.resolve({ indices, width, height });
+            } else if (pixels) {
+                // RGBA mode — wrap in ImageData
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const imageData = new ImageData(pixels as any, width, height);
-                pending.resolve(imageData);
+                pending.resolve({ imageData, width, height });
             } else {
-                // Worker returned without pixels - reject the promise
-                pending.reject(new Error(`Worker decode failed: no pixels returned for ${width}x${height}`));
+                pending.reject(new Error(`Worker decode failed: no data returned for ${width}x${height}`));
             }
         }
     }
@@ -63,20 +76,9 @@ export class SpriteDecoderPool {
     }
 
     /**
-     * Decode a sprite asynchronously using a worker.
-     * Returns a promise that resolves to ImageData (already trimmed if trim params provided).
+     * Send a decode request to a worker (shared logic for both modes).
      */
-    public decode(
-        buffer: ArrayBuffer,
-        offset: number,
-        width: number,
-        height: number,
-        imgType: number,
-        paletteData: Uint32Array,
-        paletteOffset: number,
-        trimTop: number = 0,
-        trimBottom: number = 0
-    ): Promise<ImageData> {
+    private sendRequest(request: DecodeRequest, buffer: ArrayBuffer): Promise<DecodeResult> {
         if (this.isDestroyed) {
             return Promise.reject(new Error('Decoder pool is destroyed'));
         }
@@ -89,29 +91,54 @@ export class SpriteDecoderPool {
             const worker = this.workers[this.nextWorkerIndex];
             this.nextWorkerIndex = (this.nextWorkerIndex + 1) % this.workers.length;
 
-            const request: DecodeRequest = {
-                id,
-                buffer,
-                offset,
-                width,
-                height,
-                imgType,
-                paletteData,
-                paletteOffset,
-                trimTop,
-                trimBottom,
-            };
+            // Only slice the portion of the buffer the worker needs
+            const maxBytes = Math.max(8192, request.width * request.height * 2);
+            const endOffset = Math.min(request.offset + maxBytes, buffer.byteLength);
+            const bufferSlice = buffer.slice(request.offset, endOffset);
 
-            // Only slice the portion of the buffer the worker needs (not the entire 50MB+ GFX file)
-            // Max compressed size estimate: width * height * 2 bytes for RLE, minimum 8KB
-            const maxBytes = Math.max(8192, width * height * 2);
-            const endOffset = Math.min(offset + maxBytes, buffer.byteLength);
-            const bufferSlice = buffer.slice(offset, endOffset);
-
-            // Adjust request to use offset 0 since we sliced from the original offset
-            const adjustedRequest: DecodeRequest = { ...request, buffer: bufferSlice, offset: 0 };
+            const adjustedRequest: DecodeRequest = { ...request, id, buffer: bufferSlice, offset: 0 };
             worker.postMessage(adjustedRequest, [bufferSlice]);
         });
+    }
+
+    /**
+     * Decode a sprite to palette indices (indexed mode).
+     * Returns a Uint16Array where each element is a combined palette index.
+     * Special values: 0 = transparent, 1 = shadow.
+     *
+     * @param paletteBaseOffset Base offset for this file's palette in the combined palette texture
+     */
+    public async decodeIndexed(
+        buffer: ArrayBuffer,
+        offset: number,
+        width: number,
+        height: number,
+        imgType: number,
+        paletteOffset: number,
+        paletteBaseOffset: number,
+        trimTop: number = 0,
+        trimBottom: number = 0
+    ): Promise<Uint16Array> {
+        const request: DecodeRequest = {
+            id: 0, // Will be set by sendRequest
+            buffer,
+            offset,
+            width,
+            height,
+            imgType,
+            paletteData: new Uint32Array(0), // Not needed for indexed mode
+            paletteOffset,
+            trimTop,
+            trimBottom,
+            indexed: true,
+            paletteBaseOffset,
+        };
+
+        const result = await this.sendRequest(request, buffer);
+        if (!result.indices) {
+            throw new Error(`Indexed decode failed: no indices for ${width}x${height}`);
+        }
+        return result.indices;
     }
 
     /**

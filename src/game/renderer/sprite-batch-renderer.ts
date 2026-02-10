@@ -2,6 +2,7 @@ import { ShaderProgram } from './shader-program';
 import { SpriteEntry } from './sprite-metadata';
 import {
     TEXTURE_UNIT_SPRITE_ATLAS,
+    TEXTURE_UNIT_PALETTE,
     MAX_BATCH_ENTITIES,
     FLOATS_PER_ENTITY,
 } from './entity-renderer-constants';
@@ -133,6 +134,7 @@ export class SpriteBatchRenderer {
         this.spriteShaderProgram.use();
         this.spriteShaderProgram.setMatrix('projection', projection);
         this.spriteShaderProgram.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
+        this.spriteShaderProgram.bindTexture('u_palette', TEXTURE_UNIT_PALETTE);
         this.batchOffset = 0;
     }
 
@@ -145,6 +147,7 @@ export class SpriteBatchRenderer {
         this.spriteBlendShaderProgram.use();
         this.spriteBlendShaderProgram.setMatrix('projection', projection);
         this.spriteBlendShaderProgram.bindTexture('u_spriteAtlas', TEXTURE_UNIT_SPRITE_ATLAS);
+        this.spriteBlendShaderProgram.bindTexture('u_palette', TEXTURE_UNIT_PALETTE);
         this.blendBatchOffset = 0;
     }
 

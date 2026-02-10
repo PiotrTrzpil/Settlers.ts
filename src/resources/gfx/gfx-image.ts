@@ -121,6 +121,45 @@ export class GfxImage implements IGfxImage {
                     'header Type: ' + this.headType;
     }
 
+    /**
+     * Get palette indices (Uint16Array) for this sprite.
+     * Used for synchronous indexed decoding (fallback when workers unavailable).
+     * Index 0 = transparent, 1 = shadow, others = paletteBaseOffset + paletteOffset + value.
+     */
+    public getIndexData(paletteBaseOffset: number): Uint16Array {
+        const length = this.width * this.height;
+        const indices = new Uint16Array(length);
+        const buffer = this.data.getBuffer();
+        const bufferLength = buffer.length;
+        let pos = this.dataOffset;
+        const pOff = this.paletteOffset;
+
+        if (this.imgType !== 32) {
+            // RLE encoding
+            let j = 0;
+            while (j < length && pos < bufferLength) {
+                const value = buffer[pos++];
+                if (value <= 1) {
+                    if (pos >= bufferLength) break;
+                    const count = buffer[pos++];
+                    for (let i = 0; i < count && j < length; i++) {
+                        indices[j++] = value; // 0 = transparent, 1 = shadow
+                    }
+                } else {
+                    indices[j++] = paletteBaseOffset + pOff + value;
+                }
+            }
+        } else {
+            // No encoding
+            for (let j = 0; j < length && pos < bufferLength; j++) {
+                const value = buffer[pos++];
+                indices[j] = paletteBaseOffset + pOff + value;
+            }
+        }
+
+        return indices;
+    }
+
     /** Get parameters for worker-based async decoding */
     public getDecodeParams(): GfxDecodeParams {
         return {

@@ -13,6 +13,7 @@ export const PREVIEW_INVALID_COLOR = [1.0, 0.3, 0.3, 0.5]; // Red ghost building
 
 // Texture unit assignments (landscape uses 0-2)
 export const TEXTURE_UNIT_SPRITE_ATLAS = 3;
+export const TEXTURE_UNIT_PALETTE = 4;
 
 // Maximum path dots to show per selected unit
 export const MAX_PATH_DOTS = 30;

@@ -12,8 +12,8 @@ import { JilFileReader } from '@/resources/gfx/jil-file-reader';
 import { DilFileReader } from '@/resources/gfx/dil-file-reader';
 import { PilFileReader } from '@/resources/gfx/pil-file-reader';
 import { PaletteCollection } from '@/resources/gfx/palette-collection';
-import { IGfxImage } from '@/resources/gfx/igfx-image';
 import { GfxImage } from '@/resources/gfx/gfx-image';
+import type { IGfxImage } from '@/resources/gfx/igfx-image';
 import { EntityTextureAtlas, AtlasRegion } from './entity-texture-atlas';
 import { SpriteEntry, PIXELS_TO_WORLD } from './sprite-metadata';
 import { getDecoderPool } from './sprite-decoder-pool';
@@ -72,8 +72,21 @@ export class SpriteLoader {
 
     private fileManager: FileManager;
 
+    /**
+     * Maps fileId -> paletteBaseOffset in the combined palette texture.
+     * Set by SpriteRenderManager after registering palettes.
+     */
+    private paletteBaseOffsets = new Map<string, number>();
+
     constructor(fileManager: FileManager) {
         this.fileManager = fileManager;
+    }
+
+    /**
+     * Set the palette base offset for a file set (used for indexed decoding).
+     */
+    public setPaletteBaseOffset(fileId: string, baseOffset: number): void {
+        this.paletteBaseOffsets.set(fileId, baseOffset);
     }
 
     /**
@@ -268,72 +281,55 @@ export class SpriteLoader {
     private static readonly TRIM_BOTTOM = 5;
 
     /**
-     * Trim pixel rows from top and bottom of an ImageData.
-     * Used to remove artifact lines from sprite edges.
-     * Uses TypedArray.set() for efficient row copying.
+     * Trim palette index rows by skipping top/bottom.
+     * Returns a Uint16Array with only the retained rows.
      */
-    private trimImageData(imageData: ImageData, trimTop: number, trimBottom: number): ImageData {
-        const newHeight = imageData.height - trimTop - trimBottom;
-        if (newHeight <= 0) return imageData;
+    private trimIndices(indices: Uint16Array, width: number, height: number, trimTop: number, trimBottom: number): Uint16Array {
+        const newHeight = height - trimTop - trimBottom;
+        if (newHeight <= 0 || newHeight === height) return indices;
 
-        const start = performance.now();
-
-        const trimmed = new ImageData(imageData.width, newHeight);
-        const srcData = imageData.data;
-        const dstData = trimmed.data;
-        const rowBytes = imageData.width * 4;
-
-        // Copy rows using TypedArray.set() for better performance
+        const trimmed = new Uint16Array(width * newHeight);
         for (let y = 0; y < newHeight; y++) {
-            const srcOffset = (y + trimTop) * rowBytes;
-            const dstOffset = y * rowBytes;
-            dstData.set(srcData.subarray(srcOffset, srcOffset + rowBytes), dstOffset);
+            const srcOffset = (y + trimTop) * width;
+            const dstOffset = y * width;
+            trimmed.set(indices.subarray(srcOffset, srcOffset + width), dstOffset);
         }
-
-        const elapsed = performance.now() - start;
-        if (elapsed > SpriteLoader.SLOW_OP_THRESHOLD_MS) {
-            console.warn(`[SpriteLoader] trimImageData ${imageData.width}x${imageData.height} took ${elapsed.toFixed(1)}ms`);
-        }
-
         return trimmed;
     }
 
     /**
      * Pack a GFX image into the atlas and create a SpriteEntry.
-     * Synchronous fallback - used only when worker pool is unavailable.
+     * Synchronous fallback using indexed decoding — used only when workers unavailable.
      */
-    private packSpriteIntoAtlasFallback(gfxImage: IGfxImage, atlas: EntityTextureAtlas): LoadedSprite | null {
-        const rawImageData = gfxImage.getImageData();
-
-        // Check if sprite is too small after trimming
-        const trimmedHeight = rawImageData.height - SpriteLoader.TRIM_TOP - SpriteLoader.TRIM_BOTTOM;
+    private packSpriteIntoAtlasFallback(gfxImage: GfxImage, atlas: EntityTextureAtlas): LoadedSprite | null {
+        const trimmedHeight = gfxImage.height - SpriteLoader.TRIM_TOP - SpriteLoader.TRIM_BOTTOM;
         if (trimmedHeight <= 0) {
-            SpriteLoader.log.debug(`Sprite too small after trimming: ${rawImageData.width}x${rawImageData.height}`);
+            SpriteLoader.log.debug(`Sprite too small after trimming: ${gfxImage.width}x${gfxImage.height}`);
             return null;
         }
 
-        // Trim pixels from top and bottom to remove artifact lines
-        const imageData = this.trimImageData(rawImageData, SpriteLoader.TRIM_TOP, SpriteLoader.TRIM_BOTTOM);
-
-        const region = atlas.reserve(imageData.width, imageData.height);
-
+        const region = atlas.reserve(gfxImage.width, trimmedHeight);
         if (!region) {
-            SpriteLoader.log.error(`Atlas full, cannot fit sprite ${imageData.width}x${imageData.height}`);
+            SpriteLoader.log.error(`Atlas full, cannot fit sprite ${gfxImage.width}x${trimmedHeight}`);
             return null;
         }
 
-        atlas.blit(region, imageData);
+        // Decode to palette indices synchronously on main thread
+        const paletteBaseOffset = this.currentPaletteBaseOffset;
+        const rawIndices = gfxImage.getIndexData(paletteBaseOffset);
+        const trimmedIndices = this.trimIndices(
+            rawIndices, gfxImage.width, gfxImage.height,
+            SpriteLoader.TRIM_TOP, SpriteLoader.TRIM_BOTTOM
+        );
 
-        // GFX offset convention: left/top are distances from sprite edge to anchor point.
-        // To position the sprite so the anchor aligns with worldX/worldY:
-        // - offsetX = -left (move sprite left so anchor lands at worldX)
-        // - offsetY = -(top - TRIM_TOP) because we trimmed pixels from top
+        atlas.blitIndices(region, trimmedIndices);
+
         const entry: SpriteEntry = {
             atlasRegion: region,
             offsetX: -gfxImage.left * PIXELS_TO_WORLD,
             offsetY: -(gfxImage.top - SpriteLoader.TRIM_TOP) * PIXELS_TO_WORLD,
-            widthWorld: imageData.width * PIXELS_TO_WORLD,
-            heightWorld: imageData.height * PIXELS_TO_WORLD,
+            widthWorld: gfxImage.width * PIXELS_TO_WORLD,
+            heightWorld: trimmedHeight * PIXELS_TO_WORLD,
         };
 
         return { image: gfxImage, region, entry };
@@ -341,7 +337,7 @@ export class SpriteLoader {
 
     /**
      * Pack a GFX image into the atlas asynchronously using worker pool.
-     * Decodes in worker, blits on main thread.
+     * Uses indexed decoding: outputs palette indices (Uint16Array) and blits into R16UI atlas.
      */
     private async packSpriteIntoAtlas(gfxImage: GfxImage, atlas: EntityTextureAtlas): Promise<LoadedSprite | null> {
         const pool = getDecoderPool();
@@ -371,20 +367,24 @@ export class SpriteLoader {
         }
 
         try {
-            // Decode in worker with trimming - returns already-trimmed ImageData
-            const imageData = await pool.decode(
+            // Look up the palette base offset for this file set
+            // (defaults to 0 if not registered — still works but will reference wrong palette entries)
+            const paletteBaseOffset = this.currentPaletteBaseOffset;
+
+            // Decode in worker as palette indices (indexed mode)
+            const indices = await pool.decodeIndexed(
                 params.buffer,
                 params.offset,
                 params.width,
                 params.height,
                 params.imgType,
-                params.paletteData,
                 params.paletteOffset,
+                paletteBaseOffset,
                 SpriteLoader.TRIM_TOP,
                 SpriteLoader.TRIM_BOTTOM
             );
 
-            atlas.blit(region, imageData);
+            atlas.blitIndices(region, indices);
 
             const entry: SpriteEntry = {
                 atlasRegion: region,
@@ -399,6 +399,20 @@ export class SpriteLoader {
             SpriteLoader.log.debug(`Worker decode failed, falling back to sync: ${e}`);
             return this.packSpriteIntoAtlasFallback(gfxImage, atlas);
         }
+    }
+
+    /**
+     * The palette base offset for the file currently being loaded.
+     * Set before each batch of sprite loads for a given file set.
+     */
+    private currentPaletteBaseOffset = 0;
+
+    /**
+     * Set the palette base offset for the current loading batch.
+     * Must be called before loading sprites from a file set.
+     */
+    public setCurrentPaletteBaseOffset(offset: number): void {
+        this.currentPaletteBaseOffset = offset;
     }
 
     /**

@@ -26,7 +26,7 @@ declare const __BUILD_TIME__: string;
  * Schema version for cache invalidation.
  * Bump this when animation sequence names or sprite data format changes.
  */
-const CACHE_SCHEMA_VERSION = 2;  // v2: work.0/work.1 instead of work/work_ground
+const CACHE_SCHEMA_VERSION = 3;  // v3: palettized R16UI atlas + palette texture
 
 /** Current build version for cache invalidation */
 const BUILD_VERSION = typeof __BUILD_TIME__ !== 'undefined'
@@ -60,16 +60,24 @@ interface CachedAtlasBase {
     race: Race;
     textureUnit: number;
     timestamp: number;
+    /** Palette data: file base offsets for combined palette texture */
+    paletteOffsets?: Record<string, number>;
+    /** Total number of colors in palette texture */
+    paletteTotalColors?: number;
 }
 
 /** Cached atlas data for in-memory use */
 export interface CachedAtlasData extends CachedAtlasBase {
+    /** Raw atlas image data bytes (Uint16Array stored as Uint8Array) */
     imgData: Uint8Array;
+    /** Raw palette RGBA data */
+    paletteData?: Uint8Array;
 }
 
 /** IndexedDB entry (ArrayBuffer for IDB compatibility, includes version) */
 interface IndexedDBAtlasEntry extends CachedAtlasBase {
     imgData: ArrayBuffer;
+    paletteBuffer?: ArrayBuffer;
     version: string;
 }
 
@@ -200,6 +208,9 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
         race: entry.race,
         textureUnit: entry.textureUnit,
         timestamp: entry.timestamp,
+        paletteOffsets: entry.paletteOffsets,
+        paletteTotalColors: entry.paletteTotalColors,
+        paletteData: entry.paletteBuffer ? new Uint8Array(entry.paletteBuffer) : undefined,
     };
 
     const ageMins = Math.round((Date.now() - entry.timestamp) / 60000);
@@ -234,6 +245,12 @@ export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Prom
         registryData: data.registryData,
         textureUnit: data.textureUnit,
         timestamp: data.timestamp,
+        paletteOffsets: data.paletteOffsets,
+        paletteTotalColors: data.paletteTotalColors,
+        paletteBuffer: data.paletteData ? data.paletteData.buffer.slice(
+            data.paletteData.byteOffset,
+            data.paletteData.byteOffset + data.paletteData.byteLength
+        ) : undefined,
     };
 
     const sizeMB = (data.imgData.length / 1024 / 1024).toFixed(1);

@@ -627,6 +627,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     ): void {
         if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
 
+        // Bind the palette texture so shaders can look up colors
+        this.spriteManager.paletteManager.bind(gl);
+
         this.spriteBatchRenderer.beginSpriteBatch(gl, projection);
         this.transitioningUnits.length = 0;
 
