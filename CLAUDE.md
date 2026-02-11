@@ -55,6 +55,7 @@ Test maps and procedural textures work without game files.
 - **Error messages must include context**: When throwing errors, include all relevant identifiers (entity ID, type name, state) so the root cause can be traced. Never throw generic errors like "not found" — always include what was being looked up and what was available.
 - **Report errors eagerly**: Fail fast at the source of the problem, not downstream. If a function receives invalid input, throw immediately with context rather than returning null and failing later.
 - **No silent fallbacks for bugs**: Don't add fallbacks that hide programming errors. If code requests an animation sequence that doesn't exist, that's a bug to fix, not a case to handle gracefully.
+- **Optimistic programming**: Don't check if something exists when it must exist at that point in the code. If a manager requires an entity provider to be set before use, assume it's set and use `this.provider!` — don't add defensive `if (!this.provider) return;` checks that hide initialization bugs. Trust the contract, crash loudly if violated.
 
 ## Claude Code workflow
 
