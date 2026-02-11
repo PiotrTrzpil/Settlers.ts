@@ -46,9 +46,13 @@
 import { test as base, type Page } from '@playwright/test';
 import { GamePage } from './game-page';
 import { Frames, Timeout } from './wait-config';
+import { WaitProfiler } from './wait-profiler';
 
 // Re-export custom matchers so fixture users get them automatically
 export { expect } from './matchers';
+
+// Re-export WaitProfiler for manual access in tests
+export { WaitProfiler } from './wait-profiler';
 
 /** Fixture types for test function signature */
 type TestFixtures = {
@@ -85,6 +89,16 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         await gp.waitForReady(Frames.RENDER_SETTLE, Timeout.ASSET_LOAD);
 
         await use(page);
+
+        // Print profiler summary when worker closes (enabled by default)
+        if (WaitProfiler.isEnabled()) {
+            // Use compact summary by default, full report with WAIT_PROFILER_VERBOSE=1
+            const report = process.env.WAIT_PROFILER_VERBOSE === '1'
+                ? WaitProfiler.getReport()
+                : WaitProfiler.getCompactSummary();
+            if (report) console.log(report);
+        }
+
         await context.close();
     }, { scope: 'worker', timeout: Timeout.WORKER_SETUP }],
 
