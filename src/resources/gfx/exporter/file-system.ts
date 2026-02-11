@@ -14,7 +14,7 @@ export interface IReadResult {
 /** File writer interface for exporting */
 export interface IFileWriter {
     /** Write binary data to a file */
-    writeFile(path: string, data: Uint8Array): Promise<void>;
+    writeFile(path: string, data: Uint8Array<ArrayBuffer>): Promise<void>;
 
     /** Create directory if it doesn't exist */
     mkdir(path: string): Promise<void>;
@@ -109,7 +109,7 @@ export class NodeFileSystem implements IFileReader, IFileWriter {
         }
     }
 
-    async writeFile(path: string, data: Uint8Array): Promise<void> {
+    async writeFile(path: string, data: Uint8Array<ArrayBuffer>): Promise<void> {
         await this.ensureModules();
         await this.fs!.writeFile(path, data);
     }
@@ -238,7 +238,7 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
         return result;
     }
 
-    async writeFile(path: string, data: Uint8Array): Promise<void> {
+    async writeFile(path: string, data: Uint8Array<ArrayBuffer>): Promise<void> {
         // Try File System Access API first
         if (this.directoryHandle) {
             try {
@@ -267,7 +267,7 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
         this.downloadFile(this.basename(path), data);
     }
 
-    private downloadFile(filename: string, data: Uint8Array): void {
+    private downloadFile(filename: string, data: Uint8Array<ArrayBuffer>): void {
         const blob = new Blob([data], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -377,7 +377,7 @@ export class MemoryFileSystem implements IFileReader, IFileWriter {
         return result;
     }
 
-    async writeFile(path: string, data: Uint8Array): Promise<void> {
+    async writeFile(path: string, data: Uint8Array<ArrayBuffer>): Promise<void> {
         this.files.set(path.toLowerCase(), data);
     }
 

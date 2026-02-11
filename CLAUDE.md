@@ -5,7 +5,7 @@ A Settlers 4 (Siedler 4) browser-based remake using TypeScript, Vue 3, and WebGL
 ## Stack
 
 - **Framework**: Vue 3 (Composition API) + Vue Router
-- **Build**: Vite 5, TypeScript ~5.4
+- **Build**: Vite 5, TypeScript ~5.9
 - **Rendering**: WebGL2 with GLSL shaders (via `vite-plugin-glsl`)
 - **Testing**: Vitest (unit), Playwright (e2e)
 - **Package manager**: pnpm
@@ -46,7 +46,7 @@ Test maps and procedural textures work without game files.
 
 ## Notes
 
-- The `.eslintrc.js` config uses CommonJS syntax but `package.json` has `"type": "module"` — linting is currently broken. Rename to `.eslintrc.cjs` to fix.
+- **Linting**: ESLint 9 flat config (`eslint.config.mjs`) with `typescript-eslint` v8, `eslint-plugin-vue` v10, and `eslint-plugin-import-x`.
 - Playwright `outputDir` writes to `tests/e2e/.results/` (gitignored).
 - Screenshot baselines live in `tests/e2e/__screenshots__/` and are committed.
 

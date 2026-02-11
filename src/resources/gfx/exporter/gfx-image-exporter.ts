@@ -196,7 +196,7 @@ export class GfxImageExporter {
     ): Promise<void> {
         const rawData = this.imageToRawData(image);
         const pngData = await encodePNG(rawData);
-        await this.fileWriter.writeFile(outputPath, pngData);
+        await this.fileWriter.writeFile(outputPath, pngData as Uint8Array<ArrayBuffer>);
     }
 
     /**

@@ -39,7 +39,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     private useProceduralTextures: boolean;
 
     /** Cached instance position array to avoid allocating a new Int16Array every frame */
-    private cachedInstancePos: Int16Array | null = null;
+    private cachedInstancePos: Int16Array<ArrayBuffer> | null = null;
     private cachedInstanceW = 0;
     private cachedInstanceH = 0;
     private cachedInstanceSX = 0;
@@ -179,7 +179,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     //    /-----/-----/-----/
     //   / 0/1 / 1/1 / 2/1 /
     //  /-----/-----/-----/
-    private getInstancePosArray(width: number, height: number, startX: number, startY: number): Int16Array {
+    private getInstancePosArray(width: number, height: number, startX: number, startY: number): Int16Array<ArrayBuffer> {
         // Return cached array if dimensions haven't changed
         if (this.cachedInstancePos
             && this.cachedInstanceW === width && this.cachedInstanceH === height

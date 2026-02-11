@@ -85,7 +85,7 @@ function onSaveFile() {
     }
 
     const a = window.document.createElement('a');
-    const url = window.URL.createObjectURL(new Blob([props.value.getBuffer()]));
+    const url = window.URL.createObjectURL(new Blob([props.value.getBuffer() as BlobPart]));
     a.download = props.value.filename;
     a.href = url;
     a.click();

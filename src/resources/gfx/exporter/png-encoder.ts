@@ -102,7 +102,7 @@ function createZlibStored(data: Uint8Array): Uint8Array {
 /**
  * Try to use platform deflate for better compression
  */
-async function deflateWithPlatform(data: Uint8Array): Promise<Uint8Array> {
+async function deflateWithPlatform(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
     // Try Node.js zlib first
     if (typeof process !== 'undefined' && process.versions?.node) {
         try {
