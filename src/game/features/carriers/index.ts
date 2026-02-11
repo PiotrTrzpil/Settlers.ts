@@ -1,18 +1,18 @@
 /**
  * Carrier Feature Module
  *
- * Self-contained module for carrier state management, job execution, and behavior.
+ * Self-contained module for carrier state management and registration.
  * External code should only import from this file.
  *
  * Public API:
  * - Types: CarrierState, CarrierJob, CarrierStatus, FatigueLevel
  * - Manager: CarrierManager (tracks all carrier states)
- * - System: CarrierSystem (tick system for carrier behavior)
- * - Movement: CarrierMovementController (issues movement commands)
- * - Animation: CarrierAnimationController (manages animation states)
- * - Job Completion: handleJobCompletion, JobCompletionResult
+ * - System: CarrierSystem (tick system for fatigue and registration)
  * - Helpers: createCarrierState, getFatigueLevel, canAcceptNewJob
- * - Constants: FATIGUE_THRESHOLDS, PICKUP_ANIMATION_DURATION_MS, DROP_ANIMATION_DURATION_MS
+ * - Constants: FATIGUE_THRESHOLDS
+ *
+ * Note: Task execution (movement, animation, pickup, dropoff) is handled by
+ * SettlerTaskSystem using the YAML-defined carrier.transport job sequence.
  */
 
 // Types and helpers from carrier-state
@@ -34,24 +34,3 @@ export type { EntityProvider } from '../../entity';
 
 // System (TickSystem)
 export { CarrierSystem, type CarrierSystemConfig } from './carrier-system';
-
-// Movement controller
-export type { PendingMovement, MovementStartResult } from './carrier-movement';
-export { CarrierMovementController } from './carrier-movement';
-
-// Animation controller
-export type { AnimationTimer } from './carrier-animation';
-export {
-    CarrierAnimationController,
-    PICKUP_ANIMATION_DURATION_MS,
-    DROP_ANIMATION_DURATION_MS,
-} from './carrier-animation';
-
-// Job completion handlers
-export {
-    handleJobCompletion,
-    handlePickupCompletion,
-    handleDeliveryCompletion,
-    handleReturnHomeCompletion,
-    type JobCompletionResult,
-} from './job-completion';

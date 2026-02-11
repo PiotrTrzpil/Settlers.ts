@@ -12,5 +12,6 @@ export {
     type SettlerConfig,
     type TaskNode,
     type SettlerJobState,
+    type CarrierJobState,
     type WorkHandler,
 } from './types';

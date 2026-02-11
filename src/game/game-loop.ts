@@ -164,13 +164,20 @@ export class GameLoop {
 
         // 6. Settler task system — manages all unit behaviors and animations
         this.settlerTaskSystem = new SettlerTaskSystem(gameState, this.animationService);
+        this.settlerTaskSystem.setEventBus(eventBus);
         this.registerSystem(this.settlerTaskSystem);
+
+        // Wire up carrier system to settler task system
+        this.carrierSystem.setSettlerTaskSystem(this.settlerTaskSystem);
 
         // 7. Woodcutting domain — registers work handler with task system
         this.woodcuttingSystem = new WoodcuttingSystem(gameState, this.treeSystem, this.settlerTaskSystem);
 
         // 8. Production system — handles building production cycles (requests inputs, produces outputs)
-        this.productionSystem = new ProductionSystem(gameState);
+        this.productionSystem = new ProductionSystem({
+            gameState,
+            eventBus: this.eventBus,
+        });
         this.registerSystem(this.productionSystem);
 
         // 9. Inventory visualizer — syncs building output to visual stacked resources
@@ -178,6 +185,28 @@ export class GameLoop {
             gameState,
             gameState.inventoryManager
         );
+
+        // 10. Bridge inventory changes to EventBus for other consumers (debug panel, UI)
+        gameState.inventoryManager.onChange((buildingId, materialType, slotType, previousAmount, newAmount) => {
+            this.eventBus.emit('inventory:changed', {
+                buildingId,
+                materialType,
+                slotType,
+                previousAmount,
+                newAmount,
+            });
+        });
+
+        // 11. Bridge request creation to EventBus for other consumers (debug panel, UI)
+        gameState.requestManager.on('requestAdded', ({ request }) => {
+            this.eventBus.emit('request:created', {
+                requestId: request.id,
+                buildingId: request.buildingId,
+                materialType: request.materialType,
+                amount: request.amount,
+                priority: request.priority,
+            });
+        });
 
         // Wire up entity removal callback for cleanup
         gameState.onEntityRemoved = (entityId: number) => {

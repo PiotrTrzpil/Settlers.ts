@@ -31,10 +31,12 @@ import {
     type SettlerConfig,
     type TaskNode,
     type SettlerJobState,
+    type CarrierJobState,
     type WorkHandler,
     type AnimationType,
 } from './types';
 import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDefinitions } from './loader';
+import type { EventBus } from '../../event-bus';
 
 const log = new LogHandler('SettlerTaskSystem');
 
@@ -77,6 +79,7 @@ export class SettlerTaskSystem implements TickSystem {
     private jobDefinitions: JobDefinitions;
     private workHandlers = new Map<SearchType, WorkHandler>();
     private runtimes = new Map<number, UnitRuntime>();
+    private eventBus: EventBus | undefined;
 
     constructor(gameState: GameState, animationService: AnimationService) {
         this.gameState = gameState;
@@ -88,6 +91,13 @@ export class SettlerTaskSystem implements TickSystem {
         this.registerWorkHandler(SearchType.WORKPLACE, this.createWorkplaceHandler());
 
         log.debug(`Loaded ${this.settlerConfigs.size} settler configs, ${this.jobDefinitions.size} jobs`);
+    }
+
+    /**
+     * Set event bus for emitting carrier events.
+     */
+    setEventBus(eventBus: EventBus): void {
+        this.eventBus = eventBus;
     }
 
     /**
@@ -228,6 +238,79 @@ export class SettlerTaskSystem implements TickSystem {
             runtime.moveTask = null;
             // Don't change state - let tick() handle transition to idle
         }
+    }
+
+    /**
+     * Assign a carrier transport job.
+     * Called by CarrierSystem when a delivery job is assigned.
+     *
+     * @param entityId Entity ID of the carrier
+     * @param sourceBuildingId Building to pickup from
+     * @param destBuildingId Building to deliver to
+     * @param material Material type to transport
+     * @param amount Amount to transport
+     * @param homeId Carrier's home building (for return after delivery)
+     * @returns true if job was assigned successfully
+     */
+    assignCarrierJob(
+        entityId: number,
+        sourceBuildingId: number,
+        destBuildingId: number,
+        material: EMaterialType,
+        amount: number,
+        homeId: number,
+    ): boolean {
+        const entity = this.gameState.getEntity(entityId);
+        if (!entity || entity.type !== EntityType.Unit || entity.subType !== UnitType.Carrier) {
+            log.warn(`Cannot assign carrier job: entity ${entityId} is not a carrier`);
+            return false;
+        }
+
+        // Get or create runtime
+        const runtime = this.getRuntime(entityId);
+
+        // Create carrier job state
+        const carrierJob: CarrierJobState = {
+            jobId: 'carrier.transport',
+            taskIndex: 0,
+            progress: 0,
+            targetId: sourceBuildingId,
+            targetPos: null,
+            homeId,
+            carryingGood: null,
+            sourceBuildingId,
+            destBuildingId,
+            material,
+            amount,
+        };
+
+        // Set runtime state
+        runtime.state = SettlerState.WORKING;
+        runtime.job = carrierJob;
+        runtime.moveTask = null; // Clear any existing move task
+
+        // Start movement to source building
+        const sourceBuilding = this.gameState.getEntity(sourceBuildingId);
+        if (!sourceBuilding) {
+            log.warn(`Source building ${sourceBuildingId} not found`);
+            return false;
+        }
+
+        const moveSuccess = this.gameState.movement.moveUnit(entityId, sourceBuilding.x, sourceBuilding.y);
+        if (!moveSuccess) {
+            log.warn(`Cannot path to source building ${sourceBuildingId}`);
+            runtime.state = SettlerState.IDLE;
+            runtime.job = null;
+            return false;
+        }
+
+        // Start walk animation
+        const controller = this.gameState.movement.getController(entityId);
+        const direction = controller?.direction ?? 0;
+        this.startWalkAnimation(entity, direction);
+
+        log.debug(`Carrier ${entityId} assigned transport job: ${material} from ${sourceBuildingId} to ${destBuildingId}`);
+        return true;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -557,6 +640,12 @@ export class SettlerTaskSystem implements TickSystem {
         case TaskType.GO_HOME:
             return this.executeGoHome(settler, job);
 
+        case TaskType.GO_TO_SOURCE:
+            return this.executeGoToSource(settler, job);
+
+        case TaskType.GO_TO_DEST:
+            return this.executeGoToDest(settler, job);
+
         case TaskType.STAY:
             // Worker stays indefinitely - animation set by task.anim in YAML
             return TaskResult.CONTINUE;
@@ -573,31 +662,30 @@ export class SettlerTaskSystem implements TickSystem {
         }
     }
 
-    private executeGoToTarget(settler: Entity, job: SettlerJobState): TaskResult {
-        if (!job.targetPos) return TaskResult.FAILED;
-
+    /**
+     * Helper to move settler adjacent to a target position.
+     */
+    private moveToPosition(settler: Entity, targetX: number, targetY: number): TaskResult {
         const controller = this.gameState.movement.getController(settler.id);
         if (!controller) return TaskResult.FAILED;
 
-        // Check if we're adjacent to target using proper hex distance
-        const dist = hexDistance(settler.x, settler.y, job.targetPos.x, job.targetPos.y);
+        const dist = hexDistance(settler.x, settler.y, targetX, targetY);
 
-        // Only complete when adjacent AND not moving
         if (dist <= 1 && controller.state === 'idle') {
             return TaskResult.DONE;
         }
 
-        // Start moving if idle and not yet adjacent
-        if (controller.state === 'idle' && dist > 1) {
-            const moved = this.gameState.movement.moveUnit(
-                settler.id,
-                job.targetPos.x,
-                job.targetPos.y
-            );
+        if (controller.state === 'idle') {
+            const moved = this.gameState.movement.moveUnit(settler.id, targetX, targetY);
             if (!moved) return TaskResult.FAILED;
         }
 
         return TaskResult.CONTINUE;
+    }
+
+    private executeGoToTarget(settler: Entity, job: SettlerJobState): TaskResult {
+        if (!job.targetPos) return TaskResult.FAILED;
+        return this.moveToPosition(settler, job.targetPos.x, job.targetPos.y);
     }
 
     private executeWorkOnEntity(
@@ -650,43 +738,92 @@ export class SettlerTaskSystem implements TickSystem {
         return TaskResult.CONTINUE;
     }
 
-    private executePickup(_settler: Entity, job: SettlerJobState, task: TaskNode): TaskResult {
-        // TODO: Actually pick up the good
+    private executePickup(settler: Entity, job: SettlerJobState, task: TaskNode): TaskResult {
+        // Check if this is a carrier job (has sourceBuildingId)
+        const carrierJob = job as CarrierJobState;
+        if (carrierJob.sourceBuildingId !== undefined) {
+            return this.executeCarrierPickup(settler, carrierJob);
+        }
+
+        // Regular settler pickup (e.g., woodcutter picking up LOG)
         job.carryingGood = task.good ?? null;
         return TaskResult.DONE;
     }
 
+    /**
+     * Execute carrier pickup - withdraw from source building inventory.
+     */
+    private executeCarrierPickup(settler: Entity, job: CarrierJobState): TaskResult {
+        const entity = this.gameState.getEntity(settler.id);
+        if (!entity) return TaskResult.FAILED;
+
+        // Withdraw from source building
+        const withdrawn = this.gameState.inventoryManager.withdrawOutput(
+            job.sourceBuildingId,
+            job.material,
+            job.amount,
+        );
+
+        if (withdrawn === 0) {
+            // Material no longer available
+            log.warn(`Carrier ${settler.id}: material ${job.material} not available at building ${job.sourceBuildingId}`);
+            return TaskResult.FAILED;
+        }
+
+        // Update carrier entity state
+        if (entity.carrier) {
+            entity.carrier.carryingMaterial = job.material;
+            entity.carrier.carryingAmount = withdrawn;
+        }
+
+        // Update job state
+        job.carryingGood = job.material;
+        job.amount = withdrawn; // Update to actual withdrawn amount
+
+        log.debug(`Carrier ${settler.id} picked up ${withdrawn} of ${job.material} from building ${job.sourceBuildingId}`);
+
+        // Emit pickup complete event
+        this.eventBus?.emit('carrier:pickupComplete', {
+            entityId: settler.id,
+            material: job.material,
+            amount: withdrawn,
+            fromBuilding: job.sourceBuildingId,
+        });
+
+        return TaskResult.DONE;
+    }
+
     private executeGoHome(settler: Entity, job: SettlerJobState): TaskResult {
-        if (!job.homeId) {
-            log.warn(`Settler ${settler.id} has no home building`);
-            return TaskResult.FAILED;
-        }
+        if (!job.homeId) return TaskResult.FAILED;
+        const building = this.gameState.getEntity(job.homeId);
+        if (!building) return TaskResult.FAILED;
+        return this.moveToPosition(settler, building.x, building.y);
+    }
 
-        const homeBuilding = this.gameState.getEntity(job.homeId);
-        if (!homeBuilding) {
-            log.warn(`Home building ${job.homeId} no longer exists`);
-            return TaskResult.FAILED;
-        }
+    private executeGoToSource(settler: Entity, job: SettlerJobState): TaskResult {
+        const carrierJob = job as CarrierJobState;
+        if (carrierJob.sourceBuildingId === undefined) return TaskResult.FAILED;
+        const building = this.gameState.getEntity(carrierJob.sourceBuildingId);
+        if (!building) return TaskResult.FAILED;
+        return this.moveToPosition(settler, building.x, building.y);
+    }
 
-        const controller = this.gameState.movement.getController(settler.id);
-        if (!controller) return TaskResult.FAILED;
-
-        // Check if we're adjacent to home building
-        const dist = hexDistance(settler.x, settler.y, homeBuilding.x, homeBuilding.y);
-
-        if (dist <= 1 && controller.state === 'idle') {
-            return TaskResult.DONE;
-        }
-
-        // Start movement if idle
-        if (controller.state === 'idle') {
-            this.gameState.movement.moveUnit(settler.id, homeBuilding.x, homeBuilding.y);
-        }
-
-        return TaskResult.CONTINUE;
+    private executeGoToDest(settler: Entity, job: SettlerJobState): TaskResult {
+        const carrierJob = job as CarrierJobState;
+        if (carrierJob.destBuildingId === undefined) return TaskResult.FAILED;
+        const building = this.gameState.getEntity(carrierJob.destBuildingId);
+        if (!building) return TaskResult.FAILED;
+        return this.moveToPosition(settler, building.x, building.y);
     }
 
     private executeDropoff(settler: Entity, job: SettlerJobState): TaskResult {
+        // Check if this is a carrier job (has destBuildingId)
+        const carrierJob = job as CarrierJobState;
+        if (carrierJob.destBuildingId !== undefined) {
+            return this.executeCarrierDropoff(settler, carrierJob);
+        }
+
+        // Regular settler dropoff (e.g., woodcutter dropping off LOG at home)
         if (job.carryingGood === null || job.carryingGood === undefined) {
             return TaskResult.DONE;
         }
@@ -711,6 +848,52 @@ export class SettlerTaskSystem implements TickSystem {
         }
 
         job.carryingGood = null;
+        return TaskResult.DONE;
+    }
+
+    /**
+     * Execute carrier dropoff - deposit to destination building inventory.
+     * Emits the critical 'carrier:deliveryComplete' event.
+     */
+    private executeCarrierDropoff(settler: Entity, job: CarrierJobState): TaskResult {
+        const entity = this.gameState.getEntity(settler.id);
+        if (!entity) return TaskResult.FAILED;
+
+        const amount = entity.carrier?.carryingAmount ?? job.amount;
+        const material = job.material;
+
+        // Deposit to destination building
+        const deposited = this.gameState.inventoryManager.depositInput(
+            job.destBuildingId,
+            material,
+            amount,
+        );
+
+        const overflow = amount - deposited;
+        if (overflow > 0) {
+            log.warn(`Carrier ${settler.id}: ${overflow} of ${material} overflow at building ${job.destBuildingId}`);
+        }
+
+        // Clear carrier entity state
+        if (entity.carrier) {
+            entity.carrier.carryingMaterial = null;
+            entity.carrier.carryingAmount = 0;
+        }
+
+        // Clear job state
+        job.carryingGood = null;
+
+        log.debug(`Carrier ${settler.id} delivered ${deposited} of ${material} to building ${job.destBuildingId}`);
+
+        // CRITICAL: Emit delivery complete event (used by LogisticsDispatcher)
+        this.eventBus?.emit('carrier:deliveryComplete', {
+            entityId: settler.id,
+            material,
+            amount: deposited,
+            toBuilding: job.destBuildingId,
+            overflow,
+        });
+
         return TaskResult.DONE;
     }
 

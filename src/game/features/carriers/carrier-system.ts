@@ -1,18 +1,13 @@
 /**
- * CarrierSystem - Tick system for carrier state updates and behavior.
+ * CarrierSystem - Tick system for carrier management.
  *
- * Responsibilities:
+ * Responsibilities (after unification with SettlerTaskSystem):
  * - Fatigue recovery for idle/resting carriers
- * - Movement coordination via CarrierMovementController
- * - Animation timing via CarrierAnimationController
- * - Arrival detection and job completion via job-completion handlers
- * - Movement triggers after job transitions
+ * - Auto-registering spawned carriers with nearest hub
+ * - Providing the public API for assigning delivery jobs
  *
- * This system orchestrates carrier behavior by delegating to:
- * - CarrierManager: State management
- * - CarrierMovementController: Movement commands and pending movement tracking
- * - CarrierAnimationController: Animation states and timing
- * - job-completion handlers: Inventory transfers and state transitions
+ * Task execution (movement, animation, pickup, dropoff) is now handled by
+ * SettlerTaskSystem using the YAML-defined carrier.transport job sequence.
  */
 
 import type { TickSystem } from '../../tick-system';
@@ -21,19 +16,12 @@ import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
 import type { ServiceAreaManager } from '../service-areas';
 import { CarrierManager } from './carrier-manager';
-import { CarrierStatus, type CarrierState, type CarrierJob } from './carrier-state';
-import { CarrierMovementController, type MovementStartResult } from './carrier-movement';
-import { CarrierAnimationController } from './carrier-animation';
+import { CarrierStatus } from './carrier-state';
 import { EMaterialType } from '../../economy';
 import { UnitType } from '../../unit-types';
-import {
-    handlePickupCompletion,
-    handleDeliveryCompletion,
-    handleReturnHomeCompletion,
-    type JobCompletionResult,
-} from './job-completion';
 import { LogHandler } from '@/utilities/log-handler';
 import type { AnimationService } from '../../animation/index';
+import type { SettlerTaskSystem } from '../../systems/settler-tasks';
 
 /** Fatigue recovery rate per second when resting at home tavern */
 const FATIGUE_RECOVERY_RATE = 10;
@@ -56,48 +44,41 @@ export interface CarrierSystemConfig {
 }
 
 /**
- * System that manages carrier behavior each tick.
+ * System that manages carrier registration and fatigue.
  *
- * Responsibilities:
- * - Fatigue recovery for idle/resting carriers
- * - Movement command coordination
- * - Animation state updates and timing
- * - Arrival event handling
- * - Job completion processing
+ * Task execution is handled by SettlerTaskSystem.
  */
 export class CarrierSystem implements TickSystem {
     private static log = new LogHandler('CarrierSystem');
 
     private readonly carrierManager: CarrierManager;
-    private readonly inventoryManager: BuildingInventoryManager;
     private readonly gameState: GameState;
     private readonly serviceAreaManager: ServiceAreaManager;
-    private readonly movementController: CarrierMovementController;
-    private readonly animationController: CarrierAnimationController;
 
     private eventBus: EventBus | undefined;
 
-    /** Current simulation time in milliseconds (for animation timing) */
-    private currentTimeMs: number = 0;
-
-    /** Maps carrier entity ID to their pending delivery destination */
-    private readonly pendingDeliveries: Map<number, number> = new Map();
+    /** Reference to settler task system for assigning jobs */
+    private settlerTaskSystem: SettlerTaskSystem | undefined;
 
     /** Event subscription manager for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
 
     constructor(config: CarrierSystemConfig) {
         this.carrierManager = config.carrierManager;
-        this.inventoryManager = config.inventoryManager;
         this.gameState = config.gameState;
         this.serviceAreaManager = config.serviceAreaManager;
-        this.movementController = new CarrierMovementController(this.carrierManager);
-        this.animationController = new CarrierAnimationController(config.animationService);
+    }
+
+    /**
+     * Set reference to SettlerTaskSystem (called after both systems are created).
+     */
+    setSettlerTaskSystem(system: SettlerTaskSystem): void {
+        this.settlerTaskSystem = system;
     }
 
     /**
      * Register event bus for emitting carrier system events.
-     * Also registers for movement events to detect arrival.
+     * Also registers for carrier lifecycle events.
      */
     registerEvents(eventBus: EventBus): void {
         this.eventBus = eventBus;
@@ -108,14 +89,14 @@ export class CarrierSystem implements TickSystem {
             this.handleUnitSpawned(payload);
         });
 
-        // Listen for movement stopped events to handle arrivals
-        this.subscriptions.subscribe(eventBus, 'unit:movementStopped', (payload) => {
-            this.handleMovementStopped(payload.entityId);
+        // Listen for carrier removal to cleanup
+        this.subscriptions.subscribe(eventBus, 'carrier:removed', (_payload) => {
+            // No additional cleanup needed - SettlerTaskSystem handles task state
         });
 
-        // Listen for carrier removal to cleanup pending state
-        this.subscriptions.subscribe(eventBus, 'carrier:removed', (payload) => {
-            this.handleCarrierRemoved(payload.entityId);
+        // Listen for delivery complete to add fatigue
+        this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', (payload) => {
+            this.carrierManager.addFatigue(payload.entityId, FATIGUE_PER_DELIVERY);
         });
     }
 
@@ -128,104 +109,40 @@ export class CarrierSystem implements TickSystem {
 
     /**
      * Called each game tick.
-     * Updates carrier fatigue, animation timers, and state transitions.
+     * Updates carrier fatigue.
      */
     tick(dt: number): void {
-        // Update simulation time
-        this.currentTimeMs += dt * 1000;
-
         // Update fatigue for all carriers
         for (const carrier of this.carrierManager.getAllCarriers()) {
             this.updateFatigue(carrier.entityId, carrier.status, dt);
         }
-
-        // Process animation completions
-        this.processAnimationCompletions();
     }
 
-    // === Arrival and Movement Handling ===
+    // === Fatigue Management ===
 
     /**
-     * Handle when a unit stops moving.
-     * Check if it's a carrier that arrived at a destination.
+     * Update fatigue based on carrier status.
      */
-    private handleMovementStopped(entityId: number): void {
-        // Check if this entity is a carrier with a pending movement
-        const pendingMovement = this.movementController.getPendingMovement(entityId);
-        if (!pendingMovement) return;
+    private updateFatigue(carrierId: number, status: CarrierStatus, dt: number): void {
+        const carrier = this.carrierManager.getCarrier(carrierId);
+        if (!carrier) return;
 
-        const carrier = this.carrierManager.getCarrier(entityId);
-        if (!carrier) {
-            this.movementController.clearPendingMovement(entityId);
-            return;
-        }
+        if (status === CarrierStatus.Resting) {
+            const recovery = FATIGUE_RECOVERY_RATE * dt;
+            const newFatigue = Math.max(0, carrier.fatigue - recovery);
+            this.carrierManager.setFatigue(carrierId, newFatigue);
 
-        // Validate that target building still exists
-        const targetBuilding = this.gameState.getEntity(pendingMovement.targetBuildingId);
-        if (!targetBuilding && pendingMovement.movementType !== 'return_home') {
-            // Building was destroyed mid-transit - return home
-            this.movementController.clearPendingMovement(entityId);
-            this.handleTargetDestroyed(carrier);
-            return;
-        }
-
-        // For return_home, check home building exists
-        if (pendingMovement.movementType === 'return_home') {
-            const homeBuilding = this.gameState.getEntity(carrier.homeBuilding);
-            if (!homeBuilding) {
-                // Home was destroyed - carrier is orphaned
-                this.movementController.clearPendingMovement(entityId);
-                this.carrierManager.setStatus(entityId, CarrierStatus.Idle);
-                return;
+            if (newFatigue === 0) {
+                this.carrierManager.setStatus(carrierId, CarrierStatus.Idle);
             }
+        } else if (status === CarrierStatus.Idle && carrier.fatigue > 0) {
+            const recovery = IDLE_RECOVERY_RATE * dt;
+            const newFatigue = Math.max(0, carrier.fatigue - recovery);
+            this.carrierManager.setFatigue(carrierId, newFatigue);
         }
-
-        // Handle based on movement type
-        switch (pendingMovement.movementType) {
-        case 'pickup':
-            this.handlePickupArrival(carrier, pendingMovement.targetBuildingId);
-            break;
-        case 'deliver':
-            this.handleDeliveryArrival(carrier, pendingMovement.targetBuildingId);
-            break;
-        case 'return_home':
-            this.handleReturnHomeArrival(carrier);
-            break;
-        }
-
-        // Clear the pending movement
-        this.movementController.clearPendingMovement(entityId);
     }
 
-    /**
-     * Handle case where target building was destroyed while carrier was in transit.
-     */
-    private handleTargetDestroyed(carrier: CarrierState): void {
-        // Cancel current job
-        this.carrierManager.completeJob(carrier.entityId);
-
-        // Clear pending delivery
-        this.pendingDeliveries.delete(carrier.entityId);
-
-        // If carrying materials, they're lost
-        if (carrier.carryingMaterial !== null) {
-            this.carrierManager.setCarrying(carrier.entityId, null, 0);
-            this.animationController.clearCarryingAnimation(carrier.entityId);
-        }
-
-        // Return home
-        this.startReturnHome(carrier.entityId);
-    }
-
-    /**
-     * Handle carrier removed event.
-     * Clean up any pending state for this carrier.
-     */
-    private handleCarrierRemoved(entityId: number): void {
-        this.movementController.clearPendingMovement(entityId);
-        this.animationController.clearAnimationTimer(entityId);
-        this.pendingDeliveries.delete(entityId);
-    }
+    // === Unit Spawning ===
 
     /**
      * Handle unit spawned event.
@@ -274,347 +191,6 @@ export class CarrierSystem implements TickSystem {
         return nearestHub;
     }
 
-    // === Arrival Handlers ===
-
-    /**
-     * Handle carrier arriving at a building for pickup.
-     */
-    private handlePickupArrival(carrier: CarrierState, buildingId: number): void {
-        // Validate job state matches
-        if (!carrier.currentJob || carrier.currentJob.type !== 'pickup') {
-            this.startReturnHome(carrier.entityId);
-            return;
-        }
-
-        // Set status to picking up
-        this.carrierManager.setStatus(carrier.entityId, CarrierStatus.PickingUp);
-
-        // Start pickup animation
-        this.animationController.playPickupAnimation(
-            carrier.entityId,
-            this.currentTimeMs,
-        );
-
-        // Emit arrival event
-        this.eventBus?.emit('carrier:arrivedForPickup', {
-            entityId: carrier.entityId,
-            buildingId,
-        });
-    }
-
-    /**
-     * Handle carrier arriving at a building for delivery.
-     */
-    private handleDeliveryArrival(carrier: CarrierState, buildingId: number): void {
-        // Validate job state matches
-        if (!carrier.currentJob || carrier.currentJob.type !== 'deliver') {
-            this.startReturnHome(carrier.entityId);
-            return;
-        }
-
-        // Set status to delivering
-        this.carrierManager.setStatus(carrier.entityId, CarrierStatus.Delivering);
-
-        // Start drop animation
-        this.animationController.playDropAnimation(
-            carrier.entityId,
-            this.currentTimeMs,
-        );
-
-        // Emit arrival event
-        this.eventBus?.emit('carrier:arrivedForDelivery', {
-            entityId: carrier.entityId,
-            buildingId,
-        });
-    }
-
-    /**
-     * Handle carrier arriving at their home tavern.
-     */
-    private handleReturnHomeArrival(carrier: CarrierState): void {
-        // Use the job-completion handler for return home
-        handleReturnHomeCompletion(carrier, this.carrierManager, this.eventBus);
-
-        // Set to resting if fatigued, otherwise idle
-        if (carrier.fatigue > 50) {
-            this.carrierManager.setStatus(carrier.entityId, CarrierStatus.Resting);
-        }
-
-        // Clear carrying animation (in case we were carrying something)
-        this.animationController.clearCarryingAnimation(carrier.entityId);
-
-        // Emit arrival event
-        this.eventBus?.emit('carrier:arrivedHome', {
-            entityId: carrier.entityId,
-            homeBuilding: carrier.homeBuilding,
-        });
-    }
-
-    // === Animation Completion Handling ===
-
-    /**
-     * Process animation completions for carriers in pickup/delivery states.
-     */
-    private processAnimationCompletions(): void {
-        const carriersWithAnimations = [...this.animationController.getCarriersWithActiveAnimations()];
-
-        for (const carrierId of carriersWithAnimations) {
-            if (this.animationController.isAnimationComplete(carrierId, this.currentTimeMs)) {
-                this.completeAnimation(carrierId);
-            }
-        }
-    }
-
-    /**
-     * Complete an animation and transition to next state.
-     */
-    private completeAnimation(carrierId: number): void {
-        const carrier = this.carrierManager.getCarrier(carrierId);
-        if (!carrier) {
-            this.animationController.clearAnimationTimer(carrierId);
-            return;
-        }
-
-        const animationType = this.animationController.getActiveAnimationType(carrierId);
-        this.animationController.clearAnimationTimer(carrierId);
-
-        if (animationType === 'pickup') {
-            this.completePickup(carrier);
-        } else if (animationType === 'drop') {
-            this.completeDelivery(carrier);
-        }
-    }
-
-    /**
-     * Complete the pickup action - transfer material and start delivery.
-     */
-    private completePickup(carrier: CarrierState): void {
-        const job = carrier.currentJob;
-        if (!job || job.type !== 'pickup') {
-            this.startReturnHome(carrier.entityId);
-            return;
-        }
-
-        // Get the destination for this delivery
-        const destinationId = this.pendingDeliveries.get(carrier.entityId);
-        if (destinationId === undefined) {
-            CarrierSystem.log.warn(` No pending delivery destination for carrier ${carrier.entityId}`);
-            this.carrierManager.completeJob(carrier.entityId);
-            this.startReturnHome(carrier.entityId);
-            return;
-        }
-
-        // Use job-completion handler for the material transfer
-        const result = handlePickupCompletion(
-            carrier,
-            this.carrierManager,
-            this.inventoryManager,
-            destinationId,
-            this.eventBus,
-        );
-
-        if (result.success && result.nextJob) {
-            // Set carrying animation
-            this.animationController.setCarryingAnimation(
-                carrier.entityId,
-                job.material,
-            );
-
-            // Assign deliver job and start movement
-            this.handleJobTransition(carrier.entityId, result, destinationId);
-        } else {
-            // Pickup failed - return home
-            this.pendingDeliveries.delete(carrier.entityId);
-            this.startReturnHome(carrier.entityId);
-        }
-    }
-
-    /**
-     * Complete the delivery action - transfer material and return home.
-     */
-    private completeDelivery(carrier: CarrierState): void {
-        const job = carrier.currentJob;
-        if (!job || job.type !== 'deliver') {
-            this.startReturnHome(carrier.entityId);
-            return;
-        }
-
-        // Clear pending delivery since we're now delivering
-        this.pendingDeliveries.delete(carrier.entityId);
-
-        // Use job-completion handler for the material transfer
-        const result = handleDeliveryCompletion(
-            carrier,
-            this.carrierManager,
-            this.inventoryManager,
-            this.eventBus,
-        );
-
-        // Clear carrying animation
-        this.animationController.clearCarryingAnimation(carrier.entityId);
-
-        // Add fatigue from the delivery
-        this.carrierManager.addFatigue(carrier.entityId, FATIGUE_PER_DELIVERY);
-
-        // Handle the job transition (return home)
-        if (result.nextJob) {
-            this.handleJobTransition(carrier.entityId, result, carrier.homeBuilding);
-        } else {
-            // No next job means go idle
-            this.carrierManager.setStatus(carrier.entityId, CarrierStatus.Idle);
-        }
-    }
-
-    // === Job Transition Handling ===
-
-    /**
-     * Handle job transition - assign next job and start movement.
-     */
-    private handleJobTransition(
-        carrierId: number,
-        result: JobCompletionResult,
-        nextDestination: number,
-    ): void {
-        const carrier = this.carrierManager.getCarrier(carrierId);
-        if (!carrier) return;
-
-        if (result.nextJob) {
-            // Assign the next job
-            this.forceAssignJob(carrierId, result.nextJob);
-
-            // Start movement to next destination
-            this.carrierManager.setStatus(carrierId, CarrierStatus.Walking);
-            const moveSuccess = this.startMovementToBuilding(carrierId, nextDestination, result.nextJob.type as 'deliver' | 'return_home');
-
-            if (!moveSuccess) {
-                // Path failed - cancel and return home if not already
-                if (result.nextJob.type !== 'return_home') {
-                    this.cancelJobAndReturnHome(carrierId);
-                } else {
-                    // Can't even return home - just idle
-                    this.carrierManager.completeJob(carrierId);
-                    this.carrierManager.setStatus(carrierId, CarrierStatus.Idle);
-                }
-            }
-        }
-    }
-
-    /**
-     * Force assign a job to a carrier, bypassing the availability check.
-     * Used during job transitions when carrier is not in Idle state.
-     */
-    private forceAssignJob(carrierId: number, job: CarrierJob): void {
-        const carrier = this.carrierManager.getCarrier(carrierId);
-        if (!carrier) return;
-
-        // Directly set the job since we're in a controlled transition
-        carrier.currentJob = job;
-
-        // Emit event for consistency
-        this.eventBus?.emit('carrier:jobAssigned', { entityId: carrierId, job });
-    }
-
-    /**
-     * Cancel current job and create a return_home job.
-     */
-    private cancelJobAndReturnHome(carrierId: number): void {
-        const carrier = this.carrierManager.getCarrier(carrierId);
-        if (!carrier) return;
-
-        // Complete any existing job
-        this.carrierManager.completeJob(carrierId);
-
-        // Clear pending delivery
-        this.pendingDeliveries.delete(carrierId);
-
-        // Clear any carried materials (goods are lost)
-        if (carrier.carryingMaterial !== null) {
-            this.carrierManager.setCarrying(carrierId, null, 0);
-            this.animationController.clearCarryingAnimation(carrierId);
-        }
-
-        // Start return home
-        this.startReturnHome(carrierId);
-    }
-
-    /**
-     * Start movement to return home.
-     */
-    private startReturnHome(carrierId: number): void {
-        const carrier = this.carrierManager.getCarrier(carrierId);
-        if (!carrier) return;
-
-        // Assign return_home job if not already assigned
-        if (!carrier.currentJob || carrier.currentJob.type !== 'return_home') {
-            this.forceAssignJob(carrierId, { type: 'return_home' });
-        }
-
-        // Start movement
-        const result = this.movementController.startReturnMovement(carrierId, this.gameState);
-
-        if (!result.success) {
-            // Can't path home - just set idle
-            this.carrierManager.completeJob(carrierId);
-            this.carrierManager.setStatus(carrierId, CarrierStatus.Idle);
-        }
-    }
-
-    /**
-     * Start carrier movement to a building.
-     * Returns true if movement started successfully, false if path failed.
-     */
-    private startMovementToBuilding(
-        carrierId: number,
-        buildingId: number,
-        movementType: 'pickup' | 'deliver' | 'return_home',
-    ): boolean {
-        let result: MovementStartResult;
-
-        switch (movementType) {
-        case 'pickup':
-            result = this.movementController.startPickupMovement(carrierId, buildingId, this.gameState);
-            break;
-        case 'deliver':
-            result = this.movementController.startDeliveryMovement(carrierId, buildingId, this.gameState);
-            break;
-        case 'return_home':
-            result = this.movementController.startReturnMovement(carrierId, this.gameState);
-            break;
-        default:
-            return false;
-        }
-
-        if (!result.success) {
-            CarrierSystem.log.warn(` Movement failed for carrier ${carrierId}: ${result.failureReason}`);
-        }
-
-        return result.success;
-    }
-
-    // === Fatigue Management ===
-
-    /**
-     * Update fatigue based on carrier status.
-     */
-    private updateFatigue(carrierId: number, status: CarrierStatus, dt: number): void {
-        const carrier = this.carrierManager.getCarrier(carrierId);
-        if (!carrier) return;
-
-        if (status === CarrierStatus.Resting) {
-            const recovery = FATIGUE_RECOVERY_RATE * dt;
-            const newFatigue = Math.max(0, carrier.fatigue - recovery);
-            this.carrierManager.setFatigue(carrierId, newFatigue);
-
-            if (newFatigue === 0) {
-                this.carrierManager.setStatus(carrierId, CarrierStatus.Idle);
-            }
-        } else if (status === CarrierStatus.Idle && carrier.fatigue > 0) {
-            const recovery = IDLE_RECOVERY_RATE * dt;
-            const newFatigue = Math.max(0, carrier.fatigue - recovery);
-            this.carrierManager.setFatigue(carrierId, newFatigue);
-        }
-    }
-
     // === Public API ===
 
     /**
@@ -637,90 +213,60 @@ export class CarrierSystem implements TickSystem {
     ): boolean {
         // Validate buildings exist
         if (!this.gameState.getEntity(fromBuildingId)) {
-            CarrierSystem.log.warn(` Source building ${fromBuildingId} not found`);
+            CarrierSystem.log.warn(`Source building ${fromBuildingId} not found`);
             return false;
         }
         if (!this.gameState.getEntity(toBuildingId)) {
-            CarrierSystem.log.warn(` Destination building ${toBuildingId} not found`);
+            CarrierSystem.log.warn(`Destination building ${toBuildingId} not found`);
             return false;
         }
 
-        // Assign pickup job through manager (validates carrier availability)
-        const success = this.carrierManager.assignJob(carrierId, {
-            type: 'pickup',
-            fromBuilding: fromBuildingId,
+        // Check carrier availability
+        if (!this.carrierManager.canAssignJobTo(carrierId)) {
+            CarrierSystem.log.warn(`Carrier ${carrierId} is not available for jobs`);
+            return false;
+        }
+
+        // Check settler task system is available
+        if (!this.settlerTaskSystem) {
+            CarrierSystem.log.warn('SettlerTaskSystem not set');
+            return false;
+        }
+
+        // Get carrier's home building
+        const carrier = this.carrierManager.getCarrier(carrierId);
+        if (!carrier) {
+            CarrierSystem.log.warn(`Carrier ${carrierId} not found`);
+            return false;
+        }
+
+        // Assign job via SettlerTaskSystem
+        const success = this.settlerTaskSystem.assignCarrierJob(
+            carrierId,
+            fromBuildingId,
+            toBuildingId,
             material,
             amount,
-        });
+            carrier.homeBuilding,
+        );
 
-        if (!success) return false;
+        if (success) {
+            // Update carrier status
+            this.carrierManager.setStatus(carrierId, CarrierStatus.Walking);
 
-        // Store the delivery destination for after pickup completes
-        this.pendingDeliveries.set(carrierId, toBuildingId);
-
-        // Start movement to source building
-        const moveSuccess = this.startMovementToBuilding(carrierId, fromBuildingId, 'pickup');
-
-        if (!moveSuccess) {
-            // Rollback job assignment
-            this.carrierManager.completeJob(carrierId);
-            this.pendingDeliveries.delete(carrierId);
-            return false;
+            // Emit job assigned event
+            this.eventBus?.emit('carrier:jobAssigned', {
+                entityId: carrierId,
+                job: {
+                    type: 'pickup',
+                    fromBuilding: fromBuildingId,
+                    material,
+                    amount,
+                },
+            });
         }
 
-        return true;
-    }
-
-    /**
-     * Register a pending delivery for a carrier.
-     * Called when assigning a pickup job to specify where to deliver after pickup.
-     */
-    setPendingDelivery(carrierId: number, destinationBuildingId: number): void {
-        this.pendingDeliveries.set(carrierId, destinationBuildingId);
-    }
-
-    /**
-     * Get the pending delivery destination for a carrier.
-     */
-    getPendingDelivery(carrierId: number): number | undefined {
-        return this.pendingDeliveries.get(carrierId);
-    }
-
-    /**
-     * Clear pending delivery for a carrier (e.g., when job is cancelled).
-     */
-    clearPendingDelivery(carrierId: number): void {
-        this.pendingDeliveries.delete(carrierId);
-    }
-
-    /**
-     * Start a pickup movement for a carrier.
-     * Lower-level API for systems that manage their own job assignment.
-     *
-     * @returns Result with success flag and failure reason
-     */
-    startPickup(carrierId: number, buildingId: number): MovementStartResult {
-        return this.movementController.startPickupMovement(carrierId, buildingId, this.gameState);
-    }
-
-    /**
-     * Start a delivery movement for a carrier.
-     * Lower-level API for systems that manage their own job assignment.
-     *
-     * @returns Result with success flag and failure reason
-     */
-    startDelivery(carrierId: number, buildingId: number): MovementStartResult {
-        return this.movementController.startDeliveryMovement(carrierId, buildingId, this.gameState);
-    }
-
-    /**
-     * Cancel any pending movement for a carrier.
-     * Call this when a job is cancelled while carrier is in transit.
-     *
-     * @returns true if a pending movement was cancelled
-     */
-    cancelCarrierMovement(carrierId: number): boolean {
-        return this.movementController.cancelMovement(carrierId);
+        return success;
     }
 
     /**
@@ -728,19 +274,5 @@ export class CarrierSystem implements TickSystem {
      */
     getCarrierManager(): CarrierManager {
         return this.carrierManager;
-    }
-
-    /**
-     * Get the movement controller for debugging/testing.
-     */
-    getMovementController(): CarrierMovementController {
-        return this.movementController;
-    }
-
-    /**
-     * Get the animation controller for debugging/testing.
-     */
-    getAnimationController(): CarrierAnimationController {
-        return this.animationController;
     }
 }

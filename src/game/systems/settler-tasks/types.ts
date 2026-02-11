@@ -138,6 +138,18 @@ export interface SettlerJobState {
     workStarted?: boolean;
 }
 
+/** Extended job state for carrier transport jobs */
+export interface CarrierJobState extends SettlerJobState {
+    /** Source building for pickup */
+    sourceBuildingId: number;
+    /** Destination building for delivery */
+    destBuildingId: number;
+    /** Material type being transported */
+    material: EMaterialType;
+    /** Amount to transport */
+    amount: number;
+}
+
 /** High-level settler state */
 export enum SettlerState {
     /** Waiting for work */
