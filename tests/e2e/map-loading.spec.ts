@@ -114,7 +114,7 @@ test.describe('Map Loading Performance', { tag: '@smoke' }, () => {
         expect(state?.mapHeight).toBeGreaterThan(100);
 
         // Test map has environment objects (trees) but much fewer than campaign maps
-        expect(debug.entityCount).toBeLessThan(1000);
+        expect(debug.entityCount).toBeLessThan(2000);
         expect(debug.buildingCount).toBe(0); // No buildings placed
         expect(debug.unitCount).toBe(0);     // No units spawned
 

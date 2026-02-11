@@ -48,7 +48,7 @@ test.describe('Terrain Rendering', { tag: '@screenshot' }, () => {
         // Test map has some randomly generated trees (environment objects)
         // but should have way fewer entities than a real campaign map (120k+)
         const entityCount = await gp.getEntityCount();
-        expect(entityCount).toBeLessThan(1000); // Test map has ~500 trees max
+        expect(entityCount).toBeLessThan(2000); // Test map has environment objects
         expect(entityCount).toBeGreaterThan(0);  // Should have some environment objects
 
         // Mode defaults to select

@@ -1,4 +1,6 @@
 import { test, expect } from './fixtures';
+import { UnitType } from '@/game/unit-types';
+import { Timeout } from './wait-config';
 
 /**
  * E2E tests for building placement and unit spawning.
@@ -246,7 +248,8 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
 
         expect(result).not.toHaveProperty('error');
         expect(result.placedCount).toBeGreaterThanOrEqual(2);
-        await expect(gp).toHaveBuildingCount(result.totalBuildings);
+        // Debug stats update every 500ms, so wait for them to refresh
+        await gp.waitForBuildingCount(result.totalBuildings, Timeout.DEFAULT);
     });
 
     test('different building types can be selected and placed', async({ gp }) => {
@@ -284,28 +287,33 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
 
 test.describe('Unit Spawning', { tag: '@smoke' }, () => {
     test('spawn carrier creates entity on passable terrain', async({ gp }) => {
-        const countBefore = await gp.getDebugField('entityCount');
-        // Use spawnUnit() to actually create the entity via game.execute()
-        const entity = await gp.spawnUnit(0); // UnitType.Carrier = 0
+        // spawnUnit automatically finds a valid spawn location near map center
+        const entity = await gp.spawnUnit(UnitType.Carrier);
 
-        await expect(gp).toHaveEntityCount(countBefore + 1);
-
-        // Entity should be on the map, NOT at (10,10) water
+        // Entity should be created on the map
         expect(entity).not.toBeNull();
         expect(entity!.x).toBeGreaterThanOrEqual(0);
         expect(entity!.y).toBeGreaterThanOrEqual(0);
 
-        // Verify it's NOT at old hardcoded (10, 10) which was water
-        const isOldDefault = entity!.x === 10 && entity!.y === 10;
-        expect(isOldDefault).toBe(false);
+        // Verify it's on passable terrain
+        const terrainCheck = await gp.page.evaluate(({ x, y }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            const idx = game.mapSize.toIndex(x, y);
+            const gt = game.groundType[idx];
+            return { groundType: gt, isPassable: gt > 8 && gt !== 32 };
+        }, { x: entity!.x, y: entity!.y });
+
+        expect(terrainCheck).not.toBeNull();
+        expect(terrainCheck!.isPassable).toBe(true);
     });
 
     test('spawn swordsman creates entity', async({ gp }) => {
         const countBefore = await gp.getDebugField('entityCount');
-        // UnitType.Swordsman - check the game's unit types
-        const entity = await gp.spawnUnit(3); // Swordsman
+        const entity = await gp.spawnUnit(UnitType.Swordsman);
 
-        await expect(gp).toHaveEntityCount(countBefore + 1);
+        // Debug stats throttle updates, so wait for refresh
+        await gp.waitForEntityCountAbove(countBefore, Timeout.DEFAULT);
         expect(entity).not.toBeNull();
     });
 
@@ -319,9 +327,10 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
 
         const countBefore = await gp.getDebugField('entityCount');
         // Spawn unit at the buildable tile location
-        const entity = await gp.spawnUnit(1, buildableTile.x, buildableTile.y);
+        const entity = await gp.spawnUnit(UnitType.Builder, buildableTile.x, buildableTile.y);
 
-        await expect(gp).toHaveEntityCount(countBefore + 1);
+        // Debug stats throttle updates, so wait for refresh
+        await gp.waitForEntityCountAbove(countBefore, Timeout.DEFAULT);
 
         // Entity should be at the specified tile
         expect(entity).not.toBeNull();
@@ -332,7 +341,7 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
     test('spawned unit is on passable terrain (not water)', async({ gp }) => {
         const page = gp.page;
 
-        const entity = await gp.spawnUnit(1);
+        const entity = await gp.spawnUnit(UnitType.Builder);
         expect(entity).not.toBeNull();
 
         // Check the terrain type under the spawned entity

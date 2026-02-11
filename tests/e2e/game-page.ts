@@ -1,5 +1,6 @@
 import { type Page, type Locator, expect } from '@playwright/test';
 import { Frames, Timeout } from './wait-config';
+import { WaitProfiler, type WaitCategory } from './wait-profiler';
 
 /**
  * Mirrors LoadTimings from src/game/debug-stats.ts.
@@ -61,6 +62,51 @@ export class GamePage {
         this.modeIndicator = page.locator('[data-testid="mode-indicator"]');
     }
 
+    // ── Profiler Integration ─────────────────────────────────
+
+    /**
+     * Wrap a wait operation with profiler timing.
+     * If profiler is disabled, just runs the function directly.
+     */
+    private async profiledWait<T>(
+        category: WaitCategory,
+        method: string,
+        condition: string,
+        timeout: number,
+        fn: () => Promise<T>,
+        context?: Record<string, unknown>
+    ): Promise<T> {
+        if (!WaitProfiler.isEnabled()) {
+            return fn();
+        }
+
+        const startTime = performance.now();
+        let timedOut = false;
+
+        try {
+            return await fn();
+        } catch (error) {
+            if (error instanceof Error && (error.message.includes('Timeout') || error.message.includes('timeout'))) {
+                timedOut = true;
+            }
+            throw error;
+        } finally {
+            const endTime = performance.now();
+            WaitProfiler.record({
+                category,
+                method,
+                condition,
+                startTime,
+                endTime,
+                duration: endTime - startTime,
+                pollCount: 0, // page.waitForFunction doesn't expose poll count
+                timedOut,
+                timeout,
+                context,
+            });
+        }
+    }
+
     // ── Navigation ──────────────────────────────────────────
 
     /** Navigate to the map view with an optional test map. */
@@ -73,7 +119,9 @@ export class GamePage {
 
     /** Wait until the game UI is mounted in the DOM. */
     async waitForGameUi(timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
-        await this.gameUi.waitFor({ timeout });
+        await this.profiledWait('dom', 'waitForGameUi', 'game UI element visible', timeout, () =>
+            this.gameUi.waitFor({ timeout })
+        );
     }
 
     /**
