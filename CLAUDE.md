@@ -50,6 +50,12 @@ Test maps and procedural textures work without game files.
 - Playwright `outputDir` writes to `tests/e2e/.results/` (gitignored).
 - Screenshot baselines live in `tests/e2e/__screenshots__/` and are committed.
 
+## Coding guidelines
+
+- **Error messages must include context**: When throwing errors, include all relevant identifiers (entity ID, type name, state) so the root cause can be traced. Never throw generic errors like "not found" — always include what was being looked up and what was available.
+- **Report errors eagerly**: Fail fast at the source of the problem, not downstream. If a function receives invalid input, throw immediately with context rather than returning null and failing later.
+- **No silent fallbacks for bugs**: Don't add fallbacks that hide programming errors. If code requests an animation sequence that doesn't exist, that's a bug to fix, not a case to handle gracefully.
+
 ## Claude Code workflow
 
 - **Always use async/await**: Prefer `async/await` over `.then()` chains for cleaner, more readable code

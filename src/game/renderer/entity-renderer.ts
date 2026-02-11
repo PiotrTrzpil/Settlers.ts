@@ -86,6 +86,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Extracted managers and renderers
     public spriteManager: SpriteRenderManager | null = null;
     private animationService: AnimationService | null = null;
+    private _onSpritesLoaded: (() => void) | null = null;
     private spriteBatchRenderer: SpriteBatchRenderer;
     private selectionOverlayRenderer: SelectionOverlayRenderer;
     private depthSorter: OptimizedDepthSorter;
@@ -290,10 +291,20 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                         `Sprite loading complete: ${this.spriteManager?.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${Race[this.spriteManager?.currentRace ?? Race.Roman]}`
                     );
                 }
+                // Notify when sprites are loaded (even if loading failed, animations are ready)
+                this._onSpritesLoaded?.();
             });
         }
 
         return true;
+    }
+
+    /**
+     * Set callback to be called when sprites finish loading.
+     * Used to enable game ticks after animations are available.
+     */
+    public set onSpritesLoaded(callback: (() => void) | null) {
+        this._onSpritesLoaded = callback;
     }
 
     /**

@@ -24,6 +24,7 @@ import {
     clearKeyboardState,
 } from './input-state';
 import { CameraMode } from './modes/camera-mode';
+import { gameSettings } from '../game-settings';
 
 
 /**
@@ -522,6 +523,13 @@ export class InputManager {
         if (action) {
             const binding = this.config.bindings.find(b => b.action === action);
             if (e.repeat && !binding?.repeatable) return;
+
+            // Handle global actions that work regardless of mode
+            if (action === InputAction.TogglePause) {
+                gameSettings.state.paused = !gameSettings.state.paused;
+                e.preventDefault();
+                return;
+            }
 
             const context = this.createContext();
             const mode = this.getCurrentMode();

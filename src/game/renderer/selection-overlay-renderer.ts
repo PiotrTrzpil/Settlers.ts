@@ -346,11 +346,15 @@ export class SelectionOverlayRenderer {
         ];
 
         for (const tile of footprint) {
+            // Get height at integer tile position
+            const idx = ctx.mapSize.toIndex(tile.x, tile.y);
+            const hWorld = heightToWorld(ctx.groundHeight[idx] ?? 0);
+
             for (const offset of cornerOffsets) {
-                const worldPos = TilePicker.tileToWorld(
+                // Use pure tileToWorld for fractional coords (tile corners)
+                const worldPos = tileToWorld(
                     tile.x + offset.dx, tile.y + offset.dy,
-                    ctx.groundHeight, ctx.mapSize,
-                    ctx.viewPoint.x, ctx.viewPoint.y
+                    hWorld, ctx.viewPoint.x, ctx.viewPoint.y
                 );
                 minX = Math.min(minX, worldPos.worldX);
                 minY = Math.min(minY, worldPos.worldY);

@@ -492,6 +492,8 @@ export function useRenderer({
             game.groundType
         );
         entityRenderer.setAnimationService(game.gameLoop.animationService);
+        // Enable game ticks once sprites are loaded (prevents animation errors during loading)
+        entityRenderer.onSpritesLoaded = () => game.gameLoop.enableTicks();
         renderer.add(entityRenderer);
 
         // Initialize renderers asynchronously

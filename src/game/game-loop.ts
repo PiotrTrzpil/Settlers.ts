@@ -55,6 +55,8 @@ export class GameLoop {
     private lastRenderTime = 0;
     /** Bound visibility handler for cleanup */
     private visibilityHandler: (() => void) | null = null;
+    /** Bound frame handler to avoid creating closures every frame */
+    private boundFrame: (time: number) => void;
 
     private gameState: GameState;
     private groundType: Uint8Array | undefined;
@@ -64,6 +66,9 @@ export class GameLoop {
     private mapSize: MapSize | undefined;
     /** Render callback - returns render timing if available */
     private onRender: ((alpha: number, deltaSec: number) => FrameRenderTiming | null) | null = null;
+
+    /** When true, game logic (ticks) is paused but rendering continues */
+    private _ticksPaused = true;
 
     /** Registered tick systems */
     private systems: TickSystem[] = [];
@@ -104,6 +109,9 @@ export class GameLoop {
     constructor(gameState: GameState, eventBus: EventBus) {
         this.gameState = gameState;
         this.eventBus = eventBus;
+
+        // Bind frame handler once to avoid creating closures every frame
+        this.boundFrame = this.frame.bind(this);
 
         // Create animation service first - other systems depend on it
         this.animationService = new AnimationService();
@@ -206,6 +214,18 @@ export class GameLoop {
         this.systems.push(system);
     }
 
+    /** Enable game ticks (call after sprites are loaded) */
+    public enableTicks(): void {
+        if (!this._ticksPaused) return;
+        this._ticksPaused = false;
+        GameLoop.log.debug('Game ticks enabled');
+    }
+
+    /** Check if game ticks are paused */
+    public get ticksPaused(): boolean {
+        return this._ticksPaused;
+    }
+
     /**
      * Building types that act as logistics hubs (taverns/carrier bases).
      * These buildings get service areas when created.
@@ -246,6 +266,11 @@ export class GameLoop {
      * Handle entity removal - cleans up carrier state, inventory, service areas, and logistics.
      */
     private handleEntityRemoved(entityId: number): void {
+        // Notify all registered tick systems that implement onEntityRemoved
+        for (const system of this.systems) {
+            system.onEntityRemoved?.(entityId);
+        }
+
         // Clean up carrier state if this was a carrier
         if (this.gameState.carrierManager.hasCarrier(entityId)) {
             this.gameState.carrierManager.removeCarrier(entityId);
@@ -288,7 +313,7 @@ export class GameLoop {
         if (this.running) return;
         this.running = true;
         this.lastTime = performance.now();
-        this.animRequest = requestAnimationFrame((t) => this.frame(t));
+        this.animRequest = requestAnimationFrame(this.boundFrame);
 
         GameLoop.activeLoops++;
         if (GameLoop.activeLoops > 1) {
@@ -396,12 +421,18 @@ export class GameLoop {
             this.lastTime = now;
             this.accumulator += deltaSec;
 
-            // Fixed timestep simulation - always runs to keep game state consistent
+            // Fixed timestep simulation - only runs when ticks are enabled and not paused
             const scaledDt = TICK_DURATION * gameSettings.state.gameSpeed;
             const tickStart = performance.now();
-            while (this.accumulator >= TICK_DURATION) {
-                this.tick(scaledDt);
-                this.accumulator -= TICK_DURATION;
+            const shouldTick = !this._ticksPaused && !gameSettings.state.paused;
+            if (shouldTick) {
+                while (this.accumulator >= TICK_DURATION) {
+                    this.tick(scaledDt);
+                    this.accumulator -= TICK_DURATION;
+                }
+            } else {
+                // Drain accumulator to prevent catch-up burst when unpaused
+                this.accumulator = 0;
             }
             ticksTime = performance.now() - tickStart;
 
@@ -409,11 +440,12 @@ export class GameLoop {
             if (shouldRender) {
                 // Update animations (runs every rendered frame for smooth animation)
                 // Scale by game speed so animations match game pace
+                // Skip animation updates when paused
                 const animStart = performance.now();
-                const scaledDeltaMs = deltaSec * 1000 * gameSettings.state.gameSpeed;
-
-                // Update animation service
-                this.animationService.update(scaledDeltaMs);
+                if (shouldTick) {
+                    const scaledDeltaMs = deltaSec * 1000 * gameSettings.state.gameSpeed;
+                    this.animationService.update(scaledDeltaMs);
+                }
                 animationsTime = performance.now() - animStart;
 
                 // Render with interpolation alpha for smooth sub-tick visuals
@@ -430,7 +462,7 @@ export class GameLoop {
             this.logThrottledError('Error in game frame', e);
         }
 
-        this.animRequest = requestAnimationFrame((t) => this.frame(t));
+        this.animRequest = requestAnimationFrame(this.boundFrame);
     }
 
     private tick(dt: number): void {

@@ -13,10 +13,12 @@
           Game
         </h3>
         <div v-if="sections.game" class="section-body">
+          <SettingsCheckbox label="Paused" v-model="settings.paused" />
           <SettingsSlider
             label="Game speed"
             v-model="settings.gameSpeed"
             :min="0.25" :max="4" :step="0.25"
+            :disabled="settings.paused"
           />
         </div>
       </section>

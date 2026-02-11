@@ -8,6 +8,7 @@ const SETTINGS_STORAGE_KEY = 'settlers_game_settings';
  */
 export interface GameSettings {
     // Game
+    paused: boolean;
     gameSpeed: number;
 
     // Camera
@@ -38,6 +39,7 @@ export interface GameSettings {
 /** Default values for all settings */
 const DEFAULT_SETTINGS: GameSettings = {
     // Game
+    paused: false,
     gameSpeed: 1.0,
 
     // Camera

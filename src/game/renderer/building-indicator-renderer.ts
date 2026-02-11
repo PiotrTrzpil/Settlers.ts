@@ -224,11 +224,11 @@ export class BuildingIndicatorRenderer {
         this.indicatorCache.length = 0;
 
         // Compute visible tile range based on viewport
-        // zoom = 0.1 / zoomValue, so smaller zoom = more zoomed out = larger visible area
-        // zoomValue = 0.1 / zoom
-        const zoomValue = 0.1 / viewPoint.zoom;
-        const visibleWidth = Math.ceil(40 / zoomValue);
-        const visibleHeight = Math.ceil(30 / zoomValue);
+        // World visible range is 2/zoom in Y, multiply by aspectRatio for X
+        // Tiles are roughly 1:0.5 world units in X:Y due to isometric projection
+        const visibleWorldRange = 2 / viewPoint.zoom;
+        const visibleWidth = Math.ceil(visibleWorldRange * viewPoint.aspectRatio) + 10;
+        const visibleHeight = Math.ceil(visibleWorldRange * 2) + 10; // *2 for tile-to-world Y factor
 
         const centerX = Math.round(viewPoint.x);
         const centerY = Math.round(viewPoint.y);

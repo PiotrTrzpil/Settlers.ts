@@ -91,8 +91,11 @@ export interface IFrameContext {
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Margin added to world bounds for safe culling */
+/** Margin added to world bounds for safe culling (top/left/right) */
 const WORLD_MARGIN = 2.0;
+
+/** Extra margin for bottom of screen to account for tall sprites (trees extend upward from base) */
+const WORLD_MARGIN_BOTTOM = 5.0;
 
 /** Margin added to tile bounds to catch edge cases */
 const TILE_MARGIN = 10;
@@ -240,6 +243,7 @@ export class FrameContext implements IFrameContext {
 
 /**
  * Compute visible world bounds from viewpoint.
+ * Uses larger bottom margin to account for tall sprites (trees) extending upward from base.
  */
 function computeWorldBounds(viewPoint: IViewPoint): Bounds {
     const { zoom, aspectRatio: aspect } = viewPoint;
@@ -247,7 +251,7 @@ function computeWorldBounds(viewPoint: IViewPoint): Bounds {
         minX: (-1 + zoom) * aspect / zoom - WORLD_MARGIN,
         maxX: (1 + zoom) * aspect / zoom + WORLD_MARGIN,
         minY: (zoom - 1) / zoom - WORLD_MARGIN,
-        maxY: (zoom + 1) / zoom + WORLD_MARGIN,
+        maxY: (zoom + 1) / zoom + WORLD_MARGIN_BOTTOM,
     };
 }
 

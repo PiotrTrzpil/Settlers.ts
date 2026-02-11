@@ -5,4 +5,13 @@
 export interface TickSystem {
     /** Called each fixed-timestep tick */
     tick(dt: number): void;
+
+    /**
+     * Optional: Called when an entity is removed from the game.
+     * Systems that maintain per-entity state (Map<entityId, State>) should
+     * implement this to clean up their internal state.
+     *
+     * This is called automatically by GameLoop for all registered systems.
+     */
+    onEntityRemoved?(entityId: number): void;
 }
