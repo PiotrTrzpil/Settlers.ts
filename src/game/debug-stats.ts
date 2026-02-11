@@ -578,6 +578,9 @@ class DebugStats {
                 }
                 break;
             }
+            case EntityType.None:
+                // Skip placeholder/invalid entities
+                break;
             }
         }
         this.state.buildingCount = buildings;

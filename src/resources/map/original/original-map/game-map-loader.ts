@@ -120,7 +120,7 @@ export class OriginalMapLoader extends OriginalMapFile implements IMapLoader {
         return true;
     }
 
-    public toString():string {
+    public override toString(): string {
         return this.general.toString() + '; ' +
                         this.mapSize.toString() + '; ' +
                         'unk5: ' + this.unknown5 + '; ' +

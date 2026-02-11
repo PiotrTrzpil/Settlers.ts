@@ -36,7 +36,7 @@ export class PilFileReader extends ResourceFile {
         Object.seal(this);
     }
 
-    public toString(): string {
+    public override toString(): string {
         return 'pil: ' + super.toString();
     }
 }

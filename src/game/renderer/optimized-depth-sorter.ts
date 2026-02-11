@@ -177,7 +177,7 @@ export class OptimizedDepthSorter {
             return DEPTH_FACTOR_UNIT;
         case EntityType.StackedResource:
             return DEPTH_FACTOR_RESOURCE;
-        default:
+        case EntityType.None:
             return 1.0;
         }
     }
@@ -197,7 +197,7 @@ export class OptimizedDepthSorter {
             return spriteManager.getUnit(entity.subType as UnitType);
         case EntityType.StackedResource:
             return spriteManager.getResource(entity.subType as EMaterialType);
-        default:
+        case EntityType.None:
             return null;
         }
     }

@@ -32,7 +32,7 @@ export class JilFileReader extends IndexFile {
         Object.seal(this);
     }
 
-    public toString(): string {
+    public override toString(): string {
         return 'jil: ' + super.toString();
     }
 }

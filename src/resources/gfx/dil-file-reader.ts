@@ -39,7 +39,7 @@ export class DilFileReader extends IndexFile {
         Object.seal(this);
     }
 
-    public toString(): string {
+    public override toString(): string {
         return 'dil: ' + super.toString();
     }
 }

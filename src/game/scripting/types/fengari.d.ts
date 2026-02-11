@@ -10,9 +10,9 @@ declare module 'fengari' {
     /** Lua string type - can be string or Uint8Array */
     export type LuaString = string | Uint8Array;
 
-    export interface lua_State {
-        // Opaque type representing Lua state
-    }
+    // Opaque type representing Lua state
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+    export interface lua_State {}
 
     export namespace lua {
         // Thread status

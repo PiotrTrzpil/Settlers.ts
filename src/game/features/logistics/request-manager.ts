@@ -515,7 +515,6 @@ export class RequestManager {
         listener: RequestEventListener<K>,
     ): void {
         if (!this.listeners[event]) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             this.listeners[event] = new Set() as any;
         }
         (this.listeners[event] as Set<RequestEventListener<K>>).add(listener);

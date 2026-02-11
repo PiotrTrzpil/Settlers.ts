@@ -35,6 +35,11 @@ export default tseslint.config(
                 ...globals.browser,
                 ...globals.node,
             },
+            parserOptions: {
+                projectService: true,
+                tsconfigRootDir: import.meta.dirname,
+                extraFileExtensions: ['.vue'],
+            },
         },
         settings: {
             'import-x/resolver': {
@@ -71,6 +76,13 @@ export default tseslint.config(
             // Import rules - detect circular dependencies
             'import-x/no-cycle': ['error', { maxDepth: 5 }],
             'import-x/no-self-import': 'error',
+
+            // Type-aware rules (require parserOptions.projectService)
+            '@typescript-eslint/no-floating-promises': 'error',
+            '@typescript-eslint/no-misused-promises': 'error',
+            '@typescript-eslint/switch-exhaustiveness-check': 'error',
+            '@typescript-eslint/await-thenable': 'error',
+            '@typescript-eslint/require-await': 'warn',
 
             // Complexity limits
             complexity: ['error', { max: 15 }],

@@ -187,7 +187,7 @@ export class SoundManager implements IAudioManager {
             document.removeEventListener('touchstart', unlock);
         };
 
-        const unlock = async() => {
+        const unlock = () => {
             // Guard against multiple rapid calls
             if (unlocking) {
                 return;
@@ -199,18 +199,17 @@ export class SoundManager implements IAudioManager {
                 // Remove listeners IMMEDIATELY to prevent duplicate calls
                 removeListeners();
 
-                try {
-                    await Howler.ctx.resume();
+                void Howler.ctx.resume().then(() => {
                     SoundManager.log.info('AudioContext resumed via user interaction');
                     this.musicController.retryPendingMusic();
-                } catch (err) {
+                }).catch((err) => {
                     SoundManager.log.warn('Failed to resume AudioContext: ' + err);
                     unlocking = false;
                     // Re-add listeners on failure
                     document.addEventListener('click', unlock);
                     document.addEventListener('keydown', unlock);
                     document.addEventListener('touchstart', unlock);
-                }
+                });
             }
         };
 
@@ -313,17 +312,16 @@ export class SoundManager implements IAudioManager {
             onloaderror: (_id, err) => {
                 SoundManager.log.error(`Failed to load sound ${config.id}: ${err}`);
             },
-            onplayerror: async(_id, err) => {
+            onplayerror: (_id, err) => {
                 SoundManager.log.error(`Failed to play sound ${config.id}: ${err}`);
                 // Unlock audio context if needed
                 if (Howler.ctx && Howler.ctx.state === 'suspended') {
-                    try {
-                        await Howler.ctx.resume();
+                    void Howler.ctx.resume().then(() => {
                         SoundManager.log.info('Audio context resumed from error handler');
                         this.musicController.retryPendingMusic();
-                    } catch (resumeErr) {
+                    }).catch((resumeErr) => {
                         SoundManager.log.warn('Failed to resume audio context: ' + resumeErr);
-                    }
+                    });
                 }
             }
         });

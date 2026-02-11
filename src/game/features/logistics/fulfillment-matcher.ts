@@ -69,6 +69,7 @@ export interface MatchOptions {
  * @param options Matching options
  * @returns The best match, or null if no suitable source found
  */
+// eslint-disable-next-line complexity -- multi-step matching algorithm
 export function matchRequestToSupply(
     request: ResourceRequest,
     gameState: GameState,

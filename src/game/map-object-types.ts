@@ -25,7 +25,9 @@ export enum MapObjectType {
     TreeOliveSmall = 17,// 18
 
     // Tree aliases for code compatibility or specific tribe variations
+    // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values
     TreePalm = 10,      // Alias for Coconut/Date generic
+    // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values
     TreeCypress = 8,    // Alias for Fir/Spruce generic
     TreeDead = 18,      // Placeholder for now
 

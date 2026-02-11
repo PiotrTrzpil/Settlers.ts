@@ -5,7 +5,7 @@
 
 import { EntityType } from '../entity';
 import { BuildingType } from '../buildings/types';
-import { BuildingConstructionPhase, type BuildingState } from '../features/building-construction';
+import { BuildingConstructionPhase } from '../features/building-construction';
 import { GameState } from '../game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
@@ -61,35 +61,6 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
     [S4BuildingType.FORTRESS]: BuildingType.Castle, // Approximation
     [S4BuildingType.MANACOPTERHALL]: BuildingType.SiegeWorkshop, // Approximation
 };
-
-/**
- * Default construction duration used for building state.
- * Since these are pre-built, we set elapsed time equal to this.
- */
-const DEFAULT_CONSTRUCTION_DURATION = 10;
-
-/**
- * Create a completed building state for a pre-existing building.
- */
-function _createCompletedBuildingState(
-    entityId: number,
-    buildingType: BuildingType,
-    x: number,
-    y: number
-): BuildingState {
-    return {
-        entityId,
-        buildingType,
-        phase: BuildingConstructionPhase.Completed,
-        phaseProgress: 1.0,
-        totalDuration: DEFAULT_CONSTRUCTION_DURATION,
-        elapsedTime: DEFAULT_CONSTRUCTION_DURATION,
-        tileX: x,
-        tileY: y,
-        originalTerrain: null,
-        terrainModified: true, // Mark as already modified since it's pre-existing
-    };
-}
 
 /**
  * Options for populating map buildings.

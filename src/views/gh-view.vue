@@ -148,7 +148,7 @@ watchGridMode(renderAllGridImages, () => ghContent.value.length > 0);
 // Render single view when switching to single mode
 watch(viewMode, (newMode) => {
     if (newMode === 'single' && selectedItem.value) {
-        nextTick(() => onSelectItem());
+        void nextTick(() => onSelectItem());
     }
 });
 </script>

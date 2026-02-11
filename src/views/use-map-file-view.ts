@@ -108,7 +108,7 @@ function getCategoryIcon(category: ChunkInfo['category']): string {
     case 'entities': return '🏠';
     case 'player': return '👤';
     case 'savegame': return '💾';
-    default: return '❓';
+    case 'unknown': return '❓';
     }
 }
 

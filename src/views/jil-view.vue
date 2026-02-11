@@ -259,6 +259,7 @@ function onFileSelect(file: IFileSource) {
     void load(file);
 }
 
+// eslint-disable-next-line @typescript-eslint/require-await -- delegates to doLoad
 async function load(file: IFileSource) {
     if (!props.fileManager) return;
     const fileId = Path.getFileNameWithoutExtension(file.name);

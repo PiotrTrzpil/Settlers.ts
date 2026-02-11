@@ -73,6 +73,7 @@ class UnitStateMap implements UnitStateLookup {
     }
 
     values(): IterableIterator<UnitStateView> {
+        // eslint-disable-next-line @typescript-eslint/no-this-alias -- needed for generator context
         const self = this;
         return (function* () {
             for (const controller of self.movementSystem.getAllControllers()) {
@@ -172,6 +173,7 @@ export class GameState {
      * - MapObject/StackedResource: NOT selectable
      * Speed defaults to UnitTypeConfig value for units.
      */
+    // eslint-disable-next-line complexity -- entity initialization handles many type variants
     public addEntity(
         type: EntityType, subType: number, x: number, y: number,
         player: number, selectable?: boolean, variation?: number
@@ -192,6 +194,9 @@ export class GameState {
             case EntityType.MapObject:
             case EntityType.StackedResource:
                 // Map objects and resources are never selectable
+                resolvedSelectable = false;
+                break;
+            case EntityType.None:
                 resolvedSelectable = false;
                 break;
             }

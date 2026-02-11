@@ -211,15 +211,16 @@ export class LuaEventDispatcher {
      */
     private createEventRegistrationFunction(L: lua_State, eventName: ScriptEventType): void {
         // Capture 'this' for use in closure
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
         const dispatcher = this;
 
-        lua.lua_pushcfunction(L, (L: lua_State) => {
+        lua.lua_pushcfunction(L, (luaState: lua_State) => {
             // Check that argument is a function
-            lauxlib.luaL_checktype(L, 1, lua.LUA_TFUNCTION);
+            lauxlib.luaL_checktype(luaState, 1, lua.LUA_TFUNCTION);
 
             // Store function in registry and get reference
-            lua.lua_pushvalue(L, 1);
-            const ref = lauxlib.luaL_ref(L, lua.LUA_REGISTRYINDEX);
+            lua.lua_pushvalue(luaState, 1);
+            const ref = lauxlib.luaL_ref(luaState, lua.LUA_REGISTRYINDEX);
 
             // Register the handler
             dispatcher.registerHandler(eventName, ref);

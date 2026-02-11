@@ -134,6 +134,7 @@ function createRenderCallback(
     renderer: Renderer,
     selectionBox: Ref<SelectionBox | null>
 ): (alpha: number, deltaSec: number) => FrameRenderTiming | null {
+    // eslint-disable-next-line complexity -- render callback coordinates multiple systems
     return (alpha: number, deltaSec: number): FrameRenderTiming | null => {
         const ctx = getContext();
         const { game: g, entityRenderer: er, landscapeRenderer, inputManager } = ctx;
@@ -501,7 +502,7 @@ export function useRenderer({
         // Initialize renderers asynchronously
         const gl = renderer.gl;
         if (gl) {
-            initRenderersAsync(gl, landscapeRenderer, entityRenderer, game);
+            void initRenderersAsync(gl, landscapeRenderer, entityRenderer, game);
         }
 
         const landTile = game.findLandTile();

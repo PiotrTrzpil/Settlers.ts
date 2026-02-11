@@ -542,6 +542,7 @@ function tryPlaceTreeAt(
  * Expand existing trees by adding more trees around them.
  * Uses seed trees from map data as starting points for forest clusters.
  */
+// eslint-disable-next-line complexity -- forest expansion algorithm has many steps
 export function expandTrees(
     state: GameState,
     groundType: Uint8Array,

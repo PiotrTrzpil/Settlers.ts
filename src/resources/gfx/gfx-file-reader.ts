@@ -119,7 +119,7 @@ export class GfxFileReader extends ResourceFile {
         return newImg;
     }
 
-    public toString() : string {
+    public override toString(): string {
         return 'gfx: ' + super.toString() + ', --- ' + this.isWordHeader;
     }
 }

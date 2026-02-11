@@ -139,7 +139,7 @@ const entityIcon = computed(() => {
         case UnitCategory.Military: return '⚔️';
         case UnitCategory.Religious: return '🙏';
         case UnitCategory.Specialist: return '🎯';
-        default: return '👷';
+        case UnitCategory.Worker: return '👷';
         }
     }
 

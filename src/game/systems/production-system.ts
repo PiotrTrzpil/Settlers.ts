@@ -35,7 +35,7 @@ import { EMaterialType } from '../economy';
 import { BUILDING_PRODUCTIONS } from '../economy/building-production';
 import { LogHandler } from '@/utilities/log-handler';
 import { RequestPriority } from '../features/logistics';
-import { consumesMaterials, getInventoryConfig, type InventoryConfig } from '../features/inventory';
+import { getInventoryConfig, type InventoryConfig } from '../features/inventory';
 import { BuildingConstructionPhase } from '../features/building-construction';
 
 const log = new LogHandler('ProductionSystem');

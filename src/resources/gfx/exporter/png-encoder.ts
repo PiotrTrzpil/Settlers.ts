@@ -123,8 +123,8 @@ async function deflateWithPlatform(data: Uint8Array<ArrayBuffer>): Promise<Uint8
         try {
             const stream = new CompressionStream('deflate');
             const writer = stream.writable.getWriter();
-            writer.write(data);
-            writer.close();
+            void writer.write(data);
+            void writer.close();
 
             const chunks: Uint8Array[] = [];
             const reader = stream.readable.getReader();

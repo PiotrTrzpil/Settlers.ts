@@ -82,7 +82,7 @@ export class EntityDepthSorter {
             return spriteManager.getUnit(entity.subType as UnitType);
         case EntityType.StackedResource:
             return spriteManager.getResource(entity.subType as EMaterialType);
-        default:
+        case EntityType.None:
             return null;
         }
     }
@@ -113,8 +113,9 @@ export class EntityDepthSorter {
             case EntityType.StackedResource:
                 depthFactor = DEPTH_FACTOR_RESOURCE;
                 break;
-            default:
+            case EntityType.None:
                 depthFactor = 1.0;
+                break;
             }
 
             // Depth point = base position + offset to the depth line within sprite

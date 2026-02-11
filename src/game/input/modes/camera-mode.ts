@@ -83,11 +83,11 @@ export class CameraMode extends BaseInputMode {
         }
     }
 
-    onAction(_action: InputAction, _context: InputContext): InputResult {
+    override onAction(_action: InputAction, _context: InputContext): InputResult {
         return UNHANDLED;
     }
 
-    onPointerDown(data: PointerData, _context: InputContext): InputResult {
+    override onPointerDown(data: PointerData, _context: InputContext): InputResult {
         if (!this.viewPoint) return UNHANDLED;
 
         // Middle or right mouse button starts camera drag
@@ -107,7 +107,7 @@ export class CameraMode extends BaseInputMode {
         return UNHANDLED;
     }
 
-    onPointerUp(data: PointerData, _context: InputContext): InputResult {
+    override onPointerUp(data: PointerData, _context: InputContext): InputResult {
         if (this.isDraggingCamera && data.button === this.dragButton) {
             const wasMoving = this.didMoveCamera;
             this.isDraggingCamera = false;
@@ -120,7 +120,7 @@ export class CameraMode extends BaseInputMode {
         return UNHANDLED;
     }
 
-    onPointerMove(data: PointerData, _context: InputContext): InputResult {
+    override onPointerMove(data: PointerData, _context: InputContext): InputResult {
         if (!this.isDraggingCamera) return UNHANDLED;
 
         // Just store the current mouse position - camera position is computed in onUpdate
@@ -138,7 +138,7 @@ export class CameraMode extends BaseInputMode {
         return HANDLED;
     }
 
-    onWheel(data: PointerData, _context: InputContext): InputResult {
+    override onWheel(data: PointerData, _context: InputContext): InputResult {
         if (!this.viewPoint || data.wheelDelta === undefined) return UNHANDLED;
 
         const delta = this.config.invertZoom ? -data.wheelDelta : data.wheelDelta;
@@ -158,7 +158,7 @@ export class CameraMode extends BaseInputMode {
         return HANDLED;
     }
 
-    onUpdate(deltaTime: number, context: InputContext): void {
+    override onUpdate(deltaTime: number, context: InputContext): void {
         if (!this.viewPoint) return;
 
         // MOUSE DRAG: Compute camera position from current mouse position (frame-synchronized)

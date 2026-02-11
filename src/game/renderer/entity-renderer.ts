@@ -264,6 +264,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         return this.animationService?.getState(entityId) ?? null;
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await -- sprite loading is fire-and-forget
     public async init(gl: WebGL2RenderingContext): Promise<boolean> {
         this.glContext = gl;
 
@@ -288,7 +289,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             this.spriteBatchRenderer.init(gl);
 
             // Start sprite loading in background (don't await)
-            this.spriteManager.init(gl).then(loaded => {
+            void this.spriteManager.init(gl).then(loaded => {
                 if (loaded) {
                     EntityRenderer.log.debug(
                         `Sprite loading complete: ${this.spriteManager?.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${Race[this.spriteManager?.currentRace ?? Race.Roman]}`
@@ -841,7 +842,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return !!this.spriteManager.getResource(entity.subType as EMaterialType);
         case EntityType.Unit:
             return !!this.spriteManager.getUnit(entity.subType as UnitType);
-        default:
+        case EntityType.None:
             return false;
         }
     }
@@ -1054,7 +1055,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return this.layerVisibility.units;
         case EntityType.MapObject:
             return isMapObjectVisible(this.layerVisibility, entity.subType as MapObjectType);
-        default:
+        case EntityType.StackedResource:
+        case EntityType.None:
             return true;
         }
     }

@@ -165,6 +165,7 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
     private files: Map<string, File> = new Map();
 
     /** Initialize with a FileList from input element or drag-drop */
+    // eslint-disable-next-line @typescript-eslint/require-await -- sync impl of async interface
     public async initFromFileList(fileList: FileList): Promise<void> {
         this.files.clear();
         for (const file of fileList) {
@@ -219,6 +220,7 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
         return result;
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await -- sync impl of async interface
     async listFiles(directory: string, pattern?: RegExp): Promise<string[]> {
         const normalizedDir = directory.toLowerCase().replace(/\\/g, '/');
         const result: string[] = [];
@@ -291,6 +293,7 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
         // For download fallback, mkdir is a no-op
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await -- sync impl of async interface
     async exists(path: string): Promise<boolean> {
         const normalizedPath = path.toLowerCase().replace(/\\/g, '/');
         return this.files.has(normalizedPath);
@@ -338,6 +341,7 @@ export class MemoryFileSystem implements IFileReader, IFileWriter {
         return new Map(this.files);
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await -- sync impl of async interface
     async readFile(path: string): Promise<BinaryReader> {
         const normalizedPath = path.toLowerCase();
         const data = this.files.get(normalizedPath);
@@ -362,6 +366,7 @@ export class MemoryFileSystem implements IFileReader, IFileWriter {
         return result;
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await -- sync impl of async interface
     async listFiles(directory: string, pattern?: RegExp): Promise<string[]> {
         const normalizedDir = directory.toLowerCase();
         const result: string[] = [];
@@ -377,6 +382,7 @@ export class MemoryFileSystem implements IFileReader, IFileWriter {
         return result;
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await -- sync impl of async interface
     async writeFile(path: string, data: Uint8Array<ArrayBuffer>): Promise<void> {
         this.files.set(path.toLowerCase(), data);
     }
@@ -385,6 +391,7 @@ export class MemoryFileSystem implements IFileReader, IFileWriter {
         // No-op for memory file system
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await -- sync impl of async interface
     async exists(path: string): Promise<boolean> {
         return this.files.has(path.toLowerCase());
     }

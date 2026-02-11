@@ -367,10 +367,6 @@ export class EntityTextureAtlas extends ShaderTexture {
      * Upload the atlas to the GPU. Log utilization stats.
      */
     public load(gl: WebGL2RenderingContext): void {
-        let totalUsedHeight = 0;
-        for (const slots of this.layerSlots) {
-            totalUsedHeight += slots.length > 0 ? slots[slots.length - 1].bottom : 0;
-        }
         const totalPixels = this.layers.length * LAYER_SIZE * LAYER_SIZE;
         const memoryMB = (totalPixels * 2 / 1024 / 1024).toFixed(1);
 

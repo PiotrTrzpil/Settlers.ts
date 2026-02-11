@@ -24,6 +24,7 @@ class LibFileFile implements IFileSource {
         Object.seal(this);
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await -- sync impl of async interface
     public async readBinary(): Promise<BinaryReader> {
         return this.libFileItem.getReader();
     }

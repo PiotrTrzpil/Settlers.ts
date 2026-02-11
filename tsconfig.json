@@ -4,6 +4,8 @@
     "module": "ESNext",
     "strict": true,
     "isolatedModules": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
     "jsx": "preserve",
     "moduleResolution": "bundler",
     "skipLibCheck": true,

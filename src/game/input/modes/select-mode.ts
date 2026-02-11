@@ -18,7 +18,9 @@ export class SelectMode extends BaseInputMode {
     readonly name = 'select';
     readonly displayName = 'Select';
 
-    onAction(action: InputAction, context: InputContext): InputResult {
+    override onAction(action: InputAction, context: InputContext): InputResult {
+        // Only handles actions relevant to select mode; others fall through to UNHANDLED
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (action) {
         case InputAction.DeselectAll:
             context.executeCommand({ type: 'select', entityId: null });
@@ -65,7 +67,7 @@ export class SelectMode extends BaseInputMode {
         }
     }
 
-    onPointerDown(data: PointerData, context: InputContext): InputResult {
+    override onPointerDown(data: PointerData, context: InputContext): InputResult {
         if (data.button === MouseButton.Left) {
             // Start potential drag selection
             context.state.startDrag(
@@ -80,7 +82,7 @@ export class SelectMode extends BaseInputMode {
         return UNHANDLED;
     }
 
-    onPointerUp(data: PointerData, context: InputContext): InputResult {
+    override onPointerUp(data: PointerData, context: InputContext): InputResult {
         const dragData = context.state.endDrag();
 
         if (data.button === MouseButton.Left) {
@@ -119,12 +121,12 @@ export class SelectMode extends BaseInputMode {
         return UNHANDLED;
     }
 
-    onDrag(_data: DragData, _context: InputContext): InputResult {
+    override onDrag(_data: DragData, _context: InputContext): InputResult {
         // Visual feedback for drag selection - the selection box is drawn via getRenderState
         return HANDLED;
     }
 
-    onDragEnd(data: DragData, context: InputContext): InputResult {
+    override onDragEnd(data: DragData, context: InputContext): InputResult {
         if (data.button === MouseButton.Left && data.isDragging) {
             // Box selection
             if (data.startTileX !== undefined && data.startTileY !== undefined &&

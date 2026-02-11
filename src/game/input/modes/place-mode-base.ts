@@ -143,7 +143,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
     // InputMode lifecycle implementation
     // ─────────────────────────────────────────────────────────────────
 
-    onEnter(context: InputContext, enterData?: PlacementModeEnterData<TSubType>): void {
+    override onEnter(context: InputContext, enterData?: PlacementModeEnterData<TSubType>): void {
         if (!enterData?.subType && enterData?.subType !== 0) {
             // No subtype specified, switch back to select
             context.switchMode('select');
@@ -154,11 +154,13 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
         context.setModeData(this.initializeModeData(enterData));
     }
 
-    onExit(context: InputContext): void {
+    override onExit(context: InputContext): void {
         context.setModeData<PlacementModeData<TSubType> | undefined>(undefined);
     }
 
-    onAction(action: InputAction, context: InputContext): InputResult {
+    override onAction(action: InputAction, context: InputContext): InputResult {
+        // Only handles placement-relevant actions; others fall through to UNHANDLED
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (action) {
         case InputAction.CancelPlacement:
         case InputAction.DeselectAll:
@@ -170,7 +172,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
         }
     }
 
-    onPointerUp(data: PointerData, context: InputContext): InputResult {
+    override onPointerUp(data: PointerData, context: InputContext): InputResult {
         const modeData = context.getModeData<PlacementModeData<TSubType>>();
         if (!modeData) return UNHANDLED;
 
@@ -203,7 +205,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
         return UNHANDLED;
     }
 
-    onPointerMove(data: PointerData, context: InputContext): InputResult {
+    override onPointerMove(data: PointerData, context: InputContext): InputResult {
         const modeData = context.getModeData<PlacementModeData<TSubType>>();
         if (!modeData || data.tileX === undefined || data.tileY === undefined) {
             return UNHANDLED;

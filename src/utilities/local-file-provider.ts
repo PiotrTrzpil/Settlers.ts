@@ -30,6 +30,7 @@ export class LocalFileProvider implements IFileProvider {
         this.fileList = fileList;
     }
 
+    // eslint-disable-next-line @typescript-eslint/require-await -- sync impl of async interface
     public async readFiles(): Promise<IFileSource[]> {
         const files: IFileSource[] = [];
 

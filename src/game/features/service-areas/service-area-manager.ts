@@ -227,7 +227,6 @@ export class ServiceAreaManager {
         listener: ServiceAreaEventListener<K>,
     ): void {
         if (!this.listeners[event]) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             this.listeners[event] = new Set() as any;
         }
         (this.listeners[event] as Set<ServiceAreaEventListener<K>>).add(listener);

@@ -471,6 +471,7 @@ export class SpriteRenderManager {
     /**
      * Save current atlas and registry to both cache tiers.
      */
+    // eslint-disable-next-line @typescript-eslint/require-await -- cache save is fire-and-forget
     private async saveToCache(race: Race): Promise<void> {
         if (!this._spriteAtlas || !this._spriteRegistry) {
             return;
@@ -653,7 +654,7 @@ export class SpriteRenderManager {
 
         const gpuUpload = t.lap();
 
-        this.saveToCache(race);
+        void this.saveToCache(race);
         this.recordLoadTimings({ filePreload, atlasAlloc, buildings, mapObjects, resources, units, gpuUpload }, t, atlas, registry);
 
         return registry.hasBuildingSprites() || registry.hasMapObjectSprites() ||
@@ -664,6 +665,7 @@ export class SpriteRenderManager {
      * Load building sprites from a GFX file set.
      * Uses SafeLoadBatch to ensure GPU upload before registration.
      */
+    // eslint-disable-next-line complexity -- sprite loading handles multiple file formats
     private async loadBuildingSprites(
         fileNum: number,
         atlas: EntityTextureAtlas,

@@ -384,6 +384,7 @@ export class GameLoop {
     }
 
     /** Record detailed timing breakdown for debug stats */
+    // eslint-disable-next-line complexity -- timing breakdown requires many branches
     private recordFrameTiming(
         frameStart: number,
         ticksTime: number,

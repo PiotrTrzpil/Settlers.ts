@@ -28,7 +28,7 @@ export class GilFileReader extends IndexFile {
         Object.seal(this);
     }
 
-    public toString(): string {
+    public override toString(): string {
         return 'gil: ' + super.toString();
     }
 }

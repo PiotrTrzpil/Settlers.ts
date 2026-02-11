@@ -80,6 +80,7 @@ export class SpriteLoader {
      * Uses module-level cache that persists across HMR.
      * Returns null if files are not available.
      */
+    // eslint-disable-next-line complexity -- file loading handles multiple format variations
     public async loadFileSet(fileId: string): Promise<LoadedGfxFileSet | null> {
         // Return cached file set if available (module-level cache persists across HMR)
         if (globalFileSetCache.has(fileId)) {
