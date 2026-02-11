@@ -35,7 +35,15 @@ export class WoodcuttingSystem {
 
     private createWorkHandler(): WorkHandler {
         return {
-            findTarget: (x: number, y: number) => {
+            findTarget: (x: number, y: number, settlerId?: number) => {
+                // Woodcutter needs a home building to return logs to
+                if (settlerId !== undefined) {
+                    const settler = this.gameState.getEntity(settlerId);
+                    if (!settler || !this.gameState.findNearestWorkplace(settler)) {
+                        log.debug(`Woodcutter ${settlerId} has no home building, cannot work`);
+                        return null;
+                    }
+                }
                 return this.findNearestTree(x, y);
             },
 

@@ -81,8 +81,8 @@ export class ProductionSystem implements TickSystem {
         // Check if we need to request materials
         this.checkAndRequestMaterials(buildingId, config, state);
 
-        // Check if we can produce (have all inputs)
-        if (!this.canProduce(buildingId, config)) {
+        // Check if we can produce (have all inputs and output space)
+        if (!this.canProduce(buildingId)) {
             return;
         }
 
@@ -91,7 +91,7 @@ export class ProductionSystem implements TickSystem {
         state.progress += dt / productionTime;
 
         if (state.progress >= 1) {
-            this.completeProduction(buildingId, buildingType, config);
+            this.completeProduction(buildingId, buildingType);
             state.progress = 0;
         }
     }
@@ -134,54 +134,23 @@ export class ProductionSystem implements TickSystem {
         }
     }
 
-    private canProduce(buildingId: number, config: InventoryConfig): boolean {
-        // Check if we have at least 1 of each input material
-        for (const inputSlot of config.inputSlots) {
-            const amount = this.gameState.inventoryManager.getInputAmount(
-                buildingId,
-                inputSlot.materialType
-            );
-            if (amount < 1) {
-                return false;
-            }
-        }
-
-        // Check if output has space
-        for (const outputSlot of config.outputSlots) {
-            const amount = this.gameState.inventoryManager.getOutputAmount(
-                buildingId,
-                outputSlot.materialType
-            );
-            if (amount >= outputSlot.maxCapacity) {
-                return false; // Output full
-            }
-        }
-
-        return true;
+    private canProduce(buildingId: number): boolean {
+        return this.gameState.inventoryManager.canStartProduction(buildingId) &&
+               this.gameState.inventoryManager.canStoreOutput(buildingId);
     }
 
-    private completeProduction(
-        buildingId: number,
-        buildingType: BuildingType,
-        config: InventoryConfig
-    ): void {
-        // Consume inputs (1 of each)
-        for (const inputSlot of config.inputSlots) {
-            this.gameState.inventoryManager.withdrawInput(buildingId, inputSlot.materialType, 1);
-        }
-
-        // Produce outputs (1 of each)
-        for (const outputSlot of config.outputSlots) {
-            this.gameState.inventoryManager.depositOutput(buildingId, outputSlot.materialType, 1);
-        }
+    private completeProduction(buildingId: number, buildingType: BuildingType): void {
+        this.gameState.inventoryManager.consumeProductionInputs(buildingId);
+        this.gameState.inventoryManager.produceOutput(buildingId);
 
         log.debug(`Building ${buildingId} (${BuildingType[buildingType]}) produced output`);
     }
 
     /**
-     * Clean up production state when building is removed.
+     * Clean up production state when entity is removed.
+     * Implements TickSystem.onEntityRemoved for automatic cleanup.
      */
-    removeBuilding(buildingId: number): void {
-        this.productionStates.delete(buildingId);
+    onEntityRemoved(entityId: number): void {
+        this.productionStates.delete(entityId);
     }
 }
