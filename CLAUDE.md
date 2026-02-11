@@ -55,7 +55,79 @@ Test maps and procedural textures work without game files.
 - **Error messages must include context**: When throwing errors, include all relevant identifiers (entity ID, type name, state) so the root cause can be traced. Never throw generic errors like "not found" — always include what was being looked up and what was available.
 - **Report errors eagerly**: Fail fast at the source of the problem, not downstream. If a function receives invalid input, throw immediately with context rather than returning null and failing later.
 - **No silent fallbacks for bugs**: Don't add fallbacks that hide programming errors. If code requests an animation sequence that doesn't exist, that's a bug to fix, not a case to handle gracefully.
-- **Optimistic programming**: Don't check if something exists when it must exist at that point in the code. If a manager requires an entity provider to be set before use, assume it's set and use `this.provider!` — don't add defensive `if (!this.provider) return;` checks that hide initialization bugs. Trust the contract, crash loudly if violated.
+- **Optimistic programming**: This is CRITICAL. Don't check if something exists when it must exist at that point in the code. If a manager requires an entity provider to be set before use, assume it's set and use `this.provider!` — don't add defensive `if (!this.provider) return;` checks that hide initialization bugs. Trust the contract, crash loudly if violated.
+  - **NEVER** use `?.` on required dependencies (`this.eventBus?.emit` → `this.eventBus!.emit`)
+  - **NEVER** declare required deps as `| undefined` (`private foo: Bar | undefined` → `private foo!: Bar`)
+  - **NEVER** add silent fallbacks (`map.get(x) ?? 0` when x must exist → `map.get(x)!`)
+  - **NEVER** guard with `if (x)` when x must exist by contract (OK for genuinely optional values)
+  - **NEVER** make config fields optional (`eventBus?: EventBus`) when they're always provided
+  - **NEVER** use wrong filters that require defensive checks downstream (filter precisely, then assert)
+
+## Pre-Commit Review Checklist
+
+**VERY IMPORTANT: Check ALL modified code for these patterns before committing:**
+
+### 1. Optional Chaining on Required Dependencies (MUST FIX)
+
+```typescript
+// ❌ BAD - hides initialization bugs
+this.eventBus?.emit(...)
+this.manager?.doThing()
+private foo: Bar | undefined
+
+// ✅ GOOD - crashes loudly if not initialized
+this.eventBus!.emit(...)
+this.manager!.doThing()
+private foo!: Bar
+```
+
+### 2. Silent Fallbacks That Hide Bugs (MUST FIX)
+
+```typescript
+// ❌ BAD - silently returns wrong value if bug exists
+const x = map.get(id) ?? 0
+return entity?.value ?? null
+slot?.amount || 0
+
+// ✅ GOOD - crashes if value doesn't exist when it should
+const x = map.get(id)!
+return entity!.value
+slot!.amount
+```
+
+### 3. Defensive Checks When Value Must Exist (MUST FIX)
+
+```typescript
+// ❌ BAD - silently skips code that should run
+if (this.manager) { this.manager.doThing() }
+if (!entity) return;
+handler && handler.onWork()
+
+// ✅ GOOD - trust the contract, crash if violated
+this.manager!.doThing()
+entity!  // let it crash if bug
+handler!.onWork()
+```
+
+### 4. Missing Error Context / Silent Failures (MUST FIX)
+
+```typescript
+// ❌ BAD - hides the root cause
+if (!x) return null;
+console.warn('failed')
+return undefined
+
+// ✅ GOOD - crash with full context for debugging
+throw new Error(`Entity ${id} not found. Available: ${[...map.keys()]}`)
+throw new Error(`Cannot process ${type}: ${JSON.stringify(state)}`)
+```
+
+### When Defensive Code IS Appropriate
+
+- **Nullable by design**: `placementPreview?: ...`, optional callbacks
+- **API boundaries**: `getEntity(id)` returning undefined for queries
+- **Cleanup/destroy**: Resources may not be initialized
+- **External input**: User data, file parsing, network responses
 
 ## Claude Code workflow
 

@@ -1,1 +1,88 @@
 pnpm lint-staged
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  ⚠️  CRITICAL: OPTIMISTIC PROGRAMMING - READ THIS ⚠️                        ║
+# ║                                                                            ║
+# ║  This codebase uses OPTIMISTIC programming patterns.                       ║
+# ║  DEFENSIVE CODE HIDES BUGS AND WILL BE REJECTED.                           ║
+# ║                                                                            ║
+# ║  If value MUST exist at that point, these are BUGS:                        ║
+# ║    • this.foo?.bar()     → this.foo!.bar()                                 ║
+# ║    • x ?? defaultValue   → x!                                              ║
+# ║    • if (x) { x.y() }    → x!.y()  (when x is required, not optional)      ║
+# ║    • foo?: Type          → foo: Type (when always provided)                ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+STAGED_TS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$' | grep -v '\.spec\.ts$' | grep -v '\.test\.ts$')
+
+if [ -n "$STAGED_TS_FILES" ]; then
+    echo ""
+    echo "╔════════════════════════════════════════════════════════════════════╗"
+    echo "║  🛑 STOP! OPTIMISTIC PROGRAMMING - MANUAL REVIEW REQUIRED 🛑       ║"
+    echo "╚════════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "You are committing these TypeScript files:"
+    echo "$STAGED_TS_FILES" | sed 's/^/  • /'
+    echo ""
+
+    # Check for high-confidence violations: eventBus, gameState, inventoryManager patterns
+    # These are commonly-misused required dependencies
+    VIOLATIONS=$(echo "$STAGED_TS_FILES" | xargs grep -n 'this\.\(eventBus\|gameState\|inventoryManager\|carrierSystem\|requestManager\)?\.' 2>/dev/null | grep -v '// ok-defensive' || true)
+
+    if [ -n "$VIOLATIONS" ]; then
+        echo "⚠️  LIKELY VIOLATIONS FOUND (required dependencies with ?.):"
+        echo "───────────────────────────────────────────────────────────────────"
+        echo "$VIOLATIONS"
+        echo "───────────────────────────────────────────────────────────────────"
+        echo ""
+    fi
+
+    echo "✋ MANUALLY CHECK each file for these anti-patterns:"
+    echo ""
+    echo "  ┌─────────────────────────────────────────────────────────────────┐"
+    echo "  │ 1. OPTIONAL CHAINING ON REQUIRED DEPENDENCIES                   │"
+    echo "  └─────────────────────────────────────────────────────────────────┘"
+    echo "   ❌ this.eventBus?.emit(...)       → ✅ this.eventBus!.emit(...)"
+    echo "   ❌ this.manager?.doThing()        → ✅ this.manager!.doThing(...)"
+    echo "   ❌ private foo: Bar | undefined   → ✅ private foo!: Bar"
+    echo ""
+    echo "  ┌─────────────────────────────────────────────────────────────────┐"
+    echo "  │ 2. SILENT FALLBACKS THAT HIDE BUGS                              │"
+    echo "  └─────────────────────────────────────────────────────────────────┘"
+    echo "   ❌ const x = map.get(id) ?? 0     → ✅ const x = map.get(id)!"
+    echo "   ❌ return entity?.value ?? null   → ✅ return entity!.value"
+    echo "   ❌ slot?.amount || 0              → ✅ slot!.amount"
+    echo ""
+    echo "  ┌─────────────────────────────────────────────────────────────────┐"
+    echo "  │ 3. DEFENSIVE CHECKS WHEN VALUE MUST EXIST (by contract)         │"
+    echo "  └─────────────────────────────────────────────────────────────────┘"
+    echo "   ❌ if (this.manager) { ... }      → ✅ this.manager!.doThing()"
+    echo "   ❌ if (!entity) return;           → ✅ entity! (crash if bug)"
+    echo "   ❌ handler && handler.onWork()    → ✅ handler!.onWork()"
+    echo "   (Only bad when value is REQUIRED - optional values can use guards)"
+    echo ""
+    echo "  ┌─────────────────────────────────────────────────────────────────┐"
+    echo "  │ 4. MISSING ERROR CONTEXT / SILENT FAILURES                      │"
+    echo "  └─────────────────────────────────────────────────────────────────┘"
+    echo "   ❌ if (!x) return null;           → ✅ throw new Error(\`X not found: \${id}\`)"
+    echo "   ❌ console.warn('failed')         → ✅ throw with full context"
+    echo "   ❌ return undefined               → ✅ crash or throw with details"
+    echo ""
+    echo "  ┌─────────────────────────────────────────────────────────────────┐"
+    echo "  │ 5. WRONG FILTERS REQUIRING DOWNSTREAM GUARDS                    │"
+    echo "  └─────────────────────────────────────────────────────────────────┘"
+    echo "   ❌ Filter loosely, then: if (x) { use x }   → ✅ Filter precisely, then: x!"
+    echo "   ❌ config.eventBus?: EventBus               → ✅ config.eventBus: EventBus"
+    echo "   ❌ Optional field + guard everywhere        → ✅ Required field + assert once"
+    echo ""
+    echo "  ┌─────────────────────────────────────────────────────────────────┐"
+    echo "  │ ✓ WHEN DEFENSIVE CODE IS OK                                     │"
+    echo "  └─────────────────────────────────────────────────────────────────┘"
+    echo "   ✓ Nullable by design (placementPreview?, optional callbacks)"
+    echo "   ✓ API boundaries (getEntity() returning undefined for queries)"
+    echo "   ✓ Cleanup/destroy methods (resource may not be initialized)"
+    echo "   ✓ External input validation (user data, file parsing)"
+    echo ""
+    echo "See CLAUDE.md 'Pre-Commit Review Checklist' for full guidelines."
+    echo ""
+fi
