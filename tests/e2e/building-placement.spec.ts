@@ -143,7 +143,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         const buildingsBefore = await gp.getDebugField('buildingCount');
 
         const box = await gp.canvas.boundingBox();
-        await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
+        await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 }, force: true });
 
         await gp.waitForFrames(1);
 

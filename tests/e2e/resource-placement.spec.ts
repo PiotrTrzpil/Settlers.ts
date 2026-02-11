@@ -16,7 +16,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         const page = gp.page;
         await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
 
-        const btn = page.locator('[data-testid="btn-resource-0"]');
+        const btn = page.locator('[data-testid="btn-resource-board"]');
         await expect(btn).toBeVisible();
         await btn.click();
 
@@ -27,7 +27,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         const page = gp.page;
         await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
 
-        await page.locator('[data-testid="btn-resource-0"]').click();
+        await page.locator('[data-testid="btn-resource-board"]').click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
 
         await gp.selectMode();
@@ -81,7 +81,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         const countBefore = (await gp.getEntities({ type: 4 })).length;
 
         const box = await gp.canvas.boundingBox();
-        await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
+        await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 }, force: true });
         await gp.waitForFrames(1);
 
         const countAfter = (await gp.getEntities({ type: 4 })).length;
@@ -99,15 +99,15 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
 
         // Click first resource button
-        const btn0 = page.locator('[data-testid="btn-resource-0"]');
+        const btn0 = page.locator('[data-testid="btn-resource-board"]');
         await expect(btn0).toBeVisible();
-        await btn0.click();
+        await btn0.click({ force: true });
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
 
         // Check second resource button
-        const btn1 = page.locator('[data-testid="btn-resource-1"]');
+        const btn1 = page.locator('[data-testid="btn-resource-stone"]');
         if (await btn1.isVisible()) {
-            await btn1.click();
+            await btn1.click({ force: true });
             await gp.waitForFrames(2);
             await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
         }
@@ -159,7 +159,7 @@ test.describe('Resource Rendering', () => {
         const page = gp.page;
         await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
 
-        const btn = page.locator('[data-testid="btn-resource-0"]');
+        const btn = page.locator('[data-testid="btn-resource-board"]');
         await expect(btn).toBeVisible();
         await btn.click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });

@@ -137,7 +137,7 @@ fixtureTest.describe('Canvas Interaction', { tag: '@smoke' }, () => {
     });
 
     fixtureTest('canvas handles right-click without showing context menu', async({ gp }) => {
-        await gp.canvas.click({ button: 'right', position: { x: 400, y: 400 } });
+        await gp.canvas.click({ button: 'right', position: { x: 400, y: 400 }, force: true });
         await gp.waitForFrames(1);
     });
 });

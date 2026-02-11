@@ -268,6 +268,81 @@ test('building is rendered on canvas', async({ page }) => {
 
 Only add `test.step()` to tests with 3+ distinct phases. Simple tests don't need it.
 
+### Consolidate tests that share setup
+
+**When multiple tests navigate to the same page or use the same fixture setup, consolidate
+them into a single test with `test.step()`.** This eliminates redundant navigation/setup
+while preserving clear failure reporting.
+
+**Consolidate when:**
+- Multiple tests load the same page (e.g., all navigate to `/jil-view`)
+- Tests check different aspects of the same loaded state
+- Tests form a logical sequence (enable → verify → disable → verify)
+
+**Keep separate when:**
+- Tests need different fixture states
+- Tests are genuinely independent scenarios
+- One test's failure shouldn't skip the others
+
+```typescript
+// BAD — 3 tests, 3 page loads
+test('page loads without errors', async ({ page }) => {
+    await page.goto('/jil-view');
+    // ... check errors
+});
+test('view toggle works', async ({ page }) => {
+    await page.goto('/jil-view');  // Redundant load!
+    // ... check toggle
+});
+test('selectors visible', async ({ page }) => {
+    await page.goto('/jil-view');  // Redundant load!
+    // ... check selectors
+});
+
+// GOOD — 1 test, 1 page load, clear steps
+test('jil-view loads and view modes work correctly', async ({ page }) => {
+    await test.step('page loads without critical errors', async () => {
+        await page.goto('/jil-view');
+        // ... check errors
+    });
+
+    await test.step('view toggle works', async () => {
+        // ... check toggle (page already loaded)
+    });
+
+    await test.step('selectors visible in single view', async () => {
+        // ... check selectors
+    });
+});
+```
+
+**Shared fixtures reduce consolidation value:** When using the shared `gp` fixture,
+tests already share the loaded page. Consolidation mainly helps tests using fresh
+`page` fixture or tests that do expensive setup within the test body.
+
+### Avoid race conditions at high game speeds
+
+The `gs` fixture uses 4x game speed by default. Short movements (3-5 tiles) can complete
+before assertions run, causing flaky tests.
+
+```typescript
+// BAD — 5 tiles at 4x speed completes too fast, assertion may miss "moving" state
+await gs.moveUnit(unit.id, unit.x + 5, unit.y);
+await gs.waitForUnitsMoving(1, 5000);  // May fail if already finished
+
+// GOOD — 15 tiles gives enough time to catch the "moving" state
+await gs.moveUnit(unit.id, unit.x + 15, unit.y);
+await gs.waitForUnitsMoving(1, 5000);  // Unit still moving when we check
+```
+
+For timing-sensitive tests, use 1x speed:
+```typescript
+test('animation state during movement', async ({ gs }) => {
+    await gs.setGameSpeed(1.0);  // Slow down for observation
+    // ...
+});
+```
+
 ### Never use `waitForTimeout`
 Use deterministic waiting instead:
 ```typescript
@@ -622,9 +697,39 @@ function createPointerData(overrides: Partial<PointerData> = {}): PointerData {
 }
 ```
 
-### Named Constants Over Magic Numbers
+### Use Enums and Constants, Never Magic Numbers
 
-Use named constants for test fixture IDs:
+**Always use named constants for IDs, enums for types, and `TERRAIN` constants for terrain:**
+
+```typescript
+// GOOD — use enums and named constants
+import { EntityType } from '@/game/entity';
+import { BuildingType } from '@/game/buildings';
+import { UnitType } from '@/game/unit-types';
+import { EMaterialType } from '@/game/economy/material-type';
+import { TERRAIN } from '../helpers/test-map';
+
+// Terrain manipulation
+ctx.map.groundType[index] = TERRAIN.WATER;  // Not 0
+ctx.map.groundType[index] = TERRAIN.GRASS;  // Not 16
+
+// Entity types
+placeBuilding(state, map, x, y, BuildingType.WoodcutterHut);  // Not 1
+spawnUnit(state, map, x, y, UnitType.Carrier);                // Not 0
+placeResource(state, map, x, y, EMaterialType.LOG);           // Not 0
+
+// Entity filtering
+const buildings = state.entities.filter(e => e.type === EntityType.Building);  // Not type === 2
+const units = state.entities.filter(e => e.type === EntityType.Unit);          // Not type === 1
+
+// BAD — magic numbers
+ctx.map.groundType[index] = 0;           // What is 0? Water? Grass?
+placeBuilding(state, map, x, y, 1);      // What building type is 1?
+placeResource(state, map, x, y, 0, 5);   // What material type is 0?
+state.entities.filter(e => e.type === 2);  // What entity type is 2?
+```
+
+**Named constants for test fixture IDs:**
 ```typescript
 // GOOD — clear what IDs represent
 const TAVERN_ID = 100;
@@ -728,10 +833,160 @@ describe('assignJob', () => {
 
 1. **Duplicating helpers** — If you write a helper function, check if it belongs in `test-game.ts`
 2. **Direct state mutation** — Use manager/system APIs instead of setting properties
-3. **Magic numbers** — Use named constants for IDs and values
+3. **Magic numbers** — Use enums (`EntityType`, `BuildingType`, `UnitType`, `EMaterialType`) and `TERRAIN` constants instead of raw numbers. Never write `type === 2` when you mean `type === EntityType.Building`
 4. **Inline object literals** — Use test data builders for repeated structures
 5. **Test interdependency** — Each test must be independent and repeatable
 6. **Testing implementation details** — Test behavior through public APIs
+
+---
+
+## Test Tier Decision Guide
+
+Use this guide to decide whether a test belongs in e2e or unit tests.
+
+### Tier 1: Visual (E2E Required)
+
+**Requires browser + WebGL.** These tests verify pixel-level rendering:
+
+- Screenshot regression tests
+- Sprite/texture loading verification
+- Canvas rendering (entity sprites, terrain, UI overlays)
+- Visual feedback (placement preview, selection box)
+
+```typescript
+// Tier 1: Must be e2e — verifies visual output
+test('building renders on canvas', async ({ page }) => {
+    await gp.placeBuilding(1, 10, 10);
+    await expect(page).toHaveScreenshot('building-placed.png');
+});
+```
+
+### Tier 2: Spatial (E2E with `gs` fixture OR Unit Test)
+
+**Requires game loop but not WebGL.** Tests positions, movement, animation state:
+
+- Unit movement (path computation, position updates)
+- Animation state (playing, direction, sequenceKey)
+- Entity spatial relationships
+- Multi-system tick interactions
+
+**Use e2e (`gs` fixture)** when testing real-time behavior across ticks:
+```typescript
+// Tier 2 e2e: Tests movement over multiple game ticks
+test('unit reaches destination', async ({ gs }) => {
+    const unit = await gs.spawnUnit(1);
+    await gs.moveUnit(unit.id, unit.x + 10, unit.y);
+    await gs.waitForUnitAtDestination(unit.id, unit.x + 10, unit.y, 10000);
+});
+```
+
+**Use unit test** when testing single-tick or state-machine logic:
+```typescript
+// Tier 2 unit: Tests animation state transitions directly
+it('should transition from walking to idle', () => {
+    animationService.play(unitId, 'walk');
+    animationService.stop(unitId);
+    expect(animationService.getState(unitId)?.playing).toBe(false);
+});
+```
+
+### Tier 3: Logic/Economic (Unit Test Preferred)
+
+**Pure game state.** No browser, no game loop ticks needed:
+
+- Manager state (carrier registration, inventory, service areas)
+- Command execution results (entity creation, removal)
+- Event emission and handling
+- Request/job state machines
+
+**Always prefer unit tests for Tier 3:**
+```typescript
+// Tier 3 unit: Tests carrier auto-registration via event system
+it('should auto-register carrier when unit:spawned fires', () => {
+    const tavern = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 10, 10, 1);
+    const carrier = gameState.addEntity(EntityType.Unit, UnitType.Carrier, 12, 12, 1);
+
+    eventBus.emit('unit:spawned', { entityId: carrier.id, unitType: UnitType.Carrier, x: 12, y: 12, player: 1 });
+
+    expect(gameState.carrierManager.getCarrier(carrier.id)?.homeBuilding).toBe(tavern.id);
+});
+```
+
+### Decision Flowchart
+
+```
+Does the test verify visual/pixel output?
+├── YES → Tier 1 (E2E with screenshots)
+└── NO
+    Does the test need real-time behavior over multiple game ticks?
+    ├── YES → Tier 2 (E2E with gs fixture OR unit test with tick simulation)
+    └── NO
+        Can it be tested with direct API calls on GameState/managers?
+        ├── YES → Tier 3 (Unit test) ← STRONGLY PREFER THIS
+        └── NO → Re-evaluate what you're actually testing
+```
+
+### Speed Comparison
+
+| Tier | E2E Time | Unit Test Time | Speedup |
+|------|----------|----------------|---------|
+| Tier 1 (Visual) | ~2-5s | N/A | — |
+| Tier 2 (Spatial) | ~1-2s | ~5-50ms | 20-400x |
+| Tier 3 (Logic) | ~0.5-1s | ~1-5ms | 100-500x |
+
+### Common Mistakes
+
+**❌ Using e2e for pure state queries:**
+```typescript
+// BAD: This doesn't need a browser
+test('carrier has correct home building', async ({ gs }) => {
+    const state = await gs.getCarrierState(carrierId);
+    expect(state.homeBuilding).toBe(tavernId);
+});
+```
+
+**✅ Use unit test instead:**
+```typescript
+// GOOD: Direct state verification
+it('carrier has correct home building', () => {
+    const state = gameState.carrierManager.getCarrier(carrierId);
+    expect(state?.homeBuilding).toBe(tavernId);
+});
+```
+
+**❌ Using e2e to test event handling:**
+```typescript
+// BAD: Event handling doesn't need a browser
+test('movementStopped event fires', async ({ gs }) => {
+    const { getEvents } = await gs.captureMovementEvents();
+    // ...
+});
+```
+
+**✅ Use unit test instead:**
+```typescript
+// GOOD: Direct event bus testing
+it('emits movementStopped when unit arrives', () => {
+    const events: any[] = [];
+    eventBus.on('unit:movementStopped', (e) => events.push(e));
+
+    movementSystem.tick(1.0); // Advance to completion
+
+    expect(events).toHaveLength(1);
+    expect(events[0].entityId).toBe(unitId);
+});
+```
+
+### Tier 3 Tests Currently in E2E (Migration Candidates)
+
+These tests in `tests/e2e/` could move to unit tests for faster execution:
+
+| File | Test Pattern | Why Unit Test Works |
+|------|--------------|---------------------|
+| `audio.spec.ts` | Audio state toggles | Tests `AudioState` object, not audio output |
+| `building-placement.spec.ts` | Entity creation via `game.execute()` | Pure state verification |
+| `resource-placement.spec.ts` | Entity creation via `game.execute()` | Pure state verification |
+| `map-loading.spec.ts` | Entity count, debug stats | Pure state queries |
 
 ---
 
@@ -742,6 +997,7 @@ describe('assignJob', () => {
 - State machines (input modes, game state transitions)
 - Data transformations (command execution)
 - Game logic (entity lifecycle, economy, behavior trees)
+- **Tier 3: Manager state, event handling, request/job logic**
 
 ### E2E Tests
 - User flows (click button → mode changes → click canvas → building appears)
@@ -749,6 +1005,7 @@ describe('assignJob', () => {
 - Canvas interactions (pointer events, wheel, right-click)
 - Navigation and app loading
 - Debug bridge integration
+- **Tier 2: Real-time movement, animation timing (when unit tests aren't sufficient)**
 
 ### Skip Testing
 - Simple getters/setters

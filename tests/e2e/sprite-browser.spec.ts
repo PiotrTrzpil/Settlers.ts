@@ -1,15 +1,12 @@
 import { test, expect } from './matchers';
 
 /**
- * E2E tests for the JIL view sprite browser and entity texture pipeline.
- * These tests verify that:
- * 1. The JIL view loads and displays correctly with grid mode
- * 2. Building type annotations are shown for mapped job indices
- * 3. The entity rendering pipeline correctly loads sprites
+ * E2E tests for the JIL and GFX sprite browser views.
+ * Consolidated tests that verify page loading and UI functionality.
  */
 
 test.describe('JIL View Sprite Browser', () => {
-    test('jil-view page loads without errors', async({ page }) => {
+    test('jil-view loads and view modes work correctly', async ({ page }) => {
         const errors: string[] = [];
         page.on('console', msg => {
             if (msg.type() === 'error') {
@@ -17,74 +14,54 @@ test.describe('JIL View Sprite Browser', () => {
             }
         });
 
-        await page.goto('/jil-view');
-        await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
+        await test.step('page loads without critical errors', async () => {
+            await page.goto('/jil-view');
+            await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
+            await expect(page.locator('.controls')).toBeVisible();
 
-        // Check controls are visible
-        await expect(page.locator('.controls')).toBeVisible();
+            const criticalErrors = errors.filter(e =>
+                !e.includes('GFX file') && !e.includes('not available')
+            );
+            expect(criticalErrors.length).toBe(0);
+        });
 
-        // No critical errors should have occurred during load
-        const criticalErrors = errors.filter(e =>
-            !e.includes('GFX file') && !e.includes('not available')
-        );
-        expect(criticalErrors.length).toBe(0);
-    });
+        await test.step('grid view is default and toggle works', async () => {
+            const singleBtn = page.locator('button:has-text("Single")');
+            const gridBtn = page.locator('button:has-text("Grid")');
 
-    test('view mode buttons work (single/grid toggle)', async({ page }) => {
-        await page.goto('/jil-view');
-        await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
+            await expect(singleBtn).toBeVisible();
+            await expect(gridBtn).toBeVisible();
+            await expect(gridBtn).toHaveClass(/active/);
+            await expect(page.locator('.grid-container')).toBeVisible({ timeout: 5000 });
 
-        // Find the Single and Grid buttons
-        const singleBtn = page.locator('button:has-text("Single")');
-        const gridBtn = page.locator('button:has-text("Grid")');
+            // Switch to single view
+            await singleBtn.click();
+            await expect(singleBtn).toHaveClass(/active/);
+            await expect(page.locator('.single-view')).toBeVisible({ timeout: 5000 });
+        });
 
-        await expect(singleBtn).toBeVisible();
-        await expect(gridBtn).toBeVisible();
+        await test.step('selectors visible in single view', async () => {
+            await expect(page.locator('.selector-group').first()).toBeVisible();
 
-        // Grid view should be active by default
-        await expect(gridBtn).toHaveClass(/active/);
-        await expect(page.locator('.grid-container')).toBeVisible({ timeout: 5000 });
-
-        // Click single view
-        await singleBtn.click();
-        await expect(singleBtn).toHaveClass(/active/);
-        await expect(page.locator('.single-view')).toBeVisible({ timeout: 5000 });
-
-        // Click back to grid view
-        await gridBtn.click();
-        await expect(gridBtn).toHaveClass(/active/);
-        await expect(page.locator('.grid-container')).toBeVisible({ timeout: 5000 });
-    });
-
-    test('selectors are visible in single view', async({ page }) => {
-        await page.goto('/jil-view');
-        await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
-
-        // Switch to single view (grid is default)
-        await page.locator('button:has-text("Single")').click();
-        await expect(page.locator('.single-view')).toBeVisible({ timeout: 5000 });
-
-        // Check that selector groups are visible
-        await expect(page.locator('.selector-group').first()).toBeVisible();
+            // Switch back to grid to verify toggle works both ways
+            await page.locator('button:has-text("Grid")').click();
+            await expect(page.locator('.grid-container')).toBeVisible({ timeout: 5000 });
+        });
     });
 });
 
 test.describe('GFX View Grid', () => {
-    test('gfx-view page loads and shows grid toggle', async({ page }) => {
-        await page.goto('/gfx-view');
-        await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
+    test('gfx-view loads with controls and file browser', async ({ page }) => {
+        await test.step('page loads with view toggle', async () => {
+            await page.goto('/gfx-view');
+            await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
+            await expect(page.locator('button:has-text("Single")')).toBeVisible();
+            await expect(page.locator('button:has-text("Grid")')).toBeVisible();
+        });
 
-        // Should have Single/Grid toggle buttons in controls
-        await expect(page.locator('button:has-text("Single")')).toBeVisible();
-        await expect(page.locator('button:has-text("Grid")')).toBeVisible();
-    });
-
-    test('file browser is visible and functional', async({ page }) => {
-        await page.goto('/gfx-view');
-        await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
-
-        // File browser component should be present
-        const fileBrowser = page.locator('.browser');
-        await expect(fileBrowser).toBeVisible({ timeout: 5000 });
+        await test.step('file browser is visible', async () => {
+            const fileBrowser = page.locator('.browser');
+            await expect(fileBrowser).toBeVisible({ timeout: 5000 });
+        });
     });
 });

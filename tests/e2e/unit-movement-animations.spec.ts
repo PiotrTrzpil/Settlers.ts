@@ -18,7 +18,8 @@ test.describe('Animation During Movement', { tag: '@animations' }, () => {
         const unit = await gs.spawnUnit(1);
         expect(unit).not.toBeNull();
 
-        const targetX = unit!.x + 5;
+        // Use longer distance (15 tiles) so movement is still in progress during assertions
+        const targetX = unit!.x + 15;
         await gs.moveUnit(unit!.id, targetX, unit!.y);
         await gs.waitForUnitsMoving(1, 5000);
 

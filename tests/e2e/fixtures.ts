@@ -54,6 +54,21 @@ export { expect } from './matchers';
 // Re-export WaitProfiler for manual access in tests
 export { WaitProfiler } from './wait-profiler';
 
+/**
+ * Check if WebGL is available in this environment.
+ * Set by global-setup.ts after probing browser capabilities.
+ */
+export function isWebGLAvailable(): boolean {
+    return process.env.E2E_WEBGL_AVAILABLE !== 'false';
+}
+
+/**
+ * Check if running on a software renderer (slower, may affect timing).
+ */
+export function isSoftwareRenderer(): boolean {
+    return process.env.E2E_SOFTWARE_RENDERER === 'true';
+}
+
 /** Fixture types for test function signature */
 type TestFixtures = {
     /** GamePage with testMap pre-loaded, 4x speed. State is reset before each test. */
@@ -88,6 +103,19 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     // Worker-scoped fixture: one page per parallel worker, loaded once
     // ─────────────────────────────────────────────────────────────────────────
     testMapPage: [async({ browser }, use) => {
+        // Fail fast if WebGL is not available (instead of timing out)
+        if (!isWebGLAvailable()) {
+            throw new Error(
+                'WebGL not available in this environment.\n' +
+                'Tests using gp/testMapPage fixture require WebGL.\n' +
+                'Options:\n' +
+                '  1. Use gs fixture for game-state-only tests (no rendering)\n' +
+                '  2. Run: npx playwright test game-logic --reporter=list\n' +
+                '  3. Set CLAUDE_CODE_REMOTE=true or CI=true to enable SwiftShader\n' +
+                `Detected renderer: ${process.env.E2E_RENDERER || 'unknown'}`
+            );
+        }
+
         const context = await browser.newContext();
         const page = await context.newPage();
         const gp = new GamePage(page);

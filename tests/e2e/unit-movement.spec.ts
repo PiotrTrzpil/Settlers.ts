@@ -14,7 +14,8 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         const unit = await gs.spawnUnit(1);
         expect(unit).not.toBeNull();
 
-        const targetX = unit!.x + 3;
+        // Use 10 tiles so path isn't consumed before we can check it at 4x speed
+        const targetX = unit!.x + 10;
         const targetY = unit!.y;
 
         const ok = await gs.moveUnit(unit!.id, targetX, targetY);
@@ -154,9 +155,10 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         await expect(gs).toHaveUnitsMoving(0);
 
         // Spawn and move a unit using helpers
+        // Use longer distance (15 tiles) so movement is still in progress when we check
         const unit = await gs.spawnUnit(1);
         expect(unit).not.toBeNull();
-        await gs.moveUnit(unit!.id, unit!.x + 5, unit!.y);
+        await gs.moveUnit(unit!.id, unit!.x + 15, unit!.y);
 
         // Wait for unitsMoving to be at least 1
         await gs.waitForUnitsMoving(1, 5000);

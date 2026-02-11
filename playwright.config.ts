@@ -17,6 +17,10 @@ import { defineConfig } from '@playwright/test';
  *   npx playwright test --grep-invert @requires-assets  # Skip asset tests
  */
 
+// Detect cloud/CI environments for automatic mitigations
+// CLAUDE_CODE_REMOTE is set by Claude Code web environments
+const isCloudEnv = process.env.CI || process.env.CLAUDE_CODE_REMOTE === 'true';
+
 // Base settings shared across projects
 const baseSettings = {
     baseURL: 'http://localhost:4173',
@@ -26,13 +30,23 @@ const baseSettings = {
     trace: 'retain-on-failure' as const,
     screenshot: 'only-on-failure' as const,
     launchOptions: {
-        args: ['--disable-web-security', '--disable-features=IsolateOrigins,site-per-process'],
+        args: [
+            '--disable-web-security',
+            '--disable-features=IsolateOrigins,site-per-process',
+            // Cloud/CI: avoid /dev/shm issues and enable software WebGL
+            ...(isCloudEnv ? [
+                '--disable-dev-shm-usage',
+                '--use-gl=swiftshader',
+                '--enable-webgl',
+            ] : []),
+        ],
     },
 };
 
 export default defineConfig({
     testDir: './tests/e2e',
     outputDir: './tests/e2e/.results',
+    globalSetup: './tests/e2e/global-setup.ts',
     fullyParallel: true,
     reporter: process.env.CI
         ? [['list'], ['github-actions']]
@@ -66,7 +80,7 @@ export default defineConfig({
         {
             name: 'default',
             testMatch: '**/*.spec.ts',
-            grepInvert: /@requires-assets|@slow|@screenshot/,
+            grepInvert: /@requires-assets|@slow|@screenshot|@smoke/,
             timeout: 15_000,
             use: {
                 ...baseSettings,

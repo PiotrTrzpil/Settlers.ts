@@ -321,3 +321,98 @@ export function removeEntity(
         bus,
     );
 }
+
+/** Execute a place_resource command. Returns success boolean. */
+export function placeResource(
+    state: GameState,
+    map: TestMap,
+    x: number,
+    y: number,
+    materialType: number,
+    amount = 1,
+    eventBus: EventBus = new EventBus(),
+): boolean {
+    return executeCommand(
+        state,
+        { type: 'place_resource', materialType, amount, x, y },
+        map.groundType,
+        map.groundHeight,
+        map.mapSize,
+        eventBus,
+    );
+}
+
+// ─── Terrain query helpers ───────────────────────────────────────────
+
+/**
+ * Check if terrain at (x, y) is passable for units.
+ * Water types (0-8) are impassable.
+ */
+export function isTerrainPassable(map: TestMap, x: number, y: number): boolean {
+    const index = map.mapSize.toIndex(x, y);
+    const terrainType = map.groundType[index];
+    return terrainType > 8; // Water types are 0-8
+}
+
+/**
+ * Check if terrain at (x, y) is water.
+ */
+export function isTerrainWater(map: TestMap, x: number, y: number): boolean {
+    const index = map.mapSize.toIndex(x, y);
+    const terrainType = map.groundType[index];
+    return terrainType <= 8;
+}
+
+/**
+ * Find a passable tile on the map near center.
+ * Returns null if no passable tile found.
+ */
+export function findPassableTile(map: TestMap): { x: number; y: number } | null {
+    const cx = Math.floor(map.mapSize.width / 2);
+    const cy = Math.floor(map.mapSize.height / 2);
+
+    // Spiral out from center to find passable tile
+    for (let r = 0; r < 20; r++) {
+        for (let dx = -r; dx <= r; dx++) {
+            for (let dy = -r; dy <= r; dy++) {
+                if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue; // Only check perimeter
+                const x = cx + dx;
+                const y = cy + dy;
+                if (x >= 0 && x < map.mapSize.width && y >= 0 && y < map.mapSize.height) {
+                    if (isTerrainPassable(map, x, y)) {
+                        return { x, y };
+                    }
+                }
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * Find a buildable tile on the map near center.
+ * Buildable terrain is grass (16) or desert (64).
+ */
+export function findBuildableTile(map: TestMap): { x: number; y: number } | null {
+    const cx = Math.floor(map.mapSize.width / 2);
+    const cy = Math.floor(map.mapSize.height / 2);
+    const BUILDABLE = [16, 64]; // GRASS, DESERT
+
+    // Spiral out from center
+    for (let r = 0; r < 20; r++) {
+        for (let dx = -r; dx <= r; dx++) {
+            for (let dy = -r; dy <= r; dy++) {
+                if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+                const x = cx + dx;
+                const y = cy + dy;
+                if (x >= 0 && x < map.mapSize.width && y >= 0 && y < map.mapSize.height) {
+                    const index = map.mapSize.toIndex(x, y);
+                    if (BUILDABLE.includes(map.groundType[index])) {
+                        return { x, y };
+                    }
+                }
+            }
+        }
+    }
+    return null;
+}
