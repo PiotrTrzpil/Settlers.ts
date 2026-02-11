@@ -116,6 +116,15 @@ export interface GameEvents {
         amount: number;
     };
 
+    /** Emitted when a carrier pickup fails (material not available) */
+    'carrier:pickupFailed': {
+        entityId: number;
+        fromBuilding: number;
+        material: number;
+        /** Amount that was requested but not available */
+        requestedAmount: number;
+    };
+
     /** Emitted when a carrier completes a delivery (material transferred) */
     'carrier:deliveryComplete': {
         entityId: number;

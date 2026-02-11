@@ -16,7 +16,7 @@ import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from '../inventory';
 import type { ServiceAreaManager } from '../service-areas';
 import { CarrierManager } from './carrier-manager';
-import { CarrierStatus } from './carrier-state';
+import { CarrierStatus, type CarrierState } from './carrier-state';
 import { EMaterialType } from '../../economy';
 import { UnitType } from '../../unit-types';
 import { LogHandler } from '@/utilities/log-handler';
@@ -55,10 +55,11 @@ export class CarrierSystem implements TickSystem {
     private readonly gameState: GameState;
     private readonly serviceAreaManager: ServiceAreaManager;
 
-    private eventBus: EventBus | undefined;
+    /** Event bus (MUST be set via registerEvents) */
+    private eventBus!: EventBus;
 
-    /** Reference to settler task system for assigning jobs */
-    private settlerTaskSystem: SettlerTaskSystem | undefined;
+    /** Reference to settler task system for assigning jobs (MUST be set via setSettlerTaskSystem) */
+    private settlerTaskSystem!: SettlerTaskSystem;
 
     /** Event subscription manager for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
@@ -114,7 +115,7 @@ export class CarrierSystem implements TickSystem {
     tick(dt: number): void {
         // Update fatigue for all carriers
         for (const carrier of this.carrierManager.getAllCarriers()) {
-            this.updateFatigue(carrier.entityId, carrier.status, dt);
+            this.updateFatigue(carrier, dt);
         }
     }
 
@@ -123,22 +124,19 @@ export class CarrierSystem implements TickSystem {
     /**
      * Update fatigue based on carrier status.
      */
-    private updateFatigue(carrierId: number, status: CarrierStatus, dt: number): void {
-        const carrier = this.carrierManager.getCarrier(carrierId);
-        if (!carrier) return;
-
-        if (status === CarrierStatus.Resting) {
+    private updateFatigue(carrier: CarrierState, dt: number): void {
+        if (carrier.status === CarrierStatus.Resting) {
             const recovery = FATIGUE_RECOVERY_RATE * dt;
             const newFatigue = Math.max(0, carrier.fatigue - recovery);
-            this.carrierManager.setFatigue(carrierId, newFatigue);
+            this.carrierManager.setFatigue(carrier.entityId, newFatigue);
 
             if (newFatigue === 0) {
-                this.carrierManager.setStatus(carrierId, CarrierStatus.Idle);
+                this.carrierManager.setStatus(carrier.entityId, CarrierStatus.Idle);
             }
-        } else if (status === CarrierStatus.Idle && carrier.fatigue > 0) {
+        } else if (carrier.status === CarrierStatus.Idle && carrier.fatigue > 0) {
             const recovery = IDLE_RECOVERY_RATE * dt;
             const newFatigue = Math.max(0, carrier.fatigue - recovery);
-            this.carrierManager.setFatigue(carrierId, newFatigue);
+            this.carrierManager.setFatigue(carrier.entityId, newFatigue);
         }
     }
 
@@ -227,18 +225,8 @@ export class CarrierSystem implements TickSystem {
             return false;
         }
 
-        // Check settler task system is available
-        if (!this.settlerTaskSystem) {
-            CarrierSystem.log.warn('SettlerTaskSystem not set');
-            return false;
-        }
-
-        // Get carrier's home building
-        const carrier = this.carrierManager.getCarrier(carrierId);
-        if (!carrier) {
-            CarrierSystem.log.warn(`Carrier ${carrierId} not found`);
-            return false;
-        }
+        // Get carrier's home building (must exist since canAssignJobTo passed)
+        const carrier = this.carrierManager.getCarrier(carrierId)!;
 
         // Assign job via SettlerTaskSystem
         const success = this.settlerTaskSystem.assignCarrierJob(
@@ -255,7 +243,7 @@ export class CarrierSystem implements TickSystem {
             this.carrierManager.setStatus(carrierId, CarrierStatus.Walking);
 
             // Emit job assigned event
-            this.eventBus?.emit('carrier:jobAssigned', {
+            this.eventBus!.emit('carrier:jobAssigned', {
                 entityId: carrierId,
                 job: {
                     type: 'pickup',

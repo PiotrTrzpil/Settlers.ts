@@ -57,7 +57,7 @@ export class LogisticsDispatcher implements TickSystem {
     private readonly serviceAreaManager: ServiceAreaManager;
     private readonly reservationManager: InventoryReservationManager;
 
-    private eventBus: EventBus | undefined;
+    private eventBus!: EventBus;
 
     /** Track which carriers have active requests (carrierId -> requestId) */
     private readonly carrierToRequest: Map<number, number> = new Map();
@@ -74,6 +74,9 @@ export class LogisticsDispatcher implements TickSystem {
         this.requestManager = config.requestManager;
         this.serviceAreaManager = config.serviceAreaManager;
         this.reservationManager = new InventoryReservationManager();
+
+        // Wire up inventory manager for slot-level reservation enforcement
+        this.reservationManager.setInventoryManager(this.gameState.inventoryManager);
     }
 
     /**
@@ -85,6 +88,11 @@ export class LogisticsDispatcher implements TickSystem {
         // Listen for delivery completions to fulfill requests
         this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', (payload) => {
             this.handleDeliveryComplete(payload.entityId);
+        });
+
+        // Listen for pickup failures to reset requests (so they can be reassigned)
+        this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', (payload) => {
+            this.handlePickupFailed(payload.entityId);
         });
 
         // Listen for carrier removal to reset requests
@@ -290,8 +298,8 @@ export class LogisticsDispatcher implements TickSystem {
      * Get the player ID for a building's request.
      */
     private getRequestPlayerId(buildingId: number): number {
-        const building = this.gameState.getEntity(buildingId);
-        return building?.player ?? 0;
+        // Building MUST exist - we have an active request for it
+        return this.gameState.getEntityOrThrow(buildingId, 'requesting building').player;
     }
 
     /**
@@ -308,6 +316,30 @@ export class LogisticsDispatcher implements TickSystem {
 
         // Release any reservations for this request
         this.reservationManager.releaseReservationForRequest(requestId);
+
+        // Clear the mapping
+        this.carrierToRequest.delete(carrierId);
+    }
+
+    /**
+     * Handle carrier pickup failure - reset the request so it can be reassigned.
+     * This happens when reserved material is no longer available (e.g., building destroyed).
+     */
+    private handlePickupFailed(carrierId: number): void {
+        const requestId = this.carrierToRequest.get(carrierId);
+        if (requestId === undefined) {
+            return; // Carrier wasn't assigned by us
+        }
+
+        LogisticsDispatcher.log.debug(
+            `Pickup failed for carrier ${carrierId}, resetting request ${requestId}`,
+        );
+
+        // Release the reservation (frees up slot-level reservation)
+        this.reservationManager.releaseReservationForRequest(requestId);
+
+        // Reset the request so it can be reassigned to another carrier
+        this.requestManager.resetRequest(requestId, 'pickup_failed');
 
         // Clear the mapping
         this.carrierToRequest.delete(carrierId);
@@ -412,7 +444,7 @@ export class LogisticsDispatcher implements TickSystem {
         }
 
         // Step 4: Emit event for other systems
-        this.eventBus?.emit('logistics:buildingCleanedUp', result);
+        this.eventBus!.emit('logistics:buildingCleanedUp', result);
 
         // Log summary if any cleanup was performed
         if (result.requestsCancelled > 0 || result.requestsReset > 0 ||

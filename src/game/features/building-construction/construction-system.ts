@@ -48,8 +48,8 @@ export interface BuildingConstructionSystemConfig {
 export class BuildingConstructionSystem implements TickSystem {
     private readonly state: GameState;
     private readonly manager: BuildingStateManager;
-    private terrainContext: TerrainContext | undefined;
-    private eventBus: EventBus | undefined;
+    private terrainContext: TerrainContext | undefined;  // OK: optional, set via setter
+    private eventBus!: EventBus;  // MUST be set via registerEvents
 
     constructor(config: BuildingConstructionSystemConfig) {
         this.state = config.gameState;
@@ -116,7 +116,7 @@ export class BuildingConstructionSystem implements TickSystem {
         }
 
         if (newPhase === BuildingConstructionPhase.Completed && previousPhase !== BuildingConstructionPhase.Completed) {
-            this.eventBus?.emit('building:completed', {
+            this.eventBus!.emit('building:completed', {
                 entityId: buildingState.entityId,
                 buildingState,
             });
@@ -204,8 +204,8 @@ export class BuildingConstructionSystem implements TickSystem {
         const spawnDef = BUILDING_SPAWN_ON_COMPLETE[buildingState.buildingType];
         if (!spawnDef) return;
 
-        const entity = this.state.getEntity(buildingState.entityId);
-        if (!entity) return;
+        // Entity MUST exist - we just completed constructing it
+        const entity = this.state.getEntityOrThrow(buildingState.entityId, 'completed building');
 
         const { tileX: bx, tileY: by } = buildingState;
         let spawned = 0;
@@ -220,7 +220,7 @@ export class BuildingConstructionSystem implements TickSystem {
                     entity.player, spawnDef.selectable
                 );
 
-                this.eventBus?.emit('unit:spawned', {
+                this.eventBus!.emit('unit:spawned', {
                     entityId: spawnedEntity.id,
                     unitType: spawnDef.unitType,
                     x: tile.x,

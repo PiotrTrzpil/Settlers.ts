@@ -7,7 +7,18 @@ import { BuildingType } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import { BUILDING_PRODUCTIONS } from '../../economy/building-production';
 import type { InventorySlot } from './inventory-slot';
-import { createSlot, deposit, withdraw, canAccept, canProvide, getAvailableSpace } from './inventory-slot';
+import {
+    createSlot,
+    deposit,
+    withdraw,
+    canAccept,
+    canProvide,
+    getAvailableSpace,
+    reserve,
+    releaseReservation,
+    withdrawReserved,
+    getUnreservedAmount,
+} from './inventory-slot';
 import { getInventoryConfig, type SlotConfig } from './inventory-configs';
 import { LogHandler } from '@/utilities/log-handler';
 
@@ -154,7 +165,7 @@ export class BuildingInventoryManager {
             log.warn(`#${this._debugId} No inventory for building ${buildingId}. Known: [${[...this.inventories.keys()].join(', ')}]`);
             return undefined;
         }
-        const slot = inventory.outputSlots.find(slot => slot.materialType === materialType);
+        const slot = inventory.outputSlots.find(s => s.materialType === materialType);
         if (!slot) {
             log.warn(`#${this._debugId} Building ${buildingId} (${BuildingType[inventory.buildingType]}) has no slot for ${EMaterialType[materialType]}. Has: [${inventory.outputSlots.map(s => EMaterialType[s.materialType]).join(', ')}]`);
         }
@@ -202,6 +213,67 @@ export class BuildingInventoryManager {
         }
 
         return withdrawn;
+    }
+
+    /**
+     * Reserve material in a building's output slot for a pending carrier pickup.
+     * Prevents other carriers from claiming the same material.
+     * @param buildingId Entity ID of the building
+     * @param materialType Material type to reserve
+     * @param amount Amount to reserve
+     * @returns Amount actually reserved (may be less if not enough unreserved)
+     */
+    reserveOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
+        const slot = this.getOutputSlot(buildingId, materialType);
+        if (!slot) return 0;
+        return reserve(slot, amount);
+    }
+
+    /**
+     * Release a reservation on a building's output slot (when pickup fails or is cancelled).
+     * @param buildingId Entity ID of the building
+     * @param materialType Material type to release
+     * @param amount Amount to release from reservation
+     * @returns Amount actually released
+     */
+    releaseOutputReservation(buildingId: number, materialType: EMaterialType, amount: number): number {
+        const slot = this.getOutputSlot(buildingId, materialType);
+        if (!slot) return 0;
+        return releaseReservation(slot, amount);
+    }
+
+    /**
+     * Withdraw from reserved output (for actual carrier pickup).
+     * Releases reservation and withdraws in one atomic operation.
+     * @param buildingId Entity ID of the building
+     * @param materialType Material type to withdraw
+     * @param amount Amount to withdraw from reserved
+     * @returns Actual amount withdrawn
+     */
+    withdrawReservedOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
+        const slot = this.getOutputSlot(buildingId, materialType);
+        if (!slot) return 0;
+
+        const previousAmount = slot.currentAmount;
+        const withdrawn = withdrawReserved(slot, amount);
+
+        if (withdrawn > 0) {
+            this.emitChange(buildingId, materialType, 'output', previousAmount, slot.currentAmount);
+        }
+
+        return withdrawn;
+    }
+
+    /**
+     * Get unreserved amount in a building's output slot.
+     * @param buildingId Entity ID of the building
+     * @param materialType Material type to check
+     * @returns Amount available for new reservations
+     */
+    getUnreservedOutputAmount(buildingId: number, materialType: EMaterialType): number {
+        const slot = this.getOutputSlot(buildingId, materialType);
+        if (!slot) return 0;
+        return getUnreservedAmount(slot);
     }
 
     /**

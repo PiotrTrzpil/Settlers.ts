@@ -7,9 +7,13 @@
  * When a request is matched to a supply, the amount is "reserved"
  * until the carrier picks it up (converting to actual withdrawal)
  * or the request is cancelled (releasing the reservation).
+ *
+ * This manager delegates to BuildingInventoryManager for actual slot-level
+ * enforcement, while maintaining request-level bookkeeping.
  */
 
 import { EMaterialType } from '../../economy/material-type';
+import type { BuildingInventoryManager } from '../inventory';
 
 /**
  * A reservation of inventory at a building.
@@ -41,6 +45,8 @@ function reservationKey(buildingId: number, materialType: EMaterialType): string
  *
  * Reservations temporarily reduce the "available" amount of a material
  * without actually removing it from the building's inventory.
+ *
+ * Delegates to BuildingInventoryManager for slot-level enforcement.
  */
 export class InventoryReservationManager {
     /** All reservations indexed by ID */
@@ -55,6 +61,17 @@ export class InventoryReservationManager {
     /** Next reservation ID */
     private nextId = 1;
 
+    /** Reference to inventory manager for slot-level enforcement (required) */
+    private inventoryManager!: BuildingInventoryManager;
+
+    /**
+     * Set the inventory manager for slot-level reservation enforcement.
+     * MUST be called before creating reservations - will crash if not set.
+     */
+    setInventoryManager(manager: BuildingInventoryManager): void {
+        this.inventoryManager = manager;
+    }
+
     /**
      * Create a reservation for inventory at a building.
      *
@@ -62,7 +79,7 @@ export class InventoryReservationManager {
      * @param materialType Material to reserve
      * @param amount Amount to reserve
      * @param requestId Request this reservation is for
-     * @returns The created reservation, or null if invalid
+     * @returns The created reservation, or null if invalid or not enough inventory
      */
     createReservation(
         buildingId: number,
@@ -72,11 +89,17 @@ export class InventoryReservationManager {
     ): InventoryReservation | null {
         if (amount <= 0) return null;
 
+        // Enforce slot-level reservation (optimistic - inventoryManager must be set)
+        const actualReserved = this.inventoryManager.reserveOutput(buildingId, materialType, amount);
+        if (actualReserved === 0) {
+            return null; // Nothing to reserve
+        }
+
         const reservation: InventoryReservation = {
             id: this.nextId++,
             buildingId,
             materialType,
-            amount,
+            amount: actualReserved,
             requestId,
             timestamp: Date.now(),
         };
@@ -107,6 +130,13 @@ export class InventoryReservationManager {
     releaseReservation(reservationId: number): boolean {
         const reservation = this.reservations.get(reservationId);
         if (!reservation) return false;
+
+        // Release slot-level reservation (optimistic - inventoryManager must be set)
+        this.inventoryManager.releaseOutputReservation(
+            reservation.buildingId,
+            reservation.materialType,
+            reservation.amount,
+        );
 
         this.reservations.delete(reservationId);
 

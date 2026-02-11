@@ -24,11 +24,11 @@ export const DEFAULT_CONSTRUCTION_DURATION = 10;
  * State is stored on entity.construction (RFC: Entity-Owned State).
  */
 export class BuildingStateManager {
-    /** Entity provider for accessing entities */
-    private entityProvider: EntityProvider | undefined;
+    /** Entity provider for accessing entities (MUST be set via setEntityProvider) */
+    private entityProvider!: EntityProvider;
 
-    /** Event bus for emitting building events */
-    private eventBus: EventBus | undefined;
+    /** Event bus for emitting building events (MUST be set via registerEvents) */
+    private eventBus!: EventBus;
 
     /**
      * Set the entity provider (called by GameState after construction).
@@ -60,7 +60,7 @@ export class BuildingStateManager {
         y: number,
         totalDuration: number = DEFAULT_CONSTRUCTION_DURATION
     ): BuildingState {
-        const entity = this.entityProvider?.getEntity(entityId);
+        const entity = this.entityProvider.getEntity(entityId);
         if (!entity) {
             throw new Error(`Cannot create building state: entity ${entityId} not found`);
         }
@@ -89,7 +89,7 @@ export class BuildingStateManager {
      * @returns true if the state was removed
      */
     removeBuildingState(entityId: number): boolean {
-        const entity = this.entityProvider?.getEntity(entityId);
+        const entity = this.entityProvider.getEntity(entityId);
         if (entity?.construction) {
             delete entity.construction;
             return true;
@@ -103,7 +103,7 @@ export class BuildingStateManager {
      * @returns The building state, or undefined if not found
      */
     getBuildingState(entityId: number): BuildingState | undefined {
-        return this.entityProvider?.getEntity(entityId)?.construction;
+        return this.entityProvider.getEntity(entityId)?.construction;
     }
 
     /**
@@ -111,7 +111,7 @@ export class BuildingStateManager {
      * @param entityId - The entity ID of the building
      */
     hasBuildingState(entityId: number): boolean {
-        return this.entityProvider?.getEntity(entityId)?.construction !== undefined;
+        return this.entityProvider.getEntity(entityId)?.construction !== undefined;
     }
 
     /**
@@ -188,7 +188,7 @@ export class BuildingStateManager {
         elapsedTime: number;
         terrainModified: boolean;
     }): void {
-        const entity = this.entityProvider?.getEntity(data.entityId);
+        const entity = this.entityProvider.getEntity(data.entityId);
         if (!entity) {
             throw new Error(`Cannot restore building state: entity ${data.entityId} not found`);
         }

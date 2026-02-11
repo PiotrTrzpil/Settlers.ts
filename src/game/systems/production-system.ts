@@ -71,7 +71,7 @@ export interface ProductionState {
 /** Configuration for ProductionSystem dependencies */
 export interface ProductionSystemConfig {
     gameState: GameState;
-    eventBus?: EventBus;
+    eventBus: EventBus;
 }
 
 /**
@@ -80,7 +80,7 @@ export interface ProductionSystemConfig {
  */
 export class ProductionSystem implements TickSystem {
     private gameState: GameState;
-    private eventBus: EventBus | undefined;
+    private eventBus: EventBus;
 
     constructor(config: ProductionSystemConfig) {
         this.gameState = config.gameState;
@@ -93,7 +93,9 @@ export class ProductionSystem implements TickSystem {
             if (entity.type !== EntityType.Building) continue;
 
             const buildingType = entity.subType as BuildingType;
-            if (!consumesMaterials(buildingType)) continue;
+
+            // Only process AUTOMATIC production buildings (not worker-based)
+            if (!PRODUCTION_TIME[buildingType]) continue;
 
             // Only process completed buildings
             const buildingState = this.gameState.buildingStateManager.getBuildingState(entity.id);
@@ -127,14 +129,12 @@ export class ProductionSystem implements TickSystem {
         // Emit production:started only once per cycle
         if (!state.cycleStarted) {
             state.cycleStarted = true;
-            const production = BUILDING_PRODUCTIONS.get(buildingType);
-            if (production && this.eventBus) {
-                this.eventBus.emit('production:started', {
-                    buildingId: entity.id,
-                    buildingType,
-                    outputMaterial: production.output,
-                });
-            }
+            const production = BUILDING_PRODUCTIONS.get(buildingType)!;
+            this.eventBus.emit('production:started', {
+                buildingId: entity.id,
+                buildingType,
+                outputMaterial: production.output,
+            });
         }
 
         // Update production progress
@@ -153,8 +153,11 @@ export class ProductionSystem implements TickSystem {
         config: InventoryConfig,
         state: ProductionState
     ): void {
+        // Production buildings MUST have inventories by design
         const inventory = this.gameState.inventoryManager.getInventory(buildingId);
-        if (!inventory) return;
+        if (!inventory) {
+            throw new Error(`Production building ${buildingId} has no inventory`);
+        }
 
         for (const inputSlot of config.inputSlots) {
             const currentAmount = this.gameState.inventoryManager.getInputAmount(
@@ -164,8 +167,6 @@ export class ProductionSystem implements TickSystem {
 
             // Request more if below threshold and no pending request
             if (currentAmount < REQUEST_THRESHOLD && !state.pendingRequests.has(inputSlot.materialType)) {
-                const entity = this.gameState.getEntity(buildingId);
-                if (!entity) continue;
 
                 // Create request for this material
                 this.gameState.requestManager.addRequest(
@@ -196,14 +197,12 @@ export class ProductionSystem implements TickSystem {
         this.gameState.inventoryManager.produceOutput(buildingId);
 
         // Emit production:completed event
-        const production = BUILDING_PRODUCTIONS.get(buildingType);
-        if (production && this.eventBus) {
-            this.eventBus.emit('production:completed', {
-                buildingId,
-                buildingType,
-                outputMaterial: production.output,
-            });
-        }
+        const production = BUILDING_PRODUCTIONS.get(buildingType)!;
+        this.eventBus.emit('production:completed', {
+            buildingId,
+            buildingType,
+            outputMaterial: production.output,
+        });
 
         log.debug(`Building ${buildingId} (${BuildingType[buildingType]}) produced output`);
     }

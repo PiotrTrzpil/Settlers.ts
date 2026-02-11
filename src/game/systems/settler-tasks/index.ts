@@ -11,7 +11,14 @@ export {
     type AnimationType,
     type SettlerConfig,
     type TaskNode,
-    type SettlerJobState,
+    // New composed job state types
+    type CommonJobFields,
+    type WorkerJobData,
+    type CarrierJobData,
+    type WorkerJobState,
     type CarrierJobState,
+    type JobState,
+    // Legacy flattened type (deprecated)
+    type SettlerJobState,
     type WorkHandler,
 } from './types';

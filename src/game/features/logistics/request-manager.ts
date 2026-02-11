@@ -19,7 +19,7 @@ import {
 /**
  * Reasons why a request was reset to pending.
  */
-export type RequestResetReason = 'carrier_removed' | 'source_unavailable' | 'timeout';
+export type RequestResetReason = 'carrier_removed' | 'source_unavailable' | 'timeout' | 'pickup_failed';
 
 /**
  * Events emitted by the RequestManager.

@@ -118,28 +118,36 @@ export enum TaskResult {
     FAILED = 'FAILED',
 }
 
-/** Runtime state for a settler executing a job */
-export interface SettlerJobState {
-    /** Current job ID (e.g., 'woodcutter.work') */
+// ─────────────────────────────────────────────────────────────
+// Job State - Uses composition pattern (not inheritance)
+// ─────────────────────────────────────────────────────────────
+
+/** Common fields shared by all job types */
+export interface CommonJobFields {
+    /** Current job ID (e.g., 'woodcutter.work', 'carrier.transport') */
     jobId: string;
-    /** Current task index in the job */
+    /** Current task index in the job sequence */
     taskIndex: number;
     /** Progress within current task (0-1) */
     progress: number;
-    /** Target entity ID (tree, stone, building, etc.) */
-    targetId: number | null;
-    /** Target position */
-    targetPos: { x: number; y: number } | null;
-    /** Home building ID */
-    homeId: number | null;
-    /** Carried good type */
-    carryingGood: EMaterialType | null;
     /** Whether onWorkStart was called (for proper cleanup) */
     workStarted?: boolean;
 }
 
-/** Extended job state for carrier transport jobs */
-export interface CarrierJobState extends SettlerJobState {
+/** Worker-specific job data (woodcutter, builder, etc.) */
+export interface WorkerJobData {
+    /** Target entity ID (tree, stone, building, etc.) */
+    targetId: number | null;
+    /** Target position (for SEARCH_POS/GO_TO_POS tasks) */
+    targetPos: { x: number; y: number } | null;
+    /** Home building ID (workplace) */
+    homeId: number | null;
+    /** Carried good type (after pickup) */
+    carryingGood: EMaterialType | null;
+}
+
+/** Carrier-specific job data (transport jobs) */
+export interface CarrierJobData {
     /** Source building for pickup */
     sourceBuildingId: number;
     /** Destination building for delivery */
@@ -148,6 +156,44 @@ export interface CarrierJobState extends SettlerJobState {
     material: EMaterialType;
     /** Amount to transport */
     amount: number;
+    /** Home building ID (tavern) */
+    homeId: number;
+    /** Carried good type (after pickup) */
+    carryingGood: EMaterialType | null;
+}
+
+/** Worker job state - for settlers with YAML-defined jobs */
+export interface WorkerJobState extends CommonJobFields {
+    type: 'worker';
+    data: WorkerJobData;
+}
+
+/** Carrier job state - for transport jobs */
+export interface CarrierJobState extends CommonJobFields {
+    type: 'carrier';
+    data: CarrierJobData;
+}
+
+/** Discriminated union of all job state types */
+export type JobState = WorkerJobState | CarrierJobState;
+
+// ─────────────────────────────────────────────────────────────
+// Legacy aliases for backward compatibility
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * @deprecated Use WorkerJobState instead. This flattened interface is kept
+ * for backward compatibility but new code should use the composed types.
+ */
+export interface SettlerJobState {
+    jobId: string;
+    taskIndex: number;
+    progress: number;
+    targetId: number | null;
+    targetPos: { x: number; y: number } | null;
+    homeId: number | null;
+    carryingGood: EMaterialType | null;
+    workStarted?: boolean;
 }
 
 /** High-level settler state */

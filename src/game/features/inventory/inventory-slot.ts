@@ -15,6 +15,8 @@ export interface InventorySlot {
     currentAmount: number;
     /** Maximum capacity of this slot */
     maxCapacity: number;
+    /** Amount reserved for pending carrier pickups (prevents double-booking) */
+    reservedAmount: number;
 }
 
 /**
@@ -60,6 +62,7 @@ export function createSlot(materialType: EMaterialType, maxCapacity: number): In
         materialType,
         currentAmount: 0,
         maxCapacity: capacity,
+        reservedAmount: 0,
     };
 }
 
@@ -194,4 +197,58 @@ export function isEmpty(slot: InventorySlot): boolean {
  */
 export function isFull(slot: InventorySlot): boolean {
     return slot.currentAmount >= slot.maxCapacity;
+}
+
+/**
+ * Get the amount available for withdrawal (excluding reserved amount).
+ * @param slot The inventory slot to check
+ * @returns Amount that can be withdrawn without affecting reservations
+ */
+export function getUnreservedAmount(slot: InventorySlot): number {
+    return Math.max(0, slot.currentAmount - slot.reservedAmount);
+}
+
+/**
+ * Reserve an amount for a pending pickup.
+ * Prevents other carriers from claiming the same material.
+ * @param slot The inventory slot
+ * @param amount Amount to reserve
+ * @returns Amount actually reserved (may be less if not enough unreserved)
+ */
+export function reserve(slot: InventorySlot, amount: number): number {
+    const sanitized = sanitizeAmount(amount);
+    const available = getUnreservedAmount(slot);
+    const toReserve = Math.min(sanitized, available);
+    slot.reservedAmount += toReserve;
+    return toReserve;
+}
+
+/**
+ * Release a reservation (when pickup completes or fails).
+ * @param slot The inventory slot
+ * @param amount Amount to release from reservation
+ * @returns Amount actually released
+ */
+export function releaseReservation(slot: InventorySlot, amount: number): number {
+    const sanitized = sanitizeAmount(amount);
+    const toRelease = Math.min(sanitized, slot.reservedAmount);
+    slot.reservedAmount -= toRelease;
+    return toRelease;
+}
+
+/**
+ * Withdraw from reserved amount (for actual pickup).
+ * First releases the reservation, then withdraws.
+ * @param slot The inventory slot
+ * @param amount Amount to withdraw from reserved
+ * @returns Amount actually withdrawn
+ */
+export function withdrawReserved(slot: InventorySlot, amount: number): number {
+    const sanitized = sanitizeAmount(amount);
+    // Release the reservation first
+    const released = releaseReservation(slot, sanitized);
+    // Then withdraw the actual amount
+    const toWithdraw = Math.min(released, slot.currentAmount);
+    slot.currentAmount -= toWithdraw;
+    return toWithdraw;
 }

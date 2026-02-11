@@ -283,6 +283,22 @@ export class GameState {
         return this.entityMap.get(id);
     }
 
+    /**
+     * Get an entity by ID, throwing if it doesn't exist.
+     * Use this when the entity MUST exist by contract.
+     * @param id Entity ID
+     * @param context Optional context for error message (e.g., "source building", "carrier")
+     * @throws Error if entity not found, with ID and context
+     */
+    public getEntityOrThrow(id: number, context?: string): Entity {
+        const entity = this.entityMap.get(id);
+        if (!entity) {
+            const ctx = context ? ` (${context})` : '';
+            throw new Error(`Entity ${id}${ctx} not found`);
+        }
+        return entity;
+    }
+
     public getEntityAt(x: number, y: number): Entity | undefined {
         const id = this.tileOccupancy.get(tileKey(x, y));
         if (id === undefined) return undefined;

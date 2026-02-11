@@ -24,14 +24,14 @@ import {
  * State is stored on entity.carrier (RFC: Entity-Owned State).
  */
 export class CarrierManager {
-    /** Entity provider for accessing entities */
-    private entityProvider: EntityProvider | undefined;
+    /** Entity provider for accessing entities (MUST be set via setEntityProvider) */
+    private entityProvider!: EntityProvider;
 
     /** Index of tavern ID -> Set of carrier entity IDs (cross-entity state stays in manager) */
     private carriersByTavern: Map<number, Set<number>> = new Map();
 
-    /** Event bus for emitting carrier events */
-    private eventBus: EventBus | undefined;
+    /** Event bus for emitting carrier events (MUST be set via registerEvents) */
+    private eventBus!: EventBus;
 
     /**
      * Set the entity provider (called by GameState after construction).
@@ -54,7 +54,7 @@ export class CarrierManager {
      * @returns The created carrier state
      */
     createCarrier(entityId: number, homeBuilding: number): CarrierState {
-        const entity = this.entityProvider?.getEntity(entityId);
+        const entity = this.entityProvider.getEntity(entityId);
         if (!entity) {
             throw new Error(`Cannot create carrier: entity ${entityId} not found`);
         }
@@ -73,7 +73,7 @@ export class CarrierManager {
         }
         this.carriersByTavern.get(homeBuilding)!.add(entityId);
 
-        this.eventBus?.emit('carrier:created', { entityId, homeBuilding });
+        this.eventBus!.emit('carrier:created', { entityId, homeBuilding });
 
         return state;
     }
@@ -85,7 +85,7 @@ export class CarrierManager {
      * @returns true if the carrier was removed, false if it didn't exist
      */
     removeCarrier(entityId: number): boolean {
-        const entity = this.entityProvider?.getEntity(entityId);
+        const entity = this.entityProvider.getEntity(entityId);
         const state = entity?.carrier;
         if (!state) return false;
 
@@ -104,7 +104,7 @@ export class CarrierManager {
         // Remove state from entity (RFC: Entity-Owned State)
         delete entity.carrier;
 
-        this.eventBus?.emit('carrier:removed', { entityId, homeBuilding, hadActiveJob });
+        this.eventBus!.emit('carrier:removed', { entityId, homeBuilding, hadActiveJob });
 
         return true;
     }
@@ -115,7 +115,7 @@ export class CarrierManager {
      * @returns The carrier state, or undefined if not found
      */
     getCarrier(entityId: number): CarrierState | undefined {
-        return this.entityProvider?.getEntity(entityId)?.carrier;
+        return this.entityProvider.getEntity(entityId)?.carrier;
     }
 
     /**
@@ -124,7 +124,7 @@ export class CarrierManager {
      * @returns true if the carrier exists
      */
     hasCarrier(entityId: number): boolean {
-        return this.entityProvider?.getEntity(entityId)?.carrier !== undefined;
+        return this.entityProvider.getEntity(entityId)?.carrier !== undefined;
     }
 
     /**
@@ -138,7 +138,7 @@ export class CarrierManager {
 
         const result: CarrierState[] = [];
         for (const id of carrierIds) {
-            const state = this.entityProvider?.getEntity(id)?.carrier;
+            const state = this.entityProvider.getEntity(id)?.carrier;
             if (state) result.push(state);
         }
         return result;
@@ -172,7 +172,7 @@ export class CarrierManager {
      * @returns true if the carrier can accept a new job
      */
     canAssignJobTo(carrierId: number): boolean {
-        const state = this.entityProvider?.getEntity(carrierId)?.carrier;
+        const state = this.entityProvider.getEntity(carrierId)?.carrier;
         if (!state) return false;
 
         // Must be idle with no current job
@@ -197,12 +197,12 @@ export class CarrierManager {
             return false;
         }
 
-        const state = this.entityProvider?.getEntity(carrierId)?.carrier;
+        const state = this.entityProvider.getEntity(carrierId)?.carrier;
         if (!state) return false;
 
         state.currentJob = job;
 
-        this.eventBus?.emit('carrier:jobAssigned', { entityId: carrierId, job });
+        this.eventBus!.emit('carrier:jobAssigned', { entityId: carrierId, job });
 
         return true;
     }
@@ -214,14 +214,14 @@ export class CarrierManager {
      * @returns The completed job, or null if carrier not found or had no job
      */
     completeJob(carrierId: number): CarrierJob | null {
-        const state = this.entityProvider?.getEntity(carrierId)?.carrier;
+        const state = this.entityProvider.getEntity(carrierId)?.carrier;
         if (!state) return null;
         if (state.currentJob === null) return null;
 
         const completedJob = state.currentJob;
         state.currentJob = null;
 
-        this.eventBus?.emit('carrier:jobCompleted', { entityId: carrierId, completedJob });
+        this.eventBus!.emit('carrier:jobCompleted', { entityId: carrierId, completedJob });
 
         return completedJob;
     }
@@ -233,7 +233,7 @@ export class CarrierManager {
      * @returns true if the status was updated, false if carrier not found
      */
     setStatus(carrierId: number, status: CarrierStatus): boolean {
-        const state = this.entityProvider?.getEntity(carrierId)?.carrier;
+        const state = this.entityProvider.getEntity(carrierId)?.carrier;
         if (!state) return false;
 
         const previousStatus = state.status;
@@ -241,7 +241,7 @@ export class CarrierManager {
 
         state.status = status;
 
-        this.eventBus?.emit('carrier:statusChanged', {
+        this.eventBus!.emit('carrier:statusChanged', {
             entityId: carrierId,
             previousStatus,
             newStatus: status,
@@ -258,7 +258,7 @@ export class CarrierManager {
      * @returns true if updated, false if carrier not found
      */
     setCarrying(carrierId: number, material: EMaterialType | null, amount: number): boolean {
-        const state = this.entityProvider?.getEntity(carrierId)?.carrier;
+        const state = this.entityProvider.getEntity(carrierId)?.carrier;
         if (!state) return false;
 
         state.carryingMaterial = material;
@@ -273,7 +273,7 @@ export class CarrierManager {
      * @returns true if updated, false if carrier not found
      */
     setFatigue(carrierId: number, fatigue: number): boolean {
-        const state = this.entityProvider?.getEntity(carrierId)?.carrier;
+        const state = this.entityProvider.getEntity(carrierId)?.carrier;
         if (!state) return false;
 
         state.fatigue = Math.max(0, Math.min(100, fatigue));
@@ -287,7 +287,7 @@ export class CarrierManager {
      * @returns true if updated, false if carrier not found
      */
     addFatigue(carrierId: number, amount: number): boolean {
-        const state = this.entityProvider?.getEntity(carrierId)?.carrier;
+        const state = this.entityProvider.getEntity(carrierId)?.carrier;
         if (!state) return false;
 
         return this.setFatigue(carrierId, state.fatigue + amount);
@@ -301,7 +301,7 @@ export class CarrierManager {
      * @returns true if reassigned, false if carrier not found or has active job
      */
     reassignToTavern(carrierId: number, newTavernId: number): boolean {
-        const state = this.entityProvider?.getEntity(carrierId)?.carrier;
+        const state = this.entityProvider.getEntity(carrierId)?.carrier;
         if (!state) return false;
 
         // Prevent reassignment while on a job
@@ -374,7 +374,7 @@ export class CarrierManager {
         carryingMaterial: EMaterialType | null;
         carryingAmount: number;
     }): void {
-        const entity = this.entityProvider?.getEntity(data.entityId);
+        const entity = this.entityProvider.getEntity(data.entityId);
         if (!entity) {
             throw new Error(`Cannot restore carrier: entity ${data.entityId} not found`);
         }
