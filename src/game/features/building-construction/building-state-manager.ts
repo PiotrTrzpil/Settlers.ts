@@ -5,11 +5,14 @@
  * Following the Manager pattern (Rule 4.1):
  * - Manager owns state, provides CRUD
  * - System handles per-frame behavior
+ *
+ * State is stored on entity.construction (RFC: Entity-Owned State).
  */
 
 import type { EventBus } from '../../event-bus';
 import { BuildingType } from '../../buildings/types';
 import { BuildingConstructionPhase, type BuildingState } from './types';
+import type { EntityProvider } from '../../entity';
 
 /** Default building construction duration in seconds */
 export const DEFAULT_CONSTRUCTION_DURATION = 10;
@@ -17,13 +20,22 @@ export const DEFAULT_CONSTRUCTION_DURATION = 10;
 /**
  * Manages building construction states for all buildings.
  * Provides CRUD operations and queries.
+ *
+ * State is stored on entity.construction (RFC: Entity-Owned State).
  */
 export class BuildingStateManager {
-    /** Map of entity ID -> building state */
-    private readonly states: Map<number, BuildingState> = new Map();
+    /** Entity provider for accessing entities */
+    private entityProvider: EntityProvider | undefined;
 
     /** Event bus for emitting building events */
     private eventBus: EventBus | undefined;
+
+    /**
+     * Set the entity provider (called by GameState after construction).
+     */
+    setEntityProvider(provider: EntityProvider): void {
+        this.entityProvider = provider;
+    }
 
     /**
      * Register event bus for emitting building events.
@@ -48,6 +60,11 @@ export class BuildingStateManager {
         y: number,
         totalDuration: number = DEFAULT_CONSTRUCTION_DURATION
     ): BuildingState {
+        const entity = this.entityProvider?.getEntity(entityId);
+        if (!entity) {
+            throw new Error(`Cannot create building state: entity ${entityId} not found`);
+        }
+
         const state: BuildingState = {
             entityId,
             buildingType,
@@ -60,7 +77,9 @@ export class BuildingStateManager {
             originalTerrain: null,
             terrainModified: false,
         };
-        this.states.set(entityId, state);
+
+        // Store state on entity (RFC: Entity-Owned State)
+        entity.construction = state;
         return state;
     }
 
@@ -70,7 +89,12 @@ export class BuildingStateManager {
      * @returns true if the state was removed
      */
     removeBuildingState(entityId: number): boolean {
-        return this.states.delete(entityId);
+        const entity = this.entityProvider?.getEntity(entityId);
+        if (entity?.construction) {
+            delete entity.construction;
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -79,7 +103,7 @@ export class BuildingStateManager {
      * @returns The building state, or undefined if not found
      */
     getBuildingState(entityId: number): BuildingState | undefined {
-        return this.states.get(entityId);
+        return this.entityProvider?.getEntity(entityId)?.construction;
     }
 
     /**
@@ -87,29 +111,46 @@ export class BuildingStateManager {
      * @param entityId - The entity ID of the building
      */
     hasBuildingState(entityId: number): boolean {
-        return this.states.has(entityId);
+        return this.entityProvider?.getEntity(entityId)?.construction !== undefined;
     }
 
     /**
      * Get all building states.
      * For iteration, use getAllBuildingIds() for deterministic order.
      */
-    getAllBuildingStates(): IterableIterator<BuildingState> {
-        return this.states.values();
+    *getAllBuildingStates(): IterableIterator<BuildingState> {
+        for (const entity of this.entityProvider!.entities) {
+            if (entity.construction) {
+                yield entity.construction;
+            }
+        }
     }
 
     /**
      * Get all building entity IDs in sorted order (for deterministic iteration).
      */
     getAllBuildingIds(): number[] {
-        return [...this.states.keys()].sort((a, b) => a - b);
+        const ids: number[] = [];
+        for (const entity of this.entityProvider!.entities) {
+            if (entity.construction) {
+                ids.push(entity.id);
+            }
+        }
+        return ids.sort((a, b) => a - b);
     }
 
     /**
-     * Get the underlying states map (read-only access for renderers).
+     * Get the underlying states as a readonly map (for renderers).
+     * Note: This creates a new Map on each call - prefer getBuildingState() for single lookups.
      */
     get buildingStates(): ReadonlyMap<number, BuildingState> {
-        return this.states;
+        const map = new Map<number, BuildingState>();
+        for (const entity of this.entityProvider!.entities) {
+            if (entity.construction) {
+                map.set(entity.id, entity.construction);
+            }
+        }
+        return map;
     }
 
     /**
@@ -117,8 +158,8 @@ export class BuildingStateManager {
      */
     getCountByPhase(phase: BuildingConstructionPhase): number {
         let count = 0;
-        for (const state of this.states.values()) {
-            if (state.phase === phase) count++;
+        for (const entity of this.entityProvider!.entities) {
+            if (entity.construction?.phase === phase) count++;
         }
         return count;
     }
@@ -128,7 +169,9 @@ export class BuildingStateManager {
      * Useful for testing or game reset.
      */
     clear(): void {
-        this.states.clear();
+        for (const entity of this.entityProvider!.entities) {
+            delete entity.construction;
+        }
     }
 
     /**
@@ -145,7 +188,13 @@ export class BuildingStateManager {
         elapsedTime: number;
         terrainModified: boolean;
     }): void {
-        const state: BuildingState = {
+        const entity = this.entityProvider?.getEntity(data.entityId);
+        if (!entity) {
+            throw new Error(`Cannot restore building state: entity ${data.entityId} not found`);
+        }
+
+        // Store state on entity (RFC: Entity-Owned State)
+        entity.construction = {
             entityId: data.entityId,
             buildingType: data.buildingType,
             phase: data.phase,
@@ -157,6 +206,5 @@ export class BuildingStateManager {
             originalTerrain: null, // Not persisted - terrain is already modified
             terrainModified: data.terrainModified,
         };
-        this.states.set(data.entityId, state);
     }
 }

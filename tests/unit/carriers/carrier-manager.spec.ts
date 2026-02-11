@@ -14,12 +14,16 @@ import {
     type CarrierJob,
 } from '@/game/features/carriers';
 import { EMaterialType } from '@/game/economy';
+import { MockEntityProvider } from '../helpers/mock-entity-provider';
 
 describe('CarrierManager', () => {
     let manager: CarrierManager;
+    let entityProvider: MockEntityProvider;
 
     beforeEach(() => {
         manager = new CarrierManager();
+        entityProvider = new MockEntityProvider();
+        manager.setEntityProvider(entityProvider);
     });
 
     // ---------------------------------------------------------------------------

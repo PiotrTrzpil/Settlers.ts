@@ -764,8 +764,9 @@ export class SettlerTaskSystem implements TickSystem {
      * Carriers carrying a material use a material-specific carry sequence.
      */
     private getWalkSequenceKey(entity: Entity): string {
-        if (entity.subType === UnitType.Carrier && entity.carriedMaterial !== undefined) {
-            return carrySequenceKey(entity.carriedMaterial);
+        const carriedMaterial = entity.carrier?.carryingMaterial;
+        if (entity.subType === UnitType.Carrier && carriedMaterial !== undefined && carriedMaterial !== null) {
+            return carrySequenceKey(carriedMaterial);
         }
         return ANIMATION_SEQUENCES.WALK;
     }
@@ -799,8 +800,8 @@ export class SettlerTaskSystem implements TickSystem {
             return ANIMATION_SEQUENCES.WALK;
 
         case 'carry': {
-            // Material-specific carry animation
-            const material = settler.carriedMaterial ?? 0;
+            // Material-specific carry animation (from carrier state)
+            const material = settler.carrier?.carryingMaterial ?? 0;
             return carrySequenceKey(material);
         }
 

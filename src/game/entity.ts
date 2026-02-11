@@ -3,7 +3,22 @@
  * This is a barrel file that re-exports from specialized modules.
  */
 
-import type { TileCoord } from './coordinates';
+
+// === Entity State Types (imported for Entity interface) ===
+// These are imported as types to avoid circular dependencies.
+// The actual implementations live in their respective systems/features.
+
+/** Tree growth/cutting state - see TreeSystem */
+export type { TreeState, TreeStage } from './systems/tree-system';
+
+/** Production cycle state - see ProductionSystem */
+export type { ProductionState } from './systems/production-system';
+
+/** Building construction state - see BuildingStateManager */
+export type { BuildingState } from './features/building-construction/types';
+
+/** Carrier job/status state - see CarrierManager */
+export type { CarrierState, CarrierStatus, CarrierJob } from './features/carriers/carrier-state';
 
 // === Re-export coordinates (base types with no dependencies) ===
 export type { TileCoord } from './coordinates';
@@ -66,27 +81,42 @@ export interface Entity {
      * Default is 0.
      */
     variation?: number;
+    // === Per-Entity State (RFC: Entity-Owned State) ===
+    // State that lives on the entity rather than in system Maps.
+    // See docs/rfcs/entity-component-architecture.md
+
     /**
-     * Material type being carried by a carrier unit.
-     * undefined means the carrier is empty (not carrying anything).
-     * Only meaningful for UnitType.Carrier entities.
+     * Tree growth/cutting state.
+     * Only present for MapObject entities that are trees.
      */
-    carriedMaterial?: import('./economy/material-type').EMaterialType;
+    tree?: import('./systems/tree-system').TreeState;
+
+    /**
+     * Production cycle state.
+     * Only present for buildings that produce goods.
+     */
+    production?: import('./systems/production-system').ProductionState;
+
+    /**
+     * Building construction state.
+     * Present for all buildings - tracks construction phase (including Completed).
+     */
+    construction?: import('./features/building-construction/types').BuildingState;
+
+    /**
+     * Carrier job and status state.
+     * Only present for carrier units.
+     */
+    carrier?: import('./features/carriers/carrier-state').CarrierState;
 }
 
-export interface UnitState {
-    entityId: number;
-    path: TileCoord[];
-    pathIndex: number;
-    moveProgress: number;
-    speed: number;
-    /** Previous tile position for visual interpolation */
-    prevX: number;
-    prevY: number;
-    /** Time spent idle (no path) in seconds */
-    idleTime: number;
-    /** Random threshold for next idle direction change (seconds) */
-    nextIdleTurnTime: number;
+/**
+ * Interface for accessing entities without circular dependencies.
+ * Used by managers that need entity access but are owned by GameState.
+ */
+export interface EntityProvider {
+    getEntity(id: number): Entity | undefined;
+    get entities(): Entity[];
 }
 
 /**

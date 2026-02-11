@@ -150,6 +150,10 @@ export class GameState {
             (id) => this.getEntity(id)
         );
         this.movement.setTileOccupancy(this.tileOccupancy);
+
+        // Wire up entity providers for managers (RFC: Entity-Owned State)
+        this.buildingStateManager.setEntityProvider(this);
+        this.carrierManager.setEntityProvider(this);
     }
 
     /**

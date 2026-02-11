@@ -18,6 +18,7 @@ import { BuildingInventoryManager } from '@/game/features/inventory';
 import { BuildingType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { EventBus } from '@/game/event-bus';
+import { MockEntityProvider } from '../helpers/mock-entity-provider';
 
 describe('Job Completion Handlers', () => {
     let carrierManager: CarrierManager;
@@ -26,6 +27,7 @@ describe('Job Completion Handlers', () => {
 
     beforeEach(() => {
         carrierManager = new CarrierManager();
+        carrierManager.setEntityProvider(new MockEntityProvider());
         inventoryManager = new BuildingInventoryManager();
         eventBus = new EventBus();
         carrierManager.registerEvents(eventBus);

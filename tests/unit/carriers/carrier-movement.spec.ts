@@ -30,9 +30,9 @@ describe('CarrierMovementController', () => {
     let testMap: TestMap;
 
     beforeEach(() => {
-        carrierManager = new CarrierManager();
-        movementController = new CarrierMovementController(carrierManager);
         gameState = createGameState();
+        carrierManager = gameState.carrierManager; // Use GameState's wired-up manager
+        movementController = new CarrierMovementController(carrierManager);
         testMap = createTestMap(64, 64);
         gameState.setTerrainData(
             testMap.groundType,

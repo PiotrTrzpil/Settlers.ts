@@ -29,6 +29,9 @@ export {
 // Manager
 export { CarrierManager } from './carrier-manager';
 
+// Re-export EntityProvider from entity for convenience
+export type { EntityProvider } from '../../entity';
+
 // System (TickSystem)
 export { CarrierSystem, type CarrierSystemConfig } from './carrier-system';
 

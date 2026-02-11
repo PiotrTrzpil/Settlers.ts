@@ -5,6 +5,8 @@
  * - Create resource requests when buildings need input materials
  * - Process production when buildings have required inputs
  * - Manage production timers and output
+ *
+ * State is stored on entity.production (RFC: Entity-Owned State).
  */
 
 import type { TickSystem } from '../tick-system';
@@ -33,8 +35,11 @@ const PRODUCTION_TIME: Partial<Record<BuildingType, number>> = {
 /** Minimum input threshold before requesting more materials */
 const REQUEST_THRESHOLD = 4;
 
-/** Production state for a building */
-interface ProductionState {
+/**
+ * Production state for a building.
+ * Stored on entity.production (RFC: Entity-Owned State).
+ */
+export interface ProductionState {
     /** Progress of current production cycle (0-1) */
     progress: number;
     /** Whether we have active requests for each input slot */
@@ -43,10 +48,10 @@ interface ProductionState {
 
 /**
  * System that manages production buildings.
+ * State is stored on entity.production (RFC: Entity-Owned State).
  */
 export class ProductionSystem implements TickSystem {
     private gameState: GameState;
-    private productionStates: Map<number, ProductionState> = new Map();
 
     constructor(gameState: GameState) {
         this.gameState = gameState;
@@ -64,25 +69,24 @@ export class ProductionSystem implements TickSystem {
             const buildingState = this.gameState.buildingStateManager.getBuildingState(entity.id);
             if (!buildingState || buildingState.phase !== BuildingConstructionPhase.Completed) continue;
 
-            this.updateProduction(entity.id, buildingType, dt);
+            this.updateProduction(entity, buildingType, dt);
         }
     }
 
-    private updateProduction(buildingId: number, buildingType: BuildingType, dt: number): void {
-        // Get or create production state
-        let state = this.productionStates.get(buildingId);
-        if (!state) {
-            state = { progress: 0, pendingRequests: new Set() };
-            this.productionStates.set(buildingId, state);
+    private updateProduction(entity: { id: number; production?: ProductionState }, buildingType: BuildingType, dt: number): void {
+        // Get or create production state on entity (RFC: Entity-Owned State)
+        if (!entity.production) {
+            entity.production = { progress: 0, pendingRequests: new Set() };
         }
+        const state = entity.production;
 
         const config = getInventoryConfig(buildingType);
 
         // Check if we need to request materials
-        this.checkAndRequestMaterials(buildingId, config, state);
+        this.checkAndRequestMaterials(entity.id, config, state);
 
         // Check if we can produce (have all inputs and output space)
-        if (!this.canProduce(buildingId)) {
+        if (!this.canProduce(entity.id)) {
             return;
         }
 
@@ -91,7 +95,7 @@ export class ProductionSystem implements TickSystem {
         state.progress += dt / productionTime;
 
         if (state.progress >= 1) {
-            this.completeProduction(buildingId, buildingType);
+            this.completeProduction(entity.id, buildingType);
             state.progress = 0;
         }
     }
@@ -146,11 +150,5 @@ export class ProductionSystem implements TickSystem {
         log.debug(`Building ${buildingId} (${BuildingType[buildingType]}) produced output`);
     }
 
-    /**
-     * Clean up production state when entity is removed.
-     * Implements TickSystem.onEntityRemoved for automatic cleanup.
-     */
-    onEntityRemoved(entityId: number): void {
-        this.productionStates.delete(entityId);
-    }
+    // No onEntityRemoved needed - state is deleted with entity automatically (RFC: Entity-Owned State)
 }

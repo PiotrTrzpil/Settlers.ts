@@ -7,11 +7,13 @@
  *
  * Visual state is controlled by setting entity.variation directly.
  * Normal trees (variation=3) also play 'default' animation for sway.
+ *
+ * State is stored on entity.tree (RFC: Entity-Owned State).
  */
 
 import type { TickSystem } from '../tick-system';
 import type { GameState } from '../game-state';
-import { MapObjectType } from '../entity';
+import { EntityType, MapObjectType } from '../entity';
 import { OBJECT_TYPE_CATEGORY } from './map-objects';
 import type { AnimationService } from '../animation/index';
 
@@ -48,8 +50,9 @@ const TREE_OFFSET = {
 
 /**
  * State for a single tree.
+ * Stored on entity.tree (RFC: Entity-Owned State).
  */
-interface TreeState {
+export interface TreeState {
     stage: TreeStage;
     progress: number; // 0-1 within current stage
     stumpTimer: number; // Seconds until stump removal
@@ -63,9 +66,10 @@ const STUMP_DECAY_TIME = 30; // Seconds for stump to disappear
 /**
  * Manages tree growth, cutting, and stump decay.
  * Uses AnimationService for visual state - no direct entity manipulation.
+ *
+ * State is stored on entity.tree (RFC: Entity-Owned State).
  */
 export class TreeSystem implements TickSystem {
-    private states = new Map<number, TreeState>();
     private gameState: GameState;
     private animationService: AnimationService;
 
@@ -136,27 +140,26 @@ export class TreeSystem implements TickSystem {
         // Only register trees
         if (OBJECT_TYPE_CATEGORY[objectType] !== 'trees') return;
 
+        const entity = this.gameState.getEntity(entityId);
+        if (!entity) return;
+
         const stage = planted ? TreeStage.Growing : TreeStage.Normal;
         const offset = this.getSpriteOffset(stage, 0);
 
-        const state: TreeState = {
+        // Store state on entity (RFC: Entity-Owned State)
+        entity.tree = {
             stage,
             progress: 0,
             stumpTimer: 0,
             currentOffset: offset,
         };
 
-        this.states.set(entityId, state);
-
         // Set initial sprite variation
-        const entity = this.gameState.getEntity(entityId);
-        if (entity) {
-            entity.variation = offset;
+        entity.variation = offset;
 
-            // Normal trees have sway animation
-            if (offset === TREE_OFFSET.NORMAL) {
-                this.animationService.play(entityId, 'default', { loop: true });
-            }
+        // Normal trees have sway animation
+        if (offset === TREE_OFFSET.NORMAL) {
+            this.animationService.play(entityId, 'default', { loop: true });
         }
     }
 
@@ -164,28 +167,29 @@ export class TreeSystem implements TickSystem {
      * Get tree stage for rendering.
      */
     getStage(entityId: number): TreeStage | undefined {
-        return this.states.get(entityId)?.stage;
+        return this.gameState.getEntity(entityId)?.tree?.stage;
     }
 
     /**
      * Check if tree can be cut (is in Normal stage, not already being cut).
      */
     canCut(entityId: number): boolean {
-        return this.states.get(entityId)?.stage === TreeStage.Normal;
+        return this.gameState.getEntity(entityId)?.tree?.stage === TreeStage.Normal;
     }
 
     /**
      * Check if tree is currently being cut (work in progress).
      */
     isCutting(entityId: number): boolean {
-        return this.states.get(entityId)?.stage === TreeStage.Cutting;
+        return this.gameState.getEntity(entityId)?.tree?.stage === TreeStage.Cutting;
     }
 
     /**
      * Start cutting (called by woodcutter).
      */
     startCutting(entityId: number): boolean {
-        const state = this.states.get(entityId);
+        const entity = this.gameState.getEntity(entityId);
+        const state = entity?.tree;
         if (!state || state.stage !== TreeStage.Normal) return false;
 
         state.stage = TreeStage.Cutting;
@@ -199,7 +203,8 @@ export class TreeSystem implements TickSystem {
      * @returns true if tree became a stump
      */
     updateCutting(entityId: number, progress: number): boolean {
-        const state = this.states.get(entityId);
+        const entity = this.gameState.getEntity(entityId);
+        const state = entity?.tree;
         if (!state || state.stage !== TreeStage.Cutting) return false;
 
         state.progress = Math.min(1, progress);
@@ -222,7 +227,8 @@ export class TreeSystem implements TickSystem {
      * Cancel cutting (woodcutter interrupted).
      */
     cancelCutting(entityId: number): void {
-        const state = this.states.get(entityId);
+        const entity = this.gameState.getEntity(entityId);
+        const state = entity?.tree;
         if (state && state.stage === TreeStage.Cutting) {
             state.stage = TreeStage.Normal;
             state.progress = 0;
@@ -236,7 +242,12 @@ export class TreeSystem implements TickSystem {
     tick(dt: number): void {
         const toRemove: number[] = [];
 
-        for (const [entityId, state] of this.states) {
+        // Iterate all entities with tree state
+        for (const entity of this.gameState.entities) {
+            if (entity.type !== EntityType.MapObject) continue;
+            const state = entity.tree;
+            if (!state) continue;
+
             // Growing trees
             if (state.stage === TreeStage.Growing) {
                 state.progress += dt / GROWTH_TIME;
@@ -244,29 +255,21 @@ export class TreeSystem implements TickSystem {
                     state.progress = 0;
                     state.stage = TreeStage.Normal;
                 }
-                this.updateVisual(entityId, state);
+                this.updateVisual(entity.id, state);
             }
 
             // Decaying stumps
             if (state.stage === TreeStage.Cut) {
                 state.stumpTimer -= dt;
                 if (state.stumpTimer <= 0) {
-                    toRemove.push(entityId);
+                    toRemove.push(entity.id);
                 }
             }
         }
 
-        // Remove decayed stumps
+        // Remove decayed stumps (entity removal also removes tree state)
         for (const entityId of toRemove) {
-            this.states.delete(entityId);
             this.gameState.removeEntity(entityId);
-        }
-
-        // Cleanup removed entities
-        for (const entityId of this.states.keys()) {
-            if (!this.gameState.getEntity(entityId)) {
-                this.states.delete(entityId);
-            }
         }
     }
 
@@ -281,8 +284,10 @@ export class TreeSystem implements TickSystem {
             [TreeStage.Cut]: 0,
         };
 
-        for (const state of this.states.values()) {
-            stats[state.stage]++;
+        for (const entity of this.gameState.entities) {
+            if (entity.tree) {
+                stats[entity.tree.stage]++;
+            }
         }
 
         return stats;

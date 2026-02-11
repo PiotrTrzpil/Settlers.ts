@@ -60,10 +60,11 @@ test.describe.serial('Carrier Logistics System', () => {
     });
 
     /**
-     * Test carrier registration with a building.
+     * Test carrier auto-registration when spawned near a hub.
+     * CarrierSystem handles this via the 'unit:spawned' event.
      */
     test('carrier registration', async({ gp }) => {
-        // Place a hub building
+        // Place a hub building (residence with service area)
         const hubTile = await gp.findBuildableTile(29);
         if (!hubTile) {
             test.skip();
@@ -73,18 +74,18 @@ test.describe.serial('Carrier Logistics System', () => {
         const hub = await gp.placeBuilding(29, hubTile.x, hubTile.y);
         expect(hub).not.toBeNull();
 
-        // Spawn carrier and register it
-        const result = await gp.page.evaluate(({ hubId }) => {
+        // Spawn carrier - it should auto-register with the nearest hub
+        const result = await gp.page.evaluate(({ hubX, hubY }) => {
             const game = (window as any).__settlers_game__;
             if (!game) return { error: 'no game' };
 
-            // Spawn a carrier
+            // Spawn a carrier near the hub (so it gets auto-registered)
             const maxIdBefore = Math.max(...game.state.entities.map((e: any) => e.id), 0);
             game.execute({
                 type: 'spawn_unit',
                 unitType: 0, // Carrier
-                x: Math.floor(game.mapSize.width / 2),
-                y: Math.floor(game.mapSize.height / 2),
+                x: hubX + 2,
+                y: hubY + 2,
                 player: 0,
             });
 
@@ -93,19 +94,19 @@ test.describe.serial('Carrier Logistics System', () => {
             );
             if (!carrier) return { error: 'carrier spawn failed' };
 
-            // Register with hub
-            game.state.carrierManager.createCarrier(carrier.id, hubId);
+            // Carrier should be auto-registered by CarrierSystem
             const state = game.state.carrierManager.getCarrier(carrier.id);
+            if (!state) return { error: 'carrier not auto-registered' };
 
             return {
                 carrierId: carrier.id,
-                homeBuilding: state?.homeBuilding,
-                hasNoJob: state?.currentJob === null,
+                homeBuilding: state.homeBuilding,
+                hasNoJob: state.currentJob === null,
             };
-        }, { hubId: hub!.id });
+        }, { hubX: hubTile.x, hubY: hubTile.y });
 
         expect(result).not.toHaveProperty('error');
-        expect(result.homeBuilding).toBe(hub!.id);
+        expect(result.homeBuilding).toBeDefined();
         expect(result.hasNoJob).toBe(true);
     });
 

@@ -157,12 +157,13 @@ const unitCategory = computed(() => {
     return getUnitCategory(entity.subType as UnitType);
 });
 
-// Carried material for carriers
+// Carried material for carriers (from entity.carrier state)
 const carriedMaterial = computed(() => {
     const entity = selectedEntity.value;
     if (!entity || entity.type !== EntityType.Unit) return null;
-    if (entity.carriedMaterial === undefined) return null;
-    return EMaterialType[entity.carriedMaterial] ?? `Material #${entity.carriedMaterial}`;
+    const material = entity.carrier?.carryingMaterial;
+    if (material === undefined || material === null) return null;
+    return EMaterialType[material] ?? `Material #${material}`;
 });
 
 // Building size
