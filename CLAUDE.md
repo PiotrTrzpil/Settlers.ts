@@ -5,7 +5,7 @@ A Settlers 4 (Siedler 4) browser-based remake using TypeScript, Vue 3, and WebGL
 ## Stack
 
 - **Framework**: Vue 3 (Composition API) + Vue Router
-- **Build**: Vite 5, TypeScript ~5.9
+- **Build**: Vite 7, TypeScript ~5.9
 - **Rendering**: WebGL2 with GLSL shaders (via `vite-plugin-glsl`)
 - **Testing**: Vitest (unit), Playwright (e2e)
 - **Package manager**: pnpm

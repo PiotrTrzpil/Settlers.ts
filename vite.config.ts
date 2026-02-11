@@ -1,5 +1,4 @@
-/// <reference types="vitest" />
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import vue from '@vitejs/plugin-vue';
 import glsl from 'vite-plugin-glsl';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
@@ -44,14 +43,7 @@ export default defineConfig({
         environment: 'jsdom',
         include: ['tests/unit/**/*.spec.ts'],
         reporters: process.env.CI ? ['verbose', 'github-actions'] : ['verbose'],
-        // Limit parallelism to avoid resource exhaustion
-        pool: 'threads',
-        poolOptions: {
-            threads: {
-                minThreads: 1,
-                maxThreads: 4,
-            }
-        },
+        // Vitest 4 defaults to 'forks' pool with sensible parallelism
         // Timeouts to prevent hung processes
         testTimeout: 10000,
         hookTimeout: 10000,
