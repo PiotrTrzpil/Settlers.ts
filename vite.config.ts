@@ -43,6 +43,7 @@ export default defineConfig({
     test: {
         environment: 'jsdom',
         include: ['tests/unit/**/*.spec.ts'],
+        reporters: process.env.CI ? ['verbose', 'github-actions'] : ['verbose'],
         // Limit parallelism to avoid resource exhaustion
         pool: 'threads',
         poolOptions: {

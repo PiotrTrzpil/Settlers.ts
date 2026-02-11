@@ -45,6 +45,7 @@
 
 import { test as base, type Page } from '@playwright/test';
 import { GamePage } from './game-page';
+import { Frames, Timeout } from './wait-config';
 
 // Re-export custom matchers so fixture users get them automatically
 export { expect } from './matchers';
@@ -81,11 +82,11 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
         // Navigate and wait for full readiness
         await gp.goto({ testMap: true });
-        await gp.waitForReady(5, 30_000);
+        await gp.waitForReady(Frames.RENDER_SETTLE, Timeout.ASSET_LOAD);
 
         await use(page);
         await context.close();
-    }, { scope: 'worker', timeout: 45_000 }],
+    }, { scope: 'worker', timeout: Timeout.WORKER_SETUP }],
 
     // ─────────────────────────────────────────────────────────────────────────
     // Test-scoped fixtures: reset state before each test
@@ -100,7 +101,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         await gp.resetGameState();
 
         await use(gp);
-    }, { timeout: 8_000 }],
+    }, { timeout: Timeout.MOVEMENT }],
 
     /** Fixture with UI reset: select mode + Buildings tab (for UI interaction tests) */
     gpWithUI: [async({ testMapPage }, use) => {
@@ -112,7 +113,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         await testMapPage.locator('.tab-btn', { hasText: 'Buildings' }).click({ force: true });
 
         await use(gp);
-    }, { timeout: 10_000 }],
+    }, { timeout: Timeout.LONG_MOVEMENT }],
 
     /** Preset: reset state + place a Lumberjack building */
     gpWithBuilding: [async({ testMapPage }, use) => {
@@ -125,10 +126,10 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             await gp.placeBuilding(1, tile.x, tile.y);
         }
 
-        // Quick sync
-        await gp.waitForFrames(1, 3_000);
+        // Quick sync - just need one render tick to register the building
+        await gp.waitForFrames(Frames.IMMEDIATE, Timeout.FAST);
         await use(gp);
-    }, { timeout: 8_000 }],
+    }, { timeout: Timeout.MOVEMENT }],
 
     /** Preset: reset state + spawn a Carrier unit */
     gpWithUnit: [async({ testMapPage }, use) => {
@@ -139,9 +140,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         await gp.spawnUnit(1);
 
         // Wait for entity to appear
-        await gp.waitForUnitCount(1, 5_000);
+        await gp.waitForUnitCount(1, Timeout.DEFAULT);
         await use(gp);
-    }, { timeout: 8_000 }],
+    }, { timeout: Timeout.MOVEMENT }],
 
     /** Preset: reset state + spawn a Carrier and start moving east */
     gpWithMovingUnit: [async({ testMapPage }, use) => {
@@ -153,11 +154,11 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         if (unit) {
             await gp.moveUnit(unit.id, unit.x + 10, unit.y);
             // Wait for movement to start
-            await gp.waitForUnitsMoving(1, 5_000);
+            await gp.waitForUnitsMoving(1, Timeout.DEFAULT);
         }
 
         await use(gp);
-    }, { timeout: 8_000 }],
+    }, { timeout: Timeout.MOVEMENT }],
 
     /** Preset: camera centered on map */
     gpCentered: [async({ testMapPage }, use) => {
@@ -173,5 +174,5 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         }
 
         await use(gp);
-    }, { timeout: 8_000 }],
+    }, { timeout: Timeout.MOVEMENT }],
 });

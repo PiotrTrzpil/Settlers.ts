@@ -1,4 +1,5 @@
 import { type Page, type Locator, expect } from '@playwright/test';
+import { Frames, Timeout } from './wait-config';
 
 /**
  * Mirrors LoadTimings from src/game/debug-stats.ts.
@@ -71,7 +72,7 @@ export class GamePage {
     // ── Waiting ─────────────────────────────────────────────
 
     /** Wait until the game UI is mounted in the DOM. */
-    async waitForGameUi(timeout = 20_000): Promise<void> {
+    async waitForGameUi(timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
         await this.gameUi.waitFor({ timeout });
     }
 
@@ -80,8 +81,15 @@ export class GamePage {
      * Uses relative counting (reads current frameCount first, then waits for
      * current + minFrames) so it works correctly with the shared fixture where
      * frameCount is already high from previous tests.
+     *
+     * @param minFrames - Number of frames to wait. Use Frames constants:
+     *   - Frames.IMMEDIATE (1) - state already set, just need render tick
+     *   - Frames.STATE_PROPAGATE (2) - camera move, mode switch
+     *   - Frames.RENDER_SETTLE (5) - entity creation, basic rendering
+     *   - Frames.ANIMATION_SETTLE (10) - animation state changes
+     *   - Frames.VISUAL_STABLE (15) - screenshot comparisons
      */
-    async waitForFrames(minFrames = 5, timeout = 20_000): Promise<void> {
+    async waitForFrames(minFrames: number = Frames.RENDER_SETTLE, timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
         const baseFrame = await this.page.evaluate(
             () => (window as any).__settlers_debug__?.frameCount ?? 0,
         );
@@ -93,7 +101,7 @@ export class GamePage {
     }
 
     /** Wait for game loaded + renderer ready + N frames rendered. */
-    async waitForReady(minFrames = 5, timeout = 20_000): Promise<void> {
+    async waitForReady(minFrames: number = Frames.RENDER_SETTLE, timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
         await this.waitForGameUi(timeout);
         await this.page.waitForFunction(
             () => {
@@ -131,7 +139,7 @@ export class GamePage {
             }
         });
         // Wait for state to settle - use longer timeout for parallel runs
-        await this.waitForFrames(1, 5000);
+        await this.waitForFrames(Frames.IMMEDIATE, Timeout.DEFAULT);
     }
 
     // ── Debug bridge reads ──────────────────────────────────
@@ -222,7 +230,7 @@ export class GamePage {
             }
         }, { x: tileX, y: tileY });
         // Wait for the camera position to propagate through the render loop
-        await this.waitForFrames(2, 5000);
+        await this.waitForFrames(Frames.STATE_PROPAGATE, Timeout.DEFAULT);
     }
 
     /**
@@ -270,7 +278,7 @@ export class GamePage {
     }
 
     /** Wait for entity count to exceed a given value. */
-    async waitForEntityCountAbove(n: number, timeout = 5000): Promise<void> {
+    async waitForEntityCountAbove(n: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this.page.waitForFunction(
             (min) => (window as any).__settlers_debug__?.entityCount > min,
             n,
@@ -280,9 +288,11 @@ export class GamePage {
 
     // ── Polling helpers ─────────────────────────────────────────
     // Use these instead of point-in-time assertions when timing is uncertain
+    // Note: Custom matchers in matchers.ts now poll automatically, so you can
+    // use `await expect(gp).toHaveUnitCount(5)` instead of these helpers.
 
     /** Wait for unit count to reach expected value. */
-    async waitForUnitCount(expected: number, timeout = 5000): Promise<void> {
+    async waitForUnitCount(expected: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this.page.waitForFunction(
             (n) => (window as any).__settlers_debug__?.unitCount === n,
             expected,
@@ -291,7 +301,7 @@ export class GamePage {
     }
 
     /** Wait for building count to reach expected value. */
-    async waitForBuildingCount(expected: number, timeout = 5000): Promise<void> {
+    async waitForBuildingCount(expected: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this.page.waitForFunction(
             (n) => (window as any).__settlers_debug__?.buildingCount === n,
             expected,
@@ -300,7 +310,7 @@ export class GamePage {
     }
 
     /** Wait for at least N units to be moving. */
-    async waitForUnitsMoving(minMoving: number, timeout = 5000): Promise<void> {
+    async waitForUnitsMoving(minMoving: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this.page.waitForFunction(
             (n) => (window as any).__settlers_debug__?.unitsMoving >= n,
             minMoving,
@@ -309,7 +319,7 @@ export class GamePage {
     }
 
     /** Wait for no units to be moving (all stationary). */
-    async waitForNoUnitsMoving(timeout = 5000): Promise<void> {
+    async waitForNoUnitsMoving(timeout: number = Timeout.DEFAULT): Promise<void> {
         await this.page.waitForFunction(
             () => (window as any).__settlers_debug__?.unitsMoving === 0,
             null,
@@ -325,7 +335,7 @@ export class GamePage {
         unitId: number,
         targetX: number,
         targetY: number,
-        timeout = 10000
+        timeout: number = Timeout.LONG_MOVEMENT
     ): Promise<void> {
         await this.page.waitForFunction(
             ({ id, tx, ty }) => {
@@ -345,7 +355,7 @@ export class GamePage {
      * Wait for a unit to move away from its starting position.
      * Useful for verifying movement has started.
      */
-    async waitForUnitToMove(unitId: number, startX: number, startY: number, timeout = 5000): Promise<void> {
+    async waitForUnitToMove(unitId: number, startX: number, startY: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this.page.waitForFunction(
             ({ id, sx, sy }) => {
                 const game = (window as any).__settlers_game__;
@@ -361,7 +371,7 @@ export class GamePage {
     /**
      * Wait for mode to change to expected value.
      */
-    async waitForMode(expectedMode: string, timeout = 5000): Promise<void> {
+    async waitForMode(expectedMode: string, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this.page.waitForFunction(
             (mode) => (window as any).__settlers_debug__?.mode === mode,
             expectedMode,
@@ -608,15 +618,32 @@ export class GamePage {
             game?.soundManager?.toggleMusic(e);
         }, enabled);
         // Wait for state to propagate
-        await this.waitForFrames(2);
+        await this.waitForFrames(Frames.STATE_PROPAGATE);
     }
 
-    /** Trigger user interaction to unlock AudioContext. */
+    /**
+     * Trigger user interaction to unlock AudioContext.
+     * Waits for AudioContext to be in 'running' state or times out gracefully.
+     */
     async unlockAudio(): Promise<void> {
         // Click on the canvas to trigger user interaction
         await this.canvas.click();
-        // Wait for potential audio context resume
-        await this.page.waitForTimeout(100);
+
+        // Wait for AudioContext to unlock (running state) instead of hardcoded timeout
+        // AudioContext may already be running, or may need user gesture to resume
+        await this.page.waitForFunction(
+            () => {
+                const game = (window as any).__settlers_game__;
+                const ctx = game?.soundManager?.audioContext;
+                // Success if no audio context (audio disabled) or context is running
+                return !ctx || ctx.state === 'running';
+            },
+            null,
+            { timeout: Timeout.FAST },
+        ).catch(() => {
+            // AudioContext may not exist or may be suspended - that's OK for tests
+            // that don't actually need audio
+        });
     }
 
     // ── Sprite cache helpers ─────────────────────────────────

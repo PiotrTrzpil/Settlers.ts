@@ -34,6 +34,9 @@ export default defineConfig({
     testDir: './tests/e2e',
     outputDir: './tests/e2e/.results',
     fullyParallel: true,
+    reporter: process.env.CI
+        ? [['list'], ['github-actions']]
+        : [['list'], ['html', { open: 'never' }]],
     // Limit workers to avoid overwhelming shared worker fixtures (testMapPage)
     // Tests use worker-scoped pages that can't handle too many parallel tests
     workers: 2,
