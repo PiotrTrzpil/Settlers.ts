@@ -8,7 +8,7 @@
  * - Entity removal triggers proper cleanup
  * - The systems work together correctly
  */
-/* eslint-disable max-lines-per-function */
+ 
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { GameState } from '@/game/game-state';
@@ -16,6 +16,7 @@ import { GameLoop } from '@/game/game-loop';
 import { EventBus } from '@/game/event-bus';
 import { EntityType, BuildingType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
+import { RequestPriority, RequestStatus } from '@/game/features/logistics';
 
 describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
     let gameState: GameState;
@@ -240,6 +241,88 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
 
             const newFatigue = gameState.carrierManager.getCarrier(carrierEntity.id)!.fatigue;
             expect(newFatigue).toBeLessThan(initialFatigue);
+        });
+    });
+
+    // ---------------------------------------------------------------------------
+    // Carrier Registration (Tier 3 — migrated from e2e)
+    // ---------------------------------------------------------------------------
+
+    describe('Carrier Registration', () => {
+        it('should register carrier with home building and no active job', () => {
+            // Create a tavern (logistics hub with service area)
+            const tavern = gameState.addEntity(
+                EntityType.Building,
+                BuildingType.ResidenceSmall,
+                10, 10,
+                1
+            );
+
+            // Create a carrier unit near the tavern
+            const carrier = gameState.addEntity(
+                EntityType.Unit,
+                UnitType.Carrier,
+                12, 12,
+                1
+            );
+
+            // Register carrier with the tavern
+            gameState.carrierManager.createCarrier(carrier.id, tavern.id);
+
+            const carrierState = gameState.carrierManager.getCarrier(carrier.id);
+            expect(carrierState).toBeDefined();
+            expect(carrierState!.homeBuilding).toBe(tavern.id);
+            expect(carrierState!.currentJob).toBeNull();
+        });
+    });
+
+    // ---------------------------------------------------------------------------
+    // Resource Request Creation (Tier 3 — migrated from e2e)
+    // ---------------------------------------------------------------------------
+
+    describe('Resource Request Creation', () => {
+        it('should create pending resource request with correct attributes', () => {
+            // Create a sawmill (has LOG input slot)
+            const sawmill = gameState.addEntity(
+                EntityType.Building,
+                BuildingType.Sawmill,
+                10, 10,
+                1
+            );
+
+            // Add a resource request for logs
+            const request = gameState.requestManager.addRequest(
+                sawmill.id,
+                EMaterialType.LOG,
+                4,
+                RequestPriority.Normal,
+            );
+
+            expect(request).toBeDefined();
+            expect(request.materialType).toBe(EMaterialType.LOG);
+            expect(request.amount).toBe(4);
+            expect(request.status).toBe(RequestStatus.Pending);
+            expect(request.buildingId).toBe(sawmill.id);
+        });
+
+        it('should track request in pending requests list', () => {
+            const sawmill = gameState.addEntity(
+                EntityType.Building,
+                BuildingType.Sawmill,
+                10, 10,
+                1
+            );
+
+            gameState.requestManager.addRequest(
+                sawmill.id,
+                EMaterialType.LOG,
+                4,
+            );
+
+            expect(gameState.requestManager.getPendingCount()).toBe(1);
+            const pending = gameState.requestManager.getPendingRequests();
+            expect(pending).toHaveLength(1);
+            expect(pending[0].materialType).toBe(EMaterialType.LOG);
         });
     });
 
