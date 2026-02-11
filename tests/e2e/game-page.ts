@@ -287,26 +287,24 @@ export class GamePage {
     /**
      * Remove user-placed entities (buildings, units, resources) but preserve
      * environment objects (trees, stones). Resets mode to 'select'.
+     *
+     * Uses Game.resetToCleanState() for consistent behavior with debug panel.
      */
     async resetGameState(): Promise<void> {
         await this.page.evaluate(() => {
             const game = (window as any).__settlers_game__;
             if (!game) return;
-            // Remove only user-placed entities (type 1=Unit, 2=Building, 4=Resource)
-            // Keep environment objects (type 3) which are part of the map
-            const userEntities = game.state.entities.filter(
-                (e: any) => e.type === 1 || e.type === 2 || e.type === 4
-            );
-            for (const e of userEntities) {
-                game.execute({ type: 'remove_entity', entityId: e.id });
-            }
-            // Reset mode via InputManager
+
+            // Use unified reset method (removes user entities, rebuilds inventory)
+            game.resetToCleanState({ keepEnvironment: true, rebuildInventory: true });
+
+            // Reset input mode to 'select' (test-specific, not part of game reset)
             const input = (window as any).__settlers_input__;
             if (input && input.getModeName() !== 'select') {
                 input.switchMode('select');
             }
         });
-        // Wait for state to settle - use longer timeout for parallel runs
+        // Wait for state to settle
         await this.waitForFrames(Frames.IMMEDIATE, Timeout.DEFAULT);
     }
 

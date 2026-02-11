@@ -300,16 +300,15 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
             if (restored) {
                 // Rebuild inventory visualizer state from restored entities
                 g.gameLoop.inventoryVisualizer.rebuildFromExistingEntities();
+                log.info('Game state reset to initial map state');
             } else {
-                // Fallback: if no initial state, just remove all entities
-                log.warn('No initial state available, removing all entities');
-                g.removeAllEntities();
+                // Fallback: no initial state, use clean reset (keeps environment)
+                log.warn('No initial state available, resetting to clean state');
+                g.resetToCleanState({ keepEnvironment: true, rebuildInventory: true });
             }
 
             // Force UI update
             triggerRef(game);
-
-            log.info('Game state reset to initial map state');
         },
     };
 }
@@ -443,7 +442,7 @@ export function useMapView(
 
             // Load mission script (non-blocking, only if Lua enabled)
             if (isLuaEnabled()) {
-                result.game.loadScript(file.name).then(scriptResult => {
+                void result.game.loadScript(file.name).then(scriptResult => {
                     if (scriptResult.success) {
                         log.info(`Script loaded: ${scriptResult.scriptPath}`);
                     }

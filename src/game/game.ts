@@ -10,6 +10,15 @@ import { populateMapBuildings } from './systems/map-buildings';
 import { SoundManager } from './audio';
 import { Race } from './renderer/sprite-metadata';
 import { EventBus } from './event-bus';
+import { EntityType } from './entity';
+
+/** Options for resetToCleanState */
+export interface ResetOptions {
+    /** Keep environment objects (trees, stones). Default: true */
+    keepEnvironment?: boolean;
+    /** Rebuild inventory visualizer after reset. Default: true */
+    rebuildInventory?: boolean;
+}
 // Scripting is loaded dynamically to avoid bundling Lua when disabled
 // import { ScriptService, type ScriptLoadResult } from './scripting';
 type ScriptLoadResult = { success: boolean; scriptPath: string | null; error?: string };
@@ -85,7 +94,7 @@ export class Game {
         }
 
         // Initialize Audio
-        this.soundManager.init(this.fileManager).then(() => {
+        void this.soundManager.init(this.fileManager).then(() => {
             if (!this.soundManager.currentMusicId) {
                 console.log('Game: SoundManager initialized, requesting music...');
                 this.soundManager.playRandomMusic(Race.Roman);
@@ -150,6 +159,39 @@ export class Game {
         for (const id of ids) {
             this.execute({ type: 'remove_entity', entityId: id });
         }
+    }
+
+    /**
+     * Reset game to a clean state by removing user-placed entities.
+     * Used by both debug panel and e2e tests for consistent reset behavior.
+     *
+     * @param options Reset options
+     * @returns Number of entities removed
+     */
+    public resetToCleanState(options: ResetOptions = {}): number {
+        const { keepEnvironment = true, rebuildInventory = true } = options;
+
+        // Determine which entity types to remove
+        const typesToRemove = keepEnvironment
+            ? [EntityType.Unit, EntityType.Building, EntityType.StackedResource]
+            : [EntityType.Unit, EntityType.Building, EntityType.StackedResource, EntityType.MapObject];
+
+        // Collect entities to remove (snapshot IDs first to avoid mutation during iteration)
+        const idsToRemove = this.state.entities
+            .filter(e => typesToRemove.includes(e.type))
+            .map(e => e.id);
+
+        // Remove via command pipeline for proper cleanup
+        for (const id of idsToRemove) {
+            this.execute({ type: 'remove_entity', entityId: id });
+        }
+
+        // Rebuild inventory visualizer to sync with new entity state
+        if (rebuildInventory) {
+            this.gameLoop.inventoryVisualizer.rebuildFromExistingEntities();
+        }
+
+        return idsToRemove.length;
     }
 
     /**
