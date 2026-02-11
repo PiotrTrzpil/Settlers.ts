@@ -14,6 +14,7 @@ import {
     type CarrierJob,
 } from '@/game/features/carriers';
 import { EMaterialType } from '@/game/economy';
+import { EventBus } from '@/game/event-bus';
 import { MockEntityProvider } from '../helpers/mock-entity-provider';
 
 describe('CarrierManager', () => {
@@ -24,6 +25,7 @@ describe('CarrierManager', () => {
         manager = new CarrierManager();
         entityProvider = new MockEntityProvider();
         manager.setEntityProvider(entityProvider);
+        manager.registerEvents(new EventBus());
     });
 
     // ---------------------------------------------------------------------------
@@ -364,11 +366,6 @@ describe('CarrierManager', () => {
             // Note: completeJob does NOT change status - caller controls status
         });
 
-        it('should return null for non-existent carrier', () => {
-            const completed = manager.completeJob(999);
-            expect(completed).toBeNull();
-        });
-
         it('should return null for carrier without job', () => {
             manager.createCarrier(1, 100);
 
@@ -390,18 +387,12 @@ describe('CarrierManager', () => {
             expect(carrier.status).toBe(CarrierStatus.PickingUp);
         });
 
-        it('should return false for non-existent carrier', () => {
-            const result = manager.setStatus(999, CarrierStatus.Walking);
-            expect(result).toBe(false);
-        });
-
-        it('should return true when status is already the same', () => {
+        it('should no-op when status is already the same', () => {
             const carrier = manager.createCarrier(1, 100);
             carrier.status = CarrierStatus.Walking;
 
-            const result = manager.setStatus(1, CarrierStatus.Walking);
+            manager.setStatus(1, CarrierStatus.Walking);
 
-            expect(result).toBe(true);
             expect(carrier.status).toBe(CarrierStatus.Walking);
         });
     });
@@ -427,10 +418,6 @@ describe('CarrierManager', () => {
             expect(carrier.carryingAmount).toBe(0);
         });
 
-        it('should return false for non-existent carrier', () => {
-            const result = manager.setCarrying(999, EMaterialType.LOG, 1);
-            expect(result).toBe(false);
-        });
     });
 
     describe('setFatigue', () => {
@@ -452,10 +439,6 @@ describe('CarrierManager', () => {
             expect(carrier.fatigue).toBe(0);
         });
 
-        it('should return false for non-existent carrier', () => {
-            const result = manager.setFatigue(999, 50);
-            expect(result).toBe(false);
-        });
     });
 
     describe('addFatigue', () => {
@@ -488,10 +471,6 @@ describe('CarrierManager', () => {
             expect(carrier.fatigue).toBe(0);
         });
 
-        it('should return false for non-existent carrier', () => {
-            const result = manager.addFatigue(999, 10);
-            expect(result).toBe(false);
-        });
     });
 
     // ---------------------------------------------------------------------------
@@ -508,11 +487,6 @@ describe('CarrierManager', () => {
             expect(carrier.homeBuilding).toBe(200);
             expect(manager.getCarriersForTavern(100)).toHaveLength(0);
             expect(manager.getCarriersForTavern(200)).toHaveLength(1);
-        });
-
-        it('should return false for non-existent carrier', () => {
-            const result = manager.reassignToTavern(999, 200);
-            expect(result).toBe(false);
         });
 
         it('should return true when already at target tavern', () => {
@@ -573,6 +547,22 @@ describe('CarrierManager', () => {
             expect(manager.hasCarrier(2)).toBe(false);
             expect(manager.getCarriersForTavern(100)).toHaveLength(0);
             expect(manager.getCarriersForTavern(200)).toHaveLength(0);
+        });
+    });
+
+    // ---------------------------------------------------------------------------
+    // Error Handling - Optimistic Programming
+    // ---------------------------------------------------------------------------
+
+    describe('error handling', () => {
+        it('should throw when operating on non-existent carrier', () => {
+            // All mutation methods should throw for entities without carrier state
+            expect(() => manager.completeJob(999)).toThrow(/is not a carrier/);
+            expect(() => manager.setStatus(999, CarrierStatus.Walking)).toThrow(/is not a carrier/);
+            expect(() => manager.setCarrying(999, EMaterialType.LOG, 1)).toThrow(/is not a carrier/);
+            expect(() => manager.setFatigue(999, 50)).toThrow(/is not a carrier/);
+            expect(() => manager.addFatigue(999, 10)).toThrow(/is not a carrier/);
+            expect(() => manager.reassignToTavern(999, 200)).toThrow(/is not a carrier/);
         });
     });
 });

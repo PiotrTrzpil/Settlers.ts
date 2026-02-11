@@ -209,15 +209,9 @@ export class CarrierSystem implements TickSystem {
         material: EMaterialType,
         amount: number,
     ): boolean {
-        // Validate buildings exist
-        if (!this.gameState.getEntity(fromBuildingId)) {
-            CarrierSystem.log.warn(`Source building ${fromBuildingId} not found`);
-            return false;
-        }
-        if (!this.gameState.getEntity(toBuildingId)) {
-            CarrierSystem.log.warn(`Destination building ${toBuildingId} not found`);
-            return false;
-        }
+        // Buildings MUST exist - caller should have validated
+        this.gameState.getEntityOrThrow(fromBuildingId, 'source building for delivery');
+        this.gameState.getEntityOrThrow(toBuildingId, 'destination building for delivery');
 
         // Check carrier availability
         if (!this.carrierManager.canAssignJobTo(carrierId)) {

@@ -339,14 +339,15 @@ describe('BuildingInventoryManager', () => {
             expect(inventory.outputSlots[0].currentAmount).toBe(2);
         });
 
-        it('should return 0 when depositing wrong material type', () => {
+        it('should throw when depositing wrong material type', () => {
             manager.createInventory(100, BuildingType.Sawmill);
-            const deposited = manager.depositInput(100, EMaterialType.STONE, 5);
-            expect(deposited).toBe(0);
+            expect(() => manager.depositInput(100, EMaterialType.STONE, 5))
+                .toThrow(/has no input slot for STONE/);
         });
 
-        it('should return 0 when withdrawing from non-existent building', () => {
-            expect(manager.withdrawOutput(999, EMaterialType.BOARD, 5)).toBe(0);
+        it('should throw when withdrawing from non-existent building', () => {
+            expect(() => manager.withdrawOutput(999, EMaterialType.BOARD, 5))
+                .toThrow(/Building 999 has no inventory/);
         });
     });
 

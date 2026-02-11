@@ -423,8 +423,8 @@ describe('Fulfillment Matcher', () => {
             const hub = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 20, 20, 0);
             serviceAreaManager.createServiceArea(hub.id, 0, 20, 20, 30);
 
-            // Building has material in its own output
-            const building = addBuildingWithInventory(gameState, 15, 20, BuildingType.Sawmill, 0);
+            // Building has material in its own output - use WoodcutterHut which outputs LOG
+            const building = addBuildingWithInventory(gameState, 15, 20, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(building.id, EMaterialType.LOG, 5);
 
             const request = requestManager.addRequest(building.id, EMaterialType.LOG, 4);
@@ -499,7 +499,8 @@ describe('Fulfillment Matcher', () => {
         });
 
         it('should return false when only supply is at destination', () => {
-            const building = addBuildingWithInventory(gameState, 15, 20, BuildingType.Sawmill, 0);
+            // WoodcutterHut outputs LOG, so we can deposit LOG to its output
+            const building = addBuildingWithInventory(gameState, 15, 20, BuildingType.WoodcutterHut, 0);
             gameState.inventoryManager.depositOutput(building.id, EMaterialType.LOG, 5);
 
             const request = requestManager.addRequest(building.id, EMaterialType.LOG, 4);

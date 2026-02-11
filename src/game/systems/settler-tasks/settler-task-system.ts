@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Settler Task System - manages ALL unit behaviors via tasks.
  *
@@ -30,7 +31,6 @@ import {
     SettlerState,
     type SettlerConfig,
     type TaskNode,
-    type WorkerJobState,
     type CarrierJobState,
     type JobState,
     type WorkHandler,
@@ -261,10 +261,10 @@ export class SettlerTaskSystem implements TickSystem {
         amount: number,
         homeId: number,
     ): boolean {
-        const entity = this.gameState.getEntity(entityId);
-        if (!entity || entity.type !== EntityType.Unit || entity.subType !== UnitType.Carrier) {
-            log.warn(`Cannot assign carrier job: entity ${entityId} is not a carrier`);
-            return false;
+        // Entity MUST exist and be a carrier - caller should have validated
+        const entity = this.gameState.getEntityOrThrow(entityId, 'carrier for job assignment');
+        if (entity.type !== EntityType.Unit || entity.subType !== UnitType.Carrier) {
+            throw new Error(`Entity ${entityId} is not a carrier (type=${entity.type}, subType=${entity.subType})`);
         }
 
         // Get or create runtime
@@ -291,17 +291,9 @@ export class SettlerTaskSystem implements TickSystem {
         runtime.job = carrierJob;
         runtime.moveTask = null; // Clear any existing move task
 
-        // Validate source and destination buildings exist
-        const sourceBuilding = this.gameState.getEntity(sourceBuildingId);
-        if (!sourceBuilding) {
-            log.warn(`Source building ${sourceBuildingId} not found`);
-            return false;
-        }
-        const destBuilding = this.gameState.getEntity(destBuildingId);
-        if (!destBuilding) {
-            log.warn(`Destination building ${destBuildingId} not found`);
-            return false;
-        }
+        // Buildings MUST exist - caller should have validated
+        const sourceBuilding = this.gameState.getEntityOrThrow(sourceBuildingId, 'source building for carrier job');
+        this.gameState.getEntityOrThrow(destBuildingId, 'destination building for carrier job');
 
         // Note: Inventory reservation is handled by LogisticsDispatcher via InventoryReservationManager.
         // We don't reserve here - the logistics layer already reserved when creating the job.
@@ -511,8 +503,7 @@ export class SettlerTaskSystem implements TickSystem {
         const jobId = `${UnitType[settler.subType].toLowerCase()}.${config.jobs[0]}`;
         const tasks = this.jobDefinitions.get(jobId);
         if (!tasks || tasks.length === 0) {
-            log.warn(`No tasks found for job: ${jobId}`);
-            return;
+            throw new Error(`No tasks found for job: ${jobId}. Check YAML job definitions.`);
         }
 
         // Check if home building can store the output before starting work
@@ -947,8 +938,7 @@ export class SettlerTaskSystem implements TickSystem {
     private executeSearchPos(settler: Entity, job: JobState, handler?: WorkHandler): TaskResult {
         if (job.type !== 'worker') return TaskResult.FAILED;
         if (!handler) {
-            log.warn(`Settler ${settler.id}: no work handler for SEARCH_POS`);
-            return TaskResult.FAILED;
+            throw new Error(`Settler ${settler.id} (${UnitType[settler.subType]}): SEARCH_POS task requires a work handler`);
         }
 
         // Use findTarget to search for a valid position

@@ -194,6 +194,7 @@ export function tickConstruction(gameState: GameState, dt: number, ctx: TerrainC
         buildingStateManager: gameState.buildingStateManager,
     });
     system.setTerrainContext(ctx);
+    system.registerEvents(new EventBus());
     system.tick(dt);
 }
 
