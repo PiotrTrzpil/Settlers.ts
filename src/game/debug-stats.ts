@@ -2,6 +2,7 @@ import { reactive, watch } from 'vue';
 import { EntityType, MapObjectType } from './entity';
 import { isResourceDeposit, getEnvironmentSubLayer, EnvironmentSubLayer } from './renderer/layer-visibility';
 import type { Game } from './game';
+import { gameSettings } from './game-settings';
 
 const WINDOW_SIZE = 60;
 const SETTINGS_STORAGE_KEY = 'settlers_debug_settings';
@@ -523,8 +524,9 @@ class DebugStats {
     private static readonly ENTITY_COUNT_INTERVAL = 500; // ms
 
     public updateFromGame(game: Game): void {
-        // Expose game reference for e2e tests (Vue internals are stripped in prod builds)
+        // Expose references for e2e tests (Vue internals are stripped in prod builds)
         (window as any).__settlers_game__ = game;
+        (window as any).__settlers_game_settings__ = gameSettings;
         const gameState = game.state;
 
         // Always update total count (cheap)

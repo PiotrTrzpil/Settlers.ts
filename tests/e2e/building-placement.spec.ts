@@ -325,14 +325,10 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
             return;
         }
 
-        const countBefore = await gp.getDebugField('entityCount');
         // Spawn unit at the buildable tile location
         const entity = await gp.spawnUnit(UnitType.Builder, buildableTile.x, buildableTile.y);
 
-        // Debug stats throttle updates, so wait for refresh
-        await gp.waitForEntityCountAbove(countBefore, Timeout.DEFAULT);
-
-        // Entity should be at the specified tile
+        // Check spawn succeeded first (spawnUnit returns entity synchronously if successful)
         expect(entity).not.toBeNull();
         expect(entity!.x).toBe(buildableTile.x);
         expect(entity!.y).toBe(buildableTile.y);

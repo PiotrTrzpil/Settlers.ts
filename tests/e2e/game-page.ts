@@ -194,9 +194,15 @@ export class GamePage {
         );
     }
 
-    /** Wait for game loaded + renderer ready + N frames rendered. */
+    /**
+     * Wait for game loaded + renderer ready + N frames rendered.
+     *
+     * Note: We skip the DOM element wait (waitForGameUi) here because:
+     * 1. The gameLoaded flag is only set AFTER the Vue component mounts
+     * 2. By the time gameLoaded && rendererReady is true, the DOM is ready
+     * 3. JS-based polling is faster than DOM element polling (~2s savings)
+     */
     async waitForReady(minFrames: number = Frames.RENDER_SETTLE, timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
-        await this.waitForGameUi(timeout);
         await this._waitForFunction(
             'frame:waitForReady:gameLoaded && rendererReady',
             () => {
@@ -283,6 +289,21 @@ export class GamePage {
     }
 
     // ── Game state (via __settlers_game__) ─────────────────
+
+    /**
+     * Set game speed multiplier. Higher values = faster simulation.
+     * Useful for speeding up movement tests.
+     * @param speed - Speed multiplier (1.0 = normal, 4.0 = 4x faster)
+     */
+    async setGameSpeed(speed: number): Promise<void> {
+        await this.page.evaluate((s) => {
+            // gameSettings is imported globally in the game
+            const settings = (window as any).__settlers_game_settings__;
+            if (settings?.state) {
+                settings.state.gameSpeed = s;
+            }
+        }, speed);
+    }
 
     /** Read structured game state including entities and map size. */
     async getGameState(): Promise<{

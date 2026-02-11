@@ -222,7 +222,7 @@ test.describe('Direction Tracking', { tag: '@animations' }, () => {
         expect(animState!.direction).toBeLessThanOrEqual(5);
     });
 
-    test('direction updates when path changes', async({ gp }) => {
+    test('direction updates when path changes', async({ gpNormal: gp }) => {
         const page = gp.page;
 
         // Spawn unit and start moving
@@ -259,7 +259,7 @@ test.describe('Direction Tracking', { tag: '@animations' }, () => {
         expect(newState!.direction).toBeLessThanOrEqual(5);
     });
 
-    test('multiple direction changes during movement are handled', async({ gp }) => {
+    test('multiple direction changes during movement are handled', async({ gpNormal: gp }) => {
         const page = gp.page;
 
         // Track direction samples over time
@@ -313,7 +313,7 @@ test.describe('Direction Tracking', { tag: '@animations' }, () => {
 });
 
 test.describe('Animation State Initialization', { tag: '@animations' }, () => {
-    test('animation state exists after unit spawns and moves', async({ gp }) => {
+    test('animation state exists after unit spawns and moves', async({ gpNormal: gp }) => {
         const page = gp.page;
 
         // Spawn unit and start movement to trigger animation initialization
@@ -439,7 +439,7 @@ test.describe('Movement Events', { tag: '@animations' }, () => {
 });
 
 test.describe('Movement and Animation Consistency', { tag: '@animations' }, () => {
-    test('movement controller state matches animation playing state', async({ gp }) => {
+    test('movement controller state matches animation playing state', async({ gpNormal: gp }) => {
         const page = gp.page;
 
         const unit = await gp.spawnUnit(1);

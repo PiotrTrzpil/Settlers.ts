@@ -56,8 +56,10 @@ export { WaitProfiler } from './wait-profiler';
 
 /** Fixture types for test function signature */
 type TestFixtures = {
-    /** GamePage with testMap pre-loaded. State is reset before each test. */
+    /** GamePage with testMap pre-loaded, 4x speed. State is reset before each test. */
     gp: GamePage;
+    /** GamePage with 1x speed for timing-sensitive tests (animation observation). */
+    gpNormal: GamePage;
     /** GamePage with UI reset to select mode + Buildings tab (for UI interaction tests). */
     gpWithUI: GamePage;
     /** GamePage with a Lumberjack building already placed. */
@@ -68,6 +70,8 @@ type TestFixtures = {
     gpWithMovingUnit: GamePage;
     /** GamePage at a specific camera position (center of map). */
     gpCentered: GamePage;
+    /** GamePage with 4x game speed for faster movement tests. */
+    gpFast: GamePage;
 };
 
 type WorkerFixtures = {
@@ -106,7 +110,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     // Test-scoped fixtures: reset state before each test
     // ─────────────────────────────────────────────────────────────────────────
 
-    /** Base fixture: minimal reset, clean state (no UI interaction) */
+    /** Base fixture: minimal reset, clean state, 4x game speed (no UI interaction) */
     gp: [async({ testMapPage }, use) => {
         const gp = new GamePage(testMapPage);
 
@@ -114,6 +118,20 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         // No UI clicks - most tests use game.execute() APIs and don't need UI state
         await gp.resetGameState();
 
+        // Use 4x speed by default for faster tests
+        await gp.setGameSpeed(4.0);
+
+        await use(gp);
+
+        // Reset speed after test
+        await gp.setGameSpeed(1.0);
+    }, { timeout: Timeout.MOVEMENT }],
+
+    /** 1x speed fixture for timing-sensitive tests (animation observation during movement) */
+    gpNormal: [async({ testMapPage }, use) => {
+        const gp = new GamePage(testMapPage);
+        await gp.resetGameState();
+        await gp.setGameSpeed(1.0);
         await use(gp);
     }, { timeout: Timeout.MOVEMENT }],
 
@@ -188,5 +206,17 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         }
 
         await use(gp);
+    }, { timeout: Timeout.MOVEMENT }],
+
+    /** GamePage with 4x game speed for faster movement tests */
+    gpFast: [async({ testMapPage }, use) => {
+        const gp = new GamePage(testMapPage);
+        await gp.resetGameState();
+        await gp.setGameSpeed(4.0);
+
+        await use(gp);
+
+        // Reset speed after test
+        await gp.setGameSpeed(1.0);
     }, { timeout: Timeout.MOVEMENT }],
 });
