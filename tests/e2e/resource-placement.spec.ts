@@ -127,8 +127,8 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         const box = await gp.canvas.boundingBox();
         await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
 
-        // Wait a few frames for any potential side effects
-        await gp.waitForFrames(5);
+        // Wait a frame for any potential side effects
+        await gp.waitForFrames(1);
 
         const countAfter = await gp.getDebugField('entityCount');
         expect(countAfter).toBe(countBefore);

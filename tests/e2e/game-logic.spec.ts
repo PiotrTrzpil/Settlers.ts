@@ -123,7 +123,7 @@ test.describe('Canvas Interaction', { tag: '@smoke' }, () => {
         await gp.waitForReady();
 
         await gp.canvas.dispatchEvent('wheel', { deltaY: 100 });
-        await gp.waitForFrames(3);
+        await gp.waitForFrames(1);
 
         checkErrors();
     });
@@ -136,7 +136,7 @@ test.describe('Canvas Interaction', { tag: '@smoke' }, () => {
         await gp.waitForReady();
 
         await gp.canvas.click({ position: { x: 400, y: 400 } });
-        await gp.waitForFrames(3);
+        await gp.waitForFrames(1);
 
         checkErrors();
     });
@@ -148,6 +148,6 @@ test.describe('Canvas Interaction', { tag: '@smoke' }, () => {
         await gp.waitForReady();
 
         await gp.canvas.click({ button: 'right', position: { x: 400, y: 400 } });
-        await gp.waitForFrames(3);
+        await gp.waitForFrames(1);
     });
 });

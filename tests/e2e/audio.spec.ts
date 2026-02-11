@@ -12,7 +12,7 @@ test.describe('Audio System', { tag: '@smoke' }, () => {
     test('should have music enabled by default', async({ gp }) => {
         // Unlock audio context via user interaction
         await gp.unlockAudio();
-        await gp.waitForFrames(5);
+        await gp.waitForFrames(1);
 
         const audioState = await gp.getAudioState();
         expect(audioState.musicEnabled).toBe(true);
@@ -40,7 +40,7 @@ test.describe('Audio System', { tag: '@smoke' }, () => {
 
     test('should not have multiple music IDs (no overlap)', async({ gp }) => {
         await gp.unlockAudio();
-        await gp.waitForFrames(5);
+        await gp.waitForFrames(1);
 
         // Sample audio state multiple times over a short period
         const samples: string[] = [];
@@ -63,7 +63,7 @@ test.describe('Audio System', { tag: '@smoke' }, () => {
 
     test('should clear music state when disabled', async({ gp }) => {
         await gp.unlockAudio();
-        await gp.waitForFrames(5);
+        await gp.waitForFrames(1);
 
         // Disable music
         await gp.toggleMusic(false);

@@ -149,7 +149,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         }
 
         await gp.moveCamera(buildableTile.x, buildableTile.y);
-        await gp.waitForFrames(5);
+        await gp.waitForFrames(1);
 
         // Enter placement mode
         await page.locator('[data-testid="btn-woodcutter"]').click();
@@ -161,8 +161,8 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         const box = await gp.canvas.boundingBox();
         await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
 
-        // Wait a few frames for placement to process
-        await gp.waitForFrames(5);
+        // Wait a frame for placement to process
+        await gp.waitForFrames(1);
 
         const countAfter = await gp.getDebugField('buildingCount');
 
@@ -189,8 +189,8 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         const box = await gp.canvas.boundingBox();
         await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
 
-        // Wait a few frames for any potential side effects
-        await gp.waitForFrames(5);
+        // Wait a frame for any potential side effects
+        await gp.waitForFrames(1);
 
         await expect(gp).toHaveBuildingCount(buildingsBefore);
     });
