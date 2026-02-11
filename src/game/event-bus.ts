@@ -8,6 +8,8 @@ import type { BuildingType } from './buildings/types';
 import type { UnitType } from './unit-types';
 import type { CarrierJob } from './features/carriers';
 import type { BuildingCleanupResult } from './features/logistics/logistics-dispatcher';
+import type { EMaterialType } from './economy';
+import type { RequestPriority } from './features/logistics';
 
 /** Event map defining all game events and their payloads */
 export interface GameEvents {
@@ -134,6 +136,42 @@ export interface GameEvents {
 
     /** Emitted when logistics cleanup completes after a building is destroyed */
     'logistics:buildingCleanedUp': BuildingCleanupResult;
+
+    /** Emitted when a new resource request is created */
+    'request:created': {
+        requestId: number;
+        buildingId: number;
+        materialType: EMaterialType;
+        amount: number;
+        priority: RequestPriority;
+    };
+
+    // === Production Events ===
+
+    /** Emitted when a building starts a production cycle */
+    'production:started': {
+        buildingId: number;
+        buildingType: BuildingType;
+        outputMaterial: EMaterialType;
+    };
+
+    /** Emitted when a building completes a production cycle */
+    'production:completed': {
+        buildingId: number;
+        buildingType: BuildingType;
+        outputMaterial: EMaterialType;
+    };
+
+    // === Inventory Events ===
+
+    /** Emitted when a building's inventory changes */
+    'inventory:changed': {
+        buildingId: number;
+        materialType: EMaterialType;
+        slotType: 'input' | 'output';
+        previousAmount: number;
+        newAmount: number;
+    };
 }
 
 type EventHandler<T> = (payload: T) => void;

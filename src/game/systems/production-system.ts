@@ -1,18 +1,38 @@
 /**
- * Production System - handles building production cycles.
+ * Production System - handles automatic building production cycles.
+ *
+ * This system manages AUTOMATIC production buildings where the building itself
+ * transforms inputs into outputs without worker movement.
+ *
+ * ## Production Types
+ *
+ * There are two types of production in the game:
+ *
+ * ### 1. AUTOMATIC (this system)
+ * - Building transforms inputs to outputs automatically
+ * - No worker movement required - building does the work
+ * - Examples: Mill (GRAIN → FLOUR), IronSmelter (IRONORE + COAL → IRONBAR)
+ *
+ * ### 2. WORKER-BASED (SettlerTaskSystem)
+ * - Worker travels to external resource or workspace
+ * - Worker brings material back to building or works at the building
+ * - Examples: Woodcutter (travels to tree → brings LOG), Sawmill (worker at building)
  *
  * Responsibilities:
  * - Create resource requests when buildings need input materials
  * - Process production when buildings have required inputs
  * - Manage production timers and output
+ * - Emit production:started and production:completed events
  *
  * State is stored on entity.production (RFC: Entity-Owned State).
  */
 
 import type { TickSystem } from '../tick-system';
 import type { GameState } from '../game-state';
+import type { EventBus } from '../event-bus';
 import { EntityType, BuildingType } from '../entity';
 import { EMaterialType } from '../economy';
+import { BUILDING_PRODUCTIONS } from '../economy/building-production';
 import { LogHandler } from '@/utilities/log-handler';
 import { RequestPriority } from '../features/logistics';
 import { consumesMaterials, getInventoryConfig, type InventoryConfig } from '../features/inventory';
@@ -44,17 +64,27 @@ export interface ProductionState {
     progress: number;
     /** Whether we have active requests for each input slot */
     pendingRequests: Set<EMaterialType>;
+    /** True if we emitted production:started for the current cycle */
+    cycleStarted: boolean;
+}
+
+/** Configuration for ProductionSystem dependencies */
+export interface ProductionSystemConfig {
+    gameState: GameState;
+    eventBus?: EventBus;
 }
 
 /**
- * System that manages production buildings.
+ * System that manages automatic production buildings.
  * State is stored on entity.production (RFC: Entity-Owned State).
  */
 export class ProductionSystem implements TickSystem {
     private gameState: GameState;
+    private eventBus: EventBus | undefined;
 
-    constructor(gameState: GameState) {
-        this.gameState = gameState;
+    constructor(config: ProductionSystemConfig) {
+        this.gameState = config.gameState;
+        this.eventBus = config.eventBus;
     }
 
     tick(dt: number): void {
@@ -76,7 +106,7 @@ export class ProductionSystem implements TickSystem {
     private updateProduction(entity: { id: number; production?: ProductionState }, buildingType: BuildingType, dt: number): void {
         // Get or create production state on entity (RFC: Entity-Owned State)
         if (!entity.production) {
-            entity.production = { progress: 0, pendingRequests: new Set() };
+            entity.production = { progress: 0, pendingRequests: new Set(), cycleStarted: false };
         }
         const state = entity.production;
 
@@ -87,7 +117,24 @@ export class ProductionSystem implements TickSystem {
 
         // Check if we can produce (have all inputs and output space)
         if (!this.canProduce(entity.id)) {
+            // Reset cycle started if we can't produce (inputs depleted)
+            if (state.progress === 0) {
+                state.cycleStarted = false;
+            }
             return;
+        }
+
+        // Emit production:started only once per cycle
+        if (!state.cycleStarted) {
+            state.cycleStarted = true;
+            const production = BUILDING_PRODUCTIONS.get(buildingType);
+            if (production && this.eventBus) {
+                this.eventBus.emit('production:started', {
+                    buildingId: entity.id,
+                    buildingType,
+                    outputMaterial: production.output,
+                });
+            }
         }
 
         // Update production progress
@@ -97,6 +144,7 @@ export class ProductionSystem implements TickSystem {
         if (state.progress >= 1) {
             this.completeProduction(entity.id, buildingType);
             state.progress = 0;
+            state.cycleStarted = false;
         }
     }
 
@@ -146,6 +194,16 @@ export class ProductionSystem implements TickSystem {
     private completeProduction(buildingId: number, buildingType: BuildingType): void {
         this.gameState.inventoryManager.consumeProductionInputs(buildingId);
         this.gameState.inventoryManager.produceOutput(buildingId);
+
+        // Emit production:completed event
+        const production = BUILDING_PRODUCTIONS.get(buildingType);
+        if (production && this.eventBus) {
+            this.eventBus.emit('production:completed', {
+                buildingId,
+                buildingType,
+                outputMaterial: production.output,
+            });
+        }
 
         log.debug(`Building ${buildingId} (${BuildingType[buildingType]}) produced output`);
     }
