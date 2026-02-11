@@ -103,4 +103,10 @@ export interface StackedResourceState {
     entityId: number;
     /** Number of items in the stack (1 to MAX_RESOURCE_STACK_SIZE) */
     quantity: number;
+    /**
+     * If set, this resource pile is a visual representation of a building's inventory.
+     * Resources with a buildingId are reserved for that building and should not be
+     * picked up by carriers or used by other systems.
+     */
+    buildingId?: number;
 }

@@ -217,6 +217,13 @@ export function getBuildingHotspot(
  * @param buildingType Type of building
  * @param raceId Optional race ID for race-specific buildings (defaults to RACE_ROMAN)
  */
+/**
+ * Scale factor for building footprints from game data.
+ * Game data footprints are larger than visual building size (include blocking area).
+ * Scale of 0.5 means footprint is shrunk to ~half size toward center.
+ */
+const FOOTPRINT_SCALE = 0.5;
+
 export function getBuildingFootprint(
     x: number,
     y: number,
@@ -230,7 +237,8 @@ export function getBuildingFootprint(
         if (xmlId) {
             const buildingInfo = loader.getBuilding(raceId, xmlId);
             if (buildingInfo && buildingInfo.buildingPosLines.length > 0) {
-                return getBuildingFootprintAt(buildingInfo, x, y);
+                const fullFootprint = getBuildingFootprintAt(buildingInfo, x, y);
+                return scaleFootprint(fullFootprint, FOOTPRINT_SCALE);
             }
         }
     }
@@ -244,4 +252,39 @@ export function getBuildingFootprint(
         }
     }
     return tiles;
+}
+
+/**
+ * Scale a footprint toward its center.
+ * Tiles further from center are removed based on scale factor.
+ */
+function scaleFootprint(tiles: TileCoord[], scale: number): TileCoord[] {
+    if (tiles.length === 0 || scale >= 1) return tiles;
+
+    // Find center of footprint
+    let sumX = 0, sumY = 0;
+    for (const tile of tiles) {
+        sumX += tile.x;
+        sumY += tile.y;
+    }
+    const centerX = sumX / tiles.length;
+    const centerY = sumY / tiles.length;
+
+    // Find max distance from center
+    let maxDist = 0;
+    for (const tile of tiles) {
+        const dx = tile.x - centerX;
+        const dy = tile.y - centerY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > maxDist) maxDist = dist;
+    }
+
+    // Keep only tiles within scaled distance
+    const threshold = maxDist * scale;
+    return tiles.filter(tile => {
+        const dx = tile.x - centerX;
+        const dy = tile.y - centerY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        return dist <= threshold;
+    });
 }

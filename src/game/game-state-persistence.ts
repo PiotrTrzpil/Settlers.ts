@@ -46,8 +46,8 @@ export interface GameStateSnapshot {
     }>;
     nextId: number;
     rngSeed: number;
-    /** Resource stack quantities (can't be rebuilt from entity alone) */
-    resourceQuantities: Array<{ entityId: number; quantity: number }>;
+    /** Resource stack quantities and building ownership */
+    resourceQuantities: Array<{ entityId: number; quantity: number; buildingId?: number }>;
     /** Building construction states (phase, progress, etc.) */
     buildingStates?: SerializedBuildingState[];
 }
@@ -76,9 +76,9 @@ export function createSnapshot(gameState: GameState): GameStateSnapshot {
         variation: e.variation,
     }));
 
-    const resourceQuantities: Array<{ entityId: number; quantity: number }> = [];
+    const resourceQuantities: Array<{ entityId: number; quantity: number; buildingId?: number }> = [];
     for (const [entityId, state] of gameState.resourceStates) {
-        resourceQuantities.push({ entityId, quantity: state.quantity });
+        resourceQuantities.push({ entityId, quantity: state.quantity, buildingId: state.buildingId });
     }
 
     // Save building construction states
@@ -230,11 +230,12 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
         }
     }
 
-    // Restore resource quantities (these aren't set by addEntity)
+    // Restore resource quantities and building ownership (these aren't set by addEntity)
     for (const rq of snapshot.resourceQuantities) {
         const resourceState = state.resourceStates.get(rq.entityId);
         if (resourceState) {
             resourceState.quantity = rq.quantity;
+            resourceState.buildingId = rq.buildingId;
         }
     }
 

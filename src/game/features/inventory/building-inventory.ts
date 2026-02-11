@@ -9,6 +9,9 @@ import { BUILDING_PRODUCTIONS } from '../../economy/building-production';
 import type { InventorySlot } from './inventory-slot';
 import { createSlot, deposit, withdraw, canAccept, canProvide, getAvailableSpace } from './inventory-slot';
 import { getInventoryConfig, type SlotConfig } from './inventory-configs';
+import { LogHandler } from '@/utilities/log-handler';
+
+const log = new LogHandler('BuildingInventory');
 
 /**
  * Complete inventory state for a building.
@@ -35,6 +38,8 @@ export type InventoryChangeCallback = (
     newAmount: number
 ) => void;
 
+let _instanceCounter = 0;
+
 /**
  * Manages building inventories across the game.
  * Provides methods to create, query, and modify building inventories.
@@ -42,6 +47,11 @@ export type InventoryChangeCallback = (
 export class BuildingInventoryManager {
     private inventories: Map<number, BuildingInventory> = new Map();
     private changeListeners: Set<InventoryChangeCallback> = new Set();
+    private _debugId = ++_instanceCounter;
+
+    constructor() {
+        log.debug(`Created instance #${this._debugId}`);
+    }
 
     /**
      * Register a callback for inventory changes.
@@ -49,6 +59,7 @@ export class BuildingInventoryManager {
      */
     onChange(callback: InventoryChangeCallback): void {
         this.changeListeners.add(callback);
+        log.debug(`#${this._debugId} Registered change listener, total: ${this.changeListeners.size}`);
     }
 
     /**
@@ -70,6 +81,7 @@ export class BuildingInventoryManager {
         newAmount: number
     ): void {
         if (previousAmount === newAmount) return; // No actual change
+        log.debug(`#${this._debugId} emitChange: building=${buildingId}, ${slotType}, ${previousAmount}->${newAmount}, listeners=${this.changeListeners.size}`);
         for (const listener of this.changeListeners) {
             listener(buildingId, materialType, slotType, previousAmount, newAmount);
         }
@@ -83,6 +95,7 @@ export class BuildingInventoryManager {
      */
     createInventory(buildingId: number, buildingType: BuildingType): BuildingInventory {
         const config = getInventoryConfig(buildingType);
+        log.debug(`#${this._debugId} createInventory: building=${buildingId}, type=${BuildingType[buildingType]}, outputs=${config.outputSlots.length}`);
 
         const inventory: BuildingInventory = {
             buildingId,
@@ -137,8 +150,15 @@ export class BuildingInventoryManager {
      */
     getOutputSlot(buildingId: number, materialType: EMaterialType): InventorySlot | undefined {
         const inventory = this.inventories.get(buildingId);
-        if (!inventory) return undefined;
-        return inventory.outputSlots.find(slot => slot.materialType === materialType);
+        if (!inventory) {
+            log.warn(`#${this._debugId} No inventory for building ${buildingId}. Known: [${[...this.inventories.keys()].join(', ')}]`);
+            return undefined;
+        }
+        const slot = inventory.outputSlots.find(slot => slot.materialType === materialType);
+        if (!slot) {
+            log.warn(`#${this._debugId} Building ${buildingId} (${BuildingType[inventory.buildingType]}) has no slot for ${EMaterialType[materialType]}. Has: [${inventory.outputSlots.map(s => EMaterialType[s.materialType]).join(', ')}]`);
+        }
+        return slot;
     }
 
     /**
@@ -252,12 +272,17 @@ export class BuildingInventoryManager {
      * @returns Amount deposited (may be less than requested if slot is full)
      */
     depositOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
+        log.debug(`#${this._debugId} depositOutput: building=${buildingId}, listeners=${this.changeListeners.size}`);
         const slot = this.getOutputSlot(buildingId, materialType);
-        if (!slot) return 0;
+        if (!slot) {
+            return 0;
+        }
 
         const previousAmount = slot.currentAmount;
         const overflow = deposit(slot, amount);
         const deposited = amount - overflow;
+
+        log.debug(`#${this._debugId} depositOutput: prev=${previousAmount}, deposited=${deposited}, overflow=${overflow}`);
 
         if (deposited > 0) {
             this.emitChange(buildingId, materialType, 'output', previousAmount, slot.currentAmount);
@@ -308,6 +333,44 @@ export class BuildingInventoryManager {
             }
         }
 
+        return true;
+    }
+
+    /**
+     * Consume inputs for one production cycle.
+     * Withdraws 1 of each required input material.
+     * @param buildingId Entity ID of the building
+     * @returns True if inputs were consumed successfully
+     */
+    consumeProductionInputs(buildingId: number): boolean {
+        const inventory = this.inventories.get(buildingId);
+        if (!inventory) return false;
+
+        const production = BUILDING_PRODUCTIONS.get(inventory.buildingType);
+        if (!production) return false;
+
+        // Consume 1 of each required input
+        for (const inputMaterial of production.inputs) {
+            this.withdrawInput(buildingId, inputMaterial, 1);
+        }
+
+        return true;
+    }
+
+    /**
+     * Produce output for one production cycle.
+     * Deposits 1 of the output material.
+     * @param buildingId Entity ID of the building
+     * @returns True if output was produced successfully
+     */
+    produceOutput(buildingId: number): boolean {
+        const inventory = this.inventories.get(buildingId);
+        if (!inventory) return false;
+
+        const production = BUILDING_PRODUCTIONS.get(inventory.buildingType);
+        if (!production || production.output === EMaterialType.NO_MATERIAL) return false;
+
+        this.depositOutput(buildingId, production.output, 1);
         return true;
     }
 

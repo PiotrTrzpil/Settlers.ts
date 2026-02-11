@@ -9,6 +9,7 @@
 import type { GameState } from '../../game-state';
 import type { TickSystem } from '../../tick-system';
 import { EntityType, UnitType, Entity } from '../../entity';
+import { EMaterialType } from '../../economy';
 import { LogHandler } from '@/utilities/log-handler';
 import { hexDistance } from '../hex-directions';
 import {
@@ -29,7 +30,6 @@ import {
     type AnimationType,
 } from './types';
 import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDefinitions } from './loader';
-import { getWorkerWorkplace } from '../../unit-types';
 
 const log = new LogHandler('SettlerTaskSystem');
 
@@ -76,7 +76,7 @@ export class SettlerTaskSystem implements TickSystem {
                 const settler = this.gameState.getEntity(settlerId);
                 if (!settler) return null;
 
-                const workplace = this.findHomeBuilding(settler);
+                const workplace = this.gameState.findNearestWorkplace(settler);
                 if (!workplace) return null;
 
                 return { entityId: workplace.id, x: workplace.x, y: workplace.y };
@@ -90,14 +90,7 @@ export class SettlerTaskSystem implements TickSystem {
 
             onWorkStart: (targetId: number) => {
                 // Consume inputs when starting work
-                const inventory = this.gameState.inventoryManager.getInventory(targetId);
-                if (!inventory) return;
-
-                for (const slot of inventory.inputSlots) {
-                    if (slot.currentAmount > 0) {
-                        this.gameState.inventoryManager.withdrawInput(targetId, slot.materialType, 1);
-                    }
-                }
+                this.gameState.inventoryManager.consumeProductionInputs(targetId);
             },
 
             onWorkTick: (_targetId: number, progress: number) => {
@@ -107,12 +100,7 @@ export class SettlerTaskSystem implements TickSystem {
 
             onWorkComplete: (targetId: number) => {
                 // Produce outputs when work completes
-                const inventory = this.gameState.inventoryManager.getInventory(targetId);
-                if (!inventory) return;
-
-                for (const slot of inventory.outputSlots) {
-                    this.gameState.inventoryManager.depositOutput(targetId, slot.materialType, 1);
-                }
+                this.gameState.inventoryManager.produceOutput(targetId);
             },
         };
     }
@@ -142,39 +130,6 @@ export class SettlerTaskSystem implements TickSystem {
     registerWorkHandler(searchType: SearchType, handler: WorkHandler): void {
         this.workHandlers.set(searchType, handler);
         log.debug(`Registered work handler for ${searchType}`);
-    }
-
-    /**
-     * Find the nearest workplace building for a settler.
-     */
-    private findHomeBuilding(settler: Entity): Entity | null {
-        const unitType = settler.subType as UnitType;
-        const workplaceType = getWorkerWorkplace(unitType);
-
-        if (workplaceType === undefined) {
-            return null;
-        }
-
-        // Find nearest building of the correct type for this player
-        let nearest: Entity | null = null;
-        let nearestDistSq = Infinity;
-
-        for (const entity of this.gameState.entities) {
-            if (entity.type !== EntityType.Building) continue;
-            if (entity.subType !== workplaceType) continue;
-            if (entity.player !== settler.player) continue;
-
-            const dx = entity.x - settler.x;
-            const dy = entity.y - settler.y;
-            const distSq = dx * dx + dy * dy;
-
-            if (distSq < nearestDistSq) {
-                nearestDistSq = distSq;
-                nearest = entity;
-            }
-        }
-
-        return nearest;
     }
 
     /** TickSystem interface */
@@ -231,11 +186,10 @@ export class SettlerTaskSystem implements TickSystem {
         const handler = this.workHandlers.get(config.search);
         if (!handler) return;
 
-        // Search for work
-        const target = handler.findTarget(settler.x, settler.y, settler.id);
-        if (!target) return;
+        // Find home building (workplace) for this settler
+        const homeBuilding = this.gameState.findNearestWorkplace(settler);
 
-        // Start the first job in the settler's job list
+        // Get job definition to check what output the settler produces
         const jobId = `${UnitType[settler.subType].toLowerCase()}.${config.jobs[0]}`;
         const tasks = this.jobDefinitions.get(jobId);
         if (!tasks || tasks.length === 0) {
@@ -243,8 +197,24 @@ export class SettlerTaskSystem implements TickSystem {
             return;
         }
 
-        // Find home building (workplace) for this settler
-        const homeBuilding = this.findHomeBuilding(settler);
+        // Check if home building can store the output before starting work
+        if (homeBuilding) {
+            const pickupTask = tasks.find(t => t.task === TaskType.PICKUP && t.good !== undefined);
+            if (pickupTask && pickupTask.good !== undefined) {
+                const canStore = this.gameState.inventoryManager.canAcceptInput(homeBuilding.id, pickupTask.good, 1) ||
+                                 this.gameState.inventoryManager.getInputSpace(homeBuilding.id, pickupTask.good) > 0 ||
+                                 this.canStoreInOutput(homeBuilding.id, pickupTask.good);
+                if (!canStore) {
+                    // Output full - return home and wait there
+                    this.returnHomeAndWait(settler, homeBuilding);
+                    return;
+                }
+            }
+        }
+
+        // Search for work
+        const target = handler.findTarget(settler.x, settler.y, settler.id);
+        if (!target) return;
 
         runtime.state = SettlerState.WORKING;
         runtime.job = {
@@ -258,6 +228,42 @@ export class SettlerTaskSystem implements TickSystem {
         };
 
         log.debug(`Settler ${settler.id} starting job ${jobId}, target ${target.entityId}, home ${homeBuilding?.id ?? 'none'}`);
+    }
+
+    /**
+     * Check if building can store a material in its output slot.
+     */
+    private canStoreInOutput(buildingId: number, materialType: EMaterialType): boolean {
+        const inventory = this.gameState.inventoryManager.getInventory(buildingId);
+        if (!inventory) return false;
+
+        const slot = inventory.outputSlots.find(s => s.materialType === materialType);
+        if (!slot) return false;
+
+        return slot.currentAmount < slot.maxCapacity;
+    }
+
+    /**
+     * Make settler return to home building and wait there.
+     * Used when output is full and settler can't work.
+     */
+    private returnHomeAndWait(settler: Entity, homeBuilding: Entity): void {
+        const controller = this.gameState.movement.getController(settler.id);
+        if (!controller) return;
+
+        const dist = hexDistance(settler.x, settler.y, homeBuilding.x, homeBuilding.y);
+
+        // If already at home, just stay idle
+        if (dist <= 1) {
+            this.setIdleAnimation(settler);
+            return;
+        }
+
+        // If not moving, start moving home
+        if (controller.state === 'idle') {
+            this.gameState.movement.moveUnit(settler.id, homeBuilding.x, homeBuilding.y);
+            this.animationService.play(settler.id, ANIMATION_SEQUENCES.WALK, { loop: true });
+        }
     }
 
     private handleWorking(settler: Entity, config: SettlerConfig, runtime: SettlerRuntime, dt: number): void {
@@ -456,7 +462,7 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     private executeDropoff(settler: Entity, job: SettlerJobState): TaskResult {
-        if (!job.carryingGood) {
+        if (job.carryingGood === null || job.carryingGood === undefined) {
             return TaskResult.DONE;
         }
 

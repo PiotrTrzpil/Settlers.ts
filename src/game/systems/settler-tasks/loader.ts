@@ -3,13 +3,51 @@
  */
 
 import { parse as parseYaml } from 'yaml';
-import type { SettlerConfig, TaskNode, SearchType, TaskType, AnimationType } from './types';
+import type { SettlerConfig, TaskNode, AnimationType } from './types';
+import { SearchType, TaskType } from './types';
 import { UnitType } from '../../entity';
-import type { EMaterialType } from '../../economy';
+import { EMaterialType } from '../../economy';
 
 // Import YAML as raw text (Vite handles this)
 import settlersYaml from './data/settlers.yaml?raw';
 import jobsYaml from './data/jobs.yaml?raw';
+
+/** Parse a material type string from YAML to EMaterialType enum value */
+function parseMaterialType(name: string | undefined): EMaterialType | undefined {
+    if (name === undefined) return undefined;
+    const value = EMaterialType[name as keyof typeof EMaterialType];
+    if (value === undefined) {
+        throw new Error(`Unknown material type in YAML: "${name}". Valid types: ${Object.keys(EMaterialType).filter(k => isNaN(Number(k))).join(', ')}`);
+    }
+    return value;
+}
+
+/** Parse a search type string from YAML */
+function parseSearchType(name: string): SearchType {
+    const validTypes = ['TREE', 'TREE_SEED_POS', 'STONE', 'FISH', 'VENISON', 'GRAIN', 'RESOURCE_POS', 'GOOD', 'CONSTRUCTION', 'TERRAIN', 'FORGE', 'WORKPLACE'];
+    if (!validTypes.includes(name)) {
+        throw new Error(`Unknown search type in YAML: "${name}". Valid types: ${validTypes.join(', ')}`);
+    }
+    return name as SearchType;
+}
+
+/** Parse a task type string from YAML */
+function parseTaskType(name: string): TaskType {
+    const validTypes = ['GO_TO_TARGET', 'GO_TO_POS', 'GO_TO_SOURCE', 'GO_TO_DEST', 'GO_HOME', 'SEARCH_POS', 'WORK_ON_ENTITY', 'STAY', 'WORK', 'WAIT', 'PICKUP', 'DROPOFF'];
+    if (!validTypes.includes(name)) {
+        throw new Error(`Unknown task type in YAML: "${name}". Valid types: ${validTypes.join(', ')}`);
+    }
+    return name as TaskType;
+}
+
+/** Parse an animation type string from YAML */
+function parseAnimationType(name: string): AnimationType {
+    const validTypes = ['walk', 'idle', 'carry', 'pickup', 'dropoff', 'chop', 'harvest', 'plant', 'mine', 'hammer', 'dig', 'work'];
+    if (!validTypes.includes(name)) {
+        throw new Error(`Unknown animation type in YAML: "${name}". Valid types: ${validTypes.join(', ')}`);
+    }
+    return name as AnimationType;
+}
 
 /** Parsed settler configs keyed by settler name */
 export type SettlerConfigs = Map<UnitType, SettlerConfig>;
@@ -53,13 +91,12 @@ export function loadSettlerConfigs(): SettlerConfigs {
     for (const [name, rawConfig] of Object.entries(raw)) {
         const unitType = SETTLER_NAME_MAP[name];
         if (unitType === undefined) {
-            console.warn(`Unknown settler type: ${name}`);
-            continue;
+            throw new Error(`Unknown settler type in YAML: "${name}". Valid types: ${Object.keys(SETTLER_NAME_MAP).join(', ')}`);
         }
 
         configs.set(unitType, {
-            search: rawConfig.search as SearchType,
-            tool: rawConfig.tool as EMaterialType | undefined,
+            search: parseSearchType(rawConfig.search),
+            tool: parseMaterialType(rawConfig.tool),
             jobs: rawConfig.jobs,
         });
     }
@@ -75,11 +112,11 @@ export function loadJobDefinitions(): JobDefinitions {
     const jobs = new Map<string, TaskNode[]>();
 
     for (const [jobId, rawTasks] of Object.entries(raw)) {
-        const tasks: TaskNode[] = rawTasks.map(rawTask => ({
-            task: rawTask.task as TaskType,
-            anim: rawTask.anim as AnimationType,
+        const tasks: TaskNode[] = rawTasks.map((rawTask) => ({
+            task: parseTaskType(rawTask.task),
+            anim: parseAnimationType(rawTask.anim),
             duration: rawTask.duration,
-            good: rawTask.good as EMaterialType | undefined,
+            good: parseMaterialType(rawTask.good),
         }));
 
         jobs.set(jobId, tasks);

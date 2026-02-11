@@ -1,4 +1,5 @@
 import { Entity, EntityType, UnitType, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE, isUnitTypeSelectable, getUnitTypeSpeed } from './entity';
+import { getWorkerWorkplace } from './unit-types';
 import { EMaterialType } from './economy';
 import { MovementSystem, MovementController } from './systems/movement/index';
 import { CarrierManager } from './features/carriers';
@@ -309,6 +310,39 @@ export class GameState {
         );
     }
 
+    /**
+     * Find the nearest workplace building for a settler based on their unit type.
+     * Returns the nearest building of the appropriate type owned by the same player.
+     */
+    public findNearestWorkplace(settler: Entity): Entity | null {
+        const unitType = settler.subType as UnitType;
+        const workplaceType = getWorkerWorkplace(unitType);
+
+        if (workplaceType === undefined) {
+            return null;
+        }
+
+        let nearest: Entity | null = null;
+        let nearestDistSq = Infinity;
+
+        for (const entity of this.entities) {
+            if (entity.type !== EntityType.Building) continue;
+            if (entity.subType !== workplaceType) continue;
+            if (entity.player !== settler.player) continue;
+
+            const dx = entity.x - settler.x;
+            const dy = entity.y - settler.y;
+            const distSq = dx * dx + dy * dy;
+
+            if (distSq < nearestDistSq) {
+                nearestDistSq = distSq;
+                nearest = entity;
+            }
+        }
+
+        return nearest;
+    }
+
     /** Update occupancy when an entity moves */
     public updateEntityPosition(id: number, newX: number, newY: number): void {
         const entity = this.entityMap.get(id);
@@ -416,6 +450,7 @@ export class GameState {
 
     /**
      * Find the nearest stacked resource of a specific material type within a radius.
+     * Excludes resources that belong to a building (have buildingId set).
      */
     public findNearestResource(x: number, y: number, materialType: EMaterialType, radius: number): Entity | undefined {
         let nearest: Entity | undefined;
@@ -424,6 +459,10 @@ export class GameState {
         for (const entity of this.entities) {
             if (entity.type !== EntityType.StackedResource) continue;
             if (entity.subType !== materialType) continue;
+
+            // Skip resources that belong to a building's inventory visualization
+            const state = this.resourceStates.get(entity.id);
+            if (state?.buildingId !== undefined) continue;
 
             const dx = entity.x - x;
             const dy = entity.y - y;
@@ -436,5 +475,25 @@ export class GameState {
         }
 
         return nearest;
+    }
+
+    /**
+     * Mark a stacked resource as belonging to a building's inventory visualization.
+     * Resources with a buildingId are reserved and won't be picked up by carriers.
+     */
+    public setResourceBuildingId(entityId: number, buildingId: number | undefined): void {
+        const state = this.resourceStates.get(entityId);
+        if (state) {
+            state.buildingId = buildingId;
+        }
+    }
+
+    /**
+     * Get the building ID that a stacked resource belongs to.
+     * Returns undefined if the resource is free (not belonging to any building).
+     */
+    public getResourceBuildingId(entityId: number): number | undefined {
+        const state = this.resourceStates.get(entityId);
+        return state?.buildingId;
     }
 }

@@ -297,7 +297,10 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
 
             // Restore to initial map state (trees, buildings, etc. from map load)
             const restored = gameStatePersistence.restoreToInitialState(g);
-            if (!restored) {
+            if (restored) {
+                // Rebuild inventory visualizer state from restored entities
+                g.gameLoop.inventoryVisualizer.rebuildFromExistingEntities();
+            } else {
                 // Fallback: if no initial state, just remove all entities
                 log.warn('No initial state available, removing all entities');
                 g.removeAllEntities();
@@ -394,6 +397,8 @@ export function useMapView(
                 if (snapshot) {
                     log.info('Restoring saved game state...');
                     restoreFromSnapshot(game.value, snapshot);
+                    // Rebuild inventory visualizer state from restored entities
+                    game.value.gameLoop.inventoryVisualizer.rebuildFromExistingEntities();
                 }
 
                 // Start auto-saving (won't save initial state again since we already did)
@@ -429,6 +434,8 @@ export function useMapView(
             if (snapshot) {
                 log.info('Restoring saved game state...');
                 restoreFromSnapshot(result.game, snapshot);
+                // Rebuild inventory visualizer state from restored entities
+                result.game.gameLoop.inventoryVisualizer.rebuildFromExistingEntities();
             }
 
             // Start auto-saving (won't save initial state again since we already did)
