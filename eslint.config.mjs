@@ -116,9 +116,11 @@ export default tseslint.config(
     },
 
     // E2E tests often have long test functions with many assertions
+    // and page.evaluate() callbacks that work with untyped browser globals
     {
         files: ['tests/e2e/**/*.ts'],
         rules: {
+            '@typescript-eslint/no-explicit-any': 'off',
             'max-lines-per-function': 'off',
             'max-depth': ['error', 5],
             'max-len': ['error', { code: 150, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }]

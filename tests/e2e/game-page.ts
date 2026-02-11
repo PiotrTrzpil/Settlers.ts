@@ -804,6 +804,399 @@ export class GamePage {
         }, filter ?? null);
     }
 
+    // ── Unit state queries ────────────────────────────────────
+
+    /**
+     * Get the unit state for a specific entity (path, movement progress, etc).
+     * Encapsulates access to game.state.unitStates.
+     */
+    async getUnitState(unitId: number): Promise<{
+        prevX: number;
+        prevY: number;
+        pathLength: number;
+        pathIndex: number;
+        moveProgress: number;
+    } | null> {
+        return this.page.evaluate(({ id }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            const us = game.state.unitStates.get(id);
+            if (!us) return null;
+            return {
+                prevX: us.prevX,
+                prevY: us.prevY,
+                pathLength: us.path.length,
+                pathIndex: us.pathIndex,
+                moveProgress: us.moveProgress,
+            };
+        }, { id: unitId });
+    }
+
+    /**
+     * Get animation state for a unit from AnimationService.
+     */
+    async getAnimationState(unitId: number): Promise<{
+        sequenceKey: string;
+        currentFrame: number;
+        direction: number;
+        playing: boolean;
+        loop: boolean;
+        elapsedMs: number;
+    } | null> {
+        return this.page.evaluate(({ id }) => {
+            const game = (window as any).__settlers_game__;
+            const animService = game?.gameLoop?.animationService;
+            if (!animService) return null;
+            const state = animService.getState(id);
+            if (!state) return null;
+            return {
+                sequenceKey: state.sequenceKey,
+                currentFrame: state.currentFrame,
+                direction: state.direction,
+                playing: state.playing,
+                loop: state.loop,
+                elapsedMs: state.elapsedMs,
+            };
+        }, { id: unitId });
+    }
+
+    /**
+     * Get movement controller state for a unit.
+     */
+    async getMovementControllerState(unitId: number): Promise<{
+        state: string;
+        direction: number;
+        tileX: number;
+        tileY: number;
+    } | null> {
+        return this.page.evaluate(({ id }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            const controller = game.state.movement.getController(id);
+            if (!controller) return null;
+            return {
+                state: controller.state,
+                direction: controller.direction,
+                tileX: controller.tileX,
+                tileY: controller.tileY,
+            };
+        }, { id: unitId });
+    }
+
+    /**
+     * Wait for a unit's movement controller to reach 'idle' state.
+     */
+    async waitForMovementIdle(unitId: number, timeout: number = Timeout.DEFAULT): Promise<void> {
+        await this._waitForFunction(
+            `movement:waitForMovementIdle:controller idle for unit ${unitId}`,
+            (id) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return false;
+                const controller = game.state.movement.getController(id);
+                return controller && controller.state === 'idle';
+            },
+            unitId,
+            { timeout },
+        );
+    }
+
+    /**
+     * Sample animation states over multiple frames while a unit is moving.
+     * Returns an array of animation snapshots.
+     */
+    async sampleAnimationStates(unitId: number, numSamples: number = 10): Promise<
+        Array<{ playing: boolean; sequenceKey: string }>
+    > {
+        return this.page.evaluate(({ id, maxSamples }) => {
+            return new Promise<Array<{ playing: boolean; sequenceKey: string }>>((resolve) => {
+                const samples: Array<{ playing: boolean; sequenceKey: string }> = [];
+                let count = 0;
+                function sample() {
+                    const game = (window as any).__settlers_game__;
+                    const animService = game?.gameLoop?.animationService;
+                    if (animService) {
+                        const state = animService.getState(id);
+                        if (state) {
+                            samples.push({ playing: state.playing, sequenceKey: state.sequenceKey });
+                        }
+                    }
+                    count++;
+                    if (count < maxSamples) {
+                        requestAnimationFrame(sample);
+                    } else {
+                        resolve(samples);
+                    }
+                }
+                requestAnimationFrame(sample);
+            });
+        }, { id: unitId, maxSamples: numSamples });
+    }
+
+    /**
+     * Capture movement events by listening on the game event bus.
+     * Sets up a capture array and returns a function to retrieve captured events.
+     */
+    async captureMovementEvents(): Promise<{
+        getEvents: () => Promise<Array<{ event: string; entityId: number; direction: number }>>;
+        getCount: () => Promise<number>;
+    }> {
+        await this.page.evaluate(() => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return;
+            const captured: Array<{ event: string; entityId: number; direction: number }> = [];
+            game.eventBus.on('unit:movementStopped', (payload: any) => {
+                captured.push({
+                    event: 'movementStopped',
+                    entityId: payload.entityId,
+                    direction: payload.direction,
+                });
+            });
+            (window as any).__capturedMovementEvents = captured;
+        });
+        return {
+            getEvents: () => this.page.evaluate(
+                () => (window as any).__capturedMovementEvents ?? []
+            ),
+            getCount: () => this.page.evaluate(
+                () => ((window as any).__capturedMovementEvents ?? []).length
+            ),
+        };
+    }
+
+    /**
+     * Sample unit positions over multiple frames to verify smooth movement.
+     * Returns position snapshots taken at each animation frame.
+     */
+    async sampleUnitPositions(unitId: number, numSamples: number = 10): Promise<
+        Array<{ x: number; y: number }>
+    > {
+        return this.page.evaluate(({ id, maxSamples }) => {
+            return new Promise<Array<{ x: number; y: number }>>((resolve) => {
+                const positions: Array<{ x: number; y: number }> = [];
+                let count = 0;
+                function sample() {
+                    const game = (window as any).__settlers_game__;
+                    if (game) {
+                        const u = game.state.getEntity(id);
+                        if (u) positions.push({ x: u.x, y: u.y });
+                    }
+                    count++;
+                    if (count < maxSamples) {
+                        requestAnimationFrame(sample);
+                    } else {
+                        resolve(positions);
+                    }
+                }
+                requestAnimationFrame(sample);
+            });
+        }, { id: unitId, maxSamples: numSamples });
+    }
+
+    /**
+     * Get the map center coordinates.
+     */
+    async getMapCenter(): Promise<{ x: number; y: number }> {
+        return this.page.evaluate(() => {
+            const game = (window as any).__settlers_game__;
+            return {
+                x: Math.floor(game.mapSize.width / 2),
+                y: Math.floor(game.mapSize.height / 2),
+            };
+        });
+    }
+
+    /**
+     * Check if a tile is passable terrain (not water, not blocked).
+     */
+    async isTerrainPassable(x: number, y: number): Promise<{
+        groundType: number;
+        isPassable: boolean;
+        isWater: boolean;
+    } | null> {
+        return this.page.evaluate(({ tx, ty }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            const idx = game.mapSize.toIndex(tx, ty);
+            const gt = game.groundType[idx];
+            return {
+                groundType: gt,
+                isPassable: gt > 8 && gt !== 32,
+                isWater: gt <= 8,
+            };
+        }, { tx: x, ty: y });
+    }
+
+    /**
+     * Place multiple buildings at different positions, spiraling from map center.
+     * Returns the number placed and total building count.
+     */
+    async placeMultipleBuildings(count: number, buildingTypes?: number[], players?: number[]): Promise<{
+        placedCount: number;
+        positions: Array<{ x: number; y: number }>;
+        totalBuildings: number;
+    }> {
+        return this.page.evaluate(({ targetCount, types, ps }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return { placedCount: 0, positions: [], totalBuildings: 0 };
+            const w = game.mapSize.width;
+            const h = game.mapSize.height;
+            const cx = Math.floor(w / 2);
+            const cy = Math.floor(h / 2);
+            let placed = 0;
+            const positions: Array<{ x: number; y: number }> = [];
+            for (let r = 0; r < Math.max(w, h) / 2 && placed < targetCount; r += 3) {
+                for (let angle = 0; angle < 8 && placed < targetCount; angle++) {
+                    const dx = Math.round(r * Math.cos(angle * Math.PI / 4));
+                    const dy = Math.round(r * Math.sin(angle * Math.PI / 4));
+                    const tx = cx + dx;
+                    const ty = cy + dy;
+                    if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+                    const bt = types ? types[placed % types.length] : 1;
+                    const p = ps ? ps[placed % ps.length] : 0;
+                    const ok = game.execute({
+                        type: 'place_building', buildingType: bt, x: tx, y: ty, player: p
+                    });
+                    if (ok) {
+                        placed++;
+                        positions.push({ x: tx, y: ty });
+                    }
+                }
+            }
+            return {
+                placedCount: placed,
+                positions,
+                totalBuildings: game.state.entities.filter((e: any) => e.type === 2).length,
+            };
+        }, { targetCount: count, types: buildingTypes ?? null, ps: players ?? null });
+    }
+
+    /**
+     * Place multiple resources at different positions, spiraling from map center.
+     */
+    async placeMultipleResources(count: number, materialTypes?: number[]): Promise<{
+        placedCount: number;
+        totalResources: number;
+    }> {
+        return this.page.evaluate(({ targetCount, types }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return { placedCount: 0, totalResources: 0 };
+            const w = game.mapSize.width;
+            const h = game.mapSize.height;
+            const cx = Math.floor(w / 2);
+            const cy = Math.floor(h / 2);
+            let placed = 0;
+            for (let r = 0; r < 20 && placed < targetCount; r++) {
+                for (let angle = 0; angle < 8 && placed < targetCount; angle++) {
+                    const dx = Math.round(r * 2 * Math.cos(angle * Math.PI / 4));
+                    const dy = Math.round(r * 2 * Math.sin(angle * Math.PI / 4));
+                    const tx = cx + dx;
+                    const ty = cy + dy;
+                    if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+                    const mt = types ? types[placed % types.length] : placed % 3;
+                    const ok = game.execute({
+                        type: 'place_resource', materialType: mt, amount: placed + 1, x: tx, y: ty
+                    });
+                    if (ok) placed++;
+                }
+            }
+            return {
+                placedCount: placed,
+                totalResources: game.state.entities.filter((e: any) => e.type === 4).length,
+            };
+        }, { targetCount: count, types: materialTypes ?? null });
+    }
+
+    /**
+     * Get placement preview state from the entity renderer.
+     */
+    async getPlacementPreview(): Promise<{
+        indicatorsEnabled: boolean;
+        previewBuildingType: number | null;
+        previewMaterialType: number | null;
+        placementPreview: { entityType: string; subType: number } | null;
+    } | null> {
+        return this.page.evaluate(() => {
+            const renderer = (window as any).__settlers_entity_renderer__;
+            if (!renderer) return null;
+            return {
+                indicatorsEnabled: renderer.buildingIndicatorsEnabled,
+                previewBuildingType: renderer.previewBuildingType ?? null,
+                previewMaterialType: renderer.previewMaterialType ?? null,
+                placementPreview: renderer.placementPreview ? {
+                    entityType: renderer.placementPreview.entityType,
+                    subType: renderer.placementPreview.subType,
+                } : null,
+            };
+        });
+    }
+
+    // ── Logistics subsystem queries ──────────────────────────
+
+    /**
+     * Check if a building has a service area.
+     */
+    async hasServiceArea(buildingId: number): Promise<boolean> {
+        return this.page.evaluate(({ id }) => {
+            const game = (window as any).__settlers_game__;
+            const area = game?.state.serviceAreaManager.getServiceArea(id);
+            return area !== null && area !== undefined;
+        }, { id: buildingId });
+    }
+
+    /**
+     * Check if a building has an inventory.
+     */
+    async hasInventory(buildingId: number): Promise<boolean> {
+        return this.page.evaluate(({ id }) => {
+            const game = (window as any).__settlers_game__;
+            const inv = game?.state.inventoryManager.getInventory(id);
+            return inv !== null && inv !== undefined;
+        }, { id: buildingId });
+    }
+
+    /**
+     * Get carrier state for a unit.
+     */
+    async getCarrierState(carrierId: number): Promise<{
+        homeBuilding: number | null;
+        hasJob: boolean;
+    } | null> {
+        return this.page.evaluate(({ id }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            const state = game.state.carrierManager.getCarrier(id);
+            if (!state) return null;
+            return {
+                homeBuilding: state.homeBuilding ?? null,
+                hasJob: state.currentJob !== null,
+            };
+        }, { id: carrierId });
+    }
+
+    /**
+     * Add a resource request for a building and return the request details.
+     */
+    async addResourceRequest(buildingId: number, materialType: number, amount: number, priority = 1): Promise<{
+        requestId: number;
+        materialType: number;
+        amount: number;
+        isPending: boolean;
+    } | null> {
+        return this.page.evaluate(({ bId, mt, amt, prio }) => {
+            const game = (window as any).__settlers_game__;
+            if (!game) return null;
+            const request = game.state.requestManager.addRequest(bId, mt, amt, prio);
+            const pending = game.state.requestManager.getPendingRequests();
+            const found = pending.some((r: any) => r.id === request.id);
+            return {
+                requestId: request.id,
+                materialType: request.materialType,
+                amount: request.amount,
+                isPending: found,
+            };
+        }, { bId: buildingId, mt: materialType, amt: amount, prio: priority });
+    }
+
     // ── Canvas diagnostics ──────────────────────────────────
 
     /** Sample pixel colors from the WebGL canvas at named positions. */
@@ -919,6 +1312,84 @@ export class GamePage {
             // AudioContext may not exist or may be suspended - that's OK for tests
             // that don't actually need audio
         });
+    }
+
+    // ── Sprite loading queries ─────────────────────────────────
+
+    /**
+     * Check if the entity renderer has sprites loaded.
+     */
+    async hasSpritesLoaded(): Promise<boolean> {
+        return this.page.evaluate(() => {
+            const renderer = (window as any).__settlers_entity_renderer__;
+            if (!renderer) return false;
+            const spriteManager = (renderer as any).spriteManager;
+            return spriteManager?.hasSprites === true;
+        });
+    }
+
+    /**
+     * Query loaded unit sprites from the sprite registry.
+     * Returns which unit types (0-8) have loaded sprites.
+     */
+    async getLoadedUnitSprites(): Promise<{
+        currentRace: string | null;
+        loadedByType: Record<number, boolean>;
+        loadedCount: number;
+    } | null> {
+        return this.page.evaluate(() => {
+            const renderer = (window as any).__settlers_entity_renderer__;
+            if (!renderer) return null;
+            const spriteManager = (renderer as any).spriteManager;
+            if (!spriteManager) return null;
+            const loadedByType: Record<number, boolean> = {};
+            for (let unitType = 0; unitType <= 8; unitType++) {
+                const sprite = spriteManager.getUnit(unitType, 0);
+                loadedByType[unitType] = sprite !== null;
+            }
+            return {
+                currentRace: spriteManager.currentRace ?? null,
+                loadedByType,
+                loadedCount: Object.values(loadedByType).filter(Boolean).length,
+            };
+        });
+    }
+
+    /**
+     * Get the unit sprite registry size.
+     */
+    async getSpriteRegistrySize(): Promise<number> {
+        return this.page.evaluate(() => {
+            const renderer = (window as any).__settlers_entity_renderer__;
+            const registry = (renderer as any)?.spriteManager?._spriteRegistry;
+            return registry?.units?.size ?? 0;
+        });
+    }
+
+    /**
+     * Test JIL index lookup for specific job indices.
+     * Returns info about which job indices exist in the JIL file.
+     */
+    async testJilLookup(fileId: string, jobIndices: number[]): Promise<{
+        totalJobs: number;
+        results: Record<number, { exists: boolean; offset?: number; length?: number }>;
+    } | null> {
+        return this.page.evaluate(async({ fid, indices }) => {
+            const renderer = (window as any).__settlers_entity_renderer__;
+            const spriteLoader = (renderer as any)?.spriteManager?.spriteLoader;
+            if (!spriteLoader) return null;
+            const fileSet = await spriteLoader.loadFileSet(fid);
+            if (!fileSet?.jilReader) return null;
+            const totalJobs = fileSet.jilReader.length;
+            const results: Record<number, { exists: boolean; offset?: number; length?: number }> = {};
+            for (const idx of indices) {
+                const item = fileSet.jilReader.getItem(idx);
+                results[idx] = item
+                    ? { exists: true, offset: item.offset, length: item.length }
+                    : { exists: false };
+            }
+            return { totalJobs, results };
+        }, { fid: fileId, indices: jobIndices });
     }
 
     // ── Sprite cache helpers ─────────────────────────────────
