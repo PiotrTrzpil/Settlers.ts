@@ -211,11 +211,13 @@ export class CarrierManager {
      * Mark a carrier's current job as complete.
      * Does NOT automatically change status - caller should set status appropriately.
      * @param carrierId - The entity ID of the carrier
-     * @returns The completed job, or null if carrier not found or had no job
+     * @returns The completed job, or null if carrier had no job
+     * @throws Error if carrier not found
      */
     completeJob(carrierId: number): CarrierJob | null {
-        const state = this.entityProvider.getEntity(carrierId)?.carrier;
-        if (!state) return null;
+        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for completeJob');
+        const state = getCarrierState(entity);
+
         if (state.currentJob === null) return null;
 
         const completedJob = state.currentJob;
@@ -230,14 +232,14 @@ export class CarrierManager {
      * Update a carrier's status.
      * @param carrierId - The entity ID of the carrier
      * @param status - The new status
-     * @returns true if the status was updated, false if carrier not found
+     * @throws Error if carrier not found
      */
-    setStatus(carrierId: number, status: CarrierStatus): boolean {
-        const state = this.entityProvider.getEntity(carrierId)?.carrier;
-        if (!state) return false;
+    setStatus(carrierId: number, status: CarrierStatus): void {
+        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for setStatus');
+        const state = getCarrierState(entity);
 
         const previousStatus = state.status;
-        if (previousStatus === status) return true; // No change needed
+        if (previousStatus === status) return; // No change needed
 
         state.status = status;
 
@@ -246,8 +248,6 @@ export class CarrierManager {
             previousStatus,
             newStatus: status,
         });
-
-        return true;
     }
 
     /**
@@ -255,42 +255,40 @@ export class CarrierManager {
      * @param carrierId - The entity ID of the carrier
      * @param material - The material type, or null to clear
      * @param amount - The amount being carried
-     * @returns true if updated, false if carrier not found
+     * @throws Error if carrier not found
      */
-    setCarrying(carrierId: number, material: EMaterialType | null, amount: number): boolean {
-        const state = this.entityProvider.getEntity(carrierId)?.carrier;
-        if (!state) return false;
+    setCarrying(carrierId: number, material: EMaterialType | null, amount: number): void {
+        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for setCarrying');
+        const state = getCarrierState(entity);
 
         state.carryingMaterial = material;
         state.carryingAmount = amount;
-        return true;
     }
 
     /**
      * Update a carrier's fatigue level.
      * @param carrierId - The entity ID of the carrier
      * @param fatigue - The new fatigue level (0-100)
-     * @returns true if updated, false if carrier not found
+     * @throws Error if carrier not found
      */
-    setFatigue(carrierId: number, fatigue: number): boolean {
-        const state = this.entityProvider.getEntity(carrierId)?.carrier;
-        if (!state) return false;
+    setFatigue(carrierId: number, fatigue: number): void {
+        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for setFatigue');
+        const state = getCarrierState(entity);
 
         state.fatigue = Math.max(0, Math.min(100, fatigue));
-        return true;
     }
 
     /**
      * Add fatigue to a carrier.
      * @param carrierId - The entity ID of the carrier
      * @param amount - Amount to add (positive) or remove (negative)
-     * @returns true if updated, false if carrier not found
+     * @throws Error if carrier not found
      */
-    addFatigue(carrierId: number, amount: number): boolean {
-        const state = this.entityProvider.getEntity(carrierId)?.carrier;
-        if (!state) return false;
+    addFatigue(carrierId: number, amount: number): void {
+        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for addFatigue');
+        const state = getCarrierState(entity);
 
-        return this.setFatigue(carrierId, state.fatigue + amount);
+        this.setFatigue(carrierId, state.fatigue + amount);
     }
 
     /**
@@ -298,13 +296,14 @@ export class CarrierManager {
      * Cannot reassign while carrier has an active job.
      * @param carrierId - The entity ID of the carrier
      * @param newTavernId - The entity ID of the new home tavern
-     * @returns true if reassigned, false if carrier not found or has active job
+     * @returns true if reassigned, false if carrier has active job
+     * @throws Error if carrier not found
      */
     reassignToTavern(carrierId: number, newTavernId: number): boolean {
-        const state = this.entityProvider.getEntity(carrierId)?.carrier;
-        if (!state) return false;
+        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for reassignToTavern');
+        const state = getCarrierState(entity);
 
-        // Prevent reassignment while on a job
+        // Prevent reassignment while on a job (valid condition, not a bug)
         if (state.currentJob !== null) return false;
 
         const oldTavernId = state.homeBuilding;
