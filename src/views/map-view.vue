@@ -129,6 +129,7 @@
               :fileManager="fileManager"
               @select="onFileSelect"
               filter=".map"
+              storageKey="viewer_map_file"
               class="browser"
             />
           </div>
@@ -412,9 +413,9 @@ async function onRaceChange() {
 .sidebar-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
-  padding: 5px 8px;
+  padding: 2px 6px;
   background: #2c1e0e;
   color: #c8a96e;
   border: 1px solid #4a3218;
@@ -444,8 +445,8 @@ async function onRaceChange() {
 
 .btn-icon {
   font-size: 14px;
-  width: 20px;
-  height: 20px;
+  width: 32px;
+  height: 32px;
   text-align: center;
   flex-shrink: 0;
   display: flex;
@@ -454,8 +455,8 @@ async function onRaceChange() {
 }
 
 .building-icon-img {
-  max-width: 20px;
-  max-height: 20px;
+  max-width: 32px;
+  max-height: 32px;
   object-fit: contain;
   image-rendering: pixelated;
 }

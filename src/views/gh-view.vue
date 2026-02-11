@@ -6,6 +6,7 @@
         :fileManager="fileManager"
         @select="onFileSelect"
         filter=".gh6|.gl6|.gh5|.gl5"
+        storageKey="viewer_gh_file"
         class="browser"
       />
       <span class="info">{{ ghContent.length }} images</span>

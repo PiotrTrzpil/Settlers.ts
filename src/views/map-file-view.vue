@@ -7,6 +7,7 @@
         :fileManager="fileManager"
         @select="onFileSelect"
         filter=".exe|.map|.edm"
+        storageKey="viewer_mapfile_file"
         class="file-selector"
       />
     </header>

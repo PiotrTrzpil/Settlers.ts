@@ -6,6 +6,7 @@
         :fileManager="fileManager"
         @select="onFileSelect"
         filter=".gfx"
+        storageKey="viewer_gfx_file"
         class="browser"
       />
       <span class="info">{{ gfxContent?.length }} images</span>
@@ -60,7 +61,6 @@ import { ref, useTemplateRef, nextTick } from 'vue';
 import { IGfxImage } from '@/resources/gfx/igfx-image';
 import { Path } from '@/utilities/path';
 import { GfxFileReader } from '@/resources/gfx/gfx-file-reader';
-import { GilFileReader } from '@/resources/gfx/gil-file-reader';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { pad, renderImageToCanvas, collectImages, loadGfxFileSet, parseGfxReaders } from '@/utilities/view-helpers';
@@ -100,12 +100,9 @@ async function doLoad(fileId: string) {
     const fileSet = await loadGfxFileSet(props.fileManager, fileId);
     const readers = parseGfxReaders(fileSet);
 
-    const hasJil = fileSet.jil.length > 0;
-    const directionIndexList = hasJil ? readers.dilFileReader : null;
-    const jobIndexList = hasJil ? readers.jilFileReader : null;
-
-    const gfxIndexList = new GilFileReader(fileSet.gil);
-    gfxFile.value = new GfxFileReader(fileSet.gfx, gfxIndexList, jobIndexList, directionIndexList, readers.paletteCollection);
+    // For the GFX viewer, don't use jil/dil - just browse raw images by gil index
+    // This avoids reverse lookup errors for images outside the job/direction tables
+    gfxFile.value = new GfxFileReader(fileSet.gfx, readers.gilFileReader, null, null, readers.paletteCollection);
 
     const gfx = gfxFile.value;
     gfxContent.value = collectImages(

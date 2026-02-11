@@ -6,6 +6,7 @@
         :fileManager="fileManager"
         @select="onFileSelect"
         filter=".jil"
+        storageKey="viewer_jil_file"
         class="browser"
       />
       <span class="info">{{ jilList.length }} jobs</span>
@@ -28,8 +29,8 @@
         }"
         @click="selectJobFromGrid(item)"
       >
-        <div class="direction-grid" :class="'dirs-' + Math.min(getDirectionCount(item.index), 6)">
-          <div v-for="dir in Math.min(getDirectionCount(item.index), 6)" :key="dir" class="direction-cell">
+        <div class="direction-grid" :class="'dirs-' + Math.min(getDirectionCount(item.index), 8)">
+          <div v-for="dir in Math.min(getDirectionCount(item.index), 8)" :key="dir" class="direction-cell">
             <canvas
               :ref="el => setCanvasRef(el as HTMLCanvasElement, `${item.index}-${dir - 1}`)"
               width="200"
@@ -268,6 +269,13 @@ async function doLoad(fileId: string) {
     const fileSet = await loadGfxFileSet(props.fileManager, fileId);
     const readers = parseGfxReaders(fileSet);
 
+    // Jil-view requires jil/dil files to function
+    if (!readers.jilFileReader || !readers.dilFileReader) {
+        log.error('No jil/dil files found for ' + fileId + ' - this view requires job index files');
+        jilList.value = [];
+        return;
+    }
+
     dilFileReader.value = readers.dilFileReader;
     gilFileReader.value = readers.gilFileReader;
     jilList.value = readers.jilFileReader.getItems(0);
@@ -285,7 +293,7 @@ async function doLoad(fileId: string) {
     // Compute direction counts for each job
     directionCounts.value.clear();
     for (const item of jilList.value) {
-        const dirItems = dilFileReader.value.getItems(item.offset, item.length);
+        const dirItems = dilFileReader.value!.getItems(item.offset, item.length);
         directionCounts.value.set(item.index, dirItems.length);
     }
 
@@ -359,8 +367,8 @@ function renderAllGridSprites() {
         const dirItems = dilFileReader.value.getItems(item.offset, item.length);
         if (dirItems.length === 0) continue;
 
-        // Render only existing directions (up to 6)
-        const maxDirs = Math.min(6, dirItems.length);
+        // Render only existing directions (up to 8)
+        const maxDirs = Math.min(8, dirItems.length);
         for (let dirIdx = 0; dirIdx < maxDirs; dirIdx++) {
             const canvas = canvasRefs.get(`${item.index}-${dirIdx}`);
             if (!canvas) continue;
@@ -410,26 +418,79 @@ watchGridMode(renderAllGridSprites, () => jilList.value.length > 0);
   font-size: 0.8em;
   opacity: 0.8;
 }
-/* JIL-specific overrides for larger sprites with multiple directions */
+
+/* JIL-specific overrides for sprites with multiple directions */
 .grid-container {
-  grid-template-columns: repeat(auto-fill, minmax(550px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+  gap: 8px;
+  padding: 10px;
 }
 
 .grid-item {
-  padding: 12px 24px;
+  padding: 8px 4px 4px 8px;
 }
 
-/* Override canvas sizes from shared CSS - match specificity and remove fixed sizes */
+/* Direction grid fills available space */
+.direction-grid {
+  gap: 2px;
+  padding: 2px;
+  flex: 1;
+  width: 100%;
+}
+
+.dir-label {
+  margin-top: 0;
+  font-size: 8px;
+}
+
+.grid-label {
+  margin-top: 2px;
+}
+
+/* Override ALL base canvas sizes - scale to fill cell */
 .direction-grid .grid-canvas,
 .direction-grid.dirs-1 .grid-canvas,
 .direction-grid.dirs-2 .grid-canvas,
 .direction-grid.dirs-3 .grid-canvas,
 .direction-grid.dirs-4 .grid-canvas,
 .direction-grid.dirs-5 .grid-canvas,
-.direction-grid.dirs-6 .grid-canvas {
-  width: auto;
-  height: auto;
-  max-width: none;
-  max-height: none;
+.direction-grid.dirs-6 .grid-canvas,
+.direction-grid.dirs-7 .grid-canvas,
+.direction-grid.dirs-8 .grid-canvas {
+  width: 100% !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+/* Grid layouts - use fr units to fill space */
+.direction-grid.dirs-1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  max-width: 200px;
+  margin: 0 auto;
+}
+
+.direction-grid.dirs-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.direction-grid.dirs-3,
+.direction-grid.dirs-4 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.direction-grid.dirs-5,
+.direction-grid.dirs-6 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.direction-grid.dirs-7,
+.direction-grid.dirs-8 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
 }
 </style>

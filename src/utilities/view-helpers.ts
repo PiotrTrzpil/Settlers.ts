@@ -58,8 +58,8 @@ export interface GfxFileSet {
 /** Parsed GFX readers common to jil-view and gfx-view */
 export interface ParsedGfxReaders {
     gilFileReader: GilFileReader;
-    jilFileReader: JilFileReader;
-    dilFileReader: DilFileReader;
+    jilFileReader: JilFileReader | null;
+    dilFileReader: DilFileReader | null;
     paletteCollection: PaletteCollection;
     files: GfxFileSet;
 }
@@ -92,9 +92,13 @@ export async function loadGfxFileSet(fileManager: FileManager, fileId: string): 
 export function parseGfxReaders(files: GfxFileSet): ParsedGfxReaders {
     const paletteIndexList = new PilFileReader(files.paletteIndex);
     const paletteCollection = new PaletteCollection(files.palette, paletteIndexList);
-    const dilFileReader = new DilFileReader(files.dil);
     const gilFileReader = new GilFileReader(files.gil);
-    const jilFileReader = new JilFileReader(files.jil);
+
+    // Only create dil/jil readers if the files exist (have content)
+    const hasDil = files.dil.length > 0;
+    const hasJil = files.jil.length > 0;
+    const dilFileReader = hasDil ? new DilFileReader(files.dil) : null;
+    const jilFileReader = hasJil ? new JilFileReader(files.jil) : null;
 
     return {
         gilFileReader,

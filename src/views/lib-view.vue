@@ -6,6 +6,7 @@
         :fileManager="fileManager"
         @select="onFileSelect"
         filter=".lib"
+        storageKey="viewer_lib_file"
         class="browser"
       />
       <span class="info">{{ libContent.length }} items</span>
