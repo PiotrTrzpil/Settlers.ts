@@ -5,9 +5,9 @@
 export class RawImageData {
     public readonly width: number;
     public readonly height: number;
-    public readonly data: Uint8ClampedArray;
+    public readonly data: Uint8ClampedArray<ArrayBuffer>;
 
-    constructor(width: number, height: number, data?: Uint8ClampedArray) {
+    constructor(width: number, height: number, data?: Uint8ClampedArray<ArrayBuffer>) {
         this.width = width;
         this.height = height;
         this.data = data ?? new Uint8ClampedArray(width * height * 4);
@@ -56,7 +56,7 @@ export class RawImageData {
         height: number,
         data: Uint32Array
     ): RawImageData {
-        const rawData = new Uint8ClampedArray(data.buffer);
+        const rawData = new Uint8ClampedArray(data.buffer as ArrayBuffer);
         return new RawImageData(width, height, rawData);
     }
 

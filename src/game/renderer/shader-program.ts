@@ -138,7 +138,7 @@ export class ShaderProgram implements ShaderObject {
         gl.uniform2fv(uniformLocation, this.vec2Temp);
     }
 
-    public setArrayFloat(name: string, values: Float32Array, size: number, divisor = 0): void {
+    public setArrayFloat(name: string, values: Float32Array<ArrayBuffer>, size: number, divisor = 0): void {
         if (!this.gl) {
             return;
         }
@@ -146,7 +146,7 @@ export class ShaderProgram implements ShaderObject {
         this.setAttribute(name, values, size, this.gl.FLOAT, divisor);
     }
 
-    public setArrayShort(name: string, values: Int16Array, size: number, divisor = 0): void {
+    public setArrayShort(name: string, values: Int16Array<ArrayBuffer>, size: number, divisor = 0): void {
         if (!this.gl) {
             return;
         }

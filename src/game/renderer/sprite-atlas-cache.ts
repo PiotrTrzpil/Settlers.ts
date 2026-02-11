@@ -238,7 +238,7 @@ export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Prom
     const entry: IndexedDBAtlasEntry = {
         race,
         version: BUILD_VERSION,
-        imgData: data.imgData.buffer.slice(
+        imgData: (data.imgData.buffer as ArrayBuffer).slice(
             data.imgData.byteOffset,
             data.imgData.byteOffset + data.imgData.byteLength
         ),
@@ -250,7 +250,7 @@ export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Prom
         timestamp: data.timestamp,
         paletteOffsets: data.paletteOffsets,
         paletteTotalColors: data.paletteTotalColors,
-        paletteBuffer: data.paletteData ? data.paletteData.buffer.slice(
+        paletteBuffer: data.paletteData ? (data.paletteData.buffer as ArrayBuffer).slice(
             data.paletteData.byteOffset,
             data.paletteData.byteOffset + data.paletteData.byteLength
         ) : undefined,

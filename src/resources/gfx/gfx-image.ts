@@ -169,7 +169,7 @@ export class GfxImage implements IGfxImage {
     /** Get parameters for worker-based async decoding */
     public getDecodeParams(): GfxDecodeParams {
         return {
-            buffer: this.data.getBuffer().buffer,
+            buffer: this.data.getBuffer().buffer as ArrayBuffer,
             offset: this.dataOffset,
             width: this.width,
             height: this.height,
