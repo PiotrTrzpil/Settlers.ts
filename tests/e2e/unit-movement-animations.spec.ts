@@ -3,17 +3,18 @@ import { test, expect } from './fixtures';
 /**
  * E2E tests for unit movement animations and direction change events.
  *
- * These tests verify:
- * - EventBus emits correct movement events (started, stopped, directionChanged)
- * - Animation frames progress correctly during movement
- * - Direction transitions occur with correct values
- * - Idle animation state when movement stops
+ * NOTE: Most of these tests are SKIPPED because the event-driven animation system
+ * (movementStarted, directionChanged events) was replaced with SettlerTaskSystem-based
+ * animation handling. Only movementStopped is still emitted for CarrierSystem arrival.
+ *
+ * TODO: Rewrite these tests to validate animation state via SettlerTaskSystem directly.
  *
  * Uses programmatic test map (no real game assets required).
  */
 
 test.describe('Movement Animation Events', { tag: '@animations' }, () => {
-    test('EventBus emits movementStarted when unit begins moving', async({ gp }) => {
+    // SKIP: movementStarted event was removed - animation now handled by SettlerTaskSystem
+    test.skip('EventBus emits movementStarted when unit begins moving', async({ gp }) => {
         const page = gp.page;
 
         // Set up event capture before spawning/moving
@@ -110,7 +111,8 @@ test.describe('Movement Animation Events', { tag: '@animations' }, () => {
         expect(stopEvent.payload.entityId).toBe(unit!.id);
     });
 
-    test('EventBus emits directionChanged on path turns', async({ gp }) => {
+    // SKIP: directionChanged event was removed - animation now handled by SettlerTaskSystem
+    test.skip('EventBus emits directionChanged on path turns', async({ gp }) => {
         const page = gp.page;
 
         // Set up event capture

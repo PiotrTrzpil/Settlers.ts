@@ -51,17 +51,17 @@ test.describe('Map View Page', { tag: '@smoke' }, () => {
         await gp.goto({ testMap: true });
         await gp.waitForGameUi(15_000);
 
-        // Debug panel toggle should be visible
-        const debugToggle = page.locator('.debug-toggle-btn');
-        await expect(debugToggle).toBeVisible();
+        // Settings panel toggle should be visible
+        const settingsToggle = page.locator('.settings-toggle-btn');
+        await expect(settingsToggle).toBeVisible();
 
-        // Click to expand the debug panel
-        await debugToggle.click();
+        // Click to expand the settings panel
+        await settingsToggle.click();
 
-        // Wait for the debug panel content to appear
-        await expect(page.locator('.debug-sections')).toBeVisible();
+        // Wait for the settings panel content to appear
+        await expect(page.locator('.settings-sections')).toBeVisible();
 
-        // The Debug grid checkbox should be visible (Controls section is expanded by default)
+        // The Debug grid checkbox should be visible (Display section is expanded by default)
         const checkbox = page.locator('label:has-text("Debug grid") input[type="checkbox"]');
         await expect(checkbox).toBeVisible({ timeout: 5000 });
 

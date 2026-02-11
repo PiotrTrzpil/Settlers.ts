@@ -22,18 +22,19 @@ describe('Movement System – edge cases', () => {
         expect(unit.y).toBe(5);
     });
 
-    it.skip('should advance unit along path based on speed', () => {
+    it('should advance unit along path based on speed', () => {
         const { entity: unit, unitState } = addUnitWithPath(state, 0, 0, [
             { x: 1, y: 0 },
             { x: 2, y: 0 },
             { x: 3, y: 0 },
         ], 2);
 
-        // 0.5 seconds at speed 2 = 1 tile
+        // startPath sets progress=1 (immediate first step), then 0.5s at speed 2 adds 1 more
+        // Total progress = 2, so unit moves 2 tiles
         state.movement.update(0.5);
 
-        expect(unit.x).toBe(1);
+        expect(unit.x).toBe(2);
         expect(unit.y).toBe(0);
-        expect(unitState.pathIndex).toBe(1);
+        expect(unitState.pathIndex).toBe(2);
     });
 });

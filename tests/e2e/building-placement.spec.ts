@@ -68,7 +68,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
     test('clicking building button activates place_building mode', async({ gp }) => {
         const page = gp.page;
 
-        const btn = page.locator('[data-testid="btn-lumberjack"]');
+        const btn = page.locator('[data-testid="btn-woodcutter"]');
         await expect(btn).toBeVisible();
         await btn.click();
 
@@ -79,7 +79,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
     test('select mode button returns to select mode', async({ gp }) => {
         const page = gp.page;
 
-        const btn = page.locator('[data-testid="btn-lumberjack"]');
+        const btn = page.locator('[data-testid="btn-woodcutter"]');
         await expect(btn).toBeVisible();
         await btn.click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
@@ -150,7 +150,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await gp.waitForFrames(5);
 
         // Enter placement mode
-        await page.locator('[data-testid="btn-lumberjack"]').click();
+        await page.locator('[data-testid="btn-woodcutter"]').click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
 
         const countBefore = await gp.getDebugField('buildingCount');
@@ -197,7 +197,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         const page = gp.page;
 
         // Enter placement mode
-        await page.locator('[data-testid="btn-lumberjack"]').click();
+        await page.locator('[data-testid="btn-woodcutter"]').click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
 
         // Place buildings at multiple locations via game.execute to ensure valid spots
@@ -253,7 +253,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         const page = gp.page;
 
         // Place a lumberjack first
-        await page.locator('[data-testid="btn-lumberjack"]').click();
+        await page.locator('[data-testid="btn-woodcutter"]').click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
 
         let state = await gp.getGameState();
@@ -481,7 +481,7 @@ test.describe('Entity Rendering', () => {
 
         await test.step('enter placement mode and hover', async() => {
             await gp.moveCamera(buildableTile.x, buildableTile.y);
-            const btn = page.locator('[data-testid="btn-lumberjack"]');
+            const btn = page.locator('[data-testid="btn-woodcutter"]');
             await expect(btn).toBeVisible();
             await btn.click();
             await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });

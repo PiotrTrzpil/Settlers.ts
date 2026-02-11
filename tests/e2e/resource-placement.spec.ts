@@ -18,7 +18,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         await page.locator('.tab-btn', { hasText: 'Resources' }).click();
 
         // Click trunk (wood) resource button
-        const btn = page.locator('[data-testid="btn-resource-trunk"]');
+        const btn = page.locator('[data-testid="btn-resource-log"]');
         await expect(btn).toBeVisible();
         await btn.click();
 
@@ -31,7 +31,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
 
         // Switch to Resources tab and enter resource placement mode
         await page.locator('.tab-btn', { hasText: 'Resources' }).click();
-        const btn = page.locator('[data-testid="btn-resource-trunk"]');
+        const btn = page.locator('[data-testid="btn-resource-log"]');
         await expect(btn).toBeVisible();
         await btn.click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
@@ -193,7 +193,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         await page.locator('.tab-btn', { hasText: 'Resources' }).click();
 
         // Select trunk (wood)
-        await page.locator('[data-testid="btn-resource-trunk"]').click();
+        await page.locator('[data-testid="btn-resource-log"]').click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
 
         // Switch to stone
@@ -207,7 +207,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         await expect(stoneBtn).toHaveClass(/active/);
 
         // Trunk button should no longer be active
-        const trunkBtn = page.locator('[data-testid="btn-resource-trunk"]');
+        const trunkBtn = page.locator('[data-testid="btn-resource-log"]');
         await expect(trunkBtn).not.toHaveClass(/active/);
     });
 });
@@ -246,7 +246,7 @@ test.describe('Resource Rendering', () => {
             // Switch to Resources tab
             await page.locator('.tab-btn', { hasText: 'Resources' }).click();
 
-            const btn = page.locator('[data-testid="btn-resource-trunk"]');
+            const btn = page.locator('[data-testid="btn-resource-log"]');
             await expect(btn).toBeVisible();
             await btn.click();
             await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
