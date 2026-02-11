@@ -34,32 +34,32 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
     });
 
-    test('resource placement via game.execute() creates entity with correct attributes', async({ gp }) => {
-        const passableTile = await gp.findPassableTile();
+    test('resource placement via game.execute() creates entity with correct attributes', async({ gs }) => {
+        const passableTile = await gs.findPassableTile();
         if (!passableTile) {
             test.skip();
             return;
         }
 
-        const resource = await gp.placeResource(0, passableTile.x, passableTile.y, 5);
+        const resource = await gs.placeResource(0, passableTile.x, passableTile.y, 5);
         expect(resource).not.toBeNull();
         expect(resource!.type).toBe(4); // EntityType.StackedResource
         expect(resource!.x).toBe(passableTile.x);
         expect(resource!.y).toBe(passableTile.y);
         expect(resource!.amount).toBe(5);
 
-        const entities = await gp.getEntities({ type: 4 });
+        const entities = await gs.getEntities({ type: 4 });
         expect(entities.length).toBeGreaterThanOrEqual(1);
     });
 
-    test('resource placement via placeResource helper', async({ gp }) => {
-        const passableTile = await gp.findPassableTile();
+    test('resource placement via placeResource helper', async({ gs }) => {
+        const passableTile = await gs.findPassableTile();
         if (!passableTile) {
             test.skip();
             return;
         }
 
-        const resource = await gp.placeResource(1, passableTile.x, passableTile.y, 3);
+        const resource = await gs.placeResource(1, passableTile.x, passableTile.y, 3);
         expect(resource).not.toBeNull();
         expect(resource!.type).toBe(4);
         expect(resource!.subType).toBe(1);
@@ -88,8 +88,8 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         expect(countAfter).toBe(countBefore);
     });
 
-    test('multiple resources can be placed at different locations', async({ gp }) => {
-        const result = await gp.placeMultipleResources(3);
+    test('multiple resources can be placed at different locations', async({ gs }) => {
+        const result = await gs.placeMultipleResources(3);
         expect(result.placedCount).toBeGreaterThanOrEqual(2);
         expect(result.totalResources).toBeGreaterThanOrEqual(2);
     });
@@ -136,14 +136,14 @@ test.describe('Resource Rendering', () => {
         await expect(gp).toHaveEntity({ type: 4, x: passableTile.x, y: passableTile.y });
     });
 
-    test('resources with different amounts are placed correctly', async({ gp }) => {
+    test('resources with different amounts are placed correctly', async({ gs }) => {
         const amounts = [1, 5, 8];
         const placed: Array<{ id: number; amount: number }> = [];
 
         for (const amount of amounts) {
-            const tile = await gp.findPassableTile();
+            const tile = await gs.findPassableTile();
             if (!tile) continue;
-            const resource = await gp.placeResource(0, tile.x, tile.y, amount);
+            const resource = await gs.placeResource(0, tile.x, tile.y, amount);
             if (resource) {
                 placed.push({ id: resource.id, amount: resource.amount });
             }

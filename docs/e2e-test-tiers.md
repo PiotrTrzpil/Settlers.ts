@@ -270,11 +270,19 @@ Runs in ~4ms instead of ~15s.
 Changes 1-6 above implemented. Game ticks run without WebGL in testMap mode.
 `gameStatePage` fixture + `gs` test fixture available for Tier 2/3 tests.
 
-### Phase 3: Migrate Tier 2 tests to `gs` fixture
+### Phase 3: Migrate Tier 2 tests to `gs` fixture — DONE
 
-Migrate spatial tests (unit-movement, building-placement entity tests) from the
-`gp` fixture (requires `testMapPage` → `waitForReady` → WebGL) to the `gs`
-fixture (requires `gameStatePage` → `waitForGameReady` → no WebGL).
+Migrated 18 spatial tests from `gp`/`gpNormal` to `gs` fixture:
+
+- **unit-movement.spec.ts**: All 5 tests → `gs`. `waitForFrames` → `waitForTicks`.
+- **unit-movement-animations.spec.ts**: All 4 tests → `gs`. `gpNormal` tests set 1x
+  speed explicitly. `waitForFrames` → `waitForTicks`.
+- **building-placement.spec.ts**: 5 tests → `gs` (entity creation via `game.execute()`,
+  all 4 unit spawning tests). 14 tests stay on `gp` (canvas clicks, UI buttons,
+  visual rendering, placement preview).
+- **resource-placement.spec.ts**: 4 tests → `gs` (entity creation, amounts, batch
+  placement). 6 tests stay on `gp`/`gpWithUI` (canvas clicks, UI buttons, rendering,
+  placement preview).
 
 ### Phase 4: Tag and organize tests by tier
 
@@ -377,5 +385,9 @@ npx playwright test --grep-invert @visual # Everything except rendering
 **Phase 2** (done): Engine decoupled — `gameLoaded` and ticks work without WebGL.
 `gs` fixture available for tests that don't need rendering.
 
-**Next**: Phase 3 — migrate Tier 2 spatial tests from `gp` to `gs` fixture.
-Phase 4 — add `@visual`/`@spatial`/`@economic` tags for selective CI runs.
+**Phase 3** (done): 18 spatial tests migrated from `gp` to `gs` fixture. These tests
+no longer require WebGL — they use `gameStatePage` (game-state only) instead of
+`testMapPage` (full rendering). `waitForFrames` replaced with `waitForTicks` where
+applicable.
+
+**Next**: Phase 4 — add `@visual`/`@spatial`/`@economic` tags for selective CI runs.

@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 /**
- * E2E tests for unit movement animations.
+ * E2E tests for unit movement animations (Tier 2: Spatial).
  *
  * Consolidated tests verify:
  * - Animation plays with walk sequence during movement and stops at destination
@@ -10,20 +10,20 @@ import { test, expect } from './fixtures';
  * - movementStopped event fires when unit reaches destination
  *
  * All game state queries go through GamePage helpers.
- * Uses programmatic test map (no real game assets required).
+ * Uses the `gs` fixture — game-state only, no WebGL required.
  */
 
 test.describe('Animation During Movement', { tag: '@animations' }, () => {
-    test('walk animation plays during movement and stops at destination', async({ gp }) => {
-        const unit = await gp.spawnUnit(1);
+    test('walk animation plays during movement and stops at destination', async({ gs }) => {
+        const unit = await gs.spawnUnit(1);
         expect(unit).not.toBeNull();
 
         const targetX = unit!.x + 5;
-        await gp.moveUnit(unit!.id, targetX, unit!.y);
-        await gp.waitForUnitsMoving(1, 5000);
+        await gs.moveUnit(unit!.id, targetX, unit!.y);
+        await gs.waitForUnitsMoving(1, 5000);
 
         await test.step('animation is playing with walk sequence', async() => {
-            const animState = await gp.getAnimationState(unit!.id);
+            const animState = await gs.getAnimationState(unit!.id);
             expect(animState).not.toBeNull();
             expect(animState!.playing).toBe(true);
             expect(animState!.sequenceKey).toBe('walk');
@@ -31,42 +31,45 @@ test.describe('Animation During Movement', { tag: '@animations' }, () => {
         });
 
         await test.step('movement controller is in moving state', async() => {
-            const moveState = await gp.getMovementControllerState(unit!.id);
+            const moveState = await gs.getMovementControllerState(unit!.id);
             expect(moveState).not.toBeNull();
             expect(moveState!.state).toBe('moving');
         });
 
         await test.step('animation direction matches movement direction (valid hex 0-5)', async() => {
-            const animState = await gp.getAnimationState(unit!.id);
-            const moveState = await gp.getMovementControllerState(unit!.id);
+            const animState = await gs.getAnimationState(unit!.id);
+            const moveState = await gs.getMovementControllerState(unit!.id);
             expect(animState!.direction).toBe(moveState!.direction);
             expect(animState!.direction).toBeGreaterThanOrEqual(0);
             expect(animState!.direction).toBeLessThanOrEqual(5);
         });
 
         await test.step('animation stops and resets to frame 0 at destination', async() => {
-            await gp.waitForUnitAtDestination(unit!.id, targetX, unit!.y, 10000);
-            await gp.waitForMovementIdle(unit!.id, 5000);
+            await gs.waitForUnitAtDestination(unit!.id, targetX, unit!.y, 10000);
+            await gs.waitForMovementIdle(unit!.id, 5000);
 
-            const animState = await gp.getAnimationState(unit!.id);
+            const animState = await gs.getAnimationState(unit!.id);
             expect(animState).not.toBeNull();
             expect(animState!.playing).toBe(false);
             expect(animState!.currentFrame).toBe(0);
 
-            const moveState = await gp.getMovementControllerState(unit!.id);
+            const moveState = await gs.getMovementControllerState(unit!.id);
             expect(moveState!.state).toBe('idle');
         });
     });
 
-    test('animation state is maintained consistently during movement', { tag: '@slow' }, async({ gpNormal: gp }) => {
-        const unit = await gp.spawnUnit(1);
+    test('animation state is maintained consistently during movement', { tag: '@slow' }, async({ gs }) => {
+        // Use 1x speed for more animation samples during movement
+        await gs.setGameSpeed(1.0);
+
+        const unit = await gs.spawnUnit(1);
         expect(unit).not.toBeNull();
 
-        await gp.moveUnit(unit!.id, unit!.x + 15, unit!.y);
-        await gp.waitForUnitsMoving(1, 5000);
+        await gs.moveUnit(unit!.id, unit!.x + 15, unit!.y);
+        await gs.waitForUnitsMoving(1, 5000);
 
         // Sample animation state multiple times during movement
-        const stateSamples = await gp.sampleAnimationStates(unit!.id, 20);
+        const stateSamples = await gs.sampleAnimationStates(unit!.id, 20);
         expect(stateSamples.length).toBeGreaterThan(5);
 
         // All samples should show animation is playing with walk sequence
@@ -76,26 +79,29 @@ test.describe('Animation During Movement', { tag: '@animations' }, () => {
         }
     });
 
-    test('direction updates when path changes', async({ gpNormal: gp }) => {
-        const unit = await gp.spawnUnit(1);
+    test('direction updates when path changes', async({ gs }) => {
+        // Use 1x speed for direction observation
+        await gs.setGameSpeed(1.0);
+
+        const unit = await gs.spawnUnit(1);
         expect(unit).not.toBeNull();
 
         // Move east first
-        await gp.moveUnit(unit!.id, unit!.x + 5, unit!.y);
-        await gp.waitForUnitsMoving(1, 5000);
-        await gp.waitForUnitToMove(unit!.id, unit!.x, unit!.y, 5000);
+        await gs.moveUnit(unit!.id, unit!.x + 5, unit!.y);
+        await gs.waitForUnitsMoving(1, 5000);
+        await gs.waitForUnitToMove(unit!.id, unit!.x, unit!.y, 5000);
 
-        const initialAnim = await gp.getAnimationState(unit!.id);
+        const initialAnim = await gs.getAnimationState(unit!.id);
         expect(initialAnim).not.toBeNull();
 
         // Get current position and redirect south
-        const entities = await gp.getEntities({ type: 1 });
+        const entities = await gs.getEntities({ type: 1 });
         const current = entities.find(e => e.id === unit!.id)!;
-        await gp.moveUnit(unit!.id, current.x, current.y + 5);
-        await gp.waitForFrames(10, 3000);
+        await gs.moveUnit(unit!.id, current.x, current.y + 5);
+        await gs.waitForTicks(10, 3000);
 
         // Direction should still be valid after path change
-        const newAnim = await gp.getAnimationState(unit!.id);
+        const newAnim = await gs.getAnimationState(unit!.id);
         expect(newAnim).not.toBeNull();
         expect(newAnim!.direction).toBeGreaterThanOrEqual(0);
         expect(newAnim!.direction).toBeLessThanOrEqual(5);
@@ -103,17 +109,17 @@ test.describe('Animation During Movement', { tag: '@animations' }, () => {
 });
 
 test.describe('Movement Events', { tag: '@animations' }, () => {
-    test('movementStopped event fires when unit reaches destination', async({ gp }) => {
-        const { getEvents } = await gp.captureMovementEvents();
+    test('movementStopped event fires when unit reaches destination', async({ gs }) => {
+        const { getEvents } = await gs.captureMovementEvents();
 
-        const unit = await gp.spawnUnit(1);
+        const unit = await gs.spawnUnit(1);
         expect(unit).not.toBeNull();
 
         const targetX = unit!.x + 2;
-        await gp.moveUnit(unit!.id, targetX, unit!.y);
+        await gs.moveUnit(unit!.id, targetX, unit!.y);
 
-        await gp.waitForUnitAtDestination(unit!.id, targetX, unit!.y, 10000);
-        await gp.waitForMovementIdle(unit!.id, 5000);
+        await gs.waitForUnitAtDestination(unit!.id, targetX, unit!.y, 10000);
+        await gs.waitForMovementIdle(unit!.id, 5000);
 
         const events = await getEvents();
         const stopEvent = events.find(e => e.entityId === unit!.id);

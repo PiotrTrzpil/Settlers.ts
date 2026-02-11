@@ -83,14 +83,14 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
     });
 
-    test('building placement via game.execute() creates entity with correct attributes', async({ gp }) => {
-        const buildableTile = await gp.findBuildableTile();
+    test('building placement via game.execute() creates entity with correct attributes', async({ gs }) => {
+        const buildableTile = await gs.findBuildableTile();
         if (!buildableTile) {
             test.skip();
             return;
         }
 
-        const building = await gp.placeBuilding(1, buildableTile.x, buildableTile.y);
+        const building = await gs.placeBuilding(1, buildableTile.x, buildableTile.y);
         expect(building).not.toBeNull();
         expect(building!.type).toBe(2); // EntityType.Building
         expect(building!.subType).toBe(1); // BuildingType.WoodcutterHut
@@ -98,7 +98,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         expect(building!.y).toBe(buildableTile.y);
         expect(building!.player).toBe(0);
 
-        await expect(gp).toHaveBuildingCount(1);
+        await expect(gs).toHaveBuildingCount(1);
     });
 
     test('building placement via canvas click on buildable terrain', async({ gp }) => {
@@ -195,45 +195,45 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
 // --- Unit Spawning ---
 
 test.describe('Unit Spawning', { tag: '@smoke' }, () => {
-    test('spawn carrier creates entity on passable terrain', async({ gp }) => {
-        const entity = await gp.spawnUnit(UnitType.Carrier);
+    test('spawn carrier creates entity on passable terrain', async({ gs }) => {
+        const entity = await gs.spawnUnit(UnitType.Carrier);
         expect(entity).not.toBeNull();
         expect(entity!.x).toBeGreaterThanOrEqual(0);
         expect(entity!.y).toBeGreaterThanOrEqual(0);
 
         // Verify it's on passable terrain via GamePage helper
-        const terrainCheck = await gp.isTerrainPassable(entity!.x, entity!.y);
+        const terrainCheck = await gs.isTerrainPassable(entity!.x, entity!.y);
         expect(terrainCheck).not.toBeNull();
         expect(terrainCheck!.isPassable).toBe(true);
     });
 
-    test('spawn swordsman creates entity', async({ gp }) => {
-        const countBefore = await gp.getDebugField('entityCount');
-        const entity = await gp.spawnUnit(UnitType.Swordsman);
+    test('spawn swordsman creates entity', async({ gs }) => {
+        const countBefore = await gs.getDebugField('entityCount');
+        const entity = await gs.spawnUnit(UnitType.Swordsman);
 
         // Debug stats throttle updates, so wait for refresh
-        await gp.waitForEntityCountAbove(countBefore, Timeout.DEFAULT);
+        await gs.waitForEntityCountAbove(countBefore, Timeout.DEFAULT);
         expect(entity).not.toBeNull();
     });
 
-    test('clicking canvas then spawning uses clicked tile', async({ gp }) => {
-        const buildableTile = await gp.findBuildableTile();
+    test('clicking canvas then spawning uses clicked tile', async({ gs }) => {
+        const buildableTile = await gs.findBuildableTile();
         if (!buildableTile) {
             test.skip();
             return;
         }
 
-        const entity = await gp.spawnUnit(UnitType.Builder, buildableTile.x, buildableTile.y);
+        const entity = await gs.spawnUnit(UnitType.Builder, buildableTile.x, buildableTile.y);
         expect(entity).not.toBeNull();
         expect(entity!.x).toBe(buildableTile.x);
         expect(entity!.y).toBe(buildableTile.y);
     });
 
-    test('spawned unit is on passable terrain (not water)', async({ gp }) => {
-        const entity = await gp.spawnUnit(UnitType.Builder);
+    test('spawned unit is on passable terrain (not water)', async({ gs }) => {
+        const entity = await gs.spawnUnit(UnitType.Builder);
         expect(entity).not.toBeNull();
 
-        const terrainCheck = await gp.isTerrainPassable(entity!.x, entity!.y);
+        const terrainCheck = await gs.isTerrainPassable(entity!.x, entity!.y);
         expect(terrainCheck).not.toBeNull();
         expect(terrainCheck!.isWater).toBe(false);
         expect(terrainCheck!.isPassable).toBe(true);
