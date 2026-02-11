@@ -173,6 +173,44 @@ export class BuildingInventoryManager {
     }
 
     /**
+     * Get an input slot, throwing if building or slot doesn't exist.
+     * Use for mutation operations where the slot MUST exist.
+     */
+    private getInputSlotOrThrow(buildingId: number, materialType: EMaterialType): InventorySlot {
+        const inventory = this.inventories.get(buildingId);
+        if (!inventory) {
+            throw new Error(`Building ${buildingId} has no inventory. Known: [${[...this.inventories.keys()].join(', ')}]`);
+        }
+        const slot = inventory.inputSlots.find(s => s.materialType === materialType);
+        if (!slot) {
+            throw new Error(
+                `Building ${buildingId} (${BuildingType[inventory.buildingType]}) has no input slot for ${EMaterialType[materialType]}. ` +
+                `Has: [${inventory.inputSlots.map(s => EMaterialType[s.materialType]).join(', ')}]`
+            );
+        }
+        return slot;
+    }
+
+    /**
+     * Get an output slot, throwing if building or slot doesn't exist.
+     * Use for mutation operations where the slot MUST exist.
+     */
+    private getOutputSlotOrThrow(buildingId: number, materialType: EMaterialType): InventorySlot {
+        const inventory = this.inventories.get(buildingId);
+        if (!inventory) {
+            throw new Error(`Building ${buildingId} has no inventory. Known: [${[...this.inventories.keys()].join(', ')}]`);
+        }
+        const slot = inventory.outputSlots.find(s => s.materialType === materialType);
+        if (!slot) {
+            throw new Error(
+                `Building ${buildingId} (${BuildingType[inventory.buildingType]}) has no output slot for ${EMaterialType[materialType]}. ` +
+                `Has: [${inventory.outputSlots.map(s => EMaterialType[s.materialType]).join(', ')}]`
+            );
+        }
+        return slot;
+    }
+
+    /**
      * Deposit material into a building's input slot.
      * @param buildingId Entity ID of the building
      * @param materialType Material type to deposit
@@ -180,8 +218,7 @@ export class BuildingInventoryManager {
      * @returns Amount deposited (may be less than requested if slot is full)
      */
     depositInput(buildingId: number, materialType: EMaterialType, amount: number): number {
-        const slot = this.getInputSlot(buildingId, materialType);
-        if (!slot) return 0;
+        const slot = this.getInputSlotOrThrow(buildingId, materialType);
 
         const previousAmount = slot.currentAmount;
         const overflow = deposit(slot, amount);
@@ -202,8 +239,7 @@ export class BuildingInventoryManager {
      * @returns Actual amount withdrawn (may be less than requested)
      */
     withdrawOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
-        const slot = this.getOutputSlot(buildingId, materialType);
-        if (!slot) return 0;
+        const slot = this.getOutputSlotOrThrow(buildingId, materialType);
 
         const previousAmount = slot.currentAmount;
         const withdrawn = withdraw(slot, amount);
@@ -224,8 +260,7 @@ export class BuildingInventoryManager {
      * @returns Amount actually reserved (may be less if not enough unreserved)
      */
     reserveOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
-        const slot = this.getOutputSlot(buildingId, materialType);
-        if (!slot) return 0;
+        const slot = this.getOutputSlotOrThrow(buildingId, materialType);
         return reserve(slot, amount);
     }
 
@@ -237,8 +272,7 @@ export class BuildingInventoryManager {
      * @returns Amount actually released
      */
     releaseOutputReservation(buildingId: number, materialType: EMaterialType, amount: number): number {
-        const slot = this.getOutputSlot(buildingId, materialType);
-        if (!slot) return 0;
+        const slot = this.getOutputSlotOrThrow(buildingId, materialType);
         return releaseReservation(slot, amount);
     }
 
@@ -251,8 +285,7 @@ export class BuildingInventoryManager {
      * @returns Actual amount withdrawn
      */
     withdrawReservedOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
-        const slot = this.getOutputSlot(buildingId, materialType);
-        if (!slot) return 0;
+        const slot = this.getOutputSlotOrThrow(buildingId, materialType);
 
         const previousAmount = slot.currentAmount;
         const withdrawn = withdrawReserved(slot, amount);
@@ -345,10 +378,7 @@ export class BuildingInventoryManager {
      */
     depositOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
         log.debug(`#${this._debugId} depositOutput: building=${buildingId}, listeners=${this.changeListeners.size}`);
-        const slot = this.getOutputSlot(buildingId, materialType);
-        if (!slot) {
-            return 0;
-        }
+        const slot = this.getOutputSlotOrThrow(buildingId, materialType);
 
         const previousAmount = slot.currentAmount;
         const overflow = deposit(slot, amount);
@@ -371,8 +401,7 @@ export class BuildingInventoryManager {
      * @returns Actual amount withdrawn (may be less than requested)
      */
     withdrawInput(buildingId: number, materialType: EMaterialType, amount: number): number {
-        const slot = this.getInputSlot(buildingId, materialType);
-        if (!slot) return 0;
+        const slot = this.getInputSlotOrThrow(buildingId, materialType);
 
         const previousAmount = slot.currentAmount;
         const withdrawn = withdraw(slot, amount);
