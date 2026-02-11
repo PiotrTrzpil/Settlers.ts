@@ -130,8 +130,8 @@ export class GamePage {
                 input.switchMode('select');
             }
         });
-        // Quick wait for state to settle
-        await this.waitForFrames(2, 3000);
+        // Wait for state to settle - use longer timeout for parallel runs
+        await this.waitForFrames(1, 5000);
     }
 
     // ── Debug bridge reads ──────────────────────────────────

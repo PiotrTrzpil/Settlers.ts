@@ -34,6 +34,9 @@ export default defineConfig({
     testDir: './tests/e2e',
     outputDir: './tests/e2e/.results',
     fullyParallel: true,
+    // Limit workers to avoid overwhelming shared worker fixtures (testMapPage)
+    // Tests use worker-scoped pages that can't handle too many parallel tests
+    workers: 2,
     retries: 0,
     snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',
 

@@ -4,7 +4,8 @@
  * ## Fixture Hierarchy
  *
  *   testMapPage (worker-scoped)
- *       └── gp (test-scoped, minimal reset)
+ *       └── gp (test-scoped, game state reset only - fast)
+ *           ├── gpWithUI (adds UI reset: select mode + Buildings tab)
  *           ├── gpWithBuilding (has Lumberjack placed)
  *           ├── gpWithUnit (has Carrier spawned)
  *           └── gpWithMovingUnit (has Carrier moving east)
@@ -13,9 +14,14 @@
  *
  *   import { test, expect } from './fixtures';
  *
- *   // Basic: clean slate with test map loaded
+ *   // Basic: clean slate with test map loaded (fastest, no UI interaction)
  *   test('my test', async ({ gp }) => {
  *       await gp.spawnUnit(1);
+ *   });
+ *
+ *   // With UI: for tests that interact with sidebar buttons
+ *   test('ui test', async ({ gpWithUI }) => {
+ *       // UI is reset to select mode + Buildings tab
  *   });
  *
  *   // Preset: building already placed
@@ -30,9 +36,10 @@
  *
  * ## Notes
  *
+ * - Use `gp` for tests that only use game.execute() APIs (most game logic tests)
+ * - Use `gpWithUI` only for tests that need specific UI state
  * - Test map has ~500 environment entities (trees). Use unitCount/buildingCount
  *   assertions, not entityCount, when checking for "empty" state.
- * - Fixture setup uses force:true for UI clicks to skip actionability waits.
  * - For tests needing a fresh page (screenshots), use standard { page } fixture.
  */
 
@@ -46,6 +53,8 @@ export { expect } from './matchers';
 type TestFixtures = {
     /** GamePage with testMap pre-loaded. State is reset before each test. */
     gp: GamePage;
+    /** GamePage with UI reset to select mode + Buildings tab (for UI interaction tests). */
+    gpWithUI: GamePage;
     /** GamePage with a Lumberjack building already placed. */
     gpWithBuilding: GamePage;
     /** GamePage with a Carrier unit already spawned. */
@@ -82,19 +91,28 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     // Test-scoped fixtures: reset state before each test
     // ─────────────────────────────────────────────────────────────────────────
 
-    /** Base fixture: minimal reset, clean state */
+    /** Base fixture: minimal reset, clean state (no UI interaction) */
     gp: [async({ testMapPage }, use) => {
         const gp = new GamePage(testMapPage);
 
-        // Reset game state (removes user entities, keeps environment)
+        // Reset game state only (removes user entities, keeps environment)
+        // No UI clicks - most tests use game.execute() APIs and don't need UI state
         await gp.resetGameState();
 
-        // Quick UI reset with force:true to skip actionability checks
+        await use(gp);
+    }, { timeout: 8_000 }],
+
+    /** Fixture with UI reset: select mode + Buildings tab (for UI interaction tests) */
+    gpWithUI: [async({ testMapPage }, use) => {
+        const gp = new GamePage(testMapPage);
+        await gp.resetGameState();
+
+        // Reset UI to known state for tests that interact with sidebar
         await testMapPage.locator('[data-testid="btn-select-mode"]').click({ force: true });
         await testMapPage.locator('.tab-btn', { hasText: 'Buildings' }).click({ force: true });
 
         await use(gp);
-    }, { timeout: 5_000 }],
+    }, { timeout: 10_000 }],
 
     /** Preset: reset state + place a Lumberjack building */
     gpWithBuilding: [async({ testMapPage }, use) => {
@@ -108,9 +126,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         }
 
         // Quick sync
-        await gp.waitForFrames(1, 2_000);
+        await gp.waitForFrames(1, 3_000);
         await use(gp);
-    }, { timeout: 5_000 }],
+    }, { timeout: 8_000 }],
 
     /** Preset: reset state + spawn a Carrier unit */
     gpWithUnit: [async({ testMapPage }, use) => {
@@ -121,9 +139,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         await gp.spawnUnit(1);
 
         // Wait for entity to appear
-        await gp.waitForUnitCount(1, 3_000);
+        await gp.waitForUnitCount(1, 5_000);
         await use(gp);
-    }, { timeout: 5_000 }],
+    }, { timeout: 8_000 }],
 
     /** Preset: reset state + spawn a Carrier and start moving east */
     gpWithMovingUnit: [async({ testMapPage }, use) => {
@@ -135,11 +153,11 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         if (unit) {
             await gp.moveUnit(unit.id, unit.x + 10, unit.y);
             // Wait for movement to start
-            await gp.waitForUnitsMoving(1, 3_000);
+            await gp.waitForUnitsMoving(1, 5_000);
         }
 
         await use(gp);
-    }, { timeout: 5_000 }],
+    }, { timeout: 8_000 }],
 
     /** Preset: camera centered on map */
     gpCentered: [async({ testMapPage }, use) => {
@@ -155,5 +173,5 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         }
 
         await use(gp);
-    }, { timeout: 5_000 }],
+    }, { timeout: 8_000 }],
 });
