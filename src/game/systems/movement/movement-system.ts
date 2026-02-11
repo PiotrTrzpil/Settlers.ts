@@ -303,41 +303,26 @@ export class MovementSystem implements TickSystem {
     }
 
     /**
-     * Emit movement events when state or direction changes.
+     * Emit movement stopped event when unit stops.
+     * Note: movementStarted and directionChanged events were removed as
+     * animation is now handled by SettlerTaskSystem, not event-driven.
+     * movementStopped is kept for CarrierSystem arrival detection.
      */
     private emitMovementEvents(
         controller: MovementController,
         prevState: MovementState,
-        prevDirection: number
+        _prevDirection: number
     ): void {
         if (!this.eventBus) return;
 
-        const entityId = controller.entityId;
         const newState = controller.state;
-        const newDirection = controller.direction;
 
-        // Emit direction change event
-        if (newDirection !== prevDirection) {
-            this.eventBus.emit('unit:directionChanged', {
-                entityId,
-                direction: newDirection,
-                previousDirection: prevDirection,
+        // Only emit movementStopped - used by CarrierSystem for arrival detection
+        if (newState !== prevState && newState === 'idle' && prevState !== 'idle') {
+            this.eventBus.emit('unit:movementStopped', {
+                entityId: controller.entityId,
+                direction: controller.direction,
             });
-        }
-
-        // Emit state change events
-        if (newState !== prevState) {
-            if (newState === 'moving' && prevState !== 'moving') {
-                this.eventBus.emit('unit:movementStarted', {
-                    entityId,
-                    direction: newDirection,
-                });
-            } else if (newState === 'idle' && prevState !== 'idle') {
-                this.eventBus.emit('unit:movementStopped', {
-                    entityId,
-                    direction: newDirection,
-                });
-            }
         }
     }
 

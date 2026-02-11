@@ -5,6 +5,7 @@ import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
 import { MapSize } from '@/utilities/map-size';
 import type { EventBus } from '../event-bus';
 import { gameSettings } from '../game-settings';
+import type { SettlerTaskSystem } from '../systems/settler-tasks';
 import {
     Command,
     FORMATION_OFFSETS,
@@ -48,6 +49,8 @@ interface CommandContext {
     groundHeight: Uint8Array;
     mapSize: MapSize;
     eventBus: EventBus;
+    /** Optional task system for routing movement through tasks */
+    settlerTaskSystem?: SettlerTaskSystem;
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): boolean {
@@ -153,6 +156,11 @@ function findValidSpawnTile(
 }
 
 function executeMoveUnit(ctx: CommandContext, cmd: MoveUnitCommand): boolean {
+    // Route through task system if available (handles animation)
+    if (ctx.settlerTaskSystem) {
+        return ctx.settlerTaskSystem.assignMoveTask(cmd.entityId, cmd.targetX, cmd.targetY);
+    }
+    // Fallback to direct movement (no animation handling)
     return ctx.state.movement.moveUnit(cmd.entityId, cmd.targetX, cmd.targetY);
 }
 
@@ -242,7 +250,7 @@ function executeSelectArea(ctx: CommandContext, cmd: SelectAreaCommand): boolean
 }
 
 function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCommand): boolean {
-    const { state } = ctx;
+    const { state, settlerTaskSystem } = ctx;
 
     const selectedUnits: number[] = [];
     for (const entityId of state.selectedEntityIds) {
@@ -259,7 +267,12 @@ function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCom
         const targetX = cmd.targetX + offset[0];
         const targetY = cmd.targetY + offset[1];
 
-        if (state.movement.moveUnit(selectedUnits[i], targetX, targetY)) {
+        // Route through task system if available (handles animation)
+        const moved = settlerTaskSystem
+            ? settlerTaskSystem.assignMoveTask(selectedUnits[i], targetX, targetY)
+            : state.movement.moveUnit(selectedUnits[i], targetX, targetY);
+
+        if (moved) {
             anyMoved = true;
         }
     }
@@ -322,9 +335,10 @@ export function executeCommand(
     groundType: Uint8Array,
     groundHeight: Uint8Array,
     mapSize: MapSize,
-    eventBus: EventBus
+    eventBus: EventBus,
+    settlerTaskSystem?: SettlerTaskSystem
 ): boolean {
-    const ctx: CommandContext = { state, groundType, groundHeight, mapSize, eventBus };
+    const ctx: CommandContext = { state, groundType, groundHeight, mapSize, eventBus, settlerTaskSystem };
 
     switch (cmd.type) {
     case 'place_building':

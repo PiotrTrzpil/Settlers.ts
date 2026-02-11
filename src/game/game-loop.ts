@@ -1,5 +1,4 @@
 import { GameState } from './game-state';
-import { IdleBehaviorSystem } from './systems/idle-behavior';
 import { TreeSystem } from './systems/tree-system';
 import { WoodcuttingSystem } from './systems/woodcutting-system';
 import { SettlerTaskSystem } from './systems/settler-tasks';
@@ -79,9 +78,6 @@ export class GameLoop {
     /** Building construction system (registered as TickSystem) */
     public readonly constructionSystem: BuildingConstructionSystem;
 
-    /** Idle behavior system for animation direction updates */
-    public readonly idleBehaviorSystem: IdleBehaviorSystem;
-
     /** Carrier logistics system */
     public readonly carrierSystem: CarrierSystem;
 
@@ -122,12 +118,7 @@ export class GameLoop {
         gameState.movement.setRng(gameState.rng);
         this.registerSystem(gameState.movement);
 
-        // 2. Idle behavior — updates animation based on movement events
-        this.idleBehaviorSystem = new IdleBehaviorSystem(gameState, this.animationService);
-        this.idleBehaviorSystem.registerEvents(eventBus);
-        this.registerSystem(this.idleBehaviorSystem);
-
-        // 3. Building construction — terrain modification, phase transitions
+        // 2. Building construction — terrain modification, phase transitions
         this.constructionSystem = new BuildingConstructionSystem({
             gameState,
             buildingStateManager: gameState.buildingStateManager,
@@ -141,7 +132,7 @@ export class GameLoop {
             this.handleBuildingCreated(entityId, buildingType as BuildingType, x, y);
         };
 
-        // 4. Carrier system — manages carrier fatigue and behavior
+        // 3. Carrier system — manages carrier fatigue and behavior
         this.carrierSystem = new CarrierSystem({
             carrierManager: gameState.carrierManager,
             inventoryManager: gameState.inventoryManager,
@@ -152,7 +143,7 @@ export class GameLoop {
         this.carrierSystem.registerEvents(eventBus);
         this.registerSystem(this.carrierSystem);
 
-        // 5. Logistics dispatcher — assigns carriers to pending requests
+        // 4. Logistics dispatcher — assigns carriers to pending requests
         this.logisticsDispatcher = new LogisticsDispatcher({
             gameState: gameState,
             carrierSystem: this.carrierSystem,
@@ -162,7 +153,7 @@ export class GameLoop {
         this.logisticsDispatcher.registerEvents(eventBus);
         this.registerSystem(this.logisticsDispatcher);
 
-        // 6. Tree system — manages tree growth and cutting states
+        // 5. Tree system — manages tree growth and cutting states
         this.treeSystem = new TreeSystem(gameState, this.animationService);
         this.registerSystem(this.treeSystem);
 
@@ -171,21 +162,18 @@ export class GameLoop {
             this.handleMapObjectCreated(entityId, objectType);
         };
 
-        // 7. Settler task system — manages all settler behaviors via task sequences
+        // 6. Settler task system — manages all unit behaviors and animations
         this.settlerTaskSystem = new SettlerTaskSystem(gameState, this.animationService);
         this.registerSystem(this.settlerTaskSystem);
 
-        // Wire up idle behavior to defer to task system for managed settlers
-        this.idleBehaviorSystem.setManagedCheck((entityId) => this.settlerTaskSystem.isWorking(entityId));
-
-        // 8. Woodcutting domain — registers work handler with task system
+        // 7. Woodcutting domain — registers work handler with task system
         this.woodcuttingSystem = new WoodcuttingSystem(gameState, this.treeSystem, this.settlerTaskSystem);
 
-        // 9. Production system — handles building production cycles (requests inputs, produces outputs)
+        // 8. Production system — handles building production cycles (requests inputs, produces outputs)
         this.productionSystem = new ProductionSystem(gameState);
         this.registerSystem(this.productionSystem);
 
-        // 10. Inventory visualizer — syncs building output to visual stacked resources
+        // 9. Inventory visualizer — syncs building output to visual stacked resources
         this.inventoryVisualizer = new InventoryVisualizer(
             gameState,
             gameState.inventoryManager
@@ -193,7 +181,6 @@ export class GameLoop {
 
         // Wire up entity removal callback for cleanup
         gameState.onEntityRemoved = (entityId: number) => {
-            this.idleBehaviorSystem.cleanupIdleState(entityId);
             this.handleEntityRemoved(entityId);
         };
 

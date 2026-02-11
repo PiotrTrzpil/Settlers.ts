@@ -1,7 +1,12 @@
 /**
- * Settler Task System - manages settler behaviors via task sequences.
+ * Settler Task System - manages ALL unit behaviors via tasks.
  *
- * Settlers execute jobs (sequences of tasks) defined in YAML.
+ * This system is the single source of truth for unit behavior and animation:
+ * - Workers execute job sequences defined in YAML
+ * - All units (including non-workers) can receive move tasks from user commands
+ * - Handles walk/idle animations for all units
+ * - Handles idle turning when units have no task
+ *
  * Domain systems (WoodcuttingSystem, etc.) register work handlers
  * that are called when settlers perform WORK_ON_ENTITY tasks.
  */
@@ -33,14 +38,37 @@ import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDe
 
 const log = new LogHandler('SettlerTaskSystem');
 
-/** Runtime state for each settler */
-interface SettlerRuntime {
+/** Number of sprite directions (matches hex grid) */
+const NUM_DIRECTIONS = 6;
+
+/** Simple move task state (for user-initiated movement) */
+interface MoveTaskState {
+    type: 'move';
+    targetX: number;
+    targetY: number;
+}
+
+/** Idle animation state for random turning */
+interface IdleAnimationState {
+    idleTime: number;
+    nextIdleTurnTime: number;
+}
+
+/** Runtime state for each unit */
+interface UnitRuntime {
     state: SettlerState;
+    /** YAML-based job state (for workers) */
     job: SettlerJobState | null;
+    /** Simple move task (for user commands) */
+    moveTask: MoveTaskState | null;
+    /** Last known direction (for change detection) */
+    lastDirection: number;
+    /** Idle animation state */
+    idleState: IdleAnimationState;
 }
 
 /**
- * Manages all settler behaviors through task execution.
+ * Manages all unit behaviors through task execution.
  */
 export class SettlerTaskSystem implements TickSystem {
     private gameState: GameState;
@@ -48,7 +76,7 @@ export class SettlerTaskSystem implements TickSystem {
     private settlerConfigs: SettlerConfigs;
     private jobDefinitions: JobDefinitions;
     private workHandlers = new Map<SearchType, WorkHandler>();
-    private runtimes = new Map<number, SettlerRuntime>();
+    private runtimes = new Map<number, UnitRuntime>();
 
     constructor(gameState: GameState, animationService: AnimationService) {
         this.gameState = gameState;
@@ -116,11 +144,20 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     /**
-     * Check if a settler is currently working (not idle).
+     * Check if a unit is currently working (has active job or move task).
      */
     isWorking(entityId: number): boolean {
         const runtime = this.runtimes.get(entityId);
-        return runtime?.state === SettlerState.WORKING;
+        if (!runtime) return false;
+        return runtime.state === SettlerState.WORKING || runtime.moveTask !== null;
+    }
+
+    /**
+     * Check if a unit has an active move task.
+     */
+    hasMoveTask(entityId: number): boolean {
+        const runtime = this.runtimes.get(entityId);
+        return runtime?.moveTask !== null;
     }
 
     /**
@@ -132,20 +169,81 @@ export class SettlerTaskSystem implements TickSystem {
         log.debug(`Registered work handler for ${searchType}`);
     }
 
-    /** TickSystem interface */
-    tick(dt: number): void {
-        // Process all settlers that have configs
-        for (const [unitType, config] of this.settlerConfigs) {
-            const settlers = this.gameState.entities.filter(
-                e => e.type === EntityType.Unit && e.subType === unitType
-            );
+    // ─────────────────────────────────────────────────────────────
+    // Public API for assigning tasks
+    // ─────────────────────────────────────────────────────────────
 
-            for (const settler of settlers) {
-                this.updateSettler(settler, config, dt);
-            }
+    /**
+     * Assign a simple move task to a unit (for user-initiated movement).
+     * This interrupts any current job and starts movement to the target.
+     * @returns true if movement was started successfully
+     */
+    assignMoveTask(entityId: number, targetX: number, targetY: number): boolean {
+        const entity = this.gameState.getEntity(entityId);
+        if (!entity || entity.type !== EntityType.Unit) {
+            return false;
         }
 
-        // Cleanup removed settlers
+        // Start movement via MovementSystem
+        const moveSuccess = this.gameState.movement.moveUnit(entityId, targetX, targetY);
+        if (!moveSuccess) {
+            return false;
+        }
+
+        // Get or create runtime
+        const runtime = this.getRuntime(entityId);
+
+        // Interrupt any current job
+        if (runtime.job) {
+            const config = this.settlerConfigs.get(entity.subType as UnitType);
+            if (config) {
+                this.interruptJob(entity, config, runtime);
+            }
+            runtime.job = null;
+        }
+
+        // Set up move task
+        runtime.moveTask = {
+            type: 'move',
+            targetX,
+            targetY,
+        };
+        runtime.state = SettlerState.WORKING;
+
+        // Start walk animation
+        const controller = this.gameState.movement.getController(entityId);
+        const direction = controller?.direction ?? 0;
+        this.startWalkAnimation(entity, direction);
+
+        log.debug(`Unit ${entityId} assigned move task to (${targetX}, ${targetY})`);
+        return true;
+    }
+
+    /**
+     * Cancel any active move task for a unit.
+     */
+    cancelMoveTask(entityId: number): void {
+        const runtime = this.runtimes.get(entityId);
+        if (runtime?.moveTask) {
+            runtime.moveTask = null;
+            // Don't change state - let tick() handle transition to idle
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Tick processing
+    // ─────────────────────────────────────────────────────────────
+
+    /** TickSystem interface */
+    tick(dt: number): void {
+        // Process ALL units (not just those with YAML configs)
+        const allUnits = this.gameState.entities.filter(e => e.type === EntityType.Unit);
+
+        for (const unit of allUnits) {
+            this.updateUnit(unit, dt);
+        }
+
+        // Cleanup removed units
         for (const id of this.runtimes.keys()) {
             if (!this.gameState.getEntity(id)) {
                 this.runtimes.delete(id);
@@ -153,21 +251,148 @@ export class SettlerTaskSystem implements TickSystem {
         }
     }
 
-    private getRuntime(settlerId: number): SettlerRuntime {
-        let runtime = this.runtimes.get(settlerId);
+    private getRuntime(entityId: number): UnitRuntime {
+        let runtime = this.runtimes.get(entityId);
         if (!runtime) {
-            runtime = { state: SettlerState.IDLE, job: null };
-            this.runtimes.set(settlerId, runtime);
+            runtime = {
+                state: SettlerState.IDLE,
+                job: null,
+                moveTask: null,
+                lastDirection: 0,
+                idleState: {
+                    idleTime: 0,
+                    nextIdleTurnTime: 2 + this.gameState.rng.next() * 4,
+                },
+            };
+            this.runtimes.set(entityId, runtime);
         }
         return runtime;
     }
 
-    private updateSettler(settler: Entity, config: SettlerConfig, dt: number): void {
-        const runtime = this.getRuntime(settler.id);
+    private updateUnit(unit: Entity, dt: number): void {
+        const runtime = this.getRuntime(unit.id);
+        const config = this.settlerConfigs.get(unit.subType as UnitType);
 
+        // Update direction tracking and animation
+        this.updateDirectionTracking(unit, runtime);
+
+        // Handle move task first (takes priority)
+        if (runtime.moveTask) {
+            this.updateMoveTask(unit, runtime);
+            return;
+        }
+
+        // Handle YAML-based jobs for configured settlers
+        if (config) {
+            this.updateSettler(unit, config, runtime, dt);
+            return;
+        }
+
+        // Handle idle state for non-configured units
+        this.updateIdleUnit(unit, runtime, dt);
+    }
+
+    /**
+     * Track direction changes and update animation direction.
+     */
+    private updateDirectionTracking(unit: Entity, runtime: UnitRuntime): void {
+        const controller = this.gameState.movement.getController(unit.id);
+        if (!controller) return;
+
+        const currentDirection = controller.direction;
+        if (currentDirection !== runtime.lastDirection) {
+            // Direction changed - update animation
+            this.animationService.setDirection(unit.id, currentDirection);
+            runtime.lastDirection = currentDirection;
+        }
+    }
+
+    /**
+     * Update a simple move task.
+     */
+    private updateMoveTask(unit: Entity, runtime: UnitRuntime): void {
+        const controller = this.gameState.movement.getController(unit.id);
+        if (!controller) {
+            // No movement controller - cancel task
+            runtime.moveTask = null;
+            runtime.state = SettlerState.IDLE;
+            this.setIdleAnimation(unit);
+            return;
+        }
+
+        // Check if movement is complete
+        if (controller.state === 'idle') {
+            // Movement finished
+            runtime.moveTask = null;
+            runtime.state = SettlerState.IDLE;
+            this.setIdleAnimation(unit);
+            runtime.idleState.idleTime = 0;
+            log.debug(`Unit ${unit.id} completed move task`);
+        }
+        // Otherwise keep waiting for movement to complete
+    }
+
+    /**
+     * Update idle state for non-configured units (random turning, etc.)
+     */
+    private updateIdleUnit(unit: Entity, runtime: UnitRuntime, dt: number): void {
+        const controller = this.gameState.movement.getController(unit.id);
+
+        // If unit is moving (e.g., pushed), play walk animation
+        if (controller?.state === 'moving') {
+            // Ensure walk animation is playing
+            const animState = this.animationService.getState(unit.id);
+            if (!animState?.playing || animState.sequenceKey !== ANIMATION_SEQUENCES.WALK) {
+                this.startWalkAnimation(unit, controller.direction);
+            }
+            runtime.idleState.idleTime = 0;
+            return;
+        }
+
+        // Unit is idle - handle idle turning
+        this.updateIdleTurning(unit, runtime, dt);
+    }
+
+    /**
+     * Handle random idle turning for standing units.
+     */
+    private updateIdleTurning(unit: Entity, runtime: UnitRuntime, dt: number): void {
+        const idleState = runtime.idleState;
+        idleState.idleTime += dt;
+
+        if (idleState.idleTime >= idleState.nextIdleTurnTime) {
+            // Time for a random turn
+            const animState = this.animationService.getState(unit.id);
+            const currentDirection = animState?.direction ?? 0;
+            const newDirection = this.getAdjacentDirection(currentDirection);
+            this.animationService.setDirection(unit.id, newDirection);
+
+            // Reset timer
+            idleState.idleTime = 0;
+            idleState.nextIdleTurnTime = 2 + this.gameState.rng.next() * 4;
+        }
+    }
+
+    /**
+     * Get an adjacent direction for idle turning.
+     */
+    private getAdjacentDirection(currentDirection: number): number {
+        const offset = this.gameState.rng.nextBool() ? 1 : -1;
+        return ((currentDirection + offset) % NUM_DIRECTIONS + NUM_DIRECTIONS) % NUM_DIRECTIONS;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // YAML-based settler job handling (existing logic)
+    // ─────────────────────────────────────────────────────────────
+
+    private updateSettler(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
         switch (runtime.state) {
         case SettlerState.IDLE:
             this.handleIdle(settler, config, runtime);
+            // Also handle idle turning when not working
+            if (runtime.state === SettlerState.IDLE) {
+                this.updateIdleTurning(settler, runtime, dt);
+            }
             break;
 
         case SettlerState.WORKING:
@@ -182,7 +407,7 @@ export class SettlerTaskSystem implements TickSystem {
         }
     }
 
-    private handleIdle(settler: Entity, config: SettlerConfig, runtime: SettlerRuntime): void {
+    private handleIdle(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
         const handler = this.workHandlers.get(config.search);
         if (!handler) return;
 
@@ -262,11 +487,11 @@ export class SettlerTaskSystem implements TickSystem {
         // If not moving, start moving home
         if (controller.state === 'idle') {
             this.gameState.movement.moveUnit(settler.id, homeBuilding.x, homeBuilding.y);
-            this.animationService.play(settler.id, ANIMATION_SEQUENCES.WALK, { loop: true });
+            this.startWalkAnimation(settler, controller.direction);
         }
     }
 
-    private handleWorking(settler: Entity, config: SettlerConfig, runtime: SettlerRuntime, dt: number): void {
+    private handleWorking(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
         const job = runtime.job;
         if (!job) {
             runtime.state = SettlerState.IDLE;
@@ -312,7 +537,7 @@ export class SettlerTaskSystem implements TickSystem {
     private executeTask(
         settler: Entity,
         config: SettlerConfig,
-        runtime: SettlerRuntime,
+        runtime: UnitRuntime,
         task: TaskNode,
         dt: number
     ): TaskResult {
@@ -502,14 +727,15 @@ export class SettlerTaskSystem implements TickSystem {
         return TaskResult.CONTINUE;
     }
 
-    private completeJob(settler: Entity, runtime: SettlerRuntime): void {
+    private completeJob(settler: Entity, runtime: UnitRuntime): void {
         log.debug(`Settler ${settler.id} completed job ${runtime.job?.jobId}`);
         runtime.state = SettlerState.IDLE;
         runtime.job = null;
         this.setIdleAnimation(settler);
+        runtime.idleState.idleTime = 0;
     }
 
-    private interruptJob(settler: Entity, config: SettlerConfig, runtime: SettlerRuntime): void {
+    private interruptJob(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
         const handler = this.workHandlers.get(config.search);
         // Only call onWorkInterrupt if work actually started (onWorkStart was called)
         if (handler && runtime.job?.targetId && runtime.job.workStarted) {
@@ -524,6 +750,25 @@ export class SettlerTaskSystem implements TickSystem {
     // ─────────────────────────────────────────────────────────────
     // Animation helpers (uses AnimationService)
     // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Start walk animation for a unit.
+     */
+    private startWalkAnimation(unit: Entity, direction: number): void {
+        const sequenceKey = this.getWalkSequenceKey(unit);
+        this.animationService.play(unit.id, sequenceKey, { loop: true, direction });
+    }
+
+    /**
+     * Determine the correct walk sequence key for a unit.
+     * Carriers carrying a material use a material-specific carry sequence.
+     */
+    private getWalkSequenceKey(entity: Entity): string {
+        if (entity.subType === UnitType.Carrier && entity.carriedMaterial !== undefined) {
+            return carrySequenceKey(entity.carriedMaterial);
+        }
+        return ANIMATION_SEQUENCES.WALK;
+    }
 
     /**
      * Apply animation for a task action.

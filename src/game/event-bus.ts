@@ -42,23 +42,15 @@ export interface GameEvents {
 
     // === Movement Events ===
 
-    /** Emitted when a unit starts moving */
-    'unit:movementStarted': {
-        entityId: number;
-        direction: number;
-    };
-
-    /** Emitted when a unit stops moving (becomes idle) */
+    /**
+     * Emitted when a unit stops moving (becomes idle).
+     * Used by CarrierSystem for arrival detection.
+     * Note: movementStarted and directionChanged were removed - animation
+     * is now handled by SettlerTaskSystem directly, not via events.
+     */
     'unit:movementStopped': {
         entityId: number;
         direction: number;
-    };
-
-    /** Emitted when a unit's facing direction changes during movement */
-    'unit:directionChanged': {
-        entityId: number;
-        direction: number;
-        previousDirection: number;
     };
 
     // === Carrier Events ===

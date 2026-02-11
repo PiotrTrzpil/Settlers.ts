@@ -492,6 +492,8 @@ export function useRenderer({
             game.groundType
         );
         entityRenderer.setAnimationService(game.gameLoop.animationService);
+        // Skip sprite loading in procedural textures mode (testMap) - no game files needed
+        entityRenderer.skipSpriteLoading = game.useProceduralTextures;
         // Enable game ticks once sprites are loaded (prevents animation errors during loading)
         entityRenderer.onSpritesLoaded = () => game.gameLoop.enableTicks();
         renderer.add(entityRenderer);

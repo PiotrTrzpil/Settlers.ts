@@ -224,6 +224,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private frameColorTime = 0;
     private frameSelectionTime = 0;
 
+    /** Skip sprite loading (for testMap or procedural textures mode) */
+    public skipSpriteLoading = false;
+
     constructor(
         mapSize: MapSize,
         groundHeight: Uint8Array,
@@ -281,7 +284,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.buildingIndicatorRenderer.init(gl);
 
         // Initialize sprite batch renderer and manager if available
-        if (this.spriteManager) {
+        if (this.spriteManager && !this.skipSpriteLoading) {
             this.spriteBatchRenderer.init(gl);
 
             // Start sprite loading in background (don't await)
@@ -294,6 +297,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 // Notify when sprites are loaded (even if loading failed, animations are ready)
                 this._onSpritesLoaded?.();
             });
+        } else {
+            // No sprite manager or skip flag set (testMap/procedural textures) - enable ticks immediately
+            this._onSpritesLoaded?.();
         }
 
         return true;

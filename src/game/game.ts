@@ -113,7 +113,7 @@ export class Game {
     public execute(cmd: Command): boolean {
         return executeCommand(
             this.state, cmd, this.groundType, this.groundHeight, this.mapSize,
-            this.eventBus
+            this.eventBus, this.gameLoop.settlerTaskSystem
         );
     }
 
