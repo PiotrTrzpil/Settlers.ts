@@ -27,6 +27,8 @@ describe('Unit Placement, Selection & Movement', () => {
         eventBus = new EventBus();
         // Set terrain data for the movement system (required for pathfinding)
         state.setTerrainData(groundType, groundHeight, mapSize.width, mapSize.height);
+        // Set rng for the movement system (required for push/collision resolution)
+        state.movement.setRng(state.rng);
     });
 
     // ── Unit Placement (spawn_unit) ────────────────────────────────────
@@ -597,7 +599,7 @@ describe('Unit Placement, Selection & Movement', () => {
             expect(unit.y).toBe(5);
         });
 
-        it.skip('should handle multi-unit workflow: spawn multiple, box select, move in formation', () => {
+        it('should handle multi-unit workflow: spawn multiple, box select, move in formation', () => {
             // Spawn 3 units in a cluster
             for (let i = 0; i < 3; i++) {
                 executeCommand(state, {

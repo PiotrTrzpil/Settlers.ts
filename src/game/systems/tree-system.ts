@@ -140,8 +140,8 @@ export class TreeSystem implements TickSystem {
         // Only register trees
         if (OBJECT_TYPE_CATEGORY[objectType] !== 'trees') return;
 
-        const entity = this.gameState.getEntity(entityId);
-        if (!entity) return;
+        // Entity MUST exist - we're being called from entity creation event
+        const entity = this.gameState.getEntityOrThrow(entityId, 'tree for registration');
 
         const stage = planted ? TreeStage.Growing : TreeStage.Normal;
         const offset = this.getSpriteOffset(stage, 0);

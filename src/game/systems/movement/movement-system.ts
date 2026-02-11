@@ -248,11 +248,15 @@ export class MovementSystem implements TickSystem {
             return true;
         }
 
-        // After resolution, re-check if waypoint is still blocked
-        const stillBlocked = this.tileOccupancy.get(tileKey(wp.x, wp.y));
-        if (stillBlocked !== undefined && stillBlocked !== controller.entityId) {
-            controller.setBlocked(deltaSec);
-            return true;
+        // After resolution, re-check if the CURRENT waypoint is still blocked
+        // (detour may have changed the next waypoint to a different tile)
+        const currentWp = controller.nextWaypoint;
+        if (currentWp) {
+            const stillBlocked = this.tileOccupancy.get(tileKey(currentWp.x, currentWp.y));
+            if (stillBlocked !== undefined && stillBlocked !== controller.entityId) {
+                controller.setBlocked(deltaSec);
+                return true;
+            }
         }
 
         return false;

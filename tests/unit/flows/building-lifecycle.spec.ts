@@ -29,8 +29,7 @@ import {
 } from '@/game/features/building-construction';
 
 describe('Building Lifecycle: place → construct → remove', () => {
-    // TODO: Fix tileOccupancy - worker overwrites building's tile at (20,20)
-    it.skip('full lifecycle from placement through construction to removal', () => {
+    it('full lifecycle from placement through construction to removal', () => {
         const map = createTestMap(64, 64, { flatHeight: 100 });
         const state = createGameState();
 

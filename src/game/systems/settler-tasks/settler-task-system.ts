@@ -112,8 +112,8 @@ export class SettlerTaskSystem implements TickSystem {
 
             findTarget: (_x: number, _y: number, settlerId?: number) => {
                 if (settlerId === undefined) return null;
-                const settler = this.gameState.getEntity(settlerId);
-                if (!settler) return null;
+                // Settler MUST exist if we're searching for its target
+                const settler = this.gameState.getEntityOrThrow(settlerId, 'settler for findTarget');
 
                 const workplace = this.gameState.findNearestWorkplace(settler);
                 if (!workplace) return null;
@@ -494,7 +494,9 @@ export class SettlerTaskSystem implements TickSystem {
 
     private handleIdle(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
         const handler = this.workHandlers.get(config.search);
-        if (!handler) return;
+        if (!handler) {
+            throw new Error(`No work handler registered for search type: ${config.search}. Settler ${settler.id} (${UnitType[settler.subType]}) cannot find work.`);
+        }
 
         // Find home building (workplace) for this settler
         const homeBuilding = this.gameState.findNearestWorkplace(settler);
@@ -561,7 +563,9 @@ export class SettlerTaskSystem implements TickSystem {
      */
     private returnHomeAndWait(settler: Entity, homeBuilding: Entity): void {
         const controller = this.gameState.movement.getController(settler.id);
-        if (!controller) return;
+        if (!controller) {
+            throw new Error(`Settler ${settler.id} (${UnitType[settler.subType]}) has no movement controller`);
+        }
 
         const dist = hexDistance(settler.x, settler.y, homeBuilding.x, homeBuilding.y);
 
@@ -853,9 +857,7 @@ export class SettlerTaskSystem implements TickSystem {
         }
 
         if (!job.data.homeId) {
-            log.warn(`Settler ${settler.id} has no home building for dropoff`);
-            job.data.carryingGood = null;
-            return TaskResult.DONE;
+            throw new Error(`Settler ${settler.id} (${UnitType[settler.subType]}) has no home building for dropoff. Job started incorrectly.`);
         }
 
         const homeId = job.data.homeId;

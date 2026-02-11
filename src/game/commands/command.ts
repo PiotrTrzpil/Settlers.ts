@@ -1,4 +1,4 @@
-import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE } from '../entity';
+import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE, tileKey } from '../entity';
 import { BuildingConstructionPhase } from '../features/building-construction';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
@@ -96,8 +96,18 @@ function spawnWorkerForBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand):
         return;
     }
 
+    // Get building entity ID before spawning worker (it occupies the tile now)
+    const building = ctx.state.getEntityAt(cmd.x, cmd.y);
+
     // Spawn worker at building location - don't check for occupancy
     const entity = ctx.state.addEntity(EntityType.Unit, workerType, cmd.x, cmd.y, cmd.player);
+
+    // Restore building's tile occupancy - workers "work inside" buildings
+    // and shouldn't claim the building's tile
+    if (building) {
+        ctx.state.tileOccupancy.set(tileKey(cmd.x, cmd.y), building.id);
+    }
+
     ctx.eventBus.emit('unit:spawned', {
         entityId: entity.id,
         unitType: workerType,
