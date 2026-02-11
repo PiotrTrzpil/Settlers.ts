@@ -226,7 +226,7 @@ export class CarrierSystem implements TickSystem {
         }
 
         // Get carrier's home building (must exist since canAssignJobTo passed)
-        const carrier = this.carrierManager.getCarrier(carrierId)!;
+        const carrier = this.carrierManager.getCarrierOrThrow(carrierId, 'for job assignment');
 
         // Assign job via SettlerTaskSystem
         const success = this.settlerTaskSystem.assignCarrierJob(

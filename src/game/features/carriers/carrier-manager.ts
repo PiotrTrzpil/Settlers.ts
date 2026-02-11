@@ -119,6 +119,19 @@ export class CarrierManager {
     }
 
     /**
+     * Get a carrier's state, throwing if not found.
+     * Use when the carrier MUST exist.
+     * @param entityId - The entity ID of the carrier
+     * @param context - Optional context for error message
+     * @returns The carrier state
+     * @throws Error if carrier not found
+     */
+    getCarrierOrThrow(entityId: number, context?: string): CarrierState {
+        const entity = this.entityProvider.getEntityOrThrow(entityId, context ?? 'carrier');
+        return getCarrierState(entity);
+    }
+
+    /**
      * Check if a carrier exists.
      * @param entityId - The entity ID to check
      * @returns true if the carrier exists
