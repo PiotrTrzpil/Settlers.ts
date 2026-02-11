@@ -780,3 +780,69 @@ npx playwright test --grep @smoke              # Only smoke tests
 npx playwright test --grep-invert @slow        # Skip slow tests
 npx playwright test --grep-invert @requires-assets  # Skip asset-dependent
 ```
+
+### CRITICAL: Reporter Selection
+
+**NEVER use `--reporter=line`** — it suppresses stdout from workers, which hides the
+Wait Profiler output and any `console.log` debugging. Use these instead:
+
+```sh
+# Default reporter (shows profiler output)
+npx playwright test
+
+# List reporter (verbose, shows profiler output)
+npx playwright test --reporter=list
+
+# Run in background with output capture
+npx playwright test --reporter=list 2>&1 | tee /tmp/e2e.log &
+```
+
+---
+
+## Wait Profiler
+
+E2E tests include a built-in **Wait Profiler** (`tests/e2e/wait-profiler.ts`) that tracks
+all wait operations and reports the slowest ones at worker teardown.
+
+### Viewing profiler output
+
+The profiler prints a summary when each Playwright worker closes:
+```
+⏱️  Wait Profiler: 47 waits, 12.3s total
+    frame:8.2s | movement:3.1s | state:1.0s
+    Slowest:
+      1.04s - waitForFrames: 5 frames
+      0.83s - waitForReady: gameLoaded && rendererReady
+      0.53s - waitForUnitsMoving: unitsMoving >= 1
+```
+
+### Verbose mode
+
+For per-wait logging during test execution:
+```sh
+WAIT_PROFILER_VERBOSE=1 npx playwright test
+```
+
+This logs each wait as it completes:
+```
+[WaitProfiler] ✓ frame/waitForFrames: 234.5ms (3 polls) - 5 frames
+[WaitProfiler] ✓ movement/waitForUnitsMoving: 512.3ms (8 polls) - unitsMoving >= 1
+```
+
+### Disabling the profiler
+
+The profiler is enabled by default. To disable:
+```sh
+WAIT_PROFILER=0 npx playwright test
+```
+
+### Categories tracked
+
+| Category | Methods | Purpose |
+|----------|---------|---------|
+| `frame` | waitForFrames, waitForReady | Render loop synchronization |
+| `state` | waitForUnitCount, waitForBuildingCount | Debug bridge polling |
+| `movement` | waitForUnitAtDestination, waitForUnitToMove | Position tracking |
+| `render` | waitForMode, moveCamera | Visual state changes |
+| `audio` | unlockAudio, toggleMusic | Audio subsystem |
+| `dom` | waitForGameUi | DOM element visibility |

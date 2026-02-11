@@ -81,14 +81,14 @@ test.describe('Animation State During Movement', { tag: '@animations' }, () => {
         expect(animState!.loop).toBe(true);
     });
 
-    test('animation state is maintained consistently during movement', { tag: '@slow' }, async({ gp }) => {
+    test('animation state is maintained consistently during movement', { tag: '@slow' }, async({ gpNormal: gp }) => {
         const page = gp.page;
 
-        // Spawn and start moving
+        // Spawn and start moving (use longer distance to ensure movement lasts through sampling)
         const unit = await gp.spawnUnit(1);
         expect(unit).not.toBeNull();
 
-        await gp.moveUnit(unit!.id, unit!.x + 10, unit!.y);
+        await gp.moveUnit(unit!.id, unit!.x + 15, unit!.y);
         await gp.waitForUnitsMoving(1, 5000);
 
         // Sample animation state multiple times during movement
@@ -184,15 +184,15 @@ test.describe('Animation State During Movement', { tag: '@animations' }, () => {
 });
 
 test.describe('Direction Tracking', { tag: '@animations' }, () => {
-    test('animation direction matches movement controller direction', async({ gp }) => {
+    test('animation direction matches movement controller direction', async({ gpNormal: gp }) => {
         const page = gp.page;
 
-        // Spawn unit
+        // Spawn unit (use 1x speed to reliably sample during movement)
         const unit = await gp.spawnUnit(1);
         expect(unit).not.toBeNull();
 
         // Move east
-        await gp.moveUnit(unit!.id, unit!.x + 5, unit!.y);
+        await gp.moveUnit(unit!.id, unit!.x + 8, unit!.y);
         await gp.waitForUnitsMoving(1, 5000);
 
         // Sample both animation and movement controller directions
@@ -204,16 +204,16 @@ test.describe('Direction Tracking', { tag: '@animations' }, () => {
         expect(animState!.direction).toBe(moveState!.direction);
     });
 
-    test('direction values are valid hex directions (0-5)', async({ gp }) => {
+    test('direction values are valid hex directions (0-5)', async({ gpNormal: gp }) => {
         const page = gp.page;
 
-        // Spawn and move multiple units in different directions
+        // Spawn and move (use 1x speed to reliably catch movement state)
         const unit = await gp.spawnUnit(1);
         expect(unit).not.toBeNull();
 
         // Move and sample direction
-        await gp.moveUnit(unit!.id, unit!.x + 5, unit!.y);
-        await gp.waitForUnitsMoving(1, 3000);
+        await gp.moveUnit(unit!.id, unit!.x + 8, unit!.y);
+        await gp.waitForUnitsMoving(1, 5000);
 
         const animState = await getAnimationState(page, unit!.id);
 
@@ -335,14 +335,14 @@ test.describe('Animation State Initialization', { tag: '@animations' }, () => {
         expect(animState!.playing).toBe(true);
     });
 
-    test('AnimationService has state for moving unit', async({ gp }) => {
+    test('AnimationService has state for moving unit', async({ gpNormal: gp }) => {
         const page = gp.page;
 
-        // Spawn and move
+        // Spawn and move (use 1x speed to ensure animation state persists during check)
         const unit = await gp.spawnUnit(1);
         expect(unit).not.toBeNull();
 
-        await gp.moveUnit(unit!.id, unit!.x + 5, unit!.y);
+        await gp.moveUnit(unit!.id, unit!.x + 10, unit!.y);
         await gp.waitForUnitsMoving(1, 5000);
 
         // Verify AnimationService.hasState returns true

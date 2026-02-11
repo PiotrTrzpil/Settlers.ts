@@ -161,9 +161,11 @@ throw new Error(`Cannot process ${type}: ${JSON.stringify(state)}`)
 - Always rebuild first: `pnpm build && npx playwright test`
 - Use `GamePage` helpers and shared fixture (`import { test, expect } from './fixtures'`)
 - Never use `waitForTimeout()` — use `waitForFrames()`, `waitForReady()`, etc.
+- **CRITICAL: Never use `--reporter=line`** — it suppresses stdout and hides the WaitProfiler output. Use `--reporter=list` instead.
+- **Wait Profiler**: E2e tests have a built-in profiler that reports slowest waits at worker teardown. Use `WAIT_PROFILER_VERBOSE=1` for per-wait logging.
 - **Run full e2e suite in background** to avoid blocking and recover from stuck tests:
   ```sh
-  npx playwright test --reporter=line 2>&1 | tee /tmp/e2e.log &
+  npx playwright test --reporter=list 2>&1 | tee /tmp/e2e.log &
   # Then poll output every 1-2 seconds:
   while ! grep -q "passed\|failed" /tmp/e2e.log 2>/dev/null; do sleep 1; tail -5 /tmp/e2e.log 2>/dev/null; done
   ```

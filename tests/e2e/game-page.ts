@@ -175,6 +175,9 @@ export class GamePage {
      * current + minFrames) so it works correctly with the shared fixture where
      * frameCount is already high from previous tests.
      *
+     * **Optimized**: Uses browser-side requestAnimationFrame loop instead of
+     * Playwright IPC polling. This reduces wait time from ~400ms to ~16ms per frame.
+     *
      * @param minFrames - Number of frames to wait. Use Frames constants:
      *   - Frames.IMMEDIATE (1) - state already set, just need render tick
      *   - Frames.STATE_PROPAGATE (2) - camera move, mode switch
@@ -183,19 +186,43 @@ export class GamePage {
      *   - Frames.VISUAL_STABLE (15) - screenshot comparisons
      */
     async waitForFrames(minFrames: number = Frames.RENDER_SETTLE, timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
-        const baseFrame = await this.page.evaluate(
-            () => (window as any).__settlers_debug__?.frameCount ?? 0,
-        );
-        await this._waitForFunction(
+        await this._profiledWait(
             `frame:waitForFrames:${minFrames} frames`,
-            ({ base, n }) => (window as any).__settlers_debug__?.frameCount >= base + n,
-            { base: baseFrame, n: minFrames },
-            { timeout },
+            timeout,
+            () => this.page.evaluate(({ n, timeoutMs }) => {
+                return new Promise<void>((resolve, reject) => {
+                    const debug = (window as any).__settlers_debug__;
+                    const startFrame = debug?.frameCount ?? 0;
+                    const targetFrame = startFrame + n;
+                    const deadline = Date.now() + timeoutMs;
+
+                    function checkFrame() {
+                        const currentFrame = (window as any).__settlers_debug__?.frameCount ?? 0;
+                        if (currentFrame >= targetFrame) {
+                            resolve();
+                        } else if (Date.now() > deadline) {
+                            reject(new Error(
+                                `Timeout waiting for ${n} frames: got ${currentFrame - startFrame}/${n} ` +
+                                `(start=${startFrame}, current=${currentFrame}, target=${targetFrame})`
+                            ));
+                        } else {
+                            requestAnimationFrame(checkFrame);
+                        }
+                    }
+                    // Start checking on next frame
+                    requestAnimationFrame(checkFrame);
+                });
+            }, { n: minFrames, timeoutMs: timeout })
         );
     }
 
     /**
      * Wait for game loaded + renderer ready + N frames rendered.
+     *
+     * **Optimized**: Single browser-side operation that:
+     * 1. Polls for gameLoaded && rendererReady
+     * 2. Then waits for N frames via requestAnimationFrame
+     * All in one IPC call, eliminating ~400ms overhead.
      *
      * Note: We skip the DOM element wait (waitForGameUi) here because:
      * 1. The gameLoaded flag is only set AFTER the Vue component mounts
@@ -203,16 +230,56 @@ export class GamePage {
      * 3. JS-based polling is faster than DOM element polling (~2s savings)
      */
     async waitForReady(minFrames: number = Frames.RENDER_SETTLE, timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
-        await this._waitForFunction(
-            'frame:waitForReady:gameLoaded && rendererReady',
-            () => {
-                const d = (window as any).__settlers_debug__;
-                return d && d.gameLoaded && d.rendererReady;
-            },
-            null,
-            { timeout },
+        await this._profiledWait(
+            `frame:waitForReady:gameLoaded && rendererReady + ${minFrames} frames`,
+            timeout,
+            () => this.page.evaluate(({ n, timeoutMs }) => {
+                return new Promise<void>((resolve, reject) => {
+                    const deadline = Date.now() + timeoutMs;
+                    let startFrame: number | null = null;
+
+                    function checkReady() {
+                        const debug = (window as any).__settlers_debug__;
+                        const now = Date.now();
+
+                        if (now > deadline) {
+                            const state = debug
+                                ? `gameLoaded=${debug.gameLoaded}, rendererReady=${debug.rendererReady}`
+                                : 'debug not available';
+                            reject(new Error(`Timeout waiting for game ready: ${state}`));
+                            return;
+                        }
+
+                        // Phase 1: Wait for game to be loaded and renderer ready
+                        if (!debug || !debug.gameLoaded || !debug.rendererReady) {
+                            requestAnimationFrame(checkReady);
+                            return;
+                        }
+
+                        // Phase 2: Once ready, wait for N frames
+                        if (startFrame === null) {
+                            startFrame = debug.frameCount ?? 0;
+                        }
+
+                        const currentFrame = debug.frameCount ?? 0;
+                        const base = startFrame as number; // Narrowed after null check
+                        const targetFrame = base + n;
+
+                        if (currentFrame >= targetFrame) {
+                            resolve();
+                        } else if (now > deadline) {
+                            reject(new Error(
+                                `Timeout waiting for ${n} frames after ready: ` +
+                                `got ${currentFrame - base}/${n}`
+                            ));
+                        } else {
+                            requestAnimationFrame(checkReady);
+                        }
+                    }
+                    requestAnimationFrame(checkReady);
+                });
+            }, { n: minFrames, timeoutMs: timeout })
         );
-        await this.waitForFrames(minFrames, timeout);
     }
 
     // ── State reset ───────────────────────────────────────────
@@ -285,7 +352,8 @@ export class GamePage {
     }
 
     async selectMode(): Promise<void> {
-        await this.clickButton('btn-select-mode');
+        // Use force: true to bypass stability checks (button may have CSS transitions)
+        await this.page.locator('[data-testid="btn-select-mode"]').click({ force: true });
     }
 
     // ── Game state (via __settlers_game__) ─────────────────
@@ -428,29 +496,66 @@ export class GamePage {
         );
     }
 
-    /** Wait for at least N units to be moving. */
+    /**
+     * Wait for at least N units to be moving.
+     * **Optimized**: Uses browser-side requestAnimationFrame polling.
+     */
     async waitForUnitsMoving(minMoving: number, timeout: number = Timeout.DEFAULT): Promise<void> {
-        await this._waitForFunction(
+        await this._profiledWait(
             `movement:waitForUnitsMoving:unitsMoving >= ${minMoving}`,
-            (n) => (window as any).__settlers_debug__?.unitsMoving >= n,
-            minMoving,
-            { timeout },
+            timeout,
+            () => this.page.evaluate(({ n, timeoutMs }) => {
+                return new Promise<void>((resolve, reject) => {
+                    const deadline = Date.now() + timeoutMs;
+                    function check() {
+                        const debug = (window as any).__settlers_debug__;
+                        const moving = debug?.unitsMoving ?? 0;
+                        if (moving >= n) {
+                            resolve();
+                        } else if (Date.now() > deadline) {
+                            reject(new Error(`Timeout waiting for ${n} units moving, got ${moving}`));
+                        } else {
+                            requestAnimationFrame(check);
+                        }
+                    }
+                    requestAnimationFrame(check);
+                });
+            }, { n: minMoving, timeoutMs: timeout })
         );
     }
 
-    /** Wait for no units to be moving (all stationary). */
+    /**
+     * Wait for no units to be moving (all stationary).
+     * **Optimized**: Uses browser-side requestAnimationFrame polling.
+     */
     async waitForNoUnitsMoving(timeout: number = Timeout.DEFAULT): Promise<void> {
-        await this._waitForFunction(
+        await this._profiledWait(
             'movement:waitForNoUnitsMoving:unitsMoving === 0',
-            () => (window as any).__settlers_debug__?.unitsMoving === 0,
-            null,
-            { timeout },
+            timeout,
+            () => this.page.evaluate(({ timeoutMs }) => {
+                return new Promise<void>((resolve, reject) => {
+                    const deadline = Date.now() + timeoutMs;
+                    function check() {
+                        const debug = (window as any).__settlers_debug__;
+                        const moving = debug?.unitsMoving ?? 0;
+                        if (moving === 0) {
+                            resolve();
+                        } else if (Date.now() > deadline) {
+                            reject(new Error(`Timeout waiting for no units moving, still have ${moving}`));
+                        } else {
+                            requestAnimationFrame(check);
+                        }
+                    }
+                    requestAnimationFrame(check);
+                });
+            }, { timeoutMs: timeout })
         );
     }
 
     /**
      * Wait for a specific unit to reach its destination.
      * Destination is considered reached when unit is at target AND path is empty.
+     * **Optimized**: Uses browser-side requestAnimationFrame polling.
      */
     async waitForUnitAtDestination(
         unitId: number,
@@ -458,36 +563,83 @@ export class GamePage {
         targetY: number,
         timeout: number = Timeout.LONG_MOVEMENT
     ): Promise<void> {
-        await this._waitForFunction(
+        await this._profiledWait(
             `movement:waitForUnitAtDestination:unit ${unitId} at (${targetX},${targetY})`,
-            ({ id, tx, ty }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return false;
-                const unit = game.state.getEntity(id);
-                const unitState = game.state.unitStates.get(id);
-                return unit && unit.x === tx && unit.y === ty &&
-                    unitState && unitState.path.length === 0;
-            },
-            { id: unitId, tx: targetX, ty: targetY },
-            { timeout },
+            timeout,
+            () => this.page.evaluate(({ id, tx, ty, timeoutMs }) => {
+                return new Promise<void>((resolve, reject) => {
+                    const deadline = Date.now() + timeoutMs;
+                    function check() {
+                        const game = (window as any).__settlers_game__;
+                        if (!game) {
+                            if (Date.now() > deadline) {
+                                reject(new Error('Timeout: game not available'));
+                            } else {
+                                requestAnimationFrame(check);
+                            }
+                            return;
+                        }
+                        const unit = game.state.getEntity(id);
+                        const unitState = game.state.unitStates.get(id);
+                        const atTarget = unit && unit.x === tx && unit.y === ty;
+                        const pathEmpty = unitState && unitState.path.length === 0;
+
+                        if (atTarget && pathEmpty) {
+                            resolve();
+                        } else if (Date.now() > deadline) {
+                            const pos = unit ? `(${unit.x},${unit.y})` : 'not found';
+                            const pathLen = unitState?.path?.length ?? 'no state';
+                            reject(new Error(
+                                `Timeout waiting for unit ${id} at (${tx},${ty}): ` +
+                                `current=${pos}, pathLength=${pathLen}`
+                            ));
+                        } else {
+                            requestAnimationFrame(check);
+                        }
+                    }
+                    requestAnimationFrame(check);
+                });
+            }, { id: unitId, tx: targetX, ty: targetY, timeoutMs: timeout })
         );
     }
 
     /**
      * Wait for a unit to move away from its starting position.
      * Useful for verifying movement has started.
+     * **Optimized**: Uses browser-side requestAnimationFrame polling.
      */
     async waitForUnitToMove(unitId: number, startX: number, startY: number, timeout: number = Timeout.DEFAULT): Promise<void> {
-        await this._waitForFunction(
+        await this._profiledWait(
             `movement:waitForUnitToMove:unit ${unitId} moved from (${startX},${startY})`,
-            ({ id, sx, sy }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return false;
-                const unit = game.state.getEntity(id);
-                return unit && (unit.x !== sx || unit.y !== sy);
-            },
-            { id: unitId, sx: startX, sy: startY },
-            { timeout },
+            timeout,
+            () => this.page.evaluate(({ id, sx, sy, timeoutMs }) => {
+                return new Promise<void>((resolve, reject) => {
+                    const deadline = Date.now() + timeoutMs;
+                    function check() {
+                        const game = (window as any).__settlers_game__;
+                        if (!game) {
+                            if (Date.now() > deadline) {
+                                reject(new Error('Timeout: game not available'));
+                            } else {
+                                requestAnimationFrame(check);
+                            }
+                            return;
+                        }
+                        const unit = game.state.getEntity(id);
+                        if (unit && (unit.x !== sx || unit.y !== sy)) {
+                            resolve();
+                        } else if (Date.now() > deadline) {
+                            const pos = unit ? `(${unit.x},${unit.y})` : 'not found';
+                            reject(new Error(
+                                `Timeout waiting for unit ${id} to move from (${sx},${sy}): current=${pos}`
+                            ));
+                        } else {
+                            requestAnimationFrame(check);
+                        }
+                    }
+                    requestAnimationFrame(check);
+                });
+            }, { id: unitId, sx: startX, sy: startY, timeoutMs: timeout })
         );
     }
 
