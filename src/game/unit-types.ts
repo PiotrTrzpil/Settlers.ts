@@ -112,10 +112,32 @@ export function getUnitTypesInCategory(category: UnitCategory): UnitType[] {
         .map(([type]) => Number(type) as UnitType);
 }
 
-/** Which unit type each building auto-spawns at placement time (undefined = no auto-spawn) */
-export const BUILDING_UNIT_TYPE: Record<number, UnitType | undefined> = {
-    [BuildingType.WoodcutterHut]: UnitType.Builder,
-    [BuildingType.StorageArea]: undefined,
+/**
+ * Mapping from building types to their dedicated worker types.
+ * Used to spawn workers when "place with worker" option is enabled.
+ * Only production buildings that have a specific worker type are included.
+ */
+export const BUILDING_UNIT_TYPE: Partial<Record<BuildingType, UnitType>> = {
+    // Wood/Forest production
+    [BuildingType.WoodcutterHut]: UnitType.Woodcutter,
+    [BuildingType.ForesterHut]: UnitType.Forester,
+    [BuildingType.Sawmill]: UnitType.SawmillWorker,
+
+    // Farming
+    [BuildingType.GrainFarm]: UnitType.Farmer,
+
+    // Mining
+    [BuildingType.CoalMine]: UnitType.Miner,
+    [BuildingType.IronMine]: UnitType.Miner,
+    [BuildingType.GoldMine]: UnitType.Miner,
+    [BuildingType.SulfurMine]: UnitType.Miner,
+    [BuildingType.StoneMine]: UnitType.Miner,
+
+    // Smithing
+    [BuildingType.WeaponSmith]: UnitType.Smith,
+    [BuildingType.ToolSmith]: UnitType.Smith,
+    [BuildingType.IronSmelter]: UnitType.Smith,
+    [BuildingType.SmeltGold]: UnitType.Smith,
 };
 
 /**

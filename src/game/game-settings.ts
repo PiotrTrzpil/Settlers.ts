@@ -28,6 +28,7 @@ export interface GameSettings {
 
     // Building placement
     placeBuildingsCompleted: boolean;
+    placeBuildingsWithWorker: boolean;
 
     // UI state (persisted)
     settingsPanelOpen: boolean;
@@ -59,6 +60,7 @@ const DEFAULT_SETTINGS: GameSettings = {
 
     // Building placement
     placeBuildingsCompleted: false,
+    placeBuildingsWithWorker: true,
 
     // UI state
     settingsPanelOpen: false,

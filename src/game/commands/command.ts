@@ -83,31 +83,28 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): b
         player: cmd.player,
     });
 
-    spawnWorkerForBuilding(ctx, cmd, mapSize);
+    // Spawn dedicated worker if "place with worker" is enabled
+    if (gameSettings.state.placeBuildingsWithWorker) {
+        spawnWorkerForBuilding(ctx, cmd);
+    }
     return true;
 }
 
-function spawnWorkerForBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand, mapSize: MapSize): void {
+function spawnWorkerForBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): void {
     const workerType = BUILDING_UNIT_TYPE[cmd.buildingType];
-    if (workerType === undefined) return;
-
-    for (const [dx, dy] of EXTENDED_OFFSETS) {
-        const nx = cmd.x + dx;
-        const ny = cmd.y + dy;
-        if (nx >= 0 && nx < mapSize.width && ny >= 0 && ny < mapSize.height) {
-            if (!ctx.state.getEntityAt(nx, ny)) {
-                const entity = ctx.state.addEntity(EntityType.Unit, workerType, nx, ny, cmd.player);
-                ctx.eventBus.emit('unit:spawned', {
-                    entityId: entity.id,
-                    unitType: workerType,
-                    x: nx,
-                    y: ny,
-                    player: cmd.player,
-                });
-                return;
-            }
-        }
+    if (workerType === undefined) {
+        return;
     }
+
+    // Spawn worker at building location - don't check for occupancy
+    const entity = ctx.state.addEntity(EntityType.Unit, workerType, cmd.x, cmd.y, cmd.player);
+    ctx.eventBus.emit('unit:spawned', {
+        entityId: entity.id,
+        unitType: workerType,
+        x: cmd.x,
+        y: cmd.y,
+        player: cmd.player,
+    });
 }
 
 function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): boolean {

@@ -37,6 +37,7 @@
         <!-- Buildings tab -->
         <div v-if="activeTab === 'buildings'" class="tab-content building-list" data-testid="building-palette">
           <SettingsCheckbox v-model="placeBuildingsCompleted" label="Place as completed" />
+          <SettingsCheckbox v-model="placeBuildingsWithWorker" label="Place with worker" />
           <button
             v-for="b in availableBuildings"
             :key="b.type"
@@ -276,10 +277,15 @@ const availableRaces = AVAILABLE_RACES.map(race => ({
 const fileManagerRef = computed(() => props.fileManager);
 const { getIconUrl } = useBuildingIcons(fileManagerRef, currentRace);
 
-// Building placement option
+// Building placement options
 const placeBuildingsCompleted = computed({
     get: () => gameSettings.state.placeBuildingsCompleted,
     set: (value: boolean) => { gameSettings.state.placeBuildingsCompleted = value }
+});
+
+const placeBuildingsWithWorker = computed({
+    get: () => gameSettings.state.placeBuildingsWithWorker,
+    set: (value: boolean) => { gameSettings.state.placeBuildingsWithWorker = value }
 });
 
 async function onRaceChange() {
