@@ -52,7 +52,27 @@ export const GFX_FILE_NUMBERS = {
  */
 export const BUILDING_ICON_INDICES: Record<Race, Partial<Record<BuildingType, [number, number]>>> = {
     [Race.Roman]: {
+        // Residential
+        [BuildingType.ResidenceBig]: [747, 748],
+        [BuildingType.ResidenceMedium]: [749, 750],
+        [BuildingType.ResidenceSmall]: [751, 752],
+        // Food Production
+        [BuildingType.Bakery]: [755, 756],
+        [BuildingType.FisherHut]: [760, 761],
+        [BuildingType.GrainFarm]: [762, 763],
+        [BuildingType.Slaughterhouse]: [767, 768],
+        [BuildingType.Mill]: [771, 772],
+        // Wood & Stone
+        [BuildingType.Sawmill]: [769, 770],
+        [BuildingType.WaterworkHut]: [779, 780],
+        [BuildingType.WinePress]: [781, 782],
         [BuildingType.WoodcutterHut]: [828, 833],
+        [BuildingType.StonecutterHut]: [826, 827],
+        // Storage & Military
+        [BuildingType.StorageArea]: [820, 821],
+        [BuildingType.Barrack]: [818, 819],
+        [BuildingType.GuardTowerSmall]: [803, 804],
+        [BuildingType.GuardTowerBig]: [808, 809],
     },
     [Race.Viking]: {
         [BuildingType.WoodcutterHut]: [772, 773],
