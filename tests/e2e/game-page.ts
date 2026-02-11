@@ -282,6 +282,95 @@ export class GamePage {
         );
     }
 
+    /**
+     * Wait for game state to be initialized, WITHOUT requiring WebGL rendering.
+     * Only checks `gameLoaded` — not `rendererReady`. Then waits for N game
+     * ticks (not render frames) to ensure game state has advanced.
+     *
+     * Use this for Tier 2 (spatial) and Tier 3 (economic) tests that don't
+     * need pixel output. Falls back to `waitForReady` if renderer is available.
+     */
+    async waitForGameReady(minTicks: number = 5, timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
+        await this._profiledWait(
+            `state:waitForGameReady:gameLoaded + ${minTicks} ticks`,
+            timeout,
+            () => this.page.evaluate(({ n, timeoutMs }) => {
+                return new Promise<void>((resolve, reject) => {
+                    const deadline = Date.now() + timeoutMs;
+                    let startTick: number | null = null;
+
+                    function check() {
+                        const debug = (window as any).__settlers_debug__;
+                        const now = Date.now();
+
+                        if (now > deadline) {
+                            const state = debug
+                                ? `gameLoaded=${debug.gameLoaded}, tickCount=${debug.tickCount}`
+                                : 'debug not available';
+                            reject(new Error(`Timeout waiting for game ready: ${state}`));
+                            return;
+                        }
+
+                        // Phase 1: Wait for game to be loaded
+                        if (!debug || !debug.gameLoaded) {
+                            requestAnimationFrame(check);
+                            return;
+                        }
+
+                        // Phase 2: Wait for N ticks
+                        if (startTick === null) {
+                            startTick = debug.tickCount ?? 0;
+                        }
+
+                        const currentTick = debug.tickCount ?? 0;
+                        const base = startTick as number;
+                        if (currentTick >= base + n) {
+                            resolve();
+                        } else {
+                            requestAnimationFrame(check);
+                        }
+                    }
+                    requestAnimationFrame(check);
+                });
+            }, { n: minTicks, timeoutMs: timeout })
+        );
+    }
+
+    /**
+     * Wait for N game ticks to elapse (not render frames).
+     * Works even without WebGL rendering — uses the monotonic tick counter
+     * from debugStats that increments on every game loop tick.
+     */
+    async waitForTicks(minTicks: number = 5, timeout: number = Timeout.DEFAULT): Promise<void> {
+        await this._profiledWait(
+            `state:waitForTicks:${minTicks} ticks`,
+            timeout,
+            () => this.page.evaluate(({ n, timeoutMs }) => {
+                return new Promise<void>((resolve, reject) => {
+                    const debug = (window as any).__settlers_debug__;
+                    const startTick = debug?.tickCount ?? 0;
+                    const targetTick = startTick + n;
+                    const deadline = Date.now() + timeoutMs;
+
+                    function check() {
+                        const currentTick = (window as any).__settlers_debug__?.tickCount ?? 0;
+                        if (currentTick >= targetTick) {
+                            resolve();
+                        } else if (Date.now() > deadline) {
+                            reject(new Error(
+                                `Timeout waiting for ${n} ticks: got ${currentTick - startTick}/${n} ` +
+                                `(start=${startTick}, current=${currentTick}, target=${targetTick})`
+                            ));
+                        } else {
+                            requestAnimationFrame(check);
+                        }
+                    }
+                    requestAnimationFrame(check);
+                });
+            }, { n: minTicks, timeoutMs: timeout })
+        );
+    }
+
     // ── State reset ───────────────────────────────────────────
 
     /**
@@ -304,8 +393,13 @@ export class GamePage {
                 input.switchMode('select');
             }
         });
-        // Wait for state to settle
-        await this.waitForFrames(Frames.IMMEDIATE, Timeout.DEFAULT);
+        // Wait for state to settle — use ticks if renderer isn't ready
+        const rendererReady = await this.getDebugField('rendererReady');
+        if (rendererReady) {
+            await this.waitForFrames(Frames.IMMEDIATE, Timeout.DEFAULT);
+        } else {
+            await this.waitForTicks(1, Timeout.DEFAULT);
+        }
     }
 
     // ── Debug bridge reads ──────────────────────────────────

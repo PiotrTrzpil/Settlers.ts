@@ -501,5 +501,9 @@ export class GameLoop {
         for (const system of this.systems) {
             system.tick(dt);
         }
+
+        // Update debug stats from game state so entity counts are available
+        // even without a render callback (headless/CI environments)
+        debugStats.updateFromGameState(this.gameState);
     }
 }

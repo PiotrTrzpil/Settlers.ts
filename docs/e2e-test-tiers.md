@@ -165,150 +165,116 @@ use-renderer.ts:initRenderersAsync()
 
 ### What this means
 
-Even pure game-state tests (Tier 3: "does this building have inventory?") currently
-fail without WebGL because the game never finishes initializing.
+Without the Phase 2 changes, even pure game-state tests fail without WebGL because
+the game never finishes initializing.
 
 ---
 
-## Proposed Architecture Changes
+## Architecture Changes (Phase 2 — Implemented)
 
-To enable Tier 2 and Tier 3 tests without WebGL:
+The following changes decouple game ticks from rendering, enabling Tier 2 and Tier 3
+tests without WebGL:
 
-### Change 1: Decouple `gameLoaded` from renderer initialization
+### Change 1+2: Headless fallback in `use-renderer.ts`
 
-```typescript
-// BEFORE (use-renderer.ts)
-async function initRenderersAsync(gl, landscapeRenderer, entityRenderer, game) {
-    await landscapeRenderer.init(gl);
-    debugStats.state.gameLoaded = true;        // ← tied to WebGL
-    await entityRenderer.init(gl);
-    debugStats.state.rendererReady = true;     // ← tied to WebGL
-}
-
-// AFTER: Split game readiness from renderer readiness
-// In Game.start() or game-loop.ts:
-debugStats.state.gameLoaded = true;  // Game state is ready (map loaded, entities created)
-
-// In use-renderer.ts:
-async function initRenderersAsync(gl, landscapeRenderer, entityRenderer, game) {
-    await landscapeRenderer.init(gl);
-    // gameLoaded already set by game initialization
-    await entityRenderer.init(gl);
-    debugStats.state.rendererReady = true;     // Only renderer flag here
-}
-```
-
-### Change 2: Enable game ticks independently of sprite loading
+When `gl` is null (no WebGL), the renderer can't initialize. Instead of leaving
+the game stuck, we now set `gameLoaded = true` and enable ticks immediately for
+procedural/testMap mode:
 
 ```typescript
-// BEFORE
-entityRenderer.onSpritesLoaded = () => game.gameLoop.enableTicks();
-
-// AFTER: Enable ticks when game state is ready, not when sprites load
-// For testMap mode (no real sprites), ticks should start immediately
-if (game.useProceduralTextures) {
-    game.gameLoop.enableTicks();  // No sprites to wait for
+// src/components/use-renderer.ts — initRenderer()
+const gl = renderer.gl;
+if (gl) {
+    void initRenderersAsync(gl, landscapeRenderer, entityRenderer, game);
 } else {
-    entityRenderer.onSpritesLoaded = () => game.gameLoop.enableTicks();
+    // No WebGL — game state still works
+    debugStats.state.gameLoaded = true;
+    if (game.useProceduralTextures) {
+        game.gameLoop.enableTicks();
+    }
 }
 ```
 
-### Change 3: Update debug stats outside render callback
+When WebGL IS available, the original flow is unchanged: `initRenderersAsync` sets
+`gameLoaded` after landscape init and `rendererReady` after entity renderer init.
+
+### Change 3: Debug stats update from tick (not just render callback)
+
+Added `debugStats.updateFromGameState(gameState)` — a new method that updates
+entity counts and movement stats from `GameState` alone (no `Game` wrapper needed).
+Called at the end of every `GameLoop.tick()`:
 
 ```typescript
-// BEFORE: debugStats.updateFromGame(game) only in render callback
-
-// AFTER: Also update from game loop tick (independent of rendering)
-// In game-loop.ts tick():
-debugStats.updateFromGame(game);  // Runs every tick regardless of rendering
-```
-
-### Change 4: Add a game-only fixture for Tier 2/3 tests
-
-```typescript
-// tests/e2e/fixtures.ts — new fixture for headless game state tests
-const gameOnlyPage = test.extend<{}, { gameStatePage: GamePage }>({
-    gameStatePage: [async ({ browser }, use) => {
-        const page = await browser.newPage();
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        // Wait only for gameLoaded, NOT rendererReady
-        await gp.waitForGameReady();  // New helper
-        await use(gp);
-        await page.close();
-    }, { scope: 'worker', timeout: 30_000 }],
-});
-```
-
-### Change 5: Add `waitForGameReady()` to GamePage
-
-```typescript
-// Waits for game state to be initialized, without requiring rendering
-async waitForGameReady(timeout = 20_000): Promise<void> {
-    await this.page.waitForFunction(
-        () => {
-            const debug = (window as any).__settlers_debug__;
-            return debug && debug.gameLoaded;
-        },
-        undefined,
-        { timeout }
-    );
+// src/game/game-loop.ts — tick()
+private tick(dt: number): void {
+    debugStats.recordTick();
+    // ... run all systems ...
+    debugStats.updateFromGameState(this.gameState);
 }
 ```
 
-### Change 6: Alternative tick synchronization for non-rendering tests
+The render callback's `debugStats.updateFromGame(game)` now delegates to
+`updateFromGameState` internally, then adds audio state and window exposure.
+
+### Change 4: Monotonic tick counter in debug stats
+
+Added `tickCount` to `DebugStatsState` — a monotonically increasing counter
+that increments on every `recordTick()`. Unlike `ticksPerSec` (which resets
+every second), this provides a stable target for `waitForTicks()`.
+
+### Change 5: `waitForGameReady()` and `waitForTicks()` in GamePage
 
 ```typescript
-// Instead of waitForFrames (which needs frameCount from render loop),
-// use waitForTicks which polls game tick count
-async waitForTicks(n: number, timeout = 5_000): Promise<void> {
-    await this.page.waitForFunction(
-        ({ target }) => {
-            const game = (window as any).__settlers_game__;
-            return game && game.gameLoop.tickCount >= target;
-        },
-        { target: currentTickCount + n },
-        { timeout }
-    );
-}
+// Wait for gameLoaded + N ticks (no rendering required)
+await gp.waitForGameReady(5, timeout);
+
+// Wait for N additional ticks from current count
+await gp.waitForTicks(5, timeout);
 ```
+
+### Change 6: `gameStatePage` fixture + `gs` test fixture
+
+```typescript
+// Worker fixture — waits for gameLoaded only (not rendererReady)
+gameStatePage: [async({ browser }, use) => {
+    const page = await context.newPage();
+    const gp = new GamePage(page);
+    await gp.goto({ testMap: true });
+    await gp.waitForGameReady(5, timeout);
+    await use(page);
+}, { scope: 'worker' }]
+
+// Test fixture — uses gameStatePage, resets state, 4x speed
+gs: [async({ gameStatePage }, use) => {
+    const gp = new GamePage(gameStatePage);
+    await gp.resetGameState();
+    await gp.setGameSpeed(4.0);
+    await use(gp);
+}]
+```
+
+Usage: `test('my test', async ({ gs }) => { ... })` for tests that don't need WebGL.
 
 ---
 
 ## Migration Path
 
-### Phase 1: Extract Tier 3 (Economic) tests — no engine changes needed
+### Phase 1: Extract Tier 3 (Economic) tests — DONE
 
-Tier 3 tests that only check manager state after `game.execute()` calls can be
-migrated to **unit tests** immediately. They don't actually need a browser:
+Tier 3 carrier-logistics tests moved to unit tests in
+`tests/unit/integration/carrier-inventory-integration.spec.ts`.
+Runs in ~4ms instead of ~15s.
 
-```typescript
-// tests/unit/carrier-logistics.spec.ts (unit test, not e2e)
-describe('carrier logistics', () => {
-    it('residence creates service area', () => {
-        const state = createGameState();
-        const building = placeBuilding(state, ...);
-        expect(state.serviceAreaManager.hasServiceArea(building.id)).toBe(true);
-    });
-});
-```
+### Phase 2: Decouple game init from renderer — DONE
 
-These tests use `game.execute()` which is testable with Vitest. Moving them to
-unit tests makes them:
-- ~100x faster (no browser, no page load)
-- Independent of WebGL
-- Runnable in any environment
+Changes 1-6 above implemented. Game ticks run without WebGL in testMap mode.
+`gameStatePage` fixture + `gs` test fixture available for Tier 2/3 tests.
 
-### Phase 2: Decouple game init from renderer (engine changes)
+### Phase 3: Migrate Tier 2 tests to `gs` fixture
 
-Apply Changes 1-3 above to allow the game to start ticking without a renderer.
-This unblocks Tier 2 spatial tests in headless environments.
-
-### Phase 3: Create the game-only fixture
-
-Apply Changes 4-6 to create a lightweight fixture for Tier 2 tests that don't
-need pixel output. These tests verify positions, paths, and animation state machines
-but never read canvas pixels.
+Migrate spatial tests (unit-movement, building-placement entity tests) from the
+`gp` fixture (requires `testMapPage` → `waitForReady` → WebGL) to the `gs`
+fixture (requires `gameStatePage` → `waitForGameReady` → no WebGL).
 
 ### Phase 4: Tag and organize tests by tier
 
@@ -404,16 +370,12 @@ npx playwright test --grep-invert @visual # Everything except rendering
 
 ---
 
-## Recommendation
+## Current Status
 
-**Start with Phase 1** — move Tier 3 (economic) tests to unit tests. This requires
-zero engine changes and immediately gives you fast, reliable tests for logistics,
-inventory, service areas, and carrier state. These concepts are purely about game
-rules and don't need a browser.
+**Phase 1** (done): Tier 3 economic tests run as unit tests (~4ms).
 
-**Phase 2** is the highest-value engine change: decoupling `gameLoaded` and game
-ticks from the renderer. This unblocks ~24 spatial tests in headless CI environments
-and makes the test suite much more portable.
+**Phase 2** (done): Engine decoupled — `gameLoaded` and ticks work without WebGL.
+`gs` fixture available for tests that don't need rendering.
 
-**Phases 3-4** are organizational improvements that become valuable once the engine
-supports headless game state testing.
+**Next**: Phase 3 — migrate Tier 2 spatial tests from `gp` to `gs` fixture.
+Phase 4 — add `@visual`/`@spatial`/`@economic` tags for selective CI runs.

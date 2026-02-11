@@ -2,6 +2,7 @@ import { reactive, watch } from 'vue';
 import { EntityType, MapObjectType } from './entity';
 import { isResourceDeposit, getEnvironmentSubLayer, EnvironmentSubLayer } from './renderer/layer-visibility';
 import type { Game } from './game';
+import type { GameState } from './game-state';
 import { gameSettings } from './game-settings';
 
 const WINDOW_SIZE = 60;
@@ -68,6 +69,7 @@ export interface DebugStatsState {
     gameLoaded: boolean;
     rendererReady: boolean;
     frameCount: number;
+    tickCount: number;
 
     // Load timings
     loadTimings: LoadTimings;
@@ -242,6 +244,7 @@ class DebugStats {
 
         this.state = reactive<DebugStatsState>({
             gameLoaded: false,
+            tickCount: 0,
             rendererReady: false,
             frameCount: 0,
             loadTimings: {
@@ -387,6 +390,7 @@ class DebugStats {
         this.state.frameTimeMax = 0;
         this.state.ticksPerSec = 0;
         this.state.frameCount = 0;
+        this.state.tickCount = 0;
         this.state.gameLoaded = false;
         this.state.rendererReady = false;
     }
@@ -421,6 +425,7 @@ class DebugStats {
 
     public recordTick(): void {
         this.tickCount++;
+        this.state.tickCount++;
         const now = performance.now();
         if (now - this.tickResetTime >= 1000) {
             this.state.ticksPerSec = this.tickCount;
@@ -523,12 +528,12 @@ class DebugStats {
     private lastEntityCountUpdate = 0;
     private static readonly ENTITY_COUNT_INTERVAL = 500; // ms
 
-    public updateFromGame(game: Game): void {
-        // Expose references for e2e tests (Vue internals are stripped in prod builds)
-        (window as any).__settlers_game__ = game;
-        (window as any).__settlers_game_settings__ = gameSettings;
-        const gameState = game.state;
-
+    /**
+     * Update debug stats from game state only (no Game wrapper needed).
+     * Called from GameLoop.tick() so stats update even without a render callback,
+     * enabling headless/CI environments without WebGL.
+     */
+    public updateFromGameState(gameState: GameState): void {
         // Always update total count (cheap)
         this.state.entityCount = gameState.entities.length;
 
@@ -538,7 +543,6 @@ class DebugStats {
             // Skip detailed counting, just update selection/mode state
             this.state.selectedEntityId = gameState.selectedEntityId;
             this.state.selectedCount = gameState.selectedEntityIds.size;
-            this.updateAudioState(game);
             return;
         }
         this.lastEntityCountUpdate = now;
@@ -608,7 +612,14 @@ class DebugStats {
         // to ensure immediate updates without frame delay
         this.state.selectedEntityId = gameState.selectedEntityId;
         this.state.selectedCount = gameState.selectedEntityIds.size;
+    }
 
+    public updateFromGame(game: Game): void {
+        // Expose references for e2e tests (Vue internals are stripped in prod builds)
+        (window as any).__settlers_game__ = game;
+        (window as any).__settlers_game_settings__ = gameSettings;
+
+        this.updateFromGameState(game.state);
         this.updateAudioState(game);
     }
 

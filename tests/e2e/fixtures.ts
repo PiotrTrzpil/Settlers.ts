@@ -58,6 +58,8 @@ export { WaitProfiler } from './wait-profiler';
 type TestFixtures = {
     /** GamePage with testMap pre-loaded, 4x speed. State is reset before each test. */
     gp: GamePage;
+    /** GamePage for game-state-only tests. Works without WebGL. 4x speed. */
+    gs: GamePage;
     /** GamePage with 1x speed for timing-sensitive tests (animation observation). */
     gpNormal: GamePage;
     /** GamePage with UI reset to select mode + Buildings tab (for UI interaction tests). */
@@ -75,8 +77,10 @@ type TestFixtures = {
 };
 
 type WorkerFixtures = {
-    /** Shared page that persists across all tests in a worker. */
+    /** Shared page that persists across all tests in a worker. Requires WebGL. */
     testMapPage: Page;
+    /** Shared page for game-state-only tests. Works without WebGL. */
+    gameStatePage: Page;
 };
 
 export const test = base.extend<TestFixtures, WorkerFixtures>({
@@ -107,6 +111,30 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     }, { scope: 'worker', timeout: Timeout.WORKER_SETUP }],
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Worker-scoped fixture: game-state only (no WebGL required)
+    // ─────────────────────────────────────────────────────────────────────────
+    gameStatePage: [async({ browser }, use) => {
+        const context = await browser.newContext();
+        const page = await context.newPage();
+        const gp = new GamePage(page);
+
+        // Navigate and wait for game state only (not renderer)
+        await gp.goto({ testMap: true });
+        await gp.waitForGameReady(5, Timeout.ASSET_LOAD);
+
+        await use(page);
+
+        if (WaitProfiler.isEnabled()) {
+            const report = process.env.WAIT_PROFILER_VERBOSE === '1'
+                ? WaitProfiler.getReport()
+                : WaitProfiler.getCompactSummary();
+            if (report) console.log(report);
+        }
+
+        await context.close();
+    }, { scope: 'worker', timeout: Timeout.WORKER_SETUP }],
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Test-scoped fixtures: reset state before each test
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -124,6 +152,15 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         await use(gp);
 
         // Reset speed after test
+        await gp.setGameSpeed(1.0);
+    }, { timeout: Timeout.MOVEMENT }],
+
+    /** Game-state only fixture: works without WebGL. Uses gameStatePage worker fixture. */
+    gs: [async({ gameStatePage }, use) => {
+        const gp = new GamePage(gameStatePage);
+        await gp.resetGameState();
+        await gp.setGameSpeed(4.0);
+        await use(gp);
         await gp.setGameSpeed(1.0);
     }, { timeout: Timeout.MOVEMENT }],
 

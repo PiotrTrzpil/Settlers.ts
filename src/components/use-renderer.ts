@@ -503,6 +503,14 @@ export function useRenderer({
         const gl = renderer.gl;
         if (gl) {
             void initRenderersAsync(gl, landscapeRenderer, entityRenderer, game);
+        } else {
+            // No WebGL available — set game as loaded and enable ticks so game
+            // state can still advance (headless/CI testing, software rendering failure).
+            // rendererReady stays false since we can't render.
+            debugStats.state.gameLoaded = true;
+            if (game.useProceduralTextures) {
+                game.gameLoop.enableTicks();
+            }
         }
 
         const landTile = game.findLandTile();
