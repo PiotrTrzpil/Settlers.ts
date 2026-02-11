@@ -41,7 +41,7 @@ export default defineConfig({
         // when SharedArrayBuffer support is properly implemented
     },
     test: {
-        environment: 'jsdom',
+        environment: 'node',
         include: ['tests/unit/**/*.spec.ts'],
         reporters: process.env.CI ? ['verbose', 'github-actions'] : ['verbose'],
         // Limit parallelism to avoid resource exhaustion

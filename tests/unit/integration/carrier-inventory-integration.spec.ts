@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Integration tests for Wave 1 systems: carriers, inventory, and service areas.
  *
