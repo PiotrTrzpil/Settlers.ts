@@ -1,4 +1,5 @@
 import { test, expect } from './matchers';
+import { test as fixtureTest } from './fixtures';
 import { GamePage } from './game-page';
 
 /**
@@ -6,8 +7,9 @@ import { GamePage } from './game-page';
  * Tests verify the app loads correctly, navigation works, and UI elements
  * for the game MVP are properly rendered and interactive.
  *
- * NOTE: These tests use fresh page navigation intentionally - they test
+ * NOTE: Most tests use fresh page navigation intentionally - they test
  * initial load, navigation, and cannot use shared fixtures.
+ * Canvas Interaction tests use shared fixture (gp) for efficiency.
  */
 
 test.describe('App Loading and Structure', { tag: '@smoke' }, () => {
@@ -114,13 +116,10 @@ test.describe('Route Navigation', () => {
     });
 });
 
-test.describe('Canvas Interaction', { tag: '@smoke' }, () => {
-    test('canvas responds to mouse wheel events without errors', async({ page }) => {
-        const gp = new GamePage(page);
+// Canvas Interaction tests use shared fixture (eliminates 3 waitForReady calls)
+fixtureTest.describe('Canvas Interaction', { tag: '@smoke' }, () => {
+    fixtureTest('canvas responds to mouse wheel events without errors', async({ gp }) => {
         const { check: checkErrors } = gp.collectErrors();
-
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
 
         await gp.canvas.dispatchEvent('wheel', { deltaY: 100 });
         await gp.waitForFrames(1);
@@ -128,12 +127,8 @@ test.describe('Canvas Interaction', { tag: '@smoke' }, () => {
         checkErrors();
     });
 
-    test('canvas handles click events without errors', async({ page }) => {
-        const gp = new GamePage(page);
+    fixtureTest('canvas handles click events without errors', async({ gp }) => {
         const { check: checkErrors } = gp.collectErrors();
-
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
 
         await gp.canvas.click({ position: { x: 400, y: 400 } });
         await gp.waitForFrames(1);
@@ -141,12 +136,7 @@ test.describe('Canvas Interaction', { tag: '@smoke' }, () => {
         checkErrors();
     });
 
-    test('canvas handles right-click without showing context menu', async({ page }) => {
-        const gp = new GamePage(page);
-
-        await gp.goto({ testMap: true });
-        await gp.waitForReady();
-
+    fixtureTest('canvas handles right-click without showing context menu', async({ gp }) => {
         await gp.canvas.click({ button: 'right', position: { x: 400, y: 400 } });
         await gp.waitForFrames(1);
     });

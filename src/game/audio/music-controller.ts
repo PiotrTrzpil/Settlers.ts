@@ -202,7 +202,6 @@ export class MusicController {
         }
 
         // Check for suspended audio context (autoplay policy)
-        // @ts-ignore - Howler types might not expose ctx fully
         if (typeof Howler !== 'undefined' && Howler.ctx && Howler.ctx.state === 'suspended') {
             this.pendingMusicId = soundId;
             this.pendingFadeDuration = fadeDuration;
