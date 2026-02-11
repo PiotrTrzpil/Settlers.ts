@@ -260,6 +260,10 @@
               Reset State
             </button>
           </div>
+          <SettingsCheckbox
+            v-model="settings.showBuildingFootprint"
+            label="Show building footprints"
+          />
           <div class="river-debug">
             <span class="stat-label river-heading">River textures</span>
             <div class="stat-row">
@@ -337,6 +341,7 @@
 /* eslint-disable max-lines */
 import { reactive, computed } from 'vue';
 import { debugStats } from '@/game/debug-stats';
+import { gameSettings } from '@/game/game-settings';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
 import type { Game } from '@/game/game';
 import { useDebugMapObjects } from './use-debug-map-objects';
@@ -353,6 +358,7 @@ defineEmits<{
 }>();
 
 const stats = debugStats.state;
+const settings = gameSettings.state;
 
 // Use the persisted open state from debug stats
 const open = computed({

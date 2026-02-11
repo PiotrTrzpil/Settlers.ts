@@ -23,6 +23,7 @@ export interface GameSettings {
     // Display
     showDebugGrid: boolean;
     disablePlayerTinting: boolean;
+    showBuildingFootprint: boolean;
 
     // Building placement
     placeBuildingsCompleted: boolean;
@@ -52,6 +53,7 @@ const DEFAULT_SETTINGS: GameSettings = {
     // Display
     showDebugGrid: false,
     disablePlayerTinting: false,
+    showBuildingFootprint: false,
 
     // Building placement
     placeBuildingsCompleted: false,

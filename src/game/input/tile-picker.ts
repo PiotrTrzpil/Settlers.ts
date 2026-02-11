@@ -47,6 +47,10 @@ export class TilePicker {
     /**
      * Convert tile coordinate to world position (for rendering entities).
      * Static method for use without a TilePicker instance.
+     *
+     * NOTE: This method only works with integer tile coordinates.
+     * For fractional coordinates, use the pure tileToWorld() function
+     * from coordinate-system.ts with a pre-calculated height.
      */
     public static tileToWorld(
         tileX: number,
@@ -56,8 +60,22 @@ export class TilePicker {
         viewPointX: number,
         viewPointY: number
     ): { worldX: number; worldY: number } {
-        const idx = mapSize.toIndex(tileX, tileY);
-        const hWorld = heightToWorld(groundHeight[idx]);
+        // Validate tile coordinates are integers and in bounds
+        const intX = Math.floor(tileX);
+        const intY = Math.floor(tileY);
+
+        if (intX < 0 || intX >= mapSize.width || intY < 0 || intY >= mapSize.height) {
+            console.warn(`TilePicker.tileToWorld: tile (${tileX}, ${tileY}) out of bounds [0-${mapSize.width}, 0-${mapSize.height}]`);
+            // Return a default position to avoid NaN
+            return tileToWorld(tileX, tileY, 0, viewPointX, viewPointY);
+        }
+
+        if (tileX !== intX || tileY !== intY) {
+            console.warn(`TilePicker.tileToWorld: fractional coordinates (${tileX}, ${tileY}) - use pure tileToWorld() instead`);
+        }
+
+        const idx = mapSize.toIndex(intX, intY);
+        const hWorld = heightToWorld(groundHeight[idx] ?? 0);
         return tileToWorld(tileX, tileY, hWorld, viewPointX, viewPointY);
     }
 }

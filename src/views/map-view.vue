@@ -161,6 +161,11 @@
           class="game-canvas"
         />
 
+        <!-- Left panel container (selection info) -->
+        <div class="left-panels">
+          <selection-panel :game="game" />
+        </div>
+
         <!-- Right panel container (layers + settings + debug) -->
         <div class="right-panels">
           <layer-panel
@@ -215,6 +220,7 @@ import RendererViewer from '@/components/renderer-viewer.vue';
 import DebugPanel from '@/components/debug-panel.vue';
 import LayerPanel from '@/components/layer-panel.vue';
 import SettingsPanel from '@/components/settings-panel.vue';
+import SelectionPanel from '@/components/selection-panel.vue';
 import SettingsCheckbox from '@/components/settings/SettingsCheckbox.vue';
 
 const props = defineProps<{
@@ -585,6 +591,20 @@ async function onRaceChange() {
 .game-canvas {
   flex: 1;
   min-height: 0;
+}
+
+/* Left panels container (selection info) */
+.left-panels {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  z-index: 100;
+  max-height: calc(100% - 16px);
+  pointer-events: none;
 }
 
 /* Right panels container */

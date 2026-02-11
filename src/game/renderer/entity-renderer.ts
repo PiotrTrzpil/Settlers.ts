@@ -438,6 +438,22 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.sortEntitiesByDepth(viewPoint);
         this.frameCullSortTime = performance.now() - cullSortStart;
 
+        // Draw building footprints BEFORE entities (ground overlay)
+        if (gameSettings.state.showBuildingFootprint) {
+            // Activate color shader for footprints
+            super.drawBase(gl, projection);
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
+            gl.enableVertexAttribArray(this.aPosition);
+            gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
+            gl.disableVertexAttribArray(this.aEntityPos);
+            gl.disableVertexAttribArray(this.aColor);
+
+            this.selectionOverlayRenderer.drawBuildingFootprints(
+                gl, this.dynamicBuffer!, this.sortedEntities,
+                this.aPosition, this.aEntityPos, this.aColor, selectionCtx
+            );
+        }
+
         // Draw entities (textured or color fallback)
         const drawStart = performance.now();
         profiler.beginPhase('draw');
@@ -458,8 +474,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         profiler.endPhase('draw');
         this.frameDrawTime = performance.now() - drawStart;
 
-        // Draw selection frames (color shader) - must be after entities
         const selectionStart = performance.now();
+
+        // Draw selection frames (color shader) - must be after entities
         this.selectionOverlayRenderer.drawSelectionFrames(
             gl, this.dynamicBuffer!, this.sortedEntities, this.selectedEntityIds,
             this.aEntityPos, this.aColor, selectionCtx
@@ -531,7 +548,14 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return fallbackSprite;
         }
 
-        return getAnimatedSprite(animState, animatedEntry.animationData, animatedEntry.staticSprite);
+        try {
+            return getAnimatedSprite(animState, animatedEntry.animationData, animatedEntry.staticSprite);
+        } catch (e) {
+            // Log details to help debug missing animation sequences
+            const typeName = entity.type === EntityType.Unit ? UnitType[entity.subType] : `${EntityType[entity.type]}:${entity.subType}`;
+            EntityRenderer.log.error(`Animation error for ${typeName} (id=${entity.id}): seq='${animState.sequenceKey}', available=[${[...animatedEntry.animationData.sequences.keys()].join(', ')}]`);
+            throw e;
+        }
     }
 
     /** Get sprite entry for a building entity */

@@ -53,6 +53,20 @@ export const SELECTION_ORIGIN_DOT_SCALE = 0.10; // Smaller dot at logical origin
 export const SELECTION_DOT_COLOR = [0.2, 0.9, 1.0, 1.0]; // Cyan dot on sprite
 export const SELECTION_ORIGIN_DOT_COLOR = [1.0, 0.4, 0.2, 1.0]; // Orange dot at origin
 
+// Footprint debug visualization
+export const FOOTPRINT_TILE_COLOR = [0.2, 0.8, 1.0, 0.4]; // Semi-transparent cyan
+
+/**
+ * Vertex scale factor applied by entity-vert.glsl shader.
+ * The shader does: pos = a_position * SHADER_VERTEX_SCALE + a_entityPos
+ *
+ * When drawing with absolute world coordinates, you must compensate:
+ * relativeCoord = (worldCoord - center) * (1 / SHADER_VERTEX_SCALE)
+ *
+ * Or use the helper methods in SelectionOverlayRenderer that handle this automatically.
+ */
+export const SHADER_VERTEX_SCALE = 0.4;
+
 // Maximum entities for batch buffer allocation
 export const MAX_BATCH_ENTITIES = 500;
 // 6 vertices per quad, 10 floats per vertex (posX, posY, texU, texV, texLayer, playerRow, r, g, b, a)
