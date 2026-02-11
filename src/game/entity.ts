@@ -116,7 +116,45 @@ export interface Entity {
  */
 export interface EntityProvider {
     getEntity(id: number): Entity | undefined;
+    getEntityOrThrow(id: number, context?: string): Entity;
     get entities(): Entity[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Component helpers - throw with context when accessing required components
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Get carrier state from an entity, throwing if not present.
+ * Use when the entity MUST be a carrier.
+ */
+export function getCarrierState(entity: Entity): NonNullable<Entity['carrier']> {
+    if (!entity.carrier) {
+        throw new Error(`Entity ${entity.id} is not a carrier (has no carrier state)`);
+    }
+    return entity.carrier;
+}
+
+/**
+ * Get tree state from an entity, throwing if not present.
+ * Use when the entity MUST be a tree.
+ */
+export function getTreeState(entity: Entity): NonNullable<Entity['tree']> {
+    if (!entity.tree) {
+        throw new Error(`Entity ${entity.id} is not a tree (has no tree state)`);
+    }
+    return entity.tree;
+}
+
+/**
+ * Get construction state from an entity, throwing if not present.
+ * Use when the entity MUST have construction state.
+ */
+export function getConstructionState(entity: Entity): NonNullable<Entity['construction']> {
+    if (!entity.construction) {
+        throw new Error(`Entity ${entity.id} has no construction state`);
+    }
+    return entity.construction;
 }
 
 /**

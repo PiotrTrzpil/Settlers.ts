@@ -81,21 +81,32 @@ this.manager!.doThing()
 private foo!: Bar
 ```
 
-### 2. Silent Fallbacks That Hide Bugs (MUST FIX)
+### 2. Entity Lookups - Use getEntityOrThrow (MUST FIX)
+
+```typescript
+// ❌ BAD - no context when it crashes
+const entity = this.gameState.getEntity(id)!
+
+// ❌ WORSE - silently returns wrong value
+const player = this.gameState.getEntity(id)?.player ?? 0
+
+// ✅ GOOD - crashes with helpful context
+const entity = this.gameState.getEntityOrThrow(id, 'source building')
+```
+
+### 3. Silent Fallbacks That Hide Bugs (MUST FIX)
 
 ```typescript
 // ❌ BAD - silently returns wrong value if bug exists
 const x = map.get(id) ?? 0
-return entity?.value ?? null
 slot?.amount || 0
 
 // ✅ GOOD - crashes if value doesn't exist when it should
 const x = map.get(id)!
-return entity!.value
 slot!.amount
 ```
 
-### 3. Defensive Checks When Value Must Exist (MUST FIX)
+### 4. Defensive Checks When Value Must Exist (MUST FIX)
 
 ```typescript
 // ❌ BAD - silently skips code that should run
@@ -109,7 +120,7 @@ entity!  // let it crash if bug
 handler!.onWork()
 ```
 
-### 4. Missing Error Context / Silent Failures (MUST FIX)
+### 5. Missing Error Context / Silent Failures (MUST FIX)
 
 ```typescript
 // ❌ BAD - hides the root cause

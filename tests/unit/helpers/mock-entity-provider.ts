@@ -36,6 +36,15 @@ export class MockEntityProvider implements EntityProvider {
         return this.entityMap.get(id);
     }
 
+    getEntityOrThrow(id: number, context?: string): Entity {
+        const entity = this.getEntity(id);
+        if (!entity) {
+            const ctx = context ? ` (${context})` : '';
+            throw new Error(`Entity ${id}${ctx} not found`);
+        }
+        return entity;
+    }
+
     /**
      * Manually add an entity with specific properties.
      */

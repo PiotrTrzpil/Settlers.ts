@@ -13,7 +13,7 @@
 
 import type { GameState } from '../../game-state';
 import type { TickSystem } from '../../tick-system';
-import { EntityType, UnitType, Entity } from '../../entity';
+import { EntityType, UnitType, Entity, getCarrierState } from '../../entity';
 import { EMaterialType } from '../../economy';
 import { LogHandler } from '@/utilities/log-handler';
 import { hexDistance } from '../hex-directions';
@@ -805,8 +805,9 @@ export class SettlerTaskSystem implements TickSystem {
         }
 
         // Update carrier entity state
-        entity.carrier!.carryingMaterial = material;
-        entity.carrier!.carryingAmount = withdrawn;
+        const carrierState = getCarrierState(entity);
+        carrierState.carryingMaterial = material;
+        carrierState.carryingAmount = withdrawn;
 
         // Update job state
         job.data.carryingGood = material;
@@ -887,9 +888,10 @@ export class SettlerTaskSystem implements TickSystem {
      */
     private executeCarrierDropoff(settler: Entity, job: CarrierJobState): TaskResult {
         const entity = this.gameState.getEntityOrThrow(settler.id, 'carrier');
+        const carrierState = getCarrierState(entity);
         const { destBuildingId, material, amount: jobAmount } = job.data;
 
-        const amount = entity.carrier!.carryingAmount ?? jobAmount;
+        const amount = carrierState.carryingAmount ?? jobAmount;
 
         // Deposit to destination building
         const deposited = this.gameState.inventoryManager.depositInput(
@@ -903,9 +905,9 @@ export class SettlerTaskSystem implements TickSystem {
             log.warn(`Carrier ${settler.id}: ${overflow} of ${material} overflow at building ${destBuildingId}`);
         }
 
-        // Clear carrier entity state (optimistic - carrier must exist)
-        entity.carrier!.carryingMaterial = null;
-        entity.carrier!.carryingAmount = 0;
+        // Clear carrier entity state
+        carrierState.carryingMaterial = null;
+        carrierState.carryingAmount = 0;
 
         // Clear job state
         job.data.carryingGood = null;

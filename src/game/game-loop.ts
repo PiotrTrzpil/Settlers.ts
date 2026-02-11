@@ -256,8 +256,9 @@ export class GameLoop {
      * Handle building creation - creates inventory and service area as needed.
      */
     private handleBuildingCreated(entityId: number, buildingType: BuildingType, x: number, y: number): void {
-        const entity = this.gameState.getEntity(entityId);
-        const playerId = entity?.player ?? 0;
+        // Entity MUST exist - we just received a creation event for it
+        const entity = this.gameState.getEntityOrThrow(entityId, 'created building');
+        const playerId = entity.player;
 
         // Create service area for logistics hubs (taverns/warehouses)
         if (GameLoop.SERVICE_AREA_BUILDINGS.has(buildingType)) {

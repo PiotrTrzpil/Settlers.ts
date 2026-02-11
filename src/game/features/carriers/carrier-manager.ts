@@ -8,7 +8,7 @@
 
 import type { EventBus } from '../../event-bus';
 import { EMaterialType } from '../../economy';
-import type { EntityProvider } from '../../entity';
+import { type EntityProvider, getCarrierState } from '../../entity';
 import {
     CarrierStatus,
     type CarrierState,
@@ -197,9 +197,9 @@ export class CarrierManager {
             return false;
         }
 
-        const state = this.entityProvider.getEntity(carrierId)?.carrier;
-        if (!state) return false;
-
+        // Carrier MUST exist - canAssignJobTo just verified it
+        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier');
+        const state = getCarrierState(entity);
         state.currentJob = job;
 
         this.eventBus!.emit('carrier:jobAssigned', { entityId: carrierId, job });
