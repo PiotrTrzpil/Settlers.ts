@@ -26,6 +26,9 @@ export interface GameSettings {
     disablePlayerTinting: boolean;
     showBuildingFootprint: boolean;
 
+    // Graphics
+    antialias: boolean;
+
     // Building placement
     placeBuildingsCompleted: boolean;
     placeBuildingsWithWorker: boolean;
@@ -57,6 +60,9 @@ const DEFAULT_SETTINGS: GameSettings = {
     showDebugGrid: false,
     disablePlayerTinting: false,
     showBuildingFootprint: false,
+
+    // Graphics
+    antialias: true,
 
     // Building placement
     placeBuildingsCompleted: false,

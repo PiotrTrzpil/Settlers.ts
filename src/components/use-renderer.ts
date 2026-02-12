@@ -353,6 +353,7 @@ interface UseRendererOptions {
     getDebugGrid: () => boolean;
     getLayerVisibility: () => LayerVisibility;
     onTileClick: (tile: { x: number; y: number }) => void;
+    initialCamera?: { x: number; y: number; zoom: number } | null;
 }
 
 /** Handle mode changes and update debug stats */
@@ -392,6 +393,7 @@ export function useRenderer({
     getDebugGrid,
     getLayerVisibility,
     onTileClick,
+    initialCamera,
 }: UseRendererOptions) {
     let renderer: Renderer | null = null;
     let tilePicker: TilePicker | null = null;
@@ -464,17 +466,10 @@ export function useRenderer({
     }
 
     /**
-     * Initialize the renderer.
-     * Landscape loads first for immediate camera control, then sprites load in background.
+     * Create and configure renderers for the current game.
      */
-    function initRenderer(): void {
-        const game = getGame();
-        if (game == null || renderer == null) return;
-
-        // Reset timing stats to clear stale data from previous game/HMR reload
-        debugStats.reset();
-
-        renderer.clear();
+    function setupRenderers(game: Game): void {
+        if (!renderer) return;
 
         landscapeRenderer = new LandscapeRenderer(
             game.fileManager,
@@ -493,34 +488,29 @@ export function useRenderer({
             game.groundType
         );
         entityRenderer.setAnimationService(game.gameLoop.animationService);
-        // Skip sprite loading in procedural textures mode (testMap) - no game files needed
         entityRenderer.skipSpriteLoading = game.useProceduralTextures;
-        // Enable game ticks once sprites are loaded (prevents animation errors during loading)
         entityRenderer.onSpritesLoaded = () => game.gameLoop.enableTicks();
         renderer.add(entityRenderer);
+    }
 
-        // Initialize renderers asynchronously
+    /**
+     * Initialize GL resources and bind event handlers.
+     */
+    function initGLAndBindEvents(game: Game): void {
+        if (!renderer || !landscapeRenderer || !entityRenderer) return;
+
         const gl = renderer.gl;
         if (gl) {
             void initRenderersAsync(gl, landscapeRenderer, entityRenderer, game);
         } else {
-            // No WebGL available — set game as loaded and enable ticks so game
-            // state can still advance (headless/CI testing, software rendering failure).
-            // rendererReady stays false since we can't render.
             debugStats.state.gameLoaded = true;
             if (game.useProceduralTextures) {
                 game.gameLoop.enableTicks();
             }
         }
 
-        const landTile = game.findLandTile();
-        if (landTile) {
-            renderer.viewPoint.setPosition(landTile.x, landTile.y);
-        }
-
         exposeForE2E(renderer.viewPoint, landscapeRenderer, entityRenderer, inputManager);
 
-        // Subscribe to terrain modification events
         game.eventBus.on('terrain:modified', () => {
             landscapeRenderer?.markTerrainDirty();
         });
@@ -537,6 +527,32 @@ export function useRenderer({
             renderer,
             selectionBox
         ));
+    }
+
+    /**
+     * Initialize the renderer for a new game.
+     * Sets up renderers, positions camera, and starts the game.
+     */
+    function initRenderer(): void {
+        const game = getGame();
+        if (game == null || renderer == null) return;
+
+        debugStats.reset();
+        renderer.clear();
+
+        setupRenderers(game);
+        initGLAndBindEvents(game);
+
+        // Restore camera from saved state, or find a land tile for initial position
+        if (initialCamera) {
+            renderer.viewPoint.setRawPosition(initialCamera.x, initialCamera.y);
+            renderer.viewPoint.zoomValue = initialCamera.zoom;
+        } else {
+            const landTile = game.findLandTile();
+            if (landTile) {
+                renderer.viewPoint.setPosition(landTile.x, landTile.y);
+            }
+        }
 
         game.start();
     }
@@ -584,11 +600,24 @@ export function useRenderer({
         return inputManager;
     }
 
+    /**
+     * Get current camera state for saving/restoring across recreations.
+     */
+    function getCamera(): { x: number; y: number; zoom: number } | null {
+        if (!renderer) return null;
+        return {
+            x: renderer.viewPoint.x,
+            y: renderer.viewPoint.y,
+            zoom: renderer.viewPoint.zoomValue,
+        };
+    }
+
     return {
         getRenderer: () => renderer,
         setRace,
         getRace,
         getInputManager,
+        getCamera,
         selectionBox,
     };
 }

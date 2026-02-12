@@ -26,6 +26,7 @@ const props = defineProps<{
     game: Game | null;
     debugGrid: boolean;
     layerVisibility?: LayerVisibility;
+    initialCamera?: { x: number; y: number; zoom: number } | null;
 }>();
 
 const emit = defineEmits<{
@@ -34,12 +35,13 @@ const emit = defineEmits<{
 
 const cav = useTemplateRef<HTMLCanvasElement>('cav');
 
-const { setRace, getRace, getInputManager, selectionBox } = useRenderer({
+const { setRace, getRace, getInputManager, getCamera, selectionBox } = useRenderer({
     canvas: cav,
     getGame: () => props.game,
     getDebugGrid: () => props.debugGrid,
     getLayerVisibility: () => props.layerVisibility ?? DEFAULT_LAYER_VISIBILITY,
-    onTileClick: (tile) => emit('tileClick', tile)
+    onTileClick: (tile) => emit('tileClick', tile),
+    initialCamera: props.initialCamera,
 });
 
 // Compute selection box style from screen coordinates
@@ -60,8 +62,8 @@ const selectionBoxStyle = computed(() => {
     };
 });
 
-// Expose race switching and input manager for parent components
-defineExpose({ setRace, getRace, getInputManager, Race });
+// Expose race switching, input manager, and camera for parent components
+defineExpose({ setRace, getRace, getInputManager, getCamera, Race });
 </script>
 
 <style scoped>

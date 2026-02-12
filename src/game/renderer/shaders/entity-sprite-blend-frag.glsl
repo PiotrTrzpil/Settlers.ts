@@ -41,9 +41,7 @@ void main() {
     // Blend the two colors based on transition progress
     vec4 blended = mix(color1, color2, v_blend);
 
-    // Discard fully transparent pixels
-    if (blended.a < 0.01) discard;
-
     // Apply selection/highlight tint
+    // Output alpha=0 for transparent pixels (alpha-to-coverage with MSAA)
     fragColor = blended * v_tint;
 }

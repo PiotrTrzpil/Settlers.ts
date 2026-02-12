@@ -2,6 +2,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import { IRenderer } from './i-renderer';
 import { ViewPoint } from './view-point';
 import type { EntityRenderer } from './entity-renderer';
+import { gameSettings } from '@/game/game-settings';
 
 /** Detailed render timing for a single frame */
 export interface FrameRenderTiming {
@@ -81,7 +82,8 @@ export class Renderer {
         this.viewPoint = new ViewPoint(canvas, { externalInput: options?.externalInput });
         // Note: onMove callback removed - the game loop now drives all rendering via drawOnce()
 
-        let newGl = canvas.getContext('webgl2', { preserveDrawingBuffer: true });
+        const antialias = gameSettings.state.antialias;
+        let newGl = canvas.getContext('webgl2', { antialias, preserveDrawingBuffer: true });
         if (!newGl) {
             Renderer.log.error('Unable to initialize WebGL2. Your browser may not support it.');
             return;

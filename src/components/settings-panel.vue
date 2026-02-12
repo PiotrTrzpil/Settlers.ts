@@ -87,6 +87,20 @@
         </div>
       </section>
 
+      <!-- Graphics Settings -->
+      <section class="settings-section">
+        <h3 class="section-header" @click="sections.graphics = !sections.graphics">
+          <span class="caret">{{ sections.graphics ? '&#x25BC;' : '&#x25B6;' }}</span>
+          Graphics
+        </h3>
+        <div v-if="sections.graphics" class="section-body">
+          <SettingsCheckbox
+            label="Anti-aliasing (MSAA)"
+            v-model="settings.antialias"
+          />
+        </div>
+      </section>
+
       <!-- Reset button -->
       <section class="settings-section">
         <div class="reset-section">
@@ -118,6 +132,7 @@ const sections = reactive({
     camera: true,
     audio: true,
     display: true,
+    graphics: true,
 });
 
 // Helper to get game instance

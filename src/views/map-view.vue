@@ -156,9 +156,11 @@
         <!-- Canvas fills remaining space -->
         <renderer-viewer
           ref="rendererRef"
+          :key="rendererKey"
           :game="game"
           :debugGrid="showDebug"
           :layerVisibility="layerVisibility"
+          :initialCamera="savedCamera"
           @tileClick="onTileClick"
           class="game-canvas"
         />
@@ -209,7 +211,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useTemplateRef } from 'vue';
+import { ref, computed, useTemplateRef, watch } from 'vue';
 import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
 import { useBuildingIcons } from '@/composables/useBuildingIcons';
@@ -297,6 +299,24 @@ async function onRaceChange() {
     // Switch music to match the selected race
     SoundManager.getInstance().playRandomMusic(currentRace.value);
 }
+
+// Key to force renderer recreation when graphics settings change
+const rendererKey = ref(0);
+const savedCamera = ref<{ x: number; y: number; zoom: number } | null>(null);
+
+// Watch for graphics settings changes that require context recreation
+watch(
+    () => gameSettings.state.antialias,
+    () => {
+        // Save camera position before recreation
+        const renderer = rendererRef.value;
+        if (renderer && typeof renderer.getCamera === 'function') {
+            savedCamera.value = renderer.getCamera();
+        }
+        // Force component recreation by changing key
+        rendererKey.value++;
+    }
+);
 </script>
 
 <style scoped>

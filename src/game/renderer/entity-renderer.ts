@@ -663,6 +663,16 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         return { skip: true, transitioning: false, sprite: null, progress: 1 };
     }
 
+    /** Enable alpha-to-coverage if MSAA is active, return whether it was enabled */
+    private enableAlphaToCoverageIfMSAA(gl: WebGL2RenderingContext): boolean {
+        const samples = gl.getParameter(gl.SAMPLES) as number;
+        if (samples > 1) {
+            gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Draw entities using the sprite shader and atlas texture (batched).
      */
@@ -673,13 +683,16 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     ): void {
         if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
 
+        // Enable alpha-to-coverage for smooth sprite edges when MSAA is active
+        const useAlphaToCoverage = this.enableAlphaToCoverageIfMSAA(gl);
+
         // Bind atlas and palette textures so shaders can sample them
         this.spriteManager.spriteAtlas!.bindForRendering(gl);
         this.spriteManager.paletteManager.bind(gl);
 
         const paletteWidth = PALETTE_TEXTURE_WIDTH;
         const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
-        this.spriteBatchRenderer.beginSpriteBatch(gl, projection, paletteWidth, rowsPerPlayer);
+        this.spriteBatchRenderer.beginSpriteBatch(gl, projection, paletteWidth, rowsPerPlayer, gameSettings.state.antialias);
         this.transitioningUnits.length = 0;
 
         for (const entity of this.sortedEntities) {
@@ -717,6 +730,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Draw transitioning units with blend shader
         if (this.transitioningUnits.length > 0) {
             this.drawTransitioningUnits(gl, projection, viewPoint);
+        }
+
+        // Disable alpha-to-coverage
+        if (useAlphaToCoverage) {
+            gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE);
         }
     }
 
@@ -984,7 +1002,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             if (spriteEntry) {
                 const paletteWidth = PALETTE_TEXTURE_WIDTH;
                 const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
-                this.spriteBatchRenderer.beginSpriteBatch(gl, projection, paletteWidth, rowsPerPlayer);
+                this.spriteBatchRenderer.beginSpriteBatch(gl, projection, paletteWidth, rowsPerPlayer, gameSettings.state.antialias);
                 this.spriteBatchRenderer.addSprite(
                     gl, worldPos.worldX, worldPos.worldY, spriteEntry,
                     0, tint[0], tint[1], tint[2], tint[3]

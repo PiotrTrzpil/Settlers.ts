@@ -140,12 +140,14 @@ export class SpriteBatchRenderer {
      * Begin a new sprite batch. Call before adding sprites.
      * @param paletteWidth Width of the 2D palette texture (e.g., 2048)
      * @param paletteRowsPerPlayer Number of texture rows per player section
+     * @param edgeAA Whether to enable edge anti-aliasing
      */
     public beginSpriteBatch(
         gl: WebGL2RenderingContext,
         projection: Float32Array,
         paletteWidth: number,
-        paletteRowsPerPlayer: number
+        paletteRowsPerPlayer: number,
+        edgeAA: boolean
     ): void {
         if (!this.spriteShaderProgram) return;
 
@@ -155,6 +157,7 @@ export class SpriteBatchRenderer {
         this.spriteShaderProgram.bindTexture('u_palette', TEXTURE_UNIT_PALETTE);
         this.spriteShaderProgram.setUniformInt('u_paletteWidth', paletteWidth);
         this.spriteShaderProgram.setUniformInt('u_paletteRowsPerPlayer', paletteRowsPerPlayer);
+        this.spriteShaderProgram.setUniformInt('u_edgeAA', edgeAA ? 1 : 0);
         this.batchOffset = 0;
     }
 
