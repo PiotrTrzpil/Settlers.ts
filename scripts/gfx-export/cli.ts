@@ -28,6 +28,35 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+// Polyfill ImageData for Node.js (browser API not available)
+if (typeof globalThis.ImageData === 'undefined') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).ImageData = class ImageData {
+        readonly data: Uint8ClampedArray;
+        readonly width: number;
+        readonly height: number;
+        readonly colorSpace: string = 'srgb';
+
+        constructor(
+            dataOrWidth: Uint8ClampedArray | number,
+            widthOrHeight: number,
+            heightOrSettings?: number | { colorSpace?: string }
+        ) {
+            if (typeof dataOrWidth === 'number') {
+                // new ImageData(width, height)
+                this.width = dataOrWidth;
+                this.height = widthOrHeight;
+                this.data = new Uint8ClampedArray(this.width * this.height * 4);
+            } else {
+                // new ImageData(data, width, height?)
+                this.data = dataOrWidth;
+                this.width = widthOrHeight;
+                this.height = heightOrSettings as number ?? (dataOrWidth.length / 4 / widthOrHeight);
+            }
+        }
+    };
+}
+
 // Using path aliases from tsconfig.json
 import { BinaryReader } from '@/resources/file/binary-reader';
 import { DilFileReader } from '@/resources/gfx/dil-file-reader';
@@ -62,16 +91,6 @@ function crc32(data: Uint8Array, start = 0, length?: number): number {
         crc = CRC32_TABLE[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
     }
     return crc ^ 0xffffffff;
-}
-
-function adler32(data: Uint8Array): number {
-    let a = 1, b = 0;
-    const MOD = 65521;
-    for (let i = 0; i < data.length; i++) {
-        a = (a + data[i]) % MOD;
-        b = (b + a) % MOD;
-    }
-    return (b << 16) | a;
 }
 
 function writeUint32BE(arr: Uint8Array, value: number, offset: number): void {
