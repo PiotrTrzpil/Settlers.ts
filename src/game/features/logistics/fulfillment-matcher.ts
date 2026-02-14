@@ -12,6 +12,7 @@ import { getHubsServingBothPositions } from '../service-areas/service-area-queri
 import type { ResourceRequest } from './resource-request';
 import { getAvailableSupplies, type ResourceSupply } from './resource-supply';
 import type { InventoryReservationManager } from './inventory-reservation';
+import type { BuildingInventoryManager } from '../inventory';
 
 /**
  * Result of a successful match between a request and a supply.
@@ -65,6 +66,7 @@ export interface MatchOptions {
  *
  * @param request The resource request to fulfill
  * @param gameState The game state with entities and inventories
+ * @param inventoryManager The inventory manager for building inventories
  * @param serviceAreaManager Manager for service area queries
  * @param options Matching options
  * @returns The best match, or null if no suitable source found
@@ -73,8 +75,9 @@ export interface MatchOptions {
 export function matchRequestToSupply(
     request: ResourceRequest,
     gameState: GameState,
+    inventoryManager: BuildingInventoryManager,
     serviceAreaManager: ServiceAreaManager,
-    options: MatchOptions = {},
+    options: MatchOptions = {}
 ): FulfillmentMatch | null {
     const {
         playerId,
@@ -90,7 +93,7 @@ export function matchRequestToSupply(
     }
 
     // Find all supplies of this material type
-    const supplies = getAvailableSupplies(gameState, request.materialType, {
+    const supplies = getAvailableSupplies(gameState, inventoryManager, request.materialType, {
         playerId,
         minAmount: 1, // We'll take partial fulfillment
     });
@@ -122,10 +125,7 @@ export function matchRequestToSupply(
         // Calculate effective available amount (accounting for reservations)
         let effectiveAmount = supply.availableAmount;
         if (reservationManager) {
-            const reserved = reservationManager.getReservedAmount(
-                supply.buildingId,
-                request.materialType,
-            );
+            const reserved = reservationManager.getReservedAmount(supply.buildingId, request.materialType);
             effectiveAmount = Math.max(0, effectiveAmount - reserved);
         }
 
@@ -141,7 +141,7 @@ export function matchRequestToSupply(
             destBuilding.x,
             destBuilding.y,
             serviceAreaManager,
-            { playerId },
+            { playerId }
         );
 
         // If we require service area coverage, skip sources without any hubs
@@ -150,12 +150,7 @@ export function matchRequestToSupply(
         }
 
         // Calculate distance
-        const distance = hexDistance(
-            sourceBuilding.x,
-            sourceBuilding.y,
-            destBuilding.x,
-            destBuilding.y,
-        );
+        const distance = hexDistance(sourceBuilding.x, sourceBuilding.y, destBuilding.x, destBuilding.y);
 
         candidates.push({
             supply,
@@ -202,6 +197,7 @@ export function matchRequestToSupply(
  *
  * @param request The resource request
  * @param gameState The game state
+ * @param inventoryManager The inventory manager for building inventories
  * @param serviceAreaManager Service area manager
  * @param options Matching options
  * @returns Array of all possible matches, sorted by distance
@@ -209,8 +205,9 @@ export function matchRequestToSupply(
 export function findAllMatches(
     request: ResourceRequest,
     gameState: GameState,
+    inventoryManager: BuildingInventoryManager,
     serviceAreaManager: ServiceAreaManager,
-    options: MatchOptions = {},
+    options: MatchOptions = {}
 ): FulfillmentMatch[] {
     const { playerId, requireServiceArea = true, reservationManager } = options;
 
@@ -219,7 +216,7 @@ export function findAllMatches(
         return [];
     }
 
-    const supplies = getAvailableSupplies(gameState, request.materialType, {
+    const supplies = getAvailableSupplies(gameState, inventoryManager, request.materialType, {
         playerId,
         minAmount: 1,
     });
@@ -239,10 +236,7 @@ export function findAllMatches(
         // Calculate effective available amount (accounting for reservations)
         let effectiveAmount = supply.availableAmount;
         if (reservationManager) {
-            const reserved = reservationManager.getReservedAmount(
-                supply.buildingId,
-                request.materialType,
-            );
+            const reserved = reservationManager.getReservedAmount(supply.buildingId, request.materialType);
             effectiveAmount = Math.max(0, effectiveAmount - reserved);
         }
 
@@ -257,19 +251,14 @@ export function findAllMatches(
             destBuilding.x,
             destBuilding.y,
             serviceAreaManager,
-            { playerId },
+            { playerId }
         );
 
         if (requireServiceArea && serviceHubs.length === 0) {
             continue;
         }
 
-        const distance = hexDistance(
-            sourceBuilding.x,
-            sourceBuilding.y,
-            destBuilding.x,
-            destBuilding.y,
-        );
+        const distance = hexDistance(sourceBuilding.x, sourceBuilding.y, destBuilding.x, destBuilding.y);
 
         matches.push({
             sourceBuilding: supply.buildingId,
@@ -293,11 +282,13 @@ export function findAllMatches(
  *
  * @param request The resource request
  * @param gameState The game state
+ * @param inventoryManager The inventory manager for building inventories
  * @returns True if fulfillment is potentially possible
  */
 export function canPotentiallyFulfill(
     request: ResourceRequest,
     gameState: GameState,
+    inventoryManager: BuildingInventoryManager
 ): boolean {
     // Check destination exists
     if (!gameState.getEntity(request.buildingId)) {
@@ -305,13 +296,10 @@ export function canPotentiallyFulfill(
     }
 
     // Check there's any supply
-    const buildingIds = gameState.inventoryManager.getBuildingsWithOutput(
-        request.materialType,
-        1,
-    );
+    const buildingIds = inventoryManager.getBuildingsWithOutput(request.materialType, 1);
 
     // Need at least one supply that isn't the destination
-    return buildingIds.some(id => id !== request.buildingId);
+    return buildingIds.some((id: number) => id !== request.buildingId);
 }
 
 /**
@@ -322,18 +310,20 @@ export function canPotentiallyFulfill(
  *
  * @param request The resource request
  * @param gameState The game state
+ * @param inventoryManager The inventory manager for building inventories
  * @returns The minimum distance, or Infinity if no supply exists
  */
 export function estimateFulfillmentDistance(
     request: ResourceRequest,
     gameState: GameState,
+    inventoryManager: BuildingInventoryManager
 ): number {
     const destBuilding = gameState.getEntity(request.buildingId);
     if (!destBuilding) {
         return Infinity;
     }
 
-    const supplies = getAvailableSupplies(gameState, request.materialType);
+    const supplies = getAvailableSupplies(gameState, inventoryManager, request.materialType);
     let minDistance = Infinity;
 
     for (const supply of supplies) {
@@ -346,12 +336,7 @@ export function estimateFulfillmentDistance(
             continue;
         }
 
-        const distance = hexDistance(
-            sourceBuilding.x,
-            sourceBuilding.y,
-            destBuilding.x,
-            destBuilding.y,
-        );
+        const distance = hexDistance(sourceBuilding.x, sourceBuilding.y, destBuilding.x, destBuilding.y);
 
         if (distance < minDistance) {
             minDistance = distance;

@@ -34,6 +34,7 @@ import {
 } from './types';
 import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDefinitions } from './loader';
 import type { EventBus } from '../../event-bus';
+import type { BuildingInventoryManager } from '../../features/inventory';
 
 const log = new LogHandler('SettlerTaskSystem');
 
@@ -66,21 +67,30 @@ interface UnitRuntime {
     idleState: IdleAnimationState;
 }
 
+/** Configuration for SettlerTaskSystem dependencies */
+export interface SettlerTaskSystemConfig {
+    gameState: GameState;
+    animationService: AnimationService;
+    inventoryManager: BuildingInventoryManager;
+}
+
 /**
  * Manages all unit behaviors through task execution.
  */
 export class SettlerTaskSystem implements TickSystem {
     private gameState: GameState;
     private animationService: AnimationService;
+    private inventoryManager: BuildingInventoryManager;
     private settlerConfigs: SettlerConfigs;
     private jobDefinitions: JobDefinitions;
     private workHandlers = new Map<SearchType, WorkHandler>();
     private runtimes = new Map<number, UnitRuntime>();
     private eventBus!: EventBus; // MUST be set via setEventBus
 
-    constructor(gameState: GameState, animationService: AnimationService) {
-        this.gameState = gameState;
-        this.animationService = animationService;
+    constructor(config: SettlerTaskSystemConfig) {
+        this.gameState = config.gameState;
+        this.animationService = config.animationService;
+        this.inventoryManager = config.inventoryManager;
         this.settlerConfigs = loadSettlerConfigs();
         this.jobDefinitions = loadJobDefinitions();
 
@@ -120,14 +130,13 @@ export class SettlerTaskSystem implements TickSystem {
             canWork: (targetId: number) => {
                 // Can work when building has inputs and output space
                 return (
-                    this.gameState.inventoryManager.canStartProduction(targetId) &&
-                    this.gameState.inventoryManager.canStoreOutput(targetId)
+                    this.inventoryManager.canStartProduction(targetId) && this.inventoryManager.canStoreOutput(targetId)
                 );
             },
 
             onWorkStart: (targetId: number) => {
                 // Consume inputs when starting work
-                this.gameState.inventoryManager.consumeProductionInputs(targetId);
+                this.inventoryManager.consumeProductionInputs(targetId);
             },
 
             onWorkTick: (_targetId: number, progress: number) => {
@@ -137,7 +146,7 @@ export class SettlerTaskSystem implements TickSystem {
 
             onWorkComplete: (targetId: number) => {
                 // Produce outputs when work completes
-                this.gameState.inventoryManager.produceOutput(targetId);
+                this.inventoryManager.produceOutput(targetId);
             },
         };
     }
@@ -512,8 +521,8 @@ export class SettlerTaskSystem implements TickSystem {
             const pickupTask = tasks.find(t => t.task === TaskType.PICKUP && t.good !== undefined);
             if (pickupTask && pickupTask.good !== undefined) {
                 const canStore =
-                    this.gameState.inventoryManager.canAcceptInput(homeBuilding.id, pickupTask.good, 1) ||
-                    this.gameState.inventoryManager.getInputSpace(homeBuilding.id, pickupTask.good) > 0 ||
+                    this.inventoryManager.canAcceptInput(homeBuilding.id, pickupTask.good, 1) ||
+                    this.inventoryManager.getInputSpace(homeBuilding.id, pickupTask.good) > 0 ||
                     this.canStoreInOutput(homeBuilding.id, pickupTask.good);
                 if (!canStore) {
                     // Output full - return home and wait there
@@ -550,7 +559,7 @@ export class SettlerTaskSystem implements TickSystem {
      * Check if building can store a material in its output slot.
      */
     private canStoreInOutput(buildingId: number, materialType: EMaterialType): boolean {
-        const inventory = this.gameState.inventoryManager.getInventory(buildingId);
+        const inventory = this.inventoryManager.getInventory(buildingId);
         if (!inventory) return false;
 
         const slot = inventory.outputSlots.find(s => s.materialType === materialType);
@@ -782,11 +791,7 @@ export class SettlerTaskSystem implements TickSystem {
         const { sourceBuildingId, material, amount: requestedAmount } = job.data;
 
         // Withdraw from reserved amount (atomic: release slot reservation + withdraw)
-        const withdrawn = this.gameState.inventoryManager.withdrawReservedOutput(
-            sourceBuildingId,
-            material,
-            requestedAmount
-        );
+        const withdrawn = this.inventoryManager.withdrawReservedOutput(sourceBuildingId, material, requestedAmount);
 
         if (withdrawn === 0) {
             // Material no longer available (reservation may have been released due to building destruction)
@@ -870,7 +875,7 @@ export class SettlerTaskSystem implements TickSystem {
         const carryingGood = job.data.carryingGood;
 
         // Deposit to building inventory (optimistic - assumes inventory exists)
-        const deposited = this.gameState.inventoryManager.depositOutput(homeId, carryingGood, 1);
+        const deposited = this.inventoryManager.depositOutput(homeId, carryingGood, 1);
         if (deposited > 0) {
             log.debug(`Settler ${settler.id} deposited ${carryingGood} to building ${homeId}`);
         } else {
@@ -893,7 +898,7 @@ export class SettlerTaskSystem implements TickSystem {
         const amount = carrierState.carryingAmount ?? jobAmount;
 
         // Deposit to destination building
-        const deposited = this.gameState.inventoryManager.depositInput(destBuildingId, material, amount);
+        const deposited = this.inventoryManager.depositInput(destBuildingId, material, amount);
 
         const overflow = amount - deposited;
         if (overflow > 0) {

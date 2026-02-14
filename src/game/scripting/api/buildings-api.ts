@@ -10,14 +10,14 @@ import { LogHandler } from '@/utilities/log-handler';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { EntityType, BuildingType } from '@/game/entity';
-import { BuildingConstructionPhase } from '@/game/features/building-construction';
+import { BuildingConstructionPhase, type BuildingStateManager } from '@/game/features/building-construction';
 
 const log = new LogHandler('BuildingsAPI');
 
 /** Building state constants */
 export const BUILDING_STATE_CONSTANTS = {
-    BUILD: 0,      // Under construction
-    STANDARD: 1,   // Completed
+    BUILD: 0, // Under construction
+    STANDARD: 1, // Completed
 } as const;
 
 /**
@@ -124,13 +124,14 @@ function mapS4ToInternalType(s4Type: number): number {
 
 export interface BuildingsAPIContext {
     gameState: GameState;
+    buildingStateManager: BuildingStateManager;
 }
 
 /**
  * Check if a building is in "completed" state
  */
-function isBuildingCompleted(gameState: GameState, entityId: number): boolean {
-    const buildingState = gameState.buildingStateManager.getBuildingState(entityId);
+function isBuildingCompleted(buildingStateManager: BuildingStateManager, entityId: number): boolean {
+    const buildingState = buildingStateManager.getBuildingState(entityId);
     if (!buildingState) return false;
     return buildingState.phase === BuildingConstructionPhase.Completed;
 }
@@ -153,22 +154,20 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
     }
 
     // Buildings.AddBuilding(x, y, player, buildingType) - Create a building
-    runtime.registerFunction('Buildings', 'AddBuilding', (
-        x: number, y: number, player: number, buildingType: number
-    ) => {
-        const internalType = mapS4ToInternalType(buildingType);
-        log.debug(`AddBuilding: type ${buildingType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`);
+    runtime.registerFunction(
+        'Buildings',
+        'AddBuilding',
+        (x: number, y: number, player: number, buildingType: number) => {
+            const internalType = mapS4ToInternalType(buildingType);
+            log.debug(
+                `AddBuilding: type ${buildingType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`
+            );
 
-        const entity = context.gameState.addEntity(
-            EntityType.Building,
-            internalType,
-            x,
-            y,
-            player
-        );
+            const entity = context.gameState.addEntity(EntityType.Building, internalType, x, y, player);
 
-        return entity.id;
-    });
+            return entity.id;
+        }
+    );
 
     // Buildings.CrushBuilding(entityId) - Destroy a building
     runtime.registerFunction('Buildings', 'CrushBuilding', (entityId: number) => {
@@ -182,9 +181,7 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
     });
 
     // Buildings.Amount(player, buildingType, state?) - Count buildings
-    runtime.registerFunction('Buildings', 'Amount', (
-        player: number, buildingType: number, state?: number
-    ) => {
+    runtime.registerFunction('Buildings', 'Amount', (player: number, buildingType: number, state?: number) => {
         const internalType = mapS4ToInternalType(buildingType);
         let count = 0;
 
@@ -195,7 +192,7 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
 
             // Filter by state if specified
             if (state !== undefined) {
-                const isComplete = isBuildingCompleted(context.gameState, entity.id);
+                const isComplete = isBuildingCompleted(context.buildingStateManager, entity.id);
                 if (state === BUILDING_STATE_CONSTANTS.STANDARD && !isComplete) continue;
                 if (state === BUILDING_STATE_CONSTANTS.BUILD && isComplete) continue;
             }
@@ -206,43 +203,43 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
     });
 
     // Buildings.ExistsBuildingInArea(player, buildingType, x, y, range) - Check if building exists in area
-    runtime.registerFunction('Buildings', 'ExistsBuildingInArea', (
-        player: number, buildingType: number, x: number, y: number, range: number
-    ) => {
-        const internalType = mapS4ToInternalType(buildingType);
-        const rangeSq = range * range;
+    runtime.registerFunction(
+        'Buildings',
+        'ExistsBuildingInArea',
+        (player: number, buildingType: number, x: number, y: number, range: number) => {
+            const internalType = mapS4ToInternalType(buildingType);
+            const rangeSq = range * range;
 
-        for (const entity of context.gameState.entities) {
-            if (entity.type !== EntityType.Building) continue;
-            if (entity.subType !== internalType) continue;
-            if (entity.player !== player) continue;
+            for (const entity of context.gameState.entities) {
+                if (entity.type !== EntityType.Building) continue;
+                if (entity.subType !== internalType) continue;
+                if (entity.player !== player) continue;
 
-            const dx = entity.x - x;
-            const dy = entity.y - y;
-            if (dx * dx + dy * dy <= rangeSq) {
-                return true;
+                const dx = entity.x - x;
+                const dy = entity.y - y;
+                if (dx * dx + dy * dy <= rangeSq) {
+                    return true;
+                }
             }
+            return false;
         }
-        return false;
-    });
+    );
 
     // Buildings.AddBuildingEx(x, y, player, buildingType) - Alias for AddBuilding (S4 script compatibility)
-    runtime.registerFunction('Buildings', 'AddBuildingEx', (
-        x: number, y: number, player: number, buildingType: number
-    ) => {
-        const internalType = mapS4ToInternalType(buildingType);
-        log.debug(`AddBuildingEx: type ${buildingType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`);
+    runtime.registerFunction(
+        'Buildings',
+        'AddBuildingEx',
+        (x: number, y: number, player: number, buildingType: number) => {
+            const internalType = mapS4ToInternalType(buildingType);
+            log.debug(
+                `AddBuildingEx: type ${buildingType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`
+            );
 
-        const entity = context.gameState.addEntity(
-            EntityType.Building,
-            internalType,
-            x,
-            y,
-            player
-        );
+            const entity = context.gameState.addEntity(EntityType.Building, internalType, x, y, player);
 
-        return entity.id;
-    });
+            return entity.id;
+        }
+    );
 
     // Buildings.GetState(entityId) - Get building construction state
     // Returns: 0 = BUILD (under construction), 1 = STANDARD (completed)
@@ -252,13 +249,13 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
             return -1;
         }
 
-        const isComplete = isBuildingCompleted(context.gameState, entityId);
+        const isComplete = isBuildingCompleted(context.buildingStateManager, entityId);
         return isComplete ? BUILDING_STATE_CONSTANTS.STANDARD : BUILDING_STATE_CONSTANTS.BUILD;
     });
 
     // Buildings.IsComplete(entityId) - Check if building is fully constructed
     runtime.registerFunction('Buildings', 'IsComplete', (entityId: number) => {
-        return isBuildingCompleted(context.gameState, entityId);
+        return isBuildingCompleted(context.buildingStateManager, entityId);
     });
 
     // Buildings.GetPosition(entityId) - Get building position

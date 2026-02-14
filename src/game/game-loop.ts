@@ -8,10 +8,16 @@ import { debugStats } from './debug-stats';
 import { gameSettings } from './game-settings';
 import { MapSize } from '@/utilities/map-size';
 import type { TickSystem } from './tick-system';
-import { BuildingConstructionSystem } from './features/building-construction';
-import { CarrierSystem } from './features/carriers';
-import { hasInventory, isProductionBuilding, InventoryVisualizer } from './features/inventory';
-import { LogisticsDispatcher } from './features/logistics';
+import { BuildingConstructionSystem, BuildingStateManager } from './features/building-construction';
+import { CarrierSystem, CarrierManager } from './features/carriers';
+import {
+    hasInventory,
+    isProductionBuilding,
+    InventoryVisualizer,
+    BuildingInventoryManager,
+} from './features/inventory';
+import { LogisticsDispatcher, RequestManager } from './features/logistics';
+import { ServiceAreaManager } from './features/service-areas';
 import { EventBus } from './event-bus';
 import type { FrameRenderTiming } from './renderer/renderer';
 import { BuildingType, MapObjectType } from './entity';
@@ -102,6 +108,22 @@ export class GameLoop {
     /** Production system - handles building production cycles */
     public readonly productionSystem: ProductionSystem;
 
+    // ===== Managers (owned by GameLoop, used by systems) =====
+    /** Carrier manager - tracks carrier state and assignments */
+    public readonly carrierManager: CarrierManager;
+
+    /** Building inventory manager - tracks building input/output slots */
+    public readonly inventoryManager: BuildingInventoryManager;
+
+    /** Service area manager - tracks logistics service areas */
+    public readonly serviceAreaManager: ServiceAreaManager;
+
+    /** Request manager - tracks material delivery requests */
+    public readonly requestManager: RequestManager;
+
+    /** Building state manager - tracks construction state for all buildings */
+    public readonly buildingStateManager: BuildingStateManager;
+
     constructor(gameState: GameState, eventBus: EventBus) {
         this.gameState = gameState;
         this.eventBus = eventBus;
@@ -112,6 +134,17 @@ export class GameLoop {
         // Create animation service first - other systems depend on it
         this.animationService = new AnimationService();
 
+        // Instantiate managers (owned by GameLoop, used by systems)
+        this.carrierManager = new CarrierManager();
+        this.inventoryManager = new BuildingInventoryManager();
+        this.serviceAreaManager = new ServiceAreaManager();
+        this.requestManager = new RequestManager();
+        this.buildingStateManager = new BuildingStateManager();
+
+        // Set entity providers for managers that need entity lookup
+        this.buildingStateManager.setEntityProvider(gameState);
+        this.carrierManager.setEntityProvider(gameState);
+
         // Register all tick systems in execution order:
         // 1. Movement — updates unit positions (must run first)
         gameState.movement.setEventBus(eventBus);
@@ -121,7 +154,7 @@ export class GameLoop {
         // 2. Building construction — terrain modification, phase transitions
         this.constructionSystem = new BuildingConstructionSystem({
             gameState,
-            buildingStateManager: gameState.buildingStateManager,
+            buildingStateManager: this.buildingStateManager,
         });
         this.constructionSystem.registerEvents(eventBus);
         this.registerSystem(this.constructionSystem);
@@ -134,10 +167,10 @@ export class GameLoop {
 
         // 3. Carrier system — manages carrier fatigue and behavior
         this.carrierSystem = new CarrierSystem({
-            carrierManager: gameState.carrierManager,
-            inventoryManager: gameState.inventoryManager,
+            carrierManager: this.carrierManager,
+            inventoryManager: this.inventoryManager,
             gameState: gameState,
-            serviceAreaManager: gameState.serviceAreaManager,
+            serviceAreaManager: this.serviceAreaManager,
             animationService: this.animationService,
         });
         this.carrierSystem.registerEvents(eventBus);
@@ -147,8 +180,9 @@ export class GameLoop {
         this.logisticsDispatcher = new LogisticsDispatcher({
             gameState: gameState,
             carrierSystem: this.carrierSystem,
-            requestManager: gameState.requestManager,
-            serviceAreaManager: gameState.serviceAreaManager,
+            requestManager: this.requestManager,
+            serviceAreaManager: this.serviceAreaManager,
+            inventoryManager: this.inventoryManager,
         });
         this.logisticsDispatcher.registerEvents(eventBus);
         this.registerSystem(this.logisticsDispatcher);
@@ -163,7 +197,11 @@ export class GameLoop {
         };
 
         // 6. Settler task system — manages all unit behaviors and animations
-        this.settlerTaskSystem = new SettlerTaskSystem(gameState, this.animationService);
+        this.settlerTaskSystem = new SettlerTaskSystem({
+            gameState,
+            animationService: this.animationService,
+            inventoryManager: this.inventoryManager,
+        });
         this.settlerTaskSystem.setEventBus(eventBus);
         this.registerSystem(this.settlerTaskSystem);
 
@@ -177,17 +215,17 @@ export class GameLoop {
         this.productionSystem = new ProductionSystem({
             gameState,
             eventBus: this.eventBus,
+            buildingStateManager: this.buildingStateManager,
+            inventoryManager: this.inventoryManager,
+            requestManager: this.requestManager,
         });
         this.registerSystem(this.productionSystem);
 
         // 9. Inventory visualizer — syncs building output to visual stacked resources
-        this.inventoryVisualizer = new InventoryVisualizer(
-            gameState,
-            gameState.inventoryManager
-        );
+        this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager);
 
         // 10. Bridge inventory changes to EventBus for other consumers (debug panel, UI)
-        gameState.inventoryManager.onChange((buildingId, materialType, slotType, previousAmount, newAmount) => {
+        this.inventoryManager.onChange((buildingId, materialType, slotType, previousAmount, newAmount) => {
             this.eventBus.emit('inventory:changed', {
                 buildingId,
                 materialType,
@@ -198,7 +236,7 @@ export class GameLoop {
         });
 
         // 11. Bridge request creation to EventBus for other consumers (debug panel, UI)
-        gameState.requestManager.on('requestAdded', ({ request }) => {
+        this.requestManager.on('requestAdded', ({ request }) => {
             this.eventBus.emit('request:created', {
                 requestId: request.id,
                 buildingId: request.buildingId,
@@ -262,13 +300,16 @@ export class GameLoop {
 
         // Create service area for logistics hubs (taverns/warehouses)
         if (GameLoop.SERVICE_AREA_BUILDINGS.has(buildingType)) {
-            this.gameState.serviceAreaManager.createServiceArea(entityId, playerId, x, y);
+            this.serviceAreaManager.createServiceArea(entityId, playerId, x, y);
         }
 
         // Create inventory for buildings with input/output slots
         if (hasInventory(buildingType) || isProductionBuilding(buildingType)) {
-            this.gameState.inventoryManager.createInventory(entityId, buildingType);
+            this.inventoryManager.createInventory(entityId, buildingType);
         }
+
+        // Create building construction state
+        this.buildingStateManager.createBuildingState(entityId, buildingType, x, y);
     }
 
     /**
@@ -289,15 +330,15 @@ export class GameLoop {
         }
 
         // Clean up carrier state if this was a carrier
-        if (this.gameState.carrierManager.hasCarrier(entityId)) {
-            this.gameState.carrierManager.removeCarrier(entityId);
+        if (this.carrierManager.hasCarrier(entityId)) {
+            this.carrierManager.removeCarrier(entityId);
         }
 
         // Clean up service area if this building had one
-        this.gameState.serviceAreaManager.removeServiceArea(entityId);
+        this.serviceAreaManager.removeServiceArea(entityId);
 
         // Clean up inventory if this building had one
-        this.gameState.inventoryManager.removeInventory(entityId);
+        this.inventoryManager.removeInventory(entityId);
 
         // Clean up logistics state (requests to/from this building, reservations)
         this.logisticsDispatcher.handleBuildingDestroyed(entityId);

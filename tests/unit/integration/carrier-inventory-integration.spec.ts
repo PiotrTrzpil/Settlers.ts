@@ -8,7 +8,6 @@
  * - Entity removal triggers proper cleanup
  * - The systems work together correctly
  */
- 
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { GameState } from '@/game/game-state';
@@ -34,17 +33,17 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
     // ---------------------------------------------------------------------------
 
     describe('Manager Initialization', () => {
-        it('should have carrierManager initialized in GameState', () => {
-            expect(gameState.carrierManager).toBeDefined();
-            expect(gameState.carrierManager.size).toBe(0);
+        it('should have carrierManager initialized in GameLoop', () => {
+            expect(gameLoop.carrierManager).toBeDefined();
+            expect(gameLoop.carrierManager.size).toBe(0);
         });
 
-        it('should have inventoryManager initialized in GameState', () => {
-            expect(gameState.inventoryManager).toBeDefined();
+        it('should have inventoryManager initialized in GameLoop', () => {
+            expect(gameLoop.inventoryManager).toBeDefined();
         });
 
-        it('should have serviceAreaManager initialized in GameState', () => {
-            expect(gameState.serviceAreaManager).toBeDefined();
+        it('should have serviceAreaManager initialized in GameLoop', () => {
+            expect(gameLoop.serviceAreaManager).toBeDefined();
         });
 
         it('should have carrierSystem registered in GameLoop', () => {
@@ -61,11 +60,12 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
             const entity = gameState.addEntity(
                 EntityType.Building,
                 BuildingType.ResidenceSmall,
-                10, 10,
+                10,
+                10,
                 1 // player 1
             );
 
-            const serviceArea = gameState.serviceAreaManager.getServiceArea(entity.id);
+            const serviceArea = gameLoop.serviceAreaManager.getServiceArea(entity.id);
             expect(serviceArea).toBeDefined();
             expect(serviceArea?.buildingId).toBe(entity.id);
             expect(serviceArea?.centerX).toBe(10);
@@ -74,27 +74,17 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
         });
 
         it('should NOT create service area for StorageArea (not a logistics hub)', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.StorageArea,
-                20, 20,
-                1
-            );
+            const entity = gameState.addEntity(EntityType.Building, BuildingType.StorageArea, 20, 20, 1);
 
             // StorageArea is storage only, not a carrier hub
-            const serviceArea = gameState.serviceAreaManager.getServiceArea(entity.id);
+            const serviceArea = gameLoop.serviceAreaManager.getServiceArea(entity.id);
             expect(serviceArea).toBeUndefined();
         });
 
         it('should NOT create service area for non-logistics buildings', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.WoodcutterHut,
-                30, 30,
-                1
-            );
+            const entity = gameState.addEntity(EntityType.Building, BuildingType.WoodcutterHut, 30, 30, 1);
 
-            const serviceArea = gameState.serviceAreaManager.getServiceArea(entity.id);
+            const serviceArea = gameLoop.serviceAreaManager.getServiceArea(entity.id);
             expect(serviceArea).toBeUndefined();
         });
     });
@@ -105,14 +95,9 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
 
     describe('Building Creation - Inventories', () => {
         it('should create inventory when production building is created', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.WoodcutterHut,
-                10, 10,
-                1
-            );
+            const entity = gameState.addEntity(EntityType.Building, BuildingType.WoodcutterHut, 10, 10, 1);
 
-            const inventory = gameState.inventoryManager.getInventory(entity.id);
+            const inventory = gameLoop.inventoryManager.getInventory(entity.id);
             expect(inventory).toBeDefined();
             expect(inventory?.buildingType).toBe(BuildingType.WoodcutterHut);
             // Woodcutter has LOG output slot
@@ -121,14 +106,9 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
         });
 
         it('should create inventory with input slots for processing buildings', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.Sawmill,
-                10, 10,
-                1
-            );
+            const entity = gameState.addEntity(EntityType.Building, BuildingType.Sawmill, 10, 10, 1);
 
-            const inventory = gameState.inventoryManager.getInventory(entity.id);
+            const inventory = gameLoop.inventoryManager.getInventory(entity.id);
             expect(inventory).toBeDefined();
             // Sawmill has LOG input and BOARD output
             expect(inventory?.inputSlots.length).toBeGreaterThan(0);
@@ -143,67 +123,47 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
 
     describe('Entity Removal - Cleanup', () => {
         it('should remove service area when logistics building is removed', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.ResidenceSmall,
-                10, 10,
-                1
-            );
+            const entity = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 10, 10, 1);
 
             // Verify service area exists
-            expect(gameState.serviceAreaManager.getServiceArea(entity.id)).toBeDefined();
+            expect(gameLoop.serviceAreaManager.getServiceArea(entity.id)).toBeDefined();
 
             // Remove building
             gameState.removeEntity(entity.id);
 
             // Service area should be cleaned up
-            expect(gameState.serviceAreaManager.getServiceArea(entity.id)).toBeUndefined();
+            expect(gameLoop.serviceAreaManager.getServiceArea(entity.id)).toBeUndefined();
         });
 
         it('should remove inventory when building is removed', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.WoodcutterHut,
-                10, 10,
-                1
-            );
+            const entity = gameState.addEntity(EntityType.Building, BuildingType.WoodcutterHut, 10, 10, 1);
 
             // Verify inventory exists
-            expect(gameState.inventoryManager.getInventory(entity.id)).toBeDefined();
+            expect(gameLoop.inventoryManager.getInventory(entity.id)).toBeDefined();
 
             // Remove building
             gameState.removeEntity(entity.id);
 
             // Inventory should be cleaned up
-            expect(gameState.inventoryManager.getInventory(entity.id)).toBeUndefined();
+            expect(gameLoop.inventoryManager.getInventory(entity.id)).toBeUndefined();
         });
 
         it('should remove carrier state when carrier unit is removed', () => {
             // Create a tavern first
-            const tavern = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.ResidenceSmall,
-                10, 10,
-                1
-            );
+            const tavern = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 10, 10, 1);
 
             // Create a carrier unit
-            const carrier = gameState.addEntity(
-                EntityType.Unit,
-                UnitType.Carrier,
-                12, 12,
-                1
-            );
+            const carrier = gameState.addEntity(EntityType.Unit, UnitType.Carrier, 12, 12, 1);
 
             // Manually register carrier with manager (normally done by carrier assignment system)
-            gameState.carrierManager.createCarrier(carrier.id, tavern.id);
-            expect(gameState.carrierManager.hasCarrier(carrier.id)).toBe(true);
+            gameLoop.carrierManager.createCarrier(carrier.id, tavern.id);
+            expect(gameLoop.carrierManager.hasCarrier(carrier.id)).toBe(true);
 
             // Remove carrier
             gameState.removeEntity(carrier.id);
 
             // Carrier state should be cleaned up
-            expect(gameState.carrierManager.hasCarrier(carrier.id)).toBe(false);
+            expect(gameLoop.carrierManager.hasCarrier(carrier.id)).toBe(false);
         });
     });
 
@@ -214,32 +174,22 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
     describe('CarrierSystem Tick - Fatigue Recovery', () => {
         it('should recover fatigue for resting carriers', () => {
             // Create tavern
-            const tavern = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.ResidenceSmall,
-                10, 10,
-                1
-            );
+            const tavern = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 10, 10, 1);
 
             // Create carrier unit and register
-            const carrierEntity = gameState.addEntity(
-                EntityType.Unit,
-                UnitType.Carrier,
-                10, 10,
-                1
-            );
-            gameState.carrierManager.createCarrier(carrierEntity.id, tavern.id);
+            const carrierEntity = gameState.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 1);
+            gameLoop.carrierManager.createCarrier(carrierEntity.id, tavern.id);
 
             // Set carrier as fatigued and resting
-            gameState.carrierManager.setFatigue(carrierEntity.id, 50);
-            gameState.carrierManager.setStatus(carrierEntity.id, 4); // CarrierStatus.Resting
+            gameLoop.carrierManager.setFatigue(carrierEntity.id, 50);
+            gameLoop.carrierManager.setStatus(carrierEntity.id, 4); // CarrierStatus.Resting
 
-            const initialFatigue = gameState.carrierManager.getCarrier(carrierEntity.id)!.fatigue;
+            const initialFatigue = gameLoop.carrierManager.getCarrier(carrierEntity.id)!.fatigue;
 
             // Tick the carrier system
             gameLoop.carrierSystem.tick(1.0); // 1 second
 
-            const newFatigue = gameState.carrierManager.getCarrier(carrierEntity.id)!.fatigue;
+            const newFatigue = gameLoop.carrierManager.getCarrier(carrierEntity.id)!.fatigue;
             expect(newFatigue).toBeLessThan(initialFatigue);
         });
     });
@@ -251,25 +201,15 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
     describe('Carrier Registration', () => {
         it('should register carrier with home building and no active job', () => {
             // Create a tavern (logistics hub with service area)
-            const tavern = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.ResidenceSmall,
-                10, 10,
-                1
-            );
+            const tavern = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 10, 10, 1);
 
             // Create a carrier unit near the tavern
-            const carrier = gameState.addEntity(
-                EntityType.Unit,
-                UnitType.Carrier,
-                12, 12,
-                1
-            );
+            const carrier = gameState.addEntity(EntityType.Unit, UnitType.Carrier, 12, 12, 1);
 
             // Register carrier with the tavern
-            gameState.carrierManager.createCarrier(carrier.id, tavern.id);
+            gameLoop.carrierManager.createCarrier(carrier.id, tavern.id);
 
-            const carrierState = gameState.carrierManager.getCarrier(carrier.id);
+            const carrierState = gameLoop.carrierManager.getCarrier(carrier.id);
             expect(carrierState).toBeDefined();
             expect(carrierState!.homeBuilding).toBe(tavern.id);
             expect(carrierState!.currentJob).toBeNull();
@@ -283,19 +223,14 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
     describe('Resource Request Creation', () => {
         it('should create pending resource request with correct attributes', () => {
             // Create a sawmill (has LOG input slot)
-            const sawmill = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.Sawmill,
-                10, 10,
-                1
-            );
+            const sawmill = gameState.addEntity(EntityType.Building, BuildingType.Sawmill, 10, 10, 1);
 
             // Add a resource request for logs
-            const request = gameState.requestManager.addRequest(
+            const request = gameLoop.requestManager.addRequest(
                 sawmill.id,
                 EMaterialType.LOG,
                 4,
-                RequestPriority.Normal,
+                RequestPriority.Normal
             );
 
             expect(request).toBeDefined();
@@ -306,21 +241,12 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
         });
 
         it('should track request in pending requests list', () => {
-            const sawmill = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.Sawmill,
-                10, 10,
-                1
-            );
+            const sawmill = gameState.addEntity(EntityType.Building, BuildingType.Sawmill, 10, 10, 1);
 
-            gameState.requestManager.addRequest(
-                sawmill.id,
-                EMaterialType.LOG,
-                4,
-            );
+            gameLoop.requestManager.addRequest(sawmill.id, EMaterialType.LOG, 4);
 
-            expect(gameState.requestManager.getPendingCount()).toBe(1);
-            const pending = gameState.requestManager.getPendingRequests();
+            expect(gameLoop.requestManager.getPendingCount()).toBe(1);
+            const pending = gameLoop.requestManager.getPendingRequests();
             expect(pending).toHaveLength(1);
             expect(pending[0].materialType).toBe(EMaterialType.LOG);
         });
@@ -333,43 +259,23 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
     describe('Full Integration Scenario', () => {
         it('should handle complete building lifecycle', () => {
             // 1. Create a tavern - should get service area
-            const tavern = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.ResidenceSmall,
-                10, 10,
-                1
-            );
-            expect(gameState.serviceAreaManager.getServiceArea(tavern.id)).toBeDefined();
+            const tavern = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 10, 10, 1);
+            expect(gameLoop.serviceAreaManager.getServiceArea(tavern.id)).toBeDefined();
 
             // 2. Create a woodcutter - should get inventory
-            const woodcutter = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.WoodcutterHut,
-                15, 10,
-                1
-            );
-            expect(gameState.inventoryManager.getInventory(woodcutter.id)).toBeDefined();
+            const woodcutter = gameState.addEntity(EntityType.Building, BuildingType.WoodcutterHut, 15, 10, 1);
+            expect(gameLoop.inventoryManager.getInventory(woodcutter.id)).toBeDefined();
 
             // 3. Create a warehouse - StorageArea does NOT get a service area (it's not a carrier hub)
-            const warehouse = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.StorageArea,
-                20, 10,
-                1
-            );
-            expect(gameState.serviceAreaManager.getServiceArea(warehouse.id)).toBeUndefined();
+            const warehouse = gameState.addEntity(EntityType.Building, BuildingType.StorageArea, 20, 10, 1);
+            expect(gameLoop.serviceAreaManager.getServiceArea(warehouse.id)).toBeUndefined();
             // Note: StorageArea has empty slot config - it uses dynamic material handling
             // so hasInventory() returns false and no traditional inventory is created
 
             // 4. Create a carrier and register it
-            const carrier = gameState.addEntity(
-                EntityType.Unit,
-                UnitType.Carrier,
-                10, 10,
-                1
-            );
-            gameState.carrierManager.createCarrier(carrier.id, tavern.id);
-            expect(gameState.carrierManager.getCarriersForTavern(tavern.id).length).toBe(1);
+            const carrier = gameState.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 1);
+            gameLoop.carrierManager.createCarrier(carrier.id, tavern.id);
+            expect(gameLoop.carrierManager.getCarriersForTavern(tavern.id).length).toBe(1);
 
             // 5. Remove buildings and carrier - all should clean up
             gameState.removeEntity(tavern.id);
@@ -377,10 +283,10 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
             gameState.removeEntity(warehouse.id);
             gameState.removeEntity(carrier.id);
 
-            expect(gameState.serviceAreaManager.getServiceArea(tavern.id)).toBeUndefined();
-            expect(gameState.serviceAreaManager.getServiceArea(warehouse.id)).toBeUndefined();
-            expect(gameState.inventoryManager.getInventory(woodcutter.id)).toBeUndefined();
-            expect(gameState.carrierManager.hasCarrier(carrier.id)).toBe(false);
+            expect(gameLoop.serviceAreaManager.getServiceArea(tavern.id)).toBeUndefined();
+            expect(gameLoop.serviceAreaManager.getServiceArea(warehouse.id)).toBeUndefined();
+            expect(gameLoop.inventoryManager.getInventory(woodcutter.id)).toBeUndefined();
+            expect(gameLoop.carrierManager.hasCarrier(carrier.id)).toBe(false);
         });
     });
 });

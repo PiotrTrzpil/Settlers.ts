@@ -1,4 +1,4 @@
-/* eslint-disable max-lines-per-function */
+ 
 /**
  * Integration test: Unit Lifecycle
  *
@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { createTestMap, TERRAIN, blockColumn, TestMap } from '../helpers/test-map';
 import {
     createGameState,
+    createTestContext,
     addUnit,
     addUnitWithPath,
     spawnUnit,
@@ -36,21 +37,20 @@ function makeTerrain(map: TestMap): TerrainAccessor {
 
 describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
     it('full lifecycle from spawn through movement to arrival', () => {
-        const map = createTestMap();
-        const state = createGameState();
+        const ctx = createTestContext();
 
         // ── Step 1: Spawn a unit via command ──
-        const spawned = spawnUnit(state, map, 5, 5);
+        const spawned = spawnUnit(ctx, 5, 5);
         expect(spawned).toBe(true);
-        expect(state.entities).toHaveLength(1);
+        expect(ctx.state.entities).toHaveLength(1);
 
-        const unit = state.entities[0];
+        const unit = ctx.state.entities[0];
         expect(unit.type).toBe(EntityType.Unit);
         expect(unit.x).toBe(5);
         expect(unit.y).toBe(5);
 
         // UnitState created with correct defaults
-        const unitState = state.unitStates.get(unit.id);
+        const unitState = ctx.state.unitStates.get(unit.id);
         expect(unitState).toBeDefined();
         expect(unitState!.path).toHaveLength(0);
         expect(unitState!.speed).toBe(2);
@@ -58,7 +58,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         expect(unitState!.prevY).toBe(5);
 
         // ── Step 2: Command the unit to move via pathfinding ──
-        const moved = moveUnit(state, map, unit.id, 10, 5);
+        const moved = moveUnit(ctx, unit.id, 10, 5);
         expect(moved).toBe(true);
         expect(unitState!.path.length).toBeGreaterThan(0);
         expect(unitState!.path[unitState!.path.length - 1]).toEqual({ x: 10, y: 5 });
@@ -66,29 +66,29 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         // ── Step 3: Simulate movement updates ──
         // Progress starts at 1 when path is set (for immediate responsiveness).
         // At speed 2, 0.5s adds 1 to progress -> total 2 -> moves 2 tiles.
-        state.movement.update(0.5);
+        ctx.state.movement.update(0.5);
         expect(unit.x).toBe(7);
         expect(unit.y).toBe(5);
         expect(unitState!.prevX).toBe(6); // Previous position tracked for interpolation
 
         // Continue movement to completion
-        state.movement.update(5.0); // Enough time to finish
+        ctx.state.movement.update(5.0); // Enough time to finish
         expect(unit.x).toBe(10);
         expect(unit.y).toBe(5);
         expect(unitState!.path).toHaveLength(0);
         expect(unitState!.moveProgress).toBe(0);
 
         // ── Step 4: Tile occupancy updated correctly ──
-        expect(state.getEntityAt(10, 5)).toBeDefined();
-        expect(state.getEntityAt(10, 5)!.id).toBe(unit.id);
-        expect(state.getEntityAt(5, 5)).toBeUndefined(); // Old position cleared
+        expect(ctx.state.getEntityAt(10, 5)).toBeDefined();
+        expect(ctx.state.getEntityAt(10, 5)!.id).toBe(unit.id);
+        expect(ctx.state.getEntityAt(5, 5)).toBeUndefined(); // Old position cleared
 
         // ── Step 5: Remove unit ──
-        const removed = removeEntity(state, map, unit.id);
+        const removed = removeEntity(ctx, unit.id);
         expect(removed).toBe(true);
-        expect(state.entities).toHaveLength(0);
-        expect(state.unitStates.has(unit.id)).toBe(false);
-        expect(state.getEntityAt(10, 5)).toBeUndefined();
+        expect(ctx.state.entities).toHaveLength(0);
+        expect(ctx.state.unitStates.has(unit.id)).toBe(false);
+        expect(ctx.state.getEntityAt(10, 5)).toBeUndefined();
     });
 
     it('pathfinding finds routes around obstacles using hex directions', () => {
@@ -99,10 +99,15 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         map.groundType[10 + 3 * map.mapSize.width] = TERRAIN.GRASS; // gap at (10, 3)
 
         const path = findPath(
-            8, 5, 12, 5,
-            map.groundType, map.groundHeight,
-            map.mapSize.width, map.mapSize.height,
-            map.occupancy,
+            8,
+            5,
+            12,
+            5,
+            map.groundType,
+            map.groundHeight,
+            map.mapSize.width,
+            map.mapSize.height,
+            map.occupancy
         );
 
         expect(path).not.toBeNull();
@@ -118,7 +123,16 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const state = createGameState();
 
         const { entity: u1 } = addUnitWithPath(state, 0, 0, [{ x: 1, y: 0 }], 2);
-        const { entity: u2 } = addUnitWithPath(state, 10, 10, [{ x: 11, y: 10 }, { x: 12, y: 10 }], 4);
+        const { entity: u2 } = addUnitWithPath(
+            state,
+            10,
+            10,
+            [
+                { x: 11, y: 10 },
+                { x: 12, y: 10 },
+            ],
+            4
+        );
 
         state.movement.update(0.5);
 
@@ -152,7 +166,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
             state.tileOccupancy,
             state.rng,
             makeTerrain(map),
-            (id, x, y) => state.updateEntityPosition(id, x, y),
+            (id, x, y) => state.updateEntityPosition(id, x, y)
         );
         expect(pushResult).toBe(true);
         // Unit B should have moved away from (6,5)
@@ -165,25 +179,32 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
             state.tileOccupancy,
             state.rng,
             makeTerrain(map),
-            (id, x, y) => state.updateEntityPosition(id, x, y),
+            (id, x, y) => state.updateEntityPosition(id, x, y)
         );
         expect(reverseResult).toBe(false);
     });
 
     it('unit spawned adjacent to building when target tile is occupied', () => {
-        const map = createTestMap(64, 64, { flatHeight: 100 });
-        const state = createGameState();
+        const ctx = createTestContext(64, 64);
+        // Set flat height for building placement
+        ctx.map.groundHeight.fill(100);
+        ctx.state.setTerrainData(
+            ctx.map.groundType,
+            ctx.map.groundHeight,
+            ctx.map.mapSize.width,
+            ctx.map.mapSize.height
+        );
 
         // Place a warehouse (no auto-spawn) to occupy tile
-        placeBuilding(state, map, 10, 10, BuildingType.StorageArea);
-        expect(state.entities).toHaveLength(1);
-        expect(state.getEntityAt(10, 10)).toBeDefined();
+        placeBuilding(ctx, 10, 10, BuildingType.StorageArea);
+        expect(ctx.state.entities).toHaveLength(1);
+        expect(ctx.state.getEntityAt(10, 10)).toBeDefined();
 
         // Spawn unit at same tile → should be placed adjacent
-        const spawned = spawnUnit(state, map, 10, 10);
+        const spawned = spawnUnit(ctx, 10, 10);
         expect(spawned).toBe(true);
 
-        const unit = state.entities.find(e => e.type === EntityType.Unit);
+        const unit = ctx.state.entities.find(e => e.type === EntityType.Unit);
         expect(unit).toBeDefined();
         // Should be adjacent, not at the same spot
         const dist = Math.abs(unit!.x - 10) + Math.abs(unit!.y - 10);
@@ -198,10 +219,15 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         blockColumn(map, 15);
 
         const path = findPath(
-            10, 5, 20, 5,
-            map.groundType, map.groundHeight,
-            map.mapSize.width, map.mapSize.height,
-            map.occupancy,
+            10,
+            5,
+            20,
+            5,
+            map.groundType,
+            map.groundHeight,
+            map.mapSize.width,
+            map.mapSize.height,
+            map.occupancy
         );
 
         expect(path).toBeNull();
@@ -221,11 +247,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const map = createTestMap();
         for (const n of neighbors) {
             if (n.x >= 0 && n.x < 64 && n.y >= 0 && n.y < 64) {
-                const path = findPath(
-                    10, 10, n.x, n.y,
-                    map.groundType, map.groundHeight,
-                    64, 64, map.occupancy,
-                );
+                const path = findPath(10, 10, n.x, n.y, map.groundType, map.groundHeight, 64, 64, map.occupancy);
                 expect(path).not.toBeNull();
                 expect(path).toHaveLength(1);
             }
@@ -239,12 +261,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         addUnit(state, 10, 10);
 
         // All open → should find a free direction
-        const free = findRandomFreeDirection(
-            10, 10,
-            state.tileOccupancy,
-            state.rng,
-            makeTerrain(map),
-        );
+        const free = findRandomFreeDirection(10, 10, state.tileOccupancy, state.rng, makeTerrain(map));
         expect(free).not.toBeNull();
 
         // Block all 6 hex neighbors with units
@@ -253,12 +270,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
             addUnit(state, n.x, n.y);
         }
 
-        const blocked = findRandomFreeDirection(
-            10, 10,
-            state.tileOccupancy,
-            state.rng,
-            makeTerrain(map),
-        );
+        const blocked = findRandomFreeDirection(10, 10, state.tileOccupancy, state.rng, makeTerrain(map));
         expect(blocked).toBeNull();
     });
 
@@ -271,16 +283,35 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
 
         // Unit A at (6,5) with a path to (15,5) - created FIRST so has lower ID
         // Unit B at (5,5) will try to move through A's position
-        addUnitWithPath(state, 6, 5, [
-            { x: 7, y: 5 }, { x: 8, y: 5 }, { x: 9, y: 5 },
-            { x: 10, y: 5 }, { x: 11, y: 5 }, { x: 12, y: 5 }, { x: 13, y: 5 },
-            { x: 14, y: 5 }, { x: 15, y: 5 },
-        ], 2);
+        addUnitWithPath(
+            state,
+            6,
+            5,
+            [
+                { x: 7, y: 5 },
+                { x: 8, y: 5 },
+                { x: 9, y: 5 },
+                { x: 10, y: 5 },
+                { x: 11, y: 5 },
+                { x: 12, y: 5 },
+                { x: 13, y: 5 },
+                { x: 14, y: 5 },
+                { x: 15, y: 5 },
+            ],
+            2
+        );
 
         // Unit B created SECOND (higher ID) - B will move to (6,5) and get pushed by A
-        const { entity: unitB } = addUnitWithPath(state, 5, 5, [
-            { x: 6, y: 5 }, { x: 7, y: 5 },
-        ], 2);
+        const { entity: unitB } = addUnitWithPath(
+            state,
+            5,
+            5,
+            [
+                { x: 6, y: 5 },
+                { x: 7, y: 5 },
+            ],
+            2
+        );
 
         const controllerB = state.movement.getController(unitB.id)!;
 
@@ -310,9 +341,16 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const state = createGameState();
         // Longer path to test incremental movement
         const { entity, unitState } = addUnitWithPath(
-            state, 5, 5,
-            [{ x: 6, y: 5 }, { x: 7, y: 5 }, { x: 8, y: 5 }, { x: 9, y: 5 }],
-            2,
+            state,
+            5,
+            5,
+            [
+                { x: 6, y: 5 },
+                { x: 7, y: 5 },
+                { x: 8, y: 5 },
+                { x: 9, y: 5 },
+            ],
+            2
         );
 
         // Initial prevX/prevY = spawn position

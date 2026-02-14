@@ -19,7 +19,7 @@ describe('InventoryVisualizer', () => {
 
     beforeEach(() => {
         ctx = createTestContext();
-        inventoryManager = ctx.state.inventoryManager;
+        inventoryManager = ctx.inventoryManager;
         visualizer = new InventoryVisualizer(ctx.state, inventoryManager);
     });
 
@@ -37,8 +37,8 @@ describe('InventoryVisualizer', () => {
             inventoryManager.depositOutput(building.id, EMaterialType.LOG, 3);
 
             // Should have created a stacked resource entity
-            const resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            const resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
 
@@ -54,8 +54,8 @@ describe('InventoryVisualizer', () => {
             // Initial deposit
             inventoryManager.depositOutput(building.id, EMaterialType.LOG, 2);
 
-            const resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            const resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
             const resourceId = resources[0].id;
@@ -77,8 +77,8 @@ describe('InventoryVisualizer', () => {
             inventoryManager.withdrawOutput(building.id, EMaterialType.LOG, 3);
 
             // Visual stack should be removed
-            const resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            const resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(0);
         });
@@ -91,21 +91,18 @@ describe('InventoryVisualizer', () => {
 
             inventoryManager.depositOutput(building.id, EMaterialType.LOG, 1);
 
-            const resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            const resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
 
             const resource = resources[0];
             // Should be near the building (not on it)
-            const onBuilding = (resource.x >= 10 && resource.x <= 11) &&
-                               (resource.y >= 10 && resource.y <= 11);
+            const onBuilding = resource.x >= 10 && resource.x <= 11 && resource.y >= 10 && resource.y <= 11;
             expect(onBuilding).toBe(false);
 
             // Should be close to the building (within 2 tiles of footprint edge)
-            const isNearby =
-                (resource.x >= 9 && resource.x <= 13) &&
-                (resource.y >= 9 && resource.y <= 13);
+            const isNearby = resource.x >= 9 && resource.x <= 13 && resource.y >= 9 && resource.y <= 13;
             expect(isNearby).toBe(true);
         });
     });
@@ -120,8 +117,8 @@ describe('InventoryVisualizer', () => {
             // Deposit the output material
             inventoryManager.depositOutput(building.id, EMaterialType.BOARD, 2);
 
-            const boards = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.BOARD
+            const boards = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.BOARD
             );
             expect(boards.length).toBe(1);
         });
@@ -137,8 +134,8 @@ describe('InventoryVisualizer', () => {
             inventoryManager.depositInput(building.id, EMaterialType.LOG, 3);
 
             // Should create visual stack for inputs
-            const resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            const resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
 
@@ -157,11 +154,11 @@ describe('InventoryVisualizer', () => {
             inventoryManager.depositOutput(building.id, EMaterialType.BOARD, 2);
 
             // Should have two separate visual stacks
-            const logs = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            const logs = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
-            const boards = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.BOARD
+            const boards = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.BOARD
             );
 
             expect(logs.length).toBe(1);
@@ -182,8 +179,8 @@ describe('InventoryVisualizer', () => {
             inventoryManager.withdrawInput(building.id, EMaterialType.LOG, 3);
 
             // Visual stack should be removed
-            const resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            const resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(0);
         });
@@ -198,8 +195,8 @@ describe('InventoryVisualizer', () => {
             inventoryManager.depositInput(building.id, EMaterialType.LOG, 3);
 
             // Verify input stack exists and is reserved
-            let resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            let resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
             expect(ctx.state.getResourceBuildingId(resources[0].id)).toBe(building.id);
@@ -208,8 +205,8 @@ describe('InventoryVisualizer', () => {
             visualizer.removeBuilding(building.id);
 
             // Resource should still exist but no longer be reserved
-            resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
             expect(ctx.state.getResourceBuildingId(resources[0].id)).toBeUndefined();
@@ -227,8 +224,8 @@ describe('InventoryVisualizer', () => {
             inventoryManager.depositOutput(building.id, EMaterialType.LOG, 3);
 
             // Verify output stack exists and is reserved
-            let resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            let resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
             expect(ctx.state.getResourceBuildingId(resources[0].id)).toBe(building.id);
@@ -237,8 +234,8 @@ describe('InventoryVisualizer', () => {
             visualizer.removeBuilding(building.id);
 
             // Resource should still exist but now be free
-            resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
             expect(ctx.state.getResourceBuildingId(resources[0].id)).toBeUndefined();
@@ -265,8 +262,8 @@ describe('InventoryVisualizer', () => {
             const newVisualizer = new InventoryVisualizer(ctx.state, inventoryManager);
 
             // No visuals yet (change wasn't emitted)
-            let resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            let resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(0);
 
@@ -274,8 +271,8 @@ describe('InventoryVisualizer', () => {
             newVisualizer.initializeExistingBuildings();
 
             // Now should have visual
-            resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
             expect(ctx.state.resourceStates.get(resources[0].id)?.quantity).toBe(4);
@@ -292,8 +289,8 @@ describe('InventoryVisualizer', () => {
 
             inventoryManager.depositInput(building.id, EMaterialType.LOG, 3);
 
-            const resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            const resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
 
@@ -312,8 +309,8 @@ describe('InventoryVisualizer', () => {
 
             inventoryManager.depositOutput(building.id, EMaterialType.LOG, 3);
 
-            const resources = ctx.state.entities.filter(e =>
-                e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
+            const resources = ctx.state.entities.filter(
+                e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
 
@@ -328,12 +325,7 @@ describe('InventoryVisualizer', () => {
 
         it('free resources are found by findNearestResource', () => {
             // Add a free resource stack (not belonging to any building)
-            const freeResource = ctx.state.addEntity(
-                EntityType.StackedResource,
-                EMaterialType.LOG,
-                15, 15,
-                0
-            );
+            const freeResource = ctx.state.addEntity(EntityType.StackedResource, EMaterialType.LOG, 15, 15, 0);
             ctx.state.setResourceQuantity(freeResource.id, 5);
 
             // This resource has no buildingId, so it should be findable

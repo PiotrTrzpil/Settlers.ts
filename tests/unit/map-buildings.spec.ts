@@ -1,18 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createGameState } from './helpers/test-game';
+import { createTestContext, type TestContext } from './helpers/test-game';
 import { populateMapBuildings, mapS4BuildingType } from '@/game/systems/map-buildings';
 import { S4BuildingType } from '@/resources/map/s4-types';
 import { BuildingType } from '@/game/buildings/types';
 import { EntityType } from '@/game/entity';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
-import type { GameState } from '@/game/game-state';
 
 describe('populateMapBuildings', () => {
-    let state: GameState;
+    let ctx: TestContext;
 
     beforeEach(() => {
-        state = createGameState();
+        ctx = createTestContext();
     });
 
     it('should create completed building entities from map data', () => {
@@ -21,20 +20,22 @@ describe('populateMapBuildings', () => {
             { x: 20, y: 20, buildingType: S4BuildingType.SAWMILL, player: 1 },
         ];
 
-        const count = populateMapBuildings(state, buildings);
+        const count = populateMapBuildings(ctx.state, buildings, {
+            buildingStateManager: ctx.buildingStateManager,
+        });
 
         expect(count).toBe(2);
-        expect(state.entities).toHaveLength(2);
+        expect(ctx.state.entities).toHaveLength(2);
 
         // Check first building
-        const entity1 = state.getEntityAt(10, 10);
+        const entity1 = ctx.state.getEntityAt(10, 10);
         expect(entity1).toBeDefined();
         expect(entity1!.type).toBe(EntityType.Building);
         expect(entity1!.subType).toBe(BuildingType.WoodcutterHut);
         expect(entity1!.player).toBe(0);
 
         // Check second building
-        const entity2 = state.getEntityAt(20, 20);
+        const entity2 = ctx.state.getEntityAt(20, 20);
         expect(entity2).toBeDefined();
         expect(entity2!.type).toBe(EntityType.Building);
         expect(entity2!.subType).toBe(BuildingType.Sawmill);
@@ -42,16 +43,16 @@ describe('populateMapBuildings', () => {
     });
 
     it('should create building states as completed', () => {
-        const buildings: MapBuildingData[] = [
-            { x: 10, y: 10, buildingType: S4BuildingType.BARRACKS, player: 0 },
-        ];
+        const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.BARRACKS, player: 0 }];
 
-        populateMapBuildings(state, buildings);
+        populateMapBuildings(ctx.state, buildings, {
+            buildingStateManager: ctx.buildingStateManager,
+        });
 
-        const entity = state.getEntityAt(10, 10);
+        const entity = ctx.state.getEntityAt(10, 10);
         expect(entity).toBeDefined();
 
-        const buildingState = state.buildingStateManager.getBuildingState(entity!.id);
+        const buildingState = ctx.buildingStateManager.getBuildingState(entity!.id);
         expect(buildingState).toBeDefined();
         expect(buildingState!.phase).toBe(BuildingConstructionPhase.Completed);
         expect(buildingState!.phaseProgress).toBe(1.0);
@@ -63,27 +64,31 @@ describe('populateMapBuildings', () => {
             { x: 20, y: 20, buildingType: S4BuildingType.SAWMILL, player: 0 }, // Valid type
         ];
 
-        const count = populateMapBuildings(state, buildings);
+        const count = populateMapBuildings(ctx.state, buildings, {
+            buildingStateManager: ctx.buildingStateManager,
+        });
 
         expect(count).toBe(1);
-        expect(state.entities).toHaveLength(1);
-        expect(state.getEntityAt(10, 10)).toBeUndefined();
-        expect(state.getEntityAt(20, 20)).toBeDefined();
+        expect(ctx.state.entities).toHaveLength(1);
+        expect(ctx.state.getEntityAt(10, 10)).toBeUndefined();
+        expect(ctx.state.getEntityAt(20, 20)).toBeDefined();
     });
 
     it('should skip occupied tiles', () => {
         // Pre-occupy a tile
-        state.addEntity(EntityType.MapObject, 1, 10, 10, 0);
+        ctx.state.addEntity(EntityType.MapObject, 1, 10, 10, 0);
 
         const buildings: MapBuildingData[] = [
             { x: 10, y: 10, buildingType: S4BuildingType.WOODCUTTERHUT, player: 0 }, // Occupied
             { x: 20, y: 20, buildingType: S4BuildingType.WOODCUTTERHUT, player: 0 }, // Free
         ];
 
-        const count = populateMapBuildings(state, buildings);
+        const count = populateMapBuildings(ctx.state, buildings, {
+            buildingStateManager: ctx.buildingStateManager,
+        });
 
         expect(count).toBe(1);
-        expect(state.entities).toHaveLength(2); // 1 map object + 1 building
+        expect(ctx.state.entities).toHaveLength(2); // 1 map object + 1 building
     });
 
     it('should filter by player when specified', () => {
@@ -93,13 +98,16 @@ describe('populateMapBuildings', () => {
             { x: 30, y: 30, buildingType: S4BuildingType.MILL, player: 0 },
         ];
 
-        const count = populateMapBuildings(state, buildings, { player: 0 });
+        const count = populateMapBuildings(ctx.state, buildings, {
+            player: 0,
+            buildingStateManager: ctx.buildingStateManager,
+        });
 
         expect(count).toBe(2);
-        expect(state.entities).toHaveLength(2);
-        expect(state.getEntityAt(10, 10)).toBeDefined();
-        expect(state.getEntityAt(20, 20)).toBeUndefined();
-        expect(state.getEntityAt(30, 30)).toBeDefined();
+        expect(ctx.state.entities).toHaveLength(2);
+        expect(ctx.state.getEntityAt(10, 10)).toBeDefined();
+        expect(ctx.state.getEntityAt(20, 20)).toBeUndefined();
+        expect(ctx.state.getEntityAt(30, 30)).toBeDefined();
     });
 });
 

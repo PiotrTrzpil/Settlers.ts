@@ -22,6 +22,7 @@ import { RequestStatus } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
 import { canAcceptNewJob } from '../carriers';
 import { LogHandler } from '@/utilities/log-handler';
+import type { BuildingInventoryManager } from '../inventory';
 
 /** Configuration for LogisticsDispatcher dependencies */
 export interface LogisticsDispatcherConfig {
@@ -29,6 +30,7 @@ export interface LogisticsDispatcherConfig {
     carrierSystem: CarrierSystem;
     requestManager: RequestManager;
     serviceAreaManager: ServiceAreaManager;
+    inventoryManager: BuildingInventoryManager;
 }
 
 /** Maximum number of job assignments per tick (to avoid frame drops) */
@@ -55,6 +57,7 @@ export class LogisticsDispatcher implements TickSystem {
     private readonly carrierSystem: CarrierSystem;
     private readonly requestManager: RequestManager;
     private readonly serviceAreaManager: ServiceAreaManager;
+    private readonly inventoryManager: BuildingInventoryManager;
     private readonly reservationManager: InventoryReservationManager;
 
     private eventBus!: EventBus;
@@ -73,10 +76,11 @@ export class LogisticsDispatcher implements TickSystem {
         this.carrierSystem = config.carrierSystem;
         this.requestManager = config.requestManager;
         this.serviceAreaManager = config.serviceAreaManager;
+        this.inventoryManager = config.inventoryManager;
         this.reservationManager = new InventoryReservationManager();
 
         // Wire up inventory manager for slot-level reservation enforcement
-        this.reservationManager.setInventoryManager(this.gameState.inventoryManager);
+        this.reservationManager.setInventoryManager(this.inventoryManager);
     }
 
     /**
@@ -86,17 +90,17 @@ export class LogisticsDispatcher implements TickSystem {
         this.eventBus = eventBus;
 
         // Listen for delivery completions to fulfill requests
-        this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', (payload) => {
+        this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', payload => {
             this.handleDeliveryComplete(payload.entityId);
         });
 
         // Listen for pickup failures to reset requests (so they can be reassigned)
-        this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', (payload) => {
+        this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', payload => {
             this.handlePickupFailed(payload.entityId);
         });
 
         // Listen for carrier removal to reset requests
-        this.subscriptions.subscribe(eventBus, 'carrier:removed', (payload) => {
+        this.subscriptions.subscribe(eventBus, 'carrier:removed', payload => {
             this.handleCarrierRemoved(payload.entityId);
         });
     }
@@ -136,8 +140,8 @@ export class LogisticsDispatcher implements TickSystem {
             // Log warning about the stalled request
             LogisticsDispatcher.log.warn(
                 `Request #${request.id} stalled after ${REQUEST_TIMEOUT_MS / 1000}s: ` +
-                `material=${request.materialType}, building=${request.buildingId}, carrier=${carrierId}. ` +
-                'Resetting to pending.',
+                    `material=${request.materialType}, building=${request.buildingId}, carrier=${carrierId}. ` +
+                    'Resetting to pending.'
             );
 
             // Release reservation if it exists
@@ -175,12 +179,13 @@ export class LogisticsDispatcher implements TickSystem {
             const match = matchRequestToSupply(
                 request,
                 this.gameState,
+                this.inventoryManager,
                 this.serviceAreaManager,
                 {
                     playerId: this.getRequestPlayerId(request.buildingId),
                     requireServiceArea: true,
                     reservationManager: this.reservationManager,
-                },
+                }
             );
 
             if (!match) {
@@ -198,7 +203,7 @@ export class LogisticsDispatcher implements TickSystem {
                 match.sourceBuilding,
                 request.materialType,
                 match.amount,
-                request.id,
+                request.id
             );
 
             // Assign the delivery job to the carrier
@@ -207,16 +212,12 @@ export class LogisticsDispatcher implements TickSystem {
                 match.sourceBuilding,
                 request.buildingId,
                 request.materialType,
-                match.amount,
+                match.amount
             );
 
             if (success) {
                 // Mark request as in progress
-                this.requestManager.assignRequest(
-                    request.id,
-                    match.sourceBuilding,
-                    carrier.entityId,
-                );
+                this.requestManager.assignRequest(request.id, match.sourceBuilding, carrier.entityId);
 
                 // Track the carrier-to-request mapping
                 this.carrierToRequest.set(carrier.entityId, request.id);
@@ -235,10 +236,7 @@ export class LogisticsDispatcher implements TickSystem {
      * Find an available carrier that can serve both source and destination buildings.
      * The carrier must belong to a hub whose service area covers both buildings.
      */
-    private findAvailableCarrier(
-        sourceBuildingId: number,
-        destBuildingId: number,
-    ): { entityId: number } | null {
+    private findAvailableCarrier(sourceBuildingId: number, destBuildingId: number): { entityId: number } | null {
         const sourceBuilding = this.gameState.getEntity(sourceBuildingId);
         const destBuilding = this.gameState.getEntity(destBuildingId);
 
@@ -250,14 +248,16 @@ export class LogisticsDispatcher implements TickSystem {
         const playerId = destBuilding.player;
 
         // Find hubs (taverns/warehouses) whose service areas cover both buildings
-        const validHubs = new Set(getHubsServingBothPositions(
-            sourceBuilding.x,
-            sourceBuilding.y,
-            destBuilding.x,
-            destBuilding.y,
-            this.serviceAreaManager,
-            { playerId },
-        ));
+        const validHubs = new Set(
+            getHubsServingBothPositions(
+                sourceBuilding.x,
+                sourceBuilding.y,
+                destBuilding.x,
+                destBuilding.y,
+                this.serviceAreaManager,
+                { playerId }
+            )
+        );
 
         if (validHubs.size === 0) {
             return null;
@@ -331,9 +331,7 @@ export class LogisticsDispatcher implements TickSystem {
             return; // Carrier wasn't assigned by us
         }
 
-        LogisticsDispatcher.log.debug(
-            `Pickup failed for carrier ${carrierId}, resetting request ${requestId}`,
-        );
+        LogisticsDispatcher.log.debug(`Pickup failed for carrier ${carrierId}, resetting request ${requestId}`);
 
         // Release the reservation (frees up slot-level reservation)
         this.reservationManager.releaseReservationForRequest(requestId);
@@ -447,13 +445,17 @@ export class LogisticsDispatcher implements TickSystem {
         this.eventBus!.emit('logistics:buildingCleanedUp', result);
 
         // Log summary if any cleanup was performed
-        if (result.requestsCancelled > 0 || result.requestsReset > 0 ||
-            result.reservationsReleased > 0 || result.carrierMappingsCleared > 0) {
+        if (
+            result.requestsCancelled > 0 ||
+            result.requestsReset > 0 ||
+            result.reservationsReleased > 0 ||
+            result.carrierMappingsCleared > 0
+        ) {
             console.debug(
                 `[Logistics] Building ${buildingId} cleanup: ` +
-                `${result.requestsCancelled} cancelled, ${result.requestsReset} reset, ` +
-                `${result.reservationsReleased} reservations released, ` +
-                `${result.carrierMappingsCleared} carrier mappings cleared`,
+                    `${result.requestsCancelled} cancelled, ${result.requestsReset} reset, ` +
+                    `${result.reservationsReleased} reservations released, ` +
+                    `${result.carrierMappingsCleared} carrier mappings cleared`
             );
         }
 

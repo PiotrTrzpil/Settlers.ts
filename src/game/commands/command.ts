@@ -1,5 +1,5 @@
 import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE, tileKey } from '../entity';
-import { BuildingConstructionPhase } from '../features/building-construction';
+import { BuildingConstructionPhase, type BuildingStateManager } from '../features/building-construction';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
 import { MapSize } from '@/utilities/map-size';
@@ -51,15 +51,24 @@ interface CommandContext {
     eventBus: EventBus;
     /** Optional task system for routing movement through tasks */
     settlerTaskSystem?: SettlerTaskSystem;
+    /** Building state manager for construction phases */
+    buildingStateManager: BuildingStateManager;
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): boolean {
     const { state, groundType, groundHeight, mapSize } = ctx;
 
-    if (!canPlaceBuildingFootprint(
-        groundType, groundHeight, mapSize, state.tileOccupancy,
-        cmd.x, cmd.y, cmd.buildingType
-    )) {
+    if (
+        !canPlaceBuildingFootprint(
+            groundType,
+            groundHeight,
+            mapSize,
+            state.tileOccupancy,
+            cmd.x,
+            cmd.y,
+            cmd.buildingType
+        )
+    ) {
         return false;
     }
 
@@ -67,7 +76,7 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): b
 
     // If "place as completed" is enabled, immediately mark building as completed
     if (gameSettings.state.placeBuildingsCompleted) {
-        const buildingState = state.buildingStateManager.getBuildingState(entity.id);
+        const buildingState = ctx.buildingStateManager.getBuildingState(entity.id);
         if (buildingState) {
             buildingState.phase = BuildingConstructionPhase.Completed;
             buildingState.phaseProgress = 1;
@@ -121,7 +130,10 @@ function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): boolean {
     const { state, groundType, mapSize } = ctx;
 
     const isTileValid = (x: number, y: number) =>
-        x >= 0 && x < mapSize.width && y >= 0 && y < mapSize.height &&
+        x >= 0 &&
+        x < mapSize.width &&
+        y >= 0 &&
+        y < mapSize.height &&
         isPassable(groundType[mapSize.toIndex(x, y)]) &&
         !state.getEntityAt(x, y);
 
@@ -149,7 +161,8 @@ function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): boolean {
 }
 
 function findValidSpawnTile(
-    x: number, y: number,
+    x: number,
+    y: number,
     isValid: (x: number, y: number) => boolean
 ): { x: number; y: number } | null {
     for (const [dx, dy] of EXTENDED_OFFSETS) {
@@ -209,18 +222,14 @@ function executeSelectAtTile(ctx: CommandContext, cmd: SelectAtTileCommand): boo
     return true;
 }
 
-function toggleEntityInSelection(
-    state: GameState,
-    entity: { id: number } | undefined
-): boolean {
+function toggleEntityInSelection(state: GameState, entity: { id: number } | undefined): boolean {
     if (!entity) return true;
 
     if (state.selectedEntityIds.has(entity.id)) {
         state.selectedEntityIds.delete(entity.id);
         if (state.selectedEntityId === entity.id) {
-            state.selectedEntityId = state.selectedEntityIds.size > 0
-                ? state.selectedEntityIds.values().next().value!
-                : null;
+            state.selectedEntityId =
+                state.selectedEntityIds.size > 0 ? state.selectedEntityIds.values().next().value! : null;
         }
     } else {
         state.selectedEntityIds.add(entity.id);
@@ -292,7 +301,7 @@ function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): boo
     if (!entity) return false;
 
     if (entity.type === EntityType.Building) {
-        const bs = state.buildingStateManager.getBuildingState(cmd.entityId);
+        const bs = ctx.buildingStateManager.getBuildingState(cmd.entityId);
         if (bs) {
             ctx.eventBus.emit('building:removed', { entityId: cmd.entityId, buildingState: bs });
         }
@@ -331,7 +340,6 @@ function executePlaceResource(ctx: CommandContext, cmd: PlaceResourceCommand): b
     return true;
 }
 
-
 /**
  * Execute a player command against the game state.
  * Returns true if the command was successfully executed.
@@ -343,9 +351,18 @@ export function executeCommand(
     groundHeight: Uint8Array,
     mapSize: MapSize,
     eventBus: EventBus,
-    settlerTaskSystem?: SettlerTaskSystem
+    settlerTaskSystem: SettlerTaskSystem | undefined,
+    buildingStateManager: BuildingStateManager
 ): boolean {
-    const ctx: CommandContext = { state, groundType, groundHeight, mapSize, eventBus, settlerTaskSystem };
+    const ctx: CommandContext = {
+        state,
+        groundType,
+        groundHeight,
+        mapSize,
+        eventBus,
+        settlerTaskSystem,
+        buildingStateManager,
+    };
 
     switch (cmd.type) {
     case 'place_building':

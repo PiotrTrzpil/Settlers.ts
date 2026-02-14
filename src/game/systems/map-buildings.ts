@@ -5,7 +5,7 @@
 
 import { EntityType } from '../entity';
 import { BuildingType } from '../buildings/types';
-import { BuildingConstructionPhase } from '../features/building-construction';
+import { BuildingConstructionPhase, type BuildingStateManager } from '../features/building-construction';
 import { GameState } from '../game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
@@ -68,6 +68,8 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
 export interface PopulateBuildingsOptions {
     /** Only populate buildings for this player (undefined = all players) */
     player?: number;
+    /** Building state manager for setting construction phase (required) */
+    buildingStateManager: BuildingStateManager;
 }
 
 /**
@@ -76,15 +78,15 @@ export interface PopulateBuildingsOptions {
  *
  * @param state - Game state to add entities to
  * @param buildings - Building data from map parser
- * @param options - Filtering options
+ * @param options - Filtering options (buildingStateManager is required)
  * @returns Number of buildings spawned
  */
 export function populateMapBuildings(
     state: GameState,
     buildings: MapBuildingData[],
-    options: PopulateBuildingsOptions = {}
+    options: PopulateBuildingsOptions
 ): number {
-    const { player } = options;
+    const { player, buildingStateManager } = options;
     let count = 0;
     let skipped = 0;
 
@@ -97,7 +99,9 @@ export function populateMapBuildings(
         // Map S4 building type to internal type
         const buildingType = S4_TO_BUILDING_TYPE[buildingData.buildingType];
         if (buildingType === undefined) {
-            log.debug(`Skipping unmapped building type: ${S4BuildingType[buildingData.buildingType] ?? buildingData.buildingType} at (${buildingData.x}, ${buildingData.y})`);
+            log.debug(
+                `Skipping unmapped building type: ${S4BuildingType[buildingData.buildingType] ?? buildingData.buildingType} at (${buildingData.x}, ${buildingData.y})`
+            );
             skipped++;
             continue;
         }
@@ -120,14 +124,15 @@ export function populateMapBuildings(
         );
 
         // Override the building state to be completed (pre-existing building)
-        const buildingState = state.buildingStateManager.getBuildingState(entity.id);
-        if (buildingState) {
-            buildingState.phase = BuildingConstructionPhase.Completed;
-            buildingState.phaseProgress = 1;
-            buildingState.elapsedTime = buildingState.totalDuration;
-        }
+        // buildingStateManager is required, getBuildingState returns the state we just created
+        const buildingState = buildingStateManager.getBuildingState(entity.id)!;
+        buildingState.phase = BuildingConstructionPhase.Completed;
+        buildingState.phaseProgress = 1;
+        buildingState.elapsedTime = buildingState.totalDuration;
 
-        log.debug(`Created completed building: ${BuildingType[buildingType]} at (${buildingData.x}, ${buildingData.y}) for player ${buildingData.player}`);
+        log.debug(
+            `Created completed building: ${BuildingType[buildingType]} at (${buildingData.x}, ${buildingData.y}) for player ${buildingData.player}`
+        );
         count++;
     }
 

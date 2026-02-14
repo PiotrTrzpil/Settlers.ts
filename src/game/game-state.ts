@@ -1,12 +1,18 @@
-import { Entity, EntityType, UnitType, tileKey, BuildingType, getBuildingFootprint, StackedResourceState, MAX_RESOURCE_STACK_SIZE, isUnitTypeSelectable, getUnitTypeSpeed } from './entity';
+import {
+    Entity,
+    EntityType,
+    UnitType,
+    tileKey,
+    BuildingType,
+    getBuildingFootprint,
+    StackedResourceState,
+    MAX_RESOURCE_STACK_SIZE,
+    isUnitTypeSelectable,
+    getUnitTypeSpeed,
+} from './entity';
 import { getWorkerWorkplace } from './unit-types';
 import { EMaterialType } from './economy';
 import { MovementSystem, MovementController } from './systems/movement/index';
-import { CarrierManager } from './features/carriers';
-import { BuildingInventoryManager } from './features/inventory';
-import { BuildingStateManager } from './features/building-construction';
-import { ServiceAreaManager } from './features/service-areas';
-import { RequestManager } from './features/logistics';
 import { SeededRng, createGameRng } from './rng';
 
 /**
@@ -37,15 +43,29 @@ export interface UnitStateLookup {
  * Provides backward-compatible read access to movement state.
  */
 class UnitStateAdapter implements UnitStateView {
-    constructor(private controller: MovementController) { }
+    constructor(private controller: MovementController) {}
 
-    get entityId(): number { return this.controller.entityId }
-    get path(): ReadonlyArray<{ x: number; y: number }> { return this.controller.path }
-    get pathIndex(): number { return this.controller.pathIndex }
-    get moveProgress(): number { return this.controller.progress }
-    get speed(): number { return this.controller.speed }
-    get prevX(): number { return this.controller.prevTileX }
-    get prevY(): number { return this.controller.prevTileY }
+    get entityId(): number {
+        return this.controller.entityId;
+    }
+    get path(): ReadonlyArray<{ x: number; y: number }> {
+        return this.controller.path;
+    }
+    get pathIndex(): number {
+        return this.controller.pathIndex;
+    }
+    get moveProgress(): number {
+        return this.controller.progress;
+    }
+    get speed(): number {
+        return this.controller.speed;
+    }
+    get prevX(): number {
+        return this.controller.prevTileX;
+    }
+    get prevY(): number {
+        return this.controller.prevTileY;
+    }
 }
 
 /**
@@ -53,7 +73,7 @@ class UnitStateAdapter implements UnitStateView {
  * Wraps MovementSystem for backward compatibility with existing code.
  */
 class UnitStateMap implements UnitStateLookup {
-    constructor(private movementSystem: MovementSystem) { }
+    constructor(private movementSystem: MovementSystem) {}
 
     get(entityId: number): UnitStateView | undefined {
         const controller = this.movementSystem.getController(entityId);
@@ -100,21 +120,6 @@ export class GameState {
     /** Legacy adapter for backward compatibility - wraps movement system */
     public readonly unitStates: UnitStateMap;
 
-    /** Carrier state manager */
-    public readonly carrierManager: CarrierManager = new CarrierManager();
-
-    /** Building inventory manager */
-    public readonly inventoryManager: BuildingInventoryManager = new BuildingInventoryManager();
-
-    /** Service area manager for logistics hubs */
-    public readonly serviceAreaManager: ServiceAreaManager = new ServiceAreaManager();
-
-    /** Resource request manager for logistics matching */
-    public readonly requestManager: RequestManager = new RequestManager();
-
-    /** Building construction state manager */
-    public readonly buildingStateManager: BuildingStateManager = new BuildingStateManager();
-
     /** Seeded RNG for deterministic game logic - use this instead of Math.random() */
     public readonly rng: SeededRng;
 
@@ -148,13 +153,9 @@ export class GameState {
                 this.updateEntityPosition(id, x, y);
                 return true;
             },
-            (id) => this.getEntity(id)
+            id => this.getEntity(id)
         );
         this.movement.setTileOccupancy(this.tileOccupancy);
-
-        // Wire up entity providers for managers (RFC: Entity-Owned State)
-        this.buildingStateManager.setEntityProvider(this);
-        this.carrierManager.setEntityProvider(this);
     }
 
     /**
@@ -175,8 +176,13 @@ export class GameState {
      */
     // eslint-disable-next-line complexity -- entity initialization handles many type variants
     public addEntity(
-        type: EntityType, subType: number, x: number, y: number,
-        player: number, selectable?: boolean, variation?: number
+        type: EntityType,
+        subType: number,
+        x: number,
+        y: number,
+        player: number,
+        selectable?: boolean,
+        variation?: number
     ): Entity {
         // Determine selectability: explicit override > type-based rules
         let resolvedSelectable: boolean | undefined;
@@ -232,9 +238,8 @@ export class GameState {
         }
 
         if (type === EntityType.Building) {
-            // Create building state directly (GameState owns buildingStateManager)
-            this.buildingStateManager.createBuildingState(entity.id, subType as BuildingType, x, y);
-            // Notify listeners for additional setup (inventory, service areas)
+            // Notify listeners for building state, inventory, service areas setup
+            // GameLoop.handleBuildingCreated() handles all building initialization
             this.onBuildingCreated?.(entity.id, subType, x, y);
         }
 
@@ -330,9 +335,7 @@ export class GameState {
         const minY = Math.min(y1, y2);
         const maxY = Math.max(y1, y2);
 
-        return this.entities.filter(e =>
-            e.x >= minX && e.x <= maxX && e.y >= minY && e.y <= maxY
-        );
+        return this.entities.filter(e => e.x >= minX && e.x <= maxX && e.y >= minY && e.y <= maxY);
     }
 
     /**

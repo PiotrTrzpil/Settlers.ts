@@ -8,14 +8,15 @@
  * verifying that all subsystems interact correctly.
  */
 
-import { describe, it, expect } from 'vitest';
-import { createTestMap, TERRAIN, setTerrainAt, setHeightAt } from '../helpers/test-map';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { TERRAIN, setTerrainAt, setHeightAt, type TestMap } from '../helpers/test-map';
 import {
-    createGameState,
+    createTestContext,
     addBuilding,
     placeBuilding,
     removeEntity,
     tickConstruction,
+    type TestContext,
 } from '../helpers/test-game';
 import { EntityType, BuildingType, getBuildingFootprint } from '@/game/entity';
 import {
@@ -29,37 +30,48 @@ import {
 } from '@/game/features/building-construction';
 
 describe('Building Lifecycle: place → construct → remove', () => {
-    it('full lifecycle from placement through construction to removal', () => {
-        const map = createTestMap(64, 64, { flatHeight: 100 });
-        const state = createGameState();
+    let ctx: TestContext;
+    let map: TestMap;
 
+    beforeEach(() => {
+        // Create a test context with 64x64 map
+        ctx = createTestContext(64, 64);
+        map = ctx.map;
+        // Set terrain to flat grass at height 100 for building tests
+        map.groundType.fill(TERRAIN.GRASS);
+        map.groundHeight.fill(100);
+        // Re-apply to state
+        ctx.state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
+    });
+
+    it('full lifecycle from placement through construction to removal', () => {
         // ── Step 1: Place a building via command system ──
-        const placed = placeBuilding(state, map, 20, 20, BuildingType.WoodcutterHut, 0);
+        const placed = placeBuilding(ctx, 20, 20, BuildingType.WoodcutterHut, 0);
         expect(placed).toBe(true);
 
-        const building = state.entities.find(e => e.type === EntityType.Building);
+        const building = ctx.state.entities.find(e => e.type === EntityType.Building);
         expect(building).toBeDefined();
         expect(building!.x).toBe(20);
         expect(building!.y).toBe(20);
         expect(building!.subType).toBe(BuildingType.WoodcutterHut);
 
         // Lumberjack auto-spawns a worker
-        const worker = state.entities.find(e => e.type === EntityType.Unit);
+        const worker = ctx.state.entities.find(e => e.type === EntityType.Unit);
         expect(worker).toBeDefined();
         expect(worker!.player).toBe(0);
 
         // ── Step 2: Verify tile occupancy ──
         // The tile should be occupied by the building (not necessarily with ID 1)
-        const occupyingEntityId = state.tileOccupancy.get('20,20');
+        const occupyingEntityId = ctx.state.tileOccupancy.get('20,20');
         expect(occupyingEntityId).toBeDefined();
-        expect(state.getEntity(occupyingEntityId!)).toBe(building);
+        expect(ctx.state.getEntity(occupyingEntityId!)).toBe(building);
 
         // ── Step 3: Simulate construction phases ──
-        const bs = state.buildingStateManager.getBuildingState(building!.id)!;
+        const bs = ctx.buildingStateManager.getBuildingState(building!.id)!;
         expect(bs).toBeDefined();
         bs.totalDuration = 10;
 
-        const ctx: TerrainContext = {
+        const terrainCtx: TerrainContext = {
             groundType: map.groundType,
             groundHeight: map.groundHeight,
             mapSize: map.mapSize,
@@ -67,7 +79,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         };
 
         // Phase 1: TerrainLeveling (0-20%) - Poles phase is skipped (duration=0)
-        tickConstruction(state, 0.5, ctx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx);
         expect(bs.phase).toBe(BuildingConstructionPhase.TerrainLeveling);
         let visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(true);
@@ -75,7 +87,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         expect(bs.originalTerrain).not.toBeNull();
 
         // Advance through terrain leveling
-        tickConstruction(state, 0.5, ctx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx);
 
         // Footprint tiles should have construction ground type
         const footprint = getBuildingFootprint(20, 20, BuildingType.WoodcutterHut);
@@ -84,33 +96,33 @@ describe('Building Lifecycle: place → construct → remove', () => {
         }
 
         // Phase 2: ConstructionRising (20-55%)
-        tickConstruction(state, 2.0, ctx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 2.0, terrainCtx);
         expect(bs.phase).toBe(BuildingConstructionPhase.ConstructionRising);
         visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(true);
         expect(visual.verticalProgress).toBeGreaterThan(0);
 
         // Phase 3: CompletedRising (55-100%)
-        tickConstruction(state, 4.0, ctx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 4.0, terrainCtx);
         expect(bs.phase).toBe(BuildingConstructionPhase.CompletedRising);
         visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(false);
 
         // Phase 4: Completed
-        tickConstruction(state, 5.0, ctx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 5.0, terrainCtx);
         expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
         visual = getBuildingVisualState(bs);
         expect(visual.isCompleted).toBe(true);
 
         // ── Step 4: Remove building and verify cleanup ──
-        const removed = removeEntity(state, map, building!.id);
+        const removed = removeEntity(ctx, building!.id);
         expect(removed).toBe(true);
 
         // Entity gone from state
-        expect(state.entities.find(e => e.id === building!.id)).toBeUndefined();
+        expect(ctx.state.entities.find(e => e.id === building!.id)).toBeUndefined();
 
         // Tile occupancy cleared
-        expect(state.tileOccupancy.has('20,20')).toBe(false);
+        expect(ctx.state.tileOccupancy.has('20,20')).toBe(false);
 
         // Terrain restored (construction ground type removed)
         for (const tile of footprint) {
@@ -119,32 +131,28 @@ describe('Building Lifecycle: place → construct → remove', () => {
     });
 
     it('building placement fails on invalid terrain, succeeds on valid', () => {
-        const map = createTestMap(64, 64, { flatHeight: 100 });
-        const state = createGameState();
-
         // Water → fails
         setTerrainAt(map, 10, 10, TERRAIN.WATER);
-        expect(placeBuilding(state, map, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
-        expect(state.entities).toHaveLength(0);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
+        expect(ctx.state.entities).toHaveLength(0);
 
         // Rock → fails
         setTerrainAt(map, 10, 10, TERRAIN.ROCK);
-        expect(placeBuilding(state, map, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
 
         // Beach → fails (not buildable)
         setTerrainAt(map, 10, 10, TERRAIN.BEACH);
-        expect(placeBuilding(state, map, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
 
         // Grass → succeeds
         setTerrainAt(map, 10, 10, TERRAIN.GRASS);
-        expect(placeBuilding(state, map, 10, 10, BuildingType.WoodcutterHut)).toBe(true);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut)).toBe(true);
 
         // Occupied → fails
-        expect(placeBuilding(state, map, 10, 10, BuildingType.StorageArea)).toBe(false);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.StorageArea)).toBe(false);
     });
 
     it('terrain capture and restoration preserves varied heights', () => {
-        const map = createTestMap(64, 64);
         setHeightAt(map, 10, 10, 200);
         setHeightAt(map, 11, 10, 50);
         setHeightAt(map, 10, 11, 100);
@@ -153,9 +161,8 @@ describe('Building Lifecycle: place → construct → remove', () => {
         // Save original state
         const originalHeights = new Uint8Array(map.groundHeight);
 
-        const state = createGameState();
-        const building = addBuilding(state, 10, 10, BuildingType.WoodcutterHut, 0);
-        const bs = state.buildingStateManager.getBuildingState(building.id)!;
+        const building = addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut, 0);
+        const bs = ctx.buildingStateManager.getBuildingState(building.id)!;
 
         // Capture terrain
         bs.originalTerrain = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
@@ -184,23 +191,22 @@ describe('Building Lifecycle: place → construct → remove', () => {
     });
 
     it('construction with terrain modification notifies callback', () => {
-        const map = createTestMap(64, 64, { flatHeight: 100 });
-        const state = createGameState();
-
-        addBuilding(state, 10, 10, BuildingType.WoodcutterHut, 0);
-        const bs = [...state.buildingStateManager.buildingStates.values()][0];
+        addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut, 0);
+        const bs = [...ctx.buildingStateManager.buildingStates.values()][0];
         bs.totalDuration = 10;
 
         let terrainNotifications = 0;
-        const ctx: TerrainContext = {
+        const terrainCtx: TerrainContext = {
             groundType: map.groundType,
             groundHeight: map.groundHeight,
             mapSize: map.mapSize,
-            onTerrainModified: () => { terrainNotifications++ },
+            onTerrainModified: () => {
+                terrainNotifications++;
+            },
         };
 
         // TerrainLeveling starts immediately (Poles phase is skipped)
-        tickConstruction(state, 0.5, ctx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx);
         expect(terrainNotifications).toBeGreaterThan(0); // Terrain mods during TerrainLeveling
     });
 });

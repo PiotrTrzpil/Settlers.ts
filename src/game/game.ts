@@ -96,7 +96,9 @@ export class Game {
 
         // Populate buildings from map entity data (if available)
         if (mapLoader.entityData?.buildings?.length) {
-            const count = populateMapBuildings(this.state, mapLoader.entityData.buildings);
+            const count = populateMapBuildings(this.state, mapLoader.entityData.buildings, {
+                buildingStateManager: this.gameLoop.buildingStateManager,
+            });
             if (count > 0) {
                 console.log(`Game: Loaded ${count} buildings from map data`);
             }
@@ -140,7 +142,8 @@ export class Game {
             this.groundHeight,
             this.mapSize,
             this.eventBus,
-            this.gameLoop.settlerTaskSystem
+            this.gameLoop.settlerTaskSystem,
+            this.gameLoop.buildingStateManager
         );
     }
 
@@ -237,6 +240,7 @@ export class Game {
             if (!this.scriptService) {
                 const service = new ScriptService({
                     gameState: this.state,
+                    buildingStateManager: this.gameLoop.buildingStateManager,
                     mapWidth: this.mapSize.width,
                     mapHeight: this.mapSize.height,
                     landscape: this.mapLoader.landscape,

@@ -31,6 +31,7 @@ import {
 import { loadScriptFromString, validateScript, type ScriptSource } from './script-loader';
 import type { GameState } from '@/game/game-state';
 import type { IMapLandscape } from '@/resources/map/imap-landscape';
+import type { BuildingStateManager } from '@/game/features/building-construction';
 
 const log = new LogHandler('LuaScriptSystem');
 
@@ -40,6 +41,8 @@ const log = new LogHandler('LuaScriptSystem');
 export interface LuaScriptSystemConfig {
     /** Game state instance */
     gameState: GameState;
+    /** Building state manager for construction phases */
+    buildingStateManager: BuildingStateManager;
     /** Map dimensions */
     mapWidth: number;
     mapHeight: number;
@@ -122,11 +125,11 @@ export class LuaScriptSystem {
             difficulty: this.config.difficulty ?? 1,
             mapWidth: this.config.mapWidth,
             mapHeight: this.config.mapHeight,
-            onPlayerWon: (player) => {
+            onPlayerWon: player => {
                 log.info(`Player ${player} won!`);
                 // TODO: Trigger victory screen
             },
-            onPlayerLost: (player) => {
+            onPlayerLost: player => {
                 log.info(`Player ${player} lost!`);
                 // TODO: Trigger defeat screen
             },
@@ -142,6 +145,7 @@ export class LuaScriptSystem {
         // Buildings API context
         const buildingsContext: BuildingsAPIContext = {
             gameState: this.config.gameState,
+            buildingStateManager: this.config.buildingStateManager,
         };
         registerBuildingsAPI(this.runtime, buildingsContext);
 

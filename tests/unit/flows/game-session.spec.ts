@@ -9,15 +9,16 @@
  * spawns units, selects entities, and moves units around.
  */
 
-import { describe, it, expect } from 'vitest';
-import { createTestMap, TERRAIN, setTerrainAt } from '../helpers/test-map';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { createTestMap, TERRAIN, setTerrainAt, type TestMap } from '../helpers/test-map';
 import {
-    createGameState,
+    createTestContext,
     placeBuilding,
     spawnUnit,
     moveUnit,
     selectEntity,
     removeEntity,
+    type TestContext,
 } from '../helpers/test-game';
 import { EntityType, BuildingType } from '@/game/entity';
 // Movement is handled via state.movement.update(dt)
@@ -35,17 +36,28 @@ import { isPassable, isBuildable, canPlaceBuilding } from '@/game/features/place
 import { findPath } from '@/game/systems/pathfinding';
 
 describe('Game Session: multi-system integration sweep', () => {
-    it('player builds an economy: lumberjack → sawmill → supply chain validation', () => {
-        const map = createTestMap(64, 64, { flatHeight: 100 });
-        const state = createGameState();
+    let ctx: TestContext;
+    let map: TestMap;
 
+    beforeEach(() => {
+        ctx = createTestContext(64, 64);
+        map = ctx.map;
+        // Set terrain to flat grass at height 100
+        map.groundType.fill(TERRAIN.GRASS);
+        map.groundHeight.fill(100);
+        ctx.state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
+    });
+
+    it('player builds an economy: lumberjack → sawmill → supply chain validation', () => {
         // ── Place a WoodcutterHut (produces LOG) ──
-        expect(placeBuilding(state, map, 20, 20, BuildingType.WoodcutterHut, 0)).toBe(true);
+        expect(placeBuilding(ctx, 20, 20, BuildingType.WoodcutterHut, 0)).toBe(true);
 
         // Lumberjack auto-spawns a worker
-        const lumberjackEntities = state.entities.filter(e => e.type === EntityType.Building && e.subType === BuildingType.WoodcutterHut);
+        const lumberjackEntities = ctx.state.entities.filter(
+            e => e.type === EntityType.Building && e.subType === BuildingType.WoodcutterHut
+        );
         expect(lumberjackEntities).toHaveLength(1);
-        const workers = state.entities.filter(e => e.type === EntityType.Unit);
+        const workers = ctx.state.entities.filter(e => e.type === EntityType.Unit);
         expect(workers).toHaveLength(1);
 
         // ── Verify production chain data ──
@@ -54,7 +66,7 @@ describe('Game Session: multi-system integration sweep', () => {
         expect(lumberjackChain.inputs).toHaveLength(0); // No inputs needed
 
         // ── Place a Sawmill (consumes LOG, produces BOARD) ──
-        expect(placeBuilding(state, map, 25, 20, BuildingType.Sawmill, 0)).toBe(true);
+        expect(placeBuilding(ctx, 25, 20, BuildingType.Sawmill, 0)).toBe(true);
 
         const sawmillChain = BUILDING_PRODUCTIONS.get(BuildingType.Sawmill)!;
         expect(sawmillChain.output).toBe(EMaterialType.BOARD);
@@ -79,69 +91,67 @@ describe('Game Session: multi-system integration sweep', () => {
     });
 
     it('full session: build, select, move units, manage entities', () => {
-        const map = createTestMap(64, 64, { flatHeight: 100 });
-        const state = createGameState();
-
         // ── Build phase: place multiple buildings ──
-        expect(placeBuilding(state, map, 10, 10, BuildingType.StorageArea, 0)).toBe(true);
-        expect(placeBuilding(state, map, 20, 20, BuildingType.WoodcutterHut, 0)).toBe(true);
-        expect(placeBuilding(state, map, 30, 30, BuildingType.GuardTowerSmall, 1)).toBe(true);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.StorageArea, 0)).toBe(true);
+        expect(placeBuilding(ctx, 20, 20, BuildingType.WoodcutterHut, 0)).toBe(true);
+        expect(placeBuilding(ctx, 30, 30, BuildingType.GuardTowerSmall, 1)).toBe(true);
 
         // Warehouse (no auto-spawn) + Lumberjack (auto-spawn worker) + Tower (no auto-spawn)
-        const buildings = state.entities.filter(e => e.type === EntityType.Building);
+        const buildings = ctx.state.entities.filter(e => e.type === EntityType.Building);
         expect(buildings).toHaveLength(3);
-        const units = state.entities.filter(e => e.type === EntityType.Unit);
+        const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
         expect(units.length).toBeGreaterThanOrEqual(1);
 
         // ── Spawn additional units ──
-        expect(spawnUnit(state, map, 15, 15, 2, 0)).toBe(true); // Swordsman (selectable - Military category)
-        const spawnedUnit = state.entities.find(
-            e => e.type === EntityType.Unit && e.x === 15 && e.y === 15
-        );
+        expect(spawnUnit(ctx, 15, 15, 2, 0)).toBe(true); // Swordsman (selectable - Military category)
+        const spawnedUnit = ctx.state.entities.find(e => e.type === EntityType.Unit && e.x === 15 && e.y === 15);
         expect(spawnedUnit).toBeDefined();
 
         // ── Selection flow ──
-        selectEntity(state, map, spawnedUnit!.id);
-        expect(state.selectedEntityId).toBe(spawnedUnit!.id);
-        expect(state.selectedEntityIds.has(spawnedUnit!.id)).toBe(true);
+        selectEntity(ctx, spawnedUnit!.id);
+        expect(ctx.state.selectedEntityId).toBe(spawnedUnit!.id);
+        expect(ctx.state.selectedEntityIds.has(spawnedUnit!.id)).toBe(true);
 
         // Deselect
-        selectEntity(state, map, null);
-        expect(state.selectedEntityId).toBeNull();
-        expect(state.selectedEntityIds.size).toBe(0);
+        selectEntity(ctx, null);
+        expect(ctx.state.selectedEntityId).toBeNull();
+        expect(ctx.state.selectedEntityIds.size).toBe(0);
 
         // ── Area selection ──
         executeCommand(
-            state,
+            ctx.state,
             { type: 'select_area', x1: 14, y1: 14, x2: 16, y2: 16 },
-            map.groundType, map.groundHeight, map.mapSize, new EventBus(),
+            map.groundType,
+            map.groundHeight,
+            map.mapSize,
+            new EventBus(),
+            undefined,
+            ctx.buildingStateManager
         );
         // Should select the unit at (15,15), prefer units over buildings
-        expect(state.selectedEntityIds.size).toBeGreaterThanOrEqual(1);
-        const selectedId = Array.from(state.selectedEntityIds)[0];
-        const selected = state.getEntity(selectedId);
+        expect(ctx.state.selectedEntityIds.size).toBeGreaterThanOrEqual(1);
+        const selectedId = Array.from(ctx.state.selectedEntityIds)[0];
+        const selected = ctx.state.getEntity(selectedId);
         expect(selected?.type).toBe(EntityType.Unit);
 
         // ── Move the selected unit ──
-        expect(moveUnit(state, map, spawnedUnit!.id, 18, 15)).toBe(true);
-        const unitState = state.unitStates.get(spawnedUnit!.id);
+        expect(moveUnit(ctx, spawnedUnit!.id, 18, 15)).toBe(true);
+        const unitState = ctx.state.unitStates.get(spawnedUnit!.id);
         expect(unitState!.path.length).toBeGreaterThan(0);
 
         // Simulate movement
-        state.movement.update(5.0); // Enough time to arrive
+        ctx.state.movement.update(5.0); // Enough time to arrive
         expect(spawnedUnit!.x).toBe(18);
         expect(spawnedUnit!.y).toBe(15);
 
         // ── Remove entities ──
-        const totalBefore = state.entities.length;
-        removeEntity(state, map, spawnedUnit!.id);
-        expect(state.entities.length).toBe(totalBefore - 1);
-        expect(state.unitStates.has(spawnedUnit!.id)).toBe(false);
+        const totalBefore = ctx.state.entities.length;
+        removeEntity(ctx, spawnedUnit!.id);
+        expect(ctx.state.entities.length).toBe(totalBefore - 1);
+        expect(ctx.state.unitStates.has(spawnedUnit!.id)).toBe(false);
     });
 
     it('terrain validation is consistent across placement, indicator, and pathfinding', () => {
-        const map = createTestMap();
-
         // Test terrain types for consistency across systems
         const terrainTypes = [
             { type: TERRAIN.WATER, passable: false, buildable: false },
@@ -163,7 +173,12 @@ describe('Game Session: multi-system integration sweep', () => {
                 const fresh = createTestMap();
                 setTerrainAt(fresh, 20, 20, type);
                 const buildResult = canPlaceBuilding(
-                    fresh.groundType, fresh.groundHeight, fresh.mapSize, fresh.occupancy, 20, 20,
+                    fresh.groundType,
+                    fresh.groundHeight,
+                    fresh.mapSize,
+                    fresh.occupancy,
+                    20,
+                    20
                 );
                 expect(buildResult).toBe(true);
             }
@@ -173,59 +188,59 @@ describe('Game Session: multi-system integration sweep', () => {
                 // Set goal to this terrain type → pathfinding should fail
                 const pathMap = createTestMap();
                 setTerrainAt(pathMap, 20, 5, type);
-                const path = findPath(
-                    5, 5, 20, 5,
-                    pathMap.groundType, pathMap.groundHeight,
-                    64, 64, pathMap.occupancy,
-                );
+                const path = findPath(5, 5, 20, 5, pathMap.groundType, pathMap.groundHeight, 64, 64, pathMap.occupancy);
                 expect(path).toBeNull();
             }
         }
     });
 
     it('selection prefers units over buildings in mixed area', () => {
-        const map = createTestMap(64, 64, { flatHeight: 100 });
-        const state = createGameState();
-
         // Place a building and a unit in the same area
-        placeBuilding(state, map, 10, 10, BuildingType.StorageArea, 0);
-        spawnUnit(state, map, 11, 10, 2, 0); // Swordsman (selectable - Military category)
+        placeBuilding(ctx, 10, 10, BuildingType.StorageArea, 0);
+        spawnUnit(ctx, 11, 10, 2, 0); // Swordsman (selectable - Military category)
 
         // Area select covering both
         executeCommand(
-            state,
+            ctx.state,
             { type: 'select_area', x1: 9, y1: 9, x2: 12, y2: 11 },
-            map.groundType, map.groundHeight, map.mapSize, new EventBus(),
+            map.groundType,
+            map.groundHeight,
+            map.mapSize,
+            new EventBus(),
+            undefined,
+            ctx.buildingStateManager
         );
 
         // Should prefer units
-        expect(state.selectedEntityIds.size).toBe(1);
-        const selectedId = Array.from(state.selectedEntityIds)[0];
-        const selected = state.getEntity(selectedId);
+        expect(ctx.state.selectedEntityIds.size).toBe(1);
+        const selectedId = Array.from(ctx.state.selectedEntityIds)[0];
+        const selected = ctx.state.getEntity(selectedId);
         expect(selected?.type).toBe(EntityType.Unit);
 
         // Empty area clears selection
         executeCommand(
-            state,
+            ctx.state,
             { type: 'select_area', x1: 50, y1: 50, x2: 60, y2: 60 },
-            map.groundType, map.groundHeight, map.mapSize, new EventBus(),
+            map.groundType,
+            map.groundHeight,
+            map.mapSize,
+            new EventBus(),
+            undefined,
+            ctx.buildingStateManager
         );
-        expect(state.selectedEntityIds.size).toBe(0);
-        expect(state.selectedEntityId).toBeNull();
+        expect(ctx.state.selectedEntityIds.size).toBe(0);
+        expect(ctx.state.selectedEntityId).toBeNull();
     });
 
     it('entity radius query finds nearby entities across types', () => {
-        const map = createTestMap(64, 64, { flatHeight: 100 });
-        const state = createGameState();
-
         // Create a cluster of entities
-        placeBuilding(state, map, 20, 20, BuildingType.StorageArea, 0);
-        spawnUnit(state, map, 21, 20, 0, 0);
-        spawnUnit(state, map, 22, 20, 0, 0);
+        placeBuilding(ctx, 20, 20, BuildingType.StorageArea, 0);
+        spawnUnit(ctx, 21, 20, 0, 0);
+        spawnUnit(ctx, 22, 20, 0, 0);
         // Far-away entity
-        spawnUnit(state, map, 50, 50, 0, 0);
+        spawnUnit(ctx, 50, 50, 0, 0);
 
-        const nearby = state.getEntitiesInRadius(20, 20, 3);
+        const nearby = ctx.state.getEntitiesInRadius(20, 20, 3);
         // Should find warehouse + 2 nearby units, but not the far unit
         expect(nearby.length).toBeGreaterThanOrEqual(3);
         expect(nearby.every(e => !(e.x === 50 && e.y === 50))).toBe(true);

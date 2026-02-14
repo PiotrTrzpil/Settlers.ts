@@ -12,9 +12,14 @@ import { EventBus } from '@/game/event-bus';
 import {
     BuildingConstructionPhase,
     BuildingConstructionSystem,
+    BuildingStateManager,
     type BuildingState,
     type TerrainContext,
 } from '@/game/features/building-construction';
+import { CarrierManager } from '@/game/features/carriers';
+import { BuildingInventoryManager } from '@/game/features/inventory';
+import { ServiceAreaManager } from '@/game/features/service-areas';
+import { RequestManager } from '@/game/features/logistics';
 
 // ─── GameState factory ──────────────────────────────────────────────
 
@@ -48,12 +53,18 @@ export interface TestContext {
     state: GameState;
     map: TestMap;
     eventBus: EventBus;
+    // Managers (created by tests, not from GameState)
+    carrierManager: CarrierManager;
+    inventoryManager: BuildingInventoryManager;
+    serviceAreaManager: ServiceAreaManager;
+    requestManager: RequestManager;
+    buildingStateManager: BuildingStateManager;
 }
 
 /**
- * Create a complete test context with GameState, TestMap, and EventBus.
+ * Create a complete test context with GameState, TestMap, EventBus, and managers.
  * The state is initialized with terrain data from the map.
- * Building states are automatically created by GameState.addEntity().
+ * Building states are created by the buildingStateManager when buildings are added.
  *
  * @param mapWidth - Map width (default: 64)
  * @param mapHeight - Map height (default: 64)
@@ -63,6 +74,17 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     const map = createTestMap(mapWidth, mapHeight);
     const eventBus = new EventBus();
 
+    // Create managers (in tests, we create them ourselves rather than using GameLoop)
+    const carrierManager = new CarrierManager();
+    const inventoryManager = new BuildingInventoryManager();
+    const serviceAreaManager = new ServiceAreaManager();
+    const requestManager = new RequestManager();
+    const buildingStateManager = new BuildingStateManager();
+
+    // Set entity providers for managers that need entity lookup
+    buildingStateManager.setEntityProvider(state);
+    carrierManager.setEntityProvider(state);
+
     // Wire up event bus and RNG to movement system
     state.movement.setEventBus(eventBus);
     state.movement.setRng(state.rng);
@@ -70,7 +92,21 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     // Initialize terrain data on state
     state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
 
-    return { state, map, eventBus };
+    // Wire up building state creation callback
+    state.onBuildingCreated = (entityId, buildingType, x, y) => {
+        buildingStateManager.createBuildingState(entityId, buildingType as BuildingType, x, y);
+    };
+
+    return {
+        state,
+        map,
+        eventBus,
+        carrierManager,
+        inventoryManager,
+        serviceAreaManager,
+        requestManager,
+        buildingStateManager,
+    };
 }
 
 // ─── Entity creation helpers ────────────────────────────────────────
@@ -104,14 +140,14 @@ export function addBuilding(
  * Without GameLoop, we need to manually create the inventory.
  */
 export function addBuildingWithInventory(
-    state: GameState,
+    ctx: TestContext,
     x: number,
     y: number,
     buildingType: BuildingType | number = BuildingType.WoodcutterHut,
     player = 0
 ): Entity {
-    const building = state.addEntity(EntityType.Building, buildingType, x, y, player);
-    state.inventoryManager.createInventory(building.id, buildingType as BuildingType);
+    const building = ctx.state.addEntity(EntityType.Building, buildingType, x, y, player);
+    ctx.inventoryManager.createInventory(building.id, buildingType as BuildingType);
     return building;
 }
 
@@ -192,10 +228,15 @@ export function makeBuildingState(
  * Create a BuildingConstructionSystem with terrain context and tick it.
  * Used for testing construction progression.
  */
-export function tickConstruction(gameState: GameState, dt: number, ctx: TerrainContext): void {
+export function tickConstruction(
+    gameState: GameState,
+    buildingStateManager: BuildingStateManager,
+    dt: number,
+    ctx: TerrainContext
+): void {
     const system = new BuildingConstructionSystem({
         gameState,
-        buildingStateManager: gameState.buildingStateManager,
+        buildingStateManager,
     });
     system.setTerrainContext(ctx);
     system.registerEvents(new EventBus());
@@ -210,11 +251,15 @@ import { executeCommand } from '@/game/commands';
  * Create an EventBus wired up with a BuildingConstructionSystem for terrain restoration.
  * Used by test helpers that need building removal to restore terrain.
  */
-export function createTestEventBus(state: GameState, map: TestMap): EventBus {
+export function createTestEventBus(
+    state: GameState,
+    map: TestMap,
+    buildingStateManager: BuildingStateManager
+): EventBus {
     const eventBus = new EventBus();
     const system = new BuildingConstructionSystem({
         gameState: state,
-        buildingStateManager: state.buildingStateManager,
+        buildingStateManager,
     });
     system.setTerrainContext({
         groundType: map.groundType,
@@ -227,105 +272,94 @@ export function createTestEventBus(state: GameState, map: TestMap): EventBus {
 
 /** Execute a place_building command. Returns success boolean. */
 export function placeBuilding(
-    state: GameState,
-    map: TestMap,
+    ctx: TestContext,
     x: number,
     y: number,
     buildingType: number = BuildingType.WoodcutterHut,
-    player = 0,
-    eventBus: EventBus = new EventBus()
+    player = 0
 ): boolean {
     return executeCommand(
-        state,
+        ctx.state,
         { type: 'place_building', buildingType, x, y, player },
-        map.groundType,
-        map.groundHeight,
-        map.mapSize,
-        eventBus
+        ctx.map.groundType,
+        ctx.map.groundHeight,
+        ctx.map.mapSize,
+        ctx.eventBus,
+        undefined,
+        ctx.buildingStateManager
     );
 }
 
 /** Execute a spawn_unit command. Returns success boolean. */
-export function spawnUnit(
-    state: GameState,
-    map: TestMap,
-    x: number,
-    y: number,
-    unitType = 0,
-    player = 0,
-    eventBus: EventBus = new EventBus()
-): boolean {
+export function spawnUnit(ctx: TestContext, x: number, y: number, unitType = 0, player = 0): boolean {
     return executeCommand(
-        state,
+        ctx.state,
         { type: 'spawn_unit', unitType, x, y, player },
-        map.groundType,
-        map.groundHeight,
-        map.mapSize,
-        eventBus
+        ctx.map.groundType,
+        ctx.map.groundHeight,
+        ctx.map.mapSize,
+        ctx.eventBus,
+        undefined,
+        ctx.buildingStateManager
     );
 }
 
 /** Execute a move_unit command. Returns success boolean. */
-export function moveUnit(
-    state: GameState,
-    map: TestMap,
-    entityId: number,
-    targetX: number,
-    targetY: number,
-    eventBus: EventBus = new EventBus()
-): boolean {
+export function moveUnit(ctx: TestContext, entityId: number, targetX: number, targetY: number): boolean {
     // Ensure terrain data is set for the movement system
-    state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
+    ctx.state.setTerrainData(ctx.map.groundType, ctx.map.groundHeight, ctx.map.mapSize.width, ctx.map.mapSize.height);
     return executeCommand(
-        state,
+        ctx.state,
         { type: 'move_unit', entityId, targetX, targetY },
-        map.groundType,
-        map.groundHeight,
-        map.mapSize,
-        eventBus
+        ctx.map.groundType,
+        ctx.map.groundHeight,
+        ctx.map.mapSize,
+        ctx.eventBus,
+        undefined,
+        ctx.buildingStateManager
     );
 }
 
 /** Execute a select command. Returns success boolean. */
-export function selectEntity(
-    state: GameState,
-    map: TestMap,
-    entityId: number | null,
-    eventBus: EventBus = new EventBus()
-): boolean {
-    return executeCommand(state, { type: 'select', entityId }, map.groundType, map.groundHeight, map.mapSize, eventBus);
+export function selectEntity(ctx: TestContext, entityId: number | null): boolean {
+    return executeCommand(
+        ctx.state,
+        { type: 'select', entityId },
+        ctx.map.groundType,
+        ctx.map.groundHeight,
+        ctx.map.mapSize,
+        ctx.eventBus,
+        undefined,
+        ctx.buildingStateManager
+    );
 }
 
 /** Execute a remove_entity command. Returns success boolean. */
-export function removeEntity(state: GameState, map: TestMap, entityId: number, eventBus?: EventBus): boolean {
-    const bus = eventBus ?? createTestEventBus(state, map);
+export function removeEntity(ctx: TestContext, entityId: number): boolean {
+    const bus = createTestEventBus(ctx.state, ctx.map, ctx.buildingStateManager);
     return executeCommand(
-        state,
+        ctx.state,
         { type: 'remove_entity', entityId },
-        map.groundType,
-        map.groundHeight,
-        map.mapSize,
-        bus
+        ctx.map.groundType,
+        ctx.map.groundHeight,
+        ctx.map.mapSize,
+        bus,
+        undefined,
+        ctx.buildingStateManager
     );
 }
 
 /** Execute a place_resource command. Returns success boolean. */
-export function placeResource(
-    state: GameState,
-    map: TestMap,
-    x: number,
-    y: number,
-    materialType: number,
-    amount = 1,
-    eventBus: EventBus = new EventBus()
-): boolean {
+export function placeResource(ctx: TestContext, x: number, y: number, materialType: number, amount = 1): boolean {
     return executeCommand(
-        state,
+        ctx.state,
         { type: 'place_resource', materialType, amount, x, y },
-        map.groundType,
-        map.groundHeight,
-        map.mapSize,
-        eventBus
+        ctx.map.groundType,
+        ctx.map.groundHeight,
+        ctx.map.mapSize,
+        ctx.eventBus,
+        undefined,
+        ctx.buildingStateManager
     );
 }
 

@@ -6,7 +6,7 @@
 import type { GameState } from './game-state';
 import type { Game } from './game';
 import { EntityType } from './entity';
-import { BuildingConstructionPhase } from './features/building-construction/types';
+import { BuildingConstructionPhase, type BuildingStateManager } from './features/building-construction';
 
 const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
@@ -65,7 +65,7 @@ export function setCurrentMapId(mapId: string): void {
 /**
  * Serialize game state to a minimal snapshot.
  */
-export function createSnapshot(gameState: GameState): GameStateSnapshot {
+export function createSnapshot(gameState: GameState, buildingStateManager: BuildingStateManager): GameStateSnapshot {
     const entities = gameState.entities.map(e => ({
         id: e.id,
         type: e.type,
@@ -83,7 +83,7 @@ export function createSnapshot(gameState: GameState): GameStateSnapshot {
 
     // Save building construction states
     const buildingStates: SerializedBuildingState[] = [];
-    for (const state of gameState.buildingStateManager.getAllBuildingStates()) {
+    for (const state of buildingStateManager.getAllBuildingStates()) {
         buildingStates.push({
             entityId: state.entityId,
             phase: state.phase,
@@ -109,9 +109,9 @@ export function createSnapshot(gameState: GameState): GameStateSnapshot {
 /**
  * Save game state to localStorage.
  */
-export function saveGameState(gameState: GameState): boolean {
+export function saveGameState(gameState: GameState, buildingStateManager: BuildingStateManager): boolean {
     try {
-        const snapshot = createSnapshot(gameState);
+        const snapshot = createSnapshot(gameState, buildingStateManager);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
         return true;
     } catch (e) {
@@ -215,7 +215,7 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
         if (e.type === EntityType.Building) {
             const savedState = savedBuildingStates.get(e.id);
             if (savedState) {
-                state.buildingStateManager.restoreBuildingState({
+                game.gameLoop.buildingStateManager.restoreBuildingState({
                     entityId: e.id,
                     buildingType: e.subType,
                     tileX: e.x,
@@ -246,9 +246,9 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
  * Save initial map state (called once after map loads, before auto-save).
  * Used to restore to the original map state when resetting.
  */
-export function saveInitialState(gameState: GameState): boolean {
+export function saveInitialState(gameState: GameState, buildingStateManager: BuildingStateManager): boolean {
     try {
-        const snapshot = createSnapshot(gameState);
+        const snapshot = createSnapshot(gameState, buildingStateManager);
         localStorage.setItem(INITIAL_STATE_KEY, JSON.stringify(snapshot));
         console.log(`GameState: Saved initial state with ${snapshot.entities.length} entities`);
         return true;
@@ -293,6 +293,7 @@ export function clearInitialState(): void {
  */
 class GameStatePersistence {
     private gameState: GameState | null = null;
+    private buildingStateManager: BuildingStateManager | null = null;
     private saveIntervalId: ReturnType<typeof setInterval> | null = null;
     private enabled = true;
 
@@ -300,22 +301,23 @@ class GameStatePersistence {
      * Start auto-saving.
      * Note: Initial state should be saved BEFORE calling this (via saveInitialState).
      */
-    start(gameState: GameState): void {
+    start(gameState: GameState, buildingStateManager: BuildingStateManager): void {
         this.gameState = gameState;
+        this.buildingStateManager = buildingStateManager;
 
         if (this.saveIntervalId) {
             clearInterval(this.saveIntervalId);
         }
 
         this.saveIntervalId = setInterval(() => {
-            if (this.enabled && this.gameState) {
-                saveGameState(this.gameState);
+            if (this.enabled && this.gameState && this.buildingStateManager) {
+                saveGameState(this.gameState, this.buildingStateManager);
             }
         }, AUTO_SAVE_INTERVAL_MS);
 
         // Save immediately
-        if (this.enabled) {
-            saveGameState(gameState);
+        if (this.enabled && this.buildingStateManager) {
+            saveGameState(gameState, this.buildingStateManager);
         }
     }
 
@@ -339,8 +341,8 @@ class GameStatePersistence {
 
     /** Force immediate save. */
     saveNow(): boolean {
-        if (this.gameState) {
-            return saveGameState(this.gameState);
+        if (this.gameState && this.buildingStateManager) {
+            return saveGameState(this.gameState, this.buildingStateManager);
         }
         return false;
     }

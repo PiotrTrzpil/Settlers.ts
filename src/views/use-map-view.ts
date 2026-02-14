@@ -1,4 +1,15 @@
-import { ref, shallowRef, triggerRef, computed, watch, onMounted, onUnmounted, reactive, type Ref, type ShallowRef } from 'vue';
+import {
+    ref,
+    shallowRef,
+    triggerRef,
+    computed,
+    watch,
+    onMounted,
+    onUnmounted,
+    reactive,
+    type Ref,
+    type ShallowRef,
+} from 'vue';
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
@@ -7,11 +18,7 @@ import { Entity, TileCoord, UnitType, BuildingType } from '@/game/entity';
 import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
-import {
-    LayerVisibility,
-    loadLayerVisibility,
-    saveLayerVisibility,
-} from '@/game/renderer/layer-visibility';
+import { LayerVisibility, loadLayerVisibility, saveLayerVisibility } from '@/game/renderer/layer-visibility';
 import { debugStats } from '@/game/debug-stats';
 import { gameSettings } from '@/game/game-settings';
 import type { InputManager } from '@/game/input';
@@ -80,7 +87,6 @@ async function loadMapFile(
         return { game: null, mapInfo: '' };
     }
 }
-
 
 /** Buildings available in the UI - organized by category */
 const availableBuildings = [
@@ -167,7 +173,10 @@ if (import.meta.env.DEV) {
     const allUnitTypes = Object.values(UnitType).filter((v): v is UnitType => typeof v === 'number');
     const missing = allUnitTypes.filter(t => !unitTypesInArray.has(t));
     if (missing.length > 0) {
-        console.error('availableUnits is missing UnitTypes:', missing.map(t => UnitType[t]));
+        console.error(
+            'availableUnits is missing UnitTypes:',
+            missing.map(t => UnitType[t])
+        );
     }
 }
 
@@ -178,15 +187,12 @@ const availableResources = DROPPABLE_MATERIALS.map(type => {
         type,
         id: EMaterialType[type].toLowerCase(),
         name,
-        icon: '📦' // Placeholder, will be replaced by texture
+        icon: '📦', // Placeholder, will be replaced by texture
     };
 });
 
 /** Update resource icons from the sprite manager */
-function updateResourceIconsFromManager(
-    game: Game | null,
-    resourceIcons: Ref<Record<number, string>>
-): void {
+function updateResourceIconsFromManager(game: Game | null, resourceIcons: Ref<Record<number, string>>): void {
     const g = game as any;
     if (!g?.renderer) return;
 
@@ -219,18 +225,14 @@ function updateResourceIconsFromManager(
 }
 
 /** Create mode toggle handler */
-function createModeToggler(
-    getGame: () => Game | null,
-    getInputManager: () => InputManager | null
-) {
+function createModeToggler(getGame: () => Game | null, getInputManager: () => InputManager | null) {
     return {
         setPlaceMode(buildingType: number): void {
             const game = getGame();
             const inputManager = getInputManager();
             if (!game || !inputManager) return;
 
-            if (debugStats.state.mode === 'place_building' &&
-                debugStats.state.placeBuildingType === buildingType) {
+            if (debugStats.state.mode === 'place_building' && debugStats.state.placeBuildingType === buildingType) {
                 inputManager.switchMode('select');
             } else {
                 inputManager.switchMode('place_building', {
@@ -244,8 +246,7 @@ function createModeToggler(
             const inputManager = getInputManager();
             if (!getGame() || !inputManager) return;
 
-            if (debugStats.state.mode === 'place_resource' &&
-                debugStats.state.placeResourceType === resourceType) {
+            if (debugStats.state.mode === 'place_resource' && debugStats.state.placeResourceType === resourceType) {
                 inputManager.switchMode('select');
             } else {
                 inputManager.switchMode('place_resource', { resourceType, amount });
@@ -257,8 +258,7 @@ function createModeToggler(
             const inputManager = getInputManager();
             if (!game || !inputManager) return;
 
-            if (debugStats.state.mode === 'place_unit' &&
-                debugStats.state.placeUnitType === unitType) {
+            if (debugStats.state.mode === 'place_unit' && debugStats.state.placeUnitType === unitType) {
                 inputManager.switchMode('select');
             } else {
                 inputManager.switchMode('place_unit', { unitType });
@@ -267,7 +267,7 @@ function createModeToggler(
 
         setSelectMode(): void {
             getInputManager()?.switchMode('select');
-        }
+        },
     };
 }
 
@@ -313,10 +313,7 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
     };
 }
 
-export function useMapView(
-    getFileManager: () => FileManager,
-    getInputManager?: () => InputManager | null
-) {
+export function useMapView(getFileManager: () => FileManager, getInputManager?: () => InputManager | null) {
     const route = useRoute();
     // Check if testMap query param is present - use computed for reactivity
     // in case the route isn't fully resolved when the composable first runs
@@ -389,7 +386,7 @@ export function useMapView(
                 game.value = createTestGame(fm);
 
                 // Save initial state BEFORE checking for saved game state
-                saveInitialState(game.value.state);
+                saveInitialState(game.value.state, game.value.gameLoop.buildingStateManager);
 
                 // Try to restore saved game state for test map too
                 const snapshot = loadSnapshot();
@@ -401,7 +398,7 @@ export function useMapView(
                 }
 
                 // Start auto-saving (won't save initial state again since we already did)
-                gameStatePersistence.start(game.value.state);
+                gameStatePersistence.start(game.value.state, game.value.gameLoop.buildingStateManager);
                 return true;
             }
 
@@ -426,7 +423,7 @@ export function useMapView(
             setCurrentMapId(file.name);
 
             // Save initial state BEFORE checking for saved game state
-            saveInitialState(result.game.state);
+            saveInitialState(result.game.state, result.game.gameLoop.buildingStateManager);
 
             // Try to restore saved game state (only restores if same map)
             const snapshot = loadSnapshot();
@@ -438,7 +435,7 @@ export function useMapView(
             }
 
             // Start auto-saving (won't save initial state again since we already did)
-            gameStatePersistence.start(result.game.state);
+            gameStatePersistence.start(result.game.state, result.game.gameLoop.buildingStateManager);
 
             // Load mission script (non-blocking, only if Lua enabled)
             if (isLuaEnabled()) {
@@ -493,7 +490,9 @@ export function useMapView(
 
     const showDebug = computed({
         get: () => gameSettings.state.showDebugGrid,
-        set: (value: boolean) => { gameSettings.state.showDebugGrid = value }
+        set: (value: boolean) => {
+            gameSettings.state.showDebugGrid = value;
+        },
     });
 
     const activeTab = ref<'buildings' | 'units' | 'resources'>('buildings');
@@ -520,7 +519,7 @@ export function useMapView(
             : undefined
     );
     const selectionCount = computed(() => game.value?.state.selectedEntityIds.size ?? 0);
-    const isPaused = computed(() => game.value ? !game.value.gameLoop.isRunning : false);
+    const isPaused = computed(() => (game.value ? !game.value.gameLoop.isRunning : false));
 
     // Mode state - use debugStats as the single source of truth
     const currentMode = computed(() => debugStats.state.mode);
@@ -568,7 +567,7 @@ export function useMapView(
             if (inputManager) {
                 inputManager.switchMode('place_resource', {
                     resourceType: debugStats.state.placeResourceType,
-                    amount: resourceAmount.value
+                    amount: resourceAmount.value,
                 });
             }
         }
@@ -579,7 +578,10 @@ export function useMapView(
     }
 
     // Create mode and action handlers
-    const modeToggler = createModeToggler(() => game.value, () => getInputManager?.() ?? null);
+    const modeToggler = createModeToggler(
+        () => game.value,
+        () => getInputManager?.() ?? null
+    );
     const gameActions = createGameActions(() => game.value, game);
 
     const setPlaceMode = modeToggler.setPlaceMode;
@@ -624,6 +626,6 @@ export function useMapView(
         removeSelected,
         togglePause,
         resetGameState,
-        updateLayerVisibility
+        updateLayerVisibility,
     };
 }

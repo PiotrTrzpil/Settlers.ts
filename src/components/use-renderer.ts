@@ -13,11 +13,7 @@ import { Renderer, type FrameRenderTiming } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { type TileCoord } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
-import {
-    canPlaceBuildingFootprint,
-    canPlaceResource,
-    canPlaceUnit,
-} from '@/game/features/placement';
+import { canPlaceBuildingFootprint, canPlaceResource, canPlaceUnit } from '@/game/features/placement';
 import { debugStats } from '@/game/debug-stats';
 import {
     InputManager,
@@ -55,14 +51,14 @@ function syncEntityRendererState(
     viewPoint: import('@/game/renderer/i-view-point').IViewPoint
 ): void {
     // Build render context using the builder pattern
-    const buildingStates = g.state.buildingStateManager.buildingStates;
+    const buildingStates = g.gameLoop.buildingStateManager.buildingStates;
     const renderContext = createRenderContext()
         .entities(g.state.entities)
         .unitStates(g.state.unitStates)
         .resourceStates(g.state.resourceStates)
         .buildingStates(buildingStates)
-        .buildingVisualStateGetter((entityId) => {
-            const state = g.state.buildingStateManager.getBuildingState(entityId);
+        .buildingVisualStateGetter(entityId => {
+            const state = g.gameLoop.buildingStateManager.getBuildingState(entityId);
             return getBuildingVisualState(state);
         })
         .selection({
@@ -88,9 +84,7 @@ function updatePlacementModeState(er: EntityRenderer, renderState: any): void {
     // Handle new unified PlacementPreview type
     if (preview?.type === 'placement') {
         const amount = (preview.extra?.amount as number) ?? 1;
-        const variation = preview.entityType === 'resource'
-            ? Math.max(0, Math.min(amount - 1, 7))
-            : undefined;
+        const variation = preview.entityType === 'resource' ? Math.max(0, Math.min(amount - 1, 7)) : undefined;
 
         er.placementPreview = {
             tile: { x: preview.x, y: preview.y },
@@ -103,13 +97,9 @@ function updatePlacementModeState(er: EntityRenderer, renderState: any): void {
     // Handle legacy BuildingPreview/ResourcePreview types for backward compatibility
     else if (preview?.type === 'building' || preview?.type === 'resource') {
         const entityType = preview.type as PlacementEntityType;
-        const subType = preview.type === 'building'
-            ? (preview as any).buildingType
-            : (preview as any).materialType;
+        const subType = preview.type === 'building' ? (preview as any).buildingType : (preview as any).materialType;
         const amount = preview.type === 'resource' ? ((preview as any).amount ?? 1) : 1;
-        const variation = preview.type === 'resource'
-            ? Math.max(0, Math.min(amount - 1, 7))
-            : undefined;
+        const variation = preview.type === 'resource' ? Math.max(0, Math.min(amount - 1, 7)) : undefined;
 
         er.placementPreview = {
             tile: { x: preview.x, y: preview.y },
@@ -157,8 +147,7 @@ function createRenderCallback(
                 clearPlacementModeState(er);
             }
 
-            selectionBox.value = (renderState?.preview?.type === 'selection_box')
-                ? renderState.preview : null;
+            selectionBox.value = renderState?.preview?.type === 'selection_box' ? renderState.preview : null;
 
             if (renderState?.cursor && renderer.canvas) {
                 renderer.canvas.style.cursor = renderState.cursor;
@@ -230,8 +219,13 @@ function configurePlaceBuildingMode(
                 if (!game) return false;
 
                 return canPlaceBuildingFootprint(
-                    game.groundType, game.groundHeight, game.mapSize,
-                    game.state.tileOccupancy, x, y, buildingType
+                    game.groundType,
+                    game.groundHeight,
+                    game.mapSize,
+                    game.state.tileOccupancy,
+                    x,
+                    y,
+                    buildingType
                 );
             };
             context.setModeData(modeData);
@@ -265,12 +259,7 @@ function configurePlaceResourceMode(
                 const game = getGame();
                 if (!game) return false;
 
-                return canPlaceResource(
-                    game.groundType,
-                    game.mapSize,
-                    game.state.tileOccupancy,
-                    x, y
-                );
+                return canPlaceResource(game.groundType, game.mapSize, game.state.tileOccupancy, x, y);
             };
             context.setModeData(modeData);
         }
@@ -303,12 +292,7 @@ function configurePlaceUnitMode(
                 const game = getGame();
                 if (!game) return false;
 
-                return canPlaceUnit(
-                    game.groundType,
-                    game.mapSize,
-                    game.state.tileOccupancy,
-                    x, y
-                );
+                return canPlaceUnit(game.groundType, game.mapSize, game.state.tileOccupancy, x, y);
             };
             context.setModeData(modeData);
         }
@@ -338,9 +322,7 @@ async function initRenderersAsync(
 }
 
 /** Expose objects for e2e tests */
-function exposeForE2E(
-    viewPoint: any, landscapeRenderer: any, entityRenderer: any, inputManager: any
-): void {
+function exposeForE2E(viewPoint: any, landscapeRenderer: any, entityRenderer: any, inputManager: any): void {
     (window as any).__settlers_viewpoint__ = viewPoint;
     (window as any).__settlers_landscape__ = landscapeRenderer;
     (window as any).__settlers_entity_renderer__ = entityRenderer;
@@ -357,26 +339,20 @@ interface UseRendererOptions {
 }
 
 /** Handle mode changes and update debug stats */
-function handleModeChange(
-    getGame: () => Game | null
-): (oldMode: string, newMode: string, data?: any) => void {
+function handleModeChange(getGame: () => Game | null): (oldMode: string, newMode: string, data?: any) => void {
     return (_oldMode, newMode, data) => {
         debugStats.state.mode = newMode;
 
         // Update building type
         debugStats.state.placeBuildingType =
-            (newMode === 'place_building' && data?.buildingType !== undefined)
-                ? data.buildingType : 0;
+            newMode === 'place_building' && data?.buildingType !== undefined ? data.buildingType : 0;
 
         // Update resource type
         debugStats.state.placeResourceType =
-            (newMode === 'place_resource' && data?.resourceType !== undefined)
-                ? data.resourceType : 0;
+            newMode === 'place_resource' && data?.resourceType !== undefined ? data.resourceType : 0;
 
         // Update unit type
-        debugStats.state.placeUnitType =
-            (newMode === 'place_unit' && data?.unitType !== undefined)
-                ? data.unitType : 0;
+        debugStats.state.placeUnitType = newMode === 'place_unit' && data?.unitType !== undefined ? data.unitType : 0;
 
         // Sync with game for backward compatibility
         const game = getGame();
@@ -481,12 +457,7 @@ export function useRenderer({
         );
         renderer.add(landscapeRenderer);
 
-        entityRenderer = new EntityRenderer(
-            game.mapSize,
-            game.groundHeight,
-            game.fileManager,
-            game.groundType
-        );
+        entityRenderer = new EntityRenderer(game.mapSize, game.groundHeight, game.fileManager, game.groundType);
         entityRenderer.setAnimationService(game.gameLoop.animationService);
         entityRenderer.skipSpriteLoading = game.useProceduralTextures;
         entityRenderer.onSpritesLoaded = () => game.gameLoop.enableTicks();
@@ -515,18 +486,20 @@ export function useRenderer({
             landscapeRenderer?.markTerrainDirty();
         });
 
-        game.gameLoop.setRenderCallback(createRenderCallback(
-            () => ({
-                game: getGame(),
-                entityRenderer,
-                landscapeRenderer,
-                inputManager,
-                debugGrid: getDebugGrid(),
-                layerVisibility: getLayerVisibility(),
-            }),
-            renderer,
-            selectionBox
-        ));
+        game.gameLoop.setRenderCallback(
+            createRenderCallback(
+                () => ({
+                    game: getGame(),
+                    entityRenderer,
+                    landscapeRenderer,
+                    inputManager,
+                    debugGrid: getDebugGrid(),
+                    layerVisibility: getLayerVisibility(),
+                }),
+                renderer,
+                selectionBox
+            )
+        );
     }
 
     /**

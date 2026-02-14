@@ -1,10 +1,10 @@
- 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { GameState } from '@/game/game-state';
 import { EntityType, UnitType } from '@/game/entity';
 import { executeCommand } from '@/game/commands';
 import { MapSize } from '@/utilities/map-size';
 import { EventBus } from '@/game/event-bus';
+import { BuildingStateManager } from '@/game/features/building-construction';
 
 /**
  * Comprehensive tests for the unit placement, selection, and movement systems.
@@ -17,6 +17,7 @@ describe('Unit Placement, Selection & Movement', () => {
     let groundType: Uint8Array;
     let groundHeight: Uint8Array;
     let eventBus: EventBus;
+    let buildingStateManager: BuildingStateManager;
 
     beforeEach(() => {
         state = new GameState();
@@ -25,6 +26,8 @@ describe('Unit Placement, Selection & Movement', () => {
         groundHeight = new Uint8Array(64 * 64);
         groundType.fill(16); // all grass (passable & buildable)
         eventBus = new EventBus();
+        buildingStateManager = new BuildingStateManager();
+        buildingStateManager.setEntityProvider(state);
         // Set terrain data for the movement system (required for pathfinding)
         state.setTerrainData(groundType, groundHeight, mapSize.width, mapSize.height);
         // Wire up required dependencies for movement system
@@ -48,7 +51,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -72,7 +77,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -92,7 +99,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -118,7 +127,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             // Spawn second unit at same location
@@ -134,7 +145,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -164,7 +177,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(false);
@@ -183,7 +198,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.getEntityAt(15, 15)).toBeDefined();
@@ -203,7 +220,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             executeCommand(
@@ -218,7 +237,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.entities[0].player).toBe(0);
@@ -265,7 +286,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -290,7 +313,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -314,7 +339,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityId).toBe(unit1.id);
@@ -331,7 +358,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityId).toBe(unit2.id);
@@ -356,7 +385,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             // Shift+click unit2
@@ -371,7 +402,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityIds.size).toBe(2);
@@ -400,7 +433,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityIds.size).toBe(1);
@@ -428,7 +463,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             // Primary should switch to remaining entity
@@ -449,7 +486,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityId).toBe(building.id);
@@ -471,7 +510,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -492,7 +533,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -510,7 +553,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(false);
@@ -528,7 +573,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityId).toBe(unit.id);
@@ -550,7 +597,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityId).toBe(unit1.id); // Primary unchanged
@@ -576,7 +625,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -602,7 +653,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -632,7 +685,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             // No units to move
@@ -650,7 +705,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(false);
@@ -673,7 +730,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -700,7 +759,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             const unitState = state.unitStates.get(unit.id)!;
@@ -789,7 +850,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             const unit = state.entities[0];
@@ -807,7 +870,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityId).toBe(unit.id);
@@ -823,7 +888,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             const unitState = state.unitStates.get(unit.id)!;
@@ -871,7 +938,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityIds.size).toBe(3);
@@ -887,7 +956,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             // All should have paths
@@ -933,7 +1004,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             executeCommand(
@@ -948,7 +1021,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             const unit1 = state.entities[0];
@@ -966,7 +1041,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityIds.size).toBe(1);
@@ -983,7 +1060,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityIds.size).toBe(2);
@@ -999,7 +1078,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(true);
@@ -1028,7 +1109,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityIds.size).toBe(2);
@@ -1050,7 +1133,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityIds.size).toBe(1);
@@ -1075,7 +1160,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityIds.size).toBe(0);
@@ -1099,7 +1186,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityIds.size).toBe(2);
@@ -1123,7 +1212,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityId).toBe(null);
@@ -1144,7 +1235,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityId).toBe(null);
@@ -1164,7 +1257,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.unitStates.has(unit.id)).toBe(false);
@@ -1183,7 +1278,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.getEntityAt(5, 5)).toBeUndefined();
@@ -1208,7 +1305,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityId).toBe(null);
@@ -1231,7 +1330,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
             expect(state.selectedEntityIds.size).toBe(1);
 
@@ -1247,7 +1348,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             // Should still only have the selectable one
@@ -1272,7 +1375,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             // Should only select the 2 selectable units
@@ -1291,7 +1396,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(state.selectedEntityId).toBe(null);
@@ -1310,7 +1417,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 groundType,
                 groundHeight,
                 mapSize,
-                eventBus
+                eventBus,
+                undefined,
+                buildingStateManager
             );
 
             expect(result).toBe(false);
