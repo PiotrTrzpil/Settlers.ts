@@ -17,6 +17,7 @@ import type { TickSystem } from '../../tick-system';
 import { EntityType, UnitType, Entity, getCarrierState } from '../../entity';
 import { EMaterialType } from '../../economy';
 import { LogHandler } from '@/utilities/log-handler';
+import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { hexDistance } from '../hex-directions';
 import { ANIMATION_SEQUENCES, carrySequenceKey, workSequenceKey } from '../../animation';
 import type { AnimationService } from '../../animation/index';
@@ -86,6 +87,8 @@ export class SettlerTaskSystem implements TickSystem {
     private workHandlers = new Map<SearchType, WorkHandler>();
     private runtimes = new Map<number, UnitRuntime>();
     private eventBus!: EventBus; // MUST be set via setEventBus
+    /** Throttled logger for handler errors (prevents flooding from broken domain systems) */
+    private handlerErrorLogger = new ThrottledLogger(log, 2000);
 
     constructor(config: SettlerTaskSystemConfig) {
         this.gameState = config.gameState;
@@ -181,8 +184,15 @@ export class SettlerTaskSystem implements TickSystem {
     /**
      * Register a work handler for a search type.
      * Domain systems call this to plug into the task system.
+     * Throws if a handler is already registered for this type.
      */
     registerWorkHandler(searchType: SearchType, handler: WorkHandler): void {
+        if (this.workHandlers.has(searchType)) {
+            throw new Error(
+                `Work handler already registered for ${searchType}. ` +
+                `Each SearchType must have exactly one handler.`
+            );
+        }
         this.workHandlers.set(searchType, handler);
         log.debug(`Registered work handler for ${searchType}`);
     }
@@ -326,6 +336,51 @@ export class SettlerTaskSystem implements TickSystem {
     // Tick processing
     // ─────────────────────────────────────────────────────────────
 
+    /**
+     * Called by GameLoop when an entity is removed.
+     * Properly interrupts work in progress so domain systems can clean up.
+     */
+    onEntityRemoved(entityId: number): void {
+        const runtime = this.runtimes.get(entityId);
+        if (!runtime) return;
+
+        const entity = this.gameState.getEntity(entityId);
+        if (entity) {
+            const config = this.settlerConfigs.get(entity.subType as UnitType);
+            if (config && runtime.job) {
+                this.interruptJob(entity, config, runtime);
+            }
+        } else if (runtime.job?.type === 'worker' && runtime.job.data.targetId && runtime.job.workStarted) {
+            // Entity already gone — call onWorkInterrupt directly
+            const handler = runtime.job.jobId
+                ? this.workHandlers.get(this.findSearchTypeForJob(runtime.job.jobId))
+                : undefined;
+            if (handler) {
+                try {
+                    handler.onWorkInterrupt?.(runtime.job.data.targetId);
+                } catch (e) {
+                    const err = e instanceof Error ? e : new Error(String(e));
+                    this.handlerErrorLogger.error(`onWorkInterrupt failed for entity ${entityId}`, err);
+                }
+            }
+        }
+
+        this.runtimes.delete(entityId);
+    }
+
+    /** Reverse-lookup: find SearchType from a jobId like "woodcutter.work" */
+    private findSearchTypeForJob(jobId: string): SearchType {
+        for (const [unitType, config] of this.settlerConfigs) {
+            const prefix = UnitType[unitType].toLowerCase();
+            for (const jobName of config.jobs) {
+                if (`${prefix}.${jobName}` === jobId) {
+                    return config.search;
+                }
+            }
+        }
+        return SearchType.TREE; // fallback — handler lookup will just miss
+    }
+
     /** TickSystem interface */
     tick(dt: number): void {
         // Process ALL units (not just those with YAML configs)
@@ -335,7 +390,7 @@ export class SettlerTaskSystem implements TickSystem {
             this.updateUnit(unit, dt);
         }
 
-        // Cleanup removed units
+        // Cleanup removed units whose removal wasn't signalled via onEntityRemoved
         for (const id of this.runtimes.keys()) {
             if (!this.gameState.getEntity(id)) {
                 this.runtimes.delete(id);
@@ -506,34 +561,28 @@ export class SettlerTaskSystem implements TickSystem {
             );
         }
 
-        // Find home building (workplace) for this settler
         const homeBuilding = this.gameState.findNearestWorkplace(settler);
-
-        // Get job definition to check what output the settler produces
         const jobId = `${UnitType[settler.subType].toLowerCase()}.${config.jobs[0]}`;
         const tasks = this.jobDefinitions.get(jobId);
         if (!tasks || tasks.length === 0) {
             throw new Error(`No tasks found for job: ${jobId}. Check YAML job definitions.`);
         }
 
-        // Check if home building can store the output before starting work
-        if (homeBuilding) {
-            const pickupTask = tasks.find(t => t.task === TaskType.PICKUP && t.good !== undefined);
-            if (pickupTask && pickupTask.good !== undefined) {
-                const canStore =
-                    this.inventoryManager.canAcceptInput(homeBuilding.id, pickupTask.good, 1) ||
-                    this.inventoryManager.getInputSpace(homeBuilding.id, pickupTask.good) > 0 ||
-                    this.canStoreInOutput(homeBuilding.id, pickupTask.good);
-                if (!canStore) {
-                    // Output full - return home and wait there
-                    this.returnHomeAndWait(settler, homeBuilding);
-                    return;
-                }
-            }
+        // Check if home building can store output before starting work
+        if (homeBuilding && this.isOutputFull(homeBuilding, tasks)) {
+            this.returnHomeAndWait(settler, homeBuilding);
+            return;
         }
 
-        // Search for work
-        const target = handler.findTarget(settler.x, settler.y, settler.id);
+        // Search for work (handler call is a system boundary)
+        let target: ReturnType<WorkHandler['findTarget']>;
+        try {
+            target = handler.findTarget(settler.x, settler.y, settler.id);
+        } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            this.handlerErrorLogger.error(`findTarget failed for settler ${settler.id}`, err);
+            return;
+        }
         if (!target) return;
 
         runtime.state = SettlerState.WORKING;
@@ -552,6 +601,20 @@ export class SettlerTaskSystem implements TickSystem {
 
         log.debug(
             `Settler ${settler.id} starting job ${jobId}, target ${target.entityId}, home ${homeBuilding?.id ?? 'none'}`
+        );
+    }
+
+    /**
+     * Check if the home building's output is full for the job's pickup material.
+     */
+    private isOutputFull(homeBuilding: Entity, tasks: TaskNode[]): boolean {
+        const pickupTask = tasks.find(t => t.task === TaskType.PICKUP && t.good !== undefined);
+        if (!pickupTask || pickupTask.good === undefined) return false;
+
+        return (
+            !this.inventoryManager.canAcceptInput(homeBuilding.id, pickupTask.good, 1) &&
+            this.inventoryManager.getInputSpace(homeBuilding.id, pickupTask.good) <= 0 &&
+            !this.canStoreInOutput(homeBuilding.id, pickupTask.good)
         );
     }
 
@@ -719,6 +782,7 @@ export class SettlerTaskSystem implements TickSystem {
         return this.moveToPosition(settler, job.data.targetPos.x, job.data.targetPos.y);
     }
 
+    // eslint-disable-next-line complexity -- handler boundary requires per-call guards
     private executeWorkOnEntity(
         settler: Entity,
         job: JobState,
@@ -729,20 +793,34 @@ export class SettlerTaskSystem implements TickSystem {
         if (job.type !== 'worker') return TaskResult.FAILED;
         if (!job.data.targetId || !handler) return TaskResult.FAILED;
 
-        // Check target still valid / has materials
-        if (!handler.canWork(job.data.targetId)) {
-            // If handler says to wait, idle instead of failing
-            if (handler.shouldWaitForWork) {
-                return TaskResult.CONTINUE;
+        const targetId = job.data.targetId;
+
+        // Check target still valid / has materials.
+        // Handler calls are a system boundary — guard against domain errors.
+        try {
+            if (!handler.canWork(targetId)) {
+                if (handler.shouldWaitForWork) {
+                    return TaskResult.CONTINUE;
+                }
+                return TaskResult.FAILED;
             }
+        } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            this.handlerErrorLogger.error(`canWork failed for target ${targetId}`, err);
             return TaskResult.FAILED;
         }
 
         // Start work on first tick (or when materials become available)
         if (!job.workStarted) {
-            handler.onWorkStart?.(job.data.targetId);
+            try {
+                handler.onWorkStart?.(targetId);
+            } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                this.handlerErrorLogger.error(`onWorkStart failed for target ${targetId}`, err);
+                return TaskResult.FAILED;
+            }
             job.workStarted = true;
-            job.progress = 0; // Reset progress when starting
+            job.progress = 0;
         }
 
         // Remember previous progress for animation phase transition
@@ -753,17 +831,29 @@ export class SettlerTaskSystem implements TickSystem {
         job.progress += dt / duration;
 
         // Switch to pickup animation when log is ready (at 90% progress)
-        // This threshold matches the tree system's trunk removal
         const PICKUP_THRESHOLD = 0.9;
         if (prevProgress < PICKUP_THRESHOLD && job.progress >= PICKUP_THRESHOLD) {
             this.applyTaskAnimation(settler, 'pickup');
         }
 
         // Update domain system
-        const complete = handler.onWorkTick(job.data.targetId, job.progress);
+        let complete: boolean;
+        try {
+            complete = handler.onWorkTick(targetId, job.progress);
+        } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            this.handlerErrorLogger.error(`onWorkTick failed for target ${targetId}`, err);
+            return TaskResult.FAILED;
+        }
 
         if (complete || job.progress >= 1) {
-            handler.onWorkComplete?.(job.data.targetId, settler.x, settler.y);
+            try {
+                handler.onWorkComplete?.(targetId, settler.x, settler.y);
+            } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                this.handlerErrorLogger.error(`onWorkComplete failed for target ${targetId}`, err);
+                // Work is done regardless — don't leave settler stuck
+            }
             return TaskResult.DONE;
         }
 
@@ -952,11 +1042,16 @@ export class SettlerTaskSystem implements TickSystem {
             );
         }
 
-        // Use findTarget to search for a valid position
-        const target = handler.findTarget(settler.x, settler.y, settler.id);
+        // Use findTarget to search for a valid position (handler is a system boundary)
+        let target: ReturnType<WorkHandler['findTarget']>;
+        try {
+            target = handler.findTarget(settler.x, settler.y, settler.id);
+        } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            this.handlerErrorLogger.error(`findTarget (SEARCH_POS) failed for settler ${settler.id}`, err);
+            return TaskResult.FAILED;
+        }
         if (!target) {
-            // No valid position found - this is normal, will retry next tick
-            // Handler's shouldWaitForWork determines if we wait or fail
             if (handler.shouldWaitForWork) {
                 return TaskResult.CONTINUE;
             }
@@ -1017,15 +1112,20 @@ export class SettlerTaskSystem implements TickSystem {
 
         // Only call onWorkInterrupt if work actually started (onWorkStart was called)
         if (handler && job?.type === 'worker' && job.data.targetId && job.workStarted) {
-            handler.onWorkInterrupt?.(job.data.targetId);
+            try {
+                handler.onWorkInterrupt?.(job.data.targetId);
+            } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                this.handlerErrorLogger.error(`onWorkInterrupt failed for target ${job.data.targetId}`, err);
+            }
         }
 
         // Note: Carrier reservations are handled by LogisticsDispatcher via InventoryReservationManager.
         // LogisticsDispatcher listens for carrier:removed and carrier:pickupFailed events to release reservations.
 
         // Clear carrier state if carrier was carrying material
-        const carryingGood = job?.type === 'worker' ? job.data.carryingGood : job?.data.carryingGood;
-        if (settler.carrier && carryingGood !== null && carryingGood !== undefined) {
+        const carryingGood = job?.data.carryingGood;
+        if (settler.carrier && carryingGood != null) {
             settler.carrier.carryingMaterial = null;
             settler.carrier.carryingAmount = 0;
         }
