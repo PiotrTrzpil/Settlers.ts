@@ -4,6 +4,7 @@ import { WoodcuttingSystem } from './systems/woodcutting-system';
 import { SettlerTaskSystem } from './systems/settler-tasks';
 import { ProductionSystem } from './systems/production-system';
 import { LogHandler } from '@/utilities/log-handler';
+import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { debugStats } from './debug-stats';
 import { gameSettings } from './game-settings';
 import { MapSize } from '@/utilities/map-size';
@@ -39,8 +40,7 @@ interface SystemErrorState {
     name: string;
     consecutiveFailures: number;
     disabled: boolean;
-    lastErrorTime: number;
-    suppressedCount: number;
+    logger: ThrottledLogger;
 }
 
 /**
@@ -62,10 +62,11 @@ export class GameLoop {
     private running = false;
     private animRequest = 0;
 
-    /** Error throttling - prevent console flooding (for non-system errors) */
-    private lastErrorTime = 0;
-    private suppressedErrorCount = 0;
-    private static readonly ERROR_THROTTLE_MS = 1000;
+    /** Throttled loggers for each frame sub-phase (independent cooldowns) */
+    private readonly logicPhaseLogger = new ThrottledLogger(GameLoop.log, 1000);
+    private readonly animationLogger = new ThrottledLogger(GameLoop.log, 1000);
+    private readonly updateLogger = new ThrottledLogger(GameLoop.log, 1000);
+    private readonly renderLogger = new ThrottledLogger(GameLoop.log, 1000);
 
     /** Per-system error tracking for circuit breaker & throttled logging */
     private systemErrors = new Map<TickSystem, SystemErrorState>();
@@ -287,12 +288,12 @@ export class GameLoop {
     /** Register a tick system to be updated each tick */
     public registerSystem(system: TickSystem): void {
         this.systems.push(system);
+        const name = system.constructor.name || 'Unknown';
         this.systemErrors.set(system, {
-            name: system.constructor.name || 'Unknown',
+            name,
             consecutiveFailures: 0,
             disabled: false,
-            lastErrorTime: 0,
-            suppressedCount: 0,
+            logger: new ThrottledLogger(GameLoop.log, 1000),
         });
     }
 
@@ -441,25 +442,6 @@ export class GameLoop {
         return this.running;
     }
 
-    /** Log errors with throttling to prevent console flooding (for non-system frame errors) */
-    private logThrottledError(message: string, error: unknown): void {
-        const now = performance.now();
-        const timeSinceLastError = now - this.lastErrorTime;
-
-        if (timeSinceLastError >= GameLoop.ERROR_THROTTLE_MS) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            if (this.suppressedErrorCount > 0) {
-                GameLoop.log.error(`${message} (${this.suppressedErrorCount} similar errors suppressed)`, err);
-                this.suppressedErrorCount = 0;
-            } else {
-                GameLoop.log.error(message, err);
-            }
-            this.lastErrorTime = now;
-        } else {
-            this.suppressedErrorCount++;
-        }
-    }
-
     /**
      * Handle a per-system tick error. Logs with per-system throttling, tracks
      * consecutive failures, and disables the system via circuit breaker.
@@ -467,38 +449,23 @@ export class GameLoop {
     private handleSystemError(system: TickSystem, error: unknown): void {
         const state = this.systemErrors.get(system)!;
         state.consecutiveFailures++;
-
-        const now = performance.now();
+        const err = error instanceof Error ? error : new Error(String(error));
 
         // Circuit breaker: disable after too many consecutive failures
         if (!state.disabled && state.consecutiveFailures >= SYSTEM_CIRCUIT_BREAKER_THRESHOLD) {
             state.disabled = true;
-            const msg = `System "${state.name}" disabled after ${SYSTEM_CIRCUIT_BREAKER_THRESHOLD} consecutive failures`;
-            GameLoop.log.error(msg);
+            GameLoop.log.error(
+                `System "${state.name}" disabled after ${SYSTEM_CIRCUIT_BREAKER_THRESHOLD} consecutive failures`
+            );
             toastError('GameLoop', `${state.name} has been disabled due to repeated errors`);
             return;
         }
 
-        // Per-system throttled logging (1 second cooldown per system)
-        if (now - state.lastErrorTime >= GameLoop.ERROR_THROTTLE_MS) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            if (state.suppressedCount > 0) {
-                GameLoop.log.error(
-                    `System "${state.name}" tick failed (${state.suppressedCount} similar suppressed)`,
-                    err
-                );
-                state.suppressedCount = 0;
-            } else {
-                GameLoop.log.error(`System "${state.name}" tick failed`, err);
-            }
-            state.lastErrorTime = now;
+        const logged = state.logger.error(`System "${state.name}" tick failed`, err);
 
-            // Toast on first failure only (throttle handles the rest)
-            if (state.consecutiveFailures === 1) {
-                toastError(state.name, err.message);
-            }
-        } else {
-            state.suppressedCount++;
+        // Toast on first failure only
+        if (logged && state.consecutiveFailures === 1) {
+            toastError(state.name, err.message);
         }
     }
 
@@ -549,19 +516,29 @@ export class GameLoop {
         this.accumulator += deltaSec;
 
         const shouldTick = !this._ticksPaused && !gameSettings.state.paused;
-        const timeSinceLastRender = now - this.lastRenderTime;
-        const shouldRender = this.pageVisible || timeSinceLastRender >= BACKGROUND_FRAME_DURATION;
+        const shouldRender = this.pageVisible ||
+            (now - this.lastRenderTime) >= BACKGROUND_FRAME_DURATION;
 
-        let ticksTime = 0;
-        let animationsTime = 0;
-        let callbackTime = 0;
-        let renderTiming: FrameRenderTiming | null = null;
+        // ── LOGIC ── fixed-timestep simulation (isolated from per-frame work)
+        const ticksTime = this.runLogicPhase(shouldTick);
 
-        // ═══════════════════════════════════════════════════
-        // LOGIC PHASE — fixed-timestep simulation
-        // Isolated from rendering: a logic error cannot break rendering.
-        // ═══════════════════════════════════════════════════
-        const tickStart = performance.now();
+        // ── PER-FRAME ── only when visible / not background-throttled
+        // Three isolated sub-steps: animation → update → render.
+        if (shouldRender) {
+            const animationsTime = this.runAnimations(shouldTick, deltaSec);
+            this.runUpdate(deltaSec);
+            const { time: callbackTime, timing: renderTiming } = this.runRender();
+
+            this.lastRenderTime = now;
+            this.recordFrameTiming(frameStart, ticksTime, animationsTime, callbackTime, renderTiming);
+        }
+
+        this.animRequest = requestAnimationFrame(this.boundFrame);
+    }
+
+    /** Run fixed-timestep logic ticks. Returns elapsed time in ms. */
+    private runLogicPhase(shouldTick: boolean): number {
+        const start = performance.now();
         try {
             const scaledDt = TICK_DURATION * gameSettings.state.gameSpeed;
             if (shouldTick) {
@@ -570,56 +547,55 @@ export class GameLoop {
                     this.accumulator -= TICK_DURATION;
                 }
             } else {
-                // Drain accumulator to prevent catch-up burst when unpaused
-                this.accumulator = 0;
+                this.accumulator = 0; // drain to prevent catch-up burst
             }
         } catch (e) {
-            this.logThrottledError('Error in logic phase', e);
+            const err = e instanceof Error ? e : new Error(String(e));
+            this.logicPhaseLogger.error('Error in logic phase', err);
         }
-        ticksTime = performance.now() - tickStart;
+        return performance.now() - start;
+    }
 
-        // ═══════════════════════════════════════════════════
-        // RENDER PHASE — only when visible / not throttled
-        // Isolated from logic: a render error cannot break simulation.
-        // ═══════════════════════════════════════════════════
-        if (shouldRender) {
-            // Animations (visual-only, scaled by game speed)
-            const animStart = performance.now();
-            try {
-                if (shouldTick) {
-                    const scaledDeltaMs = deltaSec * 1000 * gameSettings.state.gameSpeed;
-                    this.animationService.update(scaledDeltaMs);
-                }
-            } catch (e) {
-                this.logThrottledError('Error updating animations', e);
+    /** Update animations (visual-only, scaled by game speed). Returns elapsed time in ms. */
+    private runAnimations(shouldTick: boolean, deltaSec: number): number {
+        const start = performance.now();
+        try {
+            if (shouldTick) {
+                const scaledDeltaMs = deltaSec * 1000 * gameSettings.state.gameSpeed;
+                this.animationService.update(scaledDeltaMs);
             }
-            animationsTime = performance.now() - animStart;
-
-            // Per-frame update (input, sound, debug stats — NOT rendering)
-            try {
-                if (this.onUpdate) {
-                    this.onUpdate(deltaSec);
-                }
-            } catch (e) {
-                this.logThrottledError('Error in update callback', e);
-            }
-
-            // Render (GPU drawing only)
-            const callbackStart = performance.now();
-            try {
-                if (this.onRender) {
-                    renderTiming = this.onRender(this.accumulator / TICK_DURATION, deltaSec);
-                }
-            } catch (e) {
-                this.logThrottledError('Error in render callback', e);
-            }
-            callbackTime = performance.now() - callbackStart;
-
-            this.lastRenderTime = now;
-            this.recordFrameTiming(frameStart, ticksTime, animationsTime, callbackTime, renderTiming);
+        } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            this.animationLogger.error('Error updating animations', err);
         }
+        return performance.now() - start;
+    }
 
-        this.animRequest = requestAnimationFrame(this.boundFrame);
+    /** Run per-frame update callback (input, sound, debug stats — not rendering). */
+    private runUpdate(deltaSec: number): void {
+        try {
+            if (this.onUpdate) {
+                this.onUpdate(deltaSec);
+            }
+        } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            this.updateLogger.error('Error in update callback', err);
+        }
+    }
+
+    /** Run GPU render callback. Returns elapsed time + render timing data. */
+    private runRender(): { time: number; timing: FrameRenderTiming | null } {
+        const start = performance.now();
+        let timing: FrameRenderTiming | null = null;
+        try {
+            if (this.onRender) {
+                timing = this.onRender(this.accumulator / TICK_DURATION, 0);
+            }
+        } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            this.renderLogger.error('Error in render callback', err);
+        }
+        return { time: performance.now() - start, timing };
     }
 
     private tick(dt: number): void {
@@ -639,15 +615,13 @@ export class GameLoop {
         // Run each registered tick system with individual error isolation.
         // A failure in one system does not prevent others from running.
         for (const system of this.systems) {
-            const errorState = this.systemErrors.get(system);
+            const errorState = this.systemErrors.get(system)!;
 
-            // Circuit breaker: skip disabled systems
-            if (errorState?.disabled) continue;
+            if (errorState.disabled) continue;
 
             try {
                 system.tick(dt);
-                // Reset consecutive failure count on success
-                if (errorState && errorState.consecutiveFailures > 0) {
+                if (errorState.consecutiveFailures > 0) {
                     errorState.consecutiveFailures = 0;
                 }
             } catch (e) {

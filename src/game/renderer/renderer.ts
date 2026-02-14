@@ -1,19 +1,16 @@
 import { LogHandler } from '@/utilities/log-handler';
+import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { IRenderer } from './i-renderer';
 import { ViewPoint } from './view-point';
 import type { EntityRenderer } from './entity-renderer';
 import { gameSettings } from '@/game/game-settings';
 import { toastError } from '@/game/toast-notifications';
 
-/** Per-layer error tracking for throttled logging */
+/** Per-layer error tracking */
 interface LayerErrorState {
-    lastErrorTime: number;
-    suppressedCount: number;
     consecutiveFailures: number;
+    logger: ThrottledLogger;
 }
-
-/** Throttle interval for per-layer error logging (ms) */
-const LAYER_ERROR_THROTTLE_MS = 2000;
 
 /** Detailed render timing for a single frame */
 export interface FrameRenderTiming {
@@ -193,8 +190,7 @@ export class Renderer {
         m[14] = 0;
         m[15] = 1;
 
-        // Draw all renderers with per-layer error isolation.
-        // A failure in one layer (e.g. landscape) does not prevent other layers from rendering.
+        // Draw each layer with error isolation — one layer crashing cannot prevent others.
         const frameStart = performance.now();
         let landscapeTime = 0;
         let entityTiming = {
@@ -202,31 +198,24 @@ export class Renderer {
             indicators: 0, textured: 0, color: 0, selection: 0,
         };
 
-        // Ensure layerErrors tracking array matches renderer count
-        while (this.layerErrors.length < this.renderers.length) {
-            this.layerErrors.push({ lastErrorTime: 0, suppressedCount: 0, consecutiveFailures: 0 });
-        }
-
         for (let i = 0; i < this.renderers.length; i++) {
             const r = this.renderers[i];
+            const layerState = this.layerErrors[i];
             const start = performance.now();
 
             try {
                 r.draw(gl, m, this.viewPoint);
-                // Reset on success
-                this.layerErrors[i].consecutiveFailures = 0;
+                layerState.consecutiveFailures = 0;
             } catch (e) {
                 this.handleLayerError(i, r, e);
-                continue; // Skip timing collection for failed layer
+                continue;
             }
 
             const elapsed = performance.now() - start;
 
-            // First renderer is typically LandscapeRenderer
             if (i === 0) {
                 landscapeTime = elapsed;
             }
-            // Second renderer is typically EntityRenderer - collect detailed timing
             if (i === 1 && 'getLastFrameTiming' in r) {
                 entityTiming = (r as EntityRenderer).getLastFrameTiming();
             }
@@ -271,7 +260,10 @@ export class Renderer {
 
     public add(newRenderer: IRenderer): void {
         this.renderers.push(newRenderer);
-        this.layerErrors.push({ lastErrorTime: 0, suppressedCount: 0, consecutiveFailures: 0 });
+        this.layerErrors.push({
+            consecutiveFailures: 0,
+            logger: new ThrottledLogger(Renderer.log, 2000),
+        });
     }
 
     /** Clear all renderers, destroying their GPU resources (call before adding new ones on game change) */
@@ -287,28 +279,13 @@ export class Renderer {
     private handleLayerError(index: number, renderer: IRenderer, error: unknown): void {
         const state = this.layerErrors[index];
         state.consecutiveFailures++;
+
+        const err = error instanceof Error ? error : new Error(String(error));
         const name = renderer.constructor.name || `Layer ${index}`;
-        const now = performance.now();
+        const logged = state.logger.error(`Render layer "${name}" failed`, err);
 
-        if (now - state.lastErrorTime >= LAYER_ERROR_THROTTLE_MS) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            if (state.suppressedCount > 0) {
-                Renderer.log.error(
-                    `Render layer "${name}" failed (${state.suppressedCount} similar suppressed)`,
-                    err
-                );
-                state.suppressedCount = 0;
-            } else {
-                Renderer.log.error(`Render layer "${name}" failed`, err);
-            }
-            state.lastErrorTime = now;
-
-            // Toast on first failure
-            if (state.consecutiveFailures === 1) {
-                toastError('Renderer', `${name} render failed: ${err.message}`);
-            }
-        } else {
-            state.suppressedCount++;
+        if (logged && state.consecutiveFailures === 1) {
+            toastError('Renderer', `${name}: ${err.message}`);
         }
     }
 }
