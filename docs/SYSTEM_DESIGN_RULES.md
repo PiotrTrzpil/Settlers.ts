@@ -3,6 +3,7 @@
 Architectural rules and conventions for Settlers.ts. These rules ensure consistency, maintainability, and extensibility as the codebase grows.
 
 **Related docs:**
+- `coding-guidelines.md` — TypeScript patterns (error handling, optimistic programming)
 - `feature-module-architecture.md` — Feature module structure and patterns
 - `modularity-review.md` — Dependency analysis and invariants
 - `architecture-fixes.md` — Implementation roadmap for fixes
@@ -527,84 +528,29 @@ const value = Math.random();
 
 ## 9. Avoiding Over-Engineering
 
-### Rule 9.1: Don't Handle Scenarios That Can't Happen
+See `coding-guidelines.md` for the full optimistic programming philosophy. This section covers project-specific applications.
 
-Defensive code that handles "impossible" scenarios masks bugs and adds complexity:
-
-```typescript
-// BAD — defensive code for scenario that shouldn't happen
-if (existingEntityId !== undefined) {
-    const entity = this.gameState.getEntity(existingEntityId);
-    if (entity && entity.type === EntityType.StackedResource) {
-        // Normal case
-        this.gameState.setResourceQuantity(existingEntityId, quantity);
-    } else {
-        // "Defensive" handling — but WHY would this entity not exist?
-        // This hides bugs and adds untested code paths
-        visualState.visualStacks.delete(materialType);
-    }
-}
-
-// GOOD — trust the invariant, crash loudly if violated
-if (existingEntityId !== undefined) {
-    this.gameState.setResourceQuantity(existingEntityId, quantity);
-}
-```
-
-**Why:**
-- If the scenario truly can't happen, the code is dead weight
-- If it CAN happen, it's a bug that should be fixed at the source
-- Defensive code creates untested paths that may have their own bugs
-- Silent recovery masks the root cause, making debugging harder
-
-### Rule 9.2: Validate at Boundaries, Trust Internals
-
-Add validation where external data enters the system. Trust internal invariants:
+### Rule 9.1: Use getEntityOrThrow for Required Lookups
 
 ```typescript
-// GOOD — validate external input
-function handleUserCommand(cmd: unknown): void {
-    if (!isValidCommand(cmd)) {
-        log.warn('Invalid command from user');
-        return;
-    }
-    executeCommand(cmd);
-}
+// BAD — no context when it crashes
+const entity = this.gameState.getEntity(id)!;
 
-// GOOD — internal code trusts validated data
-function processCarrierJob(carrier: CarrierState, job: CarrierJob): void {
-    // No need to check if carrier or job are valid —
-    // they came from our own state management
-    const building = this.gameState.getEntity(job.fromBuilding)!;
-    // ...
-}
+// GOOD — crashes with helpful context
+const entity = this.gameState.getEntityOrThrow(id, 'source building');
 ```
 
-### Rule 9.3: Delete Rather Than Deprecate
+### Rule 9.2: Delete Rather Than Deprecate
 
-When removing functionality, delete the code. Don't leave "just in case" fallbacks:
-
-```typescript
-// BAD — keeping unused code "just in case"
-function doThing() {
-    if (USE_NEW_IMPLEMENTATION) {
-        newImplementation();
-    } else {
-        legacyImplementation();  // Never runs, never tested
-    }
-}
-
-// GOOD — delete the old code
-function doThing() {
-    newImplementation();
-}
-```
+When removing functionality, delete the code. Don't leave "just in case" fallbacks.
 
 **Git preserves history.** If you need old code back, use `git log` or `git blame`.
 
 ---
 
 ## 10. Error Handling Rules
+
+See `coding-guidelines.md` for general error handling patterns. This section covers game-specific rules.
 
 ### Rule 10.1: TickSystems Must Not Throw
 
@@ -617,7 +563,6 @@ tick(dt: number): void {
             this.updateEntity(id, state, dt);
         } catch (e) {
             log.error(`Failed to update entity ${id}`, e);
-            // Optionally mark entity for cleanup
         }
     }
 }
@@ -625,7 +570,7 @@ tick(dt: number): void {
 
 **Why:** One bad entity shouldn't crash the entire game.
 
-### Rule 9.2: Commands Return Success/Failure
+### Rule 10.2: Commands Return Success/Failure
 
 Commands return `boolean` for success/failure, not exceptions:
 
@@ -636,26 +581,6 @@ function executeCommand(ctx: CommandContext, cmd: Command): boolean {
     }
     // ...
     return true;
-}
-```
-
-### Rule 9.3: Validate at System Boundaries
-
-Validate inputs at system boundaries (user input, external APIs, file loading). Trust internal code:
-
-```typescript
-// GOOD — validate at boundary
-function handleUserPlaceBuilding(x: number, y: number, type: number): void {
-    if (!isValidBuildingType(type)) {
-        log.warn('Invalid building type from user');
-        return;
-    }
-    game.execute({ type: 'place_building', ... });
-}
-
-// Internal code trusts validated data
-function createBuildingState(entityId: number, buildingType: BuildingType): void {
-    // No need to re-validate buildingType here
 }
 ```
 

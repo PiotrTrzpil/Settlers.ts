@@ -26,6 +26,7 @@ pnpm test:unit        # Run Vitest unit tests
 pnpm test:watch       # Vitest in watch mode
 npx playwright test   # Run Playwright e2e tests (builds + preview first)
 pnpm lint             # ESLint (src/**/*.ts,*.vue)
+pnpm format           # Prettier formatting
 ```
 
 ## Key patterns
@@ -47,21 +48,17 @@ Test maps and procedural textures work without game files.
 ## Notes
 
 - **Linting**: ESLint 9 flat config (`eslint.config.mjs`) with `typescript-eslint` v8, `eslint-plugin-vue` v10, and `eslint-plugin-import-x`.
+- **Formatting**: Prettier (`.prettierrc`). Runs automatically via lint-staged on commit.
 - Playwright `outputDir` writes to `tests/e2e/.results/` (gitignored).
 - Screenshot baselines live in `tests/e2e/__screenshots__/` and are committed.
 
 ## Coding guidelines
 
-- **Error messages must include context**: When throwing errors, include all relevant identifiers (entity ID, type name, state) so the root cause can be traced. Never throw generic errors like "not found" — always include what was being looked up and what was available.
-- **Report errors eagerly**: Fail fast at the source of the problem, not downstream. If a function receives invalid input, throw immediately with context rather than returning null and failing later.
-- **No silent fallbacks for bugs**: Don't add fallbacks that hide programming errors. If code requests an animation sequence that doesn't exist, that's a bug to fix, not a case to handle gracefully.
-- **Optimistic programming**: This is CRITICAL. Don't check if something exists when it must exist at that point in the code. If a manager requires an entity provider to be set before use, assume it's set and use `this.provider!` — don't add defensive `if (!this.provider) return;` checks that hide initialization bugs. Trust the contract, crash loudly if violated.
-  - **NEVER** use `?.` on required dependencies (`this.eventBus?.emit` → `this.eventBus!.emit`)
-  - **NEVER** declare required deps as `| undefined` (`private foo: Bar | undefined` → `private foo!: Bar`)
-  - **NEVER** add silent fallbacks (`map.get(x) ?? 0` when x must exist → `map.get(x)!`)
-  - **NEVER** guard with `if (x)` when x must exist by contract (OK for genuinely optional values)
-  - **NEVER** make config fields optional (`eventBus?: EventBus`) when they're always provided
-  - **NEVER** use wrong filters that require defensive checks downstream (filter precisely, then assert)
+**Read `docs/coding-guidelines.md`** for TypeScript patterns (error handling, optimistic programming, async/await).
+
+Key project-specific rules:
+- Use `getEntityOrThrow(id, 'context')` instead of `getEntity(id)!`
+- See `docs/SYSTEM_DESIGN_RULES.md` for architecture patterns
 
 ## Pre-Commit Review Checklist
 
@@ -142,7 +139,6 @@ throw new Error(`Cannot process ${type}: ${JSON.stringify(state)}`)
 
 ## Claude Code workflow
 
-- **Always use async/await**: Prefer `async/await` over `.then()` chains for cleaner, more readable code
 - **Validate every change**: Run targeted unit test after each edit, full suite before commit
 - **Cross-module changes need e2e**: If touching multiple modules, run `pnpm build && npx playwright test`
 - **Use LSP MCP** (if available): Always prefer over grep/edit for code exploration and refactoring
