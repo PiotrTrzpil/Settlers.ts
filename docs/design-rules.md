@@ -3,11 +3,9 @@
 Architectural rules and conventions for Settlers.ts. These rules ensure consistency, maintainability, and extensibility as the codebase grows.
 
 **Related docs:**
-- `coding-guidelines.md` — TypeScript patterns (error handling, optimistic programming)
-- `feature-module-architecture.md` — Feature module structure and patterns
-- `modularity-review.md` — Dependency analysis and invariants
-- `architecture-fixes.md` — Implementation roadmap for fixes
-- `testing-best-practices.md` — Testing guidelines
+- `coding-style.md` — TypeScript patterns (error handling, optimistic programming)
+- `architecture/feature-modules.md` — Feature module structure and patterns
+- `testing/guide.md` — Testing guidelines
 
 ---
 
@@ -528,7 +526,7 @@ const value = Math.random();
 
 ## 9. Avoiding Over-Engineering
 
-See `coding-guidelines.md` for the full optimistic programming philosophy. This section covers project-specific applications.
+See `coding-style.md` for the full optimistic programming philosophy. This section covers project-specific applications.
 
 ### Rule 9.1: Use getEntityOrThrow for Required Lookups
 
@@ -550,7 +548,7 @@ When removing functionality, delete the code. Don't leave "just in case" fallbac
 
 ## 10. Error Handling Rules
 
-See `coding-guidelines.md` for general error handling patterns. This section covers game-specific rules.
+See `coding-style.md` for general error handling patterns. This section covers game-specific rules.
 
 ### Rule 10.1: TickSystems Must Not Throw
 
@@ -694,7 +692,7 @@ Use consistent domain prefixes for events:
 | JSDoc headers | Code review checklist |
 | Deterministic iteration | grep for unordered Map iteration |
 | Query immutability | TypeScript `Readonly<T>` return types |
-| Test patterns | Code review + `testing-best-practices.md` |
+| Test patterns | Code review + `testing/guide.md` |
 
 ---
 

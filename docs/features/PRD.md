@@ -120,24 +120,23 @@ The game should emphasize:
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Lumberjack AI | 🟡 Basic | Finds trees, chops, returns; no carry animation |
-| Debug Tools | 🟡 Basic | Stats overlay, layer visibility |
+| **Carrier System** | 🟡 Basic | CarrierManager, job assignment, home building tracking |
+| **Logistics** | 🟡 Basic | LogisticsDispatcher, RequestManager, inventory reservations |
+| **Production** | 🟡 Basic | ProductionSystem for sawmill, woodcutter outputs |
+| **Woodcutting** | 🟡 Basic | TreeSystem, WoodcuttingSystem, settler task integration |
+| Debug Tools | 🟡 Basic | Stats overlay, layer visibility, building footprints |
 | Unit Selection | 🟡 Basic | Single selection, no multi-select |
 
 ### 4.3 Not Yet Implemented
 
 | Feature | Priority |
 |---------|----------|
-| Carrier/logistics system | **Critical** |
-| Resource transport | **Critical** |
-| Building production | **Critical** |
 | Food consumption | High |
-| Territory system | High |
 | Combat system | High |
 | AI opponent | Medium |
 | Multiplayer | Medium |
 | Save/load game state | Medium |
-| Sound effects integration | Low |
+| Multi-unit selection | Low |
 
 ---
 

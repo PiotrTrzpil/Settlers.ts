@@ -73,7 +73,7 @@ const x = map.get(id)!  // or getEntityOrThrow(id, 'context')
 ### Components
 
 - Composition API (`<script setup lang="ts">`)
-- Feature modules follow registration pattern (see `docs/feature-module-architecture.md`)
+- Feature modules follow registration pattern (see `docs/architecture/feature-modules.md`)
 - Minimal public API per module — communicate through events
 
 ### Testing

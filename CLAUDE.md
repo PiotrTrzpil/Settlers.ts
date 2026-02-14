@@ -37,12 +37,12 @@ pnpm format           # Prettier formatting
 - **Test map**: `?testMap=true` query param loads a synthetic map (no game assets needed)
 - **GLSL imports**: Shader files use `import x from './shaders/file.glsl'` via vite-plugin-glsl
 - **Type declarations**: Ambient types live in `src/types/` (env.d.ts, glsl.d.ts, shims-vue.d.ts)
-- **Feature modules**: New features should follow the patterns in `docs/feature-module-architecture.md` (registration, events, minimal public API)
-- **Architecture rules**: Read `docs/SYSTEM_DESIGN_RULES.md` for all architectural invariants, naming conventions, and code organization rules
+- **Feature modules**: New features should follow the patterns in `docs/architecture/feature-modules.md` (registration, events, minimal public API)
+- **Architecture rules**: Read `docs/design-rules.md` for all architectural invariants, naming conventions, and code organization rules
 
 ## Game assets
 
-The app needs original Settlers 4 files for full functionality. See `docs/game-files-setup.md`.
+The app needs original Settlers 4 files for full functionality. See `docs/SETUP.md`.
 Test maps and procedural textures work without game files.
 
 ## Notes
@@ -54,11 +54,11 @@ Test maps and procedural textures work without game files.
 
 ## Coding guidelines
 
-**Read `docs/coding-guidelines.md`** for TypeScript patterns (error handling, optimistic programming, async/await).
+**Read `docs/coding-style.md`** for TypeScript patterns (error handling, optimistic programming, async/await).
 
 Key project-specific rules:
 - Use `getEntityOrThrow(id, 'context')` instead of `getEntity(id)!`
-- See `docs/SYSTEM_DESIGN_RULES.md` for architecture patterns
+- See `docs/design-rules.md` for architecture patterns
 
 ## Pre-Commit Review Checklist
 
@@ -152,7 +152,7 @@ throw new Error(`Cannot process ${type}: ${JSON.stringify(state)}`)
 
 ## E2E testing
 
-**Read `docs/testing-best-practices.md` before writing or updating tests.**
+**Read `docs/testing/guide.md` before writing or updating tests.**
 
 - Always rebuild first: `pnpm build && npx playwright test`
 - Use `GamePage` helpers and shared fixture (`import { test, expect } from './fixtures'`)
