@@ -2,18 +2,23 @@
  * Unit tests for LuaScriptSystem
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { LuaScriptSystem } from '@/game/scripting/lua-script-system';
 import { GameState } from '@/game/game-state';
+import { BuildingStateManager } from '@/game/features/building-construction';
 
 describe('LuaScriptSystem', () => {
     let gameState: GameState;
     let scriptSystem: LuaScriptSystem;
+    let buildingStateManager: BuildingStateManager;
 
     beforeEach(() => {
         gameState = new GameState();
+        buildingStateManager = new BuildingStateManager();
+        buildingStateManager.setEntityProvider(gameState);
         scriptSystem = new LuaScriptSystem({
             gameState,
+            buildingStateManager,
             mapWidth: 128,
             mapHeight: 128,
             localPlayer: 0,
@@ -71,6 +76,7 @@ describe('LuaScriptSystem', () => {
         it('should fail if not initialized', () => {
             const uninitSystem = new LuaScriptSystem({
                 gameState,
+                buildingStateManager,
                 mapWidth: 128,
                 mapHeight: 128,
             });

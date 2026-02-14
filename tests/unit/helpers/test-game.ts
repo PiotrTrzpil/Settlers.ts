@@ -89,13 +89,16 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     state.movement.setEventBus(eventBus);
     state.movement.setRng(state.rng);
 
+    // Wire up event bus to GameState for entity lifecycle events
+    state.setEventBus(eventBus);
+
     // Initialize terrain data on state
     state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
 
-    // Wire up building state creation callback
-    state.onBuildingCreated = (entityId, buildingType, x, y) => {
-        buildingStateManager.createBuildingState(entityId, buildingType as BuildingType, x, y);
-    };
+    // Subscribe to building creation events for building state initialization
+    eventBus.on('building:created', ({ entityId, buildingType, x, y }) => {
+        buildingStateManager.createBuildingState(entityId, buildingType, x, y);
+    });
 
     return {
         state,

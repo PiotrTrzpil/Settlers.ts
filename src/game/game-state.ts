@@ -9,11 +9,13 @@ import {
     MAX_RESOURCE_STACK_SIZE,
     isUnitTypeSelectable,
     getUnitTypeSpeed,
+    MapObjectType,
 } from './entity';
 import { getWorkerWorkplace } from './unit-types';
 import { EMaterialType } from './economy';
 import { MovementSystem, MovementController } from './systems/movement/index';
 import { SeededRng, createGameRng } from './rng';
+import { EventBus } from './event-bus';
 
 /**
  * Legacy UnitState interface for backward compatibility.
@@ -134,14 +136,8 @@ export class GameState {
     /** Spatial lookup: "x,y" -> entityId */
     public tileOccupancy: Map<string, number> = new Map();
 
-    /** Optional callback invoked when an entity is removed (for system cleanup) */
-    public onEntityRemoved: ((entityId: number) => void) | null = null;
-
-    /** Optional callback for building creation (delegates to BuildingConstructionSystem when wired up) */
-    public onBuildingCreated: ((entityId: number, buildingType: number, x: number, y: number) => void) | null = null;
-
-    /** Optional callback for map object creation (e.g., trees register with TreeSystem) */
-    public onMapObjectCreated: ((entityId: number, objectType: number, x: number, y: number) => void) | null = null;
+    /** Event bus for entity lifecycle events */
+    private eventBus: EventBus | null = null;
 
     constructor(seed?: number) {
         this.rng = createGameRng(seed);
@@ -156,6 +152,14 @@ export class GameState {
             id => this.getEntity(id)
         );
         this.movement.setTileOccupancy(this.tileOccupancy);
+    }
+
+    /**
+     * Set the event bus for entity lifecycle events.
+     * Called by GameLoop after construction to enable event emission.
+     */
+    public setEventBus(eventBus: EventBus): void {
+        this.eventBus = eventBus;
     }
 
     /**
@@ -238,14 +242,24 @@ export class GameState {
         }
 
         if (type === EntityType.Building) {
-            // Notify listeners for building state, inventory, service areas setup
-            // GameLoop.handleBuildingCreated() handles all building initialization
-            this.onBuildingCreated?.(entity.id, subType, x, y);
+            // Emit event for building state, inventory, service areas setup
+            // GameLoop subscribes to handle all building initialization
+            this.eventBus?.emit('building:created', {
+                entityId: entity.id,
+                buildingType: subType as BuildingType,
+                x,
+                y,
+            });
         }
 
         if (type === EntityType.MapObject) {
-            // Notify listeners (e.g., TreeSystem registers trees)
-            this.onMapObjectCreated?.(entity.id, subType, x, y);
+            // Emit event for map object registration (e.g., TreeSystem registers trees)
+            this.eventBus?.emit('mapObject:created', {
+                entityId: entity.id,
+                objectType: subType as MapObjectType,
+                x,
+                y,
+            });
         }
 
         if (type === EntityType.StackedResource) {
@@ -280,8 +294,10 @@ export class GameState {
         }
 
         this.movement.removeController(id);
-        this.onEntityRemoved?.(id);
         this.resourceStates.delete(id);
+
+        // Emit event for system cleanup (carrier state, inventory, service areas, etc.)
+        this.eventBus?.emit('entity:removed', { entityId: id });
 
         this.selectedEntityIds.delete(id);
         if (this.selectedEntityId === id) {

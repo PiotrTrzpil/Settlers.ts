@@ -19,6 +19,7 @@ import {
     CONSTRUCTION_SITE_GROUND_TYPE,
 } from '@/game/features/building-construction';
 import { GameState } from '@/game/game-state';
+import { EventBus } from '@/game/event-bus';
 import { createTestMap, TERRAIN } from './helpers/test-map';
 import { makeBuildingState, tickConstruction } from './helpers/test-game';
 
@@ -296,11 +297,13 @@ describe('Building Construction Phases', () => {
             groundHeight.fill(100);
 
             const gameState = new GameState();
+            const eventBus = new EventBus();
+            gameState.setEventBus(eventBus);
             const buildingStateManager = new BuildingStateManager();
             buildingStateManager.setEntityProvider(gameState);
-            gameState.onBuildingCreated = (entityId, buildingType, x, y) => {
-                buildingStateManager.createBuildingState(entityId, buildingType as BuildingType, x, y);
-            };
+            eventBus.on('building:created', ({ entityId, buildingType, x, y }) => {
+                buildingStateManager.createBuildingState(entityId, buildingType, x, y);
+            });
             gameState.addEntity(EntityType.Building, BuildingType.WoodcutterHut, 10, 10, 0);
             const bs = buildingStateManager.buildingStates.values().next().value as BuildingState;
             bs.totalDuration = 10; // 10 seconds total
@@ -350,11 +353,13 @@ describe('Building Construction Phases', () => {
 describe('Barracks unit spawning on construction complete', () => {
     function createTestGameStateWithBSM(): { gameState: GameState; buildingStateManager: BuildingStateManager } {
         const gameState = new GameState();
+        const eventBus = new EventBus();
+        gameState.setEventBus(eventBus);
         const buildingStateManager = new BuildingStateManager();
         buildingStateManager.setEntityProvider(gameState);
-        gameState.onBuildingCreated = (entityId, buildingType, x, y) => {
-            buildingStateManager.createBuildingState(entityId, buildingType as BuildingType, x, y);
-        };
+        eventBus.on('building:created', ({ entityId, buildingType, x, y }) => {
+            buildingStateManager.createBuildingState(entityId, buildingType, x, y);
+        });
         return { gameState, buildingStateManager };
     }
 

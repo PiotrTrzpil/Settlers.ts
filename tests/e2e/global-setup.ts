@@ -13,9 +13,7 @@ interface BrowserCapabilities {
     maxTextureSize: number;
 }
 
-async function detectBrowserCapabilities(
-    launchArgs: string[]
-): Promise<BrowserCapabilities | null> {
+async function detectBrowserCapabilities(launchArgs: string[]): Promise<BrowserCapabilities | null> {
     let browser;
     try {
         browser = await chromium.launch({
@@ -43,16 +41,10 @@ async function detectBrowserCapabilities(
             const renderer = debugInfo
                 ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
                 : gl.getParameter(gl.RENDERER);
-            const vendor = debugInfo
-                ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL)
-                : gl.getParameter(gl.VENDOR);
+            const vendor = debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
 
-            const isSwiftShader =
-                renderer.includes('SwiftShader') || renderer.includes('llvmpipe');
-            const isSoftwareRenderer =
-                isSwiftShader ||
-                renderer.includes('Software') ||
-                renderer.includes('Mesa');
+            const isSwiftShader = renderer.includes('SwiftShader') || renderer.includes('llvmpipe');
+            const isSoftwareRenderer = isSwiftShader || renderer.includes('Software') || renderer.includes('Mesa');
 
             return {
                 webgl2: true,
@@ -73,20 +65,15 @@ async function detectBrowserCapabilities(
 }
 
 export default async function globalSetup() {
-    const isCloudEnv =
-        process.env.CI || process.env.CLAUDE_CODE_REMOTE === 'true';
+    const isCloudEnv = process.env.CI || process.env.CLAUDE_CODE_REMOTE === 'true';
 
     // Build launch args matching playwright.config.ts
-    const launchArgs = [
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process',
-    ];
+    const launchArgs = ['--disable-web-security', '--disable-features=IsolateOrigins,site-per-process'];
     if (isCloudEnv) {
-        launchArgs.push(
-            '--disable-dev-shm-usage',
-            '--use-gl=swiftshader',
-            '--enable-webgl'
-        );
+        launchArgs.push('--disable-dev-shm-usage', '--use-gl=swiftshader', '--enable-webgl');
+    } else {
+        // Local macOS: use Metal for GPU acceleration
+        launchArgs.push('--use-angle=metal', '--enable-webgl');
     }
 
     console.log('\n🔍 Detecting browser capabilities...');
@@ -113,27 +100,18 @@ export default async function globalSetup() {
 
     // Set environment variables for tests to use
     process.env.E2E_WEBGL_AVAILABLE = capabilities.webgl2 ? 'true' : 'false';
-    process.env.E2E_SOFTWARE_RENDERER = capabilities.isSoftwareRenderer
-        ? 'true'
-        : 'false';
+    process.env.E2E_SOFTWARE_RENDERER = capabilities.isSoftwareRenderer ? 'true' : 'false';
     process.env.E2E_RENDERER = capabilities.renderer;
 
     // If WebGL2 is not available and we're in cloud, try enabling SwiftShader
     if (!capabilities.webgl2 && !isCloudEnv) {
         console.log('\n   Retrying with SwiftShader...');
-        const swiftShaderArgs = [
-            ...launchArgs,
-            '--disable-dev-shm-usage',
-            '--use-gl=swiftshader',
-            '--enable-webgl',
-        ];
+        const swiftShaderArgs = [...launchArgs, '--disable-dev-shm-usage', '--use-gl=swiftshader', '--enable-webgl'];
         const retryCapabilities = await detectBrowserCapabilities(swiftShaderArgs);
 
         if (retryCapabilities?.webgl2) {
             console.log('   ✓ SwiftShader enables WebGL2');
-            console.log(
-                '   Consider setting CI=true or CLAUDE_CODE_REMOTE=true to auto-enable'
-            );
+            console.log('   Consider setting CI=true or CLAUDE_CODE_REMOTE=true to auto-enable');
             // Update env to signal that SwiftShader works
             process.env.E2E_SWIFTSHADER_AVAILABLE = 'true';
         } else {

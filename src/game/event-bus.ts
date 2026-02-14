@@ -181,6 +181,38 @@ export interface GameEvents {
         previousAmount: number;
         newAmount: number;
     };
+
+    // === Entity Lifecycle Events ===
+
+    /**
+     * Emitted when any entity is removed from the game.
+     * Systems should subscribe to clean up per-entity state.
+     */
+    'entity:removed': {
+        entityId: number;
+    };
+
+    /**
+     * Emitted when a building entity is created (via addEntity).
+     * Used for initializing building-specific state (inventory, service areas, construction).
+     */
+    'building:created': {
+        entityId: number;
+        buildingType: BuildingType;
+        x: number;
+        y: number;
+    };
+
+    /**
+     * Emitted when a map object entity is created (via addEntity).
+     * Used for registering objects with their respective systems (e.g., trees).
+     */
+    'mapObject:created': {
+        entityId: number;
+        objectType: number;
+        x: number;
+        y: number;
+    };
 }
 
 type EventHandler<T> = (payload: T) => void;
@@ -247,11 +279,7 @@ export class EventSubscriptionManager {
     /**
      * Subscribe to an event and track the subscription for later cleanup.
      */
-    subscribe<K extends keyof GameEvents>(
-        eventBus: EventBus,
-        event: K,
-        handler: EventHandler<GameEvents[K]>,
-    ): void {
+    subscribe<K extends keyof GameEvents>(eventBus: EventBus, event: K, handler: EventHandler<GameEvents[K]>): void {
         eventBus.on(event, handler);
         this.subscriptions.push({ eventBus, event, handler });
     }

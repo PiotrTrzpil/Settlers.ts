@@ -261,7 +261,9 @@ describe('Unit Placement, Selection & Movement', () => {
                     groundType,
                     groundHeight,
                     mapSize,
-                    eventBus
+                    eventBus,
+                    undefined,
+                    buildingStateManager
                 );
                 expect(result).toBe(true);
             }
@@ -920,7 +922,9 @@ describe('Unit Placement, Selection & Movement', () => {
                     groundType,
                     groundHeight,
                     mapSize,
-                    eventBus
+                    eventBus,
+                    undefined,
+                    buildingStateManager
                 );
             }
             expect(state.entities).toHaveLength(3);

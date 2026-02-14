@@ -52,12 +52,16 @@ All per-frame updates use `GameLoop.registerSystem()` with a clean `TickSystem` 
 
 Existing direct imports continue to work. New code should prefer importing from barrel files.
 
-### Issue 4: Callback Overlap with Event Bus
-**Impact:** Two parallel notification mechanisms exist. `GameState.onEntityRemoved`, `GameState.onBuildingCreated`, `GameState.onMapObjectCreated` are callbacks set by GameLoop. Meanwhile, events like `building:placed`, `building:removed` serve similar purposes. This creates confusion about when to use which.
+### Issue 4: Callback Overlap with Event Bus ✅ RESOLVED
+**Impact:** Two parallel notification mechanisms existed. `GameState.onEntityRemoved`, `GameState.onBuildingCreated`, `GameState.onMapObjectCreated` were callbacks set by GameLoop. Meanwhile, events like `building:placed`, `building:removed` served similar purposes.
 
-**Current state:** GameState exposes callbacks in `game-state.ts:132-139`. GameLoop sets them in constructor to wire up systems. Events handle cross-system communication but some concerns (entity removal cleanup) use both mechanisms.
+**Resolution:** Unified on events as the single notification mechanism for entity lifecycle:
+- Added `entity:removed`, `building:created`, `mapObject:created` events to `GameEvents`
+- `GameState` now accepts `EventBus` via `setEventBus()` and emits these events directly
+- `GameLoop` subscribes to these events instead of setting callbacks
+- Removed the callback properties from `GameState`
 
-**Recommended direction:** Events should be the single notification mechanism for game domain changes. Callbacks should only be for framework plumbing (render frame, terrain data setup). `onEntityRemoved` should emit an `entity:removed` event that systems subscribe to, rather than having GameLoop manually call cleanup.
+The `TickSystem.onEntityRemoved` interface method remains for systems that need per-entity cleanup - `GameLoop` subscribes to `entity:removed` and iterates through systems calling this method.
 
 ## Recommended Restructuring
 
@@ -109,17 +113,17 @@ interface RenderContext {
 
 **Dependencies:** Large refactor. Should be done after other structural fixes.
 
-### Refactor 3: Unify Entity Removal via Events
-**Scope:** `game-state.ts`, `game-loop.ts`, `event-bus.ts`, all systems with `onEntityRemoved`
-**Rationale:** Entity removal currently uses callback (`onEntityRemoved`) which GameLoop sets. This should use the event bus like all other domain changes.
+### Refactor 3: Unify Entity Removal via Events ✅ COMPLETED
+**Scope:** `game-state.ts`, `game-loop.ts`, `event-bus.ts`
+**Rationale:** Entity removal used callbacks which GameLoop set. This has been unified with the event bus.
 
-**Target state:**
-- Add `entity:removed` event to `GameEvents`
-- Emit from `GameState.removeEntity()`
-- Systems subscribe via `eventBus.on('entity:removed', ...)`
-- Remove `GameState.onEntityRemoved` callback
-
-**Dependencies:** Requires EventBus to be available in GameState (it currently isn't). Could pass eventBus to GameState constructor, or emit from command level.
+**Completed state:**
+- Added `entity:removed`, `building:created`, `mapObject:created` events to `GameEvents`
+- `GameState.setEventBus()` allows GameLoop to provide the EventBus
+- `GameState.addEntity()` emits `building:created` and `mapObject:created` events
+- `GameState.removeEntity()` emits `entity:removed` event
+- `GameLoop` subscribes to all three events instead of setting callbacks
+- Callback properties removed from `GameState`
 
 ### Refactor 4: Add Missing Barrel Files ✅ COMPLETED
 **Scope:** `renderer/`, `systems/`, `ai/`

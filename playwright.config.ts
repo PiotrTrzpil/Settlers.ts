@@ -34,11 +34,13 @@ const baseSettings = {
             '--disable-web-security',
             '--disable-features=IsolateOrigins,site-per-process',
             // Cloud/CI: avoid /dev/shm issues and enable software WebGL
-            ...(isCloudEnv ? [
-                '--disable-dev-shm-usage',
-                '--use-gl=swiftshader',
-                '--enable-webgl',
-            ] : []),
+            ...(isCloudEnv
+                ? ['--disable-dev-shm-usage', '--use-gl=swiftshader', '--enable-webgl']
+                : [
+                      // Local macOS: use Metal for GPU acceleration
+                      '--use-angle=metal',
+                      '--enable-webgl',
+                  ]),
         ],
     },
 };
@@ -48,9 +50,7 @@ export default defineConfig({
     outputDir: './tests/e2e/.results',
     globalSetup: './tests/e2e/global-setup.ts',
     fullyParallel: true,
-    reporter: process.env.CI
-        ? [['list'], ['github-actions']]
-        : [['list'], ['html', { open: 'never' }]],
+    reporter: process.env.CI ? [['list'], ['github-actions']] : [['list'], ['html', { open: 'never' }]],
     // Limit workers to avoid overwhelming shared worker fixtures (testMapPage)
     // Tests use worker-scoped pages that can't handle too many parallel tests
     workers: 2,

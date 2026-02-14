@@ -190,7 +190,7 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
     }
 
     // Recreate entities using the normal addEntity path
-    // This triggers all the callbacks (onBuildingCreated, onMapObjectCreated, etc.)
+    // This emits entity lifecycle events (building:created, mapObject:created, etc.)
     for (const e of snapshot.entities) {
         // Use addEntity directly to preserve original IDs
         // We need to temporarily set nextId to match each entity's ID

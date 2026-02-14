@@ -575,7 +575,7 @@ describe('Inventory Reservation System', () => {
         reservationManager = new InventoryReservationManager();
         // Mock inventory manager for slot-level reservation enforcement
         const mockInventoryManager = {
-            reserveOutput: (_, __, amount: number) => amount,
+            reserveOutput: (_buildingId: number, _material: number, amount: number) => amount,
             releaseOutputReservation: () => {},
         } as unknown as import('@/game/features/inventory').BuildingInventoryManager;
         reservationManager.setInventoryManager(mockInventoryManager);

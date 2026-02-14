@@ -1,73 +1,73 @@
 <template>
-  <div class="selection-panel">
-    <!-- Empty state when nothing selected -->
-    <template v-if="!selectedEntity">
-      <div class="panel-header">
-        <span class="header-icon">👆</span>
-        <span class="header-title">Selection</span>
-      </div>
-      <div class="panel-body">
-        <div class="empty-state">Click to select a unit or building</div>
-      </div>
-    </template>
+    <div class="selection-panel">
+        <!-- Empty state when nothing selected -->
+        <template v-if="!selectedEntity">
+            <div class="panel-header">
+                <span class="header-icon">👆</span>
+                <span class="header-title">Selection</span>
+            </div>
+            <div class="panel-body">
+                <div class="empty-state">Click to select a unit or building</div>
+            </div>
+        </template>
 
-    <!-- Selected entity info -->
-    <template v-else>
-      <div class="panel-header">
-        <span class="header-icon">{{ entityIcon }}</span>
-        <span class="header-title">{{ entityTypeName }}</span>
-        <span v-if="selectionCount > 1" class="multi-select-badge">+{{ selectionCount - 1 }}</span>
-      </div>
+        <!-- Selected entity info -->
+        <template v-else>
+            <div class="panel-header">
+                <span class="header-icon">{{ entityIcon }}</span>
+                <span class="header-title">{{ entityTypeName }}</span>
+                <span v-if="selectionCount > 1" class="multi-select-badge">+{{ selectionCount - 1 }}</span>
+            </div>
 
-      <div class="panel-body">
-      <!-- Entity ID and Position -->
-      <div class="info-row">
-        <span class="label">ID:</span>
-        <span class="value">#{{ selectedEntity.id }}</span>
-      </div>
-      <div class="info-row">
-        <span class="label">Position:</span>
-        <span class="value">({{ selectedEntity.x }}, {{ selectedEntity.y }})</span>
-      </div>
-      <div class="info-row">
-        <span class="label">Player:</span>
-        <span class="value player-badge" :style="{ background: playerColor }">
-          {{ selectedEntity.player }}
-        </span>
-      </div>
+            <div class="panel-body">
+                <!-- Entity ID and Position -->
+                <div class="info-row">
+                    <span class="label">ID:</span>
+                    <span class="value">#{{ selectedEntity.id }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Position:</span>
+                    <span class="value">({{ selectedEntity.x }}, {{ selectedEntity.y }})</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Player:</span>
+                    <span class="value player-badge" :style="{ background: playerColor }">
+                        {{ selectedEntity.player }}
+                    </span>
+                </div>
 
-      <!-- Unit-specific info -->
-      <template v-if="isUnit">
-        <div class="info-section">
-          <div class="section-label">Unit Info</div>
-          <div class="info-row">
-            <span class="label">Category:</span>
-            <span class="value category-badge" :class="unitCategory">{{ unitCategory }}</span>
-          </div>
-          <div v-if="carriedMaterial" class="info-row">
-            <span class="label">Carrying:</span>
-            <span class="value">{{ carriedMaterial }}</span>
-          </div>
-        </div>
-      </template>
+                <!-- Unit-specific info -->
+                <template v-if="isUnit">
+                    <div class="info-section">
+                        <div class="section-label">Unit Info</div>
+                        <div class="info-row">
+                            <span class="label">Category:</span>
+                            <span class="value category-badge" :class="unitCategory">{{ unitCategory }}</span>
+                        </div>
+                        <div v-if="carriedMaterial" class="info-row">
+                            <span class="label">Carrying:</span>
+                            <span class="value">{{ carriedMaterial }}</span>
+                        </div>
+                    </div>
+                </template>
 
-      <!-- Building-specific info -->
-      <template v-if="isBuilding">
-        <div class="info-section">
-          <div class="section-label">Building Info</div>
-          <div class="info-row">
-            <span class="label">Size:</span>
-            <span class="value">{{ buildingSize }}</span>
-          </div>
-          <div v-if="buildingStatus" class="info-row">
-            <span class="label">Status:</span>
-            <span class="value status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
-          </div>
-        </div>
-      </template>
-      </div>
-    </template>
-  </div>
+                <!-- Building-specific info -->
+                <template v-if="isBuilding">
+                    <div class="info-section">
+                        <div class="section-label">Building Info</div>
+                        <div class="info-row">
+                            <span class="label">Size:</span>
+                            <span class="value">{{ buildingSize }}</span>
+                        </div>
+                        <div v-if="buildingStatus" class="info-row">
+                            <span class="label">Status:</span>
+                            <span class="value status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -136,10 +136,14 @@ const entityIcon = computed(() => {
         const unitType = entity.subType as UnitType;
         const category = getUnitCategory(unitType);
         switch (category) {
-        case UnitCategory.Military: return '⚔️';
-        case UnitCategory.Religious: return '🙏';
-        case UnitCategory.Specialist: return '🎯';
-        case UnitCategory.Worker: return '👷';
+        case UnitCategory.Military:
+            return '⚔️';
+        case UnitCategory.Religious:
+            return '🙏';
+        case UnitCategory.Specialist:
+            return '🎯';
+        case UnitCategory.Worker:
+            return '👷';
         }
     }
 
@@ -180,7 +184,7 @@ const buildingStatus = computed(() => {
     if (!entity || entity.type !== EntityType.Building) return null;
     if (!props.game) return null;
 
-    const state = props.game.state.buildingStateManager.getBuildingState(entity.id);
+    const state = props.game.gameLoop.buildingStateManager.getBuildingState(entity.id);
     if (!state) return 'unknown';
 
     if (state.phase === BuildingConstructionPhase.Completed) return 'completed';
@@ -197,141 +201,141 @@ const playerColor = computed(() => {
 
 <style scoped>
 .selection-panel {
-  background: rgba(13, 10, 5, 0.92);
-  border: 1px solid #5c3d1a;
-  border-radius: 4px;
-  color: #c8a96e;
-  font-size: 11px;
-  font-family: monospace;
-  min-width: 160px;
-  pointer-events: auto;
+    background: rgba(13, 10, 5, 0.92);
+    border: 1px solid #5c3d1a;
+    border-radius: 4px;
+    color: #c8a96e;
+    font-size: 11px;
+    font-family: monospace;
+    min-width: 160px;
+    pointer-events: auto;
 }
 
 .panel-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  background: #2c1e0e;
-  border-bottom: 1px solid #3a2a10;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: #2c1e0e;
+    border-bottom: 1px solid #3a2a10;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .header-icon {
-  font-size: 14px;
+    font-size: 14px;
 }
 
 .header-title {
-  flex: 1;
-  color: #d4b27a;
+    flex: 1;
+    color: #d4b27a;
 }
 
 .multi-select-badge {
-  background: #4a3518;
-  color: #e8c87e;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-size: 9px;
+    background: #4a3518;
+    color: #e8c87e;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 9px;
 }
 
 .panel-body {
-  padding: 6px 10px;
+    padding: 6px 10px;
 }
 
 .info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 3px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
 }
 
 .label {
-  color: #8a7040;
-  font-size: 10px;
+    color: #8a7040;
+    font-size: 10px;
 }
 
 .value {
-  color: #e8c87e;
+    color: #e8c87e;
 }
 
 .player-badge {
-  padding: 1px 6px;
-  border-radius: 3px;
-  color: #fff;
-  font-weight: bold;
-  font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: #fff;
+    font-weight: bold;
+    font-size: 10px;
 }
 
 .info-section {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid #2a1e0e;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #2a1e0e;
 }
 
 .section-label {
-  font-size: 9px;
-  text-transform: uppercase;
-  color: #6a5030;
-  margin-bottom: 4px;
-  letter-spacing: 0.5px;
+    font-size: 9px;
+    text-transform: uppercase;
+    color: #6a5030;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
 }
 
 .category-badge {
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  text-transform: capitalize;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    text-transform: capitalize;
 }
 
 .category-badge.military {
-  background: #5a2020;
-  color: #ff8080;
+    background: #5a2020;
+    color: #ff8080;
 }
 
 .category-badge.religious {
-  background: #3a3a50;
-  color: #a0a0ff;
+    background: #3a3a50;
+    color: #a0a0ff;
 }
 
 .category-badge.specialist {
-  background: #4a4020;
-  color: #e0c060;
+    background: #4a4020;
+    color: #e0c060;
 }
 
 .category-badge.worker {
-  background: #204020;
-  color: #80c080;
+    background: #204020;
+    color: #80c080;
 }
 
 .status-badge {
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  text-transform: capitalize;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    text-transform: capitalize;
 }
 
 .status-badge.completed {
-  background: #204020;
-  color: #80c080;
+    background: #204020;
+    color: #80c080;
 }
 
 .status-badge.building {
-  background: #4a4020;
-  color: #e0c060;
+    background: #4a4020;
+    color: #e0c060;
 }
 
 .status-badge.unknown {
-  background: #3a3a3a;
-  color: #a0a0a0;
+    background: #3a3a3a;
+    color: #a0a0a0;
 }
 
 .empty-state {
-  color: #6a5030;
-  font-size: 10px;
-  font-style: italic;
-  text-align: center;
-  padding: 4px 0;
+    color: #6a5030;
+    font-size: 10px;
+    font-style: italic;
+    text-align: center;
+    padding: 4px 0;
 }
 </style>

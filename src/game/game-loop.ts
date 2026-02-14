@@ -128,6 +128,9 @@ export class GameLoop {
         this.gameState = gameState;
         this.eventBus = eventBus;
 
+        // Wire up event bus for entity lifecycle events
+        gameState.setEventBus(eventBus);
+
         // Bind frame handler once to avoid creating closures every frame
         this.boundFrame = this.frame.bind(this);
 
@@ -159,11 +162,10 @@ export class GameLoop {
         this.constructionSystem.registerEvents(eventBus);
         this.registerSystem(this.constructionSystem);
 
-        // Wire up inventory and service area creation
-        // (Building state creation is handled directly by GameState.addEntity)
-        gameState.onBuildingCreated = (entityId, buildingType, x, y) => {
-            this.handleBuildingCreated(entityId, buildingType as BuildingType, x, y);
-        };
+        // Subscribe to building creation events for inventory and service area setup
+        eventBus.on('building:created', ({ entityId, buildingType, x, y }) => {
+            this.handleBuildingCreated(entityId, buildingType, x, y);
+        });
 
         // 3. Carrier system — manages carrier fatigue and behavior
         this.carrierSystem = new CarrierSystem({
@@ -191,10 +193,10 @@ export class GameLoop {
         this.treeSystem = new TreeSystem(gameState, this.animationService);
         this.registerSystem(this.treeSystem);
 
-        // Wire up tree registration for map objects
-        gameState.onMapObjectCreated = (entityId, objectType, _x, _y) => {
+        // Subscribe to map object creation events for tree registration
+        eventBus.on('mapObject:created', ({ entityId, objectType }) => {
             this.handleMapObjectCreated(entityId, objectType);
-        };
+        });
 
         // 6. Settler task system — manages all unit behaviors and animations
         this.settlerTaskSystem = new SettlerTaskSystem({
@@ -246,10 +248,10 @@ export class GameLoop {
             });
         });
 
-        // Wire up entity removal callback for cleanup
-        gameState.onEntityRemoved = (entityId: number) => {
+        // Subscribe to entity removal events for cleanup
+        eventBus.on('entity:removed', ({ entityId }) => {
             this.handleEntityRemoved(entityId);
-        };
+        });
 
         // Set up page visibility tracking for background throttling
         this.visibilityHandler = () => {
