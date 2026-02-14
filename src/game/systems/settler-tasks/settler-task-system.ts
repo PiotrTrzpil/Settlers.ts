@@ -656,11 +656,8 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     private handleWorking(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
-        const job = runtime.job;
-        if (!job) {
-            runtime.state = SettlerState.IDLE;
-            return;
-        }
+        // Job MUST exist when state is WORKING — crash if invariant violated
+        const job = runtime.job!;
 
         const tasks = this.jobDefinitions.get(job.jobId);
         if (!tasks || job.taskIndex >= tasks.length) {
@@ -982,9 +979,9 @@ export class SettlerTaskSystem implements TickSystem {
     private executeCarrierDropoff(settler: Entity, job: CarrierJobState): TaskResult {
         const entity = this.gameState.getEntityOrThrow(settler.id, 'carrier');
         const carrierState = getCarrierState(entity);
-        const { destBuildingId, material, amount: jobAmount } = job.data;
+        const { destBuildingId, material } = job.data;
 
-        const amount = carrierState.carryingAmount ?? jobAmount;
+        const amount = carrierState.carryingAmount;
 
         // Deposit to destination building
         const deposited = this.inventoryManager.depositInput(destBuildingId, material, amount);
@@ -1076,8 +1073,9 @@ export class SettlerTaskSystem implements TickSystem {
     private executeGoToPos(settler: Entity, job: JobState): TaskResult {
         if (job.type !== 'worker') return TaskResult.FAILED;
         if (!job.data.targetPos) {
-            log.warn(`Settler ${settler.id}: no targetPos set for GO_TO_POS (run SEARCH_POS first)`);
-            return TaskResult.FAILED;
+            throw new Error(
+                `Settler ${settler.id} (${UnitType[settler.subType]}): GO_TO_POS requires targetPos from a preceding SEARCH_POS task. Check job YAML.`
+            );
         }
         return this.moveToPosition(settler, job.data.targetPos.x, job.data.targetPos.y);
     }
@@ -1098,7 +1096,7 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     private completeJob(settler: Entity, runtime: UnitRuntime): void {
-        log.debug(`Settler ${settler.id} completed job ${runtime.job?.jobId}`);
+        log.debug(`Settler ${settler.id} completed job ${runtime.job!.jobId}`);
         runtime.state = SettlerState.IDLE;
         runtime.job = null;
         this.setIdleAnimation(settler);
@@ -1107,10 +1105,11 @@ export class SettlerTaskSystem implements TickSystem {
 
     private interruptJob(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
         const handler = this.workHandlers.get(config.search);
-        const job = runtime.job;
+        // Job MUST exist — all callers verify runtime.job is non-null before calling
+        const job = runtime.job!;
 
         // Only call onWorkInterrupt if work actually started (onWorkStart was called)
-        if (handler && job?.type === 'worker' && job.data.targetId && job.workStarted) {
+        if (handler && job.type === 'worker' && job.data.targetId && job.workStarted) {
             try {
                 handler.onWorkInterrupt?.(job.data.targetId);
             } catch (e) {
@@ -1123,13 +1122,13 @@ export class SettlerTaskSystem implements TickSystem {
         // LogisticsDispatcher listens for carrier:removed and carrier:pickupFailed events to release reservations.
 
         // Clear carrier state if carrier was carrying material
-        const carryingGood = job?.data.carryingGood;
+        const carryingGood = job.data.carryingGood;
         if (settler.carrier && carryingGood != null) {
             settler.carrier.carryingMaterial = null;
             settler.carrier.carryingAmount = 0;
         }
 
-        log.debug(`Settler ${settler.id} interrupted job ${job?.jobId}`);
+        log.debug(`Settler ${settler.id} interrupted job ${job.jobId}`);
         runtime.state = SettlerState.INTERRUPTED;
         this.setIdleAnimation(settler);
     }
