@@ -13,7 +13,7 @@ import { GamePage } from './game-page';
  */
 
 test.describe('App Loading and Structure', { tag: '@smoke' }, () => {
-    test('app loads without JavaScript errors', async({ page }) => {
+    test('app loads without JavaScript errors', async ({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 
@@ -24,7 +24,7 @@ test.describe('App Loading and Structure', { tag: '@smoke' }, () => {
         checkErrors();
     });
 
-    test('navigation bar has all required links', async({ page }) => {
+    test('navigation bar has all required links', async ({ page }) => {
         await page.goto('/');
 
         const nav = page.locator('#nav');
@@ -39,7 +39,7 @@ test.describe('App Loading and Structure', { tag: '@smoke' }, () => {
 });
 
 test.describe('Map View Page', { tag: '@smoke' }, () => {
-    test('map view page renders with map selector', async({ page }) => {
+    test('map view page renders with map selector', async ({ page }) => {
         await page.goto('/map-view');
 
         // Map selector label should be visible
@@ -48,7 +48,7 @@ test.describe('Map View Page', { tag: '@smoke' }, () => {
         await expect(page.locator('canvas.cav')).toBeVisible();
     });
 
-    test('debug panel can be expanded and checkbox toggled', async({ page }) => {
+    test('debug panel can be expanded and checkbox toggled', async ({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForGameUi(15_000);
@@ -73,13 +73,13 @@ test.describe('Map View Page', { tag: '@smoke' }, () => {
         await expect(checkbox).toBeChecked({ checked: !wasChecked });
     });
 
-    test('canvas element exists for rendering', async({ page }) => {
+    test('canvas element exists for rendering', async ({ page }) => {
         const gp = new GamePage(page);
         await page.goto('/map-view');
         await gp.expectCanvasVisible();
     });
 
-    test('game UI panel appears when test map is loaded', async({ page }) => {
+    test('game UI panel appears when test map is loaded', async ({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
         await gp.waitForGameUi(15_000);
@@ -87,7 +87,7 @@ test.describe('Map View Page', { tag: '@smoke' }, () => {
 });
 
 test.describe('Route Navigation', () => {
-    test('navigating between routes preserves app state', async({ page }) => {
+    test('navigating between routes preserves app state', async ({ page }) => {
         await page.goto('/');
 
         await page.click('a[href="/map-view"]');
@@ -102,11 +102,11 @@ test.describe('Route Navigation', () => {
         await expect(page.locator('text=Map:')).toBeVisible();
     });
 
-    test('direct URL navigation works for all routes', async({ page }) => {
+    test('direct URL navigation works for all routes', async ({ page }) => {
         const routes = [
             { path: '/', selector: '#nav' },
             { path: '/map-view', selector: 'text=Map:' },
-            { path: '/logging-view', selector: '#nav' }
+            { path: '/logging-view', selector: '#nav' },
         ];
 
         for (const route of routes) {
@@ -118,7 +118,7 @@ test.describe('Route Navigation', () => {
 
 // Canvas Interaction tests use shared fixture (eliminates 3 waitForReady calls)
 fixtureTest.describe('Canvas Interaction', { tag: '@smoke' }, () => {
-    fixtureTest('canvas responds to mouse wheel events without errors', async({ gp }) => {
+    fixtureTest('canvas responds to mouse wheel events without errors', async ({ gp }) => {
         const { check: checkErrors } = gp.collectErrors();
 
         await gp.canvas.dispatchEvent('wheel', { deltaY: 100 });
@@ -127,16 +127,17 @@ fixtureTest.describe('Canvas Interaction', { tag: '@smoke' }, () => {
         checkErrors();
     });
 
-    fixtureTest('canvas handles click events without errors', async({ gp }) => {
+    fixtureTest('canvas handles click events without errors', async ({ gp }) => {
         const { check: checkErrors } = gp.collectErrors();
 
-        await gp.canvas.click({ position: { x: 400, y: 400 } });
+        // Use force:true to avoid waiting for "scheduled navigations" which can timeout
+        await gp.canvas.click({ position: { x: 400, y: 400 }, force: true });
         await gp.waitForFrames(1);
 
         checkErrors();
     });
 
-    fixtureTest('canvas handles right-click without showing context menu', async({ gp }) => {
+    fixtureTest('canvas handles right-click without showing context menu', async ({ gp }) => {
         await gp.canvas.click({ button: 'right', position: { x: 400, y: 400 }, force: true });
         await gp.waitForFrames(1);
     });

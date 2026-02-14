@@ -1,4 +1,4 @@
-/* eslint-disable max-lines-per-function, max-lines */
+ 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { GameState } from '@/game/game-state';
 import { EntityType, UnitType } from '@/game/entity';
@@ -27,7 +27,8 @@ describe('Unit Placement, Selection & Movement', () => {
         eventBus = new EventBus();
         // Set terrain data for the movement system (required for pathfinding)
         state.setTerrainData(groundType, groundHeight, mapSize.width, mapSize.height);
-        // Set rng for the movement system (required for push/collision resolution)
+        // Wire up required dependencies for movement system
+        state.movement.setEventBus(eventBus);
         state.movement.setRng(state.rng);
     });
 
@@ -35,13 +36,20 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Unit Placement (spawn_unit)', () => {
         it('should spawn a carrier at the given position', () => {
-            const result = executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Carrier,
-                x: 10,
-                y: 10,
-                player: 0,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Carrier,
+                    x: 10,
+                    y: 10,
+                    player: 0,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             expect(state.entities).toHaveLength(1);
@@ -52,26 +60,40 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should spawn a swordsman at the given position', () => {
-            const result = executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Swordsman,
-                x: 20,
-                y: 20,
-                player: 0,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Swordsman,
+                    x: 20,
+                    y: 20,
+                    player: 0,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             expect(state.entities[0].subType).toBe(UnitType.Swordsman);
         });
 
         it('should create unit state with default speed', () => {
-            const result = executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Carrier,
-                x: 10,
-                y: 10,
-                player: 0,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Carrier,
+                    x: 10,
+                    y: 10,
+                    player: 0,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             const unitState = state.unitStates.get(state.entities[0].id);
@@ -84,22 +106,36 @@ describe('Unit Placement, Selection & Movement', () => {
 
         it('should spawn adjacent when target tile is occupied', () => {
             // Place first unit
-            executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Carrier,
-                x: 10,
-                y: 10,
-                player: 0,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Carrier,
+                    x: 10,
+                    y: 10,
+                    player: 0,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             // Spawn second unit at same location
-            const result = executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Swordsman,
-                x: 10,
-                y: 10,
-                player: 0,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Swordsman,
+                    x: 10,
+                    y: 10,
+                    player: 0,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             expect(state.entities).toHaveLength(2);
@@ -116,46 +152,74 @@ describe('Unit Placement, Selection & Movement', () => {
                 }
             }
 
-            const result = executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Carrier,
-                x: 1,
-                y: 1,
-                player: 0,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Carrier,
+                    x: 1,
+                    y: 1,
+                    player: 0,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(false);
         });
 
         it('should register tile occupancy for spawned unit', () => {
-            executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Carrier,
-                x: 15,
-                y: 15,
-                player: 0,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Carrier,
+                    x: 15,
+                    y: 15,
+                    player: 0,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.getEntityAt(15, 15)).toBeDefined();
             expect(state.getEntityAt(15, 15)!.type).toBe(EntityType.Unit);
         });
 
         it('should spawn units for different players', () => {
-            executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Carrier,
-                x: 10,
-                y: 10,
-                player: 0,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Carrier,
+                    x: 10,
+                    y: 10,
+                    player: 0,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
-            executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Carrier,
-                x: 20,
-                y: 20,
-                player: 1,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Carrier,
+                    x: 20,
+                    y: 20,
+                    player: 1,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.entities[0].player).toBe(0);
             expect(state.entities[1].player).toBe(1);
@@ -164,13 +228,20 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should spawn all unit types', () => {
             const types = [UnitType.Carrier, UnitType.Builder, UnitType.Swordsman, UnitType.Bowman, UnitType.Priest];
             for (let i = 0; i < types.length; i++) {
-                const result = executeCommand(state, {
-                    type: 'spawn_unit',
-                    unitType: types[i],
-                    x: 10 + i * 2,
-                    y: 10,
-                    player: 0,
-                }, groundType, groundHeight, mapSize, eventBus);
+                const result = executeCommand(
+                    state,
+                    {
+                        type: 'spawn_unit',
+                        unitType: types[i],
+                        x: 10 + i * 2,
+                        y: 10,
+                        player: 0,
+                    },
+                    groundType,
+                    groundHeight,
+                    mapSize,
+                    eventBus
+                );
                 expect(result).toBe(true);
             }
             expect(state.entities).toHaveLength(types.length);
@@ -183,12 +254,19 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should select a unit at a tile', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
 
-            const result = executeCommand(state, {
-                type: 'select_at_tile',
-                x: 10,
-                y: 10,
-                addToSelection: false,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 10,
+                    y: 10,
+                    addToSelection: false,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             expect(state.selectedEntityId).toBe(unit.id);
@@ -201,12 +279,19 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityId = unit.id;
             state.selectedEntityIds.add(unit.id);
 
-            const result = executeCommand(state, {
-                type: 'select_at_tile',
-                x: 20,
-                y: 20,
-                addToSelection: false,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 20,
+                    y: 20,
+                    addToSelection: false,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             expect(state.selectedEntityId).toBe(null);
@@ -218,22 +303,36 @@ describe('Unit Placement, Selection & Movement', () => {
             const unit2 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 20, 20, 0);
 
             // Select unit1
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: 10,
-                y: 10,
-                addToSelection: false,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 10,
+                    y: 10,
+                    addToSelection: false,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityId).toBe(unit1.id);
 
             // Click unit2 without shift
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: 20,
-                y: 20,
-                addToSelection: false,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 20,
+                    y: 20,
+                    addToSelection: false,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityId).toBe(unit2.id);
             expect(state.selectedEntityIds.size).toBe(1);
@@ -246,20 +345,34 @@ describe('Unit Placement, Selection & Movement', () => {
             const unit2 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 20, 20, 0);
 
             // Select unit1
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: 10,
-                y: 10,
-                addToSelection: false,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 10,
+                    y: 10,
+                    addToSelection: false,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             // Shift+click unit2
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: 20,
-                y: 20,
-                addToSelection: true,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 20,
+                    y: 20,
+                    addToSelection: true,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityIds.size).toBe(2);
             expect(state.selectedEntityIds.has(unit1.id)).toBe(true);
@@ -276,12 +389,19 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityId = unit1.id;
 
             // Shift+click unit1 (toggle it off)
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: 10,
-                y: 10,
-                addToSelection: true,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 10,
+                    y: 10,
+                    addToSelection: true,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityIds.size).toBe(1);
             expect(state.selectedEntityIds.has(unit1.id)).toBe(false);
@@ -297,12 +417,19 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityId = unit1.id;
 
             // Shift+click to deselect the primary entity
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: 10,
-                y: 10,
-                addToSelection: true,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 10,
+                    y: 10,
+                    addToSelection: true,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             // Primary should switch to remaining entity
             expect(state.selectedEntityId).toBe(unit2.id);
@@ -311,12 +438,19 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should select building at tile', () => {
             const building = state.addEntity(EntityType.Building, 1, 10, 10, 0);
 
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: 10,
-                y: 10,
-                addToSelection: false,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 10,
+                    y: 10,
+                    addToSelection: false,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityId).toBe(building.id);
         });
@@ -328,10 +462,17 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should add entity to selection', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
 
-            const result = executeCommand(state, {
-                type: 'toggle_selection',
-                entityId: unit.id,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'toggle_selection',
+                    entityId: unit.id,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             expect(state.selectedEntityIds.has(unit.id)).toBe(true);
@@ -342,10 +483,17 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
-            const result = executeCommand(state, {
-                type: 'toggle_selection',
-                entityId: unit.id,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'toggle_selection',
+                    entityId: unit.id,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             expect(state.selectedEntityIds.has(unit.id)).toBe(false);
@@ -353,10 +501,17 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should fail for non-existent entity', () => {
-            const result = executeCommand(state, {
-                type: 'toggle_selection',
-                entityId: 999,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'toggle_selection',
+                    entityId: 999,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(false);
         });
@@ -364,10 +519,17 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should set primary selection when adding first entity', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
 
-            executeCommand(state, {
-                type: 'toggle_selection',
-                entityId: unit.id,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'toggle_selection',
+                    entityId: unit.id,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityId).toBe(unit.id);
         });
@@ -379,10 +541,17 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityIds.add(unit1.id);
             state.selectedEntityId = unit1.id;
 
-            executeCommand(state, {
-                type: 'toggle_selection',
-                entityId: unit2.id,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'toggle_selection',
+                    entityId: unit2.id,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityId).toBe(unit1.id); // Primary unchanged
             expect(state.selectedEntityIds.size).toBe(2);
@@ -397,11 +566,18 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
-            const result = executeCommand(state, {
-                type: 'move_selected_units',
-                targetX: 10,
-                targetY: 5,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'move_selected_units',
+                    targetX: 10,
+                    targetY: 5,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             const unitState = state.unitStates.get(unit.id);
@@ -416,11 +592,18 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityIds.add(unit2.id);
             state.selectedEntityId = unit1.id;
 
-            const result = executeCommand(state, {
-                type: 'move_selected_units',
-                targetX: 20,
-                targetY: 20,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'move_selected_units',
+                    targetX: 20,
+                    targetY: 20,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             const us1 = state.unitStates.get(unit1.id);
@@ -439,22 +622,36 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityIds.add(building.id);
             state.selectedEntityId = building.id;
 
-            const result = executeCommand(state, {
-                type: 'move_selected_units',
-                targetX: 20,
-                targetY: 20,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'move_selected_units',
+                    targetX: 20,
+                    targetY: 20,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             // No units to move
             expect(result).toBe(false);
         });
 
         it('should fail with empty selection', () => {
-            const result = executeCommand(state, {
-                type: 'move_selected_units',
-                targetX: 20,
-                targetY: 20,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'move_selected_units',
+                    targetX: 20,
+                    targetY: 20,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(false);
         });
@@ -466,11 +663,18 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityIds.add(building.id);
             state.selectedEntityId = unit.id;
 
-            const result = executeCommand(state, {
-                type: 'move_selected_units',
-                targetX: 20,
-                targetY: 20,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'move_selected_units',
+                    targetX: 20,
+                    targetY: 20,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             const unitState = state.unitStates.get(unit.id);
@@ -486,11 +690,18 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
-            executeCommand(state, {
-                type: 'move_selected_units',
-                targetX: 10,
-                targetY: 5,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'move_selected_units',
+                    targetX: 10,
+                    targetY: 5,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             const unitState = state.unitStates.get(unit.id)!;
             const pathLength = unitState.path.length;
@@ -510,7 +721,10 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should update tile occupancy during movement', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0);
             const controller = state.movement.getController(unit.id)!;
-            controller.startPath([{ x: 6, y: 5 }, { x: 7, y: 5 }]);
+            controller.startPath([
+                { x: 6, y: 5 },
+                { x: 7, y: 5 },
+            ]);
             // Default speed is 2 for Carrier
 
             // Progress starts at 1 when path set. 0.5s at speed 2 adds 1 -> moves 2 tiles.
@@ -526,7 +740,11 @@ describe('Unit Placement, Selection & Movement', () => {
             const controller = state.movement.getController(unit.id)!;
             const unitState = state.unitStates.get(unit.id)!;
             // Longer path to test incremental movement
-            controller.startPath([{ x: 6, y: 5 }, { x: 7, y: 5 }, { x: 8, y: 5 }]);
+            controller.startPath([
+                { x: 6, y: 5 },
+                { x: 7, y: 5 },
+                { x: 8, y: 5 },
+            ]);
             // Default speed is 2 for Carrier
 
             // Progress starts at 1 when path set. 0.5s at speed 2 adds 1 -> moves 2 tiles.
@@ -559,33 +777,54 @@ describe('Unit Placement, Selection & Movement', () => {
     describe('Full Integration: Spawn → Select → Move', () => {
         it('should spawn, select, and move a unit end-to-end', () => {
             // Spawn
-            executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Swordsman,
-                x: 5,
-                y: 5,
-                player: 0,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Swordsman,
+                    x: 5,
+                    y: 5,
+                    player: 0,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             const unit = state.entities[0];
             expect(unit).toBeDefined();
 
             // Select at tile
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: 5,
-                y: 5,
-                addToSelection: false,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 5,
+                    y: 5,
+                    addToSelection: false,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityId).toBe(unit.id);
 
             // Move
-            executeCommand(state, {
-                type: 'move_selected_units',
-                targetX: 15,
-                targetY: 5,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'move_selected_units',
+                    targetX: 15,
+                    targetY: 5,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             const unitState = state.unitStates.get(unit.id)!;
             expect(unitState.path.length).toBeGreaterThan(0);
@@ -602,33 +841,54 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should handle multi-unit workflow: spawn multiple, box select, move in formation', () => {
             // Spawn 3 units in a cluster
             for (let i = 0; i < 3; i++) {
-                executeCommand(state, {
-                    type: 'spawn_unit',
-                    unitType: UnitType.Swordsman,
-                    x: 5 + i,
-                    y: 5,
-                    player: 0,
-                }, groundType, groundHeight, mapSize, eventBus);
+                executeCommand(
+                    state,
+                    {
+                        type: 'spawn_unit',
+                        unitType: UnitType.Swordsman,
+                        x: 5 + i,
+                        y: 5,
+                        player: 0,
+                    },
+                    groundType,
+                    groundHeight,
+                    mapSize,
+                    eventBus
+                );
             }
             expect(state.entities).toHaveLength(3);
 
             // Box select all 3
-            executeCommand(state, {
-                type: 'select_area',
-                x1: 4,
-                y1: 4,
-                x2: 8,
-                y2: 6,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_area',
+                    x1: 4,
+                    y1: 4,
+                    x2: 8,
+                    y2: 6,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityIds.size).toBe(3);
 
             // Move all in formation to a nearby target (short distance)
-            executeCommand(state, {
-                type: 'move_selected_units',
-                targetX: 15,
-                targetY: 10,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'move_selected_units',
+                    targetX: 15,
+                    targetY: 10,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             // All should have paths
             for (const entity of state.entities) {
@@ -661,51 +921,86 @@ describe('Unit Placement, Selection & Movement', () => {
 
         it('should handle spawn → shift select multiple → move', () => {
             // Spawn 2 units far apart
-            executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Swordsman,
-                x: 5,
-                y: 5,
-                player: 0,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Swordsman,
+                    x: 5,
+                    y: 5,
+                    player: 0,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
-            executeCommand(state, {
-                type: 'spawn_unit',
-                unitType: UnitType.Swordsman,
-                x: 10,
-                y: 10,
-                player: 0,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'spawn_unit',
+                    unitType: UnitType.Swordsman,
+                    x: 10,
+                    y: 10,
+                    player: 0,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             const unit1 = state.entities[0];
             const unit2 = state.entities[1];
 
             // Select first (normal click)
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: unit1.x,
-                y: unit1.y,
-                addToSelection: false,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: unit1.x,
+                    y: unit1.y,
+                    addToSelection: false,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityIds.size).toBe(1);
 
             // Shift+click second
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: unit2.x,
-                y: unit2.y,
-                addToSelection: true,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: unit2.x,
+                    y: unit2.y,
+                    addToSelection: true,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityIds.size).toBe(2);
 
             // Move both
-            const result = executeCommand(state, {
-                type: 'move_selected_units',
-                targetX: 25,
-                targetY: 25,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'move_selected_units',
+                    targetX: 25,
+                    targetY: 25,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(true);
             expect(state.unitStates.get(unit1.id)!.path.length).toBeGreaterThan(0);
@@ -721,13 +1016,20 @@ describe('Unit Placement, Selection & Movement', () => {
             state.addEntity(EntityType.Unit, UnitType.Swordsman, 7, 7, 0);
             state.addEntity(EntityType.Unit, UnitType.Swordsman, 20, 20, 0);
 
-            executeCommand(state, {
-                type: 'select_area',
-                x1: 4,
-                y1: 4,
-                x2: 8,
-                y2: 8,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_area',
+                    x1: 4,
+                    y1: 4,
+                    x2: 8,
+                    y2: 8,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityIds.size).toBe(2);
         });
@@ -736,13 +1038,20 @@ describe('Unit Placement, Selection & Movement', () => {
             state.addEntity(EntityType.Building, 1, 10, 10, 0);
             state.addEntity(EntityType.Unit, UnitType.Swordsman, 11, 10, 0);
 
-            executeCommand(state, {
-                type: 'select_area',
-                x1: 9,
-                y1: 9,
-                x2: 12,
-                y2: 11,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_area',
+                    x1: 9,
+                    y1: 9,
+                    x2: 12,
+                    y2: 11,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityIds.size).toBe(1);
             const selectedId = Array.from(state.selectedEntityIds)[0];
@@ -754,13 +1063,20 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
-            executeCommand(state, {
-                type: 'select_area',
-                x1: 20,
-                y1: 20,
-                x2: 30,
-                y2: 30,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_area',
+                    x1: 20,
+                    y1: 20,
+                    x2: 30,
+                    y2: 30,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityIds.size).toBe(0);
             expect(state.selectedEntityId).toBe(null);
@@ -771,13 +1087,20 @@ describe('Unit Placement, Selection & Movement', () => {
             state.addEntity(EntityType.Unit, UnitType.Swordsman, 7, 7, 0);
 
             // Drag from bottom-right to top-left
-            executeCommand(state, {
-                type: 'select_area',
-                x1: 8,
-                y1: 8,
-                x2: 4,
-                y2: 4,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_area',
+                    x1: 8,
+                    y1: 8,
+                    x2: 4,
+                    y2: 4,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityIds.size).toBe(2);
         });
@@ -791,10 +1114,17 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
-            executeCommand(state, {
-                type: 'select',
-                entityId: null,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select',
+                    entityId: null,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityId).toBe(null);
             expect(state.selectedEntityIds.size).toBe(0);
@@ -805,10 +1135,17 @@ describe('Unit Placement, Selection & Movement', () => {
             state.selectedEntityIds.add(unit.id);
             state.selectedEntityId = unit.id;
 
-            executeCommand(state, {
-                type: 'remove_entity',
-                entityId: unit.id,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'remove_entity',
+                    entityId: unit.id,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityId).toBe(null);
             expect(state.selectedEntityIds.size).toBe(0);
@@ -818,10 +1155,17 @@ describe('Unit Placement, Selection & Movement', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
             expect(state.unitStates.has(unit.id)).toBe(true);
 
-            executeCommand(state, {
-                type: 'remove_entity',
-                entityId: unit.id,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'remove_entity',
+                    entityId: unit.id,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.unitStates.has(unit.id)).toBe(false);
         });
@@ -830,10 +1174,17 @@ describe('Unit Placement, Selection & Movement', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
             expect(state.getEntityAt(5, 5)).toBeDefined();
 
-            executeCommand(state, {
-                type: 'remove_entity',
-                entityId: unit.id,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'remove_entity',
+                    entityId: unit.id,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.getEntityAt(5, 5)).toBeUndefined();
         });
@@ -846,12 +1197,19 @@ describe('Unit Placement, Selection & Movement', () => {
             // Spawn unselectable unit
             state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
 
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: 10,
-                y: 10,
-                addToSelection: false,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 10,
+                    y: 10,
+                    addToSelection: false,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityId).toBe(null);
             expect(state.selectedEntityIds.size).toBe(0);
@@ -862,21 +1220,35 @@ describe('Unit Placement, Selection & Movement', () => {
             state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
 
             // Select the selectable one
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: 5,
-                y: 5,
-                addToSelection: false,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 5,
+                    y: 5,
+                    addToSelection: false,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
             expect(state.selectedEntityIds.size).toBe(1);
 
             // Shift+click the unselectable one
-            executeCommand(state, {
-                type: 'select_at_tile',
-                x: 10,
-                y: 10,
-                addToSelection: true,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_at_tile',
+                    x: 10,
+                    y: 10,
+                    addToSelection: true,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             // Should still only have the selectable one
             expect(state.selectedEntityIds.size).toBe(1);
@@ -888,13 +1260,20 @@ describe('Unit Placement, Selection & Movement', () => {
             state.addEntity(EntityType.Unit, UnitType.Carrier, 7, 7, 0, false); // unselectable
             state.addEntity(EntityType.Unit, UnitType.Swordsman, 6, 6, 0);
 
-            executeCommand(state, {
-                type: 'select_area',
-                x1: 4,
-                y1: 4,
-                x2: 8,
-                y2: 8,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select_area',
+                    x1: 4,
+                    y1: 4,
+                    x2: 8,
+                    y2: 8,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             // Should only select the 2 selectable units
             expect(state.selectedEntityIds.size).toBe(2);
@@ -903,10 +1282,17 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should not select unselectable entity via select command', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
 
-            executeCommand(state, {
-                type: 'select',
-                entityId: unit.id,
-            }, groundType, groundHeight, mapSize, eventBus);
+            executeCommand(
+                state,
+                {
+                    type: 'select',
+                    entityId: unit.id,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(state.selectedEntityId).toBe(null);
             expect(state.selectedEntityIds.size).toBe(0);
@@ -915,10 +1301,17 @@ describe('Unit Placement, Selection & Movement', () => {
         it('should not toggle unselectable entity via toggle_selection', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
 
-            const result = executeCommand(state, {
-                type: 'toggle_selection',
-                entityId: unit.id,
-            }, groundType, groundHeight, mapSize, eventBus);
+            const result = executeCommand(
+                state,
+                {
+                    type: 'toggle_selection',
+                    entityId: unit.id,
+                },
+                groundType,
+                groundHeight,
+                mapSize,
+                eventBus
+            );
 
             expect(result).toBe(false);
             expect(state.selectedEntityIds.size).toBe(0);

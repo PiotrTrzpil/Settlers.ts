@@ -42,15 +42,15 @@ export class MovementSystem implements TickSystem {
     private mapHeight?: number;
     private tileOccupancy?: Map<string, number>;
 
-    // Callbacks for game state interaction
-    private updatePosition?: UpdatePositionFn;
-    private getEntity?: GetEntityFn;
+    // Callbacks for game state interaction (MUST be set via setCallbacks)
+    private updatePosition!: UpdatePositionFn;
+    private getEntity!: GetEntityFn;
 
-    // Event bus for notifying other systems of movement changes
-    private eventBus?: EventBus;
+    // Event bus for notifying other systems of movement changes (MUST be set via setEventBus)
+    private eventBus!: EventBus;
 
-    // Seeded RNG for deterministic push behavior
-    private rng?: SeededRng;
+    // Seeded RNG for deterministic push behavior (MUST be set via setRng)
+    private rng!: SeededRng;
 
     // Previous state snapshots for change detection
     private prevSnapshots: Map<number, ControllerSnapshot> = new Map();
@@ -58,12 +58,7 @@ export class MovementSystem implements TickSystem {
     /**
      * Set the terrain data for pathfinding and collision.
      */
-    setTerrainData(
-        groundType: Uint8Array,
-        groundHeight: Uint8Array,
-        mapWidth: number,
-        mapHeight: number
-    ): void {
+    setTerrainData(groundType: Uint8Array, groundHeight: Uint8Array, mapWidth: number, mapHeight: number): void {
         this.groundType = groundType;
         this.groundHeight = groundHeight;
         this.mapWidth = mapWidth;
@@ -185,10 +180,14 @@ export class MovementSystem implements TickSystem {
         }
 
         const path = findPath(
-            controller.tileX, controller.tileY,
-            targetX, targetY,
-            this.groundType, this.groundHeight,
-            this.mapWidth, this.mapHeight,
+            controller.tileX,
+            controller.tileY,
+            targetX,
+            targetY,
+            this.groundType,
+            this.groundHeight,
+            this.mapWidth,
+            this.mapHeight,
             this.tileOccupancy,
             true // ignoreOccupancy: Initial plan should ignore transient units
         );
@@ -226,11 +225,7 @@ export class MovementSystem implements TickSystem {
     }
 
     /** Check if the waypoint is blocked by a unit and try to resolve it */
-    private handleBlockedWaypoint(
-        controller: MovementController,
-        wp: TileCoord,
-        deltaSec: number
-    ): boolean {
+    private handleBlockedWaypoint(controller: MovementController, wp: TileCoord, deltaSec: number): boolean {
         if (!this.tileOccupancy) return false;
 
         const blockingEntityId = this.tileOccupancy.get(tileKey(wp.x, wp.y));
@@ -238,7 +233,7 @@ export class MovementSystem implements TickSystem {
             return false;
         }
 
-        const blockingEntity = this.getEntity?.(blockingEntityId);
+        const blockingEntity = this.getEntity(blockingEntityId);
         if (!blockingEntity || blockingEntity.type !== EntityType.Unit) {
             return false;
         }
@@ -290,7 +285,9 @@ export class MovementSystem implements TickSystem {
         // Detect teleporting (visual position discontinuity)
         const teleportDist = controller.detectTeleport();
         if (teleportDist > 1.5) {
-            console.warn(`[MovementSystem] TELEPORT DETECTED! Entity ${controller.entityId} jumped ${teleportDist.toFixed(2)} tiles`);
+            console.warn(
+                `[MovementSystem] TELEPORT DETECTED! Entity ${controller.entityId} jumped ${teleportDist.toFixed(2)} tiles`
+            );
         }
 
         // Update last visual position for next frame's teleport detection
@@ -312,13 +309,7 @@ export class MovementSystem implements TickSystem {
      * animation is now handled by SettlerTaskSystem, not event-driven.
      * movementStopped is kept for CarrierSystem arrival detection.
      */
-    private emitMovementEvents(
-        controller: MovementController,
-        prevState: MovementState,
-        _prevDirection: number
-    ): void {
-        if (!this.eventBus) return;
-
+    private emitMovementEvents(controller: MovementController, prevState: MovementState, _prevDirection: number): void {
         const newState = controller.state;
 
         // Only emit movementStopped - used by CarrierSystem for arrival detection
@@ -349,16 +340,17 @@ export class MovementSystem implements TickSystem {
 
     /** Recalculate a prefix of the path */
     private repairPathPrefix(controller: MovementController): boolean {
-        const prefixTargetIdx = Math.min(
-            controller.pathIndex + PATH_REPAIR_DISTANCE,
-            controller.path.length - 1
-        );
+        const prefixTargetIdx = Math.min(controller.pathIndex + PATH_REPAIR_DISTANCE, controller.path.length - 1);
         const prefixTarget = controller.path[prefixTargetIdx];
         const newPrefix = findPath(
-            controller.tileX, controller.tileY,
-            prefixTarget.x, prefixTarget.y,
-            this.groundType!, this.groundHeight!,
-            this.mapWidth!, this.mapHeight!,
+            controller.tileX,
+            controller.tileY,
+            prefixTarget.x,
+            prefixTarget.y,
+            this.groundType!,
+            this.groundHeight!,
+            this.mapWidth!,
+            this.mapHeight!,
             this.tileOccupancy!,
             false // ignoreOccupancy: Repair should respect current obstacles
         );
@@ -373,10 +365,14 @@ export class MovementSystem implements TickSystem {
     private repairFullPath(controller: MovementController): boolean {
         const goal = controller.path[controller.path.length - 1];
         const newPath = findPath(
-            controller.tileX, controller.tileY,
-            goal.x, goal.y,
-            this.groundType!, this.groundHeight!,
-            this.mapWidth!, this.mapHeight!,
+            controller.tileX,
+            controller.tileY,
+            goal.x,
+            goal.y,
+            this.groundType!,
+            this.groundHeight!,
+            this.mapWidth!,
+            this.mapHeight!,
             this.tileOccupancy!,
             false // ignoreOccupancy: Repair should respect current obstacles
         );
@@ -391,10 +387,7 @@ export class MovementSystem implements TickSystem {
      * Try to resolve an obstacle blocking the path.
      * Strategies: detour, path repair, or push.
      */
-    private tryResolveObstacle(
-        controller: MovementController,
-        blockingEntityId: number
-    ): boolean {
+    private tryResolveObstacle(controller: MovementController, blockingEntityId: number): boolean {
         // Strategy a: Try a 1-tile detour
         if (this.hasTerrainData()) {
             const detour = this.findDetour(controller);
@@ -447,9 +440,7 @@ export class MovementSystem implements TickSystem {
         if (!blockedWp) return null;
 
         const nextIdx = controller.pathIndex + 1;
-        const rejoinWp = nextIdx < controller.path.length
-            ? controller.path[nextIdx]
-            : blockedWp;
+        const rejoinWp = nextIdx < controller.path.length ? controller.path[nextIdx] : blockedWp;
 
         const neighbors = getAllNeighbors({ x: controller.tileX, y: controller.tileY });
 
@@ -471,10 +462,14 @@ export class MovementSystem implements TickSystem {
         if (controller.tileX === goal.x && controller.tileY === goal.y) return;
 
         const newPath = findPath(
-            controller.tileX, controller.tileY,
-            goal.x, goal.y,
-            this.groundType!, this.groundHeight!,
-            this.mapWidth!, this.mapHeight!,
+            controller.tileX,
+            controller.tileY,
+            goal.x,
+            goal.y,
+            this.groundType!,
+            this.groundHeight!,
+            this.mapWidth!,
+            this.mapHeight!,
             this.tileOccupancy,
             true // ignoreOccupancy for planning
         );
@@ -521,7 +516,7 @@ export class MovementSystem implements TickSystem {
 
         // Execute the push
         blockedController.handlePush(freeDir.x, freeDir.y);
-        this.updatePosition?.(blockedEntityId, freeDir.x, freeDir.y);
+        this.updatePosition(blockedEntityId, freeDir.x, freeDir.y);
 
         // Repath to continue toward original goal
         if (goal) {

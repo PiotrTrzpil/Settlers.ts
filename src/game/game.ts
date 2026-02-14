@@ -23,6 +23,15 @@ export interface ResetOptions {
 // import { ScriptService, type ScriptLoadResult } from './scripting';
 type ScriptLoadResult = { success: boolean; scriptPath: string | null; error?: string };
 
+/**
+ * Interface for the dynamically-loaded ScriptService.
+ * Matches the public API of ScriptService without importing it.
+ */
+interface IScriptService {
+    loadScriptForMap(mapFilename: string): Promise<ScriptLoadResult>;
+    destroy(): void;
+}
+
 /** contains the game state */
 export class Game {
     public mapSize: MapSize;
@@ -34,7 +43,7 @@ export class Game {
     public readonly eventBus: EventBus;
     public gameLoop: GameLoop;
     // Script service is optional - only loaded when Lua is enabled
-    private scriptService: unknown = null;
+    private scriptService: IScriptService | null = null;
 
     /** Current interaction mode */
     public mode: 'select' | 'place_building' | 'move' = 'select';
@@ -67,7 +76,10 @@ export class Game {
         // Populate map objects (trees) from entity data chunk (type 6)
         if (mapLoader.entityData?.objects?.length) {
             const seedCount = populateMapObjectsFromEntityData(
-                this.state, mapLoader.entityData.objects, this.groundType, this.mapSize
+                this.state,
+                mapLoader.entityData.objects,
+                this.groundType,
+                this.mapSize
             );
             if (seedCount > 0) {
                 console.log(`Game: Loaded ${seedCount} seed trees from map data`);
@@ -84,34 +96,35 @@ export class Game {
 
         // Populate buildings from map entity data (if available)
         if (mapLoader.entityData?.buildings?.length) {
-            const count = populateMapBuildings(
-                this.state,
-                mapLoader.entityData.buildings
-            );
+            const count = populateMapBuildings(this.state, mapLoader.entityData.buildings);
             if (count > 0) {
                 console.log(`Game: Loaded ${count} buildings from map data`);
             }
         }
 
         // Initialize Audio
-        void this.soundManager.init(this.fileManager).then(() => {
-            if (!this.soundManager.currentMusicId) {
-                console.log('Game: SoundManager initialized, requesting music...');
-                this.soundManager.playRandomMusic(Race.Roman);
-            }
-        });
+        this.soundManager
+            .init(this.fileManager)
+            .then(() => {
+                if (!this.soundManager.currentMusicId) {
+                    console.log('Game: SoundManager initialized, requesting music...');
+                    this.soundManager.playRandomMusic(Race.Roman);
+                }
+            })
+            .catch((err: unknown) => {
+                console.warn('Game: SoundManager initialization failed:', err);
+            });
 
-        // Debug helper
-        (window as any).debugSound = () => {
-            const sm = this.soundManager as any;
+        // Debug helper (typed via env.d.ts)
+        window.debugSound = () => {
             console.log('--- Sound Debug ---');
-            console.log('Current Music ID:', sm.currentMusicId);
-            console.log('Music Volume:', sm.musicVolume);
-            console.log('Master Volume:', sm.masterVolume);
+            console.log('Current Music ID:', this.soundManager.currentMusicId);
             console.log('Audio Context State:', Howler.ctx ? Howler.ctx.state : 'No Context');
         };
 
-        console.log(`Game\tMap loaded: ${this.mapSize.width}x${this.mapSize.height} in ${Math.round(performance.now() - start)}ms`);
+        console.log(
+            `Game\tMap loaded: ${this.mapSize.width}x${this.mapSize.height} in ${Math.round(performance.now() - start)}ms`
+        );
     }
 
     public get soundManager(): SoundManager {
@@ -121,8 +134,13 @@ export class Game {
     /** Execute a command against the game state */
     public execute(cmd: Command): boolean {
         return executeCommand(
-            this.state, cmd, this.groundType, this.groundHeight, this.mapSize,
-            this.eventBus, this.gameLoop.settlerTaskSystem
+            this.state,
+            cmd,
+            this.groundType,
+            this.groundHeight,
+            this.mapSize,
+            this.eventBus,
+            this.gameLoop.settlerTaskSystem
         );
     }
 
@@ -177,9 +195,7 @@ export class Game {
             : [EntityType.Unit, EntityType.Building, EntityType.StackedResource, EntityType.MapObject];
 
         // Collect entities to remove (snapshot IDs first to avoid mutation during iteration)
-        const idsToRemove = this.state.entities
-            .filter(e => typesToRemove.includes(e.type))
-            .map(e => e.id);
+        const idsToRemove = this.state.entities.filter(e => typesToRemove.includes(e.type)).map(e => e.id);
 
         // Remove via command pipeline for proper cleanup
         for (const id of idsToRemove) {
@@ -230,7 +246,7 @@ export class Game {
                 this.scriptService = service;
             }
 
-            return (this.scriptService as any).loadScriptForMap(mapFilename);
+            return this.scriptService!.loadScriptForMap(mapFilename);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             return { success: false, scriptPath: null, error: msg };
@@ -249,9 +265,7 @@ export class Game {
 
     /** Destroy the game and clean up all resources */
     public destroy(): void {
-        if (this.scriptService && typeof (this.scriptService as any).destroy === 'function') {
-            (this.scriptService as any).destroy();
-        }
+        this.scriptService?.destroy();
         this.gameLoop.destroy();
     }
 }

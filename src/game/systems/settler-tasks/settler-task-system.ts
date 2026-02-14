@@ -18,11 +18,7 @@ import { EntityType, UnitType, Entity, getCarrierState } from '../../entity';
 import { EMaterialType } from '../../economy';
 import { LogHandler } from '@/utilities/log-handler';
 import { hexDistance } from '../hex-directions';
-import {
-    ANIMATION_SEQUENCES,
-    carrySequenceKey,
-    workSequenceKey,
-} from '../../animation';
+import { ANIMATION_SEQUENCES, carrySequenceKey, workSequenceKey } from '../../animation';
 import type { AnimationService } from '../../animation/index';
 import {
     TaskType,
@@ -80,7 +76,7 @@ export class SettlerTaskSystem implements TickSystem {
     private jobDefinitions: JobDefinitions;
     private workHandlers = new Map<SearchType, WorkHandler>();
     private runtimes = new Map<number, UnitRuntime>();
-    private eventBus!: EventBus;  // MUST be set via setEventBus
+    private eventBus!: EventBus; // MUST be set via setEventBus
 
     constructor(gameState: GameState, animationService: AnimationService) {
         this.gameState = gameState;
@@ -123,8 +119,10 @@ export class SettlerTaskSystem implements TickSystem {
 
             canWork: (targetId: number) => {
                 // Can work when building has inputs and output space
-                return this.gameState.inventoryManager.canStartProduction(targetId) &&
-                       this.gameState.inventoryManager.canStoreOutput(targetId);
+                return (
+                    this.gameState.inventoryManager.canStartProduction(targetId) &&
+                    this.gameState.inventoryManager.canStoreOutput(targetId)
+                );
             },
 
             onWorkStart: (targetId: number) => {
@@ -221,10 +219,9 @@ export class SettlerTaskSystem implements TickSystem {
         };
         runtime.state = SettlerState.WORKING;
 
-        // Start walk animation
-        const controller = this.gameState.movement.getController(entityId);
-        const direction = controller?.direction ?? 0;
-        this.startWalkAnimation(entity, direction);
+        // Start walk animation (controller MUST exist after successful moveUnit)
+        const controller = this.gameState.movement.getController(entityId)!;
+        this.startWalkAnimation(entity, controller.direction);
 
         log.debug(`Unit ${entityId} assigned move task to (${targetX}, ${targetY})`);
         return true;
@@ -259,7 +256,7 @@ export class SettlerTaskSystem implements TickSystem {
         destBuildingId: number,
         material: EMaterialType,
         amount: number,
-        homeId: number,
+        homeId: number
     ): boolean {
         // Entity MUST exist and be a carrier - caller should have validated
         const entity = this.gameState.getEntityOrThrow(entityId, 'carrier for job assignment');
@@ -306,12 +303,13 @@ export class SettlerTaskSystem implements TickSystem {
             return false;
         }
 
-        // Start walk animation
-        const controller = this.gameState.movement.getController(entityId);
-        const direction = controller?.direction ?? 0;
-        this.startWalkAnimation(entity, direction);
+        // Start walk animation (controller MUST exist after successful moveUnit)
+        const controller = this.gameState.movement.getController(entityId)!;
+        this.startWalkAnimation(entity, controller.direction);
 
-        log.debug(`Carrier ${entityId} assigned transport job: ${amount} of ${material} from ${sourceBuildingId} to ${destBuildingId}`);
+        log.debug(
+            `Carrier ${entityId} assigned transport job: ${amount} of ${material} from ${sourceBuildingId} to ${destBuildingId}`
+        );
         return true;
     }
 
@@ -446,10 +444,9 @@ export class SettlerTaskSystem implements TickSystem {
         idleState.idleTime += dt;
 
         if (idleState.idleTime >= idleState.nextIdleTurnTime) {
-            // Time for a random turn
-            const animState = this.animationService.getState(unit.id);
-            const currentDirection = animState?.direction ?? 0;
-            const newDirection = this.getAdjacentDirection(currentDirection);
+            // Time for a random turn (animState MUST exist for active units)
+            const animState = this.animationService.getState(unit.id)!;
+            const newDirection = this.getAdjacentDirection(animState.direction);
             this.animationService.setDirection(unit.id, newDirection);
 
             // Reset timer
@@ -463,7 +460,7 @@ export class SettlerTaskSystem implements TickSystem {
      */
     private getAdjacentDirection(currentDirection: number): number {
         const offset = this.gameState.rng.nextBool() ? 1 : -1;
-        return ((currentDirection + offset) % NUM_DIRECTIONS + NUM_DIRECTIONS) % NUM_DIRECTIONS;
+        return (((currentDirection + offset) % NUM_DIRECTIONS) + NUM_DIRECTIONS) % NUM_DIRECTIONS;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -495,7 +492,9 @@ export class SettlerTaskSystem implements TickSystem {
     private handleIdle(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
         const handler = this.workHandlers.get(config.search);
         if (!handler) {
-            throw new Error(`No work handler registered for search type: ${config.search}. Settler ${settler.id} (${UnitType[settler.subType]}) cannot find work.`);
+            throw new Error(
+                `No work handler registered for search type: ${config.search}. Settler ${settler.id} (${UnitType[settler.subType]}) cannot find work.`
+            );
         }
 
         // Find home building (workplace) for this settler
@@ -512,9 +511,10 @@ export class SettlerTaskSystem implements TickSystem {
         if (homeBuilding) {
             const pickupTask = tasks.find(t => t.task === TaskType.PICKUP && t.good !== undefined);
             if (pickupTask && pickupTask.good !== undefined) {
-                const canStore = this.gameState.inventoryManager.canAcceptInput(homeBuilding.id, pickupTask.good, 1) ||
-                                 this.gameState.inventoryManager.getInputSpace(homeBuilding.id, pickupTask.good) > 0 ||
-                                 this.canStoreInOutput(homeBuilding.id, pickupTask.good);
+                const canStore =
+                    this.gameState.inventoryManager.canAcceptInput(homeBuilding.id, pickupTask.good, 1) ||
+                    this.gameState.inventoryManager.getInputSpace(homeBuilding.id, pickupTask.good) > 0 ||
+                    this.canStoreInOutput(homeBuilding.id, pickupTask.good);
                 if (!canStore) {
                     // Output full - return home and wait there
                     this.returnHomeAndWait(settler, homeBuilding);
@@ -541,7 +541,9 @@ export class SettlerTaskSystem implements TickSystem {
             },
         };
 
-        log.debug(`Settler ${settler.id} starting job ${jobId}, target ${target.entityId}, home ${homeBuilding?.id ?? 'none'}`);
+        log.debug(
+            `Settler ${settler.id} starting job ${jobId}, target ${target.entityId}, home ${homeBuilding?.id ?? 'none'}`
+        );
     }
 
     /**
@@ -674,8 +676,10 @@ export class SettlerTaskSystem implements TickSystem {
             return this.executeWait(job, task, dt);
 
         default:
-            throw new Error(`Unhandled task type: ${task.task} in job ${job.jobId} (settler ${settler.id}). ` +
-                `Add implementation in executeTask() or remove from jobs.yaml.`);
+            throw new Error(
+                `Unhandled task type: ${task.task} in job ${job.jobId} (settler ${settler.id}). ` +
+                        `Add implementation in executeTask() or remove from jobs.yaml.`
+            );
         }
     }
 
@@ -781,7 +785,7 @@ export class SettlerTaskSystem implements TickSystem {
         const withdrawn = this.gameState.inventoryManager.withdrawReservedOutput(
             sourceBuildingId,
             material,
-            requestedAmount,
+            requestedAmount
         );
 
         if (withdrawn === 0) {
@@ -857,7 +861,9 @@ export class SettlerTaskSystem implements TickSystem {
         }
 
         if (!job.data.homeId) {
-            throw new Error(`Settler ${settler.id} (${UnitType[settler.subType]}) has no home building for dropoff. Job started incorrectly.`);
+            throw new Error(
+                `Settler ${settler.id} (${UnitType[settler.subType]}) has no home building for dropoff. Job started incorrectly.`
+            );
         }
 
         const homeId = job.data.homeId;
@@ -887,11 +893,7 @@ export class SettlerTaskSystem implements TickSystem {
         const amount = carrierState.carryingAmount ?? jobAmount;
 
         // Deposit to destination building
-        const deposited = this.gameState.inventoryManager.depositInput(
-            destBuildingId,
-            material,
-            amount,
-        );
+        const deposited = this.gameState.inventoryManager.depositInput(destBuildingId, material, amount);
 
         const overflow = amount - deposited;
         if (overflow > 0) {
@@ -940,7 +942,9 @@ export class SettlerTaskSystem implements TickSystem {
     private executeSearchPos(settler: Entity, job: JobState, handler?: WorkHandler): TaskResult {
         if (job.type !== 'worker') return TaskResult.FAILED;
         if (!handler) {
-            throw new Error(`Settler ${settler.id} (${UnitType[settler.subType]}): SEARCH_POS task requires a work handler`);
+            throw new Error(
+                `Settler ${settler.id} (${UnitType[settler.subType]}): SEARCH_POS task requires a work handler`
+            );
         }
 
         // Use findTarget to search for a valid position
@@ -1079,8 +1083,8 @@ export class SettlerTaskSystem implements TickSystem {
             return ANIMATION_SEQUENCES.WALK;
 
         case 'carry': {
-            // Material-specific carry animation (from carrier state)
-            const material = settler.carrier?.carryingMaterial ?? 0;
+            // Material-specific carry animation (carrier MUST have material for carry anim)
+            const material = settler.carrier!.carryingMaterial!;
             return carrySequenceKey(material);
         }
 
@@ -1115,7 +1119,7 @@ export class SettlerTaskSystem implements TickSystem {
         case 'carry':
             return true;
 
-        // Work animations loop
+            // Work animations loop
         case 'chop':
         case 'harvest':
         case 'mine':
@@ -1125,7 +1129,7 @@ export class SettlerTaskSystem implements TickSystem {
         case 'work':
             return true;
 
-        // One-shot animations
+            // One-shot animations
         case 'idle':
         case 'pickup':
         case 'dropoff':

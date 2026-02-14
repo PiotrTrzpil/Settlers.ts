@@ -9,6 +9,7 @@
 
 import { LogHandler } from '@/utilities/log-handler';
 import { LuaScriptSystem, type LuaScriptSystemConfig } from './lua-script-system';
+import type { ScriptEventType } from './event-dispatcher';
 import type { TickSystem } from '../tick-system';
 
 const log = new LogHandler('ScriptService');
@@ -164,8 +165,8 @@ export class ScriptService implements TickSystem {
     /**
      * Dispatch a custom event to script handlers.
      */
-    public dispatchEvent(event: string, ...args: unknown[]): void {
-        this.scriptSystem?.dispatchEvent(event as any, ...args);
+    public dispatchEvent(event: ScriptEventType, ...args: unknown[]): void {
+        this.scriptSystem?.dispatchEvent(event, ...args);
     }
 
     /**

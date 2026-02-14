@@ -45,8 +45,8 @@ class Slot {
         return this.width - this.x;
     }
 
-    /** return the bottom positon of the slot */
-    public get buttom() {
+    /** return the bottom position of the slot */
+    public get bottom() {
         return this.y + this.height;
     }
 
@@ -68,18 +68,18 @@ class Slot {
  * Format: (R5 << 11) | (G6 << 5) | B5
  */
 const PROCEDURAL_PALETTE: readonly number[] = [
-    0x001F, // bright blue    (water)
-    0xFE60, // sandy yellow   (beach)
-    0x07E0, // bright green   (grass)
+    0x001f, // bright blue    (water)
+    0xfe60, // sandy yellow   (beach)
+    0x07e0, // bright green   (grass)
     0x0400, // dark green     (grass dark)
-    0xCE40, // olive          (grass dry)
-    0xFD20, // orange         (desert)
+    0xce40, // olive          (grass dry)
+    0xfd20, // orange         (desert)
     0x8410, // gray           (rock)
-    0x4A49, // dark teal      (swamp)
-    0xA145, // brown          (mud)
-    0xFFFF, // white          (snow)
-    0xDDA0, // tan            (dusty way)
-    0x632C, // dark gray      (rocky way)
+    0x4a49, // dark teal      (swamp)
+    0xa145, // brown          (mud)
+    0xffff, // white          (snow)
+    0xdda0, // tan            (dusty way)
+    0x632c, // dark gray      (rocky way)
 ];
 
 /**
@@ -91,9 +91,9 @@ export class TextureMap16Bit extends ShaderTexture {
     /** the size of the texture map. width and height are equeal! */
     public imgWidthHeight: number;
     /*
-    * every slot is 256 pixle height so y=index*256
-    * the value of slotPosX is the position in x
-    */
+     * every slot is 256 pixle height so y=index*256
+     * the value of slotPosX is the position in x
+     */
     private slots: Slot[] = [];
 
     constructor(widthHeight: number, textureIndex: number) {
@@ -104,7 +104,7 @@ export class TextureMap16Bit extends ShaderTexture {
 
         const numberOfPixles = widthHeight * widthHeight;
         for (let i = 0; i < numberOfPixles; i++) {
-            this.imgData[i] = 0xF81F;
+            this.imgData[i] = 0xf81f;
         }
 
         // reserve the 0/0 position as null slot
@@ -118,22 +118,15 @@ export class TextureMap16Bit extends ShaderTexture {
     /** declare an image of the given size within the texture map */
     public reserve(width: number, height: number): TextureMapImage | null {
         // find existing slot that can be used for the image
-        let slot = this.slots.find((s) => s.height === height && s.leftSize >= width);
+        let slot = this.slots.find(s => s.height === height && s.leftSize >= width);
         if (slot == null) {
             // create new slot
-            const freeY = this.slots[this.slots.length - 1]?.buttom ?? 0;
+            const freeY = this.slots[this.slots.length - 1]?.bottom ?? 0;
             slot = new Slot(freeY, this.imgWidthHeight, height);
             this.slots.push(slot);
         }
 
-        const newImg = new TextureMapImage(
-            this.imgData,
-            this.imgWidthHeight,
-            slot.x,
-            slot.y,
-            width,
-            height
-        );
+        const newImg = new TextureMapImage(this.imgData, this.imgWidthHeight, slot.x, slot.y, width, height);
 
         slot.increase(width);
 
@@ -173,7 +166,6 @@ export class TextureMap16Bit extends ShaderTexture {
         // 16-bit (2 byte) texels require alignment of 2.
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
 
-        gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border,
-            format, type, this.imgData);
+        gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border, format, type, this.imgData);
     }
 }

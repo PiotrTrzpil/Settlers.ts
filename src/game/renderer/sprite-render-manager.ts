@@ -43,7 +43,12 @@ function createTimer() {
     const start = performance.now();
     let last = start;
     return {
-        lap: () => { const now = performance.now(); const elapsed = Math.round(now - last); last = now; return elapsed },
+        lap: () => {
+            const now = performance.now();
+            const elapsed = Math.round(now - last);
+            last = now;
+            return elapsed;
+        },
         total: () => Math.round(performance.now() - start),
     };
 }
@@ -85,11 +90,7 @@ class SafeLoadBatch<T> {
      * @param gl - WebGL context for GPU upload
      * @param register - Function to register each item (called after GPU upload)
      */
-    finalize(
-        atlas: EntityTextureAtlas,
-        gl: WebGL2RenderingContext,
-        register: (item: T) => void
-    ): void {
+    finalize(atlas: EntityTextureAtlas, gl: WebGL2RenderingContext, register: (item: T) => void): void {
         if (this.items.length === 0) return;
 
         // GPU upload first
@@ -143,6 +144,7 @@ export class SpriteRenderManager {
     private textureUnit: number;
 
     // Sprite atlas and metadata
+    // OK: nullable - null until init() loads sprites, allows graceful fallback to procedural rendering
     private _spriteAtlas: EntityTextureAtlas | null = null;
     private _spriteRegistry: SpriteMetadataRegistry | null = null;
     private _currentRace: Race = Race.Roman;
@@ -284,10 +286,8 @@ export class SpriteRenderManager {
      */
     public asAnimationProvider(): AnimationDataProvider {
         return {
-            getAnimationData: (entityType: EntityType, subType: number) =>
-                this.getAnimationData(entityType, subType),
-            hasAnimation: (entityType: EntityType, subType: number) =>
-                this.hasAnimation(entityType, subType),
+            getAnimationData: (entityType: EntityType, subType: number) => this.getAnimationData(entityType, subType),
+            hasAnimation: (entityType: EntityType, subType: number) => this.hasAnimation(entityType, subType),
         };
     }
 
@@ -455,8 +455,11 @@ export class SpriteRenderManager {
             gpuUpload: Math.round(elapsed),
             totalSprites: Math.round(elapsed),
             atlasSize: `${atlas.layerCount}x${atlas.width}x${atlas.height}`,
-            spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
-                registry.getResourceCount() + registry.getUnitCount(),
+            spriteCount:
+                registry.getBuildingCount() +
+                registry.getMapObjectCount() +
+                registry.getResourceCount() +
+                registry.getUnitCount(),
             cacheHit: true,
             cacheSource: source,
         });
@@ -464,7 +467,7 @@ export class SpriteRenderManager {
         const sourceLabel = source === 'module' ? 'module cache (HMR)' : 'IndexedDB (refresh)';
         SpriteRenderManager.log.debug(
             `Restored sprites from ${sourceLabel} for ${Race[cached.race]} in ${elapsed.toFixed(1)}ms ` +
-            `(${atlas.layerCount} layers, ${registry.getBuildingCount()} buildings)`
+                `(${atlas.layerCount} layers, ${registry.getBuildingCount()} buildings)`
         );
     }
 
@@ -502,8 +505,8 @@ export class SpriteRenderManager {
         setAtlasCache(race, cacheData);
 
         // Save to IndexedDB (async, for page refresh) - don't await to avoid blocking
-        setIndexedDBCache(race, cacheData).catch(e => {
-            SpriteRenderManager.log.debug(`IndexedDB save failed (non-fatal): ${e}`);
+        setIndexedDBCache(race, cacheData).catch((e: unknown) => {
+            SpriteRenderManager.log.warn(`IndexedDB cache save failed (non-fatal): ${e}`);
         });
     }
 
@@ -531,8 +534,13 @@ export class SpriteRenderManager {
      */
     private recordLoadTimings(
         timings: {
-            filePreload: number; atlasAlloc: number; buildings: number;
-            mapObjects: number; resources: number; units: number; gpuUpload: number;
+            filePreload: number;
+            atlasAlloc: number;
+            buildings: number;
+            mapObjects: number;
+            resources: number;
+            units: number;
+            gpuUpload: number;
         },
         timer: ReturnType<typeof createTimer>,
         atlas: EntityTextureAtlas,
@@ -542,16 +550,19 @@ export class SpriteRenderManager {
             ...timings,
             totalSprites: timer.total(),
             atlasSize: `${atlas.layerCount}x${atlas.width}x${atlas.height}`,
-            spriteCount: registry.getBuildingCount() + registry.getMapObjectCount() +
-                registry.getResourceCount() + registry.getUnitCount(),
+            spriteCount:
+                registry.getBuildingCount() +
+                registry.getMapObjectCount() +
+                registry.getResourceCount() +
+                registry.getUnitCount(),
             cacheHit: false,
             cacheSource: null,
         });
 
         SpriteRenderManager.log.debug(
             `Sprite loading (ms): preload=${timings.filePreload}, buildings=${timings.buildings}, ` +
-            `mapObj=${timings.mapObjects}, resources=${timings.resources}, units=${timings.units}, ` +
-            `gpu=${timings.gpuUpload}, TOTAL=${timer.total()}, workers=${getDecoderPool().getDecodeCount()}`
+                `mapObj=${timings.mapObjects}, resources=${timings.resources}, units=${timings.units}, ` +
+                `gpu=${timings.gpuUpload}, TOTAL=${timer.total()}, workers=${getDecoderPool().getDecodeCount()}`
         );
     }
 
@@ -605,10 +616,7 @@ export class SpriteRenderManager {
             `${GFX_FILE_NUMBERS.RESOURCES}`,
             `${SETTLER_FILE_NUMBERS[race]}`,
         ];
-        await Promise.all([
-            ...allFileIds.map(id => this.spriteLoader.loadFileSet(id)),
-            warmUpDecoderPool(),
-        ]);
+        await Promise.all([...allFileIds.map(id => this.spriteLoader.loadFileSet(id)), warmUpDecoderPool()]);
 
         await this.registerPalettesForFiles(allFileIds);
         const filePreload = t.lap();
@@ -655,10 +663,19 @@ export class SpriteRenderManager {
         const gpuUpload = t.lap();
 
         void this.saveToCache(race);
-        this.recordLoadTimings({ filePreload, atlasAlloc, buildings, mapObjects, resources, units, gpuUpload }, t, atlas, registry);
+        this.recordLoadTimings(
+            { filePreload, atlasAlloc, buildings, mapObjects, resources, units, gpuUpload },
+            t,
+            atlas,
+            registry
+        );
 
-        return registry.hasBuildingSprites() || registry.hasMapObjectSprites() ||
-            registry.hasResourceSprites() || registry.hasUnitSprites();
+        return (
+            registry.hasBuildingSprites() ||
+            registry.hasMapObjectSprites() ||
+            registry.hasResourceSprites() ||
+            registry.hasUnitSprites()
+        );
     }
 
     /**
@@ -698,7 +715,10 @@ export class SpriteRenderManager {
                 const buildingType = Number(typeStr) as BuildingType;
 
                 const constructionSprite = await this.spriteLoader.loadJobSprite(
-                    fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.CONSTRUCTION }, atlas, paletteBase
+                    fileSet,
+                    { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.CONSTRUCTION },
+                    atlas,
+                    paletteBase
                 );
 
                 const frameCount = this.spriteLoader.getFrameCount(fileSet, info.index, BUILDING_DIRECTION.COMPLETED);
@@ -707,7 +727,11 @@ export class SpriteRenderManager {
 
                 if (frameCount > 1) {
                     const anim = await this.spriteLoader.loadJobAnimation(
-                        fileSet, info.index, BUILDING_DIRECTION.COMPLETED, atlas, paletteBase
+                        fileSet,
+                        info.index,
+                        BUILDING_DIRECTION.COMPLETED,
+                        atlas,
+                        paletteBase
                     );
                     if (anim?.frames.length) {
                         animationFrames = anim.frames.map(f => f.entry);
@@ -715,7 +739,10 @@ export class SpriteRenderManager {
                     }
                 } else {
                     completedSprite = await this.spriteLoader.loadJobSprite(
-                        fileSet, { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.COMPLETED }, atlas, paletteBase
+                        fileSet,
+                        { jobIndex: info.index, directionIndex: BUILDING_DIRECTION.COMPLETED },
+                        atlas,
+                        paletteBase
                     );
                 }
 
@@ -728,14 +755,17 @@ export class SpriteRenderManager {
             }
 
             // Finalize: GPU upload → register
-            batch.finalize(atlas, gl, (data) => {
+            batch.finalize(atlas, gl, data => {
                 if (!data.constructionEntry && !data.completedEntry) return;
 
                 if (data.animationFrames) {
                     const frames = new Map([[BUILDING_DIRECTION.COMPLETED, data.animationFrames]]);
                     registry.registerAnimatedEntity(
-                        EntityType.Building, data.buildingType, frames,
-                        ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
+                        EntityType.Building,
+                        data.buildingType,
+                        frames,
+                        ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                        true
                     );
                 }
                 registry.registerBuilding(data.buildingType, data.constructionEntry, data.completedEntry);
@@ -759,7 +789,7 @@ export class SpriteRenderManager {
         // Load both file sets potentially needed
         const [fileSet5, fileSet3] = await Promise.all([
             this.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.MAP_OBJECTS}`),
-            this.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.RESOURCES}`)
+            this.spriteLoader.loadFileSet(`${GFX_FILE_NUMBERS.RESOURCES}`),
         ]);
 
         if (!fileSet5) return false;
@@ -826,7 +856,11 @@ export class SpriteRenderManager {
             // Load all 11 stages for this tree type
             for (let offset = 0; offset <= 10; offset++) {
                 const anim = await this.spriteLoader.loadJobAnimation(
-                    fileSet, baseJobIndex + offset, 0, atlas, paletteBaseOffset
+                    fileSet,
+                    baseJobIndex + offset,
+                    0,
+                    atlas,
+                    paletteBaseOffset
                 );
                 if (anim?.frames.length) {
                     batch.add({
@@ -839,13 +873,15 @@ export class SpriteRenderManager {
             }
 
             // GPU upload → register this tree type
-            batch.finalize(atlas, gl, (data) => {
+            batch.finalize(atlas, gl, data => {
                 registry.registerMapObject(data.treeType, data.firstFrame, data.offset);
                 if (data.allFrames) {
                     registry.registerAnimatedEntity(
-                        EntityType.MapObject, data.treeType,
+                        EntityType.MapObject,
+                        data.treeType,
                         new Map([[0, data.allFrames]]),
-                        ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
+                        ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                        true
                     );
                 }
                 totalLoaded++;
@@ -917,7 +953,10 @@ export class SpriteRenderManager {
 
             for (let dir = 0; dir < 8; dir++) {
                 const sprite = await this.spriteLoader.loadJobSprite(
-                    fileSet, { jobIndex: info.index, directionIndex: dir, frameIndex: 0 }, atlas, paletteBase
+                    fileSet,
+                    { jobIndex: info.index, directionIndex: dir, frameIndex: 0 },
+                    atlas,
+                    paletteBase
                 );
                 if (sprite) {
                     batch.add({ type, dir, entry: sprite.entry });
@@ -925,7 +964,7 @@ export class SpriteRenderManager {
             }
         }
 
-        batch.finalize(atlas, gl, (data) => {
+        batch.finalize(atlas, gl, data => {
             registry.registerResource(data.type, data.dir, data.entry);
         });
 
@@ -962,7 +1001,10 @@ export class SpriteRenderManager {
 
             const directionFrames = new Map<number, SpriteEntry[]>();
             for (const [dir, sprites] of loadedDirs) {
-                directionFrames.set(dir, sprites.map(s => s.entry));
+                directionFrames.set(
+                    dir,
+                    sprites.map(s => s.entry)
+                );
             }
 
             if (directionFrames.size > 0) {
@@ -970,10 +1012,13 @@ export class SpriteRenderManager {
             }
         }
 
-        batch.finalize(atlas, gl, (data) => {
+        batch.finalize(atlas, gl, data => {
             registry.registerAnimatedEntity(
-                EntityType.Unit, data.unitType, data.directionFrames,
-                ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
+                EntityType.Unit,
+                data.unitType,
+                data.directionFrames,
+                ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                true
             );
             for (const [dir, frames] of data.directionFrames) {
                 if (frames.length > 0) {
@@ -1008,7 +1053,12 @@ export class SpriteRenderManager {
             if (jobIndex === undefined) continue;
             const materialType = Number(typeStr) as EMaterialType;
 
-            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas, paletteBaseOffset);
+            const loadedDirs = await this.spriteLoader.loadJobAllDirections(
+                fileSet,
+                jobIndex,
+                atlas,
+                paletteBaseOffset
+            );
             if (!loadedDirs) {
                 SpriteRenderManager.log.debug(`Carrier job ${jobIndex} not found for ${EMaterialType[materialType]}`);
                 continue;
@@ -1016,7 +1066,10 @@ export class SpriteRenderManager {
 
             const directionFrames = new Map<number, SpriteEntry[]>();
             for (const [dir, sprites] of loadedDirs) {
-                directionFrames.set(dir, sprites.map(s => s.entry));
+                directionFrames.set(
+                    dir,
+                    sprites.map(s => s.entry)
+                );
             }
 
             if (directionFrames.size > 0) {
@@ -1024,13 +1077,17 @@ export class SpriteRenderManager {
             }
         }
 
-        batch.finalize(atlas, gl, (data) => {
+        batch.finalize(atlas, gl, data => {
             // Register carry animations for all unit types that can carry materials
             const carryingUnitTypes = [UnitType.Carrier, UnitType.Woodcutter];
             for (const unitType of carryingUnitTypes) {
                 registry.registerAnimationSequence(
-                    EntityType.Unit, unitType, carrySequenceKey(data.materialType),
-                    data.directionFrames, ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
+                    EntityType.Unit,
+                    unitType,
+                    carrySequenceKey(data.materialType),
+                    data.directionFrames,
+                    ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                    true
                 );
             }
         });
@@ -1099,9 +1156,18 @@ export class SpriteRenderManager {
 
                 const frames = new Map<number, SpriteEntry[]>();
                 for (let dir = 0; dir < dirCount; dir++) {
-                    const anim = await this.spriteLoader.loadJobAnimation(fileSet, jobIndex, dir, atlas, paletteBaseOffset);
+                    const anim = await this.spriteLoader.loadJobAnimation(
+                        fileSet,
+                        jobIndex,
+                        dir,
+                        atlas,
+                        paletteBaseOffset
+                    );
                     if (anim?.frames.length) {
-                        frames.set(dir, anim.frames.map(f => f.entry));
+                        frames.set(
+                            dir,
+                            anim.frames.map(f => f.entry)
+                        );
                     }
                 }
 
@@ -1116,10 +1182,14 @@ export class SpriteRenderManager {
         }
 
         let loadedCount = 0;
-        batch.finalize(atlas, gl, (data) => {
+        batch.finalize(atlas, gl, data => {
             registry.registerAnimationSequence(
-                EntityType.Unit, data.unitType, data.seqKey,
-                data.frames, ANIMATION_DEFAULTS.FRAME_DURATION_MS, true
+                EntityType.Unit,
+                data.unitType,
+                data.seqKey,
+                data.frames,
+                ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                true
             );
             loadedCount++;
         });
@@ -1128,5 +1198,4 @@ export class SpriteRenderManager {
             SpriteRenderManager.log.debug(`Loaded ${loadedCount} worker animation sequences`);
         }
     }
-
 }

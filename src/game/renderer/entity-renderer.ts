@@ -1,21 +1,27 @@
 import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
-import { Entity, EntityType, StackedResourceState, TileCoord, BuildingType, getBuildingFootprint, UnitType } from '../entity';
+import {
+    Entity,
+    EntityType,
+    StackedResourceState,
+    TileCoord,
+    BuildingType,
+    getBuildingFootprint,
+    UnitType,
+} from '../entity';
 import { UnitStateLookup } from '../game-state';
-import { getBuildingVisualState, BuildingConstructionPhase, type BuildingState } from '../features/building-construction';
+import {
+    getBuildingVisualState,
+    BuildingConstructionPhase,
+    type BuildingState,
+} from '../features/building-construction';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
 import { SpriteEntry, Race } from './sprite-metadata';
-import {
-    PLAYER_COLORS,
-    TINT_NEUTRAL,
-    TINT_SELECTED,
-    TINT_PREVIEW_VALID,
-    TINT_PREVIEW_INVALID,
-} from './tint-utils';
+import { PLAYER_COLORS, TINT_NEUTRAL, TINT_SELECTED, TINT_PREVIEW_VALID, TINT_PREVIEW_INVALID } from './tint-utils';
 import { MapObjectType } from '../entity';
 import { EMaterialType } from '../economy';
 import { SpriteRenderManager } from './sprite-render-manager';
@@ -29,14 +35,9 @@ import type { AnimationState } from '../animation';
 import { FrameContext, type IFrameContext } from './frame-context';
 import { OptimizedDepthSorter, type OptimizedSortContext } from './optimized-depth-sorter';
 import { profiler } from './debug/render-profiler';
-import {
-    LayerVisibility,
-    DEFAULT_LAYER_VISIBILITY,
-    isMapObjectVisible,
-} from './layer-visibility';
+import { LayerVisibility, DEFAULT_LAYER_VISIBILITY, isMapObjectVisible } from './layer-visibility';
 import type { IRenderContext } from './render-context';
 import { gameSettings } from '../game-settings';
-
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -84,15 +85,18 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private groundHeight: Uint8Array;
 
     // Extracted managers and renderers
+    // OK: nullable - procedural rendering works without sprites (testMap mode)
     public spriteManager: SpriteRenderManager | null = null;
+    // OK: nullable - can render without animations during initialization
     private animationService: AnimationService | null = null;
+    // OK: optional callback for sprite load completion
     private _onSpritesLoaded: (() => void) | null = null;
     private spriteBatchRenderer: SpriteBatchRenderer;
     private selectionOverlayRenderer: SelectionOverlayRenderer;
     private depthSorter: OptimizedDepthSorter;
     private buildingIndicatorRenderer: BuildingIndicatorRenderer;
 
-    // Frame context for cached per-frame computations (world positions, bounds)
+    // OK: nullable - per-frame cache, created at render start, allows fallback computation
     private frameContext: IFrameContext | null = null;
 
     // Debug logging state
@@ -227,12 +231,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     /** Skip sprite loading (for testMap or procedural textures mode) */
     public skipSpriteLoading = false;
 
-    constructor(
-        mapSize: MapSize,
-        groundHeight: Uint8Array,
-        fileManager?: FileManager,
-        groundType?: Uint8Array
-    ) {
+    constructor(mapSize: MapSize, groundHeight: Uint8Array, fileManager?: FileManager, groundType?: Uint8Array) {
         super();
         this.mapSize = mapSize;
         this.groundHeight = groundHeight;
@@ -289,15 +288,22 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             this.spriteBatchRenderer.init(gl);
 
             // Start sprite loading in background (don't await)
-            void this.spriteManager.init(gl).then(loaded => {
-                if (loaded) {
-                    EntityRenderer.log.debug(
-                        `Sprite loading complete: ${this.spriteManager?.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${Race[this.spriteManager?.currentRace ?? Race.Roman]}`
-                    );
-                }
-                // Notify when sprites are loaded (even if loading failed, animations are ready)
-                this._onSpritesLoaded?.();
-            });
+            this.spriteManager
+                .init(gl)
+                .then(loaded => {
+                    if (loaded) {
+                        EntityRenderer.log.debug(
+                            `Sprite loading complete: ${this.spriteManager!.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${Race[this.spriteManager!.currentRace ?? Race.Roman]}`
+                        );
+                    }
+                    // Notify when sprites are loaded (even if loading failed, animations are ready)
+                    this._onSpritesLoaded?.();
+                })
+                .catch((err: unknown) => {
+                    EntityRenderer.log.warn(`Sprite loading failed: ${err}`);
+                    // Still notify - procedural rendering can continue without sprites
+                    this._onSpritesLoaded?.();
+                });
         } else {
             // No sprite manager or skip flag set (testMap/procedural textures) - enable ticks immediately
             this._onSpritesLoaded?.();
@@ -376,11 +382,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     /**
      * Draw building placement indicators across visible terrain.
      */
-    private drawBuildingIndicators(
-        gl: WebGL2RenderingContext,
-        projection: Float32Array,
-        viewPoint: IViewPoint
-    ): void {
+    private drawBuildingIndicators(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         // Update indicator renderer state
         this.buildingIndicatorRenderer.enabled = this.buildingIndicatorsEnabled;
         this.buildingIndicatorRenderer.hoveredTile = this.previewTile;
@@ -445,10 +447,15 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             mapSize: this.mapSize,
             groundHeight: this.groundHeight,
             viewPoint,
-            unitStates: this.unitStates
+            unitStates: this.unitStates,
         };
         this.selectionOverlayRenderer.drawSelectedUnitPath(
-            gl, this.dynamicBuffer, this.selectedEntityIds, this.aEntityPos, this.aColor, selectionCtx
+            gl,
+            this.dynamicBuffer,
+            this.selectedEntityIds,
+            this.aEntityPos,
+            this.aColor,
+            selectionCtx
         );
 
         // Sort entities by depth for correct painter's algorithm rendering
@@ -467,8 +474,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             gl.disableVertexAttribArray(this.aColor);
 
             this.selectionOverlayRenderer.drawBuildingFootprints(
-                gl, this.dynamicBuffer!, this.sortedEntities,
-                this.aPosition, this.aEntityPos, this.aColor, selectionCtx
+                gl,
+                this.dynamicBuffer!,
+                this.sortedEntities,
+                this.aPosition,
+                this.aEntityPos,
+                this.aColor,
+                selectionCtx
             );
         }
 
@@ -496,14 +508,24 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         // Draw selection frames (color shader) - must be after entities
         this.selectionOverlayRenderer.drawSelectionFrames(
-            gl, this.dynamicBuffer!, this.sortedEntities, this.selectedEntityIds,
-            this.aEntityPos, this.aColor, selectionCtx
+            gl,
+            this.dynamicBuffer!,
+            this.sortedEntities,
+            this.selectedEntityIds,
+            this.aEntityPos,
+            this.aColor,
+            selectionCtx
         );
 
         // Draw selection dots for selected units (on top of frames)
         this.selectionOverlayRenderer.drawSelectionDots(
-            gl, this.dynamicBuffer!, this.sortedEntities, this.selectedEntityIds,
-            this.aEntityPos, this.aColor, selectionCtx
+            gl,
+            this.dynamicBuffer!,
+            this.sortedEntities,
+            this.selectedEntityIds,
+            this.aEntityPos,
+            this.aColor,
+            selectionCtx
         );
         this.frameSelectionTime = performance.now() - selectionStart;
 
@@ -570,8 +592,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return getAnimatedSprite(animState, animatedEntry.animationData, animatedEntry.staticSprite);
         } catch (e) {
             // Log details to help debug missing animation sequences
-            const typeName = entity.type === EntityType.Unit ? UnitType[entity.subType] : `${EntityType[entity.type]}:${entity.subType}`;
-            EntityRenderer.log.error(`Animation error for ${typeName} (id=${entity.id}): seq='${animState.sequenceKey}', available=[${[...animatedEntry.animationData.sequences.keys()].join(', ')}]`);
+            const typeName =
+                entity.type === EntityType.Unit
+                    ? UnitType[entity.subType]
+                    : `${EntityType[entity.type]}:${entity.subType}`;
+            EntityRenderer.log.error(
+                `Animation error for ${typeName} (id=${entity.id}): seq='${animState.sequenceKey}', available=[${[...animatedEntry.animationData.sequences.keys()].join(', ')}]`
+            );
             throw e;
         }
     }
@@ -586,8 +613,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         let sprite: SpriteEntry | null;
         if (visualState.useConstructionSprite) {
-            sprite = this.spriteManager.getBuildingConstruction(buildingType)
-                ?? this.spriteManager.getBuilding(buildingType);
+            sprite =
+                this.spriteManager.getBuildingConstruction(buildingType) ??
+                this.spriteManager.getBuilding(buildingType);
         } else {
             const fallback = this.spriteManager.getBuilding(buildingType);
             sprite = this.getAnimatedEntitySprite(entity, fallback);
@@ -638,7 +666,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     } {
         if (entity.type === EntityType.Building) {
             const result = this.getBuildingSprite(entity);
-            return { skip: result.progress <= 0, transitioning: false, sprite: result.sprite, progress: result.progress };
+            return {
+                skip: result.progress <= 0,
+                transitioning: false,
+                sprite: result.sprite,
+                progress: result.progress,
+            };
         }
         if (entity.type === EntityType.MapObject) {
             return { skip: false, transitioning: false, sprite: this.getMapObjectSprite(entity), progress: 1 };
@@ -649,8 +682,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const direction = Math.max(0, Math.min(quantity - 1, 7)); // 1->D0 ... 8->D7
 
             return {
-                skip: false, transitioning: false,
-                sprite: this.spriteManager?.getResource(entity.subType as EMaterialType, direction) ?? null, progress: 1
+                skip: false,
+                transitioning: false,
+                sprite: this.spriteManager?.getResource(entity.subType as EMaterialType, direction) ?? null,
+                progress: 1,
             };
         }
         if (entity.type === EntityType.Unit) {
@@ -676,11 +711,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     /**
      * Draw entities using the sprite shader and atlas texture (batched).
      */
-    private drawTexturedEntities(
-        gl: WebGL2RenderingContext,
-        projection: Float32Array,
-        viewPoint: IViewPoint
-    ): void {
+    private drawTexturedEntities(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
 
         // Enable alpha-to-coverage for smooth sprite edges when MSAA is active
@@ -692,7 +723,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         const paletteWidth = PALETTE_TEXTURE_WIDTH;
         const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
-        this.spriteBatchRenderer.beginSpriteBatch(gl, projection, paletteWidth, rowsPerPlayer, gameSettings.state.antialias);
+        this.spriteBatchRenderer.beginSpriteBatch(
+            gl,
+            projection,
+            paletteWidth,
+            rowsPerPlayer,
+            gameSettings.state.antialias
+        );
         this.transitioningUnits.length = 0;
 
         for (const entity of this.sortedEntities) {
@@ -703,23 +740,42 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
             const resolved = this.resolveEntitySprite(entity);
             if (resolved.skip) continue;
-            if (resolved.transitioning) { this.transitioningUnits.push(entity); continue }
+            if (resolved.transitioning) {
+                this.transitioningUnits.push(entity);
+                continue;
+            }
             if (!resolved.sprite) continue;
 
             const worldPos = this.getEntityWorldPos(entity, viewPoint);
-            const playerRow = (entity.type === EntityType.Building || entity.type === EntityType.Unit) ? this.getPlayerRow(entity) : 0;
+            const playerRow =
+                entity.type === EntityType.Building || entity.type === EntityType.Unit ? this.getPlayerRow(entity) : 0;
             const isSelected = this.selectedEntityIds.has(entity.id);
             const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
 
             if (resolved.progress < 1.0) {
                 this.spriteBatchRenderer.addSpritePartial(
-                    gl, worldPos.worldX, worldPos.worldY, resolved.sprite,
-                    playerRow, tint[0], tint[1], tint[2], tint[3], resolved.progress
+                    gl,
+                    worldPos.worldX,
+                    worldPos.worldY,
+                    resolved.sprite,
+                    playerRow,
+                    tint[0],
+                    tint[1],
+                    tint[2],
+                    tint[3],
+                    resolved.progress
                 );
             } else {
                 this.spriteBatchRenderer.addSprite(
-                    gl, worldPos.worldX, worldPos.worldY, resolved.sprite,
-                    playerRow, tint[0], tint[1], tint[2], tint[3]
+                    gl,
+                    worldPos.worldX,
+                    worldPos.worldY,
+                    resolved.sprite,
+                    playerRow,
+                    tint[0],
+                    tint[1],
+                    tint[2],
+                    tint[3]
                 );
             }
             this.frameSpriteCount++;
@@ -754,9 +810,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const cachedPos = this.frameContext?.getWorldPos(entity);
         const worldPos = cachedPos
             ? { worldX: cachedPos.worldX, worldY: cachedPos.worldY }
-            : (entity.type === EntityType.Unit
+            : entity.type === EntityType.Unit
                 ? this.getInterpolatedWorldPos(entity, viewPoint)
-                : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y));
+                : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
 
         // Add random visual offset for MapObjects (trees, stones) to break up the grid
         // Only apply to normal trees (variation 3, not being cut/growing) to avoid position mismatch with woodcutters
@@ -783,9 +839,26 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const constructionSprite = this.spriteManager.getBuildingConstruction(entity.subType as BuildingType);
         if (!constructionSprite) return;
 
-        const worldPos = TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
+        const worldPos = TilePicker.tileToWorld(
+            entity.x,
+            entity.y,
+            this.groundHeight,
+            this.mapSize,
+            viewPoint.x,
+            viewPoint.y
+        );
         const playerRow = this.getPlayerRow(entity);
-        this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, constructionSprite, playerRow, 1, 1, 1, 1);
+        this.spriteBatchRenderer.addSprite(
+            gl,
+            worldPos.worldX,
+            worldPos.worldY,
+            constructionSprite,
+            playerRow,
+            1,
+            1,
+            1,
+            1
+        );
     }
 
     /**
@@ -793,7 +866,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      * Used for direction transitions where we need sprites for two different directions.
      * Uses the unified animation API for O(1) lookup.
      */
-    private getUnitSpriteForDirection(unitType: UnitType, animState: AnimationState, direction: number): SpriteEntry | null {
+    private getUnitSpriteForDirection(
+        unitType: UnitType,
+        animState: AnimationState,
+        direction: number
+    ): SpriteEntry | null {
         if (!this.spriteManager) return null;
 
         const fallback = this.spriteManager.getUnit(unitType, direction);
@@ -839,8 +916,17 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const isSelected = this.selectedEntityIds.has(entity.id);
             const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
             this.spriteBatchRenderer.addBlendSprite(
-                gl, worldPos.worldX, worldPos.worldY, oldSprite, newSprite, blendFactor,
-                playerRow, tint[0], tint[1], tint[2], tint[3]
+                gl,
+                worldPos.worldX,
+                worldPos.worldY,
+                oldSprite,
+                newSprite,
+                blendFactor,
+                playerRow,
+                tint[0],
+                tint[1],
+                tint[2],
+                tint[3]
             );
         }
 
@@ -905,9 +991,18 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
             // Use cached world position from frame context
             const cachedPos = this.frameContext?.getWorldPos(entity);
-            const worldPos = cachedPos ?? (entity.type === EntityType.Unit
-                ? this.getInterpolatedWorldPos(entity, viewPoint)
-                : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y));
+            const worldPos =
+                cachedPos ??
+                (entity.type === EntityType.Unit
+                    ? this.getInterpolatedWorldPos(entity, viewPoint)
+                    : TilePicker.tileToWorld(
+                        entity.x,
+                        entity.y,
+                        this.groundHeight,
+                        this.mapSize,
+                        viewPoint.x,
+                        viewPoint.y
+                    ));
 
             gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
             this.fillQuadVertices(0, 0, scale);
@@ -924,16 +1019,37 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const isStationary = !unitState || (unitState.prevX === entity.x && unitState.prevY === entity.y);
 
         if (isStationary) {
-            return TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
+            return TilePicker.tileToWorld(
+                entity.x,
+                entity.y,
+                this.groundHeight,
+                this.mapSize,
+                viewPoint.x,
+                viewPoint.y
+            );
         }
 
-        const prevPos = TilePicker.tileToWorld(unitState.prevX, unitState.prevY, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
-        const currPos = TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
+        const prevPos = TilePicker.tileToWorld(
+            unitState.prevX,
+            unitState.prevY,
+            this.groundHeight,
+            this.mapSize,
+            viewPoint.x,
+            viewPoint.y
+        );
+        const currPos = TilePicker.tileToWorld(
+            entity.x,
+            entity.y,
+            this.groundHeight,
+            this.mapSize,
+            viewPoint.x,
+            viewPoint.y
+        );
 
         const t = Math.max(0, Math.min(unitState.moveProgress, 1));
         return {
             worldX: prevPos.worldX + (currPos.worldX - prevPos.worldX) * t,
-            worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t
+            worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t,
         };
     }
 
@@ -953,7 +1069,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             groundHeight: this.groundHeight,
             mapSize: this.mapSize,
             alpha: this.renderAlpha,
-            isEntityVisible: (entity) => this.isEntityVisible(entity),
+            isEntityVisible: entity => this.isEntityVisible(entity),
         });
         profiler.endPhase('cull');
 
@@ -974,7 +1090,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         profiler.beginPhase('sort');
         const sortCtx: OptimizedSortContext = {
             spriteManager: this.spriteManager,
-            getWorldPos: (entity) => this.frameContext!.getWorldPos(entity),
+            getWorldPos: entity => this.frameContext!.getWorldPos(entity),
         };
         this.depthSorter.sortByDepth(this.sortedEntities, sortCtx);
         profiler.endPhase('sort');
@@ -991,7 +1107,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const { tile, valid, entityType, subType, variation } = preview;
 
         const worldPos = TilePicker.tileToWorld(
-            tile.x, tile.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y
+            tile.x,
+            tile.y,
+            this.groundHeight,
+            this.mapSize,
+            viewPoint.x,
+            viewPoint.y
         );
 
         const tint = valid ? TINT_PREVIEW_VALID : TINT_PREVIEW_INVALID;
@@ -1002,10 +1123,23 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             if (spriteEntry) {
                 const paletteWidth = PALETTE_TEXTURE_WIDTH;
                 const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
-                this.spriteBatchRenderer.beginSpriteBatch(gl, projection, paletteWidth, rowsPerPlayer, gameSettings.state.antialias);
+                this.spriteBatchRenderer.beginSpriteBatch(
+                    gl,
+                    projection,
+                    paletteWidth,
+                    rowsPerPlayer,
+                    gameSettings.state.antialias
+                );
                 this.spriteBatchRenderer.addSprite(
-                    gl, worldPos.worldX, worldPos.worldY, spriteEntry,
-                    0, tint[0], tint[1], tint[2], tint[3]
+                    gl,
+                    worldPos.worldX,
+                    worldPos.worldY,
+                    spriteEntry,
+                    0,
+                    tint[0],
+                    tint[1],
+                    tint[2],
+                    tint[3]
                 );
                 this.spriteBatchRenderer.endSpriteBatch(gl);
                 return;
@@ -1030,11 +1164,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      * Adding a new type to PlacementEntityType will cause a compile error here
      * until the case is added.
      */
-    private getPreviewSprite(
-        entityType: PlacementEntityType,
-        subType: number,
-        variation?: number
-    ): SpriteEntry | null {
+    private getPreviewSprite(entityType: PlacementEntityType, subType: number, variation?: number): SpriteEntry | null {
         if (!this.spriteManager) return null;
 
         switch (entityType) {
@@ -1078,5 +1208,4 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return true;
         }
     }
-
 }

@@ -16,9 +16,6 @@ import { Race } from '@/game/renderer/sprite-metadata';
  * - Volume control groups (Master, SFX, Music)
  * - Loading .snd archives for SFX
  */
-/** Global key for HMR-safe singleton storage */
-const SOUND_MANAGER_KEY = '__settlers_sound_manager__';
-
 export class SoundManager implements IAudioManager {
     private static log = new LogHandler('SoundManager');
 
@@ -40,7 +37,7 @@ export class SoundManager implements IAudioManager {
     private constructor() {
         this.musicController = new MusicController(this);
         this.sfxPoolManager = new SfxPoolManager(
-            (config) => this.createHowlForConfig(config),
+            config => this.createHowlForConfig(config),
             () => this.sfxVolume * this.masterVolume
         );
     }
@@ -51,12 +48,12 @@ export class SoundManager implements IAudioManager {
     public static getInstance(): SoundManager {
         // Use window storage to survive HMR - when the module is hot-replaced,
         // static class properties are reset, but window persists
-        const existing = (window as any)[SOUND_MANAGER_KEY] as SoundManager | undefined;
+        const existing = window.__settlers_sound_manager__;
         if (existing) {
             return existing;
         }
         const instance = new SoundManager();
-        (window as any)[SOUND_MANAGER_KEY] = instance;
+        window.__settlers_sound_manager__ = instance;
         return instance;
     }
 
@@ -170,7 +167,7 @@ export class SoundManager implements IAudioManager {
             const settings = {
                 masterVolume: this.masterVolume,
                 musicVolume: this.musicVolume,
-                musicEnabled: this.musicController.enabled
+                musicEnabled: this.musicController.enabled,
             };
             localStorage.setItem('settlers_sound_settings', JSON.stringify(settings));
         } catch (e) {
@@ -199,17 +196,20 @@ export class SoundManager implements IAudioManager {
                 // Remove listeners IMMEDIATELY to prevent duplicate calls
                 removeListeners();
 
-                void Howler.ctx.resume().then(() => {
-                    SoundManager.log.info('AudioContext resumed via user interaction');
-                    this.musicController.retryPendingMusic();
-                }).catch((err) => {
-                    SoundManager.log.warn('Failed to resume AudioContext: ' + err);
-                    unlocking = false;
-                    // Re-add listeners on failure
-                    document.addEventListener('click', unlock);
-                    document.addEventListener('keydown', unlock);
-                    document.addEventListener('touchstart', unlock);
-                });
+                void Howler.ctx
+                    .resume()
+                    .then(() => {
+                        SoundManager.log.info('AudioContext resumed via user interaction');
+                        this.musicController.retryPendingMusic();
+                    })
+                    .catch(err => {
+                        SoundManager.log.warn('Failed to resume AudioContext: ' + err);
+                        unlocking = false;
+                        // Re-add listeners on failure
+                        document.addEventListener('click', unlock);
+                        document.addEventListener('keydown', unlock);
+                        document.addEventListener('touchstart', unlock);
+                    });
             }
         };
 
@@ -291,7 +291,7 @@ export class SoundManager implements IAudioManager {
             if (!this.sndReader) {
                 return null;
             }
-            const index = parseInt(config.path.split(':')[1]);
+            const index = parseInt(config.path.split(':')[1], 10);
             const blobUrl = this.sndReader.getSound(index);
 
             if (blobUrl) {
@@ -316,14 +316,17 @@ export class SoundManager implements IAudioManager {
                 SoundManager.log.error(`Failed to play sound ${config.id}: ${err}`);
                 // Unlock audio context if needed
                 if (Howler.ctx && Howler.ctx.state === 'suspended') {
-                    void Howler.ctx.resume().then(() => {
-                        SoundManager.log.info('Audio context resumed from error handler');
-                        this.musicController.retryPendingMusic();
-                    }).catch((resumeErr) => {
-                        SoundManager.log.warn('Failed to resume audio context: ' + resumeErr);
-                    });
+                    void Howler.ctx
+                        .resume()
+                        .then(() => {
+                            SoundManager.log.info('Audio context resumed from error handler');
+                            this.musicController.retryPendingMusic();
+                        })
+                        .catch(resumeErr => {
+                            SoundManager.log.warn('Failed to resume audio context: ' + resumeErr);
+                        });
                 }
-            }
+            },
         });
 
         // Only cache SFX, not music (music is managed by MusicController)
@@ -352,7 +355,7 @@ export class SoundManager implements IAudioManager {
 
         if (config.type === SoundType.SFX && config.path.startsWith('Snd:')) {
             if (!this.sndReader) return null;
-            const index = parseInt(config.path.split(':')[1]);
+            const index = parseInt(config.path.split(':')[1], 10);
             const blobUrl = this.sndReader.getSound(index);
             if (!blobUrl) return null;
             src = [blobUrl];
@@ -448,12 +451,15 @@ export class SoundManager implements IAudioManager {
 
         if (x !== undefined && y !== undefined) {
             sound.pos(x, y, 0, id);
-            sound.pannerAttr({
-                panningModel: 'HRTF',
-                refDistance: 5,
-                rolloffFactor: 1,
-                distanceModel: 'inverse',
-            }, id);
+            sound.pannerAttr(
+                {
+                    panningModel: 'HRTF',
+                    refDistance: 5,
+                    rolloffFactor: 1,
+                    distanceModel: 'inverse',
+                },
+                id
+            );
         } else {
             sound.pos(0, 0, 0, id);
         }

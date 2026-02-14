@@ -19,7 +19,12 @@ import {
 // ─── GameState factory ──────────────────────────────────────────────
 
 export function createGameState(): GameState {
-    return new GameState();
+    const state = new GameState();
+    // Set up required dependencies on movement system for tests
+    const eventBus = new EventBus();
+    state.movement.setEventBus(eventBus);
+    state.movement.setRng(state.rng);
+    return state;
 }
 
 // ─── Unified test context ───────────────────────────────────────────
@@ -58,13 +63,12 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     const map = createTestMap(mapWidth, mapHeight);
     const eventBus = new EventBus();
 
+    // Wire up event bus and RNG to movement system
+    state.movement.setEventBus(eventBus);
+    state.movement.setRng(state.rng);
+
     // Initialize terrain data on state
-    state.setTerrainData(
-        map.groundType,
-        map.groundHeight,
-        map.mapSize.width,
-        map.mapSize.height,
-    );
+    state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
 
     return { state, map, eventBus };
 }
@@ -76,7 +80,7 @@ export function addUnit(
     state: GameState,
     x: number,
     y: number,
-    options: { player?: number; subType?: number } = {},
+    options: { player?: number; subType?: number } = {}
 ): { entity: Entity; unitState: UnitStateView } {
     const entity = state.addEntity(EntityType.Unit, options.subType ?? 0, x, y, options.player ?? 0);
     const unitState = state.unitStates.get(entity.id);
@@ -90,7 +94,7 @@ export function addBuilding(
     x: number,
     y: number,
     buildingType: BuildingType | number = BuildingType.WoodcutterHut,
-    player = 0,
+    player = 0
 ): Entity {
     return state.addEntity(EntityType.Building, buildingType, x, y, player);
 }
@@ -104,7 +108,7 @@ export function addBuildingWithInventory(
     x: number,
     y: number,
     buildingType: BuildingType | number = BuildingType.WoodcutterHut,
-    player = 0,
+    player = 0
 ): Entity {
     const building = state.addEntity(EntityType.Building, buildingType, x, y, player);
     state.inventoryManager.createInventory(building.id, buildingType as BuildingType);
@@ -117,7 +121,7 @@ export function addUnitWithPath(
     startX: number,
     startY: number,
     path: Array<{ x: number; y: number }>,
-    speed = 2,
+    speed = 2
 ): { entity: Entity; unitState: UnitStateView } {
     const { entity, unitState } = addUnit(state, startX, startY);
     // Use the MovementController to set up the path and speed
@@ -138,7 +142,7 @@ import type { CarrierJob } from '@/game/features/carriers';
 export function createPickupJob(
     fromBuilding: number,
     material: EMaterialType = EMaterialType.LOG,
-    amount = 1,
+    amount = 1
 ): CarrierJob {
     return { type: 'pickup', fromBuilding, material, amount };
 }
@@ -147,7 +151,7 @@ export function createPickupJob(
 export function createDeliverJob(
     toBuilding: number,
     material: EMaterialType = EMaterialType.LOG,
-    amount = 1,
+    amount = 1
 ): CarrierJob {
     return { type: 'deliver', toBuilding, material, amount };
 }
@@ -167,7 +171,7 @@ export function makeBuildingState(
     tileX: number,
     tileY: number,
     buildingType: BuildingType,
-    overrides: Partial<BuildingState> = {},
+    overrides: Partial<BuildingState> = {}
 ): BuildingState {
     return {
         entityId: 1,
@@ -229,7 +233,7 @@ export function placeBuilding(
     y: number,
     buildingType: number = BuildingType.WoodcutterHut,
     player = 0,
-    eventBus: EventBus = new EventBus(),
+    eventBus: EventBus = new EventBus()
 ): boolean {
     return executeCommand(
         state,
@@ -237,7 +241,7 @@ export function placeBuilding(
         map.groundType,
         map.groundHeight,
         map.mapSize,
-        eventBus,
+        eventBus
     );
 }
 
@@ -249,7 +253,7 @@ export function spawnUnit(
     y: number,
     unitType = 0,
     player = 0,
-    eventBus: EventBus = new EventBus(),
+    eventBus: EventBus = new EventBus()
 ): boolean {
     return executeCommand(
         state,
@@ -257,7 +261,7 @@ export function spawnUnit(
         map.groundType,
         map.groundHeight,
         map.mapSize,
-        eventBus,
+        eventBus
     );
 }
 
@@ -268,22 +272,17 @@ export function moveUnit(
     entityId: number,
     targetX: number,
     targetY: number,
-    eventBus: EventBus = new EventBus(),
+    eventBus: EventBus = new EventBus()
 ): boolean {
     // Ensure terrain data is set for the movement system
-    state.setTerrainData(
-        map.groundType,
-        map.groundHeight,
-        map.mapSize.width,
-        map.mapSize.height
-    );
+    state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
     return executeCommand(
         state,
         { type: 'move_unit', entityId, targetX, targetY },
         map.groundType,
         map.groundHeight,
         map.mapSize,
-        eventBus,
+        eventBus
     );
 }
 
@@ -292,25 +291,13 @@ export function selectEntity(
     state: GameState,
     map: TestMap,
     entityId: number | null,
-    eventBus: EventBus = new EventBus(),
+    eventBus: EventBus = new EventBus()
 ): boolean {
-    return executeCommand(
-        state,
-        { type: 'select', entityId },
-        map.groundType,
-        map.groundHeight,
-        map.mapSize,
-        eventBus,
-    );
+    return executeCommand(state, { type: 'select', entityId }, map.groundType, map.groundHeight, map.mapSize, eventBus);
 }
 
 /** Execute a remove_entity command. Returns success boolean. */
-export function removeEntity(
-    state: GameState,
-    map: TestMap,
-    entityId: number,
-    eventBus?: EventBus,
-): boolean {
+export function removeEntity(state: GameState, map: TestMap, entityId: number, eventBus?: EventBus): boolean {
     const bus = eventBus ?? createTestEventBus(state, map);
     return executeCommand(
         state,
@@ -318,7 +305,7 @@ export function removeEntity(
         map.groundType,
         map.groundHeight,
         map.mapSize,
-        bus,
+        bus
     );
 }
 
@@ -330,7 +317,7 @@ export function placeResource(
     y: number,
     materialType: number,
     amount = 1,
-    eventBus: EventBus = new EventBus(),
+    eventBus: EventBus = new EventBus()
 ): boolean {
     return executeCommand(
         state,
@@ -338,7 +325,7 @@ export function placeResource(
         map.groundType,
         map.groundHeight,
         map.mapSize,
-        eventBus,
+        eventBus
     );
 }
 

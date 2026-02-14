@@ -86,7 +86,8 @@ export class OptimizedDepthSorter {
         // Compute depth keys (as floats for precision)
         for (let i = 0; i < count; i++) {
             const entity = entities[i];
-            const worldPos = ctx.getWorldPos(entity);
+            // Visible entities MUST have cached world positions
+            const worldPos = ctx.getWorldPos(entity)!;
             const spriteEntry = this.getSpriteEntry(entity, ctx.spriteManager);
             this.floatDepthKeys[i] = this.computeFloatDepthKey(entity, worldPos, spriteEntry);
             this.sortedIndices[i] = i;
@@ -120,8 +121,8 @@ export class OptimizedDepthSorter {
     /**
      * Compute float depth key for an entity (preserves precision).
      */
-    private computeFloatDepthKey(entity: Entity, worldPos: WorldPos | undefined, spriteEntry: SpriteEntry | null): number {
-        let depth = worldPos?.worldY ?? 0;
+    private computeFloatDepthKey(entity: Entity, worldPos: WorldPos, spriteEntry: SpriteEntry | null): number {
+        let depth = worldPos.worldY;
 
         if (spriteEntry) {
             const { offsetY, heightWorld } = spriteEntry;
@@ -201,5 +202,4 @@ export class OptimizedDepthSorter {
             return null;
         }
     }
-
 }

@@ -12,7 +12,7 @@ import { test, expect } from './fixtures';
 // --- Resource Placement Mode ---
 
 test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
-    test('clicking resource button activates place_resource mode', async({ gpWithUI: gp }) => {
+    test('clicking resource button activates place_resource mode', async ({ gpWithUI: gp }) => {
         const page = gp.page;
         await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
 
@@ -23,18 +23,18 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
     });
 
-    test('select mode button returns to select mode from resource placement', async({ gpWithUI: gp }) => {
+    test('select mode button returns to select mode from resource placement', async ({ gpWithUI: gp }) => {
         const page = gp.page;
         await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
 
-        await page.locator('[data-testid="btn-resource-board"]').click();
+        await page.locator('[data-testid="btn-resource-board"]').click({ force: true });
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
 
         await gp.selectMode();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
     });
 
-    test('resource placement via game.execute() creates entity with correct attributes', async({ gs }) => {
+    test('resource placement via game.execute() creates entity with correct attributes', async ({ gs }) => {
         const passableTile = await gs.findPassableTile();
         if (!passableTile) {
             test.skip();
@@ -52,7 +52,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         expect(entities.length).toBeGreaterThanOrEqual(1);
     });
 
-    test('resource placement via placeResource helper', async({ gs }) => {
+    test('resource placement via placeResource helper', async ({ gs }) => {
         const passableTile = await gs.findPassableTile();
         if (!passableTile) {
             test.skip();
@@ -66,7 +66,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         expect(resource!.amount).toBe(3);
     });
 
-    test('clicking canvas while not in placement mode does not place resource', async({ gp }) => {
+    test('clicking canvas while not in placement mode does not place resource', async ({ gp }) => {
         const passableTile = await gp.findPassableTile();
         if (!passableTile) {
             test.skip();
@@ -88,13 +88,13 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         expect(countAfter).toBe(countBefore);
     });
 
-    test('multiple resources can be placed at different locations', async({ gs }) => {
+    test('multiple resources can be placed at different locations', async ({ gs }) => {
         const result = await gs.placeMultipleResources(3);
         expect(result.placedCount).toBeGreaterThanOrEqual(2);
         expect(result.totalResources).toBeGreaterThanOrEqual(2);
     });
 
-    test('different resource types can be selected', async({ gpWithUI: gp }) => {
+    test('different resource types can be selected', async ({ gpWithUI: gp }) => {
         const page = gp.page;
         await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
 
@@ -117,7 +117,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
 // --- Resource Rendering ---
 
 test.describe('Resource Rendering', () => {
-    test('placed resource is rendered on canvas', async({ gp }) => {
+    test('placed resource is rendered on canvas', async ({ gp }) => {
         const passableTile = await gp.findPassableTile();
         if (!passableTile) {
             test.skip();
@@ -136,7 +136,7 @@ test.describe('Resource Rendering', () => {
         await expect(gp).toHaveEntity({ type: 4, x: passableTile.x, y: passableTile.y });
     });
 
-    test('resources with different amounts are placed correctly', async({ gs }) => {
+    test('resources with different amounts are placed correctly', async ({ gs }) => {
         const amounts = [1, 5, 8];
         const placed: Array<{ id: number; amount: number }> = [];
 
@@ -155,7 +155,7 @@ test.describe('Resource Rendering', () => {
         }
     });
 
-    test('resource placement preview renders during placement mode', async({ gpWithUI: gp }) => {
+    test('resource placement preview renders during placement mode', async ({ gpWithUI: gp }) => {
         const page = gp.page;
         await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
 
