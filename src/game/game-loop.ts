@@ -23,7 +23,7 @@ import { EventBus } from './event-bus';
 import type { FrameRenderTiming } from './renderer/renderer';
 import { BuildingType, MapObjectType } from './entity';
 import { AnimationService } from './animation/index';
-import { toastError } from './toast-notifications';
+import { toastError, toastClearThrottle } from './toast-notifications';
 
 const TICK_RATE = 30;
 const TICK_DURATION = 1 / TICK_RATE;
@@ -429,13 +429,15 @@ export class GameLoop {
         }
     }
 
-    /** Clean up event listeners when destroying the game loop */
+    /** Clean up event listeners and module state when destroying the game loop */
     public destroy(): void {
         this.stop();
         if (this.visibilityHandler) {
             document.removeEventListener('visibilitychange', this.visibilityHandler);
             this.visibilityHandler = null;
         }
+        // Clear toast throttle so a new game session starts fresh
+        toastClearThrottle();
     }
 
     public get isRunning(): boolean {

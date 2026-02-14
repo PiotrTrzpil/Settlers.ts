@@ -352,9 +352,7 @@ export class SettlerTaskSystem implements TickSystem {
             }
         } else if (runtime.job?.type === 'worker' && runtime.job.data.targetId && runtime.job.workStarted) {
             // Entity already gone — call onWorkInterrupt directly
-            const handler = runtime.job.jobId
-                ? this.workHandlers.get(this.findSearchTypeForJob(runtime.job.jobId))
-                : undefined;
+            const handler = this.findHandlerForJob(runtime.job.jobId);
             if (handler) {
                 try {
                     handler.onWorkInterrupt?.(runtime.job.data.targetId);
@@ -368,17 +366,17 @@ export class SettlerTaskSystem implements TickSystem {
         this.runtimes.delete(entityId);
     }
 
-    /** Reverse-lookup: find SearchType from a jobId like "woodcutter.work" */
-    private findSearchTypeForJob(jobId: string): SearchType {
+    /** Reverse-lookup: find the work handler for a given jobId like "woodcutter.work" */
+    private findHandlerForJob(jobId: string): WorkHandler | undefined {
         for (const [unitType, config] of this.settlerConfigs) {
             const prefix = UnitType[unitType].toLowerCase();
             for (const jobName of config.jobs) {
                 if (`${prefix}.${jobName}` === jobId) {
-                    return config.search;
+                    return this.workHandlers.get(config.search);
                 }
             }
         }
-        return SearchType.TREE; // fallback — handler lookup will just miss
+        return undefined;
     }
 
     /** TickSystem interface */
@@ -390,10 +388,11 @@ export class SettlerTaskSystem implements TickSystem {
             this.updateUnit(unit, dt);
         }
 
-        // Cleanup removed units whose removal wasn't signalled via onEntityRemoved
+        // Safety net: clean up runtimes for entities removed without onEntityRemoved signal.
+        // Uses onEntityRemoved so domain handlers get proper cleanup notification.
         for (const id of this.runtimes.keys()) {
             if (!this.gameState.getEntity(id)) {
-                this.runtimes.delete(id);
+                this.onEntityRemoved(id);
             }
         }
     }
@@ -926,7 +925,7 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     private executeGoHome(settler: Entity, job: JobState): TaskResult {
-        const homeId = job.type === 'worker' ? job.data.homeId : job.data.homeId;
+        const homeId = job.data.homeId;
         if (!homeId) return TaskResult.FAILED;
         const building = this.gameState.getEntityOrThrow(homeId, 'home building');
         return this.moveToPosition(settler, building.x, building.y);
@@ -951,7 +950,7 @@ export class SettlerTaskSystem implements TickSystem {
         }
 
         // Regular settler dropoff (e.g., woodcutter dropping off LOG at home)
-        if (job.data.carryingGood === null || job.data.carryingGood === undefined) {
+        if (job.data.carryingGood == null) {
             return TaskResult.DONE;
         }
 
@@ -1153,7 +1152,7 @@ export class SettlerTaskSystem implements TickSystem {
      */
     private getWalkSequenceKey(entity: Entity): string {
         const carriedMaterial = entity.carrier?.carryingMaterial;
-        if (entity.subType === UnitType.Carrier && carriedMaterial !== undefined && carriedMaterial !== null) {
+        if (entity.subType === UnitType.Carrier && carriedMaterial != null) {
             return carrySequenceKey(carriedMaterial);
         }
         return ANIMATION_SEQUENCES.WALK;
