@@ -43,4 +43,25 @@ export class ThrottledLogger {
         this.lastTime = now;
         return true;
     }
+
+    /**
+     * Log a warning if enough time has passed since the last one.
+     * Same throttling behavior as error() but for non-fatal issues.
+     */
+    warn(message: string): boolean {
+        const now = performance.now();
+        if (now - this.lastTime < this.throttleMs) {
+            this.suppressed++;
+            return false;
+        }
+
+        if (this.suppressed > 0) {
+            this.log.warn(`${message} (${this.suppressed} similar suppressed)`);
+            this.suppressed = 0;
+        } else {
+            this.log.warn(message);
+        }
+        this.lastTime = now;
+        return true;
+    }
 }

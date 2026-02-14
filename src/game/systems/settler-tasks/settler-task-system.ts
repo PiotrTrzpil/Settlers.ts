@@ -89,6 +89,8 @@ export class SettlerTaskSystem implements TickSystem {
     private eventBus!: EventBus; // MUST be set via setEventBus
     /** Throttled logger for handler errors (prevents flooding from broken domain systems) */
     private handlerErrorLogger = new ThrottledLogger(log, 2000);
+    /** Throttled logger for missing handler warnings (prevents spam when feature not yet implemented) */
+    private missingHandlerLogger = new ThrottledLogger(log, 5000);
 
     constructor(config: SettlerTaskSystemConfig) {
         this.gameState = config.gameState;
@@ -99,6 +101,9 @@ export class SettlerTaskSystem implements TickSystem {
 
         // Register built-in WORKPLACE handler for building workers
         this.registerWorkHandler(SearchType.WORKPLACE, this.createWorkplaceHandler());
+
+        // Register GOOD handler for carriers (they get jobs assigned externally by LogisticsDispatcher)
+        this.registerWorkHandler(SearchType.GOOD, this.createCarrierHandler());
 
         log.debug(`Loaded ${this.settlerConfigs.size} settler configs, ${this.jobDefinitions.size} jobs`);
     }
@@ -155,6 +160,38 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     /**
+     * Create a handler for GOOD search type (carriers).
+     *
+     * Carriers don't find work themselves - they get jobs assigned externally
+     * by LogisticsDispatcher via assignCarrierJob(). This handler exists to
+     * prevent "no handler registered" errors when carriers are idle.
+     *
+     * Returns null from findTarget() which makes the carrier stay idle until
+     * a job is assigned externally.
+     */
+    private createCarrierHandler(): WorkHandler {
+        return {
+            // Carrier waits for work to be assigned externally
+            shouldWaitForWork: true,
+
+            findTarget: () => {
+                // Carriers don't self-search - jobs are assigned by LogisticsDispatcher
+                return null;
+            },
+
+            canWork: () => {
+                // Never called since findTarget returns null
+                return false;
+            },
+
+            onWorkTick: () => {
+                // Never called since findTarget returns null
+                return false;
+            },
+        };
+    }
+
+    /**
      * Check if a settler is managed by this system (has active job or is a known type).
      * Other systems should check this before manipulating settler animation.
      */
@@ -189,8 +226,7 @@ export class SettlerTaskSystem implements TickSystem {
     registerWorkHandler(searchType: SearchType, handler: WorkHandler): void {
         if (this.workHandlers.has(searchType)) {
             throw new Error(
-                `Work handler already registered for ${searchType}. ` +
-                `Each SearchType must have exactly one handler.`
+                `Work handler already registered for ${searchType}. ` + `Each SearchType must have exactly one handler.`
             );
         }
         this.workHandlers.set(searchType, handler);
@@ -555,9 +591,12 @@ export class SettlerTaskSystem implements TickSystem {
     private handleIdle(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
         const handler = this.workHandlers.get(config.search);
         if (!handler) {
-            throw new Error(
-                `No work handler registered for search type: ${config.search}. Settler ${settler.id} (${UnitType[settler.subType]}) cannot find work.`
+            // Log warning instead of throwing - missing handlers are missing features, not crashes
+            this.missingHandlerLogger.warn(
+                `No work handler registered for search type: ${config.search}. ` +
+                    `Settler ${settler.id} (${UnitType[settler.subType]}) will stay idle until feature is implemented.`
             );
+            return;
         }
 
         const homeBuilding = this.gameState.findNearestWorkplace(settler);
