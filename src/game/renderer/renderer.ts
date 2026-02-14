@@ -3,6 +3,17 @@ import { IRenderer } from './i-renderer';
 import { ViewPoint } from './view-point';
 import type { EntityRenderer } from './entity-renderer';
 import { gameSettings } from '@/game/game-settings';
+import { toastError } from '@/game/toast-notifications';
+
+/** Per-layer error tracking for throttled logging */
+interface LayerErrorState {
+    lastErrorTime: number;
+    suppressedCount: number;
+    consecutiveFailures: number;
+}
+
+/** Throttle interval for per-layer error logging (ms) */
+const LAYER_ERROR_THROTTLE_MS = 2000;
 
 /** Detailed render timing for a single frame */
 export interface FrameRenderTiming {
@@ -61,6 +72,9 @@ export class Renderer {
         visibleCount: 0, drawCalls: 0, spriteCount: 0,
         indicators: 0, textured: 0, color: 0, selection: 0,
     };
+
+    /** Per-layer error tracking to prevent log flooding */
+    private layerErrors: LayerErrorState[] = [];
 
     /** Get the WebGL2 context */
     public get gl(): WebGL2RenderingContext | null {
@@ -179,7 +193,8 @@ export class Renderer {
         m[14] = 0;
         m[15] = 1;
 
-        // draw all renderers with timing
+        // Draw all renderers with per-layer error isolation.
+        // A failure in one layer (e.g. landscape) does not prevent other layers from rendering.
         const frameStart = performance.now();
         let landscapeTime = 0;
         let entityTiming = {
@@ -187,10 +202,24 @@ export class Renderer {
             indicators: 0, textured: 0, color: 0, selection: 0,
         };
 
+        // Ensure layerErrors tracking array matches renderer count
+        while (this.layerErrors.length < this.renderers.length) {
+            this.layerErrors.push({ lastErrorTime: 0, suppressedCount: 0, consecutiveFailures: 0 });
+        }
+
         for (let i = 0; i < this.renderers.length; i++) {
             const r = this.renderers[i];
             const start = performance.now();
-            r.draw(gl, m, this.viewPoint);
+
+            try {
+                r.draw(gl, m, this.viewPoint);
+                // Reset on success
+                this.layerErrors[i].consecutiveFailures = 0;
+            } catch (e) {
+                this.handleLayerError(i, r, e);
+                continue; // Skip timing collection for failed layer
+            }
+
             const elapsed = performance.now() - start;
 
             // First renderer is typically LandscapeRenderer
@@ -242,6 +271,7 @@ export class Renderer {
 
     public add(newRenderer: IRenderer): void {
         this.renderers.push(newRenderer);
+        this.layerErrors.push({ lastErrorTime: 0, suppressedCount: 0, consecutiveFailures: 0 });
     }
 
     /** Clear all renderers, destroying their GPU resources (call before adding new ones on game change) */
@@ -250,5 +280,35 @@ export class Renderer {
             r.destroy?.();
         }
         this.renderers = [];
+        this.layerErrors = [];
+    }
+
+    /** Handle a render layer error with throttled logging and toast notification */
+    private handleLayerError(index: number, renderer: IRenderer, error: unknown): void {
+        const state = this.layerErrors[index];
+        state.consecutiveFailures++;
+        const name = renderer.constructor.name || `Layer ${index}`;
+        const now = performance.now();
+
+        if (now - state.lastErrorTime >= LAYER_ERROR_THROTTLE_MS) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            if (state.suppressedCount > 0) {
+                Renderer.log.error(
+                    `Render layer "${name}" failed (${state.suppressedCount} similar suppressed)`,
+                    err
+                );
+                state.suppressedCount = 0;
+            } else {
+                Renderer.log.error(`Render layer "${name}" failed`, err);
+            }
+            state.lastErrorTime = now;
+
+            // Toast on first failure
+            if (state.consecutiveFailures === 1) {
+                toastError('Renderer', `${name} render failed: ${err.message}`);
+            }
+        } else {
+            state.suppressedCount++;
+        }
     }
 }

@@ -118,22 +118,63 @@ function clearPlacementModeState(er: EntityRenderer): void {
     er.placementPreview = null;
 }
 
-/** Create the render callback that runs each frame. Returns render timing data. */
-function createRenderCallback(
+/**
+ * Create the per-frame update callback for non-rendering work.
+ * Called by GameLoop BEFORE the render callback each visible frame.
+ * Handles: input processing, sound, debug stats.
+ */
+function createUpdateCallback(
     getContext: () => CallbackContext,
     renderer: Renderer,
     selectionBox: Ref<SelectionBox | null>
+): (deltaSec: number) => void {
+    return (deltaSec: number): void => {
+        const ctx = getContext();
+        const { game: g, entityRenderer: er, inputManager } = ctx;
+
+        // Camera interpolation for smooth panning
+        renderer.viewPoint.update(deltaSec);
+
+        // Input processing
+        if (er && g) {
+            inputManager?.update(deltaSec);
+
+            const renderState = inputManager?.getRenderState();
+            selectionBox.value = renderState?.preview?.type === 'selection_box' ? renderState.preview : null;
+
+            if (renderState?.cursor && renderer.canvas) {
+                renderer.canvas.style.cursor = renderState.cursor;
+            }
+        }
+
+        // Debug stats + sound
+        if (g) {
+            debugStats.updateFromGame(g);
+            g.soundManager.updateListener(renderer.viewPoint.x, renderer.viewPoint.y);
+        }
+
+        debugStats.state.cameraX = Math.round(renderer.viewPoint.x * 10) / 10;
+        debugStats.state.cameraY = Math.round(renderer.viewPoint.y * 10) / 10;
+        debugStats.state.zoom = Math.round(renderer.viewPoint.zoomValue * 100) / 100;
+        debugStats.state.canvasWidth = renderer.canvas.width;
+        debugStats.state.canvasHeight = renderer.canvas.height;
+    };
+}
+
+/**
+ * Create the render callback — ONLY rendering work.
+ * Syncs visual state to the entity renderer, then draws.
+ */
+function createRenderCallback(
+    getContext: () => CallbackContext,
+    renderer: Renderer
 ): (alpha: number, deltaSec: number) => FrameRenderTiming | null {
-    // eslint-disable-next-line complexity -- render callback coordinates multiple systems
-    return (alpha: number, deltaSec: number): FrameRenderTiming | null => {
+    return (alpha: number, _deltaSec: number): FrameRenderTiming | null => {
         const ctx = getContext();
         const { game: g, entityRenderer: er, landscapeRenderer, inputManager } = ctx;
 
-        // Update camera interpolation for smooth panning
-        renderer.viewPoint.update(deltaSec);
-
+        // Sync visual state to renderers
         if (er && g) {
-            inputManager?.update(deltaSec);
             syncEntityRendererState(er, g, ctx, alpha, renderer.viewPoint);
 
             const renderState = inputManager?.getRenderState();
@@ -146,30 +187,13 @@ function createRenderCallback(
             } else {
                 clearPlacementModeState(er);
             }
-
-            selectionBox.value = renderState?.preview?.type === 'selection_box' ? renderState.preview : null;
-
-            if (renderState?.cursor && renderer.canvas) {
-                renderer.canvas.style.cursor = renderState.cursor;
-            }
         }
 
         if (landscapeRenderer) landscapeRenderer.debugGrid = ctx.debugGrid;
-        if (g) {
-            debugStats.updateFromGame(g);
-            // Update spatial audio listener position to camera center
-            g.soundManager.updateListener(renderer.viewPoint.x, renderer.viewPoint.y);
-        }
 
-        debugStats.state.cameraX = Math.round(renderer.viewPoint.x * 10) / 10;
-        debugStats.state.cameraY = Math.round(renderer.viewPoint.y * 10) / 10;
-        debugStats.state.zoom = Math.round(renderer.viewPoint.zoomValue * 100) / 100;
-        debugStats.state.canvasWidth = renderer.canvas.width;
-        debugStats.state.canvasHeight = renderer.canvas.height;
-
+        // GPU draw
         renderer.drawOnce();
 
-        // Return render timing for the game loop to aggregate
         return renderer.getLastRenderTiming();
     };
 }
@@ -486,19 +510,23 @@ export function useRenderer({
             landscapeRenderer?.markTerrainDirty();
         });
 
+        const contextGetter = () => ({
+            game: getGame(),
+            entityRenderer,
+            landscapeRenderer,
+            inputManager,
+            debugGrid: getDebugGrid(),
+            layerVisibility: getLayerVisibility(),
+        });
+
+        // Register update callback (input, sound, debug stats — runs before render)
+        game.gameLoop.setUpdateCallback(
+            createUpdateCallback(contextGetter, renderer, selectionBox)
+        );
+
+        // Register render callback (visual sync + GPU draw only)
         game.gameLoop.setRenderCallback(
-            createRenderCallback(
-                () => ({
-                    game: getGame(),
-                    entityRenderer,
-                    landscapeRenderer,
-                    inputManager,
-                    debugGrid: getDebugGrid(),
-                    layerVisibility: getLayerVisibility(),
-                }),
-                renderer,
-                selectionBox
-            )
+            createRenderCallback(contextGetter, renderer)
         );
     }
 

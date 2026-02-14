@@ -22,6 +22,7 @@ import { EventBus } from './event-bus';
 import type { FrameRenderTiming } from './renderer/renderer';
 import { BuildingType, MapObjectType } from './entity';
 import { AnimationService } from './animation/index';
+import { toastError } from './toast-notifications';
 
 const TICK_RATE = 30;
 const TICK_DURATION = 1 / TICK_RATE;
@@ -29,6 +30,18 @@ const TICK_DURATION = 1 / TICK_RATE;
 /** Target FPS when page is in background (to save CPU/battery) */
 const BACKGROUND_FPS = 10;
 const BACKGROUND_FRAME_DURATION = 1000 / BACKGROUND_FPS;
+
+/** Consecutive failures before a tick system is disabled */
+const SYSTEM_CIRCUIT_BREAKER_THRESHOLD = 100;
+
+/** Per-system error tracking */
+interface SystemErrorState {
+    name: string;
+    consecutiveFailures: number;
+    disabled: boolean;
+    lastErrorTime: number;
+    suppressedCount: number;
+}
 
 /**
  * Fixed-timestep game loop using requestAnimationFrame.
@@ -49,10 +62,13 @@ export class GameLoop {
     private running = false;
     private animRequest = 0;
 
-    /** Error throttling - prevent console flooding */
+    /** Error throttling - prevent console flooding (for non-system errors) */
     private lastErrorTime = 0;
     private suppressedErrorCount = 0;
     private static readonly ERROR_THROTTLE_MS = 1000;
+
+    /** Per-system error tracking for circuit breaker & throttled logging */
+    private systemErrors = new Map<TickSystem, SystemErrorState>();
 
     /** Whether the page is currently visible */
     private pageVisible = !document.hidden;
@@ -69,8 +85,11 @@ export class GameLoop {
     private mapWidth: number | undefined;
     private mapHeight: number | undefined;
     private mapSize: MapSize | undefined;
-    /** Render callback - returns render timing if available */
+    /** Render callback — ONLY rendering, returns render timing if available */
     private onRender: ((alpha: number, deltaSec: number) => FrameRenderTiming | null) | null = null;
+
+    /** Per-frame update callback — non-rendering work (sound, input, debug stats) */
+    private onUpdate: ((deltaSec: number) => void) | null = null;
 
     /** When true, game logic (ticks) is paused but rendering continues */
     private _ticksPaused = true;
@@ -268,6 +287,13 @@ export class GameLoop {
     /** Register a tick system to be updated each tick */
     public registerSystem(system: TickSystem): void {
         this.systems.push(system);
+        this.systemErrors.set(system, {
+            name: system.constructor.name || 'Unknown',
+            consecutiveFailures: 0,
+            disabled: false,
+            lastErrorTime: 0,
+            suppressedCount: 0,
+        });
     }
 
     /** Enable game ticks (call after sprites are loaded) */
@@ -362,11 +388,21 @@ export class GameLoop {
     }
 
     /**
-     * Set the render callback, called every animation frame with interpolation alpha and delta time.
-     * The callback should return render timing data if available (from Renderer.getLastRenderTiming()).
+     * Set the render callback — called every visible frame with interpolation alpha.
+     * This callback should ONLY perform rendering work (sync visual state + draw).
+     * Returns render timing data if available.
      */
     public setRenderCallback(callback: (alpha: number, deltaSec: number) => FrameRenderTiming | null): void {
         this.onRender = callback;
+    }
+
+    /**
+     * Set the per-frame update callback — called every visible frame for non-rendering work.
+     * Use this for input processing, sound updates, debug stats, etc.
+     * Runs before the render callback so updated state is available for rendering.
+     */
+    public setUpdateCallback(callback: (deltaSec: number) => void): void {
+        this.onUpdate = callback;
     }
 
     public start(): void {
@@ -405,13 +441,12 @@ export class GameLoop {
         return this.running;
     }
 
-    /** Log errors with throttling to prevent console flooding */
+    /** Log errors with throttling to prevent console flooding (for non-system frame errors) */
     private logThrottledError(message: string, error: unknown): void {
         const now = performance.now();
         const timeSinceLastError = now - this.lastErrorTime;
 
         if (timeSinceLastError >= GameLoop.ERROR_THROTTLE_MS) {
-            // Enough time has passed, log the error
             const err = error instanceof Error ? error : new Error(String(error));
             if (this.suppressedErrorCount > 0) {
                 GameLoop.log.error(`${message} (${this.suppressedErrorCount} similar errors suppressed)`, err);
@@ -421,8 +456,49 @@ export class GameLoop {
             }
             this.lastErrorTime = now;
         } else {
-            // Throttled - just count the suppressed error
             this.suppressedErrorCount++;
+        }
+    }
+
+    /**
+     * Handle a per-system tick error. Logs with per-system throttling, tracks
+     * consecutive failures, and disables the system via circuit breaker.
+     */
+    private handleSystemError(system: TickSystem, error: unknown): void {
+        const state = this.systemErrors.get(system)!;
+        state.consecutiveFailures++;
+
+        const now = performance.now();
+
+        // Circuit breaker: disable after too many consecutive failures
+        if (!state.disabled && state.consecutiveFailures >= SYSTEM_CIRCUIT_BREAKER_THRESHOLD) {
+            state.disabled = true;
+            const msg = `System "${state.name}" disabled after ${SYSTEM_CIRCUIT_BREAKER_THRESHOLD} consecutive failures`;
+            GameLoop.log.error(msg);
+            toastError('GameLoop', `${state.name} has been disabled due to repeated errors`);
+            return;
+        }
+
+        // Per-system throttled logging (1 second cooldown per system)
+        if (now - state.lastErrorTime >= GameLoop.ERROR_THROTTLE_MS) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            if (state.suppressedCount > 0) {
+                GameLoop.log.error(
+                    `System "${state.name}" tick failed (${state.suppressedCount} similar suppressed)`,
+                    err
+                );
+                state.suppressedCount = 0;
+            } else {
+                GameLoop.log.error(`System "${state.name}" tick failed`, err);
+            }
+            state.lastErrorTime = now;
+
+            // Toast on first failure only (throttle handles the rest)
+            if (state.consecutiveFailures === 1) {
+                toastError(state.name, err.message);
+            }
+        } else {
+            state.suppressedCount++;
         }
     }
 
@@ -467,25 +543,27 @@ export class GameLoop {
     private frame(now: number): void {
         if (!this.running) return;
 
-        // When page is hidden, throttle to BACKGROUND_FPS to save CPU/battery
+        const frameStart = performance.now();
+        const deltaSec = Math.min((now - this.lastTime) / 1000, 0.1); // cap at 100ms
+        this.lastTime = now;
+        this.accumulator += deltaSec;
+
+        const shouldTick = !this._ticksPaused && !gameSettings.state.paused;
         const timeSinceLastRender = now - this.lastRenderTime;
         const shouldRender = this.pageVisible || timeSinceLastRender >= BACKGROUND_FRAME_DURATION;
 
-        const frameStart = performance.now();
         let ticksTime = 0;
         let animationsTime = 0;
         let callbackTime = 0;
         let renderTiming: FrameRenderTiming | null = null;
 
+        // ═══════════════════════════════════════════════════
+        // LOGIC PHASE — fixed-timestep simulation
+        // Isolated from rendering: a logic error cannot break rendering.
+        // ═══════════════════════════════════════════════════
+        const tickStart = performance.now();
         try {
-            const deltaSec = Math.min((now - this.lastTime) / 1000, 0.1); // cap at 100ms
-            this.lastTime = now;
-            this.accumulator += deltaSec;
-
-            // Fixed timestep simulation - only runs when ticks are enabled and not paused
             const scaledDt = TICK_DURATION * gameSettings.state.gameSpeed;
-            const tickStart = performance.now();
-            const shouldTick = !this._ticksPaused && !gameSettings.state.paused;
             if (shouldTick) {
                 while (this.accumulator >= TICK_DURATION) {
                     this.tick(scaledDt);
@@ -495,32 +573,50 @@ export class GameLoop {
                 // Drain accumulator to prevent catch-up burst when unpaused
                 this.accumulator = 0;
             }
-            ticksTime = performance.now() - tickStart;
+        } catch (e) {
+            this.logThrottledError('Error in logic phase', e);
+        }
+        ticksTime = performance.now() - tickStart;
 
-            // Only update animations and render when not throttled
-            if (shouldRender) {
-                // Update animations (runs every rendered frame for smooth animation)
-                // Scale by game speed so animations match game pace
-                // Skip animation updates when paused
-                const animStart = performance.now();
+        // ═══════════════════════════════════════════════════
+        // RENDER PHASE — only when visible / not throttled
+        // Isolated from logic: a render error cannot break simulation.
+        // ═══════════════════════════════════════════════════
+        if (shouldRender) {
+            // Animations (visual-only, scaled by game speed)
+            const animStart = performance.now();
+            try {
                 if (shouldTick) {
                     const scaledDeltaMs = deltaSec * 1000 * gameSettings.state.gameSpeed;
                     this.animationService.update(scaledDeltaMs);
                 }
-                animationsTime = performance.now() - animStart;
+            } catch (e) {
+                this.logThrottledError('Error updating animations', e);
+            }
+            animationsTime = performance.now() - animStart;
 
-                // Render with interpolation alpha for smooth sub-tick visuals
-                const callbackStart = performance.now();
+            // Per-frame update (input, sound, debug stats — NOT rendering)
+            try {
+                if (this.onUpdate) {
+                    this.onUpdate(deltaSec);
+                }
+            } catch (e) {
+                this.logThrottledError('Error in update callback', e);
+            }
+
+            // Render (GPU drawing only)
+            const callbackStart = performance.now();
+            try {
                 if (this.onRender) {
                     renderTiming = this.onRender(this.accumulator / TICK_DURATION, deltaSec);
                 }
-                callbackTime = performance.now() - callbackStart;
-
-                this.lastRenderTime = now;
-                this.recordFrameTiming(frameStart, ticksTime, animationsTime, callbackTime, renderTiming);
+            } catch (e) {
+                this.logThrottledError('Error in render callback', e);
             }
-        } catch (e) {
-            this.logThrottledError('Error in game frame', e);
+            callbackTime = performance.now() - callbackStart;
+
+            this.lastRenderTime = now;
+            this.recordFrameTiming(frameStart, ticksTime, animationsTime, callbackTime, renderTiming);
         }
 
         this.animRequest = requestAnimationFrame(this.boundFrame);
@@ -540,9 +636,23 @@ export class GameLoop {
             this.constructionSystem.setTerrainContext(undefined);
         }
 
-        // Run all registered tick systems in order
+        // Run each registered tick system with individual error isolation.
+        // A failure in one system does not prevent others from running.
         for (const system of this.systems) {
-            system.tick(dt);
+            const errorState = this.systemErrors.get(system);
+
+            // Circuit breaker: skip disabled systems
+            if (errorState?.disabled) continue;
+
+            try {
+                system.tick(dt);
+                // Reset consecutive failure count on success
+                if (errorState && errorState.consecutiveFailures > 0) {
+                    errorState.consecutiveFailures = 0;
+                }
+            } catch (e) {
+                this.handleSystemError(system, e);
+            }
         }
 
         // Update debug stats from game state so entity counts are available
