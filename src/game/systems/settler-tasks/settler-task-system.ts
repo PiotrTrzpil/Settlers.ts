@@ -543,8 +543,9 @@ export class SettlerTaskSystem implements TickSystem {
         idleState.idleTime += dt;
 
         if (idleState.idleTime >= idleState.nextIdleTurnTime) {
-            // Time for a random turn (animState MUST exist for active units)
-            const animState = this.animationService.getState(unit.id)!;
+            // Animation state may be missing during cleanup
+            const animState = this.animationService.getState(unit.id);
+            if (!animState) return;
             const newDirection = this.getAdjacentDirection(animState.direction);
             this.animationService.setDirection(unit.id, newDirection);
 
