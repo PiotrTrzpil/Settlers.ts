@@ -1,16 +1,17 @@
 import { LogHandler } from './log-handler';
 
 /**
- * Throttled error logger that prevents console flooding.
+ * Throttled logger that prevents console flooding.
  *
- * When errors fire every frame (e.g. a broken render layer or tick system),
+ * When errors/warnings fire every frame (e.g. a broken render layer or tick system),
  * this logger emits at most one log entry per `throttleMs` and reports how
- * many identical errors were suppressed in between.
+ * many identical messages were suppressed in between.
  *
  * Usage:
  *   const tl = new ThrottledLogger(log, 1000);
  *   // hot path — call as often as you like
  *   tl.error('Layer "Landscape" failed', err);
+ *   tl.warn('Feature not implemented');
  */
 export class ThrottledLogger {
     private lastTime = 0;
@@ -22,25 +23,35 @@ export class ThrottledLogger {
     ) {}
 
     /**
+     * Check if throttling allows a log, update state, and return formatted message.
+     * Returns null if suppressed, otherwise the message (with suppression count if any).
+     */
+    private shouldLog(message: string): string | null {
+        const now = performance.now();
+        if (now - this.lastTime < this.throttleMs) {
+            this.suppressed++;
+            return null;
+        }
+
+        this.lastTime = now;
+        if (this.suppressed > 0) {
+            const result = `${message} (${this.suppressed} similar suppressed)`;
+            this.suppressed = 0;
+            return result;
+        }
+        return message;
+    }
+
+    /**
      * Log an error if enough time has passed since the last one.
      * Returns `true` when the message was actually logged,
      * `false` when it was suppressed (caller can use this to decide
      * whether to fire a toast or other one-shot action).
      */
     error(message: string, error: Error): boolean {
-        const now = performance.now();
-        if (now - this.lastTime < this.throttleMs) {
-            this.suppressed++;
-            return false;
-        }
-
-        if (this.suppressed > 0) {
-            this.log.error(`${message} (${this.suppressed} similar suppressed)`, error);
-            this.suppressed = 0;
-        } else {
-            this.log.error(message, error);
-        }
-        this.lastTime = now;
+        const finalMessage = this.shouldLog(message);
+        if (finalMessage === null) return false;
+        this.log.error(finalMessage, error);
         return true;
     }
 
@@ -49,19 +60,9 @@ export class ThrottledLogger {
      * Same throttling behavior as error() but for non-fatal issues.
      */
     warn(message: string): boolean {
-        const now = performance.now();
-        if (now - this.lastTime < this.throttleMs) {
-            this.suppressed++;
-            return false;
-        }
-
-        if (this.suppressed > 0) {
-            this.log.warn(`${message} (${this.suppressed} similar suppressed)`);
-            this.suppressed = 0;
-        } else {
-            this.log.warn(message);
-        }
-        this.lastTime = now;
+        const finalMessage = this.shouldLog(message);
+        if (finalMessage === null) return false;
+        this.log.warn(finalMessage);
         return true;
     }
 }

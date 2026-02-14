@@ -1,6 +1,9 @@
 /**
  * Lightweight typed event bus for decoupling game systems.
  * Features register event handlers instead of being called directly.
+ *
+ * Error isolation: Handlers that throw are caught and logged with throttling.
+ * One bad handler won't crash the loop or prevent other handlers from running.
  */
 
 import type { BuildingState } from './features/building-construction';
@@ -10,6 +13,9 @@ import type { CarrierJob } from './features/carriers';
 import type { BuildingCleanupResult } from './features/logistics/logistics-dispatcher';
 import type { EMaterialType } from './economy';
 import type { RequestPriority } from './features/logistics';
+import { LogHandler } from '@/utilities/log-handler';
+import { ThrottledLogger } from '@/utilities/throttled-logger';
+import { toastError } from './toast-notifications';
 
 /** Event map defining all game events and their payloads */
 export interface GameEvents {
@@ -217,8 +223,23 @@ export interface GameEvents {
 
 type EventHandler<T> = (payload: T) => void;
 
+const log = new LogHandler('EventBus');
+
 export class EventBus {
     private handlers = new Map<string, Set<EventHandler<any>>>();
+
+    /** Per-event throttled logger to prevent error spam */
+    private errorLoggers = new Map<string, ThrottledLogger>();
+
+    /** Get or create throttled logger for an event type */
+    private getErrorLogger(event: string): ThrottledLogger {
+        let logger = this.errorLoggers.get(event);
+        if (!logger) {
+            logger = new ThrottledLogger(log, 2000);
+            this.errorLoggers.set(event, logger);
+        }
+        return logger;
+    }
 
     /** Register an event handler */
     on<K extends keyof GameEvents>(event: K, handler: EventHandler<GameEvents[K]>): void {
@@ -233,18 +254,36 @@ export class EventBus {
         this.handlers.get(event as string)?.delete(handler);
     }
 
-    /** Emit an event to all registered handlers */
+    /**
+     * Emit an event to all registered handlers.
+     * Each handler is called in isolation - if one throws, others still run.
+     * Errors are logged with throttling, and a toast is shown on first failure.
+     */
     emit<K extends keyof GameEvents>(event: K, payload: GameEvents[K]): void {
         const handlers = this.handlers.get(event as string);
         if (!handlers) return;
+
         for (const handler of handlers) {
-            handler(payload);
+            try {
+                handler(payload);
+            } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                const logged = this.getErrorLogger(event as string).error(
+                    `Handler for '${event as string}' threw`,
+                    err
+                );
+                // Toast on first failure (when throttle allows logging)
+                if (logged) {
+                    toastError('EventBus', `${event as string}: ${err.message}`);
+                }
+            }
         }
     }
 
     /** Remove all handlers */
     clear(): void {
         this.handlers.clear();
+        this.errorLoggers.clear();
     }
 }
 
