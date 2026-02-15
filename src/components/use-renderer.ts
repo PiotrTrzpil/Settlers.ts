@@ -14,6 +14,7 @@ import { TilePicker } from '@/game/input/tile-picker';
 import { type TileCoord } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
 import { canPlaceBuildingFootprint, canPlaceResource, canPlaceUnit } from '@/game/features/placement';
+import type { CommandResult } from '@/game/commands';
 import { debugStats } from '@/game/debug-stats';
 import {
     InputManager,
@@ -415,10 +416,11 @@ export function useRenderer({
 
     /**
      * Execute a game command, updating debug stats for tile clicks.
+     * Returns CommandResult with success status, error details, and effects.
      */
-    function executeCommand(command: any): boolean {
+    function executeCommand(command: any): CommandResult {
         const game = getGame();
-        if (!game) return false;
+        if (!game) return { success: false, error: 'Game not initialized' };
 
         // Track tile info for debug stats on tile-targeting commands
         if (command.type === 'select_at_tile' || command.type === 'move_selected_units') {
@@ -520,14 +522,10 @@ export function useRenderer({
         });
 
         // Register update callback (input, sound, debug stats — runs before render)
-        game.gameLoop.setUpdateCallback(
-            createUpdateCallback(contextGetter, renderer, selectionBox)
-        );
+        game.gameLoop.setUpdateCallback(createUpdateCallback(contextGetter, renderer, selectionBox));
 
         // Register render callback (visual sync + GPU draw only)
-        game.gameLoop.setRenderCallback(
-            createRenderCallback(contextGetter, renderer)
-        );
+        game.gameLoop.setRenderCallback(createRenderCallback(contextGetter, renderer));
     }
 
     /**

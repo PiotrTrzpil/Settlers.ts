@@ -1,4 +1,3 @@
- 
 /**
  * Integration test: Unit Lifecycle
  *
@@ -41,7 +40,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
 
         // ── Step 1: Spawn a unit via command ──
         const spawned = spawnUnit(ctx, 5, 5);
-        expect(spawned).toBe(true);
+        expect(spawned.success).toBe(true);
         expect(ctx.state.entities).toHaveLength(1);
 
         const unit = ctx.state.entities[0];
@@ -59,7 +58,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
 
         // ── Step 2: Command the unit to move via pathfinding ──
         const moved = moveUnit(ctx, unit.id, 10, 5);
-        expect(moved).toBe(true);
+        expect(moved.success).toBe(true);
         expect(unitState!.path.length).toBeGreaterThan(0);
         expect(unitState!.path[unitState!.path.length - 1]).toEqual({ x: 10, y: 5 });
 
@@ -85,7 +84,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
 
         // ── Step 5: Remove unit ──
         const removed = removeEntity(ctx, unit.id);
-        expect(removed).toBe(true);
+        expect(removed.success).toBe(true);
         expect(ctx.state.entities).toHaveLength(0);
         expect(ctx.state.unitStates.has(unit.id)).toBe(false);
         expect(ctx.state.getEntityAt(10, 5)).toBeUndefined();
@@ -202,7 +201,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
 
         // Spawn unit at same tile → should be placed adjacent
         const spawned = spawnUnit(ctx, 10, 10);
-        expect(spawned).toBe(true);
+        expect(spawned.success).toBe(true);
 
         const unit = ctx.state.entities.find(e => e.type === EntityType.Unit);
         expect(unit).toBeDefined();

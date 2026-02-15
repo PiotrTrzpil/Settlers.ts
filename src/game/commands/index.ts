@@ -17,6 +17,8 @@ export type {
     SelectAreaCommand,
     MoveSelectedUnitsCommand,
     RemoveEntityCommand,
+    CommandResult,
+    CommandEffect,
 } from './command-types';
 
 export {
@@ -26,6 +28,9 @@ export {
     isResourceCommand,
     isSelectionCommand,
     isMovementCommand,
+    COMMAND_OK,
+    commandSuccess,
+    commandFailed,
 } from './command-types';
 
 // Command execution

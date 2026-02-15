@@ -4,17 +4,10 @@ import type { InputMode, InputContext, InputResult } from './input-mode';
 import type { InputConfig } from './input-config';
 import type { InputState } from './input-state';
 import type { ModeRenderState } from './render-state';
-import {
-    InputAction,
-    MouseButton,
-    type PointerData,
-    type KeyboardData,
-} from './input-actions';
-import {
-    matchesKeyBinding,
-    matchesMouseBinding,
-    getDefaultInputConfig,
-} from './input-config';
+import type { CommandResult } from '../commands';
+import { commandFailed } from '../commands';
+import { InputAction, MouseButton, type PointerData, type KeyboardData } from './input-actions';
+import { matchesKeyBinding, matchesMouseBinding, getDefaultInputConfig } from './input-config';
 import {
     createInputState,
     handleKeyDown,
@@ -26,7 +19,6 @@ import {
 import { CameraMode } from './modes/camera-mode';
 import { gameSettings } from '../game-settings';
 
-
 /**
  * Tile resolver function type.
  */
@@ -34,8 +26,9 @@ export type TileResolver = (screenX: number, screenY: number) => TileCoord | nul
 
 /**
  * Command executor function type.
+ * Returns CommandResult with success status, error details, and effects.
  */
-export type CommandExecutor = (command: any) => boolean;
+export type CommandExecutor = (command: any) => CommandResult;
 
 /**
  * Mode change callback.
@@ -312,15 +305,12 @@ export class InputManager {
     // ─── Private Methods ─────────────────────────────────────────────────
 
     private createContext(): InputContext {
-        const currentTile = this.resolveTile(
-            this.state.mouseX.value,
-            this.state.mouseY.value
-        );
+        const currentTile = this.resolveTile(this.state.mouseX.value, this.state.mouseY.value);
 
         return {
             state: this.state,
             currentTile,
-            executeCommand: (cmd) => this.commandExecutor?.(cmd) ?? false,
+            executeCommand: cmd => this.commandExecutor?.(cmd) ?? commandFailed('No command executor'),
             switchMode: (mode, data) => this.switchMode(mode, data),
             getModeData: <T>() => this.modeData.get(this.currentModeName) as T | undefined,
             setModeData: <T>(data: T) => this.modeData.set(this.currentModeName, data),
@@ -342,7 +332,7 @@ export class InputManager {
             screenY,
             tileX: resolvedTile?.x,
             tileY: resolvedTile?.y,
-            button: (e as PointerEvent).button as MouseButton ?? MouseButton.Left,
+            button: ((e as PointerEvent).button as MouseButton) ?? MouseButton.Left,
             shiftKey: e.shiftKey,
             ctrlKey: e.ctrlKey || e.metaKey,
             altKey: e.altKey,
@@ -371,12 +361,7 @@ export class InputManager {
         }
     }
 
-    private findActionForKey(
-        code: string,
-        shiftKey: boolean,
-        ctrlKey: boolean,
-        altKey: boolean
-    ): InputAction | null {
+    private findActionForKey(code: string, shiftKey: boolean, ctrlKey: boolean, altKey: boolean): InputAction | null {
         for (const binding of this.config.bindings) {
             if (matchesKeyBinding(binding, code, shiftKey, ctrlKey, altKey)) {
                 return binding.action;

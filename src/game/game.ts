@@ -3,7 +3,7 @@ import { IMapLoader } from '@/resources/map/imap-loader';
 import { MapSize } from '@/utilities/map-size';
 import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
-import { Command, executeCommand } from './commands';
+import { Command, executeCommand, type CommandResult } from './commands';
 import { isBuildable } from './features/placement';
 import { populateMapObjectsFromEntityData, expandTrees } from './systems/map-objects';
 import { populateMapBuildings } from './systems/map-buildings';
@@ -134,7 +134,7 @@ export class Game {
     }
 
     /** Execute a command against the game state */
-    public execute(cmd: Command): boolean {
+    public execute(cmd: Command): CommandResult {
         return executeCommand(
             this.state,
             cmd,

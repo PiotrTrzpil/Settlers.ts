@@ -6,12 +6,30 @@ import { BuildingType, UnitType } from '../entity';
  */
 export const FORMATION_OFFSETS: ReadonlyArray<readonly [number, number]> = [
     [0, 0],
-    [1, 0], [0, 1], [-1, 0], [0, -1],
-    [1, 1], [-1, 1], [1, -1], [-1, -1],
-    [2, 0], [0, 2], [-2, 0], [0, -2],
-    [2, 1], [1, 2], [-1, 2], [-2, 1],
-    [-2, -1], [-1, -2], [1, -2], [2, -1],
-    [2, 2], [-2, 2], [2, -2], [-2, -2],
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+    [1, 1],
+    [-1, 1],
+    [1, -1],
+    [-1, -1],
+    [2, 0],
+    [0, 2],
+    [-2, 0],
+    [0, -2],
+    [2, 1],
+    [1, 2],
+    [-1, 2],
+    [-2, 1],
+    [-2, -1],
+    [-1, -2],
+    [1, -2],
+    [2, -1],
+    [2, 2],
+    [-2, 2],
+    [2, -2],
+    [-2, -2],
 ];
 
 // === Building Commands ===
@@ -102,6 +120,54 @@ export type Command =
     | MoveSelectedUnitsCommand
     | RemoveEntityCommand;
 
+// === Command Result Types ===
+
+/**
+ * Effect produced by a command execution.
+ * Used for debugging, replay, and undo functionality.
+ */
+export type CommandEffect =
+    | { type: 'entity_created'; entityId: number; entityType: string }
+    | { type: 'entity_removed'; entityId: number }
+    | { type: 'entity_moved'; entityId: number; fromX: number; fromY: number; toX: number; toY: number }
+    | { type: 'selection_changed'; selectedIds: number[] }
+    | { type: 'building_placed'; entityId: number; buildingType: BuildingType; x: number; y: number }
+    | { type: 'unit_spawned'; entityId: number; unitType: UnitType; x: number; y: number };
+
+/**
+ * Result of command execution.
+ * Provides detailed feedback for debugging, replay, and UI feedback.
+ */
+export interface CommandResult {
+    /** Whether the command executed successfully */
+    success: boolean;
+
+    /**
+     * Error message if command failed.
+     * Provides context for debugging and user feedback.
+     */
+    error?: string;
+
+    /**
+     * Effects produced by the command.
+     * Used for debugging, replay, and undo functionality.
+     */
+    effects?: CommandEffect[];
+}
+
+/** Successful command result with no effects */
+export const COMMAND_OK: CommandResult = { success: true };
+
+/** Create a successful result with effects */
+export function commandSuccess(effects?: CommandEffect[]): CommandResult {
+    return effects ? { success: true, effects } : COMMAND_OK;
+}
+
+/** Create a failed result with error message */
+export function commandFailed(error: string): CommandResult {
+    return { success: false, error };
+}
+
 /**
  * Type guard for building-related commands.
  */
@@ -126,9 +192,15 @@ export function isUnitCommand(cmd: Command): cmd is SpawnUnitCommand | MoveUnitC
 /**
  * Type guard for selection-related commands.
  */
-export function isSelectionCommand(cmd: Command): cmd is SelectCommand | SelectAtTileCommand | ToggleSelectionCommand | SelectAreaCommand {
-    return cmd.type === 'select' || cmd.type === 'select_at_tile' ||
-        cmd.type === 'toggle_selection' || cmd.type === 'select_area';
+export function isSelectionCommand(
+    cmd: Command
+): cmd is SelectCommand | SelectAtTileCommand | ToggleSelectionCommand | SelectAreaCommand {
+    return (
+        cmd.type === 'select' ||
+        cmd.type === 'select_at_tile' ||
+        cmd.type === 'toggle_selection' ||
+        cmd.type === 'select_area'
+    );
 }
 
 /**

@@ -47,7 +47,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
     it('full lifecycle from placement through construction to removal', () => {
         // ── Step 1: Place a building via command system ──
         const placed = placeBuilding(ctx, 20, 20, BuildingType.WoodcutterHut, 0);
-        expect(placed).toBe(true);
+        expect(placed.success).toBe(true);
 
         const building = ctx.state.entities.find(e => e.type === EntityType.Building);
         expect(building).toBeDefined();
@@ -116,7 +116,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
 
         // ── Step 4: Remove building and verify cleanup ──
         const removed = removeEntity(ctx, building!.id);
-        expect(removed).toBe(true);
+        expect(removed.success).toBe(true);
 
         // Entity gone from state
         expect(ctx.state.entities.find(e => e.id === building!.id)).toBeUndefined();
@@ -133,23 +133,23 @@ describe('Building Lifecycle: place → construct → remove', () => {
     it('building placement fails on invalid terrain, succeeds on valid', () => {
         // Water → fails
         setTerrainAt(map, 10, 10, TERRAIN.WATER);
-        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut).success).toBe(false);
         expect(ctx.state.entities).toHaveLength(0);
 
         // Rock → fails
         setTerrainAt(map, 10, 10, TERRAIN.ROCK);
-        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut).success).toBe(false);
 
         // Beach → fails (not buildable)
         setTerrainAt(map, 10, 10, TERRAIN.BEACH);
-        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut).success).toBe(false);
 
         // Grass → succeeds
         setTerrainAt(map, 10, 10, TERRAIN.GRASS);
-        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut)).toBe(true);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.WoodcutterHut).success).toBe(true);
 
         // Occupied → fails
-        expect(placeBuilding(ctx, 10, 10, BuildingType.StorageArea)).toBe(false);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.StorageArea).success).toBe(false);
     });
 
     it('terrain capture and restoration preserves varied heights', () => {

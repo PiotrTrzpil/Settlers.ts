@@ -10,6 +10,7 @@ import { BuildingType, getBuildingSize } from '@/game/entity';
 import { HANDLED, UNHANDLED, type InputContext } from '@/game/input/input-mode';
 import { MouseButton, type PointerData, InputAction } from '@/game/input/input-actions';
 import { CursorType } from '@/game/input/render-state';
+import { commandSuccess, commandFailed, type Command } from '@/game/commands';
 
 /** Helper to create minimal PointerData for tests */
 function createPointerData(overrides: Partial<PointerData> = {}): PointerData {
@@ -29,7 +30,7 @@ describe('PlaceBuildingMode', () => {
     let mode: PlaceBuildingMode;
     let mockContext: InputContext;
     let modeData: PlaceBuildingModeData | undefined;
-    let executedCommands: any[];
+    let executedCommands: Command[];
     let switchedToMode: string | null;
 
     beforeEach(() => {
@@ -45,11 +46,15 @@ describe('PlaceBuildingMode', () => {
                 drag: { value: null },
             },
             getModeData: <T>() => modeData as T,
-            setModeData: <T>(data: T) => { modeData = data as PlaceBuildingModeData | undefined },
-            switchMode: (name: string) => { switchedToMode = name },
-            executeCommand: (cmd: any) => {
+            setModeData: <T>(data: T) => {
+                modeData = data as PlaceBuildingModeData | undefined;
+            },
+            switchMode: (name: string) => {
+                switchedToMode = name;
+            },
+            executeCommand: (cmd: Command) => {
                 executedCommands.push(cmd);
-                return true;
+                return commandSuccess();
             },
         } as unknown as InputContext;
     });
@@ -123,7 +128,7 @@ describe('PlaceBuildingMode', () => {
 
             // Command failure
             modeData!.previewValid = true;
-            mockContext.executeCommand = () => false;
+            mockContext.executeCommand = () => commandFailed('test failure');
             mode.onPointerUp(createPointerData(), mockContext);
             expect(switchedToMode).toBeNull();
         });

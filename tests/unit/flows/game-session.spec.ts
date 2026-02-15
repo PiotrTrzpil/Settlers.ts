@@ -50,7 +50,7 @@ describe('Game Session: multi-system integration sweep', () => {
 
     it('player builds an economy: lumberjack → sawmill → supply chain validation', () => {
         // ── Place a WoodcutterHut (produces LOG) ──
-        expect(placeBuilding(ctx, 20, 20, BuildingType.WoodcutterHut, 0)).toBe(true);
+        expect(placeBuilding(ctx, 20, 20, BuildingType.WoodcutterHut, 0).success).toBe(true);
 
         // Lumberjack auto-spawns a worker
         const lumberjackEntities = ctx.state.entities.filter(
@@ -66,7 +66,7 @@ describe('Game Session: multi-system integration sweep', () => {
         expect(lumberjackChain.inputs).toHaveLength(0); // No inputs needed
 
         // ── Place a Sawmill (consumes LOG, produces BOARD) ──
-        expect(placeBuilding(ctx, 25, 20, BuildingType.Sawmill, 0)).toBe(true);
+        expect(placeBuilding(ctx, 25, 20, BuildingType.Sawmill, 0).success).toBe(true);
 
         const sawmillChain = BUILDING_PRODUCTIONS.get(BuildingType.Sawmill)!;
         expect(sawmillChain.output).toBe(EMaterialType.BOARD);
@@ -92,9 +92,9 @@ describe('Game Session: multi-system integration sweep', () => {
 
     it('full session: build, select, move units, manage entities', () => {
         // ── Build phase: place multiple buildings ──
-        expect(placeBuilding(ctx, 10, 10, BuildingType.StorageArea, 0)).toBe(true);
-        expect(placeBuilding(ctx, 20, 20, BuildingType.WoodcutterHut, 0)).toBe(true);
-        expect(placeBuilding(ctx, 30, 30, BuildingType.GuardTowerSmall, 1)).toBe(true);
+        expect(placeBuilding(ctx, 10, 10, BuildingType.StorageArea, 0).success).toBe(true);
+        expect(placeBuilding(ctx, 20, 20, BuildingType.WoodcutterHut, 0).success).toBe(true);
+        expect(placeBuilding(ctx, 30, 30, BuildingType.GuardTowerSmall, 1).success).toBe(true);
 
         // Warehouse (no auto-spawn) + Lumberjack (auto-spawn worker) + Tower (no auto-spawn)
         const buildings = ctx.state.entities.filter(e => e.type === EntityType.Building);
@@ -103,7 +103,7 @@ describe('Game Session: multi-system integration sweep', () => {
         expect(units.length).toBeGreaterThanOrEqual(1);
 
         // ── Spawn additional units ──
-        expect(spawnUnit(ctx, 15, 15, 2, 0)).toBe(true); // Swordsman (selectable - Military category)
+        expect(spawnUnit(ctx, 15, 15, 2, 0).success).toBe(true); // Swordsman (selectable - Military category)
         const spawnedUnit = ctx.state.entities.find(e => e.type === EntityType.Unit && e.x === 15 && e.y === 15);
         expect(spawnedUnit).toBeDefined();
 
@@ -135,7 +135,7 @@ describe('Game Session: multi-system integration sweep', () => {
         expect(selected?.type).toBe(EntityType.Unit);
 
         // ── Move the selected unit ──
-        expect(moveUnit(ctx, spawnedUnit!.id, 18, 15)).toBe(true);
+        expect(moveUnit(ctx, spawnedUnit!.id, 18, 15).success).toBe(true);
         const unitState = ctx.state.unitStates.get(spawnedUnit!.id);
         expect(unitState!.path.length).toBeGreaterThan(0);
 

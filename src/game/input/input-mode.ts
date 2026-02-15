@@ -2,6 +2,7 @@ import type { InputAction, PointerData, DragData, KeyboardData } from './input-a
 import type { InputState } from './input-state';
 import type { TileCoord } from '../entity';
 import { type ModeRenderState, createDefaultRenderState } from './render-state';
+import type { CommandResult } from '../commands';
 
 /**
  * Context passed to input mode handlers.
@@ -11,8 +12,8 @@ export interface InputContext {
     state: InputState;
     /** Current tile under cursor (if resolved) */
     currentTile: TileCoord | null;
-    /** Execute a game command */
-    executeCommand: (command: any) => boolean;
+    /** Execute a game command. Returns CommandResult with success, error, and effects. */
+    executeCommand: (command: any) => CommandResult;
     /** Switch to a different mode */
     switchMode: (mode: string, data?: any) => void;
     /** Get mode-specific data */

@@ -37,8 +37,8 @@ describe('Building Placement Commands', () => {
         const tile = findBuildableTile(ctx.map);
         expect(tile).not.toBeNull();
 
-        const success = placeBuilding(ctx, tile!.x, tile!.y, BuildingType.WoodcutterHut);
-        expect(success).toBe(true);
+        const result = placeBuilding(ctx, tile!.x, tile!.y, BuildingType.WoodcutterHut);
+        expect(result.success).toBe(true);
 
         const buildings = ctx.state.entities.filter(e => e.type === EntityType.Building);
         expect(buildings.length).toBe(1);
@@ -57,8 +57,8 @@ describe('Building Placement Commands', () => {
         const cy = Math.floor(ctx.map.mapSize.height / 2);
         ctx.map.groundType[ctx.map.mapSize.toIndex(cx, cy)] = TERRAIN.WATER;
 
-        const success = placeBuilding(ctx, cx, cy, BuildingType.WoodcutterHut);
-        expect(success).toBe(false);
+        const result = placeBuilding(ctx, cx, cy, BuildingType.WoodcutterHut);
+        expect(result.success).toBe(false);
 
         const buildings = ctx.state.entities.filter(e => e.type === EntityType.Building);
         expect(buildings.length).toBe(0);
@@ -69,12 +69,12 @@ describe('Building Placement Commands', () => {
         expect(tile1).not.toBeNull();
 
         // Place WoodcutterHut
-        const success1 = placeBuilding(ctx, tile1!.x, tile1!.y, BuildingType.WoodcutterHut);
-        expect(success1).toBe(true);
+        const result1 = placeBuilding(ctx, tile1!.x, tile1!.y, BuildingType.WoodcutterHut);
+        expect(result1.success).toBe(true);
 
         // Place StorageArea at different location
-        const success2 = placeBuilding(ctx, tile1!.x + 5, tile1!.y + 5, BuildingType.StorageArea);
-        expect(success2).toBe(true);
+        const result2 = placeBuilding(ctx, tile1!.x + 5, tile1!.y + 5, BuildingType.StorageArea);
+        expect(result2.success).toBe(true);
 
         const buildings = ctx.state.entities.filter(e => e.type === EntityType.Building);
         expect(buildings.length).toBe(2);
@@ -94,8 +94,8 @@ describe('Unit Spawn Commands', () => {
         const tile = findPassableTile(ctx.map);
         expect(tile).not.toBeNull();
 
-        const success = spawnUnit(ctx, tile!.x, tile!.y, UnitType.Carrier);
-        expect(success).toBe(true);
+        const result = spawnUnit(ctx, tile!.x, tile!.y, UnitType.Carrier);
+        expect(result.success).toBe(true);
 
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
         expect(units.length).toBe(1);
@@ -114,8 +114,8 @@ describe('Unit Spawn Commands', () => {
         const tile = findPassableTile(ctx.map);
         expect(tile).not.toBeNull();
 
-        const success = spawnUnit(ctx, tile!.x, tile!.y, UnitType.Swordsman);
-        expect(success).toBe(true);
+        const result = spawnUnit(ctx, tile!.x, tile!.y, UnitType.Swordsman);
+        expect(result.success).toBe(true);
 
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
         expect(units.length).toBe(1);
@@ -126,8 +126,8 @@ describe('Unit Spawn Commands', () => {
         const tile = findBuildableTile(ctx.map);
         expect(tile).not.toBeNull();
 
-        const success = spawnUnit(ctx, tile!.x, tile!.y, UnitType.Builder);
-        expect(success).toBe(true);
+        const result = spawnUnit(ctx, tile!.x, tile!.y, UnitType.Builder);
+        expect(result.success).toBe(true);
 
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
         expect(units.length).toBe(1);
@@ -141,8 +141,8 @@ describe('Unit Spawn Commands', () => {
         const tile = findPassableTile(ctx.map);
         expect(tile).not.toBeNull();
 
-        const success = spawnUnit(ctx, tile!.x, tile!.y, UnitType.Builder);
-        expect(success).toBe(true);
+        const result = spawnUnit(ctx, tile!.x, tile!.y, UnitType.Builder);
+        expect(result.success).toBe(true);
 
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
         const unit = units[0];
@@ -180,8 +180,8 @@ describe('Resource Placement Commands', () => {
         expect(tile).not.toBeNull();
 
         const amount = 5;
-        const success = placeResource(ctx, tile!.x, tile!.y, EMaterialType.LOG, amount);
-        expect(success).toBe(true);
+        const result = placeResource(ctx, tile!.x, tile!.y, EMaterialType.LOG, amount);
+        expect(result.success).toBe(true);
 
         const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedResource);
         expect(resources.length).toBe(1);
@@ -198,8 +198,8 @@ describe('Resource Placement Commands', () => {
         expect(tile).not.toBeNull();
 
         const amount = 3;
-        const success = placeResource(ctx, tile!.x, tile!.y, EMaterialType.BOARD, amount);
-        expect(success).toBe(true);
+        const result = placeResource(ctx, tile!.x, tile!.y, EMaterialType.BOARD, amount);
+        expect(result.success).toBe(true);
 
         const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedResource);
         expect(resources.length).toBe(1);
@@ -213,8 +213,8 @@ describe('Resource Placement Commands', () => {
         for (let i = 0; i < 3; i++) {
             const x = 10 + i * 3;
             const y = 10 + i * 3;
-            const success = placeResource(ctx, x, y, EMaterialType.LOG);
-            if (success) placedCount++;
+            const result = placeResource(ctx, x, y, EMaterialType.LOG);
+            if (result.success) placedCount++;
         }
 
         expect(placedCount).toBeGreaterThanOrEqual(2);
@@ -230,8 +230,8 @@ describe('Resource Placement Commands', () => {
         for (let i = 0; i < amounts.length; i++) {
             const x = 10 + i * 3;
             const y = 10 + i * 3;
-            const success = placeResource(ctx, x, y, EMaterialType.LOG, amounts[i]);
-            if (success) {
+            const result = placeResource(ctx, x, y, EMaterialType.LOG, amounts[i]);
+            if (result.success) {
                 const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedResource);
                 const newest = resources[resources.length - 1];
                 placed.push({ id: newest.id, subType: newest.subType });
@@ -253,8 +253,8 @@ describe('Resource Placement Commands', () => {
         const cy = Math.floor(ctx.map.mapSize.height / 2);
         ctx.map.groundType[ctx.map.mapSize.toIndex(cx, cy)] = TERRAIN.WATER;
 
-        const success = placeResource(ctx, cx, cy, EMaterialType.LOG);
-        expect(success).toBe(false);
+        const result = placeResource(ctx, cx, cy, EMaterialType.LOG);
+        expect(result.success).toBe(false);
 
         const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedResource);
         expect(resources.length).toBe(0);

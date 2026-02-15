@@ -19,10 +19,13 @@ import {
     SelectAreaCommand,
     MoveSelectedUnitsCommand,
     RemoveEntityCommand,
+    type CommandResult,
+    commandSuccess,
+    commandFailed,
 } from './command-types';
 
 // Re-export Command type and related types for backward compatibility
-export type { Command } from './command-types';
+export type { Command, CommandResult, CommandEffect } from './command-types';
 export type {
     PlaceBuildingCommand,
     SpawnUnitCommand,
@@ -41,6 +44,9 @@ export {
     isResourceCommand,
     isSelectionCommand,
     isMovementCommand,
+    COMMAND_OK,
+    commandSuccess,
+    commandFailed,
 } from './command-types';
 
 interface CommandContext {
@@ -55,7 +61,7 @@ interface CommandContext {
     buildingStateManager: BuildingStateManager;
 }
 
-function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): boolean {
+function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): CommandResult {
     const { state, groundType, groundHeight, mapSize } = ctx;
 
     if (
@@ -69,7 +75,7 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): b
             cmd.buildingType
         )
     ) {
-        return false;
+        return commandFailed(`Cannot place building at (${cmd.x}, ${cmd.y}): invalid placement`);
     }
 
     const entity = state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
@@ -96,7 +102,10 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): b
     if (gameSettings.state.placeBuildingsWithWorker) {
         spawnWorkerForBuilding(ctx, cmd);
     }
-    return true;
+
+    return commandSuccess([
+        { type: 'building_placed', entityId: entity.id, buildingType: cmd.buildingType, x: cmd.x, y: cmd.y },
+    ]);
 }
 
 function spawnWorkerForBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): void {
@@ -126,7 +135,7 @@ function spawnWorkerForBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand):
     });
 }
 
-function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): boolean {
+function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): CommandResult {
     const { state, groundType, mapSize } = ctx;
 
     const isTileValid = (x: number, y: number) =>
@@ -142,7 +151,9 @@ function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): boolean {
 
     if (!isTileValid(spawnX, spawnY)) {
         const found = findValidSpawnTile(cmd.x, cmd.y, isTileValid);
-        if (!found) return false;
+        if (!found) {
+            return commandFailed(`Cannot spawn unit at (${cmd.x}, ${cmd.y}): no valid tile nearby`);
+        }
         spawnX = found.x;
         spawnY = found.y;
     }
@@ -157,7 +168,9 @@ function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): boolean {
         player: cmd.player,
     });
 
-    return true;
+    return commandSuccess([
+        { type: 'unit_spawned', entityId: entity.id, unitType: cmd.unitType, x: spawnX, y: spawnY },
+    ]);
 }
 
 function findValidSpawnTile(
@@ -175,16 +188,30 @@ function findValidSpawnTile(
     return null;
 }
 
-function executeMoveUnit(ctx: CommandContext, cmd: MoveUnitCommand): boolean {
-    // Route through task system if available (handles animation)
-    if (ctx.settlerTaskSystem) {
-        return ctx.settlerTaskSystem.assignMoveTask(cmd.entityId, cmd.targetX, cmd.targetY);
+function executeMoveUnit(ctx: CommandContext, cmd: MoveUnitCommand): CommandResult {
+    const entity = ctx.state.getEntity(cmd.entityId);
+    if (!entity) {
+        return commandFailed(`Entity ${cmd.entityId} not found`);
     }
-    // Fallback to direct movement (no animation handling)
-    return ctx.state.movement.moveUnit(cmd.entityId, cmd.targetX, cmd.targetY);
+
+    const fromX = entity.x;
+    const fromY = entity.y;
+
+    // Route through task system if available (handles animation)
+    const success = ctx.settlerTaskSystem
+        ? ctx.settlerTaskSystem.assignMoveTask(cmd.entityId, cmd.targetX, cmd.targetY)
+        : ctx.state.movement.moveUnit(cmd.entityId, cmd.targetX, cmd.targetY);
+
+    if (!success) {
+        return commandFailed(`Cannot move unit ${cmd.entityId} to (${cmd.targetX}, ${cmd.targetY})`);
+    }
+
+    return commandSuccess([
+        { type: 'entity_moved', entityId: cmd.entityId, fromX, fromY, toX: cmd.targetX, toY: cmd.targetY },
+    ]);
 }
 
-function executeSelect(ctx: CommandContext, cmd: SelectCommand): boolean {
+function executeSelect(ctx: CommandContext, cmd: SelectCommand): CommandResult {
     const { state } = ctx;
 
     if (cmd.entityId !== null) {
@@ -192,7 +219,7 @@ function executeSelect(ctx: CommandContext, cmd: SelectCommand): boolean {
         if (ent && ent.selectable === false) {
             state.selectedEntityId = null;
             state.selectedEntityIds.clear();
-            return true;
+            return commandSuccess([{ type: 'selection_changed', selectedIds: [] }]);
         }
     }
 
@@ -201,16 +228,18 @@ function executeSelect(ctx: CommandContext, cmd: SelectCommand): boolean {
     if (cmd.entityId !== null) {
         state.selectedEntityIds.add(cmd.entityId);
     }
-    return true;
+
+    return commandSuccess([{ type: 'selection_changed', selectedIds: cmd.entityId !== null ? [cmd.entityId] : [] }]);
 }
 
-function executeSelectAtTile(ctx: CommandContext, cmd: SelectAtTileCommand): boolean {
+function executeSelectAtTile(ctx: CommandContext, cmd: SelectAtTileCommand): CommandResult {
     const { state } = ctx;
     const rawEntity = state.getEntityAt(cmd.x, cmd.y);
     const entity = rawEntity?.selectable !== false ? rawEntity : undefined;
 
     if (cmd.addToSelection) {
-        return toggleEntityInSelection(state, entity);
+        toggleEntityInSelection(state, entity);
+        return commandSuccess([{ type: 'selection_changed', selectedIds: [...state.selectedEntityIds] }]);
     }
 
     // Replace selection
@@ -219,11 +248,12 @@ function executeSelectAtTile(ctx: CommandContext, cmd: SelectAtTileCommand): boo
     if (entity) {
         state.selectedEntityIds.add(entity.id);
     }
-    return true;
+
+    return commandSuccess([{ type: 'selection_changed', selectedIds: entity ? [entity.id] : [] }]);
 }
 
-function toggleEntityInSelection(state: GameState, entity: { id: number } | undefined): boolean {
-    if (!entity) return true;
+function toggleEntityInSelection(state: GameState, entity: { id: number } | undefined): void {
+    if (!entity) return;
 
     if (state.selectedEntityIds.has(entity.id)) {
         state.selectedEntityIds.delete(entity.id);
@@ -237,18 +267,20 @@ function toggleEntityInSelection(state: GameState, entity: { id: number } | unde
             state.selectedEntityId = entity.id;
         }
     }
-    return true;
 }
 
-function executeToggleSelection(ctx: CommandContext, cmd: ToggleSelectionCommand): boolean {
+function executeToggleSelection(ctx: CommandContext, cmd: ToggleSelectionCommand): CommandResult {
     const { state } = ctx;
     const entity = state.getEntity(cmd.entityId);
-    if (!entity || entity.selectable === false) return false;
+    if (!entity || entity.selectable === false) {
+        return commandFailed(`Entity ${cmd.entityId} is not selectable`);
+    }
 
-    return toggleEntityInSelection(state, entity);
+    toggleEntityInSelection(state, entity);
+    return commandSuccess([{ type: 'selection_changed', selectedIds: [...state.selectedEntityIds] }]);
 }
 
-function executeSelectArea(ctx: CommandContext, cmd: SelectAreaCommand): boolean {
+function executeSelectArea(ctx: CommandContext, cmd: SelectAreaCommand): CommandResult {
     const { state } = ctx;
     const allEntities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
     const entities = allEntities.filter(e => e.selectable !== false);
@@ -262,10 +294,11 @@ function executeSelectArea(ctx: CommandContext, cmd: SelectAreaCommand): boolean
         state.selectedEntityIds.add(e.id);
     }
     state.selectedEntityId = toSelect.length > 0 ? toSelect[0].id : null;
-    return true;
+
+    return commandSuccess([{ type: 'selection_changed', selectedIds: toSelect.map(e => e.id) }]);
 }
 
-function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCommand): boolean {
+function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCommand): CommandResult {
     const { state, settlerTaskSystem } = ctx;
 
     const selectedUnits: number[] = [];
@@ -275,13 +308,28 @@ function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCom
             selectedUnits.push(entityId);
         }
     }
-    if (selectedUnits.length === 0) return false;
+    if (selectedUnits.length === 0) {
+        return commandFailed('No units selected');
+    }
 
-    let anyMoved = false;
+    const effects: {
+        type: 'entity_moved';
+        entityId: number;
+        fromX: number;
+        fromY: number;
+        toX: number;
+        toY: number;
+    }[] = [];
     for (let i = 0; i < selectedUnits.length; i++) {
         const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
         const targetX = cmd.targetX + offset[0];
         const targetY = cmd.targetY + offset[1];
+
+        const entity = state.getEntity(selectedUnits[i]);
+        if (!entity) continue;
+
+        const fromX = entity.x;
+        const fromY = entity.y;
 
         // Route through task system if available (handles animation)
         const moved = settlerTaskSystem
@@ -289,16 +337,30 @@ function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCom
             : state.movement.moveUnit(selectedUnits[i], targetX, targetY);
 
         if (moved) {
-            anyMoved = true;
+            effects.push({
+                type: 'entity_moved',
+                entityId: selectedUnits[i],
+                fromX,
+                fromY,
+                toX: targetX,
+                toY: targetY,
+            });
         }
     }
-    return anyMoved;
+
+    if (effects.length === 0) {
+        return commandFailed(`Could not move any of ${selectedUnits.length} selected units`);
+    }
+
+    return commandSuccess(effects);
 }
 
-function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): boolean {
+function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): CommandResult {
     const { state } = ctx;
     const entity = state.getEntity(cmd.entityId);
-    if (!entity) return false;
+    if (!entity) {
+        return commandFailed(`Entity ${cmd.entityId} not found`);
+    }
 
     if (entity.type === EntityType.Building) {
         const bs = ctx.buildingStateManager.getBuildingState(cmd.entityId);
@@ -308,24 +370,24 @@ function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): boo
     }
 
     state.removeEntity(cmd.entityId);
-    return true;
+    return commandSuccess([{ type: 'entity_removed', entityId: cmd.entityId }]);
 }
 
-function executePlaceResource(ctx: CommandContext, cmd: PlaceResourceCommand): boolean {
+function executePlaceResource(ctx: CommandContext, cmd: PlaceResourceCommand): CommandResult {
     const { state, mapSize, groundType } = ctx;
 
     if (cmd.x < 0 || cmd.x >= mapSize.width || cmd.y < 0 || cmd.y >= mapSize.height) {
-        return false;
+        return commandFailed(`Position (${cmd.x}, ${cmd.y}) is out of bounds`);
     }
 
     // Check passability (not sea/rock)
     if (!isPassable(groundType[mapSize.toIndex(cmd.x, cmd.y)])) {
-        return false;
+        return commandFailed(`Position (${cmd.x}, ${cmd.y}) is not passable`);
     }
 
     // Check if tile is occupied
     if (state.getEntityAt(cmd.x, cmd.y)) {
-        return false;
+        return commandFailed(`Position (${cmd.x}, ${cmd.y}) is already occupied`);
     }
 
     // Create a StackedResource entity for the material
@@ -337,12 +399,12 @@ function executePlaceResource(ctx: CommandContext, cmd: PlaceResourceCommand): b
         resourceState.quantity = cmd.amount;
     }
 
-    return true;
+    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedResource' }]);
 }
 
 /**
  * Execute a player command against the game state.
- * Returns true if the command was successfully executed.
+ * Returns a CommandResult with success status, error details, and effects.
  */
 export function executeCommand(
     state: GameState,
@@ -353,7 +415,7 @@ export function executeCommand(
     eventBus: EventBus,
     settlerTaskSystem: SettlerTaskSystem | undefined,
     buildingStateManager: BuildingStateManager
-): boolean {
+): CommandResult {
     const ctx: CommandContext = {
         state,
         groundType,
@@ -386,6 +448,6 @@ export function executeCommand(
     case 'remove_entity':
         return executeRemoveEntity(ctx, cmd);
     default:
-        return false;
+        return commandFailed(`Unknown command type: ${(cmd as any).type}`);
     }
 }

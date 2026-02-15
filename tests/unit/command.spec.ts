@@ -41,7 +41,7 @@ describe('Command System – edge cases', () => {
                 ctx.buildingStateManager
             );
 
-            expect(result).toBe(false);
+            expect(result.success).toBe(false);
             expect(ctx.state.entities).toHaveLength(0);
         });
     });
@@ -63,7 +63,7 @@ describe('Command System – edge cases', () => {
                 undefined,
                 ctx.buildingStateManager
             );
-            expect(result).toBe(false);
+            expect(result.success).toBe(false);
         });
 
         it('should fail when no path exists', () => {
@@ -101,7 +101,7 @@ describe('Command System – edge cases', () => {
                 undefined,
                 ctx.buildingStateManager
             );
-            expect(result).toBe(false);
+            expect(result.success).toBe(false);
         });
     });
 
@@ -148,7 +148,7 @@ describe('Command System – edge cases', () => {
                 undefined,
                 ctx.buildingStateManager
             );
-            expect(result).toBe(false);
+            expect(result.success).toBe(false);
         });
 
         it('should restore terrain when removing a building with modified terrain', () => {

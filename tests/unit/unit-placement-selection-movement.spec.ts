@@ -57,7 +57,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             expect(state.entities).toHaveLength(1);
             expect(state.entities[0].type).toBe(EntityType.Unit);
             expect(state.entities[0].subType).toBe(UnitType.Carrier);
@@ -83,7 +83,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             expect(state.entities[0].subType).toBe(UnitType.Swordsman);
         });
 
@@ -105,7 +105,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             const unitState = state.unitStates.get(state.entities[0].id);
             expect(unitState).toBeDefined();
             expect(unitState!.speed).toBe(2);
@@ -151,7 +151,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             expect(state.entities).toHaveLength(2);
             // Second unit should not be at (10,10) since it's occupied
             const swordsman = state.entities.find(e => e.subType === UnitType.Swordsman)!;
@@ -183,7 +183,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(false);
+            expect(result.success).toBe(false);
         });
 
         it('should register tile occupancy for spawned unit', () => {
@@ -266,7 +266,7 @@ describe('Unit Placement, Selection & Movement', () => {
                     undefined,
                     buildingStateManager
                 );
-                expect(result).toBe(true);
+                expect(result.success).toBe(true);
             }
             expect(state.entities).toHaveLength(types.length);
         });
@@ -294,7 +294,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             expect(state.selectedEntityId).toBe(unit.id);
             expect(state.selectedEntityIds.has(unit.id)).toBe(true);
             expect(state.selectedEntityIds.size).toBe(1);
@@ -321,7 +321,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             expect(state.selectedEntityId).toBe(null);
             expect(state.selectedEntityIds.size).toBe(0);
         });
@@ -518,7 +518,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             expect(state.selectedEntityIds.has(unit.id)).toBe(true);
         });
 
@@ -541,7 +541,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             expect(state.selectedEntityIds.has(unit.id)).toBe(false);
             expect(state.selectedEntityId).toBe(null);
         });
@@ -561,7 +561,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(false);
+            expect(result.success).toBe(false);
         });
 
         it('should set primary selection when adding first entity', () => {
@@ -633,7 +633,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             const unitState = state.unitStates.get(unit.id);
             expect(unitState).toBeDefined();
             expect(unitState!.path.length).toBeGreaterThan(0);
@@ -661,7 +661,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             const us1 = state.unitStates.get(unit1.id);
             const us2 = state.unitStates.get(unit2.id);
             expect(us1!.path.length).toBeGreaterThan(0);
@@ -694,7 +694,7 @@ describe('Unit Placement, Selection & Movement', () => {
             );
 
             // No units to move
-            expect(result).toBe(false);
+            expect(result.success).toBe(false);
         });
 
         it('should fail with empty selection', () => {
@@ -713,7 +713,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(false);
+            expect(result.success).toBe(false);
         });
 
         it('should move only units when selection includes buildings', () => {
@@ -738,7 +738,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             const unitState = state.unitStates.get(unit.id);
             expect(unitState!.path.length).toBeGreaterThan(0);
         });
@@ -1088,7 +1088,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             expect(state.unitStates.get(unit1.id)!.path.length).toBeGreaterThan(0);
             expect(state.unitStates.get(unit2.id)!.path.length).toBeGreaterThan(0);
         });
@@ -1427,7 +1427,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 buildingStateManager
             );
 
-            expect(result).toBe(false);
+            expect(result.success).toBe(false);
             expect(state.selectedEntityIds.size).toBe(0);
         });
 

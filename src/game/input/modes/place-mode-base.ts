@@ -74,11 +74,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
      * @param subType The entity subtype being placed
      * @returns Anchor position for preview
      */
-    protected abstract resolveAnchorPosition(
-        tileX: number,
-        tileY: number,
-        subType: TSubType
-    ): { x: number; y: number };
+    protected abstract resolveAnchorPosition(tileX: number, tileY: number, subType: TSubType): { x: number; y: number };
 
     /**
      * Create the placement command to execute.
@@ -134,9 +130,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
      */
     protected getStatusText(data: PlacementModeData<TSubType>): string {
         const typeName = this.getSubTypeName(data.subType);
-        return data.previewValid
-            ? `Place ${typeName}`
-            : 'Cannot place here';
+        return data.previewValid ? `Place ${typeName}` : 'Cannot place here';
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -178,18 +172,14 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
 
         if (data.button === MouseButton.Left) {
             if (modeData.previewValid) {
-                const command = this.createPlacementCommand(
-                    modeData.previewX,
-                    modeData.previewY,
-                    modeData
-                );
-                const success = context.executeCommand(command);
+                const command = this.createPlacementCommand(modeData.previewX, modeData.previewY, modeData);
+                const result = context.executeCommand(command);
 
-                if (success) {
+                if (result.success) {
                     this.logPlacement(modeData, true);
                     context.switchMode('select');
                 } else {
-                    this.logPlacement(modeData, false, 'Command failed');
+                    this.logPlacement(modeData, false, result.error ?? 'Command failed');
                 }
             } else {
                 this.logPlacement(modeData, false, 'Invalid position');
@@ -266,10 +256,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
      * Set the placement validator function.
      * Called by use-renderer to inject game-aware validation.
      */
-    setValidator(
-        context: InputContext,
-        validator: (x: number, y: number, subType: TSubType) => boolean
-    ): void {
+    setValidator(context: InputContext, validator: (x: number, y: number, subType: TSubType) => boolean): void {
         const modeData = context.getModeData<PlacementModeData<TSubType>>();
         if (modeData) {
             modeData.validatePlacement = validator;
@@ -281,11 +268,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
     // Private helpers
     // ─────────────────────────────────────────────────────────────────
 
-    private logPlacement(
-        data: PlacementModeData<TSubType>,
-        success: boolean,
-        reason?: string
-    ): void {
+    private logPlacement(data: PlacementModeData<TSubType>, success: boolean, reason?: string): void {
         const typeName = this.getSubTypeName(data.subType);
         const pos = `${data.previewX},${data.previewY}`;
 

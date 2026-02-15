@@ -241,7 +241,7 @@ export function tickConstruction(
 
 // ─── Command execution helpers ──────────────────────────────────────
 
-import { executeCommand } from '@/game/commands';
+import { executeCommand, type CommandResult } from '@/game/commands';
 
 /**
  * Create an EventBus wired up with a BuildingConstructionSystem for terrain restoration.
@@ -266,14 +266,14 @@ export function createTestEventBus(
     return eventBus;
 }
 
-/** Execute a place_building command. Returns success boolean. */
+/** Execute a place_building command. Returns CommandResult. */
 export function placeBuilding(
     ctx: TestContext,
     x: number,
     y: number,
     buildingType: number = BuildingType.WoodcutterHut,
     player = 0
-): boolean {
+): CommandResult {
     return executeCommand(
         ctx.state,
         { type: 'place_building', buildingType, x, y, player },
@@ -286,8 +286,8 @@ export function placeBuilding(
     );
 }
 
-/** Execute a spawn_unit command. Returns success boolean. */
-export function spawnUnit(ctx: TestContext, x: number, y: number, unitType = 0, player = 0): boolean {
+/** Execute a spawn_unit command. Returns CommandResult. */
+export function spawnUnit(ctx: TestContext, x: number, y: number, unitType = 0, player = 0): CommandResult {
     return executeCommand(
         ctx.state,
         { type: 'spawn_unit', unitType, x, y, player },
@@ -300,8 +300,8 @@ export function spawnUnit(ctx: TestContext, x: number, y: number, unitType = 0, 
     );
 }
 
-/** Execute a move_unit command. Returns success boolean. */
-export function moveUnit(ctx: TestContext, entityId: number, targetX: number, targetY: number): boolean {
+/** Execute a move_unit command. Returns CommandResult. */
+export function moveUnit(ctx: TestContext, entityId: number, targetX: number, targetY: number): CommandResult {
     // Ensure terrain data is set for the movement system
     ctx.state.setTerrainData(ctx.map.groundType, ctx.map.groundHeight, ctx.map.mapSize.width, ctx.map.mapSize.height);
     return executeCommand(
@@ -316,8 +316,8 @@ export function moveUnit(ctx: TestContext, entityId: number, targetX: number, ta
     );
 }
 
-/** Execute a select command. Returns success boolean. */
-export function selectEntity(ctx: TestContext, entityId: number | null): boolean {
+/** Execute a select command. Returns CommandResult. */
+export function selectEntity(ctx: TestContext, entityId: number | null): CommandResult {
     return executeCommand(
         ctx.state,
         { type: 'select', entityId },
@@ -330,8 +330,8 @@ export function selectEntity(ctx: TestContext, entityId: number | null): boolean
     );
 }
 
-/** Execute a remove_entity command. Returns success boolean. */
-export function removeEntity(ctx: TestContext, entityId: number): boolean {
+/** Execute a remove_entity command. Returns CommandResult. */
+export function removeEntity(ctx: TestContext, entityId: number): CommandResult {
     const bus = createTestEventBus(ctx.state, ctx.map, ctx.buildingStateManager);
     return executeCommand(
         ctx.state,
@@ -345,8 +345,8 @@ export function removeEntity(ctx: TestContext, entityId: number): boolean {
     );
 }
 
-/** Execute a place_resource command. Returns success boolean. */
-export function placeResource(ctx: TestContext, x: number, y: number, materialType: number, amount = 1): boolean {
+/** Execute a place_resource command. Returns CommandResult. */
+export function placeResource(ctx: TestContext, x: number, y: number, materialType: number, amount = 1): CommandResult {
     return executeCommand(
         ctx.state,
         { type: 'place_resource', materialType, amount, x, y },
