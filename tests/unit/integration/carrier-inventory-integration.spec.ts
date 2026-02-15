@@ -23,8 +23,8 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
     let eventBus: EventBus;
 
     beforeEach(() => {
-        gameState = new GameState();
         eventBus = new EventBus();
+        gameState = new GameState(eventBus);
         gameLoop = new GameLoop(gameState, eventBus);
     });
 

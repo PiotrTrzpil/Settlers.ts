@@ -10,7 +10,7 @@
 
 import type { TickSystem } from '../../tick-system';
 import type { GameState } from '../../game-state';
-import type { EventBus } from '../../event-bus';
+import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { EntityType } from '../../entity';
 import { BuildingType } from '../../buildings/types';
 import { UnitType } from '../../unit-types';
@@ -48,8 +48,11 @@ export interface BuildingConstructionSystemConfig {
 export class BuildingConstructionSystem implements TickSystem {
     private readonly state: GameState;
     private readonly manager: BuildingStateManager;
-    private terrainContext: TerrainContext | undefined;  // OK: optional, set via setter
-    private eventBus!: EventBus;  // MUST be set via registerEvents
+    private terrainContext: TerrainContext | undefined; // OK: optional, set via setter
+    private eventBus!: EventBus; // MUST be set via registerEvents
+
+    /** Event subscription manager for cleanup */
+    private readonly subscriptions = new EventSubscriptionManager();
 
     constructor(config: BuildingConstructionSystemConfig) {
         this.state = config.gameState;
@@ -64,9 +67,19 @@ export class BuildingConstructionSystem implements TickSystem {
     /** Register event handlers with the event bus */
     registerEvents(eventBus: EventBus): void {
         this.eventBus = eventBus;
-        eventBus.on('building:removed', ({ buildingState }) => {
+        this.subscriptions.subscribe(eventBus, 'building:removed', ({ buildingState }) => {
             this.onBuildingRemoved(buildingState);
         });
+    }
+
+    /** Unregister event handlers - called during cleanup */
+    unregisterEvents(): void {
+        this.subscriptions.unsubscribeAll();
+    }
+
+    /** Cleanup for HMR and game exit */
+    destroy(): void {
+        this.unregisterEvents();
     }
 
     /** Called by GameLoop each tick */
@@ -110,9 +123,7 @@ export class BuildingConstructionSystem implements TickSystem {
         if (this.terrainContext) {
             this.handleTerrainCapture(buildingState, newPhase);
             terrainModified = this.handleTerrainLeveling(buildingState, newPhase);
-            terrainModified = this.handleTerrainFinalization(
-                buildingState, previousPhase, newPhase
-            ) || terrainModified;
+            terrainModified = this.handleTerrainFinalization(buildingState, previousPhase, newPhase) || terrainModified;
         }
 
         if (newPhase === BuildingConstructionPhase.Completed && previousPhase !== BuildingConstructionPhase.Completed) {
@@ -127,34 +138,23 @@ export class BuildingConstructionSystem implements TickSystem {
     }
 
     /** Handle terrain leveling initialization for a building */
-    private handleTerrainCapture(
-        buildingState: BuildingState,
-        newPhase: BuildingConstructionPhase
-    ): void {
+    private handleTerrainCapture(buildingState: BuildingState, newPhase: BuildingConstructionPhase): void {
         if (newPhase !== BuildingConstructionPhase.TerrainLeveling) return;
         if (buildingState.originalTerrain) return;
         if (!this.terrainContext) return;
 
         const { groundType, groundHeight, mapSize } = this.terrainContext;
-        buildingState.originalTerrain = captureOriginalTerrain(
-            buildingState, groundType, groundHeight, mapSize
-        );
+        buildingState.originalTerrain = captureOriginalTerrain(buildingState, groundType, groundHeight, mapSize);
     }
 
     /** Handle active terrain leveling during construction */
-    private handleTerrainLeveling(
-        buildingState: BuildingState,
-        newPhase: BuildingConstructionPhase
-    ): boolean {
+    private handleTerrainLeveling(buildingState: BuildingState, newPhase: BuildingConstructionPhase): boolean {
         if (newPhase !== BuildingConstructionPhase.TerrainLeveling) return false;
         if (!buildingState.originalTerrain) return false;
         if (!this.terrainContext) return false;
 
         const { groundType, groundHeight, mapSize } = this.terrainContext;
-        return applyTerrainLeveling(
-            buildingState, groundType, groundHeight, mapSize,
-            buildingState.phaseProgress
-        );
+        return applyTerrainLeveling(buildingState, groundType, groundHeight, mapSize, buildingState.phaseProgress);
     }
 
     /** Finalize terrain when transitioning out of TerrainLeveling phase */
@@ -170,9 +170,7 @@ export class BuildingConstructionSystem implements TickSystem {
 
         buildingState.terrainModified = true;
         const { groundType, groundHeight, mapSize } = this.terrainContext;
-        return applyTerrainLeveling(
-            buildingState, groundType, groundHeight, mapSize, 1.0
-        );
+        return applyTerrainLeveling(buildingState, groundType, groundHeight, mapSize, 1.0);
     }
 
     /** Check if a tile is valid for spawning a unit */
@@ -216,8 +214,12 @@ export class BuildingConstructionSystem implements TickSystem {
                 if (!this.isValidSpawnTile(tile.x, tile.y)) continue;
 
                 const spawnedEntity = this.state.addEntity(
-                    EntityType.Unit, spawnDef.unitType, tile.x, tile.y,
-                    entity.player, spawnDef.selectable
+                    EntityType.Unit,
+                    spawnDef.unitType,
+                    tile.x,
+                    tile.y,
+                    entity.player,
+                    spawnDef.selectable
                 );
 
                 this.eventBus!.emit('unit:spawned', {

@@ -83,20 +83,20 @@ export class CarrierSystem implements TickSystem {
      */
     registerEvents(eventBus: EventBus): void {
         this.eventBus = eventBus;
-        this.carrierManager.registerEvents(eventBus);
+        // Note: CarrierManager gets eventBus via constructor, no need to call registerEvents
 
         // Listen for unit spawned to auto-register carriers
-        this.subscriptions.subscribe(eventBus, 'unit:spawned', (payload) => {
+        this.subscriptions.subscribe(eventBus, 'unit:spawned', payload => {
             this.handleUnitSpawned(payload);
         });
 
         // Listen for carrier removal to cleanup
-        this.subscriptions.subscribe(eventBus, 'carrier:removed', (_payload) => {
+        this.subscriptions.subscribe(eventBus, 'carrier:removed', _payload => {
             // No additional cleanup needed - SettlerTaskSystem handles task state
         });
 
         // Listen for delivery complete to add fatigue
-        this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', (payload) => {
+        this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', payload => {
             this.carrierManager.addFatigue(payload.entityId, FATIGUE_PER_DELIVERY);
         });
     }
@@ -106,6 +106,13 @@ export class CarrierSystem implements TickSystem {
      */
     unregisterEvents(): void {
         this.subscriptions.unsubscribeAll();
+    }
+
+    /**
+     * Cleanup for HMR and game exit.
+     */
+    destroy(): void {
+        this.unregisterEvents();
     }
 
     /**
@@ -146,7 +153,13 @@ export class CarrierSystem implements TickSystem {
      * Handle unit spawned event.
      * If it's a carrier, register it with the nearest hub.
      */
-    private handleUnitSpawned(payload: { entityId: number; unitType: UnitType; x: number; y: number; player: number }): void {
+    private handleUnitSpawned(payload: {
+        entityId: number;
+        unitType: UnitType;
+        x: number;
+        y: number;
+        player: number;
+    }): void {
         if (payload.unitType !== UnitType.Carrier) {
             return;
         }
@@ -154,7 +167,9 @@ export class CarrierSystem implements TickSystem {
         // Find nearest hub (residence) for this player
         const nearestHub = this.findNearestHub(payload.x, payload.y, payload.player);
         if (!nearestHub) {
-            CarrierSystem.log.warn(`No hub found for carrier ${payload.entityId} at (${payload.x}, ${payload.y}) for player ${payload.player}`);
+            CarrierSystem.log.warn(
+                `No hub found for carrier ${payload.entityId} at (${payload.x}, ${payload.y}) for player ${payload.player}`
+            );
             return;
         }
 
@@ -207,7 +222,7 @@ export class CarrierSystem implements TickSystem {
         fromBuildingId: number,
         toBuildingId: number,
         material: EMaterialType,
-        amount: number,
+        amount: number
     ): boolean {
         // Buildings MUST exist - caller should have validated
         this.gameState.getEntityOrThrow(fromBuildingId, 'source building for delivery');
@@ -229,7 +244,7 @@ export class CarrierSystem implements TickSystem {
             toBuildingId,
             material,
             amount,
-            carrier.homeBuilding,
+            carrier.homeBuilding
         );
 
         if (success) {

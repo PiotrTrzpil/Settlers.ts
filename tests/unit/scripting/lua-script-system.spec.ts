@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { LuaScriptSystem } from '@/game/scripting/lua-script-system';
 import { GameState } from '@/game/game-state';
 import { BuildingStateManager } from '@/game/features/building-construction';
+import { EventBus } from '@/game/event-bus';
 
 describe('LuaScriptSystem', () => {
     let gameState: GameState;
@@ -13,9 +14,12 @@ describe('LuaScriptSystem', () => {
     let buildingStateManager: BuildingStateManager;
 
     beforeEach(() => {
-        gameState = new GameState();
-        buildingStateManager = new BuildingStateManager();
-        buildingStateManager.setEntityProvider(gameState);
+        const eventBus = new EventBus();
+        gameState = new GameState(eventBus);
+        buildingStateManager = new BuildingStateManager({
+            entityProvider: gameState,
+            eventBus,
+        });
         scriptSystem = new LuaScriptSystem({
             gameState,
             buildingStateManager,

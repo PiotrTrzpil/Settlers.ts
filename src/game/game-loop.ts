@@ -1,5 +1,4 @@
 import { GameState } from './game-state';
-import { TreeSystem } from './systems/tree-system';
 import { WoodcuttingSystem } from './systems/woodcutting-system';
 import { SettlerTaskSystem } from './systems/settler-tasks';
 import { ProductionSystem } from './systems/production-system';
@@ -19,9 +18,11 @@ import {
 } from './features/inventory';
 import { LogisticsDispatcher, RequestManager } from './features/logistics';
 import { ServiceAreaManager } from './features/service-areas';
-import { EventBus } from './event-bus';
+import { FeatureRegistry } from './features/feature-registry';
+import { TreeFeature, TreeSystem, type TreeFeatureExports } from './features/trees';
+import { EventBus, EventSubscriptionManager } from './event-bus';
 import type { FrameRenderTiming } from './renderer/renderer';
-import { BuildingType, MapObjectType } from './entity';
+import { BuildingType } from './entity';
 import { AnimationService } from './animation/index';
 import { toastError, toastClearThrottle } from './toast-notifications';
 
@@ -70,6 +71,9 @@ export class GameLoop {
 
     /** Per-system error tracking for circuit breaker & throttled logging */
     private systemErrors = new Map<TickSystem, SystemErrorState>();
+
+    /** Event subscription manager for GameLoop's own event handlers */
+    private readonly subscriptions = new EventSubscriptionManager();
 
     /** Whether the page is currently visible */
     private pageVisible = !document.hidden;
@@ -144,12 +148,12 @@ export class GameLoop {
     /** Building state manager - tracks construction state for all buildings */
     public readonly buildingStateManager: BuildingStateManager;
 
+    /** Feature registry - manages self-registering feature modules */
+    private readonly featureRegistry: FeatureRegistry;
+
     constructor(gameState: GameState, eventBus: EventBus) {
         this.gameState = gameState;
         this.eventBus = eventBus;
-
-        // Wire up event bus for entity lifecycle events
-        gameState.setEventBus(eventBus);
 
         // Bind frame handler once to avoid creating closures every frame
         this.boundFrame = this.frame.bind(this);
@@ -158,20 +162,22 @@ export class GameLoop {
         this.animationService = new AnimationService();
 
         // Instantiate managers (owned by GameLoop, used by systems)
-        this.carrierManager = new CarrierManager();
+        // Managers now require dependencies via constructor
+        this.carrierManager = new CarrierManager({
+            entityProvider: gameState,
+            eventBus,
+        });
         this.inventoryManager = new BuildingInventoryManager();
         this.serviceAreaManager = new ServiceAreaManager();
         this.requestManager = new RequestManager();
-        this.buildingStateManager = new BuildingStateManager();
-
-        // Set entity providers for managers that need entity lookup
-        this.buildingStateManager.setEntityProvider(gameState);
-        this.carrierManager.setEntityProvider(gameState);
+        this.buildingStateManager = new BuildingStateManager({
+            entityProvider: gameState,
+            eventBus,
+        });
 
         // Register all tick systems in execution order:
         // 1. Movement — updates unit positions (must run first)
-        gameState.movement.setEventBus(eventBus);
-        gameState.movement.setRng(gameState.rng);
+        // Note: MovementSystem is created in GameState with its dependencies
         this.registerSystem(gameState.movement);
 
         // 2. Building construction — terrain modification, phase transitions
@@ -183,7 +189,7 @@ export class GameLoop {
         this.registerSystem(this.constructionSystem);
 
         // Subscribe to building creation events for inventory and service area setup
-        eventBus.on('building:created', ({ entityId, buildingType, x, y }) => {
+        this.subscriptions.subscribe(eventBus, 'building:created', ({ entityId, buildingType, x, y }) => {
             this.handleBuildingCreated(entityId, buildingType, x, y);
         });
 
@@ -209,22 +215,29 @@ export class GameLoop {
         this.logisticsDispatcher.registerEvents(eventBus);
         this.registerSystem(this.logisticsDispatcher);
 
-        // 5. Tree system — manages tree growth and cutting states
-        this.treeSystem = new TreeSystem(gameState, this.animationService);
-        this.registerSystem(this.treeSystem);
-
-        // Subscribe to map object creation events for tree registration
-        eventBus.on('mapObject:created', ({ entityId, objectType }) => {
-            this.handleMapObjectCreated(entityId, objectType);
+        // 5. Feature Registry — load self-registering features
+        this.featureRegistry = new FeatureRegistry({
+            gameState,
+            eventBus,
+            animationService: this.animationService,
         });
+
+        // Load TreeFeature (handles tree lifecycle and mapObject:created subscription)
+        this.featureRegistry.load(TreeFeature);
+        this.treeSystem = this.featureRegistry.getFeatureExports<TreeFeatureExports>('trees').treeSystem;
+
+        // Register all feature systems
+        for (const system of this.featureRegistry.getSystems()) {
+            this.registerSystem(system);
+        }
 
         // 6. Settler task system — manages all unit behaviors and animations
         this.settlerTaskSystem = new SettlerTaskSystem({
             gameState,
             animationService: this.animationService,
             inventoryManager: this.inventoryManager,
+            eventBus,
         });
-        this.settlerTaskSystem.setEventBus(eventBus);
         this.registerSystem(this.settlerTaskSystem);
 
         // Wire up carrier system to settler task system
@@ -269,7 +282,7 @@ export class GameLoop {
         });
 
         // Subscribe to entity removal events for cleanup
-        eventBus.on('entity:removed', ({ entityId }) => {
+        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
             this.handleEntityRemoved(entityId);
         });
 
@@ -339,14 +352,6 @@ export class GameLoop {
 
         // Create building construction state
         this.buildingStateManager.createBuildingState(entityId, buildingType, x, y);
-    }
-
-    /**
-     * Handle map object creation - registers trees with TreeSystem.
-     */
-    private handleMapObjectCreated(entityId: number, objectType: number): void {
-        // Register trees with tree system (checks if it's a tree type internally)
-        this.treeSystem.register(entityId, objectType as MapObjectType);
     }
 
     /**
@@ -432,6 +437,20 @@ export class GameLoop {
     /** Clean up event listeners and module state when destroying the game loop */
     public destroy(): void {
         this.stop();
+
+        // Unsubscribe all registered systems from events
+        for (const system of this.systems) {
+            if (system.destroy) {
+                system.destroy();
+            }
+        }
+
+        // Destroy feature registry (cleans up feature event handlers)
+        this.featureRegistry.destroy();
+
+        // Unsubscribe GameLoop's own event handlers
+        this.subscriptions.unsubscribeAll();
+
         if (this.visibilityHandler) {
             document.removeEventListener('visibilitychange', this.visibilityHandler);
             this.visibilityHandler = null;
@@ -518,8 +537,7 @@ export class GameLoop {
         this.accumulator += deltaSec;
 
         const shouldTick = !this._ticksPaused && !gameSettings.state.paused;
-        const shouldRender = this.pageVisible ||
-            (now - this.lastRenderTime) >= BACKGROUND_FRAME_DURATION;
+        const shouldRender = this.pageVisible || now - this.lastRenderTime >= BACKGROUND_FRAME_DURATION;
 
         // ── LOGIC ── fixed-timestep simulation (isolated from per-frame work)
         const ticksTime = this.runLogicPhase(shouldTick);

@@ -117,7 +117,7 @@ export class GameState {
     private entityMap: Map<number, Entity> = new Map();
 
     /** Movement system for all units */
-    public readonly movement: MovementSystem = new MovementSystem();
+    public readonly movement: MovementSystem;
 
     /** Legacy adapter for backward compatibility - wraps movement system */
     public readonly unitStates: UnitStateMap;
@@ -137,29 +137,25 @@ export class GameState {
     public tileOccupancy: Map<string, number> = new Map();
 
     /** Event bus for entity lifecycle events */
-    private eventBus: EventBus | null = null;
+    private readonly eventBus: EventBus;
 
-    constructor(seed?: number) {
+    constructor(eventBus: EventBus, seed?: number) {
+        this.eventBus = eventBus;
         this.rng = createGameRng(seed);
-        this.unitStates = new UnitStateMap(this.movement);
 
-        // Set up movement system callbacks
-        this.movement.setCallbacks(
-            (id, x, y) => {
+        // Create movement system with required dependencies
+        this.movement = new MovementSystem({
+            eventBus,
+            rng: this.rng,
+            updatePosition: (id, x, y) => {
                 this.updateEntityPosition(id, x, y);
                 return true;
             },
-            id => this.getEntity(id)
-        );
+            getEntity: id => this.getEntity(id),
+        });
         this.movement.setTileOccupancy(this.tileOccupancy);
-    }
 
-    /**
-     * Set the event bus for entity lifecycle events.
-     * Called by GameLoop after construction to enable event emission.
-     */
-    public setEventBus(eventBus: EventBus): void {
-        this.eventBus = eventBus;
+        this.unitStates = new UnitStateMap(this.movement);
     }
 
     /**
@@ -178,7 +174,7 @@ export class GameState {
      * - MapObject/StackedResource: NOT selectable
      * Speed defaults to UnitTypeConfig value for units.
      */
-    // eslint-disable-next-line complexity -- entity initialization handles many type variants
+     
     public addEntity(
         type: EntityType,
         subType: number,
@@ -244,7 +240,7 @@ export class GameState {
         if (type === EntityType.Building) {
             // Emit event for building state, inventory, service areas setup
             // GameLoop subscribes to handle all building initialization
-            this.eventBus?.emit('building:created', {
+            this.eventBus.emit('building:created', {
                 entityId: entity.id,
                 buildingType: subType as BuildingType,
                 x,
@@ -254,7 +250,7 @@ export class GameState {
 
         if (type === EntityType.MapObject) {
             // Emit event for map object registration (e.g., TreeSystem registers trees)
-            this.eventBus?.emit('mapObject:created', {
+            this.eventBus.emit('mapObject:created', {
                 entityId: entity.id,
                 objectType: subType as MapObjectType,
                 x,
@@ -297,7 +293,7 @@ export class GameState {
         this.resourceStates.delete(id);
 
         // Emit event for system cleanup (carrier state, inventory, service areas, etc.)
-        this.eventBus?.emit('entity:removed', { entityId: id });
+        this.eventBus.emit('entity:removed', { entityId: id });
 
         this.selectedEntityIds.delete(id);
         if (this.selectedEntityId === id) {

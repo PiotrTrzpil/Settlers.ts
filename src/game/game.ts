@@ -65,8 +65,8 @@ export class Game {
         this.groundHeight = mapLoader.landscape.getGroundHeight();
         this.groundType = mapLoader.landscape.getGroundType();
 
-        this.state = new GameState();
         this.eventBus = new EventBus();
+        this.state = new GameState(this.eventBus);
         this.gameLoop = new GameLoop(this.state, this.eventBus);
         this.gameLoop.setTerrainData(this.groundType, this.groundHeight, this.mapSize.width, this.mapSize.height);
 

@@ -18,30 +18,29 @@ import type { EntityProvider } from '../../entity';
 export const DEFAULT_CONSTRUCTION_DURATION = 10;
 
 /**
+ * Configuration for BuildingStateManager dependencies.
+ */
+export interface BuildingStateManagerConfig {
+    entityProvider: EntityProvider;
+    eventBus: EventBus;
+}
+
+/**
  * Manages building construction states for all buildings.
  * Provides CRUD operations and queries.
  *
  * State is stored on entity.construction (RFC: Entity-Owned State).
  */
 export class BuildingStateManager {
-    /** Entity provider for accessing entities (MUST be set via setEntityProvider) */
-    private entityProvider!: EntityProvider;
+    /** Entity provider for accessing entities */
+    private readonly entityProvider: EntityProvider;
 
-    /** Event bus for emitting building events (MUST be set via registerEvents) */
-    private eventBus!: EventBus;
+    /** Event bus for emitting building events */
+    private readonly eventBus: EventBus;
 
-    /**
-     * Set the entity provider (called by GameState after construction).
-     */
-    setEntityProvider(provider: EntityProvider): void {
-        this.entityProvider = provider;
-    }
-
-    /**
-     * Register event bus for emitting building events.
-     */
-    registerEvents(eventBus: EventBus): void {
-        this.eventBus = eventBus;
+    constructor(config: BuildingStateManagerConfig) {
+        this.entityProvider = config.entityProvider;
+        this.eventBus = config.eventBus;
     }
 
     /**
@@ -119,7 +118,7 @@ export class BuildingStateManager {
      * For iteration, use getAllBuildingIds() for deterministic order.
      */
     *getAllBuildingStates(): IterableIterator<BuildingState> {
-        for (const entity of this.entityProvider!.entities) {
+        for (const entity of this.entityProvider.entities) {
             if (entity.construction) {
                 yield entity.construction;
             }
@@ -131,7 +130,7 @@ export class BuildingStateManager {
      */
     getAllBuildingIds(): number[] {
         const ids: number[] = [];
-        for (const entity of this.entityProvider!.entities) {
+        for (const entity of this.entityProvider.entities) {
             if (entity.construction) {
                 ids.push(entity.id);
             }
@@ -145,7 +144,7 @@ export class BuildingStateManager {
      */
     get buildingStates(): ReadonlyMap<number, BuildingState> {
         const map = new Map<number, BuildingState>();
-        for (const entity of this.entityProvider!.entities) {
+        for (const entity of this.entityProvider.entities) {
             if (entity.construction) {
                 map.set(entity.id, entity.construction);
             }
@@ -158,7 +157,7 @@ export class BuildingStateManager {
      */
     getCountByPhase(phase: BuildingConstructionPhase): number {
         let count = 0;
-        for (const entity of this.entityProvider!.entities) {
+        for (const entity of this.entityProvider.entities) {
             if (entity.construction?.phase === phase) count++;
         }
         return count;
@@ -169,7 +168,7 @@ export class BuildingStateManager {
      * Useful for testing or game reset.
      */
     clear(): void {
-        for (const entity of this.entityProvider!.entities) {
+        for (const entity of this.entityProvider.entities) {
             delete entity.construction;
         }
     }

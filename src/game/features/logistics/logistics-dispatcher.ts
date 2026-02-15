@@ -113,6 +113,13 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
+     * Cleanup for HMR and game exit.
+     */
+    destroy(): void {
+        this.unregisterEvents();
+    }
+
+    /**
      * Main tick - assign pending requests to available carriers and check for stalls.
      */
     tick(dt: number): void {

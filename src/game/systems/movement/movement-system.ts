@@ -23,6 +23,16 @@ export type UpdatePositionFn = (entityId: number, x: number, y: number) => boole
 export type GetEntityFn = (entityId: number) => { type: EntityType; x: number; y: number } | undefined;
 
 /**
+ * Configuration for MovementSystem dependencies.
+ */
+export interface MovementSystemConfig {
+    eventBus: EventBus;
+    rng: SeededRng;
+    updatePosition: UpdatePositionFn;
+    getEntity: GetEntityFn;
+}
+
+/**
  * MovementSystem manages all unit movement controllers and coordinates
  * their updates, collision resolution, and pathfinding.
  */
@@ -35,25 +45,32 @@ interface ControllerSnapshot {
 export class MovementSystem implements TickSystem {
     private controllers: Map<number, MovementController> = new Map();
 
-    // Map terrain and occupancy data
+    // Map terrain and occupancy data (set when map loads via setTerrainData)
     private groundType?: Uint8Array;
     private groundHeight?: Uint8Array;
     private mapWidth?: number;
     private mapHeight?: number;
     private tileOccupancy?: Map<string, number>;
 
-    // Callbacks for game state interaction (MUST be set via setCallbacks)
-    private updatePosition!: UpdatePositionFn;
-    private getEntity!: GetEntityFn;
+    // Callbacks for game state interaction
+    private readonly updatePosition: UpdatePositionFn;
+    private readonly getEntity: GetEntityFn;
 
-    // Event bus for notifying other systems of movement changes (MUST be set via setEventBus)
-    private eventBus!: EventBus;
+    // Event bus for notifying other systems of movement changes
+    private readonly eventBus: EventBus;
 
-    // Seeded RNG for deterministic push behavior (MUST be set via setRng)
-    private rng!: SeededRng;
+    // Seeded RNG for deterministic push behavior
+    private readonly rng: SeededRng;
 
     // Previous state snapshots for change detection
     private prevSnapshots: Map<number, ControllerSnapshot> = new Map();
+
+    constructor(config: MovementSystemConfig) {
+        this.eventBus = config.eventBus;
+        this.rng = config.rng;
+        this.updatePosition = config.updatePosition;
+        this.getEntity = config.getEntity;
+    }
 
     /**
      * Set the terrain data for pathfinding and collision.
@@ -70,28 +87,6 @@ export class MovementSystem implements TickSystem {
      */
     setTileOccupancy(occupancy: Map<string, number>): void {
         this.tileOccupancy = occupancy;
-    }
-
-    /**
-     * Set callbacks for game state interaction.
-     */
-    setCallbacks(updatePosition: UpdatePositionFn, getEntity: GetEntityFn): void {
-        this.updatePosition = updatePosition;
-        this.getEntity = getEntity;
-    }
-
-    /**
-     * Set the event bus for emitting movement events.
-     */
-    setEventBus(eventBus: EventBus): void {
-        this.eventBus = eventBus;
-    }
-
-    /**
-     * Set the seeded RNG for deterministic push behavior.
-     */
-    setRng(rng: SeededRng): void {
-        this.rng = rng;
     }
 
     /**

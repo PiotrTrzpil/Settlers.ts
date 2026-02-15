@@ -23,7 +23,11 @@ export type {
 export { BuildingConstructionPhase } from './types';
 
 // Manager (owns building states, lives on GameState)
-export { BuildingStateManager, DEFAULT_CONSTRUCTION_DURATION } from './building-state-manager';
+export {
+    BuildingStateManager,
+    DEFAULT_CONSTRUCTION_DURATION,
+    type BuildingStateManagerConfig,
+} from './building-state-manager';
 
 // System (for registration with GameLoop)
 export { BuildingConstructionSystem, BUILDING_SPAWN_ON_COMPLETE } from './construction-system';

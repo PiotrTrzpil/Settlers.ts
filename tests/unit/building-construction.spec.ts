@@ -296,11 +296,12 @@ describe('Building Construction Phases', () => {
             groundType.fill(TERRAIN.GRASS);
             groundHeight.fill(100);
 
-            const gameState = new GameState();
             const eventBus = new EventBus();
-            gameState.setEventBus(eventBus);
-            const buildingStateManager = new BuildingStateManager();
-            buildingStateManager.setEntityProvider(gameState);
+            const gameState = new GameState(eventBus);
+            const buildingStateManager = new BuildingStateManager({
+                entityProvider: gameState,
+                eventBus,
+            });
             eventBus.on('building:created', ({ entityId, buildingType, x, y }) => {
                 buildingStateManager.createBuildingState(entityId, buildingType, x, y);
             });
@@ -352,11 +353,12 @@ describe('Building Construction Phases', () => {
 
 describe('Barracks unit spawning on construction complete', () => {
     function createTestGameStateWithBSM(): { gameState: GameState; buildingStateManager: BuildingStateManager } {
-        const gameState = new GameState();
         const eventBus = new EventBus();
-        gameState.setEventBus(eventBus);
-        const buildingStateManager = new BuildingStateManager();
-        buildingStateManager.setEntityProvider(gameState);
+        const gameState = new GameState(eventBus);
+        const buildingStateManager = new BuildingStateManager({
+            entityProvider: gameState,
+            eventBus,
+        });
         eventBus.on('building:created', ({ entityId, buildingType, x, y }) => {
             buildingStateManager.createBuildingState(entityId, buildingType, x, y);
         });

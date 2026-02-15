@@ -1,7 +1,7 @@
 /**
  * Tests for CarrierManager - carrier state management.
  */
-/* eslint-disable max-lines-per-function */
+ 
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
@@ -20,12 +20,15 @@ import { MockEntityProvider } from '../helpers/mock-entity-provider';
 describe('CarrierManager', () => {
     let manager: CarrierManager;
     let entityProvider: MockEntityProvider;
+    let eventBus: EventBus;
 
     beforeEach(() => {
-        manager = new CarrierManager();
         entityProvider = new MockEntityProvider();
-        manager.setEntityProvider(entityProvider);
-        manager.registerEvents(new EventBus());
+        eventBus = new EventBus();
+        manager = new CarrierManager({
+            entityProvider,
+            eventBus,
+        });
     });
 
     // ---------------------------------------------------------------------------
@@ -55,9 +58,7 @@ describe('CarrierManager', () => {
         it('should throw when creating carrier with duplicate entity ID', () => {
             manager.createCarrier(1, 100);
 
-            expect(() => manager.createCarrier(1, 200)).toThrow(
-                'Carrier with entity ID 1 already exists'
-            );
+            expect(() => manager.createCarrier(1, 200)).toThrow('Carrier with entity ID 1 already exists');
         });
 
         it('should track carrier count', () => {
@@ -417,7 +418,6 @@ describe('CarrierManager', () => {
             expect(carrier.carryingMaterial).toBeNull();
             expect(carrier.carryingAmount).toBe(0);
         });
-
     });
 
     describe('setFatigue', () => {
@@ -438,7 +438,6 @@ describe('CarrierManager', () => {
             manager.setFatigue(1, -10);
             expect(carrier.fatigue).toBe(0);
         });
-
     });
 
     describe('addFatigue', () => {
@@ -470,7 +469,6 @@ describe('CarrierManager', () => {
             manager.addFatigue(1, -200);
             expect(carrier.fatigue).toBe(0);
         });
-
     });
 
     // ---------------------------------------------------------------------------

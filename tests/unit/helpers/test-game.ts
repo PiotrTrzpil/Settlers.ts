@@ -24,12 +24,9 @@ import { RequestManager } from '@/game/features/logistics';
 // ─── GameState factory ──────────────────────────────────────────────
 
 export function createGameState(): GameState {
-    const state = new GameState();
-    // Set up required dependencies on movement system for tests
+    // GameState now requires EventBus in constructor
     const eventBus = new EventBus();
-    state.movement.setEventBus(eventBus);
-    state.movement.setRng(state.rng);
-    return state;
+    return new GameState(eventBus);
 }
 
 // ─── Unified test context ───────────────────────────────────────────
@@ -70,27 +67,23 @@ export interface TestContext {
  * @param mapHeight - Map height (default: 64)
  */
 export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
-    const state = new GameState();
     const map = createTestMap(mapWidth, mapHeight);
     const eventBus = new EventBus();
+    // GameState now requires EventBus in constructor (MovementSystem gets it automatically)
+    const state = new GameState(eventBus);
 
-    // Create managers (in tests, we create them ourselves rather than using GameLoop)
-    const carrierManager = new CarrierManager();
+    // Create managers with required dependencies via constructor
+    const carrierManager = new CarrierManager({
+        entityProvider: state,
+        eventBus,
+    });
     const inventoryManager = new BuildingInventoryManager();
     const serviceAreaManager = new ServiceAreaManager();
     const requestManager = new RequestManager();
-    const buildingStateManager = new BuildingStateManager();
-
-    // Set entity providers for managers that need entity lookup
-    buildingStateManager.setEntityProvider(state);
-    carrierManager.setEntityProvider(state);
-
-    // Wire up event bus and RNG to movement system
-    state.movement.setEventBus(eventBus);
-    state.movement.setRng(state.rng);
-
-    // Wire up event bus to GameState for entity lifecycle events
-    state.setEventBus(eventBus);
+    const buildingStateManager = new BuildingStateManager({
+        entityProvider: state,
+        eventBus,
+    });
 
     // Initialize terrain data on state
     state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);

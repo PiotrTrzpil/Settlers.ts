@@ -27,7 +27,7 @@ export {
 } from './carrier-state';
 
 // Manager
-export { CarrierManager } from './carrier-manager';
+export { CarrierManager, type CarrierManagerConfig } from './carrier-manager';
 
 // Re-export EntityProvider from entity for convenience
 export type { EntityProvider } from '../../entity';

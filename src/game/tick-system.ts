@@ -14,4 +14,15 @@ export interface TickSystem {
      * This is called automatically by GameLoop for all registered systems.
      */
     onEntityRemoved?(entityId: number): void;
+
+    /**
+     * Optional: Called when the system is being destroyed (e.g., HMR reload, game exit).
+     * Systems that subscribe to events MUST implement this to clean up subscriptions.
+     *
+     * Best practice: Use EventSubscriptionManager to track subscriptions,
+     * then call subscriptions.unsubscribeAll() in destroy().
+     *
+     * This is called automatically by GameLoop.destroy() for all registered systems.
+     */
+    destroy?(): void;
 }

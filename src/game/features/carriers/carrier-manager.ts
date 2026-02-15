@@ -18,33 +18,32 @@ import {
 } from './carrier-state';
 
 /**
+ * Configuration for CarrierManager dependencies.
+ */
+export interface CarrierManagerConfig {
+    entityProvider: EntityProvider;
+    eventBus: EventBus;
+}
+
+/**
  * Manages carrier state for all carrier units.
  * Tracks carriers by their home tavern and provides job assignment.
  *
  * State is stored on entity.carrier (RFC: Entity-Owned State).
  */
 export class CarrierManager {
-    /** Entity provider for accessing entities (MUST be set via setEntityProvider) */
-    private entityProvider!: EntityProvider;
+    /** Entity provider for accessing entities */
+    private readonly entityProvider: EntityProvider;
 
     /** Index of tavern ID -> Set of carrier entity IDs (cross-entity state stays in manager) */
     private carriersByTavern: Map<number, Set<number>> = new Map();
 
-    /** Event bus for emitting carrier events (MUST be set via registerEvents) */
-    private eventBus!: EventBus;
+    /** Event bus for emitting carrier events */
+    private readonly eventBus: EventBus;
 
-    /**
-     * Set the entity provider (called by GameState after construction).
-     */
-    setEntityProvider(provider: EntityProvider): void {
-        this.entityProvider = provider;
-    }
-
-    /**
-     * Register event bus for emitting carrier events.
-     */
-    registerEvents(eventBus: EventBus): void {
-        this.eventBus = eventBus;
+    constructor(config: CarrierManagerConfig) {
+        this.entityProvider = config.entityProvider;
+        this.eventBus = config.eventBus;
     }
 
     /**
@@ -73,7 +72,7 @@ export class CarrierManager {
         }
         this.carriersByTavern.get(homeBuilding)!.add(entityId);
 
-        this.eventBus!.emit('carrier:created', { entityId, homeBuilding });
+        this.eventBus.emit('carrier:created', { entityId, homeBuilding });
 
         return state;
     }
@@ -104,7 +103,7 @@ export class CarrierManager {
         // Remove state from entity (RFC: Entity-Owned State)
         delete entity.carrier;
 
-        this.eventBus!.emit('carrier:removed', { entityId, homeBuilding, hadActiveJob });
+        this.eventBus.emit('carrier:removed', { entityId, homeBuilding, hadActiveJob });
 
         return true;
     }
@@ -163,9 +162,7 @@ export class CarrierManager {
      * @returns Array of available carrier states for that tavern
      */
     getAvailableCarriers(tavernId: number): CarrierState[] {
-        return this.getCarriersForTavern(tavernId).filter(
-            carrier => this.canAssignJobTo(carrier.entityId)
-        );
+        return this.getCarriersForTavern(tavernId).filter(carrier => this.canAssignJobTo(carrier.entityId));
     }
 
     /**
@@ -215,7 +212,7 @@ export class CarrierManager {
         const state = getCarrierState(entity);
         state.currentJob = job;
 
-        this.eventBus!.emit('carrier:jobAssigned', { entityId: carrierId, job });
+        this.eventBus.emit('carrier:jobAssigned', { entityId: carrierId, job });
 
         return true;
     }
@@ -236,7 +233,7 @@ export class CarrierManager {
         const completedJob = state.currentJob;
         state.currentJob = null;
 
-        this.eventBus!.emit('carrier:jobCompleted', { entityId: carrierId, completedJob });
+        this.eventBus.emit('carrier:jobCompleted', { entityId: carrierId, completedJob });
 
         return completedJob;
     }
@@ -256,7 +253,7 @@ export class CarrierManager {
 
         state.status = status;
 
-        this.eventBus!.emit('carrier:statusChanged', {
+        this.eventBus.emit('carrier:statusChanged', {
             entityId: carrierId,
             previousStatus,
             newStatus: status,
@@ -346,7 +343,7 @@ export class CarrierManager {
      * @returns Iterator of all carrier states
      */
     *getAllCarriers(): IterableIterator<CarrierState> {
-        for (const entity of this.entityProvider!.entities) {
+        for (const entity of this.entityProvider.entities) {
             if (entity.carrier) {
                 yield entity.carrier;
             }
@@ -358,7 +355,7 @@ export class CarrierManager {
      */
     get size(): number {
         let count = 0;
-        for (const entity of this.entityProvider!.entities) {
+        for (const entity of this.entityProvider.entities) {
             if (entity.carrier) count++;
         }
         return count;
@@ -368,7 +365,7 @@ export class CarrierManager {
      * Clear all carrier states.
      */
     clear(): void {
-        for (const entity of this.entityProvider!.entities) {
+        for (const entity of this.entityProvider.entities) {
             delete entity.carrier;
         }
         this.carriersByTavern.clear();

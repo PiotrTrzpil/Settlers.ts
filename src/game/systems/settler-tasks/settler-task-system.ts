@@ -73,6 +73,7 @@ export interface SettlerTaskSystemConfig {
     gameState: GameState;
     animationService: AnimationService;
     inventoryManager: BuildingInventoryManager;
+    eventBus: EventBus;
 }
 
 /**
@@ -86,7 +87,7 @@ export class SettlerTaskSystem implements TickSystem {
     private jobDefinitions: JobDefinitions;
     private workHandlers = new Map<SearchType, WorkHandler>();
     private runtimes = new Map<number, UnitRuntime>();
-    private eventBus!: EventBus; // MUST be set via setEventBus
+    private readonly eventBus: EventBus;
     /** Throttled logger for handler errors (prevents flooding from broken domain systems) */
     private handlerErrorLogger = new ThrottledLogger(log, 2000);
     /** Throttled logger for missing handler warnings (prevents spam when feature not yet implemented) */
@@ -96,6 +97,7 @@ export class SettlerTaskSystem implements TickSystem {
         this.gameState = config.gameState;
         this.animationService = config.animationService;
         this.inventoryManager = config.inventoryManager;
+        this.eventBus = config.eventBus;
         this.settlerConfigs = loadSettlerConfigs();
         this.jobDefinitions = loadJobDefinitions();
 
@@ -106,13 +108,6 @@ export class SettlerTaskSystem implements TickSystem {
         this.registerWorkHandler(SearchType.GOOD, this.createCarrierHandler());
 
         log.debug(`Loaded ${this.settlerConfigs.size} settler configs, ${this.jobDefinitions.size} jobs`);
-    }
-
-    /**
-     * Set event bus for emitting carrier events.
-     */
-    setEventBus(eventBus: EventBus): void {
-        this.eventBus = eventBus;
     }
 
     /**
@@ -924,7 +919,7 @@ export class SettlerTaskSystem implements TickSystem {
             log.warn(`Carrier ${settler.id}: material ${material} not available at building ${sourceBuildingId}`);
 
             // Emit pickup failed event so logistics can reassign
-            this.eventBus!.emit('carrier:pickupFailed', {
+            this.eventBus.emit('carrier:pickupFailed', {
                 entityId: settler.id,
                 material,
                 fromBuilding: sourceBuildingId,
@@ -951,7 +946,7 @@ export class SettlerTaskSystem implements TickSystem {
         }
 
         // Emit pickup complete event (includes actual amount for logistics tracking)
-        this.eventBus!.emit('carrier:pickupComplete', {
+        this.eventBus.emit('carrier:pickupComplete', {
             entityId: settler.id,
             material,
             amount: withdrawn,
@@ -1041,7 +1036,7 @@ export class SettlerTaskSystem implements TickSystem {
         log.debug(`Carrier ${settler.id} delivered ${deposited} of ${material} to building ${destBuildingId}`);
 
         // CRITICAL: Emit delivery complete event (used by LogisticsDispatcher)
-        this.eventBus!.emit('carrier:deliveryComplete', {
+        this.eventBus.emit('carrier:deliveryComplete', {
             entityId: settler.id,
             material,
             amount: deposited,

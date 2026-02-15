@@ -8,10 +8,14 @@
  * - Interpolator: Calculates smooth visual positions between tiles
  *
  * Usage:
- *   const system = new MovementSystem();
+ *   const system = new MovementSystem({
+ *       eventBus,
+ *       rng,
+ *       updatePosition: (id, x, y) => ...,
+ *       getEntity: (id) => ...,
+ *   });
  *   system.setTerrainData(groundType, groundHeight, width, height);
  *   system.setTileOccupancy(occupancy);
- *   system.setCallbacks(updatePosition, getEntity);
  *
  *   // Create controller when unit spawns
  *   const controller = system.createController(entityId, x, y, speed);
@@ -29,7 +33,7 @@
 
 export type { MovementState } from './movement-controller';
 export { MovementController } from './movement-controller';
-export type { UpdatePositionFn, GetEntityFn } from './movement-system';
+export type { UpdatePositionFn, GetEntityFn, MovementSystemConfig } from './movement-system';
 export { MovementSystem } from './movement-system';
 export type { WorldCoord, TileToWorldFn } from './interpolator';
 export { Interpolator, createTestInterpolator } from './interpolator';

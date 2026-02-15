@@ -20,19 +20,20 @@ describe('Unit Placement, Selection & Movement', () => {
     let buildingStateManager: BuildingStateManager;
 
     beforeEach(() => {
-        state = new GameState();
         mapSize = new MapSize(64, 64);
         groundType = new Uint8Array(64 * 64);
         groundHeight = new Uint8Array(64 * 64);
         groundType.fill(16); // all grass (passable & buildable)
         eventBus = new EventBus();
-        buildingStateManager = new BuildingStateManager();
-        buildingStateManager.setEntityProvider(state);
+        // GameState now requires EventBus (MovementSystem gets dependencies automatically)
+        state = new GameState(eventBus);
+        // BuildingStateManager requires dependencies via constructor
+        buildingStateManager = new BuildingStateManager({
+            entityProvider: state,
+            eventBus,
+        });
         // Set terrain data for the movement system (required for pathfinding)
         state.setTerrainData(groundType, groundHeight, mapSize.width, mapSize.height);
-        // Wire up required dependencies for movement system
-        state.movement.setEventBus(eventBus);
-        state.movement.setRng(state.rng);
     });
 
     // ── Unit Placement (spawn_unit) ────────────────────────────────────
