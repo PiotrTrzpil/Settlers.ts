@@ -342,7 +342,7 @@ export class GameLoop {
 
         // Create service area for logistics hubs (taverns/warehouses)
         if (GameLoop.SERVICE_AREA_BUILDINGS.has(buildingType)) {
-            this.serviceAreaManager.createServiceArea(entityId, playerId, x, y);
+            this.serviceAreaManager.createServiceArea(entityId, playerId, x, y, buildingType);
         }
 
         // Create inventory for buildings with input/output slots

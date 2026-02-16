@@ -5,11 +5,18 @@
 
 import { EntityType } from '../entity';
 import { BuildingType } from '../buildings/types';
-import { BuildingConstructionPhase, type BuildingStateManager } from '../features/building-construction';
+import {
+    BuildingConstructionPhase,
+    type BuildingStateManager,
+    BUILDING_SPAWN_ON_COMPLETE,
+} from '../features/building-construction';
 import { GameState } from '../game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
 import { S4BuildingType } from '@/resources/map/s4-types';
+import type { EventBus } from '../event-bus';
+import { isPassable } from '../features/placement';
+import type { MapSize } from '@/utilities/map-size';
 
 const log = new LogHandler('MapBuildings');
 
@@ -63,6 +70,14 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
 };
 
 /**
+ * Terrain context for spawn tile validation.
+ */
+interface TerrainContext {
+    groundType: Uint8Array;
+    mapSize: MapSize;
+}
+
+/**
  * Options for populating map buildings.
  */
 export interface PopulateBuildingsOptions {
@@ -70,6 +85,10 @@ export interface PopulateBuildingsOptions {
     player?: number;
     /** Building state manager for setting construction phase (required) */
     buildingStateManager: BuildingStateManager;
+    /** Event bus for emitting unit:spawned events (required for carrier registration) */
+    eventBus: EventBus;
+    /** Terrain context for spawn validation (required for unit spawning) */
+    terrain: TerrainContext;
 }
 
 /**
@@ -86,7 +105,7 @@ export function populateMapBuildings(
     buildings: MapBuildingData[],
     options: PopulateBuildingsOptions
 ): number {
-    const { player, buildingStateManager } = options;
+    const { player, buildingStateManager, eventBus, terrain } = options;
     let count = 0;
     let skipped = 0;
 
@@ -130,6 +149,15 @@ export function populateMapBuildings(
         buildingState.phaseProgress = 1;
         buildingState.elapsedTime = buildingState.totalDuration;
 
+        // Emit building:completed so that systems (like CarrierSystem) can register service areas
+        eventBus.emit('building:completed', {
+            entityId: entity.id,
+            buildingState,
+        });
+
+        // Spawn units for residence buildings (same as construction completion)
+        spawnUnitsForBuilding(state, entity, buildingState, eventBus, terrain);
+
         log.debug(
             `Created completed building: ${BuildingType[buildingType]} at (${buildingData.x}, ${buildingData.y}) for player ${buildingData.player}`
         );
@@ -141,6 +169,77 @@ export function populateMapBuildings(
     }
 
     return count;
+}
+
+/**
+ * Check if a tile is valid for spawning a unit.
+ */
+function isValidSpawnTile(state: GameState, terrain: TerrainContext, x: number, y: number): boolean {
+    const { mapSize, groundType } = terrain;
+    if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) return false;
+    if (!isPassable(groundType[mapSize.toIndex(x, y)])) return false;
+    return !state.getEntityAt(x, y);
+}
+
+/**
+ * Generate ring perimeter tiles (only the edge of a square ring).
+ */
+function* getRingTiles(cx: number, cy: number, radius: number): Generator<{ x: number; y: number }> {
+    for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+            if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
+                yield { x: cx + dx, y: cy + dy };
+            }
+        }
+    }
+}
+
+/**
+ * Spawn units for a completed building based on BUILDING_SPAWN_ON_COMPLETE config.
+ * Mirrors the logic in BuildingConstructionSystem.spawnUnitsOnBuildingComplete.
+ */
+function spawnUnitsForBuilding(
+    state: GameState,
+    entity: { id: number; x: number; y: number; player: number },
+    buildingState: { buildingType: number },
+    eventBus: EventBus,
+    terrain: TerrainContext
+): void {
+    const spawnDef = BUILDING_SPAWN_ON_COMPLETE[buildingState.buildingType];
+    if (!spawnDef) return;
+
+    const { x: bx, y: by, player } = entity;
+    let spawned = 0;
+
+    for (let radius = 1; radius <= 4 && spawned < spawnDef.count; radius++) {
+        for (const tile of getRingTiles(bx, by, radius)) {
+            if (spawned >= spawnDef.count) break;
+            if (!isValidSpawnTile(state, terrain, tile.x, tile.y)) continue;
+
+            const spawnedEntity = state.addEntity(
+                EntityType.Unit,
+                spawnDef.unitType,
+                tile.x,
+                tile.y,
+                player,
+                spawnDef.selectable
+            );
+
+            eventBus.emit('unit:spawned', {
+                entityId: spawnedEntity.id,
+                unitType: spawnDef.unitType,
+                x: tile.x,
+                y: tile.y,
+                player,
+            });
+
+            spawned++;
+        }
+    }
+
+    if (spawned > 0) {
+        log.debug(`Spawned ${spawned} units for building ${entity.id}`);
+    }
 }
 
 /**

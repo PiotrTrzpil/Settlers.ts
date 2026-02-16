@@ -7,6 +7,19 @@ import { EntityType } from '@/game/entity';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
 
+/** Helper to create populate options from test context */
+function createPopulateOptions(ctx: TestContext, player?: number) {
+    return {
+        player,
+        buildingStateManager: ctx.buildingStateManager,
+        eventBus: ctx.eventBus,
+        terrain: {
+            groundType: ctx.map.groundType,
+            mapSize: ctx.map.mapSize,
+        },
+    };
+}
+
 describe('populateMapBuildings', () => {
     let ctx: TestContext;
 
@@ -20,11 +33,10 @@ describe('populateMapBuildings', () => {
             { x: 20, y: 20, buildingType: S4BuildingType.SAWMILL, player: 1 },
         ];
 
-        const count = populateMapBuildings(ctx.state, buildings, {
-            buildingStateManager: ctx.buildingStateManager,
-        });
+        const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         expect(count).toBe(2);
+        // 2 buildings, no units spawned (woodcutter/sawmill don't spawn units)
         expect(ctx.state.entities).toHaveLength(2);
 
         // Check first building
@@ -45,9 +57,7 @@ describe('populateMapBuildings', () => {
     it('should create building states as completed', () => {
         const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.BARRACKS, player: 0 }];
 
-        populateMapBuildings(ctx.state, buildings, {
-            buildingStateManager: ctx.buildingStateManager,
-        });
+        populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         const entity = ctx.state.getEntityAt(10, 10);
         expect(entity).toBeDefined();
@@ -64,9 +74,7 @@ describe('populateMapBuildings', () => {
             { x: 20, y: 20, buildingType: S4BuildingType.SAWMILL, player: 0 }, // Valid type
         ];
 
-        const count = populateMapBuildings(ctx.state, buildings, {
-            buildingStateManager: ctx.buildingStateManager,
-        });
+        const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         expect(count).toBe(1);
         expect(ctx.state.entities).toHaveLength(1);
@@ -83,9 +91,7 @@ describe('populateMapBuildings', () => {
             { x: 20, y: 20, buildingType: S4BuildingType.WOODCUTTERHUT, player: 0 }, // Free
         ];
 
-        const count = populateMapBuildings(ctx.state, buildings, {
-            buildingStateManager: ctx.buildingStateManager,
-        });
+        const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         expect(count).toBe(1);
         expect(ctx.state.entities).toHaveLength(2); // 1 map object + 1 building
@@ -98,16 +104,50 @@ describe('populateMapBuildings', () => {
             { x: 30, y: 30, buildingType: S4BuildingType.MILL, player: 0 },
         ];
 
-        const count = populateMapBuildings(ctx.state, buildings, {
-            player: 0,
-            buildingStateManager: ctx.buildingStateManager,
-        });
+        const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx, 0));
 
         expect(count).toBe(2);
         expect(ctx.state.entities).toHaveLength(2);
         expect(ctx.state.getEntityAt(10, 10)).toBeDefined();
         expect(ctx.state.getEntityAt(20, 20)).toBeUndefined();
         expect(ctx.state.getEntityAt(30, 30)).toBeDefined();
+    });
+
+    it('should spawn carriers for residence buildings', () => {
+        const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.RESIDENCESMALL, player: 0 }];
+
+        const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
+
+        expect(count).toBe(1);
+        // ResidenceSmall spawns 2 carriers
+        expect(ctx.state.entities).toHaveLength(3); // 1 building + 2 carriers
+    });
+
+    it('should emit building:completed event', () => {
+        const completedEvents: number[] = [];
+        ctx.eventBus.on('building:completed', ({ entityId }) => {
+            completedEvents.push(entityId);
+        });
+
+        const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.WOODCUTTERHUT, player: 0 }];
+
+        populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
+
+        expect(completedEvents).toHaveLength(1);
+    });
+
+    it('should emit unit:spawned events for carriers', () => {
+        const spawnedEvents: number[] = [];
+        ctx.eventBus.on('unit:spawned', ({ entityId }) => {
+            spawnedEvents.push(entityId);
+        });
+
+        const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.RESIDENCESMALL, player: 0 }];
+
+        populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
+
+        // ResidenceSmall spawns 2 carriers
+        expect(spawnedEvents).toHaveLength(2);
     });
 });
 

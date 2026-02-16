@@ -20,15 +20,7 @@
             </div>
 
             <div class="panel-body">
-                <!-- Entity ID and Position -->
-                <div class="info-row">
-                    <span class="label">ID:</span>
-                    <span class="value">#{{ selectedEntity.id }}</span>
-                </div>
-                <div class="info-row">
-                    <span class="label">Position:</span>
-                    <span class="value">({{ selectedEntity.x }}, {{ selectedEntity.y }})</span>
-                </div>
+                <!-- Player info (always shown) -->
                 <div class="info-row">
                     <span class="label">Player:</span>
                     <span class="value player-badge" :style="{ background: playerColor }">
@@ -38,31 +30,150 @@
 
                 <!-- Unit-specific info -->
                 <template v-if="isUnit">
-                    <div class="info-section">
-                        <div class="section-label">Unit Info</div>
-                        <div class="info-row">
-                            <span class="label">Category:</span>
-                            <span class="value category-badge" :class="unitCategory">{{ unitCategory }}</span>
-                        </div>
-                        <div v-if="carriedMaterial" class="info-row">
-                            <span class="label">Carrying:</span>
-                            <span class="value">{{ carriedMaterial }}</span>
-                        </div>
+                    <div class="info-row">
+                        <span class="label">Category:</span>
+                        <span class="value category-badge" :class="unitCategory">{{ unitCategory }}</span>
+                    </div>
+                    <div v-if="carriedMaterial" class="info-row">
+                        <span class="label">Carrying:</span>
+                        <span class="value">{{ carriedMaterial }}</span>
                     </div>
                 </template>
 
                 <!-- Building-specific info -->
                 <template v-if="isBuilding">
-                    <div class="info-section">
-                        <div class="section-label">Building Info</div>
-                        <div class="info-row">
-                            <span class="label">Size:</span>
-                            <span class="value">{{ buildingSize }}</span>
+                    <div v-if="buildingStatus" class="info-row">
+                        <span class="label">Status:</span>
+                        <span class="value status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
+                    </div>
+                </template>
+
+                <!-- Debug Info Section (only when debug panel is open) -->
+                <template v-if="showDebugInfo">
+                    <div class="info-section debug-section">
+                        <div class="section-label debug-label" @click="debugExpanded = !debugExpanded">
+                            <span class="caret">{{ debugExpanded ? '▼' : '▶' }}</span>
+                            Debug Info
                         </div>
-                        <div v-if="buildingStatus" class="info-row">
-                            <span class="label">Status:</span>
-                            <span class="value status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
-                        </div>
+                        <template v-if="debugExpanded">
+                            <!-- Common debug info -->
+                            <div class="info-row">
+                                <span class="label">ID:</span>
+                                <span class="value">#{{ selectedEntity.id }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="label">Position:</span>
+                                <span class="value">({{ selectedEntity.x }}, {{ selectedEntity.y }})</span>
+                            </div>
+                            <div v-if="isBuilding" class="info-row">
+                                <span class="label">Size:</span>
+                                <span class="value">{{ buildingSize }}</span>
+                            </div>
+
+                            <!-- Carrier Debug Info -->
+                            <template v-if="isUnit && carrierDebug">
+                                <div class="info-row">
+                                    <span class="label">Status:</span>
+                                    <span class="value" :class="'carrier-status-' + carrierDebug.statusClass">
+                                        {{ carrierDebug.status }}
+                                    </span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="label">Fatigue:</span>
+                                    <span class="value" :class="'fatigue-' + carrierDebug.fatigueClass">
+                                        {{ carrierDebug.fatigue }}% ({{ carrierDebug.fatigueLevel }})
+                                    </span>
+                                </div>
+                                <div class="info-row">
+                                    <span class="label">Home:</span>
+                                    <span class="value">#{{ carrierDebug.homeBuilding }}</span>
+                                </div>
+                                <template v-if="carrierDebug.hasJob">
+                                    <div class="debug-subsection">Job</div>
+                                    <div class="info-row sub-row">
+                                        <span class="label">Type:</span>
+                                        <span class="value">{{ carrierDebug.jobType }}</span>
+                                    </div>
+                                    <div v-if="carrierDebug.jobTarget !== null" class="info-row sub-row">
+                                        <span class="label">Target:</span>
+                                        <span class="value">#{{ carrierDebug.jobTarget }}</span>
+                                    </div>
+                                    <div v-if="carrierDebug.jobMaterial" class="info-row sub-row">
+                                        <span class="label">Material:</span>
+                                        <span class="value"
+                                            >{{ carrierDebug.jobMaterial }} ×{{ carrierDebug.jobAmount }}</span
+                                        >
+                                    </div>
+                                </template>
+                                <template v-if="carrierDebug.pathLength > 0">
+                                    <div class="info-row">
+                                        <span class="label">Path:</span>
+                                        <span class="value"
+                                            >{{ carrierDebug.pathProgress }}/{{ carrierDebug.pathLength }}</span
+                                        >
+                                    </div>
+                                </template>
+                            </template>
+
+                            <!-- Building Debug Info -->
+                            <template v-if="isBuilding && buildingDebug">
+                                <!-- Construction -->
+                                <template v-if="buildingDebug.isConstructing">
+                                    <div class="debug-subsection">Construction</div>
+                                    <div class="info-row sub-row">
+                                        <span class="label">Phase:</span>
+                                        <span class="value">{{ buildingDebug.constructionPhase }}</span>
+                                    </div>
+                                    <div class="info-row sub-row">
+                                        <span class="label">Progress:</span>
+                                        <span class="value">{{ buildingDebug.constructionProgress }}%</span>
+                                    </div>
+                                </template>
+
+                                <!-- Production -->
+                                <template v-if="buildingDebug.hasProduction">
+                                    <div class="debug-subsection">Production</div>
+                                    <div class="info-row sub-row">
+                                        <span class="label">Cycle:</span>
+                                        <span class="value">{{ buildingDebug.productionProgress }}%</span>
+                                    </div>
+                                    <div v-if="buildingDebug.pendingInputs.length > 0" class="info-row sub-row">
+                                        <span class="label">Pending:</span>
+                                        <span class="value">{{ buildingDebug.pendingInputs.join(', ') }}</span>
+                                    </div>
+                                </template>
+
+                                <!-- Inventory -->
+                                <template v-if="buildingDebug.hasInventory">
+                                    <div class="debug-subsection">Inventory</div>
+                                    <div
+                                        v-for="slot in buildingDebug.inventorySlots"
+                                        :key="slot.material"
+                                        class="info-row sub-row"
+                                    >
+                                        <span class="label">{{ slot.type }}:</span>
+                                        <span class="value">
+                                            {{ slot.material }} {{ slot.amount }}
+                                            <span v-if="slot.reserved > 0" class="reserved"
+                                                >({{ slot.reserved }} res)</span
+                                            >
+                                        </span>
+                                    </div>
+                                </template>
+
+                                <!-- Requests -->
+                                <template v-if="buildingDebug.requestCount > 0">
+                                    <div class="debug-subsection">Requests ({{ buildingDebug.requestCount }})</div>
+                                    <div v-for="req in buildingDebug.requests" :key="req.id" class="info-row sub-row">
+                                        <span class="label">#{{ req.id }}:</span>
+                                        <span class="value">
+                                            {{ req.material }}
+                                            <span :class="'req-status-' + req.status">{{ req.statusLabel }}</span>
+                                        </span>
+                                    </div>
+                                </template>
+                            </template>
+                        </template>
                     </div>
                 </template>
             </div>
@@ -71,13 +182,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { Entity } from '@/game/entity';
 import { EntityType, UnitType, BuildingType, getBuildingSize } from '@/game/entity';
 import { UNIT_TYPE_CONFIG, getUnitCategory, UnitCategory } from '@/game/unit-types';
 import { EMaterialType } from '@/game/economy';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
+import { getFatigueLevel } from '@/game/features/carriers/carrier-state';
+import { RequestStatus } from '@/game/features/logistics/resource-request';
 import { debugStats } from '@/game/debug-stats';
+import {
+    CARRIER_STATUS_NAMES,
+    CARRIER_STATUS_CLASSES,
+    FATIGUE_LEVEL_NAMES,
+    FATIGUE_LEVEL_CLASSES,
+} from '@/composables/useLogisticsDebug';
 import type { Game } from '@/game/game';
 
 const props = defineProps<{
@@ -85,10 +204,15 @@ const props = defineProps<{
 }>();
 
 // Use debugStats for reactivity (it's updated every frame)
+// Include frameCount as dependency and return a fresh snapshot so Vue sees changes
 const selectedEntity = computed<Entity | undefined>(() => {
+    // Touch frameCount to make this computed re-evaluate each frame
+    void debugStats.state.frameCount;
     const entityId = debugStats.state.selectedEntityId;
     if (entityId === null || !props.game) return undefined;
-    return props.game.state.getEntity(entityId);
+    const entity = props.game.state.getEntity(entityId);
+    // Return a shallow copy so Vue detects changes to entity properties
+    return entity ? { ...entity } : undefined;
 });
 
 const selectionCount = computed(() => debugStats.state.selectedCount);
@@ -196,6 +320,199 @@ const playerColor = computed(() => {
     const entity = selectedEntity.value;
     if (!entity) return PLAYER_COLORS[0];
     return PLAYER_COLORS[entity.player % PLAYER_COLORS.length];
+});
+
+// Debug section state
+const debugExpanded = ref(true);
+
+// Show debug info only when debug panel is open
+const showDebugInfo = computed(() => debugStats.state.debugPanelOpen);
+
+// Carrier debug info
+interface CarrierDebugInfo {
+    status: string;
+    statusClass: string;
+    fatigue: number;
+    fatigueLevel: string;
+    fatigueClass: string;
+    homeBuilding: number;
+    hasJob: boolean;
+    jobType: string | null;
+    jobTarget: number | null;
+    jobMaterial: string | null;
+    jobAmount: number;
+    pathLength: number;
+    pathProgress: number;
+}
+
+const carrierDebug = computed<CarrierDebugInfo | null>(() => {
+    // Touch frameCount to re-evaluate every frame (carrier state changes frequently)
+    void debugStats.state.frameCount;
+    const entity = selectedEntity.value;
+    if (!entity || entity.type !== EntityType.Unit) return null;
+    if (!entity.carrier) return null;
+    if (!props.game) return null;
+
+    const carrier = entity.carrier;
+    const fatigueLevel = getFatigueLevel(carrier.fatigue);
+
+    // Get path info from movement system
+    const movement = props.game.state.movement.getController(entity.id);
+    const pathLength = movement?.path.length ?? 0;
+    const pathProgress = movement?.pathIndex ?? 0;
+
+    // Job details
+    let jobType: string | null = null;
+    let jobTarget: number | null = null;
+    let jobMaterial: string | null = null;
+    let jobAmount = 0;
+
+    if (carrier.currentJob) {
+        jobType = carrier.currentJob.type;
+        if (carrier.currentJob.type === 'pickup') {
+            jobTarget = carrier.currentJob.fromBuilding;
+            jobMaterial = EMaterialType[carrier.currentJob.material] ?? `#${carrier.currentJob.material}`;
+            jobAmount = carrier.currentJob.amount;
+        } else if (carrier.currentJob.type === 'deliver') {
+            jobTarget = carrier.currentJob.toBuilding;
+            jobMaterial = EMaterialType[carrier.currentJob.material] ?? `#${carrier.currentJob.material}`;
+            jobAmount = carrier.currentJob.amount;
+        }
+    }
+
+    return {
+        status: CARRIER_STATUS_NAMES[carrier.status],
+        statusClass: CARRIER_STATUS_CLASSES[carrier.status],
+        fatigue: Math.round(carrier.fatigue),
+        fatigueLevel: FATIGUE_LEVEL_NAMES[fatigueLevel],
+        fatigueClass: FATIGUE_LEVEL_CLASSES[fatigueLevel],
+        homeBuilding: carrier.homeBuilding,
+        hasJob: carrier.currentJob !== null,
+        jobType,
+        jobTarget,
+        jobMaterial,
+        jobAmount,
+        pathLength,
+        pathProgress,
+    };
+});
+
+// Building debug info
+interface InventorySlotInfo {
+    type: string;
+    material: string;
+    amount: number;
+    reserved: number;
+}
+
+interface RequestInfo {
+    id: number;
+    material: string;
+    status: string;
+    statusLabel: string;
+}
+
+interface BuildingDebugInfo {
+    isConstructing: boolean;
+    constructionPhase: string;
+    constructionProgress: number;
+    hasProduction: boolean;
+    productionProgress: number;
+    pendingInputs: string[];
+    hasInventory: boolean;
+    inventorySlots: InventorySlotInfo[];
+    requestCount: number;
+    requests: RequestInfo[];
+}
+
+const PHASE_NAMES: Record<BuildingConstructionPhase, string> = {
+    [BuildingConstructionPhase.Poles]: 'Poles',
+    [BuildingConstructionPhase.TerrainLeveling]: 'Leveling',
+    [BuildingConstructionPhase.ConstructionRising]: 'Rising',
+    [BuildingConstructionPhase.CompletedRising]: 'Completing',
+    [BuildingConstructionPhase.Completed]: 'Completed',
+};
+
+const buildingDebug = computed<BuildingDebugInfo | null>(() => {
+    // Touch frameCount to re-evaluate every frame (building state changes)
+    void debugStats.state.frameCount;
+    const entity = selectedEntity.value;
+    if (!entity || entity.type !== EntityType.Building) return null;
+    if (!props.game) return null;
+
+    const gameLoop = props.game.gameLoop;
+    const buildingState = gameLoop.buildingStateManager.getBuildingState(entity.id);
+    const inventory = gameLoop.inventoryManager.getInventory(entity.id);
+    const requests = [...gameLoop.requestManager.getRequestsForBuilding(entity.id, false)];
+
+    // Construction info
+    const isConstructing = buildingState !== undefined && buildingState.phase !== BuildingConstructionPhase.Completed;
+    let constructionPhase = '';
+    let constructionProgress = 0;
+
+    if (buildingState) {
+        constructionPhase = PHASE_NAMES[buildingState.phase];
+        constructionProgress =
+            buildingState.totalDuration > 0
+                ? Math.round((buildingState.elapsedTime / buildingState.totalDuration) * 100)
+                : 0;
+    }
+
+    // Production info
+    const production = entity.production;
+    const hasProduction = production !== undefined;
+    const productionProgress = production ? Math.round(production.progress * 100) : 0;
+    const pendingInputs = production ? [...production.pendingRequests].map(m => EMaterialType[m] ?? `#${m}`) : [];
+
+    // Inventory info
+    const hasInventory = inventory !== undefined;
+    const inventorySlots: InventorySlotInfo[] = [];
+
+    if (inventory) {
+        for (const slot of inventory.inputSlots) {
+            const reserved = gameLoop.logisticsDispatcher
+                .getReservationManager()
+                .getReservedAmount(entity.id, slot.materialType);
+            inventorySlots.push({
+                type: 'In',
+                material: EMaterialType[slot.materialType] ?? `#${slot.materialType}`,
+                amount: slot.currentAmount,
+                reserved,
+            });
+        }
+        for (const slot of inventory.outputSlots) {
+            const reserved = gameLoop.logisticsDispatcher
+                .getReservationManager()
+                .getReservedAmount(entity.id, slot.materialType);
+            inventorySlots.push({
+                type: 'Out',
+                material: EMaterialType[slot.materialType] ?? `#${slot.materialType}`,
+                amount: slot.currentAmount,
+                reserved,
+            });
+        }
+    }
+
+    // Request info
+    const requestInfos: RequestInfo[] = requests.slice(0, 5).map(req => ({
+        id: req.id,
+        material: EMaterialType[req.materialType] ?? `#${req.materialType}`,
+        status: req.status === RequestStatus.InProgress ? 'progress' : 'pending',
+        statusLabel: req.status === RequestStatus.InProgress ? '⚙' : '⏳',
+    }));
+
+    return {
+        isConstructing,
+        constructionPhase,
+        constructionProgress,
+        hasProduction,
+        productionProgress,
+        pendingInputs,
+        hasInventory,
+        inventorySlots,
+        requestCount: requests.length,
+        requests: requestInfos,
+    };
 });
 </script>
 
@@ -337,5 +654,100 @@ const playerColor = computed(() => {
     font-style: italic;
     text-align: center;
     padding: 4px 0;
+}
+
+/* Debug Section */
+.debug-section {
+    border-top-color: #3a2a10;
+}
+
+.debug-label {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.debug-label:hover {
+    color: #8a7040;
+}
+
+.caret {
+    font-size: 8px;
+}
+
+.debug-subsection {
+    font-size: 9px;
+    text-transform: uppercase;
+    color: #5a4a30;
+    margin-top: 4px;
+    margin-bottom: 2px;
+    padding-left: 4px;
+    border-left: 2px solid #3a2a10;
+}
+
+.sub-row {
+    padding-left: 8px;
+}
+
+.sub-row .label {
+    font-size: 9px;
+    color: #6a5a3a;
+}
+
+.sub-row .value {
+    font-size: 9px;
+}
+
+/* Carrier status colors */
+.carrier-status-idle {
+    color: #80c080;
+}
+
+.carrier-status-walking {
+    color: #80a0c0;
+}
+
+.carrier-status-pickingup {
+    color: #c0a040;
+}
+
+.carrier-status-delivering {
+    color: #a080c0;
+}
+
+.carrier-status-resting {
+    color: #6090a0;
+}
+
+/* Fatigue colors */
+.fatigue-fresh {
+    color: #80c080;
+}
+
+.fatigue-tired {
+    color: #e0c060;
+}
+
+.fatigue-exhausted {
+    color: #e08040;
+}
+
+.fatigue-collapsed {
+    color: #d04040;
+}
+
+/* Request status colors */
+.req-status-pending {
+    color: #c0a040;
+}
+
+.req-status-progress {
+    color: #80c080;
+}
+
+.reserved {
+    color: #7a6a4a;
+    font-size: 8px;
 }
 </style>

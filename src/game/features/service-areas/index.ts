@@ -23,8 +23,11 @@ export {
     DEFAULT_SERVICE_RADIUS,
     MIN_SERVICE_RADIUS,
     MAX_SERVICE_RADIUS,
+    DEFAULT_HUB_CAPACITY,
+    HUB_CARRIER_CAPACITY,
     createServiceArea,
     clampRadius,
+    getHubCapacity,
 } from './service-area';
 
 // Manager (with events)

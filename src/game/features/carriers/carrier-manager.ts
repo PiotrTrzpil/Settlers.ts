@@ -157,6 +157,25 @@ export class CarrierManager {
     }
 
     /**
+     * Get the number of carriers currently assigned to a hub.
+     * @param hubId - The entity ID of the hub building
+     * @returns Number of carriers assigned to this hub
+     */
+    getCarrierCountForHub(hubId: number): number {
+        return this.carriersByTavern.get(hubId)?.size ?? 0;
+    }
+
+    /**
+     * Check if a hub has capacity for more carriers.
+     * @param hubId - The entity ID of the hub building
+     * @param capacity - The maximum capacity of the hub
+     * @returns true if the hub can accept more carriers
+     */
+    hasCapacity(hubId: number, capacity: number): boolean {
+        return this.getCarrierCountForHub(hubId) < capacity;
+    }
+
+    /**
      * Get available carriers for a specific tavern (idle, no job, not too fatigued).
      * @param tavernId - The entity ID of the tavern
      * @returns Array of available carrier states for that tavern

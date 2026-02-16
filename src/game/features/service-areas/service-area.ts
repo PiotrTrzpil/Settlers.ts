@@ -9,11 +9,36 @@
  * The integration step will determine which building types should have service areas.
  */
 
+import { BuildingType } from '../../buildings/types';
+
 /**
  * Default service area radius in tiles.
  * This determines how far from the tavern carriers will travel by default.
  */
 export const DEFAULT_SERVICE_RADIUS = 15;
+
+/**
+ * Default carrier capacity when not specified by building type.
+ */
+export const DEFAULT_HUB_CAPACITY = 6;
+
+/**
+ * Carrier capacity per hub building type.
+ * Determines the maximum number of carriers that can be assigned to each hub.
+ */
+export const HUB_CARRIER_CAPACITY: Partial<Record<BuildingType, number>> = {
+    [BuildingType.ResidenceSmall]: 4, // Spawns 2, can hold 4
+    [BuildingType.ResidenceMedium]: 8, // Spawns 4, can hold 8
+    [BuildingType.ResidenceBig]: 12, // Spawns 6, can hold 12
+};
+
+/**
+ * Get the carrier capacity for a building type.
+ * Returns the configured capacity or DEFAULT_HUB_CAPACITY if not specified.
+ */
+export function getHubCapacity(buildingType: BuildingType): number {
+    return HUB_CARRIER_CAPACITY[buildingType] ?? DEFAULT_HUB_CAPACITY;
+}
 
 /**
  * Minimum allowed service area radius.
@@ -43,6 +68,10 @@ export interface ServiceArea {
     centerY: number;
     /** Radius of the service area in tiles */
     radius: number;
+    /** Maximum number of carriers this hub can support */
+    readonly capacity: number;
+    /** Building type of the hub (used for capacity lookup) */
+    readonly buildingType: BuildingType;
 }
 
 /**
@@ -52,6 +81,7 @@ export interface ServiceArea {
  * @param playerId Player who owns this service area
  * @param centerX X coordinate of the center
  * @param centerY Y coordinate of the center
+ * @param buildingType Building type (used for capacity lookup)
  * @param radius Radius in tiles (clamped to MIN/MAX)
  */
 export function createServiceArea(
@@ -59,7 +89,8 @@ export function createServiceArea(
     playerId: number,
     centerX: number,
     centerY: number,
-    radius: number = DEFAULT_SERVICE_RADIUS,
+    buildingType: BuildingType,
+    radius: number = DEFAULT_SERVICE_RADIUS
 ): ServiceArea {
     return {
         buildingId,
@@ -67,6 +98,8 @@ export function createServiceArea(
         centerX,
         centerY,
         radius: clampRadius(radius),
+        capacity: getHubCapacity(buildingType),
+        buildingType,
     };
 }
 

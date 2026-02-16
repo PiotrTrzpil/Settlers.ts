@@ -5,12 +5,8 @@
  * Each hub has exactly one service area that defines its operational range.
  */
 
-import {
-    ServiceArea,
-    createServiceArea,
-    clampRadius,
-    DEFAULT_SERVICE_RADIUS,
-} from './service-area';
+import { ServiceArea, createServiceArea, clampRadius, DEFAULT_SERVICE_RADIUS } from './service-area';
+import { BuildingType } from '../../buildings/types';
 
 /**
  * Events emitted by the ServiceAreaManager.
@@ -30,9 +26,7 @@ export interface ServiceAreaEvents {
 /**
  * Callback type for service area event listeners.
  */
-export type ServiceAreaEventListener<K extends keyof ServiceAreaEvents> = (
-    data: ServiceAreaEvents[K]
-) => void;
+export type ServiceAreaEventListener<K extends keyof ServiceAreaEvents> = (data: ServiceAreaEvents[K]) => void;
 
 /**
  * Manages service areas for logistics hubs.
@@ -57,6 +51,7 @@ export class ServiceAreaManager {
      * @param playerId Player who owns this building
      * @param x X coordinate of the building (used as center)
      * @param y Y coordinate of the building (used as center)
+     * @param buildingType Building type (determines carrier capacity)
      * @param radius Optional custom radius (defaults to DEFAULT_SERVICE_RADIUS)
      * @returns The created ServiceArea
      */
@@ -65,9 +60,10 @@ export class ServiceAreaManager {
         playerId: number,
         x: number,
         y: number,
-        radius: number = DEFAULT_SERVICE_RADIUS,
+        buildingType: BuildingType,
+        radius: number = DEFAULT_SERVICE_RADIUS
     ): ServiceArea {
-        const serviceArea = createServiceArea(buildingId, playerId, x, y, radius);
+        const serviceArea = createServiceArea(buildingId, playerId, x, y, buildingType, radius);
         this.serviceAreas.set(buildingId, serviceArea);
         this.emit('created', { serviceArea });
         return serviceArea;
@@ -206,12 +202,14 @@ export class ServiceAreaManager {
         centerX: number;
         centerY: number;
         radius: number;
+        buildingType: BuildingType;
     }): void {
         const serviceArea = createServiceArea(
             data.buildingId,
             data.playerId,
             data.centerX,
             data.centerY,
+            data.buildingType,
             data.radius
         );
         this.serviceAreas.set(data.buildingId, serviceArea);
@@ -222,10 +220,7 @@ export class ServiceAreaManager {
     /**
      * Subscribe to a service area event.
      */
-    on<K extends keyof ServiceAreaEvents>(
-        event: K,
-        listener: ServiceAreaEventListener<K>,
-    ): void {
+    on<K extends keyof ServiceAreaEvents>(event: K, listener: ServiceAreaEventListener<K>): void {
         if (!this.listeners[event]) {
             this.listeners[event] = new Set() as any;
         }
@@ -235,10 +230,7 @@ export class ServiceAreaManager {
     /**
      * Unsubscribe from a service area event.
      */
-    off<K extends keyof ServiceAreaEvents>(
-        event: K,
-        listener: ServiceAreaEventListener<K>,
-    ): void {
+    off<K extends keyof ServiceAreaEvents>(event: K, listener: ServiceAreaEventListener<K>): void {
         const listeners = this.listeners[event] as Set<ServiceAreaEventListener<K>> | undefined;
         if (listeners) {
             listeners.delete(listener);
@@ -248,10 +240,7 @@ export class ServiceAreaManager {
     /**
      * Emit a service area event.
      */
-    private emit<K extends keyof ServiceAreaEvents>(
-        event: K,
-        data: ServiceAreaEvents[K],
-    ): void {
+    private emit<K extends keyof ServiceAreaEvents>(event: K, data: ServiceAreaEvents[K]): void {
         const listeners = this.listeners[event] as Set<ServiceAreaEventListener<K>> | undefined;
         if (listeners) {
             for (const listener of listeners) {

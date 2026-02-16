@@ -136,6 +136,12 @@ export interface DebugStatsState {
     // Layer panel UI state (persisted)
     layerPanelOpen: boolean;
 
+    // Logistics panel UI state (persisted)
+    logisticsPanelOpen: boolean;
+
+    // Debug selection mode - allows selecting normally non-selectable units
+    selectAllUnits: boolean;
+
     // Render timings (updated every ~1 sec)
     renderTimings: RenderTimings;
 }
@@ -151,6 +157,8 @@ interface PersistedDebugSettings {
     debugPanelOpen: boolean;
     debugGridEnabled: boolean;
     layerPanelOpen: boolean;
+    logisticsPanelOpen: boolean;
+    selectAllUnits: boolean;
 }
 
 /** Default values for persisted settings */
@@ -164,6 +172,8 @@ const DEFAULT_SETTINGS: PersistedDebugSettings = {
     debugPanelOpen: false,
     debugGridEnabled: false,
     layerPanelOpen: false,
+    logisticsPanelOpen: false,
+    selectAllUnits: false,
 };
 
 /** Load persisted settings from localStorage */
@@ -182,6 +192,8 @@ function loadDebugSettings(): PersistedDebugSettings {
             debugPanelOpen: parsed.debugPanelOpen ?? DEFAULT_SETTINGS.debugPanelOpen,
             debugGridEnabled: parsed.debugGridEnabled ?? DEFAULT_SETTINGS.debugGridEnabled,
             layerPanelOpen: parsed.layerPanelOpen ?? DEFAULT_SETTINGS.layerPanelOpen,
+            logisticsPanelOpen: parsed.logisticsPanelOpen ?? DEFAULT_SETTINGS.logisticsPanelOpen,
+            selectAllUnits: parsed.selectAllUnits ?? DEFAULT_SETTINGS.selectAllUnits,
         };
     } catch (e) {
         console.warn('Failed to load debug settings from localStorage:', e);
@@ -231,10 +243,22 @@ class DebugStats {
 
     // Render timing accumulation
     private renderSamples: RenderTimingSamples = {
-        frame: [], ticks: [], animations: [], callback: [], other: [], render: [],
-        landscape: [], entities: [], cullSort: [],
-        visibleCount: [], drawCalls: [], spriteCount: [],
-        indicators: [], textured: [], color: [], selection: [],
+        frame: [],
+        ticks: [],
+        animations: [],
+        callback: [],
+        other: [],
+        render: [],
+        landscape: [],
+        entities: [],
+        cullSort: [],
+        visibleCount: [],
+        drawCalls: [],
+        spriteCount: [],
+        indicators: [],
+        textured: [],
+        color: [],
+        selection: [],
     };
     private lastRenderTimingUpdate = 0;
 
@@ -306,6 +330,8 @@ class DebugStats {
             debugPanelOpen: savedSettings.debugPanelOpen,
             debugGridEnabled: savedSettings.debugGridEnabled,
             layerPanelOpen: savedSettings.layerPanelOpen,
+            logisticsPanelOpen: savedSettings.logisticsPanelOpen,
+            selectAllUnits: savedSettings.selectAllUnits,
             renderTimings: {
                 frame: 0,
                 ticks: 0,
@@ -326,8 +352,10 @@ class DebugStats {
             },
         });
 
-        // Expose on window for Playwright tests
-        (window as any).__settlers_debug__ = this.state;
+        // Expose on window for Playwright tests (skip in Node.js environment)
+        if (typeof window !== 'undefined') {
+            (window as any).__settlers_debug__ = this.state;
+        }
 
         // Set up watchers to auto-save settings when they change
         this.setupSettingsWatchers();
@@ -337,9 +365,17 @@ class DebugStats {
     private setupSettingsWatchers(): void {
         // Watch all persisted settings and save when any changes
         const settingsKeys: (keyof PersistedDebugSettings)[] = [
-            'zoomSpeed', 'panSpeed', 'riverSlotPermutation',
-            'riverFlipInner', 'riverFlipOuter', 'riverFlipMiddle',
-            'debugPanelOpen', 'debugGridEnabled', 'layerPanelOpen'
+            'zoomSpeed',
+            'panSpeed',
+            'riverSlotPermutation',
+            'riverFlipInner',
+            'riverFlipOuter',
+            'riverFlipMiddle',
+            'debugPanelOpen',
+            'debugGridEnabled',
+            'layerPanelOpen',
+            'logisticsPanelOpen',
+            'selectAllUnits',
         ];
 
         for (const key of settingsKeys) {
@@ -363,6 +399,8 @@ class DebugStats {
             debugPanelOpen: this.state.debugPanelOpen,
             debugGridEnabled: this.state.debugGridEnabled,
             layerPanelOpen: this.state.layerPanelOpen,
+            logisticsPanelOpen: this.state.logisticsPanelOpen,
+            selectAllUnits: this.state.selectAllUnits,
         });
     }
 
@@ -484,9 +522,7 @@ class DebugStats {
 
     /** Compute averages from samples and update state */
     private updateRenderTimingAverages(): void {
-        const avg = (arr: number[]) => arr.length > 0
-            ? arr.reduce((a, b) => a + b, 0) / arr.length
-            : 0;
+        const avg = (arr: number[]) => (arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
 
         this.state.renderTimings.frame = Math.round(avg(this.renderSamples.frame) * 100) / 100;
         this.state.renderTimings.ticks = Math.round(avg(this.renderSamples.ticks) * 100) / 100;
@@ -574,10 +610,18 @@ class DebugStats {
                 } else {
                     environment++;
                     switch (getEnvironmentSubLayer(objType)) {
-                    case EnvironmentSubLayer.Trees: trees++; break;
-                    case EnvironmentSubLayer.Stones: stones++; break;
-                    case EnvironmentSubLayer.Plants: plants++; break;
-                    case EnvironmentSubLayer.Other: other++; break;
+                    case EnvironmentSubLayer.Trees:
+                        trees++;
+                        break;
+                    case EnvironmentSubLayer.Stones:
+                        stones++;
+                        break;
+                    case EnvironmentSubLayer.Plants:
+                        plants++;
+                        break;
+                    case EnvironmentSubLayer.Other:
+                        other++;
+                        break;
                     }
                 }
                 break;

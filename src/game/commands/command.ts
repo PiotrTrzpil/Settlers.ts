@@ -1,10 +1,11 @@
-import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE, tileKey } from '../entity';
+import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE, tileKey, type Entity } from '../entity';
 import { BuildingConstructionPhase, type BuildingStateManager } from '../features/building-construction';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
 import { MapSize } from '@/utilities/map-size';
 import type { EventBus } from '../event-bus';
 import { gameSettings } from '../game-settings';
+import { debugStats } from '../debug-stats';
 import type { SettlerTaskSystem } from '../systems/settler-tasks';
 import {
     Command,
@@ -211,12 +212,23 @@ function executeMoveUnit(ctx: CommandContext, cmd: MoveUnitCommand): CommandResu
     ]);
 }
 
+/**
+ * Check if an entity can be selected, respecting the debug "select all units" setting.
+ * Returns true if entity is normally selectable OR if debug mode allows selecting all units.
+ */
+function canSelectEntity(entity: Entity | undefined): boolean {
+    if (!entity) return false;
+    if (entity.selectable !== false) return true;
+    // Debug mode: allow selecting non-selectable units
+    return debugStats.state.selectAllUnits && entity.type === EntityType.Unit;
+}
+
 function executeSelect(ctx: CommandContext, cmd: SelectCommand): CommandResult {
     const { state } = ctx;
 
     if (cmd.entityId !== null) {
         const ent = state.getEntity(cmd.entityId);
-        if (ent && ent.selectable === false) {
+        if (ent && !canSelectEntity(ent)) {
             state.selectedEntityId = null;
             state.selectedEntityIds.clear();
             return commandSuccess([{ type: 'selection_changed', selectedIds: [] }]);
@@ -235,7 +247,7 @@ function executeSelect(ctx: CommandContext, cmd: SelectCommand): CommandResult {
 function executeSelectAtTile(ctx: CommandContext, cmd: SelectAtTileCommand): CommandResult {
     const { state } = ctx;
     const rawEntity = state.getEntityAt(cmd.x, cmd.y);
-    const entity = rawEntity?.selectable !== false ? rawEntity : undefined;
+    const entity = canSelectEntity(rawEntity) ? rawEntity : undefined;
 
     if (cmd.addToSelection) {
         toggleEntityInSelection(state, entity);
@@ -272,7 +284,7 @@ function toggleEntityInSelection(state: GameState, entity: { id: number } | unde
 function executeToggleSelection(ctx: CommandContext, cmd: ToggleSelectionCommand): CommandResult {
     const { state } = ctx;
     const entity = state.getEntity(cmd.entityId);
-    if (!entity || entity.selectable === false) {
+    if (!canSelectEntity(entity)) {
         return commandFailed(`Entity ${cmd.entityId} is not selectable`);
     }
 
@@ -283,7 +295,7 @@ function executeToggleSelection(ctx: CommandContext, cmd: ToggleSelectionCommand
 function executeSelectArea(ctx: CommandContext, cmd: SelectAreaCommand): CommandResult {
     const { state } = ctx;
     const allEntities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
-    const entities = allEntities.filter(e => e.selectable !== false);
+    const entities = allEntities.filter(e => canSelectEntity(e));
 
     // Prefer selecting units over buildings
     const units = entities.filter(e => e.type === EntityType.Unit);

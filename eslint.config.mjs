@@ -125,5 +125,13 @@ export default tseslint.config(
             'max-depth': ['error', 5],
             'max-len': ['error', { code: 150, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }]
         }
+    },
+
+    // Large Vue SFC files with template + script + styles
+    {
+        files: ['**/components/*-panel.vue', '**/views/*-view.vue'],
+        rules: {
+            'max-lines': ['error', { max: 800, skipBlankLines: true, skipComments: true }]
+        }
     }
 );

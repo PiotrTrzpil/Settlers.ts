@@ -1,7 +1,6 @@
 /**
  * Tests for CarrierManager - carrier state management.
  */
- 
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
@@ -504,6 +503,55 @@ describe('CarrierManager', () => {
 
             expect(result).toBe(false);
             expect(carrier.homeBuilding).toBe(100);
+        });
+    });
+
+    // ---------------------------------------------------------------------------
+    // Hub Capacity
+    // ---------------------------------------------------------------------------
+
+    describe('getCarrierCountForHub', () => {
+        it('should return 0 for hub with no carriers', () => {
+            expect(manager.getCarrierCountForHub(100)).toBe(0);
+        });
+
+        it('should count carriers assigned to a hub', () => {
+            manager.createCarrier(1, 100);
+            manager.createCarrier(2, 100);
+            manager.createCarrier(3, 200); // Different hub
+
+            expect(manager.getCarrierCountForHub(100)).toBe(2);
+            expect(manager.getCarrierCountForHub(200)).toBe(1);
+        });
+    });
+
+    describe('hasCapacity', () => {
+        it('should return true when hub has space', () => {
+            manager.createCarrier(1, 100);
+            manager.createCarrier(2, 100);
+
+            expect(manager.hasCapacity(100, 4)).toBe(true); // 2 carriers, capacity 4
+        });
+
+        it('should return false when hub is at capacity', () => {
+            manager.createCarrier(1, 100);
+            manager.createCarrier(2, 100);
+            manager.createCarrier(3, 100);
+            manager.createCarrier(4, 100);
+
+            expect(manager.hasCapacity(100, 4)).toBe(false); // 4 carriers, capacity 4
+        });
+
+        it('should return true for empty hub', () => {
+            expect(manager.hasCapacity(100, 4)).toBe(true);
+        });
+
+        it('should return false when hub exceeds capacity', () => {
+            manager.createCarrier(1, 100);
+            manager.createCarrier(2, 100);
+            manager.createCarrier(3, 100);
+
+            expect(manager.hasCapacity(100, 2)).toBe(false); // 3 carriers, capacity 2
         });
     });
 

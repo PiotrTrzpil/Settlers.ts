@@ -180,6 +180,7 @@ export class CarrierSystem implements TickSystem {
 
     /**
      * Find the nearest hub (building with service area) for a player at a given position.
+     * Only returns hubs that have capacity for more carriers.
      */
     private findNearestHub(x: number, y: number, playerId: number): number | null {
         const serviceAreas = this.serviceAreaManager.getServiceAreasForPlayer(playerId);
@@ -191,6 +192,11 @@ export class CarrierSystem implements TickSystem {
         let nearestDistSq = Infinity;
 
         for (const area of serviceAreas) {
+            // Skip hubs that are at capacity
+            if (!this.carrierManager.hasCapacity(area.buildingId, area.capacity)) {
+                continue;
+            }
+
             const dx = area.centerX - x;
             const dy = area.centerY - y;
             const distSq = dx * dx + dy * dy;
