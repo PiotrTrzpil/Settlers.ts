@@ -21,11 +21,12 @@ A Settlers 4 (Siedler 4) browser-based remake using TypeScript, Vue 3, and WebGL
 
 ```sh
 pnpm dev              # Start Vite dev server (port 5173)
-pnpm build            # Type-check + production build
+pnpm lint             # Type-check (vue-tsc) + ESLint in parallel
+pnpm build            # Fast bundle (rolldown-vite, no fengari)
+pnpm build:full       # Full bundle (regular vite, with fengari/Lua scripting)
 pnpm test:unit        # Run Vitest unit tests
 pnpm test:watch       # Vitest in watch mode
-npx playwright test   # Run Playwright e2e tests (builds + preview first)
-pnpm lint             # ESLint (src/**/*.ts,*.vue)
+npx playwright test   # Run Playwright e2e tests (uses dev server locally)
 pnpm format           # Prettier formatting
 ```
 
@@ -142,7 +143,7 @@ throw new Error(`Cannot process ${type}: ${JSON.stringify(state)}`)
 ## Claude Code workflow
 
 - **Validate every change**: Run targeted unit test after each edit, full suite before commit
-- **Cross-module changes need e2e**: If touching multiple modules, run `pnpm build && npx playwright test`
+- **Cross-module changes need e2e**: If touching multiple modules, run `pnpm lint && npx playwright test`
 - **Use LSP MCP** (if available): Always prefer over grep/edit for code exploration and refactoring
   - `find_references` — find all usages of a symbol
   - `find_definition` — jump to where something is defined
@@ -156,7 +157,7 @@ throw new Error(`Cannot process ${type}: ${JSON.stringify(state)}`)
 
 **Read `docs/testing/guide.md` before writing or updating tests.**
 
-- Always rebuild first: `pnpm build && npx playwright test`
+- Always lint first: `pnpm lint && npx playwright test`
 - Use `GamePage` helpers and shared fixture (`import { test, expect } from './fixtures'`)
 - Never use `waitForTimeout()` — use `waitForFrames()`, `waitForReady()`, etc.
 - **CRITICAL: Never use `--reporter=line`** — it suppresses stdout and hides the WaitProfiler output. Use `--reporter=list` instead.

@@ -22,7 +22,6 @@ Create a git commit for the current changes.
 2. Stage files:
    - **If `all` option**: `git add -A` (but warn if .env or credential files would be included)
    - **Otherwise**: Stage only files related to the current work. If there are already staged changes, respect that staging. Prefer staging specific files by name.
-   - NEVER stage files that likely contain secrets (.env, credentials.json, etc.) — warn the user instead.
 
 3. Draft the commit message:
    - Analyze the staged diff to write an appropriate message
@@ -55,4 +54,5 @@ Create a git commit for the current changes.
 - NEVER use --no-verify or skip hooks
 - NEVER update git config
 - If pre-commit hook fails, fix the issue and create a NEW commit
+- If lint found warnings not related to your changes, also fix them if they are minor.
 - If there are no changes to commit, say so and stop

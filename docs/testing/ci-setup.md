@@ -310,7 +310,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Build
-        run: pnpm build
+        run: pnpm build:full
 
       - name: Run E2E tests
         run: npx playwright test --reporter=list
@@ -335,7 +335,7 @@ services:
         mkdir -p /tmp/playwright &&
         pnpm install --ignore-scripts &&
         npx playwright install --with-deps chromium &&
-        pnpm build &&
+        pnpm build:full &&
         npx playwright test --reporter=list
       "
 ```
@@ -376,7 +376,7 @@ npx playwright install --dry-run chromium 2>/dev/null && echo "YES" || echo "NO 
 
 # Check build
 echo -n "Build exists: "
-[ -d "dist" ] && echo "YES" || echo "NO - run: pnpm build"
+[ -d "dist" ] && echo "YES" || echo "NO - run: pnpm build:full"
 
 # Check WebGL (requires running browser)
 echo ""

@@ -974,7 +974,7 @@ REQUIREMENTS:
 
 VERIFY:
 - Run pnpm test:unit to ensure all tests pass
-- Run pnpm build to ensure no type errors
+- Run pnpm lint to ensure no type errors
 - No circular dependencies (run pnpm analyze:circular)
 ```
 
@@ -1226,7 +1226,7 @@ REQUIREMENTS:
 
 RUN FULL TEST SUITE:
 - pnpm test:unit
-- pnpm build && npx playwright test
+- pnpm lint && npx playwright test
 - Manual playtest in browser
 
 KNOWN ISSUES TO DOCUMENT:

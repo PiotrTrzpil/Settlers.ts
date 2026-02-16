@@ -1,26 +1,31 @@
 import { defineConfig } from 'vitest/config';
 import vue from '@vitejs/plugin-vue';
 import glsl from 'vite-plugin-glsl';
-import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { resolve } from 'path';
 
 // Only include polyfills in browser builds, not in test environment
 const isTest = process.env.VITEST === 'true';
+// Fast build skips fengari/node-polyfills (incompatible with rolldown-vite)
+const isFastBuild = process.env.FAST_BUILD === '1';
 
-export default defineConfig({
-    plugins: [
-        vue(),
-        glsl(),
-        // Polyfill Node.js core modules for browser (required by fengari Lua VM)
-        // Disabled in test mode to allow real Node.js fs/path etc.
-        !isTest && nodePolyfills({
+// Load node polyfills plugin only when needed (full build + non-test)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const plugins: any[] = [vue(), glsl()];
+if (!isTest && !isFastBuild) {
+    const { nodePolyfills } = await import('vite-plugin-node-polyfills');
+    plugins.push(
+        nodePolyfills({
             globals: {
                 process: true,
                 Buffer: true,
                 global: true,
             },
-        }),
-    ].filter(Boolean),
+        })
+    );
+}
+
+export default defineConfig({
+    plugins,
     define: {
         // Build timestamp for cache invalidation on server restart
         __BUILD_TIME__: JSON.stringify(Date.now().toString()),
@@ -28,7 +33,16 @@ export default defineConfig({
     resolve: {
         alias: {
             '@': resolve(__dirname, 'src'),
-        }
+        },
+    },
+    build: {
+        // Skip gzip size computation in fast builds (saves ~1-2s)
+        reportCompressedSize: !isFastBuild,
+        rollupOptions: {
+            // In fast builds, externalize fengari so the dynamic import fails gracefully
+            // (game.ts already catches this and disables Lua scripting)
+            external: isFastBuild ? ['fengari', 'fengari-interop'] : [],
+        },
     },
     server: {
         port: 5173,
@@ -50,5 +64,5 @@ export default defineConfig({
         teardownTimeout: 5000,
         // Force exit after tests complete (helps with stale processes)
         passWithNoTests: true,
-    }
+    },
 });

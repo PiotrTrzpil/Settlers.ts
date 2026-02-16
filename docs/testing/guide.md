@@ -1021,8 +1021,8 @@ pnpm test:unit              # All unit tests
 pnpm test:unit path/to/test # Specific test file
 pnpm test:watch             # Watch mode
 
-pnpm build                  # Must rebuild before e2e tests
-npx playwright test         # E2E tests (uses built dist)
+pnpm lint                   # Type-check + ESLint before e2e tests
+npx playwright test         # E2E tests (uses dev server locally, build in CI)
 npx playwright test --headed -g "test name"  # Run specific test visually
 npx playwright test building-placement.spec.ts  # Run specific file
 

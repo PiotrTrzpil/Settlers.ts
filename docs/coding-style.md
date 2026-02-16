@@ -79,7 +79,7 @@ const x = map.get(id)!  // or getEntityOrThrow(id, 'context')
 ### Testing
 
 - Vitest for unit tests, Playwright for e2e
-- Always rebuild before e2e: `pnpm build && npx playwright test`
+- Always lint before e2e: `pnpm lint && npx playwright test`
 - Use page objects (`GamePage`) for e2e navigation and assertions
 - Never use `waitForTimeout()` — use semantic waiters (`waitForFrames()`, `waitForReady()`)
 
