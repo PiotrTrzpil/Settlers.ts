@@ -1,5 +1,6 @@
 import { GameState } from './game-state';
 import { WoodcuttingSystem } from './systems/woodcutting-system';
+import { StonecuttingSystem } from './systems/stonecutting-system';
 import { SettlerTaskSystem } from './systems/settler-tasks';
 import { MaterialRequestSystem } from './systems/production-system';
 import { LogHandler } from '@/utilities/log-handler';
@@ -126,6 +127,9 @@ export class GameLoop {
     /** Woodcutting domain system - work handler for tree cutting */
     public readonly woodcuttingSystem: WoodcuttingSystem;
 
+    /** Stonecutting domain system - work handler for stone mining */
+    public readonly stonecuttingSystem: StonecuttingSystem;
+
     /** Inventory visualizer - syncs building outputs to visual stacked resources */
     public readonly inventoryVisualizer: InventoryVisualizer;
 
@@ -243,8 +247,10 @@ export class GameLoop {
         // Wire up carrier system to settler task system
         this.carrierSystem.setSettlerTaskSystem(this.settlerTaskSystem);
 
-        // 7. Woodcutting domain — registers work handler with task system
+        // 7. Domain systems — register work handlers with task system
         this.woodcuttingSystem = new WoodcuttingSystem(gameState, this.treeSystem, this.settlerTaskSystem);
+        this.stonecuttingSystem = new StonecuttingSystem(gameState, this.settlerTaskSystem);
+        this.treeSystem.registerForesterHandler(this.settlerTaskSystem);
 
         // 8. Material request system — creates transport requests for buildings needing input materials
         this.materialRequestSystem = new MaterialRequestSystem({
@@ -370,11 +376,11 @@ export class GameLoop {
         // Clean up service area if this building had one
         this.serviceAreaManager.removeServiceArea(entityId);
 
-        // Clean up inventory if this building had one
-        this.inventoryManager.removeInventory(entityId);
-
-        // Clean up logistics state (requests to/from this building, reservations)
+        // Clean up logistics state first (releasing reservations needs the inventory)
         this.logisticsDispatcher.handleBuildingDestroyed(entityId);
+
+        // Clean up inventory after logistics is done with it
+        this.inventoryManager.removeInventory(entityId);
 
         // Clean up visual inventory stacks
         this.inventoryVisualizer.removeBuilding(entityId);

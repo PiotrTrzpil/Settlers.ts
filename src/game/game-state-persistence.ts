@@ -14,7 +14,7 @@ import { type RequestPriority, RequestStatus } from './features/logistics/resour
 const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
-const SNAPSHOT_VERSION = 4; // Bumped for carrier/tree/request/production state
+const SNAPSHOT_VERSION = 5; // Bumped for terrain persistence
 
 /**
  * Serialized building construction state.
@@ -128,6 +128,10 @@ export interface GameStateSnapshot {
     requests?: SerializedRequest[];
     /** Production cycle progress per building */
     productions?: SerializedProduction[];
+    /** Modified terrain ground types (base64-encoded Uint8Array) */
+    terrainGroundType?: string;
+    /** Modified terrain ground heights (base64-encoded Uint8Array) */
+    terrainGroundHeight?: string;
 }
 
 /** Current map identifier for save/load matching */
@@ -138,6 +142,25 @@ let currentMapId: string = '';
  */
 export function setCurrentMapId(mapId: string): void {
     currentMapId = mapId;
+}
+
+// === Base64 encoding for typed arrays ===
+
+function uint8ArrayToBase64(arr: Uint8Array): string {
+    let binary = '';
+    for (let i = 0; i < arr.length; i++) {
+        binary += String.fromCharCode(arr[i]);
+    }
+    return btoa(binary);
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+    const binary = atob(base64);
+    const arr = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        arr[i] = binary.charCodeAt(i);
+    }
+    return arr;
 }
 
 // === Serialization Helpers ===
@@ -277,6 +300,8 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         trees,
         requests: serializeRequests(game),
         productions,
+        terrainGroundType: uint8ArrayToBase64(game.groundType),
+        terrainGroundHeight: uint8ArrayToBase64(game.groundHeight),
     };
 }
 
@@ -486,6 +511,19 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
 
     // Recreate entities with their per-entity state overrides
     restoreEntities(game, snapshot);
+
+    // Restore terrain modifications (raw ground, leveling)
+    if (snapshot.terrainGroundType) {
+        const restored = base64ToUint8Array(snapshot.terrainGroundType);
+        game.groundType.set(restored);
+    }
+    if (snapshot.terrainGroundHeight) {
+        const restored = base64ToUint8Array(snapshot.terrainGroundHeight);
+        game.groundHeight.set(restored);
+    }
+    if (snapshot.terrainGroundType || snapshot.terrainGroundHeight) {
+        game.eventBus.emit('terrain:modified', {});
+    }
 
     // Restore feature state
     restoreResourceQuantities(game, snapshot);
