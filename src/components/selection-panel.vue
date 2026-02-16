@@ -407,10 +407,12 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
                 : 0;
     }
 
-    // Material request info
-    const production = entity.production;
-    const hasProduction = production !== undefined;
-    const pendingInputs = production ? [...production.pendingRequests].map(m => EMaterialType[m] ?? `#${m}`) : [];
+    // Material request info - derive from RequestManager (source of truth)
+    const activeRequests = requests.filter(
+        r => r.status !== RequestStatus.Fulfilled && r.status !== RequestStatus.Cancelled
+    );
+    const hasProduction = activeRequests.length > 0 || inventory !== undefined;
+    const pendingInputs = activeRequests.map(r => EMaterialType[r.materialType] ?? `#${r.materialType}`);
 
     // Inventory info
     const hasInventory = inventory !== undefined;

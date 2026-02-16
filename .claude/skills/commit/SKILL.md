@@ -21,7 +21,7 @@ Create a git commit for the current changes.
    - See if there are some files that perhaps should be gitignored and do it first in that case.
 
 2. Stage files:
-   - **If `all` option**: `git add -A` (but warn if .env or credential files would be included)
+   - **If `all` option**: try briefly to decide if the work should be commited in 1 or 2 or 3 commits (if very big) - try to distinguish changes semantically, but best-effort.
    - **Otherwise**: Stage only files related to the current work. If there are already staged changes, respect that staging. Prefer staging specific files by name.
 
 3. Draft the commit message:

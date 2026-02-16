@@ -5,7 +5,7 @@
  * This system's only job is to ensure buildings request materials when their
  * input slots are running low.
  *
- * State is stored on entity.production (RFC: Entity-Owned State).
+ * Active request tracking is delegated to the RequestManager (single source of truth).
  */
 
 import type { TickSystem } from '../tick-system';
@@ -22,18 +22,6 @@ const log = new LogHandler('MaterialRequestSystem');
 /** Minimum input threshold before requesting more materials */
 const REQUEST_THRESHOLD = 4;
 
-/**
- * Material request tracking state for a building.
- * Stored on entity.production (RFC: Entity-Owned State).
- */
-export interface MaterialRequestState {
-    /** Whether we have active requests for each input slot */
-    pendingRequests: Set<EMaterialType>;
-}
-
-/** @deprecated Use MaterialRequestState instead */
-export type ProductionState = MaterialRequestState;
-
 /** Configuration for MaterialRequestSystem dependencies */
 export interface MaterialRequestSystemConfig {
     gameState: GameState;
@@ -41,9 +29,6 @@ export interface MaterialRequestSystemConfig {
     inventoryManager: BuildingInventoryManager;
     requestManager: RequestManager;
 }
-
-/** @deprecated Use MaterialRequestSystemConfig instead */
-export type ProductionSystemConfig = MaterialRequestSystemConfig;
 
 /**
  * System that creates material transport requests for buildings with input slots.
@@ -80,13 +65,7 @@ export class MaterialRequestSystem implements TickSystem {
         }
     }
 
-    private requestMaterials(entity: { id: number; production?: MaterialRequestState }, config: InventoryConfig): void {
-        // Get or create request tracking state on entity (RFC: Entity-Owned State)
-        if (!entity.production) {
-            entity.production = { pendingRequests: new Set() };
-        }
-        const state = entity.production;
-
+    private requestMaterials(entity: { id: number }, config: InventoryConfig): void {
         // Buildings with input slots MUST have inventories by design
         const inventory = this.inventoryManager.getInventory(entity.id);
         if (!inventory) {
@@ -96,20 +75,17 @@ export class MaterialRequestSystem implements TickSystem {
         for (const inputSlot of config.inputSlots) {
             const currentAmount = this.inventoryManager.getInputAmount(entity.id, inputSlot.materialType);
 
-            // Request more if below threshold and no pending request
-            if (currentAmount < REQUEST_THRESHOLD && !state.pendingRequests.has(inputSlot.materialType)) {
+            // Request more if below threshold and no active request in the RequestManager
+            if (currentAmount < REQUEST_THRESHOLD && !this.hasActiveRequest(entity.id, inputSlot.materialType)) {
                 this.requestManager.addRequest(entity.id, inputSlot.materialType, 1, RequestPriority.Normal);
-                state.pendingRequests.add(inputSlot.materialType);
                 log.debug(`Building ${entity.id} requested ${EMaterialType[inputSlot.materialType]}`);
-            }
-
-            // Clear pending flag if we received material
-            if (currentAmount >= REQUEST_THRESHOLD) {
-                state.pendingRequests.delete(inputSlot.materialType);
             }
         }
     }
-}
 
-/** @deprecated Use MaterialRequestSystem instead */
-export const ProductionSystem = MaterialRequestSystem;
+    /** Check if there's already an active (pending or in-progress) request for this building+material */
+    private hasActiveRequest(buildingId: number, materialType: EMaterialType): boolean {
+        const requests = this.requestManager.getRequestsForBuilding(buildingId);
+        return requests.some(r => r.materialType === materialType);
+    }
+}

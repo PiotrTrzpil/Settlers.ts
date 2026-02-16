@@ -123,5 +123,44 @@ describe('MaterialRequestSystem', () => {
             const pending = ctx.requestManager.getPendingRequests();
             expect(pending.length).toBe(1);
         });
+
+        it('should create a new request after previous one is fulfilled', () => {
+            const sawmill = addBuildingWithInventory(ctx, 10, 10, BuildingType.Sawmill);
+            completeBuilding(sawmill.id);
+
+            // First tick creates the initial request
+            system.tick();
+            const firstPending = ctx.requestManager.getPendingRequests();
+            expect(firstPending.length).toBe(1);
+            const firstRequest = firstPending[0];
+
+            // Simulate carrier picking up and delivering: assign then fulfill
+            ctx.requestManager.assignRequest(firstRequest.id, 999, 888);
+            ctx.inventoryManager.depositInput(sawmill.id, EMaterialType.LOG, 1);
+            ctx.requestManager.fulfillRequest(firstRequest.id);
+
+            // After fulfillment, input has 1 LOG (still below threshold of 4)
+            expect(ctx.inventoryManager.getInputAmount(sawmill.id, EMaterialType.LOG)).toBe(1);
+
+            // Next tick should create a new request since input is still low
+            system.tick();
+            const newPending = ctx.requestManager.getPendingRequests();
+            expect(newPending.length).toBe(1);
+            expect(newPending[0].materialType).toBe(EMaterialType.LOG);
+            expect(newPending[0].id).not.toBe(firstRequest.id);
+        });
+
+        it('should stop requesting when input reaches threshold', () => {
+            const sawmill = addBuildingWithInventory(ctx, 10, 10, BuildingType.Sawmill);
+            completeBuilding(sawmill.id);
+
+            // Fill input to threshold (4)
+            ctx.inventoryManager.depositInput(sawmill.id, EMaterialType.LOG, 4);
+
+            system.tick();
+
+            const pending = ctx.requestManager.getPendingRequests();
+            expect(pending.length).toBe(0);
+        });
     });
 });

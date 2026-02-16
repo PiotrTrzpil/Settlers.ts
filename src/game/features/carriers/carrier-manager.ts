@@ -392,23 +392,26 @@ export class CarrierManager {
 
     /**
      * Get all carrier states.
+     * Uses the tavern index to avoid scanning all entities.
      * @returns Iterator of all carrier states
      */
     *getAllCarriers(): IterableIterator<CarrierState> {
-        for (const entity of this.entityProvider.entities) {
-            if (entity.carrier) {
-                yield entity.carrier;
+        for (const carrierIds of this.carriersByTavern.values()) {
+            for (const id of carrierIds) {
+                const state = this.entityProvider.getEntity(id)?.carrier;
+                if (state) yield state;
             }
         }
     }
 
     /**
      * Get the number of carriers.
+     * Uses the tavern index to avoid scanning all entities.
      */
     get size(): number {
         let count = 0;
-        for (const entity of this.entityProvider.entities) {
-            if (entity.carrier) count++;
+        for (const carrierIds of this.carriersByTavern.values()) {
+            count += carrierIds.size;
         }
         return count;
     }

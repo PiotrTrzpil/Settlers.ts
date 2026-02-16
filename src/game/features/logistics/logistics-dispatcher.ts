@@ -200,6 +200,10 @@ export class LogisticsDispatcher implements TickSystem {
                 continue;
             }
 
+            // Look up destination building once for both matching and carrier search
+            const destBuilding = this.gameState.getEntityOrThrow(request.buildingId, 'requesting building');
+            const playerId = destBuilding.player;
+
             // Try to match this request to a supply (accounting for already-reserved inventory)
             const match = matchRequestToSupply(
                 request,
@@ -207,7 +211,7 @@ export class LogisticsDispatcher implements TickSystem {
                 this.inventoryManager,
                 this.serviceAreaManager,
                 {
-                    playerId: this.getRequestPlayerId(request.buildingId),
+                    playerId,
                     requireServiceArea: true,
                     reservationManager: this.reservationManager,
                 }
@@ -220,8 +224,9 @@ export class LogisticsDispatcher implements TickSystem {
                 continue; // No supply available for this request
             }
 
-            // Find an available carrier that can serve both buildings
-            const carrier = this.findAvailableCarrier(match.sourceBuilding, request.buildingId);
+            // Find an available carrier from a hub that serves both buildings
+            // Reuse serviceHubs from the match to avoid a duplicate service area scan
+            const carrier = this.findAvailableCarrier(match.serviceHubs, playerId);
             if (!carrier) {
                 if (this.matchDiagnosticDue) {
                     LogisticsDispatcher.log.warn(
@@ -269,66 +274,33 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
-     * Find an available carrier that can serve both source and destination buildings.
-     * The carrier must belong to a hub whose service area covers both buildings.
+     * Find an available carrier from the given service hubs.
+     * Uses per-hub carrier lookup instead of scanning all carriers.
+     *
+     * @param serviceHubs Hub building IDs whose service areas cover both source and dest
+     * @param playerId Player who owns the requesting building
      */
-    private findAvailableCarrier(sourceBuildingId: number, destBuildingId: number): { entityId: number } | null {
-        const sourceBuilding = this.gameState.getEntity(sourceBuildingId);
-        const destBuilding = this.gameState.getEntity(destBuildingId);
-
-        if (!sourceBuilding || !destBuilding) {
+    private findAvailableCarrier(serviceHubs: number[], playerId: number): { entityId: number } | null {
+        if (serviceHubs.length === 0) {
             return null;
         }
 
-        // Get player from destination building (the one requesting)
-        const playerId = destBuilding.player;
-
-        // Find hubs (taverns/warehouses) whose service areas cover both buildings
-        const validHubs = new Set(
-            getHubsServingBothPositions(
-                sourceBuilding.x,
-                sourceBuilding.y,
-                destBuilding.x,
-                destBuilding.y,
-                this.serviceAreaManager,
-                { playerId }
-            )
-        );
-
-        if (validHubs.size === 0) {
-            return null;
-        }
-
-        // Find an available carrier whose home is one of the valid hubs
-        for (const carrier of this.carrierManager.getAllCarriers()) {
-            // Carrier's home must be a hub that serves both buildings
-            if (!validHubs.has(carrier.homeBuilding)) {
+        // Iterate only carriers in the valid hubs (much smaller than all carriers)
+        for (const hubId of serviceHubs) {
+            // Verify hub belongs to the right player
+            const hubEntity = this.gameState.getEntity(hubId);
+            if (!hubEntity || hubEntity.player !== playerId) {
                 continue;
             }
 
-            // Must be able to accept new jobs (idle, not exhausted/collapsed)
-            if (!this.carrierManager.canAssignJobTo(carrier.entityId)) {
-                continue;
+            for (const carrier of this.carrierManager.getCarriersForTavern(hubId)) {
+                if (this.carrierManager.canAssignJobTo(carrier.entityId)) {
+                    return { entityId: carrier.entityId };
+                }
             }
-
-            // Verify home building belongs to the right player
-            const homeBuilding = this.gameState.getEntity(carrier.homeBuilding);
-            if (!homeBuilding || homeBuilding.player !== playerId) {
-                continue;
-            }
-
-            return { entityId: carrier.entityId };
         }
 
         return null;
-    }
-
-    /**
-     * Get the player ID for a building's request.
-     */
-    private getRequestPlayerId(buildingId: number): number {
-        // Building MUST exist - we have an active request for it
-        return this.gameState.getEntityOrThrow(buildingId, 'requesting building').player;
     }
 
     /**

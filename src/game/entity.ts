@@ -10,11 +10,6 @@
 /** Tree growth/cutting state - see TreeSystem */
 export type { TreeState, TreeStage } from './systems/tree-system';
 
-/** Material request tracking state - see MaterialRequestSystem */
-export type { MaterialRequestState } from './systems/production-system';
-/** @deprecated Use MaterialRequestState instead */
-export type { ProductionState } from './systems/production-system';
-
 /** Building construction state - see BuildingStateManager */
 export type { BuildingState } from './features/building-construction/types';
 
@@ -100,12 +95,6 @@ export interface Entity {
      * Only present for MapObject entities that are trees.
      */
     tree?: import('./systems/tree-system').TreeState;
-
-    /**
-     * Production cycle state.
-     * Only present for buildings that produce goods.
-     */
-    production?: import('./systems/production-system').ProductionState;
 
     /**
      * Building construction state.

@@ -119,15 +119,7 @@ export { TreeStage, type TreeState, TreeSystem } from './tree-system';
 // ============================================================================
 // Material Request System (formerly Production System)
 // ============================================================================
-export {
-    type MaterialRequestState,
-    type MaterialRequestSystemConfig,
-    MaterialRequestSystem,
-    // Deprecated aliases
-    type ProductionState,
-    type ProductionSystemConfig,
-    ProductionSystem,
-} from './production-system';
+export { type MaterialRequestSystemConfig, MaterialRequestSystem } from './production-system';
 
 // ============================================================================
 // Domain Systems (work handlers for SettlerTaskSystem)

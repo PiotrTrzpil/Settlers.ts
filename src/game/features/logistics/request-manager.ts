@@ -40,9 +40,7 @@ export interface RequestManagerEvents {
 /**
  * Callback type for request event listeners.
  */
-export type RequestEventListener<K extends keyof RequestManagerEvents> = (
-    data: RequestManagerEvents[K]
-) => void;
+export type RequestEventListener<K extends keyof RequestManagerEvents> = (data: RequestManagerEvents[K]) => void;
 
 /**
  * Manages resource requests from buildings.
@@ -56,6 +54,13 @@ export class RequestManager {
 
     /** Next request ID */
     private nextId = 1;
+
+    /** Cached sorted pending requests list */
+    private pendingCache: ResourceRequest[] = [];
+
+    /** Whether the pending cache needs to be rebuilt.
+     * Set to true by invalidatePendingCache() when requests are mutated. */
+    private pendingCacheDirty = true;
 
     /** Event listeners */
     private listeners: {
@@ -75,17 +80,12 @@ export class RequestManager {
         buildingId: number,
         materialType: EMaterialType,
         amount: number,
-        priority: RequestPriority = RequestPriority.Normal,
+        priority: RequestPriority = RequestPriority.Normal
     ): ResourceRequest {
-        const request = createResourceRequest(
-            this.nextId++,
-            buildingId,
-            materialType,
-            amount,
-            priority,
-        );
+        const request = createResourceRequest(this.nextId++, buildingId, materialType, amount, priority);
 
         this.requests.set(request.id, request);
+        this.invalidatePendingCache();
         this.emit('requestAdded', { request });
 
         return request;
@@ -107,6 +107,7 @@ export class RequestManager {
         }
 
         this.requests.delete(requestId);
+        this.invalidatePendingCache();
         this.emit('requestRemoved', { requestId });
 
         return true;
@@ -143,22 +144,25 @@ export class RequestManager {
 
     /**
      * Get all pending requests sorted by priority and timestamp.
+     * Results are cached and only rebuilt when requests change.
      *
      * @returns Array of pending requests, sorted by priority then timestamp
      */
     getPendingRequests(): ResourceRequest[] {
-        const pending: ResourceRequest[] = [];
+        if (this.pendingCacheDirty) {
+            this.pendingCache.length = 0;
 
-        for (const request of this.requests.values()) {
-            if (canAssignRequest(request)) {
-                pending.push(request);
+            for (const request of this.requests.values()) {
+                if (canAssignRequest(request)) {
+                    this.pendingCache.push(request);
+                }
             }
+
+            this.pendingCache.sort(compareRequests);
+            this.pendingCacheDirty = false;
         }
 
-        // Sort by priority (ascending) then timestamp (ascending)
-        pending.sort(compareRequests);
-
-        return pending;
+        return this.pendingCache;
     }
 
     /**
@@ -186,11 +190,7 @@ export class RequestManager {
      * @param carrierId Entity ID of the carrier fulfilling the request
      * @returns True if the request was assigned
      */
-    assignRequest(
-        requestId: number,
-        sourceBuilding: number,
-        carrierId: number,
-    ): boolean {
+    assignRequest(requestId: number, sourceBuilding: number, carrierId: number): boolean {
         const request = this.requests.get(requestId);
         if (!request || !canAssignRequest(request)) return false;
 
@@ -198,6 +198,7 @@ export class RequestManager {
         request.assignedCarrier = carrierId;
         request.sourceBuilding = sourceBuilding;
         request.assignedAt = Date.now();
+        this.invalidatePendingCache();
 
         this.emit('requestAssigned', { request, carrierId, sourceBuilding });
 
@@ -217,6 +218,7 @@ export class RequestManager {
         if (request.status !== RequestStatus.InProgress) return false;
 
         request.status = RequestStatus.Fulfilled;
+        this.invalidatePendingCache();
         this.emit('requestFulfilled', { request });
 
         // Remove fulfilled requests to prevent memory buildup
@@ -277,6 +279,7 @@ export class RequestManager {
             }
         }
 
+        if (count > 0) this.invalidatePendingCache();
         return count;
     }
 
@@ -312,6 +315,7 @@ export class RequestManager {
             }
         }
 
+        if (count > 0) this.invalidatePendingCache();
         return count;
     }
 
@@ -332,6 +336,7 @@ export class RequestManager {
         request.assignedCarrier = null;
         request.sourceBuilding = null;
         request.assignedAt = null;
+        this.invalidatePendingCache();
         this.emit('requestReset', { request, reason });
 
         return true;
@@ -428,6 +433,7 @@ export class RequestManager {
         if (request.status !== RequestStatus.Pending) return false;
 
         request.priority = priority;
+        this.invalidatePendingCache();
         return true;
     }
 
@@ -456,6 +462,7 @@ export class RequestManager {
     clear(): void {
         const ids = Array.from(this.requests.keys());
         this.requests.clear();
+        this.invalidatePendingCache();
         this.nextId = 1;
         for (const id of ids) {
             this.emit('requestRemoved', { requestId: id });
@@ -498,6 +505,7 @@ export class RequestManager {
             assignedAt: data.assignedAt,
         };
         this.requests.set(data.id, request);
+        this.invalidatePendingCache();
 
         // Update nextId to avoid collisions
         if (data.id >= this.nextId) {
@@ -505,15 +513,17 @@ export class RequestManager {
         }
     }
 
+    /** Mark the pending cache as needing rebuild on next access. */
+    private invalidatePendingCache(): void {
+        this.pendingCacheDirty = true;
+    }
+
     // === Event System ===
 
     /**
      * Subscribe to a request event.
      */
-    on<K extends keyof RequestManagerEvents>(
-        event: K,
-        listener: RequestEventListener<K>,
-    ): void {
+    on<K extends keyof RequestManagerEvents>(event: K, listener: RequestEventListener<K>): void {
         if (!this.listeners[event]) {
             this.listeners[event] = new Set() as any;
         }
@@ -523,10 +533,7 @@ export class RequestManager {
     /**
      * Unsubscribe from a request event.
      */
-    off<K extends keyof RequestManagerEvents>(
-        event: K,
-        listener: RequestEventListener<K>,
-    ): void {
+    off<K extends keyof RequestManagerEvents>(event: K, listener: RequestEventListener<K>): void {
         const listeners = this.listeners[event] as Set<RequestEventListener<K>> | undefined;
         if (listeners) {
             listeners.delete(listener);
@@ -536,10 +543,7 @@ export class RequestManager {
     /**
      * Emit a request event.
      */
-    private emit<K extends keyof RequestManagerEvents>(
-        event: K,
-        data: RequestManagerEvents[K],
-    ): void {
+    private emit<K extends keyof RequestManagerEvents>(event: K, data: RequestManagerEvents[K]): void {
         const listeners = this.listeners[event] as Set<RequestEventListener<K>> | undefined;
         if (listeners) {
             for (const listener of listeners) {
