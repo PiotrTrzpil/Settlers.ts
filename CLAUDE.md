@@ -48,6 +48,8 @@ Test maps and procedural textures work without game files.
 ## Notes
 
 - **Linting**: ESLint 9 flat config (`eslint.config.mjs`) with `typescript-eslint` v8, `eslint-plugin-vue` v10, and `eslint-plugin-import-x`.
+- **Line length**: max 140 chars (TS), 150 chars (Vue). URLs, strings, and template literals are exempt.
+- **Complexity**: max cyclomatic complexity 15 per function. Extract helpers to stay under the limit.
 - **Formatting**: Prettier (`.prettierrc`). Runs automatically via lint-staged on commit.
 - Playwright `outputDir` writes to `tests/e2e/.results/` (gitignored).
 - Screenshot baselines live in `tests/e2e/__screenshots__/` and are committed.

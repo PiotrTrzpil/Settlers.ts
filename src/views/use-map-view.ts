@@ -386,7 +386,7 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
                 game.value = createTestGame(fm);
 
                 // Save initial state BEFORE checking for saved game state
-                saveInitialState(game.value.state, game.value.gameLoop.buildingStateManager);
+                saveInitialState(game.value);
 
                 // Try to restore saved game state for test map too
                 const snapshot = loadSnapshot();
@@ -398,7 +398,7 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
                 }
 
                 // Start auto-saving (won't save initial state again since we already did)
-                gameStatePersistence.start(game.value.state, game.value.gameLoop.buildingStateManager);
+                gameStatePersistence.start(game.value);
                 return true;
             }
 
@@ -423,7 +423,7 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
             setCurrentMapId(file.name);
 
             // Save initial state BEFORE checking for saved game state
-            saveInitialState(result.game.state, result.game.gameLoop.buildingStateManager);
+            saveInitialState(result.game);
 
             // Try to restore saved game state (only restores if same map)
             const snapshot = loadSnapshot();
@@ -435,7 +435,7 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
             }
 
             // Start auto-saving (won't save initial state again since we already did)
-            gameStatePersistence.start(result.game.state, result.game.gameLoop.buildingStateManager);
+            gameStatePersistence.start(result.game);
 
             // Load mission script (non-blocking, only if Lua enabled)
             if (isLuaEnabled()) {
