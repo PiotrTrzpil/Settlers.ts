@@ -1,5 +1,5 @@
 import { TileCoord } from '../../entity';
-import { getApproxDirection, EDirection } from '../hex-directions';
+import { getApproxDirection, EDirection, getStepDistanceFactor } from '../hex-directions';
 
 /**
  * Movement state machine states.
@@ -46,6 +46,9 @@ export class MovementController {
 
     /** Current facing direction (0-5 for hex directions, updated when steps are taken) */
     private _direction: number = EDirection.EAST;
+
+    /** World-space distance factor for the current step (normalizes visual speed across directions) */
+    private _distanceFactor: number = 1.0;
 
     /** Last computed visual position for teleport detection */
     private _lastVisualX = 0;
@@ -197,7 +200,9 @@ export class MovementController {
         const dy = visualAfter.y - visualBefore.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > 0.1) {
-            console.warn(`[MovementController] startPath caused teleport! Entity ${this.entityId} jumped ${dist.toFixed(2)} tiles`);
+            console.warn(
+                `[MovementController] startPath caused teleport! Entity ${this.entityId} jumped ${dist.toFixed(2)} tiles`
+            );
         }
     }
 
@@ -227,7 +232,9 @@ export class MovementController {
         const dy = visualAfter.y - visualBefore.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > 0.1) {
-            console.warn(`[MovementController] redirectPath caused teleport! Entity ${this.entityId} jumped ${dist.toFixed(2)} tiles`);
+            console.warn(
+                `[MovementController] redirectPath caused teleport! Entity ${this.entityId} jumped ${dist.toFixed(2)} tiles`
+            );
         }
     }
 
@@ -253,7 +260,9 @@ export class MovementController {
     advanceProgress(deltaSec: number, maxProgress?: number): number {
         // Only advance if moving or in visual transit
         if (this._state === 'moving' || this.isInTransit) {
-            this._progress += this._speed * deltaSec;
+            // Divide by distance factor so longer world-space steps take proportionally more time,
+            // producing uniform visual speed regardless of hex direction.
+            this._progress += (this._speed * deltaSec) / this._distanceFactor;
 
             // Cap progress to prevent teleporting on large delta times
             if (maxProgress !== undefined && this._progress > maxProgress) {
@@ -299,6 +308,9 @@ export class MovementController {
 
         // Update facing direction based on movement
         this._direction = getApproxDirection(this._prevTileX, this._prevTileY, this._tileX, this._tileY);
+
+        // Update distance factor for this step's world-space distance
+        this._distanceFactor = getStepDistanceFactor(this._tileX - this._prevTileX, this._tileY - this._prevTileY);
 
         // Advance path
         this._pathIndex++;
@@ -383,8 +395,10 @@ export class MovementController {
         // ASSERT: We should not be mid-transit when pushed
         // If we are, log it and handle gracefully
         if (this.isInTransit) {
-            console.warn(`[MovementController] handlePush called mid-transit for entity ${this.entityId}! ` +
-                `Visual pos: (${this._prevTileX},${this._prevTileY}) -> (${this._tileX},${this._tileY}) @ ${this._progress.toFixed(2)}`);
+            console.warn(
+                `[MovementController] handlePush called mid-transit for entity ${this.entityId}! ` +
+                    `Visual pos: (${this._prevTileX},${this._prevTileY}) -> (${this._tileX},${this._tileY}) @ ${this._progress.toFixed(2)}`
+            );
         }
 
         // When not mid-transit, prevTile === currTile, so visual is at currTile
@@ -397,6 +411,9 @@ export class MovementController {
 
         // Update facing direction based on push direction
         this._direction = getApproxDirection(this._prevTileX, this._prevTileY, this._tileX, this._tileY);
+
+        // Update distance factor for this push step
+        this._distanceFactor = getStepDistanceFactor(this._tileX - this._prevTileX, this._tileY - this._prevTileY);
 
         // Set state to moving so the renderer interpolates this forced move
         this._state = 'moving';
@@ -425,5 +442,4 @@ export class MovementController {
         this._path = [...newPath];
         this._pathIndex = 0;
     }
-
 }

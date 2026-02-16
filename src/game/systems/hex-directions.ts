@@ -33,16 +33,16 @@ export const GRID_DELTA_Y: readonly number[] = [-1, 0, 1, 1, 0, -1];
 
 /** Combined [dx, dy] offsets indexed by EDirection */
 export const GRID_DELTAS: ReadonlyArray<readonly [number, number]> = [
-    [1, -1],   // NORTH_EAST
-    [1, 0],    // EAST
-    [0, 1],    // SOUTH_EAST
-    [-1, 1],   // SOUTH_WEST
-    [-1, 0],   // WEST
-    [0, -1],   // NORTH_WEST
+    [1, -1], // NORTH_EAST
+    [1, 0], // EAST
+    [0, 1], // SOUTH_EAST
+    [-1, 1], // SOUTH_WEST
+    [-1, 0], // WEST
+    [0, -1], // NORTH_WEST
 ];
 
 /** Y scale factor for hex grid distance (sqrt(3)/2 * 0.999999) */
-export const Y_SCALE = Math.sqrt(3) / 2 * 0.999999;
+export const Y_SCALE = (Math.sqrt(3) / 2) * 0.999999;
 
 /**
  * Get the next tile position in the given hex direction.
@@ -94,12 +94,7 @@ function getSDominantDirection(q: number, s: number): EDirection {
  * The grid deltas map to cube coordinates (q, r, s) where q=dx, r=dy, s=-(dx+dy).
  * The dominant cube axis determines the direction.
  */
-export function getApproxDirection(
-    fromX: number,
-    fromY: number,
-    toX: number,
-    toY: number,
-): EDirection {
+export function getApproxDirection(fromX: number, fromY: number, toX: number, toY: number): EDirection {
     const q = toX - fromX;
     const r = toY - fromY;
     const s = -(q + r);
@@ -126,7 +121,8 @@ export function getApproxDirection(
  * Positive offset = clockwise, negative = counter-clockwise.
  */
 export function rotateDirection(direction: EDirection, offset: number): EDirection {
-    return (((direction + offset) % NUMBER_OF_DIRECTIONS + NUMBER_OF_DIRECTIONS) % NUMBER_OF_DIRECTIONS) as EDirection;
+    return ((((direction + offset) % NUMBER_OF_DIRECTIONS) + NUMBER_OF_DIRECTIONS) %
+        NUMBER_OF_DIRECTIONS) as EDirection;
 }
 
 /**
@@ -148,7 +144,48 @@ export function hexDistance(x1: number, y1: number, x2: number, y2: number): num
  * Squared hex distance (avoids sqrt, useful for comparisons).
  */
 export function squaredHexDistance(x1: number, y1: number, x2: number, y2: number): number {
-    const dx = (x2 - x1) - (y2 - y1) * 0.5;
+    const dx = x2 - x1 - (y2 - y1) * 0.5;
     const dy = (y2 - y1) * Y_SCALE;
     return dx * dx + dy * dy;
+}
+
+/**
+ * World-space distance for each hex direction.
+ *
+ * Derived from the isometric tile-to-world transform:
+ *   worldDx = tileDx - tileDy * 0.5
+ *   worldDy = tileDy * 0.5
+ *
+ * | Direction   | tileDx,tileDy | worldDx | worldDy | distance |
+ * |-------------|---------------|---------|---------|----------|
+ * | NORTH_EAST  |  (1, -1)      |  1.5    | -0.5    | √2.5    |
+ * | EAST        |  (1,  0)      |  1.0    |  0.0    | 1.0     |
+ * | SOUTH_EAST  |  (0,  1)      | -0.5    |  0.5    | √0.5    |
+ * | SOUTH_WEST  | (-1,  1)      | -1.5    |  0.5    | √2.5    |
+ * | WEST        | (-1,  0)      | -1.0    |  0.0    | 1.0     |
+ * | NORTH_WEST  |  (0, -1)      |  0.5    | -0.5    | √0.5    |
+ *
+ * Used by movement to normalize visual speed across directions.
+ */
+export const WORLD_DISTANCE_PER_DIRECTION: readonly number[] = [
+    Math.sqrt(2.5), // NORTH_EAST
+    1.0, // EAST
+    Math.sqrt(0.5), // SOUTH_EAST
+    Math.sqrt(2.5), // SOUTH_WEST
+    1.0, // WEST
+    Math.sqrt(0.5), // NORTH_WEST
+];
+
+/**
+ * Get the world-space distance factor for a tile step (dx, dy).
+ * Returns the ratio of world-space distance to the baseline (EAST = 1.0).
+ * Falls back to 1.0 for zero or unrecognized steps.
+ */
+export function getStepDistanceFactor(dx: number, dy: number): number {
+    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+        if (GRID_DELTA_X[d] === dx && GRID_DELTA_Y[d] === dy) {
+            return WORLD_DISTANCE_PER_DIRECTION[d];
+        }
+    }
+    return 1.0;
 }

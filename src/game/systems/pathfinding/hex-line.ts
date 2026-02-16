@@ -38,8 +38,8 @@ export function cubeRound(q: number, r: number, s: number): TileCoord {
  * Generate all tiles along a hex grid line from (x1, y1) to (x2, y2).
  *
  * Uses linear interpolation in cube coordinate space, then rounds each
- * point to the nearest hex tile. This produces a smooth line that visits
- * exactly hexDistance(start, end) + 1 tiles.
+ * point to the nearest hex tile, followed by a reorder pass that groups
+ * same-direction steps into runs of 2+ to reduce visual zigzag.
  *
  * @param x1 Start X coordinate
  * @param y1 Start Y coordinate
@@ -58,8 +58,12 @@ export function getHexLine(x1: number, y1: number, x2: number, y2: number): Tile
 
     // Convert offset coordinates to cube coordinates
     // For our hex grid: q = x, r = y, s = -(x + y)
-    const q1 = x1, r1 = y1, s1 = -(x1 + y1);
-    const q2 = x2, r2 = y2, s2 = -(x2 + y2);
+    const q1 = x1,
+        r1 = y1,
+        s1 = -(x1 + y1);
+    const q2 = x2,
+        r2 = y2,
+        s2 = -(x2 + y2);
 
     for (let i = 0; i <= n; i++) {
         const t = i / n;
@@ -73,7 +77,71 @@ export function getHexLine(x1: number, y1: number, x2: number, y2: number): Tile
         results.push(cubeRound(q, r, s));
     }
 
-    return results;
+    return groupDirectionRuns(results);
+}
+
+/**
+ * Reorder tiles in a hex line to create longer same-direction runs.
+ *
+ * The standard cube interpolation distributes direction changes maximally
+ * evenly (e.g. E,SE,E,SE,E,SE). This function swaps adjacent pairs to
+ * create runs of 2 (e.g. E,E,SE,SE,E,SE), which looks more natural.
+ *
+ * Each swap preserves the property that consecutive tiles are hex neighbors,
+ * because swapping two adjacent hex steps (A then B → B then A) always
+ * produces valid hex neighbors (the intermediate tile changes but both
+ * directions are valid hex moves from any tile).
+ */
+export function groupDirectionRuns(tiles: TileCoord[]): TileCoord[] {
+    if (tiles.length <= 3) return tiles;
+
+    // Extract step directions as (dx, dy) pairs
+    const n = tiles.length - 1;
+    const dirs: Array<{ dx: number; dy: number }> = [];
+    for (let i = 0; i < n; i++) {
+        dirs.push({
+            dx: tiles[i + 1].x - tiles[i].x,
+            dy: tiles[i + 1].y - tiles[i].y,
+        });
+    }
+
+    // Single pass: swap adjacent steps to extend runs.
+    // Pattern: if we see X, Y, X (singleton Y between two X's),
+    // swap Y and the second X to get X, X, Y — extending the X run.
+    // Skip the swap if it would create a run of 3+ (keep runs at ~2).
+    let i = 0;
+    while (i < dirs.length - 2) {
+        const curr = dirs[i];
+        const next = dirs[i + 1];
+        const after = dirs[i + 2];
+
+        if (curr.dx === after.dx && curr.dy === after.dy && (curr.dx !== next.dx || curr.dy !== next.dy)) {
+            // Would this create a run of 3+? Check if previous step is same direction.
+            if (i > 0 && dirs[i - 1].dx === after.dx && dirs[i - 1].dy === after.dy) {
+                i++;
+                continue;
+            }
+
+            // Swap: [i+1] and [i+2]
+            dirs[i + 1] = after;
+            dirs[i + 2] = next;
+            i += 3; // Skip past the created run
+        } else {
+            i++;
+        }
+    }
+
+    // Rebuild tile coordinates from directions
+    const result: TileCoord[] = [tiles[0]];
+    let x = tiles[0].x;
+    let y = tiles[0].y;
+    for (const dir of dirs) {
+        x += dir.dx;
+        y += dir.dy;
+        result.push({ x, y });
+    }
+
+    return result;
 }
 
 /**
@@ -87,8 +155,10 @@ export function getHexLine(x1: number, y1: number, x2: number, y2: number): Tile
  * @returns true if all tiles along the line are passable
  */
 export function isHexLinePassable(
-    startX: number, startY: number,
-    endX: number, endY: number,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
     isPassableFn: (x: number, y: number) => boolean
 ): boolean {
     const tiles = getHexLine(startX, startY, endX, endY);

@@ -19,7 +19,7 @@ export { findPathAStar, type TerrainData } from './astar';
 export { BucketPriorityQueue } from './bucket-priority-queue';
 
 // Hex line utilities
-export { getHexLine, cubeRound, isHexLinePassable } from './hex-line';
+export { getHexLine, cubeRound, isHexLinePassable, groupDirectionRuns } from './hex-line';
 
 // Path post-processing
 export { smoothPath, type PathSmoothingParams } from './path-smoothing';
@@ -62,14 +62,8 @@ export function findPath(
         groundType,
         groundHeight,
         mapWidth,
-        mapHeight
+        mapHeight,
     };
 
-    return findPathAStar(
-        startX, startY,
-        goalX, goalY,
-        terrain,
-        tileOccupancy,
-        ignoreOccupancy
-    );
+    return findPathAStar(startX, startY, goalX, goalY, terrain, tileOccupancy, ignoreOccupancy);
 }
