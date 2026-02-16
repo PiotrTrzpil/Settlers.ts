@@ -115,11 +115,7 @@ export class GamePage {
      * Instrumented wrapper for any async wait operation.
      * @param label - Format: "category:method:condition"
      */
-    private async _profiledWait<T>(
-        label: string,
-        timeout: number,
-        fn: () => Promise<T>
-    ): Promise<T> {
+    private async _profiledWait<T>(label: string, timeout: number, fn: () => Promise<T>): Promise<T> {
         if (!WaitProfiler.isEnabled()) {
             return fn();
         }
@@ -164,9 +160,7 @@ export class GamePage {
 
     /** Wait until the game UI is mounted in the DOM. */
     async waitForGameUi(timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
-        await this._profiledWait('dom:waitForGameUi:game UI visible', timeout, () =>
-            this.gameUi.waitFor({ timeout })
-        );
+        await this._profiledWait('dom:waitForGameUi:game UI visible', timeout, () => this.gameUi.waitFor({ timeout }));
     }
 
     /**
@@ -185,34 +179,40 @@ export class GamePage {
      *   - Frames.ANIMATION_SETTLE (10) - animation state changes
      *   - Frames.VISUAL_STABLE (15) - screenshot comparisons
      */
-    async waitForFrames(minFrames: number = Frames.RENDER_SETTLE, timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
-        await this._profiledWait(
-            `frame:waitForFrames:${minFrames} frames`,
-            timeout,
-            () => this.page.evaluate(({ n, timeoutMs }) => {
-                return new Promise<void>((resolve, reject) => {
-                    const debug = (window as any).__settlers_debug__;
-                    const startFrame = debug?.frameCount ?? 0;
-                    const targetFrame = startFrame + n;
-                    const deadline = Date.now() + timeoutMs;
+    async waitForFrames(
+        minFrames: number = Frames.RENDER_SETTLE,
+        timeout: number = Timeout.INITIAL_LOAD
+    ): Promise<void> {
+        await this._profiledWait(`frame:waitForFrames:${minFrames} frames`, timeout, () =>
+            this.page.evaluate(
+                ({ n, timeoutMs }) => {
+                    return new Promise<void>((resolve, reject) => {
+                        const debug = (window as any).__settlers_debug__;
+                        const startFrame = debug?.frameCount ?? 0;
+                        const targetFrame = startFrame + n;
+                        const deadline = Date.now() + timeoutMs;
 
-                    function checkFrame() {
-                        const currentFrame = (window as any).__settlers_debug__?.frameCount ?? 0;
-                        if (currentFrame >= targetFrame) {
-                            resolve();
-                        } else if (Date.now() > deadline) {
-                            reject(new Error(
-                                `Timeout waiting for ${n} frames: got ${currentFrame - startFrame}/${n} ` +
-                                `(start=${startFrame}, current=${currentFrame}, target=${targetFrame})`
-                            ));
-                        } else {
-                            requestAnimationFrame(checkFrame);
+                        function checkFrame() {
+                            const currentFrame = (window as any).__settlers_debug__?.frameCount ?? 0;
+                            if (currentFrame >= targetFrame) {
+                                resolve();
+                            } else if (Date.now() > deadline) {
+                                reject(
+                                    new Error(
+                                        `Timeout waiting for ${n} frames: got ${currentFrame - startFrame}/${n} ` +
+                                            `(start=${startFrame}, current=${currentFrame}, target=${targetFrame})`
+                                    )
+                                );
+                            } else {
+                                requestAnimationFrame(checkFrame);
+                            }
                         }
-                    }
-                    // Start checking on next frame
-                    requestAnimationFrame(checkFrame);
-                });
-            }, { n: minFrames, timeoutMs: timeout })
+                        // Start checking on next frame
+                        requestAnimationFrame(checkFrame);
+                    });
+                },
+                { n: minFrames, timeoutMs: timeout }
+            )
         );
     }
 
@@ -229,56 +229,62 @@ export class GamePage {
      * 2. By the time gameLoaded && rendererReady is true, the DOM is ready
      * 3. JS-based polling is faster than DOM element polling (~2s savings)
      */
-    async waitForReady(minFrames: number = Frames.RENDER_SETTLE, timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
-        await this._profiledWait(
-            `frame:waitForReady:gameLoaded && rendererReady + ${minFrames} frames`,
-            timeout,
-            () => this.page.evaluate(({ n, timeoutMs }) => {
-                return new Promise<void>((resolve, reject) => {
-                    const deadline = Date.now() + timeoutMs;
-                    let startFrame: number | null = null;
+    async waitForReady(
+        minFrames: number = Frames.RENDER_SETTLE,
+        timeout: number = Timeout.INITIAL_LOAD
+    ): Promise<void> {
+        await this._profiledWait(`frame:waitForReady:gameLoaded && rendererReady + ${minFrames} frames`, timeout, () =>
+            this.page.evaluate(
+                ({ n, timeoutMs }) => {
+                    return new Promise<void>((resolve, reject) => {
+                        const deadline = Date.now() + timeoutMs;
+                        let startFrame: number | null = null;
 
-                    function checkReady() {
-                        const debug = (window as any).__settlers_debug__;
-                        const now = Date.now();
+                        function checkReady() {
+                            const debug = (window as any).__settlers_debug__;
+                            const now = Date.now();
 
-                        if (now > deadline) {
-                            const state = debug
-                                ? `gameLoaded=${debug.gameLoaded}, rendererReady=${debug.rendererReady}`
-                                : 'debug not available';
-                            reject(new Error(`Timeout waiting for game ready: ${state}`));
-                            return;
+                            if (now > deadline) {
+                                const state = debug
+                                    ? `gameLoaded=${debug.gameLoaded}, rendererReady=${debug.rendererReady}`
+                                    : 'debug not available';
+                                reject(new Error(`Timeout waiting for game ready: ${state}`));
+                                return;
+                            }
+
+                            // Phase 1: Wait for game to be loaded and renderer ready
+                            if (!debug || !debug.gameLoaded || !debug.rendererReady) {
+                                requestAnimationFrame(checkReady);
+                                return;
+                            }
+
+                            // Phase 2: Once ready, wait for N frames
+                            if (startFrame === null) {
+                                startFrame = debug.frameCount ?? 0;
+                            }
+
+                            const currentFrame = debug.frameCount ?? 0;
+                            const base = startFrame as number; // Narrowed after null check
+                            const targetFrame = base + n;
+
+                            if (currentFrame >= targetFrame) {
+                                resolve();
+                            } else if (now > deadline) {
+                                reject(
+                                    new Error(
+                                        `Timeout waiting for ${n} frames after ready: ` +
+                                            `got ${currentFrame - base}/${n}`
+                                    )
+                                );
+                            } else {
+                                requestAnimationFrame(checkReady);
+                            }
                         }
-
-                        // Phase 1: Wait for game to be loaded and renderer ready
-                        if (!debug || !debug.gameLoaded || !debug.rendererReady) {
-                            requestAnimationFrame(checkReady);
-                            return;
-                        }
-
-                        // Phase 2: Once ready, wait for N frames
-                        if (startFrame === null) {
-                            startFrame = debug.frameCount ?? 0;
-                        }
-
-                        const currentFrame = debug.frameCount ?? 0;
-                        const base = startFrame as number; // Narrowed after null check
-                        const targetFrame = base + n;
-
-                        if (currentFrame >= targetFrame) {
-                            resolve();
-                        } else if (now > deadline) {
-                            reject(new Error(
-                                `Timeout waiting for ${n} frames after ready: ` +
-                                `got ${currentFrame - base}/${n}`
-                            ));
-                        } else {
-                            requestAnimationFrame(checkReady);
-                        }
-                    }
-                    requestAnimationFrame(checkReady);
-                });
-            }, { n: minFrames, timeoutMs: timeout })
+                        requestAnimationFrame(checkReady);
+                    });
+                },
+                { n: minFrames, timeoutMs: timeout }
+            )
         );
     }
 
@@ -291,48 +297,49 @@ export class GamePage {
      * need pixel output. Falls back to `waitForReady` if renderer is available.
      */
     async waitForGameReady(minTicks: number = 5, timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
-        await this._profiledWait(
-            `state:waitForGameReady:gameLoaded + ${minTicks} ticks`,
-            timeout,
-            () => this.page.evaluate(({ n, timeoutMs }) => {
-                return new Promise<void>((resolve, reject) => {
-                    const deadline = Date.now() + timeoutMs;
-                    let startTick: number | null = null;
+        await this._profiledWait(`state:waitForGameReady:gameLoaded + ${minTicks} ticks`, timeout, () =>
+            this.page.evaluate(
+                ({ n, timeoutMs }) => {
+                    return new Promise<void>((resolve, reject) => {
+                        const deadline = Date.now() + timeoutMs;
+                        let startTick: number | null = null;
 
-                    function check() {
-                        const debug = (window as any).__settlers_debug__;
-                        const now = Date.now();
+                        function check() {
+                            const debug = (window as any).__settlers_debug__;
+                            const now = Date.now();
 
-                        if (now > deadline) {
-                            const state = debug
-                                ? `gameLoaded=${debug.gameLoaded}, tickCount=${debug.tickCount}`
-                                : 'debug not available';
-                            reject(new Error(`Timeout waiting for game ready: ${state}`));
-                            return;
+                            if (now > deadline) {
+                                const state = debug
+                                    ? `gameLoaded=${debug.gameLoaded}, tickCount=${debug.tickCount}`
+                                    : 'debug not available';
+                                reject(new Error(`Timeout waiting for game ready: ${state}`));
+                                return;
+                            }
+
+                            // Phase 1: Wait for game to be loaded
+                            if (!debug || !debug.gameLoaded) {
+                                requestAnimationFrame(check);
+                                return;
+                            }
+
+                            // Phase 2: Wait for N ticks
+                            if (startTick === null) {
+                                startTick = debug.tickCount ?? 0;
+                            }
+
+                            const currentTick = debug.tickCount ?? 0;
+                            const base = startTick as number;
+                            if (currentTick >= base + n) {
+                                resolve();
+                            } else {
+                                requestAnimationFrame(check);
+                            }
                         }
-
-                        // Phase 1: Wait for game to be loaded
-                        if (!debug || !debug.gameLoaded) {
-                            requestAnimationFrame(check);
-                            return;
-                        }
-
-                        // Phase 2: Wait for N ticks
-                        if (startTick === null) {
-                            startTick = debug.tickCount ?? 0;
-                        }
-
-                        const currentTick = debug.tickCount ?? 0;
-                        const base = startTick as number;
-                        if (currentTick >= base + n) {
-                            resolve();
-                        } else {
-                            requestAnimationFrame(check);
-                        }
-                    }
-                    requestAnimationFrame(check);
-                });
-            }, { n: minTicks, timeoutMs: timeout })
+                        requestAnimationFrame(check);
+                    });
+                },
+                { n: minTicks, timeoutMs: timeout }
+            )
         );
     }
 
@@ -342,32 +349,35 @@ export class GamePage {
      * from debugStats that increments on every game loop tick.
      */
     async waitForTicks(minTicks: number = 5, timeout: number = Timeout.DEFAULT): Promise<void> {
-        await this._profiledWait(
-            `state:waitForTicks:${minTicks} ticks`,
-            timeout,
-            () => this.page.evaluate(({ n, timeoutMs }) => {
-                return new Promise<void>((resolve, reject) => {
-                    const debug = (window as any).__settlers_debug__;
-                    const startTick = debug?.tickCount ?? 0;
-                    const targetTick = startTick + n;
-                    const deadline = Date.now() + timeoutMs;
+        await this._profiledWait(`state:waitForTicks:${minTicks} ticks`, timeout, () =>
+            this.page.evaluate(
+                ({ n, timeoutMs }) => {
+                    return new Promise<void>((resolve, reject) => {
+                        const debug = (window as any).__settlers_debug__;
+                        const startTick = debug?.tickCount ?? 0;
+                        const targetTick = startTick + n;
+                        const deadline = Date.now() + timeoutMs;
 
-                    function check() {
-                        const currentTick = (window as any).__settlers_debug__?.tickCount ?? 0;
-                        if (currentTick >= targetTick) {
-                            resolve();
-                        } else if (Date.now() > deadline) {
-                            reject(new Error(
-                                `Timeout waiting for ${n} ticks: got ${currentTick - startTick}/${n} ` +
-                                `(start=${startTick}, current=${currentTick}, target=${targetTick})`
-                            ));
-                        } else {
-                            requestAnimationFrame(check);
+                        function check() {
+                            const currentTick = (window as any).__settlers_debug__?.tickCount ?? 0;
+                            if (currentTick >= targetTick) {
+                                resolve();
+                            } else if (Date.now() > deadline) {
+                                reject(
+                                    new Error(
+                                        `Timeout waiting for ${n} ticks: got ${currentTick - startTick}/${n} ` +
+                                            `(start=${startTick}, current=${currentTick}, target=${targetTick})`
+                                    )
+                                );
+                            } else {
+                                requestAnimationFrame(check);
+                            }
                         }
-                    }
-                    requestAnimationFrame(check);
-                });
-            }, { n: minTicks, timeoutMs: timeout })
+                        requestAnimationFrame(check);
+                    });
+                },
+                { n: minTicks, timeoutMs: timeout }
+            )
         );
     }
 
@@ -415,10 +425,7 @@ export class GamePage {
 
     /** Read a single debug field. */
     async getDebugField<K extends keyof SettlersDebug>(key: K): Promise<SettlersDebug[K]> {
-        return this.page.evaluate(
-            (k) => (window as any).__settlers_debug__?.[k],
-            key,
-        );
+        return this.page.evaluate(k => (window as any).__settlers_debug__?.[k], key);
     }
 
     // ── Structured data-* attribute reads ───────────────────
@@ -456,7 +463,7 @@ export class GamePage {
      * @param speed - Speed multiplier (1.0 = normal, 4.0 = 4x faster)
      */
     async setGameSpeed(speed: number): Promise<void> {
-        await this.page.evaluate((s) => {
+        await this.page.evaluate(s => {
             // gameSettings is imported globally in the game
             const settings = (window as any).__settlers_game_settings__;
             if (settings?.state) {
@@ -482,8 +489,12 @@ export class GamePage {
                 placeBuildingType: game.placeBuildingType,
                 entityCount: game.state.entities.length,
                 entities: game.state.entities.map((e: any) => ({
-                    id: e.id, type: e.type, subType: e.subType,
-                    x: e.x, y: e.y, player: e.player
+                    id: e.id,
+                    type: e.type,
+                    subType: e.subType,
+                    x: e.x,
+                    y: e.y,
+                    player: e.player,
                 })),
                 mapWidth: game.mapSize.width,
                 mapHeight: game.mapSize.height,
@@ -497,14 +508,17 @@ export class GamePage {
      * conversion, or falls back to CameraMode.setPosition() via InputManager.
      */
     async moveCamera(tileX: number, tileY: number): Promise<void> {
-        await this.page.evaluate(({ x, y }) => {
-            const vp = (window as any).__settlers_viewpoint__;
-            if (vp?.setPosition) {
-                // ViewPoint.setPosition(tileX, tileY) does proper isometric
-                // coordinate conversion and centers the camera on the tile.
-                vp.setPosition(x, y);
-            }
-        }, { x: tileX, y: tileY });
+        await this.page.evaluate(
+            ({ x, y }) => {
+                const vp = (window as any).__settlers_viewpoint__;
+                if (vp?.setPosition) {
+                    // ViewPoint.setPosition(tileX, tileY) does proper isometric
+                    // coordinate conversion and centers the camera on the tile.
+                    vp.setPosition(x, y);
+                }
+            },
+            { x: tileX, y: tileY }
+        );
         // Wait for the camera position to propagate through the render loop
         await this.waitForFrames(Frames.STATE_PROPAGATE, Timeout.DEFAULT);
     }
@@ -516,7 +530,7 @@ export class GamePage {
      *   Use 2 for Warehouse (3x3) to find spots with enough room.
      */
     async findBuildableTile(buildingType = 1): Promise<{ x: number; y: number } | null> {
-        return this.page.evaluate((bt) => {
+        return this.page.evaluate(bt => {
             const game = (window as any).__settlers_game__;
             if (!game) return null;
             const w = game.mapSize.width;
@@ -533,14 +547,15 @@ export class GamePage {
                         const ty = cy + dy;
                         if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
 
-                        const ok = game.execute({
+                        const result = game.execute({
                             type: 'place_building',
-                            buildingType: bt, x: tx, y: ty, player: 0
+                            buildingType: bt,
+                            x: tx,
+                            y: ty,
+                            player: 0,
                         });
-                        if (ok) {
-                            const newEntities = game.state.entities.filter(
-                                (e: any) => !existingIds.has(e.id)
-                            );
+                        if (result?.success) {
+                            const newEntities = game.state.entities.filter((e: any) => !existingIds.has(e.id));
                             for (const e of newEntities) {
                                 game.execute({ type: 'remove_entity', entityId: e.id });
                             }
@@ -557,9 +572,9 @@ export class GamePage {
     async waitForEntityCountAbove(n: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._waitForFunction(
             `state:waitForEntityCountAbove:entityCount > ${n}`,
-            (min) => (window as any).__settlers_debug__?.entityCount > min,
+            min => (window as any).__settlers_debug__?.entityCount > min,
             n,
-            { timeout },
+            { timeout }
         );
     }
 
@@ -572,9 +587,9 @@ export class GamePage {
     async waitForUnitCount(expected: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._waitForFunction(
             `state:waitForUnitCount:unitCount === ${expected}`,
-            (n) => (window as any).__settlers_debug__?.unitCount === n,
+            n => (window as any).__settlers_debug__?.unitCount === n,
             expected,
-            { timeout },
+            { timeout }
         );
     }
 
@@ -582,9 +597,9 @@ export class GamePage {
     async waitForBuildingCount(expected: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._waitForFunction(
             `state:waitForBuildingCount:buildingCount === ${expected}`,
-            (n) => (window as any).__settlers_debug__?.buildingCount === n,
+            n => (window as any).__settlers_debug__?.buildingCount === n,
             expected,
-            { timeout },
+            { timeout }
         );
     }
 
@@ -593,26 +608,27 @@ export class GamePage {
      * **Optimized**: Uses browser-side requestAnimationFrame polling.
      */
     async waitForUnitsMoving(minMoving: number, timeout: number = Timeout.DEFAULT): Promise<void> {
-        await this._profiledWait(
-            `movement:waitForUnitsMoving:unitsMoving >= ${minMoving}`,
-            timeout,
-            () => this.page.evaluate(({ n, timeoutMs }) => {
-                return new Promise<void>((resolve, reject) => {
-                    const deadline = Date.now() + timeoutMs;
-                    function check() {
-                        const debug = (window as any).__settlers_debug__;
-                        const moving = debug?.unitsMoving ?? 0;
-                        if (moving >= n) {
-                            resolve();
-                        } else if (Date.now() > deadline) {
-                            reject(new Error(`Timeout waiting for ${n} units moving, got ${moving}`));
-                        } else {
-                            requestAnimationFrame(check);
+        await this._profiledWait(`movement:waitForUnitsMoving:unitsMoving >= ${minMoving}`, timeout, () =>
+            this.page.evaluate(
+                ({ n, timeoutMs }) => {
+                    return new Promise<void>((resolve, reject) => {
+                        const deadline = Date.now() + timeoutMs;
+                        function check() {
+                            const debug = (window as any).__settlers_debug__;
+                            const moving = debug?.unitsMoving ?? 0;
+                            if (moving >= n) {
+                                resolve();
+                            } else if (Date.now() > deadline) {
+                                reject(new Error(`Timeout waiting for ${n} units moving, got ${moving}`));
+                            } else {
+                                requestAnimationFrame(check);
+                            }
                         }
-                    }
-                    requestAnimationFrame(check);
-                });
-            }, { n: minMoving, timeoutMs: timeout })
+                        requestAnimationFrame(check);
+                    });
+                },
+                { n: minMoving, timeoutMs: timeout }
+            )
         );
     }
 
@@ -621,26 +637,27 @@ export class GamePage {
      * **Optimized**: Uses browser-side requestAnimationFrame polling.
      */
     async waitForNoUnitsMoving(timeout: number = Timeout.DEFAULT): Promise<void> {
-        await this._profiledWait(
-            'movement:waitForNoUnitsMoving:unitsMoving === 0',
-            timeout,
-            () => this.page.evaluate(({ timeoutMs }) => {
-                return new Promise<void>((resolve, reject) => {
-                    const deadline = Date.now() + timeoutMs;
-                    function check() {
-                        const debug = (window as any).__settlers_debug__;
-                        const moving = debug?.unitsMoving ?? 0;
-                        if (moving === 0) {
-                            resolve();
-                        } else if (Date.now() > deadline) {
-                            reject(new Error(`Timeout waiting for no units moving, still have ${moving}`));
-                        } else {
-                            requestAnimationFrame(check);
+        await this._profiledWait('movement:waitForNoUnitsMoving:unitsMoving === 0', timeout, () =>
+            this.page.evaluate(
+                ({ timeoutMs }) => {
+                    return new Promise<void>((resolve, reject) => {
+                        const deadline = Date.now() + timeoutMs;
+                        function check() {
+                            const debug = (window as any).__settlers_debug__;
+                            const moving = debug?.unitsMoving ?? 0;
+                            if (moving === 0) {
+                                resolve();
+                            } else if (Date.now() > deadline) {
+                                reject(new Error(`Timeout waiting for no units moving, still have ${moving}`));
+                            } else {
+                                requestAnimationFrame(check);
+                            }
                         }
-                    }
-                    requestAnimationFrame(check);
-                });
-            }, { timeoutMs: timeout })
+                        requestAnimationFrame(check);
+                    });
+                },
+                { timeoutMs: timeout }
+            )
         );
     }
 
@@ -658,40 +675,46 @@ export class GamePage {
         await this._profiledWait(
             `movement:waitForUnitAtDestination:unit ${unitId} at (${targetX},${targetY})`,
             timeout,
-            () => this.page.evaluate(({ id, tx, ty, timeoutMs }) => {
-                return new Promise<void>((resolve, reject) => {
-                    const deadline = Date.now() + timeoutMs;
-                    function check() {
-                        const game = (window as any).__settlers_game__;
-                        if (!game) {
-                            if (Date.now() > deadline) {
-                                reject(new Error('Timeout: game not available'));
-                            } else {
-                                requestAnimationFrame(check);
-                            }
-                            return;
-                        }
-                        const unit = game.state.getEntity(id);
-                        const unitState = game.state.unitStates.get(id);
-                        const atTarget = unit && unit.x === tx && unit.y === ty;
-                        const pathEmpty = unitState && unitState.path.length === 0;
+            () =>
+                this.page.evaluate(
+                    ({ id, tx, ty, timeoutMs }) => {
+                        return new Promise<void>((resolve, reject) => {
+                            const deadline = Date.now() + timeoutMs;
+                            function check() {
+                                const game = (window as any).__settlers_game__;
+                                if (!game) {
+                                    if (Date.now() > deadline) {
+                                        reject(new Error('Timeout: game not available'));
+                                    } else {
+                                        requestAnimationFrame(check);
+                                    }
+                                    return;
+                                }
+                                const unit = game.state.getEntity(id);
+                                const unitState = game.state.unitStates.get(id);
+                                const atTarget = unit && unit.x === tx && unit.y === ty;
+                                const pathEmpty = unitState && unitState.path.length === 0;
 
-                        if (atTarget && pathEmpty) {
-                            resolve();
-                        } else if (Date.now() > deadline) {
-                            const pos = unit ? `(${unit.x},${unit.y})` : 'not found';
-                            const pathLen = unitState?.path?.length ?? 'no state';
-                            reject(new Error(
-                                `Timeout waiting for unit ${id} at (${tx},${ty}): ` +
-                                `current=${pos}, pathLength=${pathLen}`
-                            ));
-                        } else {
+                                if (atTarget && pathEmpty) {
+                                    resolve();
+                                } else if (Date.now() > deadline) {
+                                    const pos = unit ? `(${unit.x},${unit.y})` : 'not found';
+                                    const pathLen = unitState?.path?.length ?? 'no state';
+                                    reject(
+                                        new Error(
+                                            `Timeout waiting for unit ${id} at (${tx},${ty}): ` +
+                                                `current=${pos}, pathLength=${pathLen}`
+                                        )
+                                    );
+                                } else {
+                                    requestAnimationFrame(check);
+                                }
+                            }
                             requestAnimationFrame(check);
-                        }
-                    }
-                    requestAnimationFrame(check);
-                });
-            }, { id: unitId, tx: targetX, ty: targetY, timeoutMs: timeout })
+                        });
+                    },
+                    { id: unitId, tx: targetX, ty: targetY, timeoutMs: timeout }
+                )
         );
     }
 
@@ -700,38 +723,49 @@ export class GamePage {
      * Useful for verifying movement has started.
      * **Optimized**: Uses browser-side requestAnimationFrame polling.
      */
-    async waitForUnitToMove(unitId: number, startX: number, startY: number, timeout: number = Timeout.DEFAULT): Promise<void> {
+    async waitForUnitToMove(
+        unitId: number,
+        startX: number,
+        startY: number,
+        timeout: number = Timeout.DEFAULT
+    ): Promise<void> {
         await this._profiledWait(
             `movement:waitForUnitToMove:unit ${unitId} moved from (${startX},${startY})`,
             timeout,
-            () => this.page.evaluate(({ id, sx, sy, timeoutMs }) => {
-                return new Promise<void>((resolve, reject) => {
-                    const deadline = Date.now() + timeoutMs;
-                    function check() {
-                        const game = (window as any).__settlers_game__;
-                        if (!game) {
-                            if (Date.now() > deadline) {
-                                reject(new Error('Timeout: game not available'));
-                            } else {
-                                requestAnimationFrame(check);
+            () =>
+                this.page.evaluate(
+                    ({ id, sx, sy, timeoutMs }) => {
+                        return new Promise<void>((resolve, reject) => {
+                            const deadline = Date.now() + timeoutMs;
+                            function check() {
+                                const game = (window as any).__settlers_game__;
+                                if (!game) {
+                                    if (Date.now() > deadline) {
+                                        reject(new Error('Timeout: game not available'));
+                                    } else {
+                                        requestAnimationFrame(check);
+                                    }
+                                    return;
+                                }
+                                const unit = game.state.getEntity(id);
+                                if (unit && (unit.x !== sx || unit.y !== sy)) {
+                                    resolve();
+                                } else if (Date.now() > deadline) {
+                                    const pos = unit ? `(${unit.x},${unit.y})` : 'not found';
+                                    reject(
+                                        new Error(
+                                            `Timeout waiting for unit ${id} to move from (${sx},${sy}): current=${pos}`
+                                        )
+                                    );
+                                } else {
+                                    requestAnimationFrame(check);
+                                }
                             }
-                            return;
-                        }
-                        const unit = game.state.getEntity(id);
-                        if (unit && (unit.x !== sx || unit.y !== sy)) {
-                            resolve();
-                        } else if (Date.now() > deadline) {
-                            const pos = unit ? `(${unit.x},${unit.y})` : 'not found';
-                            reject(new Error(
-                                `Timeout waiting for unit ${id} to move from (${sx},${sy}): current=${pos}`
-                            ));
-                        } else {
                             requestAnimationFrame(check);
-                        }
-                    }
-                    requestAnimationFrame(check);
-                });
-            }, { id: unitId, sx: startX, sy: startY, timeoutMs: timeout })
+                        });
+                    },
+                    { id: unitId, sx: startX, sy: startY, timeoutMs: timeout }
+                )
         );
     }
 
@@ -741,9 +775,9 @@ export class GamePage {
     async waitForMode(expectedMode: string, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._waitForFunction(
             `render:waitForMode:mode === ${expectedMode}`,
-            (mode) => (window as any).__settlers_debug__?.mode === mode,
+            mode => (window as any).__settlers_debug__?.mode === mode,
             expectedMode,
-            { timeout },
+            { timeout }
         );
     }
 
@@ -753,51 +787,106 @@ export class GamePage {
      * Place a building via game.execute() command pipeline.
      * Returns the created entity info, or null if placement failed.
      */
-    async placeBuilding(buildingType: number, x: number, y: number, player = 0): Promise<{
-        id: number; type: number; subType: number; x: number; y: number; player: number;
+    async placeBuilding(
+        buildingType: number,
+        x: number,
+        y: number,
+        player = 0
+    ): Promise<{
+        id: number;
+        type: number;
+        subType: number;
+        x: number;
+        y: number;
+        player: number;
     } | null> {
-        return this.page.evaluate(({ bt, posX, posY, p }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-            const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
-            const ok = game.execute({ type: 'place_building', buildingType: bt, x: posX, y: posY, player: p });
-            if (!ok) return null;
-            const newEntity = game.state.entities.find(
-                (e: any) => !idsBefore.has(e.id) && e.type === 2
-            );
-            return newEntity
-                ? { id: newEntity.id, type: newEntity.type, subType: newEntity.subType, x: newEntity.x, y: newEntity.y, player: newEntity.player }
-                : null;
-        }, { bt: buildingType, posX: x, posY: y, p: player });
+        const result = await this.page.evaluate(
+            ({ bt, posX, posY, p }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) {
+                    return { error: 'No game found' };
+                }
+                const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
+                const cmdResult = game.execute({
+                    type: 'place_building',
+                    buildingType: bt,
+                    x: posX,
+                    y: posY,
+                    player: p,
+                });
+                if (!cmdResult?.success) {
+                    return { error: cmdResult?.error ?? 'unknown error' };
+                }
+                const newEntity = game.state.entities.find((e: any) => !idsBefore.has(e.id) && e.type === 2);
+                return newEntity
+                    ? {
+                          entity: {
+                              id: newEntity.id,
+                              type: newEntity.type,
+                              subType: newEntity.subType,
+                              x: newEntity.x,
+                              y: newEntity.y,
+                              player: newEntity.player,
+                          },
+                      }
+                    : { error: 'Entity not found after placement' };
+            },
+            { bt: buildingType, posX: x, posY: y, p: player }
+        );
+
+        if ('error' in result) {
+            console.log(`[placeBuilding] Failed: ${result.error}`);
+            return null;
+        }
+        return result.entity;
     }
 
     /**
      * Place a resource via game.execute() command pipeline.
      * Returns the created entity info, or null if placement failed.
      */
-    async placeResource(materialType: number, x: number, y: number, amount = 1): Promise<{
-        id: number; type: number; subType: number; x: number; y: number; amount: number;
+    async placeResource(
+        materialType: number,
+        x: number,
+        y: number,
+        amount = 1
+    ): Promise<{
+        id: number;
+        type: number;
+        subType: number;
+        x: number;
+        y: number;
+        amount: number;
     } | null> {
-        return this.page.evaluate(({ mt, posX, posY, amt }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-            const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
-            const ok = game.execute({ type: 'place_resource', materialType: mt, x: posX, y: posY, amount: amt });
-            if (!ok) return null;
-            const newEntity = game.state.entities.find(
-                (e: any) => !idsBefore.has(e.id) && e.type === 4 // EntityType.StackedResource
-            );
-            if (!newEntity) return null;
-            const resourceState = game.state.resourceStates.get(newEntity.id);
-            return {
-                id: newEntity.id,
-                type: newEntity.type,
-                subType: newEntity.subType,
-                x: newEntity.x,
-                y: newEntity.y,
-                amount: resourceState?.quantity ?? amt
-            };
-        }, { mt: materialType, posX: x, posY: y, amt: amount });
+        return this.page.evaluate(
+            ({ mt, posX, posY, amt }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return null;
+                const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
+                const result = game.execute({
+                    type: 'place_resource',
+                    materialType: mt,
+                    x: posX,
+                    y: posY,
+                    amount: amt,
+                });
+                if (!result?.success) return null;
+                const newEntity = game.state.entities.find(
+                    (e: any) => !idsBefore.has(e.id) && e.type === 4 // EntityType.StackedResource
+                );
+                if (!newEntity) return null;
+                const resourceState = game.state.resourceStates.get(newEntity.id);
+                return {
+                    id: newEntity.id,
+                    type: newEntity.type,
+                    subType: newEntity.subType,
+                    x: newEntity.x,
+                    y: newEntity.y,
+                    amount: resourceState?.quantity ?? amt,
+                };
+            },
+            { mt: materialType, posX: x, posY: y, amt: amount }
+        );
     }
 
     /**
@@ -844,23 +933,39 @@ export class GamePage {
      * If x/y not provided, spawns at map center.
      * Returns the created entity info, or null if spawn failed.
      */
-    async spawnUnit(unitType = 1, x?: number, y?: number, player = 0): Promise<{
-        id: number; type: number; subType: number; x: number; y: number;
+    async spawnUnit(
+        unitType = 1,
+        x?: number,
+        y?: number,
+        player = 0
+    ): Promise<{
+        id: number;
+        type: number;
+        subType: number;
+        x: number;
+        y: number;
     } | null> {
-        return this.page.evaluate(({ ut, posX, posY, p }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-            const spawnX = posX ?? Math.floor(game.mapSize.width / 2);
-            const spawnY = posY ?? Math.floor(game.mapSize.height / 2);
-            const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
-            game.execute({ type: 'spawn_unit', unitType: ut, x: spawnX, y: spawnY, player: p });
-            const newEntity = game.state.entities.find(
-                (e: any) => !idsBefore.has(e.id) && e.type === 1
-            );
-            return newEntity
-                ? { id: newEntity.id, type: newEntity.type, subType: newEntity.subType, x: newEntity.x, y: newEntity.y }
-                : null;
-        }, { ut: unitType, posX: x, posY: y, p: player });
+        return this.page.evaluate(
+            ({ ut, posX, posY, p }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return null;
+                const spawnX = posX ?? Math.floor(game.mapSize.width / 2);
+                const spawnY = posY ?? Math.floor(game.mapSize.height / 2);
+                const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
+                game.execute({ type: 'spawn_unit', unitType: ut, x: spawnX, y: spawnY, player: p });
+                const newEntity = game.state.entities.find((e: any) => !idsBefore.has(e.id) && e.type === 1);
+                return newEntity
+                    ? {
+                          id: newEntity.id,
+                          type: newEntity.type,
+                          subType: newEntity.subType,
+                          x: newEntity.x,
+                          y: newEntity.y,
+                      }
+                    : null;
+            },
+            { ut: unitType, posX: x, posY: y, p: player }
+        );
     }
 
     /**
@@ -868,20 +973,25 @@ export class GamePage {
      * Returns true if the command was accepted.
      */
     async moveUnit(entityId: number, targetX: number, targetY: number): Promise<boolean> {
-        return this.page.evaluate(({ id, tx, ty }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return false;
-            return !!game.execute({ type: 'move_unit', entityId: id, targetX: tx, targetY: ty });
-        }, { id: entityId, tx: targetX, ty: targetY });
+        return this.page.evaluate(
+            ({ id, tx, ty }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return false;
+                return game.execute({ type: 'move_unit', entityId: id, targetX: tx, targetY: ty })?.success ?? false;
+            },
+            { id: entityId, tx: targetX, ty: targetY }
+        );
     }
 
     /**
      * Read entities from game state, optionally filtered.
      */
-    async getEntities(filter?: { type?: number; subType?: number; player?: number }): Promise<
-        Array<{ id: number; type: number; subType: number; x: number; y: number; player: number }>
-    > {
-        return this.page.evaluate((f) => {
+    async getEntities(filter?: {
+        type?: number;
+        subType?: number;
+        player?: number;
+    }): Promise<Array<{ id: number; type: number; subType: number; x: number; y: number; player: number }>> {
+        return this.page.evaluate(f => {
             const game = (window as any).__settlers_game__;
             if (!game) return [];
             return game.state.entities
@@ -892,8 +1002,12 @@ export class GamePage {
                     return true;
                 })
                 .map((e: any) => ({
-                    id: e.id, type: e.type, subType: e.subType,
-                    x: e.x, y: e.y, player: e.player
+                    id: e.id,
+                    type: e.type,
+                    subType: e.subType,
+                    x: e.x,
+                    y: e.y,
+                    player: e.player,
                 }));
         }, filter ?? null);
     }
@@ -911,19 +1025,22 @@ export class GamePage {
         pathIndex: number;
         moveProgress: number;
     } | null> {
-        return this.page.evaluate(({ id }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-            const us = game.state.unitStates.get(id);
-            if (!us) return null;
-            return {
-                prevX: us.prevX,
-                prevY: us.prevY,
-                pathLength: us.path.length,
-                pathIndex: us.pathIndex,
-                moveProgress: us.moveProgress,
-            };
-        }, { id: unitId });
+        return this.page.evaluate(
+            ({ id }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return null;
+                const us = game.state.unitStates.get(id);
+                if (!us) return null;
+                return {
+                    prevX: us.prevX,
+                    prevY: us.prevY,
+                    pathLength: us.path.length,
+                    pathIndex: us.pathIndex,
+                    moveProgress: us.moveProgress,
+                };
+            },
+            { id: unitId }
+        );
     }
 
     /**
@@ -937,21 +1054,24 @@ export class GamePage {
         loop: boolean;
         elapsedMs: number;
     } | null> {
-        return this.page.evaluate(({ id }) => {
-            const game = (window as any).__settlers_game__;
-            const animService = game?.gameLoop?.animationService;
-            if (!animService) return null;
-            const state = animService.getState(id);
-            if (!state) return null;
-            return {
-                sequenceKey: state.sequenceKey,
-                currentFrame: state.currentFrame,
-                direction: state.direction,
-                playing: state.playing,
-                loop: state.loop,
-                elapsedMs: state.elapsedMs,
-            };
-        }, { id: unitId });
+        return this.page.evaluate(
+            ({ id }) => {
+                const game = (window as any).__settlers_game__;
+                const animService = game?.gameLoop?.animationService;
+                if (!animService) return null;
+                const state = animService.getState(id);
+                if (!state) return null;
+                return {
+                    sequenceKey: state.sequenceKey,
+                    currentFrame: state.currentFrame,
+                    direction: state.direction,
+                    playing: state.playing,
+                    loop: state.loop,
+                    elapsedMs: state.elapsedMs,
+                };
+            },
+            { id: unitId }
+        );
     }
 
     /**
@@ -963,18 +1083,21 @@ export class GamePage {
         tileX: number;
         tileY: number;
     } | null> {
-        return this.page.evaluate(({ id }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-            const controller = game.state.movement.getController(id);
-            if (!controller) return null;
-            return {
-                state: controller.state,
-                direction: controller.direction,
-                tileX: controller.tileX,
-                tileY: controller.tileY,
-            };
-        }, { id: unitId });
+        return this.page.evaluate(
+            ({ id }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return null;
+                const controller = game.state.movement.getController(id);
+                if (!controller) return null;
+                return {
+                    state: controller.state,
+                    direction: controller.direction,
+                    tileX: controller.tileX,
+                    tileY: controller.tileY,
+                };
+            },
+            { id: unitId }
+        );
     }
 
     /**
@@ -983,14 +1106,14 @@ export class GamePage {
     async waitForMovementIdle(unitId: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._waitForFunction(
             `movement:waitForMovementIdle:controller idle for unit ${unitId}`,
-            (id) => {
+            id => {
                 const game = (window as any).__settlers_game__;
                 if (!game) return false;
                 const controller = game.state.movement.getController(id);
                 return controller && controller.state === 'idle';
             },
             unitId,
-            { timeout },
+            { timeout }
         );
     }
 
@@ -998,32 +1121,36 @@ export class GamePage {
      * Sample animation states over multiple frames while a unit is moving.
      * Returns an array of animation snapshots.
      */
-    async sampleAnimationStates(unitId: number, numSamples: number = 10): Promise<
-        Array<{ playing: boolean; sequenceKey: string }>
-    > {
-        return this.page.evaluate(({ id, maxSamples }) => {
-            return new Promise<Array<{ playing: boolean; sequenceKey: string }>>((resolve) => {
-                const samples: Array<{ playing: boolean; sequenceKey: string }> = [];
-                let count = 0;
-                function sample() {
-                    const game = (window as any).__settlers_game__;
-                    const animService = game?.gameLoop?.animationService;
-                    if (animService) {
-                        const state = animService.getState(id);
-                        if (state) {
-                            samples.push({ playing: state.playing, sequenceKey: state.sequenceKey });
+    async sampleAnimationStates(
+        unitId: number,
+        numSamples: number = 10
+    ): Promise<Array<{ playing: boolean; sequenceKey: string }>> {
+        return this.page.evaluate(
+            ({ id, maxSamples }) => {
+                return new Promise<Array<{ playing: boolean; sequenceKey: string }>>(resolve => {
+                    const samples: Array<{ playing: boolean; sequenceKey: string }> = [];
+                    let count = 0;
+                    function sample() {
+                        const game = (window as any).__settlers_game__;
+                        const animService = game?.gameLoop?.animationService;
+                        if (animService) {
+                            const state = animService.getState(id);
+                            if (state) {
+                                samples.push({ playing: state.playing, sequenceKey: state.sequenceKey });
+                            }
+                        }
+                        count++;
+                        if (count < maxSamples) {
+                            requestAnimationFrame(sample);
+                        } else {
+                            resolve(samples);
                         }
                     }
-                    count++;
-                    if (count < maxSamples) {
-                        requestAnimationFrame(sample);
-                    } else {
-                        resolve(samples);
-                    }
-                }
-                requestAnimationFrame(sample);
-            });
-        }, { id: unitId, maxSamples: numSamples });
+                    requestAnimationFrame(sample);
+                });
+            },
+            { id: unitId, maxSamples: numSamples }
+        );
     }
 
     /**
@@ -1048,12 +1175,8 @@ export class GamePage {
             (window as any).__capturedMovementEvents = captured;
         });
         return {
-            getEvents: () => this.page.evaluate(
-                () => (window as any).__capturedMovementEvents ?? []
-            ),
-            getCount: () => this.page.evaluate(
-                () => ((window as any).__capturedMovementEvents ?? []).length
-            ),
+            getEvents: () => this.page.evaluate(() => (window as any).__capturedMovementEvents ?? []),
+            getCount: () => this.page.evaluate(() => ((window as any).__capturedMovementEvents ?? []).length),
         };
     }
 
@@ -1061,29 +1184,30 @@ export class GamePage {
      * Sample unit positions over multiple frames to verify smooth movement.
      * Returns position snapshots taken at each animation frame.
      */
-    async sampleUnitPositions(unitId: number, numSamples: number = 10): Promise<
-        Array<{ x: number; y: number }>
-    > {
-        return this.page.evaluate(({ id, maxSamples }) => {
-            return new Promise<Array<{ x: number; y: number }>>((resolve) => {
-                const positions: Array<{ x: number; y: number }> = [];
-                let count = 0;
-                function sample() {
-                    const game = (window as any).__settlers_game__;
-                    if (game) {
-                        const u = game.state.getEntity(id);
-                        if (u) positions.push({ x: u.x, y: u.y });
+    async sampleUnitPositions(unitId: number, numSamples: number = 10): Promise<Array<{ x: number; y: number }>> {
+        return this.page.evaluate(
+            ({ id, maxSamples }) => {
+                return new Promise<Array<{ x: number; y: number }>>(resolve => {
+                    const positions: Array<{ x: number; y: number }> = [];
+                    let count = 0;
+                    function sample() {
+                        const game = (window as any).__settlers_game__;
+                        if (game) {
+                            const u = game.state.getEntity(id);
+                            if (u) positions.push({ x: u.x, y: u.y });
+                        }
+                        count++;
+                        if (count < maxSamples) {
+                            requestAnimationFrame(sample);
+                        } else {
+                            resolve(positions);
+                        }
                     }
-                    count++;
-                    if (count < maxSamples) {
-                        requestAnimationFrame(sample);
-                    } else {
-                        resolve(positions);
-                    }
-                }
-                requestAnimationFrame(sample);
-            });
-        }, { id: unitId, maxSamples: numSamples });
+                    requestAnimationFrame(sample);
+                });
+            },
+            { id: unitId, maxSamples: numSamples }
+        );
     }
 
     /**
@@ -1102,102 +1226,129 @@ export class GamePage {
     /**
      * Check if a tile is passable terrain (not water, not blocked).
      */
-    async isTerrainPassable(x: number, y: number): Promise<{
+    async isTerrainPassable(
+        x: number,
+        y: number
+    ): Promise<{
         groundType: number;
         isPassable: boolean;
         isWater: boolean;
     } | null> {
-        return this.page.evaluate(({ tx, ty }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-            const idx = game.mapSize.toIndex(tx, ty);
-            const gt = game.groundType[idx];
-            return {
-                groundType: gt,
-                isPassable: gt > 8 && gt !== 32,
-                isWater: gt <= 8,
-            };
-        }, { tx: x, ty: y });
+        return this.page.evaluate(
+            ({ tx, ty }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return null;
+                const idx = game.mapSize.toIndex(tx, ty);
+                const gt = game.groundType[idx];
+                return {
+                    groundType: gt,
+                    isPassable: gt > 8 && gt !== 32,
+                    isWater: gt <= 8,
+                };
+            },
+            { tx: x, ty: y }
+        );
     }
 
     /**
      * Place multiple buildings at different positions, spiraling from map center.
      * Returns the number placed and total building count.
      */
-    async placeMultipleBuildings(count: number, buildingTypes?: number[], players?: number[]): Promise<{
+    async placeMultipleBuildings(
+        count: number,
+        buildingTypes?: number[],
+        players?: number[]
+    ): Promise<{
         placedCount: number;
         positions: Array<{ x: number; y: number }>;
         totalBuildings: number;
     }> {
-        return this.page.evaluate(({ targetCount, types, ps }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { placedCount: 0, positions: [], totalBuildings: 0 };
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-            let placed = 0;
-            const positions: Array<{ x: number; y: number }> = [];
-            for (let r = 0; r < Math.max(w, h) / 2 && placed < targetCount; r += 3) {
-                for (let angle = 0; angle < 8 && placed < targetCount; angle++) {
-                    const dx = Math.round(r * Math.cos(angle * Math.PI / 4));
-                    const dy = Math.round(r * Math.sin(angle * Math.PI / 4));
-                    const tx = cx + dx;
-                    const ty = cy + dy;
-                    if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-                    const bt = types ? types[placed % types.length] : 1;
-                    const p = ps ? ps[placed % ps.length] : 0;
-                    const ok = game.execute({
-                        type: 'place_building', buildingType: bt, x: tx, y: ty, player: p
-                    });
-                    if (ok) {
-                        placed++;
-                        positions.push({ x: tx, y: ty });
+        return this.page.evaluate(
+            ({ targetCount, types, ps }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return { placedCount: 0, positions: [], totalBuildings: 0 };
+                const w = game.mapSize.width;
+                const h = game.mapSize.height;
+                const cx = Math.floor(w / 2);
+                const cy = Math.floor(h / 2);
+                let placed = 0;
+                const positions: Array<{ x: number; y: number }> = [];
+                for (let r = 0; r < Math.max(w, h) / 2 && placed < targetCount; r += 3) {
+                    for (let angle = 0; angle < 8 && placed < targetCount; angle++) {
+                        const dx = Math.round(r * Math.cos((angle * Math.PI) / 4));
+                        const dy = Math.round(r * Math.sin((angle * Math.PI) / 4));
+                        const tx = cx + dx;
+                        const ty = cy + dy;
+                        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+                        const bt = types ? types[placed % types.length] : 1;
+                        const p = ps ? ps[placed % ps.length] : 0;
+                        const result = game.execute({
+                            type: 'place_building',
+                            buildingType: bt,
+                            x: tx,
+                            y: ty,
+                            player: p,
+                        });
+                        if (result?.success) {
+                            placed++;
+                            positions.push({ x: tx, y: ty });
+                        }
                     }
                 }
-            }
-            return {
-                placedCount: placed,
-                positions,
-                totalBuildings: game.state.entities.filter((e: any) => e.type === 2).length,
-            };
-        }, { targetCount: count, types: buildingTypes ?? null, ps: players ?? null });
+                return {
+                    placedCount: placed,
+                    positions,
+                    totalBuildings: game.state.entities.filter((e: any) => e.type === 2).length,
+                };
+            },
+            { targetCount: count, types: buildingTypes ?? null, ps: players ?? null }
+        );
     }
 
     /**
      * Place multiple resources at different positions, spiraling from map center.
      */
-    async placeMultipleResources(count: number, materialTypes?: number[]): Promise<{
+    async placeMultipleResources(
+        count: number,
+        materialTypes?: number[]
+    ): Promise<{
         placedCount: number;
         totalResources: number;
     }> {
-        return this.page.evaluate(({ targetCount, types }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { placedCount: 0, totalResources: 0 };
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-            let placed = 0;
-            for (let r = 0; r < 20 && placed < targetCount; r++) {
-                for (let angle = 0; angle < 8 && placed < targetCount; angle++) {
-                    const dx = Math.round(r * 2 * Math.cos(angle * Math.PI / 4));
-                    const dy = Math.round(r * 2 * Math.sin(angle * Math.PI / 4));
-                    const tx = cx + dx;
-                    const ty = cy + dy;
-                    if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-                    const mt = types ? types[placed % types.length] : placed % 3;
-                    const ok = game.execute({
-                        type: 'place_resource', materialType: mt, amount: placed + 1, x: tx, y: ty
-                    });
-                    if (ok) placed++;
+        return this.page.evaluate(
+            ({ targetCount, types }) => {
+                const game = (window as any).__settlers_game__;
+                if (!game) return { placedCount: 0, totalResources: 0 };
+                const w = game.mapSize.width;
+                const h = game.mapSize.height;
+                const cx = Math.floor(w / 2);
+                const cy = Math.floor(h / 2);
+                let placed = 0;
+                for (let r = 0; r < 20 && placed < targetCount; r++) {
+                    for (let angle = 0; angle < 8 && placed < targetCount; angle++) {
+                        const dx = Math.round(r * 2 * Math.cos((angle * Math.PI) / 4));
+                        const dy = Math.round(r * 2 * Math.sin((angle * Math.PI) / 4));
+                        const tx = cx + dx;
+                        const ty = cy + dy;
+                        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+                        const mt = types ? types[placed % types.length] : placed % 3;
+                        const result = game.execute({
+                            type: 'place_resource',
+                            materialType: mt,
+                            amount: placed + 1,
+                            x: tx,
+                            y: ty,
+                        });
+                        if (result?.success) placed++;
+                    }
                 }
-            }
-            return {
-                placedCount: placed,
-                totalResources: game.state.entities.filter((e: any) => e.type === 4).length,
-            };
-        }, { targetCount: count, types: materialTypes ?? null });
+                return {
+                    placedCount: placed,
+                    totalResources: game.state.entities.filter((e: any) => e.type === 4).length,
+                };
+            },
+            { targetCount: count, types: materialTypes ?? null }
+        );
     }
 
     /**
@@ -1216,10 +1367,12 @@ export class GamePage {
                 indicatorsEnabled: renderer.buildingIndicatorsEnabled,
                 previewBuildingType: renderer.previewBuildingType ?? null,
                 previewMaterialType: renderer.previewMaterialType ?? null,
-                placementPreview: renderer.placementPreview ? {
-                    entityType: renderer.placementPreview.entityType,
-                    subType: renderer.placementPreview.subType,
-                } : null,
+                placementPreview: renderer.placementPreview
+                    ? {
+                          entityType: renderer.placementPreview.entityType,
+                          subType: renderer.placementPreview.subType,
+                      }
+                    : null,
             };
         });
     }
@@ -1272,15 +1425,12 @@ export class GamePage {
      */
     collectErrors(): { errors: string[]; check: () => void } {
         const errors: string[] = [];
-        this.page.on('pageerror', (err) => errors.push(err.message));
+        this.page.on('pageerror', err => errors.push(err.message));
         return {
             errors,
             check: () => {
                 const unexpected = errors.filter(
-                    (e) =>
-                        !e.includes('2.gh6') &&
-                        !e.includes('WebGL') &&
-                        !e.startsWith('texture fallback:'),
+                    e => !e.includes('2.gh6') && !e.includes('WebGL') && !e.startsWith('texture fallback:')
                 );
                 expect(unexpected).toHaveLength(0);
             },
@@ -1307,7 +1457,7 @@ export class GamePage {
 
     /** Toggle music on or off via SoundManager. */
     async toggleMusic(enabled: boolean): Promise<void> {
-        await this.page.evaluate((e) => {
+        await this.page.evaluate(e => {
             const game = (window as any).__settlers_game__;
             game?.soundManager?.toggleMusic(e);
         }, enabled);
@@ -1334,7 +1484,7 @@ export class GamePage {
                 return !ctx || ctx.state === 'running';
             },
             null,
-            { timeout: Timeout.FAST },
+            { timeout: Timeout.FAST }
         ).catch(() => {
             // AudioContext may not exist or may be suspended - that's OK for tests
             // that don't actually need audio
@@ -1397,26 +1547,32 @@ export class GamePage {
      * Test JIL index lookup for specific job indices.
      * Returns info about which job indices exist in the JIL file.
      */
-    async testJilLookup(fileId: string, jobIndices: number[]): Promise<{
+    async testJilLookup(
+        fileId: string,
+        jobIndices: number[]
+    ): Promise<{
         totalJobs: number;
         results: Record<number, { exists: boolean; offset?: number; length?: number }>;
     } | null> {
-        return this.page.evaluate(async({ fid, indices }) => {
-            const renderer = (window as any).__settlers_entity_renderer__;
-            const spriteLoader = (renderer as any)?.spriteManager?.spriteLoader;
-            if (!spriteLoader) return null;
-            const fileSet = await spriteLoader.loadFileSet(fid);
-            if (!fileSet?.jilReader) return null;
-            const totalJobs = fileSet.jilReader.length;
-            const results: Record<number, { exists: boolean; offset?: number; length?: number }> = {};
-            for (const idx of indices) {
-                const item = fileSet.jilReader.getItem(idx);
-                results[idx] = item
-                    ? { exists: true, offset: item.offset, length: item.length }
-                    : { exists: false };
-            }
-            return { totalJobs, results };
-        }, { fid: fileId, indices: jobIndices });
+        return this.page.evaluate(
+            async ({ fid, indices }) => {
+                const renderer = (window as any).__settlers_entity_renderer__;
+                const spriteLoader = (renderer as any)?.spriteManager?.spriteLoader;
+                if (!spriteLoader) return null;
+                const fileSet = await spriteLoader.loadFileSet(fid);
+                if (!fileSet?.jilReader) return null;
+                const totalJobs = fileSet.jilReader.length;
+                const results: Record<number, { exists: boolean; offset?: number; length?: number }> = {};
+                for (const idx of indices) {
+                    const item = fileSet.jilReader.getItem(idx);
+                    results[idx] = item
+                        ? { exists: true, offset: item.offset, length: item.length }
+                        : { exists: false };
+                }
+                return { totalJobs, results };
+            },
+            { fid: fileId, indices: jobIndices }
+        );
     }
 
     // ── Sprite cache helpers ─────────────────────────────────
@@ -1435,9 +1591,9 @@ export class GamePage {
 
     /** Clear the IndexedDB sprite atlas cache. */
     async clearSpriteCache(): Promise<void> {
-        await this.page.evaluate(async() => {
+        await this.page.evaluate(async () => {
             const DB_NAME = 'settlers-atlas-cache';
-            return new Promise<void>((resolve) => {
+            return new Promise<void>(resolve => {
                 const request = indexedDB.deleteDatabase(DB_NAME);
                 request.onsuccess = () => resolve();
                 request.onerror = () => resolve();
