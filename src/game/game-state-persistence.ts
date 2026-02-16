@@ -203,12 +203,7 @@ function serializeEntityState(game: Game): {
                 currentOffset: entity.tree.currentOffset,
             });
         }
-        if (entity.production && entity.production.progress > 0) {
-            productions.push({
-                entityId: entity.id,
-                progress: entity.production.progress,
-            });
-        }
+        // Production progress is now tracked by SettlerTaskSystem workers, not entity state
     }
     return { trees, productions };
 }
@@ -469,17 +464,9 @@ function restoreRequests(game: Game, snapshot: GameStateSnapshot): void {
     }
 }
 
-function restoreProductions(game: Game, snapshot: GameStateSnapshot): void {
-    if (!snapshot.productions) return;
-    for (const prod of snapshot.productions) {
-        const entity = game.state.getEntity(prod.entityId);
-        if (entity) {
-            if (!entity.production) {
-                entity.production = { progress: 0, pendingRequests: new Set(), cycleStarted: false };
-            }
-            entity.production.progress = prod.progress;
-        }
-    }
+function restoreProductions(_game: Game, _snapshot: GameStateSnapshot): void {
+    // Production progress is now tracked by SettlerTaskSystem workers.
+    // Kept for backward compatibility with saved snapshots.
 }
 
 /**

@@ -34,11 +34,20 @@ digger:
   tool: SHOVEL
   jobs: [dig]
 
+# Building workers - go to workplace, wait for materials, produce
 smith:
-  search: FORGE
+  search: WORKPLACE
   tool: HAMMER
-  jobs: [work]
+  jobs: [station]
 
 sawmillworker:
+  search: WORKPLACE
+  jobs: [station]
+
+miller:
+  search: WORKPLACE
+  jobs: [station]
+
+butcher:
   search: WORKPLACE
   jobs: [station]

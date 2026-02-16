@@ -10,7 +10,9 @@
 /** Tree growth/cutting state - see TreeSystem */
 export type { TreeState, TreeStage } from './systems/tree-system';
 
-/** Production cycle state - see ProductionSystem */
+/** Material request tracking state - see MaterialRequestSystem */
+export type { MaterialRequestState } from './systems/production-system';
+/** @deprecated Use MaterialRequestState instead */
 export type { ProductionState } from './systems/production-system';
 
 /** Building construction state - see BuildingStateManager */

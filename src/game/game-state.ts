@@ -11,7 +11,7 @@ import {
     getUnitTypeSpeed,
     MapObjectType,
 } from './entity';
-import { getWorkerWorkplace } from './unit-types';
+import { getWorkerWorkplaces } from './unit-types';
 import { EMaterialType } from './economy';
 import { MovementSystem, MovementController } from './systems/movement/index';
 import { SeededRng, createGameRng } from './rng';
@@ -174,7 +174,7 @@ export class GameState {
      * - MapObject/StackedResource: NOT selectable
      * Speed defaults to UnitTypeConfig value for units.
      */
-     
+
     public addEntity(
         type: EntityType,
         subType: number,
@@ -356,9 +356,9 @@ export class GameState {
      */
     public findNearestWorkplace(settler: Entity): Entity | null {
         const unitType = settler.subType as UnitType;
-        const workplaceType = getWorkerWorkplace(unitType);
+        const workplaceTypes = getWorkerWorkplaces(unitType);
 
-        if (workplaceType === undefined) {
+        if (!workplaceTypes) {
             return null;
         }
 
@@ -367,7 +367,7 @@ export class GameState {
 
         for (const entity of this.entities) {
             if (entity.type !== EntityType.Building) continue;
-            if (entity.subType !== workplaceType) continue;
+            if (!workplaceTypes.has(entity.subType as BuildingType)) continue;
             if (entity.player !== settler.player) continue;
 
             const dx = entity.x - settler.x;

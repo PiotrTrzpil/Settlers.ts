@@ -121,14 +121,33 @@ digger.dig:
   - task: GO_HOME
     anim: walk
 
-smith.work:
-  - task: WORK
-    anim: hammer
-    duration: 5.0
-
 # Building workers go to workplace, wait for materials, then produce
 # Worker IS the production - no worker = no production
+smith.station:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WORK_ON_ENTITY
+    anim: work
+    duration: 5.0
+
 sawmillworker.station:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WORK_ON_ENTITY
+    anim: work
+    duration: 4.0
+
+miller.station:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WORK_ON_ENTITY
+    anim: work
+    duration: 4.0
+
+butcher.station:
   - task: GO_TO_TARGET
     anim: walk
 

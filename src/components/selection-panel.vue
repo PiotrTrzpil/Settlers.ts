@@ -132,11 +132,7 @@
 
                                 <!-- Production -->
                                 <template v-if="buildingDebug.hasProduction">
-                                    <div class="debug-subsection">Production</div>
-                                    <div class="info-row sub-row">
-                                        <span class="label">Cycle:</span>
-                                        <span class="value">{{ buildingDebug.productionProgress }}%</span>
-                                    </div>
+                                    <div class="debug-subsection">Material Requests</div>
                                     <div v-if="buildingDebug.pendingInputs.length > 0" class="info-row sub-row">
                                         <span class="label">Pending:</span>
                                         <span class="value">{{ buildingDebug.pendingInputs.join(', ') }}</span>
@@ -417,7 +413,6 @@ interface BuildingDebugInfo {
     constructionPhase: string;
     constructionProgress: number;
     hasProduction: boolean;
-    productionProgress: number;
     pendingInputs: string[];
     hasInventory: boolean;
     inventorySlots: InventorySlotInfo[];
@@ -458,10 +453,9 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
                 : 0;
     }
 
-    // Production info
+    // Material request info
     const production = entity.production;
     const hasProduction = production !== undefined;
-    const productionProgress = production ? Math.round(production.progress * 100) : 0;
     const pendingInputs = production ? [...production.pendingRequests].map(m => EMaterialType[m] ?? `#${m}`) : [];
 
     // Inventory info
@@ -506,7 +500,6 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
         constructionPhase,
         constructionProgress,
         hasProduction,
-        productionProgress,
         pendingInputs,
         hasInventory,
         inventorySlots,

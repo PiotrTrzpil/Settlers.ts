@@ -161,22 +161,6 @@ export interface GameEvents {
         priority: RequestPriority;
     };
 
-    // === Production Events ===
-
-    /** Emitted when a building starts a production cycle */
-    'production:started': {
-        buildingId: number;
-        buildingType: BuildingType;
-        outputMaterial: EMaterialType;
-    };
-
-    /** Emitted when a building completes a production cycle */
-    'production:completed': {
-        buildingId: number;
-        buildingType: BuildingType;
-        outputMaterial: EMaterialType;
-    };
-
     // === Inventory Events ===
 
     /** Emitted when a building's inventory changes */

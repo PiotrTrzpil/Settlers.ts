@@ -117,9 +117,17 @@ export { analyzeResourceTypes } from './map-resources';
 export { TreeStage, type TreeState, TreeSystem } from './tree-system';
 
 // ============================================================================
-// Production System
+// Material Request System (formerly Production System)
 // ============================================================================
-export { type ProductionState, type ProductionSystemConfig, ProductionSystem } from './production-system';
+export {
+    type MaterialRequestState,
+    type MaterialRequestSystemConfig,
+    MaterialRequestSystem,
+    // Deprecated aliases
+    type ProductionState,
+    type ProductionSystemConfig,
+    ProductionSystem,
+} from './production-system';
 
 // ============================================================================
 // Woodcutting System

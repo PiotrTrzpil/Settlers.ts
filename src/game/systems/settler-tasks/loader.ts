@@ -17,14 +17,31 @@ function parseMaterialType(name: string | undefined): EMaterialType | undefined 
     if (name === undefined) return undefined;
     const value = EMaterialType[name as keyof typeof EMaterialType];
     if (value === undefined) {
-        throw new Error(`Unknown material type in YAML: "${name}". Valid types: ${Object.keys(EMaterialType).filter(k => isNaN(Number(k))).join(', ')}`);
+        throw new Error(
+            `Unknown material type in YAML: "${name}". Valid types: ${Object.keys(EMaterialType)
+                .filter(k => isNaN(Number(k)))
+                .join(', ')}`
+        );
     }
     return value;
 }
 
 /** Parse a search type string from YAML */
 function parseSearchType(name: string): SearchType {
-    const validTypes = ['TREE', 'TREE_SEED_POS', 'STONE', 'FISH', 'VENISON', 'GRAIN', 'RESOURCE_POS', 'GOOD', 'CONSTRUCTION', 'TERRAIN', 'FORGE', 'WORKPLACE'];
+    const validTypes = [
+        'TREE',
+        'TREE_SEED_POS',
+        'STONE',
+        'FISH',
+        'VENISON',
+        'GRAIN',
+        'RESOURCE_POS',
+        'GOOD',
+        'CONSTRUCTION',
+        'TERRAIN',
+        'FORGE',
+        'WORKPLACE',
+    ];
     if (!validTypes.includes(name)) {
         throw new Error(`Unknown search type in YAML: "${name}". Valid types: ${validTypes.join(', ')}`);
     }
@@ -33,7 +50,20 @@ function parseSearchType(name: string): SearchType {
 
 /** Parse a task type string from YAML */
 function parseTaskType(name: string): TaskType {
-    const validTypes = ['GO_TO_TARGET', 'GO_TO_POS', 'GO_TO_SOURCE', 'GO_TO_DEST', 'GO_HOME', 'SEARCH_POS', 'WORK_ON_ENTITY', 'STAY', 'WORK', 'WAIT', 'PICKUP', 'DROPOFF'];
+    const validTypes = [
+        'GO_TO_TARGET',
+        'GO_TO_POS',
+        'GO_TO_SOURCE',
+        'GO_TO_DEST',
+        'GO_HOME',
+        'SEARCH_POS',
+        'WORK_ON_ENTITY',
+        'STAY',
+        'WORK',
+        'WAIT',
+        'PICKUP',
+        'DROPOFF',
+    ];
     if (!validTypes.includes(name)) {
         throw new Error(`Unknown task type in YAML: "${name}". Valid types: ${validTypes.join(', ')}`);
     }
@@ -42,7 +72,20 @@ function parseTaskType(name: string): TaskType {
 
 /** Parse an animation type string from YAML */
 function parseAnimationType(name: string): AnimationType {
-    const validTypes = ['walk', 'idle', 'carry', 'pickup', 'dropoff', 'chop', 'harvest', 'plant', 'mine', 'hammer', 'dig', 'work'];
+    const validTypes = [
+        'walk',
+        'idle',
+        'carry',
+        'pickup',
+        'dropoff',
+        'chop',
+        'harvest',
+        'plant',
+        'mine',
+        'hammer',
+        'dig',
+        'work',
+    ];
     if (!validTypes.includes(name)) {
         throw new Error(`Unknown animation type in YAML: "${name}". Valid types: ${validTypes.join(', ')}`);
     }
@@ -66,6 +109,8 @@ const SETTLER_NAME_MAP: Record<string, UnitType> = {
     digger: UnitType.Digger,
     smith: UnitType.Smith,
     sawmillworker: UnitType.SawmillWorker,
+    miller: UnitType.Miller,
+    butcher: UnitType.Butcher,
 };
 
 interface RawSettlerConfig {
@@ -91,7 +136,9 @@ export function loadSettlerConfigs(): SettlerConfigs {
     for (const [name, rawConfig] of Object.entries(raw)) {
         const unitType = SETTLER_NAME_MAP[name];
         if (unitType === undefined) {
-            throw new Error(`Unknown settler type in YAML: "${name}". Valid types: ${Object.keys(SETTLER_NAME_MAP).join(', ')}`);
+            throw new Error(
+                `Unknown settler type in YAML: "${name}". Valid types: ${Object.keys(SETTLER_NAME_MAP).join(', ')}`
+            );
         }
 
         configs.set(unitType, {
@@ -112,7 +159,7 @@ export function loadJobDefinitions(): JobDefinitions {
     const jobs = new Map<string, TaskNode[]>();
 
     for (const [jobId, rawTasks] of Object.entries(raw)) {
-        const tasks: TaskNode[] = rawTasks.map((rawTask) => ({
+        const tasks: TaskNode[] = rawTasks.map(rawTask => ({
             task: parseTaskType(rawTask.task),
             anim: parseAnimationType(rawTask.anim),
             duration: rawTask.duration,

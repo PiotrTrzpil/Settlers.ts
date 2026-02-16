@@ -703,8 +703,10 @@ export class SettlerTaskSystem implements TickSystem {
 
         const task = tasks[job.taskIndex];
 
-        // Apply animation for current task (on first tick of task)
-        if (job.progress === 0) {
+        // Apply animation for current task (on first tick of task).
+        // WORK_ON_ENTITY handles its own animation — it must wait until
+        // canWork() confirms materials are available before playing work anim.
+        if (job.progress === 0 && task.task !== TaskType.WORK_ON_ENTITY) {
             this.applyTaskAnimation(settler, task.anim);
         }
 
@@ -715,7 +717,8 @@ export class SettlerTaskSystem implements TickSystem {
             job.taskIndex++;
             job.progress = 0;
             // Apply animation for next task if there is one
-            if (job.taskIndex < tasks.length) {
+            // (WORK_ON_ENTITY manages its own animation timing)
+            if (job.taskIndex < tasks.length && tasks[job.taskIndex].task !== TaskType.WORK_ON_ENTITY) {
                 this.applyTaskAnimation(settler, tasks[job.taskIndex].anim);
             }
             break;
@@ -831,6 +834,8 @@ export class SettlerTaskSystem implements TickSystem {
         try {
             if (!handler.canWork(targetId)) {
                 if (handler.shouldWaitForWork) {
+                    // Show idle animation while waiting for materials
+                    this.setIdleAnimation(settler);
                     return TaskResult.CONTINUE;
                 }
                 return TaskResult.FAILED;
@@ -843,6 +848,8 @@ export class SettlerTaskSystem implements TickSystem {
 
         // Start work on first tick (or when materials become available)
         if (!job.workStarted) {
+            // Apply work animation now that materials are confirmed available
+            this.applyTaskAnimation(settler, task.anim);
             try {
                 handler.onWorkStart?.(targetId);
             } catch (e) {

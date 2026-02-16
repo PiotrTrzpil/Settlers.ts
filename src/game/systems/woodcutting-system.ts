@@ -62,7 +62,7 @@ export class WoodcuttingSystem {
 
             onWorkComplete: (targetId: number, settlerX: number, settlerY: number) => {
                 log.debug(`Tree ${targetId} cut at (${settlerX}, ${settlerY})`);
-                // TODO: Spawn LOG resource at settler position
+                // LOG pickup is handled by the PICKUP task in the YAML job sequence
             },
 
             onWorkInterrupt: (targetId: number) => {

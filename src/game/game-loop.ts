@@ -1,7 +1,7 @@
 import { GameState } from './game-state';
 import { WoodcuttingSystem } from './systems/woodcutting-system';
 import { SettlerTaskSystem } from './systems/settler-tasks';
-import { ProductionSystem } from './systems/production-system';
+import { MaterialRequestSystem } from './systems/production-system';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { debugStats } from './debug-stats';
@@ -129,8 +129,8 @@ export class GameLoop {
     /** Inventory visualizer - syncs building outputs to visual stacked resources */
     public readonly inventoryVisualizer: InventoryVisualizer;
 
-    /** Production system - handles building production cycles */
-    public readonly productionSystem: ProductionSystem;
+    /** Material request system - creates transport requests for buildings needing materials */
+    public readonly materialRequestSystem: MaterialRequestSystem;
 
     // ===== Managers (owned by GameLoop, used by systems) =====
     /** Carrier manager - tracks carrier state and assignments */
@@ -246,15 +246,14 @@ export class GameLoop {
         // 7. Woodcutting domain — registers work handler with task system
         this.woodcuttingSystem = new WoodcuttingSystem(gameState, this.treeSystem, this.settlerTaskSystem);
 
-        // 8. Production system — handles building production cycles (requests inputs, produces outputs)
-        this.productionSystem = new ProductionSystem({
+        // 8. Material request system — creates transport requests for buildings needing input materials
+        this.materialRequestSystem = new MaterialRequestSystem({
             gameState,
-            eventBus: this.eventBus,
             buildingStateManager: this.buildingStateManager,
             inventoryManager: this.inventoryManager,
             requestManager: this.requestManager,
         });
-        this.registerSystem(this.productionSystem);
+        this.registerSystem(this.materialRequestSystem);
 
         // 9. Inventory visualizer — syncs building output to visual stacked resources
         this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager);

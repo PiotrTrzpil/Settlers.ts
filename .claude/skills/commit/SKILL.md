@@ -18,6 +18,7 @@ Create a git commit for the current changes.
    - What files are changed (staged and unstaged)
    - The nature of the changes
    - Recent commit message style
+   - See if there are some files that perhaps should be gitignored and do it first in that case.
 
 2. Stage files:
    - **If `all` option**: `git add -A` (but warn if .env or credential files would be included)

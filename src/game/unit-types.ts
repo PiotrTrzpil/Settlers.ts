@@ -20,8 +20,10 @@ export enum UnitType {
     Forester = 11,
     Farmer = 12,
     Smith = 13,
-    Digger = 14,  // Landscaper/Shovelworker
+    Digger = 14, // Landscaper/Shovelworker
     SawmillWorker = 15,
+    Miller = 16,
+    Butcher = 17,
 }
 
 /**
@@ -75,6 +77,8 @@ export const UNIT_TYPE_CONFIG: Record<UnitType, UnitTypeConfig> = {
     [UnitType.Smith]: { name: 'Smith', category: UnitCategory.Worker, speed: 2 },
     [UnitType.Digger]: { name: 'Digger', category: UnitCategory.Worker, speed: 2 },
     [UnitType.SawmillWorker]: { name: 'SawmillWorker', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Miller]: { name: 'Miller', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Butcher]: { name: 'Butcher', category: UnitCategory.Worker, speed: 2 },
 };
 
 /** Categories that allow player selection */
@@ -123,8 +127,10 @@ export const BUILDING_UNIT_TYPE: Partial<Record<BuildingType, UnitType>> = {
     [BuildingType.ForesterHut]: UnitType.Forester,
     [BuildingType.Sawmill]: UnitType.SawmillWorker,
 
-    // Farming
+    // Farming / Food
     [BuildingType.GrainFarm]: UnitType.Farmer,
+    [BuildingType.Mill]: UnitType.Miller,
+    [BuildingType.Slaughterhouse]: UnitType.Butcher,
 
     // Mining
     [BuildingType.CoalMine]: UnitType.Miner,
@@ -133,7 +139,7 @@ export const BUILDING_UNIT_TYPE: Partial<Record<BuildingType, UnitType>> = {
     [BuildingType.SulfurMine]: UnitType.Miner,
     [BuildingType.StoneMine]: UnitType.Miner,
 
-    // Smithing
+    // Smithing / Smelting
     [BuildingType.WeaponSmith]: UnitType.Smith,
     [BuildingType.ToolSmith]: UnitType.Smith,
     [BuildingType.IronSmelter]: UnitType.Smith,
@@ -141,21 +147,27 @@ export const BUILDING_UNIT_TYPE: Partial<Record<BuildingType, UnitType>> = {
 };
 
 /**
- * Mapping of worker unit types to the building type they work at.
- * Used to find a worker's home building.
+ * Derived reverse lookup: for each unit type, all building types it can work at.
+ * Computed once from BUILDING_UNIT_TYPE (single source of truth).
  */
-export const WORKER_WORKPLACE: Partial<Record<UnitType, BuildingType>> = {
-    [UnitType.Woodcutter]: BuildingType.WoodcutterHut,
-    [UnitType.Forester]: BuildingType.ForesterHut,
-    [UnitType.Farmer]: BuildingType.GrainFarm,
-    [UnitType.Miner]: BuildingType.CoalMine, // Generic - actual mine determined at runtime
-    [UnitType.Smith]: BuildingType.WeaponSmith, // Generic - actual smith determined at runtime
-    [UnitType.SawmillWorker]: BuildingType.Sawmill,
-};
+const WORKER_WORKPLACES: ReadonlyMap<UnitType, ReadonlySet<BuildingType>> = (() => {
+    const map = new Map<UnitType, Set<BuildingType>>();
+    for (const [buildingStr, unitType] of Object.entries(BUILDING_UNIT_TYPE)) {
+        const building = Number(buildingStr) as BuildingType;
+        let set = map.get(unitType);
+        if (!set) {
+            set = new Set();
+            map.set(unitType, set);
+        }
+        set.add(building);
+    }
+    return map;
+})();
 
 /**
- * Get the workplace building type for a worker unit type.
+ * Get all building types where a worker unit type can work.
+ * Returns undefined if the unit type has no workplace.
  */
-export function getWorkerWorkplace(unitType: UnitType): BuildingType | undefined {
-    return WORKER_WORKPLACE[unitType];
+export function getWorkerWorkplaces(unitType: UnitType): ReadonlySet<BuildingType> | undefined {
+    return WORKER_WORKPLACES.get(unitType);
 }
