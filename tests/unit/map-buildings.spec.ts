@@ -36,8 +36,8 @@ describe('populateMapBuildings', () => {
         const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         expect(count).toBe(2);
-        // 2 buildings, no units spawned (woodcutter/sawmill don't spawn units)
-        expect(ctx.state.entities).toHaveLength(2);
+        // 2 buildings + 2 workers (woodcutter + sawmill worker)
+        expect(ctx.state.entities).toHaveLength(4);
 
         // Check first building
         const entity1 = ctx.state.getEntityAt(10, 10);
@@ -77,7 +77,7 @@ describe('populateMapBuildings', () => {
         const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         expect(count).toBe(1);
-        expect(ctx.state.entities).toHaveLength(1);
+        expect(ctx.state.entities).toHaveLength(2); // 1 building + 1 worker
         expect(ctx.state.getEntityAt(10, 10)).toBeUndefined();
         expect(ctx.state.getEntityAt(20, 20)).toBeDefined();
     });
@@ -94,7 +94,7 @@ describe('populateMapBuildings', () => {
         const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         expect(count).toBe(1);
-        expect(ctx.state.entities).toHaveLength(2); // 1 map object + 1 building
+        expect(ctx.state.entities).toHaveLength(3); // 1 map object + 1 building + 1 worker
     });
 
     it('should filter by player when specified', () => {
@@ -107,7 +107,9 @@ describe('populateMapBuildings', () => {
         const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx, 0));
 
         expect(count).toBe(2);
-        expect(ctx.state.entities).toHaveLength(2);
+        // 2 buildings + 1 worker (woodcutter) - Mill doesn't have a dedicated worker type
+        const buildings2 = ctx.state.entities.filter(e => e.type === EntityType.Building);
+        expect(buildings2).toHaveLength(2);
         expect(ctx.state.getEntityAt(10, 10)).toBeDefined();
         expect(ctx.state.getEntityAt(20, 20)).toBeUndefined();
         expect(ctx.state.getEntityAt(30, 30)).toBeDefined();

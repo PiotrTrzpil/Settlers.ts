@@ -1,4 +1,4 @@
-import { EntityType, EXTENDED_OFFSETS, BUILDING_UNIT_TYPE, tileKey, type Entity } from '../entity';
+import { EntityType, EXTENDED_OFFSETS, type Entity } from '../entity';
 import { BuildingConstructionPhase, type BuildingStateManager } from '../features/building-construction';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
@@ -99,41 +99,20 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
         player: cmd.player,
     });
 
-    // Spawn dedicated worker if "place with worker" is enabled
-    if (gameSettings.state.placeBuildingsWithWorker) {
-        spawnWorkerForBuilding(ctx, cmd);
+    // If placed as completed, emit event (spawning handled by BuildingConstructionSystem listener)
+    if (gameSettings.state.placeBuildingsCompleted) {
+        const buildingState = ctx.buildingStateManager.getBuildingState(entity.id);
+        if (buildingState) {
+            ctx.eventBus.emit('building:completed', {
+                entityId: entity.id,
+                buildingState,
+            });
+        }
     }
 
     return commandSuccess([
         { type: 'building_placed', entityId: entity.id, buildingType: cmd.buildingType, x: cmd.x, y: cmd.y },
     ]);
-}
-
-function spawnWorkerForBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): void {
-    const workerType = BUILDING_UNIT_TYPE[cmd.buildingType];
-    if (workerType === undefined) {
-        return;
-    }
-
-    // Get building entity ID before spawning worker (it occupies the tile now)
-    const building = ctx.state.getEntityAt(cmd.x, cmd.y);
-
-    // Spawn worker at building location - don't check for occupancy
-    const entity = ctx.state.addEntity(EntityType.Unit, workerType, cmd.x, cmd.y, cmd.player);
-
-    // Restore building's tile occupancy - workers "work inside" buildings
-    // and shouldn't claim the building's tile
-    if (building) {
-        ctx.state.tileOccupancy.set(tileKey(cmd.x, cmd.y), building.id);
-    }
-
-    ctx.eventBus.emit('unit:spawned', {
-        entityId: entity.id,
-        unitType: workerType,
-        x: cmd.x,
-        y: cmd.y,
-        player: cmd.player,
-    });
 }
 
 function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): CommandResult {

@@ -30,7 +30,10 @@ export {
 } from './building-state-manager';
 
 // System (for registration with GameLoop)
-export { BuildingConstructionSystem, BUILDING_SPAWN_ON_COMPLETE } from './construction-system';
+export { BuildingConstructionSystem } from './construction-system';
+
+// Unit spawning (shared logic for construction completion)
+export { spawnUnitsOnBuildingComplete, BUILDING_SPAWN_ON_COMPLETE, type SpawnContext } from './spawn-units';
 
 // Queries (for renderers)
 export { getBuildingVisualState } from './visual-state';

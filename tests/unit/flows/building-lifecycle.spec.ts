@@ -55,10 +55,9 @@ describe('Building Lifecycle: place → construct → remove', () => {
         expect(building!.y).toBe(20);
         expect(building!.subType).toBe(BuildingType.WoodcutterHut);
 
-        // Lumberjack auto-spawns a worker
-        const worker = ctx.state.entities.find(e => e.type === EntityType.Unit);
-        expect(worker).toBeDefined();
-        expect(worker!.player).toBe(0);
+        // Worker is not spawned until construction completes
+        const workerBeforeComplete = ctx.state.entities.find(e => e.type === EntityType.Unit);
+        expect(workerBeforeComplete).toBeUndefined();
 
         // ── Step 2: Verify tile occupancy ──
         // The tile should be occupied by the building (not necessarily with ID 1)
@@ -113,6 +112,11 @@ describe('Building Lifecycle: place → construct → remove', () => {
         expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
         visual = getBuildingVisualState(bs);
         expect(visual.isCompleted).toBe(true);
+
+        // Worker is spawned when construction completes
+        const workerAfterComplete = ctx.state.entities.find(e => e.type === EntityType.Unit);
+        expect(workerAfterComplete).toBeDefined();
+        expect(workerAfterComplete!.player).toBe(0);
 
         // ── Step 4: Remove building and verify cleanup ──
         const removed = removeEntity(ctx, building!.id);

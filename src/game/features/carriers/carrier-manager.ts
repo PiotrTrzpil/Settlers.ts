@@ -280,21 +280,6 @@ export class CarrierManager {
     }
 
     /**
-     * Set what material a carrier is currently carrying.
-     * @param carrierId - The entity ID of the carrier
-     * @param material - The material type, or null to clear
-     * @param amount - The amount being carried
-     * @throws Error if carrier not found
-     */
-    setCarrying(carrierId: number, material: EMaterialType | null, amount: number): void {
-        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for setCarrying');
-        const state = getCarrierState(entity);
-
-        state.carryingMaterial = material;
-        state.carryingAmount = amount;
-    }
-
-    /**
      * Update a carrier's fatigue level.
      * @param carrierId - The entity ID of the carrier
      * @param fatigue - The new fatigue level (0-100)
@@ -407,16 +392,22 @@ export class CarrierManager {
             throw new Error(`Cannot restore carrier: entity ${data.entityId} not found`);
         }
 
-        // Store state on entity (RFC: Entity-Owned State)
+        // Store carrier state on entity (RFC: Entity-Owned State)
         entity.carrier = {
             entityId: data.entityId,
             homeBuilding: data.homeBuilding,
             currentJob: null, // Jobs are not persisted - will be re-assigned
             fatigue: data.fatigue,
-            carryingMaterial: data.carryingMaterial,
-            carryingAmount: data.carryingAmount,
             status: data.status,
         };
+
+        // Restore carrying state if carrier was carrying material
+        if (data.carryingMaterial !== null && data.carryingAmount > 0) {
+            entity.carrying = {
+                material: data.carryingMaterial,
+                amount: data.carryingAmount,
+            };
+        }
 
         // Add to tavern index
         if (!this.carriersByTavern.has(data.homeBuilding)) {

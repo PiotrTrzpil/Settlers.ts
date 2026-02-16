@@ -14,7 +14,7 @@
 
 import type { GameState } from '../../game-state';
 import type { TickSystem } from '../../tick-system';
-import { EntityType, UnitType, Entity, getCarrierState } from '../../entity';
+import { EntityType, UnitType, Entity, setCarrying, clearCarrying } from '../../entity';
 import { EMaterialType } from '../../economy';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
@@ -898,7 +898,11 @@ export class SettlerTaskSystem implements TickSystem {
         }
 
         // Regular settler pickup (e.g., woodcutter picking up LOG)
-        job.data.carryingGood = task.good ?? null;
+        const material = task.good;
+        if (material != null) {
+            setCarrying(settler, material, 1);
+            job.data.carryingGood = material;
+        }
         return TaskResult.DONE;
     }
 
@@ -929,10 +933,8 @@ export class SettlerTaskSystem implements TickSystem {
             return TaskResult.FAILED;
         }
 
-        // Update carrier entity state
-        const carrierState = getCarrierState(entity);
-        carrierState.carryingMaterial = material;
-        carrierState.carryingAmount = withdrawn;
+        // Update entity carrying state (shared by all unit types)
+        setCarrying(entity, material, withdrawn);
 
         // Update job state
         job.data.carryingGood = material;
@@ -1003,6 +1005,8 @@ export class SettlerTaskSystem implements TickSystem {
             log.warn(`Building ${homeId} output full, material lost`);
         }
 
+        // Clear entity and job carrying state
+        clearCarrying(settler);
         job.data.carryingGood = null;
         return TaskResult.DONE;
     }
@@ -1013,10 +1017,10 @@ export class SettlerTaskSystem implements TickSystem {
      */
     private executeCarrierDropoff(settler: Entity, job: CarrierJobState): TaskResult {
         const entity = this.gameState.getEntityOrThrow(settler.id, 'carrier');
-        const carrierState = getCarrierState(entity);
         const { destBuildingId, material } = job.data;
 
-        const amount = carrierState.carryingAmount;
+        // Get amount from entity carrying state
+        const amount = entity.carrying?.amount ?? 0;
 
         // Deposit to destination building
         const deposited = this.inventoryManager.depositInput(destBuildingId, material, amount);
@@ -1026,9 +1030,8 @@ export class SettlerTaskSystem implements TickSystem {
             log.warn(`Carrier ${settler.id}: ${overflow} of ${material} overflow at building ${destBuildingId}`);
         }
 
-        // Clear carrier entity state
-        carrierState.carryingMaterial = null;
-        carrierState.carryingAmount = 0;
+        // Clear entity carrying state
+        clearCarrying(entity);
 
         // Clear job state
         job.data.carryingGood = null;
@@ -1156,11 +1159,9 @@ export class SettlerTaskSystem implements TickSystem {
         // Note: Carrier reservations are handled by LogisticsDispatcher via InventoryReservationManager.
         // LogisticsDispatcher listens for carrier:removed and carrier:pickupFailed events to release reservations.
 
-        // Clear carrier state if carrier was carrying material
-        const carryingGood = job.data.carryingGood;
-        if (settler.carrier && carryingGood != null) {
-            settler.carrier.carryingMaterial = null;
-            settler.carrier.carryingAmount = 0;
+        // Clear carrying state if unit was carrying material
+        if (settler.carrying) {
+            clearCarrying(settler);
         }
 
         log.debug(`Settler ${settler.id} interrupted job ${job.jobId}`);
@@ -1182,12 +1183,11 @@ export class SettlerTaskSystem implements TickSystem {
 
     /**
      * Determine the correct walk sequence key for a unit.
-     * Carriers carrying a material use a material-specific carry sequence.
+     * Units carrying material use a material-specific carry sequence.
      */
     private getWalkSequenceKey(entity: Entity): string {
-        const carriedMaterial = entity.carrier?.carryingMaterial;
-        if (entity.subType === UnitType.Carrier && carriedMaterial != null) {
-            return carrySequenceKey(carriedMaterial);
+        if (entity.carrying) {
+            return carrySequenceKey(entity.carrying.material);
         }
         return ANIMATION_SEQUENCES.WALK;
     }
@@ -1221,9 +1221,14 @@ export class SettlerTaskSystem implements TickSystem {
             return ANIMATION_SEQUENCES.WALK;
 
         case 'carry': {
-            // Material-specific carry animation (carrier MUST have material for carry anim)
-            const material = settler.carrier!.carryingMaterial!;
-            return carrySequenceKey(material);
+            // Get material from entity carrying state (set by PICKUP task)
+            if (!settler.carrying) {
+                throw new Error(
+                    `Cannot play 'carry' animation for entity ${settler.id} (${UnitType[settler.subType]}): ` +
+                            `no material being carried. Check PICKUP task runs before GO_HOME with carry anim.`
+                );
+            }
+            return carrySequenceKey(settler.carrying.material);
         }
 
         case 'chop':

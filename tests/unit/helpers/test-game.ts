@@ -56,12 +56,17 @@ export interface TestContext {
     serviceAreaManager: ServiceAreaManager;
     requestManager: RequestManager;
     buildingStateManager: BuildingStateManager;
+    // System for construction events
+    buildingConstructionSystem: BuildingConstructionSystem;
 }
 
 /**
  * Create a complete test context with GameState, TestMap, EventBus, and managers.
  * The state is initialized with terrain data from the map.
  * Building states are created by the buildingStateManager when buildings are added.
+ *
+ * By default, buildings are placed as completed with workers for easier testing.
+ * The BuildingConstructionSystem is registered to handle building:completed events.
  *
  * @param mapWidth - Map width (default: 64)
  * @param mapHeight - Map height (default: 64)
@@ -85,6 +90,18 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         eventBus,
     });
 
+    // Create and register BuildingConstructionSystem for event handling
+    const buildingConstructionSystem = new BuildingConstructionSystem({
+        gameState: state,
+        buildingStateManager,
+    });
+    buildingConstructionSystem.setTerrainContext({
+        groundType: map.groundType,
+        groundHeight: map.groundHeight,
+        mapSize: map.mapSize,
+    });
+    buildingConstructionSystem.registerEvents(eventBus);
+
     // Initialize terrain data on state
     state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
 
@@ -102,6 +119,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         serviceAreaManager,
         requestManager,
         buildingStateManager,
+        buildingConstructionSystem,
     };
 }
 

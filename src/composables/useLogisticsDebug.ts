@@ -15,7 +15,7 @@ import type { InventoryReservation } from '@/game/features/logistics/inventory-r
 import type { ServiceArea } from '@/game/features/service-areas/service-area';
 import type { CarrierManager } from '@/game/features/carriers/carrier-manager';
 import { EMaterialType } from '@/game/economy';
-import { EntityType } from '@/game/entity';
+import { EntityType, type Entity } from '@/game/entity';
 import { UnitType } from '@/game/unit-types';
 
 /** Summary of a pending or in-progress request */
@@ -245,11 +245,17 @@ function gatherRequests(
     return { pending, inProgress };
 }
 
-function gatherCarriers(allCarriers: Iterable<CarrierState>, stats: LogisticsStats): CarrierSummary[] {
+function gatherCarriers(
+    allCarriers: Iterable<CarrierState>,
+    getEntity: (id: number) => Entity | undefined,
+    stats: LogisticsStats
+): CarrierSummary[] {
     const carriers: CarrierSummary[] = [];
 
     for (const carrier of allCarriers) {
         const fatigueLevel = getFatigueLevel(carrier.fatigue);
+        const entity = getEntity(carrier.entityId);
+        const carrying = entity?.carrying;
 
         carriers.push({
             entityId: carrier.entityId,
@@ -257,8 +263,8 @@ function gatherCarriers(allCarriers: Iterable<CarrierState>, stats: LogisticsSta
             fatigue: Math.round(carrier.fatigue),
             fatigueLevel: FATIGUE_LEVEL_NAMES[fatigueLevel],
             homeBuilding: carrier.homeBuilding,
-            carryingMaterial: carrier.carryingMaterial !== null ? formatMaterial(carrier.carryingMaterial) : null,
-            carryingAmount: carrier.carryingAmount,
+            carryingMaterial: carrying ? formatMaterial(carrying.material) : null,
+            carryingAmount: carrying?.amount ?? 0,
             hasJob: carrier.currentJob !== null,
             jobType: carrier.currentJob?.type ?? null,
         });
@@ -350,7 +356,7 @@ export function useLogisticsDebug(getGame: () => Game | null): {
         const { pending, inProgress } = gatherRequests(gameLoop.requestManager.getAllRequests(), now, stats);
 
         // Gather carriers
-        const carriers = gatherCarriers(gameLoop.carrierManager.getAllCarriers(), stats);
+        const carriers = gatherCarriers(gameLoop.carrierManager.getAllCarriers(), id => gameState.getEntity(id), stats);
 
         // Count unregistered carriers (carrier units without entity.carrier)
         for (const entity of gameState.entities) {

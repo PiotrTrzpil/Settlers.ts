@@ -3,7 +3,6 @@
  * This is a barrel file that re-exports from specialized modules.
  */
 
-
 // === Entity State Types (imported for Entity interface) ===
 // These are imported as types to avoid circular dependencies.
 // The actual implementations live in their respective systems/features.
@@ -19,6 +18,14 @@ export type { BuildingState } from './features/building-construction/types';
 
 /** Carrier job/status state - see CarrierManager */
 export type { CarrierState, CarrierStatus, CarrierJob } from './features/carriers/carrier-state';
+
+/** Material carrying state - used by any unit that can carry materials */
+import type { EMaterialType } from './economy';
+
+export interface CarryingState {
+    material: EMaterialType;
+    amount: number;
+}
 
 // === Re-export coordinates (base types with no dependencies) ===
 export type { TileCoord } from './coordinates';
@@ -108,6 +115,13 @@ export interface Entity {
      * Only present for carrier units.
      */
     carrier?: import('./features/carriers/carrier-state').CarrierState;
+
+    /**
+     * Material being carried by this unit.
+     * Present for any unit currently carrying materials (carriers, woodcutters, farmers, etc.)
+     * Set on PICKUP, cleared on DROPOFF.
+     */
+    carrying?: CarryingState;
 }
 
 /**
@@ -155,6 +169,31 @@ export function getConstructionState(entity: Entity): NonNullable<Entity['constr
         throw new Error(`Entity ${entity.id} has no construction state`);
     }
     return entity.construction;
+}
+
+/**
+ * Get carrying state from an entity, throwing if not present.
+ * Use when the entity MUST be carrying something.
+ */
+export function getCarryingState(entity: Entity): NonNullable<Entity['carrying']> {
+    if (!entity.carrying) {
+        throw new Error(`Entity ${entity.id} is not carrying anything`);
+    }
+    return entity.carrying;
+}
+
+/**
+ * Set the carrying state on an entity.
+ */
+export function setCarrying(entity: Entity, material: EMaterialType, amount: number): void {
+    entity.carrying = { material, amount };
+}
+
+/**
+ * Clear the carrying state on an entity.
+ */
+export function clearCarrying(entity: Entity): void {
+    entity.carrying = undefined;
 }
 
 /**

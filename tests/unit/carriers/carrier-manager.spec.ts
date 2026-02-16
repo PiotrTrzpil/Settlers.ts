@@ -42,9 +42,9 @@ describe('CarrierManager', () => {
             expect(carrier.homeBuilding).toBe(100);
             expect(carrier.currentJob).toBeNull();
             expect(carrier.fatigue).toBe(0);
-            expect(carrier.carryingMaterial).toBeNull();
-            expect(carrier.carryingAmount).toBe(0);
             expect(carrier.status).toBe(CarrierStatus.Idle);
+            // carryingMaterial/carryingAmount moved to entity.carrying
+            expect(entityProvider.getEntity(1)?.carrying).toBeUndefined();
         });
 
         it('should register carrier in manager', () => {
@@ -397,27 +397,8 @@ describe('CarrierManager', () => {
         });
     });
 
-    describe('setCarrying', () => {
-        it('should set carrying material and amount', () => {
-            const carrier = manager.createCarrier(1, 100);
-
-            manager.setCarrying(1, EMaterialType.STONE, 3);
-
-            expect(carrier.carryingMaterial).toBe(EMaterialType.STONE);
-            expect(carrier.carryingAmount).toBe(3);
-        });
-
-        it('should clear carrying when material is null', () => {
-            const carrier = manager.createCarrier(1, 100);
-            carrier.carryingMaterial = EMaterialType.LOG;
-            carrier.carryingAmount = 5;
-
-            manager.setCarrying(1, null, 0);
-
-            expect(carrier.carryingMaterial).toBeNull();
-            expect(carrier.carryingAmount).toBe(0);
-        });
-    });
+    // Note: setCarrying has been moved to entity.ts - carriers now use entity.carrying
+    // like all other units. See entity.spec.ts for carrying state tests.
 
     describe('setFatigue', () => {
         it('should update fatigue level', () => {
@@ -605,7 +586,6 @@ describe('CarrierManager', () => {
             // All mutation methods should throw for entities without carrier state
             expect(() => manager.completeJob(999)).toThrow(/is not a carrier/);
             expect(() => manager.setStatus(999, CarrierStatus.Walking)).toThrow(/is not a carrier/);
-            expect(() => manager.setCarrying(999, EMaterialType.LOG, 1)).toThrow(/is not a carrier/);
             expect(() => manager.setFatigue(999, 50)).toThrow(/is not a carrier/);
             expect(() => manager.addFatigue(999, 10)).toThrow(/is not a carrier/);
             expect(() => manager.reassignToTavern(999, 200)).toThrow(/is not a carrier/);

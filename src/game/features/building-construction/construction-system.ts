@@ -11,26 +11,11 @@
 import type { TickSystem } from '../../tick-system';
 import type { GameState } from '../../game-state';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
-import { EntityType } from '../../entity';
-import { BuildingType } from '../../buildings/types';
-import { UnitType } from '../../unit-types';
-import { isPassable } from '../placement';
-import { BuildingConstructionPhase, type BuildingState, type BuildingSpawnConfig, type TerrainContext } from './types';
+import { BuildingConstructionPhase, type BuildingState, type TerrainContext } from './types';
 import { determinePhase, calculatePhaseProgress } from './internal/phase-transitions';
 import { captureOriginalTerrain, applyTerrainLeveling, restoreOriginalTerrain } from './terrain';
 import type { BuildingStateManager } from './building-state-manager';
-
-/**
- * Which unit type (and count) each building spawns when construction completes.
- * The Barrack produces soldiers, residence buildings produce settlers, etc.
- * Buildings not listed here don't spawn units on completion.
- */
-export const BUILDING_SPAWN_ON_COMPLETE: Record<number, BuildingSpawnConfig | undefined> = {
-    [BuildingType.Barrack]: { unitType: UnitType.Swordsman, count: 3 },
-    [BuildingType.ResidenceSmall]: { unitType: UnitType.Carrier, count: 2 },
-    [BuildingType.ResidenceMedium]: { unitType: UnitType.Carrier, count: 4 },
-    [BuildingType.ResidenceBig]: { unitType: UnitType.Carrier, count: 6 },
-};
+import { spawnUnitsOnBuildingComplete, type SpawnContext } from './spawn-units';
 
 /**
  * Configuration for BuildingConstructionSystem dependencies.
@@ -69,6 +54,13 @@ export class BuildingConstructionSystem implements TickSystem {
         this.eventBus = eventBus;
         this.subscriptions.subscribe(eventBus, 'building:removed', ({ buildingState }) => {
             this.onBuildingRemoved(buildingState);
+        });
+        // Listen for building:completed to spawn units (handles both tick completion and instant placement)
+        this.subscriptions.subscribe(eventBus, 'building:completed', ({ buildingState }) => {
+            const spawnCtx: SpawnContext | undefined = this.terrainContext
+                ? { groundType: this.terrainContext.groundType, mapSize: this.terrainContext.mapSize }
+                : undefined;
+            spawnUnitsOnBuildingComplete(this.state, buildingState, eventBus, spawnCtx);
         });
     }
 
@@ -127,11 +119,11 @@ export class BuildingConstructionSystem implements TickSystem {
         }
 
         if (newPhase === BuildingConstructionPhase.Completed && previousPhase !== BuildingConstructionPhase.Completed) {
+            // Emit event - unit spawning is handled by the building:completed event listener
             this.eventBus!.emit('building:completed', {
                 entityId: buildingState.entityId,
                 buildingState,
             });
-            this.spawnUnitsOnBuildingComplete(buildingState);
         }
 
         return terrainModified;
@@ -171,67 +163,5 @@ export class BuildingConstructionSystem implements TickSystem {
         buildingState.terrainModified = true;
         const { groundType, groundHeight, mapSize } = this.terrainContext;
         return applyTerrainLeveling(buildingState, groundType, groundHeight, mapSize, 1.0);
-    }
-
-    /** Check if a tile is valid for spawning a unit */
-    private isValidSpawnTile(x: number, y: number): boolean {
-        if (this.terrainContext) {
-            const { mapSize, groundType } = this.terrainContext;
-            if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) return false;
-            if (!isPassable(groundType[mapSize.toIndex(x, y)])) return false;
-        }
-        return !this.state.getEntityAt(x, y);
-    }
-
-    /** Generate ring perimeter tiles (only the edge of a square ring) */
-    private *getRingTiles(cx: number, cy: number, radius: number): Generator<{ x: number; y: number }> {
-        for (let dy = -radius; dy <= radius; dy++) {
-            for (let dx = -radius; dx <= radius; dx++) {
-                if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
-                    yield { x: cx + dx, y: cy + dy };
-                }
-            }
-        }
-    }
-
-    /**
-     * Spawn units adjacent to a building that just completed construction.
-     * Uses BUILDING_SPAWN_ON_COMPLETE to determine which unit type and count to spawn.
-     */
-    private spawnUnitsOnBuildingComplete(buildingState: BuildingState): void {
-        const spawnDef = BUILDING_SPAWN_ON_COMPLETE[buildingState.buildingType];
-        if (!spawnDef) return;
-
-        // Entity MUST exist - we just completed constructing it
-        const entity = this.state.getEntityOrThrow(buildingState.entityId, 'completed building');
-
-        const { tileX: bx, tileY: by } = buildingState;
-        let spawned = 0;
-
-        for (let radius = 1; radius <= 4 && spawned < spawnDef.count; radius++) {
-            for (const tile of this.getRingTiles(bx, by, radius)) {
-                if (spawned >= spawnDef.count) break;
-                if (!this.isValidSpawnTile(tile.x, tile.y)) continue;
-
-                const spawnedEntity = this.state.addEntity(
-                    EntityType.Unit,
-                    spawnDef.unitType,
-                    tile.x,
-                    tile.y,
-                    entity.player,
-                    spawnDef.selectable
-                );
-
-                this.eventBus!.emit('unit:spawned', {
-                    entityId: spawnedEntity.id,
-                    unitType: spawnDef.unitType,
-                    x: tile.x,
-                    y: tile.y,
-                    player: entity.player,
-                });
-
-                spawned++;
-            }
-        }
     }
 }

@@ -73,6 +73,9 @@ export type CarrierJob =
 
 /**
  * State tracking for a carrier unit.
+ *
+ * Note: Material being carried is stored on entity.carrying (shared with all units).
+ * Use entity.carrying.material and entity.carrying.amount to access carried material.
  */
 export interface CarrierState {
     /** Entity ID of this carrier */
@@ -83,10 +86,6 @@ export interface CarrierState {
     currentJob: CarrierJob | null;
     /** Fatigue level (0 = fresh, 100 = exhausted) */
     fatigue: number;
-    /** Material type currently being carried (null if not carrying anything) */
-    carryingMaterial: EMaterialType | null;
-    /** Amount of material currently being carried */
-    carryingAmount: number;
     /** Current status of the carrier */
     status: CarrierStatus;
 }
@@ -100,8 +99,6 @@ export function createCarrierState(entityId: number, homeBuilding: number): Carr
         homeBuilding,
         currentJob: null,
         fatigue: 0,
-        carryingMaterial: null,
-        carryingAmount: 0,
         status: CarrierStatus.Idle,
     };
 }

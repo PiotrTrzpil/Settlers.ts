@@ -285,11 +285,11 @@ const unitCategory = computed(() => {
     return getUnitCategory(entity.subType as UnitType);
 });
 
-// Carried material for carriers (from entity.carrier state)
+// Carried material for any unit (from entity.carrying state)
 const carriedMaterial = computed(() => {
     const entity = selectedEntity.value;
     if (!entity || entity.type !== EntityType.Unit) return null;
-    const material = entity.carrier?.carryingMaterial;
+    const material = entity.carrying?.material;
     if (material === undefined || material === null) return null;
     return EMaterialType[material] ?? `Material #${material}`;
 });

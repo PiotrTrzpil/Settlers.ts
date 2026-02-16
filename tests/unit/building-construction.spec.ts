@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { BuildingType, getBuildingFootprint, EntityType } from '@/game/entity';
+import { UnitType } from '@/game/unit-types';
 import {
     BuildingConstructionPhase,
     BuildingStateManager,
@@ -419,7 +420,7 @@ describe('Barracks unit spawning on construction complete', () => {
         }
     });
 
-    it('should not spawn units for non-barrack buildings', () => {
+    it('should spawn dedicated worker for production buildings when placeBuildingsWithWorker is enabled', () => {
         const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
         const { gameState, buildingStateManager } = createTestGameStateWithBSM();
         const lj = gameState.addEntity(EntityType.Building, BuildingType.WoodcutterHut, 10, 10, 0);
@@ -435,10 +436,10 @@ describe('Barracks unit spawning on construction complete', () => {
         tickConstruction(gameState, buildingStateManager, 0.2, ctx);
 
         expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
-        // Lumberjack auto-spawns at placement time (via BUILDING_UNIT_TYPE), not on completion
-        // No additional unit should be spawned by the construction system
+        // Woodcutter worker is spawned on completion (placeBuildingsWithWorker defaults to true)
         const units = gameState.entities.filter(e => e.type === EntityType.Unit);
-        expect(units).toHaveLength(0);
+        expect(units).toHaveLength(1);
+        expect(units[0].subType).toBe(UnitType.Woodcutter);
     });
 
     it('should handle limited space around the building gracefully', () => {
