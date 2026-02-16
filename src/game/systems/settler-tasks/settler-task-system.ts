@@ -14,7 +14,6 @@
 import type { GameState } from '../../game-state';
 import type { TickSystem } from '../../tick-system';
 import { EntityType, UnitType, Entity, clearCarrying } from '../../entity';
-import { EMaterialType } from '../../economy';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { hexDistance } from '../hex-directions';
@@ -37,6 +36,7 @@ import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDe
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../../features/inventory';
 import type { CarrierManager } from '../../features/carriers';
+import { createWorkplaceHandler, createCarrierHandler, isOutputFull } from './work-handlers';
 
 const log = new LogHandler('SettlerTaskSystem');
 
@@ -115,10 +115,10 @@ export class SettlerTaskSystem implements TickSystem {
         this.jobDefinitions = loadJobDefinitions();
 
         // Register built-in WORKPLACE handler for building workers
-        this.registerWorkHandler(SearchType.WORKPLACE, this.createWorkplaceHandler());
+        this.registerWorkHandler(SearchType.WORKPLACE, createWorkplaceHandler(this.gameState, this.inventoryManager));
 
         // Register GOOD handler for carriers (they get jobs assigned externally by LogisticsDispatcher)
-        this.registerWorkHandler(SearchType.GOOD, this.createCarrierHandler());
+        this.registerWorkHandler(SearchType.GOOD, createCarrierHandler());
 
         log.debug(`Loaded ${this.settlerConfigs.size} settler configs, ${this.jobDefinitions.size} jobs`);
     }
@@ -138,82 +138,6 @@ export class SettlerTaskSystem implements TickSystem {
             setIdleAnimation: (settler: Entity) => this.setIdleAnimation(settler),
             applyTaskAnimation: (settler: Entity, anim: AnimationType, direction?: number) =>
                 this.applyTaskAnimation(settler, anim, direction),
-        };
-    }
-
-    /**
-     * Create a handler for WORKPLACE search type.
-     * Building workers find their workplace, wait for materials, then produce.
-     */
-    private createWorkplaceHandler(): WorkHandler {
-        return {
-            // Worker waits at building for materials instead of failing
-            shouldWaitForWork: true,
-
-            findTarget: (_x: number, _y: number, settlerId?: number) => {
-                if (settlerId === undefined) return null;
-                // Settler MUST exist if we're searching for its target
-                const settler = this.gameState.getEntityOrThrow(settlerId, 'settler for findTarget');
-
-                const workplace = this.gameState.findNearestWorkplace(settler);
-                if (!workplace) return null;
-
-                return { entityId: workplace.id, x: workplace.x, y: workplace.y };
-            },
-
-            canWork: (targetId: number) => {
-                // Can work when building has inputs and output space
-                return (
-                    this.inventoryManager.canStartProduction(targetId) && this.inventoryManager.canStoreOutput(targetId)
-                );
-            },
-
-            onWorkStart: (targetId: number) => {
-                // Consume inputs when starting work
-                this.inventoryManager.consumeProductionInputs(targetId);
-            },
-
-            onWorkTick: (_targetId: number, progress: number) => {
-                // Complete when progress reaches 1.0
-                return progress >= 1.0;
-            },
-
-            onWorkComplete: (targetId: number) => {
-                // Produce outputs when work completes
-                this.inventoryManager.produceOutput(targetId);
-            },
-        };
-    }
-
-    /**
-     * Create a handler for GOOD search type (carriers).
-     *
-     * Carriers don't find work themselves - they get jobs assigned externally
-     * by LogisticsDispatcher via assignJob(). This handler exists to
-     * prevent "no handler registered" errors when carriers are idle.
-     *
-     * Returns null from findTarget() which makes the carrier stay idle until
-     * a job is assigned externally.
-     */
-    private createCarrierHandler(): WorkHandler {
-        return {
-            // Carrier waits for work to be assigned externally
-            shouldWaitForWork: true,
-
-            findTarget: () => {
-                // Carriers don't self-search - jobs are assigned by LogisticsDispatcher
-                return null;
-            },
-
-            canWork: () => {
-                // Never called since findTarget returns null
-                return false;
-            },
-
-            onWorkTick: () => {
-                // Never called since findTarget returns null
-                return false;
-            },
         };
     }
 
@@ -633,7 +557,7 @@ export class SettlerTaskSystem implements TickSystem {
         const selected = this.selectJob(settler, config, target);
         if (!selected) return;
 
-        if (homeBuilding && this.isOutputFull(homeBuilding, selected.tasks)) {
+        if (homeBuilding && isOutputFull(homeBuilding, selected.tasks, this.inventoryManager)) {
             this.returnHomeAndWait(settler, homeBuilding);
             return;
         }
@@ -695,33 +619,6 @@ export class SettlerTaskSystem implements TickSystem {
      */
     private jobNeedsEntityTarget(firstTask: TaskNode): boolean {
         return firstTask.task === TaskType.GO_TO_TARGET || firstTask.task === TaskType.WORK_ON_ENTITY;
-    }
-
-    /**
-     * Check if the home building's output is full for the job's pickup material.
-     */
-    private isOutputFull(homeBuilding: Entity, tasks: TaskNode[]): boolean {
-        const pickupTask = tasks.find(t => t.task === TaskType.PICKUP && t.good !== undefined);
-        if (!pickupTask || pickupTask.good === undefined) return false;
-
-        return (
-            !this.inventoryManager.canAcceptInput(homeBuilding.id, pickupTask.good, 1) &&
-            this.inventoryManager.getInputSpace(homeBuilding.id, pickupTask.good) <= 0 &&
-            !this.canStoreInOutput(homeBuilding.id, pickupTask.good)
-        );
-    }
-
-    /**
-     * Check if building can store a material in its output slot.
-     */
-    private canStoreInOutput(buildingId: number, materialType: EMaterialType): boolean {
-        const inventory = this.inventoryManager.getInventory(buildingId);
-        if (!inventory) return false;
-
-        const slot = inventory.outputSlots.find(s => s.materialType === materialType);
-        if (!slot) return false;
-
-        return slot.currentAmount < slot.maxCapacity;
     }
 
     /**

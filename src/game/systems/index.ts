@@ -122,11 +122,8 @@ export { TreeStage, type TreeState, TreeSystem } from './tree-system';
 export { type MaterialRequestSystemConfig, MaterialRequestSystem } from './production-system';
 
 // ============================================================================
-// Domain Systems (work handlers for SettlerTaskSystem)
+// Spatial Search
 // ============================================================================
-export { WoodcuttingSystem } from './woodcutting-system';
-export { StonecuttingSystem } from './stonecutting-system';
-export { createSimpleHarvestHandler, type SimpleHarvestConfig } from './resource-harvesting';
 export { findNearestEntity, findEmptySpot, ringTiles, type FindEmptySpotConfig } from './spatial-search';
 
 // ============================================================================

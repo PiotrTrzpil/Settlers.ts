@@ -1,7 +1,10 @@
 import { GameState } from './game-state';
-import { WoodcuttingSystem } from './systems/woodcutting-system';
-import { StonecuttingSystem } from './systems/stonecutting-system';
-import { SettlerTaskSystem } from './systems/settler-tasks';
+import { SettlerTaskSystem, SearchType } from './systems/settler-tasks';
+import {
+    createWoodcuttingHandler,
+    createStonecuttingHandler,
+    createForesterHandler,
+} from './systems/settler-tasks/work-handlers';
 import { MaterialRequestSystem } from './systems/production-system';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
@@ -121,12 +124,6 @@ export class GameLoop {
     /** Settler task system - manages all settler behaviors */
     public readonly settlerTaskSystem: SettlerTaskSystem;
 
-    /** Woodcutting domain system - work handler for tree cutting */
-    public readonly woodcuttingSystem: WoodcuttingSystem;
-
-    /** Stonecutting domain system - work handler for stone mining */
-    public readonly stonecuttingSystem: StonecuttingSystem;
-
     /** Inventory visualizer - syncs building outputs to visual stacked resources */
     public readonly inventoryVisualizer: InventoryVisualizer;
 
@@ -243,9 +240,12 @@ export class GameLoop {
         this.registerSystem(this.logisticsDispatcher);
 
         // 7. Domain systems — register work handlers with task system
-        this.woodcuttingSystem = new WoodcuttingSystem(gameState, this.treeSystem, this.settlerTaskSystem);
-        this.stonecuttingSystem = new StonecuttingSystem(gameState, this.settlerTaskSystem);
-        this.treeSystem.registerForesterHandler(this.settlerTaskSystem);
+        this.settlerTaskSystem.registerWorkHandler(
+            SearchType.TREE,
+            createWoodcuttingHandler(gameState, this.treeSystem)
+        );
+        this.settlerTaskSystem.registerWorkHandler(SearchType.STONE, createStonecuttingHandler(gameState));
+        this.settlerTaskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, createForesterHandler(this.treeSystem));
 
         // 8. Material request system — creates transport requests for buildings needing input materials
         this.materialRequestSystem = new MaterialRequestSystem({

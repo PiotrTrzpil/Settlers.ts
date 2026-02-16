@@ -18,7 +18,6 @@ import type { GameState } from '../game-state';
 import { EntityType, MapObjectType } from '../entity';
 import { OBJECT_TYPE_CATEGORY } from './map-objects';
 import type { AnimationService } from '../animation/index';
-import { SettlerTaskSystem, SearchType, type WorkHandler } from './settler-tasks';
 import { findEmptySpot } from './spatial-search';
 import { LogHandler } from '@/utilities/log-handler';
 
@@ -295,35 +294,10 @@ export class TreeSystem implements TickSystem {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Forester work handler (TREE_SEED_POS)
+    // Forester support (used by createForesterHandler in work-handlers)
     // ─────────────────────────────────────────────────────────────
 
-    /**
-     * Register the forester work handler with the settler task system.
-     * Foresters find empty tiles and plant new trees.
-     */
-    registerForesterHandler(taskSystem: SettlerTaskSystem): void {
-        taskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, this.createForesterHandler());
-        log.debug('Registered forester work handler');
-    }
-
-    private createForesterHandler(): WorkHandler {
-        return {
-            findTarget: (x: number, y: number) => {
-                return this.findPlantingSpot(x, y);
-            },
-
-            // canWork/onWorkTick are required but not used for SEARCH_POS → WORK flow
-            canWork: () => true,
-            onWorkTick: () => true,
-
-            onWorkAtPositionComplete: (posX: number, posY: number, settlerId: number) => {
-                this.plantTree(posX, posY, settlerId);
-            },
-        };
-    }
-
-    private plantTree(x: number, y: number, settlerId: number): void {
+    plantTree(x: number, y: number, settlerId: number): void {
         const treeType = PLANTABLE_TREE_TYPES[Math.floor(Math.random() * PLANTABLE_TREE_TYPES.length)];
 
         // Check tile is still valid (nothing placed there while forester was walking)
@@ -337,7 +311,7 @@ export class TreeSystem implements TickSystem {
         log.debug(`Forester ${settlerId} planted ${MapObjectType[treeType]} at (${x}, ${y})`);
     }
 
-    private findPlantingSpot(cx: number, cy: number): { entityId: number | null; x: number; y: number } | null {
+    findPlantingSpot(cx: number, cy: number): { entityId: number | null; x: number; y: number } | null {
         return findEmptySpot(cx, cy, {
             gameState: this.gameState,
             searchRadius: PLANTING_SEARCH_RADIUS,
