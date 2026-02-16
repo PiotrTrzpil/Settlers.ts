@@ -19,5 +19,6 @@ export {
     type CarrierJobState,
     type JobState,
     type WorkHandler,
+    buildCarrierJob,
 } from './types';
 export type { TaskContext } from './task-executors';

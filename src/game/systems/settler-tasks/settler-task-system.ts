@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 /**
  * Settler Task System - manages ALL unit behaviors via tasks.
  *
@@ -28,7 +27,6 @@ import {
     SettlerState,
     type SettlerConfig,
     type TaskNode,
-    type CarrierJobState,
     type WorkerJobData,
     type JobState,
     type WorkHandler,
@@ -39,12 +37,14 @@ import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDe
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../../features/inventory';
 import type { CarrierManager } from '../../features/carriers';
-import { CarrierStatus } from '../../features/carriers';
 
 const log = new LogHandler('SettlerTaskSystem');
 
 /** Number of sprite directions (matches hex grid) */
 const NUM_DIRECTIONS = 6;
+
+/** How often to run the orphan-runtime safety net (in ticks) */
+const ORPHAN_CHECK_INTERVAL = 60;
 
 /** Simple move task state (for user-initiated movement) */
 interface MoveTaskState {
@@ -102,6 +102,8 @@ export class SettlerTaskSystem implements TickSystem {
     private inventoryVisualizer!: InventoryVisualizer;
     /** Context object passed to task executor functions */
     private taskContext!: TaskContext;
+    /** Tick counter for throttling the orphan-runtime safety net */
+    private ticksSinceOrphanCheck = 0;
 
     constructor(config: SettlerTaskSystemConfig) {
         this.gameState = config.gameState;
@@ -187,7 +189,7 @@ export class SettlerTaskSystem implements TickSystem {
      * Create a handler for GOOD search type (carriers).
      *
      * Carriers don't find work themselves - they get jobs assigned externally
-     * by LogisticsDispatcher via assignCarrierJob(). This handler exists to
+     * by LogisticsDispatcher via assignJob(). This handler exists to
      * prevent "no handler registered" errors when carriers are idle.
      *
      * Returns null from findTarget() which makes the carrier stay idle until
@@ -318,82 +320,50 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     /**
-     * Assign a carrier transport job.
-     * Called by LogisticsDispatcher when a delivery is matched.
+     * Assign an externally-constructed job to a unit.
+     * Used by LogisticsDispatcher for carrier transport jobs and potentially
+     * for future external job assignments (military orders, etc.).
      *
-     * Also updates carrier status via CarrierManager and emits carrier:jobAssigned.
+     * Interrupts any current job and optionally starts movement.
      *
-     * @param entityId Entity ID of the carrier
-     * @param sourceBuildingId Building to pickup from
-     * @param destBuildingId Building to deliver to
-     * @param material Material type to transport
-     * @param amount Amount to transport
-     * @param homeId Carrier's home building (for return after delivery)
-     * @returns true if job was assigned successfully
+     * @param entityId Entity ID of the unit
+     * @param job The job state to assign
+     * @param moveTo Optional initial movement target
+     * @returns true if the job was assigned (movement started if requested)
      */
-    assignCarrierJob(
-        entityId: number,
-        sourceBuildingId: number,
-        destBuildingId: number,
-        material: EMaterialType,
-        amount: number,
-        homeId: number
-    ): boolean {
-        // Entity MUST exist and be a carrier - caller should have validated
-        const entity = this.gameState.getEntityOrThrow(entityId, 'carrier for job assignment');
-        if (entity.type !== EntityType.Unit || entity.subType !== UnitType.Carrier) {
-            throw new Error(`Entity ${entityId} is not a carrier (type=${entity.type}, subType=${entity.subType})`);
-        }
-
-        // Get or create runtime
+    assignJob(entityId: number, job: JobState, moveTo?: { x: number; y: number }): boolean {
+        const entity = this.gameState.getEntityOrThrow(entityId, 'unit for job assignment');
         const runtime = this.getRuntime(entityId);
 
-        // Create carrier job state (composed structure)
-        const carrierJob: CarrierJobState = {
-            type: 'carrier',
-            jobId: 'carrier.transport',
-            taskIndex: 0,
-            progress: 0,
-            data: {
-                sourceBuildingId,
-                destBuildingId,
-                material,
-                amount,
-                homeId,
-                carryingGood: null,
-            },
-        };
+        // Interrupt any current job
+        if (runtime.job) {
+            const config = this.settlerConfigs.get(entity.subType as UnitType);
+            if (config) {
+                this.interruptJob(entity, config, runtime);
+            }
+            runtime.job = null;
+        }
+
+        // Start movement if target position provided
+        if (moveTo) {
+            const moveSuccess = this.gameState.movement.moveUnit(entityId, moveTo.x, moveTo.y);
+            if (!moveSuccess) {
+                return false;
+            }
+        }
 
         // Set runtime state
         runtime.state = SettlerState.WORKING;
-        runtime.job = carrierJob;
-        runtime.moveTask = null; // Clear any existing move task
+        runtime.job = job;
+        runtime.moveTask = null;
 
-        // Buildings MUST exist - caller should have validated
-        const sourceBuilding = this.gameState.getEntityOrThrow(sourceBuildingId, 'source building for carrier job');
-        this.gameState.getEntityOrThrow(destBuildingId, 'destination building for carrier job');
-
-        // Note: Inventory reservation is handled by LogisticsDispatcher via InventoryReservationManager.
-        // We don't reserve here - the logistics layer already reserved when creating the job.
-
-        const moveSuccess = this.gameState.movement.moveUnit(entityId, sourceBuilding.x, sourceBuilding.y);
-        if (!moveSuccess) {
-            log.warn(`Cannot path to source building ${sourceBuildingId}`);
-            runtime.state = SettlerState.IDLE;
-            runtime.job = null;
-            return false;
+        // Start walk animation if moving
+        if (moveTo) {
+            const controller = this.gameState.movement.getController(entityId)!;
+            this.startWalkAnimation(entity, controller.direction);
         }
 
-        // Update carrier status
-        this.carrierManager.setStatus(entityId, CarrierStatus.Walking);
-
-        // Start walk animation (controller MUST exist after successful moveUnit)
-        const controller = this.gameState.movement.getController(entityId)!;
-        this.startWalkAnimation(entity, controller.direction);
-
-        log.debug(
-            `Carrier ${entityId} assigned transport job: ${amount} of ${material} from ${sourceBuildingId} to ${destBuildingId}`
-        );
+        log.debug(`Unit ${entityId} assigned job ${job.jobId}`);
         return true;
     }
 
@@ -454,10 +424,13 @@ export class SettlerTaskSystem implements TickSystem {
         }
 
         // Safety net: clean up runtimes for entities removed without onEntityRemoved signal.
-        // Uses onEntityRemoved so domain handlers get proper cleanup notification.
-        for (const id of this.runtimes.keys()) {
-            if (!this.gameState.getEntity(id)) {
-                this.onEntityRemoved(id);
+        // Runs every ~60 ticks since onEntityRemoved is the primary cleanup path.
+        if (++this.ticksSinceOrphanCheck >= ORPHAN_CHECK_INTERVAL) {
+            this.ticksSinceOrphanCheck = 0;
+            for (const id of this.runtimes.keys()) {
+                if (!this.gameState.getEntity(id)) {
+                    this.onEntityRemoved(id);
+                }
             }
         }
     }

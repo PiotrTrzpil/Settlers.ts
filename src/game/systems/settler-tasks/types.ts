@@ -177,6 +177,33 @@ export interface CarrierJobState extends CommonJobFields {
 /** Discriminated union of all job state types */
 export type JobState = WorkerJobState | CarrierJobState;
 
+/**
+ * Build a CarrierJobState for a transport delivery.
+ * Pure data construction — no side effects.
+ */
+export function buildCarrierJob(
+    sourceBuildingId: number,
+    destBuildingId: number,
+    material: EMaterialType,
+    amount: number,
+    homeId: number
+): CarrierJobState {
+    return {
+        type: 'carrier',
+        jobId: 'carrier.transport',
+        taskIndex: 0,
+        progress: 0,
+        data: {
+            sourceBuildingId,
+            destBuildingId,
+            material,
+            amount,
+            homeId,
+            carryingGood: null,
+        },
+    };
+}
+
 // ─────────────────────────────────────────────────────────────
 // Legacy aliases for backward compatibility
 // ─────────────────────────────────────────────────────────────

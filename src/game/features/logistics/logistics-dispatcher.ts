@@ -14,6 +14,7 @@ import type { TickSystem } from '../../tick-system';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import type { GameState } from '../../game-state';
 import type { CarrierManager } from '../carriers';
+import { CarrierStatus } from '../carriers';
 import type { RequestManager } from './request-manager';
 import type { ServiceAreaManager } from '../service-areas';
 import { getHubsServingBothPositions, getHubsServingPosition } from '../service-areas/service-area-queries';
@@ -22,7 +23,7 @@ import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
 import { LogHandler } from '@/utilities/log-handler';
 import type { BuildingInventoryManager } from '../inventory';
-import type { SettlerTaskSystem } from '../../systems/settler-tasks';
+import { buildCarrierJob, type SettlerTaskSystem } from '../../systems/settler-tasks';
 
 /** Configuration for LogisticsDispatcher dependencies */
 export interface LogisticsDispatcherConfig {
@@ -245,18 +246,24 @@ export class LogisticsDispatcher implements TickSystem {
                 request.id
             );
 
-            // Assign the delivery job to the carrier via SettlerTaskSystem
+            // Build carrier job and assign via generic SettlerTaskSystem API
             const carrierState = this.carrierManager.getCarrierOrThrow(carrier.entityId, 'for delivery assignment');
-            const success = this.settlerTaskSystem.assignCarrierJob(
-                carrier.entityId,
+            const sourceBuilding = this.gameState.getEntityOrThrow(match.sourceBuilding, 'source building for carrier');
+            const job = buildCarrierJob(
                 match.sourceBuilding,
                 request.buildingId,
                 request.materialType,
                 match.amount,
                 carrierState.homeBuilding
             );
+            const success = this.settlerTaskSystem.assignJob(carrier.entityId, job, {
+                x: sourceBuilding.x,
+                y: sourceBuilding.y,
+            });
 
             if (success) {
+                this.carrierManager.setStatus(carrier.entityId, CarrierStatus.Walking);
+
                 // Mark request as in progress
                 this.requestManager.assignRequest(request.id, match.sourceBuilding, carrier.entityId);
 

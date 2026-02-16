@@ -13,21 +13,10 @@ import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../../features/inventory';
 import type { CarrierManager } from '../../features/carriers';
-import { CarrierStatus } from '../../features/carriers';
-import {
-    TaskType,
-    TaskResult,
-    type TaskNode,
-    type CarrierJobState,
-    type JobState,
-    type WorkHandler,
-    type AnimationType,
-} from './types';
+import { TaskType, TaskResult, type TaskNode, type JobState, type WorkHandler, type AnimationType } from './types';
+import { executeCarrierTask } from './carrier-task-executors';
 
 const log = new LogHandler('TaskExecutors');
-
-/** Fatigue added per delivery cycle */
-const FATIGUE_PER_DELIVERY = 5;
 
 /**
  * Services and callbacks needed by task executors.
@@ -59,6 +48,13 @@ export function executeTask(
     ctx: TaskContext,
     handler?: WorkHandler
 ): TaskResult {
+    // Carrier-specific tasks are handled by the carrier executor
+    if (job.type === 'carrier') {
+        const result = executeCarrierTask(settler, job, task, ctx);
+        if (result !== null) return result;
+        // Fall through to generic tasks (GO_HOME, WAIT, STAY, etc.)
+    }
+
     switch (task.task) {
     case TaskType.GO_TO_TARGET:
         return executeGoToTarget(settler, job, ctx);
@@ -71,12 +67,6 @@ export function executeTask(
 
     case TaskType.GO_HOME:
         return executeGoHome(settler, job, ctx);
-
-    case TaskType.GO_TO_SOURCE:
-        return executeGoToSource(settler, job, ctx);
-
-    case TaskType.GO_TO_DEST:
-        return executeGoToDest(settler, job, ctx);
 
     case TaskType.STAY:
         return TaskResult.CONTINUE;
@@ -96,6 +86,11 @@ export function executeTask(
     case TaskType.WAIT:
         return executeWait(job, task, dt);
 
+    case TaskType.GO_TO_SOURCE:
+    case TaskType.GO_TO_DEST:
+        // Carrier-only tasks — if we reach here, the job type is wrong
+        throw new Error(`Task ${task.task} is carrier-only but job type is '${job.type}' (settler ${settler.id}).`);
+
     default:
         throw new Error(
             `Unhandled task type: ${task.task} in job ${job.jobId} (settler ${settler.id}). ` +
@@ -108,7 +103,7 @@ export function executeTask(
 // Movement helper
 // ─────────────────────────────────────────────────────────────
 
-function moveToPosition(settler: Entity, targetX: number, targetY: number, ctx: TaskContext): TaskResult {
+export function moveToPosition(settler: Entity, targetX: number, targetY: number, ctx: TaskContext): TaskResult {
     const controller = ctx.gameState.movement.getController(settler.id);
     if (!controller) return TaskResult.FAILED;
 
@@ -143,28 +138,6 @@ function executeGoHome(settler: Entity, job: JobState, ctx: TaskContext): TaskRe
     if (!homeId) return TaskResult.FAILED;
     const building = ctx.gameState.getEntityOrThrow(homeId, 'home building');
     return moveToPosition(settler, building.x, building.y, ctx);
-}
-
-function executeGoToSource(settler: Entity, job: JobState, ctx: TaskContext): TaskResult {
-    if (job.type !== 'carrier') return TaskResult.FAILED;
-    const { sourceBuildingId, material } = job.data;
-    const building = ctx.gameState.getEntityOrThrow(sourceBuildingId, 'source building');
-    // Navigate to the output stack position if it exists, otherwise fall back to building center
-    const stackPos = ctx.inventoryVisualizer.getStackPosition(sourceBuildingId, material, 'output');
-    const targetX = stackPos?.x ?? building.x;
-    const targetY = stackPos?.y ?? building.y;
-    return moveToPosition(settler, targetX, targetY, ctx);
-}
-
-function executeGoToDest(settler: Entity, job: JobState, ctx: TaskContext): TaskResult {
-    if (job.type !== 'carrier') return TaskResult.FAILED;
-    const { destBuildingId, material } = job.data;
-    const building = ctx.gameState.getEntityOrThrow(destBuildingId, 'destination building');
-    // Navigate to the input stack position if it exists, otherwise fall back to building center
-    const stackPos = ctx.inventoryVisualizer.getStackPosition(destBuildingId, material, 'input');
-    const targetX = stackPos?.x ?? building.x;
-    const targetY = stackPos?.y ?? building.y;
-    return moveToPosition(settler, targetX, targetY, ctx);
 }
 
 function executeGoToPos(settler: Entity, job: JobState, ctx: TaskContext): TaskResult {
@@ -342,12 +315,8 @@ function executeWait(job: JobState, task: TaskNode, dt: number): TaskResult {
 // Pickup / Dropoff tasks
 // ─────────────────────────────────────────────────────────────
 
-function executePickup(settler: Entity, job: JobState, task: TaskNode, ctx: TaskContext): TaskResult {
-    if (job.type === 'carrier') {
-        return executeCarrierPickup(settler, job, ctx);
-    }
-
-    // Regular settler pickup (e.g., woodcutter picking up LOG)
+/** Worker pickup (e.g., woodcutter picking up LOG after chopping) */
+function executePickup(settler: Entity, job: JobState, task: TaskNode, _ctx: TaskContext): TaskResult {
     const material = task.good;
     if (material != null) {
         setCarrying(settler, material, 1);
@@ -356,57 +325,8 @@ function executePickup(settler: Entity, job: JobState, task: TaskNode, ctx: Task
     return TaskResult.DONE;
 }
 
-/**
- * Carrier pickup - withdraw from source building inventory.
- * Inventory was reserved by LogisticsDispatcher via InventoryReservationManager.
- */
-function executeCarrierPickup(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskResult {
-    const entity = ctx.gameState.getEntityOrThrow(settler.id, 'carrier');
-    const { sourceBuildingId, material, amount: requestedAmount } = job.data;
-
-    // Withdraw from reserved amount (atomic: release slot reservation + withdraw)
-    const withdrawn = ctx.inventoryManager.withdrawReservedOutput(sourceBuildingId, material, requestedAmount);
-
-    if (withdrawn === 0) {
-        log.warn(`Carrier ${settler.id}: material ${material} not available at building ${sourceBuildingId}`);
-
-        ctx.eventBus.emit('carrier:pickupFailed', {
-            entityId: settler.id,
-            material,
-            fromBuilding: sourceBuildingId,
-            requestedAmount,
-        });
-
-        return TaskResult.FAILED;
-    }
-
-    setCarrying(entity, material, withdrawn);
-
-    job.data.carryingGood = material;
-    job.data.amount = withdrawn;
-
-    if (withdrawn < requestedAmount) {
-        log.debug(`Carrier ${settler.id} picked up ${withdrawn}/${requestedAmount} of ${material} (partial)`);
-    } else {
-        log.debug(`Carrier ${settler.id} picked up ${withdrawn} of ${material} from building ${sourceBuildingId}`);
-    }
-
-    ctx.eventBus.emit('carrier:pickupComplete', {
-        entityId: settler.id,
-        material,
-        amount: withdrawn,
-        fromBuilding: sourceBuildingId,
-    });
-
-    return TaskResult.DONE;
-}
-
+/** Worker dropoff (e.g., woodcutter dropping off LOG at home building) */
 function executeDropoff(settler: Entity, job: JobState, ctx: TaskContext): TaskResult {
-    if (job.type === 'carrier') {
-        return executeCarrierDropoff(settler, job, ctx);
-    }
-
-    // Regular settler dropoff (e.g., woodcutter dropping off LOG at home)
     if (job.data.carryingGood == null) {
         return TaskResult.DONE;
     }
@@ -429,41 +349,5 @@ function executeDropoff(settler: Entity, job: JobState, ctx: TaskContext): TaskR
 
     clearCarrying(settler);
     job.data.carryingGood = null;
-    return TaskResult.DONE;
-}
-
-/**
- * Carrier dropoff - deposit to destination building inventory.
- * Emits the critical 'carrier:deliveryComplete' event.
- */
-function executeCarrierDropoff(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskResult {
-    const entity = ctx.gameState.getEntityOrThrow(settler.id, 'carrier');
-    const { destBuildingId, material } = job.data;
-
-    const amount = entity.carrying?.amount ?? 0;
-
-    const deposited = ctx.inventoryManager.depositInput(destBuildingId, material, amount);
-
-    const overflow = amount - deposited;
-    if (overflow > 0) {
-        log.warn(`Carrier ${settler.id}: ${overflow} of ${material} overflow at building ${destBuildingId}`);
-    }
-
-    clearCarrying(entity);
-    job.data.carryingGood = null;
-
-    log.debug(`Carrier ${settler.id} delivered ${deposited} of ${material} to building ${destBuildingId}`);
-
-    ctx.carrierManager.addFatigue(settler.id, FATIGUE_PER_DELIVERY);
-    ctx.carrierManager.setStatus(settler.id, CarrierStatus.Idle);
-
-    ctx.eventBus.emit('carrier:deliveryComplete', {
-        entityId: settler.id,
-        material,
-        amount: deposited,
-        toBuilding: destBuildingId,
-        overflow,
-    });
-
     return TaskResult.DONE;
 }
