@@ -1,344 +1,337 @@
 <template>
-  <div class="debug-panel" :class="{ collapsed: !open }">
-    <button class="debug-toggle-btn" @click="open = !open" title="Debug Panel">
-      <span class="toggle-icon">{{ open ? '&#x25BC;' : '&#x25B6;' }}</span>
-      <span class="toggle-label">Debug</span>
-    </button>
+    <div class="debug-panel" :class="{ collapsed: !open }">
+        <button class="debug-toggle-btn" @click="open = !open" title="Debug Panel">
+            <span class="toggle-icon">{{ open ? '&#x25BC;' : '&#x25B6;' }}</span>
+            <span class="toggle-label">Debug</span>
+        </button>
 
-    <div v-if="open" class="debug-sections">
-      <!-- Performance -->
-      <section class="debug-section">
-        <h3 class="section-header" @click="sections.perf = !sections.perf">
-          <span class="caret">{{ sections.perf ? '&#x25BC;' : '&#x25B6;' }}</span>
-          Performance
-        </h3>
-        <div v-if="sections.perf" class="section-body">
-          <div class="stat-row">
-            <span class="stat-label">FPS</span>
-            <span class="stat-value" :class="fpsClass">{{ stats.fps }}</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Frame (avg)</span>
-            <span class="stat-value">{{ stats.frameTimeMs }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Frame (min/max)</span>
-            <span class="stat-value">{{ stats.frameTimeMin }} / {{ stats.frameTimeMax }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Ticks/sec</span>
-            <span class="stat-value">{{ stats.ticksPerSec }}</span>
-          </div>
+        <div v-if="open" class="debug-sections">
+            <!-- Performance -->
+            <section class="debug-section">
+                <h3 class="section-header" @click="sections.perf = !sections.perf">
+                    <span class="caret">{{ sections.perf ? '&#x25BC;' : '&#x25B6;' }}</span>
+                    Performance
+                </h3>
+                <div v-if="sections.perf" class="section-body">
+                    <div class="stat-row">
+                        <span class="stat-label">FPS</span>
+                        <span class="stat-value" :class="fpsClass">{{ stats.fps }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Frame (avg)</span>
+                        <span class="stat-value">{{ stats.frameTimeMs }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Frame (min/max)</span>
+                        <span class="stat-value">{{ stats.frameTimeMin }} / {{ stats.frameTimeMax }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Ticks/sec</span>
+                        <span class="stat-value">{{ stats.ticksPerSec }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Render Timings -->
+            <section class="debug-section">
+                <h3 class="section-header" @click="sections.renderTimings = !sections.renderTimings">
+                    <span class="caret">{{ sections.renderTimings ? '&#x25BC;' : '&#x25B6;' }}</span>
+                    Frame Timings
+                </h3>
+                <div v-if="sections.renderTimings" class="section-body">
+                    <div class="stat-row total-row">
+                        <span class="stat-label">Frame</span>
+                        <span class="stat-value">{{ stats.renderTimings.frame }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Ticks</span>
+                        <span class="stat-value">{{ stats.renderTimings.ticks }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Animations</span>
+                        <span class="stat-value">{{ stats.renderTimings.animations }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Callback</span>
+                        <span class="stat-value">{{ stats.renderTimings.callback }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Other</span>
+                        <span class="stat-value">{{ stats.renderTimings.other }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Render</span>
+                        <span class="stat-value">{{ stats.renderTimings.render }} ms</span>
+                    </div>
+                    <div class="stat-row sub-stat">
+                        <span class="stat-label">Landscape</span>
+                        <span class="stat-value">{{ stats.renderTimings.landscape }} ms</span>
+                    </div>
+                    <div class="stat-row sub-stat">
+                        <span class="stat-label">Cull/Sort</span>
+                        <span class="stat-value">{{ stats.renderTimings.cullSort }} ms</span>
+                    </div>
+                    <div class="stat-row sub-stat">
+                        <span class="stat-label">Entities</span>
+                        <span class="stat-value">{{ stats.renderTimings.entities }} ms</span>
+                    </div>
+                    <div class="stat-row sub-stat depth-2">
+                        <span class="stat-label">Indicators</span>
+                        <span class="stat-value">{{ stats.renderTimings.indicators }} ms</span>
+                    </div>
+                    <div class="stat-row sub-stat depth-2">
+                        <span class="stat-label">Textured</span>
+                        <span class="stat-value">{{ stats.renderTimings.textured }} ms</span>
+                    </div>
+                    <div class="stat-row sub-stat depth-2">
+                        <span class="stat-label">Color</span>
+                        <span class="stat-value">{{ stats.renderTimings.color }} ms</span>
+                    </div>
+                    <div class="stat-row sub-stat depth-2">
+                        <span class="stat-label">Selection</span>
+                        <span class="stat-value">{{ stats.renderTimings.selection }} ms</span>
+                    </div>
+                    <div class="stat-row sub-stat">
+                        <span class="stat-label">Visible</span>
+                        <span class="stat-value">{{ stats.renderTimings.visibleCount }}</span>
+                    </div>
+                    <div class="stat-row sub-stat">
+                        <span class="stat-label">Sprites</span>
+                        <span class="stat-value">{{ stats.renderTimings.spriteCount }}</span>
+                    </div>
+                    <div class="stat-row sub-stat">
+                        <span class="stat-label">Draw calls</span>
+                        <span class="stat-value">{{ stats.renderTimings.drawCalls }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Load Timings -->
+            <section class="debug-section">
+                <h3 class="section-header" @click="sections.loadTimings = !sections.loadTimings">
+                    <span class="caret">{{ sections.loadTimings ? '&#x25BC;' : '&#x25B6;' }}</span>
+                    Load Timings
+                </h3>
+                <div v-if="sections.loadTimings" class="section-body">
+                    <div class="stat-row">
+                        <span class="stat-label">Landscape</span>
+                        <span class="stat-value">{{ stats.loadTimings.landscape }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">File preload</span>
+                        <span class="stat-value">{{ stats.loadTimings.filePreload }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Atlas alloc</span>
+                        <span class="stat-value">{{ stats.loadTimings.atlasAlloc }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Buildings</span>
+                        <span class="stat-value">{{ stats.loadTimings.buildings }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Map objects</span>
+                        <span class="stat-value">{{ stats.loadTimings.mapObjects }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Resources</span>
+                        <span class="stat-value">{{ stats.loadTimings.resources }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Units</span>
+                        <span class="stat-value">{{ stats.loadTimings.units }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">GPU upload</span>
+                        <span class="stat-value">{{ stats.loadTimings.gpuUpload }} ms</span>
+                    </div>
+                    <div class="stat-row total-row">
+                        <span class="stat-label">Total sprites</span>
+                        <span class="stat-value">{{ stats.loadTimings.totalSprites }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Atlas size</span>
+                        <span class="stat-value">{{ stats.loadTimings.atlasSize || '-' }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Sprite count</span>
+                        <span class="stat-value">{{ stats.loadTimings.spriteCount }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Cache</span>
+                        <span class="stat-value" :class="cacheClass">
+                            {{ cacheLabel }}
+                        </span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Entities -->
+            <section class="debug-section">
+                <h3 class="section-header" @click="sections.entities = !sections.entities">
+                    <span class="caret">{{ sections.entities ? '&#x25BC;' : '&#x25B6;' }}</span>
+                    Entities
+                </h3>
+                <div v-if="sections.entities" class="section-body">
+                    <div class="stat-row">
+                        <span class="stat-label">Total</span>
+                        <span class="stat-value">{{ stats.entityCount }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Buildings</span>
+                        <span class="stat-value">{{ stats.buildingCount }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Units</span>
+                        <span class="stat-value">{{ stats.unitCount }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Moving</span>
+                        <span class="stat-value">{{ stats.unitsMoving }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Path steps</span>
+                        <span class="stat-value">{{ stats.totalPathSteps }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Camera -->
+            <section class="debug-section">
+                <h3 class="section-header" @click="sections.camera = !sections.camera">
+                    <span class="caret">{{ sections.camera ? '&#x25BC;' : '&#x25B6;' }}</span>
+                    Camera
+                </h3>
+                <div v-if="sections.camera" class="section-body">
+                    <div class="stat-row">
+                        <span class="stat-label">Position</span>
+                        <span class="stat-value">{{ stats.cameraX }}, {{ stats.cameraY }}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Zoom</span>
+                        <span class="stat-value">{{ stats.zoom }}x</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Canvas</span>
+                        <span class="stat-value">{{ stats.canvasWidth }} x {{ stats.canvasHeight }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tile -->
+            <section class="debug-section">
+                <h3 class="section-header" @click="sections.tile = !sections.tile">
+                    <span class="caret">{{ sections.tile ? '&#x25BC;' : '&#x25B6;' }}</span>
+                    Tile
+                </h3>
+                <div v-if="sections.tile" class="section-body">
+                    <template v-if="stats.hasTile">
+                        <div class="stat-row">
+                            <span class="stat-label">Coords</span>
+                            <span class="stat-value">{{ stats.tileX }}, {{ stats.tileY }}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Ground type</span>
+                            <span class="stat-value">{{ stats.tileGroundType }}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Height</span>
+                            <span class="stat-value">{{ stats.tileGroundHeight }}</span>
+                        </div>
+                    </template>
+                    <div v-else class="stat-row">
+                        <span class="stat-label dim">Move mouse over map</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Controls -->
+            <section class="debug-section">
+                <h3 class="section-header" @click="sections.controls = !sections.controls">
+                    <span class="caret">{{ sections.controls ? '&#x25BC;' : '&#x25B6;' }}</span>
+                    Controls
+                </h3>
+                <div v-if="sections.controls" class="section-body">
+                    <div class="control-buttons">
+                        <button class="ctrl-btn" @click="$emit('togglePause')">
+                            {{ paused ? 'Resume' : 'Pause' }}
+                        </button>
+                        <button class="ctrl-btn danger" @click="$emit('resetGameState')">Reset State</button>
+                    </div>
+                    <SettingsCheckbox v-model="settings.showBuildingFootprint" label="Show building footprints" />
+                    <div class="river-debug">
+                        <span class="stat-label river-heading">River textures</span>
+                        <div class="stat-row">
+                            <span class="stat-label">Slots (I/O/M)</span>
+                            <span class="perm-control">
+                                <button class="perm-btn" @click="cycleSlotPerm(-1)">&lt;</button>
+                                <span class="perm-value">{{ slotPermLabel }}</span>
+                                <button class="perm-btn" @click="cycleSlotPerm(1)">&gt;</button>
+                            </span>
+                        </div>
+                        <SettingsCheckbox
+                            v-model="stats.riverFlipInner"
+                            label="Flip inner (River3↔River1)"
+                            @update:modelValue="applyRiverConfig()"
+                        />
+                        <SettingsCheckbox
+                            v-model="stats.riverFlipOuter"
+                            label="Flip outer (Grass↔River4)"
+                            @update:modelValue="applyRiverConfig()"
+                        />
+                        <SettingsCheckbox
+                            v-model="stats.riverFlipMiddle"
+                            label="Flip middle (River4↔River3)"
+                            @update:modelValue="applyRiverConfig()"
+                        />
+                        <div class="stat-row">
+                            <span class="stat-label dim">{{ configIndex }}/48</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Map Objects -->
+            <section class="debug-section">
+                <h3 class="section-header" @click="sections.mapObjects = !sections.mapObjects">
+                    <span class="caret">{{ sections.mapObjects ? '&#x25BC;' : '&#x25B6;' }}</span>
+                    Map Objects
+                </h3>
+                <div v-if="sections.mapObjects" class="section-body">
+                    <div class="map-obj-row">
+                        <span class="stat-label">Trees</span>
+                        <span class="stat-value">{{ mapObjectCounts.trees }}</span>
+                        <button class="spawn-btn" @click="spawnCategory('trees')">+</button>
+                    </div>
+                    <div class="map-obj-row">
+                        <span class="stat-label">Stones</span>
+                        <span class="stat-value">{{ mapObjectCounts.stones }}</span>
+                        <button class="spawn-btn" @click="spawnCategory('stones')">+</button>
+                    </div>
+                    <div class="map-obj-row">
+                        <span class="stat-label">Resources</span>
+                        <span class="stat-value">{{ mapObjectCounts.resources }}</span>
+                        <button class="spawn-btn" @click="spawnCategory('resources')">+</button>
+                    </div>
+                    <div class="map-obj-row">
+                        <span class="stat-label">Plants</span>
+                        <span class="stat-value">{{ mapObjectCounts.plants }}</span>
+                        <button class="spawn-btn" @click="spawnCategory('plants')">+</button>
+                    </div>
+                    <div class="map-obj-actions">
+                        <button class="ctrl-btn" @click="spawnAllFromMap()">From Map</button>
+                        <button class="ctrl-btn" @click="clearAllMapObjects()">Clear</button>
+                    </div>
+                    <div v-if="!hasObjectTypeData" class="stat-row">
+                        <span class="stat-label dim">No map object data (test map)</span>
+                    </div>
+                </div>
+            </section>
         </div>
-      </section>
-
-      <!-- Render Timings -->
-      <section class="debug-section">
-        <h3 class="section-header" @click="sections.renderTimings = !sections.renderTimings">
-          <span class="caret">{{ sections.renderTimings ? '&#x25BC;' : '&#x25B6;' }}</span>
-          Frame Timings
-        </h3>
-        <div v-if="sections.renderTimings" class="section-body">
-          <div class="stat-row total-row">
-            <span class="stat-label">Frame</span>
-            <span class="stat-value">{{ stats.renderTimings.frame }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Ticks</span>
-            <span class="stat-value">{{ stats.renderTimings.ticks }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Animations</span>
-            <span class="stat-value">{{ stats.renderTimings.animations }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Callback</span>
-            <span class="stat-value">{{ stats.renderTimings.callback }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Other</span>
-            <span class="stat-value">{{ stats.renderTimings.other }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Render</span>
-            <span class="stat-value">{{ stats.renderTimings.render }} ms</span>
-          </div>
-          <div class="stat-row sub-stat">
-            <span class="stat-label">Landscape</span>
-            <span class="stat-value">{{ stats.renderTimings.landscape }} ms</span>
-          </div>
-          <div class="stat-row sub-stat">
-            <span class="stat-label">Cull/Sort</span>
-            <span class="stat-value">{{ stats.renderTimings.cullSort }} ms</span>
-          </div>
-          <div class="stat-row sub-stat">
-            <span class="stat-label">Entities</span>
-            <span class="stat-value">{{ stats.renderTimings.entities }} ms</span>
-          </div>
-          <div class="stat-row sub-stat depth-2">
-            <span class="stat-label">Indicators</span>
-            <span class="stat-value">{{ stats.renderTimings.indicators }} ms</span>
-          </div>
-          <div class="stat-row sub-stat depth-2">
-            <span class="stat-label">Textured</span>
-            <span class="stat-value">{{ stats.renderTimings.textured }} ms</span>
-          </div>
-          <div class="stat-row sub-stat depth-2">
-            <span class="stat-label">Color</span>
-            <span class="stat-value">{{ stats.renderTimings.color }} ms</span>
-          </div>
-          <div class="stat-row sub-stat depth-2">
-            <span class="stat-label">Selection</span>
-            <span class="stat-value">{{ stats.renderTimings.selection }} ms</span>
-          </div>
-          <div class="stat-row sub-stat">
-            <span class="stat-label">Visible</span>
-            <span class="stat-value">{{ stats.renderTimings.visibleCount }}</span>
-          </div>
-          <div class="stat-row sub-stat">
-            <span class="stat-label">Sprites</span>
-            <span class="stat-value">{{ stats.renderTimings.spriteCount }}</span>
-          </div>
-          <div class="stat-row sub-stat">
-            <span class="stat-label">Draw calls</span>
-            <span class="stat-value">{{ stats.renderTimings.drawCalls }}</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Load Timings -->
-      <section class="debug-section">
-        <h3 class="section-header" @click="sections.loadTimings = !sections.loadTimings">
-          <span class="caret">{{ sections.loadTimings ? '&#x25BC;' : '&#x25B6;' }}</span>
-          Load Timings
-        </h3>
-        <div v-if="sections.loadTimings" class="section-body">
-          <div class="stat-row">
-            <span class="stat-label">Landscape</span>
-            <span class="stat-value">{{ stats.loadTimings.landscape }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">File preload</span>
-            <span class="stat-value">{{ stats.loadTimings.filePreload }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Atlas alloc</span>
-            <span class="stat-value">{{ stats.loadTimings.atlasAlloc }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Buildings</span>
-            <span class="stat-value">{{ stats.loadTimings.buildings }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Map objects</span>
-            <span class="stat-value">{{ stats.loadTimings.mapObjects }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Resources</span>
-            <span class="stat-value">{{ stats.loadTimings.resources }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Units</span>
-            <span class="stat-value">{{ stats.loadTimings.units }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">GPU upload</span>
-            <span class="stat-value">{{ stats.loadTimings.gpuUpload }} ms</span>
-          </div>
-          <div class="stat-row total-row">
-            <span class="stat-label">Total sprites</span>
-            <span class="stat-value">{{ stats.loadTimings.totalSprites }} ms</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Atlas size</span>
-            <span class="stat-value">{{ stats.loadTimings.atlasSize || '-' }}</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Sprite count</span>
-            <span class="stat-value">{{ stats.loadTimings.spriteCount }}</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Cache</span>
-            <span class="stat-value" :class="cacheClass">
-              {{ cacheLabel }}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Entities -->
-      <section class="debug-section">
-        <h3 class="section-header" @click="sections.entities = !sections.entities">
-          <span class="caret">{{ sections.entities ? '&#x25BC;' : '&#x25B6;' }}</span>
-          Entities
-        </h3>
-        <div v-if="sections.entities" class="section-body">
-          <div class="stat-row">
-            <span class="stat-label">Total</span>
-            <span class="stat-value">{{ stats.entityCount }}</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Buildings</span>
-            <span class="stat-value">{{ stats.buildingCount }}</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Units</span>
-            <span class="stat-value">{{ stats.unitCount }}</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Moving</span>
-            <span class="stat-value">{{ stats.unitsMoving }}</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Path steps</span>
-            <span class="stat-value">{{ stats.totalPathSteps }}</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Camera -->
-      <section class="debug-section">
-        <h3 class="section-header" @click="sections.camera = !sections.camera">
-          <span class="caret">{{ sections.camera ? '&#x25BC;' : '&#x25B6;' }}</span>
-          Camera
-        </h3>
-        <div v-if="sections.camera" class="section-body">
-          <div class="stat-row">
-            <span class="stat-label">Position</span>
-            <span class="stat-value">{{ stats.cameraX }}, {{ stats.cameraY }}</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Zoom</span>
-            <span class="stat-value">{{ stats.zoom }}x</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Canvas</span>
-            <span class="stat-value">{{ stats.canvasWidth }} x {{ stats.canvasHeight }}</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Tile -->
-      <section class="debug-section">
-        <h3 class="section-header" @click="sections.tile = !sections.tile">
-          <span class="caret">{{ sections.tile ? '&#x25BC;' : '&#x25B6;' }}</span>
-          Tile
-        </h3>
-        <div v-if="sections.tile" class="section-body">
-          <template v-if="stats.hasTile">
-            <div class="stat-row">
-              <span class="stat-label">Coords</span>
-              <span class="stat-value">{{ stats.tileX }}, {{ stats.tileY }}</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Ground type</span>
-              <span class="stat-value">{{ stats.tileGroundType }}</span>
-            </div>
-            <div class="stat-row">
-              <span class="stat-label">Height</span>
-              <span class="stat-value">{{ stats.tileGroundHeight }}</span>
-            </div>
-          </template>
-          <div v-else class="stat-row">
-            <span class="stat-label dim">Move mouse over map</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Controls -->
-      <section class="debug-section">
-        <h3 class="section-header" @click="sections.controls = !sections.controls">
-          <span class="caret">{{ sections.controls ? '&#x25BC;' : '&#x25B6;' }}</span>
-          Controls
-        </h3>
-        <div v-if="sections.controls" class="section-body">
-          <div class="control-buttons">
-            <button class="ctrl-btn" @click="$emit('togglePause')">
-              {{ paused ? 'Resume' : 'Pause' }}
-            </button>
-            <button class="ctrl-btn danger" @click="$emit('resetGameState')">
-              Reset State
-            </button>
-          </div>
-          <SettingsCheckbox
-            v-model="settings.showBuildingFootprint"
-            label="Show building footprints"
-          />
-          <div class="river-debug">
-            <span class="stat-label river-heading">River textures</span>
-            <div class="stat-row">
-              <span class="stat-label">Slots (I/O/M)</span>
-              <span class="perm-control">
-                <button class="perm-btn" @click="cycleSlotPerm(-1)">&lt;</button>
-                <span class="perm-value">{{ slotPermLabel }}</span>
-                <button class="perm-btn" @click="cycleSlotPerm(1)">&gt;</button>
-              </span>
-            </div>
-            <SettingsCheckbox
-              v-model="stats.riverFlipInner"
-              label="Flip inner (River3↔River1)"
-              @update:modelValue="applyRiverConfig()"
-            />
-            <SettingsCheckbox
-              v-model="stats.riverFlipOuter"
-              label="Flip outer (Grass↔River4)"
-              @update:modelValue="applyRiverConfig()"
-            />
-            <SettingsCheckbox
-              v-model="stats.riverFlipMiddle"
-              label="Flip middle (River4↔River3)"
-              @update:modelValue="applyRiverConfig()"
-            />
-            <div class="stat-row">
-              <span class="stat-label dim">{{ configIndex }}/48</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Map Objects -->
-      <section class="debug-section">
-        <h3 class="section-header" @click="sections.mapObjects = !sections.mapObjects">
-          <span class="caret">{{ sections.mapObjects ? '&#x25BC;' : '&#x25B6;' }}</span>
-          Map Objects
-        </h3>
-        <div v-if="sections.mapObjects" class="section-body">
-          <div class="map-obj-row">
-            <span class="stat-label">Trees</span>
-            <span class="stat-value">{{ mapObjectCounts.trees }}</span>
-            <button class="spawn-btn" @click="spawnCategory('trees')">+</button>
-          </div>
-          <div class="map-obj-row">
-            <span class="stat-label">Stones</span>
-            <span class="stat-value">{{ mapObjectCounts.stones }}</span>
-            <button class="spawn-btn" @click="spawnCategory('stones')">+</button>
-          </div>
-          <div class="map-obj-row">
-            <span class="stat-label">Resources</span>
-            <span class="stat-value">{{ mapObjectCounts.resources }}</span>
-            <button class="spawn-btn" @click="spawnCategory('resources')">+</button>
-          </div>
-          <div class="map-obj-row">
-            <span class="stat-label">Plants</span>
-            <span class="stat-value">{{ mapObjectCounts.plants }}</span>
-            <button class="spawn-btn" @click="spawnCategory('plants')">+</button>
-          </div>
-          <div class="map-obj-actions">
-            <button class="ctrl-btn" @click="spawnAllFromMap()">From Map</button>
-            <button class="ctrl-btn" @click="clearAllMapObjects()">Clear</button>
-          </div>
-          <div v-if="!hasObjectTypeData" class="stat-row">
-            <span class="stat-label dim">No map object data (test map)</span>
-          </div>
-        </div>
-      </section>
-
     </div>
-  </div>
 </template>
 
 <script setup lang="ts">
-/* eslint-disable max-lines */
 import { reactive, computed } from 'vue';
 import { debugStats } from '@/game/debug-stats';
 import { gameSettings } from '@/game/game-settings';
@@ -363,7 +356,9 @@ const settings = gameSettings.state;
 // Use the persisted open state from debug stats
 const open = computed({
     get: () => stats.debugPanelOpen,
-    set: (value: boolean) => { stats.debugPanelOpen = value }
+    set: (value: boolean) => {
+        stats.debugPanelOpen = value;
+    },
 });
 
 const sections = reactive({
@@ -379,13 +374,8 @@ const sections = reactive({
 
 // Map objects functionality (extracted to composable)
 const getGame = (): Game | null => (window as any).__settlers_game__ ?? null;
-const {
-    mapObjectCounts,
-    hasObjectTypeData,
-    spawnCategory,
-    spawnAllFromMap,
-    clearAllMapObjects,
-} = useDebugMapObjects(getGame);
+const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clearAllMapObjects } =
+    useDebugMapObjects(getGame);
 
 const slotPermLabel = computed(() => {
     const perm = RIVER_SLOT_PERMS[stats.riverSlotPermutation % RIVER_SLOT_PERMS.length];
@@ -393,11 +383,13 @@ const slotPermLabel = computed(() => {
 });
 
 const configIndex = computed(() => {
-    return stats.riverSlotPermutation * 8
-        + (stats.riverFlipInner ? 4 : 0)
-        + (stats.riverFlipOuter ? 2 : 0)
-        + (stats.riverFlipMiddle ? 1 : 0)
-        + 1;
+    return (
+        stats.riverSlotPermutation * 8 +
+        (stats.riverFlipInner ? 4 : 0) +
+        (stats.riverFlipOuter ? 2 : 0) +
+        (stats.riverFlipMiddle ? 1 : 0) +
+        1
+    );
 });
 
 function applyRiverConfig() {
@@ -414,10 +406,9 @@ function applyRiverConfig() {
 
 function cycleSlotPerm(dir: number) {
     const len = RIVER_SLOT_PERMS.length;
-    stats.riverSlotPermutation = ((stats.riverSlotPermutation + dir) % len + len) % len;
+    stats.riverSlotPermutation = (((stats.riverSlotPermutation + dir) % len) + len) % len;
     applyRiverConfig();
 }
-
 
 const fpsClass = computed(() => {
     if (stats.fps >= 55) return 'fps-good';
@@ -442,275 +433,289 @@ const cacheClass = computed(() => {
 
 <style scoped>
 .debug-panel {
-  background: rgba(13, 10, 5, 0.92);
-  border: 1px solid #5c3d1a;
-  border-radius: 4px;
-  color: #c8a96e;
-  font-size: 11px;
-  font-family: monospace;
-  min-width: 200px;
-  max-height: 100%;
-  overflow-y: auto;
-  pointer-events: auto;
+    background: rgba(13, 10, 5, 0.92);
+    border: 1px solid #5c3d1a;
+    border-radius: 4px;
+    color: #c8a96e;
+    font-size: 11px;
+    font-family: monospace;
+    min-width: 200px;
+    max-height: 100%;
+    overflow-y: auto;
+    pointer-events: auto;
 }
 
 .debug-panel.collapsed {
-  min-width: 0;
+    min-width: 0;
 }
 
 .debug-toggle-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px 10px;
-  background: #2c1e0e;
-  color: #d4b27a;
-  border: none;
-  border-bottom: 1px solid #3a2a10;
-  cursor: pointer;
-  font-size: 11px;
-  font-family: monospace;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 10px;
+    background: #2c1e0e;
+    color: #d4b27a;
+    border: none;
+    border-bottom: 1px solid #3a2a10;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: monospace;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .debug-toggle-btn:hover {
-  background: #3a2810;
+    background: #3a2810;
 }
 
 .toggle-icon {
-  font-size: 8px;
-  width: 10px;
+    font-size: 8px;
+    width: 10px;
 }
 
 .debug-sections {
-  padding: 2px 0;
+    padding: 2px 0;
 }
 
 .debug-section {
-  border-bottom: 1px solid #2a1e0e;
+    border-bottom: 1px solid #2a1e0e;
 }
 
 .debug-section:last-child {
-  border-bottom: none;
+    border-bottom: none;
 }
 
 .section-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  margin: 0;
-  font-size: 10px;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #8a7040;
-  cursor: pointer;
-  user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    margin: 0;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8a7040;
+    cursor: pointer;
+    user-select: none;
 }
 
 .section-header:hover {
-  color: #c8a96e;
-  background: rgba(60, 40, 16, 0.3);
+    color: #c8a96e;
+    background: rgba(60, 40, 16, 0.3);
 }
 
 .caret {
-  font-size: 7px;
-  width: 10px;
+    font-size: 7px;
+    width: 10px;
 }
 
 .section-body {
-  padding: 2px 10px 6px;
+    padding: 2px 10px 6px;
 }
 
 .stat-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 1px 0;
-  gap: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 1px 0;
+    gap: 12px;
 }
 
 .stat-label {
-  color: #7a6a4a;
+    color: #7a6a4a;
 }
 
 .stat-label.dim {
-  color: #4a3a2a;
-  font-style: italic;
+    color: #4a3a2a;
+    font-style: italic;
 }
 
 .stat-value {
-  color: #d4b27a;
-  text-align: right;
+    color: #d4b27a;
+    text-align: right;
 }
 
-.fps-good { color: #80c080; }
-.fps-ok { color: #d4a030; }
-.fps-bad { color: #d04040; }
+.fps-good {
+    color: #80c080;
+}
+.fps-ok {
+    color: #d4a030;
+}
+.fps-bad {
+    color: #d04040;
+}
 
-.cache-hit-hmr { color: #80c080; font-weight: bold; }
-.cache-hit-idb { color: #80b0c0; font-weight: bold; }
-.cache-miss { color: #7a6a4a; }
+.cache-hit-hmr {
+    color: #80c080;
+    font-weight: bold;
+}
+.cache-hit-idb {
+    color: #80b0c0;
+    font-weight: bold;
+}
+.cache-miss {
+    color: #7a6a4a;
+}
 
 .sub-stat {
-  padding-left: 12px;
+    padding-left: 12px;
 }
 .sub-stat .stat-label {
-  color: #5a4a3a;
-  font-size: 10px;
+    color: #5a4a3a;
+    font-size: 10px;
 }
 .sub-stat .stat-value {
-  color: #a08050;
-  font-size: 10px;
+    color: #a08050;
+    font-size: 10px;
 }
 .sub-stat.depth-2 {
-  padding-left: 24px;
+    padding-left: 24px;
 }
 .sub-stat.depth-2 .stat-label {
-  color: #4a3a2a;
+    color: #4a3a2a;
 }
 .sub-stat.depth-2 .stat-value {
-  color: #8a6a40;
+    color: #8a6a40;
 }
 
 .total-row {
-  margin-top: 4px;
-  padding-top: 4px;
-  border-top: 1px solid #3a2a10;
-  font-weight: bold;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid #3a2a10;
+    font-weight: bold;
 }
 
 .total-row .stat-value {
-  color: #e0c080;
+    color: #e0c080;
 }
 
 .control-buttons {
-  display: flex;
-  gap: 4px;
-  margin-top: 4px;
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
 }
 
 .ctrl-btn {
-  flex: 1;
-  padding: 4px 8px;
-  background: #2c1e0e;
-  color: #c8a96e;
-  border: 1px solid #4a3218;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 10px;
-  font-family: monospace;
-  font-weight: bold;
-  text-transform: uppercase;
+    flex: 1;
+    padding: 4px 8px;
+    background: #2c1e0e;
+    color: #c8a96e;
+    border: 1px solid #4a3218;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 10px;
+    font-family: monospace;
+    font-weight: bold;
+    text-transform: uppercase;
 }
 
 .ctrl-btn:hover {
-  background: #3a2810;
-  border-color: #6a4a20;
+    background: #3a2810;
+    border-color: #6a4a20;
 }
 
 .ctrl-btn.danger {
-  background: #3a1a1a;
-  border-color: #6a2020;
-  color: #d08080;
+    background: #3a1a1a;
+    border-color: #6a2020;
+    color: #d08080;
 }
 
 .ctrl-btn.danger:hover {
-  background: #4a2020;
-  border-color: #8a3030;
+    background: #4a2020;
+    border-color: #8a3030;
 }
 
 .river-heading {
-  display: block;
-  margin-top: 6px;
+    display: block;
+    margin-top: 6px;
 }
 
 .perm-control {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .perm-btn {
-  padding: 1px 6px;
-  background: #2c1e0e;
-  color: #c8a96e;
-  border: 1px solid #4a3218;
-  border-radius: 2px;
-  cursor: pointer;
-  font-size: 10px;
-  font-family: monospace;
-  line-height: 1;
+    padding: 1px 6px;
+    background: #2c1e0e;
+    color: #c8a96e;
+    border: 1px solid #4a3218;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 10px;
+    font-family: monospace;
+    line-height: 1;
 }
 
 .perm-btn:hover {
-  background: #3a2810;
-  border-color: #6a4a20;
+    background: #3a2810;
+    border-color: #6a4a20;
 }
 
 .perm-value {
-  color: #d4b27a;
-  font-weight: bold;
-  min-width: 36px;
-  text-align: center;
+    color: #d4b27a;
+    font-weight: bold;
+    min-width: 36px;
+    text-align: center;
 }
 
 /* Scrollbar */
 .debug-panel::-webkit-scrollbar {
-  width: 4px;
+    width: 4px;
 }
 
 .debug-panel::-webkit-scrollbar-track {
-  background: #0d0a05;
+    background: #0d0a05;
 }
 
 .debug-panel::-webkit-scrollbar-thumb {
-  background: #4a3218;
-  border-radius: 2px;
+    background: #4a3218;
+    border-radius: 2px;
 }
 
 /* Map Objects section */
 .map-obj-row {
-  display: flex;
-  align-items: center;
-  padding: 2px 0;
-  gap: 8px;
+    display: flex;
+    align-items: center;
+    padding: 2px 0;
+    gap: 8px;
 }
 
 .map-obj-row .stat-label {
-  flex: 1;
+    flex: 1;
 }
 
 .map-obj-row .stat-value {
-  min-width: 30px;
-  text-align: right;
+    min-width: 30px;
+    text-align: right;
 }
 
 .spawn-btn {
-  padding: 1px 6px;
-  background: #1a3a1a;
-  color: #80c080;
-  border: 1px solid #2a5a2a;
-  border-radius: 2px;
-  cursor: pointer;
-  font-size: 10px;
-  font-family: monospace;
-  font-weight: bold;
-  line-height: 1;
+    padding: 1px 6px;
+    background: #1a3a1a;
+    color: #80c080;
+    border: 1px solid #2a5a2a;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 10px;
+    font-family: monospace;
+    font-weight: bold;
+    line-height: 1;
 }
 
 .spawn-btn:hover {
-  background: #2a4a2a;
-  border-color: #3a6a3a;
+    background: #2a4a2a;
+    border-color: #3a6a3a;
 }
 
 .map-obj-actions {
-  display: flex;
-  gap: 4px;
-  margin-top: 6px;
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
 }
 </style>
