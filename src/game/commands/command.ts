@@ -1,5 +1,11 @@
 import { EntityType, EXTENDED_OFFSETS, type Entity } from '../entity';
-import { BuildingConstructionPhase, type BuildingStateManager } from '../features/building-construction';
+import {
+    BuildingConstructionPhase,
+    type BuildingStateManager,
+    captureOriginalTerrain,
+    setConstructionSiteGroundType,
+    applyTerrainLeveling,
+} from '../features/building-construction';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
 import { MapSize } from '@/utilities/map-size';
@@ -81,15 +87,24 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
 
     const entity = state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
 
-    // If "place as completed" is enabled, immediately mark building as completed
+    // Immediately capture terrain and change ground to raw earth under the building.
+    // This makes the ground visually change right when the building is placed,
+    // before the gradual height leveling begins during the TerrainLeveling phase.
+    const buildingState = ctx.buildingStateManager.getBuildingState(entity.id)!;
+    buildingState.originalTerrain = captureOriginalTerrain(buildingState, groundType, groundHeight, mapSize);
+    setConstructionSiteGroundType(buildingState, groundType, mapSize);
+
     if (gameSettings.state.placeBuildingsCompleted) {
-        const buildingState = ctx.buildingStateManager.getBuildingState(entity.id);
-        if (buildingState) {
-            buildingState.phase = BuildingConstructionPhase.Completed;
-            buildingState.phaseProgress = 1;
-            buildingState.elapsedTime = buildingState.totalDuration;
-        }
+        // Instant mode: level heights immediately, then mark completed
+        applyTerrainLeveling(buildingState, groundType, groundHeight, mapSize, 1.0);
+        buildingState.terrainModified = true;
+        buildingState.phase = BuildingConstructionPhase.Completed;
+        buildingState.phaseProgress = 1;
+        buildingState.elapsedTime = buildingState.totalDuration;
     }
+
+    // Notify renderer that terrain buffers need re-upload
+    ctx.eventBus.emit('terrain:modified', {});
 
     ctx.eventBus.emit('building:placed', {
         entityId: entity.id,
@@ -101,13 +116,10 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
 
     // If placed as completed, emit event (spawning handled by BuildingConstructionSystem listener)
     if (gameSettings.state.placeBuildingsCompleted) {
-        const buildingState = ctx.buildingStateManager.getBuildingState(entity.id);
-        if (buildingState) {
-            ctx.eventBus.emit('building:completed', {
-                entityId: entity.id,
-                buildingState,
-            });
-        }
+        ctx.eventBus.emit('building:completed', {
+            entityId: entity.id,
+            buildingState,
+        });
     }
 
     return commandSuccess([

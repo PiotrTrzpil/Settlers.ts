@@ -42,6 +42,7 @@ export { getBuildingVisualState } from './visual-state';
 export {
     captureOriginalTerrain,
     applyTerrainLeveling,
+    setConstructionSiteGroundType,
     restoreOriginalTerrain,
     CONSTRUCTION_SITE_GROUND_TYPE,
 } from './terrain';

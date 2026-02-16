@@ -627,6 +627,7 @@ export class GameLoop {
                 groundType: this.groundType,
                 groundHeight: this.groundHeight,
                 mapSize: this.mapSize,
+                onTerrainModified: () => this.eventBus.emit('terrain:modified', {}),
             });
         } else {
             this.constructionSystem.setTerrainContext(undefined);

@@ -101,6 +101,7 @@ export class Game {
                 eventBus: this.eventBus,
                 terrain: {
                     groundType: this.groundType,
+                    groundHeight: this.groundHeight,
                     mapSize: this.mapSize,
                 },
             });

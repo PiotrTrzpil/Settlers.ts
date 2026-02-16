@@ -138,6 +138,33 @@ export function applyTerrainLeveling(
 }
 
 /**
+ * Sets ground type to construction site material for all footprint tiles.
+ * Called immediately at placement time so the ground looks "raw" right away,
+ * before height leveling begins.
+ *
+ * @returns true if any ground type was changed
+ */
+export function setConstructionSiteGroundType(
+    buildingState: BuildingState,
+    groundType: Uint8Array,
+    mapSize: MapSize
+): boolean {
+    const original = buildingState.originalTerrain;
+    if (!original) return false;
+
+    let modified = false;
+    for (const tile of original.tiles) {
+        if (!tile.isFootprint) continue;
+        const idx = mapSize.toIndex(tile.x, tile.y);
+        if (groundType[idx] !== CONSTRUCTION_SITE_GROUND_TYPE) {
+            groundType[idx] = CONSTRUCTION_SITE_GROUND_TYPE;
+            modified = true;
+        }
+    }
+    return modified;
+}
+
+/**
  * Restores original terrain when a building is cancelled/removed during construction.
  * Should be called before removing the building entity.
  */

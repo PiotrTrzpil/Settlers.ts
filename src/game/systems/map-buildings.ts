@@ -5,7 +5,13 @@
 
 import { EntityType } from '../entity';
 import { BuildingType } from '../buildings/types';
-import { BuildingConstructionPhase, type BuildingStateManager } from '../features/building-construction';
+import {
+    BuildingConstructionPhase,
+    type BuildingStateManager,
+    captureOriginalTerrain,
+    setConstructionSiteGroundType,
+    applyTerrainLeveling,
+} from '../features/building-construction';
 import { GameState } from '../game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
@@ -65,10 +71,11 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
 };
 
 /**
- * Terrain context for spawn tile validation.
+ * Terrain context for spawn tile validation and terrain modification.
  */
 interface TerrainContext {
     groundType: Uint8Array;
+    groundHeight: Uint8Array;
     mapSize: MapSize;
 }
 
@@ -140,6 +147,14 @@ export function populateMapBuildings(
         // Override the building state to be completed (pre-existing building)
         // buildingStateManager is required, getBuildingState returns the state we just created
         const buildingState = buildingStateManager.getBuildingState(entity.id)!;
+
+        // Apply instant terrain modification: raw ground + leveled heights
+        const { groundType, groundHeight, mapSize } = options.terrain;
+        buildingState.originalTerrain = captureOriginalTerrain(buildingState, groundType, groundHeight, mapSize);
+        setConstructionSiteGroundType(buildingState, groundType, mapSize);
+        applyTerrainLeveling(buildingState, groundType, groundHeight, mapSize, 1.0);
+        buildingState.terrainModified = true;
+
         buildingState.phase = BuildingConstructionPhase.Completed;
         buildingState.phaseProgress = 1;
         buildingState.elapsedTime = buildingState.totalDuration;

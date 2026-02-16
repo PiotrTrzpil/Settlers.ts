@@ -15,6 +15,7 @@ function createPopulateOptions(ctx: TestContext, player?: number) {
         eventBus: ctx.eventBus,
         terrain: {
             groundType: ctx.map.groundType,
+            groundHeight: ctx.map.groundHeight,
             mapSize: ctx.map.mapSize,
         },
     };

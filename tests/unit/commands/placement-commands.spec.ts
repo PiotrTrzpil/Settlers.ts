@@ -10,9 +10,11 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { EntityType } from '@/game/entity';
-import { BuildingType } from '@/game/buildings';
+import { BuildingType, getBuildingFootprint } from '@/game/buildings';
 import { UnitType } from '@/game/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
+import { BuildingConstructionPhase, CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
+import { gameSettings } from '@/game/game-settings';
 import {
     createTestContext,
     placeBuilding,
@@ -24,7 +26,7 @@ import {
     isTerrainWater,
     type TestContext,
 } from '../helpers/test-game';
-import { TERRAIN } from '../helpers/test-map';
+import { TERRAIN, setHeightAt } from '../helpers/test-map';
 
 describe('Building Placement Commands', () => {
     let ctx: TestContext;
@@ -258,5 +260,84 @@ describe('Resource Placement Commands', () => {
 
         const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedResource);
         expect(resources.length).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Terrain modification at placement time (regression tests)
+// ---------------------------------------------------------------------------
+
+describe('Building Placement Terrain Modification', () => {
+    let ctx: TestContext;
+
+    beforeEach(() => {
+        ctx = createTestContext();
+        // Reset completed mode
+        gameSettings.state.placeBuildingsCompleted = false;
+    });
+
+    it('should change ground to raw immediately on placement (normal mode)', () => {
+        const tile = findBuildableTile(ctx.map);
+        expect(tile).not.toBeNull();
+
+        // Verify ground is grass before placement
+        const footprint = getBuildingFootprint(tile!.x, tile!.y, BuildingType.WoodcutterHut);
+        for (const ft of footprint) {
+            expect(ctx.map.groundType[ctx.map.mapSize.toIndex(ft.x, ft.y)]).toBe(TERRAIN.GRASS);
+        }
+
+        const result = placeBuilding(ctx, tile!.x, tile!.y, BuildingType.WoodcutterHut);
+        expect(result.success).toBe(true);
+
+        // Ground type should be raw (DustyWay) immediately after placement - no tick needed
+        for (const ft of footprint) {
+            expect(ctx.map.groundType[ctx.map.mapSize.toIndex(ft.x, ft.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
+        }
+    });
+
+    it('should capture original terrain at placement time (normal mode)', () => {
+        const tile = findBuildableTile(ctx.map);
+        expect(tile).not.toBeNull();
+
+        const result = placeBuilding(ctx, tile!.x, tile!.y, BuildingType.WoodcutterHut);
+        expect(result.success).toBe(true);
+
+        const building = ctx.state.entities.find(e => e.type === EntityType.Building)!;
+        const buildingState = building.construction!;
+        expect(buildingState.originalTerrain).not.toBeNull();
+        expect(buildingState.originalTerrain!.tiles.length).toBeGreaterThan(0);
+    });
+
+    it('should change ground and level heights instantly in completed mode', () => {
+        gameSettings.state.placeBuildingsCompleted = true;
+
+        const tile = findBuildableTile(ctx.map);
+        expect(tile).not.toBeNull();
+
+        // Set varying heights within slope tolerance (MAX_SLOPE_DIFF = 8)
+        setHeightAt(ctx.map, tile!.x, tile!.y, 10);
+        setHeightAt(ctx.map, tile!.x + 1, tile!.y, 14);
+        setHeightAt(ctx.map, tile!.x, tile!.y + 1, 12);
+        setHeightAt(ctx.map, tile!.x + 1, tile!.y + 1, 8);
+
+        const result = placeBuilding(ctx, tile!.x, tile!.y, BuildingType.WoodcutterHut);
+        expect(result.success).toBe(true);
+
+        // Ground type should be raw
+        const footprint = getBuildingFootprint(tile!.x, tile!.y, BuildingType.WoodcutterHut);
+        for (const ft of footprint) {
+            expect(ctx.map.groundType[ctx.map.mapSize.toIndex(ft.x, ft.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
+        }
+
+        // Heights should be leveled (all the same target height)
+        const heights = footprint.map(ft => ctx.map.groundHeight[ctx.map.mapSize.toIndex(ft.x, ft.y)]);
+        const uniqueHeights = new Set(heights);
+        // All footprint tiles should have the same leveled height
+        expect(uniqueHeights.size).toBe(1);
+
+        // Building should be completed
+        const building = ctx.state.entities.find(e => e.type === EntityType.Building)!;
+        expect(building.construction!.phase).toBe(BuildingConstructionPhase.Completed);
+        expect(building.construction!.terrainModified).toBe(true);
     });
 });
