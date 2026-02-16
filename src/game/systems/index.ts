@@ -130,9 +130,11 @@ export {
 } from './production-system';
 
 // ============================================================================
-// Woodcutting System
+// Domain Systems (work handlers for SettlerTaskSystem)
 // ============================================================================
 export { WoodcuttingSystem } from './woodcutting-system';
+export { StonecuttingSystem } from './stonecutting-system';
+export { findNearestMapObject, createSimpleHarvestHandler, type SimpleHarvestConfig } from './resource-harvesting';
 
 // ============================================================================
 // Settler Tasks (re-exports from settler-tasks/)

@@ -29,6 +29,7 @@ import {
     type SettlerConfig,
     type TaskNode,
     type CarrierJobState,
+    type WorkerJobData,
     type JobState,
     type WorkHandler,
     type AnimationType,
@@ -413,10 +414,10 @@ export class SettlerTaskSystem implements TickSystem {
     /** TickSystem interface */
     tick(dt: number): void {
         // Process ALL units (not just those with YAML configs)
-        const allUnits = this.gameState.entities.filter(e => e.type === EntityType.Unit);
-
-        for (const unit of allUnits) {
-            this.updateUnit(unit, dt);
+        for (const entity of this.gameState.entities) {
+            if (entity.type === EntityType.Unit) {
+                this.updateUnit(entity, dt);
+            }
         }
 
         // Safety net: clean up runtimes for entities removed without onEntityRemoved signal.
@@ -584,10 +585,33 @@ export class SettlerTaskSystem implements TickSystem {
         }
     }
 
+    /** Find a work target via the handler, catching errors at the system boundary. */
+    private findWorkTarget(handler: WorkHandler, settler: Entity): ReturnType<WorkHandler['findTarget']> | undefined {
+        try {
+            return handler.findTarget(settler.x, settler.y, settler.id);
+        } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            this.handlerErrorLogger.error(`findTarget failed for settler ${settler.id}`, err);
+            return undefined;
+        }
+    }
+
+    /** Build the initial WorkerJobState data for a new job. */
+    private buildWorkerJobData(
+        target: { entityId: number | null; x: number; y: number } | null,
+        homeBuilding: Entity | null
+    ): WorkerJobData {
+        return {
+            targetId: target?.entityId ?? null,
+            targetPos: target && target.entityId == null ? { x: target.x, y: target.y } : null,
+            homeId: homeBuilding?.id ?? null,
+            carryingGood: null,
+        };
+    }
+
     private handleIdle(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
         const handler = this.workHandlers.get(config.search);
         if (!handler) {
-            // Log warning instead of throwing - missing handlers are missing features, not crashes
             this.missingHandlerLogger.warn(
                 `No work handler registered for search type: ${config.search}. ` +
                     `Settler ${settler.id} (${UnitType[settler.subType]}) will stay idle until feature is implemented.`
@@ -596,46 +620,75 @@ export class SettlerTaskSystem implements TickSystem {
         }
 
         const homeBuilding = this.gameState.findNearestWorkplace(settler);
-        const jobId = `${UnitType[settler.subType].toLowerCase()}.${config.jobs[0]}`;
-        const tasks = this.jobDefinitions.get(jobId);
-        if (!tasks || tasks.length === 0) {
-            throw new Error(`No tasks found for job: ${jobId}. Check YAML job definitions.`);
-        }
 
-        // Check if home building can store output before starting work
-        if (homeBuilding && this.isOutputFull(homeBuilding, tasks)) {
+        const target = this.findWorkTarget(handler, settler);
+        if (target === undefined) return; // error already logged
+
+        const selected = this.selectJob(settler, config, target);
+        if (!selected) return;
+
+        if (homeBuilding && this.isOutputFull(homeBuilding, selected.tasks)) {
             this.returnHomeAndWait(settler, homeBuilding);
             return;
         }
 
-        // Search for work (handler call is a system boundary)
-        let target: ReturnType<WorkHandler['findTarget']>;
-        try {
-            target = handler.findTarget(settler.x, settler.y, settler.id);
-        } catch (e) {
-            const err = e instanceof Error ? e : new Error(String(e));
-            this.handlerErrorLogger.error(`findTarget failed for settler ${settler.id}`, err);
-            return;
-        }
-        if (!target) return;
-
         runtime.state = SettlerState.WORKING;
         runtime.job = {
             type: 'worker',
-            jobId,
+            jobId: selected.jobId,
             taskIndex: 0,
             progress: 0,
-            data: {
-                targetId: target.entityId,
-                targetPos: { x: target.x, y: target.y },
-                homeId: homeBuilding?.id ?? null,
-                carryingGood: null,
-            },
+            data: this.buildWorkerJobData(target, homeBuilding),
         };
 
         log.debug(
-            `Settler ${settler.id} starting job ${jobId}, target ${target.entityId}, home ${homeBuilding?.id ?? 'none'}`
+            `Settler ${settler.id} starting job ${selected.jobId}, target ${target?.entityId ?? 'none'}, home ${homeBuilding?.id ?? 'none'}`
         );
+    }
+
+    /**
+     * Select the best job for a settler based on target availability.
+     *
+     * Priority: entity-target jobs first (harvest, chop, etc.) since they have
+     * concrete work to do, then self-searching jobs (plant) as fallback.
+     */
+    private selectJob(
+        settler: Entity,
+        config: SettlerConfig,
+        target: ReturnType<WorkHandler['findTarget']>
+    ): { jobId: string; tasks: TaskNode[] } | null {
+        const prefix = UnitType[settler.subType].toLowerCase();
+
+        // Phase 1: If a target entity was found, try jobs that need one
+        if (target?.entityId != null) {
+            for (const jobName of config.jobs) {
+                const jobId = `${prefix}.${jobName}`;
+                const tasks = this.jobDefinitions.get(jobId);
+                if (!tasks?.length) continue;
+                if (this.jobNeedsEntityTarget(tasks[0]!)) {
+                    return { jobId, tasks };
+                }
+            }
+        }
+
+        // Phase 2: Try self-searching jobs (SEARCH_POS) that don't need an initial target
+        for (const jobName of config.jobs) {
+            const jobId = `${prefix}.${jobName}`;
+            const tasks = this.jobDefinitions.get(jobId);
+            if (!tasks?.length) continue;
+            if (!this.jobNeedsEntityTarget(tasks[0]!)) {
+                return { jobId, tasks };
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Check if a job's first task requires an entity target from findTarget.
+     */
+    private jobNeedsEntityTarget(firstTask: TaskNode): boolean {
+        return firstTask.task === TaskType.GO_TO_TARGET || firstTask.task === TaskType.WORK_ON_ENTITY;
     }
 
     /**
@@ -770,7 +823,7 @@ export class SettlerTaskSystem implements TickSystem {
             return this.executeDropoff(settler, job);
 
         case TaskType.WORK:
-            return this.executeWork(settler, job, task, dt);
+            return this.executeWork(settler, job, task, dt, handler);
 
         case TaskType.SEARCH_POS:
             return this.executeSearchPos(settler, job, handler);
@@ -812,8 +865,10 @@ export class SettlerTaskSystem implements TickSystem {
 
     private executeGoToTarget(settler: Entity, job: JobState): TaskResult {
         if (job.type !== 'worker') return TaskResult.FAILED;
-        if (!job.data.targetPos) return TaskResult.FAILED;
-        return this.moveToPosition(settler, job.data.targetPos.x, job.data.targetPos.y);
+        if (!job.data.targetId) return TaskResult.FAILED;
+        const target = this.gameState.getEntity(job.data.targetId);
+        if (!target) return TaskResult.FAILED;
+        return this.moveToPosition(settler, target.x, target.y);
     }
 
     // eslint-disable-next-line complexity -- handler boundary requires per-call guards
@@ -1057,13 +1112,22 @@ export class SettlerTaskSystem implements TickSystem {
         return TaskResult.DONE;
     }
 
-    private executeWork(_settler: Entity, job: JobState, task: TaskNode, dt: number): TaskResult {
+    private executeWork(settler: Entity, job: JobState, task: TaskNode, dt: number, handler?: WorkHandler): TaskResult {
         // Animation is applied by handleWorking at task start
 
         const duration = task.duration ?? 1.0;
         job.progress += dt / duration;
 
         if (job.progress >= 1) {
+            // Notify handler if work completed at a searched position (forester planting, etc.)
+            if (handler?.onWorkAtPositionComplete && job.type === 'worker' && job.data.targetPos) {
+                try {
+                    handler.onWorkAtPositionComplete(job.data.targetPos.x, job.data.targetPos.y, settler.id);
+                } catch (e) {
+                    const err = e instanceof Error ? e : new Error(String(e));
+                    this.handlerErrorLogger.error(`onWorkAtPositionComplete failed for settler ${settler.id}`, err);
+                }
+            }
             return TaskResult.DONE;
         }
 
@@ -1250,8 +1314,8 @@ export class SettlerTaskSystem implements TickSystem {
 
         case 'pickup':
         case 'dropoff':
-            // Pickup/dropoff use work.1 (bending down animation)
-            return workSequenceKey(1);
+            // Pickup/dropoff reuse work.0 (carriers only have one work animation)
+            return workSequenceKey(0);
 
         case 'idle':
         default:

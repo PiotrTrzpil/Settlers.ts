@@ -23,6 +23,24 @@ woodcutter.work:
   - task: DROPOFF
     anim: dropoff
 
+stonecutter.work:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WORK_ON_ENTITY
+    anim: mine
+    duration: 6.0
+
+  - task: PICKUP
+    anim: pickup
+    good: STONE
+
+  - task: GO_HOME
+    anim: carry
+
+  - task: DROPOFF
+    anim: dropoff
+
 forester.plant:
   - task: SEARCH_POS
     anim: walk

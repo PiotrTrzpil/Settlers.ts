@@ -18,7 +18,5 @@ export {
     type WorkerJobState,
     type CarrierJobState,
     type JobState,
-    // Legacy flattened type (deprecated)
-    type SettlerJobState,
     type WorkHandler,
 } from './types';

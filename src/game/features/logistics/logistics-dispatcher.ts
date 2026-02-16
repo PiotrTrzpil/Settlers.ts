@@ -16,9 +16,9 @@ import type { GameState } from '../../game-state';
 import type { CarrierSystem } from '../carriers';
 import type { RequestManager } from './request-manager';
 import type { ServiceAreaManager } from '../service-areas';
-import { getHubsServingBothPositions } from '../service-areas/service-area-queries';
+import { getHubsServingBothPositions, getHubsServingPosition } from '../service-areas/service-area-queries';
 import { matchRequestToSupply } from './fulfillment-matcher';
-import { RequestStatus } from './resource-request';
+import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
 import { canAcceptNewJob } from '../carriers';
 import { LogHandler } from '@/utilities/log-handler';
@@ -41,6 +41,9 @@ const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
 
 /** How often to check for stalled requests (in milliseconds) */
 const STALL_CHECK_INTERVAL_MS = 5_000; // Check every 5 seconds
+
+/** How often to log match failure diagnostics (in milliseconds) */
+const MATCH_DIAGNOSTIC_INTERVAL_MS = 10_000;
 
 /**
  * System that coordinates resource requests with carrier assignments.
@@ -67,6 +70,10 @@ export class LogisticsDispatcher implements TickSystem {
 
     /** Accumulated time since last stall check (in ms) */
     private timeSinceStallCheck: number = 0;
+
+    /** Accumulated time since last match diagnostic log (in ms) */
+    private timeSinceMatchDiagnostic: number = 0;
+    private matchDiagnosticDue = false;
 
     /** Event subscription manager for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
@@ -123,7 +130,15 @@ export class LogisticsDispatcher implements TickSystem {
      * Main tick - assign pending requests to available carriers and check for stalls.
      */
     tick(dt: number): void {
+        // Enable match diagnostics periodically
+        this.timeSinceMatchDiagnostic += dt * 1000;
+        if (this.timeSinceMatchDiagnostic >= MATCH_DIAGNOSTIC_INTERVAL_MS) {
+            this.timeSinceMatchDiagnostic = 0;
+            this.matchDiagnosticDue = true;
+        }
+
         this.assignPendingRequests();
+        this.matchDiagnosticDue = false;
 
         // Periodically check for stalled requests
         this.timeSinceStallCheck += dt * 1000;
@@ -196,12 +211,21 @@ export class LogisticsDispatcher implements TickSystem {
             );
 
             if (!match) {
+                if (this.matchDiagnosticDue) {
+                    this.logMatchFailure(request);
+                }
                 continue; // No supply available for this request
             }
 
             // Find an available carrier that can serve both buildings
             const carrier = this.findAvailableCarrier(match.sourceBuilding, request.buildingId);
             if (!carrier) {
+                if (this.matchDiagnosticDue) {
+                    LogisticsDispatcher.log.warn(
+                        `Request #${request.id}: matched source=${match.sourceBuilding} but no carrier available ` +
+                            `(${match.serviceHubs.length} valid hubs: [${match.serviceHubs.join(', ')}])`
+                    );
+                }
                 continue; // No carrier available
             }
 
@@ -307,6 +331,75 @@ export class LogisticsDispatcher implements TickSystem {
     private getRequestPlayerId(buildingId: number): number {
         // Building MUST exist - we have an active request for it
         return this.gameState.getEntityOrThrow(buildingId, 'requesting building').player;
+    }
+
+    /**
+     * Log diagnostic info when a request cannot be matched to any supply.
+     * Helps identify service area coverage gaps.
+     */
+    private logMatchFailure(request: ResourceRequest): void {
+        const destBuilding = this.gameState.getEntity(request.buildingId);
+        if (!destBuilding) return;
+
+        const playerId = destBuilding.player;
+        const destHubs = getHubsServingPosition(destBuilding.x, destBuilding.y, this.serviceAreaManager, { playerId });
+
+        // Check if destination is even covered by any hub
+        if (destHubs.length === 0) {
+            LogisticsDispatcher.log.warn(
+                `Request #${request.id} (material=${request.materialType}): ` +
+                    `destination building ${request.buildingId} at (${destBuilding.x},${destBuilding.y}) ` +
+                    `is NOT covered by any hub service area`
+            );
+            return;
+        }
+
+        // Check if any supply exists
+        const supplies = this.inventoryManager.getBuildingsWithOutput(request.materialType, 1);
+        const otherSupplies = supplies.filter((id: number) => id !== request.buildingId);
+        if (otherSupplies.length === 0) {
+            LogisticsDispatcher.log.debug(
+                `Request #${request.id} (material=${request.materialType}): no supply available anywhere`
+            );
+            return;
+        }
+
+        // Check why no supply is reachable
+        for (const supplyId of otherSupplies) {
+            const supplyBuilding = this.gameState.getEntity(supplyId);
+            if (!supplyBuilding) continue;
+
+            const supplyHubs = getHubsServingPosition(supplyBuilding.x, supplyBuilding.y, this.serviceAreaManager, {
+                playerId,
+            });
+
+            if (supplyHubs.length === 0) {
+                LogisticsDispatcher.log.warn(
+                    `Request #${request.id} (material=${request.materialType}): ` +
+                        `supply building ${supplyId} at (${supplyBuilding.x},${supplyBuilding.y}) ` +
+                        `is NOT covered by any hub`
+                );
+            } else {
+                // Both are covered, but by different hubs
+                const sharedHubs = getHubsServingBothPositions(
+                    supplyBuilding.x,
+                    supplyBuilding.y,
+                    destBuilding.x,
+                    destBuilding.y,
+                    this.serviceAreaManager,
+                    { playerId }
+                );
+                if (sharedHubs.length === 0) {
+                    LogisticsDispatcher.log.warn(
+                        `Request #${request.id} (material=${request.materialType}): ` +
+                            `supply ${supplyId} at (${supplyBuilding.x},${supplyBuilding.y}) ` +
+                            `and dest ${request.buildingId} at (${destBuilding.x},${destBuilding.y}) ` +
+                            `are covered by DIFFERENT hubs (no shared hub). ` +
+                            `Supply hubs: [${supplyHubs.join(',')}], Dest hubs: [${destHubs.join(',')}]`
+                    );
+                }
+            }
+        }
     }
 
     /**

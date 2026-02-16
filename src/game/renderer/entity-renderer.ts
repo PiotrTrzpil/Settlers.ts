@@ -36,7 +36,7 @@ import { FrameContext, type IFrameContext } from './frame-context';
 import { OptimizedDepthSorter, type OptimizedSortContext } from './optimized-depth-sorter';
 import { profiler } from './debug/render-profiler';
 import { LayerVisibility, DEFAULT_LAYER_VISIBILITY, isMapObjectVisible } from './layer-visibility';
-import type { IRenderContext } from './render-context';
+import type { IRenderContext, ServiceAreaRenderData } from './render-context';
 import { gameSettings } from '../game-settings';
 
 import vertCode from './shaders/entity-vert.glsl';
@@ -201,6 +201,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Layer visibility settings
     public layerVisibility: LayerVisibility = { ...DEFAULT_LAYER_VISIBILITY };
 
+    // Service areas to render for selected hub buildings
+    public selectedServiceAreas: readonly ServiceAreaRenderData[] = [];
+
     // Cached attribute/uniform locations for color shader
     private aPosition = -1;
     private aEntityPos = -1;
@@ -352,6 +355,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.renderAlpha = ctx.alpha;
         this.layerVisibility = ctx.layerVisibility;
         this.placementPreview = ctx.placementPreview;
+        this.selectedServiceAreas = ctx.selectedServiceAreas;
     }
 
     /**
@@ -478,6 +482,28 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 this.dynamicBuffer!,
                 this.sortedEntities,
                 this.aPosition,
+                this.aEntityPos,
+                this.aColor,
+                selectionCtx
+            );
+        }
+
+        // Draw service area circles for selected hub buildings
+        if (this.selectedServiceAreas.length > 0) {
+            // Activate color shader for service area circles
+            if (!gameSettings.state.showBuildingFootprint) {
+                super.drawBase(gl, projection);
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
+                gl.enableVertexAttribArray(this.aPosition);
+                gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
+                gl.disableVertexAttribArray(this.aEntityPos);
+                gl.disableVertexAttribArray(this.aColor);
+            }
+
+            this.selectionOverlayRenderer.drawServiceAreaCircles(
+                gl,
+                this.dynamicBuffer!,
+                this.selectedServiceAreas,
                 this.aEntityPos,
                 this.aColor,
                 selectionCtx

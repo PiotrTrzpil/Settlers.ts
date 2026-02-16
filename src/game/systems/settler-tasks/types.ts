@@ -130,8 +130,6 @@ export interface CommonJobFields {
     taskIndex: number;
     /** Progress within current task (0-1) */
     progress: number;
-    /** Whether onWorkStart was called (for proper cleanup) */
-    workStarted?: boolean;
 }
 
 /** Worker-specific job data (woodcutter, builder, etc.) */
@@ -166,6 +164,8 @@ export interface CarrierJobData {
 export interface WorkerJobState extends CommonJobFields {
     type: 'worker';
     data: WorkerJobData;
+    /** Whether onWorkStart was called for WORK_ON_ENTITY (for proper cleanup on interrupt) */
+    workStarted?: boolean;
 }
 
 /** Carrier job state - for transport jobs */
@@ -181,21 +181,6 @@ export type JobState = WorkerJobState | CarrierJobState;
 // Legacy aliases for backward compatibility
 // ─────────────────────────────────────────────────────────────
 
-/**
- * @deprecated Use WorkerJobState instead. This flattened interface is kept
- * for backward compatibility but new code should use the composed types.
- */
-export interface SettlerJobState {
-    jobId: string;
-    taskIndex: number;
-    progress: number;
-    targetId: number | null;
-    targetPos: { x: number; y: number } | null;
-    homeId: number | null;
-    carryingGood: EMaterialType | null;
-    workStarted?: boolean;
-}
-
 /** High-level settler state */
 export enum SettlerState {
     /** Waiting for work */
@@ -208,8 +193,8 @@ export enum SettlerState {
 
 /** Work handler provided by domain systems (e.g., WoodcuttingSystem) */
 export interface WorkHandler {
-    /** Find a target for this settler */
-    findTarget(x: number, y: number, settlerId?: number): { entityId: number; x: number; y: number } | null;
+    /** Find a target for this settler. entityId is null for position-only results (e.g., forester planting spots). */
+    findTarget(x: number, y: number, settlerId?: number): { entityId: number | null; x: number; y: number } | null;
     /** Check if target is still valid / has materials to work with */
     canWork(targetId: number): boolean;
     /** If true, worker waits (idles) when canWork is false instead of failing */
@@ -222,4 +207,6 @@ export interface WorkHandler {
     onWorkComplete?(targetId: number, settlerX: number, settlerY: number): void;
     /** Called if work is interrupted */
     onWorkInterrupt?(targetId: number): void;
+    /** Called when a WORK task completes at a searched position (SEARCH_POS → GO_TO_POS → WORK flow) */
+    onWorkAtPositionComplete?(x: number, y: number, settlerId: number): void;
 }

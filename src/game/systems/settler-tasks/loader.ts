@@ -101,6 +101,7 @@ export type JobDefinitions = Map<string, TaskNode[]>;
 /** Map settler names from YAML to UnitType enum */
 const SETTLER_NAME_MAP: Record<string, UnitType> = {
     woodcutter: UnitType.Woodcutter,
+    stonecutter: UnitType.Stonecutter,
     forester: UnitType.Forester,
     farmer: UnitType.Farmer,
     miner: UnitType.Miner,

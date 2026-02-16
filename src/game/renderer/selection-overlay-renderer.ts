@@ -2,6 +2,7 @@ import { Entity, EntityType, BuildingType, getBuildingFootprint } from '../entit
 import { TilePicker } from '../input/tile-picker';
 import { tileToWorld, heightToWorld } from '../systems/coordinate-system';
 import { getEntityWorldPos, getInterpolatedWorldPos, type WorldPositionContext } from './world-position';
+import type { ServiceAreaRenderData } from './render-context';
 import {
     FRAME_COLOR,
     FRAME_CORNER_COLOR,
@@ -20,6 +21,8 @@ import {
     SELECTION_DOT_COLOR,
     SELECTION_ORIGIN_DOT_COLOR,
     FOOTPRINT_TILE_COLOR,
+    SERVICE_AREA_CIRCLE_COLOR,
+    SERVICE_AREA_CIRCLE_SEGMENTS,
     SHADER_VERTEX_SCALE,
 } from './entity-renderer-constants';
 
@@ -57,9 +60,12 @@ export class SelectionOverlayRenderer {
             // Skip frames for units - they use dots instead
             if (entity.type === EntityType.Unit) continue;
 
-            let minX = Infinity, minY = Infinity;
-            let maxX = -Infinity, maxY = -Infinity;
-            let centerX = 0, centerY = 0;
+            let minX = Infinity,
+                minY = Infinity;
+            let maxX = -Infinity,
+                maxY = -Infinity;
+            let centerX = 0,
+                centerY = 0;
 
             if (entity.type === EntityType.Building) {
                 // Get footprint tiles and calculate bounding box in world coordinates
@@ -143,7 +149,13 @@ export class SelectionOverlayRenderer {
         const cornerLenX = halfWidth * FRAME_CORNER_LENGTH;
         const cornerLenY = halfHeight * FRAME_CORNER_LENGTH;
         const ct = t * 1.8; // Corner thickness
-        gl.vertexAttrib4f(aColor, FRAME_CORNER_COLOR[0], FRAME_CORNER_COLOR[1], FRAME_CORNER_COLOR[2], FRAME_CORNER_COLOR[3]);
+        gl.vertexAttrib4f(
+            aColor,
+            FRAME_CORNER_COLOR[0],
+            FRAME_CORNER_COLOR[1],
+            FRAME_CORNER_COLOR[2],
+            FRAME_CORNER_COLOR[3]
+        );
 
         // Top-left corner (horizontal + vertical)
         this.fillRectVertices(-halfWidth, halfHeight - ct, -halfWidth + cornerLenX, halfHeight);
@@ -201,9 +213,12 @@ export class SelectionOverlayRenderer {
             for (let i = unitState.pathIndex; i < maxDots; i++) {
                 const wp = unitState.path[i];
                 const worldPos = TilePicker.tileToWorld(
-                    wp.x, wp.y,
-                    ctx.groundHeight, ctx.mapSize,
-                    ctx.viewPoint.x, ctx.viewPoint.y
+                    wp.x,
+                    wp.y,
+                    ctx.groundHeight,
+                    ctx.mapSize,
+                    ctx.viewPoint.x,
+                    ctx.viewPoint.y
                 );
 
                 gl.vertexAttrib2f(aEntityPos, worldPos.worldX, worldPos.worldY);
@@ -255,9 +270,12 @@ export class SelectionOverlayRenderer {
 
             // Draw smaller dot at logical origin (current tile position)
             const originPos = TilePicker.tileToWorld(
-                entity.x, entity.y,
-                ctx.groundHeight, ctx.mapSize,
-                ctx.viewPoint.x, ctx.viewPoint.y
+                entity.x,
+                entity.y,
+                ctx.groundHeight,
+                ctx.mapSize,
+                ctx.viewPoint.x,
+                ctx.viewPoint.y
             );
             gl.vertexAttrib2f(aEntityPos, originPos.worldX, originPos.worldY);
             gl.vertexAttrib4f(
@@ -327,6 +345,117 @@ export class SelectionOverlayRenderer {
     }
 
     /**
+     * Draw circle outlines around service areas for selected hub buildings.
+     * Each circle is approximated as a ring of thin quad segments in world space.
+     */
+    public drawServiceAreaCircles(
+        gl: WebGL2RenderingContext,
+        buffer: WebGLBuffer,
+        serviceAreas: readonly ServiceAreaRenderData[],
+        aEntityPos: number,
+        aColor: number,
+        ctx: SelectionRenderContext
+    ): void {
+        if (serviceAreas.length === 0) return;
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.vertexAttrib4f(
+            aColor,
+            SERVICE_AREA_CIRCLE_COLOR[0],
+            SERVICE_AREA_CIRCLE_COLOR[1],
+            SERVICE_AREA_CIRCLE_COLOR[2],
+            SERVICE_AREA_CIRCLE_COLOR[3]
+        );
+
+        const segments = SERVICE_AREA_CIRCLE_SEGMENTS;
+        const lineWidth = 0.3; // Width of circle outline in tile units
+
+        // 6 vertices per quad segment (2 triangles)
+        const segmentVerts = new Float32Array(12);
+
+        for (const area of serviceAreas) {
+            // Sample ground height at center for a reasonable base height
+            const centerIdx = ctx.mapSize.toIndex(Math.round(area.centerX), Math.round(area.centerY));
+            const baseH = heightToWorld(ctx.groundHeight[centerIdx] ?? 0);
+
+            // Generate circle points in tile space and convert to world space
+            const points: { worldX: number; worldY: number }[] = [];
+
+            for (let i = 0; i <= segments; i++) {
+                const angle = (i / segments) * Math.PI * 2;
+                const tileX = area.centerX + 0.5 + Math.cos(angle) * area.radius;
+                const tileY = area.centerY + 0.5 + Math.sin(angle) * area.radius;
+
+                // Sample height at this tile position for terrain-following
+                const sampleX = Math.round(tileX);
+                const sampleY = Math.round(tileY);
+                const inBounds =
+                    sampleX >= 0 && sampleX < ctx.mapSize.width && sampleY >= 0 && sampleY < ctx.mapSize.height;
+                const h = inBounds ? heightToWorld(ctx.groundHeight[ctx.mapSize.toIndex(sampleX, sampleY)]) : baseH;
+
+                points.push(tileToWorld(tileX, tileY, h, ctx.viewPoint.x, ctx.viewPoint.y));
+            }
+
+            // Compute center of all points for use as entityPos
+            let cx = 0,
+                cy = 0;
+            for (const p of points) {
+                cx += p.worldX;
+                cy += p.worldY;
+            }
+            cx /= points.length;
+            cy /= points.length;
+            gl.vertexAttrib2f(aEntityPos, cx, cy);
+
+            const invScale = 1 / SHADER_VERTEX_SCALE;
+
+            // Draw quad segments connecting consecutive circle points
+            for (let i = 0; i < points.length - 1; i++) {
+                const p0 = points[i];
+                const p1 = points[i + 1];
+
+                // Direction vector from p0 to p1
+                const dx = p1.worldX - p0.worldX;
+                const dy = p1.worldY - p0.worldY;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                if (len < 0.001) continue;
+
+                // Normal (perpendicular) for line width
+                const nx = (-dy / len) * lineWidth * 0.5;
+                const ny = (dx / len) * lineWidth * 0.5;
+
+                // Quad corners (outer and inner edges)
+                const ax = (p0.worldX + nx - cx) * invScale;
+                const ay = (p0.worldY + ny - cy) * invScale;
+                const bx = (p0.worldX - nx - cx) * invScale;
+                const by = (p0.worldY - ny - cy) * invScale;
+                const cx2 = (p1.worldX - nx - cx) * invScale;
+                const cy2 = (p1.worldY - ny - cy) * invScale;
+                const dx2 = (p1.worldX + nx - cx) * invScale;
+                const dy2 = (p1.worldY + ny - cy) * invScale;
+
+                // Triangle 1: a, b, c
+                segmentVerts[0] = ax;
+                segmentVerts[1] = ay;
+                segmentVerts[2] = bx;
+                segmentVerts[3] = by;
+                segmentVerts[4] = cx2;
+                segmentVerts[5] = cy2;
+                // Triangle 2: a, c, d
+                segmentVerts[6] = ax;
+                segmentVerts[7] = ay;
+                segmentVerts[8] = cx2;
+                segmentVerts[9] = cy2;
+                segmentVerts[10] = dx2;
+                segmentVerts[11] = dy2;
+
+                gl.bufferData(gl.ARRAY_BUFFER, segmentVerts, gl.DYNAMIC_DRAW);
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+            }
+        }
+    }
+
+    /**
      * Calculate world-space bounding box for a building's footprint tiles.
      * Computes all 4 corners of each tile's diamond shape.
      */
@@ -334,15 +463,17 @@ export class SelectionOverlayRenderer {
         footprint: { x: number; y: number }[],
         ctx: SelectionRenderContext
     ): { minX: number; minY: number; maxX: number; maxY: number } {
-        let minX = Infinity, minY = Infinity;
-        let maxX = -Infinity, maxY = -Infinity;
+        let minX = Infinity,
+            minY = Infinity;
+        let maxX = -Infinity,
+            maxY = -Infinity;
 
         // Tile diamonds have corners at fractional tile positions
         const cornerOffsets = [
-            { dx: 0.5, dy: 0 },    // Top corner
-            { dx: 1, dy: 0.5 },    // Right corner
-            { dx: 0.5, dy: 1 },    // Bottom corner
-            { dx: 0, dy: 0.5 },    // Left corner
+            { dx: 0.5, dy: 0 }, // Top corner
+            { dx: 1, dy: 0.5 }, // Right corner
+            { dx: 0.5, dy: 1 }, // Bottom corner
+            { dx: 0, dy: 0.5 }, // Left corner
         ];
 
         for (const tile of footprint) {
@@ -353,8 +484,11 @@ export class SelectionOverlayRenderer {
             for (const offset of cornerOffsets) {
                 // Use pure tileToWorld for fractional coords (tile corners)
                 const worldPos = tileToWorld(
-                    tile.x + offset.dx, tile.y + offset.dy,
-                    hWorld, ctx.viewPoint.x, ctx.viewPoint.y
+                    tile.x + offset.dx,
+                    tile.y + offset.dy,
+                    hWorld,
+                    ctx.viewPoint.x,
+                    ctx.viewPoint.y
                 );
                 minX = Math.min(minX, worldPos.worldX);
                 minY = Math.min(minY, worldPos.worldY);
@@ -381,13 +515,19 @@ export class SelectionOverlayRenderer {
     private fillRectVertices(x0: number, y0: number, x1: number, y1: number): void {
         const verts = this.vertexData;
         // Triangle 1: top-left, bottom-left, bottom-right
-        verts[0] = x0; verts[1] = y1;
-        verts[2] = x0; verts[3] = y0;
-        verts[4] = x1; verts[5] = y0;
+        verts[0] = x0;
+        verts[1] = y1;
+        verts[2] = x0;
+        verts[3] = y0;
+        verts[4] = x1;
+        verts[5] = y0;
         // Triangle 2: top-left, bottom-right, top-right
-        verts[6] = x0; verts[7] = y1;
-        verts[8] = x1; verts[9] = y0;
-        verts[10] = x1; verts[11] = y1;
+        verts[6] = x0;
+        verts[7] = y1;
+        verts[8] = x1;
+        verts[9] = y0;
+        verts[10] = x1;
+        verts[11] = y1;
     }
 
     /**

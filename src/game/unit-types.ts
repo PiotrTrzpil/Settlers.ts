@@ -24,6 +24,7 @@ export enum UnitType {
     SawmillWorker = 15,
     Miller = 16,
     Butcher = 17,
+    Stonecutter = 18,
 }
 
 /**
@@ -79,6 +80,7 @@ export const UNIT_TYPE_CONFIG: Record<UnitType, UnitTypeConfig> = {
     [UnitType.SawmillWorker]: { name: 'SawmillWorker', category: UnitCategory.Worker, speed: 2 },
     [UnitType.Miller]: { name: 'Miller', category: UnitCategory.Worker, speed: 2 },
     [UnitType.Butcher]: { name: 'Butcher', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Stonecutter]: { name: 'Stonecutter', category: UnitCategory.Worker, speed: 2 },
 };
 
 /** Categories that allow player selection */
@@ -126,6 +128,9 @@ export const BUILDING_UNIT_TYPE: Partial<Record<BuildingType, UnitType>> = {
     [BuildingType.WoodcutterHut]: UnitType.Woodcutter,
     [BuildingType.ForesterHut]: UnitType.Forester,
     [BuildingType.Sawmill]: UnitType.SawmillWorker,
+
+    // Stone
+    [BuildingType.StonecutterHut]: UnitType.Stonecutter,
 
     // Farming / Food
     [BuildingType.GrainFarm]: UnitType.Farmer,

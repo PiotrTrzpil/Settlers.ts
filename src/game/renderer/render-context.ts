@@ -19,6 +19,15 @@ import type { PlacementPreviewState } from './entity-renderer';
 import { BuildingConstructionPhase } from '../features/building-construction';
 
 /**
+ * Lightweight service area data for rendering (avoids importing full ServiceArea type).
+ */
+export interface ServiceAreaRenderData {
+    centerX: number;
+    centerY: number;
+    radius: number;
+}
+
+/**
  * Selection state for rendering.
  */
 export interface SelectionState {
@@ -71,6 +80,10 @@ export interface IRenderContext {
     // === Camera ===
     /** Current view point for world coordinate calculation */
     readonly viewPoint: IViewPoint;
+
+    // === Service Areas ===
+    /** Service areas to render for selected hub buildings */
+    readonly selectedServiceAreas: readonly ServiceAreaRenderData[];
 }
 
 /**
@@ -98,6 +111,7 @@ export class RenderContextBuilder {
     private _mapWidth = 0;
     private _mapHeight = 0;
     private _viewPoint: IViewPoint | null = null;
+    private _selectedServiceAreas: readonly ServiceAreaRenderData[] = [];
 
     entities(entities: readonly Entity[]): this {
         this._entities = entities;
@@ -165,6 +179,11 @@ export class RenderContextBuilder {
         return this;
     }
 
+    selectedServiceAreas(areas: readonly ServiceAreaRenderData[]): this {
+        this._selectedServiceAreas = areas;
+        return this;
+    }
+
     /**
      * Build the immutable render context.
      * @throws Error if required fields (viewPoint) are not set
@@ -192,6 +211,7 @@ export class RenderContextBuilder {
             mapWidth: this._mapWidth,
             mapHeight: this._mapHeight,
             viewPoint: this._viewPoint,
+            selectedServiceAreas: this._selectedServiceAreas,
         };
     }
 }

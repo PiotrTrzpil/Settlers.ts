@@ -1,9 +1,11 @@
 /**
- * Tree lifecycle system - manages tree growth and cutting states.
+ * Tree lifecycle system - manages tree growth, cutting, and planting.
  *
  * Logical stages (game state):
  *   Growing -> Normal (planted by forester, progress 0-1)
  *   Normal -> Cutting -> Cut (cut by woodcutter, progress 0-1)
+ *
+ * Also provides the forester work handler (TREE_SEED_POS) for tree planting.
  *
  * Visual state is controlled by setting entity.variation directly.
  * Normal trees (variation=3) also play 'default' animation for sway.
@@ -16,6 +18,10 @@ import type { GameState } from '../game-state';
 import { EntityType, MapObjectType } from '../entity';
 import { OBJECT_TYPE_CATEGORY } from './map-objects';
 import type { AnimationService } from '../animation/index';
+import { SettlerTaskSystem, SearchType, type WorkHandler } from './settler-tasks';
+import { LogHandler } from '@/utilities/log-handler';
+
+const log = new LogHandler('TreeSystem');
 
 /**
  * Logical tree stage (game state).
@@ -62,6 +68,20 @@ export interface TreeState {
 // Timing constants
 const GROWTH_TIME = 60; // Seconds per growth stage
 const STUMP_DECAY_TIME = 30; // Seconds for stump to disappear
+
+// Forester constants
+const PLANTING_SEARCH_RADIUS = 15;
+const MIN_TREE_DISTANCE_SQ = 4; // 2 tiles minimum between trees
+
+/** Tree types foresters can plant */
+const PLANTABLE_TREE_TYPES: readonly MapObjectType[] = [
+    MapObjectType.TreeOak,
+    MapObjectType.TreeBeech,
+    MapObjectType.TreeFir,
+    MapObjectType.TreeSpruce,
+    MapObjectType.TreePine,
+    MapObjectType.TreeBirch,
+];
 
 /**
  * Manages tree growth, cutting, and stump decay.
@@ -271,6 +291,84 @@ export class TreeSystem implements TickSystem {
         for (const entityId of toRemove) {
             this.gameState.removeEntity(entityId);
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Forester work handler (TREE_SEED_POS)
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Register the forester work handler with the settler task system.
+     * Foresters find empty tiles and plant new trees.
+     */
+    registerForesterHandler(taskSystem: SettlerTaskSystem): void {
+        taskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, this.createForesterHandler());
+        log.debug('Registered forester work handler');
+    }
+
+    private createForesterHandler(): WorkHandler {
+        return {
+            findTarget: (x: number, y: number) => {
+                return this.findPlantingSpot(x, y);
+            },
+
+            // canWork/onWorkTick are required but not used for SEARCH_POS → WORK flow
+            canWork: () => true,
+            onWorkTick: () => true,
+
+            onWorkAtPositionComplete: (posX: number, posY: number, settlerId: number) => {
+                this.plantTree(posX, posY, settlerId);
+            },
+        };
+    }
+
+    private plantTree(x: number, y: number, settlerId: number): void {
+        const treeType = PLANTABLE_TREE_TYPES[Math.floor(Math.random() * PLANTABLE_TREE_TYPES.length)];
+
+        // Check tile is still valid (nothing placed there while forester was walking)
+        if (this.gameState.getEntityAt(x, y)) {
+            log.debug(`Forester ${settlerId}: tile (${x}, ${y}) occupied, cannot plant`);
+            return;
+        }
+
+        const entity = this.gameState.addEntity(EntityType.MapObject, treeType, x, y, 0);
+        this.register(entity.id, treeType, true);
+        log.debug(`Forester ${settlerId} planted ${MapObjectType[treeType]} at (${x}, ${y})`);
+    }
+
+    private findPlantingSpot(cx: number, cy: number): { entityId: number | null; x: number; y: number } | null {
+        for (let radius = 2; radius <= PLANTING_SEARCH_RADIUS; radius++) {
+            for (let dy = -radius; dy <= radius; dy++) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                    if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+
+                    const x = cx + dx;
+                    const y = cy + dy;
+                    if (x < 0 || y < 0) continue;
+
+                    // Tile must be empty
+                    if (this.gameState.getEntityAt(x, y)) continue;
+
+                    // Must not be too close to existing trees
+                    if (this.isTooCloseToTree(x, y)) continue;
+
+                    return { entityId: null, x, y };
+                }
+            }
+        }
+        return null;
+    }
+
+    private isTooCloseToTree(x: number, y: number): boolean {
+        for (const entity of this.gameState.entities) {
+            if (entity.type !== EntityType.MapObject) continue;
+            if (OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType] !== 'trees') continue;
+
+            const dx = entity.x - x;
+            const dy = entity.y - y;
+            if (dx * dx + dy * dy < MIN_TREE_DISTANCE_SQ) return true;
+        }
+        return false;
     }
 
     /**

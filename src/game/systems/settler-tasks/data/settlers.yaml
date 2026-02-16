@@ -6,6 +6,11 @@ woodcutter:
   tool: AXE
   jobs: [work]
 
+stonecutter:
+  search: STONE
+  tool: PICKAXE
+  jobs: [work]
+
 forester:
   search: TREE_SEED_POS
   jobs: [plant]

@@ -15,7 +15,7 @@ import { BuildingType } from '../../buildings/types';
  * Default service area radius in tiles.
  * This determines how far from the tavern carriers will travel by default.
  */
-export const DEFAULT_SERVICE_RADIUS = 15;
+export const DEFAULT_SERVICE_RADIUS = 40;
 
 /**
  * Default carrier capacity when not specified by building type.

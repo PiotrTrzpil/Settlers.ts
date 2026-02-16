@@ -19,11 +19,7 @@ export const TEXTURE_UNIT_PALETTE = 4;
 export const MAX_PATH_DOTS = 30;
 
 // Base quad vertices for instanced rendering
-export const BASE_QUAD = new Float32Array([
-    -0.5, -0.5, 0.5, -0.5,
-    -0.5, 0.5, -0.5, 0.5,
-    0.5, -0.5, 0.5, 0.5
-]);
+export const BASE_QUAD = new Float32Array([-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5]);
 
 // Entity scale factors
 export const BUILDING_SCALE = 1.0;
@@ -37,10 +33,10 @@ export const PATH_DOT_SCALE = 0.24;
  * 0.0 = top of sprite, 1.0 = bottom of sprite.
  * Higher values = depth point closer to ground = appears "more in front".
  */
-export const DEPTH_FACTOR_BUILDING = 0.5;   // Middle of building
+export const DEPTH_FACTOR_BUILDING = 0.5; // Middle of building
 export const DEPTH_FACTOR_MAP_OBJECT = 0.85; // Near bottom (trees, stones have base at bottom)
-export const DEPTH_FACTOR_UNIT = 1.0;       // At feet (units stand on ground)
-export const DEPTH_FACTOR_RESOURCE = 1.0;   // On ground
+export const DEPTH_FACTOR_UNIT = 1.0; // At feet (units stand on ground)
+export const DEPTH_FACTOR_RESOURCE = 1.0; // On ground
 
 // Selection frame parameters
 export const FRAME_PADDING = 1.3; // Frame size relative to entity scale
@@ -49,12 +45,16 @@ export const FRAME_CORNER_LENGTH = 0.35; // Corner accent length (fraction of fr
 
 // Selection dot parameters
 export const SELECTION_DOT_SCALE = 0.15; // Larger dot on unit sprite
-export const SELECTION_ORIGIN_DOT_SCALE = 0.10; // Smaller dot at logical origin
+export const SELECTION_ORIGIN_DOT_SCALE = 0.1; // Smaller dot at logical origin
 export const SELECTION_DOT_COLOR = [0.2, 0.9, 1.0, 1.0]; // Cyan dot on sprite
 export const SELECTION_ORIGIN_DOT_COLOR = [1.0, 0.4, 0.2, 1.0]; // Orange dot at origin
 
 // Footprint debug visualization
 export const FOOTPRINT_TILE_COLOR = [0.2, 0.8, 1.0, 0.4]; // Semi-transparent cyan
+
+// Service area overlay
+export const SERVICE_AREA_CIRCLE_COLOR = [0.3, 0.7, 1.0, 0.6]; // Blue circle outline
+export const SERVICE_AREA_CIRCLE_SEGMENTS = 64; // Number of segments for circle approximation
 
 /**
  * Vertex scale factor applied by entity-vert.glsl shader.

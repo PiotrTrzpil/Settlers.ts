@@ -95,6 +95,8 @@ function mapS4ToInternalType(s4Type: number): number {
         [S4_SETTLER_TYPES.CARRIER]: UnitType.Carrier,
         [S4_SETTLER_TYPES.BUILDER]: UnitType.Builder,
         [S4_SETTLER_TYPES.WOODCUTTER]: UnitType.Woodcutter,
+        [S4_SETTLER_TYPES.STONECUTTER]: UnitType.Stonecutter,
+        [S4_SETTLER_TYPES.FORESTER]: UnitType.Forester,
         [S4_SETTLER_TYPES.SWORDSMAN_01]: UnitType.Swordsman,
         [S4_SETTLER_TYPES.BOWMAN_01]: UnitType.Bowman,
         [S4_SETTLER_TYPES.PRIEST]: UnitType.Priest,
@@ -125,39 +127,35 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
     }
 
     // Settlers.AddSettlers(x, y, player, settlerType, amount) - Spawn settlers
-    runtime.registerFunction('Settlers', 'AddSettlers', (
-        x: number, y: number, player: number, settlerType: number, amount: number = 1
-    ) => {
-        const internalType = mapS4ToInternalType(settlerType);
-        log.debug(`AddSettlers: ${amount}x type ${settlerType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`);
-
-        const created: number[] = [];
-        for (let i = 0; i < amount; i++) {
-            // Offset slightly for multiple units
-            const offsetX = x + (i % 3);
-            const offsetY = y + Math.floor(i / 3);
-
-            const entity = context.gameState.addEntity(
-                EntityType.Unit,
-                internalType,
-                offsetX,
-                offsetY,
-                player
+    runtime.registerFunction(
+        'Settlers',
+        'AddSettlers',
+        (x: number, y: number, player: number, settlerType: number, amount: number = 1) => {
+            const internalType = mapS4ToInternalType(settlerType);
+            log.debug(
+                `AddSettlers: ${amount}x type ${settlerType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`
             );
-            created.push(entity.id);
-        }
 
-        return created.length;
-    });
+            const created: number[] = [];
+            for (let i = 0; i < amount; i++) {
+                // Offset slightly for multiple units
+                const offsetX = x + (i % 3);
+                const offsetY = y + Math.floor(i / 3);
+
+                const entity = context.gameState.addEntity(EntityType.Unit, internalType, offsetX, offsetY, player);
+                created.push(entity.id);
+            }
+
+            return created.length;
+        }
+    );
 
     // Settlers.Amount(player, settlerType) - Count settlers of type
     runtime.registerFunction('Settlers', 'Amount', (player: number, settlerType: number) => {
         const internalType = mapS4ToInternalType(settlerType);
         let count = 0;
         for (const entity of context.gameState.entities) {
-            if (entity.type === EntityType.Unit &&
-                entity.subType === internalType &&
-                entity.player === player) {
+            if (entity.type === EntityType.Unit && entity.subType === internalType && entity.player === player) {
                 count++;
             }
         }
@@ -165,26 +163,28 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
     });
 
     // Settlers.AmountInArea(player, settlerType, x, y, range) - Count settlers in area
-    runtime.registerFunction('Settlers', 'AmountInArea', (
-        player: number, settlerType: number, x: number, y: number, range: number
-    ) => {
-        const internalType = mapS4ToInternalType(settlerType);
-        let count = 0;
-        const rangeSq = range * range;
+    runtime.registerFunction(
+        'Settlers',
+        'AmountInArea',
+        (player: number, settlerType: number, x: number, y: number, range: number) => {
+            const internalType = mapS4ToInternalType(settlerType);
+            let count = 0;
+            const rangeSq = range * range;
 
-        for (const entity of context.gameState.entities) {
-            if (entity.type !== EntityType.Unit) continue;
-            if (entity.subType !== internalType) continue;
-            if (entity.player !== player) continue;
+            for (const entity of context.gameState.entities) {
+                if (entity.type !== EntityType.Unit) continue;
+                if (entity.subType !== internalType) continue;
+                if (entity.player !== player) continue;
 
-            const dx = entity.x - x;
-            const dy = entity.y - y;
-            if (dx * dx + dy * dy <= rangeSq) {
-                count++;
+                const dx = entity.x - x;
+                const dy = entity.y - y;
+                if (dx * dx + dy * dy <= rangeSq) {
+                    count++;
+                }
             }
+            return count;
         }
-        return count;
-    });
+    );
 
     // Settlers.Kill(entityId) - Kill a specific settler
     runtime.registerFunction('Settlers', 'Kill', (entityId: number) => {

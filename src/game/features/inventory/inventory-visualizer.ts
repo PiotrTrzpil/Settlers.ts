@@ -13,6 +13,7 @@
 import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from './building-inventory';
 import { BuildingType, EntityType, getBuildingSize, tileKey, type TileCoord } from '../../entity';
+import { getBuildingFootprint } from '../../buildings/types';
 import { EMaterialType } from '../../economy/material-type';
 import { MAX_RESOURCE_STACK_SIZE } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
@@ -162,11 +163,7 @@ export class InventoryVisualizer {
         const buildingType = building.subType as BuildingType;
 
         // Calculate positions for outputs (upper right) and inputs (lower right)
-        const { outputPositions, inputPositions } = this.calculateStackPositions(
-            building.x,
-            building.y,
-            buildingType
-        );
+        const { outputPositions, inputPositions } = this.calculateStackPositions(building.x, building.y, buildingType);
 
         state = {
             buildingId,
@@ -182,56 +179,62 @@ export class InventoryVisualizer {
 
     /**
      * Calculate positions for both output and input resource stacks.
-     * - Outputs are placed on the right side, upper positions (visually higher)
-     * - Inputs are placed on the right side, lower positions (visually lower)
+     * Uses the actual building footprint (from game data) to find adjacent tiles
+     * that are truly outside the building's occupied area.
      *
-     * In isometric view, lower Y = visually higher (north), higher Y = visually lower (south).
+     * - Outputs: upper/right positions (visually higher in isometric view)
+     * - Inputs: lower/left positions (visually lower in isometric view)
      */
     private calculateStackPositions(
         buildingX: number,
         buildingY: number,
         buildingType: BuildingType
     ): { outputPositions: TileCoord[]; inputPositions: TileCoord[] } {
-        // Use simple building size for visual placement (ignore large blocking footprint)
         const size = getBuildingSize(buildingType);
+        const footprint = getBuildingFootprint(buildingX, buildingY, buildingType);
+        const footprintSet = new Set(footprint.map(t => tileKey(t.x, t.y)));
+
+        // Find all tiles adjacent to the footprint but not part of it
+        const adjacentSet = new Set<string>();
+        const adjacentTiles: TileCoord[] = [];
+
+        for (const tile of footprint) {
+            for (const [dx, dy] of [
+                [0, -1],
+                [1, 0],
+                [0, 1],
+                [-1, 0],
+            ]) {
+                const nx = tile.x + dx;
+                const ny = tile.y + dy;
+                if (nx < 0 || ny < 0) continue;
+                const key = tileKey(nx, ny);
+                if (footprintSet.has(key) || adjacentSet.has(key)) continue;
+                adjacentSet.add(key);
+                adjacentTiles.push({ x: nx, y: ny });
+            }
+        }
+
+        // Categorize into output (upper/right) vs input (lower/left) based on
+        // position relative to building center. In isometric view, lower Y = visually higher.
+        const centerY = buildingY + size.height / 2;
 
         const outputPositions: TileCoord[] = [];
         const inputPositions: TileCoord[] = [];
 
-        // Right edge (x + width + 1) - primary location, offset one tile right
-        // Split: upper half for outputs, lower half for inputs
-        for (let dy = 0; dy < size.height; dy++) {
-            const pos = { x: buildingX + size.width + 1, y: buildingY + dy };
-            if (dy < size.height / 2) {
+        for (const pos of adjacentTiles) {
+            if (pos.y < centerY) {
                 outputPositions.push(pos);
             } else {
                 inputPositions.push(pos);
             }
         }
 
-        // Bottom edge (y + height) - secondary for inputs
-        for (let dx = size.width - 1; dx >= 0; dx--) {
-            inputPositions.push({ x: buildingX + dx, y: buildingY + size.height });
-        }
+        // Sort outputs: prefer right side (higher x), then top (lower y)
+        outputPositions.sort((a, b) => b.x - a.x || a.y - b.y);
 
-        // Top edge (y - 1) - secondary for outputs
-        for (let dx = size.width - 1; dx >= 0; dx--) {
-            if (buildingY > 0) {
-                outputPositions.push({ x: buildingX + dx, y: buildingY - 1 });
-            }
-        }
-
-        // Left edge (x - 1) - fallback
-        for (let dy = 0; dy < size.height; dy++) {
-            if (buildingX > 0) {
-                const pos = { x: buildingX - 1, y: buildingY + dy };
-                if (dy < size.height / 2) {
-                    outputPositions.push(pos);
-                } else {
-                    inputPositions.push(pos);
-                }
-            }
-        }
+        // Sort inputs: prefer right side (higher x), then bottom (higher y)
+        inputPositions.sort((a, b) => b.x - a.x || b.y - a.y);
 
         return { outputPositions, inputPositions };
     }
@@ -381,10 +384,14 @@ export class InventoryVisualizer {
 
             if (isOutput) {
                 visualState.outputStacks.set(materialType, entity.id);
-                log.debug(`Rebuilt output stack: building=${buildingId}, material=${EMaterialType[materialType]}, entity=${entity.id}`);
+                log.debug(
+                    `Rebuilt output stack: building=${buildingId}, material=${EMaterialType[materialType]}, entity=${entity.id}`
+                );
             } else if (isInput) {
                 visualState.inputStacks.set(materialType, entity.id);
-                log.debug(`Rebuilt input stack: building=${buildingId}, material=${EMaterialType[materialType]}, entity=${entity.id}`);
+                log.debug(
+                    `Rebuilt input stack: building=${buildingId}, material=${EMaterialType[materialType]}, entity=${entity.id}`
+                );
             }
         }
     }

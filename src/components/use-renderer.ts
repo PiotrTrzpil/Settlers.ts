@@ -30,8 +30,9 @@ import {
 } from '@/game/input';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { SelectionBox, PlacementPreview } from '@/game/input/render-state';
-import { createRenderContext } from '@/game/renderer/render-context';
+import { createRenderContext, type ServiceAreaRenderData } from '@/game/renderer/render-context';
 import { getBuildingVisualState } from '@/game/features/building-construction';
+import { EntityType } from '@/game/entity';
 
 /** Context object for render callback - avoids excessive callback parameters */
 interface CallbackContext {
@@ -53,6 +54,20 @@ function syncEntityRendererState(
 ): void {
     // Build render context using the builder pattern
     const buildingStates = g.gameLoop.buildingStateManager.buildingStates;
+
+    // Collect service areas for selected hub buildings
+    const serviceAreas: ServiceAreaRenderData[] = [];
+    const sam = g.gameLoop.serviceAreaManager;
+    for (const id of g.state.selectedEntityIds) {
+        const entity = g.state.getEntity(id);
+        if (entity && entity.type === EntityType.Building) {
+            const sa = sam.getServiceArea(id);
+            if (sa) {
+                serviceAreas.push({ centerX: sa.centerX, centerY: sa.centerY, radius: sa.radius });
+            }
+        }
+    }
+
     const renderContext = createRenderContext()
         .entities(g.state.entities)
         .unitStates(g.state.unitStates)
@@ -66,6 +81,7 @@ function syncEntityRendererState(
             primaryId: g.state.selectedEntityId,
             ids: g.state.selectedEntityIds,
         })
+        .selectedServiceAreas(serviceAreas)
         .alpha(alpha)
         .layerVisibility(ctx.layerVisibility)
         .groundHeight(g.groundHeight)
