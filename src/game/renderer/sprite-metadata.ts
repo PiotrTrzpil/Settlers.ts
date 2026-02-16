@@ -3,7 +3,6 @@ import { EMaterialType } from '../economy';
 import { AtlasRegion } from './entity-texture-atlas';
 import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS, ANIMATION_SEQUENCES } from '../animation';
 import { mapToArray, arrayToMap } from './sprite-metadata-helpers';
-import { LogHandler } from '@/utilities/log-handler';
 
 /** Conversion factor from sprite pixels to world-space units */
 export const PIXELS_TO_WORLD = 1.0 / 32.0;
@@ -15,7 +14,7 @@ export enum Race {
     Roman = 10,
     Viking = 11,
     Mayan = 12,
-    DarkTribe = 13,  // Uses different building mappings
+    DarkTribe = 13, // Uses different building mappings
     Trojan = 14,
 }
 
@@ -92,7 +91,7 @@ export const BUILDING_ICON_FILE_NUMBERS: Record<Race, number> = {
     [Race.Roman]: 9,
     [Race.Viking]: 19,
     [Race.Mayan]: 29,
-    [Race.DarkTribe]: 9,  // Fallback to Roman icons
+    [Race.DarkTribe]: 9, // Fallback to Roman icons
     [Race.Trojan]: 39,
 };
 
@@ -138,20 +137,20 @@ export const NUM_UNIT_DIRECTIONS = 6;
  */
 export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
     // Job 0: Unknown/placeholder
-    [UnitType.Carrier]: 1,      // Carrier without goods (walk cycle)
-    [UnitType.Builder]: 19,     // Construction worker
-    [UnitType.Woodcutter]: 5,   // Woodcutter
-    [UnitType.Swordsman]: 227,  // Lvl1 swordsman (first of pair 227/228)
-    [UnitType.Bowman]: 236,     // Lvl1 bowman standing (236-240 = set1, 242-246 = set2)
-    [UnitType.Digger]: 50,      // Digger/Landscaper walk
-    [UnitType.Smith]: 52,       // Smith idle
-    [UnitType.Miner]: 60,       // Miner walk
-    [UnitType.Forester]: 62,    // Forester idle
-    [UnitType.Farmer]: 65,      // Farmer idle
-    [UnitType.Priest]: 287,     // Priest idle/walk (288 is alternate?)
-    [UnitType.Geologist]: 290,  // Geologist idle
-    [UnitType.Pioneer]: 298,    // Pioneer idle
-    [UnitType.Thief]: -1,       // TODO: Not yet identified
+    [UnitType.Carrier]: 1, // Carrier without goods (walk cycle)
+    [UnitType.Builder]: 19, // Construction worker
+    [UnitType.Woodcutter]: 5, // Woodcutter
+    [UnitType.Swordsman]: 227, // Lvl1 swordsman (first of pair 227/228)
+    [UnitType.Bowman]: 236, // Lvl1 bowman standing (236-240 = set1, 242-246 = set2)
+    [UnitType.Digger]: 50, // Digger/Landscaper walk
+    [UnitType.Smith]: 52, // Smith idle
+    [UnitType.Miner]: 60, // Miner walk
+    [UnitType.Forester]: 62, // Forester idle
+    [UnitType.Farmer]: 65, // Farmer idle
+    [UnitType.Priest]: 287, // Priest idle/walk (288 is alternate?)
+    [UnitType.Geologist]: 290, // Geologist idle
+    [UnitType.Pioneer]: 298, // Pioneer idle
+    [UnitType.Thief]: -1, // TODO: Not yet identified
     [UnitType.SawmillWorker]: 96, // Sawmill worker idle
 };
 
@@ -170,15 +169,15 @@ export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
 export const WORKER_JOB_INDICES = {
     // Carrier (transports goods)
     carrier: {
-        idle: [44, 45, 46, 47, 48],  // idle animation variants
+        idle: [44, 45, 46, 47, 48], // idle animation variants
         walk: 1,
-        work: [49],  // striking/protesting
+        work: [49], // striking/protesting
     },
     // Digger/Landscaper (uses shovel)
     digger: {
-        idle: -1,  // TODO: unmapped
+        idle: -1, // TODO: unmapped
         walk: 50,
-        work: [51],  // digging
+        work: [51], // digging
     },
     // Smithy worker
     smith: {
@@ -186,54 +185,54 @@ export const WORKER_JOB_INDICES = {
     },
     // Builder
     builder: {
-        idle: -1,  // TODO: unmapped (may share with walk pose)
-        walk: 53,  // Note: also at job 19
+        idle: -1, // TODO: unmapped (may share with walk pose)
+        walk: 53, // Note: also at job 19
     },
     // Woodcutter
     woodcutter: {
-        idle: -1,  // TODO: unmapped (may share with walk pose)
-        walk: 54,  // Note: also at job 5
+        idle: -1, // TODO: unmapped (may share with walk pose)
+        walk: 54, // Note: also at job 5
         carry: 55, // carrying log
-        work: [56, 57],  // [chopping standing tree, cutting fallen log]
+        work: [56, 57], // [chopping standing tree, cutting fallen log]
     },
     // Miner
     miner: {
         idle: 58,
         walk: 60,
         carry: 61, // carrying stone
-        work: [59],  // mining
+        work: [59], // mining
     },
     // Forester
     forester: {
         idle: 62,
         carry: 63, // carrying plant
-        work: [64],  // planting
+        work: [64], // planting
     },
     // Farmer
     farmer: {
         idle: 65,
         carry: 66, // carrying grain
-        work: [67, 68],  // [seeding phase 1, seeding phase 2]
+        work: [67, 68], // [seeding phase 1, seeding phase 2]
     },
     // Priest
     priest: {
         idle: 287,
-        alternate: 288,  // Unknown purpose
+        alternate: 288, // Unknown purpose
     },
     // Geologist
     geologist: {
         idle: 290,
-        work: [291, 292, 293, 294, 295, 296, 297],  // Different work phases
+        work: [291, 292, 293, 294, 295, 296, 297], // Different work phases
     },
     // Pioneer
     pioneer: {
         idle: 298,
-        work: [299, 300],  // [working phase 1, working phase 2]
+        work: [299, 300], // [working phase 1, working phase 2]
     },
     // Swordsman levels (2 variants per level, appear identical)
     swordsman_1: {
         idle: 227,
-        walk: 228,  // may be idle variant
+        walk: 228, // may be idle variant
     },
     swordsman_2: {
         idle: 230,
@@ -246,7 +245,7 @@ export const WORKER_JOB_INDICES = {
     // Bowman levels (first is idle, rest are shooting animations)
     bowman_1: {
         idle: 236,
-        work: [237, 238, 239, 240],  // shooting variants
+        work: [237, 238, 239, 240], // shooting variants
     },
     bowman_2: {
         idle: 242,
@@ -261,7 +260,7 @@ export const WORKER_JOB_INDICES = {
     sawmillworker: {
         idle: 96,
         carry: [97, 98], // carrying, carrying2
-        work: [99],      // working
+        work: [99], // working
         pickup: [100, 101], // picking up, picking up2
     },
 } as const;
@@ -339,49 +338,49 @@ export interface BuildingSpriteInfo {
 export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
     // JIL indices match S4BuildingType values from s4-types.ts
     // Reference: src/resources/map/s4-types.ts S4BuildingType enum
-    [BuildingType.WoodcutterHut]: 1,   // S4BuildingType.WOODCUTTERHUT
-    [BuildingType.ForesterHut]: 2,     // S4BuildingType.FORESTERHUT
-    [BuildingType.Sawmill]: 3,         // S4BuildingType.SAWMILL
-    [BuildingType.StonecutterHut]: 4,  // S4BuildingType.STONECUTTERHUT
-    [BuildingType.WaterworkHut]: 5,    // S4BuildingType.WATERWORKHUT
-    [BuildingType.FisherHut]: 6,       // S4BuildingType.FISHERHUT
-    [BuildingType.HunterHut]: 7,       // S4BuildingType.HUNTERHUT
-    [BuildingType.Slaughterhouse]: 8,  // S4BuildingType.SLAUGHTERHOUSE
-    [BuildingType.Mill]: 9,            // S4BuildingType.MILL
-    [BuildingType.Bakery]: 10,         // S4BuildingType.BAKERY
-    [BuildingType.GrainFarm]: 11,      // S4BuildingType.GRAINFARM
-    [BuildingType.AnimalRanch]: 12,    // S4BuildingType.ANIMALRANCH
-    [BuildingType.DonkeyRanch]: 13,    // S4BuildingType.DONKEYRANCH
-    [BuildingType.StoneMine]: 14,      // S4BuildingType.STONEMINE
-    [BuildingType.IronMine]: 15,       // S4BuildingType.IRONMINE
-    [BuildingType.GoldMine]: 16,       // S4BuildingType.GOLDMINE
-    [BuildingType.CoalMine]: 17,       // S4BuildingType.COALMINE
-    [BuildingType.SulfurMine]: 18,     // S4BuildingType.SULFURMINE
-    [BuildingType.SmeltGold]: 19,      // S4BuildingType.SMELTGOLD
-    [BuildingType.IronSmelter]: 20,    // S4BuildingType.SMELTIRON
-    [BuildingType.ToolSmith]: 21,      // S4BuildingType.TOOLSMITH
-    [BuildingType.WeaponSmith]: 22,    // S4BuildingType.WEAPONSMITH
-    [BuildingType.SiegeWorkshop]: 23,  // S4BuildingType.VEHICLEHALL
-    [BuildingType.Barrack]: 24,        // S4BuildingType.BARRACKS
+    [BuildingType.WoodcutterHut]: 1, // S4BuildingType.WOODCUTTERHUT
+    [BuildingType.ForesterHut]: 2, // S4BuildingType.FORESTERHUT
+    [BuildingType.Sawmill]: 3, // S4BuildingType.SAWMILL
+    [BuildingType.StonecutterHut]: 4, // S4BuildingType.STONECUTTERHUT
+    [BuildingType.WaterworkHut]: 5, // S4BuildingType.WATERWORKHUT
+    [BuildingType.FisherHut]: 6, // S4BuildingType.FISHERHUT
+    [BuildingType.HunterHut]: 7, // S4BuildingType.HUNTERHUT
+    [BuildingType.Slaughterhouse]: 8, // S4BuildingType.SLAUGHTERHOUSE
+    [BuildingType.Mill]: 9, // S4BuildingType.MILL
+    [BuildingType.Bakery]: 10, // S4BuildingType.BAKERY
+    [BuildingType.GrainFarm]: 11, // S4BuildingType.GRAINFARM
+    [BuildingType.AnimalRanch]: 12, // S4BuildingType.ANIMALRANCH
+    [BuildingType.DonkeyRanch]: 13, // S4BuildingType.DONKEYRANCH
+    [BuildingType.StoneMine]: 14, // S4BuildingType.STONEMINE
+    [BuildingType.IronMine]: 15, // S4BuildingType.IRONMINE
+    [BuildingType.GoldMine]: 16, // S4BuildingType.GOLDMINE
+    [BuildingType.CoalMine]: 17, // S4BuildingType.COALMINE
+    [BuildingType.SulfurMine]: 18, // S4BuildingType.SULFURMINE
+    [BuildingType.SmeltGold]: 19, // S4BuildingType.SMELTGOLD
+    [BuildingType.IronSmelter]: 20, // S4BuildingType.SMELTIRON
+    [BuildingType.ToolSmith]: 21, // S4BuildingType.TOOLSMITH
+    [BuildingType.WeaponSmith]: 22, // S4BuildingType.WEAPONSMITH
+    [BuildingType.SiegeWorkshop]: 23, // S4BuildingType.VEHICLEHALL
+    [BuildingType.Barrack]: 24, // S4BuildingType.BARRACKS
     // CHARCOALMAKER = 25 (not in BuildingType)
-    [BuildingType.LivingHouse]: 26,    // S4BuildingType.TRAININGCENTER
-    [BuildingType.HealerHut]: 27,      // S4BuildingType.HEALERHUT
+    [BuildingType.LivingHouse]: 26, // S4BuildingType.TRAININGCENTER
+    [BuildingType.HealerHut]: 27, // S4BuildingType.HEALERHUT
     [BuildingType.AmmunitionMaker]: 28, // S4BuildingType.AMMOMAKERHUT
     // GUNPOWDERMAKERHUT = 29, LANDSCAPEMAKERHUT = 30 (not in BuildingType)
-    [BuildingType.Shipyard]: 31,       // S4BuildingType.SHIPYARD
+    [BuildingType.Shipyard]: 31, // S4BuildingType.SHIPYARD
     // PORT = 32, MARKETPLACE = 33 (not in BuildingType)
-    [BuildingType.StorageArea]: 34,    // S4BuildingType.STORAGEAREA
-    [BuildingType.WinePress]: 35,      // S4BuildingType.VINYARD
+    [BuildingType.StorageArea]: 34, // S4BuildingType.STORAGEAREA
+    [BuildingType.WinePress]: 35, // S4BuildingType.VINYARD
     // AGAVEFARMERHUT = 36, TEQUILAMAKERHUT = 37, BEEKEEPERHUT = 38, MEADMAKERHUT = 39 (not in BuildingType)
     [BuildingType.ResidenceSmall]: 40, // S4BuildingType.RESIDENCESMALL
     [BuildingType.ResidenceMedium]: 41, // S4BuildingType.RESIDENCEMEDIUM
-    [BuildingType.ResidenceBig]: 42,   // S4BuildingType.RESIDENCEBIG
-    [BuildingType.SmallTemple]: 43,    // S4BuildingType.SMALLTEMPLE
-    [BuildingType.LargeTemple]: 44,    // S4BuildingType.BIGTEMPLE
-    [BuildingType.LookoutTower]: 45,   // S4BuildingType.LOOKOUTTOWER
+    [BuildingType.ResidenceBig]: 42, // S4BuildingType.RESIDENCEBIG
+    [BuildingType.SmallTemple]: 43, // S4BuildingType.SMALLTEMPLE
+    [BuildingType.LargeTemple]: 44, // S4BuildingType.BIGTEMPLE
+    [BuildingType.LookoutTower]: 45, // S4BuildingType.LOOKOUTTOWER
     [BuildingType.GuardTowerSmall]: 46, // S4BuildingType.GUARDTOWERSMALL
-    [BuildingType.GuardTowerBig]: 47,  // S4BuildingType.GUARDTOWERBIG
-    [BuildingType.Castle]: 48,         // S4BuildingType.CASTLE
+    [BuildingType.GuardTowerBig]: 47, // S4BuildingType.GUARDTOWERBIG
+    [BuildingType.Castle]: 48, // S4BuildingType.CASTLE
     // MUSHROOMFARM = 49, DARKTEMPLE = 50, FORTRESS = 51 (race-specific)
     // 52-63: Shipyard orientations, 64-75: Decorations
     [BuildingType.Decoration]: 64,
@@ -395,45 +394,45 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
  */
 export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
     // S4GoodType values are the JIL job indices (alphabetically ordered)
-    [EMaterialType.AGAVE]: 1,      // S4GoodType.AGAVE
+    [EMaterialType.AGAVE]: 1, // S4GoodType.AGAVE
     // AMMO = 2 (not in EMaterialType)
-    [EMaterialType.ARMOR]: 3,      // S4GoodType.ARMOR
-    [EMaterialType.AXE]: 4,        // S4GoodType.AXE
-    [EMaterialType.BATTLEAXE]: 5,  // S4GoodType.BATTLEAXE
-    [EMaterialType.BLOWGUN]: 6,    // S4GoodType.BLOWGUN
-    [EMaterialType.BOARD]: 7,      // S4GoodType.BOARD
-    [EMaterialType.BOW]: 8,        // S4GoodType.BOW
-    [EMaterialType.BREAD]: 9,      // S4GoodType.BREAD
-    [EMaterialType.COAL]: 10,      // S4GoodType.COAL
-    [EMaterialType.FISH]: 11,      // S4GoodType.FISH
-    [EMaterialType.FLOUR]: 12,     // S4GoodType.FLOUR
-    [EMaterialType.GOAT]: 13,      // S4GoodType.GOAT
-    [EMaterialType.GOLDBAR]: 14,   // S4GoodType.GOLDBAR
-    [EMaterialType.GOLDORE]: 15,   // S4GoodType.GOLDORE
-    [EMaterialType.GRAIN]: 16,     // S4GoodType.GRAIN
+    [EMaterialType.ARMOR]: 3, // S4GoodType.ARMOR
+    [EMaterialType.AXE]: 4, // S4GoodType.AXE
+    [EMaterialType.BATTLEAXE]: 5, // S4GoodType.BATTLEAXE
+    [EMaterialType.BLOWGUN]: 6, // S4GoodType.BLOWGUN
+    [EMaterialType.BOARD]: 7, // S4GoodType.BOARD
+    [EMaterialType.BOW]: 8, // S4GoodType.BOW
+    [EMaterialType.BREAD]: 9, // S4GoodType.BREAD
+    [EMaterialType.COAL]: 10, // S4GoodType.COAL
+    [EMaterialType.FISH]: 11, // S4GoodType.FISH
+    [EMaterialType.FLOUR]: 12, // S4GoodType.FLOUR
+    [EMaterialType.GOAT]: 13, // S4GoodType.GOAT
+    [EMaterialType.GOLDBAR]: 14, // S4GoodType.GOLDBAR
+    [EMaterialType.GOLDORE]: 15, // S4GoodType.GOLDORE
+    [EMaterialType.GRAIN]: 16, // S4GoodType.GRAIN
     // GUNPOWDER = 17 (not in EMaterialType)
-    [EMaterialType.HAMMER]: 18,    // S4GoodType.HAMMER
-    [EMaterialType.HONEY]: 19,     // S4GoodType.HONEY
-    [EMaterialType.IRONBAR]: 20,   // S4GoodType.IRONBAR
-    [EMaterialType.IRONORE]: 21,   // S4GoodType.IRONORE
-    [EMaterialType.LOG]: 22,       // S4GoodType.LOG
-    [EMaterialType.MEAD]: 23,      // S4GoodType.MEAD
-    [EMaterialType.MEAT]: 24,      // S4GoodType.MEAT
-    [EMaterialType.PICKAXE]: 25,   // S4GoodType.PICKAXE
-    [EMaterialType.PIG]: 26,       // S4GoodType.PIG
-    [EMaterialType.ROD]: 27,       // S4GoodType.ROD
-    [EMaterialType.SAW]: 28,       // S4GoodType.SAW
-    [EMaterialType.SCYTHE]: 29,    // S4GoodType.SCYTHE
-    [EMaterialType.SHEEP]: 30,     // S4GoodType.SHEEP
-    [EMaterialType.SHOVEL]: 31,    // S4GoodType.SHOVEL
-    [EMaterialType.STONE]: 32,     // S4GoodType.STONE
-    [EMaterialType.SULFUR]: 33,    // S4GoodType.SULFUR
-    [EMaterialType.SWORD]: 34,     // S4GoodType.SWORD
+    [EMaterialType.HAMMER]: 18, // S4GoodType.HAMMER
+    [EMaterialType.HONEY]: 19, // S4GoodType.HONEY
+    [EMaterialType.IRONBAR]: 20, // S4GoodType.IRONBAR
+    [EMaterialType.IRONORE]: 21, // S4GoodType.IRONORE
+    [EMaterialType.LOG]: 22, // S4GoodType.LOG
+    [EMaterialType.MEAD]: 23, // S4GoodType.MEAD
+    [EMaterialType.MEAT]: 24, // S4GoodType.MEAT
+    [EMaterialType.PICKAXE]: 25, // S4GoodType.PICKAXE
+    [EMaterialType.PIG]: 26, // S4GoodType.PIG
+    [EMaterialType.ROD]: 27, // S4GoodType.ROD
+    [EMaterialType.SAW]: 28, // S4GoodType.SAW
+    [EMaterialType.SCYTHE]: 29, // S4GoodType.SCYTHE
+    [EMaterialType.SHEEP]: 30, // S4GoodType.SHEEP
+    [EMaterialType.SHOVEL]: 31, // S4GoodType.SHOVEL
+    [EMaterialType.STONE]: 32, // S4GoodType.STONE
+    [EMaterialType.SULFUR]: 33, // S4GoodType.SULFUR
+    [EMaterialType.SWORD]: 34, // S4GoodType.SWORD
     // TEQUILA = 35 (not in EMaterialType)
-    [EMaterialType.WATER]: 36,     // S4GoodType.WATER
-    [EMaterialType.WINE]: 37,      // S4GoodType.WINE
-    [EMaterialType.CATAPULT]: 38,  // Siege ammunition
-    [EMaterialType.GOOSE]: 39,     // Livestock (geese)
+    [EMaterialType.WATER]: 36, // S4GoodType.WATER
+    [EMaterialType.WINE]: 37, // S4GoodType.WINE
+    [EMaterialType.CATAPULT]: 38, // Siege ammunition
+    [EMaterialType.GOOSE]: 39, // Livestock (geese)
 };
 
 /**
@@ -444,12 +443,11 @@ export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
  * Carrier job indices follow the same pattern as resource JIL indices (3.jil) but +1.
  * E.g., AGAVE resource is job #1, carrier with AGAVE is job #2.
  */
-export const CARRIER_MATERIAL_JOB_INDICES: Partial<Record<EMaterialType, number>> =
-    Object.fromEntries(
-        Object.entries(RESOURCE_JOB_INDICES)
-            .filter(([, idx]) => idx !== undefined)
-            .map(([type, idx]) => [Number(type), idx! + 1])
-    ) as Partial<Record<EMaterialType, number>>;
+export const CARRIER_MATERIAL_JOB_INDICES: Partial<Record<EMaterialType, number>> = Object.fromEntries(
+    Object.entries(RESOURCE_JOB_INDICES)
+        .filter(([, idx]) => idx !== undefined)
+        .map(([type, idx]) => [Number(type), idx! + 1])
+) as Partial<Record<EMaterialType, number>>;
 
 /**
  * Sprite information for a resource type (dropped goods).
@@ -690,8 +688,6 @@ export interface AnimatedSpriteEntry {
  * Built during initialization after sprites are loaded and packed into the atlas.
  */
 export class SpriteMetadataRegistry {
-    private static log = new LogHandler('SpriteRegistry');
-
     private buildings: Map<BuildingType, BuildingSpriteEntries> = new Map();
     private mapObjects: Map<MapObjectType, SpriteEntry[]> = new Map();
     private resources: Map<EMaterialType, Map<number, SpriteEntry>> = new Map();
@@ -704,9 +700,6 @@ export class SpriteMetadataRegistry {
      * Replaces separate animatedBuildings, animatedMapObjects, animatedUnits maps.
      */
     private animatedEntities: Map<EntityType, Map<number, AnimatedSpriteEntry>> = new Map();
-
-    /** Track warnings to avoid spam during progressive loading */
-    private warnedTypes: Set<string> = new Set();
 
     /**
      * Register sprite entries for a building type (both construction and completed).
@@ -739,9 +732,6 @@ export class SpriteMetadataRegistry {
     }
 
     /**
-     * Register a sprite entry for a map object type.
-     */
-    /**
      * Register a sprite entry for a map object type (with optional variation index).
      */
     public registerMapObject(type: MapObjectType, entry: SpriteEntry, variation: number = 0): void {
@@ -758,26 +748,7 @@ export class SpriteMetadataRegistry {
      * Returns null if no sprite is registered for this type.
      */
     public getMapObject(type: MapObjectType, variation: number = 0): SpriteEntry | null {
-        const entries = this.mapObjects.get(type);
-        if (!entries || entries.length === 0) {
-            // Silently return null - missing sprites are expected during progressive loading
-            return null;
-        }
-
-        const entry = entries[variation];
-        if (entry === undefined || entry === null) {
-            // Silently return null - missing variations are expected
-            return null;
-        }
-
-        return entry;
-    }
-
-    /**
-     * Get the number of variations available for a map object type.
-     */
-    public getMapObjectVariationCount(type: MapObjectType): number {
-        return this.mapObjects.get(type)?.length ?? 0;
+        return this.mapObjects.get(type)?.[variation] ?? null;
     }
 
     /**
@@ -1043,7 +1014,6 @@ export class SpriteMetadataRegistry {
         this.animatedEntities.clear();
         this.resources.clear();
         this.units.clear();
-        this.warnedTypes.clear();
     }
 
     /**
@@ -1060,8 +1030,8 @@ export class SpriteMetadataRegistry {
                 ...entry,
                 animationData: {
                     ...entry.animationData,
-                    sequences
-                }
+                    sequences,
+                },
             };
         };
 
@@ -1089,7 +1059,7 @@ export class SpriteMetadataRegistry {
         }
         return {
             ...entryData,
-            animationData: { ...entryData.animationData, sequences }
+            animationData: { ...entryData.animationData, sequences },
         };
     }
 
@@ -1121,15 +1091,16 @@ export class SpriteMetadataRegistry {
 
         if (data.resources) {
             registry.resources = new Map(
-                (data.resources as Array<[EMaterialType, Array<[number, SpriteEntry]>]>)
-                    .map(([k, v]) => [k, arrayToMap(v)])
+                (data.resources as Array<[EMaterialType, Array<[number, SpriteEntry]>]>).map(([k, v]) => [
+                    k,
+                    arrayToMap(v),
+                ])
             );
         }
 
         if (data.units) {
             registry.units = new Map(
-                (data.units as Array<[UnitType, Array<[number, SpriteEntry]>]>)
-                    .map(([k, v]) => [k, arrayToMap(v)])
+                (data.units as Array<[UnitType, Array<[number, SpriteEntry]>]>).map(([k, v]) => [k, arrayToMap(v)])
             );
         }
 
@@ -1145,9 +1116,21 @@ export class SpriteMetadataRegistry {
         }
 
         // Legacy support: deserialize old format if present
-        SpriteMetadataRegistry.deserializeLegacyAnimated(data.animatedBuildings, EntityType.Building, registry.animatedEntities);
-        SpriteMetadataRegistry.deserializeLegacyAnimated(data.animatedMapObjects, EntityType.MapObject, registry.animatedEntities);
-        SpriteMetadataRegistry.deserializeLegacyAnimated(data.animatedUnits, EntityType.Unit, registry.animatedEntities);
+        SpriteMetadataRegistry.deserializeLegacyAnimated(
+            data.animatedBuildings,
+            EntityType.Building,
+            registry.animatedEntities
+        );
+        SpriteMetadataRegistry.deserializeLegacyAnimated(
+            data.animatedMapObjects,
+            EntityType.MapObject,
+            registry.animatedEntities
+        );
+        SpriteMetadataRegistry.deserializeLegacyAnimated(
+            data.animatedUnits,
+            EntityType.Unit,
+            registry.animatedEntities
+        );
 
         return registry;
     }

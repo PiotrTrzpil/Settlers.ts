@@ -7,7 +7,6 @@ import { debugStats } from '@/game/debug-stats';
 import {
     SpriteMetadataRegistry,
     SpriteEntry,
-    BuildingSpriteEntries,
     Race,
     getBuildingSpriteMap,
     getUnitSpriteMap,
@@ -107,28 +106,6 @@ class SafeLoadBatch<T> {
     get count(): number {
         return this.items.length;
     }
-}
-
-/**
- * Consolidated building render data - all sprites needed for a building type in one lookup.
- */
-export interface BuildingRenderEntry {
-    /** Construction state sprite (D0) */
-    construction: SpriteEntry | null;
-    /** Completed state sprite (D1) - static fallback */
-    completed: SpriteEntry | null;
-    /** Animated sprite data if available */
-    animated: AnimatedSpriteEntry | null;
-}
-
-/**
- * Consolidated map object render data.
- */
-export interface MapObjectRenderEntry {
-    /** Static sprite */
-    static: SpriteEntry | null;
-    /** Animated sprite data if available */
-    animated: AnimatedSpriteEntry | null;
 }
 
 /**
@@ -240,16 +217,6 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Get both construction and completed sprites for a building type.
-     */
-    public getBuildingSprites(type: BuildingType): BuildingSpriteEntries | null {
-        return this._spriteRegistry?.getBuildingSprites(type) ?? null;
-    }
-
-    /**
-     * Get a map object sprite entry by type.
-     */
-    /**
      * Get a map object sprite entry by type (and optional variation).
      */
     public getMapObject(type: MapObjectType, variation?: number): SpriteEntry | null {
@@ -304,32 +271,6 @@ export class SpriteRenderManager {
      */
     public getUnit(type: UnitType, direction: number = 0): SpriteEntry | null {
         return this._spriteRegistry?.getUnit(type, direction) ?? null;
-    }
-
-    /**
-     * Get all building sprites in a single lookup (construction, completed, animated).
-     * Reduces multiple method calls per building per frame.
-     */
-    public getBuildingRenderEntry(type: BuildingType): BuildingRenderEntry {
-        const sprites = this._spriteRegistry?.getBuildingSprites(type);
-        const animated = this._spriteRegistry?.getAnimatedEntity(EntityType.Building, type) ?? null;
-        return {
-            construction: sprites?.construction ?? null,
-            completed: sprites?.completed ?? null,
-            animated,
-        };
-    }
-
-    /**
-     * Get all map object sprites in a single lookup (static, animated).
-     */
-    public getMapObjectRenderEntry(type: MapObjectType): MapObjectRenderEntry {
-        const staticSprite = this._spriteRegistry?.getMapObject(type) ?? null;
-        const animated = this._spriteRegistry?.getAnimatedEntity(EntityType.MapObject, type) ?? null;
-        return {
-            static: staticSprite,
-            animated,
-        };
     }
 
     /**

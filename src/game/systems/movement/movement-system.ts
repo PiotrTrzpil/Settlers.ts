@@ -36,12 +36,6 @@ export interface MovementSystemConfig {
  * MovementSystem manages all unit movement controllers and coordinates
  * their updates, collision resolution, and pathfinding.
  */
-/** Tracks previous state for change detection */
-interface ControllerSnapshot {
-    state: MovementState;
-    direction: number;
-}
-
 export class MovementSystem implements TickSystem {
     private controllers: Map<number, MovementController> = new Map();
 
@@ -62,8 +56,8 @@ export class MovementSystem implements TickSystem {
     // Seeded RNG for deterministic push behavior
     private readonly rng: SeededRng;
 
-    // Previous state snapshots for change detection
-    private prevSnapshots: Map<number, ControllerSnapshot> = new Map();
+    // Previous movement state per controller for change detection
+    private prevStates: Map<number, MovementState> = new Map();
 
     constructor(config: MovementSystemConfig) {
         this.eventBus = config.eventBus;
@@ -110,7 +104,7 @@ export class MovementSystem implements TickSystem {
      */
     removeController(entityId: number): void {
         this.controllers.delete(entityId);
-        this.prevSnapshots.delete(entityId);
+        this.prevStates.delete(entityId);
     }
 
     /**
@@ -125,40 +119,6 @@ export class MovementSystem implements TickSystem {
      */
     getAllControllers(): IterableIterator<MovementController> {
         return this.controllers.values();
-    }
-
-    /**
-     * Clear all controllers.
-     */
-    clear(): void {
-        this.controllers.clear();
-        this.prevSnapshots.clear();
-    }
-
-    /**
-     * Restore a movement controller from serialized data (used by persistence).
-     */
-    restoreController(data: {
-        entityId: number;
-        x: number;
-        y: number;
-        prevTileX: number;
-        prevTileY: number;
-        progress: number;
-        speed: number;
-        path: Array<{ x: number; y: number }>;
-        pathIndex: number;
-    }): void {
-        const controller = new MovementController(data.entityId, data.x, data.y, data.speed);
-        // Restore path if unit was moving
-        if (data.path.length > 0) {
-            controller.startPath(data.path);
-            // Fast-forward to saved position in path
-            for (let i = 0; i < data.pathIndex; i++) {
-                controller.executeMove();
-            }
-        }
-        this.controllers.set(data.entityId, controller);
     }
 
     /**
@@ -256,10 +216,7 @@ export class MovementSystem implements TickSystem {
      * Update a single movement controller.
      */
     private updateController(controller: MovementController, deltaSec: number): void {
-        // Capture state before update for change detection
-        const prevSnapshot = this.prevSnapshots.get(controller.entityId);
-        const prevState = prevSnapshot?.state ?? controller.state;
-        const prevDirection = prevSnapshot?.direction ?? controller.direction;
+        const prevState = this.prevStates.get(controller.entityId) ?? controller.state;
 
         controller.advanceProgress(deltaSec);
 
@@ -270,7 +227,7 @@ export class MovementSystem implements TickSystem {
             if (this.handleBlockedWaypoint(controller, wp, deltaSec)) break;
 
             const newPos = controller.executeMove();
-            if (newPos && this.updatePosition) {
+            if (newPos) {
                 this.updatePosition(controller.entityId, newPos.x, newPos.y);
             }
         }
@@ -285,30 +242,13 @@ export class MovementSystem implements TickSystem {
             );
         }
 
-        // Update last visual position for next frame's teleport detection
         controller.updateLastVisualPosition();
-
-        // Emit events for state/direction changes
-        this.emitMovementEvents(controller, prevState, prevDirection);
-
-        // Update snapshot for next tick
-        this.prevSnapshots.set(controller.entityId, {
-            state: controller.state,
-            direction: controller.direction,
-        });
+        this.emitMovementStopped(controller, prevState);
+        this.prevStates.set(controller.entityId, controller.state);
     }
 
-    /**
-     * Emit movement stopped event when unit stops.
-     * Note: movementStarted and directionChanged events were removed as
-     * animation is now handled by SettlerTaskSystem, not event-driven.
-     * movementStopped is kept for CarrierSystem arrival detection.
-     */
-    private emitMovementEvents(controller: MovementController, prevState: MovementState, _prevDirection: number): void {
-        const newState = controller.state;
-
-        // Only emit movementStopped - used by CarrierSystem for arrival detection
-        if (newState !== prevState && newState === 'idle' && prevState !== 'idle') {
+    private emitMovementStopped(controller: MovementController, prevState: MovementState): void {
+        if (controller.state !== prevState && controller.state === 'idle' && prevState !== 'idle') {
             this.eventBus.emit('unit:movementStopped', {
                 entityId: controller.entityId,
                 direction: controller.direction,
@@ -425,12 +365,9 @@ export class MovementSystem implements TickSystem {
 
     /**
      * Find a 1-tile detour around a blocked tile.
+     * Caller must verify hasTerrainData() before calling.
      */
     private findDetour(controller: MovementController): TileCoord | null {
-        if (!this.groundType || !this.mapWidth || !this.mapHeight || !this.tileOccupancy) {
-            return null;
-        }
-
         const blockedWp = controller.nextWaypoint;
         if (!blockedWp) return null;
 

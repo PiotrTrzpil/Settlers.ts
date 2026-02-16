@@ -166,23 +166,6 @@ export class RequestManager {
     }
 
     /**
-     * Get all in-progress requests.
-     *
-     * @returns Array of requests currently being fulfilled
-     */
-    getInProgressRequests(): ResourceRequest[] {
-        const inProgress: ResourceRequest[] = [];
-
-        for (const request of this.requests.values()) {
-            if (request.status === RequestStatus.InProgress) {
-                inProgress.push(request);
-            }
-        }
-
-        return inProgress;
-    }
-
-    /**
      * Mark a request as being fulfilled by a carrier.
      *
      * @param requestId ID of the request
@@ -263,31 +246,16 @@ export class RequestManager {
     resetRequestsForCarrier(carrierId: number): number {
         let count = 0;
 
-        // Sort by request ID for deterministic iteration
-        const sortedIds = [...this.requests.keys()].sort((a, b) => a - b);
-        for (const requestId of sortedIds) {
-            const request = this.requests.get(requestId);
-            if (!request) continue;
+        for (const requestId of this.sortedRequestIds()) {
+            const request = this.requests.get(requestId)!;
             if (request.assignedCarrier === carrierId && request.status === RequestStatus.InProgress) {
-                // Reset to pending so another carrier can pick it up
-                request.status = RequestStatus.Pending;
-                request.assignedCarrier = null;
-                request.sourceBuilding = null;
-                request.assignedAt = null;
+                this.resetToPending(request, 'carrier_removed');
                 count++;
-                this.emit('requestReset', { request, reason: 'carrier_removed' });
             }
         }
 
         if (count > 0) this.invalidatePendingCache();
         return count;
-    }
-
-    /**
-     * @deprecated Use resetRequestsForCarrier instead
-     */
-    cancelRequestsForCarrier(carrierId: number): number {
-        return this.resetRequestsForCarrier(carrierId);
     }
 
     /**
@@ -300,18 +268,11 @@ export class RequestManager {
     resetRequestsFromSource(buildingId: number): number {
         let count = 0;
 
-        // Sort by request ID for deterministic iteration
-        const sortedIds = [...this.requests.keys()].sort((a, b) => a - b);
-        for (const requestId of sortedIds) {
-            const request = this.requests.get(requestId);
-            if (!request) continue;
+        for (const requestId of this.sortedRequestIds()) {
+            const request = this.requests.get(requestId)!;
             if (request.sourceBuilding === buildingId && request.status === RequestStatus.InProgress) {
-                request.status = RequestStatus.Pending;
-                request.assignedCarrier = null;
-                request.sourceBuilding = null;
-                request.assignedAt = null;
+                this.resetToPending(request, 'source_unavailable');
                 count++;
-                this.emit('requestReset', { request, reason: 'source_unavailable' });
             }
         }
 
@@ -332,13 +293,8 @@ export class RequestManager {
             return false;
         }
 
-        request.status = RequestStatus.Pending;
-        request.assignedCarrier = null;
-        request.sourceBuilding = null;
-        request.assignedAt = null;
+        this.resetToPending(request, reason);
         this.invalidatePendingCache();
-        this.emit('requestReset', { request, reason });
-
         return true;
     }
 
@@ -371,28 +327,6 @@ export class RequestManager {
         let count = 0;
         for (const request of this.requests.values()) {
             if (canAssignRequest(request)) count++;
-        }
-        return count;
-    }
-
-    /**
-     * Get count of in-progress requests.
-     */
-    getInProgressCount(): number {
-        let count = 0;
-        for (const request of this.requests.values()) {
-            if (request.status === RequestStatus.InProgress) count++;
-        }
-        return count;
-    }
-
-    /**
-     * Get total count of all active requests.
-     */
-    getActiveCount(): number {
-        let count = 0;
-        for (const request of this.requests.values()) {
-            if (isRequestActive(request)) count++;
         }
         return count;
     }
@@ -438,24 +372,6 @@ export class RequestManager {
     }
 
     /**
-     * Get all requests that are sourcing from a specific building.
-     *
-     * @param buildingId Entity ID of the source building
-     * @returns Array of in-progress requests using this source
-     */
-    getRequestsFromSource(buildingId: number): ResourceRequest[] {
-        const result: ResourceRequest[] = [];
-
-        for (const request of this.requests.values()) {
-            if (request.sourceBuilding === buildingId && request.status === RequestStatus.InProgress) {
-                result.push(request);
-            }
-        }
-
-        return result;
-    }
-
-    /**
      * Clear all requests.
      * Useful for testing or game reset.
      */
@@ -492,28 +408,28 @@ export class RequestManager {
         sourceBuilding: number | null;
         assignedAt: number | null;
     }): void {
-        const request: ResourceRequest = {
-            id: data.id,
-            buildingId: data.buildingId,
-            materialType: data.materialType,
-            amount: data.amount,
-            priority: data.priority,
-            timestamp: data.timestamp,
-            status: data.status,
-            assignedCarrier: data.assignedCarrier,
-            sourceBuilding: data.sourceBuilding,
-            assignedAt: data.assignedAt,
-        };
-        this.requests.set(data.id, request);
+        this.requests.set(data.id, { ...data });
         this.invalidatePendingCache();
 
-        // Update nextId to avoid collisions
         if (data.id >= this.nextId) {
             this.nextId = data.id + 1;
         }
     }
 
-    /** Mark the pending cache as needing rebuild on next access. */
+    /** Reset an in-progress request back to pending and emit the reset event. */
+    private resetToPending(request: ResourceRequest, reason: RequestResetReason): void {
+        request.status = RequestStatus.Pending;
+        request.assignedCarrier = null;
+        request.sourceBuilding = null;
+        request.assignedAt = null;
+        this.emit('requestReset', { request, reason });
+    }
+
+    /** Return request IDs sorted numerically for deterministic iteration. */
+    private sortedRequestIds(): number[] {
+        return [...this.requests.keys()].sort((a, b) => a - b);
+    }
+
     private invalidatePendingCache(): void {
         this.pendingCacheDirty = true;
     }

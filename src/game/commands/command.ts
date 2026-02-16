@@ -31,31 +31,6 @@ import {
     commandFailed,
 } from './command-types';
 
-// Re-export Command type and related types for backward compatibility
-export type { Command, CommandResult, CommandEffect } from './command-types';
-export type {
-    PlaceBuildingCommand,
-    SpawnUnitCommand,
-    MoveUnitCommand,
-    SelectCommand,
-    SelectAtTileCommand,
-    ToggleSelectionCommand,
-    SelectAreaCommand,
-    MoveSelectedUnitsCommand,
-    RemoveEntityCommand,
-} from './command-types';
-export {
-    FORMATION_OFFSETS,
-    isBuildingCommand,
-    isUnitCommand,
-    isResourceCommand,
-    isSelectionCommand,
-    isMovementCommand,
-    COMMAND_OK,
-    commandSuccess,
-    commandFailed,
-} from './command-types';
-
 interface CommandContext {
     state: GameState;
     groundType: Uint8Array;

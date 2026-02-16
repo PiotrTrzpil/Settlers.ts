@@ -161,7 +161,20 @@ interface PersistedDebugSettings {
     selectAllUnits: boolean;
 }
 
-/** Default values for persisted settings */
+const PERSISTED_KEYS: readonly (keyof PersistedDebugSettings)[] = [
+    'zoomSpeed',
+    'panSpeed',
+    'riverSlotPermutation',
+    'riverFlipInner',
+    'riverFlipOuter',
+    'riverFlipMiddle',
+    'debugPanelOpen',
+    'debugGridEnabled',
+    'layerPanelOpen',
+    'logisticsPanelOpen',
+    'selectAllUnits',
+];
+
 const DEFAULT_SETTINGS: PersistedDebugSettings = {
     zoomSpeed: 0.05,
     panSpeed: 40,
@@ -182,19 +195,7 @@ function loadDebugSettings(): PersistedDebugSettings {
         const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
         if (!stored) return { ...DEFAULT_SETTINGS };
         const parsed = JSON.parse(stored) as Partial<PersistedDebugSettings>;
-        return {
-            zoomSpeed: parsed.zoomSpeed ?? DEFAULT_SETTINGS.zoomSpeed,
-            panSpeed: parsed.panSpeed ?? DEFAULT_SETTINGS.panSpeed,
-            riverSlotPermutation: parsed.riverSlotPermutation ?? DEFAULT_SETTINGS.riverSlotPermutation,
-            riverFlipInner: parsed.riverFlipInner ?? DEFAULT_SETTINGS.riverFlipInner,
-            riverFlipOuter: parsed.riverFlipOuter ?? DEFAULT_SETTINGS.riverFlipOuter,
-            riverFlipMiddle: parsed.riverFlipMiddle ?? DEFAULT_SETTINGS.riverFlipMiddle,
-            debugPanelOpen: parsed.debugPanelOpen ?? DEFAULT_SETTINGS.debugPanelOpen,
-            debugGridEnabled: parsed.debugGridEnabled ?? DEFAULT_SETTINGS.debugGridEnabled,
-            layerPanelOpen: parsed.layerPanelOpen ?? DEFAULT_SETTINGS.layerPanelOpen,
-            logisticsPanelOpen: parsed.logisticsPanelOpen ?? DEFAULT_SETTINGS.logisticsPanelOpen,
-            selectAllUnits: parsed.selectAllUnits ?? DEFAULT_SETTINGS.selectAllUnits,
-        };
+        return { ...DEFAULT_SETTINGS, ...parsed };
     } catch (e) {
         console.warn('Failed to load debug settings from localStorage:', e);
         return { ...DEFAULT_SETTINGS };
@@ -210,7 +211,32 @@ function saveDebugSettings(settings: PersistedDebugSettings): void {
     }
 }
 
-/** Accumulator for render timing samples */
+type RenderTimingSample = Record<RenderTimingKey, number>;
+
+type RenderTimingKey = keyof RenderTimingSamples;
+
+const RENDER_TIMING_KEYS: readonly RenderTimingKey[] = [
+    'frame',
+    'ticks',
+    'animations',
+    'callback',
+    'other',
+    'render',
+    'landscape',
+    'entities',
+    'cullSort',
+    'visibleCount',
+    'drawCalls',
+    'spriteCount',
+    'indicators',
+    'textured',
+    'color',
+    'selection',
+];
+
+/** Integer-valued timing keys (no fractional rounding needed) */
+const INTEGER_TIMING_KEYS = new Set<RenderTimingKey>(['visibleCount', 'drawCalls', 'spriteCount']);
+
 interface RenderTimingSamples {
     frame: number[];
     ticks: number[];
@@ -361,24 +387,8 @@ class DebugStats {
         this.setupSettingsWatchers();
     }
 
-    /** Set up watchers to persist settings on change */
     private setupSettingsWatchers(): void {
-        // Watch all persisted settings and save when any changes
-        const settingsKeys: (keyof PersistedDebugSettings)[] = [
-            'zoomSpeed',
-            'panSpeed',
-            'riverSlotPermutation',
-            'riverFlipInner',
-            'riverFlipOuter',
-            'riverFlipMiddle',
-            'debugPanelOpen',
-            'debugGridEnabled',
-            'layerPanelOpen',
-            'logisticsPanelOpen',
-            'selectAllUnits',
-        ];
-
-        for (const key of settingsKeys) {
+        for (const key of PERSISTED_KEYS) {
             watch(
                 () => this.state[key],
                 () => this.saveSettings(),
@@ -387,21 +397,12 @@ class DebugStats {
         }
     }
 
-    /** Save current settings to localStorage */
     private saveSettings(): void {
-        saveDebugSettings({
-            zoomSpeed: this.state.zoomSpeed,
-            panSpeed: this.state.panSpeed,
-            riverSlotPermutation: this.state.riverSlotPermutation,
-            riverFlipInner: this.state.riverFlipInner,
-            riverFlipOuter: this.state.riverFlipOuter,
-            riverFlipMiddle: this.state.riverFlipMiddle,
-            debugPanelOpen: this.state.debugPanelOpen,
-            debugGridEnabled: this.state.debugGridEnabled,
-            layerPanelOpen: this.state.layerPanelOpen,
-            logisticsPanelOpen: this.state.logisticsPanelOpen,
-            selectAllUnits: this.state.selectAllUnits,
-        });
+        const settings = {} as PersistedDebugSettings;
+        for (const key of PERSISTED_KEYS) {
+            (settings as any)[key] = this.state[key];
+        }
+        saveDebugSettings(settings);
     }
 
     /**
@@ -472,47 +473,11 @@ class DebugStats {
         }
     }
 
-    /**
-     * Record render timing data for a single frame.
-     * Call this from the game loop at the end of each frame.
-     */
-    public recordRenderTiming(timing: {
-        frame: number;
-        ticks: number;
-        animations: number;
-        callback: number;
-        other: number;
-        render: number;
-        landscape: number;
-        entities: number;
-        cullSort: number;
-        visibleCount: number;
-        drawCalls: number;
-        spriteCount: number;
-        indicators: number;
-        textured: number;
-        color: number;
-        selection: number;
-    }): void {
-        // Add samples
-        this.renderSamples.frame.push(timing.frame);
-        this.renderSamples.ticks.push(timing.ticks);
-        this.renderSamples.animations.push(timing.animations);
-        this.renderSamples.callback.push(timing.callback);
-        this.renderSamples.other.push(timing.other);
-        this.renderSamples.render.push(timing.render);
-        this.renderSamples.landscape.push(timing.landscape);
-        this.renderSamples.entities.push(timing.entities);
-        this.renderSamples.cullSort.push(timing.cullSort);
-        this.renderSamples.visibleCount.push(timing.visibleCount);
-        this.renderSamples.drawCalls.push(timing.drawCalls);
-        this.renderSamples.spriteCount.push(timing.spriteCount);
-        this.renderSamples.indicators.push(timing.indicators);
-        this.renderSamples.textured.push(timing.textured);
-        this.renderSamples.color.push(timing.color);
-        this.renderSamples.selection.push(timing.selection);
+    public recordRenderTiming(timing: RenderTimingSample): void {
+        for (const key of RENDER_TIMING_KEYS) {
+            this.renderSamples[key].push(timing[key]);
+        }
 
-        // Update averages periodically
         const now = performance.now();
         if (now - this.lastRenderTimingUpdate >= RENDER_TIMING_UPDATE_INTERVAL) {
             this.updateRenderTimingAverages();
@@ -520,44 +485,16 @@ class DebugStats {
         }
     }
 
-    /** Compute averages from samples and update state */
     private updateRenderTimingAverages(): void {
         const avg = (arr: number[]) => (arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
 
-        this.state.renderTimings.frame = Math.round(avg(this.renderSamples.frame) * 100) / 100;
-        this.state.renderTimings.ticks = Math.round(avg(this.renderSamples.ticks) * 100) / 100;
-        this.state.renderTimings.animations = Math.round(avg(this.renderSamples.animations) * 100) / 100;
-        this.state.renderTimings.callback = Math.round(avg(this.renderSamples.callback) * 100) / 100;
-        this.state.renderTimings.other = Math.round(avg(this.renderSamples.other) * 100) / 100;
-        this.state.renderTimings.render = Math.round(avg(this.renderSamples.render) * 100) / 100;
-        this.state.renderTimings.landscape = Math.round(avg(this.renderSamples.landscape) * 100) / 100;
-        this.state.renderTimings.entities = Math.round(avg(this.renderSamples.entities) * 100) / 100;
-        this.state.renderTimings.cullSort = Math.round(avg(this.renderSamples.cullSort) * 100) / 100;
-        this.state.renderTimings.visibleCount = Math.round(avg(this.renderSamples.visibleCount));
-        this.state.renderTimings.drawCalls = Math.round(avg(this.renderSamples.drawCalls));
-        this.state.renderTimings.spriteCount = Math.round(avg(this.renderSamples.spriteCount));
-        this.state.renderTimings.indicators = Math.round(avg(this.renderSamples.indicators) * 100) / 100;
-        this.state.renderTimings.textured = Math.round(avg(this.renderSamples.textured) * 100) / 100;
-        this.state.renderTimings.color = Math.round(avg(this.renderSamples.color) * 100) / 100;
-        this.state.renderTimings.selection = Math.round(avg(this.renderSamples.selection) * 100) / 100;
-
-        // Clear samples for next period
-        this.renderSamples.frame.length = 0;
-        this.renderSamples.ticks.length = 0;
-        this.renderSamples.animations.length = 0;
-        this.renderSamples.callback.length = 0;
-        this.renderSamples.other.length = 0;
-        this.renderSamples.render.length = 0;
-        this.renderSamples.landscape.length = 0;
-        this.renderSamples.entities.length = 0;
-        this.renderSamples.cullSort.length = 0;
-        this.renderSamples.visibleCount.length = 0;
-        this.renderSamples.drawCalls.length = 0;
-        this.renderSamples.spriteCount.length = 0;
-        this.renderSamples.indicators.length = 0;
-        this.renderSamples.textured.length = 0;
-        this.renderSamples.color.length = 0;
-        this.renderSamples.selection.length = 0;
+        for (const key of RENDER_TIMING_KEYS) {
+            const value = avg(this.renderSamples[key]);
+            this.state.renderTimings[key] = INTEGER_TIMING_KEYS.has(key)
+                ? Math.round(value)
+                : Math.round(value * 100) / 100;
+            this.renderSamples[key].length = 0;
+        }
     }
 
     // Throttle entity counting - no need to count every frame

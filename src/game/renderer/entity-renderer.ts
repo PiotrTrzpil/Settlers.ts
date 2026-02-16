@@ -9,6 +9,7 @@ import {
     BuildingType,
     getBuildingFootprint,
     UnitType,
+    MapObjectType,
 } from '../entity';
 import { UnitStateLookup } from '../game-state';
 import {
@@ -22,7 +23,6 @@ import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
 import { SpriteEntry, Race } from './sprite-metadata';
 import { PLAYER_COLORS, TINT_NEUTRAL, TINT_SELECTED, TINT_PREVIEW_VALID, TINT_PREVIEW_INVALID } from './tint-utils';
-import { MapObjectType } from '../entity';
 import { EMaterialType } from '../economy';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { PALETTE_TEXTURE_WIDTH } from './palette-texture';
@@ -98,11 +98,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // OK: nullable - per-frame cache, created at render start, allows fallback computation
     private frameContext: IFrameContext | null = null;
-
-    // Debug logging state
-    private lastViewPointX = 0;
-    private lastViewPointY = 0;
-    private lastZoom = 0;
 
     // Entity data to render (set externally each frame)
     public entities: Entity[] = [];
@@ -834,11 +829,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     /** Compute world position for an entity, with MapObject jitter for visual variety. */
     private getEntityWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {
         const cachedPos = this.frameContext?.getWorldPos(entity);
-        const worldPos = cachedPos
-            ? { worldX: cachedPos.worldX, worldY: cachedPos.worldY }
-            : entity.type === EntityType.Unit
-                ? this.getInterpolatedWorldPos(entity, viewPoint)
-                : TilePicker.tileToWorld(entity.x, entity.y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
+        let worldPos: { worldX: number; worldY: number };
+        if (cachedPos) {
+            worldPos = { worldX: cachedPos.worldX, worldY: cachedPos.worldY };
+        } else if (entity.type === EntityType.Unit) {
+            worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
+        } else {
+            worldPos = TilePicker.tileToWorld(
+                entity.x,
+                entity.y,
+                this.groundHeight,
+                this.mapSize,
+                viewPoint.x,
+                viewPoint.y
+            );
+        }
 
         // Add random visual offset for MapObjects (trees, stones) to break up the grid
         // Only apply to normal trees (variation 3, not being cut/growing) to avoid position mismatch with woodcutters
@@ -1015,20 +1020,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const color = isSelected ? [1.0, 1.0, 0.0, 1.0] : playerColor;
             const scale = this.getEntityScale(entity.type);
 
-            // Use cached world position from frame context
-            const cachedPos = this.frameContext?.getWorldPos(entity);
-            const worldPos =
-                cachedPos ??
-                (entity.type === EntityType.Unit
-                    ? this.getInterpolatedWorldPos(entity, viewPoint)
-                    : TilePicker.tileToWorld(
-                        entity.x,
-                        entity.y,
-                        this.groundHeight,
-                        this.mapSize,
-                        viewPoint.x,
-                        viewPoint.y
-                    ));
+            const worldPos = this.getEntityWorldPos(entity, viewPoint);
 
             gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
             this.fillQuadVertices(0, 0, scale);
@@ -1081,11 +1073,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     /** Sort entities by depth for correct painter's algorithm rendering. */
     private sortEntitiesByDepth(viewPoint: IViewPoint): void {
-        // Update camera tracking
-        this.lastViewPointX = viewPoint.x;
-        this.lastViewPointY = viewPoint.y;
-        this.lastZoom = viewPoint.zoom;
-
         // Create frame context - computes bounds once, caches all world positions
         profiler.beginPhase('cull');
         this.frameContext = FrameContext.create({

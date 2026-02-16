@@ -169,6 +169,19 @@ export class MovementController {
 
     // === Path Management ===
 
+    /** Warn if visual position jumped discontinuously after a path change */
+    private warnIfTeleported(visualBefore: { x: number; y: number }, label: string): void {
+        const visualAfter = this.computeVisualPosition();
+        const dx = visualAfter.x - visualBefore.x;
+        const dy = visualAfter.y - visualBefore.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 0.1) {
+            console.warn(
+                `[MovementController] ${label} caused teleport! Entity ${this.entityId} jumped ${dist.toFixed(2)} tiles`
+            );
+        }
+    }
+
     /**
      * Start following a new path from stationary state.
      * Progress starts at 0; the unit will move after (1/speed) seconds.
@@ -176,7 +189,6 @@ export class MovementController {
     startPath(path: TileCoord[]): void {
         if (path.length === 0) return;
 
-        // Check for potential teleport
         const visualBefore = this.computeVisualPosition();
 
         this._path = [...path];
@@ -193,17 +205,7 @@ export class MovementController {
         // If in transit, keep current progress to avoid visual jump
 
         this._blockedTime = 0;
-
-        // Verify no teleport occurred
-        const visualAfter = this.computeVisualPosition();
-        const dx = visualAfter.x - visualBefore.x;
-        const dy = visualAfter.y - visualBefore.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 0.1) {
-            console.warn(
-                `[MovementController] startPath caused teleport! Entity ${this.entityId} jumped ${dist.toFixed(2)} tiles`
-            );
-        }
+        this.warnIfTeleported(visualBefore, 'startPath');
     }
 
     /**
@@ -216,7 +218,6 @@ export class MovementController {
             return;
         }
 
-        // Capture visual position before change
         const visualBefore = this.computeVisualPosition();
 
         this._path = [...path];
@@ -225,17 +226,7 @@ export class MovementController {
         this._blockedTime = 0;
 
         // Don't touch progress or prevTile - keep smooth motion
-
-        // Verify no teleport occurred
-        const visualAfter = this.computeVisualPosition();
-        const dx = visualAfter.x - visualBefore.x;
-        const dy = visualAfter.y - visualBefore.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 0.1) {
-            console.warn(
-                `[MovementController] redirectPath caused teleport! Entity ${this.entityId} jumped ${dist.toFixed(2)} tiles`
-            );
-        }
+        this.warnIfTeleported(visualBefore, 'redirectPath');
     }
 
     /**

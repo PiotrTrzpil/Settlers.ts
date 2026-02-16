@@ -498,34 +498,31 @@ export class InputManager {
     }
 
     private handleKeyDown(e: KeyboardEvent): void {
-        // Don't handle input if focus is in an input element
         if (this.isInputFocused()) return;
 
         handleKeyDown(this.state, e.code);
 
-        // Skip repeats unless action allows it
         const action = this.findActionForKey(e.code, e.shiftKey, e.ctrlKey || e.metaKey, e.altKey);
         if (action) {
             const binding = this.config.bindings.find(b => b.action === action);
             if (e.repeat && !binding?.repeatable) return;
 
-            // Handle global actions that work regardless of mode
             if (action === InputAction.TogglePause) {
                 gameSettings.state.paused = !gameSettings.state.paused;
                 e.preventDefault();
                 return;
             }
+        }
 
-            const context = this.createContext();
-            const mode = this.getCurrentMode();
+        const context = this.createContext();
+        const mode = this.getCurrentMode();
+
+        if (action) {
             const result = mode?.onAction?.(action, context) ?? { handled: false };
             this.applyResult(result, e);
         }
 
-        // Also pass raw keyboard event to mode
         const keyData = this.createKeyboardData(e);
-        const context = this.createContext();
-        const mode = this.getCurrentMode();
         mode?.onKeyboard?.(keyData, true, context);
     }
 

@@ -92,7 +92,9 @@ export class BuildingInventoryManager {
         newAmount: number
     ): void {
         if (previousAmount === newAmount) return; // No actual change
-        log.debug(`#${this._debugId} emitChange: building=${buildingId}, ${slotType}, ${previousAmount}->${newAmount}, listeners=${this.changeListeners.size}`);
+        log.debug(
+            `#${this._debugId} emitChange: building=${buildingId}, ${slotType}, ${previousAmount}->${newAmount}, listeners=${this.changeListeners.size}`
+        );
         for (const listener of this.changeListeners) {
             listener(buildingId, materialType, slotType, previousAmount, newAmount);
         }
@@ -106,7 +108,9 @@ export class BuildingInventoryManager {
      */
     createInventory(buildingId: number, buildingType: BuildingType): BuildingInventory {
         const config = getInventoryConfig(buildingType);
-        log.debug(`#${this._debugId} createInventory: building=${buildingId}, type=${BuildingType[buildingType]}, outputs=${config.outputSlots.length}`);
+        log.debug(
+            `#${this._debugId} createInventory: building=${buildingId}, type=${BuildingType[buildingType]}, outputs=${config.outputSlots.length}`
+        );
 
         const inventory: BuildingInventory = {
             buildingId,
@@ -162,49 +166,41 @@ export class BuildingInventoryManager {
     getOutputSlot(buildingId: number, materialType: EMaterialType): InventorySlot | undefined {
         const inventory = this.inventories.get(buildingId);
         if (!inventory) {
-            log.warn(`#${this._debugId} No inventory for building ${buildingId}. Known: [${[...this.inventories.keys()].join(', ')}]`);
+            log.warn(
+                `#${this._debugId} No inventory for building ${buildingId}. Known: [${[...this.inventories.keys()].join(', ')}]`
+            );
             return undefined;
         }
         const slot = inventory.outputSlots.find(s => s.materialType === materialType);
         if (!slot) {
-            log.warn(`#${this._debugId} Building ${buildingId} (${BuildingType[inventory.buildingType]}) has no slot for ${EMaterialType[materialType]}. Has: [${inventory.outputSlots.map(s => EMaterialType[s.materialType]).join(', ')}]`);
-        }
-        return slot;
-    }
-
-    /**
-     * Get an input slot, throwing if building or slot doesn't exist.
-     * Use for mutation operations where the slot MUST exist.
-     */
-    private getInputSlotOrThrow(buildingId: number, materialType: EMaterialType): InventorySlot {
-        const inventory = this.inventories.get(buildingId);
-        if (!inventory) {
-            throw new Error(`Building ${buildingId} has no inventory. Known: [${[...this.inventories.keys()].join(', ')}]`);
-        }
-        const slot = inventory.inputSlots.find(s => s.materialType === materialType);
-        if (!slot) {
-            throw new Error(
-                `Building ${buildingId} (${BuildingType[inventory.buildingType]}) has no input slot for ${EMaterialType[materialType]}. ` +
-                `Has: [${inventory.inputSlots.map(s => EMaterialType[s.materialType]).join(', ')}]`
+            log.warn(
+                `#${this._debugId} Building ${buildingId} (${BuildingType[inventory.buildingType]}) has no slot for ${EMaterialType[materialType]}. Has: [${inventory.outputSlots.map(s => EMaterialType[s.materialType]).join(', ')}]`
             );
         }
         return slot;
     }
 
-    /**
-     * Get an output slot, throwing if building or slot doesn't exist.
-     * Use for mutation operations where the slot MUST exist.
-     */
+    private getInputSlotOrThrow(buildingId: number, materialType: EMaterialType): InventorySlot {
+        return this.getSlotOrThrow(buildingId, materialType, 'input');
+    }
+
     private getOutputSlotOrThrow(buildingId: number, materialType: EMaterialType): InventorySlot {
+        return this.getSlotOrThrow(buildingId, materialType, 'output');
+    }
+
+    private getSlotOrThrow(buildingId: number, materialType: EMaterialType, kind: 'input' | 'output'): InventorySlot {
         const inventory = this.inventories.get(buildingId);
         if (!inventory) {
-            throw new Error(`Building ${buildingId} has no inventory. Known: [${[...this.inventories.keys()].join(', ')}]`);
+            throw new Error(
+                `Building ${buildingId} has no inventory. Known: [${[...this.inventories.keys()].join(', ')}]`
+            );
         }
-        const slot = inventory.outputSlots.find(s => s.materialType === materialType);
+        const slots = kind === 'input' ? inventory.inputSlots : inventory.outputSlots;
+        const slot = slots.find(s => s.materialType === materialType);
         if (!slot) {
             throw new Error(
-                `Building ${buildingId} (${BuildingType[inventory.buildingType]}) has no output slot for ${EMaterialType[materialType]}. ` +
-                `Has: [${inventory.outputSlots.map(s => EMaterialType[s.materialType]).join(', ')}]`
+                `Building ${buildingId} (${BuildingType[inventory.buildingType]}) has no ${kind} slot for ` +
+                    `${EMaterialType[materialType]}. Has: [${slots.map(s => EMaterialType[s.materialType]).join(', ')}]`
             );
         }
         return slot;
@@ -384,7 +380,9 @@ export class BuildingInventoryManager {
         const overflow = deposit(slot, amount);
         const deposited = amount - overflow;
 
-        log.debug(`#${this._debugId} depositOutput: prev=${previousAmount}, deposited=${deposited}, overflow=${overflow}`);
+        log.debug(
+            `#${this._debugId} depositOutput: prev=${previousAmount}, deposited=${deposited}, overflow=${overflow}`
+        );
 
         if (deposited > 0) {
             this.emitChange(buildingId, materialType, 'output', previousAmount, slot.currentAmount);
@@ -561,23 +559,23 @@ export class BuildingInventoryManager {
         inputSlots: Array<{ materialType: EMaterialType; current: number; max: number; reserved: number }>;
         outputSlots: Array<{ materialType: EMaterialType; current: number; max: number; reserved: number }>;
     }): void {
-        const inventory: BuildingInventory = {
+        const toSlot = (s: {
+            materialType: EMaterialType;
+            current: number;
+            max: number;
+            reserved: number;
+        }): InventorySlot => ({
+            materialType: s.materialType,
+            currentAmount: s.current,
+            maxCapacity: s.max,
+            reservedAmount: s.reserved,
+        });
+
+        this.inventories.set(data.entityId, {
             buildingId: data.entityId,
             buildingType: data.buildingType,
-            inputSlots: data.inputSlots.map(s => ({
-                materialType: s.materialType,
-                currentAmount: s.current,
-                maxCapacity: s.max,
-                reservedAmount: s.reserved,
-            })),
-            outputSlots: data.outputSlots.map(s => ({
-                materialType: s.materialType,
-                currentAmount: s.current,
-                maxCapacity: s.max,
-                reservedAmount: s.reserved,
-            })),
-        };
-
-        this.inventories.set(data.entityId, inventory);
+            inputSlots: data.inputSlots.map(toSlot),
+            outputSlots: data.outputSlots.map(toSlot),
+        });
     }
 }

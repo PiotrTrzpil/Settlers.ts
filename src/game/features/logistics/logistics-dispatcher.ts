@@ -333,7 +333,7 @@ export class LogisticsDispatcher implements TickSystem {
 
         // Check if any supply exists
         const supplies = this.inventoryManager.getBuildingsWithOutput(request.materialType, 1);
-        const otherSupplies = supplies.filter((id: number) => id !== request.buildingId);
+        const otherSupplies = supplies.filter(id => id !== request.buildingId);
         if (otherSupplies.length === 0) {
             LogisticsDispatcher.log.debug(
                 `Request #${request.id} (material=${request.materialType}): no supply available anywhere`
@@ -379,64 +379,36 @@ export class LogisticsDispatcher implements TickSystem {
         }
     }
 
-    /**
-     * Handle carrier delivery completion - fulfill the corresponding request.
-     */
     private handleDeliveryComplete(carrierId: number): void {
-        const requestId = this.carrierToRequest.get(carrierId);
-        if (requestId === undefined) {
-            return; // Carrier wasn't assigned by us
-        }
+        const requestId = this.releaseCarrierMapping(carrierId);
+        if (requestId === undefined) return;
 
-        // Fulfill the request
         this.requestManager.fulfillRequest(requestId);
-
-        // Release any reservations for this request
-        this.reservationManager.releaseReservationForRequest(requestId);
-
-        // Clear the mapping
-        this.carrierToRequest.delete(carrierId);
     }
 
-    /**
-     * Handle carrier pickup failure - reset the request so it can be reassigned.
-     * This happens when reserved material is no longer available (e.g., building destroyed).
-     */
     private handlePickupFailed(carrierId: number): void {
-        const requestId = this.carrierToRequest.get(carrierId);
-        if (requestId === undefined) {
-            return; // Carrier wasn't assigned by us
-        }
+        const requestId = this.releaseCarrierMapping(carrierId);
+        if (requestId === undefined) return;
 
         LogisticsDispatcher.log.debug(`Pickup failed for carrier ${carrierId}, resetting request ${requestId}`);
-
-        // Release the reservation (frees up slot-level reservation)
-        this.reservationManager.releaseReservationForRequest(requestId);
-
-        // Reset the request so it can be reassigned to another carrier
         this.requestManager.resetRequest(requestId, 'pickup_failed');
-
-        // Clear the mapping
-        this.carrierToRequest.delete(carrierId);
     }
 
-    /**
-     * Handle carrier removal - reset any request they were fulfilling.
-     */
     private handleCarrierRemoved(carrierId: number): void {
-        const requestId = this.carrierToRequest.get(carrierId);
-        if (requestId === undefined) {
-            return;
-        }
+        const requestId = this.releaseCarrierMapping(carrierId);
+        if (requestId === undefined) return;
 
-        // Release the reservation FIRST (before modifying request state)
-        this.reservationManager.releaseReservationForRequest(requestId);
-
-        // Reset the request so it can be re-assigned to another carrier
         this.requestManager.resetRequestsForCarrier(carrierId);
+    }
 
-        // Clear the mapping
+    /** Release reservation and carrier mapping. Returns the requestId, or undefined if carrier was not tracked. */
+    private releaseCarrierMapping(carrierId: number): number | undefined {
+        const requestId = this.carrierToRequest.get(carrierId);
+        if (requestId === undefined) return undefined;
+
+        this.reservationManager.releaseReservationForRequest(requestId);
         this.carrierToRequest.delete(carrierId);
+        return requestId;
     }
 
     /**
@@ -444,13 +416,6 @@ export class LogisticsDispatcher implements TickSystem {
      */
     getReservationManager(): InventoryReservationManager {
         return this.reservationManager;
-    }
-
-    /**
-     * Get carrier-to-request mappings for testing/debugging.
-     */
-    getCarrierToRequestMap(): ReadonlyMap<number, number> {
-        return this.carrierToRequest;
     }
 
     /**
@@ -521,13 +486,12 @@ export class LogisticsDispatcher implements TickSystem {
         // Step 4: Emit event for other systems
         this.eventBus!.emit('logistics:buildingCleanedUp', result);
 
-        // Log summary if any cleanup was performed
-        if (
-            result.requestsCancelled > 0 ||
-            result.requestsReset > 0 ||
-            result.reservationsReleased > 0 ||
-            result.carrierMappingsCleared > 0
-        ) {
+        const totalCleanedUp =
+            result.requestsCancelled +
+            result.requestsReset +
+            result.reservationsReleased +
+            result.carrierMappingsCleared;
+        if (totalCleanedUp > 0) {
             console.debug(
                 `[Logistics] Building ${buildingId} cleanup: ` +
                     `${result.requestsCancelled} cancelled, ${result.requestsReset} reset, ` +

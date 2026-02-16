@@ -229,7 +229,7 @@ export class GameLoop {
 
         // 6. Logistics dispatcher — assigns carriers to pending requests
         this.logisticsDispatcher = new LogisticsDispatcher({
-            gameState: gameState,
+            gameState,
             carrierManager: this.carrierManager,
             settlerTaskSystem: this.settlerTaskSystem,
             requestManager: this.requestManager,
@@ -494,7 +494,6 @@ export class GameLoop {
     }
 
     /** Record detailed timing breakdown for debug stats */
-    // eslint-disable-next-line complexity -- timing breakdown requires many branches
     private recordFrameTiming(
         frameStart: number,
         ticksTime: number,
@@ -502,32 +501,32 @@ export class GameLoop {
         callbackTime: number,
         renderTiming: FrameRenderTiming | null
     ): void {
-        // Record FPS and get frame period for timing breakdown
         const framePeriod = debugStats.recordFrame();
         const workTime = performance.now() - frameStart;
         const renderTime = renderTiming?.render ?? 0;
-        // Callback overhead is time in callback minus actual GPU render time
-        const callbackOverhead = Math.max(0, callbackTime - renderTime);
-        // "Other" accounts for browser overhead, vsync waiting, rAF scheduling
-        const otherTime = Math.max(0, framePeriod - workTime);
+
+        const defaults: FrameRenderTiming = {
+            render: 0,
+            landscape: 0,
+            entities: 0,
+            cullSort: 0,
+            visibleCount: 0,
+            drawCalls: 0,
+            spriteCount: 0,
+            indicators: 0,
+            textured: 0,
+            color: 0,
+            selection: 0,
+        };
+        const rt = renderTiming ?? defaults;
 
         debugStats.recordRenderTiming({
             frame: framePeriod,
             ticks: ticksTime,
             animations: animationsTime,
-            callback: callbackOverhead,
-            other: otherTime,
-            render: renderTime,
-            landscape: renderTiming?.landscape ?? 0,
-            entities: renderTiming?.entities ?? 0,
-            cullSort: renderTiming?.cullSort ?? 0,
-            visibleCount: renderTiming?.visibleCount ?? 0,
-            drawCalls: renderTiming?.drawCalls ?? 0,
-            spriteCount: renderTiming?.spriteCount ?? 0,
-            indicators: renderTiming?.indicators ?? 0,
-            textured: renderTiming?.textured ?? 0,
-            color: renderTiming?.color ?? 0,
-            selection: renderTiming?.selection ?? 0,
+            callback: Math.max(0, callbackTime - renderTime),
+            other: Math.max(0, framePeriod - workTime),
+            ...rt,
         });
     }
 

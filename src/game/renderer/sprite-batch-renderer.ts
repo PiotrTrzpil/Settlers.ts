@@ -59,14 +59,6 @@ export class SpriteBatchRenderer {
         return this.spriteShaderProgram !== null;
     }
 
-    public get spriteShader(): ShaderProgram | null {
-        return this.spriteShaderProgram;
-    }
-
-    public get blendShader(): ShaderProgram | null {
-        return this.spriteBlendShaderProgram;
-    }
-
     /**
      * Initialize sprite and blend shaders with their buffers.
      */
@@ -205,7 +197,15 @@ export class SpriteBatchRenderer {
         }
 
         this.batchOffset = this.fillSpriteQuad(
-            this.batchOffset, worldX, worldY, entry, playerRow, tintR, tintG, tintB, tintA
+            this.batchOffset,
+            worldX,
+            worldY,
+            entry,
+            playerRow,
+            tintR,
+            tintG,
+            tintB,
+            tintA
         );
     }
 
@@ -232,7 +232,16 @@ export class SpriteBatchRenderer {
         }
 
         this.batchOffset = this.fillSpriteQuadPartial(
-            this.batchOffset, worldX, worldY, entry, playerRow, tintR, tintG, tintB, tintA, verticalProgress
+            this.batchOffset,
+            worldX,
+            worldY,
+            entry,
+            playerRow,
+            tintR,
+            tintG,
+            tintB,
+            tintA,
+            verticalProgress
         );
     }
 
@@ -260,8 +269,17 @@ export class SpriteBatchRenderer {
         }
 
         this.blendBatchOffset = this.fillBlendSpriteQuad(
-            this.blendBatchOffset, worldX, worldY, oldSprite, newSprite,
-            blendFactor, playerRow, tintR, tintG, tintB, tintA
+            this.blendBatchOffset,
+            worldX,
+            worldY,
+            oldSprite,
+            newSprite,
+            blendFactor,
+            playerRow,
+            tintR,
+            tintG,
+            tintB,
+            tintA
         );
     }
 
@@ -316,40 +334,82 @@ export class SpriteBatchRenderer {
         // 6 vertices for 2 triangles (CCW winding)
         // Note: V coordinates flipped (v1 at top, v0 at bottom) to correct texture orientation
         // Vertex 0: top-left
-        data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = v1; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x0;
+        data[offset++] = y1;
+        data[offset++] = u0;
+        data[offset++] = v1;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 1: bottom-left
-        data[offset++] = x0; data[offset++] = y0;
-        data[offset++] = u0; data[offset++] = v0; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x0;
+        data[offset++] = y0;
+        data[offset++] = u0;
+        data[offset++] = v0;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 2: bottom-right
-        data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1; data[offset++] = v0; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x1;
+        data[offset++] = y0;
+        data[offset++] = u1;
+        data[offset++] = v0;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 3: top-left (again)
-        data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = v1; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x0;
+        data[offset++] = y1;
+        data[offset++] = u0;
+        data[offset++] = v1;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 4: bottom-right (again)
-        data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1; data[offset++] = v0; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x1;
+        data[offset++] = y0;
+        data[offset++] = u1;
+        data[offset++] = v0;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 5: top-right
-        data[offset++] = x1; data[offset++] = y1;
-        data[offset++] = u1; data[offset++] = v1; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x1;
+        data[offset++] = y1;
+        data[offset++] = u1;
+        data[offset++] = v1;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         return offset;
     }
@@ -392,40 +452,82 @@ export class SpriteBatchRenderer {
         // 6 vertices for 2 triangles
 
         // Vertex 0: base-left (ground level)
-        data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = v1; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x0;
+        data[offset++] = y1;
+        data[offset++] = u0;
+        data[offset++] = v1;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 1: visible-top-left (rises upward)
-        data[offset++] = x0; data[offset++] = visibleY0;
-        data[offset++] = u0; data[offset++] = visibleV0; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x0;
+        data[offset++] = visibleY0;
+        data[offset++] = u0;
+        data[offset++] = visibleV0;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 2: visible-top-right (rises upward)
-        data[offset++] = x1; data[offset++] = visibleY0;
-        data[offset++] = u1; data[offset++] = visibleV0; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x1;
+        data[offset++] = visibleY0;
+        data[offset++] = u1;
+        data[offset++] = visibleV0;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 3: base-left (again)
-        data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0; data[offset++] = v1; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x0;
+        data[offset++] = y1;
+        data[offset++] = u0;
+        data[offset++] = v1;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 4: visible-top-right (again)
-        data[offset++] = x1; data[offset++] = visibleY0;
-        data[offset++] = u1; data[offset++] = visibleV0; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x1;
+        data[offset++] = visibleY0;
+        data[offset++] = u1;
+        data[offset++] = visibleV0;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 5: base-right (ground level)
-        data[offset++] = x1; data[offset++] = y1;
-        data[offset++] = u1; data[offset++] = v1; data[offset++] = layer;
-        data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x1;
+        data[offset++] = y1;
+        data[offset++] = u1;
+        data[offset++] = v1;
+        data[offset++] = layer;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         return offset;
     }
@@ -468,46 +570,106 @@ export class SpriteBatchRenderer {
         // Each vertex: pos(2) + uvl1(3) + uvl2(3) + blend(1) + playerRow(1) + paletteBase(1) + tint(4) = 15 floats
 
         // Vertex 0: top-left
-        data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0_1; data[offset++] = v1_1; data[offset++] = l1;
-        data[offset++] = u0_2; data[offset++] = v1_2; data[offset++] = l2;
-        data[offset++] = blendFactor; data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x0;
+        data[offset++] = y1;
+        data[offset++] = u0_1;
+        data[offset++] = v1_1;
+        data[offset++] = l1;
+        data[offset++] = u0_2;
+        data[offset++] = v1_2;
+        data[offset++] = l2;
+        data[offset++] = blendFactor;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 1: bottom-left
-        data[offset++] = x0; data[offset++] = y0;
-        data[offset++] = u0_1; data[offset++] = v0_1; data[offset++] = l1;
-        data[offset++] = u0_2; data[offset++] = v0_2; data[offset++] = l2;
-        data[offset++] = blendFactor; data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x0;
+        data[offset++] = y0;
+        data[offset++] = u0_1;
+        data[offset++] = v0_1;
+        data[offset++] = l1;
+        data[offset++] = u0_2;
+        data[offset++] = v0_2;
+        data[offset++] = l2;
+        data[offset++] = blendFactor;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 2: bottom-right
-        data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1_1; data[offset++] = v0_1; data[offset++] = l1;
-        data[offset++] = u1_2; data[offset++] = v0_2; data[offset++] = l2;
-        data[offset++] = blendFactor; data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x1;
+        data[offset++] = y0;
+        data[offset++] = u1_1;
+        data[offset++] = v0_1;
+        data[offset++] = l1;
+        data[offset++] = u1_2;
+        data[offset++] = v0_2;
+        data[offset++] = l2;
+        data[offset++] = blendFactor;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 3: top-left (again)
-        data[offset++] = x0; data[offset++] = y1;
-        data[offset++] = u0_1; data[offset++] = v1_1; data[offset++] = l1;
-        data[offset++] = u0_2; data[offset++] = v1_2; data[offset++] = l2;
-        data[offset++] = blendFactor; data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x0;
+        data[offset++] = y1;
+        data[offset++] = u0_1;
+        data[offset++] = v1_1;
+        data[offset++] = l1;
+        data[offset++] = u0_2;
+        data[offset++] = v1_2;
+        data[offset++] = l2;
+        data[offset++] = blendFactor;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 4: bottom-right (again)
-        data[offset++] = x1; data[offset++] = y0;
-        data[offset++] = u1_1; data[offset++] = v0_1; data[offset++] = l1;
-        data[offset++] = u1_2; data[offset++] = v0_2; data[offset++] = l2;
-        data[offset++] = blendFactor; data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x1;
+        data[offset++] = y0;
+        data[offset++] = u1_1;
+        data[offset++] = v0_1;
+        data[offset++] = l1;
+        data[offset++] = u1_2;
+        data[offset++] = v0_2;
+        data[offset++] = l2;
+        data[offset++] = blendFactor;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         // Vertex 5: top-right
-        data[offset++] = x1; data[offset++] = y1;
-        data[offset++] = u1_1; data[offset++] = v1_1; data[offset++] = l1;
-        data[offset++] = u1_2; data[offset++] = v1_2; data[offset++] = l2;
-        data[offset++] = blendFactor; data[offset++] = playerRow; data[offset++] = paletteBaseOffset;
-        data[offset++] = tintR; data[offset++] = tintG; data[offset++] = tintB; data[offset++] = tintA;
+        data[offset++] = x1;
+        data[offset++] = y1;
+        data[offset++] = u1_1;
+        data[offset++] = v1_1;
+        data[offset++] = l1;
+        data[offset++] = u1_2;
+        data[offset++] = v1_2;
+        data[offset++] = l2;
+        data[offset++] = blendFactor;
+        data[offset++] = playerRow;
+        data[offset++] = paletteBaseOffset;
+        data[offset++] = tintR;
+        data[offset++] = tintG;
+        data[offset++] = tintB;
+        data[offset++] = tintA;
 
         return offset;
     }

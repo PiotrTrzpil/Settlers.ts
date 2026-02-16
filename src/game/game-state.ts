@@ -374,7 +374,7 @@ export class GameState {
                 entity.player === settler.player
         );
 
-        return result ? this.getEntity(result.entityId)! : null;
+        return result ? this.getEntityOrThrow(result.entityId, 'nearest workplace') : null;
     }
 
     /** Update occupancy when an entity moves */
@@ -483,12 +483,8 @@ export class GameState {
     }
 
     /**
-     * Find the nearest stacked resource of a specific material type within a radius.
-     * Excludes resources that belong to a building (have buildingId set).
-     */
-    /**
      * Find the nearest free stacked resource of the given material type.
-     * Delegates to findNearestEntity with a filter for stacked resources.
+     * Excludes resources that belong to a building (have buildingId set).
      */
     public findNearestResource(x: number, y: number, materialType: EMaterialType, radius: number): Entity | undefined {
         const result = findNearestEntity(this, x, y, radius, entity => {

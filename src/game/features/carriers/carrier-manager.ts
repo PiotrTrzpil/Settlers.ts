@@ -76,14 +76,8 @@ export class CarrierManager {
 
         const state = createCarrierState(entityId, homeBuilding);
 
-        // Store state on entity (RFC: Entity-Owned State)
         entity.carrier = state;
-
-        // Add to tavern index (cross-entity state stays in manager)
-        if (!this.carriersByTavern.has(homeBuilding)) {
-            this.carriersByTavern.set(homeBuilding, new Set());
-        }
-        this.carriersByTavern.get(homeBuilding)!.add(entityId);
+        this.addToTavernIndex(homeBuilding, entityId);
 
         this.eventBus.emit('carrier:created', { entityId, homeBuilding });
 
@@ -104,16 +98,7 @@ export class CarrierManager {
         const hadActiveJob = state.status !== CarrierStatus.Idle && state.status !== CarrierStatus.Resting;
         const homeBuilding = state.homeBuilding;
 
-        // Remove from tavern index
-        const tavernCarriers = this.carriersByTavern.get(homeBuilding);
-        if (tavernCarriers) {
-            tavernCarriers.delete(entityId);
-            if (tavernCarriers.size === 0) {
-                this.carriersByTavern.delete(homeBuilding);
-            }
-        }
-
-        // Remove state from entity (RFC: Entity-Owned State)
+        this.removeFromTavernIndex(homeBuilding, entityId);
         delete entity.carrier;
 
         this.eventBus.emit('carrier:removed', { entityId, homeBuilding, hadActiveJob });
@@ -214,14 +199,7 @@ export class CarrierManager {
     canAssignJobTo(carrierId: number): boolean {
         const state = this.entityProvider.getEntity(carrierId)?.carrier;
         if (!state) return false;
-
-        // Must be idle
-        if (state.status !== CarrierStatus.Idle) return false;
-
-        // Must not be too fatigued
-        if (!canAcceptNewJob(state.fatigue)) return false;
-
-        return true;
+        return state.status === CarrierStatus.Idle && canAcceptNewJob(state.fatigue);
     }
 
     /**
@@ -288,23 +266,10 @@ export class CarrierManager {
         if (state.status !== CarrierStatus.Idle) return false;
 
         const oldTavernId = state.homeBuilding;
-        if (oldTavernId === newTavernId) return true; // Already at this tavern
+        if (oldTavernId === newTavernId) return true;
 
-        // Remove from old tavern index
-        const oldTavernCarriers = this.carriersByTavern.get(oldTavernId);
-        if (oldTavernCarriers) {
-            oldTavernCarriers.delete(carrierId);
-            if (oldTavernCarriers.size === 0) {
-                this.carriersByTavern.delete(oldTavernId);
-            }
-        }
-
-        // Add to new tavern index
-        if (!this.carriersByTavern.has(newTavernId)) {
-            this.carriersByTavern.set(newTavernId, new Set());
-        }
-        this.carriersByTavern.get(newTavernId)!.add(carrierId);
-
+        this.removeFromTavernIndex(oldTavernId, carrierId);
+        this.addToTavernIndex(newTavernId, carrierId);
         state.homeBuilding = newTavernId;
         return true;
     }
@@ -459,10 +424,24 @@ export class CarrierManager {
             };
         }
 
-        // Add to tavern index
-        if (!this.carriersByTavern.has(data.homeBuilding)) {
-            this.carriersByTavern.set(data.homeBuilding, new Set());
+        this.addToTavernIndex(data.homeBuilding, data.entityId);
+    }
+
+    private addToTavernIndex(tavernId: number, carrierId: number): void {
+        let carriers = this.carriersByTavern.get(tavernId);
+        if (!carriers) {
+            carriers = new Set();
+            this.carriersByTavern.set(tavernId, carriers);
         }
-        this.carriersByTavern.get(data.homeBuilding)!.add(data.entityId);
+        carriers.add(carrierId);
+    }
+
+    private removeFromTavernIndex(tavernId: number, carrierId: number): void {
+        const carriers = this.carriersByTavern.get(tavernId);
+        if (!carriers) return;
+        carriers.delete(carrierId);
+        if (carriers.size === 0) {
+            this.carriersByTavern.delete(tavernId);
+        }
     }
 }

@@ -89,8 +89,10 @@ export interface SerializedRequest {
 
 /**
  * Serialized production state for a building.
+ * @deprecated Kept for backward compatibility with saved snapshots (v5).
+ * Production progress is now tracked by SettlerTaskSystem workers.
  */
-export interface SerializedProduction {
+interface SerializedProduction {
     entityId: number;
     progress: number;
 }
@@ -210,12 +212,8 @@ function serializeCarriers(game: Game): SerializedCarrier[] {
     return result;
 }
 
-function serializeEntityState(game: Game): {
-    trees: SerializedTree[];
-    productions: SerializedProduction[];
-} {
+function serializeTrees(game: Game): SerializedTree[] {
     const trees: SerializedTree[] = [];
-    const productions: SerializedProduction[] = [];
     for (const entity of game.state.entities) {
         if (entity.tree) {
             trees.push({
@@ -226,9 +224,8 @@ function serializeEntityState(game: Game): {
                 currentOffset: entity.tree.currentOffset,
             });
         }
-        // Production progress is now tracked by SettlerTaskSystem workers, not entity state
     }
-    return { trees, productions };
+    return trees;
 }
 
 function serializeRequests(game: Game): SerializedRequest[] {
@@ -284,8 +281,6 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         });
     }
 
-    const { trees, productions } = serializeEntityState(game);
-
     return {
         version: SNAPSHOT_VERSION,
         timestamp: Date.now(),
@@ -297,9 +292,8 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         buildingStates,
         buildingInventories: serializeInventories(game),
         carriers: serializeCarriers(game),
-        trees,
+        trees: serializeTrees(game),
         requests: serializeRequests(game),
-        productions,
         terrainGroundType: uint8ArrayToBase64(game.groundType),
         terrainGroundHeight: uint8ArrayToBase64(game.groundHeight),
     };
@@ -412,16 +406,14 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
         if (e.type === EntityType.MapObject) {
             const savedTree = savedTreeStates.get(e.id);
             if (savedTree) {
-                const entity = state.getEntity(e.id);
-                if (entity) {
-                    entity.tree = {
-                        stage: savedTree.stage,
-                        progress: savedTree.progress,
-                        stumpTimer: savedTree.stumpTimer,
-                        currentOffset: savedTree.currentOffset,
-                    };
-                    entity.variation = savedTree.currentOffset;
-                }
+                const entity = state.getEntityOrThrow(e.id, 'restored map object');
+                entity.tree = {
+                    stage: savedTree.stage,
+                    progress: savedTree.progress,
+                    stumpTimer: savedTree.stumpTimer,
+                    currentOffset: savedTree.currentOffset,
+                };
+                entity.variation = savedTree.currentOffset;
             }
         }
     }
@@ -489,11 +481,6 @@ function restoreRequests(game: Game, snapshot: GameStateSnapshot): void {
     }
 }
 
-function restoreProductions(_game: Game, _snapshot: GameStateSnapshot): void {
-    // Production progress is now tracked by SettlerTaskSystem workers.
-    // Kept for backward compatibility with saved snapshots.
-}
-
 /**
  * Restore game state from a snapshot using normal entity creation.
  * Must be called on a fresh Game instance (entities array should be empty or will be cleared).
@@ -530,7 +517,6 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
     restoreInventories(game, snapshot);
     restoreCarriers(game, snapshot);
     restoreRequests(game, snapshot);
-    restoreProductions(game, snapshot);
 
     console.log(`GameState: Restored ${snapshot.entities.length} entities from snapshot`);
 }
