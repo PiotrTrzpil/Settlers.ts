@@ -312,6 +312,24 @@ export class InventoryVisualizer {
     }
 
     /**
+     * Get the position of a visual stack for a specific material at a building.
+     * Used by carriers to walk to the correct stack position instead of the building center.
+     */
+    getStackPosition(buildingId: number, material: EMaterialType, slotType: 'input' | 'output'): TileCoord | null {
+        const state = this.buildingVisuals.get(buildingId);
+        if (!state) return null;
+
+        const stackMap = slotType === 'output' ? state.outputStacks : state.inputStacks;
+        const entityId = stackMap.get(material);
+        if (entityId === undefined) return null;
+
+        const entity = this.gameState.getEntity(entityId);
+        if (!entity) return null;
+
+        return { x: entity.x, y: entity.y };
+    }
+
+    /**
      * Release visual stacks when a building is destroyed.
      * The resource piles become free (available for pickup by carriers).
      */

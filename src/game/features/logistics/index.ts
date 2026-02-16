@@ -55,11 +55,7 @@ export {
 } from './resource-supply';
 
 // Request manager
-export {
-    RequestManager,
-    type RequestManagerEvents,
-    type RequestEventListener,
-} from './request-manager';
+export { RequestManager, type RequestManagerEvents, type RequestEventListener } from './request-manager';
 
 // Fulfillment matching
 export {
@@ -72,13 +68,15 @@ export {
 } from './fulfillment-matcher';
 
 // Inventory reservations (prevents race conditions)
+export { type InventoryReservation, InventoryReservationManager } from './inventory-reservation';
+
+// Fulfillment diagnostics (debug panel support)
 export {
-    type InventoryReservation,
-    InventoryReservationManager,
-} from './inventory-reservation';
+    type UnfulfilledReason,
+    UNFULFILLED_REASON_LABELS,
+    type DiagnosticConfig,
+    diagnoseUnfulfilledRequest,
+} from './fulfillment-diagnostics';
 
 // Logistics dispatcher (connects requests to carriers)
-export {
-    LogisticsDispatcher,
-    type LogisticsDispatcherConfig,
-} from './logistics-dispatcher';
+export { LogisticsDispatcher, type LogisticsDispatcherConfig } from './logistics-dispatcher';

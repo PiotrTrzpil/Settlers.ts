@@ -80,6 +80,7 @@
                         <span class="req-age">{{ req.age }}s</span>
                         <span v-if="req.inProgress" class="req-status in-progress">⚙</span>
                         <span v-else class="req-status pending">⏳</span>
+                        <span v-if="req.reason" class="req-reason">{{ req.reason }}</span>
                     </div>
                     <div v-if="hasMoreRequests" class="more-indicator">+{{ totalRequests - 15 }} more</div>
                 </div>
@@ -493,6 +494,14 @@ const activeJobCount = computed(() => carriersWithJobs.value.length);
 
 .req-status.pending {
     color: #c0a040;
+}
+
+.req-reason {
+    color: #a06030;
+    font-size: 9px;
+    font-style: italic;
+    margin-left: auto;
+    white-space: nowrap;
 }
 
 .more-indicator {

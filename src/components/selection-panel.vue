@@ -88,23 +88,6 @@
                                     <span class="label">Home:</span>
                                     <span class="value">#{{ carrierDebug.homeBuilding }}</span>
                                 </div>
-                                <template v-if="carrierDebug.hasJob">
-                                    <div class="debug-subsection">Job</div>
-                                    <div class="info-row sub-row">
-                                        <span class="label">Type:</span>
-                                        <span class="value">{{ carrierDebug.jobType }}</span>
-                                    </div>
-                                    <div v-if="carrierDebug.jobTarget !== null" class="info-row sub-row">
-                                        <span class="label">Target:</span>
-                                        <span class="value">#{{ carrierDebug.jobTarget }}</span>
-                                    </div>
-                                    <div v-if="carrierDebug.jobMaterial" class="info-row sub-row">
-                                        <span class="label">Material:</span>
-                                        <span class="value"
-                                            >{{ carrierDebug.jobMaterial }} ×{{ carrierDebug.jobAmount }}</span
-                                        >
-                                    </div>
-                                </template>
                                 <template v-if="carrierDebug.pathLength > 0">
                                     <div class="info-row">
                                         <span class="label">Path:</span>
@@ -332,11 +315,6 @@ interface CarrierDebugInfo {
     fatigueLevel: string;
     fatigueClass: string;
     homeBuilding: number;
-    hasJob: boolean;
-    jobType: string | null;
-    jobTarget: number | null;
-    jobMaterial: string | null;
-    jobAmount: number;
     pathLength: number;
     pathProgress: number;
 }
@@ -357,25 +335,6 @@ const carrierDebug = computed<CarrierDebugInfo | null>(() => {
     const pathLength = movement?.path.length ?? 0;
     const pathProgress = movement?.pathIndex ?? 0;
 
-    // Job details
-    let jobType: string | null = null;
-    let jobTarget: number | null = null;
-    let jobMaterial: string | null = null;
-    let jobAmount = 0;
-
-    if (carrier.currentJob) {
-        jobType = carrier.currentJob.type;
-        if (carrier.currentJob.type === 'pickup') {
-            jobTarget = carrier.currentJob.fromBuilding;
-            jobMaterial = EMaterialType[carrier.currentJob.material] ?? `#${carrier.currentJob.material}`;
-            jobAmount = carrier.currentJob.amount;
-        } else if (carrier.currentJob.type === 'deliver') {
-            jobTarget = carrier.currentJob.toBuilding;
-            jobMaterial = EMaterialType[carrier.currentJob.material] ?? `#${carrier.currentJob.material}`;
-            jobAmount = carrier.currentJob.amount;
-        }
-    }
-
     return {
         status: CARRIER_STATUS_NAMES[carrier.status],
         statusClass: CARRIER_STATUS_CLASSES[carrier.status],
@@ -383,11 +342,6 @@ const carrierDebug = computed<CarrierDebugInfo | null>(() => {
         fatigueLevel: FATIGUE_LEVEL_NAMES[fatigueLevel],
         fatigueClass: FATIGUE_LEVEL_CLASSES[fatigueLevel],
         homeBuilding: carrier.homeBuilding,
-        hasJob: carrier.currentJob !== null,
-        jobType,
-        jobTarget,
-        jobMaterial,
-        jobAmount,
         pathLength,
         pathProgress,
     };

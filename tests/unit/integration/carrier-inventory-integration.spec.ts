@@ -46,8 +46,8 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
             expect(gameLoop.serviceAreaManager).toBeDefined();
         });
 
-        it('should have carrierSystem registered in GameLoop', () => {
-            expect(gameLoop.carrierSystem).toBeDefined();
+        it('should have carrierManager registered in GameLoop', () => {
+            expect(gameLoop.carrierManager).toBeDefined();
         });
     });
 
@@ -186,8 +186,8 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
 
             const initialFatigue = gameLoop.carrierManager.getCarrier(carrierEntity.id)!.fatigue;
 
-            // Tick the carrier system
-            gameLoop.carrierSystem.tick(1.0); // 1 second
+            // Tick fatigue recovery
+            gameLoop.carrierManager.updateFatigue(1.0); // 1 second
 
             const newFatigue = gameLoop.carrierManager.getCarrier(carrierEntity.id)!.fatigue;
             expect(newFatigue).toBeLessThan(initialFatigue);
@@ -212,7 +212,8 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
             const carrierState = gameLoop.carrierManager.getCarrier(carrier.id);
             expect(carrierState).toBeDefined();
             expect(carrierState!.homeBuilding).toBe(tavern.id);
-            expect(carrierState!.currentJob).toBeNull();
+            // Carrier starts with status 0 (Idle) and no active job
+            expect(carrierState!.status).toBe(0);
         });
     });
 

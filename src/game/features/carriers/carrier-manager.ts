@@ -1,6 +1,5 @@
 /**
- * CarrierManager - Manages all carrier states.
- * Provides CRUD operations and queries for carrier units.
+ * CarrierManager - Manages all carrier states, fatigue recovery, and auto-registration.
  *
  * State is stored on entity.carrier (RFC: Entity-Owned State).
  * Cross-entity index (carriersByTavern) remains in the manager.
@@ -9,13 +8,15 @@
 import type { EventBus } from '../../event-bus';
 import { EMaterialType } from '../../economy';
 import { type EntityProvider, getCarrierState } from '../../entity';
-import {
-    CarrierStatus,
-    type CarrierState,
-    type CarrierJob,
-    createCarrierState,
-    canAcceptNewJob,
-} from './carrier-state';
+import { CarrierStatus, type CarrierState, createCarrierState, canAcceptNewJob } from './carrier-state';
+import type { ServiceAreaManager } from '../service-areas';
+import { LogHandler } from '@/utilities/log-handler';
+
+/** Fatigue recovery rate per second when resting at home tavern */
+const FATIGUE_RECOVERY_RATE = 10;
+
+/** Fatigue recovery rate per second when idle (not actively resting) */
+const IDLE_RECOVERY_RATE = 5;
 
 /**
  * Configuration for CarrierManager dependencies.
@@ -27,11 +28,13 @@ export interface CarrierManagerConfig {
 
 /**
  * Manages carrier state for all carrier units.
- * Tracks carriers by their home tavern and provides job assignment.
+ * Tracks carriers by their home tavern, handles fatigue recovery, and auto-registers spawned carriers.
  *
  * State is stored on entity.carrier (RFC: Entity-Owned State).
  */
 export class CarrierManager {
+    private static log = new LogHandler('CarrierManager');
+
     /** Entity provider for accessing entities */
     private readonly entityProvider: EntityProvider;
 
@@ -41,9 +44,19 @@ export class CarrierManager {
     /** Event bus for emitting carrier events */
     private readonly eventBus: EventBus;
 
+    /** Service area manager for auto-registration (set via setServiceAreaManager) */
+    private serviceAreaManager: ServiceAreaManager | null = null;
+
     constructor(config: CarrierManagerConfig) {
         this.entityProvider = config.entityProvider;
         this.eventBus = config.eventBus;
+    }
+
+    /**
+     * Set the service area manager (needed for auto-registering spawned carriers).
+     */
+    setServiceAreaManager(manager: ServiceAreaManager): void {
+        this.serviceAreaManager = manager;
     }
 
     /**
@@ -88,7 +101,7 @@ export class CarrierManager {
         const state = entity?.carrier;
         if (!state) return false;
 
-        const hadActiveJob = state.currentJob !== null;
+        const hadActiveJob = state.status !== CarrierStatus.Idle && state.status !== CarrierStatus.Resting;
         const homeBuilding = state.homeBuilding;
 
         // Remove from tavern index
@@ -190,9 +203,7 @@ export class CarrierManager {
      * @returns Array of busy carrier states for that tavern
      */
     getBusyCarriers(tavernId: number): CarrierState[] {
-        return this.getCarriersForTavern(tavernId).filter(
-            carrier => carrier.currentJob !== null || carrier.status !== CarrierStatus.Idle
-        );
+        return this.getCarriersForTavern(tavernId).filter(carrier => carrier.status !== CarrierStatus.Idle);
     }
 
     /**
@@ -204,57 +215,13 @@ export class CarrierManager {
         const state = this.entityProvider.getEntity(carrierId)?.carrier;
         if (!state) return false;
 
-        // Must be idle with no current job
+        // Must be idle
         if (state.status !== CarrierStatus.Idle) return false;
-        if (state.currentJob !== null) return false;
 
         // Must not be too fatigued
         if (!canAcceptNewJob(state.fatigue)) return false;
 
         return true;
-    }
-
-    /**
-     * Assign a job to a carrier.
-     * Does NOT automatically change carrier status - caller should set status appropriately.
-     * @param carrierId - The entity ID of the carrier
-     * @param job - The job to assign
-     * @returns true if the job was assigned, false if carrier not found or cannot accept jobs
-     */
-    assignJob(carrierId: number, job: CarrierJob): boolean {
-        if (!this.canAssignJobTo(carrierId)) {
-            return false;
-        }
-
-        // Carrier MUST exist - canAssignJobTo just verified it
-        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier');
-        const state = getCarrierState(entity);
-        state.currentJob = job;
-
-        this.eventBus.emit('carrier:jobAssigned', { entityId: carrierId, job });
-
-        return true;
-    }
-
-    /**
-     * Mark a carrier's current job as complete.
-     * Does NOT automatically change status - caller should set status appropriately.
-     * @param carrierId - The entity ID of the carrier
-     * @returns The completed job, or null if carrier had no job
-     * @throws Error if carrier not found
-     */
-    completeJob(carrierId: number): CarrierJob | null {
-        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for completeJob');
-        const state = getCarrierState(entity);
-
-        if (state.currentJob === null) return null;
-
-        const completedJob = state.currentJob;
-        state.currentJob = null;
-
-        this.eventBus.emit('carrier:jobCompleted', { entityId: carrierId, completedJob });
-
-        return completedJob;
     }
 
     /**
@@ -317,8 +284,8 @@ export class CarrierManager {
         const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for reassignToTavern');
         const state = getCarrierState(entity);
 
-        // Prevent reassignment while on a job (valid condition, not a bug)
-        if (state.currentJob !== null) return false;
+        // Prevent reassignment while carrier is busy (valid condition, not a bug)
+        if (state.status !== CarrierStatus.Idle) return false;
 
         const oldTavernId = state.homeBuilding;
         if (oldTavernId === newTavernId) return true; // Already at this tavern
@@ -340,6 +307,87 @@ export class CarrierManager {
 
         state.homeBuilding = newTavernId;
         return true;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Fatigue Recovery (runs each tick)
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Update fatigue for all carriers.
+     * Resting carriers recover faster; idle carriers recover slowly.
+     */
+    updateFatigue(dt: number): void {
+        for (const carrier of this.getAllCarriers()) {
+            if (carrier.status === CarrierStatus.Resting) {
+                const recovery = FATIGUE_RECOVERY_RATE * dt;
+                const newFatigue = Math.max(0, carrier.fatigue - recovery);
+                this.setFatigue(carrier.entityId, newFatigue);
+
+                if (newFatigue === 0) {
+                    this.setStatus(carrier.entityId, CarrierStatus.Idle);
+                }
+            } else if (carrier.status === CarrierStatus.Idle && carrier.fatigue > 0) {
+                const recovery = IDLE_RECOVERY_RATE * dt;
+                const newFatigue = Math.max(0, carrier.fatigue - recovery);
+                this.setFatigue(carrier.entityId, newFatigue);
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Auto-Registration (called on unit:spawned event)
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Auto-register a spawned carrier with its nearest hub.
+     * Called from GameLoop when a unit:spawned event fires for a carrier.
+     */
+    autoRegisterCarrier(entityId: number, x: number, y: number, player: number): void {
+        if (!this.serviceAreaManager) {
+            CarrierManager.log.warn(`Cannot auto-register carrier ${entityId}: no service area manager`);
+            return;
+        }
+
+        const nearestHub = this.findNearestHub(x, y, player);
+        if (!nearestHub) {
+            CarrierManager.log.warn(`No hub found for carrier ${entityId} at (${x}, ${y}) for player ${player}`);
+            return;
+        }
+
+        this.createCarrier(entityId, nearestHub);
+        CarrierManager.log.debug(`Registered carrier ${entityId} with hub ${nearestHub}`);
+    }
+
+    /**
+     * Find the nearest hub (building with service area) for a player at a given position.
+     * Only returns hubs that have capacity for more carriers.
+     */
+    private findNearestHub(x: number, y: number, playerId: number): number | null {
+        const serviceAreas = this.serviceAreaManager!.getServiceAreasForPlayer(playerId);
+        if (serviceAreas.length === 0) {
+            return null;
+        }
+
+        let nearestHub: number | null = null;
+        let nearestDistSq = Infinity;
+
+        for (const area of serviceAreas) {
+            if (!this.hasCapacity(area.buildingId, area.capacity)) {
+                continue;
+            }
+
+            const dx = area.centerX - x;
+            const dy = area.centerY - y;
+            const distSq = dx * dx + dy * dy;
+
+            if (distSq < nearestDistSq) {
+                nearestDistSq = distSq;
+                nearestHub = area.buildingId;
+            }
+        }
+
+        return nearestHub;
     }
 
     /**
@@ -396,7 +444,6 @@ export class CarrierManager {
         entity.carrier = {
             entityId: data.entityId,
             homeBuilding: data.homeBuilding,
-            currentJob: null, // Jobs are not persisted - will be re-assigned
             fatigue: data.fatigue,
             status: data.status,
         };

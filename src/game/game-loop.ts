@@ -10,7 +10,7 @@ import { gameSettings } from './game-settings';
 import { MapSize } from '@/utilities/map-size';
 import type { TickSystem } from './tick-system';
 import { BuildingConstructionSystem, BuildingStateManager } from './features/building-construction';
-import { CarrierSystem, CarrierManager } from './features/carriers';
+import { CarrierManager } from './features/carriers';
 import {
     hasInventory,
     isProductionBuilding,
@@ -23,7 +23,7 @@ import { FeatureRegistry } from './features/feature-registry';
 import { TreeFeature, TreeSystem, type TreeFeatureExports } from './features/trees';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import type { FrameRenderTiming } from './renderer/renderer';
-import { BuildingType } from './entity';
+import { BuildingType, UnitType } from './entity';
 import { AnimationService } from './animation/index';
 import { toastError, toastClearThrottle } from './toast-notifications';
 
@@ -108,9 +108,6 @@ export class GameLoop {
 
     /** Building construction system (registered as TickSystem) */
     public readonly constructionSystem: BuildingConstructionSystem;
-
-    /** Carrier logistics system */
-    public readonly carrierSystem: CarrierSystem;
 
     /** Logistics dispatcher - connects resource requests to carriers */
     public readonly logisticsDispatcher!: LogisticsDispatcher;
@@ -197,29 +194,17 @@ export class GameLoop {
             this.handleBuildingCreated(entityId, buildingType, x, y);
         });
 
-        // 3. Carrier system — manages carrier fatigue and behavior
-        this.carrierSystem = new CarrierSystem({
-            carrierManager: this.carrierManager,
-            inventoryManager: this.inventoryManager,
-            gameState: gameState,
-            serviceAreaManager: this.serviceAreaManager,
-            animationService: this.animationService,
-        });
-        this.carrierSystem.registerEvents(eventBus);
-        this.registerSystem(this.carrierSystem);
+        // 3. Wire carrier manager for auto-registration
+        this.carrierManager.setServiceAreaManager(this.serviceAreaManager);
 
-        // 4. Logistics dispatcher — assigns carriers to pending requests
-        this.logisticsDispatcher = new LogisticsDispatcher({
-            gameState: gameState,
-            carrierSystem: this.carrierSystem,
-            requestManager: this.requestManager,
-            serviceAreaManager: this.serviceAreaManager,
-            inventoryManager: this.inventoryManager,
+        // Listen for unit spawned to auto-register carriers
+        this.subscriptions.subscribe(eventBus, 'unit:spawned', payload => {
+            if (payload.unitType === UnitType.Carrier) {
+                this.carrierManager.autoRegisterCarrier(payload.entityId, payload.x, payload.y, payload.player);
+            }
         });
-        this.logisticsDispatcher.registerEvents(eventBus);
-        this.registerSystem(this.logisticsDispatcher);
 
-        // 5. Feature Registry — load self-registering features
+        // 4. Feature Registry — load self-registering features
         this.featureRegistry = new FeatureRegistry({
             gameState,
             eventBus,
@@ -235,17 +220,27 @@ export class GameLoop {
             this.registerSystem(system);
         }
 
-        // 6. Settler task system — manages all unit behaviors and animations
+        // 5. Settler task system — manages all unit behaviors and animations
         this.settlerTaskSystem = new SettlerTaskSystem({
             gameState,
             animationService: this.animationService,
             inventoryManager: this.inventoryManager,
+            carrierManager: this.carrierManager,
             eventBus,
         });
         this.registerSystem(this.settlerTaskSystem);
 
-        // Wire up carrier system to settler task system
-        this.carrierSystem.setSettlerTaskSystem(this.settlerTaskSystem);
+        // 6. Logistics dispatcher — assigns carriers to pending requests
+        this.logisticsDispatcher = new LogisticsDispatcher({
+            gameState: gameState,
+            carrierManager: this.carrierManager,
+            settlerTaskSystem: this.settlerTaskSystem,
+            requestManager: this.requestManager,
+            serviceAreaManager: this.serviceAreaManager,
+            inventoryManager: this.inventoryManager,
+        });
+        this.logisticsDispatcher.registerEvents(eventBus);
+        this.registerSystem(this.logisticsDispatcher);
 
         // 7. Domain systems — register work handlers with task system
         this.woodcuttingSystem = new WoodcuttingSystem(gameState, this.treeSystem, this.settlerTaskSystem);
@@ -263,6 +258,9 @@ export class GameLoop {
 
         // 9. Inventory visualizer — syncs building output to visual stacked resources
         this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager);
+
+        // Wire inventory visualizer to settler task system (for carrier stack navigation)
+        this.settlerTaskSystem.setInventoryVisualizer(this.inventoryVisualizer);
 
         // 10. Bridge inventory changes to EventBus for other consumers (debug panel, UI)
         this.inventoryManager.onChange((buildingId, materialType, slotType, previousAmount, newAmount) => {
@@ -654,6 +652,9 @@ export class GameLoop {
                 this.handleSystemError(system, e);
             }
         }
+
+        // Update carrier fatigue recovery (resting/idle carriers recover over time)
+        this.carrierManager.updateFatigue(dt);
 
         // Update debug stats from game state so entity counts are available
         // even without a render callback (headless/CI environments)

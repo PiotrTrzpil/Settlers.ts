@@ -5,9 +5,8 @@
  * External code should only import from this file.
  *
  * Public API:
- * - Types: CarrierState, CarrierJob, CarrierStatus, FatigueLevel
- * - Manager: CarrierManager (tracks all carrier states)
- * - System: CarrierSystem (tick system for fatigue and registration)
+ * - Types: CarrierState, CarrierStatus, FatigueLevel
+ * - Manager: CarrierManager (tracks all carrier states, fatigue, auto-registration)
  * - Helpers: createCarrierState, getFatigueLevel, canAcceptNewJob
  * - Constants: FATIGUE_THRESHOLDS
  *
@@ -16,7 +15,7 @@
  */
 
 // Types and helpers from carrier-state
-export type { CarrierState, CarrierJob } from './carrier-state';
+export type { CarrierState } from './carrier-state';
 export {
     CarrierStatus,
     FatigueLevel,
@@ -31,6 +30,3 @@ export { CarrierManager, type CarrierManagerConfig } from './carrier-manager';
 
 // Re-export EntityProvider from entity for convenience
 export type { EntityProvider } from '../../entity';
-
-// System (TickSystem)
-export { CarrierSystem, type CarrierSystemConfig } from './carrier-system';

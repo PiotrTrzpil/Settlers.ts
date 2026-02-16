@@ -36,7 +36,9 @@ import {
 } from './types';
 import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDefinitions } from './loader';
 import type { EventBus } from '../../event-bus';
-import type { BuildingInventoryManager } from '../../features/inventory';
+import type { BuildingInventoryManager, InventoryVisualizer } from '../../features/inventory';
+import type { CarrierManager } from '../../features/carriers';
+import { CarrierStatus } from '../../features/carriers';
 
 const log = new LogHandler('SettlerTaskSystem');
 
@@ -69,11 +71,15 @@ interface UnitRuntime {
     idleState: IdleAnimationState;
 }
 
+/** Fatigue added per delivery cycle */
+const FATIGUE_PER_DELIVERY = 5;
+
 /** Configuration for SettlerTaskSystem dependencies */
 export interface SettlerTaskSystemConfig {
     gameState: GameState;
     animationService: AnimationService;
     inventoryManager: BuildingInventoryManager;
+    carrierManager: CarrierManager;
     eventBus: EventBus;
 }
 
@@ -84,6 +90,7 @@ export class SettlerTaskSystem implements TickSystem {
     private gameState: GameState;
     private animationService: AnimationService;
     private inventoryManager: BuildingInventoryManager;
+    private carrierManager: CarrierManager;
     private settlerConfigs: SettlerConfigs;
     private jobDefinitions: JobDefinitions;
     private workHandlers = new Map<SearchType, WorkHandler>();
@@ -93,11 +100,14 @@ export class SettlerTaskSystem implements TickSystem {
     private handlerErrorLogger = new ThrottledLogger(log, 2000);
     /** Throttled logger for missing handler warnings (prevents spam when feature not yet implemented) */
     private missingHandlerLogger = new ThrottledLogger(log, 5000);
+    /** Inventory visualizer - used to find stack positions for carrier navigation */
+    private inventoryVisualizer!: InventoryVisualizer;
 
     constructor(config: SettlerTaskSystemConfig) {
         this.gameState = config.gameState;
         this.animationService = config.animationService;
         this.inventoryManager = config.inventoryManager;
+        this.carrierManager = config.carrierManager;
         this.eventBus = config.eventBus;
         this.settlerConfigs = loadSettlerConfigs();
         this.jobDefinitions = loadJobDefinitions();
@@ -109,6 +119,11 @@ export class SettlerTaskSystem implements TickSystem {
         this.registerWorkHandler(SearchType.GOOD, this.createCarrierHandler());
 
         log.debug(`Loaded ${this.settlerConfigs.size} settler configs, ${this.jobDefinitions.size} jobs`);
+    }
+
+    /** Set the inventory visualizer (created after task system in game loop). */
+    setInventoryVisualizer(visualizer: InventoryVisualizer): void {
+        this.inventoryVisualizer = visualizer;
     }
 
     /**
@@ -291,7 +306,9 @@ export class SettlerTaskSystem implements TickSystem {
 
     /**
      * Assign a carrier transport job.
-     * Called by CarrierSystem when a delivery job is assigned.
+     * Called by LogisticsDispatcher when a delivery is matched.
+     *
+     * Also updates carrier status via CarrierManager and emits carrier:jobAssigned.
      *
      * @param entityId Entity ID of the carrier
      * @param sourceBuildingId Building to pickup from
@@ -353,6 +370,9 @@ export class SettlerTaskSystem implements TickSystem {
             runtime.job = null;
             return false;
         }
+
+        // Update carrier status
+        this.carrierManager.setStatus(entityId, CarrierStatus.Walking);
 
         // Start walk animation (controller MUST exist after successful moveUnit)
         const controller = this.gameState.movement.getController(entityId)!;
@@ -1029,14 +1049,24 @@ export class SettlerTaskSystem implements TickSystem {
 
     private executeGoToSource(settler: Entity, job: JobState): TaskResult {
         if (job.type !== 'carrier') return TaskResult.FAILED;
-        const building = this.gameState.getEntityOrThrow(job.data.sourceBuildingId, 'source building');
-        return this.moveToPosition(settler, building.x, building.y);
+        const { sourceBuildingId, material } = job.data;
+        const building = this.gameState.getEntityOrThrow(sourceBuildingId, 'source building');
+        // Navigate to the output stack position if it exists, otherwise fall back to building center
+        const stackPos = this.inventoryVisualizer.getStackPosition(sourceBuildingId, material, 'output');
+        const targetX = stackPos?.x ?? building.x;
+        const targetY = stackPos?.y ?? building.y;
+        return this.moveToPosition(settler, targetX, targetY);
     }
 
     private executeGoToDest(settler: Entity, job: JobState): TaskResult {
         if (job.type !== 'carrier') return TaskResult.FAILED;
-        const building = this.gameState.getEntityOrThrow(job.data.destBuildingId, 'destination building');
-        return this.moveToPosition(settler, building.x, building.y);
+        const { destBuildingId, material } = job.data;
+        const building = this.gameState.getEntityOrThrow(destBuildingId, 'destination building');
+        // Navigate to the input stack position if it exists, otherwise fall back to building center
+        const stackPos = this.inventoryVisualizer.getStackPosition(destBuildingId, material, 'input');
+        const targetX = stackPos?.x ?? building.x;
+        const targetY = stackPos?.y ?? building.y;
+        return this.moveToPosition(settler, targetX, targetY);
     }
 
     private executeDropoff(settler: Entity, job: JobState): TaskResult {
@@ -1099,6 +1129,10 @@ export class SettlerTaskSystem implements TickSystem {
         job.data.carryingGood = null;
 
         log.debug(`Carrier ${settler.id} delivered ${deposited} of ${material} to building ${destBuildingId}`);
+
+        // Add fatigue and reset carrier status
+        this.carrierManager.addFatigue(settler.id, FATIGUE_PER_DELIVERY);
+        this.carrierManager.setStatus(settler.id, CarrierStatus.Idle);
 
         // CRITICAL: Emit delivery complete event (used by LogisticsDispatcher)
         this.eventBus.emit('carrier:deliveryComplete', {

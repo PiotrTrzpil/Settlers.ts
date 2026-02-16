@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { canPlaceBuilding, canPlaceBuildingFootprint, computeSlopeDifficulty, PlacementStatus } from '@/game/features/placement';
+import {
+    canPlaceBuilding,
+    canPlaceBuildingFootprint,
+    computeSlopeDifficulty,
+    PlacementStatus,
+} from '@/game/features/placement';
 import { BuildingType } from '@/game/entity';
 import { createTestMap, TERRAIN, setTerrainAt, setHeightAt, type TestMap } from './helpers/test-map';
 
@@ -61,10 +66,17 @@ describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
     });
 
     it('should allow 2x2 building on flat terrain', () => {
-        expect(canPlaceBuildingFootprint(
-            map.groundType, map.groundHeight, map.mapSize, map.occupancy,
-            10, 10, BuildingType.WoodcutterHut
-        )).toBe(true);
+        expect(
+            canPlaceBuildingFootprint(
+                map.groundType,
+                map.groundHeight,
+                map.mapSize,
+                map.occupancy,
+                10,
+                10,
+                BuildingType.WoodcutterHut
+            )
+        ).toBe(true);
     });
 
     it('should allow 2x2 building with gradual slope across footprint', () => {
@@ -73,21 +85,41 @@ describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
         setHeightAt(map, 11, 10, 12);
         setHeightAt(map, 10, 11, 12);
         setHeightAt(map, 11, 11, 14);
-        expect(canPlaceBuildingFootprint(
-            map.groundType, map.groundHeight, map.mapSize, map.occupancy,
-            10, 10, BuildingType.WoodcutterHut
-        )).toBe(true);
+        expect(
+            canPlaceBuildingFootprint(
+                map.groundType,
+                map.groundHeight,
+                map.mapSize,
+                map.occupancy,
+                10,
+                10,
+                BuildingType.WoodcutterHut
+            )
+        ).toBe(true);
     });
 
     it('should allow 3x3 building with large total height range but per-tile gradients within limit', () => {
         // Total range is 8 (would fail old min/max check) but each tile differs by at most 4 from neighbors
-        setHeightAt(map, 10, 10, 0);  setHeightAt(map, 11, 10, 4);  setHeightAt(map, 12, 10, 8);
-        setHeightAt(map, 10, 11, 4);  setHeightAt(map, 11, 11, 8);  setHeightAt(map, 12, 11, 8);
-        setHeightAt(map, 10, 12, 8);  setHeightAt(map, 11, 12, 8);  setHeightAt(map, 12, 12, 8);
-        expect(canPlaceBuildingFootprint(
-            map.groundType, map.groundHeight, map.mapSize, map.occupancy,
-            10, 10, BuildingType.StorageArea
-        )).toBe(true);
+        setHeightAt(map, 10, 10, 0);
+        setHeightAt(map, 11, 10, 4);
+        setHeightAt(map, 12, 10, 8);
+        setHeightAt(map, 10, 11, 4);
+        setHeightAt(map, 11, 11, 8);
+        setHeightAt(map, 12, 11, 8);
+        setHeightAt(map, 10, 12, 8);
+        setHeightAt(map, 11, 12, 8);
+        setHeightAt(map, 12, 12, 8);
+        expect(
+            canPlaceBuildingFootprint(
+                map.groundType,
+                map.groundHeight,
+                map.mapSize,
+                map.occupancy,
+                10,
+                10,
+                BuildingType.StorageArea
+            )
+        ).toBe(true);
     });
 
     it('should reject building when adjacent tiles in footprint have steep slope', () => {
@@ -96,10 +128,122 @@ describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
         setHeightAt(map, 11, 10, 20); // diff = 10 from (10,10)
         setHeightAt(map, 10, 11, 10);
         setHeightAt(map, 11, 11, 10);
-        expect(canPlaceBuildingFootprint(
-            map.groundType, map.groundHeight, map.mapSize, map.occupancy,
-            10, 10, BuildingType.WoodcutterHut
-        )).toBe(false);
+        expect(
+            canPlaceBuildingFootprint(
+                map.groundType,
+                map.groundHeight,
+                map.mapSize,
+                map.occupancy,
+                10,
+                10,
+                BuildingType.WoodcutterHut
+            )
+        ).toBe(false);
+    });
+});
+
+describe('mine terrain restrictions', () => {
+    let map: TestMap;
+
+    beforeEach(() => {
+        map = createTestMap();
+    });
+
+    it('should reject mine on grass terrain', () => {
+        expect(
+            canPlaceBuildingFootprint(
+                map.groundType,
+                map.groundHeight,
+                map.mapSize,
+                map.occupancy,
+                10,
+                10,
+                BuildingType.CoalMine
+            )
+        ).toBe(false);
+    });
+
+    it('should allow mine on rock terrain', () => {
+        // Set 2x2 footprint to rock
+        setTerrainAt(map, 10, 10, TERRAIN.ROCK);
+        setTerrainAt(map, 11, 10, TERRAIN.ROCK);
+        setTerrainAt(map, 10, 11, TERRAIN.ROCK);
+        setTerrainAt(map, 11, 11, TERRAIN.ROCK);
+        expect(
+            canPlaceBuildingFootprint(
+                map.groundType,
+                map.groundHeight,
+                map.mapSize,
+                map.occupancy,
+                10,
+                10,
+                BuildingType.CoalMine
+            )
+        ).toBe(true);
+    });
+
+    it('should reject mine when only some tiles are rock', () => {
+        setTerrainAt(map, 10, 10, TERRAIN.ROCK);
+        // (11,10) remains grass
+        setTerrainAt(map, 10, 11, TERRAIN.ROCK);
+        setTerrainAt(map, 11, 11, TERRAIN.ROCK);
+        expect(
+            canPlaceBuildingFootprint(
+                map.groundType,
+                map.groundHeight,
+                map.mapSize,
+                map.occupancy,
+                10,
+                10,
+                BuildingType.CoalMine
+            )
+        ).toBe(false);
+    });
+
+    it('should reject non-mine building on rock terrain', () => {
+        setTerrainAt(map, 10, 10, TERRAIN.ROCK);
+        setTerrainAt(map, 11, 10, TERRAIN.ROCK);
+        setTerrainAt(map, 10, 11, TERRAIN.ROCK);
+        setTerrainAt(map, 11, 11, TERRAIN.ROCK);
+        expect(
+            canPlaceBuildingFootprint(
+                map.groundType,
+                map.groundHeight,
+                map.mapSize,
+                map.occupancy,
+                10,
+                10,
+                BuildingType.WoodcutterHut
+            )
+        ).toBe(false);
+    });
+
+    it('should apply restriction to all mine types', () => {
+        // Set rock for 2x2 footprint
+        setTerrainAt(map, 10, 10, TERRAIN.ROCK);
+        setTerrainAt(map, 11, 10, TERRAIN.ROCK);
+        setTerrainAt(map, 10, 11, TERRAIN.ROCK);
+        setTerrainAt(map, 11, 11, TERRAIN.ROCK);
+
+        for (const mineType of [
+            BuildingType.CoalMine,
+            BuildingType.IronMine,
+            BuildingType.GoldMine,
+            BuildingType.StoneMine,
+            BuildingType.SulfurMine,
+        ]) {
+            expect(
+                canPlaceBuildingFootprint(
+                    map.groundType,
+                    map.groundHeight,
+                    map.mapSize,
+                    map.occupancy,
+                    10,
+                    10,
+                    mineType
+                )
+            ).toBe(true);
+        }
     });
 });
 
@@ -111,7 +255,12 @@ describe('computeSlopeDifficulty', () => {
     });
 
     it('should return Easy for flat terrain', () => {
-        const tiles = [{ x: 10, y: 10 }, { x: 11, y: 10 }, { x: 10, y: 11 }, { x: 11, y: 11 }];
+        const tiles = [
+            { x: 10, y: 10 },
+            { x: 11, y: 10 },
+            { x: 10, y: 11 },
+            { x: 11, y: 11 },
+        ];
         expect(computeSlopeDifficulty(tiles, map.groundHeight, map.mapSize)).toBe(PlacementStatus.Easy);
     });
 
@@ -120,7 +269,12 @@ describe('computeSlopeDifficulty', () => {
         setHeightAt(map, 11, 10, 11);
         setHeightAt(map, 10, 11, 10);
         setHeightAt(map, 11, 11, 11);
-        const tiles = [{ x: 10, y: 10 }, { x: 11, y: 10 }, { x: 10, y: 11 }, { x: 11, y: 11 }];
+        const tiles = [
+            { x: 10, y: 10 },
+            { x: 11, y: 10 },
+            { x: 10, y: 11 },
+            { x: 11, y: 11 },
+        ];
         expect(computeSlopeDifficulty(tiles, map.groundHeight, map.mapSize)).toBe(PlacementStatus.Medium);
     });
 
@@ -129,7 +283,12 @@ describe('computeSlopeDifficulty', () => {
         setHeightAt(map, 11, 10, 18); // diff = 8
         setHeightAt(map, 10, 11, 10);
         setHeightAt(map, 11, 11, 18);
-        const tiles = [{ x: 10, y: 10 }, { x: 11, y: 10 }, { x: 10, y: 11 }, { x: 11, y: 11 }];
+        const tiles = [
+            { x: 10, y: 10 },
+            { x: 11, y: 10 },
+            { x: 10, y: 11 },
+            { x: 11, y: 11 },
+        ];
         expect(computeSlopeDifficulty(tiles, map.groundHeight, map.mapSize)).toBe(PlacementStatus.Difficult);
     });
 
@@ -138,7 +297,12 @@ describe('computeSlopeDifficulty', () => {
         setHeightAt(map, 11, 10, 20); // diff = 10 > 8
         setHeightAt(map, 10, 11, 10);
         setHeightAt(map, 11, 11, 10);
-        const tiles = [{ x: 10, y: 10 }, { x: 11, y: 10 }, { x: 10, y: 11 }, { x: 11, y: 11 }];
+        const tiles = [
+            { x: 10, y: 10 },
+            { x: 11, y: 10 },
+            { x: 10, y: 11 },
+            { x: 11, y: 11 },
+        ];
         expect(computeSlopeDifficulty(tiles, map.groundHeight, map.mapSize)).toBe(PlacementStatus.TooSteep);
     });
 });

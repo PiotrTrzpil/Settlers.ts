@@ -36,7 +36,7 @@ export {
 } from './placement-validator';
 
 // Terrain checks (needed by movement, pathfinding, etc.)
-export { isPassable, isBuildable } from './terrain';
+export { isPassable, isBuildable, isMineBuildable, isRock } from './terrain';
 
 // Slope utilities (for indicator renderer)
 export { MAX_SLOPE_DIFF, computeSlopeDifficulty, computeHeightRange } from './slope';

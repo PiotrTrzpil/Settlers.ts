@@ -19,7 +19,15 @@ export function isPassable(groundTypeValue: number): boolean {
 }
 
 /**
- * Check if a terrain type is buildable (buildings can be placed on it).
+ * Check if a terrain type is rock/mountain terrain.
+ * Rock terrain is only buildable by mines.
+ */
+export function isRock(groundTypeValue: number): boolean {
+    return groundTypeValue === 32;
+}
+
+/**
+ * Check if a terrain type is buildable for normal (non-mine) buildings.
  */
 export function isBuildable(groundTypeValue: number): boolean {
     if (!isPassable(groundTypeValue)) return false;
@@ -35,4 +43,12 @@ export function isBuildable(groundTypeValue: number): boolean {
     if (groundTypeValue >= 96 && groundTypeValue <= 99) return false;
     // Grass (16, 18, 24, 25), Desert (64, 65), paths (28, 29), transitions - buildable
     return true;
+}
+
+/**
+ * Check if a terrain type is buildable for mine buildings.
+ * Mines can only be placed on rock/mountain terrain.
+ */
+export function isMineBuildable(groundTypeValue: number): boolean {
+    return isRock(groundTypeValue);
 }

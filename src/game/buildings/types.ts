@@ -4,11 +4,7 @@
  */
 
 import type { TileCoord } from '../coordinates';
-import {
-    getGameDataLoader,
-    getBuildingFootprintAt,
-    type RaceId,
-} from '@/resources/game-data';
+import { getGameDataLoader, getBuildingFootprintAt, type RaceId } from '@/resources/game-data';
 
 export enum BuildingType {
     WoodcutterHut = 1,
@@ -52,6 +48,20 @@ export enum BuildingType {
     WinePress = 40,
     SiegeWorkshop = 41,
     LargeDecoration = 42,
+}
+
+/** All mine building types — must be placed on mountain/rock terrain. */
+const MINE_BUILDING_TYPES: ReadonlySet<BuildingType> = new Set([
+    BuildingType.CoalMine,
+    BuildingType.IronMine,
+    BuildingType.GoldMine,
+    BuildingType.StoneMine,
+    BuildingType.SulfurMine,
+]);
+
+/** Check if a building type is a mine (requires mountain terrain). */
+export function isMineBuilding(buildingType: BuildingType): boolean {
+    return MINE_BUILDING_TYPES.has(buildingType);
 }
 
 /**
@@ -262,7 +272,8 @@ function scaleFootprint(tiles: TileCoord[], scale: number): TileCoord[] {
     if (tiles.length === 0 || scale >= 1) return tiles;
 
     // Find center of footprint
-    let sumX = 0, sumY = 0;
+    let sumX = 0,
+        sumY = 0;
     for (const tile of tiles) {
         sumX += tile.x;
         sumY += tile.y;

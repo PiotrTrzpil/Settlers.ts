@@ -3,10 +3,10 @@
  * Validates building footprints including terrain, occupancy, and slope.
  */
 
-import { tileKey, getBuildingFootprint, type BuildingType } from '../../../entity';
+import { tileKey, getBuildingFootprint, type BuildingType, isMineBuilding } from '../../../entity';
 import type { PlacementContext, PlacementResult } from '../types';
 import { PlacementStatus } from '../types';
-import { isBuildable } from './terrain';
+import { isBuildable, isMineBuildable } from './terrain';
 import { computeSlopeDifficulty } from './slope';
 
 interface TileCoord {
@@ -18,21 +18,18 @@ interface TileCoord {
  * Check if footprint is within map bounds.
  */
 function isFootprintInBounds(footprint: TileCoord[], ctx: PlacementContext): boolean {
-    return footprint.every(t =>
-        t.x >= 0 && t.x < ctx.mapSize.width && t.y >= 0 && t.y < ctx.mapSize.height
-    );
+    return footprint.every(t => t.x >= 0 && t.x < ctx.mapSize.width && t.y >= 0 && t.y < ctx.mapSize.height);
 }
 
 /**
  * Check individual tile for basic placement requirements.
+ * Mines require rock/mountain terrain; all other buildings reject it.
  * Returns the blocking status or null if tile is OK.
  */
-function checkTileBasics(
-    tile: TileCoord,
-    ctx: PlacementContext
-): PlacementStatus | null {
+function checkTileBasics(tile: TileCoord, ctx: PlacementContext, isMine: boolean): PlacementStatus | null {
     const idx = ctx.mapSize.toIndex(tile.x, tile.y);
-    if (!isBuildable(ctx.groundType[idx])) return PlacementStatus.InvalidTerrain;
+    const terrainOk = isMine ? isMineBuildable(ctx.groundType[idx]) : isBuildable(ctx.groundType[idx]);
+    if (!terrainOk) return PlacementStatus.InvalidTerrain;
     if (ctx.tileOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
     return null;
 }
@@ -53,6 +50,7 @@ export function validateBuildingPlacement(
     ctx: PlacementContext
 ): PlacementResult {
     const footprint = getBuildingFootprint(x, y, buildingType);
+    const isMine = isMineBuilding(buildingType);
 
     // Check bounds
     if (!isFootprintInBounds(footprint, ctx)) {
@@ -61,7 +59,7 @@ export function validateBuildingPlacement(
 
     // Check each tile for terrain and occupancy
     for (const tile of footprint) {
-        const blockingStatus = checkTileBasics(tile, ctx);
+        const blockingStatus = checkTileBasics(tile, ctx, isMine);
         if (blockingStatus !== null) {
             return { canPlace: false, status: blockingStatus };
         }

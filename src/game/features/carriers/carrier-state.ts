@@ -1,9 +1,7 @@
 /**
  * Carrier state types for the logistics system.
- * Defines all types for tracking carrier state and jobs.
+ * Defines all types for tracking carrier state and status.
  */
-
-import { EMaterialType } from '../../economy';
 
 /**
  * Status of a carrier unit.
@@ -64,15 +62,10 @@ export function canAcceptNewJob(fatigue: number): boolean {
 }
 
 /**
- * Job types that a carrier can be assigned.
- */
-export type CarrierJob =
-    | { type: 'pickup'; fromBuilding: number; material: EMaterialType; amount: number }
-    | { type: 'deliver'; toBuilding: number; material: EMaterialType; amount: number }
-    | { type: 'return_home' };
-
-/**
  * State tracking for a carrier unit.
+ *
+ * Job execution state lives in SettlerTaskSystem (UnitRuntime.job).
+ * This type only tracks identity, fatigue, and status.
  *
  * Note: Material being carried is stored on entity.carrying (shared with all units).
  * Use entity.carrying.material and entity.carrying.amount to access carried material.
@@ -82,8 +75,6 @@ export interface CarrierState {
     entityId: number;
     /** Entity ID of the tavern this carrier is assigned to */
     homeBuilding: number;
-    /** Current job being executed (null if idle) */
-    currentJob: CarrierJob | null;
     /** Fatigue level (0 = fresh, 100 = exhausted) */
     fatigue: number;
     /** Current status of the carrier */
@@ -97,7 +88,6 @@ export function createCarrierState(entityId: number, homeBuilding: number): Carr
     return {
         entityId,
         homeBuilding,
-        currentJob: null,
         fatigue: 0,
         status: CarrierStatus.Idle,
     };

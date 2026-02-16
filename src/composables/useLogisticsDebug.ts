@@ -17,6 +17,11 @@ import type { CarrierManager } from '@/game/features/carriers/carrier-manager';
 import { EMaterialType } from '@/game/economy';
 import { EntityType, type Entity } from '@/game/entity';
 import { UnitType } from '@/game/unit-types';
+import {
+    diagnoseUnfulfilledRequest,
+    UNFULFILLED_REASON_LABELS,
+    type DiagnosticConfig,
+} from '@/game/features/logistics/fulfillment-diagnostics';
 
 /** Summary of a pending or in-progress request */
 export interface RequestSummary {
@@ -30,6 +35,8 @@ export interface RequestSummary {
     inProgress: boolean;
     carrierId: number | null;
     sourceBuildingId: number | null;
+    /** Why this pending request is not being fulfilled (null for in-progress requests) */
+    reason: string | null;
 }
 
 /** Summary of a carrier's current state */
@@ -207,8 +214,9 @@ function gatherRequests(
     requests: Iterable<ResourceRequest>,
     now: number,
     stats: LogisticsStats
-): { pending: RequestSummary[]; inProgress: RequestSummary[] } {
+): { pending: RequestSummary[]; rawPending: ResourceRequest[]; inProgress: RequestSummary[] } {
     const pending: RequestSummary[] = [];
+    const rawPending: ResourceRequest[] = [];
     const inProgress: RequestSummary[] = [];
 
     for (const request of requests) {
@@ -221,6 +229,7 @@ function gatherRequests(
             inProgress: request.assignedCarrier !== null,
             carrierId: request.assignedCarrier,
             sourceBuildingId: request.sourceBuilding,
+            reason: null,
         };
 
         if (request.assignedCarrier !== null) {
@@ -231,18 +240,23 @@ function gatherRequests(
             }
         } else if (request.status === RequestStatus.Pending) {
             pending.push(summary);
+            rawPending.push(request);
             stats.pendingCount++;
         }
     }
 
     // Sort pending by priority then age (oldest first)
-    pending.sort((a, b) => {
+    // Sort both arrays in parallel by creating index pairs
+    const indices = pending.map((_, i) => i);
+    indices.sort((a, b) => {
         const priorityOrder = { High: 0, Normal: 1, Low: 2 };
-        const pDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
-        return pDiff !== 0 ? pDiff : b.age - a.age;
+        const pDiff = priorityOrder[pending[a].priority] - priorityOrder[pending[b].priority];
+        return pDiff !== 0 ? pDiff : pending[b].age - pending[a].age;
     });
+    const sortedPending = indices.map(i => pending[i]);
+    const sortedRawPending = indices.map(i => rawPending[i]);
 
-    return { pending, inProgress };
+    return { pending: sortedPending, rawPending: sortedRawPending, inProgress };
 }
 
 function gatherCarriers(
@@ -265,8 +279,8 @@ function gatherCarriers(
             homeBuilding: carrier.homeBuilding,
             carryingMaterial: carrying ? formatMaterial(carrying.material) : null,
             carryingAmount: carrying?.amount ?? 0,
-            hasJob: carrier.currentJob !== null,
-            jobType: carrier.currentJob?.type ?? null,
+            hasJob: carrier.status !== CarrierStatus.Idle && carrier.status !== CarrierStatus.Resting,
+            jobType: null,
         });
 
         stats.carrierCount++;
@@ -353,7 +367,11 @@ export function useLogisticsDebug(getGame: () => Game | null): {
         const now = Date.now();
 
         // Gather requests
-        const { pending, inProgress } = gatherRequests(gameLoop.requestManager.getAllRequests(), now, stats);
+        const { pending, rawPending, inProgress } = gatherRequests(
+            gameLoop.requestManager.getAllRequests(),
+            now,
+            stats
+        );
 
         // Gather carriers
         const carriers = gatherCarriers(gameLoop.carrierManager.getAllCarriers(), id => gameState.getEntity(id), stats);
@@ -373,6 +391,20 @@ export function useLogisticsDebug(getGame: () => Game | null): {
 
         // Gather hubs
         const hubs = gatherHubs(gameLoop.serviceAreaManager.getAllServiceAreas(), gameLoop.carrierManager, stats);
+
+        // Diagnose why pending requests are unfulfilled (limit to displayed items to avoid perf issues)
+        const diagnosticConfig: DiagnosticConfig = {
+            gameState,
+            inventoryManager: gameLoop.inventoryManager,
+            serviceAreaManager: gameLoop.serviceAreaManager,
+            carrierManager: gameLoop.carrierManager,
+            reservationManager: gameLoop.logisticsDispatcher.getReservationManager(),
+        };
+        const diagnosticLimit = Math.min(rawPending.length, MAX_LIST_ITEMS);
+        for (let i = 0; i < diagnosticLimit; i++) {
+            const reason = diagnoseUnfulfilledRequest(rawPending[i], diagnosticConfig);
+            pending[i].reason = UNFULFILLED_REASON_LABELS[reason];
+        }
 
         state.value = {
             stats,

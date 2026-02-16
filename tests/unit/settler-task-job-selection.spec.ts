@@ -13,15 +13,21 @@ import { AnimationService } from '@/game/animation/animation-service';
 import { EntityType } from '@/game/entity';
 import { UnitType } from '@/game/unit-types';
 import { createTestContext, addUnit, type TestContext } from './helpers/test-game';
+import { CarrierManager } from '@/game/features/carriers';
 
 /** Helper: create a SettlerTaskSystem wired to a TestContext */
 function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
     const animationService = new AnimationService();
+    const carrierManager = new CarrierManager({
+        entityProvider: ctx.state,
+        eventBus: ctx.eventBus,
+    });
     const config: SettlerTaskSystemConfig = {
         gameState: ctx.state,
         animationService,
         inventoryManager: ctx.inventoryManager,
         eventBus: ctx.eventBus,
+        carrierManager,
     };
     return new SettlerTaskSystem(config);
 }

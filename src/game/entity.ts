@@ -19,7 +19,7 @@ export type { ProductionState } from './systems/production-system';
 export type { BuildingState } from './features/building-construction/types';
 
 /** Carrier job/status state - see CarrierManager */
-export type { CarrierState, CarrierStatus, CarrierJob } from './features/carriers/carrier-state';
+export type { CarrierState, CarrierStatus } from './features/carriers/carrier-state';
 
 /** Material carrying state - used by any unit that can carry materials */
 import type { EMaterialType } from './economy';
@@ -60,6 +60,7 @@ export {
     getBuildingFootprint,
     getBuildingHotspot,
     getBuildingXmlId,
+    isMineBuilding,
 } from './buildings';
 
 // Unit types and configuration

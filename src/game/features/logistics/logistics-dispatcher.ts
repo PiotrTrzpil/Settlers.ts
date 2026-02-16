@@ -13,21 +13,22 @@
 import type { TickSystem } from '../../tick-system';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import type { GameState } from '../../game-state';
-import type { CarrierSystem } from '../carriers';
+import type { CarrierManager } from '../carriers';
 import type { RequestManager } from './request-manager';
 import type { ServiceAreaManager } from '../service-areas';
 import { getHubsServingBothPositions, getHubsServingPosition } from '../service-areas/service-area-queries';
 import { matchRequestToSupply } from './fulfillment-matcher';
 import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
-import { canAcceptNewJob } from '../carriers';
 import { LogHandler } from '@/utilities/log-handler';
 import type { BuildingInventoryManager } from '../inventory';
+import type { SettlerTaskSystem } from '../../systems/settler-tasks';
 
 /** Configuration for LogisticsDispatcher dependencies */
 export interface LogisticsDispatcherConfig {
     gameState: GameState;
-    carrierSystem: CarrierSystem;
+    carrierManager: CarrierManager;
+    settlerTaskSystem: SettlerTaskSystem;
     requestManager: RequestManager;
     serviceAreaManager: ServiceAreaManager;
     inventoryManager: BuildingInventoryManager;
@@ -57,7 +58,8 @@ export class LogisticsDispatcher implements TickSystem {
     private static log = new LogHandler('LogisticsDispatcher');
 
     private readonly gameState: GameState;
-    private readonly carrierSystem: CarrierSystem;
+    private readonly carrierManager: CarrierManager;
+    private readonly settlerTaskSystem: SettlerTaskSystem;
     private readonly requestManager: RequestManager;
     private readonly serviceAreaManager: ServiceAreaManager;
     private readonly inventoryManager: BuildingInventoryManager;
@@ -80,7 +82,8 @@ export class LogisticsDispatcher implements TickSystem {
 
     constructor(config: LogisticsDispatcherConfig) {
         this.gameState = config.gameState;
-        this.carrierSystem = config.carrierSystem;
+        this.carrierManager = config.carrierManager;
+        this.settlerTaskSystem = config.settlerTaskSystem;
         this.requestManager = config.requestManager;
         this.serviceAreaManager = config.serviceAreaManager;
         this.inventoryManager = config.inventoryManager;
@@ -237,13 +240,15 @@ export class LogisticsDispatcher implements TickSystem {
                 request.id
             );
 
-            // Assign the delivery job to the carrier
-            const success = this.carrierSystem.assignDeliveryJob(
+            // Assign the delivery job to the carrier via SettlerTaskSystem
+            const carrierState = this.carrierManager.getCarrierOrThrow(carrier.entityId, 'for delivery assignment');
+            const success = this.settlerTaskSystem.assignCarrierJob(
                 carrier.entityId,
                 match.sourceBuilding,
                 request.buildingId,
                 request.materialType,
-                match.amount
+                match.amount,
+                carrierState.homeBuilding
             );
 
             if (success) {
@@ -295,21 +300,14 @@ export class LogisticsDispatcher implements TickSystem {
         }
 
         // Find an available carrier whose home is one of the valid hubs
-        const carrierManager = this.carrierSystem.getCarrierManager();
-
-        for (const carrier of carrierManager.getAllCarriers()) {
+        for (const carrier of this.carrierManager.getAllCarriers()) {
             // Carrier's home must be a hub that serves both buildings
             if (!validHubs.has(carrier.homeBuilding)) {
                 continue;
             }
 
-            // Must be able to accept new jobs (not exhausted/collapsed)
-            if (!canAcceptNewJob(carrier.fatigue)) {
-                continue;
-            }
-
-            // Carrier must not already have a job
-            if (carrier.currentJob !== null) {
+            // Must be able to accept new jobs (idle, not exhausted/collapsed)
+            if (!this.carrierManager.canAssignJobTo(carrier.entityId)) {
                 continue;
             }
 

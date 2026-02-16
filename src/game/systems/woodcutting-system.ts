@@ -6,12 +6,12 @@
  */
 
 import type { GameState } from '../game-state';
-import type { MapObjectType } from '../entity';
+import { EntityType, type MapObjectType } from '../entity';
 import { OBJECT_TYPE_CATEGORY } from './map-objects';
 import { LogHandler } from '@/utilities/log-handler';
 import { TreeSystem } from './tree-system';
 import { SettlerTaskSystem, SearchType, type WorkHandler } from './settler-tasks';
-import { findNearestMapObject } from './resource-harvesting';
+import { findNearestEntity } from './spatial-search';
 
 const log = new LogHandler('WoodcuttingSystem');
 
@@ -36,7 +36,8 @@ export class WoodcuttingSystem {
     private createWorkHandler(gameState: GameState): WorkHandler {
         return {
             findTarget: (x: number, y: number) => {
-                return findNearestMapObject(gameState, x, y, SEARCH_RADIUS, entity => {
+                return findNearestEntity(gameState, x, y, SEARCH_RADIUS, entity => {
+                    if (entity.type !== EntityType.MapObject) return false;
                     const category = OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType];
                     return category === 'trees' && this.treeSystem.canCut(entity.id);
                 });

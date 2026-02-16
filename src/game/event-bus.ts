@@ -9,7 +9,6 @@
 import type { BuildingState } from './features/building-construction';
 import type { BuildingType } from './buildings/types';
 import type { UnitType } from './unit-types';
-import type { CarrierJob } from './features/carriers';
 import type { BuildingCleanupResult } from './features/logistics/logistics-dispatcher';
 import type { EMaterialType } from './economy';
 import type { RequestPriority } from './features/logistics';
@@ -75,18 +74,6 @@ export interface GameEvents {
         homeBuilding: number;
         /** True if carrier was removed while on a job */
         hadActiveJob: boolean;
-    };
-
-    /** Emitted when a job is assigned to a carrier */
-    'carrier:jobAssigned': {
-        entityId: number;
-        job: CarrierJob;
-    };
-
-    /** Emitted when a carrier completes their current job */
-    'carrier:jobCompleted': {
-        entityId: number;
-        completedJob: CarrierJob;
     };
 
     /** Emitted when a carrier's status changes */

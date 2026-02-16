@@ -134,7 +134,8 @@ export {
 // ============================================================================
 export { WoodcuttingSystem } from './woodcutting-system';
 export { StonecuttingSystem } from './stonecutting-system';
-export { findNearestMapObject, createSimpleHarvestHandler, type SimpleHarvestConfig } from './resource-harvesting';
+export { createSimpleHarvestHandler, type SimpleHarvestConfig } from './resource-harvesting';
+export { findNearestEntity, findEmptySpot, ringTiles, type FindEmptySpotConfig } from './spatial-search';
 
 // ============================================================================
 // Settler Tasks (re-exports from settler-tasks/)

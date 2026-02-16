@@ -13,4 +13,5 @@ export {
     getBuildingFootprint,
     getBuildingHotspot,
     getBuildingXmlId,
+    isMineBuilding,
 } from './types';

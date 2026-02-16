@@ -19,6 +19,7 @@ import { EntityType, MapObjectType } from '../entity';
 import { OBJECT_TYPE_CATEGORY } from './map-objects';
 import type { AnimationService } from '../animation/index';
 import { SettlerTaskSystem, SearchType, type WorkHandler } from './settler-tasks';
+import { findEmptySpot } from './spatial-search';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('TreeSystem');
@@ -337,38 +338,14 @@ export class TreeSystem implements TickSystem {
     }
 
     private findPlantingSpot(cx: number, cy: number): { entityId: number | null; x: number; y: number } | null {
-        for (let radius = 2; radius <= PLANTING_SEARCH_RADIUS; radius++) {
-            for (let dy = -radius; dy <= radius; dy++) {
-                for (let dx = -radius; dx <= radius; dx++) {
-                    if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-
-                    const x = cx + dx;
-                    const y = cy + dy;
-                    if (x < 0 || y < 0) continue;
-
-                    // Tile must be empty
-                    if (this.gameState.getEntityAt(x, y)) continue;
-
-                    // Must not be too close to existing trees
-                    if (this.isTooCloseToTree(x, y)) continue;
-
-                    return { entityId: null, x, y };
-                }
-            }
-        }
-        return null;
-    }
-
-    private isTooCloseToTree(x: number, y: number): boolean {
-        for (const entity of this.gameState.entities) {
-            if (entity.type !== EntityType.MapObject) continue;
-            if (OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType] !== 'trees') continue;
-
-            const dx = entity.x - x;
-            const dy = entity.y - y;
-            if (dx * dx + dy * dy < MIN_TREE_DISTANCE_SQ) return true;
-        }
-        return false;
+        return findEmptySpot(cx, cy, {
+            gameState: this.gameState,
+            searchRadius: PLANTING_SEARCH_RADIUS,
+            minDistanceSq: MIN_TREE_DISTANCE_SQ,
+            proximityFilter: entity =>
+                entity.type === EntityType.MapObject &&
+                OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType] === 'trees',
+        });
     }
 
     /**

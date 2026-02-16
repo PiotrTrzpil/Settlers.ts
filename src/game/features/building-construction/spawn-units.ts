@@ -14,6 +14,7 @@ import { EntityType, tileKey } from '../../entity';
 import { BuildingType } from '../../buildings/types';
 import { UnitType, BUILDING_UNIT_TYPE } from '../../unit-types';
 import { isPassable } from '../placement';
+import { ringTiles } from '../../systems/spatial-search';
 import type { BuildingState, BuildingSpawnConfig } from './types';
 import { gameSettings } from '../../game-settings';
 
@@ -48,19 +49,6 @@ function isValidSpawnTile(state: GameState, ctx: SpawnContext, x: number, y: num
 }
 
 /**
- * Generate ring perimeter tiles (only the edge of a square ring).
- */
-function* getRingTiles(cx: number, cy: number, radius: number): Generator<{ x: number; y: number }> {
-    for (let dy = -radius; dy <= radius; dy++) {
-        for (let dx = -radius; dx <= radius; dx++) {
-            if (Math.abs(dx) === radius || Math.abs(dy) === radius) {
-                yield { x: cx + dx, y: cy + dy };
-            }
-        }
-    }
-}
-
-/**
  * Spawn units around a building on valid tiles.
  */
 function spawnUnitsAroundBuilding(
@@ -74,7 +62,7 @@ function spawnUnitsAroundBuilding(
 ): void {
     let spawned = 0;
     for (let radius = 1; radius <= 4 && spawned < spawnDef.count; radius++) {
-        for (const tile of getRingTiles(bx, by, radius)) {
+        for (const tile of ringTiles(bx, by, radius)) {
             if (spawned >= spawnDef.count) break;
             if (!isValidSpawnTile(state, spawnCtx, tile.x, tile.y)) continue;
 

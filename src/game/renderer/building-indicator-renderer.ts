@@ -1,8 +1,15 @@
 import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
-import { TileCoord, tileKey, BuildingType, getBuildingFootprint } from '../entity';
-import { isBuildable, PlacementStatus, computeSlopeDifficulty, computeHeightRange, MAX_SLOPE_DIFF } from '../features/placement';
+import { TileCoord, tileKey, BuildingType, getBuildingFootprint, isMineBuilding } from '../entity';
+import {
+    isBuildable,
+    isMineBuildable,
+    PlacementStatus,
+    computeSlopeDifficulty,
+    computeHeightRange,
+    MAX_SLOPE_DIFF,
+} from '../features/placement';
 import { ShaderProgram } from './shader-program';
 
 import vertCode from './shaders/entity-vert.glsl';
@@ -15,9 +22,9 @@ export { PlacementStatus } from '../features/placement';
  * Color mapping for non-buildable statuses (RGBA, 0-1 range).
  */
 const UNBUILDABLE_COLORS: Record<number, number[]> = {
-    [PlacementStatus.InvalidTerrain]: [0.3, 0.0, 0.0, 0.9],     // Very dark red - can't build
-    [PlacementStatus.Occupied]: [0.4, 0.0, 0.1, 0.9],           // Dark red - occupied
-    [PlacementStatus.TooSteep]: [0.5, 0.0, 0.1, 0.9],           // Dark cherry - too steep
+    [PlacementStatus.InvalidTerrain]: [0.3, 0.0, 0.0, 0.9], // Very dark red - can't build
+    [PlacementStatus.Occupied]: [0.4, 0.0, 0.1, 0.9], // Dark red - occupied
+    [PlacementStatus.TooSteep]: [0.5, 0.0, 0.1, 0.9], // Dark cherry - too steep
 };
 
 /**
@@ -25,16 +32,16 @@ const UNBUILDABLE_COLORS: Record<number, number[]> = {
  * Index 0 = flattest (deep green), Index 9 = steepest buildable (deep cherry/red).
  */
 const SLOPE_GRADIENT: number[][] = [
-    [0.0, 0.5, 0.1, 0.9],   // 0: Deep forest green - perfectly flat
-    [0.0, 0.7, 0.1, 0.9],   // 1: Dark green
-    [0.2, 0.8, 0.1, 0.9],   // 2: Green
-    [0.4, 0.8, 0.0, 0.9],   // 3: Yellow-green
-    [0.6, 0.7, 0.0, 0.9],   // 4: Olive/yellow
-    [0.8, 0.6, 0.0, 0.9],   // 5: Gold/orange
-    [0.9, 0.4, 0.0, 0.9],   // 6: Orange
-    [0.9, 0.2, 0.1, 0.9],   // 7: Red-orange
-    [0.8, 0.1, 0.1, 0.9],   // 8: Red
-    [0.6, 0.0, 0.15, 0.9],  // 9: Deep cherry - steepest buildable
+    [0.0, 0.5, 0.1, 0.9], // 0: Deep forest green - perfectly flat
+    [0.0, 0.7, 0.1, 0.9], // 1: Dark green
+    [0.2, 0.8, 0.1, 0.9], // 2: Green
+    [0.4, 0.8, 0.0, 0.9], // 3: Yellow-green
+    [0.6, 0.7, 0.0, 0.9], // 4: Olive/yellow
+    [0.8, 0.6, 0.0, 0.9], // 5: Gold/orange
+    [0.9, 0.4, 0.0, 0.9], // 6: Orange
+    [0.9, 0.2, 0.1, 0.9], // 7: Red-orange
+    [0.8, 0.1, 0.1, 0.9], // 8: Red
+    [0.6, 0.0, 0.15, 0.9], // 9: Deep cherry - steepest buildable
 ];
 
 /** Legacy STATUS_COLORS for compatibility with tests */
@@ -66,9 +73,7 @@ const FLOATS_PER_INDICATOR = 6 * 8; // 6 vertices, 8 floats each (offsetX, offse
  * Invalid tiles (terrain, occupied, steep) show NO indicator.
  */
 export function isBuildableStatus(status: PlacementStatus): boolean {
-    return status === PlacementStatus.Easy ||
-           status === PlacementStatus.Medium ||
-           status === PlacementStatus.Difficult;
+    return status === PlacementStatus.Easy || status === PlacementStatus.Medium || status === PlacementStatus.Difficult;
 }
 
 /**
@@ -120,11 +125,7 @@ export class BuildingIndicatorRenderer {
     // External dependencies
     public tileOccupancy: Map<string, number> = new Map();
 
-    constructor(
-        mapSize: MapSize,
-        groundType: Uint8Array,
-        groundHeight: Uint8Array
-    ) {
+    constructor(mapSize: MapSize, groundType: Uint8Array, groundHeight: Uint8Array) {
         this.mapSize = mapSize;
         this.groundType = groundType;
         this.groundHeight = groundHeight;
@@ -166,15 +167,14 @@ export class BuildingIndicatorRenderer {
 
     /** Check if footprint is within map bounds */
     private isFootprintInBounds(footprint: TileCoord[]): boolean {
-        return footprint.every(t =>
-            t.x >= 0 && t.x < this.mapSize.width && t.y >= 0 && t.y < this.mapSize.height
-        );
+        return footprint.every(t => t.x >= 0 && t.x < this.mapSize.width && t.y >= 0 && t.y < this.mapSize.height);
     }
 
     /** Check individual tile for basic placement requirements */
-    private checkTileBasics(tile: TileCoord): PlacementStatus | null {
+    private checkTileBasics(tile: TileCoord, isMine: boolean): PlacementStatus | null {
         const idx = this.mapSize.toIndex(tile.x, tile.y);
-        if (!isBuildable(this.groundType[idx])) return PlacementStatus.InvalidTerrain;
+        const terrainOk = isMine ? isMineBuildable(this.groundType[idx]) : isBuildable(this.groundType[idx]);
+        if (!terrainOk) return PlacementStatus.InvalidTerrain;
         if (this.tileOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
         return null;
     }
@@ -192,11 +192,12 @@ export class BuildingIndicatorRenderer {
         if (this.buildingType === null) return PlacementStatus.InvalidTerrain;
 
         const footprint = getBuildingFootprint(x, y, this.buildingType);
+        const isMine = isMineBuilding(this.buildingType);
 
         if (!this.isFootprintInBounds(footprint)) return PlacementStatus.InvalidTerrain;
 
         for (const tile of footprint) {
-            const issue = this.checkTileBasics(tile);
+            const issue = this.checkTileBasics(tile, isMine);
             if (issue !== null) return issue;
         }
 
@@ -207,13 +208,10 @@ export class BuildingIndicatorRenderer {
      * Check if cache is still valid.
      */
     private isCacheValid(viewPoint: IViewPoint): boolean {
-        const viewDist = Math.abs(viewPoint.x - this.cacheViewX) +
-                        Math.abs(viewPoint.y - this.cacheViewY);
+        const viewDist = Math.abs(viewPoint.x - this.cacheViewX) + Math.abs(viewPoint.y - this.cacheViewY);
         const zoomDiff = Math.abs(viewPoint.zoom - this.cacheZoom);
 
-        return viewDist < 5 &&
-               zoomDiff < 0.01 &&
-               this.buildingType === this.cacheBuildingType;
+        return viewDist < 5 && zoomDiff < 0.01 && this.buildingType === this.cacheBuildingType;
     }
 
     /**
@@ -244,9 +242,8 @@ export class BuildingIndicatorRenderer {
                 // Only store buildable tiles (skip invalid ones entirely)
                 if (isBuildableStatus(status)) {
                     // Compute height range for gradient color
-                    const footprint = this.buildingType !== null
-                        ? getBuildingFootprint(x, y, this.buildingType)
-                        : [{ x, y }];
+                    const footprint =
+                        this.buildingType !== null ? getBuildingFootprint(x, y, this.buildingType) : [{ x, y }];
                     const heightRange = computeHeightRange(footprint, this.groundHeight, this.mapSize);
                     this.indicatorCache.push({ x, y, status, heightRange });
                 }
@@ -263,11 +260,7 @@ export class BuildingIndicatorRenderer {
     /**
      * Draw building placement indicators using batched rendering.
      */
-    public draw(
-        gl: WebGL2RenderingContext,
-        projection: Float32Array,
-        viewPoint: IViewPoint
-    ): void {
+    public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         if (!this.enabled || !this.shaderProgram || !this.dynamicBuffer) {
             return;
         }
@@ -293,15 +286,9 @@ export class BuildingIndicatorRenderer {
 
             const { x, y } = indicator;
 
-            const isHovered = this.hoveredTile &&
-                              this.hoveredTile.x === x &&
-                              this.hoveredTile.y === y;
+            const isHovered = this.hoveredTile && this.hoveredTile.x === x && this.hoveredTile.y === y;
 
-            const worldPos = TilePicker.tileToWorld(
-                x, y,
-                this.groundHeight, this.mapSize,
-                viewPoint.x, viewPoint.y
-            );
+            const worldPos = TilePicker.tileToWorld(x, y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
 
             const color = isHovered ? HOVER_COLOR : getGradientColor(indicator.heightRange);
             const scale = isHovered ? HOVER_DOT_SCALE : INDICATOR_DOT_SCALE;
@@ -318,7 +305,11 @@ export class BuildingIndicatorRenderer {
 
         // Upload and draw all indicators in one call
         gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, this.batchBuffer.subarray(0, this.batchCount * FLOATS_PER_INDICATOR), gl.DYNAMIC_DRAW);
+        gl.bufferData(
+            gl.ARRAY_BUFFER,
+            this.batchBuffer.subarray(0, this.batchCount * FLOATS_PER_INDICATOR),
+            gl.DYNAMIC_DRAW
+        );
 
         const stride = 8 * 4; // 8 floats per vertex
 
@@ -352,12 +343,18 @@ export class BuildingIndicatorRenderer {
         // Shader multiplies offsets by 0.4, so we compensate by dividing halfScale
         const adjHalfScale = halfScale / 0.4;
         const quadOffsets = [
-            -adjHalfScale, -adjHalfScale,
-            adjHalfScale, -adjHalfScale,
-            -adjHalfScale, adjHalfScale,
-            -adjHalfScale, adjHalfScale,
-            adjHalfScale, -adjHalfScale,
-            adjHalfScale, adjHalfScale,
+            -adjHalfScale,
+            -adjHalfScale,
+            adjHalfScale,
+            -adjHalfScale,
+            -adjHalfScale,
+            adjHalfScale,
+            -adjHalfScale,
+            adjHalfScale,
+            adjHalfScale,
+            -adjHalfScale,
+            adjHalfScale,
+            adjHalfScale,
         ];
 
         for (let i = 0; i < 6; i++) {

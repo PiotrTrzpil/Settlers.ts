@@ -10,9 +10,7 @@ import {
     FATIGUE_THRESHOLDS,
     getFatigueLevel,
     canAcceptNewJob,
-    type CarrierJob,
 } from '@/game/features/carriers';
-import { EMaterialType } from '@/game/economy';
 import { EventBus } from '@/game/event-bus';
 import { MockEntityProvider } from '../helpers/mock-entity-provider';
 
@@ -40,7 +38,6 @@ describe('CarrierManager', () => {
 
             expect(carrier.entityId).toBe(1);
             expect(carrier.homeBuilding).toBe(100);
-            expect(carrier.currentJob).toBeNull();
             expect(carrier.fatigue).toBe(0);
             expect(carrier.status).toBe(CarrierStatus.Idle);
             // carryingMaterial/carryingAmount moved to entity.carrying
@@ -137,14 +134,13 @@ describe('CarrierManager', () => {
     });
 
     describe('getAvailableCarriers', () => {
-        it('should return only idle carriers without jobs and low fatigue', () => {
+        it('should return only idle carriers with low fatigue', () => {
             manager.createCarrier(1, 100); // Will remain idle (available)
             const carrier2 = manager.createCarrier(2, 100);
             const carrier3 = manager.createCarrier(3, 100);
 
-            // carrier2 is walking (has job)
+            // carrier2 is walking
             carrier2.status = CarrierStatus.Walking;
-            carrier2.currentJob = { type: 'pickup', fromBuilding: 200, material: EMaterialType.LOG, amount: 1 };
 
             // carrier3 is resting
             carrier3.status = CarrierStatus.Resting;
@@ -158,7 +154,6 @@ describe('CarrierManager', () => {
         it('should return empty array when all carriers are busy', () => {
             const carrier = manager.createCarrier(1, 100);
             carrier.status = CarrierStatus.Walking;
-            carrier.currentJob = { type: 'return_home' };
 
             const available = manager.getAvailableCarriers(100);
             expect(available).toHaveLength(0);
@@ -199,17 +194,6 @@ describe('CarrierManager', () => {
     });
 
     describe('getBusyCarriers', () => {
-        it('should return carriers with active jobs', () => {
-            manager.createCarrier(1, 100); // Idle
-            const carrier2 = manager.createCarrier(2, 100);
-            carrier2.currentJob = { type: 'return_home' };
-
-            const busy = manager.getBusyCarriers(100);
-
-            expect(busy).toHaveLength(1);
-            expect(busy[0].entityId).toBe(2);
-        });
-
         it('should return carriers that are not idle', () => {
             manager.createCarrier(1, 100); // Idle
             const carrier2 = manager.createCarrier(2, 100);
@@ -223,24 +207,17 @@ describe('CarrierManager', () => {
     });
 
     // ---------------------------------------------------------------------------
-    // Job Assignment
+    // Carrier Availability
     // ---------------------------------------------------------------------------
 
     describe('canAssignJobTo', () => {
-        it('should return true for idle carrier with no job and low fatigue', () => {
+        it('should return true for idle carrier with low fatigue', () => {
             manager.createCarrier(1, 100);
             expect(manager.canAssignJobTo(1)).toBe(true);
         });
 
         it('should return false for non-existent carrier', () => {
             expect(manager.canAssignJobTo(999)).toBe(false);
-        });
-
-        it('should return false for carrier with job', () => {
-            const carrier = manager.createCarrier(1, 100);
-            carrier.currentJob = { type: 'return_home' };
-
-            expect(manager.canAssignJobTo(1)).toBe(false);
         });
 
         it('should return false for non-idle carrier', () => {
@@ -262,115 +239,6 @@ describe('CarrierManager', () => {
             carrier.fatigue = FATIGUE_THRESHOLDS[FatigueLevel.Tired];
 
             expect(manager.canAssignJobTo(1)).toBe(true);
-        });
-    });
-
-    describe('assignJob', () => {
-        it('should assign pickup job to idle carrier', () => {
-            manager.createCarrier(1, 100);
-
-            const job: CarrierJob = {
-                type: 'pickup',
-                fromBuilding: 200,
-                material: EMaterialType.LOG,
-                amount: 1,
-            };
-
-            const assigned = manager.assignJob(1, job);
-
-            expect(assigned).toBe(true);
-            const carrier = manager.getCarrier(1)!;
-            expect(carrier.currentJob).toEqual(job);
-            // Note: assignJob does NOT change status - caller controls status
-            expect(carrier.status).toBe(CarrierStatus.Idle);
-        });
-
-        it('should assign deliver job to idle carrier', () => {
-            manager.createCarrier(1, 100);
-
-            const job: CarrierJob = {
-                type: 'deliver',
-                toBuilding: 300,
-                material: EMaterialType.BOARD,
-                amount: 2,
-            };
-
-            const assigned = manager.assignJob(1, job);
-
-            expect(assigned).toBe(true);
-            const carrier = manager.getCarrier(1)!;
-            expect(carrier.currentJob).toEqual(job);
-        });
-
-        it('should assign return_home job', () => {
-            manager.createCarrier(1, 100);
-
-            const job: CarrierJob = { type: 'return_home' };
-
-            const assigned = manager.assignJob(1, job);
-
-            expect(assigned).toBe(true);
-            const carrier = manager.getCarrier(1)!;
-            expect(carrier.currentJob).toEqual(job);
-        });
-
-        it('should not assign job to non-existent carrier', () => {
-            const assigned = manager.assignJob(999, { type: 'return_home' });
-            expect(assigned).toBe(false);
-        });
-
-        it('should not assign job to carrier that already has a job', () => {
-            const carrier = manager.createCarrier(1, 100);
-            carrier.currentJob = { type: 'return_home' };
-            carrier.status = CarrierStatus.Walking;
-
-            const assigned = manager.assignJob(1, {
-                type: 'pickup',
-                fromBuilding: 200,
-                material: EMaterialType.LOG,
-                amount: 1,
-            });
-
-            expect(assigned).toBe(false);
-        });
-
-        it('should not assign job to non-idle carrier', () => {
-            const carrier = manager.createCarrier(1, 100);
-            carrier.status = CarrierStatus.Resting;
-
-            const assigned = manager.assignJob(1, { type: 'return_home' });
-
-            expect(assigned).toBe(false);
-        });
-
-        it('should not assign job to exhausted carrier', () => {
-            const carrier = manager.createCarrier(1, 100);
-            carrier.fatigue = FATIGUE_THRESHOLDS[FatigueLevel.Exhausted];
-
-            const assigned = manager.assignJob(1, { type: 'return_home' });
-
-            expect(assigned).toBe(false);
-        });
-    });
-
-    describe('completeJob', () => {
-        it('should complete a job and return the completed job', () => {
-            const carrier = manager.createCarrier(1, 100);
-            const job: CarrierJob = { type: 'return_home' };
-            carrier.currentJob = job;
-
-            const completedJob = manager.completeJob(1);
-
-            expect(completedJob).toEqual(job);
-            expect(carrier.currentJob).toBeNull();
-            // Note: completeJob does NOT change status - caller controls status
-        });
-
-        it('should return null for carrier without job', () => {
-            manager.createCarrier(1, 100);
-
-            const completed = manager.completeJob(1);
-            expect(completed).toBeNull();
         });
     });
 
@@ -476,9 +344,9 @@ describe('CarrierManager', () => {
             expect(carrier.homeBuilding).toBe(100);
         });
 
-        it('should prevent reassignment when carrier has active job', () => {
+        it('should prevent reassignment when carrier is not idle', () => {
             const carrier = manager.createCarrier(1, 100);
-            carrier.currentJob = { type: 'return_home' };
+            carrier.status = CarrierStatus.Walking;
 
             const result = manager.reassignToTavern(1, 200);
 
@@ -584,7 +452,6 @@ describe('CarrierManager', () => {
     describe('error handling', () => {
         it('should throw when operating on non-existent carrier', () => {
             // All mutation methods should throw for entities without carrier state
-            expect(() => manager.completeJob(999)).toThrow(/is not a carrier/);
             expect(() => manager.setStatus(999, CarrierStatus.Walking)).toThrow(/is not a carrier/);
             expect(() => manager.setFatigue(999, 50)).toThrow(/is not a carrier/);
             expect(() => manager.addFatigue(999, 10)).toThrow(/is not a carrier/);

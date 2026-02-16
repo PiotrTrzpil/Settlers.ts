@@ -13,6 +13,7 @@ import {
 } from './entity';
 import { getWorkerWorkplaces } from './unit-types';
 import { EMaterialType } from './economy';
+import { findNearestEntity } from './systems/spatial-search';
 import { MovementSystem, MovementController } from './systems/movement/index';
 import { SeededRng, createGameRng } from './rng';
 import { EventBus } from './event-bus';
@@ -362,25 +363,18 @@ export class GameState {
             return null;
         }
 
-        let nearest: Entity | null = null;
-        let nearestDistSq = Infinity;
+        const result = findNearestEntity(
+            this,
+            settler.x,
+            settler.y,
+            Infinity,
+            entity =>
+                entity.type === EntityType.Building &&
+                workplaceTypes.has(entity.subType as BuildingType) &&
+                entity.player === settler.player
+        );
 
-        for (const entity of this.entities) {
-            if (entity.type !== EntityType.Building) continue;
-            if (!workplaceTypes.has(entity.subType as BuildingType)) continue;
-            if (entity.player !== settler.player) continue;
-
-            const dx = entity.x - settler.x;
-            const dy = entity.y - settler.y;
-            const distSq = dx * dx + dy * dy;
-
-            if (distSq < nearestDistSq) {
-                nearestDistSq = distSq;
-                nearest = entity;
-            }
-        }
-
-        return nearest;
+        return result ? this.getEntity(result.entityId)! : null;
     }
 
     /** Update occupancy when an entity moves */
@@ -492,29 +486,18 @@ export class GameState {
      * Find the nearest stacked resource of a specific material type within a radius.
      * Excludes resources that belong to a building (have buildingId set).
      */
+    /**
+     * Find the nearest free stacked resource of the given material type.
+     * Delegates to findNearestEntity with a filter for stacked resources.
+     */
     public findNearestResource(x: number, y: number, materialType: EMaterialType, radius: number): Entity | undefined {
-        let nearest: Entity | undefined;
-        let nearestDist = Infinity;
-
-        for (const entity of this.entities) {
-            if (entity.type !== EntityType.StackedResource) continue;
-            if (entity.subType !== materialType) continue;
-
-            // Skip resources that belong to a building's inventory visualization
+        const result = findNearestEntity(this, x, y, radius, entity => {
+            if (entity.type !== EntityType.StackedResource) return false;
+            if (entity.subType !== materialType) return false;
             const state = this.resourceStates.get(entity.id);
-            if (state?.buildingId !== undefined) continue;
-
-            const dx = entity.x - x;
-            const dy = entity.y - y;
-            const dist = dx * dx + dy * dy;
-
-            if (dist <= radius * radius && dist < nearestDist) {
-                nearest = entity;
-                nearestDist = dist;
-            }
-        }
-
-        return nearest;
+            return state?.buildingId === undefined;
+        });
+        return result ? this.getEntity(result.entityId) : undefined;
     }
 
     /**

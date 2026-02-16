@@ -1,7 +1,7 @@
 /**
  * Shared utilities for resource harvesting systems.
  *
- * Provides common patterns used by WoodcuttingSystem, StonecuttingSystem,
+ * Provides the SimpleHarvestHandler factory used by StonecuttingSystem
  * and future harvesting systems (e.g., fishing, hunting).
  */
 
@@ -10,40 +10,7 @@ import type { Entity } from '../entity';
 import { EntityType } from '../entity';
 import { LogHandler } from '@/utilities/log-handler';
 import type { WorkHandler } from './settler-tasks';
-
-type TargetResult = { entityId: number; x: number; y: number };
-
-/**
- * Find the nearest map object matching a filter within a search radius.
- * Shared by woodcutting (trees), stonecutting (stones), and similar systems.
- */
-export function findNearestMapObject(
-    gameState: GameState,
-    x: number,
-    y: number,
-    radius: number,
-    filter: (entity: Entity) => boolean
-): TargetResult | null {
-    let nearest: TargetResult | null = null;
-    let minDistSq = Infinity;
-    const radiusSq = radius * radius;
-
-    for (const entity of gameState.entities) {
-        if (entity.type !== EntityType.MapObject) continue;
-        if (!filter(entity)) continue;
-
-        const dx = entity.x - x;
-        const dy = entity.y - y;
-        const distSq = dx * dx + dy * dy;
-
-        if (distSq < radiusSq && distSq < minDistSq) {
-            minDistSq = distSq;
-            nearest = { entityId: entity.id, x: entity.x, y: entity.y };
-        }
-    }
-
-    return nearest;
-}
+import { findNearestEntity } from './spatial-search';
 
 /**
  * Configuration for creating a simple resource harvest work handler.
@@ -79,7 +46,13 @@ export function createSimpleHarvestHandler(config: SimpleHarvestConfig): WorkHan
 
     return {
         findTarget: (x: number, y: number) => {
-            return findNearestMapObject(gameState, x, y, searchRadius, targetFilter);
+            return findNearestEntity(
+                gameState,
+                x,
+                y,
+                searchRadius,
+                entity => entity.type === EntityType.MapObject && targetFilter(entity)
+            );
         },
 
         canWork: (targetId: number) => {
