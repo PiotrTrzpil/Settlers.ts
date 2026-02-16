@@ -17,8 +17,8 @@ import { EntityType, UnitType, Entity, clearCarrying } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { hexDistance } from '../hex-directions';
-import { ANIMATION_SEQUENCES, carrySequenceKey, workSequenceKey } from '../../animation';
-import type { AnimationService } from '../../animation/index';
+import { ANIMATION_SEQUENCES } from '../../animation';
+import { resolveTaskAnimation, type AnimationService } from '../../animation/index';
 import {
     TaskType,
     TaskResult,
@@ -29,7 +29,6 @@ import {
     type WorkerJobData,
     type JobState,
     type WorkHandler,
-    type AnimationType,
 } from './types';
 import { executeTask, type TaskContext } from './task-executors';
 import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDefinitions } from './loader';
@@ -135,9 +134,6 @@ export class SettlerTaskSystem implements TickSystem {
             carrierManager: this.carrierManager,
             eventBus: this.eventBus,
             handlerErrorLogger: this.handlerErrorLogger,
-            setIdleAnimation: (settler: Entity) => this.setIdleAnimation(settler),
-            applyTaskAnimation: (settler: Entity, anim: AnimationType, direction?: number) =>
-                this.applyTaskAnimation(settler, anim, direction),
         };
     }
 
@@ -606,7 +602,7 @@ export class SettlerTaskSystem implements TickSystem {
             const jobId = `${prefix}.${jobName}`;
             const tasks = this.jobDefinitions.get(jobId);
             if (!tasks?.length) continue;
-            if (!this.jobNeedsEntityTarget(tasks[0]!)) {
+            if (this.jobIsSelfSearching(tasks[0]!)) {
                 return { jobId, tasks };
             }
         }
@@ -619,6 +615,15 @@ export class SettlerTaskSystem implements TickSystem {
      */
     private jobNeedsEntityTarget(firstTask: TaskNode): boolean {
         return firstTask.task === TaskType.GO_TO_TARGET || firstTask.task === TaskType.WORK_ON_ENTITY;
+    }
+
+    /**
+     * Check if a job is self-searching (starts with SEARCH_POS).
+     * Only these jobs can be started without an external target.
+     * Jobs like carrier.transport (GO_TO_SOURCE) need external assignment via assignJob().
+     */
+    private jobIsSelfSearching(firstTask: TaskNode): boolean {
+        return firstTask.task === TaskType.SEARCH_POS;
     }
 
     /**
@@ -659,11 +664,9 @@ export class SettlerTaskSystem implements TickSystem {
 
         const task = tasks[job.taskIndex];
 
-        // Apply animation for current task (on first tick of task).
-        // WORK_ON_ENTITY handles its own animation — it must wait until
-        // canWork() confirms materials are available before playing work anim.
-        if (job.progress === 0 && task.task !== TaskType.WORK_ON_ENTITY) {
-            this.applyTaskAnimation(settler, task.anim);
+        // Apply animation for current task (on first tick of task)
+        if (job.progress === 0) {
+            this.applyTaskAnimation(settler, task);
         }
 
         const handler = this.workHandlers.get(config.search);
@@ -674,9 +677,8 @@ export class SettlerTaskSystem implements TickSystem {
             job.taskIndex++;
             job.progress = 0;
             // Apply animation for next task if there is one
-            // (WORK_ON_ENTITY manages its own animation timing)
-            if (job.taskIndex < tasks.length && tasks[job.taskIndex].task !== TaskType.WORK_ON_ENTITY) {
-                this.applyTaskAnimation(settler, tasks[job.taskIndex].anim);
+            if (job.taskIndex < tasks.length) {
+                this.applyTaskAnimation(settler, tasks[job.taskIndex]);
             }
             break;
 
@@ -727,37 +729,25 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Animation helpers (uses AnimationService)
+    // Animation helpers
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * Start walk animation for a unit.
+     * Apply animation for the current task. Resolves semantic animation type
+     * to a concrete sequence key via AnimationResolver, then applies it.
+     */
+    private applyTaskAnimation(settler: Entity, task: TaskNode): void {
+        const intent = resolveTaskAnimation(task.anim, settler);
+        this.animationService.applyIntent(settler.id, intent);
+    }
+
+    /**
+     * Start walk animation for a unit (used for move tasks and external movement).
      */
     private startWalkAnimation(unit: Entity, direction: number): void {
-        const sequenceKey = this.getWalkSequenceKey(unit);
-        this.animationService.play(unit.id, sequenceKey, { loop: true, direction });
-    }
-
-    /**
-     * Determine the correct walk sequence key for a unit.
-     * Units carrying material use a material-specific carry sequence.
-     */
-    private getWalkSequenceKey(entity: Entity): string {
-        if (entity.carrying) {
-            return carrySequenceKey(entity.carrying.material);
-        }
-        return ANIMATION_SEQUENCES.WALK;
-    }
-
-    /**
-     * Apply animation for a task action.
-     * Maps semantic animation types to sequence keys.
-     */
-    private applyTaskAnimation(settler: Entity, anim: AnimationType, direction?: number): void {
-        const sequenceKey = this.resolveSequenceKey(settler, anim);
-        const loop = this.shouldLoop(anim);
-
-        this.animationService.play(settler.id, sequenceKey, { loop, direction });
+        const intent = resolveTaskAnimation('walk', unit);
+        this.animationService.applyIntent(unit.id, intent);
+        this.animationService.setDirection(unit.id, direction);
     }
 
     /**
@@ -766,75 +756,5 @@ export class SettlerTaskSystem implements TickSystem {
     private setIdleAnimation(settler: Entity): void {
         this.animationService.play(settler.id, ANIMATION_SEQUENCES.DEFAULT, { loop: false });
         this.animationService.stop(settler.id);
-    }
-
-    /**
-     * Map semantic animation types to legacy sequence keys.
-     * SpriteRenderManager registers animations with these keys.
-     */
-    private resolveSequenceKey(settler: Entity, anim: AnimationType): string {
-        switch (anim) {
-        case 'walk':
-            return ANIMATION_SEQUENCES.WALK;
-
-        case 'carry': {
-            // Get material from entity carrying state (set by PICKUP task)
-            if (!settler.carrying) {
-                throw new Error(
-                    `Cannot play 'carry' animation for entity ${settler.id} (${UnitType[settler.subType]}): ` +
-                            `no material being carried. Check PICKUP task runs before GO_HOME with carry anim.`
-                );
-            }
-            return carrySequenceKey(settler.carrying.material);
-        }
-
-        case 'chop':
-        case 'harvest':
-        case 'mine':
-        case 'hammer':
-        case 'dig':
-        case 'plant':
-        case 'work':
-            // All work actions use work.0 sequence
-            return workSequenceKey(0);
-
-        case 'pickup':
-        case 'dropoff':
-            // Pickup/dropoff reuse work.0 (carriers only have one work animation)
-            return workSequenceKey(0);
-
-        case 'idle':
-        default:
-            return ANIMATION_SEQUENCES.DEFAULT;
-        }
-    }
-
-    /**
-     * Determine if animation should loop.
-     */
-    private shouldLoop(anim: AnimationType): boolean {
-        switch (anim) {
-        // Movement animations loop
-        case 'walk':
-        case 'carry':
-            return true;
-
-            // Work animations loop
-        case 'chop':
-        case 'harvest':
-        case 'mine':
-        case 'hammer':
-        case 'dig':
-        case 'plant':
-        case 'work':
-            return true;
-
-            // One-shot animations
-        case 'idle':
-        case 'pickup':
-        case 'dropoff':
-        default:
-            return false;
-        }
     }
 }

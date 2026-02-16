@@ -18,7 +18,9 @@ export enum TaskType {
     GO_HOME = 'GO_HOME',
     /** Search for a position (e.g., where to plant) */
     SEARCH_POS = 'SEARCH_POS',
-    /** Work on target entity (tree, stone, etc.) */
+    /** Wait until target entity is ready to be worked on (canWork check) */
+    WAIT_FOR_WORK = 'WAIT_FOR_WORK',
+    /** Work on target entity (tree, stone, etc.) - always starts immediately */
     WORK_ON_ENTITY = 'WORK_ON_ENTITY',
     /** Stay at current position indefinitely (for building workers) */
     STAY = 'STAY',

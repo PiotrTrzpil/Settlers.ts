@@ -44,6 +44,7 @@ export function executeCarrierTask(
     case TaskType.GO_TO_POS:
     case TaskType.GO_HOME:
     case TaskType.SEARCH_POS:
+    case TaskType.WAIT_FOR_WORK:
     case TaskType.WORK_ON_ENTITY:
     case TaskType.STAY:
     case TaskType.WORK:

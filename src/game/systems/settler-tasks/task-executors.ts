@@ -13,7 +13,7 @@ import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../../features/inventory';
 import type { CarrierManager } from '../../features/carriers';
-import { TaskType, TaskResult, type TaskNode, type JobState, type WorkHandler, type AnimationType } from './types';
+import { TaskType, TaskResult, type TaskNode, type JobState, type WorkHandler } from './types';
 import { executeCarrierTask } from './carrier-task-executors';
 
 const log = new LogHandler('TaskExecutors');
@@ -29,8 +29,6 @@ export interface TaskContext {
     carrierManager: CarrierManager;
     eventBus: EventBus;
     handlerErrorLogger: ThrottledLogger;
-    setIdleAnimation(settler: Entity): void;
-    applyTaskAnimation(settler: Entity, anim: AnimationType, direction?: number): void;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -40,6 +38,7 @@ export interface TaskContext {
 /**
  * Dispatch a task to the appropriate executor function.
  */
+// eslint-disable-next-line complexity -- switch dispatcher over all task types
 export function executeTask(
     settler: Entity,
     job: JobState,
@@ -58,6 +57,9 @@ export function executeTask(
     switch (task.task) {
     case TaskType.GO_TO_TARGET:
         return executeGoToTarget(settler, job, ctx);
+
+    case TaskType.WAIT_FOR_WORK:
+        return executeWaitForWork(settler, job, ctx, handler);
 
     case TaskType.WORK_ON_ENTITY:
         return executeWorkOnEntity(settler, job, task, dt, ctx, handler);
@@ -154,6 +156,37 @@ function executeGoToPos(settler: Entity, job: JobState, ctx: TaskContext): TaskR
 // Work tasks
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Wait until canWork() passes, then advance to WORK_ON_ENTITY.
+ * Separated from WORK_ON_ENTITY so animation can be derived from task type alone.
+ */
+function executeWaitForWork(settler: Entity, job: JobState, ctx: TaskContext, handler?: WorkHandler): TaskResult {
+    if (job.type !== 'worker') return TaskResult.FAILED;
+    if (!job.data.targetId || !handler) return TaskResult.FAILED;
+
+    const targetId = job.data.targetId;
+
+    try {
+        if (handler.canWork(targetId)) {
+            return TaskResult.DONE;
+        }
+    } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        ctx.handlerErrorLogger.error(`canWork failed for target ${targetId}`, err);
+        return TaskResult.FAILED;
+    }
+
+    // Not ready — wait or fail depending on handler policy
+    if (handler.shouldWaitForWork) {
+        return TaskResult.CONTINUE;
+    }
+    return TaskResult.FAILED;
+}
+
+/**
+ * Work on target entity. Always starts immediately — canWork() gating
+ * is handled by the preceding WAIT_FOR_WORK task.
+ */
 // eslint-disable-next-line complexity -- handler boundary requires per-call guards
 function executeWorkOnEntity(
     settler: Entity,
@@ -168,27 +201,8 @@ function executeWorkOnEntity(
 
     const targetId = job.data.targetId;
 
-    // Only check canWork before work has started — once inputs are consumed
-    // by onWorkStart, the check would fail since materials are already gone.
+    // Start work on first tick
     if (!job.workStarted) {
-        try {
-            if (!handler.canWork(targetId)) {
-                if (handler.shouldWaitForWork) {
-                    ctx.setIdleAnimation(settler);
-                    return TaskResult.CONTINUE;
-                }
-                return TaskResult.FAILED;
-            }
-        } catch (e) {
-            const err = e instanceof Error ? e : new Error(String(e));
-            ctx.handlerErrorLogger.error(`canWork failed for target ${targetId}`, err);
-            return TaskResult.FAILED;
-        }
-    }
-
-    // Start work on first tick (or when materials become available)
-    if (!job.workStarted) {
-        ctx.applyTaskAnimation(settler, task.anim);
         try {
             handler.onWorkStart?.(targetId);
         } catch (e) {
@@ -200,18 +214,9 @@ function executeWorkOnEntity(
         job.progress = 0;
     }
 
-    // Remember previous progress for animation phase transition
-    const prevProgress = job.progress;
-
     // Update progress
     const duration = task.duration ?? 1.0;
     job.progress += dt / duration;
-
-    // Switch to pickup animation when log is ready (at 90% progress)
-    const PICKUP_THRESHOLD = 0.9;
-    if (prevProgress < PICKUP_THRESHOLD && job.progress >= PICKUP_THRESHOLD) {
-        ctx.applyTaskAnimation(settler, 'pickup');
-    }
 
     // Update domain system
     let complete: boolean;

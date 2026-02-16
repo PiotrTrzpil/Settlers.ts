@@ -9,6 +9,9 @@ woodcutter.work:
   - task: GO_TO_TARGET
     anim: walk
 
+  - task: WAIT_FOR_WORK
+    anim: idle
+
   - task: WORK_ON_ENTITY
     anim: chop
     duration: 10.0  # ~3s chopping standing tree, ~1s falling, ~5s cutting log, ~1s final
@@ -26,6 +29,9 @@ woodcutter.work:
 stonecutter.work:
   - task: GO_TO_TARGET
     anim: walk
+
+  - task: WAIT_FOR_WORK
+    anim: idle
 
   - task: WORK_ON_ENTITY
     anim: mine
@@ -73,6 +79,9 @@ farmer.harvest:
   - task: GO_TO_TARGET
     anim: walk
 
+  - task: WAIT_FOR_WORK
+    anim: idle
+
   - task: WORK_ON_ENTITY
     anim: harvest
     duration: 2.0
@@ -90,6 +99,9 @@ farmer.harvest:
 miner.work:
   - task: GO_TO_TARGET
     anim: walk
+
+  - task: WAIT_FOR_WORK
+    anim: idle
 
   - task: WORK_ON_ENTITY
     anim: mine
@@ -121,6 +133,9 @@ builder.build:
   - task: GO_TO_TARGET
     anim: walk
 
+  - task: WAIT_FOR_WORK
+    anim: idle
+
   - task: WORK_ON_ENTITY
     anim: hammer
     duration: 0
@@ -131,6 +146,9 @@ builder.build:
 digger.dig:
   - task: GO_TO_TARGET
     anim: walk
+
+  - task: WAIT_FOR_WORK
+    anim: idle
 
   - task: WORK_ON_ENTITY
     anim: dig
@@ -145,6 +163,9 @@ smith.station:
   - task: GO_TO_TARGET
     anim: walk
 
+  - task: WAIT_FOR_WORK
+    anim: idle
+
   - task: WORK_ON_ENTITY
     anim: work
     duration: 5.0
@@ -152,6 +173,9 @@ smith.station:
 sawmillworker.station:
   - task: GO_TO_TARGET
     anim: walk
+
+  - task: WAIT_FOR_WORK
+    anim: idle
 
   - task: WORK_ON_ENTITY
     anim: work
@@ -161,6 +185,9 @@ miller.station:
   - task: GO_TO_TARGET
     anim: walk
 
+  - task: WAIT_FOR_WORK
+    anim: idle
+
   - task: WORK_ON_ENTITY
     anim: work
     duration: 4.0
@@ -168,6 +195,9 @@ miller.station:
 butcher.station:
   - task: GO_TO_TARGET
     anim: walk
+
+  - task: WAIT_FOR_WORK
+    anim: idle
 
   - task: WORK_ON_ENTITY
     anim: work

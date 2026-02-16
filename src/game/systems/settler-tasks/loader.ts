@@ -57,6 +57,7 @@ function parseTaskType(name: string): TaskType {
         'GO_TO_DEST',
         'GO_HOME',
         'SEARCH_POS',
+        'WAIT_FOR_WORK',
         'WORK_ON_ENTITY',
         'STAY',
         'WORK',

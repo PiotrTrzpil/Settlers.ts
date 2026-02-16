@@ -1,14 +1,18 @@
 /**
- * Animation system types and interfaces.
- * Supports frame-based sprite animations for entities.
+ * Animation types, constants, and sprite lookup.
+ *
+ * This file defines the shared contract between:
+ * - AnimationService (owns runtime state)
+ * - AnimationResolver (derives intent from entity state)
+ * - SpriteRenderManager (registers animation data)
+ * - EntityRenderer (looks up sprites per frame)
  */
 
 import { SpriteEntry } from './renderer/sprite-metadata';
 
 /**
  * Well-known animation sequence keys.
- * Shared between idle-behavior (producer) and sprite-metadata (registrar)
- * so the contract isn't just magic strings.
+ * Shared between producers (AnimationResolver) and registrars (SpriteRenderManager).
  */
 export const ANIMATION_SEQUENCES = {
     /** Default/idle animation */
@@ -30,25 +34,11 @@ export function carrySequenceKey(materialType: number): string {
 }
 
 /**
- * Check if a sequence key is a carry sequence.
- */
-export function isCarrySequence(sequenceKey: string): boolean {
-    return sequenceKey.startsWith(ANIMATION_SEQUENCES.CARRY_PREFIX);
-}
-
-/**
  * Get the animation sequence key for a work animation variant.
  * Returns a key like 'work.0', 'work.1', etc.
  */
 export function workSequenceKey(index: number): string {
     return `${ANIMATION_SEQUENCES.WORK_PREFIX}${index}`;
-}
-
-/**
- * Check if a sequence key is a work sequence.
- */
-export function isWorkSequence(sequenceKey: string): boolean {
-    return sequenceKey.startsWith(ANIMATION_SEQUENCES.WORK_PREFIX);
 }
 
 /**
@@ -73,21 +63,18 @@ export interface AnimationSequence {
     loop: boolean;
 }
 
-/** Duration of direction transition blend in milliseconds */
-export const DIRECTION_TRANSITION_DURATION_MS = 125;
-
 /**
  * Runtime animation state for an entity.
  * Tracks current playback position within an animation.
  */
 export interface AnimationState {
-    /** Current animation sequence key (e.g., "idle", "walk", "work") */
+    /** Current animation sequence key (e.g., "default", "walk", "work.0") */
     sequenceKey: string;
     /** Current frame index within the sequence */
     currentFrame: number;
     /** Time elapsed in current frame (milliseconds) */
     elapsedMs: number;
-    /** Direction index for directional animations (0-3 for units, 0-1 for buildings) */
+    /** Direction index for directional animations (0-5 for units, 0-1 for buildings) */
     direction: number;
     /** Whether animation is currently playing */
     playing: boolean;
@@ -109,59 +96,8 @@ export interface AnimationData {
 }
 
 /**
- * Creates a default animation state.
- * Defaults to not playing (static pose) - movement events will start animation.
- */
-export function createAnimationState(
-    sequenceKey: string = 'default',
-    direction: number = 0
-): AnimationState {
-    return {
-        sequenceKey,
-        currentFrame: 0,
-        elapsedMs: 0,
-        direction,
-        playing: false,
-    };
-}
-
-/**
- * Updates an animation state based on elapsed time.
- * Returns true if the frame changed.
- */
-export function updateAnimationState(
-    state: AnimationState,
-    sequence: AnimationSequence | undefined,
-    deltaMs: number
-): boolean {
-    if (!state.playing || !sequence || sequence.frames.length === 0) {
-        return false;
-    }
-
-    const previousFrame = state.currentFrame;
-    state.elapsedMs += deltaMs;
-
-    // Advance frames based on elapsed time
-    while (state.elapsedMs >= sequence.frameDurationMs) {
-        state.elapsedMs -= sequence.frameDurationMs;
-        state.currentFrame++;
-
-        if (state.currentFrame >= sequence.frames.length) {
-            if (sequence.loop) {
-                state.currentFrame = 0;
-            } else {
-                state.currentFrame = sequence.frames.length - 1;
-                state.playing = false;
-                break;
-            }
-        }
-    }
-
-    return state.currentFrame !== previousFrame;
-}
-
-/**
  * Gets the current sprite entry for an animation state.
+ * Used by renderer helpers to resolve frame index to actual sprite.
  */
 export function getCurrentAnimationSprite(
     state: AnimationState,
@@ -171,7 +107,9 @@ export function getCurrentAnimationSprite(
 
     const directionMap = animationData.sequences.get(state.sequenceKey);
     if (!directionMap) {
-        throw new Error(`Animation sequence '${state.sequenceKey}' not found. Available: ${[...animationData.sequences.keys()].join(', ')}`);
+        throw new Error(
+            `Animation sequence '${state.sequenceKey}' not found. Available: ${[...animationData.sequences.keys()].join(', ')}`
+        );
     }
 
     const sequence = directionMap.get(state.direction);
@@ -183,88 +121,4 @@ export function getCurrentAnimationSprite(
         ? state.currentFrame % sequence.frames.length
         : Math.min(state.currentFrame, sequence.frames.length - 1);
     return sequence.frames[frameIndex];
-}
-
-/**
- * Sets the animation to a new sequence.
- * Resets frame and elapsed time.
- */
-export function setAnimationSequence(
-    state: AnimationState,
-    sequenceKey: string,
-    direction?: number
-): void {
-    state.sequenceKey = sequenceKey;
-    state.currentFrame = 0;
-    state.elapsedMs = 0;
-    state.playing = true;
-    if (direction !== undefined) {
-        state.direction = direction;
-    }
-}
-
-/**
- * Sets just the direction, keeping the current sequence.
- * Use startDirectionTransition() for smooth blended transitions.
- */
-export function setAnimationDirection(
-    state: AnimationState,
-    direction: number
-): void {
-    if (state.direction !== direction) {
-        state.direction = direction;
-        // Clear any in-progress transition
-        state.previousDirection = undefined;
-        state.directionTransitionProgress = undefined;
-    }
-}
-
-/**
- * Starts a smooth transition to a new direction.
- * The renderer will blend between old and new direction sprites.
- */
-export function startDirectionTransition(
-    state: AnimationState,
-    newDirection: number
-): void {
-    if (state.direction === newDirection) return;
-
-    // If already transitioning, use current blended state as the "previous"
-    // (This handles rapid direction changes smoothly)
-    state.previousDirection = state.direction;
-    state.direction = newDirection;
-    state.directionTransitionProgress = 0;
-}
-
-/**
- * Updates direction transition progress.
- * Call this every frame during transitions.
- * @returns true if transition is still in progress
- */
-export function updateDirectionTransition(
-    state: AnimationState,
-    deltaMs: number
-): boolean {
-    if (state.directionTransitionProgress === undefined) {
-        return false;
-    }
-
-    state.directionTransitionProgress += deltaMs / DIRECTION_TRANSITION_DURATION_MS;
-
-    if (state.directionTransitionProgress >= 1) {
-        // Transition complete
-        state.previousDirection = undefined;
-        state.directionTransitionProgress = undefined;
-        return false;
-    }
-
-    return true;
-}
-
-/**
- * Check if direction transition is in progress.
- */
-export function isDirectionTransitioning(state: AnimationState): boolean {
-    return state.directionTransitionProgress !== undefined &&
-           state.directionTransitionProgress < 1;
 }
