@@ -1539,7 +1539,8 @@ export class GamePage {
         return this.page.evaluate(() => {
             const renderer = (window as any).__settlers_entity_renderer__;
             const registry = (renderer as any)?.spriteManager?._spriteRegistry;
-            return registry?.units?.size ?? 0;
+            // Use public getters instead of private properties
+            return (registry?.getBuildingCount?.() ?? 0) + (registry?.getUnitCount?.() ?? 0);
         });
     }
 

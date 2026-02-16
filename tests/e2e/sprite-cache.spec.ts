@@ -1,5 +1,4 @@
-import { test, expect } from '@playwright/test';
-import { GamePage } from './game-page';
+import { test, expect } from './fixtures';
 
 /**
  * Sprite atlas cache tests.
@@ -8,35 +7,20 @@ import { GamePage } from './game-page';
  * 1. Module-level cache (survives HMR) - not testable in e2e
  * 2. IndexedDB cache (survives page refresh) - tested here
  *
- * Note: These tests require real game assets (GFX files) to be available.
- * They won't work with testMap mode which uses procedural textures.
+ * Uses gpAssets fixture which:
+ * - Loads real game assets (not test map)
+ * - Skips in CI if assets unavailable
+ * - Fails locally if assets missing
  */
 test.describe('Sprite Atlas Cache', { tag: ['@requires-assets', '@slow'] }, () => {
-    test('IndexedDB cache speeds up page refresh', async({ page }) => {
-        // Note: @requires-assets project provides 60s timeout
-        const gp = new GamePage(page);
-
-        // Clear any existing cache to ensure clean state
-        await page.goto('/');
-        await gp.clearSpriteCache();
-
-        // === First load (cache miss) - use real map ===
-        await gp.goto(); // No testMap - loads real map with sprites
-        await gp.waitForReady(5, 30_000);
-
-        const firstLoad = await gp.getLoadTimings();
+    test('IndexedDB cache speeds up page refresh', async ({ gpAssets }) => {
+        // Get first load timings (already loaded by gpAssets fixture)
+        const firstLoad = await gpAssets.getLoadTimings();
 
         console.log('\n=== First Load (Cache Miss) ===');
         console.log(`Total sprites: ${firstLoad.totalSprites}ms`);
         console.log(`Cache hit: ${firstLoad.cacheHit}`);
         console.log(`Cache source: ${firstLoad.cacheSource}`);
-
-        // Skip test if no sprites were loaded (game assets not available)
-        if (firstLoad.totalSprites === 0) {
-            console.log('Skipping: No sprites loaded (game assets may not be available)');
-            test.skip();
-            return;
-        }
 
         // First load should be a cache miss
         expect(firstLoad.cacheHit).toBe(false);
@@ -44,10 +28,10 @@ test.describe('Sprite Atlas Cache', { tag: ['@requires-assets', '@slow'] }, () =
 
         // === Second load (cache hit) ===
         // Reload the page - IndexedDB cache should persist
-        await page.reload();
-        await gp.waitForReady(5, 30_000);
+        await gpAssets.page.reload();
+        await gpAssets.waitForReady(5, 30_000);
 
-        const secondLoad = await gp.getLoadTimings();
+        const secondLoad = await gpAssets.getLoadTimings();
 
         console.log('\n=== Second Load (Cache Hit) ===');
         console.log(`Total sprites: ${secondLoad.totalSprites}ms`);
