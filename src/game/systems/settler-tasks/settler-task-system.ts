@@ -14,7 +14,7 @@
 
 import type { GameState } from '../../game-state';
 import type { TickSystem } from '../../tick-system';
-import { EntityType, UnitType, Entity, setCarrying, clearCarrying } from '../../entity';
+import { EntityType, UnitType, Entity, clearCarrying } from '../../entity';
 import { EMaterialType } from '../../economy';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
@@ -34,6 +34,7 @@ import {
     type WorkHandler,
     type AnimationType,
 } from './types';
+import { executeTask, type TaskContext } from './task-executors';
 import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDefinitions } from './loader';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../../features/inventory';
@@ -71,9 +72,6 @@ interface UnitRuntime {
     idleState: IdleAnimationState;
 }
 
-/** Fatigue added per delivery cycle */
-const FATIGUE_PER_DELIVERY = 5;
-
 /** Configuration for SettlerTaskSystem dependencies */
 export interface SettlerTaskSystemConfig {
     gameState: GameState;
@@ -102,6 +100,8 @@ export class SettlerTaskSystem implements TickSystem {
     private missingHandlerLogger = new ThrottledLogger(log, 5000);
     /** Inventory visualizer - used to find stack positions for carrier navigation */
     private inventoryVisualizer!: InventoryVisualizer;
+    /** Context object passed to task executor functions */
+    private taskContext!: TaskContext;
 
     constructor(config: SettlerTaskSystemConfig) {
         this.gameState = config.gameState;
@@ -124,6 +124,19 @@ export class SettlerTaskSystem implements TickSystem {
     /** Set the inventory visualizer (created after task system in game loop). */
     setInventoryVisualizer(visualizer: InventoryVisualizer): void {
         this.inventoryVisualizer = visualizer;
+
+        // Build the task context now that all dependencies are available
+        this.taskContext = {
+            gameState: this.gameState,
+            inventoryManager: this.inventoryManager,
+            inventoryVisualizer: this.inventoryVisualizer,
+            carrierManager: this.carrierManager,
+            eventBus: this.eventBus,
+            handlerErrorLogger: this.handlerErrorLogger,
+            setIdleAnimation: (settler: Entity) => this.setIdleAnimation(settler),
+            applyTaskAnimation: (settler: Entity, anim: AnimationType, direction?: number) =>
+                this.applyTaskAnimation(settler, anim, direction),
+        };
     }
 
     /**
@@ -783,7 +796,8 @@ export class SettlerTaskSystem implements TickSystem {
             this.applyTaskAnimation(settler, task.anim);
         }
 
-        const result = this.executeTask(settler, config, runtime, task, dt);
+        const handler = this.workHandlers.get(config.search);
+        const result = executeTask(settler, job, task, dt, this.taskContext, handler);
 
         switch (result) {
         case TaskResult.DONE:
@@ -804,438 +818,6 @@ export class SettlerTaskSystem implements TickSystem {
             // Keep going next tick
             break;
         }
-    }
-
-    private executeTask(
-        settler: Entity,
-        config: SettlerConfig,
-        runtime: UnitRuntime,
-        task: TaskNode,
-        dt: number
-    ): TaskResult {
-        const job = runtime.job!;
-        const handler = this.workHandlers.get(config.search);
-
-        switch (task.task) {
-        case TaskType.GO_TO_TARGET:
-            return this.executeGoToTarget(settler, job);
-
-        case TaskType.WORK_ON_ENTITY:
-            return this.executeWorkOnEntity(settler, job, task, dt, handler);
-
-        case TaskType.PICKUP:
-            return this.executePickup(settler, job, task);
-
-        case TaskType.GO_HOME:
-            return this.executeGoHome(settler, job);
-
-        case TaskType.GO_TO_SOURCE:
-            return this.executeGoToSource(settler, job);
-
-        case TaskType.GO_TO_DEST:
-            return this.executeGoToDest(settler, job);
-
-        case TaskType.STAY:
-            // Worker stays indefinitely - animation set by task.anim in YAML
-            return TaskResult.CONTINUE;
-
-        case TaskType.DROPOFF:
-            return this.executeDropoff(settler, job);
-
-        case TaskType.WORK:
-            return this.executeWork(settler, job, task, dt, handler);
-
-        case TaskType.SEARCH_POS:
-            return this.executeSearchPos(settler, job, handler);
-
-        case TaskType.GO_TO_POS:
-            return this.executeGoToPos(settler, job);
-
-        case TaskType.WAIT:
-            return this.executeWait(job, task, dt);
-
-        default:
-            throw new Error(
-                `Unhandled task type: ${task.task} in job ${job.jobId} (settler ${settler.id}). ` +
-                        `Add implementation in executeTask() or remove from jobs.yaml.`
-            );
-        }
-    }
-
-    /**
-     * Helper to move settler adjacent to a target position.
-     */
-    private moveToPosition(settler: Entity, targetX: number, targetY: number): TaskResult {
-        const controller = this.gameState.movement.getController(settler.id);
-        if (!controller) return TaskResult.FAILED;
-
-        const dist = hexDistance(settler.x, settler.y, targetX, targetY);
-
-        if (dist <= 1 && controller.state === 'idle') {
-            return TaskResult.DONE;
-        }
-
-        if (controller.state === 'idle') {
-            const moved = this.gameState.movement.moveUnit(settler.id, targetX, targetY);
-            if (!moved) return TaskResult.FAILED;
-        }
-
-        return TaskResult.CONTINUE;
-    }
-
-    private executeGoToTarget(settler: Entity, job: JobState): TaskResult {
-        if (job.type !== 'worker') return TaskResult.FAILED;
-        if (!job.data.targetId) return TaskResult.FAILED;
-        const target = this.gameState.getEntity(job.data.targetId);
-        if (!target) return TaskResult.FAILED;
-        return this.moveToPosition(settler, target.x, target.y);
-    }
-
-    // eslint-disable-next-line complexity -- handler boundary requires per-call guards
-    private executeWorkOnEntity(
-        settler: Entity,
-        job: JobState,
-        task: TaskNode,
-        dt: number,
-        handler?: WorkHandler
-    ): TaskResult {
-        if (job.type !== 'worker') return TaskResult.FAILED;
-        if (!job.data.targetId || !handler) return TaskResult.FAILED;
-
-        const targetId = job.data.targetId;
-
-        // Check target still valid / has materials.
-        // Handler calls are a system boundary — guard against domain errors.
-        try {
-            if (!handler.canWork(targetId)) {
-                if (handler.shouldWaitForWork) {
-                    // Show idle animation while waiting for materials
-                    this.setIdleAnimation(settler);
-                    return TaskResult.CONTINUE;
-                }
-                return TaskResult.FAILED;
-            }
-        } catch (e) {
-            const err = e instanceof Error ? e : new Error(String(e));
-            this.handlerErrorLogger.error(`canWork failed for target ${targetId}`, err);
-            return TaskResult.FAILED;
-        }
-
-        // Start work on first tick (or when materials become available)
-        if (!job.workStarted) {
-            // Apply work animation now that materials are confirmed available
-            this.applyTaskAnimation(settler, task.anim);
-            try {
-                handler.onWorkStart?.(targetId);
-            } catch (e) {
-                const err = e instanceof Error ? e : new Error(String(e));
-                this.handlerErrorLogger.error(`onWorkStart failed for target ${targetId}`, err);
-                return TaskResult.FAILED;
-            }
-            job.workStarted = true;
-            job.progress = 0;
-        }
-
-        // Remember previous progress for animation phase transition
-        const prevProgress = job.progress;
-
-        // Update progress
-        const duration = task.duration ?? 1.0;
-        job.progress += dt / duration;
-
-        // Switch to pickup animation when log is ready (at 90% progress)
-        const PICKUP_THRESHOLD = 0.9;
-        if (prevProgress < PICKUP_THRESHOLD && job.progress >= PICKUP_THRESHOLD) {
-            this.applyTaskAnimation(settler, 'pickup');
-        }
-
-        // Update domain system
-        let complete: boolean;
-        try {
-            complete = handler.onWorkTick(targetId, job.progress);
-        } catch (e) {
-            const err = e instanceof Error ? e : new Error(String(e));
-            this.handlerErrorLogger.error(`onWorkTick failed for target ${targetId}`, err);
-            return TaskResult.FAILED;
-        }
-
-        if (complete || job.progress >= 1) {
-            try {
-                handler.onWorkComplete?.(targetId, settler.x, settler.y);
-            } catch (e) {
-                const err = e instanceof Error ? e : new Error(String(e));
-                this.handlerErrorLogger.error(`onWorkComplete failed for target ${targetId}`, err);
-                // Work is done regardless — don't leave settler stuck
-            }
-            return TaskResult.DONE;
-        }
-
-        return TaskResult.CONTINUE;
-    }
-
-    private executePickup(settler: Entity, job: JobState, task: TaskNode): TaskResult {
-        // Use discriminated union to determine job type
-        if (job.type === 'carrier') {
-            return this.executeCarrierPickup(settler, job);
-        }
-
-        // Regular settler pickup (e.g., woodcutter picking up LOG)
-        const material = task.good;
-        if (material != null) {
-            setCarrying(settler, material, 1);
-            job.data.carryingGood = material;
-        }
-        return TaskResult.DONE;
-    }
-
-    /**
-     * Execute carrier pickup - withdraw from source building inventory.
-     * Inventory was reserved by LogisticsDispatcher via InventoryReservationManager.
-     * The reserved withdrawal releases the slot reservation and withdraws atomically.
-     */
-    private executeCarrierPickup(settler: Entity, job: CarrierJobState): TaskResult {
-        const entity = this.gameState.getEntityOrThrow(settler.id, 'carrier');
-        const { sourceBuildingId, material, amount: requestedAmount } = job.data;
-
-        // Withdraw from reserved amount (atomic: release slot reservation + withdraw)
-        const withdrawn = this.inventoryManager.withdrawReservedOutput(sourceBuildingId, material, requestedAmount);
-
-        if (withdrawn === 0) {
-            // Material no longer available (reservation may have been released due to building destruction)
-            log.warn(`Carrier ${settler.id}: material ${material} not available at building ${sourceBuildingId}`);
-
-            // Emit pickup failed event so logistics can reassign
-            this.eventBus.emit('carrier:pickupFailed', {
-                entityId: settler.id,
-                material,
-                fromBuilding: sourceBuildingId,
-                requestedAmount,
-            });
-
-            return TaskResult.FAILED;
-        }
-
-        // Update entity carrying state (shared by all unit types)
-        setCarrying(entity, material, withdrawn);
-
-        // Update job state
-        job.data.carryingGood = material;
-        job.data.amount = withdrawn;
-
-        // Log if partial pickup occurred
-        if (withdrawn < requestedAmount) {
-            log.debug(`Carrier ${settler.id} picked up ${withdrawn}/${requestedAmount} of ${material} (partial)`);
-        } else {
-            log.debug(`Carrier ${settler.id} picked up ${withdrawn} of ${material} from building ${sourceBuildingId}`);
-        }
-
-        // Emit pickup complete event (includes actual amount for logistics tracking)
-        this.eventBus.emit('carrier:pickupComplete', {
-            entityId: settler.id,
-            material,
-            amount: withdrawn,
-            fromBuilding: sourceBuildingId,
-        });
-
-        return TaskResult.DONE;
-    }
-
-    private executeGoHome(settler: Entity, job: JobState): TaskResult {
-        const homeId = job.data.homeId;
-        if (!homeId) return TaskResult.FAILED;
-        const building = this.gameState.getEntityOrThrow(homeId, 'home building');
-        return this.moveToPosition(settler, building.x, building.y);
-    }
-
-    private executeGoToSource(settler: Entity, job: JobState): TaskResult {
-        if (job.type !== 'carrier') return TaskResult.FAILED;
-        const { sourceBuildingId, material } = job.data;
-        const building = this.gameState.getEntityOrThrow(sourceBuildingId, 'source building');
-        // Navigate to the output stack position if it exists, otherwise fall back to building center
-        const stackPos = this.inventoryVisualizer.getStackPosition(sourceBuildingId, material, 'output');
-        const targetX = stackPos?.x ?? building.x;
-        const targetY = stackPos?.y ?? building.y;
-        return this.moveToPosition(settler, targetX, targetY);
-    }
-
-    private executeGoToDest(settler: Entity, job: JobState): TaskResult {
-        if (job.type !== 'carrier') return TaskResult.FAILED;
-        const { destBuildingId, material } = job.data;
-        const building = this.gameState.getEntityOrThrow(destBuildingId, 'destination building');
-        // Navigate to the input stack position if it exists, otherwise fall back to building center
-        const stackPos = this.inventoryVisualizer.getStackPosition(destBuildingId, material, 'input');
-        const targetX = stackPos?.x ?? building.x;
-        const targetY = stackPos?.y ?? building.y;
-        return this.moveToPosition(settler, targetX, targetY);
-    }
-
-    private executeDropoff(settler: Entity, job: JobState): TaskResult {
-        // Use discriminated union to determine job type
-        if (job.type === 'carrier') {
-            return this.executeCarrierDropoff(settler, job);
-        }
-
-        // Regular settler dropoff (e.g., woodcutter dropping off LOG at home)
-        if (job.data.carryingGood == null) {
-            return TaskResult.DONE;
-        }
-
-        if (!job.data.homeId) {
-            throw new Error(
-                `Settler ${settler.id} (${UnitType[settler.subType]}) has no home building for dropoff. Job started incorrectly.`
-            );
-        }
-
-        const homeId = job.data.homeId;
-        const carryingGood = job.data.carryingGood;
-
-        // Deposit to building inventory (optimistic - assumes inventory exists)
-        const deposited = this.inventoryManager.depositOutput(homeId, carryingGood, 1);
-        if (deposited > 0) {
-            log.debug(`Settler ${settler.id} deposited ${carryingGood} to building ${homeId}`);
-        } else {
-            log.warn(`Building ${homeId} output full, material lost`);
-        }
-
-        // Clear entity and job carrying state
-        clearCarrying(settler);
-        job.data.carryingGood = null;
-        return TaskResult.DONE;
-    }
-
-    /**
-     * Execute carrier dropoff - deposit to destination building inventory.
-     * Emits the critical 'carrier:deliveryComplete' event.
-     */
-    private executeCarrierDropoff(settler: Entity, job: CarrierJobState): TaskResult {
-        const entity = this.gameState.getEntityOrThrow(settler.id, 'carrier');
-        const { destBuildingId, material } = job.data;
-
-        // Get amount from entity carrying state
-        const amount = entity.carrying?.amount ?? 0;
-
-        // Deposit to destination building
-        const deposited = this.inventoryManager.depositInput(destBuildingId, material, amount);
-
-        const overflow = amount - deposited;
-        if (overflow > 0) {
-            log.warn(`Carrier ${settler.id}: ${overflow} of ${material} overflow at building ${destBuildingId}`);
-        }
-
-        // Clear entity carrying state
-        clearCarrying(entity);
-
-        // Clear job state
-        job.data.carryingGood = null;
-
-        log.debug(`Carrier ${settler.id} delivered ${deposited} of ${material} to building ${destBuildingId}`);
-
-        // Add fatigue and reset carrier status
-        this.carrierManager.addFatigue(settler.id, FATIGUE_PER_DELIVERY);
-        this.carrierManager.setStatus(settler.id, CarrierStatus.Idle);
-
-        // CRITICAL: Emit delivery complete event (used by LogisticsDispatcher)
-        this.eventBus.emit('carrier:deliveryComplete', {
-            entityId: settler.id,
-            material,
-            amount: deposited,
-            toBuilding: destBuildingId,
-            overflow,
-        });
-
-        return TaskResult.DONE;
-    }
-
-    private executeWork(settler: Entity, job: JobState, task: TaskNode, dt: number, handler?: WorkHandler): TaskResult {
-        // Animation is applied by handleWorking at task start
-
-        const duration = task.duration ?? 1.0;
-        job.progress += dt / duration;
-
-        if (job.progress >= 1) {
-            // Notify handler if work completed at a searched position (forester planting, etc.)
-            if (handler?.onWorkAtPositionComplete && job.type === 'worker' && job.data.targetPos) {
-                try {
-                    handler.onWorkAtPositionComplete(job.data.targetPos.x, job.data.targetPos.y, settler.id);
-                } catch (e) {
-                    const err = e instanceof Error ? e : new Error(String(e));
-                    this.handlerErrorLogger.error(`onWorkAtPositionComplete failed for settler ${settler.id}`, err);
-                }
-            }
-            return TaskResult.DONE;
-        }
-
-        return TaskResult.CONTINUE;
-    }
-
-    /**
-     * Search for a position using the work handler's findTarget.
-     * Used by foresters/farmers to find where to plant.
-     * Stores result in job.data.targetPos for subsequent GO_TO_POS task.
-     */
-    private executeSearchPos(settler: Entity, job: JobState, handler?: WorkHandler): TaskResult {
-        if (job.type !== 'worker') return TaskResult.FAILED;
-        if (!handler) {
-            throw new Error(
-                `Settler ${settler.id} (${UnitType[settler.subType]}): SEARCH_POS task requires a work handler`
-            );
-        }
-
-        // Use findTarget to search for a valid position (handler is a system boundary)
-        let target: ReturnType<WorkHandler['findTarget']>;
-        try {
-            target = handler.findTarget(settler.x, settler.y, settler.id);
-        } catch (e) {
-            const err = e instanceof Error ? e : new Error(String(e));
-            this.handlerErrorLogger.error(`findTarget (SEARCH_POS) failed for settler ${settler.id}`, err);
-            return TaskResult.FAILED;
-        }
-        if (!target) {
-            if (handler.shouldWaitForWork) {
-                return TaskResult.CONTINUE;
-            }
-            log.debug(`Settler ${settler.id}: no position found for SEARCH_POS`);
-            return TaskResult.FAILED;
-        }
-
-        // Store position for GO_TO_POS task
-        job.data.targetPos = { x: target.x, y: target.y };
-        // Also store target entity if provided (e.g., for planting near a building)
-        if (target.entityId) {
-            job.data.targetId = target.entityId;
-        }
-
-        log.debug(`Settler ${settler.id}: found position (${target.x}, ${target.y}) for planting`);
-        return TaskResult.DONE;
-    }
-
-    /**
-     * Move to the position stored in job.data.targetPos.
-     * Used after SEARCH_POS to move to the found position.
-     */
-    private executeGoToPos(settler: Entity, job: JobState): TaskResult {
-        if (job.type !== 'worker') return TaskResult.FAILED;
-        if (!job.data.targetPos) {
-            throw new Error(
-                `Settler ${settler.id} (${UnitType[settler.subType]}): GO_TO_POS requires targetPos from a preceding SEARCH_POS task. Check job YAML.`
-            );
-        }
-        return this.moveToPosition(settler, job.data.targetPos.x, job.data.targetPos.y);
-    }
-
-    /**
-     * Wait for a specified duration.
-     * Uses task.duration to determine wait time.
-     */
-    private executeWait(job: JobState, task: TaskNode, dt: number): TaskResult {
-        const duration = task.duration ?? 1.0;
-        job.progress += dt / duration;
-
-        if (job.progress >= 1) {
-            return TaskResult.DONE;
-        }
-
-        return TaskResult.CONTINUE;
     }
 
     private completeJob(settler: Entity, runtime: UnitRuntime): void {

@@ -20,3 +20,4 @@ export {
     type JobState,
     type WorkHandler,
 } from './types';
+export type { TaskContext } from './task-executors';
