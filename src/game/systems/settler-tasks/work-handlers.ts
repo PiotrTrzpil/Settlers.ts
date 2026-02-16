@@ -8,7 +8,6 @@
  * Domain handlers: TREE (woodcutter), STONE (stonecutter), TREE_SEED_POS (forester in TreeSystem).
  */
 
-import { EMaterialType } from '../../economy';
 import type { GameState } from '../../game-state';
 import { EntityType, MapObjectType, type Entity } from '../../entity';
 import type { BuildingInventoryManager } from '../../features/inventory';
@@ -221,37 +220,26 @@ export function createSimpleHarvestHandler(config: SimpleHarvestConfig): WorkHan
 // Inventory helpers
 // ─────────────────────────────────────────────────────────────
 
-/**
- * Check if the home building's output is full for the job's pickup material.
- */
 export function isOutputFull(
     homeBuilding: Entity,
     tasks: TaskNode[],
     inventoryManager: BuildingInventoryManager
 ): boolean {
     const pickupTask = tasks.find(t => t.task === TaskType.PICKUP && t.good !== undefined);
-    if (!pickupTask || pickupTask.good === undefined) return false;
+    if (!pickupTask) return false;
 
-    return (
-        !inventoryManager.canAcceptInput(homeBuilding.id, pickupTask.good, 1) &&
-        inventoryManager.getInputSpace(homeBuilding.id, pickupTask.good) <= 0 &&
-        !canStoreInOutput(inventoryManager, homeBuilding.id, pickupTask.good)
-    );
-}
+    const material = pickupTask.good!;
+    const id = homeBuilding.id;
 
-/**
- * Check if building can store a material in its output slot.
- */
-function canStoreInOutput(
-    inventoryManager: BuildingInventoryManager,
-    buildingId: number,
-    materialType: EMaterialType
-): boolean {
-    const inventory = inventoryManager.getInventory(buildingId);
+    // Check all possible storage: input slots, input space, and output slots
+    if (inventoryManager.canAcceptInput(id, material, 1)) return false;
+    if (inventoryManager.getInputSpace(id, material) > 0) return false;
+
+    // Check output slot capacity directly
+    const inventory = inventoryManager.getInventory(id);
     if (!inventory) return false;
+    const outputSlot = inventory.outputSlots.find(s => s.materialType === material);
+    if (outputSlot && outputSlot.currentAmount < outputSlot.maxCapacity) return false;
 
-    const slot = inventory.outputSlots.find(s => s.materialType === materialType);
-    if (!slot) return false;
-
-    return slot.currentAmount < slot.maxCapacity;
+    return true;
 }

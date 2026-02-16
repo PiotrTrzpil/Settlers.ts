@@ -65,7 +65,7 @@ export function executeTask(
         return executeWorkOnEntity(settler, job, task, dt, ctx, handler);
 
     case TaskType.PICKUP:
-        return executePickup(settler, job, task, ctx);
+        return executePickup(settler, job, task);
 
     case TaskType.GO_HOME:
         return executeGoHome(settler, job, ctx);
@@ -320,8 +320,7 @@ function executeWait(job: JobState, task: TaskNode, dt: number): TaskResult {
 // Pickup / Dropoff tasks
 // ─────────────────────────────────────────────────────────────
 
-/** Worker pickup (e.g., woodcutter picking up LOG after chopping) */
-function executePickup(settler: Entity, job: JobState, task: TaskNode, _ctx: TaskContext): TaskResult {
+function executePickup(settler: Entity, job: JobState, task: TaskNode): TaskResult {
     const material = task.good;
     if (material != null) {
         setCarrying(settler, material, 1);
@@ -330,20 +329,15 @@ function executePickup(settler: Entity, job: JobState, task: TaskNode, _ctx: Tas
     return TaskResult.DONE;
 }
 
-/** Worker dropoff (e.g., woodcutter dropping off LOG at home building) */
 function executeDropoff(settler: Entity, job: JobState, ctx: TaskContext): TaskResult {
-    if (job.data.carryingGood == null) {
-        return TaskResult.DONE;
-    }
+    const { carryingGood, homeId } = job.data;
+    if (carryingGood == null) return TaskResult.DONE;
 
-    if (!job.data.homeId) {
+    if (!homeId) {
         throw new Error(
             `Settler ${settler.id} (${UnitType[settler.subType]}) has no home building for dropoff. Job started incorrectly.`
         );
     }
-
-    const homeId = job.data.homeId;
-    const carryingGood = job.data.carryingGood;
 
     const deposited = ctx.inventoryManager.depositOutput(homeId, carryingGood, 1);
     if (deposited > 0) {

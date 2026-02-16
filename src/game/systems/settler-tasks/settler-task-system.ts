@@ -156,12 +156,9 @@ export class SettlerTaskSystem implements TickSystem {
         return runtime.state === SettlerState.WORKING || runtime.moveTask !== null;
     }
 
-    /**
-     * Check if a unit has an active move task.
-     */
     hasMoveTask(entityId: number): boolean {
         const runtime = this.runtimes.get(entityId);
-        return runtime?.moveTask !== null;
+        return runtime !== undefined && runtime.moveTask !== null;
     }
 
     /**
@@ -172,7 +169,7 @@ export class SettlerTaskSystem implements TickSystem {
     registerWorkHandler(searchType: SearchType, handler: WorkHandler): void {
         if (this.workHandlers.has(searchType)) {
             throw new Error(
-                `Work handler already registered for ${searchType}. ` + `Each SearchType must have exactly one handler.`
+                `Work handler already registered for ${searchType}. Each SearchType must have exactly one handler.`
             );
         }
         this.workHandlers.set(searchType, handler);
@@ -522,14 +519,15 @@ export class SettlerTaskSystem implements TickSystem {
         }
     }
 
-    /** Build the initial WorkerJobState data for a new job. */
     private buildWorkerJobData(
         target: { entityId: number | null; x: number; y: number } | null,
         homeBuilding: Entity | null
     ): WorkerJobData {
+        // Store targetPos only when there's no entity (position-only results like forester planting spots)
+        const hasPositionOnly = target !== null && target.entityId === null;
         return {
             targetId: target?.entityId ?? null,
-            targetPos: target && target.entityId == null ? { x: target.x, y: target.y } : null,
+            targetPos: hasPositionOnly ? { x: target.x, y: target.y } : null,
             homeId: homeBuilding?.id ?? null,
             carryingGood: null,
         };

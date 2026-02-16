@@ -206,10 +206,6 @@ export function buildCarrierJob(
     };
 }
 
-// ─────────────────────────────────────────────────────────────
-// Legacy aliases for backward compatibility
-// ─────────────────────────────────────────────────────────────
-
 /** High-level settler state */
 export enum SettlerState {
     /** Waiting for work */

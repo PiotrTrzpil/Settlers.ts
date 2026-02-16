@@ -86,7 +86,6 @@ function goToDest(settler: Entity, job: CarrierJobState, ctx: TaskContext): Task
  * Inventory was reserved by LogisticsDispatcher via InventoryReservationManager.
  */
 function pickup(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskResult {
-    const entity = ctx.gameState.getEntityOrThrow(settler.id, 'carrier');
     const { sourceBuildingId, material, amount: requestedAmount } = job.data;
 
     // Withdraw from reserved amount (atomic: release slot reservation + withdraw)
@@ -105,7 +104,7 @@ function pickup(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskRe
         return TaskResult.FAILED;
     }
 
-    setCarrying(entity, material, withdrawn);
+    setCarrying(settler, material, withdrawn);
 
     job.data.carryingGood = material;
     job.data.amount = withdrawn;
@@ -131,10 +130,9 @@ function pickup(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskRe
  * Emits the critical 'carrier:deliveryComplete' event.
  */
 function dropoff(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskResult {
-    const entity = ctx.gameState.getEntityOrThrow(settler.id, 'carrier');
     const { destBuildingId, material } = job.data;
 
-    const amount = entity.carrying?.amount ?? 0;
+    const amount = settler.carrying?.amount ?? 0;
 
     const deposited = ctx.inventoryManager.depositInput(destBuildingId, material, amount);
 
@@ -143,7 +141,7 @@ function dropoff(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskR
         log.warn(`Carrier ${settler.id}: ${overflow} of ${material} overflow at building ${destBuildingId}`);
     }
 
-    clearCarrying(entity);
+    clearCarrying(settler);
     job.data.carryingGood = null;
 
     log.debug(`Carrier ${settler.id} delivered ${deposited} of ${material} to building ${destBuildingId}`);
