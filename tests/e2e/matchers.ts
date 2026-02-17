@@ -50,6 +50,52 @@ interface MatcherOptions {
 const DEFAULT_TIMEOUT = Timeout.DEFAULT;
 const POLL_INTERVAL = 100;
 
+// ---------------------------------------------------------------------------
+// Factory for view-field polling matchers
+// ---------------------------------------------------------------------------
+
+type ApplyAssertion<T> = (poll: any, expected: T) => Promise<void>;
+
+function createViewFieldMatcher<T>(config: {
+    field: string;
+    describe: (expected: T) => string;
+    describeActual?: (actual: T | undefined) => string;
+    assert?: ApplyAssertion<T>;
+    formatExpected?: (expected: T) => unknown;
+}) {
+    const describeActual = config.describeActual ?? ((a: T | undefined) => `${a}`);
+
+    return async (gp: GamePage, expected: T, options?: MatcherOptions) => {
+        const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
+        let actual: T | undefined;
+
+        try {
+            const poll = baseExpect.poll(
+                async () => {
+                    actual = await gp.getViewField(config.field as any);
+                    return actual;
+                },
+                { timeout, intervals: [POLL_INTERVAL], message: `expected ${config.describe(expected)}` }
+            );
+            if (config.assert) await config.assert(poll, expected);
+            else await poll.toBe(expected);
+
+            return { pass: true, message: () => '' };
+        } catch {
+            return {
+                pass: false,
+                message: () => `expected ${config.describe(expected)}, got ${describeActual(actual)}`,
+                expected: config.formatExpected ? config.formatExpected(expected) : expected,
+                actual,
+            };
+        }
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Matchers
+// ---------------------------------------------------------------------------
+
 export const expect = baseExpect.extend({
     /**
      * Assert that at least one entity matches the given filter.
@@ -95,222 +141,51 @@ export const expect = baseExpect.extend({
         }
     },
 
-    /**
-     * Assert the current game mode. Polls until matched or timeout.
-     */
-    async toHaveMode(gp: GamePage, expectedMode: string, options?: MatcherOptions) {
-        const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
-        let actual: string | undefined;
-
-        try {
-            await baseExpect
-                .poll(
-                    async () => {
-                        actual = await gp.getViewField('mode');
-                        return actual;
-                    },
-                    {
-                        timeout,
-                        intervals: [POLL_INTERVAL],
-                        message: `expected mode "${expectedMode}"`,
-                    }
-                )
-                .toBe(expectedMode);
-
-            return { pass: true, message: () => '' };
-        } catch {
-            return {
-                pass: false,
-                message: () => `expected mode "${expectedMode}", got "${actual}"`,
-                name: 'toHaveMode',
-                expected: expectedMode,
-                actual,
-            };
-        }
-    },
+    /** Assert the current game mode. Polls until matched or timeout. */
+    toHaveMode: createViewFieldMatcher<string>({
+        field: 'mode',
+        describe: m => `mode "${m}"`,
+        describeActual: a => `"${a}"`,
+    }),
 
     /**
      * Assert total entity count (includes environment objects like trees).
-     * Polls until matched or timeout.
      *
      * Note: Test map has ~500 trees. Use toHaveUnitCount/toHaveBuildingCount
      * for checking user-placed entities.
      */
-    async toHaveEntityCount(gp: GamePage, expected: number, options?: MatcherOptions) {
-        const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
-        let actual: number | undefined;
+    toHaveEntityCount: createViewFieldMatcher<number>({
+        field: 'entityCount',
+        describe: n => `${n} entities`,
+    }),
 
-        try {
-            await baseExpect
-                .poll(
-                    async () => {
-                        actual = await gp.getViewField('entityCount');
-                        return actual;
-                    },
-                    {
-                        timeout,
-                        intervals: [POLL_INTERVAL],
-                        message: `expected ${expected} entities`,
-                    }
-                )
-                .toBe(expected);
+    /** Assert building count (EntityType.Building = 2). */
+    toHaveBuildingCount: createViewFieldMatcher<number>({
+        field: 'buildingCount',
+        describe: n => `${n} buildings`,
+    }),
 
-            return { pass: true, message: () => '' };
-        } catch {
-            return {
-                pass: false,
-                message: () => `expected ${expected} entities, got ${actual}`,
-                name: 'toHaveEntityCount',
-                expected,
-                actual,
-            };
-        }
-    },
+    /** Assert unit count (EntityType.Unit = 1). */
+    toHaveUnitCount: createViewFieldMatcher<number>({
+        field: 'unitCount',
+        describe: n => `${n} units`,
+    }),
 
-    /**
-     * Assert building count (EntityType.Building = 2).
-     * Polls until matched or timeout.
-     */
-    async toHaveBuildingCount(gp: GamePage, expected: number, options?: MatcherOptions) {
-        const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
-        let actual: number | undefined;
+    /** Assert number of units currently moving. */
+    toHaveUnitsMoving: createViewFieldMatcher<number>({
+        field: 'unitsMoving',
+        describe: n => `${n} units moving`,
+    }),
 
-        try {
-            await baseExpect
-                .poll(
-                    async () => {
-                        actual = await gp.getViewField('buildingCount');
-                        return actual;
-                    },
-                    {
-                        timeout,
-                        intervals: [POLL_INTERVAL],
-                        message: `expected ${expected} buildings`,
-                    }
-                )
-                .toBe(expected);
+    /** Assert at least N units are moving. */
+    toHaveAtLeastUnitsMoving: createViewFieldMatcher<number>({
+        field: 'unitsMoving',
+        describe: n => `at least ${n} units moving`,
+        assert: (poll, n) => poll.toBeGreaterThanOrEqual(n),
+        formatExpected: n => `>= ${n}`,
+    }),
 
-            return { pass: true, message: () => '' };
-        } catch {
-            return {
-                pass: false,
-                message: () => `expected ${expected} buildings, got ${actual}`,
-                name: 'toHaveBuildingCount',
-                expected,
-                actual,
-            };
-        }
-    },
-
-    /**
-     * Assert unit count (EntityType.Unit = 1).
-     * Polls until matched or timeout.
-     */
-    async toHaveUnitCount(gp: GamePage, expected: number, options?: MatcherOptions) {
-        const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
-        let actual: number | undefined;
-
-        try {
-            await baseExpect
-                .poll(
-                    async () => {
-                        actual = await gp.getViewField('unitCount');
-                        return actual;
-                    },
-                    {
-                        timeout,
-                        intervals: [POLL_INTERVAL],
-                        message: `expected ${expected} units`,
-                    }
-                )
-                .toBe(expected);
-
-            return { pass: true, message: () => '' };
-        } catch {
-            return {
-                pass: false,
-                message: () => `expected ${expected} units, got ${actual}`,
-                name: 'toHaveUnitCount',
-                expected,
-                actual,
-            };
-        }
-    },
-
-    /**
-     * Assert number of units currently moving.
-     * Polls until matched or timeout.
-     */
-    async toHaveUnitsMoving(gp: GamePage, expected: number, options?: MatcherOptions) {
-        const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
-        let actual: number | undefined;
-
-        try {
-            await baseExpect
-                .poll(
-                    async () => {
-                        actual = await gp.getViewField('unitsMoving');
-                        return actual;
-                    },
-                    {
-                        timeout,
-                        intervals: [POLL_INTERVAL],
-                        message: `expected ${expected} units moving`,
-                    }
-                )
-                .toBe(expected);
-
-            return { pass: true, message: () => '' };
-        } catch {
-            return {
-                pass: false,
-                message: () => `expected ${expected} units moving, got ${actual}`,
-                name: 'toHaveUnitsMoving',
-                expected,
-                actual,
-            };
-        }
-    },
-
-    /**
-     * Assert at least N units are moving.
-     * Polls until matched or timeout.
-     */
-    async toHaveAtLeastUnitsMoving(gp: GamePage, minExpected: number, options?: MatcherOptions) {
-        const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
-        let actual: number | undefined;
-
-        try {
-            await baseExpect
-                .poll(
-                    async () => {
-                        actual = await gp.getViewField('unitsMoving');
-                        return actual;
-                    },
-                    {
-                        timeout,
-                        intervals: [POLL_INTERVAL],
-                        message: `expected at least ${minExpected} units moving`,
-                    }
-                )
-                .toBeGreaterThanOrEqual(minExpected);
-
-            return { pass: true, message: () => '' };
-        } catch {
-            return {
-                pass: false,
-                message: () => `expected at least ${minExpected} units moving, got ${actual}`,
-                name: 'toHaveAtLeastUnitsMoving',
-                expected: `>= ${minExpected}`,
-                actual,
-            };
-        }
-    },
-
-    /**
-     * Assert no units are moving.
-     * Polls until matched or timeout.
-     */
+    /** Assert no units are moving. */
     async toHaveNoUnitsMoving(gp: GamePage, options?: MatcherOptions) {
         const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
         let actual: number | undefined;
@@ -322,30 +197,17 @@ export const expect = baseExpect.extend({
                         actual = await gp.getViewField('unitsMoving');
                         return actual;
                     },
-                    {
-                        timeout,
-                        intervals: [POLL_INTERVAL],
-                        message: `expected no units moving`,
-                    }
+                    { timeout, intervals: [POLL_INTERVAL], message: 'expected no units moving' }
                 )
                 .toBe(0);
 
             return { pass: true, message: () => '' };
         } catch {
-            return {
-                pass: false,
-                message: () => `expected no units moving, got ${actual}`,
-                name: 'toHaveNoUnitsMoving',
-                expected: 0,
-                actual,
-            };
+            return { pass: false, message: () => `expected no units moving, got ${actual}`, expected: 0, actual };
         }
     },
 
-    /**
-     * Assert camera is at approximately the given position.
-     * Polls until matched or timeout.
-     */
+    /** Assert camera is at approximately the given position. */
     async toHaveCameraAt(
         gp: GamePage,
         expectedX: number,
@@ -373,7 +235,7 @@ export const expect = baseExpect.extend({
                     {
                         timeout,
                         intervals: [POLL_INTERVAL],
-                        message: `expected camera at (${expectedX}, ${expectedY}) ±${tolerance}`,
+                        message: `expected camera at (${expectedX}, ${expectedY}) \u00b1${tolerance}`,
                     }
                 )
                 .toBe(true);
@@ -383,7 +245,7 @@ export const expect = baseExpect.extend({
             return {
                 pass: false,
                 message: () =>
-                    `expected camera at (${expectedX}, ${expectedY}) ±${tolerance}, got (${actualX}, ${actualY})`,
+                    `expected camera at (${expectedX}, ${expectedY}) \u00b1${tolerance}, got (${actualX}, ${actualY})`,
                 name: 'toHaveCameraAt',
                 expected: { x: expectedX, y: expectedY },
                 actual: { x: actualX, y: actualY },

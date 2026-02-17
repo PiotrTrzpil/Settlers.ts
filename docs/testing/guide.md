@@ -7,17 +7,23 @@ Guidelines for writing effective tests in Settlers.ts.
 ### File Structure
 ```
 tests/
-  unit/                           # Fast, isolated unit tests (Vitest)
-  e2e/                            # End-to-end browser tests (Playwright)
-    game-page.ts                  # Page object — all shared helpers live here
-    matchers.ts                   # Custom Playwright matchers (toHaveEntity, etc.)
-    fixtures.ts                   # Shared test map fixture (worker-scoped)
-    game-logic.spec.ts            # App loading, navigation, canvas interaction
-    building-placement.spec.ts    # Building placement, unit spawning, rendering
-    unit-movement.spec.ts         # Movement commands, interpolation, debug stats
-    terrain-rendering.spec.ts     # Screenshot regression + initial state checks
-    unit-sprites.spec.ts          # Sprite loading (requires real game assets)
-    sprite-browser.spec.ts        # JIL/GFX view pages
+  unit/                       # Fast, isolated unit tests (Vitest)
+    helpers/
+      test-game.ts            # GameState, entity factories, command helpers
+      test-map.ts             # Map/terrain fixtures, TERRAIN constants
+    flows/                    # Integration tests spanning multiple subsystems
+    carriers/, inventory/, logistics/, service-areas/, integration/
+  e2e/                        # End-to-end browser tests (Playwright)
+    game-page.ts              # Page object facade — delegates to helper modules
+    game-actions.ts           # Game commands (place, spawn, move, find tiles)
+    game-queries.ts           # Unit/animation/movement state queries
+    audio-helpers.ts          # Audio state reads and toggles
+    sprite-helpers.ts         # Sprite loading verification and cache ops
+    matchers.ts               # Custom Playwright matchers (polling-based)
+    fixtures.ts               # Shared fixtures (worker + test scoped)
+    wait-config.ts            # Centralized frame/timeout/poll constants
+    wait-profiler.ts          # Built-in wait performance tracking
+    *.spec.ts                 # Test files
 ```
 
 ### Naming Conventions
@@ -38,23 +44,10 @@ The Playwright config defines **test projects** with different timeouts based on
 | `assets` | `@requires-assets` | 60s | Needs real Settlers 4 game files |
 | `visual` | `@screenshot` | 20s | Visual regression tests |
 
-Run specific tiers:
-```sh
-npx playwright test --project=smoke           # Only smoke tests
-npx playwright test --project=assets          # Only asset-dependent tests
-npx playwright test --grep @smoke             # Alternative: by tag
-npx playwright test --grep-invert @slow       # Skip slow tests
-```
+**Use tags instead of manual `test.setTimeout()`** — projects handle timeouts automatically.
 
-**Tagging tests:**
 ```typescript
-// On describe blocks
 test.describe('App Loading', { tag: '@smoke' }, () => { ... });
-
-// On individual tests
-test('screenshot baseline', { tag: '@screenshot' }, async ({ page }) => { ... });
-
-// Multiple tags — matches any project with either tag
 test.describe('Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () => { ... });
 ```
 
@@ -73,20 +66,24 @@ test.describe('Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () => { 
   1. UI interactions   — click buttons, hover canvas, navigate routes
   2. GamePage helpers  — waitForReady, moveCamera, placeBuilding, spawnUnit, etc.
   3. game.execute()    — the command pipeline (same path the UI uses)
-  4. Debug reads       — __settlers_debug__, getGameState(), getDebugField()
+  4. Debug reads       — getDebugField(), getViewField(), getGameState()
   5. Custom matchers   — toHaveEntity, toHaveMode, toHaveUnitCount, etc.
 ```
 
 ### Debug bridges (window globals)
 
-| Bridge | Type | Purpose |
-|--------|------|---------|
-| `__settlers_debug__` | DebugStatsState | Read-only game stats (frameCount, entityCount, mode, camera, etc.) |
-| `__settlers_game__` | Game | Execute commands, read entities, map data |
-| `__settlers_input__` | InputManager | Switch modes, access camera (proper lifecycle) |
-| `__settlers_viewpoint__` | ViewPoint | Camera positioning (use setPosition for tile centering) |
-| `__settlers_entity_renderer__` | EntityRenderer | Read renderer state (public properties only) |
-| `__settlers_landscape__` | LandscapeRenderer | Landscape renderer access |
+The game exposes several window globals for test access. The primary ones:
+
+| Bridge | Purpose |
+|--------|---------|
+| `__settlers_debug__` | Read-only stats (frameCount, entityCount, camera, etc.) |
+| `__settlers_game__` | Execute commands, read entities, `resetToCleanState()` |
+| `__settlers_view_state__` | Reactive view state (entity counts, mode, etc.) |
+| `__settlers_game_settings__` | Game speed, player settings |
+| `__settlers_input__` | Switch modes with proper lifecycle |
+| `__settlers_viewpoint__` | Camera positioning (use `setPosition()`) |
+
+See `game-page.ts` and `game-actions.ts` for the full set of bridges used.
 
 ### Key principle: go through regular game logic
 
@@ -95,7 +92,7 @@ Tests should use the same code paths a player would. Ranked from most preferred 
 1. **UI interaction** — click buttons, hover canvas, keyboard shortcuts
 2. **Game commands** — `game.execute({ type: 'place_building', ... })`
 3. **Public API methods** — `viewPoint.setPosition()`, `inputManager.switchMode()`
-4. **Debug bridge reads** — `__settlers_debug__.entityCount`
+4. **Debug bridge reads** — `getDebugField('entityCount')`
 5. **Internal state reads** — `game.state.entities.filter(...)` (acceptable for verification)
 
 **Never:**
@@ -114,8 +111,6 @@ Understand what helpers exist, what patterns are used, and avoid duplicating fun
 
 ### Import structure
 
-Tests import from one of two sources depending on whether they need the shared fixture:
-
 ```typescript
 // Tests using shared fixture (testMap pre-loaded, state reset between tests)
 import { test, expect } from './fixtures';
@@ -128,86 +123,45 @@ import { GamePage } from './game-page';
 Both provide custom matchers. Never import `expect` directly from `@playwright/test`
 in spec files — always go through `matchers.ts` or `fixtures.ts`.
 
-### Use Page Objects
-All e2e tests should use `GamePage` from `tests/e2e/game-page.ts`:
-```typescript
-test('can place building', async ({ page }) => {
-    const gp = new GamePage(page);
-    await gp.goto({ testMap: true });
-    await gp.waitForReady();
-    // ...
-});
-```
-
 ### GamePage Helpers
 
-**Navigation & waiting:**
-- `goto({ testMap: true })` — navigate to map view with synthetic test map
-- `waitForReady(minFrames)` — wait for game loaded + renderer ready + N new frames
-- `waitForFrames(n)` — wait for N **new** frames (relative counting)
-- `waitForEntityCountAbove(n)` — poll until entity count exceeds N
+`GamePage` is a facade that delegates to specialized helper modules. All wait methods
+are instrumented by the Wait Profiler. **Read `game-page.ts` for the full API** — key
+categories:
 
-**Polling helpers (use instead of inline waitForFunction):**
-- `waitForUnitCount(n, timeout)` — poll until unit count equals N
-- `waitForBuildingCount(n, timeout)` — poll until building count equals N
-- `waitForUnitsMoving(n, timeout)` — poll until at least N units are moving
-- `waitForNoUnitsMoving(timeout)` — poll until all units are stationary
-- `waitForUnitToMove(unitId, startX, startY, timeout)` — poll until unit moves from start
-- `waitForUnitAtDestination(unitId, targetX, targetY, timeout)` — poll until unit arrives
-- `waitForMode(mode, timeout)` — poll until mode changes
-
-**Game actions (command pipeline):**
-- `placeBuilding(type, x, y, player?)` — place via `game.execute()`, returns entity info
-- `placeResource(type, x, y, amount?)` — place via `game.execute()`, returns entity info
-- `spawnUnit(unitType?, x?, y?, player?)` — spawn via `game.execute()`, returns entity info
-- `moveUnit(entityId, targetX, targetY)` — issue move command, returns success
-
-**State reads:**
-- `getDebugField(key)` — read a single debug bridge field
-- `getGameState()` — structured game state with entities
-- `getEntities(filter?)` — read entities with optional type/subType/player filter
-- `findBuildableTile(buildingType?)` — spiral from map center to find valid spot
-- `findPassableTile()` — find a tile suitable for resource/unit placement
-
-**UI actions:**
-- `moveCamera(x, y)` — center camera on tile (uses `ViewPoint.setPosition()`)
-- `resetGameState()` — remove user-placed entities + reset mode via InputManager
-- `selectMode()` — click select mode button
-- `collectErrors()` — error collector with known-harmless warning filter
+- **Navigation & waiting** — `goto()`, `waitForReady()`, `waitForGameReady()` (no WebGL), `waitForFrames()`, `waitForTicks()`
+- **Polling helpers** — `waitForUnitCount()`, `waitForBuildingCount()`, `waitForUnitsMoving()`, `waitForUnitAtDestination()`, `waitForMovementIdle()`, `waitForMode()`
+- **Game actions** (from `game-actions.ts`) — `placeBuilding()`, `placeResource()`, `spawnUnit()`, `moveUnit()`, `setGameSpeed()`, `findBuildableTile()`, `findPassableTile()`
+- **State reads** (from `game-actions.ts` / `game-queries.ts`) — `getDebugField()`, `getViewField()`, `getEntities()`, `getUnitState()`, `getAnimationState()`, `getMovementControllerState()`
+- **UI actions** — `moveCamera()`, `resetGameState()`, `selectMode()`, `clickButton()`, `collectErrors()`
 
 ### Custom matchers
 
-Custom matchers in `tests/e2e/matchers.ts` provide domain-specific assertions:
+Custom matchers in `matchers.ts` provide domain-specific assertions.
+**All matchers automatically poll** at 100ms intervals until the condition is met or timeout
+(default 5s). No need to wrap with `expect.toPass()`.
 
 ```typescript
-// Entity assertions
 await expect(gp).toHaveEntity({ type: 2, subType: 1, x: 10, y: 15 });
-await expect(gp).toHaveEntityCount(500);  // Includes environment (trees)
-await expect(gp).toHaveUnitCount(3);      // Only units (EntityType.Unit)
-await expect(gp).toHaveBuildingCount(2);  // Only buildings
-
-// Movement assertions
+await expect(gp).toHaveUnitCount(3);
+await expect(gp).toHaveBuildingCount(2);
 await expect(gp).toHaveUnitsMoving(1);
+await expect(gp).toHaveAtLeastUnitsMoving(1);
 await expect(gp).toHaveNoUnitsMoving();
-
-// Mode/camera assertions
 await expect(gp).toHaveMode('select');
 await expect(gp).toHaveCameraAt(100, 100, tolerance);
+
+// Override timeout
+await expect(gp).toHaveUnitCount(5, { timeout: 10_000 });
 ```
 
 **Important:** Test map has ~500 environment entities (trees). Use `toHaveUnitCount` or
 `toHaveBuildingCount` instead of `toHaveEntityCount` when checking for "empty" state.
 
-These are **point-in-time checks** (no auto-retry). For polling, wrap with `expect.toPass()`:
+For **point-in-time checks** without polling, use `GamePage.getViewField()` directly:
 ```typescript
-await expect(async () => {
-    await expect(gp).toHaveUnitCount(5);
-}).toPass({ timeout: 5000 });
-```
-
-Or use the GamePage polling helpers directly:
-```typescript
-await gp.waitForUnitCount(5, 5000);
+const count = await gp.getViewField('unitCount');
+expect(count).toBe(5);
 ```
 
 ### Polling patterns
@@ -224,14 +178,6 @@ await page.waitForFunction(
     { unitId },
     { timeout: 3000 }
 );
-
-// GOOD for multi-condition — expect.toPass() with clear error messages
-await expect(async () => {
-    const state = await page.evaluate(/* read state */);
-    expect(state.x).toBe(targetX);
-    expect(state.y).toBe(targetY);
-    expect(state.isStationary).toBe(true);
-}).toPass({ timeout: 5000, intervals: [100, 200, 500, 1000] });
 ```
 
 **Never make timing assumptions:**
@@ -245,322 +191,131 @@ expect(unitState.pathLength).toBeGreaterThan(0);
 
 ### `test.step()` for complex tests
 
-Use `test.step()` to structure multi-phase tests. Steps appear in traces and reports,
-making it clear which phase failed:
+Use `test.step()` to structure multi-phase tests (3+ distinct phases). Steps appear in
+traces and reports, making it clear which phase failed.
 
-```typescript
-test('building is rendered on canvas', async({ page }) => {
-    const gp = new GamePage(page);
-    await gp.goto({ testMap: true });
-    await gp.waitForReady(10);
-
-    await test.step('place building at buildable tile', async () => {
-        const tile = await gp.findBuildableTile();
-        await gp.placeBuilding(1, tile!.x, tile!.y);
-        await gp.waitForFrames(15);
-    });
-
-    await test.step('verify building exists', async () => {
-        await expect(gp).toHaveEntity({ type: 2 });
-    });
-});
-```
-
-Only add `test.step()` to tests with 3+ distinct phases. Simple tests don't need it.
-
-### Consolidate tests that share setup
-
-**When multiple tests navigate to the same page or use the same fixture setup, consolidate
-them into a single test with `test.step()`.** This eliminates redundant navigation/setup
-while preserving clear failure reporting.
-
-**Consolidate when:**
-- Multiple tests load the same page (e.g., all navigate to `/jil-view`)
-- Tests check different aspects of the same loaded state
-- Tests form a logical sequence (enable → verify → disable → verify)
-
-**Keep separate when:**
-- Tests need different fixture states
-- Tests are genuinely independent scenarios
-- One test's failure shouldn't skip the others
-
-```typescript
-// BAD — 3 tests, 3 page loads
-test('page loads without errors', async ({ page }) => {
-    await page.goto('/jil-view');
-    // ... check errors
-});
-test('view toggle works', async ({ page }) => {
-    await page.goto('/jil-view');  // Redundant load!
-    // ... check toggle
-});
-test('selectors visible', async ({ page }) => {
-    await page.goto('/jil-view');  // Redundant load!
-    // ... check selectors
-});
-
-// GOOD — 1 test, 1 page load, clear steps
-test('jil-view loads and view modes work correctly', async ({ page }) => {
-    await test.step('page loads without critical errors', async () => {
-        await page.goto('/jil-view');
-        // ... check errors
-    });
-
-    await test.step('view toggle works', async () => {
-        // ... check toggle (page already loaded)
-    });
-
-    await test.step('selectors visible in single view', async () => {
-        // ... check selectors
-    });
-});
-```
-
-**Shared fixtures reduce consolidation value:** When using the shared `gp` fixture,
-tests already share the loaded page. Consolidation mainly helps tests using fresh
-`page` fixture or tests that do expensive setup within the test body.
+**Consolidate when** multiple tests navigate to the same page or share expensive setup.
+**Keep separate when** tests need different fixture states or are genuinely independent.
 
 ### Avoid race conditions at high game speeds
 
-The `gs` fixture uses 4x game speed by default. Short movements (3-5 tiles) can complete
+Fixtures use 4x game speed by default. Short movements (3-5 tiles) can complete
 before assertions run, causing flaky tests.
 
 ```typescript
-// BAD — 5 tiles at 4x speed completes too fast, assertion may miss "moving" state
+// BAD — 5 tiles at 4x speed completes too fast
 await gs.moveUnit(unit.id, unit.x + 5, unit.y);
 await gs.waitForUnitsMoving(1, 5000);  // May fail if already finished
 
 // GOOD — 15 tiles gives enough time to catch the "moving" state
 await gs.moveUnit(unit.id, unit.x + 15, unit.y);
-await gs.waitForUnitsMoving(1, 5000);  // Unit still moving when we check
+await gs.waitForUnitsMoving(1, 5000);
 ```
 
-For timing-sensitive tests, use 1x speed:
-```typescript
-test('animation state during movement', async ({ gs }) => {
-    await gs.setGameSpeed(1.0);  // Slow down for observation
-    // ...
-});
-```
+For timing-sensitive tests, use `setGameSpeed(1.0)` or the `gpNormal` fixture.
 
 ### Never use `waitForTimeout`
-Use deterministic waiting instead:
-```typescript
-// BAD — flaky, slow
-await page.waitForTimeout(500);
-
-// GOOD — wait for N new frames
-await gp.waitForFrames(5);
-
-// GOOD — poll for specific condition
-await gp.waitForUnitCount(1);
-await gp.waitForUnitsMoving(1);
-
-// GOOD — custom condition with explicit timeout
-await page.waitForFunction(
-    (min) => (window as any).__settlers_debug__?.entityCount > min,
-    countBefore,
-    { timeout: 5000 },
-);
-```
+Use deterministic waiting: `waitForFrames()`, `waitForUnitCount()`, `waitForUnitsMoving()`,
+or `page.waitForFunction()` with an explicit `{ timeout }`.
 
 ### `waitForFrames` uses relative counting
 `waitForFrames(n)` waits for `n` **new** frames from the current frame count.
-It reads `frameCount` first, then waits for `frameCount >= current + n`.
-This is critical for the shared fixture where `frameCount` is already high.
 Never compare directly against absolute `frameCount`.
 
 ### Use `testMap: true` for all game tests
-Tests that interact with game state should use the synthetic test map:
-- No game asset dependencies
-- Deterministic terrain layout
-- Fast loading
-
 Only use `testMap: false` when testing real asset loading (e.g., sprite files).
 
 ### Entity type constants
-When filtering entities, use the correct `EntityType` values:
-- `type === 1` → Unit (bearer, swordsman, etc.)
-- `type === 2` → Building (lumberjack, warehouse, etc.)
-- `type === 3` → Environment (trees, stones) — **present in test map**
-- `type === 4` → StackedResource (logs, stone piles, etc.)
+When filtering entities, use `EntityType` enum values:
+- `EntityType.Unit` (1) — carrier, swordsman, etc.
+- `EntityType.Building` (2) — WoodcutterHut, StorageArea, etc.
+- `EntityType.Environment` (3) — trees, stones (**present in test map, ~500**)
+- `EntityType.StackedResource` (4) — log piles, stone piles
 
-`BuildingType` starts at 1 (Lumberjack=1, Warehouse=2, Sawmill=3). Never use `buildingType: 0`.
+`BuildingType` starts at 1 (WoodcutterHut=1, StorageArea=2, Sawmill=3). Never use `buildingType: 0`.
 
 ### Don't duplicate GamePage helpers
 If a test needs to find buildable terrain, use `gp.findBuildableTile()` instead of
-writing a custom spiral search inline. Pass a `buildingType` for larger buildings:
-`gp.findBuildableTile(2)` for Warehouse (3x3). If you need new shared logic, add it
-to `GamePage`.
+writing a custom spiral search inline. If you need new shared logic, add it to `GamePage`
+or the appropriate helper module.
 
 ### Camera positioning
-Use `gp.moveCamera(tileX, tileY)` to center the camera on a tile. It calls
-`ViewPoint.setPosition()` (public API with proper isometric coordinate conversion).
-Never directly set `posX`/`posY` on the viewpoint.
+Use `gp.moveCamera(tileX, tileY)` — it calls `ViewPoint.setPosition()` with proper
+isometric coordinate conversion. Never directly set `posX`/`posY`.
 
 ### Mode switching
-For tests, switch modes via UI buttons:
-```typescript
-await gp.selectMode();  // clicks the select button
-await page.locator('[data-testid="btn-lumberjack"]').click();
-```
-
-For `resetGameState()`, mode switching goes through `InputManager.switchMode('select')`
-which fires proper `onExit`/`onEnter` lifecycle callbacks and cleans up mode data.
-
-### No debug-only test files
-Tests should have meaningful assertions — not just capture screenshots or log data.
-Debug/diagnostic scripts belong in `scripts/`, not in the test suite.
-
-### No `console.log` in tests
-Tests should assert, not print. Remove any `console.log` debugging before committing.
-
-### E2E vs Unit test boundary
-**E2E tests should verify the full UI pipeline**: button clicks, canvas interactions,
-visual rendering, navigation, error-free loading. If a test only calls `game.execute()`
-and checks state without any UI interaction, it should be a unit test instead.
+For tests, switch modes via UI buttons (`gp.selectMode()`, `gp.clickButton('btn-woodcutter')`).
+`resetGameState()` uses `InputManager.switchMode('select')` which fires proper lifecycle callbacks.
 
 ### collectErrors() filter
-The `collectErrors()` helper filters only specific known-harmless messages:
-- Missing GFX asset files (e.g. '2.gh6')
-- WebGL context warnings from headless Chrome
-- Procedural texture fallback warnings
-
-If you need to suppress a new error pattern, add it explicitly with a comment explaining
-why it's harmless. Keep the filter narrow — broad filters hide real bugs.
+The filter is intentionally narrow — only suppresses known-harmless messages (missing GFX files,
+WebGL context warnings, procedural texture fallbacks). Add new patterns explicitly with comments.
 
 ---
 
-## Shared Test Map Fixture (Faster Tests)
+## Shared Test Map Fixture
 
-Most e2e tests load the same `?testMap=true` page. To avoid repeating that
-expensive navigation for every test, use the shared fixture from `tests/e2e/fixtures.ts`:
+Most e2e tests use the shared fixture from `tests/e2e/fixtures.ts`:
 
 ```typescript
-// Import from fixtures instead of @playwright/test
 import { test, expect } from './fixtures';
 
 test('my test', async ({ gp }) => {
-    // gp is a GamePage with testMap already loaded and state reset
+    // gp is a GamePage with testMap loaded and state reset. 4x game speed.
     // No need to call goto() or waitForReady()
-    await gp.spawnUnit(1);  // Bearer = UnitType 1
+    await gp.spawnUnit(1);
     await gp.waitForUnitCount(1);
-    // ...
 });
 ```
 
-### Fixture hierarchy
+### Fixture types
 
-```
-testMapPage (worker-scoped, 45s timeout)
-    └── gp (test-scoped, 5s setup timeout)
-        ├── gpWithBuilding (has Lumberjack placed)
-        ├── gpWithUnit (has Bearer spawned)
-        ├── gpWithMovingUnit (has Bearer moving east)
-        └── gpCentered (camera centered on map)
-```
+**Worker-scoped** (one shared page per parallel worker):
+- `testMapPage` — full WebGL, `?testMap=true`, waits for renderer ready
+- `gameStatePage` — game state only, no WebGL requirement
+- `assetPage` — real game assets (not testMap), waits for sprites loaded
 
-The base `gp` fixture:
-- Loads the test map **once per worker** (not per test)
-- Calls `resetGameState()` before each test (removes user entities, keeps trees)
-- Uses `force: true` for UI clicks to skip actionability waits
-- Has a 5-second fixture timeout (separate from test timeout)
+**Test-scoped** (reset before each test, 4x game speed):
+- `gp` — wraps `testMapPage` (WebGL required)
+- `gs` — wraps `gameStatePage` (no WebGL — for game-state-only tests)
+- `gpNormal` — like `gp` but 1x speed
+- `gpWithUI` — `gp` + Buildings tab open
+- `gpWithBuilding`, `gpWithUnit`, `gpWithMovingUnit` — preset entity state
+- `gpCentered` — camera centered on map
+- `gpAssets` — real game assets (skips in CI if unavailable)
 
-### Preset fixtures
+See `fixtures.ts` for the full list and setup details.
 
-For tests that need common starting state, use preset fixtures:
+### When to use `gp` vs `gs`
 
-```typescript
-// Test with a Lumberjack building already placed
-test('verify building state', async ({ gpWithBuilding }) => {
-    await expect(gpWithBuilding).toHaveBuildingCount(1);
-});
+Use `gp` when the test needs WebGL rendering (visual assertions, canvas interaction).
+Use `gs` when the test only needs game state (movement, animation state, entity queries).
+`gs` works in headless environments without WebGL support.
 
-// Test with a Bearer unit already spawned
-test('verify unit state', async ({ gpWithUnit }) => {
-    await expect(gpWithUnit).toHaveUnitCount(1);
-});
+### State reset
 
-// Test with a unit already moving
-test('test movement redirection', async ({ gpWithMovingUnit }) => {
-    await expect(gpWithMovingUnit).toHaveUnitsMoving(1);
-});
-```
+`resetGameState()` calls `game.resetToCleanState()` which removes user-placed entities
+(units, buildings, resources) but **keeps environment objects** (~500 trees in test map).
+Then switches mode to 'select' via InputManager and waits for propagation.
 
-**When NOT to use the shared fixture:**
-- Screenshot regression tests (need pixel-perfect fresh state)
-- Tests that need a non-testMap page (sprite browser, real assets)
-- Tests that intentionally corrupt page state (navigation tests)
+### When NOT to use the shared fixture
+- Screenshot regression tests (need fresh pixel state)
+- Non-testMap pages (sprite browser, real assets)
+- Navigation/loading tests
 
 For those, import from `./matchers` and manage the page yourself.
 
-### State reset details
-
-`resetGameState()` goes through proper game logic:
-1. Removes only user-placed entities (type 1, 2, 4) via `game.execute()`
-2. **Keeps environment objects** (type 3 = trees) — test map has ~500 of these
-3. Calls `inputManager.switchMode('select')` with proper lifecycle
-4. Waits for 2 frames to propagate cleanup
-
-### Adding new tests to the shared fixture
-
-```typescript
-// tests/e2e/my-feature.spec.ts
-import { test, expect } from './fixtures';
-
-test.describe('My Feature', { tag: '@smoke' }, () => {
-    test('test case', async ({ gp }) => {
-        const page = gp.page;
-        // gp is ready to use — game loaded, state clean
-        // Use game.execute() for setup, UI for interaction
-    });
-});
-```
-
 ---
 
-## Timeouts
+## Wait Configuration
 
-### Project-based timeouts (preferred)
+Centralized in `tests/e2e/wait-config.ts`:
 
-The Playwright config defines timeouts per project based on tags. **Use tags instead
-of manual `test.setTimeout()`:**
+- **`Frames`** — semantic frame counts: `IMMEDIATE` (1), `STATE_PROPAGATE` (2), `RENDER_SETTLE` (5), `ANIMATION_SETTLE` (10), `VISUAL_STABLE` (15)
+- **`Timeout`** — semantic timeouts: `FAST` (3s), `DEFAULT` (5s), `MOVEMENT` (8s), `LONG_MOVEMENT` (10s), `INITIAL_LOAD` (20s), `ASSET_LOAD` (30s)
+- **`PollIntervals`** — arrays for `expect.toPass()`: `FAST`, `DEFAULT`, `MOVEMENT`
 
-```typescript
-// GOOD — project handles timeout automatically
-test.describe('Slow Tests', { tag: '@slow' }, () => {
-    test('complex multi-phase test', async ({ gp }) => {
-        // Gets 30s timeout from 'slow' project
-    });
-});
-
-// AVOID — redundant if tag is set correctly
-test('slow test', async ({ gp }) => {
-    test.setTimeout(30_000);  // Unnecessary if @slow tag is used
-});
-```
-
-### Explicit timeouts in waits
-
-When using `page.waitForFunction` in spec files, always pass an explicit `{ timeout }`:
-```typescript
-// GOOD — explicit timeout
-await page.waitForFunction(predicate, args, { timeout: 5000 });
-
-// BAD — relies on global default, unclear intent
-await page.waitForFunction(predicate, args);
-```
-
-The `GamePage` helpers (`waitForReady`, `waitForFrames`, `waitForUnitCount`, etc.)
-all have sensible default timeouts (3–20s) that are capped by the global test timeout.
-
-### Fixture timeouts
-
-Fixtures have their own timeout separate from test timeout:
-- `testMapPage`: 45s (worker-scoped, one-time setup)
-- `gp` and presets: 5s (test-scoped, quick reset)
-
-This prevents fixture setup from eating into test time.
+Always pass explicit `{ timeout }` to `page.waitForFunction()` in spec files.
 
 ---
 
@@ -568,355 +323,85 @@ This prevents fixture setup from eating into test time.
 
 ### Shared Test Helpers
 
-Use the shared helpers in `tests/unit/helpers/` to reduce boilerplate:
-
-**`test-game.ts`** — GameState and entity factories:
+**`test-game.ts`** — GameState, entity factories, and command helpers:
 ```typescript
-import {
-    createGameState,
-    addUnit,
-    addBuilding,
-    addBuildingWithInventory,
-    addUnitWithPath,
-    initializeAnimationState,
-    createPickupJob,
-    createDeliverJob,
-    createReturnHomeJob,
-    placeBuilding,
-    spawnUnit,
-    moveUnit,
-    removeEntity,
-    createTestEventBus,
-} from '../helpers/test-game';
+import { createGameState, createTestContext, addUnit, addBuilding,
+    addBuildingWithInventory, placeBuilding, spawnUnit, moveUnit } from '../helpers/test-game';
 
-// Usage
-const state = createGameState();
+const state = createGameState();                              // Minimal state + movement
+const ctx = createTestContext();                               // Full context with all managers
 const { entity, unitState } = addUnit(state, 10, 10);
 const building = addBuildingWithInventory(state, 15, 15, BuildingType.Sawmill);
-initializeAnimationState(entity);
-const job = createPickupJob(building.id, EMaterialType.LOG, 5);
 ```
 
 **`test-map.ts`** — Map and terrain fixtures:
 ```typescript
-import { createTestMap, TERRAIN, setTerrainAt, blockColumn } from '../helpers/test-map';
+import { createTestMap, TERRAIN, setTerrainAt, setHeightAt, blockColumn } from '../helpers/test-map';
 
-const testMap = createTestMap(64, 64);  // 64x64 grass map
+const testMap = createTestMap(64, 64);              // 64x64 all-grass flat map
 setTerrainAt(testMap, 10, 10, TERRAIN.WATER);
-blockColumn(testMap, 5, 0, 10);  // Block tiles for pathfinding tests
-```
-
-### Keep Tests Focused
-
-**Prefer fewer, more comprehensive tests over many granular ones.**
-
-Bad (39 tests for simple mode):
-```typescript
-it('should return HANDLED', () => { ... });
-it('should set mode data', () => { ... });
-it('should update preview', () => { ... });
-```
-
-Good (focused test covering related behavior):
-```typescript
-it('should initialize with building type and switch to select if missing', () => {
-    mode.onEnter(mockContext, { buildingType: BuildingType.Lumberjack, player: 1 });
-    expect(modeData?.buildingType).toBe(BuildingType.Lumberjack);
-
-    switchedToMode = null;
-    mode.onEnter(mockContext, undefined);
-    expect(switchedToMode).toBe('select');
-});
-```
-
-### Test Structure
-
-Use `describe` blocks to group related tests by behavior:
-```typescript
-describe('CarrierManager', () => {
-    describe('createCarrier', () => { ... });
-    describe('removeCarrier', () => { ... });
-    describe('canAssignJobTo', () => { ... });
-    describe('assignJob', () => { ... });
-});
-```
-
-### Standard Setup Pattern
-
-Use `beforeEach` for common setup:
-```typescript
-describe('CarrierMovementController', () => {
-    let carrierManager: CarrierManager;
-    let gameState: GameState;
-    let testMap: TestMap;
-
-    beforeEach(() => {
-        carrierManager = new CarrierManager();
-        gameState = createGameState();
-        testMap = createTestMap(64, 64);
-        gameState.setTerrainData(
-            testMap.groundType,
-            testMap.groundHeight,
-            testMap.mapSize.width,
-            testMap.mapSize.height,
-        );
-    });
-
-    // Tests can assume fresh state
-});
-```
-
-### Test Data Builders
-
-Use builder functions for complex test objects:
-```typescript
-// GOOD — use shared builders
-const job = createPickupJob(200, EMaterialType.LOG, 5);
-
-// BAD — inline object literals everywhere
-const job: CarrierJob = {
-    type: 'pickup',
-    fromBuilding: 200,
-    material: EMaterialType.LOG,
-    amount: 5,
-};
-```
-
-### Mock Patterns
-
-**Creating minimal mocks for interfaces:**
-```typescript
-function createPointerData(overrides: Partial<PointerData> = {}): PointerData {
-    return {
-        screenX: 100, screenY: 100,
-        button: MouseButton.Left,
-        shiftKey: false, ctrlKey: false, altKey: false,
-        originalEvent: {} as PointerEvent,
-        ...overrides,
-    };
-}
+blockColumn(testMap, 5, 0, 10);                     // Block tiles for pathfinding tests
 ```
 
 ### Use Enums and Constants, Never Magic Numbers
 
-**Always use named constants for IDs, enums for types, and `TERRAIN` constants for terrain:**
-
 ```typescript
-// GOOD — use enums and named constants
 import { EntityType } from '@/game/entity';
 import { BuildingType } from '@/game/buildings';
 import { UnitType } from '@/game/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
 import { TERRAIN } from '../helpers/test-map';
 
-// Terrain manipulation
-ctx.map.groundType[index] = TERRAIN.WATER;  // Not 0
-ctx.map.groundType[index] = TERRAIN.GRASS;  // Not 16
-
-// Entity types
-placeBuilding(state, map, x, y, BuildingType.WoodcutterHut);  // Not 1
-spawnUnit(state, map, x, y, UnitType.Carrier);                // Not 0
-placeResource(state, map, x, y, EMaterialType.LOG);           // Not 0
-
-// Entity filtering
-const buildings = state.entities.filter(e => e.type === EntityType.Building);  // Not type === 2
-const units = state.entities.filter(e => e.type === EntityType.Unit);          // Not type === 1
+// GOOD
+placeBuilding(state, map, x, y, BuildingType.WoodcutterHut);
+spawnUnit(state, map, x, y, UnitType.Carrier);
+ctx.map.groundType[index] = TERRAIN.WATER;
+const units = state.entities.filter(e => e.type === EntityType.Unit);
 
 // BAD — magic numbers
-ctx.map.groundType[index] = 0;           // What is 0? Water? Grass?
-placeBuilding(state, map, x, y, 1);      // What building type is 1?
-placeResource(state, map, x, y, 0, 5);   // What material type is 0?
-state.entities.filter(e => e.type === 2);  // What entity type is 2?
+placeBuilding(state, map, x, y, 1);
+state.entities.filter(e => e.type === 2);
 ```
 
-**Named constants for test fixture IDs:**
-```typescript
-// GOOD — clear what IDs represent
-const TAVERN_ID = 100;
-const SAWMILL_ID = 200;
-const CARRIER_ID = 1;
+### Key Principles
 
-const tavern = addBuilding(state, 5, 5, BuildingType.ResidenceSmall);
-const sawmill = addBuildingWithInventory(state, 10, 10, BuildingType.Sawmill);
-
-// BAD — magic numbers
-manager.assignJob(1, { fromBuilding: 200, ... });
-```
-
-### Use Public APIs, Not Direct Mutation
-
-Test through public APIs instead of directly mutating state:
-```typescript
-// GOOD — use manager API
-manager.setStatus(carrierId, CarrierStatus.Walking);
-manager.assignJob(carrierId, job);
-
-// BAD — direct mutation
-const carrier = manager.getCarrier(carrierId)!;
-carrier.status = CarrierStatus.Walking;
-carrier.currentJob = job;
-```
-
-### Test Contracts, Not Implementation Details
-
-**Prefer testing return values and observable behavior over internal state.**
-
-Tests coupled to implementation details break when refactoring, even if behavior is unchanged.
-
-```typescript
-// GOOD — test the contract (return value)
-const result = manager.assignJob(carrierId, job);
-expect(result).toBe(true);
-
-// Then verify observable behavior through public API
-const carrier = manager.getCarrier(carrierId);
-expect(carrier?.currentJob?.type).toBe('pickup');
-
-// BAD — reaching into private/internal state
-expect((manager as any).pendingAssignments.size).toBe(1);
-expect(manager['internalQueue'].length).toBe(0);
-```
-
-**What to test:**
-- Return values from public methods
-- State accessible through public getters
-- Events emitted (subscribe and verify)
-- Side effects visible through other public APIs
-
-**What NOT to test:**
-- Private fields or methods
-- Internal data structures
-- Implementation-specific intermediate states
-- Execution order of private helpers
-
-This makes tests resilient to refactoring — you can change *how* something works as long as *what* it does remains the same.
-
-### Use TDD for Bug Fixes
-
-When fixing coordinate/math bugs, write a failing test first:
-```typescript
-it('should round-trip through screenToTile and tileToWorld', () => {
-    for (const coord of [{ x: 320, y: 320 }, { x: 320, y: 321 }, { x: 0, y: 0 }]) {
-        const world = tileToWorld(coord.x, coord.y);
-        const tile = screenToTile(world.x, world.y);
-        expect(tile).toEqual(coord);
-    }
-});
-```
-
-### Test Both Success and Error Cases
-
-Cover both happy path and error scenarios:
-```typescript
-describe('assignJob', () => {
-    it('should assign job to idle carrier', () => {
-        manager.createCarrier(1, 100);
-        const assigned = manager.assignJob(1, job);
-        expect(assigned).toBe(true);
-    });
-
-    it('should reject assignment for non-existent carrier', () => {
-        const assigned = manager.assignJob(999, job);
-        expect(assigned).toBe(false);
-    });
-
-    it('should reject assignment for busy carrier', () => {
-        manager.createCarrier(1, 100);
-        manager.assignJob(1, job);
-        const assigned = manager.assignJob(1, anotherJob);
-        expect(assigned).toBe(false);
-    });
-});
-```
+- **Prefer fewer, comprehensive tests** over many granular ones
+- **Use `describe` blocks** to group related tests by behavior
+- **Use `beforeEach`** for common setup with `createGameState()` / `createTestContext()`
+- **Use builder functions** (`addUnit`, `addBuildingWithInventory`, etc.) not inline object literals
+- **Test through public APIs** — not direct state mutation
+- **Test contracts, not implementation** — return values and observable behavior, not private fields
+- **Use TDD for bug fixes** — write a failing test first
 
 ### Anti-Patterns to Avoid
 
-1. **Duplicating helpers** — If you write a helper function, check if it belongs in `test-game.ts`
-2. **Direct state mutation** — Use manager/system APIs instead of setting properties
-3. **Magic numbers** — Use enums (`EntityType`, `BuildingType`, `UnitType`, `EMaterialType`) and `TERRAIN` constants instead of raw numbers. Never write `type === 2` when you mean `type === EntityType.Building`
-4. **Inline object literals** — Use test data builders for repeated structures
-5. **Test interdependency** — Each test must be independent and repeatable
-6. **Testing implementation details** — Test behavior through public APIs
+1. **Duplicating helpers** — check `test-game.ts` and `test-map.ts` first
+2. **Direct state mutation** — use manager/system APIs instead
+3. **Magic numbers** — use `EntityType`, `BuildingType`, `UnitType`, `EMaterialType`, `TERRAIN`
+4. **Testing implementation details** — test behavior through public APIs
+5. **Test interdependency** — each test must be independent and repeatable
 
 ---
 
 ## Test Tier Decision Guide
 
-Use this guide to decide whether a test belongs in e2e or unit tests.
-
 ### Tier 1: Visual (E2E Required)
+**Requires browser + WebGL.** Screenshot regression, sprite loading, canvas rendering.
+Use `gp` fixture.
 
-**Requires browser + WebGL.** These tests verify pixel-level rendering:
-
-- Screenshot regression tests
-- Sprite/texture loading verification
-- Canvas rendering (entity sprites, terrain, UI overlays)
-- Visual feedback (placement preview, selection box)
-
-```typescript
-// Tier 1: Must be e2e — verifies visual output
-test('building renders on canvas', async ({ page }) => {
-    await gp.placeBuilding(1, 10, 10);
-    await expect(page).toHaveScreenshot('building-placed.png');
-});
-```
-
-### Tier 2: Spatial (E2E with `gs` fixture OR Unit Test)
-
-**Requires game loop but not WebGL.** Tests positions, movement, animation state:
-
-- Unit movement (path computation, position updates)
-- Animation state (playing, direction, sequenceKey)
-- Entity spatial relationships
-- Multi-system tick interactions
-
-**Use e2e (`gs` fixture)** when testing real-time behavior across ticks:
-```typescript
-// Tier 2 e2e: Tests movement over multiple game ticks
-test('unit reaches destination', async ({ gs }) => {
-    const unit = await gs.spawnUnit(1);
-    await gs.moveUnit(unit.id, unit.x + 10, unit.y);
-    await gs.waitForUnitAtDestination(unit.id, unit.x + 10, unit.y, 10000);
-});
-```
-
-**Use unit test** when testing single-tick or state-machine logic:
-```typescript
-// Tier 2 unit: Tests animation state transitions directly
-it('should transition from walking to idle', () => {
-    animationService.play(unitId, 'walk');
-    animationService.stop(unitId);
-    expect(animationService.getState(unitId)?.playing).toBe(false);
-});
-```
+### Tier 2: Spatial (E2E `gs` fixture OR Unit Test)
+**Requires game loop but not WebGL.** Movement, animation state, multi-system ticks.
+Use `gs` fixture for real-time behavior across ticks, unit tests for single-tick logic.
 
 ### Tier 3: Logic/Economic (Unit Test Preferred)
-
-**Pure game state.** No browser, no game loop ticks needed:
-
-- Manager state (carrier registration, inventory, service areas)
-- Command execution results (entity creation, removal)
-- Event emission and handling
-- Request/job state machines
-
-**Always prefer unit tests for Tier 3:**
-```typescript
-// Tier 3 unit: Tests carrier auto-registration via event system
-it('should auto-register carrier when unit:spawned fires', () => {
-    const tavern = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 10, 10, 1);
-    const carrier = gameState.addEntity(EntityType.Unit, UnitType.Carrier, 12, 12, 1);
-
-    eventBus.emit('unit:spawned', { entityId: carrier.id, unitType: UnitType.Carrier, x: 12, y: 12, player: 1 });
-
-    expect(gameState.carrierManager.getCarrier(carrier.id)?.homeBuilding).toBe(tavern.id);
-});
-```
+**Pure game state.** Manager state, command results, event handling, job state machines.
+**Always prefer unit tests for Tier 3.**
 
 ### Decision Flowchart
 
 ```
 Does the test verify visual/pixel output?
-├── YES → Tier 1 (E2E with screenshots)
+├── YES → Tier 1 (E2E with gp, screenshots)
 └── NO
     Does the test need real-time behavior over multiple game ticks?
     ├── YES → Tier 2 (E2E with gs fixture OR unit test with tick simulation)
@@ -925,92 +410,6 @@ Does the test verify visual/pixel output?
         ├── YES → Tier 3 (Unit test) ← STRONGLY PREFER THIS
         └── NO → Re-evaluate what you're actually testing
 ```
-
-### Speed Comparison
-
-| Tier | E2E Time | Unit Test Time | Speedup |
-|------|----------|----------------|---------|
-| Tier 1 (Visual) | ~2-5s | N/A | — |
-| Tier 2 (Spatial) | ~1-2s | ~5-50ms | 20-400x |
-| Tier 3 (Logic) | ~0.5-1s | ~1-5ms | 100-500x |
-
-### Common Mistakes
-
-**❌ Using e2e for pure state queries:**
-```typescript
-// BAD: This doesn't need a browser
-test('carrier has correct home building', async ({ gs }) => {
-    const state = await gs.getCarrierState(carrierId);
-    expect(state.homeBuilding).toBe(tavernId);
-});
-```
-
-**✅ Use unit test instead:**
-```typescript
-// GOOD: Direct state verification
-it('carrier has correct home building', () => {
-    const state = gameState.carrierManager.getCarrier(carrierId);
-    expect(state?.homeBuilding).toBe(tavernId);
-});
-```
-
-**❌ Using e2e to test event handling:**
-```typescript
-// BAD: Event handling doesn't need a browser
-test('movementStopped event fires', async ({ gs }) => {
-    const { getEvents } = await gs.captureMovementEvents();
-    // ...
-});
-```
-
-**✅ Use unit test instead:**
-```typescript
-// GOOD: Direct event bus testing
-it('emits movementStopped when unit arrives', () => {
-    const events: any[] = [];
-    eventBus.on('unit:movementStopped', (e) => events.push(e));
-
-    movementSystem.tick(1.0); // Advance to completion
-
-    expect(events).toHaveLength(1);
-    expect(events[0].entityId).toBe(unitId);
-});
-```
-
-### Tier 3 Tests Currently in E2E (Migration Candidates)
-
-These tests in `tests/e2e/` could move to unit tests for faster execution:
-
-| File | Test Pattern | Why Unit Test Works |
-|------|--------------|---------------------|
-| `audio.spec.ts` | Audio state toggles | Tests `AudioState` object, not audio output |
-| `building-placement.spec.ts` | Entity creation via `game.execute()` | Pure state verification |
-| `resource-placement.spec.ts` | Entity creation via `game.execute()` | Pure state verification |
-| `map-loading.spec.ts` | Entity count, debug stats | Pure state queries |
-
----
-
-## What to Test
-
-### Unit Tests
-- Pure functions (pathfinding, placement validation, coordinate transforms)
-- State machines (input modes, game state transitions)
-- Data transformations (command execution)
-- Game logic (entity lifecycle, economy, behavior trees)
-- **Tier 3: Manager state, event handling, request/job logic**
-
-### E2E Tests
-- User flows (click button → mode changes → click canvas → building appears)
-- Visual rendering (screenshot comparisons)
-- Canvas interactions (pointer events, wheel, right-click)
-- Navigation and app loading
-- Debug bridge integration
-- **Tier 2: Real-time movement, animation timing (when unit tests aren't sufficient)**
-
-### Skip Testing
-- Simple getters/setters
-- Framework code (Vue reactivity, Vite)
-- Implementation details that could change
 
 ---
 
@@ -1024,82 +423,27 @@ pnpm test:watch             # Watch mode
 pnpm lint                   # Type-check + ESLint before e2e tests
 npx playwright test         # E2E tests (uses dev server locally, build in CI)
 npx playwright test --headed -g "test name"  # Run specific test visually
-npx playwright test building-placement.spec.ts  # Run specific file
 
 # Project-based execution (recommended)
 npx playwright test --project=smoke    # Only smoke tests (10s timeout)
 npx playwright test --project=default  # Standard tests (15s timeout)
 npx playwright test --project=slow     # Slow tests (30s timeout)
 npx playwright test --project=assets   # Asset-dependent (60s timeout)
-
-# Tag-based filtering (alternative)
-npx playwright test --grep @smoke              # Only smoke tests
-npx playwright test --grep-invert @slow        # Skip slow tests
-npx playwright test --grep-invert @requires-assets  # Skip asset-dependent
 ```
 
 ### CRITICAL: Reporter Selection
 
-**NEVER use `--reporter=line`** — it suppresses stdout from workers, which hides the
-Wait Profiler output and any `console.log` debugging. Use these instead:
-
-```sh
-# Default reporter (shows profiler output)
-npx playwright test
-
-# List reporter (verbose, shows profiler output)
-npx playwright test --reporter=list
-
-# Run in background with output capture
-npx playwright test --reporter=list 2>&1 | tee /tmp/e2e.log &
-```
+**NEVER use `--reporter=line`** — it suppresses stdout from workers, hiding Wait Profiler
+output. Use `--reporter=list` instead.
 
 ---
 
 ## Wait Profiler
 
-E2E tests include a built-in **Wait Profiler** (`tests/e2e/wait-profiler.ts`) that tracks
-all wait operations and reports the slowest ones at worker teardown.
+E2E tests include a built-in **Wait Profiler** (`wait-profiler.ts`) that tracks all wait
+operations and reports the slowest ones at worker teardown. Enabled by default.
 
-### Viewing profiler output
-
-The profiler prints a summary when each Playwright worker closes:
-```
-⏱️  Wait Profiler: 47 waits, 12.3s total
-    frame:8.2s | movement:3.1s | state:1.0s
-    Slowest:
-      1.04s - waitForFrames: 5 frames
-      0.83s - waitForReady: gameLoaded && rendererReady
-      0.53s - waitForUnitsMoving: unitsMoving >= 1
-```
-
-### Verbose mode
-
-For per-wait logging during test execution:
 ```sh
-WAIT_PROFILER_VERBOSE=1 npx playwright test
+WAIT_PROFILER_VERBOSE=1 npx playwright test   # Per-wait logging
+WAIT_PROFILER=0 npx playwright test           # Disable profiler
 ```
-
-This logs each wait as it completes:
-```
-[WaitProfiler] ✓ frame/waitForFrames: 234.5ms (3 polls) - 5 frames
-[WaitProfiler] ✓ movement/waitForUnitsMoving: 512.3ms (8 polls) - unitsMoving >= 1
-```
-
-### Disabling the profiler
-
-The profiler is enabled by default. To disable:
-```sh
-WAIT_PROFILER=0 npx playwright test
-```
-
-### Categories tracked
-
-| Category | Methods | Purpose |
-|----------|---------|---------|
-| `frame` | waitForFrames, waitForReady | Render loop synchronization |
-| `state` | waitForUnitCount, waitForBuildingCount | Debug bridge polling |
-| `movement` | waitForUnitAtDestination, waitForUnitToMove | Position tracking |
-| `render` | waitForMode, moveCamera | Visual state changes |
-| `audio` | unlockAudio, toggleMusic | Audio subsystem |
-| `dom` | waitForGameUi | DOM element visibility |

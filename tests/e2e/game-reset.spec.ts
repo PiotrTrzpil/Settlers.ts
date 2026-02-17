@@ -9,7 +9,7 @@ import { Timeout } from './wait-config';
  * even when buildings have active logistics state (inventories, reservations).
  */
 
-test.describe('Game State Reset', () => {
+test.describe('Game State Reset', { tag: '@smoke' }, () => {
     test('reset clears buildings and units without errors', async ({ gp }) => {
         const { check: checkErrors } = gp.collectErrors();
 

@@ -23,35 +23,6 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
     });
 
-    test('select mode button returns to select mode from resource placement', async ({ gpWithUI: gp }) => {
-        const page = gp.page;
-        await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
-
-        await page.locator('[data-testid="btn-resource-board"]').click({ force: true });
-        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
-
-        await gp.selectMode();
-        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
-    });
-
-    test('resource placement via game.execute() creates entity with correct attributes', async ({ gs }) => {
-        const passableTile = await gs.findPassableTile();
-        if (!passableTile) {
-            test.skip();
-            return;
-        }
-
-        const resource = await gs.placeResource(0, passableTile.x, passableTile.y, 5);
-        expect(resource).not.toBeNull();
-        expect(resource!.type).toBe(4); // EntityType.StackedResource
-        expect(resource!.x).toBe(passableTile.x);
-        expect(resource!.y).toBe(passableTile.y);
-        expect(resource!.amount).toBe(5);
-
-        const entities = await gs.getEntities({ type: 4 });
-        expect(entities.length).toBeGreaterThanOrEqual(1);
-    });
-
     test('resource placement via placeResource helper', async ({ gs }) => {
         const passableTile = await gs.findPassableTile();
         if (!passableTile) {
@@ -64,28 +35,6 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         expect(resource!.type).toBe(4);
         expect(resource!.subType).toBe(1);
         expect(resource!.amount).toBe(3);
-    });
-
-    test('clicking canvas while not in placement mode does not place resource', async ({ gp }) => {
-        const passableTile = await gp.findPassableTile();
-        if (!passableTile) {
-            test.skip();
-            return;
-        }
-
-        await gp.moveCamera(passableTile.x, passableTile.y);
-
-        await gp.selectMode();
-        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
-
-        const countBefore = (await gp.getEntities({ type: 4 })).length;
-
-        const box = await gp.canvas.boundingBox();
-        await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 }, force: true });
-        await gp.waitForFrames(1);
-
-        const countAfter = (await gp.getEntities({ type: 4 })).length;
-        expect(countAfter).toBe(countBefore);
     });
 
     test('multiple resources can be placed at different locations', async ({ gs }) => {

@@ -1,64 +1,25 @@
 import { type Page, type Locator, expect } from '@playwright/test';
+import type { DebugStatsState } from '@/game/debug-stats';
+import type { GameViewStateData } from '@/game/game-view-state';
 import { Frames, Timeout } from './wait-config';
 import { WaitProfiler, type WaitCategory } from './wait-profiler';
+import * as gameActions from './game-actions';
+import * as gameQueries from './game-queries';
+import * as audioHelpers from './audio-helpers';
+import * as spriteHelpers from './sprite-helpers';
 
-/**
- * Mirrors LoadTimings from src/game/debug-stats.ts.
- */
-interface LoadTimings {
-    totalSprites: number;
-    cacheHit: boolean;
-    cacheSource: 'module' | 'indexeddb' | null;
-}
-
-/**
- * Mirrors DebugStatsState from src/game/debug-stats.ts.
- * Performance instrumentation, readiness flags, and debug settings.
- */
-interface SettlersDebug {
-    gameLoaded: boolean;
-    rendererReady: boolean;
-    frameCount: number;
-    tickCount: number;
-    fps: number;
-    cameraX: number;
-    cameraY: number;
-    zoom: number;
-    canvasWidth: number;
-    canvasHeight: number;
-    // Audio state
-    musicEnabled: boolean;
-    musicPlaying: boolean;
-    currentMusicId: string | null;
-    // Load timings
-    loadTimings: LoadTimings;
-}
-
-/**
- * Mirrors GameViewStateData from src/game/game-view-state.ts.
- * Game state exposed to Vue components: mode, selection, entity counts.
- */
-interface SettlersView {
-    tick: number;
-    mode: string;
-    placeBuildingType: number;
-    placeResourceType: number;
-    placeUnitType: number;
-    selectedEntityId: number | null;
-    selectedCount: number;
-    entityCount: number;
-    buildingCount: number;
-    unitCount: number;
-    resourceCount: number;
-    unitsMoving: number;
-    totalPathSteps: number;
-}
+// Re-export types from helper modules for consumers that import from game-page
+export type { LoadTimings } from './sprite-helpers';
 
 /**
  * Page Object Model for the Settlers.ts map view.
  *
- * Encapsulates navigation, waiting for game readiness, and
- * common assertions so E2E tests stay concise and readable.
+ * Central facade for navigation, waiting, and game readiness.
+ * Domain-specific helpers are in dedicated modules:
+ * - game-actions.ts — entity placement, game commands, map queries
+ * - game-queries.ts — unit state, animation, movement queries
+ * - audio-helpers.ts — audio state and controls
+ * - sprite-helpers.ts — sprite loading and cache
  */
 export class GamePage {
     readonly page: Page;
@@ -79,9 +40,7 @@ export class GamePage {
 
     /**
      * Instrumented wrapper for page.waitForFunction with profiling.
-     * Same signature as page.waitForFunction but with a label prefix.
-     *
-     * @param label - Format: "category:method:condition" e.g. "frame:waitForFrames:5 frames"
+     * @param label - Format: "category:method:condition"
      */
     private async _waitForFunction<T>(
         label: string,
@@ -178,19 +137,8 @@ export class GamePage {
 
     /**
      * Wait until the renderer has drawn at least `minFrames` **new** frames.
-     * Uses relative counting (reads current frameCount first, then waits for
-     * current + minFrames) so it works correctly with the shared fixture where
-     * frameCount is already high from previous tests.
      *
-     * **Optimized**: Uses browser-side requestAnimationFrame loop instead of
-     * Playwright IPC polling. This reduces wait time from ~400ms to ~16ms per frame.
-     *
-     * @param minFrames - Number of frames to wait. Use Frames constants:
-     *   - Frames.IMMEDIATE (1) - state already set, just need render tick
-     *   - Frames.STATE_PROPAGATE (2) - camera move, mode switch
-     *   - Frames.RENDER_SETTLE (5) - entity creation, basic rendering
-     *   - Frames.ANIMATION_SETTLE (10) - animation state changes
-     *   - Frames.VISUAL_STABLE (15) - screenshot comparisons
+     * @param minFrames - Number of frames to wait. Use Frames constants.
      */
     async waitForFrames(
         minFrames: number = Frames.RENDER_SETTLE,
@@ -220,7 +168,6 @@ export class GamePage {
                                 requestAnimationFrame(checkFrame);
                             }
                         }
-                        // Start checking on next frame
                         requestAnimationFrame(checkFrame);
                     });
                 },
@@ -231,16 +178,6 @@ export class GamePage {
 
     /**
      * Wait for game loaded + renderer ready + N frames rendered.
-     *
-     * **Optimized**: Single browser-side operation that:
-     * 1. Polls for gameLoaded && rendererReady
-     * 2. Then waits for N frames via requestAnimationFrame
-     * All in one IPC call, eliminating ~400ms overhead.
-     *
-     * Note: We skip the DOM element wait (waitForGameUi) here because:
-     * 1. The gameLoaded flag is only set AFTER the Vue component mounts
-     * 2. By the time gameLoaded && rendererReady is true, the DOM is ready
-     * 3. JS-based polling is faster than DOM element polling (~2s savings)
      */
     async waitForReady(
         minFrames: number = Frames.RENDER_SETTLE,
@@ -265,19 +202,17 @@ export class GamePage {
                                 return;
                             }
 
-                            // Phase 1: Wait for game to be loaded and renderer ready
                             if (!debug || !debug.gameLoaded || !debug.rendererReady) {
                                 requestAnimationFrame(checkReady);
                                 return;
                             }
 
-                            // Phase 2: Once ready, wait for N frames
                             if (startFrame === null) {
                                 startFrame = debug.frameCount ?? 0;
                             }
 
                             const currentFrame = debug.frameCount ?? 0;
-                            const base = startFrame as number; // Narrowed after null check
+                            const base = startFrame as number;
                             const targetFrame = base + n;
 
                             if (currentFrame >= targetFrame) {
@@ -303,11 +238,6 @@ export class GamePage {
 
     /**
      * Wait for game state to be initialized, WITHOUT requiring WebGL rendering.
-     * Only checks `gameLoaded` — not `rendererReady`. Then waits for N game
-     * ticks (not render frames) to ensure game state has advanced.
-     *
-     * Use this for Tier 2 (spatial) and Tier 3 (economic) tests that don't
-     * need pixel output. Falls back to `waitForReady` if renderer is available.
      */
     async waitForGameReady(minTicks: number = 5, timeout: number = Timeout.INITIAL_LOAD): Promise<void> {
         await this._profiledWait(`state:waitForGameReady:gameLoaded + ${minTicks} ticks`, timeout, () =>
@@ -329,13 +259,11 @@ export class GamePage {
                                 return;
                             }
 
-                            // Phase 1: Wait for game to be loaded
                             if (!debug || !debug.gameLoaded) {
                                 requestAnimationFrame(check);
                                 return;
                             }
 
-                            // Phase 2: Wait for N ticks
                             if (startTick === null) {
                                 startTick = debug.tickCount ?? 0;
                             }
@@ -358,8 +286,6 @@ export class GamePage {
 
     /**
      * Wait for N game ticks to elapse (not render frames).
-     * Works even without WebGL rendering — uses the monotonic tick counter
-     * from debugStats that increments on every game loop tick.
      */
     async waitForTicks(minTicks: number = 5, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._profiledWait(`state:waitForTicks:${minTicks} ticks`, timeout, () =>
@@ -397,26 +323,24 @@ export class GamePage {
     // ── State reset ───────────────────────────────────────────
 
     /**
-     * Remove user-placed entities (buildings, units, resources) but preserve
-     * environment objects (trees, stones). Resets mode to 'select'.
-     *
-     * Uses Game.resetToCleanState() for consistent behavior with debug panel.
+     * Remove user-placed entities but preserve environment objects.
+     * Resets mode to 'select'.
      */
     async resetGameState(): Promise<void> {
         await this.page.evaluate(() => {
             const game = (window as any).__settlers_game__;
             if (!game) return;
 
-            // Use unified reset method (removes user entities, rebuilds inventory)
             game.resetToCleanState({ keepEnvironment: true, rebuildInventory: true });
 
-            // Reset input mode to 'select' (test-specific, not part of game reset)
             const input = (window as any).__settlers_input__;
             if (input && input.getModeName() !== 'select') {
                 input.switchMode('select');
             }
+
+            const viewState = (window as any).__settlers_view_state__;
+            viewState?.forceCountUpdate();
         });
-        // Wait for state to settle — use ticks if renderer isn't ready
         const rendererReady = await this.getDebugField('rendererReady');
         if (rendererReady) {
             await this.waitForFrames(Frames.IMMEDIATE, Timeout.DEFAULT);
@@ -428,21 +352,20 @@ export class GamePage {
     // ── Debug bridge reads ──────────────────────────────────
 
     /** Read the full debug state object from the page. */
-    async getDebug(): Promise<SettlersDebug> {
+    async getDebug(): Promise<DebugStatsState> {
         return this.page.evaluate(() => {
             const d = (window as any).__settlers_debug__;
-            // Return a plain object (the Vue reactive proxy can't be serialised)
             return { ...d };
         });
     }
 
     /** Read a single debug field. */
-    async getDebugField<K extends keyof SettlersDebug>(key: K): Promise<SettlersDebug[K]> {
+    async getDebugField<K extends keyof DebugStatsState>(key: K): Promise<DebugStatsState[K]> {
         return this.page.evaluate(k => (window as any).__settlers_debug__?.[k], key);
     }
 
     /** Read the full view state object (mode, selection, entity counts). */
-    async getView(): Promise<SettlersView> {
+    async getView(): Promise<GameViewStateData> {
         return this.page.evaluate(() => {
             const v = (window as any).__settlers_view__;
             return { ...v };
@@ -450,7 +373,7 @@ export class GamePage {
     }
 
     /** Read a single view state field. */
-    async getViewField<K extends keyof SettlersView>(key: K): Promise<SettlersView[K]> {
+    async getViewField<K extends keyof GameViewStateData>(key: K): Promise<GameViewStateData[K]> {
         return this.page.evaluate(k => (window as any).__settlers_view__?.[k], key);
     }
 
@@ -466,7 +389,7 @@ export class GamePage {
         return val ?? '';
     }
 
-    // ── Actions ─────────────────────────────────────────────
+    // ── UI Actions ──────────────────────────────────────────
 
     async clickButton(testId: string): Promise<void> {
         await this.page.locator(`[data-testid="${testId}"]`).click();
@@ -477,122 +400,10 @@ export class GamePage {
     }
 
     async selectMode(): Promise<void> {
-        // Use force: true to bypass stability checks (button may have CSS transitions)
         await this.page.locator('[data-testid="btn-select-mode"]').click({ force: true });
     }
 
-    // ── Game state (via __settlers_game__) ─────────────────
-
-    /**
-     * Set game speed multiplier. Higher values = faster simulation.
-     * Useful for speeding up movement tests.
-     * @param speed - Speed multiplier (1.0 = normal, 4.0 = 4x faster)
-     */
-    async setGameSpeed(speed: number): Promise<void> {
-        await this.page.evaluate(s => {
-            // gameSettings is imported globally in the game
-            const settings = (window as any).__settlers_game_settings__;
-            if (settings?.state) {
-                settings.state.gameSpeed = s;
-            }
-        }, speed);
-    }
-
-    /** Read structured game state including entities and map size. */
-    async getGameState(): Promise<{
-        mode: string;
-        placeBuildingType: number;
-        entityCount: number;
-        entities: Array<{ id: number; type: number; subType: number; x: number; y: number; player: number }>;
-        mapWidth: number;
-        mapHeight: number;
-    } | null> {
-        return this.page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-            return {
-                mode: game.mode,
-                placeBuildingType: game.placeBuildingType,
-                entityCount: game.state.entities.length,
-                entities: game.state.entities.map((e: any) => ({
-                    id: e.id,
-                    type: e.type,
-                    subType: e.subType,
-                    x: e.x,
-                    y: e.y,
-                    player: e.player,
-                })),
-                mapWidth: game.mapSize.width,
-                mapHeight: game.mapSize.height,
-            };
-        });
-    }
-
-    /**
-     * Move camera to center on a specific tile position.
-     * Uses ViewPoint.setPosition() which does proper isometric coordinate
-     * conversion, or falls back to CameraMode.setPosition() via InputManager.
-     */
-    async moveCamera(tileX: number, tileY: number): Promise<void> {
-        await this.page.evaluate(
-            ({ x, y }) => {
-                const vp = (window as any).__settlers_viewpoint__;
-                if (vp?.setPosition) {
-                    // ViewPoint.setPosition(tileX, tileY) does proper isometric
-                    // coordinate conversion and centers the camera on the tile.
-                    vp.setPosition(x, y);
-                }
-            },
-            { x: tileX, y: tileY }
-        );
-        // Wait for the camera position to propagate through the render loop
-        await this.waitForFrames(Frames.STATE_PROPAGATE, Timeout.DEFAULT);
-    }
-
-    /**
-     * Find a buildable tile by spiraling from map center.
-     * Temporarily places and removes a building to validate terrain + slope.
-     * @param buildingType BuildingType to test (default 1 = Lumberjack).
-     *   Use 2 for Warehouse (3x3) to find spots with enough room.
-     */
-    async findBuildableTile(buildingType = 1): Promise<{ x: number; y: number } | null> {
-        return this.page.evaluate(bt => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-            const existingIds = new Set(game.state.entities.map((e: any) => e.id));
-
-            for (let r = 0; r < Math.max(w, h) / 2; r++) {
-                for (let dx = -r; dx <= r; dx++) {
-                    for (let dy = -r; dy <= r; dy++) {
-                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-                        const tx = cx + dx;
-                        const ty = cy + dy;
-                        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-
-                        const result = game.execute({
-                            type: 'place_building',
-                            buildingType: bt,
-                            x: tx,
-                            y: ty,
-                            player: 0,
-                        });
-                        if (result?.success) {
-                            const newEntities = game.state.entities.filter((e: any) => !existingIds.has(e.id));
-                            for (const e of newEntities) {
-                                game.execute({ type: 'remove_entity', entityId: e.id });
-                            }
-                            return { x: tx, y: ty };
-                        }
-                    }
-                }
-            }
-            return null;
-        }, buildingType);
-    }
+    // ── Polling waits ───────────────────────────────────────
 
     /** Wait for entity count to exceed a given value. */
     async waitForEntityCountAbove(n: number, timeout: number = Timeout.DEFAULT): Promise<void> {
@@ -603,11 +414,6 @@ export class GamePage {
             { timeout }
         );
     }
-
-    // ── Polling helpers ─────────────────────────────────────────
-    // Use these instead of point-in-time assertions when timing is uncertain
-    // Note: Custom matchers in matchers.ts now poll automatically, so you can
-    // use `await expect(gp).toHaveUnitCount(5)` instead of these helpers.
 
     /** Wait for unit count to reach expected value. */
     async waitForUnitCount(expected: number, timeout: number = Timeout.DEFAULT): Promise<void> {
@@ -629,9 +435,20 @@ export class GamePage {
         );
     }
 
+    /** Wait for mode to change to expected value. */
+    async waitForMode(expectedMode: string, timeout: number = Timeout.DEFAULT): Promise<void> {
+        await this._waitForFunction(
+            `render:waitForMode:mode === ${expectedMode}`,
+            mode => (window as any).__settlers_view__?.mode === mode,
+            expectedMode,
+            { timeout }
+        );
+    }
+
+    // ── Movement waits ──────────────────────────────────────
+
     /**
      * Wait for at least N units to be moving.
-     * **Optimized**: Uses browser-side requestAnimationFrame polling.
      */
     async waitForUnitsMoving(minMoving: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._profiledWait(`movement:waitForUnitsMoving:unitsMoving >= ${minMoving}`, timeout, () =>
@@ -660,7 +477,6 @@ export class GamePage {
 
     /**
      * Wait for no units to be moving (all stationary).
-     * **Optimized**: Uses browser-side requestAnimationFrame polling.
      */
     async waitForNoUnitsMoving(timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._profiledWait('movement:waitForNoUnitsMoving:unitsMoving === 0', timeout, () =>
@@ -689,8 +505,6 @@ export class GamePage {
 
     /**
      * Wait for a specific unit to reach its destination.
-     * Destination is considered reached when unit is at target AND path is empty.
-     * **Optimized**: Uses browser-side requestAnimationFrame polling.
      */
     async waitForUnitAtDestination(
         unitId: number,
@@ -746,8 +560,6 @@ export class GamePage {
 
     /**
      * Wait for a unit to move away from its starting position.
-     * Useful for verifying movement has started.
-     * **Optimized**: Uses browser-side requestAnimationFrame polling.
      */
     async waitForUnitToMove(
         unitId: number,
@@ -796,337 +608,6 @@ export class GamePage {
     }
 
     /**
-     * Wait for mode to change to expected value.
-     */
-    async waitForMode(expectedMode: string, timeout: number = Timeout.DEFAULT): Promise<void> {
-        await this._waitForFunction(
-            `render:waitForMode:mode === ${expectedMode}`,
-            mode => (window as any).__settlers_view__?.mode === mode,
-            expectedMode,
-            { timeout }
-        );
-    }
-
-    // ── Higher-level game actions ────────────────────────────
-
-    /**
-     * Place a building via game.execute() command pipeline.
-     * Returns the created entity info, or null if placement failed.
-     */
-    async placeBuilding(
-        buildingType: number,
-        x: number,
-        y: number,
-        player = 0
-    ): Promise<{
-        id: number;
-        type: number;
-        subType: number;
-        x: number;
-        y: number;
-        player: number;
-    } | null> {
-        const result = await this.page.evaluate(
-            ({ bt, posX, posY, p }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) {
-                    return { error: 'No game found' };
-                }
-                const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
-                const cmdResult = game.execute({
-                    type: 'place_building',
-                    buildingType: bt,
-                    x: posX,
-                    y: posY,
-                    player: p,
-                });
-                if (!cmdResult?.success) {
-                    return { error: cmdResult?.error ?? 'unknown error' };
-                }
-                const newEntity = game.state.entities.find((e: any) => !idsBefore.has(e.id) && e.type === 2);
-                return newEntity
-                    ? {
-                          entity: {
-                              id: newEntity.id,
-                              type: newEntity.type,
-                              subType: newEntity.subType,
-                              x: newEntity.x,
-                              y: newEntity.y,
-                              player: newEntity.player,
-                          },
-                      }
-                    : { error: 'Entity not found after placement' };
-            },
-            { bt: buildingType, posX: x, posY: y, p: player }
-        );
-
-        if ('error' in result) {
-            console.log(`[placeBuilding] Failed: ${result.error}`);
-            return null;
-        }
-        return result.entity;
-    }
-
-    /**
-     * Place a resource via game.execute() command pipeline.
-     * Returns the created entity info, or null if placement failed.
-     */
-    async placeResource(
-        materialType: number,
-        x: number,
-        y: number,
-        amount = 1
-    ): Promise<{
-        id: number;
-        type: number;
-        subType: number;
-        x: number;
-        y: number;
-        amount: number;
-    } | null> {
-        return this.page.evaluate(
-            ({ mt, posX, posY, amt }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return null;
-                const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
-                const result = game.execute({
-                    type: 'place_resource',
-                    materialType: mt,
-                    x: posX,
-                    y: posY,
-                    amount: amt,
-                });
-                if (!result?.success) return null;
-                const newEntity = game.state.entities.find(
-                    (e: any) => !idsBefore.has(e.id) && e.type === 4 // EntityType.StackedResource
-                );
-                if (!newEntity) return null;
-                const resourceState = game.state.resources?.states?.get(newEntity.id);
-                return {
-                    id: newEntity.id,
-                    type: newEntity.type,
-                    subType: newEntity.subType,
-                    x: newEntity.x,
-                    y: newEntity.y,
-                    amount: resourceState?.quantity ?? amt,
-                };
-            },
-            { mt: materialType, posX: x, posY: y, amt: amount }
-        );
-    }
-
-    /**
-     * Find a passable tile (suitable for resource placement) by spiraling from map center.
-     * Resources require passable terrain without existing occupancy.
-     */
-    async findPassableTile(): Promise<{ x: number; y: number } | null> {
-        return this.page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return null;
-            const w = game.mapSize.width;
-            const h = game.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-
-            for (let r = 0; r < Math.max(w, h) / 2; r++) {
-                for (let dx = -r; dx <= r; dx++) {
-                    for (let dy = -r; dy <= r; dy++) {
-                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-                        const tx = cx + dx;
-                        const ty = cy + dy;
-                        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-
-                        const idx = game.mapSize.toIndex(tx, ty);
-                        const gt = game.groundType[idx];
-                        // Check if passable terrain (not water, not blocked)
-                        const isPassable = gt > 8 && gt !== 32;
-                        // Check if not already occupied
-                        const key = `${tx},${ty}`;
-                        const isOccupied = game.state.tileOccupancy?.has(key);
-
-                        if (isPassable && !isOccupied) {
-                            return { x: tx, y: ty };
-                        }
-                    }
-                }
-            }
-            return null;
-        });
-    }
-
-    /**
-     * Spawn a unit via game.execute() command pipeline (bypasses UI buttons).
-     * If x/y not provided, spawns at map center.
-     * Returns the created entity info, or null if spawn failed.
-     */
-    async spawnUnit(
-        unitType = 1,
-        x?: number,
-        y?: number,
-        player = 0
-    ): Promise<{
-        id: number;
-        type: number;
-        subType: number;
-        x: number;
-        y: number;
-    } | null> {
-        return this.page.evaluate(
-            ({ ut, posX, posY, p }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return null;
-                const spawnX = posX ?? Math.floor(game.mapSize.width / 2);
-                const spawnY = posY ?? Math.floor(game.mapSize.height / 2);
-                const idsBefore = new Set(game.state.entities.map((e: any) => e.id));
-                game.execute({ type: 'spawn_unit', unitType: ut, x: spawnX, y: spawnY, player: p });
-                const newEntity = game.state.entities.find((e: any) => !idsBefore.has(e.id) && e.type === 1);
-                return newEntity
-                    ? {
-                          id: newEntity.id,
-                          type: newEntity.type,
-                          subType: newEntity.subType,
-                          x: newEntity.x,
-                          y: newEntity.y,
-                      }
-                    : null;
-            },
-            { ut: unitType, posX: x, posY: y, p: player }
-        );
-    }
-
-    /**
-     * Issue a move_unit command via game.execute().
-     * Returns true if the command was accepted.
-     */
-    async moveUnit(entityId: number, targetX: number, targetY: number): Promise<boolean> {
-        return this.page.evaluate(
-            ({ id, tx, ty }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return false;
-                return game.execute({ type: 'move_unit', entityId: id, targetX: tx, targetY: ty })?.success ?? false;
-            },
-            { id: entityId, tx: targetX, ty: targetY }
-        );
-    }
-
-    /**
-     * Read entities from game state, optionally filtered.
-     */
-    async getEntities(filter?: {
-        type?: number;
-        subType?: number;
-        player?: number;
-    }): Promise<Array<{ id: number; type: number; subType: number; x: number; y: number; player: number }>> {
-        return this.page.evaluate(f => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return [];
-            return game.state.entities
-                .filter((e: any) => {
-                    if (f?.type !== undefined && e.type !== f.type) return false;
-                    if (f?.subType !== undefined && e.subType !== f.subType) return false;
-                    if (f?.player !== undefined && e.player !== f.player) return false;
-                    return true;
-                })
-                .map((e: any) => ({
-                    id: e.id,
-                    type: e.type,
-                    subType: e.subType,
-                    x: e.x,
-                    y: e.y,
-                    player: e.player,
-                }));
-        }, filter ?? null);
-    }
-
-    // ── Unit state queries ────────────────────────────────────
-
-    /**
-     * Get the unit state for a specific entity (path, movement progress, etc).
-     * Encapsulates access to game.state.unitStates.
-     */
-    async getUnitState(unitId: number): Promise<{
-        prevX: number;
-        prevY: number;
-        pathLength: number;
-        pathIndex: number;
-        moveProgress: number;
-    } | null> {
-        return this.page.evaluate(
-            ({ id }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return null;
-                const us = game.state.unitStates.get(id);
-                if (!us) return null;
-                return {
-                    prevX: us.prevX,
-                    prevY: us.prevY,
-                    pathLength: us.path.length,
-                    pathIndex: us.pathIndex,
-                    moveProgress: us.moveProgress,
-                };
-            },
-            { id: unitId }
-        );
-    }
-
-    /**
-     * Get animation state for a unit from AnimationService.
-     */
-    async getAnimationState(unitId: number): Promise<{
-        sequenceKey: string;
-        currentFrame: number;
-        direction: number;
-        playing: boolean;
-        loop: boolean;
-        elapsedMs: number;
-    } | null> {
-        return this.page.evaluate(
-            ({ id }) => {
-                const game = (window as any).__settlers_game__;
-                const animService = game?.services?.animationService;
-                if (!animService) return null;
-                const state = animService.getState(id);
-                if (!state) return null;
-                return {
-                    sequenceKey: state.sequenceKey,
-                    currentFrame: state.currentFrame,
-                    direction: state.direction,
-                    playing: state.playing,
-                    loop: state.loop,
-                    elapsedMs: state.elapsedMs,
-                };
-            },
-            { id: unitId }
-        );
-    }
-
-    /**
-     * Get movement controller state for a unit.
-     */
-    async getMovementControllerState(unitId: number): Promise<{
-        state: string;
-        direction: number;
-        tileX: number;
-        tileY: number;
-    } | null> {
-        return this.page.evaluate(
-            ({ id }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return null;
-                const controller = game.state.movement.getController(id);
-                if (!controller) return null;
-                return {
-                    state: controller.state,
-                    direction: controller.direction,
-                    tileX: controller.tileX,
-                    tileY: controller.tileY,
-                };
-            },
-            { id: unitId }
-        );
-    }
-
-    /**
      * Wait for a unit's movement controller to reach 'idle' state.
      */
     async waitForMovementIdle(unitId: number, timeout: number = Timeout.DEFAULT): Promise<void> {
@@ -1143,264 +624,157 @@ export class GamePage {
         );
     }
 
-    /**
-     * Sample animation states over multiple frames while a unit is moving.
-     * Returns an array of animation snapshots.
-     */
-    async sampleAnimationStates(
-        unitId: number,
-        numSamples: number = 10
-    ): Promise<Array<{ playing: boolean; sequenceKey: string }>> {
-        return this.page.evaluate(
-            ({ id, maxSamples }) => {
-                return new Promise<Array<{ playing: boolean; sequenceKey: string }>>(resolve => {
-                    const samples: Array<{ playing: boolean; sequenceKey: string }> = [];
-                    let count = 0;
-                    function sample() {
-                        const game = (window as any).__settlers_game__;
-                        const animService = game?.services?.animationService;
-                        if (animService) {
-                            const state = animService.getState(id);
-                            if (state) {
-                                samples.push({ playing: state.playing, sequenceKey: state.sequenceKey });
-                            }
-                        }
-                        count++;
-                        if (count < maxSamples) {
-                            requestAnimationFrame(sample);
-                        } else {
-                            resolve(samples);
-                        }
-                    }
-                    requestAnimationFrame(sample);
-                });
-            },
-            { id: unitId, maxSamples: numSamples }
-        );
+    // ── Delegated: Game actions (game-actions.ts) ───────────
+
+    async setGameSpeed(speed: number): Promise<void> {
+        return gameActions.setGameSpeed(this.page, speed);
+    }
+
+    async getGameState() {
+        return gameActions.getGameState(this.page);
+    }
+
+    async getEntities(filter?: { type?: number; subType?: number; player?: number }) {
+        return gameActions.getEntities(this.page, filter);
+    }
+
+    async getMapCenter() {
+        return gameActions.getMapCenter(this.page);
+    }
+
+    async isTerrainPassable(x: number, y: number) {
+        return gameActions.isTerrainPassable(this.page, x, y);
+    }
+
+    async getPlacementPreview() {
+        return gameActions.getPlacementPreview(this.page);
+    }
+
+    async placeBuilding(buildingType: number, x: number, y: number, player = 0) {
+        return gameActions.placeBuilding(this.page, buildingType, x, y, player);
+    }
+
+    async placeResource(materialType: number, x: number, y: number, amount = 1) {
+        return gameActions.placeResource(this.page, materialType, x, y, amount);
+    }
+
+    async spawnUnit(unitType = 1, x?: number, y?: number, player = 0) {
+        return gameActions.spawnUnit(this.page, unitType, x, y, player);
+    }
+
+    async moveUnit(entityId: number, targetX: number, targetY: number) {
+        return gameActions.moveUnit(this.page, entityId, targetX, targetY);
+    }
+
+    async findBuildableTile(buildingType = 1) {
+        return gameActions.findBuildableTile(this.page, buildingType);
+    }
+
+    async findPassableTile() {
+        return gameActions.findPassableTile(this.page);
+    }
+
+    async placeMultipleBuildings(count: number, buildingTypes?: number[], players?: number[]) {
+        return gameActions.placeMultipleBuildings(this.page, count, buildingTypes, players);
+    }
+
+    async placeMultipleResources(count: number, materialTypes?: number[]) {
+        return gameActions.placeMultipleResources(this.page, count, materialTypes);
     }
 
     /**
-     * Capture movement events by listening on the game event bus.
-     * Sets up a capture array and returns a function to retrieve captured events.
+     * Move camera to center on a specific tile position.
+     * Waits for the camera position to propagate through the render loop.
      */
-    async captureMovementEvents(): Promise<{
-        getEvents: () => Promise<Array<{ event: string; entityId: number; direction: number }>>;
-        getCount: () => Promise<number>;
-    }> {
-        await this.page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return;
-            const captured: Array<{ event: string; entityId: number; direction: number }> = [];
-            game.eventBus.on('unit:movementStopped', (payload: any) => {
-                captured.push({
-                    event: 'movementStopped',
-                    entityId: payload.entityId,
-                    direction: payload.direction,
-                });
-            });
-            (window as any).__capturedMovementEvents = captured;
-        });
-        return {
-            getEvents: () => this.page.evaluate(() => (window as any).__capturedMovementEvents ?? []),
-            getCount: () => this.page.evaluate(() => ((window as any).__capturedMovementEvents ?? []).length),
-        };
+    async moveCamera(tileX: number, tileY: number): Promise<void> {
+        await gameActions.setCameraPosition(this.page, tileX, tileY);
+        await this.waitForFrames(Frames.STATE_PROPAGATE, Timeout.DEFAULT);
+    }
+
+    // ── Delegated: Game queries (game-queries.ts) ───────────
+
+    async getUnitState(unitId: number) {
+        return gameQueries.getUnitState(this.page, unitId);
+    }
+
+    async getAnimationState(unitId: number) {
+        return gameQueries.getAnimationState(this.page, unitId);
+    }
+
+    async getMovementControllerState(unitId: number) {
+        return gameQueries.getMovementControllerState(this.page, unitId);
+    }
+
+    async sampleAnimationStates(unitId: number, numSamples: number = 10) {
+        return gameQueries.sampleAnimationStates(this.page, unitId, numSamples);
+    }
+
+    async sampleUnitPositions(unitId: number, numSamples: number = 10) {
+        return gameQueries.sampleUnitPositions(this.page, unitId, numSamples);
+    }
+
+    async captureMovementEvents() {
+        return gameQueries.captureMovementEvents(this.page);
+    }
+
+    // ── Delegated: Audio (audio-helpers.ts) ──────────────────
+
+    async getAudioState() {
+        return audioHelpers.getAudioState(this.page);
+    }
+
+    /** Toggle music on or off via SoundManager. */
+    async toggleMusic(enabled: boolean): Promise<void> {
+        await audioHelpers.setMusicEnabled(this.page, enabled);
+        await this.waitForFrames(Frames.STATE_PROPAGATE);
     }
 
     /**
-     * Sample unit positions over multiple frames to verify smooth movement.
-     * Returns position snapshots taken at each animation frame.
+     * Trigger user interaction to unlock AudioContext.
+     * Waits for AudioContext to be in 'running' state or times out gracefully.
      */
-    async sampleUnitPositions(unitId: number, numSamples: number = 10): Promise<Array<{ x: number; y: number }>> {
-        return this.page.evaluate(
-            ({ id, maxSamples }) => {
-                return new Promise<Array<{ x: number; y: number }>>(resolve => {
-                    const positions: Array<{ x: number; y: number }> = [];
-                    let count = 0;
-                    function sample() {
-                        const game = (window as any).__settlers_game__;
-                        if (game) {
-                            const u = game.state.getEntity(id);
-                            if (u) positions.push({ x: u.x, y: u.y });
-                        }
-                        count++;
-                        if (count < maxSamples) {
-                            requestAnimationFrame(sample);
-                        } else {
-                            resolve(positions);
-                        }
-                    }
-                    requestAnimationFrame(sample);
-                });
-            },
-            { id: unitId, maxSamples: numSamples }
-        );
-    }
+    async unlockAudio(): Promise<void> {
+        await this.canvas.click();
 
-    /**
-     * Get the map center coordinates.
-     */
-    async getMapCenter(): Promise<{ x: number; y: number }> {
-        return this.page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
-            return {
-                x: Math.floor(game.mapSize.width / 2),
-                y: Math.floor(game.mapSize.height / 2),
-            };
-        });
-    }
-
-    /**
-     * Check if a tile is passable terrain (not water, not blocked).
-     */
-    async isTerrainPassable(
-        x: number,
-        y: number
-    ): Promise<{
-        groundType: number;
-        isPassable: boolean;
-        isWater: boolean;
-    } | null> {
-        return this.page.evaluate(
-            ({ tx, ty }) => {
+        await this._waitForFunction(
+            'audio:unlockAudio:AudioContext running',
+            () => {
                 const game = (window as any).__settlers_game__;
-                if (!game) return null;
-                const idx = game.mapSize.toIndex(tx, ty);
-                const gt = game.groundType[idx];
-                return {
-                    groundType: gt,
-                    isPassable: gt > 8 && gt !== 32,
-                    isWater: gt <= 8,
-                };
+                const ctx = game?.soundManager?.audioContext;
+                return !ctx || ctx.state === 'running';
             },
-            { tx: x, ty: y }
-        );
-    }
-
-    /**
-     * Place multiple buildings at different positions, spiraling from map center.
-     * Returns the number placed and total building count.
-     */
-    async placeMultipleBuildings(
-        count: number,
-        buildingTypes?: number[],
-        players?: number[]
-    ): Promise<{
-        placedCount: number;
-        positions: Array<{ x: number; y: number }>;
-        totalBuildings: number;
-    }> {
-        return this.page.evaluate(
-            ({ targetCount, types, ps }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return { placedCount: 0, positions: [], totalBuildings: 0 };
-                const w = game.mapSize.width;
-                const h = game.mapSize.height;
-                const cx = Math.floor(w / 2);
-                const cy = Math.floor(h / 2);
-                let placed = 0;
-                const positions: Array<{ x: number; y: number }> = [];
-                for (let r = 0; r < Math.max(w, h) / 2 && placed < targetCount; r += 3) {
-                    for (let angle = 0; angle < 8 && placed < targetCount; angle++) {
-                        const dx = Math.round(r * Math.cos((angle * Math.PI) / 4));
-                        const dy = Math.round(r * Math.sin((angle * Math.PI) / 4));
-                        const tx = cx + dx;
-                        const ty = cy + dy;
-                        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-                        const bt = types ? types[placed % types.length] : 1;
-                        const p = ps ? ps[placed % ps.length] : 0;
-                        const result = game.execute({
-                            type: 'place_building',
-                            buildingType: bt,
-                            x: tx,
-                            y: ty,
-                            player: p,
-                        });
-                        if (result?.success) {
-                            placed++;
-                            positions.push({ x: tx, y: ty });
-                        }
-                    }
-                }
-                return {
-                    placedCount: placed,
-                    positions,
-                    totalBuildings: game.state.entities.filter((e: any) => e.type === 2).length,
-                };
-            },
-            { targetCount: count, types: buildingTypes ?? null, ps: players ?? null }
-        );
-    }
-
-    /**
-     * Place multiple resources at different positions, spiraling from map center.
-     */
-    async placeMultipleResources(
-        count: number,
-        materialTypes?: number[]
-    ): Promise<{
-        placedCount: number;
-        totalResources: number;
-    }> {
-        return this.page.evaluate(
-            ({ targetCount, types }) => {
-                const game = (window as any).__settlers_game__;
-                if (!game) return { placedCount: 0, totalResources: 0 };
-                const w = game.mapSize.width;
-                const h = game.mapSize.height;
-                const cx = Math.floor(w / 2);
-                const cy = Math.floor(h / 2);
-                let placed = 0;
-                for (let r = 0; r < 20 && placed < targetCount; r++) {
-                    for (let angle = 0; angle < 8 && placed < targetCount; angle++) {
-                        const dx = Math.round(r * 2 * Math.cos((angle * Math.PI) / 4));
-                        const dy = Math.round(r * 2 * Math.sin((angle * Math.PI) / 4));
-                        const tx = cx + dx;
-                        const ty = cy + dy;
-                        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-                        const mt = types ? types[placed % types.length] : placed % 3;
-                        const result = game.execute({
-                            type: 'place_resource',
-                            materialType: mt,
-                            amount: placed + 1,
-                            x: tx,
-                            y: ty,
-                        });
-                        if (result?.success) placed++;
-                    }
-                }
-                return {
-                    placedCount: placed,
-                    totalResources: game.state.entities.filter((e: any) => e.type === 4).length,
-                };
-            },
-            { targetCount: count, types: materialTypes ?? null }
-        );
-    }
-
-    /**
-     * Get placement preview state from the entity renderer.
-     */
-    async getPlacementPreview(): Promise<{
-        indicatorsEnabled: boolean;
-        previewBuildingType: number | null;
-        previewMaterialType: number | null;
-        placementPreview: { entityType: string; subType: number } | null;
-    } | null> {
-        return this.page.evaluate(() => {
-            const renderer = (window as any).__settlers_entity_renderer__;
-            if (!renderer) return null;
-            return {
-                indicatorsEnabled: renderer.buildingIndicatorsEnabled,
-                previewBuildingType: renderer.previewBuildingType ?? null,
-                previewMaterialType: renderer.previewMaterialType ?? null,
-                placementPreview: renderer.placementPreview
-                    ? {
-                          entityType: renderer.placementPreview.entityType,
-                          subType: renderer.placementPreview.subType,
-                      }
-                    : null,
-            };
+            null,
+            { timeout: Timeout.FAST }
+        ).catch(() => {
+            // AudioContext may not exist or may be suspended - that's OK for tests
+            // that don't actually need audio
         });
+    }
+
+    // ── Delegated: Sprites (sprite-helpers.ts) ──────────────
+
+    async hasSpritesLoaded() {
+        return spriteHelpers.hasSpritesLoaded(this.page);
+    }
+
+    async getLoadedUnitSprites() {
+        return spriteHelpers.getLoadedUnitSprites(this.page);
+    }
+
+    async getSpriteRegistrySize() {
+        return spriteHelpers.getSpriteRegistrySize(this.page);
+    }
+
+    async testJilLookup(fileId: string, jobIndices: number[]) {
+        return spriteHelpers.testJilLookup(this.page, fileId, jobIndices);
+    }
+
+    async getLoadTimings() {
+        return spriteHelpers.getLoadTimings(this.page);
+    }
+
+    async clearSpriteCache() {
+        return spriteHelpers.clearSpriteCache(this.page);
     }
 
     // ── Canvas diagnostics ──────────────────────────────────
@@ -1444,10 +818,6 @@ export class GamePage {
 
     /**
      * Assert no unexpected JS errors occurred.
-     * Filters only specific known-harmless messages:
-     * - Missing GFX asset files (e.g. '2.gh6')
-     * - WebGL context warnings from headless Chrome
-     * - Procedural texture fallback warnings (exact prefix match)
      */
     collectErrors(): { errors: string[]; check: () => void } {
         const errors: string[] = [];
@@ -1461,171 +831,5 @@ export class GamePage {
                 expect(unexpected).toHaveLength(0);
             },
         };
-    }
-
-    // ── Audio controls ──────────────────────────────────────
-
-    /** Get current audio state from debug bridge. */
-    async getAudioState(): Promise<{
-        musicEnabled: boolean;
-        musicPlaying: boolean;
-        currentMusicId: string | null;
-    }> {
-        return this.page.evaluate(() => {
-            const d = (window as any).__settlers_debug__;
-            return {
-                musicEnabled: d?.musicEnabled ?? false,
-                musicPlaying: d?.musicPlaying ?? false,
-                currentMusicId: d?.currentMusicId ?? null,
-            };
-        });
-    }
-
-    /** Toggle music on or off via SoundManager. */
-    async toggleMusic(enabled: boolean): Promise<void> {
-        await this.page.evaluate(e => {
-            const game = (window as any).__settlers_game__;
-            game?.soundManager?.toggleMusic(e);
-        }, enabled);
-        // Wait for state to propagate
-        await this.waitForFrames(Frames.STATE_PROPAGATE);
-    }
-
-    /**
-     * Trigger user interaction to unlock AudioContext.
-     * Waits for AudioContext to be in 'running' state or times out gracefully.
-     */
-    async unlockAudio(): Promise<void> {
-        // Click on the canvas to trigger user interaction
-        await this.canvas.click();
-
-        // Wait for AudioContext to unlock (running state) instead of hardcoded timeout
-        // AudioContext may already be running, or may need user gesture to resume
-        await this._waitForFunction(
-            'audio:unlockAudio:AudioContext running',
-            () => {
-                const game = (window as any).__settlers_game__;
-                const ctx = game?.soundManager?.audioContext;
-                // Success if no audio context (audio disabled) or context is running
-                return !ctx || ctx.state === 'running';
-            },
-            null,
-            { timeout: Timeout.FAST }
-        ).catch(() => {
-            // AudioContext may not exist or may be suspended - that's OK for tests
-            // that don't actually need audio
-        });
-    }
-
-    // ── Sprite loading queries ─────────────────────────────────
-
-    /**
-     * Check if the entity renderer has sprites loaded.
-     */
-    async hasSpritesLoaded(): Promise<boolean> {
-        return this.page.evaluate(() => {
-            const renderer = (window as any).__settlers_entity_renderer__;
-            if (!renderer) return false;
-            const spriteManager = (renderer as any).spriteManager;
-            return spriteManager?.hasSprites === true;
-        });
-    }
-
-    /**
-     * Query loaded unit sprites from the sprite registry.
-     * Returns which unit types (0-8) have loaded sprites.
-     */
-    async getLoadedUnitSprites(): Promise<{
-        currentRace: string | null;
-        loadedByType: Record<number, boolean>;
-        loadedCount: number;
-    } | null> {
-        return this.page.evaluate(() => {
-            const renderer = (window as any).__settlers_entity_renderer__;
-            if (!renderer) return null;
-            const spriteManager = (renderer as any).spriteManager;
-            if (!spriteManager) return null;
-            const loadedByType: Record<number, boolean> = {};
-            for (let unitType = 0; unitType <= 8; unitType++) {
-                const sprite = spriteManager.getUnit(unitType, 0);
-                loadedByType[unitType] = sprite !== null;
-            }
-            return {
-                currentRace: spriteManager.currentRace ?? null,
-                loadedByType,
-                loadedCount: Object.values(loadedByType).filter(Boolean).length,
-            };
-        });
-    }
-
-    /**
-     * Get the unit sprite registry size.
-     */
-    async getSpriteRegistrySize(): Promise<number> {
-        return this.page.evaluate(() => {
-            const renderer = (window as any).__settlers_entity_renderer__;
-            const registry = (renderer as any)?.spriteManager?._spriteRegistry;
-            // Use public getters instead of private properties
-            return (registry?.getBuildingCount?.() ?? 0) + (registry?.getUnitCount?.() ?? 0);
-        });
-    }
-
-    /**
-     * Test JIL index lookup for specific job indices.
-     * Returns info about which job indices exist in the JIL file.
-     */
-    async testJilLookup(
-        fileId: string,
-        jobIndices: number[]
-    ): Promise<{
-        totalJobs: number;
-        results: Record<number, { exists: boolean; offset?: number; length?: number }>;
-    } | null> {
-        return this.page.evaluate(
-            async ({ fid, indices }) => {
-                const renderer = (window as any).__settlers_entity_renderer__;
-                const spriteLoader = (renderer as any)?.spriteManager?.spriteLoader;
-                if (!spriteLoader) return null;
-                const fileSet = await spriteLoader.loadFileSet(fid);
-                if (!fileSet?.jilReader) return null;
-                const totalJobs = fileSet.jilReader.length;
-                const results: Record<number, { exists: boolean; offset?: number; length?: number }> = {};
-                for (const idx of indices) {
-                    const item = fileSet.jilReader.getItem(idx);
-                    results[idx] = item
-                        ? { exists: true, offset: item.offset, length: item.length }
-                        : { exists: false };
-                }
-                return { totalJobs, results };
-            },
-            { fid: fileId, indices: jobIndices }
-        );
-    }
-
-    // ── Sprite cache helpers ─────────────────────────────────
-
-    /** Get sprite load timings from debug state. */
-    async getLoadTimings(): Promise<LoadTimings> {
-        return this.page.evaluate(() => {
-            const d = (window as any).__settlers_debug__;
-            return {
-                totalSprites: d?.loadTimings?.totalSprites ?? 0,
-                cacheHit: d?.loadTimings?.cacheHit ?? false,
-                cacheSource: d?.loadTimings?.cacheSource ?? null,
-            };
-        });
-    }
-
-    /** Clear the IndexedDB sprite atlas cache. */
-    async clearSpriteCache(): Promise<void> {
-        await this.page.evaluate(async () => {
-            const DB_NAME = 'settlers-atlas-cache';
-            return new Promise<void>(resolve => {
-                const request = indexedDB.deleteDatabase(DB_NAME);
-                request.onsuccess = () => resolve();
-                request.onerror = () => resolve();
-                request.onblocked = () => resolve();
-            });
-        });
     }
 }

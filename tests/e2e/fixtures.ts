@@ -238,9 +238,6 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             await gp.setGameSpeed(4.0);
 
             await use(gp);
-
-            // Reset speed after test
-            await gp.setGameSpeed(1.0);
         },
         { timeout: Timeout.MOVEMENT },
     ],
@@ -252,7 +249,6 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             await gp.resetGameState();
             await gp.setGameSpeed(4.0);
             await use(gp);
-            await gp.setGameSpeed(1.0);
         },
         { timeout: Timeout.MOVEMENT },
     ],
@@ -364,9 +360,6 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             await gp.setGameSpeed(4.0);
 
             await use(gp);
-
-            // Reset speed after test
-            await gp.setGameSpeed(1.0);
         },
         { timeout: Timeout.MOVEMENT },
     ],

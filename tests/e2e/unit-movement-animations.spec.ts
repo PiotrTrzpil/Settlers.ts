@@ -13,8 +13,8 @@ import { test, expect } from './fixtures';
  * Uses the `gs` fixture — game-state only, no WebGL required.
  */
 
-test.describe('Animation During Movement', { tag: '@animations' }, () => {
-    test('walk animation plays during movement and stops at destination', async({ gs }) => {
+test.describe('Animation During Movement', { tag: '@slow' }, () => {
+    test('walk animation plays during movement and stops at destination', async ({ gs }) => {
         const unit = await gs.spawnUnit(1);
         expect(unit).not.toBeNull();
 
@@ -23,7 +23,7 @@ test.describe('Animation During Movement', { tag: '@animations' }, () => {
         await gs.moveUnit(unit!.id, targetX, unit!.y);
         await gs.waitForUnitsMoving(1, 5000);
 
-        await test.step('animation is playing with walk sequence', async() => {
+        await test.step('animation is playing with walk sequence', async () => {
             const animState = await gs.getAnimationState(unit!.id);
             expect(animState).not.toBeNull();
             expect(animState!.playing).toBe(true);
@@ -31,13 +31,13 @@ test.describe('Animation During Movement', { tag: '@animations' }, () => {
             expect(animState!.loop).toBe(true);
         });
 
-        await test.step('movement controller is in moving state', async() => {
+        await test.step('movement controller is in moving state', async () => {
             const moveState = await gs.getMovementControllerState(unit!.id);
             expect(moveState).not.toBeNull();
             expect(moveState!.state).toBe('moving');
         });
 
-        await test.step('animation direction matches movement direction (valid hex 0-5)', async() => {
+        await test.step('animation direction matches movement direction (valid hex 0-5)', async () => {
             const animState = await gs.getAnimationState(unit!.id);
             const moveState = await gs.getMovementControllerState(unit!.id);
             expect(animState!.direction).toBe(moveState!.direction);
@@ -45,7 +45,7 @@ test.describe('Animation During Movement', { tag: '@animations' }, () => {
             expect(animState!.direction).toBeLessThanOrEqual(5);
         });
 
-        await test.step('animation stops and resets to frame 0 at destination', async() => {
+        await test.step('animation stops and resets to frame 0 at destination', async () => {
             await gs.waitForUnitAtDestination(unit!.id, targetX, unit!.y, 10000);
             await gs.waitForMovementIdle(unit!.id, 5000);
 
@@ -59,7 +59,7 @@ test.describe('Animation During Movement', { tag: '@animations' }, () => {
         });
     });
 
-    test('animation state is maintained consistently during movement', { tag: '@slow' }, async({ gs }) => {
+    test('animation state is maintained consistently during movement', async ({ gs }) => {
         // Use 1x speed for more animation samples during movement
         await gs.setGameSpeed(1.0);
 
@@ -80,7 +80,7 @@ test.describe('Animation During Movement', { tag: '@animations' }, () => {
         }
     });
 
-    test('direction updates when path changes', async({ gs }) => {
+    test('direction updates when path changes', async ({ gs }) => {
         // Use 1x speed for direction observation
         await gs.setGameSpeed(1.0);
 
@@ -109,8 +109,8 @@ test.describe('Animation During Movement', { tag: '@animations' }, () => {
     });
 });
 
-test.describe('Movement Events', { tag: '@animations' }, () => {
-    test('movementStopped event fires when unit reaches destination', async({ gs }) => {
+test.describe('Movement Events', { tag: '@slow' }, () => {
+    test('movementStopped event fires when unit reaches destination', async ({ gs }) => {
         const { getEvents } = await gs.captureMovementEvents();
 
         const unit = await gs.spawnUnit(1);

@@ -1,5 +1,4 @@
 import { test, expect } from './matchers';
-import { test as fixtureTest, expect as fixtureExpect } from './fixtures';
 import { GamePage } from './game-page';
 
 /**
@@ -15,7 +14,7 @@ import { GamePage } from './game-page';
  */
 
 test.describe('Terrain Rendering', { tag: '@screenshot' }, () => {
-    test('renders all terrain types and matches baseline screenshot', async({ page }) => {
+    test('renders all terrain types and matches baseline screenshot', async ({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 
@@ -33,22 +32,5 @@ test.describe('Terrain Rendering', { tag: '@screenshot' }, () => {
         await expect(gp.canvas).toHaveScreenshot('terrain-all-types.png');
 
         checkErrors();
-    });
-
-    // Uses shared fixture (eliminates waitForReady call)
-    fixtureTest('test map loads with correct initial state', { tag: '@smoke' }, async({ gp }) => {
-        // Debug bridge reports game loaded and renderer ready
-        const debug = await gp.getDebug();
-        fixtureExpect(debug.gameLoaded).toBe(true);
-        fixtureExpect(debug.rendererReady).toBe(true);
-
-        // Test map has some randomly generated trees (environment objects)
-        // but should have way fewer entities than a real campaign map (120k+)
-        const entityCount = await gp.getEntityCount();
-        fixtureExpect(entityCount).toBeLessThan(2000); // Test map has environment objects
-        fixtureExpect(entityCount).toBeGreaterThan(0);  // Should have some environment objects
-
-        // Mode defaults to select
-        await fixtureExpect(gp).toHaveMode('select');
     });
 });

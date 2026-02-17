@@ -1,5 +1,5 @@
 import { test, expect } from './matchers';
-import { test as fixtureTest } from './fixtures';
+import { test as fixtureTest, expect as fixtureExpect } from './fixtures';
 import { GamePage } from './game-page';
 
 /**
@@ -12,77 +12,51 @@ import { GamePage } from './game-page';
  * Canvas Interaction tests use shared fixture (gp) for efficiency.
  */
 
-test.describe('App Loading and Structure', { tag: '@smoke' }, () => {
-    test('app loads without JavaScript errors', async ({ page }) => {
+test.describe('App Loading', { tag: '@smoke' }, () => {
+    test('app loads with nav bar and no errors', async ({ page }) => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 
         await page.goto('/');
-        // Wait for app to mount by checking for nav element
         await page.locator('#nav').waitFor({ timeout: 10_000 });
 
-        checkErrors();
-    });
-
-    test('navigation bar has all required links', async ({ page }) => {
-        await page.goto('/');
-
         const nav = page.locator('#nav');
-        await expect(nav).toBeVisible();
-
         await expect(nav.locator('a[href="/"]')).toBeVisible();
         await expect(nav.locator('a[href="/map-view"]')).toBeVisible();
         await expect(nav.locator('a[href="/map-file-view"]')).toBeVisible();
         await expect(nav.locator('a[href="/lib-view"]')).toBeVisible();
         await expect(nav.locator('a[href="/logging-view"]')).toBeVisible();
+
+        checkErrors();
     });
 });
 
 test.describe('Map View Page', { tag: '@smoke' }, () => {
-    test('map view page renders with map selector', async ({ page }) => {
-        await page.goto('/map-view');
-
-        // Map selector label should be visible
-        await expect(page.locator('text=Map:')).toBeVisible();
-        // Main game canvas should be present
-        await expect(page.locator('canvas.cav')).toBeVisible();
-    });
-
-    test('debug panel can be expanded and checkbox toggled', async ({ page }) => {
+    test('test map loads with canvas, game UI, and working settings panel', async ({ page }) => {
         const gp = new GamePage(page);
         await gp.goto({ testMap: true });
-        await gp.waitForGameUi(15_000);
 
-        // Settings panel toggle should be visible
-        const settingsToggle = page.locator('.settings-toggle-btn');
-        await expect(settingsToggle).toBeVisible();
+        await test.step('canvas and map selector render', async () => {
+            await expect(page.locator('text=Map:')).toBeVisible();
+            await expect(page.locator('canvas.cav')).toBeVisible();
+        });
 
-        // Click to expand the settings panel
-        await settingsToggle.click();
+        await test.step('game UI panel appears', async () => {
+            await gp.waitForGameUi(15_000);
+        });
 
-        // Wait for the settings panel content to appear
-        await expect(page.locator('.settings-sections')).toBeVisible();
+        await test.step('settings panel expands and checkbox toggles', async () => {
+            const settingsToggle = page.locator('.settings-toggle-btn');
+            await expect(settingsToggle).toBeVisible();
+            await settingsToggle.click();
+            await expect(page.locator('.settings-sections')).toBeVisible();
 
-        // The Debug grid checkbox should be visible (Display section is expanded by default)
-        const checkbox = page.locator('label:has-text("Debug grid") input[type="checkbox"]');
-        await expect(checkbox).toBeVisible({ timeout: 5000 });
-
-        // Toggle it
-        const wasChecked = await checkbox.isChecked();
-        await checkbox.click();
-        await expect(checkbox).toBeChecked({ checked: !wasChecked });
-    });
-
-    test('canvas element exists for rendering', async ({ page }) => {
-        const gp = new GamePage(page);
-        await page.goto('/map-view');
-        await gp.expectCanvasVisible();
-    });
-
-    test('game UI panel appears when test map is loaded', async ({ page }) => {
-        const gp = new GamePage(page);
-        await gp.goto({ testMap: true });
-        await gp.waitForGameUi(15_000);
+            const checkbox = page.locator('label:has-text("Debug grid") input[type="checkbox"]');
+            await expect(checkbox).toBeVisible({ timeout: 5000 });
+            const wasChecked = await checkbox.isChecked();
+            await checkbox.click();
+            await expect(checkbox).toBeChecked({ checked: !wasChecked });
+        });
     });
 });
 
@@ -160,8 +134,82 @@ fixtureTest.describe('Test Infrastructure', { tag: '@smoke' }, () => {
     });
 });
 
-// Canvas Interaction tests use shared fixture (eliminates 3 waitForReady calls)
-fixtureTest.describe('Canvas Interaction', { tag: '@smoke' }, () => {
+// Canvas event tests use shared fixture (eliminates repeated waitForReady calls)
+fixtureTest.describe('Canvas Events', { tag: '@smoke' }, () => {
+    fixtureTest('pointer events fire on canvas (not suppressed)', async ({ gp }) => {
+        const page = gp.page;
+
+        const eventLog = await page.evaluate(() => {
+            return new Promise<string[]>(resolve => {
+                const canvas = document.querySelector('canvas');
+                if (!canvas) {
+                    resolve(['no canvas']);
+                    return;
+                }
+
+                const log: string[] = [];
+                for (const evt of [
+                    'pointerdown',
+                    'pointerup',
+                    'pointermove',
+                    'mousedown',
+                    'mouseup',
+                    'mousemove',
+                    'click',
+                ]) {
+                    canvas.addEventListener(evt, () => log.push(evt), { once: true });
+                }
+
+                const rect = canvas.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+
+                canvas.dispatchEvent(
+                    new PointerEvent('pointerdown', {
+                        clientX: cx,
+                        clientY: cy,
+                        bubbles: true,
+                        button: 0,
+                        pointerId: 1,
+                    })
+                );
+                canvas.dispatchEvent(
+                    new PointerEvent('pointermove', {
+                        clientX: cx + 1,
+                        clientY: cy,
+                        bubbles: true,
+                        button: 0,
+                        pointerId: 1,
+                    })
+                );
+                canvas.dispatchEvent(
+                    new PointerEvent('pointerup', {
+                        clientX: cx,
+                        clientY: cy,
+                        bubbles: true,
+                        button: 0,
+                        pointerId: 1,
+                    })
+                );
+
+                requestAnimationFrame(() => resolve(log));
+            });
+        });
+
+        fixtureExpect(eventLog).toContain('pointerdown');
+        fixtureExpect(eventLog).toContain('pointerup');
+        fixtureExpect(eventLog).toContain('pointermove');
+    });
+
+    fixtureTest('canvas click sets hoveredTile via tileClick event', async ({ gp }) => {
+        await gp.canvas.click({ position: { x: 400, y: 400 } });
+
+        const tileInfo = gp.page.locator('[data-testid="tile-info"]');
+        await fixtureExpect(tileInfo).toBeVisible({ timeout: 5000 });
+        const text = await tileInfo.textContent();
+        fixtureExpect(text).toMatch(/Tile: \(\d+, \d+\)/);
+    });
+
     fixtureTest('canvas responds to mouse wheel events without errors', async ({ gp }) => {
         const { check: checkErrors } = gp.collectErrors();
 
@@ -171,18 +219,75 @@ fixtureTest.describe('Canvas Interaction', { tag: '@smoke' }, () => {
         checkErrors();
     });
 
-    fixtureTest('canvas handles click events without errors', async ({ gp }) => {
-        const { check: checkErrors } = gp.collectErrors();
-
-        // Use force:true to avoid waiting for "scheduled navigations" which can timeout
-        await gp.canvas.click({ position: { x: 400, y: 400 }, force: true });
-        await gp.waitForFrames(1);
-
-        checkErrors();
-    });
-
     fixtureTest('canvas handles right-click without showing context menu', async ({ gp }) => {
         await gp.canvas.click({ button: 'right', position: { x: 400, y: 400 }, force: true });
         await gp.waitForFrames(1);
+    });
+
+    fixtureTest('mouse wheel changes camera zoom level', async ({ gp }) => {
+        const zoomBefore = await gp.getDebugField('zoom');
+
+        // Zoom in (negative deltaY = scroll up = zoom in)
+        await gp.canvas.dispatchEvent('wheel', { deltaY: -300 });
+        await gp.waitForFrames(3);
+
+        const zoomAfter = await gp.getDebugField('zoom');
+        fixtureExpect(zoomAfter).not.toBe(zoomBefore);
+    });
+});
+
+// Entity selection smoke tests
+fixtureTest.describe('Entity Selection', { tag: '@smoke' }, () => {
+    fixtureTest('selecting a building updates selection state', async ({ gp }) => {
+        const buildableTile = await gp.findBuildableTile();
+        if (!buildableTile) {
+            fixtureTest.skip();
+            return;
+        }
+
+        const building = await gp.placeBuilding(1, buildableTile.x, buildableTile.y);
+        fixtureExpect(building).not.toBeNull();
+
+        // Select the building and read selection state atomically
+        const selection = await gp.page.evaluate(id => {
+            const game = (window as any).__settlers_game__;
+            const result = game?.execute({ type: 'select', entityId: id });
+            const sel = game?.state?.selection;
+            return {
+                success: result?.success ?? false,
+                selectedEntityId: sel?.selectedEntityId ?? null,
+                selectedCount: sel?.selectedEntityIds?.size ?? 0,
+            };
+        }, building!.id);
+
+        fixtureExpect(selection.success).toBe(true);
+        fixtureExpect(selection.selectedEntityId).toBe(building!.id);
+        fixtureExpect(selection.selectedCount).toBe(1);
+    });
+
+    fixtureTest('selecting and deselecting a swordsman updates selection state', async ({ gp }) => {
+        // Swordsman (UnitType 2) is Military category → selectable
+        const unit = await gp.spawnUnit(2);
+        fixtureExpect(unit).not.toBeNull();
+
+        // Select, verify, then deselect — all reads are atomic with the execute call
+        const afterSelect = await gp.page.evaluate(id => {
+            const game = (window as any).__settlers_game__;
+            game?.execute({ type: 'select', entityId: id });
+            return game?.state?.selection?.selectedEntityIds?.size ?? 0;
+        }, unit!.id);
+        fixtureExpect(afterSelect).toBe(1);
+
+        const afterDeselect = await gp.page.evaluate(() => {
+            const game = (window as any).__settlers_game__;
+            game?.execute({ type: 'select', entityId: null });
+            const sel = game?.state?.selection;
+            return {
+                selectedEntityId: sel?.selectedEntityId ?? null,
+                selectedCount: sel?.selectedEntityIds?.size ?? 0,
+            };
+        });
+        fixtureExpect(afterDeselect.selectedEntityId).toBeNull();
+        fixtureExpect(afterDeselect.selectedCount).toBe(0);
     });
 });

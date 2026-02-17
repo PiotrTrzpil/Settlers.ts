@@ -10,7 +10,7 @@ import { test, expect } from './fixtures';
  */
 
 test.describe('Unit Movement', { tag: '@smoke' }, () => {
-    test('unit starts moving immediately after command and completes path', async({ gs }) => {
+    test('unit starts moving immediately after command and completes path', { tag: '@slow' }, async ({ gs }) => {
         const unit = await gs.spawnUnit(1);
         expect(unit).not.toBeNull();
 
@@ -21,17 +21,17 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         const ok = await gs.moveUnit(unit!.id, targetX, targetY);
         expect(ok).toBe(true);
 
-        await test.step('path is computed immediately', async() => {
+        await test.step('path is computed immediately', async () => {
             const unitState = await gs.getUnitState(unit!.id);
             expect(unitState).not.toBeNull();
             expect(unitState!.pathLength).toBeGreaterThan(0);
         });
 
-        await test.step('unit moves away from start', async() => {
+        await test.step('unit moves away from start', async () => {
             await gs.waitForUnitToMove(unit!.id, unit!.x, unit!.y, 8000);
         });
 
-        await test.step('unit reaches destination and becomes stationary', async() => {
+        await test.step('unit reaches destination and becomes stationary', async () => {
             await gs.waitForUnitAtDestination(unit!.id, targetX, targetY, 10000);
 
             const unitState = await gs.getUnitState(unit!.id);
@@ -46,7 +46,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         });
     });
 
-    test('unit movement is smooth (no teleporting)', { tag: '@slow' }, async({ gs }) => {
+    test('unit movement is smooth (no teleporting)', { tag: '@slow' }, async ({ gs }) => {
         const unit = await gs.spawnUnit(1);
         expect(unit).not.toBeNull();
 
@@ -70,7 +70,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         }
     });
 
-    test('multiple units move at consistent speeds', async({ gs }) => {
+    test('multiple units move at consistent speeds', async ({ gs }) => {
         const center = await gs.getMapCenter();
 
         // Spawn 3 units at nearby positions
@@ -116,11 +116,11 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         expect(maxDist - minDist).toBeLessThan(4);
     });
 
-    test('movement command while already moving updates path correctly', async({ gs }) => {
+    test('movement command while already moving updates path correctly', async ({ gs }) => {
         const unit = await gs.spawnUnit(1);
         expect(unit).not.toBeNull();
 
-        await test.step('start initial movement east', async() => {
+        await test.step('start initial movement east', async () => {
             await gs.moveUnit(unit!.id, unit!.x + 10, unit!.y);
             await gs.waitForUnitToMove(unit!.id, unit!.x, unit!.y, 8000);
         });
@@ -129,7 +129,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         const entitiesBeforeRedirect = await gs.getEntities({ type: 1 });
         const posBeforeRedirect = entitiesBeforeRedirect.find(e => e.id === unit!.id)!;
 
-        await test.step('redirect south and verify new path', async() => {
+        await test.step('redirect south and verify new path', async () => {
             const newTargetY = unit!.y + 5;
             await gs.moveUnit(unit!.id, posBeforeRedirect.x, newTargetY);
 
@@ -139,7 +139,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
             expect(unitState!.moveProgress).toBeGreaterThanOrEqual(0);
         });
 
-        await test.step('unit moves south after redirect', async() => {
+        await test.step('unit moves south after redirect', async () => {
             await gs.waitForTicks(15, 5000);
 
             const entities = await gs.getEntities({ type: 1 });
@@ -149,7 +149,7 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
         });
     });
 
-    test('debug stats show moving units count', async({ gs }) => {
+    test('debug stats show moving units count', async ({ gs }) => {
         // Initially no user-placed units
         await expect(gs).toHaveUnitCount(0);
         await expect(gs).toHaveUnitsMoving(0);

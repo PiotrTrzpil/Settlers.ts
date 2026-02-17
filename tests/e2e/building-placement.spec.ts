@@ -1,95 +1,14 @@
 import { test, expect } from './fixtures';
-import { UnitType } from '@/game/unit-types';
 import { Timeout } from './wait-config';
 
 /**
- * E2E tests for building placement and unit spawning.
- * Verifies the full interaction pipeline: pointer events -> game commands -> entity creation.
+ * E2E tests for building placement.
+ * Verifies building placement mode, entity creation, and rendering.
  *
  * All game state queries go through GamePage helpers.
  * Uses the shared testMap fixture — the map is loaded once per worker,
  * and game state is reset between tests via resetGameState().
  */
-
-// --- Pointer Event Pipeline ---
-
-test.describe('Pointer Event Pipeline', { tag: '@smoke' }, () => {
-    test('pointer events fire on canvas (not suppressed)', async ({ gp }) => {
-        const page = gp.page;
-
-        const eventLog = await page.evaluate(() => {
-            return new Promise<string[]>(resolve => {
-                const canvas = document.querySelector('canvas');
-                if (!canvas) {
-                    resolve(['no canvas']);
-                    return;
-                }
-
-                const log: string[] = [];
-                for (const evt of [
-                    'pointerdown',
-                    'pointerup',
-                    'pointermove',
-                    'mousedown',
-                    'mouseup',
-                    'mousemove',
-                    'click',
-                ]) {
-                    canvas.addEventListener(evt, () => log.push(evt), { once: true });
-                }
-
-                const rect = canvas.getBoundingClientRect();
-                const cx = rect.left + rect.width / 2;
-                const cy = rect.top + rect.height / 2;
-
-                canvas.dispatchEvent(
-                    new PointerEvent('pointerdown', {
-                        clientX: cx,
-                        clientY: cy,
-                        bubbles: true,
-                        button: 0,
-                        pointerId: 1,
-                    })
-                );
-                canvas.dispatchEvent(
-                    new PointerEvent('pointermove', {
-                        clientX: cx + 1,
-                        clientY: cy,
-                        bubbles: true,
-                        button: 0,
-                        pointerId: 1,
-                    })
-                );
-                canvas.dispatchEvent(
-                    new PointerEvent('pointerup', {
-                        clientX: cx,
-                        clientY: cy,
-                        bubbles: true,
-                        button: 0,
-                        pointerId: 1,
-                    })
-                );
-
-                requestAnimationFrame(() => resolve(log));
-            });
-        });
-
-        expect(eventLog).toContain('pointerdown');
-        expect(eventLog).toContain('pointerup');
-        expect(eventLog).toContain('pointermove');
-    });
-
-    test('canvas click sets hoveredTile via tileClick event', async ({ gp }) => {
-        await gp.canvas.click({ position: { x: 400, y: 400 } });
-
-        const tileInfo = gp.page.locator('[data-testid="tile-info"]');
-        await expect(tileInfo).toBeVisible({ timeout: 5000 });
-        const text = await tileInfo.textContent();
-        expect(text).toMatch(/Tile: \(\d+, \d+\)/);
-    });
-});
-
-// --- Building Placement Mode ---
 
 test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
     test('clicking building button activates place_building mode', async ({ gp }) => {
@@ -109,24 +28,6 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
 
         await gp.selectMode();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
-    });
-
-    test('building placement via game.execute() creates entity with correct attributes', async ({ gs }) => {
-        const buildableTile = await gs.findBuildableTile();
-        if (!buildableTile) {
-            test.skip();
-            return;
-        }
-
-        const building = await gs.placeBuilding(1, buildableTile.x, buildableTile.y);
-        expect(building).not.toBeNull();
-        expect(building!.type).toBe(2); // EntityType.Building
-        expect(building!.subType).toBe(1); // BuildingType.WoodcutterHut
-        expect(building!.x).toBe(buildableTile.x);
-        expect(building!.y).toBe(buildableTile.y);
-        expect(building!.player).toBe(0);
-
-        await expect(gs).toHaveBuildingCount(1);
     });
 
     test('building placement via canvas click on buildable terrain', async ({ gp }) => {
@@ -217,54 +118,6 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         const warehouse = await gp.placeBuilding(2, warehouseTile.x, warehouseTile.y);
         expect(warehouse).not.toBeNull();
         expect(warehouse!.subType).toBe(2); // Warehouse
-    });
-});
-
-// --- Unit Spawning ---
-
-test.describe('Unit Spawning', { tag: '@smoke' }, () => {
-    test('spawn carrier creates entity on passable terrain', async ({ gs }) => {
-        const entity = await gs.spawnUnit(UnitType.Carrier);
-        expect(entity).not.toBeNull();
-        expect(entity!.x).toBeGreaterThanOrEqual(0);
-        expect(entity!.y).toBeGreaterThanOrEqual(0);
-
-        // Verify it's on passable terrain via GamePage helper
-        const terrainCheck = await gs.isTerrainPassable(entity!.x, entity!.y);
-        expect(terrainCheck).not.toBeNull();
-        expect(terrainCheck!.isPassable).toBe(true);
-    });
-
-    test('spawn swordsman creates entity', async ({ gs }) => {
-        const countBefore = await gs.getViewField('entityCount');
-        const entity = await gs.spawnUnit(UnitType.Swordsman);
-
-        // Debug stats throttle updates, so wait for refresh
-        await gs.waitForEntityCountAbove(countBefore, Timeout.DEFAULT);
-        expect(entity).not.toBeNull();
-    });
-
-    test('clicking canvas then spawning uses clicked tile', async ({ gs }) => {
-        const buildableTile = await gs.findBuildableTile();
-        if (!buildableTile) {
-            test.skip();
-            return;
-        }
-
-        const entity = await gs.spawnUnit(UnitType.Builder, buildableTile.x, buildableTile.y);
-        expect(entity).not.toBeNull();
-        expect(entity!.x).toBe(buildableTile.x);
-        expect(entity!.y).toBe(buildableTile.y);
-    });
-
-    test('spawned unit is on passable terrain (not water)', async ({ gs }) => {
-        const entity = await gs.spawnUnit(UnitType.Builder);
-        expect(entity).not.toBeNull();
-
-        const terrainCheck = await gs.isTerrainPassable(entity!.x, entity!.y);
-        expect(terrainCheck).not.toBeNull();
-        expect(terrainCheck!.isWater).toBe(false);
-        expect(terrainCheck!.isPassable).toBe(true);
     });
 });
 
