@@ -2,28 +2,25 @@
 
 A Settlers 4 (Siedler 4) browser-based remake using TypeScript, Vue 3, and WebGL.
 
-## Stack
-
-- **Framework**: Vue 3 (Composition API) + Vue Router
-- **Build**: Vite 7, TypeScript ~5.9
-- **Rendering**: WebGL2 with GLSL shaders (via `vite-plugin-glsl`)
-- **Testing**: Vitest (unit), Playwright (e2e)
-- **Package manager**: pnpm
-
 ## Project layout
 
 - `src/game/` — Core engine: commands, systems, renderer, input, economy, ai
+  - `features/` — Feature modules (building-construction, placement, material-requests)
+  - `systems/` — ECS-style systems (movement, pathfinding, map-objects)
+  - `terrain/` — Terrain queries and landscape data
+  - `buildings/`, `animation/`, `audio/` — Domain subsystems
 - `src/resources/` — Binary file readers (GFX, LIB, MAP formats)
 - `src/components/`, `src/views/` — Vue UI
 - `tests/unit/`, `tests/e2e/` — Vitest + Playwright
+- `docs/` — Architecture, design rules, coding style, testing guide
 
 ## Commands
 
 ```sh
 pnpm dev              # Start Vite dev server (port 5173)
 pnpm lint             # Type-check (vue-tsc) + ESLint in parallel
-pnpm build            # Fast bundle (rolldown-vite, no fengari)
-pnpm build:full       # Full bundle (regular vite, with fengari/Lua scripting)
+pnpm build            # Fast bundle (no fengari/Lua)
+pnpm build:full       # Full bundle (with fengari/Lua scripting)
 pnpm test:unit        # Run Vitest unit tests
 pnpm test:watch       # Vitest in watch mode
 npx playwright test   # Run Playwright e2e tests (uses dev server locally)
@@ -32,23 +29,39 @@ pnpm format           # Prettier formatting
 
 ## Key patterns
 
-- **Path alias**: `@/` maps to `src/` (configured in vite.config.ts + tsconfig.json)
 - **Debug bridge**: Game exposes `window.__settlers_debug__` for e2e tests and the debug panel
-- **Page object**: E2e tests use `GamePage` (tests/e2e/game-page.ts) for navigation, waiting, and assertions
 - **Test map**: `?testMap=true` query param loads a synthetic map (no game assets needed)
-- **GLSL imports**: Shader files use `import x from './shaders/file.glsl'` via vite-plugin-glsl
-- **Type declarations**: Ambient types live in `src/types/` (env.d.ts, glsl.d.ts, shims-vue.d.ts)
-- **Feature modules**: New features should follow the patterns in `docs/architecture/feature-modules.md` (registration, events, minimal public API)
-- **Architecture rules**: Read `docs/design-rules.md` for all architectural invariants, naming conventions, and code organization rules
+- **Feature modules**: Follow patterns in `docs/architecture/feature-modules.md`
+- **Architecture rules**: Read `docs/design-rules.md` for invariants and naming conventions
 
-## Game assets
+## Exploration
+**ALWAYS prefer cclsp mcp over manual grep for these operations:**
 
-The app needs original Settlers 4 files for full functionality. See `docs/SETUP.md`.
-Test maps and procedural textures work without game files.
+| Find usages | `find_references` |
+| Go to definition | `find_definition` |
+
+## Editing code
+
+**ALWAYS prefer cclsp mcp over manual edit for these operations:**
+
+| Operation | Tool |
+|-----------|------|
+| Move/Rename file | `move_file` |
+| Rename symbol | `rename_symbol` |
+
+
+If you are doing some editing patterns that are similar in many files:
+- changing parameter passing repetitively 
+- changing imports
+- removing the same thing in many files.
+
+ALWAYS prefer mass approaches, e.g. sed and others.
+
+- **Validate after your changes**: Run full unit test suite after you are done with a large change.
+
 
 ## Notes
 
-- **Linting**: ESLint 9 flat config (`eslint.config.mjs`) with `typescript-eslint` v8, `eslint-plugin-vue` v10, and `eslint-plugin-import-x`.
 - **Line length**: max 140 chars (TS), 150 chars (Vue). URLs, strings, and template literals are exempt.
 - **Complexity**: max cyclomatic complexity 15 per function. Extract helpers to stay under the limit.
 - **Formatting**: Prettier (`.prettierrc`). Runs automatically via lint-staged on commit.
@@ -63,108 +76,23 @@ Key project-specific rules:
 - Use `getEntityOrThrow(id, 'context')` instead of `getEntity(id)!`
 - See `docs/design-rules.md` for architecture patterns
 
+
 ## Pre-Commit Review Checklist
 
-**VERY IMPORTANT: Check ALL modified code for these patterns before committing:**
+**Check ALL modified code for these patterns before committing (see `docs/coding-style.md` for examples):**
 
-### 1. Optional Chaining on Required Dependencies (MUST FIX)
+- No optional chaining on required deps — use `!.` not `?.` on injected dependencies
+- Use `getEntityOrThrow(id, 'context')` not `getEntity(id)!`
+- No silent fallbacks (`?? 0`, `|| 0`) when value must exist — use `!`
+- No defensive guards (`if (x)`) when value is guaranteed — trust the contract
+- Throw with context instead of returning null/undefined silently
+- Defensive code OK for: nullable-by-design, API boundaries, cleanup/destroy, external input
 
-```typescript
-// ❌ BAD - hides initialization bugs
-this.eventBus?.emit(...)
-this.manager?.doThing()
-private foo: Bar | undefined
 
-// ✅ GOOD - crashes loudly if not initialized
-this.eventBus!.emit(...)
-this.manager!.doThing()
-private foo!: Bar
-```
-
-### 2. Entity Lookups - Use getEntityOrThrow (MUST FIX)
-
-```typescript
-// ❌ BAD - no context when it crashes
-const entity = this.gameState.getEntity(id)!
-
-// ❌ WORSE - silently returns wrong value
-const player = this.gameState.getEntity(id)?.player ?? 0
-
-// ✅ GOOD - crashes with helpful context
-const entity = this.gameState.getEntityOrThrow(id, 'source building')
-```
-
-### 3. Silent Fallbacks That Hide Bugs (MUST FIX)
-
-```typescript
-// ❌ BAD - silently returns wrong value if bug exists
-const x = map.get(id) ?? 0
-slot?.amount || 0
-
-// ✅ GOOD - crashes if value doesn't exist when it should
-const x = map.get(id)!
-slot!.amount
-```
-
-### 4. Defensive Checks When Value Must Exist (MUST FIX)
-
-```typescript
-// ❌ BAD - silently skips code that should run
-if (this.manager) { this.manager.doThing() }
-if (!entity) return;
-handler && handler.onWork()
-
-// ✅ GOOD - trust the contract, crash if violated
-this.manager!.doThing()
-entity!  // let it crash if bug
-handler!.onWork()
-```
-
-### 5. Missing Error Context / Silent Failures (MUST FIX)
-
-```typescript
-// ❌ BAD - hides the root cause
-if (!x) return null;
-console.warn('failed')
-return undefined
-
-// ✅ GOOD - crash with full context for debugging
-throw new Error(`Entity ${id} not found. Available: ${[...map.keys()]}`)
-throw new Error(`Cannot process ${type}: ${JSON.stringify(state)}`)
-```
-
-### When Defensive Code IS Appropriate
-
-- **Nullable by design**: `placementPreview?: ...`, optional callbacks
-- **API boundaries**: `getEntity(id)` returning undefined for queries
-- **Cleanup/destroy**: Resources may not be initialized
-- **External input**: User data, file parsing, network responses
-
-## Claude Code workflow
-
-- **Validate every change**: Run targeted unit test after each edit, full suite before commit
-- **Cross-module changes need e2e**: If touching multiple modules, run `pnpm lint && npx playwright test`
-- **Use LSP MCP** (if available): Always prefer over grep/edit for code exploration and refactoring
-  - `find_references` — find all usages of a symbol
-  - `find_definition` — jump to where something is defined
-  - `rename_symbol` — rename across codebase (scope-aware, updates imports)
-  - `get_diagnostics` — check for type errors
-- **MCP screenshots**: Save to `.playwright-mcp/` folder (gitignored)
-- **Hex coordinates**: Odd/even Y rows differ — test both
-- **WebGL**: Unit tests (jsdom) have no WebGL — use e2e for rendering
 
 ## E2E testing
 
 **Read `docs/testing/guide.md` before writing or updating tests.**
 
-- Always lint first: `pnpm lint && npx playwright test`
-- Use `GamePage` helpers and shared fixture (`import { test, expect } from './fixtures'`)
-- Never use `waitForTimeout()` — use `waitForFrames()`, `waitForReady()`, etc.
-- **CRITICAL: Never use `--reporter=line`** — it suppresses stdout and hides the WaitProfiler output. Use `--reporter=list` instead.
-- **Wait Profiler**: E2e tests have a built-in profiler that reports slowest waits at worker teardown. Use `WAIT_PROFILER_VERBOSE=1` for per-wait logging.
-- **Run full e2e suite in background** to avoid blocking and recover from stuck tests:
-  ```sh
-  npx playwright test --reporter=list 2>&1 | tee /tmp/e2e.log &
-  # Then poll output every 1-2 seconds:
-  while ! grep -q "passed\|failed" /tmp/e2e.log 2>/dev/null; do sleep 1; tail -5 /tmp/e2e.log 2>/dev/null; done
-  ```
+- Always lint first before running tests.
+- **Never use `--reporter=line`** — it suppresses stdout. Use `--reporter=list` instead.
