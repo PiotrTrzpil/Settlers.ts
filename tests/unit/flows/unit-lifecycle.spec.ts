@@ -187,7 +187,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const ctx = createTestContext(64, 64);
         // Set flat height for building placement
         ctx.map.groundHeight.fill(100);
-        ctx.state.setTerrainData(
+        ctx.state.movement.setTerrainData(
             ctx.map.groundType,
             ctx.map.groundHeight,
             ctx.map.mapSize.width,
@@ -278,7 +278,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const state = createGameState();
 
         // Set up terrain data for pathfinding during push
-        state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
+        state.movement.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
 
         // Unit A at (6,5) with a path to (15,5) - created FIRST so has lower ID
         // Unit B at (5,5) will try to move through A's position

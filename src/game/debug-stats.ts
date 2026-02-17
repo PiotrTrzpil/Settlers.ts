@@ -35,10 +35,12 @@ export interface RenderTimings {
     ticks: number;
     /** Animation update time in ms */
     animations: number;
+    /** Per-frame update callback (camera, input, sound, debug stats) in ms */
+    update: number;
     /** Render callback overhead (sync state, etc.) in ms */
     callback: number;
-    /** Browser/vsync/rAF scheduling overhead in ms */
-    other: number;
+    /** Idle time between frames (vsync/rAF scheduling) in ms */
+    idle: number;
     /** Total GPU render time in ms */
     render: number;
     /** Landscape render time in ms */
@@ -62,6 +64,8 @@ export interface RenderTimings {
     color: number;
     /** Selection overlay draw time in ms */
     selection: number;
+    /** Per-system tick timing breakdown (system name → ms) */
+    tickSystems: Record<string, number>;
 }
 
 export interface DebugStatsState {
@@ -211,16 +215,19 @@ function saveDebugSettings(settings: PersistedDebugSettings): void {
     }
 }
 
-type RenderTimingSample = Record<RenderTimingKey, number>;
-
+/** Keys present in a timing sample (excludes tickSystems which is handled separately) */
 type RenderTimingKey = keyof RenderTimingSamples;
+
+/** A single frame's timing sample */
+type RenderTimingSample = Record<RenderTimingKey, number> & { tickSystems: Record<string, number> };
 
 const RENDER_TIMING_KEYS: readonly RenderTimingKey[] = [
     'frame',
     'ticks',
     'animations',
+    'update',
     'callback',
-    'other',
+    'idle',
     'render',
     'landscape',
     'entities',
@@ -241,8 +248,9 @@ interface RenderTimingSamples {
     frame: number[];
     ticks: number[];
     animations: number[];
+    update: number[];
     callback: number[];
-    other: number[];
+    idle: number[];
     render: number[];
     landscape: number[];
     entities: number[];
@@ -272,8 +280,9 @@ class DebugStats {
         frame: [],
         ticks: [],
         animations: [],
+        update: [],
         callback: [],
-        other: [],
+        idle: [],
         render: [],
         landscape: [],
         entities: [],
@@ -286,6 +295,8 @@ class DebugStats {
         color: [],
         selection: [],
     };
+    /** Per-system tick timing samples (system name → array of per-frame ms values) */
+    private tickSystemSamples = new Map<string, number[]>();
     private lastRenderTimingUpdate = 0;
 
     constructor() {
@@ -362,8 +373,9 @@ class DebugStats {
                 frame: 0,
                 ticks: 0,
                 animations: 0,
+                update: 0,
                 callback: 0,
-                other: 0,
+                idle: 0,
                 render: 0,
                 landscape: 0,
                 entities: 0,
@@ -375,6 +387,7 @@ class DebugStats {
                 textured: 0,
                 color: 0,
                 selection: 0,
+                tickSystems: {},
             },
         });
 
@@ -478,6 +491,16 @@ class DebugStats {
             this.renderSamples[key].push(timing[key]);
         }
 
+        // Accumulate per-system tick timings
+        for (const [name, ms] of Object.entries(timing.tickSystems)) {
+            let arr = this.tickSystemSamples.get(name);
+            if (!arr) {
+                arr = [];
+                this.tickSystemSamples.set(name, arr);
+            }
+            arr.push(ms);
+        }
+
         const now = performance.now();
         if (now - this.lastRenderTimingUpdate >= RENDER_TIMING_UPDATE_INTERVAL) {
             this.updateRenderTimingAverages();
@@ -490,11 +513,19 @@ class DebugStats {
 
         for (const key of RENDER_TIMING_KEYS) {
             const value = avg(this.renderSamples[key]);
-            this.state.renderTimings[key] = INTEGER_TIMING_KEYS.has(key)
+            (this.state.renderTimings as unknown as Record<string, number>)[key] = INTEGER_TIMING_KEYS.has(key)
                 ? Math.round(value)
                 : Math.round(value * 100) / 100;
             this.renderSamples[key].length = 0;
         }
+
+        // Average per-system tick timings
+        const systems: Record<string, number> = {};
+        for (const [name, arr] of this.tickSystemSamples) {
+            systems[name] = Math.round(avg(arr) * 100) / 100;
+            arr.length = 0;
+        }
+        this.state.renderTimings.tickSystems = systems;
     }
 
     // Throttle entity counting - no need to count every frame
@@ -514,8 +545,8 @@ class DebugStats {
         const now = performance.now();
         if (now - this.lastEntityCountUpdate < DebugStats.ENTITY_COUNT_INTERVAL) {
             // Skip detailed counting, just update selection/mode state
-            this.state.selectedEntityId = gameState.selectedEntityId;
-            this.state.selectedCount = gameState.selectedEntityIds.size;
+            this.state.selectedEntityId = gameState.selection.selectedEntityId;
+            this.state.selectedCount = gameState.selection.selectedEntityIds.size;
             return;
         }
         this.lastEntityCountUpdate = now;
@@ -591,8 +622,8 @@ class DebugStats {
 
         // Note: mode and placeBuildingType are managed by InputManager onModeChange callback
         // to ensure immediate updates without frame delay
-        this.state.selectedEntityId = gameState.selectedEntityId;
-        this.state.selectedCount = gameState.selectedEntityIds.size;
+        this.state.selectedEntityId = gameState.selection.selectedEntityId;
+        this.state.selectedCount = gameState.selection.selectedEntityIds.size;
     }
 
     public updateFromGame(game: Game): void {

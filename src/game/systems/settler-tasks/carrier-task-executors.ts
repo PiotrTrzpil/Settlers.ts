@@ -2,6 +2,7 @@
  * Carrier-specific task executors.
  *
  * Handles the carrier.transport job tasks: GO_TO_SOURCE, PICKUP, GO_TO_DEST, DROPOFF.
+ * PICKUP and DROPOFF delegate to TransportJob for inventory + request lifecycle.
  * Generic tasks (GO_HOME, WAIT, STAY) fall through to the main dispatcher.
  */
 
@@ -78,21 +79,20 @@ function goToDest(settler: Entity, job: CarrierJobState, ctx: TaskContext): Task
 }
 
 // ─────────────────────────────────────────────────────────────
-// Pickup / Dropoff
+// Pickup / Dropoff — delegated to TransportJob
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Withdraw material from source building inventory.
- * Inventory was reserved by LogisticsDispatcher via InventoryReservationManager.
+ * Pick up material from source building.
+ * TransportJob handles the reservation → withdrawal atomically.
  */
 function pickup(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskResult {
-    const { sourceBuildingId, material, amount: requestedAmount } = job.data;
+    const { transportJob, material, sourceBuildingId, amount: requestedAmount } = job.data;
 
-    // Withdraw from reserved amount (atomic: release slot reservation + withdraw)
-    const withdrawn = ctx.inventoryManager.withdrawReservedOutput(sourceBuildingId, material, requestedAmount);
+    const withdrawn = transportJob.pickup();
 
     if (withdrawn === 0) {
-        log.warn(`Carrier ${settler.id}: material ${material} not available at building ${sourceBuildingId}`);
+        log.warn(`Carrier ${settler.id}: pickup failed at building ${sourceBuildingId}`);
 
         ctx.eventBus.emit('carrier:pickupFailed', {
             entityId: settler.id,
@@ -105,7 +105,6 @@ function pickup(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskRe
     }
 
     setCarrying(settler, material, withdrawn);
-
     job.data.carryingGood = material;
     job.data.amount = withdrawn;
 
@@ -126,15 +125,14 @@ function pickup(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskRe
 }
 
 /**
- * Deposit material to destination building inventory.
- * Emits the critical 'carrier:deliveryComplete' event.
+ * Deposit material to destination building.
+ * TransportJob handles the deposit + request fulfillment.
  */
 function dropoff(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskResult {
-    const { destBuildingId, material } = job.data;
+    const { transportJob, destBuildingId, material } = job.data;
 
     const amount = settler.carrying?.amount ?? 0;
-
-    const deposited = ctx.inventoryManager.depositInput(destBuildingId, material, amount);
+    const deposited = transportJob.complete(amount);
 
     const overflow = amount - deposited;
     if (overflow > 0) {

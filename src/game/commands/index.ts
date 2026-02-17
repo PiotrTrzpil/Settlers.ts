@@ -35,3 +35,4 @@ export {
 
 // Command execution
 export { executeCommand } from './command';
+export type { CommandContext } from './command';

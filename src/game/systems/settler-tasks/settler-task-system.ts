@@ -28,6 +28,8 @@ import {
     type TaskNode,
     type WorkerJobData,
     type JobState,
+    type EntityWorkHandler,
+    type PositionWorkHandler,
     type WorkHandler,
 } from './types';
 import { executeTask, type TaskContext } from './task-executors';
@@ -35,7 +37,7 @@ import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDe
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../../features/inventory';
 import type { CarrierManager } from '../../features/carriers';
-import { createWorkplaceHandler, createCarrierHandler, isOutputFull } from './work-handlers';
+import { createWorkplaceHandler, createCarrierHandler, isOutputFull, findNearestWorkplace } from './work-handlers';
 
 const log = new LogHandler('SettlerTaskSystem');
 
@@ -78,6 +80,8 @@ export interface SettlerTaskSystemConfig {
     inventoryManager: BuildingInventoryManager;
     carrierManager: CarrierManager;
     eventBus: EventBus;
+    /** Lazy getter — resolved on first use (breaks circular init dependency). */
+    getInventoryVisualizer: () => InventoryVisualizer;
 }
 
 /**
@@ -90,17 +94,16 @@ export class SettlerTaskSystem implements TickSystem {
     private carrierManager: CarrierManager;
     private settlerConfigs: SettlerConfigs;
     private jobDefinitions: JobDefinitions;
-    private workHandlers = new Map<SearchType, WorkHandler>();
+    private entityHandlers = new Map<SearchType, EntityWorkHandler>();
+    private positionHandlers = new Map<SearchType, PositionWorkHandler>();
     private runtimes = new Map<number, UnitRuntime>();
     private readonly eventBus: EventBus;
     /** Throttled logger for handler errors (prevents flooding from broken domain systems) */
     private handlerErrorLogger = new ThrottledLogger(log, 2000);
     /** Throttled logger for missing handler warnings (prevents spam when feature not yet implemented) */
     private missingHandlerLogger = new ThrottledLogger(log, 5000);
-    /** Inventory visualizer - used to find stack positions for carrier navigation */
-    private inventoryVisualizer!: InventoryVisualizer;
     /** Context object passed to task executor functions */
-    private taskContext!: TaskContext;
+    private readonly taskContext: TaskContext;
     /** Tick counter for throttling the orphan-runtime safety net */
     private ticksSinceOrphanCheck = 0;
 
@@ -119,22 +122,20 @@ export class SettlerTaskSystem implements TickSystem {
         // Register GOOD handler for carriers (they get jobs assigned externally by LogisticsDispatcher)
         this.registerWorkHandler(SearchType.GOOD, createCarrierHandler());
 
-        log.debug(`Loaded ${this.settlerConfigs.size} settler configs, ${this.jobDefinitions.size} jobs`);
-    }
-
-    /** Set the inventory visualizer (created after task system in game loop). */
-    setInventoryVisualizer(visualizer: InventoryVisualizer): void {
-        this.inventoryVisualizer = visualizer;
-
-        // Build the task context now that all dependencies are available
+        // Build task context eagerly — inventoryVisualizer is resolved lazily via getter
+        const getViz = config.getInventoryVisualizer;
         this.taskContext = {
             gameState: this.gameState,
             inventoryManager: this.inventoryManager,
-            inventoryVisualizer: this.inventoryVisualizer,
+            get inventoryVisualizer() {
+                return getViz();
+            },
             carrierManager: this.carrierManager,
             eventBus: this.eventBus,
             handlerErrorLogger: this.handlerErrorLogger,
         };
+
+        log.debug(`Loaded ${this.settlerConfigs.size} settler configs, ${this.jobDefinitions.size} jobs`);
     }
 
     /**
@@ -164,16 +165,21 @@ export class SettlerTaskSystem implements TickSystem {
     /**
      * Register a work handler for a search type.
      * Domain systems call this to plug into the task system.
-     * Throws if a handler is already registered for this type.
+     * A search type can have one entity handler and one position handler.
      */
     registerWorkHandler(searchType: SearchType, handler: WorkHandler): void {
-        if (this.workHandlers.has(searchType)) {
-            throw new Error(
-                `Work handler already registered for ${searchType}. Each SearchType must have exactly one handler.`
-            );
+        if (handler.type === 'entity') {
+            if (this.entityHandlers.has(searchType)) {
+                throw new Error(`Entity work handler already registered for ${searchType}.`);
+            }
+            this.entityHandlers.set(searchType, handler);
+        } else {
+            if (this.positionHandlers.has(searchType)) {
+                throw new Error(`Position work handler already registered for ${searchType}.`);
+            }
+            this.positionHandlers.set(searchType, handler);
         }
-        this.workHandlers.set(searchType, handler);
-        log.debug(`Registered work handler for ${searchType}`);
+        log.debug(`Registered ${handler.type} work handler for ${searchType}`);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -304,10 +310,10 @@ export class SettlerTaskSystem implements TickSystem {
             }
         } else if (runtime.job?.type === 'worker' && runtime.job.data.targetId && runtime.job.workStarted) {
             // Entity already gone — call onWorkInterrupt directly
-            const handler = this.findHandlerForJob(runtime.job.jobId);
-            if (handler) {
+            const entityHandler = this.findEntityHandlerForJob(runtime.job.jobId);
+            if (entityHandler) {
                 try {
-                    handler.onWorkInterrupt?.(runtime.job.data.targetId);
+                    entityHandler.onWorkInterrupt?.(runtime.job.data.targetId);
                 } catch (e) {
                     const err = e instanceof Error ? e : new Error(String(e));
                     this.handlerErrorLogger.error(`onWorkInterrupt failed for entity ${entityId}`, err);
@@ -318,13 +324,13 @@ export class SettlerTaskSystem implements TickSystem {
         this.runtimes.delete(entityId);
     }
 
-    /** Reverse-lookup: find the work handler for a given jobId like "woodcutter.work" */
-    private findHandlerForJob(jobId: string): WorkHandler | undefined {
+    /** Reverse-lookup: find the entity work handler for a given jobId like "woodcutter.work" */
+    private findEntityHandlerForJob(jobId: string): EntityWorkHandler | undefined {
         for (const [unitType, config] of this.settlerConfigs) {
             const prefix = UnitType[unitType].toLowerCase();
             for (const jobName of config.jobs) {
                 if (`${prefix}.${jobName}` === jobId) {
-                    return this.workHandlers.get(config.search);
+                    return this.entityHandlers.get(config.search);
                 }
             }
         }
@@ -508,8 +514,11 @@ export class SettlerTaskSystem implements TickSystem {
         }
     }
 
-    /** Find a work target via the handler, catching errors at the system boundary. */
-    private findWorkTarget(handler: WorkHandler, settler: Entity): ReturnType<WorkHandler['findTarget']> | undefined {
+    /** Find an entity target via an EntityWorkHandler, catching errors at the system boundary. */
+    private findEntityTarget(
+        handler: EntityWorkHandler,
+        settler: Entity
+    ): { entityId: number; x: number; y: number } | null | undefined {
         try {
             return handler.findTarget(settler.x, settler.y, settler.id);
         } catch (e) {
@@ -520,22 +529,22 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     private buildWorkerJobData(
-        target: { entityId: number | null; x: number; y: number } | null,
+        target: { entityId: number; x: number; y: number } | null,
         homeBuilding: Entity | null
     ): WorkerJobData {
-        // Store targetPos only when there's no entity (position-only results like forester planting spots)
-        const hasPositionOnly = target !== null && target.entityId === null;
         return {
             targetId: target?.entityId ?? null,
-            targetPos: hasPositionOnly ? { x: target.x, y: target.y } : null,
+            targetPos: null,
             homeId: homeBuilding?.id ?? null,
             carryingGood: null,
         };
     }
 
     private handleIdle(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
-        const handler = this.workHandlers.get(config.search);
-        if (!handler) {
+        const entityHandler = this.entityHandlers.get(config.search);
+        const positionHandler = this.positionHandlers.get(config.search);
+
+        if (!entityHandler && !positionHandler) {
             this.missingHandlerLogger.warn(
                 `No work handler registered for search type: ${config.search}. ` +
                     `Settler ${settler.id} (${UnitType[settler.subType]}) will stay idle until feature is implemented.`
@@ -543,12 +552,13 @@ export class SettlerTaskSystem implements TickSystem {
             return;
         }
 
-        const homeBuilding = this.gameState.findNearestWorkplace(settler);
+        const homeBuilding = findNearestWorkplace(this.gameState, settler);
 
-        const target = this.findWorkTarget(handler, settler);
-        if (target === undefined) return; // error already logged
+        // Entity handlers search for a target; position handlers start self-searching jobs directly
+        const entityTarget = entityHandler ? this.findEntityTarget(entityHandler, settler) : null;
+        if (entityTarget === undefined) return; // error already logged
 
-        const selected = this.selectJob(settler, config, target);
+        const selected = this.selectJob(settler, config, entityTarget);
         if (!selected) return;
 
         if (homeBuilding && isOutputFull(homeBuilding, selected.tasks, this.inventoryManager)) {
@@ -562,11 +572,11 @@ export class SettlerTaskSystem implements TickSystem {
             jobId: selected.jobId,
             taskIndex: 0,
             progress: 0,
-            data: this.buildWorkerJobData(target, homeBuilding),
+            data: this.buildWorkerJobData(entityTarget, homeBuilding),
         };
 
         log.debug(
-            `Settler ${settler.id} starting job ${selected.jobId}, target ${target?.entityId ?? 'none'}, home ${homeBuilding?.id ?? 'none'}`
+            `Settler ${settler.id} starting job ${selected.jobId}, target ${entityTarget?.entityId ?? 'none'}, home ${homeBuilding?.id ?? 'none'}`
         );
     }
 
@@ -579,12 +589,12 @@ export class SettlerTaskSystem implements TickSystem {
     private selectJob(
         settler: Entity,
         config: SettlerConfig,
-        target: ReturnType<WorkHandler['findTarget']>
+        target: { entityId: number; x: number; y: number } | null
     ): { jobId: string; tasks: TaskNode[] } | null {
         const prefix = UnitType[settler.subType].toLowerCase();
 
         // Phase 1: If a target entity was found, try jobs that need one
-        if (target?.entityId != null) {
+        if (target) {
             for (const jobName of config.jobs) {
                 const jobId = `${prefix}.${jobName}`;
                 const tasks = this.jobDefinitions.get(jobId);
@@ -667,8 +677,9 @@ export class SettlerTaskSystem implements TickSystem {
             this.applyTaskAnimation(settler, task);
         }
 
-        const handler = this.workHandlers.get(config.search);
-        const result = executeTask(settler, job, task, dt, this.taskContext, handler);
+        const entityHandler = this.entityHandlers.get(config.search);
+        const positionHandler = this.positionHandlers.get(config.search);
+        const result = executeTask(settler, job, task, dt, this.taskContext, entityHandler, positionHandler);
 
         switch (result) {
         case TaskResult.DONE:
@@ -699,14 +710,13 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     private interruptJob(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
-        const handler = this.workHandlers.get(config.search);
-        // Job MUST exist — all callers verify runtime.job is non-null before calling
+        const entityHandler = this.entityHandlers.get(config.search);
         const job = runtime.job!;
 
-        // Only call onWorkInterrupt if work actually started (onWorkStart was called)
-        if (handler && job.type === 'worker' && job.data.targetId && job.workStarted) {
+        // Only call onWorkInterrupt on entity handlers when work actually started
+        if (entityHandler && job.type === 'worker' && job.data.targetId && job.workStarted) {
             try {
-                handler.onWorkInterrupt?.(job.data.targetId);
+                entityHandler.onWorkInterrupt?.(job.data.targetId);
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));
                 this.handlerErrorLogger.error(`onWorkInterrupt failed for target ${job.data.targetId}`, err);

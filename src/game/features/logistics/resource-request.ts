@@ -75,7 +75,7 @@ export function createResourceRequest(
     buildingId: number,
     materialType: EMaterialType,
     amount: number,
-    priority: RequestPriority = RequestPriority.Normal,
+    priority: RequestPriority = RequestPriority.Normal
 ): ResourceRequest {
     return {
         id,

@@ -58,7 +58,7 @@ function syncEntityRendererState(
     // Collect service areas for selected hub buildings
     const serviceAreas: ServiceAreaRenderData[] = [];
     const sam = g.gameLoop.serviceAreaManager;
-    for (const id of g.state.selectedEntityIds) {
+    for (const id of g.state.selection.selectedEntityIds) {
         const entity = g.state.getEntity(id);
         if (entity && entity.type === EntityType.Building) {
             const sa = sam.getServiceArea(id);
@@ -71,15 +71,15 @@ function syncEntityRendererState(
     const renderContext = createRenderContext()
         .entities(g.state.entities)
         .unitStates(g.state.unitStates)
-        .resourceStates(g.state.resourceStates)
+        .resourceStates(g.state.resources.states)
         .buildingStates(buildingStates)
         .buildingVisualStateGetter(entityId => {
             const state = g.gameLoop.buildingStateManager.getBuildingState(entityId);
             return getBuildingVisualState(state);
         })
         .selection({
-            primaryId: g.state.selectedEntityId,
-            ids: g.state.selectedEntityIds,
+            primaryId: g.state.selection.selectedEntityId,
+            ids: g.state.selection.selectedEntityIds,
         })
         .selectedServiceAreas(serviceAreas)
         .alpha(alpha)

@@ -3,6 +3,7 @@
  */
 
 import type { EMaterialType } from '../../economy';
+import type { TransportJob } from '../../features/logistics/transport-job';
 
 /** Task types - atomic actions a settler can perform */
 export enum TaskType {
@@ -160,6 +161,8 @@ export interface CarrierJobData {
     homeId: number;
     /** Carried good type (after pickup) */
     carryingGood: EMaterialType | null;
+    /** The TransportJob that owns this delivery's reservation and request lifecycle */
+    transportJob: TransportJob;
 }
 
 /** Worker job state - for settlers with YAML-defined jobs */
@@ -181,27 +184,22 @@ export type JobState = WorkerJobState | CarrierJobState;
 
 /**
  * Build a CarrierJobState for a transport delivery.
- * Pure data construction — no side effects.
+ * The TransportJob owns the reservation and request lifecycle.
  */
-export function buildCarrierJob(
-    sourceBuildingId: number,
-    destBuildingId: number,
-    material: EMaterialType,
-    amount: number,
-    homeId: number
-): CarrierJobState {
+export function buildCarrierJob(transportJob: TransportJob): CarrierJobState {
     return {
         type: 'carrier',
         jobId: 'carrier.transport',
         taskIndex: 0,
         progress: 0,
         data: {
-            sourceBuildingId,
-            destBuildingId,
-            material,
-            amount,
-            homeId,
+            sourceBuildingId: transportJob.sourceBuilding,
+            destBuildingId: transportJob.destBuilding,
+            material: transportJob.material,
+            amount: transportJob.amount,
+            homeId: transportJob.homeBuilding,
             carryingGood: null,
+            transportJob,
         },
     };
 }
@@ -216,10 +214,11 @@ export enum SettlerState {
     INTERRUPTED = 'INTERRUPTED',
 }
 
-/** Work handler provided by domain systems (e.g., WoodcuttingSystem) */
-export interface WorkHandler {
-    /** Find a target for this settler. entityId is null for position-only results (e.g., forester planting spots). */
-    findTarget(x: number, y: number, settlerId?: number): { entityId: number | null; x: number; y: number } | null;
+/** Handler for entity-targeted work: GO_TO_TARGET → WAIT_FOR_WORK → WORK_ON_ENTITY */
+export interface EntityWorkHandler {
+    type: 'entity';
+    /** Find a target entity for this settler */
+    findTarget(x: number, y: number, settlerId?: number): { entityId: number; x: number; y: number } | null;
     /** Check if target is still valid / has materials to work with */
     canWork(targetId: number): boolean;
     /** If true, worker waits (idles) when canWork is false instead of failing */
@@ -232,6 +231,18 @@ export interface WorkHandler {
     onWorkComplete?(targetId: number, settlerX: number, settlerY: number): void;
     /** Called if work is interrupted */
     onWorkInterrupt?(targetId: number): void;
-    /** Called when a WORK task completes at a searched position (SEARCH_POS → GO_TO_POS → WORK flow) */
-    onWorkAtPositionComplete?(x: number, y: number, settlerId: number): void;
 }
+
+/** Handler for position-based work: SEARCH_POS → GO_TO_POS → WORK */
+export interface PositionWorkHandler {
+    type: 'position';
+    /** Find a position to work at */
+    findPosition(x: number, y: number, settlerId?: number): { x: number; y: number } | null;
+    /** If true, worker waits (idles) when no position is found instead of failing */
+    shouldWaitForWork?: boolean;
+    /** Called when WORK task completes at searched position */
+    onWorkAtPositionComplete(x: number, y: number, settlerId: number): void;
+}
+
+/** Discriminated union of work handler types */
+export type WorkHandler = EntityWorkHandler | PositionWorkHandler;

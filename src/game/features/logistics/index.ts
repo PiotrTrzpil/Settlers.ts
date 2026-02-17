@@ -78,5 +78,8 @@ export {
     diagnoseUnfulfilledRequest,
 } from './fulfillment-diagnostics';
 
+// Transport job (owns reservation + request lifecycle for a single delivery)
+export { TransportJob, type TransportJobDeps, type TransportJobStatus } from './transport-job';
+
 // Logistics dispatcher (connects requests to carriers)
 export { LogisticsDispatcher, type LogisticsDispatcherConfig } from './logistics-dispatcher';

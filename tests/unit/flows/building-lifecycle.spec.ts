@@ -41,7 +41,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         map.groundType.fill(TERRAIN.GRASS);
         map.groundHeight.fill(100);
         // Re-apply to state
-        ctx.state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
+        ctx.state.movement.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
     });
 
     it('full lifecycle from placement through construction to removal', () => {

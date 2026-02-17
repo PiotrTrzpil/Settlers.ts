@@ -5,9 +5,11 @@
  * Each tick, it:
  * 1. Finds pending resource requests
  * 2. Matches them to available supplies using FulfillmentMatcher
- * 3. Assigns idle carriers to fulfill requests via CarrierSystem
+ * 3. Creates a TransportJob (which reserves inventory + marks request InProgress)
+ * 4. Assigns idle carriers to fulfill the job
  *
- * It also listens for carrier events to update request status accordingly.
+ * TransportJob owns the full lifecycle: reservation, request status, and cleanup.
+ * The dispatcher just creates jobs and cancels them when carriers fail or buildings are destroyed.
  */
 
 import type { TickSystem } from '../../tick-system';
@@ -21,6 +23,7 @@ import { getHubsServingBothPositions, getHubsServingPosition } from '../service-
 import { matchRequestToSupply } from './fulfillment-matcher';
 import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
+import { TransportJob } from './transport-job';
 import { LogHandler } from '@/utilities/log-handler';
 import type { BuildingInventoryManager } from '../inventory';
 import { buildCarrierJob, type SettlerTaskSystem } from '../../systems/settler-tasks';
@@ -50,10 +53,9 @@ const MATCH_DIAGNOSTIC_INTERVAL_MS = 10_000;
 /**
  * System that coordinates resource requests with carrier assignments.
  *
- * This system bridges the gap between:
- * - RequestManager: tracks what materials buildings need
- * - FulfillmentMatcher: finds where to get materials
- * - CarrierSystem: assigns carriers to pickup/deliver jobs
+ * Creates TransportJob instances that own the reservation + request lifecycle.
+ * The dispatcher's role is limited to: matching supply, creating jobs, and
+ * cancelling jobs when external events require it (carrier removed, building destroyed).
  */
 export class LogisticsDispatcher implements TickSystem {
     private static log = new LogHandler('LogisticsDispatcher');
@@ -68,8 +70,8 @@ export class LogisticsDispatcher implements TickSystem {
 
     private eventBus!: EventBus;
 
-    /** Track which carriers have active requests (carrierId -> requestId) */
-    private readonly carrierToRequest: Map<number, number> = new Map();
+    /** Active transport jobs indexed by carrier ID */
+    private readonly activeJobs: Map<number, TransportJob> = new Map();
 
     /** Accumulated time since last stall check (in ms) */
     private timeSinceStallCheck: number = 0;
@@ -95,22 +97,21 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
-     * Register for carrier events to track request fulfillment.
+     * Register for carrier events.
+     * deliveryComplete and pickupFailed are handled by TransportJob internally,
+     * but we still listen to clean up our activeJobs map.
      */
     registerEvents(eventBus: EventBus): void {
         this.eventBus = eventBus;
 
-        // Listen for delivery completions to fulfill requests
         this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', payload => {
-            this.handleDeliveryComplete(payload.entityId);
+            this.activeJobs.delete(payload.entityId);
         });
 
-        // Listen for pickup failures to reset requests (so they can be reassigned)
         this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', payload => {
-            this.handlePickupFailed(payload.entityId);
+            this.activeJobs.delete(payload.entityId);
         });
 
-        // Listen for carrier removal to reset requests
         this.subscriptions.subscribe(eventBus, 'carrier:removed', payload => {
             this.handleCarrierRemoved(payload.entityId);
         });
@@ -154,31 +155,30 @@ export class LogisticsDispatcher implements TickSystem {
 
     /**
      * Check for requests that have been in-progress too long (stalled).
-     * These are reset to pending so they can be reassigned.
+     * Cancel the TransportJob, which releases reservation and resets request.
      */
     private checkForStalledRequests(): void {
         const stalledRequests = this.requestManager.getStalledRequests(REQUEST_TIMEOUT_MS);
 
         for (const request of stalledRequests) {
-            // Find the carrier assigned to this request
-            const carrierId = request.assignedCarrier;
-
-            // Log warning about the stalled request
             LogisticsDispatcher.log.warn(
                 `Request #${request.id} stalled after ${REQUEST_TIMEOUT_MS / 1000}s: ` +
-                    `material=${request.materialType}, building=${request.buildingId}, carrier=${carrierId}. ` +
-                    'Resetting to pending.'
+                    `material=${request.materialType}, building=${request.buildingId}, carrier=${request.assignedCarrier}. ` +
+                    'Cancelling transport job.'
             );
 
-            // Release reservation if it exists
-            this.reservationManager.releaseReservationForRequest(request.id);
-
-            // Clear carrier-to-request mapping if we have one
-            if (carrierId !== null) {
-                this.carrierToRequest.delete(carrierId);
+            // Find and cancel the TransportJob for this carrier
+            if (request.assignedCarrier !== null) {
+                const job = this.activeJobs.get(request.assignedCarrier);
+                if (job) {
+                    job.cancel('timeout');
+                    this.activeJobs.delete(request.assignedCarrier);
+                    continue;
+                }
             }
 
-            // Reset the request to pending
+            // Fallback: no active job found, clean up manually
+            this.reservationManager.releaseReservationForRequest(request.id);
             this.requestManager.resetRequest(request.id, 'timeout');
         }
     }
@@ -226,7 +226,6 @@ export class LogisticsDispatcher implements TickSystem {
             }
 
             // Find an available carrier from a hub that serves both buildings
-            // Reuse serviceHubs from the match to avoid a duplicate service area scan
             const carrier = this.findAvailableCarrier(match.serviceHubs, playerId);
             if (!carrier) {
                 if (this.matchDiagnosticDue) {
@@ -238,24 +237,30 @@ export class LogisticsDispatcher implements TickSystem {
                 continue; // No carrier available
             }
 
-            // Reserve the inventory to prevent race conditions
-            const reservation = this.reservationManager.createReservation(
-                match.sourceBuilding,
-                request.materialType,
-                match.amount,
-                request.id
-            );
-
-            // Build carrier job and assign via generic SettlerTaskSystem API
+            // Create TransportJob — reserves inventory + marks request InProgress
             const carrierState = this.carrierManager.getCarrierOrThrow(carrier.entityId, 'for delivery assignment');
-            const sourceBuilding = this.gameState.getEntityOrThrow(match.sourceBuilding, 'source building for carrier');
-            const job = buildCarrierJob(
+            const transportJob = TransportJob.create(
+                request.id,
                 match.sourceBuilding,
                 request.buildingId,
                 request.materialType,
                 match.amount,
-                carrierState.homeBuilding
+                carrierState.homeBuilding,
+                carrier.entityId,
+                {
+                    reservationManager: this.reservationManager,
+                    requestManager: this.requestManager,
+                    inventoryManager: this.inventoryManager,
+                }
             );
+
+            if (!transportJob) {
+                continue; // Reservation failed
+            }
+
+            // Build carrier job (references the TransportJob) and assign
+            const sourceBuilding = this.gameState.getEntityOrThrow(match.sourceBuilding, 'source building for carrier');
+            const job = buildCarrierJob(transportJob);
             const success = this.settlerTaskSystem.assignJob(carrier.entityId, job, {
                 x: sourceBuilding.x,
                 y: sourceBuilding.y,
@@ -263,19 +268,10 @@ export class LogisticsDispatcher implements TickSystem {
 
             if (success) {
                 this.carrierManager.setStatus(carrier.entityId, CarrierStatus.Walking);
-
-                // Mark request as in progress
-                this.requestManager.assignRequest(request.id, match.sourceBuilding, carrier.entityId);
-
-                // Track the carrier-to-request mapping
-                this.carrierToRequest.set(carrier.entityId, request.id);
-
+                this.activeJobs.set(carrier.entityId, transportJob);
                 assignmentCount++;
             } else {
-                // Assignment failed - release reservation
-                if (reservation !== null) {
-                    this.reservationManager.releaseReservation(reservation.id);
-                }
+                transportJob.cancel('assignment_failed');
             }
         }
     }
@@ -283,18 +279,13 @@ export class LogisticsDispatcher implements TickSystem {
     /**
      * Find an available carrier from the given service hubs.
      * Uses per-hub carrier lookup instead of scanning all carriers.
-     *
-     * @param serviceHubs Hub building IDs whose service areas cover both source and dest
-     * @param playerId Player who owns the requesting building
      */
     private findAvailableCarrier(serviceHubs: number[], playerId: number): { entityId: number } | null {
         if (serviceHubs.length === 0) {
             return null;
         }
 
-        // Iterate only carriers in the valid hubs (much smaller than all carriers)
         for (const hubId of serviceHubs) {
-            // Verify hub belongs to the right player
             const hubEntity = this.gameState.getEntity(hubId);
             if (!hubEntity || hubEntity.player !== playerId) {
                 continue;
@@ -312,7 +303,6 @@ export class LogisticsDispatcher implements TickSystem {
 
     /**
      * Log diagnostic info when a request cannot be matched to any supply.
-     * Helps identify service area coverage gaps.
      */
     private logMatchFailure(request: ResourceRequest): void {
         const destBuilding = this.gameState.getEntity(request.buildingId);
@@ -321,7 +311,6 @@ export class LogisticsDispatcher implements TickSystem {
         const playerId = destBuilding.player;
         const destHubs = getHubsServingPosition(destBuilding.x, destBuilding.y, this.serviceAreaManager, { playerId });
 
-        // Check if destination is even covered by any hub
         if (destHubs.length === 0) {
             LogisticsDispatcher.log.warn(
                 `Request #${request.id} (material=${request.materialType}): ` +
@@ -331,7 +320,6 @@ export class LogisticsDispatcher implements TickSystem {
             return;
         }
 
-        // Check if any supply exists
         const supplies = this.inventoryManager.getBuildingsWithOutput(request.materialType, 1);
         const otherSupplies = supplies.filter(id => id !== request.buildingId);
         if (otherSupplies.length === 0) {
@@ -341,7 +329,6 @@ export class LogisticsDispatcher implements TickSystem {
             return;
         }
 
-        // Check why no supply is reachable
         for (const supplyId of otherSupplies) {
             const supplyBuilding = this.gameState.getEntity(supplyId);
             if (!supplyBuilding) continue;
@@ -357,7 +344,6 @@ export class LogisticsDispatcher implements TickSystem {
                         `is NOT covered by any hub`
                 );
             } else {
-                // Both are covered, but by different hubs
                 const sharedHubs = getHubsServingBothPositions(
                     supplyBuilding.x,
                     supplyBuilding.y,
@@ -379,36 +365,15 @@ export class LogisticsDispatcher implements TickSystem {
         }
     }
 
-    private handleDeliveryComplete(carrierId: number): void {
-        const requestId = this.releaseCarrierMapping(carrierId);
-        if (requestId === undefined) return;
-
-        this.requestManager.fulfillRequest(requestId);
-    }
-
-    private handlePickupFailed(carrierId: number): void {
-        const requestId = this.releaseCarrierMapping(carrierId);
-        if (requestId === undefined) return;
-
-        LogisticsDispatcher.log.debug(`Pickup failed for carrier ${carrierId}, resetting request ${requestId}`);
-        this.requestManager.resetRequest(requestId, 'pickup_failed');
-    }
-
+    /**
+     * Handle carrier removed — cancel its TransportJob if active.
+     */
     private handleCarrierRemoved(carrierId: number): void {
-        const requestId = this.releaseCarrierMapping(carrierId);
-        if (requestId === undefined) return;
+        const job = this.activeJobs.get(carrierId);
+        if (!job) return;
 
-        this.requestManager.resetRequestsForCarrier(carrierId);
-    }
-
-    /** Release reservation and carrier mapping. Returns the requestId, or undefined if carrier was not tracked. */
-    private releaseCarrierMapping(carrierId: number): number | undefined {
-        const requestId = this.carrierToRequest.get(carrierId);
-        if (requestId === undefined) return undefined;
-
-        this.reservationManager.releaseReservationForRequest(requestId);
-        this.carrierToRequest.delete(carrierId);
-        return requestId;
+        job.cancel('carrier_removed');
+        this.activeJobs.delete(carrierId);
     }
 
     /**
@@ -419,84 +384,39 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
-     * Unified cleanup coordinator for building destruction.
+     * Cleanup when a building is destroyed.
      *
-     * When a building is destroyed, the logistics system must clean up all
-     * related state to prevent orphaned references and resource leaks.
-     *
-     * This method coordinates cleanup across all logistics subsystems:
-     *
-     * 1. **Request Cancellation** (RequestManager)
-     *    - Cancel requests TO the building (destination no longer exists)
-     *    - Reset requests FROM the building (source no longer exists)
-     *    - Reset requests return to Pending so they can be reassigned
-     *
-     * 2. **Reservation Release** (InventoryReservationManager)
-     *    - Release all material reservations at the building
-     *    - This frees up inventory that was "soft-held" for pending pickups
-     *
-     * 3. **Carrier Mapping Cleanup** (carrierToRequest map)
-     *    - Remove mappings for carriers working on affected requests
-     *    - This prevents stale lookups when carriers complete/fail
-     *
-     * 4. **Event Emission** (EventBus)
-     *    - Emit logistics:buildingCleanedUp so other systems can react
-     *
-     * @param buildingId Entity ID of the destroyed building
-     * @returns Summary of cleanup actions taken
+     * Finds all active TransportJobs involving the building and cancels them.
+     * Also cancels requests TO the building (destination gone).
      */
     handleBuildingDestroyed(buildingId: number): BuildingCleanupResult {
         const result: BuildingCleanupResult = {
             buildingId,
             requestsCancelled: 0,
-            requestsReset: 0,
-            reservationsReleased: 0,
-            carrierMappingsCleared: 0,
+            jobsCancelled: 0,
         };
 
-        // Step 1a: Cancel all requests TO this building (it can no longer receive materials)
-        result.requestsCancelled = this.requestManager.cancelRequestsForBuilding(buildingId);
-
-        // Step 1b: Reset requests FROM this building (carriers can't pick up from it anymore)
-        result.requestsReset = this.requestManager.resetRequestsFromSource(buildingId);
-
-        // Step 2: Release any reservations at this building
-        result.reservationsReleased = this.reservationManager.releaseReservationsForBuilding(buildingId);
-
-        // Step 3: Find and remove any carrier-to-request mappings for carriers
-        // that were assigned to this building's requests
-        // Sort carrier IDs for deterministic iteration order
-        const sortedCarrierIds = [...this.carrierToRequest.keys()].sort((a, b) => a - b);
-        const mappingsToRemove: number[] = [];
-        for (const carrierId of sortedCarrierIds) {
-            const requestId = this.carrierToRequest.get(carrierId);
-            if (requestId === undefined) continue;
-            const request = this.requestManager.getRequest(requestId);
-            // Request may already be deleted if it was cancelled, so also check
-            // if requestId was in the cancelled set by checking if request is gone
-            if (!request || request.buildingId === buildingId || request.sourceBuilding === buildingId) {
-                mappingsToRemove.push(carrierId);
+        // Cancel all active TransportJobs that reference this building
+        for (const [carrierId, job] of this.activeJobs) {
+            if (job.sourceBuilding === buildingId || job.destBuilding === buildingId) {
+                job.cancel('building_destroyed');
+                this.activeJobs.delete(carrierId);
+                result.jobsCancelled++;
             }
         }
-        for (const carrierId of mappingsToRemove) {
-            this.carrierToRequest.delete(carrierId);
-            result.carrierMappingsCleared++;
-        }
 
-        // Step 4: Emit event for other systems
+        // Cancel pending requests TO this building (no carrier assigned yet)
+        result.requestsCancelled = this.requestManager.cancelRequestsForBuilding(buildingId);
+
+        // Release any remaining reservations at this building (defensive — jobs should have handled this)
+        this.reservationManager.releaseReservationsForBuilding(buildingId);
+
         this.eventBus!.emit('logistics:buildingCleanedUp', result);
 
-        const totalCleanedUp =
-            result.requestsCancelled +
-            result.requestsReset +
-            result.reservationsReleased +
-            result.carrierMappingsCleared;
-        if (totalCleanedUp > 0) {
+        if (result.requestsCancelled + result.jobsCancelled > 0) {
             console.debug(
                 `[Logistics] Building ${buildingId} cleanup: ` +
-                    `${result.requestsCancelled} cancelled, ${result.requestsReset} reset, ` +
-                    `${result.reservationsReleased} reservations released, ` +
-                    `${result.carrierMappingsCleared} carrier mappings cleared`
+                    `${result.requestsCancelled} requests cancelled, ${result.jobsCancelled} jobs cancelled`
             );
         }
 
@@ -506,17 +426,9 @@ export class LogisticsDispatcher implements TickSystem {
 
 /**
  * Result of building destruction cleanup.
- * Useful for debugging and testing.
  */
 export interface BuildingCleanupResult {
-    /** Entity ID of the destroyed building */
     buildingId: number;
-    /** Number of requests to this building that were cancelled */
     requestsCancelled: number;
-    /** Number of requests from this building that were reset to pending */
-    requestsReset: number;
-    /** Number of inventory reservations that were released */
-    reservationsReleased: number;
-    /** Number of carrier-to-request mappings that were cleared */
-    carrierMappingsCleared: number;
+    jobsCancelled: number;
 }

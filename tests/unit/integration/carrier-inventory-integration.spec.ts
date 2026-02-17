@@ -187,7 +187,7 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
             const initialFatigue = gameLoop.carrierManager.getCarrier(carrierEntity.id)!.fatigue;
 
             // Tick fatigue recovery
-            gameLoop.carrierManager.updateFatigue(1.0); // 1 second
+            gameLoop.carrierManager.tick(1.0); // 1 second
 
             const newFatigue = gameLoop.carrierManager.getCarrier(carrierEntity.id)!.fatigue;
             expect(newFatigue).toBeLessThan(initialFatigue);

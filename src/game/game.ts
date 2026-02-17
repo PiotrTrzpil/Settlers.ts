@@ -3,7 +3,7 @@ import { IMapLoader } from '@/resources/map/imap-loader';
 import { MapSize } from '@/utilities/map-size';
 import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
-import { Command, executeCommand, type CommandResult } from './commands';
+import { Command, executeCommand, type CommandResult, type CommandContext } from './commands';
 import { isBuildable } from './features/placement';
 import { populateMapObjectsFromEntityData, expandTrees } from './systems/map-objects';
 import { populateMapBuildings } from './systems/map-buildings';
@@ -139,18 +139,22 @@ export class Game {
         return SoundManager.getInstance();
     }
 
+    /** Shared context passed to every command execution */
+    public get commandContext(): CommandContext {
+        return {
+            state: this.state,
+            groundType: this.groundType,
+            groundHeight: this.groundHeight,
+            mapSize: this.mapSize,
+            eventBus: this.eventBus,
+            settlerTaskSystem: this.gameLoop.settlerTaskSystem,
+            buildingStateManager: this.gameLoop.buildingStateManager,
+        };
+    }
+
     /** Execute a command against the game state */
     public execute(cmd: Command): CommandResult {
-        return executeCommand(
-            this.state,
-            cmd,
-            this.groundType,
-            this.groundHeight,
-            this.mapSize,
-            this.eventBus,
-            this.gameLoop.settlerTaskSystem,
-            this.gameLoop.buildingStateManager
-        );
+        return executeCommand(this.commandContext, cmd);
     }
 
     /** Find the first buildable land tile, spiraling out from map center */

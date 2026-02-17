@@ -8,7 +8,14 @@ import {
     CONSTRUCTION_SITE_GROUND_TYPE,
 } from '@/game/features/building-construction';
 import { TERRAIN, setTerrainAt, blockColumn } from './helpers/test-map';
-import { createTestContext, addUnit, addBuilding, createTestEventBus, type TestContext } from './helpers/test-game';
+import {
+    createTestContext,
+    addUnit,
+    addBuilding,
+    createTestEventBus,
+    toCommandContext,
+    type TestContext,
+} from './helpers/test-game';
 
 // Note: Happy-path command tests (place_building, spawn_unit, select, deselect,
 // area select, remove entity) are covered by flow integration tests in flows/.
@@ -24,22 +31,13 @@ describe('Command System – edge cases', () => {
     describe('place_building', () => {
         it('should reject building on water', () => {
             setTerrainAt(ctx.map, 10, 10, TERRAIN.WATER);
-            const result = executeCommand(
-                ctx.state,
-                {
-                    type: 'place_building',
-                    buildingType: 1,
-                    x: 10,
-                    y: 10,
-                    player: 0,
-                },
-                ctx.map.groundType,
-                ctx.map.groundHeight,
-                ctx.map.mapSize,
-                ctx.eventBus,
-                undefined,
-                ctx.buildingStateManager
-            );
+            const result = executeCommand(toCommandContext(ctx), {
+                type: 'place_building',
+                buildingType: 1,
+                x: 10,
+                y: 10,
+                player: 0,
+            });
 
             expect(result.success).toBe(false);
             expect(ctx.state.entities).toHaveLength(0);
@@ -48,59 +46,32 @@ describe('Command System – edge cases', () => {
 
     describe('move_unit', () => {
         it('should fail for non-existent unit', () => {
-            const result = executeCommand(
-                ctx.state,
-                {
-                    type: 'move_unit',
-                    entityId: 999,
-                    targetX: 10,
-                    targetY: 5,
-                },
-                ctx.map.groundType,
-                ctx.map.groundHeight,
-                ctx.map.mapSize,
-                ctx.eventBus,
-                undefined,
-                ctx.buildingStateManager
-            );
+            const result = executeCommand(toCommandContext(ctx), {
+                type: 'move_unit',
+                entityId: 999,
+                targetX: 10,
+                targetY: 5,
+            });
             expect(result.success).toBe(false);
         });
 
         it('should fail when no path exists', () => {
-            executeCommand(
-                ctx.state,
-                {
-                    type: 'spawn_unit',
-                    unitType: 0,
-                    x: 5,
-                    y: 5,
-                    player: 0,
-                },
-                ctx.map.groundType,
-                ctx.map.groundHeight,
-                ctx.map.mapSize,
-                ctx.eventBus,
-                undefined,
-                ctx.buildingStateManager
-            );
+            executeCommand(toCommandContext(ctx), {
+                type: 'spawn_unit',
+                unitType: 0,
+                x: 5,
+                y: 5,
+                player: 0,
+            });
 
             blockColumn(ctx.map, 15);
 
-            const result = executeCommand(
-                ctx.state,
-                {
-                    type: 'move_unit',
-                    entityId: ctx.state.entities[0].id,
-                    targetX: 20,
-                    targetY: 5,
-                },
-                ctx.map.groundType,
-                ctx.map.groundHeight,
-                ctx.map.mapSize,
-                ctx.eventBus,
-                undefined,
-                ctx.buildingStateManager
-            );
+            const result = executeCommand(toCommandContext(ctx), {
+                type: 'move_unit',
+                entityId: ctx.state.entities[0].id,
+                targetX: 20,
+                targetY: 5,
+            });
             expect(result.success).toBe(false);
         });
     });
@@ -110,44 +81,26 @@ describe('Command System – edge cases', () => {
             addBuilding(ctx.state, 10, 10, 0);
             addUnit(ctx.state, 11, 10, { subType: 2 }); // Swordsman (selectable - Military category)
 
-            executeCommand(
-                ctx.state,
-                {
-                    type: 'select_area',
-                    x1: 9,
-                    y1: 9,
-                    x2: 12,
-                    y2: 11,
-                },
-                ctx.map.groundType,
-                ctx.map.groundHeight,
-                ctx.map.mapSize,
-                ctx.eventBus,
-                undefined,
-                ctx.buildingStateManager
-            );
+            executeCommand(toCommandContext(ctx), {
+                type: 'select_area',
+                x1: 9,
+                y1: 9,
+                x2: 12,
+                y2: 11,
+            });
 
-            expect(ctx.state.selectedEntityIds.size).toBe(1);
-            const selectedId = Array.from(ctx.state.selectedEntityIds)[0];
+            expect(ctx.state.selection.selectedEntityIds.size).toBe(1);
+            const selectedId = Array.from(ctx.state.selection.selectedEntityIds)[0];
             expect(ctx.state.getEntity(selectedId)?.type).toBe(EntityType.Unit);
         });
     });
 
     describe('remove_entity', () => {
         it('should fail for non-existent entity', () => {
-            const result = executeCommand(
-                ctx.state,
-                {
-                    type: 'remove_entity',
-                    entityId: 999,
-                },
-                ctx.map.groundType,
-                ctx.map.groundHeight,
-                ctx.map.mapSize,
-                ctx.eventBus,
-                undefined,
-                ctx.buildingStateManager
-            );
+            const result = executeCommand(toCommandContext(ctx), {
+                type: 'remove_entity',
+                entityId: 999,
+            });
             expect(result.success).toBe(false);
         });
 
@@ -173,19 +126,10 @@ describe('Command System – edge cases', () => {
             expect(ctx.map.groundType[ctx.map.mapSize.toIndex(10, 10)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
 
             const eventBus = createTestEventBus(ctx.state, ctx.map, ctx.buildingStateManager);
-            executeCommand(
-                ctx.state,
-                {
-                    type: 'remove_entity',
-                    entityId: building.id,
-                },
-                ctx.map.groundType,
-                ctx.map.groundHeight,
-                ctx.map.mapSize,
-                eventBus,
-                undefined,
-                ctx.buildingStateManager
-            );
+            executeCommand(toCommandContext(ctx, eventBus), {
+                type: 'remove_entity',
+                entityId: building.id,
+            });
 
             for (let dy = -1; dy <= 2; dy++) {
                 for (let dx = -1; dx <= 2; dx++) {

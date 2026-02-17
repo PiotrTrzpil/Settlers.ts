@@ -19,6 +19,7 @@ import {
     moveUnit,
     selectEntity,
     removeEntity,
+    toCommandContext,
     type TestContext,
 } from '../helpers/test-game';
 import { EntityType, BuildingType } from '@/game/entity';
@@ -46,7 +47,7 @@ describe('Game Session: multi-system integration sweep', () => {
         // Set terrain to flat grass at height 100
         map.groundType.fill(TERRAIN.GRASS);
         map.groundHeight.fill(100);
-        ctx.state.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
+        ctx.state.movement.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
         // Enable instant completion with workers for this test suite
         gameSettings.state.placeBuildingsCompleted = true;
         gameSettings.state.placeBuildingsWithWorker = true;
@@ -113,28 +114,19 @@ describe('Game Session: multi-system integration sweep', () => {
 
         // ── Selection flow ──
         selectEntity(ctx, spawnedUnit!.id);
-        expect(ctx.state.selectedEntityId).toBe(spawnedUnit!.id);
-        expect(ctx.state.selectedEntityIds.has(spawnedUnit!.id)).toBe(true);
+        expect(ctx.state.selection.selectedEntityId).toBe(spawnedUnit!.id);
+        expect(ctx.state.selection.selectedEntityIds.has(spawnedUnit!.id)).toBe(true);
 
         // Deselect
         selectEntity(ctx, null);
-        expect(ctx.state.selectedEntityId).toBeNull();
-        expect(ctx.state.selectedEntityIds.size).toBe(0);
+        expect(ctx.state.selection.selectedEntityId).toBeNull();
+        expect(ctx.state.selection.selectedEntityIds.size).toBe(0);
 
         // ── Area selection ──
-        executeCommand(
-            ctx.state,
-            { type: 'select_area', x1: 14, y1: 14, x2: 16, y2: 16 },
-            map.groundType,
-            map.groundHeight,
-            map.mapSize,
-            new EventBus(),
-            undefined,
-            ctx.buildingStateManager
-        );
+        executeCommand(toCommandContext(ctx, new EventBus()), { type: 'select_area', x1: 14, y1: 14, x2: 16, y2: 16 });
         // Should select the unit at (15,15), prefer units over buildings
-        expect(ctx.state.selectedEntityIds.size).toBeGreaterThanOrEqual(1);
-        const selectedId = Array.from(ctx.state.selectedEntityIds)[0];
+        expect(ctx.state.selection.selectedEntityIds.size).toBeGreaterThanOrEqual(1);
+        const selectedId = Array.from(ctx.state.selection.selectedEntityIds)[0];
         const selected = ctx.state.getEntity(selectedId);
         expect(selected?.type).toBe(EntityType.Unit);
 
@@ -204,36 +196,24 @@ describe('Game Session: multi-system integration sweep', () => {
         spawnUnit(ctx, 11, 10, 2, 0); // Swordsman (selectable - Military category)
 
         // Area select covering both
-        executeCommand(
-            ctx.state,
-            { type: 'select_area', x1: 9, y1: 9, x2: 12, y2: 11 },
-            map.groundType,
-            map.groundHeight,
-            map.mapSize,
-            new EventBus(),
-            undefined,
-            ctx.buildingStateManager
-        );
+        executeCommand(toCommandContext(ctx, new EventBus()), { type: 'select_area', x1: 9, y1: 9, x2: 12, y2: 11 });
 
         // Should prefer units
-        expect(ctx.state.selectedEntityIds.size).toBe(1);
-        const selectedId = Array.from(ctx.state.selectedEntityIds)[0];
+        expect(ctx.state.selection.selectedEntityIds.size).toBe(1);
+        const selectedId = Array.from(ctx.state.selection.selectedEntityIds)[0];
         const selected = ctx.state.getEntity(selectedId);
         expect(selected?.type).toBe(EntityType.Unit);
 
         // Empty area clears selection
-        executeCommand(
-            ctx.state,
-            { type: 'select_area', x1: 50, y1: 50, x2: 60, y2: 60 },
-            map.groundType,
-            map.groundHeight,
-            map.mapSize,
-            new EventBus(),
-            undefined,
-            ctx.buildingStateManager
-        );
-        expect(ctx.state.selectedEntityIds.size).toBe(0);
-        expect(ctx.state.selectedEntityId).toBeNull();
+        executeCommand(toCommandContext(ctx, new EventBus()), {
+            type: 'select_area',
+            x1: 50,
+            y1: 50,
+            x2: 60,
+            y2: 60,
+        });
+        expect(ctx.state.selection.selectedEntityIds.size).toBe(0);
+        expect(ctx.state.selection.selectedEntityId).toBeNull();
     });
 
     it('entity radius query finds nearby entities across types', () => {

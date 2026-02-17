@@ -23,6 +23,7 @@ import { GameState } from '@/game/game-state';
 import { EventBus } from '@/game/event-bus';
 import { createTestMap, TERRAIN } from './helpers/test-map';
 import { makeBuildingState, tickConstruction } from './helpers/test-game';
+import { MovementSystem } from '@/game/systems/movement/index';
 
 // ---------------------------------------------------------------------------
 // Terrain Leveling
@@ -356,6 +357,18 @@ describe('Barracks unit spawning on construction complete', () => {
     function createTestGameStateWithBSM(): { gameState: GameState; buildingStateManager: BuildingStateManager } {
         const eventBus = new EventBus();
         const gameState = new GameState(eventBus);
+        // GameState needs a MovementSystem before entities can be added
+        const movement = new MovementSystem({
+            eventBus,
+            rng: gameState.rng,
+            updatePosition: (id, x, y) => {
+                gameState.updateEntityPosition(id, x, y);
+                return true;
+            },
+            getEntity: id => gameState.getEntity(id),
+        });
+        movement.setTileOccupancy(gameState.tileOccupancy);
+        gameState.setMovementSystem(movement);
         const buildingStateManager = new BuildingStateManager({
             entityProvider: gameState,
             eventBus,

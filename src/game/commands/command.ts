@@ -1,4 +1,4 @@
-import { EntityType, EXTENDED_OFFSETS, type Entity } from '../entity';
+import { EntityType, EXTENDED_OFFSETS } from '../entity';
 import {
     BuildingConstructionPhase,
     type BuildingStateManager,
@@ -31,7 +31,7 @@ import {
     commandFailed,
 } from './command-types';
 
-interface CommandContext {
+export interface CommandContext {
     state: GameState;
     groundType: Uint8Array;
     groundHeight: Uint8Array;
@@ -178,114 +178,63 @@ function executeMoveUnit(ctx: CommandContext, cmd: MoveUnitCommand): CommandResu
     ]);
 }
 
-/**
- * Check if an entity can be selected, respecting the debug "select all units" setting.
- * Returns true if entity is normally selectable OR if debug mode allows selecting all units.
- */
-function canSelectEntity(entity: Entity | undefined): boolean {
-    if (!entity) return false;
-    if (entity.selectable !== false) return true;
-    // Debug mode: allow selecting non-selectable units
-    return debugStats.state.selectAllUnits && entity.type === EntityType.Unit;
-}
-
 function executeSelect(ctx: CommandContext, cmd: SelectCommand): CommandResult {
     const { state } = ctx;
+    const sel = state.selection;
+    const debugAll = debugStats.state.selectAllUnits;
 
     if (cmd.entityId !== null) {
         const ent = state.getEntity(cmd.entityId);
-        if (ent && !canSelectEntity(ent)) {
-            state.selectedEntityId = null;
-            state.selectedEntityIds.clear();
+        if (ent && !sel.canSelect(ent, debugAll)) {
+            sel.clear();
             return commandSuccess([{ type: 'selection_changed', selectedIds: [] }]);
         }
     }
 
-    state.selectedEntityId = cmd.entityId;
-    state.selectedEntityIds.clear();
-    if (cmd.entityId !== null) {
-        state.selectedEntityIds.add(cmd.entityId);
-    }
+    sel.select(cmd.entityId);
 
     return commandSuccess([{ type: 'selection_changed', selectedIds: cmd.entityId !== null ? [cmd.entityId] : [] }]);
 }
 
 function executeSelectAtTile(ctx: CommandContext, cmd: SelectAtTileCommand): CommandResult {
     const { state } = ctx;
+    const sel = state.selection;
+    const debugAll = debugStats.state.selectAllUnits;
     const rawEntity = state.getEntityAt(cmd.x, cmd.y);
-    const entity = canSelectEntity(rawEntity) ? rawEntity : undefined;
+    const entity = sel.canSelect(rawEntity, debugAll) ? rawEntity : undefined;
 
     if (cmd.addToSelection) {
-        toggleEntityInSelection(state, entity);
-        return commandSuccess([{ type: 'selection_changed', selectedIds: [...state.selectedEntityIds] }]);
+        if (entity) sel.toggle(entity.id);
+        return commandSuccess([{ type: 'selection_changed', selectedIds: [...sel.selectedEntityIds] }]);
     }
 
-    // Replace selection
-    state.selectedEntityIds.clear();
-    state.selectedEntityId = entity?.id ?? null;
-    if (entity) {
-        state.selectedEntityIds.add(entity.id);
-    }
-
+    sel.select(entity?.id ?? null);
     return commandSuccess([{ type: 'selection_changed', selectedIds: entity ? [entity.id] : [] }]);
-}
-
-function toggleEntityInSelection(state: GameState, entity: { id: number } | undefined): void {
-    if (!entity) return;
-
-    if (state.selectedEntityIds.has(entity.id)) {
-        state.selectedEntityIds.delete(entity.id);
-        if (state.selectedEntityId === entity.id) {
-            state.selectedEntityId =
-                state.selectedEntityIds.size > 0 ? state.selectedEntityIds.values().next().value! : null;
-        }
-    } else {
-        state.selectedEntityIds.add(entity.id);
-        if (state.selectedEntityId === null) {
-            state.selectedEntityId = entity.id;
-        }
-    }
 }
 
 function executeToggleSelection(ctx: CommandContext, cmd: ToggleSelectionCommand): CommandResult {
     const { state } = ctx;
+    const sel = state.selection;
     const entity = state.getEntity(cmd.entityId);
-    if (!canSelectEntity(entity)) {
+    if (!sel.canSelect(entity, debugStats.state.selectAllUnits)) {
         return commandFailed(`Entity ${cmd.entityId} is not selectable`);
     }
 
-    toggleEntityInSelection(state, entity);
-    return commandSuccess([{ type: 'selection_changed', selectedIds: [...state.selectedEntityIds] }]);
+    sel.toggle(cmd.entityId);
+    return commandSuccess([{ type: 'selection_changed', selectedIds: [...sel.selectedEntityIds] }]);
 }
 
 function executeSelectArea(ctx: CommandContext, cmd: SelectAreaCommand): CommandResult {
     const { state } = ctx;
     const allEntities = state.getEntitiesInRect(cmd.x1, cmd.y1, cmd.x2, cmd.y2);
-    const entities = allEntities.filter(e => canSelectEntity(e));
-
-    // Prefer selecting units over buildings
-    const units = entities.filter(e => e.type === EntityType.Unit);
-    const toSelect = units.length > 0 ? units : entities;
-
-    state.selectedEntityIds.clear();
-    for (const e of toSelect) {
-        state.selectedEntityIds.add(e.id);
-    }
-    state.selectedEntityId = toSelect.length > 0 ? toSelect[0].id : null;
-
-    return commandSuccess([{ type: 'selection_changed', selectedIds: toSelect.map(e => e.id) }]);
+    const selectedIds = state.selection.selectArea(allEntities, debugStats.state.selectAllUnits);
+    return commandSuccess([{ type: 'selection_changed', selectedIds }]);
 }
 
 function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCommand): CommandResult {
     const { state, settlerTaskSystem } = ctx;
 
-    const selectedUnits: number[] = [];
-    for (const entityId of state.selectedEntityIds) {
-        const e = state.getEntity(entityId);
-        if (e && e.type === EntityType.Unit) {
-            selectedUnits.push(entityId);
-        }
-    }
+    const selectedUnits = state.selection.getSelectedByType(EntityType.Unit);
     if (selectedUnits.length === 0) {
         return commandFailed('No units selected');
     }
@@ -299,25 +248,23 @@ function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCom
         toY: number;
     }[] = [];
     for (let i = 0; i < selectedUnits.length; i++) {
+        const unit = selectedUnits[i];
         const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
         const targetX = cmd.targetX + offset[0];
         const targetY = cmd.targetY + offset[1];
 
-        const entity = state.getEntity(selectedUnits[i]);
-        if (!entity) continue;
-
-        const fromX = entity.x;
-        const fromY = entity.y;
+        const fromX = unit.x;
+        const fromY = unit.y;
 
         // Route through task system if available (handles animation)
         const moved = settlerTaskSystem
-            ? settlerTaskSystem.assignMoveTask(selectedUnits[i], targetX, targetY)
-            : state.movement.moveUnit(selectedUnits[i], targetX, targetY);
+            ? settlerTaskSystem.assignMoveTask(unit.id, targetX, targetY)
+            : state.movement.moveUnit(unit.id, targetX, targetY);
 
         if (moved) {
             effects.push({
                 type: 'entity_moved',
-                entityId: selectedUnits[i],
+                entityId: unit.id,
                 fromX,
                 fromY,
                 toX: targetX,
@@ -372,7 +319,7 @@ function executePlaceResource(ctx: CommandContext, cmd: PlaceResourceCommand): C
     const entity = state.addEntity(EntityType.StackedResource, cmd.materialType, cmd.x, cmd.y, 0);
 
     // Update quantity in resource state
-    const resourceState = state.resourceStates.get(entity.id);
+    const resourceState = state.resources.states.get(entity.id);
     if (resourceState) {
         resourceState.quantity = cmd.amount;
     }
@@ -384,26 +331,7 @@ function executePlaceResource(ctx: CommandContext, cmd: PlaceResourceCommand): C
  * Execute a player command against the game state.
  * Returns a CommandResult with success status, error details, and effects.
  */
-export function executeCommand(
-    state: GameState,
-    cmd: Command,
-    groundType: Uint8Array,
-    groundHeight: Uint8Array,
-    mapSize: MapSize,
-    eventBus: EventBus,
-    settlerTaskSystem: SettlerTaskSystem | undefined,
-    buildingStateManager: BuildingStateManager
-): CommandResult {
-    const ctx: CommandContext = {
-        state,
-        groundType,
-        groundHeight,
-        mapSize,
-        eventBus,
-        settlerTaskSystem,
-        buildingStateManager,
-    };
-
+export function executeCommand(ctx: CommandContext, cmd: Command): CommandResult {
     switch (cmd.type) {
     case 'place_building':
         return executePlaceBuilding(ctx, cmd);

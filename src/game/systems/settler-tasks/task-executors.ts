@@ -13,7 +13,14 @@ import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../../features/inventory';
 import type { CarrierManager } from '../../features/carriers';
-import { TaskType, TaskResult, type TaskNode, type JobState, type WorkHandler } from './types';
+import {
+    TaskType,
+    TaskResult,
+    type TaskNode,
+    type JobState,
+    type EntityWorkHandler,
+    type PositionWorkHandler,
+} from './types';
 import { executeCarrierTask } from './carrier-task-executors';
 
 const log = new LogHandler('TaskExecutors');
@@ -45,7 +52,8 @@ export function executeTask(
     task: TaskNode,
     dt: number,
     ctx: TaskContext,
-    handler?: WorkHandler
+    entityHandler?: EntityWorkHandler,
+    positionHandler?: PositionWorkHandler
 ): TaskResult {
     // Carrier-specific tasks are handled by the carrier executor
     if (job.type === 'carrier') {
@@ -59,10 +67,10 @@ export function executeTask(
         return executeGoToTarget(settler, job, ctx);
 
     case TaskType.WAIT_FOR_WORK:
-        return executeWaitForWork(settler, job, ctx, handler);
+        return executeWaitForWork(settler, job, ctx, entityHandler);
 
     case TaskType.WORK_ON_ENTITY:
-        return executeWorkOnEntity(settler, job, task, dt, ctx, handler);
+        return executeWorkOnEntity(settler, job, task, dt, ctx, entityHandler);
 
     case TaskType.PICKUP:
         return executePickup(settler, job, task);
@@ -77,10 +85,10 @@ export function executeTask(
         return executeDropoff(settler, job, ctx);
 
     case TaskType.WORK:
-        return executeWork(settler, job, task, dt, ctx, handler);
+        return executeWork(settler, job, task, dt, ctx, positionHandler);
 
     case TaskType.SEARCH_POS:
-        return executeSearchPos(settler, job, ctx, handler);
+        return executeSearchPos(settler, job, ctx, positionHandler);
 
     case TaskType.GO_TO_POS:
         return executeGoToPos(settler, job, ctx);
@@ -90,7 +98,6 @@ export function executeTask(
 
     case TaskType.GO_TO_SOURCE:
     case TaskType.GO_TO_DEST:
-        // Carrier-only tasks — if we reach here, the job type is wrong
         throw new Error(`Task ${task.task} is carrier-only but job type is '${job.type}' (settler ${settler.id}).`);
 
     default:
@@ -160,7 +167,7 @@ function executeGoToPos(settler: Entity, job: JobState, ctx: TaskContext): TaskR
  * Wait until canWork() passes, then advance to WORK_ON_ENTITY.
  * Separated from WORK_ON_ENTITY so animation can be derived from task type alone.
  */
-function executeWaitForWork(settler: Entity, job: JobState, ctx: TaskContext, handler?: WorkHandler): TaskResult {
+function executeWaitForWork(settler: Entity, job: JobState, ctx: TaskContext, handler?: EntityWorkHandler): TaskResult {
     if (job.type !== 'worker') return TaskResult.FAILED;
     if (!job.data.targetId || !handler) return TaskResult.FAILED;
 
@@ -176,7 +183,6 @@ function executeWaitForWork(settler: Entity, job: JobState, ctx: TaskContext, ha
         return TaskResult.FAILED;
     }
 
-    // Not ready — wait or fail depending on handler policy
     if (handler.shouldWaitForWork) {
         return TaskResult.CONTINUE;
     }
@@ -194,7 +200,7 @@ function executeWorkOnEntity(
     task: TaskNode,
     dt: number,
     ctx: TaskContext,
-    handler?: WorkHandler
+    handler?: EntityWorkHandler
 ): TaskResult {
     if (job.type !== 'worker') return TaskResult.FAILED;
     if (!job.data.targetId || !handler) return TaskResult.FAILED;
@@ -248,14 +254,13 @@ function executeWork(
     task: TaskNode,
     dt: number,
     ctx: TaskContext,
-    handler?: WorkHandler
+    handler?: PositionWorkHandler
 ): TaskResult {
     const duration = task.duration ?? 1.0;
     job.progress += dt / duration;
 
     if (job.progress >= 1) {
-        // Notify handler if work completed at a searched position (forester planting, etc.)
-        if (handler?.onWorkAtPositionComplete && job.type === 'worker' && job.data.targetPos) {
+        if (handler && job.type === 'worker' && job.data.targetPos) {
             try {
                 handler.onWorkAtPositionComplete(job.data.targetPos.x, job.data.targetPos.y, settler.id);
             } catch (e) {
@@ -269,24 +274,23 @@ function executeWork(
     return TaskResult.CONTINUE;
 }
 
-function executeSearchPos(settler: Entity, job: JobState, ctx: TaskContext, handler?: WorkHandler): TaskResult {
+function executeSearchPos(settler: Entity, job: JobState, ctx: TaskContext, handler?: PositionWorkHandler): TaskResult {
     if (job.type !== 'worker') return TaskResult.FAILED;
     if (!handler) {
         throw new Error(
-            `Settler ${settler.id} (${UnitType[settler.subType]}): SEARCH_POS task requires a work handler`
+            `Settler ${settler.id} (${UnitType[settler.subType]}): SEARCH_POS task requires a position work handler`
         );
     }
 
-    // Use findTarget to search for a valid position (handler is a system boundary)
-    let target: ReturnType<WorkHandler['findTarget']>;
+    let position: ReturnType<PositionWorkHandler['findPosition']>;
     try {
-        target = handler.findTarget(settler.x, settler.y, settler.id);
+        position = handler.findPosition(settler.x, settler.y, settler.id);
     } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e));
-        ctx.handlerErrorLogger.error(`findTarget (SEARCH_POS) failed for settler ${settler.id}`, err);
+        ctx.handlerErrorLogger.error(`findPosition (SEARCH_POS) failed for settler ${settler.id}`, err);
         return TaskResult.FAILED;
     }
-    if (!target) {
+    if (!position) {
         if (handler.shouldWaitForWork) {
             return TaskResult.CONTINUE;
         }
@@ -294,14 +298,9 @@ function executeSearchPos(settler: Entity, job: JobState, ctx: TaskContext, hand
         return TaskResult.FAILED;
     }
 
-    // Store position for GO_TO_POS task
-    job.data.targetPos = { x: target.x, y: target.y };
-    // Also store target entity if provided (e.g., for planting near a building)
-    if (target.entityId) {
-        job.data.targetId = target.entityId;
-    }
+    job.data.targetPos = { x: position.x, y: position.y };
 
-    log.debug(`Settler ${settler.id}: found position (${target.x}, ${target.y}) for planting`);
+    log.debug(`Settler ${settler.id}: found position (${position.x}, ${position.y}) for SEARCH_POS`);
     return TaskResult.DONE;
 }
 

@@ -32,11 +32,11 @@ export const S4_GOOD_TYPES = {
     AXE: 10,
     SAW: 11,
     PICK: 12,
-    PICKAXE: 12,   // Alias for script compatibility
+    PICKAXE: 12, // Alias for script compatibility
     HAMMER: 13,
     SHOVEL: 14,
     FISHINGROD: 15,
-    ROD: 15,       // Alias for script compatibility
+    ROD: 15, // Alias for script compatibility
     SCYTHE: 16,
     BOW: 17,
     CROSSBOW: 18,
@@ -96,9 +96,7 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
         // For now, count stacks on the map
         let count = 0;
         for (const entity of context.gameState.entities) {
-            if (entity.type === EntityType.StackedResource &&
-                entity.subType === goodType &&
-                entity.player === player) {
+            if (entity.type === EntityType.StackedResource && entity.subType === goodType && entity.player === player) {
                 // Stack entity - count would be stored in entity data
                 count++;
             }
@@ -107,9 +105,7 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
     });
 
     // Goods.AddGoods(x, y, goodType, amount) - Create goods at position
-    runtime.registerFunction('Goods', 'AddGoods', (
-        x: number, y: number, goodType: number, amount: number
-    ) => {
+    runtime.registerFunction('Goods', 'AddGoods', (x: number, y: number, goodType: number, amount: number) => {
         log.debug(`AddGoods: ${amount}x type ${goodType} at (${x}, ${y})`);
 
         // Create stack entity
@@ -123,16 +119,14 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
 
         // Set the quantity
         if (amount > 1) {
-            context.gameState.setResourceQuantity(entity.id, amount);
+            context.gameState.resources.setQuantity(entity.id, amount);
         }
 
         return entity.id;
     });
 
     // Goods.RemoveGoods(player, goodType, amount) - Remove goods from player's inventory
-    runtime.registerFunction('Goods', 'RemoveGoods', (
-        player: number, goodType: number, amount: number
-    ) => {
+    runtime.registerFunction('Goods', 'RemoveGoods', (player: number, goodType: number, amount: number) => {
         // TODO: Implement proper inventory management
         log.debug(`RemoveGoods: ${amount}x type ${goodType} from player ${player}`);
         return false;
@@ -141,9 +135,11 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
     // Goods.GetStackAt(x, y) - Get goods info at position
     runtime.registerFunction('Goods', 'GetStackAt', (x: number, y: number) => {
         for (const entity of context.gameState.entities) {
-            if (entity.type === EntityType.StackedResource &&
+            if (
+                entity.type === EntityType.StackedResource &&
                 Math.floor(entity.x) === x &&
-                Math.floor(entity.y) === y) {
+                Math.floor(entity.y) === y
+            ) {
                 return {
                     type: entity.subType,
                     amount: 1, // TODO: Get actual amount from stack data
@@ -156,9 +152,7 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
 
     // Goods.AddPileEx(x, y, goodType, amount) - Alias for AddGoods (S4 script compatibility)
     // Creates a resource pile at the specified location
-    runtime.registerFunction('Goods', 'AddPileEx', (
-        x: number, y: number, goodType: number, amount: number
-    ) => {
+    runtime.registerFunction('Goods', 'AddPileEx', (x: number, y: number, goodType: number, amount: number) => {
         log.debug(`AddPileEx: ${amount}x type ${goodType} at (${x}, ${y})`);
 
         // Create stack entity
@@ -172,7 +166,7 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
 
         // Set the quantity (defaults to 1, so only update if different)
         if (amount > 1) {
-            context.gameState.setResourceQuantity(entity.id, amount);
+            context.gameState.resources.setQuantity(entity.id, amount);
         }
 
         return entity.id;

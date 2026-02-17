@@ -43,7 +43,7 @@ describe('InventoryVisualizer', () => {
             expect(resources.length).toBe(1);
 
             // Verify quantity
-            const resourceState = ctx.state.resourceStates.get(resources[0].id);
+            const resourceState = ctx.state.resources.states.get(resources[0].id);
             expect(resourceState?.quantity).toBe(3);
         });
 
@@ -64,7 +64,7 @@ describe('InventoryVisualizer', () => {
             inventoryManager.depositOutput(building.id, EMaterialType.LOG, 3);
 
             // Quantity should be updated (2 + 3 = 5)
-            const resourceState = ctx.state.resourceStates.get(resourceId);
+            const resourceState = ctx.state.resources.states.get(resourceId);
             expect(resourceState?.quantity).toBe(5);
         });
 
@@ -140,7 +140,7 @@ describe('InventoryVisualizer', () => {
             expect(resources.length).toBe(1);
 
             // Verify quantity
-            const resourceState = ctx.state.resourceStates.get(resources[0].id);
+            const resourceState = ctx.state.resources.states.get(resources[0].id);
             expect(resourceState?.quantity).toBe(3);
         });
 
@@ -199,7 +199,7 @@ describe('InventoryVisualizer', () => {
                 e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
-            expect(ctx.state.getResourceBuildingId(resources[0].id)).toBe(building.id);
+            expect(ctx.state.resources.getBuildingId(resources[0].id)).toBe(building.id);
 
             // Remove building's visual stacks
             visualizer.removeBuilding(building.id);
@@ -209,10 +209,10 @@ describe('InventoryVisualizer', () => {
                 e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
-            expect(ctx.state.getResourceBuildingId(resources[0].id)).toBeUndefined();
+            expect(ctx.state.resources.getBuildingId(resources[0].id)).toBeUndefined();
 
             // Now findNearestResource should find it (it's free)
-            const found = ctx.state.findNearestResource(10, 10, EMaterialType.LOG, 10);
+            const found = ctx.state.resources.findNearestResource(10, 10, EMaterialType.LOG, 10);
             expect(found).toBeDefined();
             expect(found?.id).toBe(resources[0].id);
         });
@@ -228,7 +228,7 @@ describe('InventoryVisualizer', () => {
                 e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
-            expect(ctx.state.getResourceBuildingId(resources[0].id)).toBe(building.id);
+            expect(ctx.state.resources.getBuildingId(resources[0].id)).toBe(building.id);
 
             // Remove building
             visualizer.removeBuilding(building.id);
@@ -238,10 +238,10 @@ describe('InventoryVisualizer', () => {
                 e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
-            expect(ctx.state.getResourceBuildingId(resources[0].id)).toBeUndefined();
+            expect(ctx.state.resources.getBuildingId(resources[0].id)).toBeUndefined();
 
             // Now findNearestResource should find it
-            const found = ctx.state.findNearestResource(10, 10, EMaterialType.LOG, 10);
+            const found = ctx.state.resources.findNearestResource(10, 10, EMaterialType.LOG, 10);
             expect(found).toBeDefined();
         });
     });
@@ -275,7 +275,7 @@ describe('InventoryVisualizer', () => {
                 e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
-            expect(ctx.state.resourceStates.get(resources[0].id)?.quantity).toBe(4);
+            expect(ctx.state.resources.states.get(resources[0].id)?.quantity).toBe(4);
 
             newVisualizer.dispose();
         });
@@ -295,11 +295,11 @@ describe('InventoryVisualizer', () => {
             expect(resources.length).toBe(1);
 
             // Input resource should be marked as belonging to this building
-            const resourceBuildingId = ctx.state.getResourceBuildingId(resources[0].id);
+            const resourceBuildingId = ctx.state.resources.getBuildingId(resources[0].id);
             expect(resourceBuildingId).toBe(building.id);
 
             // findNearestResource should NOT find it (it's reserved)
-            const found = ctx.state.findNearestResource(10, 10, EMaterialType.LOG, 10);
+            const found = ctx.state.resources.findNearestResource(10, 10, EMaterialType.LOG, 10);
             expect(found).toBeUndefined();
         });
 
@@ -315,21 +315,21 @@ describe('InventoryVisualizer', () => {
             expect(resources.length).toBe(1);
 
             // Output resource should be marked as belonging to building
-            const resourceBuildingId = ctx.state.getResourceBuildingId(resources[0].id);
+            const resourceBuildingId = ctx.state.resources.getBuildingId(resources[0].id);
             expect(resourceBuildingId).toBe(building.id);
 
             // findNearestResource should NOT find it (carriers must use inventory API)
-            const found = ctx.state.findNearestResource(10, 10, EMaterialType.LOG, 10);
+            const found = ctx.state.resources.findNearestResource(10, 10, EMaterialType.LOG, 10);
             expect(found).toBeUndefined();
         });
 
         it('free resources are found by findNearestResource', () => {
             // Add a free resource stack (not belonging to any building)
             const freeResource = ctx.state.addEntity(EntityType.StackedResource, EMaterialType.LOG, 15, 15, 0);
-            ctx.state.setResourceQuantity(freeResource.id, 5);
+            ctx.state.resources.setQuantity(freeResource.id, 5);
 
             // This resource has no buildingId, so it should be findable
-            const found = ctx.state.findNearestResource(15, 15, EMaterialType.LOG, 10);
+            const found = ctx.state.resources.findNearestResource(15, 15, EMaterialType.LOG, 10);
             expect(found).toBeDefined();
             expect(found?.id).toBe(freeResource.id);
         });

@@ -10,6 +10,7 @@ import { EMaterialType } from '../../economy';
 import { type EntityProvider, getCarrierState } from '../../entity';
 import { CarrierStatus, type CarrierState, createCarrierState, canAcceptNewJob } from './carrier-state';
 import type { ServiceAreaManager } from '../service-areas';
+import type { TickSystem } from '../../tick-system';
 import { LogHandler } from '@/utilities/log-handler';
 
 /** Fatigue recovery rate per second when resting at home tavern */
@@ -32,7 +33,7 @@ export interface CarrierManagerConfig {
  *
  * State is stored on entity.carrier (RFC: Entity-Owned State).
  */
-export class CarrierManager {
+export class CarrierManager implements TickSystem {
     private static log = new LogHandler('CarrierManager');
 
     /** Entity provider for accessing entities */
@@ -275,14 +276,11 @@ export class CarrierManager {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Fatigue Recovery (runs each tick)
+    // TickSystem implementation
     // ─────────────────────────────────────────────────────────────
 
-    /**
-     * Update fatigue for all carriers.
-     * Resting carriers recover faster; idle carriers recover slowly.
-     */
-    updateFatigue(dt: number): void {
+    /** Called each fixed-timestep tick — recovers fatigue for resting/idle carriers */
+    tick(dt: number): void {
         for (const carrier of this.getAllCarriers()) {
             if (carrier.status === CarrierStatus.Resting) {
                 const recovery = FATIGUE_RECOVERY_RATE * dt;

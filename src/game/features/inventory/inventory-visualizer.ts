@@ -122,7 +122,7 @@ export class InventoryVisualizer {
         if (existingEntityId !== undefined) {
             // Update existing stack quantity
             log.debug(`Updating stack ${existingEntityId} to qty ${visualQuantity}`);
-            this.gameState.setResourceQuantity(existingEntityId, visualQuantity);
+            this.gameState.resources.setQuantity(existingEntityId, visualQuantity);
         } else {
             // Create new visual stack
             const position = this.findStackPosition(visualState, slotType, positions);
@@ -301,11 +301,11 @@ export class InventoryVisualizer {
         );
 
         // Set the initial quantity
-        this.gameState.setResourceQuantity(entity.id, quantity);
+        this.gameState.resources.setQuantity(entity.id, quantity);
 
         // Only reserve inputs - outputs are available for carrier pickup
         if (reserveForBuilding) {
-            this.gameState.setResourceBuildingId(entity.id, buildingId);
+            this.gameState.resources.setBuildingId(entity.id, buildingId);
         }
 
         return entity;
@@ -339,12 +339,12 @@ export class InventoryVisualizer {
 
         // Release output stacks - they become free resources
         for (const entityId of state.outputStacks.values()) {
-            this.gameState.setResourceBuildingId(entityId, undefined);
+            this.gameState.resources.setBuildingId(entityId, undefined);
         }
 
         // Release input stacks - they become free resources
         for (const entityId of state.inputStacks.values()) {
-            this.gameState.setResourceBuildingId(entityId, undefined);
+            this.gameState.resources.setBuildingId(entityId, undefined);
         }
 
         this.buildingVisuals.delete(buildingId);
@@ -384,7 +384,7 @@ export class InventoryVisualizer {
         for (const entity of this.gameState.entities) {
             if (entity.type !== EntityType.StackedResource) continue;
 
-            const buildingId = this.gameState.getResourceBuildingId(entity.id);
+            const buildingId = this.gameState.resources.getBuildingId(entity.id);
             if (buildingId === undefined) continue;
 
             // Get or create visual state for this building

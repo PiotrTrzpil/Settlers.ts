@@ -1,4 +1,5 @@
 import { GameState } from './game-state';
+import { MovementSystem } from './systems/movement/index';
 import { SettlerTaskSystem, SearchType } from './systems/settler-tasks';
 import {
     createWoodcuttingHandler,
@@ -14,19 +15,15 @@ import { MapSize } from '@/utilities/map-size';
 import type { TickSystem } from './tick-system';
 import { BuildingConstructionSystem, BuildingStateManager } from './features/building-construction';
 import { CarrierManager } from './features/carriers';
-import {
-    hasInventory,
-    isProductionBuilding,
-    InventoryVisualizer,
-    BuildingInventoryManager,
-} from './features/inventory';
+import { InventoryVisualizer, BuildingInventoryManager } from './features/inventory';
 import { LogisticsDispatcher, RequestManager } from './features/logistics';
 import { ServiceAreaManager } from './features/service-areas';
 import { FeatureRegistry } from './features/feature-registry';
 import { TreeFeature, TreeSystem, type TreeFeatureExports } from './features/trees';
+import { BuildingLifecycle } from './features/building-lifecycle';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import type { FrameRenderTiming } from './renderer/renderer';
-import { BuildingType, UnitType } from './entity';
+import { UnitType } from './entity';
 import { AnimationService } from './animation/index';
 import { toastError, toastClearThrottle } from './toast-notifications';
 
@@ -76,6 +73,9 @@ export class GameLoop {
     /** Per-system error tracking for circuit breaker & throttled logging */
     private systemErrors = new Map<TickSystem, SystemErrorState>();
 
+    /** Per-system tick timings from the last tick (system name → total ms) */
+    private lastTickSystemTimings: Record<string, number> = {};
+
     /** Event subscription manager for GameLoop's own event handlers */
     private readonly subscriptions = new EventSubscriptionManager();
 
@@ -105,6 +105,9 @@ export class GameLoop {
 
     /** Registered tick systems */
     private systems: TickSystem[] = [];
+
+    /** Movement system — owned by GameLoop, shared with GameState */
+    public readonly movement: MovementSystem;
 
     /** Event bus for inter-system communication */
     public readonly eventBus: EventBus;
@@ -149,6 +152,9 @@ export class GameLoop {
     /** Feature registry - manages self-registering feature modules */
     private readonly featureRegistry: FeatureRegistry;
 
+    /** Building lifecycle coordinator - owns building creation/removal dispatch */
+    public readonly buildingLifecycle: BuildingLifecycle;
+
     constructor(gameState: GameState, eventBus: EventBus) {
         this.gameState = gameState;
         this.eventBus = eventBus;
@@ -173,10 +179,21 @@ export class GameLoop {
             eventBus,
         });
 
-        // Register all tick systems in execution order:
+        // Create and register movement system (owned by GameLoop, used by GameState)
+        this.movement = new MovementSystem({
+            eventBus,
+            rng: gameState.rng,
+            updatePosition: (id, x, y) => {
+                gameState.updateEntityPosition(id, x, y);
+                return true;
+            },
+            getEntity: id => gameState.getEntity(id),
+        });
+        this.movement.setTileOccupancy(gameState.tileOccupancy);
+        gameState.setMovementSystem(this.movement);
+
         // 1. Movement — updates unit positions (must run first)
-        // Note: MovementSystem is created in GameState with its dependencies
-        this.registerSystem(gameState.movement);
+        this.registerSystem(this.movement);
 
         // 2. Building construction — terrain modification, phase transitions
         this.constructionSystem = new BuildingConstructionSystem({
@@ -186,13 +203,9 @@ export class GameLoop {
         this.constructionSystem.registerEvents(eventBus);
         this.registerSystem(this.constructionSystem);
 
-        // Subscribe to building creation events for inventory and service area setup
-        this.subscriptions.subscribe(eventBus, 'building:created', ({ entityId, buildingType, x, y }) => {
-            this.handleBuildingCreated(entityId, buildingType, x, y);
-        });
-
-        // 3. Wire carrier manager for auto-registration
+        // 3. Carrier manager — fatigue recovery each tick + auto-registration
         this.carrierManager.setServiceAreaManager(this.serviceAreaManager);
+        this.registerSystem(this.carrierManager);
 
         // Listen for unit spawned to auto-register carriers
         this.subscriptions.subscribe(eventBus, 'unit:spawned', payload => {
@@ -224,6 +237,7 @@ export class GameLoop {
             inventoryManager: this.inventoryManager,
             carrierManager: this.carrierManager,
             eventBus,
+            getInventoryVisualizer: () => this.inventoryVisualizer,
         });
         this.registerSystem(this.settlerTaskSystem);
 
@@ -259,10 +273,26 @@ export class GameLoop {
         // 9. Inventory visualizer — syncs building output to visual stacked resources
         this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager);
 
-        // Wire inventory visualizer to settler task system (for carrier stack navigation)
-        this.settlerTaskSystem.setInventoryVisualizer(this.inventoryVisualizer);
+        // 10. Building lifecycle coordinator — owns creation/removal sequence
+        this.buildingLifecycle = new BuildingLifecycle({
+            gameState,
+            eventBus,
+            serviceAreaManager: this.serviceAreaManager,
+            inventoryManager: this.inventoryManager,
+            buildingStateManager: this.buildingStateManager,
+            carrierManager: this.carrierManager,
+            logisticsDispatcher: this.logisticsDispatcher,
+            inventoryVisualizer: this.inventoryVisualizer,
+        });
 
-        // 10. Bridge inventory changes to EventBus for other consumers (debug panel, UI)
+        // Notify tick systems on entity removal (BuildingLifecycle handles manager cleanup)
+        this.buildingLifecycle.onRemoved(entityId => {
+            for (const system of this.systems) {
+                system.onEntityRemoved?.(entityId);
+            }
+        });
+
+        // 11. Bridge inventory changes to EventBus for other consumers (debug panel, UI)
         this.inventoryManager.onChange((buildingId, materialType, slotType, previousAmount, newAmount) => {
             this.eventBus.emit('inventory:changed', {
                 buildingId,
@@ -282,11 +312,6 @@ export class GameLoop {
                 amount: request.amount,
                 priority: request.priority,
             });
-        });
-
-        // Subscribe to entity removal events for cleanup
-        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
-            this.handleEntityRemoved(entityId);
         });
 
         // Set up page visibility tracking for background throttling
@@ -325,65 +350,6 @@ export class GameLoop {
         return this._ticksPaused;
     }
 
-    /**
-     * Building types that act as logistics hubs (taverns/carrier bases).
-     * These buildings get service areas when created.
-     */
-    private static readonly SERVICE_AREA_BUILDINGS: ReadonlySet<BuildingType> = new Set([
-        BuildingType.ResidenceSmall,
-        BuildingType.ResidenceMedium,
-        BuildingType.ResidenceBig,
-    ]);
-
-    /**
-     * Handle building creation - creates inventory and service area as needed.
-     */
-    private handleBuildingCreated(entityId: number, buildingType: BuildingType, x: number, y: number): void {
-        // Entity MUST exist - we just received a creation event for it
-        const entity = this.gameState.getEntityOrThrow(entityId, 'created building');
-        const playerId = entity.player;
-
-        // Create service area for logistics hubs (taverns/warehouses)
-        if (GameLoop.SERVICE_AREA_BUILDINGS.has(buildingType)) {
-            this.serviceAreaManager.createServiceArea(entityId, playerId, x, y, buildingType);
-        }
-
-        // Create inventory for buildings with input/output slots
-        if (hasInventory(buildingType) || isProductionBuilding(buildingType)) {
-            this.inventoryManager.createInventory(entityId, buildingType);
-        }
-
-        // Create building construction state
-        this.buildingStateManager.createBuildingState(entityId, buildingType, x, y);
-    }
-
-    /**
-     * Handle entity removal - cleans up carrier state, inventory, service areas, and logistics.
-     */
-    private handleEntityRemoved(entityId: number): void {
-        // Notify all registered tick systems that implement onEntityRemoved
-        for (const system of this.systems) {
-            system.onEntityRemoved?.(entityId);
-        }
-
-        // Clean up carrier state if this was a carrier
-        if (this.carrierManager.hasCarrier(entityId)) {
-            this.carrierManager.removeCarrier(entityId);
-        }
-
-        // Clean up service area if this building had one
-        this.serviceAreaManager.removeServiceArea(entityId);
-
-        // Clean up logistics state first (releasing reservations needs the inventory)
-        this.logisticsDispatcher.handleBuildingDestroyed(entityId);
-
-        // Clean up inventory after logistics is done with it
-        this.inventoryManager.removeInventory(entityId);
-
-        // Clean up visual inventory stacks
-        this.inventoryVisualizer.removeBuilding(entityId);
-    }
-
     /** Provide terrain data so movement obstacle resolution can function */
     public setTerrainData(groundType: Uint8Array, groundHeight: Uint8Array, mapWidth: number, mapHeight: number): void {
         this.groundType = groundType;
@@ -393,7 +359,15 @@ export class GameLoop {
         this.mapSize = new MapSize(mapWidth, mapHeight);
 
         // Initialize terrain data in the movement system
-        this.gameState.setTerrainData(groundType, groundHeight, mapWidth, mapHeight);
+        this.movement.setTerrainData(groundType, groundHeight, mapWidth, mapHeight);
+
+        // Provide terrain context to construction system (only needs to be set once)
+        this.constructionSystem.setTerrainContext({
+            groundType: this.groundType,
+            groundHeight: this.groundHeight,
+            mapSize: this.mapSize,
+            onTerrainModified: () => this.eventBus.emit('terrain:modified', {}),
+        });
     }
 
     /**
@@ -451,6 +425,9 @@ export class GameLoop {
         // Destroy feature registry (cleans up feature event handlers)
         this.featureRegistry.destroy();
 
+        // Destroy building lifecycle coordinator (unsubscribes building:created, entity:removed)
+        this.buildingLifecycle.destroy();
+
         // Unsubscribe GameLoop's own event handlers
         this.subscriptions.unsubscribeAll();
 
@@ -498,6 +475,7 @@ export class GameLoop {
         frameStart: number,
         ticksTime: number,
         animationsTime: number,
+        updateTime: number,
         callbackTime: number,
         renderTiming: FrameRenderTiming | null
     ): void {
@@ -524,8 +502,10 @@ export class GameLoop {
             frame: framePeriod,
             ticks: ticksTime,
             animations: animationsTime,
+            update: updateTime,
             callback: Math.max(0, callbackTime - renderTime),
-            other: Math.max(0, framePeriod - workTime),
+            idle: Math.max(0, framePeriod - workTime),
+            tickSystems: this.lastTickSystemTimings,
             ...rt,
         });
     }
@@ -548,11 +528,11 @@ export class GameLoop {
         // Three isolated sub-steps: animation → update → render.
         if (shouldRender) {
             const animationsTime = this.runAnimations(shouldTick, deltaSec);
-            this.runUpdate(deltaSec);
+            const updateTime = this.runUpdate(deltaSec);
             const { time: callbackTime, timing: renderTiming } = this.runRender();
 
             this.lastRenderTime = now;
-            this.recordFrameTiming(frameStart, ticksTime, animationsTime, callbackTime, renderTiming);
+            this.recordFrameTiming(frameStart, ticksTime, animationsTime, updateTime, callbackTime, renderTiming);
         }
 
         this.animRequest = requestAnimationFrame(this.boundFrame);
@@ -593,8 +573,9 @@ export class GameLoop {
         return performance.now() - start;
     }
 
-    /** Run per-frame update callback (input, sound, debug stats — not rendering). */
-    private runUpdate(deltaSec: number): void {
+    /** Run per-frame update callback (input, sound, debug stats — not rendering). Returns elapsed time in ms. */
+    private runUpdate(deltaSec: number): number {
+        const start = performance.now();
         try {
             if (this.onUpdate) {
                 this.onUpdate(deltaSec);
@@ -603,6 +584,7 @@ export class GameLoop {
             const err = e instanceof Error ? e : new Error(String(e));
             this.updateLogger.error('Error in update callback', err);
         }
+        return performance.now() - start;
     }
 
     /** Run GPU render callback. Returns elapsed time + render timing data. */
@@ -623,17 +605,7 @@ export class GameLoop {
     private tick(dt: number): void {
         debugStats.recordTick();
 
-        // Update terrain context for building construction if terrain data is available
-        if (this.groundType && this.groundHeight && this.mapSize) {
-            this.constructionSystem.setTerrainContext({
-                groundType: this.groundType,
-                groundHeight: this.groundHeight,
-                mapSize: this.mapSize,
-                onTerrainModified: () => this.eventBus.emit('terrain:modified', {}),
-            });
-        } else {
-            this.constructionSystem.setTerrainContext(undefined);
-        }
+        const timings: Record<string, number> = {};
 
         // Run each registered tick system with individual error isolation.
         // A failure in one system does not prevent others from running.
@@ -642,6 +614,7 @@ export class GameLoop {
 
             if (errorState.disabled) continue;
 
+            const start = performance.now();
             try {
                 system.tick(dt);
                 if (errorState.consecutiveFailures > 0) {
@@ -650,10 +623,11 @@ export class GameLoop {
             } catch (e) {
                 this.handleSystemError(system, e);
             }
+            const elapsed = performance.now() - start;
+            timings[errorState.name] = (timings[errorState.name] ?? 0) + elapsed;
         }
 
-        // Update carrier fatigue recovery (resting/idle carriers recover over time)
-        this.carrierManager.updateFatigue(dt);
+        this.lastTickSystemTimings = timings;
 
         // Update debug stats from game state so entity counts are available
         // even without a render callback (headless/CI environments)

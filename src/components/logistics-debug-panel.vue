@@ -232,26 +232,9 @@ watch(
     () => debugStats.state.selectAllUnits,
     newValue => {
         if (newValue || !props.game) return;
-
-        const gameState = props.game.state;
-        const idsToRemove: number[] = [];
-
-        for (const entityId of gameState.selectedEntityIds) {
-            const entity = gameState.getEntity(entityId);
-            if (entity && entity.type === EntityType.Unit && !isUnitTypeSelectable(entity.subType as UnitType)) {
-                idsToRemove.push(entityId);
-            }
-        }
-
-        // Remove non-selectable units from selection
-        for (const id of idsToRemove) {
-            gameState.selectedEntityIds.delete(id);
-            if (gameState.selectedEntityId === id) {
-                // Pick another selected entity or null
-                gameState.selectedEntityId =
-                    gameState.selectedEntityIds.size > 0 ? gameState.selectedEntityIds.values().next().value! : null;
-            }
-        }
+        props.game.state.selection.deselectWhere(
+            e => e.type === EntityType.Unit && !isUnitTypeSelectable(e.subType as UnitType)
+        );
     }
 );
 

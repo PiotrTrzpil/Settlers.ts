@@ -9,14 +9,45 @@
  */
 
 import type { GameState } from '../../game-state';
-import { EntityType, MapObjectType, type Entity } from '../../entity';
+import { EntityType, MapObjectType, UnitType, BuildingType, type Entity } from '../../entity';
 import type { BuildingInventoryManager } from '../../features/inventory';
 import { LogHandler } from '@/utilities/log-handler';
 import type { TaskNode } from './types';
-import { TaskType, type WorkHandler } from './types';
+import { TaskType, type EntityWorkHandler, type PositionWorkHandler } from './types';
 import type { TreeSystem } from '../tree-system';
 import { OBJECT_TYPE_CATEGORY } from '../map-objects';
 import { findNearestEntity } from '../spatial-search';
+import { getWorkerWorkplaces } from '../../unit-types';
+
+// ─────────────────────────────────────────────────────────────
+// Domain helpers (used by handlers and settler-task-system)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Find the nearest workplace building for a settler based on their unit type.
+ * Returns the nearest building of the appropriate type owned by the same player.
+ */
+export function findNearestWorkplace(gameState: GameState, settler: Entity): Entity | null {
+    const unitType = settler.subType as UnitType;
+    const workplaceTypes = getWorkerWorkplaces(unitType);
+
+    if (!workplaceTypes) {
+        return null;
+    }
+
+    const result = findNearestEntity(
+        gameState,
+        settler.x,
+        settler.y,
+        Infinity,
+        entity =>
+            entity.type === EntityType.Building &&
+            workplaceTypes.has(entity.subType as BuildingType) &&
+            entity.player === settler.player
+    );
+
+    return result ? gameState.getEntityOrThrow(result.entityId, 'nearest workplace') : null;
+}
 
 // ─────────────────────────────────────────────────────────────
 // Built-in handlers (no external domain system dependency)
@@ -26,39 +57,37 @@ import { findNearestEntity } from '../spatial-search';
  * Create a handler for WORKPLACE search type.
  * Building workers find their workplace, wait for materials, then produce.
  */
-export function createWorkplaceHandler(gameState: GameState, inventoryManager: BuildingInventoryManager): WorkHandler {
+export function createWorkplaceHandler(
+    gameState: GameState,
+    inventoryManager: BuildingInventoryManager
+): EntityWorkHandler {
     return {
-        // Worker waits at building for materials instead of failing
+        type: 'entity',
         shouldWaitForWork: true,
 
         findTarget: (_x: number, _y: number, settlerId?: number) => {
             if (settlerId === undefined) return null;
-            // Settler MUST exist if we're searching for its target
             const settler = gameState.getEntityOrThrow(settlerId, 'settler for findTarget');
 
-            const workplace = gameState.findNearestWorkplace(settler);
+            const workplace = findNearestWorkplace(gameState, settler);
             if (!workplace) return null;
 
             return { entityId: workplace.id, x: workplace.x, y: workplace.y };
         },
 
         canWork: (targetId: number) => {
-            // Can work when building has inputs and output space
             return inventoryManager.canStartProduction(targetId) && inventoryManager.canStoreOutput(targetId);
         },
 
         onWorkStart: (targetId: number) => {
-            // Consume inputs when starting work
             inventoryManager.consumeProductionInputs(targetId);
         },
 
         onWorkTick: (_targetId: number, progress: number) => {
-            // Complete when progress reaches 1.0
             return progress >= 1.0;
         },
 
         onWorkComplete: (targetId: number) => {
-            // Produce outputs when work completes
             inventoryManager.produceOutput(targetId);
         },
     };
@@ -71,8 +100,9 @@ export function createWorkplaceHandler(gameState: GameState, inventoryManager: B
  * by LogisticsDispatcher via assignJob(). This handler exists to
  * prevent "no handler registered" errors when carriers are idle.
  */
-export function createCarrierHandler(): WorkHandler {
+export function createCarrierHandler(): EntityWorkHandler {
     return {
+        type: 'entity',
         shouldWaitForWork: true,
 
         findTarget: () => null,
@@ -91,8 +121,10 @@ const WOODCUTTER_SEARCH_RADIUS = 30;
  * Create a handler for TREE search type (woodcutters).
  * Uses TreeSystem for tree lifecycle (cutting stages, falling animation, stump decay).
  */
-export function createWoodcuttingHandler(gameState: GameState, treeSystem: TreeSystem): WorkHandler {
+export function createWoodcuttingHandler(gameState: GameState, treeSystem: TreeSystem): EntityWorkHandler {
     return {
+        type: 'entity',
+
         findTarget: (x: number, y: number) => {
             return findNearestEntity(gameState, x, y, WOODCUTTER_SEARCH_RADIUS, entity => {
                 if (entity.type !== EntityType.MapObject) return false;
@@ -129,15 +161,13 @@ const woodcuttingLog = new LogHandler('WoodcuttingHandler');
  * Create a handler for TREE_SEED_POS search type (foresters).
  * Foresters find empty tiles and plant new trees via TreeSystem.
  */
-export function createForesterHandler(treeSystem: TreeSystem): WorkHandler {
+export function createForesterHandler(treeSystem: TreeSystem): PositionWorkHandler {
     return {
-        findTarget: (x: number, y: number) => {
+        type: 'position',
+
+        findPosition: (x: number, y: number) => {
             return treeSystem.findPlantingSpot(x, y);
         },
-
-        // canWork/onWorkTick are required but not used for SEARCH_POS → WORK flow
-        canWork: () => true,
-        onWorkTick: () => true,
 
         onWorkAtPositionComplete: (posX: number, posY: number, settlerId: number) => {
             treeSystem.plantTree(posX, posY, settlerId);
@@ -152,7 +182,7 @@ const stonecuttingLog = new LogHandler('StonecuttingHandler');
  * Create a handler for STONE search type (stonecutters).
  * Simple harvest: find stone → work on it → resource removed.
  */
-export function createStonecuttingHandler(gameState: GameState): WorkHandler {
+export function createStonecuttingHandler(gameState: GameState): EntityWorkHandler {
     return createSimpleHarvestHandler({
         gameState,
         log: stonecuttingLog,
@@ -184,10 +214,12 @@ interface SimpleHarvestConfig {
  * Handles the common case where a worker finds a resource entity, works on it
  * until progress reaches 1.0, and the resource is consumed.
  */
-export function createSimpleHarvestHandler(config: SimpleHarvestConfig): WorkHandler {
+export function createSimpleHarvestHandler(config: SimpleHarvestConfig): EntityWorkHandler {
     const { gameState, log, workerLabel, searchRadius, targetFilter } = config;
 
     return {
+        type: 'entity',
+
         findTarget: (x: number, y: number) => {
             return findNearestEntity(
                 gameState,

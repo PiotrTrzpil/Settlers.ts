@@ -276,8 +276,8 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
     return {
         removeSelected(): void {
             const g = getGame();
-            if (!g || g.state.selectedEntityId === null) return;
-            g.execute({ type: 'remove_entity', entityId: g.state.selectedEntityId });
+            if (!g || g.state.selection.selectedEntityId === null) return;
+            g.execute({ type: 'remove_entity', entityId: g.state.selection.selectedEntityId });
             triggerRef(game);
         },
 
@@ -514,11 +514,11 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
     // =========================================================================
 
     const selectedEntity = computed<Entity | undefined>(() =>
-        game.value?.state.selectedEntityId != null
-            ? game.value.state.getEntity(game.value.state.selectedEntityId)
+        game.value?.state.selection.selectedEntityId != null
+            ? game.value.state.getEntity(game.value.state.selection.selectedEntityId)
             : undefined
     );
-    const selectionCount = computed(() => game.value?.state.selectedEntityIds.size ?? 0);
+    const selectionCount = computed(() => game.value?.state.selection.selectedEntityIds.size ?? 0);
     const isPaused = computed(() => (game.value ? !game.value.gameLoop.isRunning : false));
 
     // Mode state - use debugStats as the single source of truth

@@ -16,10 +16,6 @@ export {
 export type { MaterialTypeConfig } from './material-type';
 
 // Production chains and construction costs
-export {
-    BUILDING_PRODUCTIONS,
-    CONSTRUCTION_COSTS,
-    getBuildingTypesRequestingMaterial,
-} from './building-production';
+export { BUILDING_PRODUCTIONS, CONSTRUCTION_COSTS, getBuildingTypesRequestingMaterial } from './building-production';
 
 export type { ProductionChain, ConstructionCost } from './building-production';

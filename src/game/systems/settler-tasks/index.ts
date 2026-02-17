@@ -8,6 +8,8 @@ export {
     type SettlerConfig,
     type TaskNode,
     type JobState,
+    type EntityWorkHandler,
+    type PositionWorkHandler,
     type WorkHandler,
     buildCarrierJob,
 } from './types';

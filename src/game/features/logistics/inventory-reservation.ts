@@ -85,7 +85,7 @@ export class InventoryReservationManager {
         buildingId: number,
         materialType: EMaterialType,
         amount: number,
-        requestId: number,
+        requestId: number
     ): InventoryReservation | null {
         if (amount <= 0) return null;
 
@@ -135,7 +135,7 @@ export class InventoryReservationManager {
         this.inventoryManager.releaseOutputReservation(
             reservation.buildingId,
             reservation.materialType,
-            reservation.amount,
+            reservation.amount
         );
 
         this.reservations.delete(reservationId);
@@ -210,11 +210,7 @@ export class InventoryReservationManager {
      * @param actualAmount Actual amount in inventory
      * @returns Available amount (actual minus reserved)
      */
-    getAvailableAmount(
-        buildingId: number,
-        materialType: EMaterialType,
-        actualAmount: number,
-    ): number {
+    getAvailableAmount(buildingId: number, materialType: EMaterialType, actualAmount: number): number {
         const reserved = this.getReservedAmount(buildingId, materialType);
         return Math.max(0, actualAmount - reserved);
     }

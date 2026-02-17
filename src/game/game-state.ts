@@ -5,18 +5,15 @@ import {
     tileKey,
     BuildingType,
     getBuildingFootprint,
-    StackedResourceState,
-    MAX_RESOURCE_STACK_SIZE,
     isUnitTypeSelectable,
     getUnitTypeSpeed,
     MapObjectType,
 } from './entity';
-import { getWorkerWorkplaces } from './unit-types';
-import { EMaterialType } from './economy';
-import { findNearestEntity } from './systems/spatial-search';
 import { MovementSystem, MovementController } from './systems/movement/index';
 import { SeededRng, createGameRng } from './rng';
 import { EventBus } from './event-bus';
+import { SelectionManager } from './selection-manager';
+import { StackedResourceManager } from './stacked-resource-manager';
 
 /**
  * Legacy UnitState interface for backward compatibility.
@@ -112,26 +109,39 @@ class UnitStateMap implements UnitStateLookup {
     }
 }
 
+/**
+ * Core entity store and spatial index.
+ *
+ * GameState is responsible for:
+ * - Entity CRUD (add, remove, get)
+ * - Spatial queries (getEntityAt, getEntitiesInRect, getEntitiesInRadius)
+ * - Tile occupancy tracking
+ *
+ * Extracted concerns (owned here but encapsulated in dedicated classes):
+ * - Selection state → SelectionManager
+ * - Stacked resource state → StackedResourceManager
+ * - Movement → MovementSystem (created externally, set via setMovementSystem)
+ */
 export class GameState {
     public entities: Entity[] = [];
     /** O(1) entity lookup by ID */
     private entityMap: Map<number, Entity> = new Map();
 
-    /** Movement system for all units */
-    public readonly movement: MovementSystem;
+    /** Movement system for all units — set via setMovementSystem() before adding entities */
+    public movement!: MovementSystem;
 
-    /** Legacy adapter for backward compatibility - wraps movement system */
-    public readonly unitStates: UnitStateMap;
+    /** Legacy adapter for backward compatibility — wraps movement system */
+    public unitStates!: UnitStateMap;
 
-    /** Seeded RNG for deterministic game logic - use this instead of Math.random() */
+    /** Seeded RNG for deterministic game logic — use this instead of Math.random() */
     public readonly rng: SeededRng;
 
-    /** Stacked resource state tracking (quantity of items in each stack) */
-    public resourceStates: Map<number, StackedResourceState> = new Map();
-    /** Primary selection (first selected entity or single selection) */
-    public selectedEntityId: number | null = null;
-    /** All selected entity IDs (for multi-select) */
-    public selectedEntityIds: Set<number> = new Set();
+    /** Player entity selection state */
+    public readonly selection: SelectionManager;
+
+    /** Stacked resource state (quantities, building ownership) */
+    public readonly resources: StackedResourceManager;
+
     public nextId = 1;
 
     /** Spatial lookup: "x,y" -> entityId */
@@ -143,28 +153,17 @@ export class GameState {
     constructor(eventBus: EventBus, seed?: number) {
         this.eventBus = eventBus;
         this.rng = createGameRng(seed);
-
-        // Create movement system with required dependencies
-        this.movement = new MovementSystem({
-            eventBus,
-            rng: this.rng,
-            updatePosition: (id, x, y) => {
-                this.updateEntityPosition(id, x, y);
-                return true;
-            },
-            getEntity: id => this.getEntity(id),
-        });
-        this.movement.setTileOccupancy(this.tileOccupancy);
-
-        this.unitStates = new UnitStateMap(this.movement);
+        this.selection = new SelectionManager(this);
+        this.resources = new StackedResourceManager(this);
     }
 
     /**
-     * Initialize terrain data for the movement system.
-     * Must be called after map is loaded.
+     * Set the movement system (created externally by GameLoop).
+     * Must be called before any entities are added.
      */
-    public setTerrainData(groundType: Uint8Array, groundHeight: Uint8Array, mapWidth: number, mapHeight: number): void {
-        this.movement.setTerrainData(groundType, groundHeight, mapWidth, mapHeight);
+    public setMovementSystem(movement: MovementSystem): void {
+        this.movement = movement;
+        this.unitStates = new UnitStateMap(movement);
     }
 
     /**
@@ -260,10 +259,7 @@ export class GameState {
         }
 
         if (type === EntityType.StackedResource) {
-            this.resourceStates.set(entity.id, {
-                entityId: entity.id,
-                quantity: 1,
-            });
+            this.resources.createState(entity.id);
         }
 
         return entity;
@@ -291,15 +287,12 @@ export class GameState {
         }
 
         this.movement.removeController(id);
-        this.resourceStates.delete(id);
+        this.resources.removeState(id);
 
         // Emit event for system cleanup (carrier state, inventory, service areas, etc.)
         this.eventBus.emit('entity:removed', { entityId: id });
 
-        this.selectedEntityIds.delete(id);
-        if (this.selectedEntityId === id) {
-            this.selectedEntityId = null;
-        }
+        this.selection.deselect(id);
     }
 
     public getEntity(id: number): Entity | undefined {
@@ -351,32 +344,6 @@ export class GameState {
         return this.entities.filter(e => e.x >= minX && e.x <= maxX && e.y >= minY && e.y <= maxY);
     }
 
-    /**
-     * Find the nearest workplace building for a settler based on their unit type.
-     * Returns the nearest building of the appropriate type owned by the same player.
-     */
-    public findNearestWorkplace(settler: Entity): Entity | null {
-        const unitType = settler.subType as UnitType;
-        const workplaceTypes = getWorkerWorkplaces(unitType);
-
-        if (!workplaceTypes) {
-            return null;
-        }
-
-        const result = findNearestEntity(
-            this,
-            settler.x,
-            settler.y,
-            Infinity,
-            entity =>
-                entity.type === EntityType.Building &&
-                workplaceTypes.has(entity.subType as BuildingType) &&
-                entity.player === settler.player
-        );
-
-        return result ? this.getEntityOrThrow(result.entityId, 'nearest workplace') : null;
-    }
-
     /** Update occupancy when an entity moves */
     public updateEntityPosition(id: number, newX: number, newY: number): void {
         const entity = this.entityMap.get(id);
@@ -386,133 +353,5 @@ export class GameState {
         entity.x = newX;
         entity.y = newY;
         this.tileOccupancy.set(tileKey(newX, newY), id);
-    }
-
-    // ==========================================
-    // Stacked Resource Management Methods
-    // ==========================================
-
-    /**
-     * Add a stacked resource at the specified position.
-     * If there's already a stack of the same material type, adds to it (up to MAX_RESOURCE_STACK_SIZE).
-     * Otherwise creates a new stack.
-     * @returns The entity if created/updated successfully, null if stack is full or tile occupied by different entity
-     */
-    public addStackedResource(materialType: EMaterialType, x: number, y: number, player: number): Entity | null {
-        const key = tileKey(x, y);
-        const existingId = this.tileOccupancy.get(key);
-
-        if (existingId !== undefined) {
-            const existing = this.entityMap.get(existingId);
-            if (existing && existing.type === EntityType.StackedResource && existing.subType === materialType) {
-                // Add to existing stack if not full
-                const state = this.resourceStates.get(existingId);
-                if (state && state.quantity < MAX_RESOURCE_STACK_SIZE) {
-                    state.quantity++;
-                    return existing;
-                }
-                // Stack is full
-                return null;
-            }
-            // Tile is occupied by a different entity
-            return null;
-        }
-
-        // Create new stack
-        return this.addEntity(EntityType.StackedResource, materialType, x, y, player);
-    }
-
-    /**
-     * Remove one item from a stacked resource.
-     * If the stack becomes empty, removes the entity entirely.
-     * @returns true if item was removed, false if no stack exists or stack was empty
-     */
-    public removeResourceFromStack(entityId: number): boolean {
-        const entity = this.entityMap.get(entityId);
-        if (!entity || entity.type !== EntityType.StackedResource) return false;
-
-        const state = this.resourceStates.get(entityId);
-        if (!state || state.quantity <= 0) return false;
-
-        state.quantity--;
-
-        if (state.quantity <= 0) {
-            this.removeEntity(entityId);
-        }
-
-        return true;
-    }
-
-    /**
-     * Get the stacked resource entity at a position, if any.
-     */
-    public getStackedResourceAt(x: number, y: number): Entity | undefined {
-        const entity = this.getEntityAt(x, y);
-        if (entity && entity.type === EntityType.StackedResource) {
-            return entity;
-        }
-        return undefined;
-    }
-
-    /**
-     * Get the quantity of resources in a stack.
-     * @returns The quantity, or 0 if the entity doesn't exist or isn't a stack
-     */
-    public getResourceQuantity(entityId: number): number {
-        const state = this.resourceStates.get(entityId);
-        return state?.quantity ?? 0;
-    }
-
-    /**
-     * Set the quantity of resources in a stack directly.
-     * If quantity is 0 or less, removes the entity.
-     */
-    public setResourceQuantity(entityId: number, quantity: number): void {
-        const entity = this.entityMap.get(entityId);
-        if (!entity || entity.type !== EntityType.StackedResource) return;
-
-        if (quantity <= 0) {
-            this.removeEntity(entityId);
-            return;
-        }
-
-        const state = this.resourceStates.get(entityId);
-        if (state) {
-            state.quantity = Math.min(quantity, MAX_RESOURCE_STACK_SIZE);
-        }
-    }
-
-    /**
-     * Find the nearest free stacked resource of the given material type.
-     * Excludes resources that belong to a building (have buildingId set).
-     */
-    public findNearestResource(x: number, y: number, materialType: EMaterialType, radius: number): Entity | undefined {
-        const result = findNearestEntity(this, x, y, radius, entity => {
-            if (entity.type !== EntityType.StackedResource) return false;
-            if (entity.subType !== materialType) return false;
-            const state = this.resourceStates.get(entity.id);
-            return state?.buildingId === undefined;
-        });
-        return result ? this.getEntity(result.entityId) : undefined;
-    }
-
-    /**
-     * Mark a stacked resource as belonging to a building's inventory visualization.
-     * Resources with a buildingId are reserved and won't be picked up by carriers.
-     */
-    public setResourceBuildingId(entityId: number, buildingId: number | undefined): void {
-        const state = this.resourceStates.get(entityId);
-        if (state) {
-            state.buildingId = buildingId;
-        }
-    }
-
-    /**
-     * Get the building ID that a stacked resource belongs to.
-     * Returns undefined if the resource is free (not belonging to any building).
-     */
-    public getResourceBuildingId(entityId: number): number | undefined {
-        const state = this.resourceStates.get(entityId);
-        return state?.buildingId;
     }
 }
