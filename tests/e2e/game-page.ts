@@ -8,9 +8,6 @@ import * as audioHelpers from './audio-helpers';
 import * as spriteHelpers from './sprite-helpers';
 import * as waitHelpers from './wait-helpers';
 
-// Re-export types from helper modules for consumers that import from game-page
-export type { LoadTimings } from './sprite-helpers';
-
 // ── Module binding ──────────────────────────────────────────
 
 /**

@@ -3,40 +3,26 @@
  *
  * ## Fixture Hierarchy
  *
- *   testMapPage (worker-scoped)
- *       └── gp (test-scoped, game state reset only - fast)
- *           ├── gpWithUI (adds UI reset: select mode + Buildings tab)
- *           ├── gpWithBuilding (has Lumberjack placed)
- *           ├── gpWithUnit (has Carrier spawned)
- *           └── gpWithMovingUnit (has Carrier moving east)
+ *   testMapPage (worker-scoped, requires WebGL)
+ *       └── gp (test-scoped, 4x speed, game state reset)
+ *       └── gpWithUI (adds UI reset: select mode + Buildings tab)
+ *   gameStatePage (worker-scoped, no WebGL required)
+ *       └── gs (test-scoped, 4x speed, game state reset)
+ *   assetPage (worker-scoped, real game assets)
+ *       └── gpAssets (skips in CI if assets unavailable)
  *
  * ## Usage
  *
  *   import { test, expect } from './fixtures';
  *
- *   // Basic: clean slate with test map loaded (fastest, no UI interaction)
  *   test('my test', async ({ gp }) => {
  *       await gp.actions.spawnUnit(1);
- *   });
- *
- *   // With UI: for tests that interact with sidebar buttons
- *   test('ui test', async ({ gpWithUI }) => {
- *       // UI is reset to select mode + Buildings tab
- *   });
- *
- *   // Preset: building already placed
- *   test('with building', async ({ gpWithBuilding }) => {
- *       const buildings = await gpWithBuilding.actions.getEntities({ type: 2 });
- *   });
- *
- *   // Preset: unit already moving
- *   test('movement test', async ({ gpWithMovingUnit }) => {
- *       // Unit is already moving east - test behavior
  *   });
  *
  * ## Notes
  *
  * - Use `gp` for tests that only use game.execute() APIs (most game logic tests)
+ * - Use `gs` for tests that don't need rendering (movement, game state)
  * - Use `gpWithUI` only for tests that need specific UI state
  * - Test map has ~500 environment entities (trees). Use unitCount/buildingCount
  *   assertions, not entityCount, when checking for "empty" state.
@@ -51,22 +37,12 @@ import { WaitProfiler } from './wait-profiler';
 // Re-export custom matchers so fixture users get them automatically
 export { expect } from './matchers';
 
-// Re-export WaitProfiler for manual access in tests
-export { WaitProfiler } from './wait-profiler';
-
 /**
  * Check if WebGL is available in this environment.
  * Set by global-setup.ts after probing browser capabilities.
  */
 export function isWebGLAvailable(): boolean {
     return process.env.E2E_WEBGL_AVAILABLE !== 'false';
-}
-
-/**
- * Check if running on a software renderer (slower, may affect timing).
- */
-export function isSoftwareRenderer(): boolean {
-    return process.env.E2E_SOFTWARE_RENDERER === 'true';
 }
 
 /**
@@ -83,20 +59,8 @@ type TestFixtures = {
     gp: GamePage;
     /** GamePage for game-state-only tests. Works without WebGL. 4x speed. */
     gs: GamePage;
-    /** GamePage with 1x speed for timing-sensitive tests (animation observation). */
-    gpNormal: GamePage;
     /** GamePage with UI reset to select mode + Buildings tab (for UI interaction tests). */
     gpWithUI: GamePage;
-    /** GamePage with a Lumberjack building already placed. */
-    gpWithBuilding: GamePage;
-    /** GamePage with a Carrier unit already spawned. */
-    gpWithUnit: GamePage;
-    /** GamePage with a Carrier unit already spawned and moving east. */
-    gpWithMovingUnit: GamePage;
-    /** GamePage at a specific camera position (center of map). */
-    gpCentered: GamePage;
-    /** GamePage with 4x game speed for faster movement tests. */
-    gpFast: GamePage;
     /** GamePage with real game assets loaded. Skips in CI if assets unavailable. */
     gpAssets: GamePage;
 };
@@ -253,17 +217,6 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         { timeout: Timeout.MOVEMENT },
     ],
 
-    /** 1x speed fixture for timing-sensitive tests (animation observation during movement) */
-    gpNormal: [
-        async ({ testMapPage }, use) => {
-            const gp = new GamePage(testMapPage);
-            await gp.resetGameState();
-            await gp.actions.setGameSpeed(1.0);
-            await use(gp);
-        },
-        { timeout: Timeout.MOVEMENT },
-    ],
-
     /** Fixture with UI reset: select mode + Buildings tab (for UI interaction tests) */
     gpWithUI: [
         async ({ testMapPage }, use) => {
@@ -277,91 +230,6 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             await use(gp);
         },
         { timeout: Timeout.LONG_MOVEMENT },
-    ],
-
-    /** Preset: reset state + place a Lumberjack building */
-    gpWithBuilding: [
-        async ({ testMapPage }, use) => {
-            const gp = new GamePage(testMapPage);
-            await gp.resetGameState();
-
-            // Place a building at a valid location
-            const tile = await gp.actions.findBuildableTile(1);
-            if (tile) {
-                await gp.actions.placeBuilding(1, tile.x, tile.y);
-            }
-
-            // Quick sync - just need one render tick to register the building
-            await gp.wait.waitForFrames(Frames.IMMEDIATE, Timeout.FAST);
-            await use(gp);
-        },
-        { timeout: Timeout.MOVEMENT },
-    ],
-
-    /** Preset: reset state + spawn a Carrier unit */
-    gpWithUnit: [
-        async ({ testMapPage }, use) => {
-            const gp = new GamePage(testMapPage);
-            await gp.resetGameState();
-
-            // Spawn a carrier at map center
-            await gp.actions.spawnUnit(1);
-
-            // Wait for entity to appear
-            await gp.wait.waitForUnitCount(1, Timeout.DEFAULT);
-            await use(gp);
-        },
-        { timeout: Timeout.MOVEMENT },
-    ],
-
-    /** Preset: reset state + spawn a Carrier and start moving east */
-    gpWithMovingUnit: [
-        async ({ testMapPage }, use) => {
-            const gp = new GamePage(testMapPage);
-            await gp.resetGameState();
-
-            // Spawn and move a unit
-            const unit = await gp.actions.spawnUnit(1);
-            if (unit) {
-                await gp.actions.moveUnit(unit.id, unit.x + 10, unit.y);
-                // Wait for movement to start
-                await gp.wait.waitForUnitsMoving(1, Timeout.DEFAULT);
-            }
-
-            await use(gp);
-        },
-        { timeout: Timeout.MOVEMENT },
-    ],
-
-    /** Preset: camera centered on map */
-    gpCentered: [
-        async ({ testMapPage }, use) => {
-            const gp = new GamePage(testMapPage);
-            await gp.resetGameState();
-
-            // Center camera
-            const state = await gp.actions.getGameState();
-            if (state) {
-                const cx = Math.floor(state.mapWidth / 2);
-                const cy = Math.floor(state.mapHeight / 2);
-                await gp.moveCamera(cx, cy);
-            }
-
-            await use(gp);
-        },
-        { timeout: Timeout.MOVEMENT },
-    ],
-
-    /** GamePage with 4x game speed for faster movement tests */
-    gpFast: [
-        async ({ testMapPage }, use) => {
-            const gp = new GamePage(testMapPage);
-            await gp.resetGameState();
-            await gp.actions.setGameSpeed(4.0);
-
-            await use(gp);
-        },
-        { timeout: Timeout.MOVEMENT },
     ],
 
     /** GamePage with real game assets. Skips in CI if unavailable, fails locally if missing. */

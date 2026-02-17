@@ -81,26 +81,3 @@ export const Timeout = {
     /** Worker fixture setup (includes build time in CI) */
     WORKER_SETUP: 45_000,
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Polling intervals (for expect.toPass and custom polling)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Polling interval arrays for expect.toPass() */
-export const PollIntervals = {
-    /** Fast polling for quick state changes */
-    FAST: [50, 100, 200],
-
-    /** Standard polling with exponential backoff */
-    DEFAULT: [100, 200, 500, 1000],
-
-    /** Slow polling for movement/animation */
-    MOVEMENT: [100, 250, 500, 1000, 2000],
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Debug stats refresh rate (game throttles updates)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Debug stats update interval in the game (see src/game/debug-stats.ts) */
-export const DEBUG_STATS_REFRESH_MS = 500;
