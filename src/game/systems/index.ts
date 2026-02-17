@@ -61,7 +61,7 @@ export {
 export {
     findPath,
     findPathAStar,
-    type TerrainData,
+    type PathfindingTerrain,
     BucketPriorityQueue,
     getHexLine,
     cubeRound,
@@ -102,35 +102,11 @@ export {
 } from './map-objects';
 
 // ============================================================================
-// Map Buildings (re-exports from features/building-construction/)
-// ============================================================================
-export {
-    type PopulateBuildingsOptions,
-    populateMapBuildings,
-    mapS4BuildingType,
-} from '../features/building-construction';
-
-// ============================================================================
 // Map Resources
 // ============================================================================
 export { analyzeResourceTypes } from './map-resources';
 
 // ============================================================================
-// Tree System (re-exports from features/trees/)
-// ============================================================================
-export { TreeStage, type TreeState, TreeSystem } from '../features/trees/tree-system';
-
-// ============================================================================
-// Material Request System (re-exports from features/material-requests/)
-// ============================================================================
-export { type MaterialRequestSystemConfig, MaterialRequestSystem } from '../features/material-requests';
-
-// ============================================================================
 // Spatial Search
 // ============================================================================
 export { findNearestEntity, findEmptySpot, ringTiles, type FindEmptySpotConfig } from './spatial-search';
-
-// ============================================================================
-// Settler Tasks (re-exports from features/settler-tasks/)
-// ============================================================================
-export * from '../features/settler-tasks';

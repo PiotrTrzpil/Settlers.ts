@@ -292,8 +292,8 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         carriers: serializeCarriers(game),
         trees: serializeTrees(game),
         requests: serializeRequests(game),
-        terrainGroundType: uint8ArrayToBase64(game.groundType),
-        terrainGroundHeight: uint8ArrayToBase64(game.groundHeight),
+        terrainGroundType: uint8ArrayToBase64(game.terrain.groundType),
+        terrainGroundHeight: uint8ArrayToBase64(game.terrain.groundHeight),
     };
 }
 
@@ -498,11 +498,11 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
     // Restore terrain modifications (raw ground, leveling)
     if (snapshot.terrainGroundType) {
         const restored = base64ToUint8Array(snapshot.terrainGroundType);
-        game.groundType.set(restored);
+        game.terrain.groundType.set(restored);
     }
     if (snapshot.terrainGroundHeight) {
         const restored = base64ToUint8Array(snapshot.terrainGroundHeight);
-        game.groundHeight.set(restored);
+        game.terrain.groundHeight.set(restored);
     }
     if (snapshot.terrainGroundType || snapshot.terrainGroundHeight) {
         game.eventBus.emit('terrain:modified', {});

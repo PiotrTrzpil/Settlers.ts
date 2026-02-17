@@ -41,7 +41,7 @@ export interface GameViewStateData {
     totalPathSteps: number;
 }
 
-class GameViewState {
+export class GameViewState {
     public readonly state: GameViewStateData;
 
     // Throttle entity counting — no need to count every tick
@@ -73,6 +73,7 @@ class GameViewState {
         // Expose on window for e2e tests (skip in Node.js environment)
         if (typeof window !== 'undefined') {
             (window as any).__settlers_view__ = this.state;
+            (window as any).__settlers_view_state__ = this;
         }
     }
 
@@ -172,6 +173,13 @@ class GameViewState {
         this.state.tick = 0;
         this.lastEntityCountUpdate = 0;
     }
-}
 
-export const gameViewState = new GameViewState();
+    /**
+     * Force an immediate entity count update, bypassing the throttle.
+     * Used by e2e tests after state mutations so count assertions resolve
+     * without waiting for the next throttle window (~500ms).
+     */
+    public forceCountUpdate(): void {
+        this.lastEntityCountUpdate = 0;
+    }
+}

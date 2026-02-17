@@ -342,16 +342,15 @@
 <script setup lang="ts">
 import { reactive, computed } from 'vue';
 import { debugStats } from '@/game/debug-stats';
-import { gameViewState } from '@/game/game-view-state';
-import { gameSettings } from '@/game/game-settings';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
 import type { Game } from '@/game/game';
 import { useDebugMapObjects } from './use-debug-map-objects';
 import SettingsCheckbox from './settings/SettingsCheckbox.vue';
 
-defineProps<{
+const props = defineProps<{
     paused: boolean;
     currentRace: number; // Race enum
+    game: Game;
 }>();
 
 defineEmits<{
@@ -360,8 +359,8 @@ defineEmits<{
 }>();
 
 const stats = debugStats.state;
-const view = gameViewState.state;
-const settings = gameSettings.state;
+const view = props.game.viewState.state;
+const settings = props.game.settings.state;
 
 // Use the persisted open state from debug stats
 const open = computed({
@@ -383,7 +382,7 @@ const sections = reactive({
 });
 
 // Map objects functionality (extracted to composable)
-const getGame = (): Game | null => (window as any).__settlers_game__ ?? null;
+const getGame = (): Game | null => props.game;
 const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clearAllMapObjects } =
     useDebugMapObjects(getGame);
 

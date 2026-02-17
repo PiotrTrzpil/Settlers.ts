@@ -19,8 +19,6 @@ import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
 import { LayerVisibility, loadLayerVisibility, saveLayerVisibility } from '@/game/renderer/layer-visibility';
-import { gameViewState } from '@/game/game-view-state';
-import { gameSettings } from '@/game/game-settings';
 import type { InputManager } from '@/game/input';
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import {
@@ -165,6 +163,9 @@ const availableUnits: { type: UnitType; id: string; name: string; icon: string }
     { type: UnitType.Pioneer, id: 'pioneer', name: 'Pioneer', icon: '🚩' },
     { type: UnitType.Thief, id: 'thief', name: 'Thief', icon: '🥷' },
     { type: UnitType.Geologist, id: 'geologist', name: 'Geologist', icon: '🔍' },
+    { type: UnitType.Miller, id: 'miller', name: 'Miller', icon: '🌀' },
+    { type: UnitType.Butcher, id: 'butcher', name: 'Butcher', icon: '🥩' },
+    { type: UnitType.Stonecutter, id: 'stonecutter', name: 'Stonecutter', icon: '🪨' },
 ];
 
 // Runtime check in development: ensure all UnitType values are in availableUnits
@@ -233,8 +234,8 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
             if (!game || !inputManager) return;
 
             if (
-                gameViewState.state.mode === 'place_building' &&
-                gameViewState.state.placeBuildingType === buildingType
+                game.viewState.state.mode === 'place_building' &&
+                game.viewState.state.placeBuildingType === buildingType
             ) {
                 inputManager.switchMode('select');
             } else {
@@ -246,12 +247,13 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
         },
 
         setPlaceResourceMode(resourceType: EMaterialType, amount: number): void {
+            const game = getGame();
             const inputManager = getInputManager();
-            if (!getGame() || !inputManager) return;
+            if (!game || !inputManager) return;
 
             if (
-                gameViewState.state.mode === 'place_resource' &&
-                gameViewState.state.placeResourceType === resourceType
+                game.viewState.state.mode === 'place_resource' &&
+                game.viewState.state.placeResourceType === resourceType
             ) {
                 inputManager.switchMode('select');
             } else {
@@ -264,7 +266,7 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
             const inputManager = getInputManager();
             if (!game || !inputManager) return;
 
-            if (gameViewState.state.mode === 'place_unit' && gameViewState.state.placeUnitType === unitType) {
+            if (game.viewState.state.mode === 'place_unit' && game.viewState.state.placeUnitType === unitType) {
                 inputManager.switchMode('select');
             } else {
                 inputManager.switchMode('place_unit', { unitType });
@@ -495,9 +497,9 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
     // =========================================================================
 
     const showDebug = computed({
-        get: () => gameSettings.state.showDebugGrid,
+        get: () => game.value?.settings.state.showDebugGrid ?? false,
         set: (value: boolean) => {
-            gameSettings.state.showDebugGrid = value;
+            if (game.value) game.value.settings.state.showDebugGrid = value;
         },
     });
 
@@ -527,23 +529,37 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
     const selectionCount = computed(() => game.value?.state.selection.selectedEntityIds.size ?? 0);
     const isPaused = computed(() => (game.value ? !game.value.isRunning : false));
 
-    // Mode state - use debugStats as the single source of truth
-    const currentMode = computed(() => gameViewState.state.mode);
-    const placeBuildingType = computed(() => gameViewState.state.placeBuildingType);
-    const placeResourceType = computed(() => gameViewState.state.placeResourceType);
-    const placeUnitType = computed(() => gameViewState.state.placeUnitType);
+    // Mode state - sourced from the game's view state
+    const currentMode = computed(() => game.value?.viewState.state.mode ?? 'select');
+    const placeBuildingType = computed(() => game.value?.viewState.state.placeBuildingType ?? 0);
+    const placeResourceType = computed(() => game.value?.viewState.state.placeResourceType ?? 0);
+    const placeUnitType = computed(() => game.value?.viewState.state.placeUnitType ?? 0);
 
-    // Entity counts from debugStats
-    const layerCounts = computed<LayerCounts>(() => ({
-        buildings: gameViewState.state.buildingCount,
-        units: gameViewState.state.unitCount,
-        resources: gameViewState.state.resourceCount,
-        environment: gameViewState.state.environmentCount,
-        trees: gameViewState.state.treeCount,
-        stones: gameViewState.state.stoneCount,
-        plants: gameViewState.state.plantCount,
-        other: gameViewState.state.otherCount,
-    }));
+    // Entity counts from game view state
+    const EMPTY_COUNTS: LayerCounts = {
+        buildings: 0,
+        units: 0,
+        resources: 0,
+        environment: 0,
+        trees: 0,
+        stones: 0,
+        plants: 0,
+        other: 0,
+    };
+    const layerCounts = computed<LayerCounts>(() => {
+        const vs = game.value?.viewState.state;
+        if (!vs) return EMPTY_COUNTS;
+        return {
+            buildings: vs.buildingCount,
+            units: vs.unitCount,
+            resources: vs.resourceCount,
+            environment: vs.environmentCount,
+            trees: vs.treeCount,
+            stones: vs.stoneCount,
+            plants: vs.plantCount,
+            other: vs.otherCount,
+        };
+    });
 
     // =========================================================================
     // Lifecycle
@@ -568,11 +584,11 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
 
     // Update resource placement mode when amount changes
     watch(resourceAmount, () => {
-        if (gameViewState.state.mode === 'place_resource' && gameViewState.state.placeResourceType) {
+        if (game.value?.viewState.state.mode === 'place_resource' && game.value?.viewState.state.placeResourceType) {
             const inputManager = getInputManager?.();
             if (inputManager) {
                 inputManager.switchMode('place_resource', {
-                    resourceType: gameViewState.state.placeResourceType,
+                    resourceType: game.value?.viewState.state.placeResourceType,
                     amount: resourceAmount.value,
                 });
             }

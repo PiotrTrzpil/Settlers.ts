@@ -27,11 +27,10 @@ export function validateResourcePlacement(x: number, y: number, ctx: PlacementCo
  * Use validateResourcePlacement for detailed status.
  */
 export function canPlaceResource(
-    groundType: Uint8Array,
-    mapSize: PlacementContext['mapSize'],
+    terrain: import('../../../terrain').TerrainData,
     tileOccupancy: Map<string, number>,
     x: number,
     y: number
 ): boolean {
-    return canPlaceSingleTile(groundType, mapSize, tileOccupancy, x, y);
+    return canPlaceSingleTile(terrain, tileOccupancy, x, y);
 }

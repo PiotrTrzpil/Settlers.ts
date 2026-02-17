@@ -1,6 +1,6 @@
 import { LogHandler } from '@/utilities/log-handler';
 import { ShaderTexture } from './shader-texture';
-import type { CachedSlot } from './sprite-atlas-cache';
+import type { CachedSlot } from './sprite-cache';
 
 /**
  * Padding in pixels around each sprite to prevent texture bleeding

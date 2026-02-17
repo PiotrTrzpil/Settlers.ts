@@ -71,9 +71,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         bs.totalDuration = 10;
 
         const terrainCtx: TerrainContext = {
-            groundType: map.groundType,
-            groundHeight: map.groundHeight,
-            mapSize: map.mapSize,
+            terrain: map.terrain,
             onTerrainModified: () => {},
         };
 
@@ -201,9 +199,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
 
         let terrainNotifications = 0;
         const terrainCtx: TerrainContext = {
-            groundType: map.groundType,
-            groundHeight: map.groundHeight,
-            mapSize: map.mapSize,
+            terrain: map.terrain,
             onTerrainModified: () => {
                 terrainNotifications++;
             },

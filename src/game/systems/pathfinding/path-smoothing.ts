@@ -6,7 +6,7 @@
  */
 
 import { TileCoord, tileKey } from '../../entity';
-import { isPassable } from '../terrain-queries';
+import { isPassable } from '../../terrain';
 import { getHexLine } from './hex-line';
 
 /**

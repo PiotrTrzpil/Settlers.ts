@@ -3,7 +3,6 @@ import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { IRenderer } from './i-renderer';
 import { ViewPoint } from './view-point';
 import type { EntityRenderer } from './entity-renderer';
-import { gameSettings } from '@/game/game-settings';
 import { toastError } from '@/game/toast-notifications';
 
 /** Per-layer error tracking */
@@ -49,6 +48,8 @@ export interface RendererOptions {
      * Use when integrating with an external InputManager.
      */
     externalInput?: boolean;
+    /** WebGL antialias setting. Defaults to true. */
+    antialias?: boolean;
 }
 
 /** Manages the WebGL context and the IRenderers that draw to it */
@@ -105,7 +106,7 @@ export class Renderer {
         this.viewPoint = new ViewPoint(canvas, { externalInput: options?.externalInput });
         // Note: onMove callback removed - the game loop now drives all rendering via drawOnce()
 
-        const antialias = gameSettings.state.antialias;
+        const antialias = options?.antialias ?? true;
         let newGl = canvas.getContext('webgl2', { antialias, preserveDrawingBuffer: true });
         if (!newGl) {
             Renderer.log.error('Unable to initialize WebGL2. Your browser may not support it.');

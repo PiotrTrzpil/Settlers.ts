@@ -1,5 +1,9 @@
 import { IViewPoint } from './i-view-point';
-import { gameSettings } from '@/game/game-settings';
+import type { GameSettings } from '@/game/game-settings';
+
+/** Default zoom/pan speeds (used when no settings are injected) */
+const DEFAULT_ZOOM_SPEED = 0.05;
+const DEFAULT_PAN_SPEED = 40;
 
 /**
  * ViewPoint options for configuration.
@@ -43,14 +47,22 @@ export class ViewPoint implements IViewPoint {
     // Whether keyboard panning is active (triggers interpolation)
     private keyboardPanActive = false;
 
-    /** Zoom speed - reads directly from game settings */
-    public get zoomSpeed(): number {
-        return gameSettings.state.zoomSpeed;
+    /** Game settings reference — nullable, set via setSettings after game loads */
+    private _settings: GameSettings | null = null; // nullable by design: ViewPoint exists before Game
+
+    /** Inject game settings (call when game loads) */
+    public setSettings(settings: GameSettings): void {
+        this._settings = settings;
     }
 
-    /** Pan speed - reads directly from game settings */
+    /** Zoom speed - reads from injected game settings */
+    public get zoomSpeed(): number {
+        return this._settings?.zoomSpeed ?? DEFAULT_ZOOM_SPEED;
+    }
+
+    /** Pan speed - reads from injected game settings */
     public get panSpeed(): number {
-        return gameSettings.state.panSpeed;
+        return this._settings?.panSpeed ?? DEFAULT_PAN_SPEED;
     }
 
     /** callback on mouse move */

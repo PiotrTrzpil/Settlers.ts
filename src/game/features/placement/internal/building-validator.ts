@@ -79,15 +79,18 @@ export function validateBuildingPlacement(
  * Use validateBuildingPlacement for detailed status.
  */
 export function canPlaceBuildingFootprint(
-    groundType: Uint8Array,
-    groundHeight: Uint8Array,
-    mapSize: PlacementContext['mapSize'],
+    terrain: import('../../../terrain').TerrainData,
     tileOccupancy: Map<string, number>,
     x: number,
     y: number,
     buildingType: BuildingType
 ): boolean {
-    const ctx: PlacementContext = { groundType, groundHeight, mapSize, tileOccupancy };
+    const ctx: PlacementContext = {
+        groundType: terrain.groundType,
+        groundHeight: terrain.groundHeight,
+        mapSize: terrain.mapSize,
+        tileOccupancy,
+    };
     return validateBuildingPlacement(x, y, buildingType, ctx).canPlace;
 }
 
@@ -97,27 +100,20 @@ export function canPlaceBuildingFootprint(
  * for the full footprint, which is more lenient since terrain leveling handles slopes.
  */
 export function canPlaceBuilding(
-    groundType: Uint8Array,
-    _groundHeight: Uint8Array,
-    mapSize: PlacementContext['mapSize'],
+    terrain: import('../../../terrain').TerrainData,
     tileOccupancy: Map<string, number>,
     x: number,
     y: number
 ): boolean {
-    const idx = mapSize.toIndex(x, y);
+    const idx = terrain.toIndex(x, y);
 
-    if (!isBuildable(groundType[idx])) {
+    if (!isBuildable(terrain.groundType[idx])) {
         return false;
     }
 
     if (tileOccupancy.has(tileKey(x, y))) {
         return false;
     }
-
-    // Slope is no longer checked here - terrain leveling during construction
-    // handles height differences, so we only check terrain type and occupancy.
-    // The full footprint slope check in validateBuildingPlacement uses
-    // computeSlopeDifficulty which is more sophisticated.
 
     return true;
 }

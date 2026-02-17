@@ -14,20 +14,43 @@ import {
     createStonecuttingHandler,
     createForesterHandler,
 } from './features/settler-tasks/work-handlers';
-import { MaterialRequestSystem } from './features/material-requests';
-import { MapSize } from '@/utilities/map-size';
+import { MaterialRequestFeature } from './features/material-requests';
+import type { TerrainData } from './terrain';
 import type { TickSystem } from './tick-system';
 import { BuildingConstructionSystem, BuildingStateManager } from './features/building-construction';
 import { CarrierManager } from './features/carriers';
-import { InventoryVisualizer, BuildingInventoryManager } from './features/inventory';
+import {
+    InventoryVisualizer,
+    BuildingInventoryManager,
+    hasInventory,
+    isProductionBuilding,
+} from './features/inventory';
 import { LogisticsDispatcher, RequestManager } from './features/logistics';
 import { ServiceAreaManager } from './features/service-areas';
 import { FeatureRegistry } from './features/feature-registry';
 import { TreeFeature, TreeSystem, type TreeFeatureExports } from './features/trees';
-import { BuildingLifecycle } from './features/building-lifecycle';
 import { EventBus, EventSubscriptionManager } from './event-bus';
-import { UnitType } from './entity';
+import { BuildingType, UnitType } from './entity';
 import { AnimationService } from './animation/index';
+
+type BuildingCreatedHandler = (
+    entityId: number,
+    buildingType: BuildingType,
+    x: number,
+    y: number,
+    player: number
+) => void;
+type EntityRemovedHandler = (entityId: number) => void;
+
+/**
+ * Building types that act as logistics hubs (taverns/carrier bases).
+ * These buildings get service areas when created.
+ */
+const SERVICE_AREA_BUILDINGS: ReadonlySet<BuildingType> = new Set([
+    BuildingType.ResidenceSmall,
+    BuildingType.ResidenceMedium,
+    BuildingType.ResidenceBig,
+]);
 import type { Command, CommandResult } from './commands';
 
 export class GameServices {
@@ -64,20 +87,15 @@ export class GameServices {
     /** Logistics dispatcher — connects resource requests to carriers */
     public readonly logisticsDispatcher!: LogisticsDispatcher;
 
-    /** Material request system — creates transport requests for buildings needing materials */
-    public readonly materialRequestSystem: MaterialRequestSystem;
-
     /** Inventory visualizer — syncs building outputs to visual stacked resources */
     public readonly inventoryVisualizer: InventoryVisualizer;
 
     /** Tree lifecycle system — growth and cutting states */
     public readonly treeSystem: TreeSystem;
 
-    // ===== Coordinators =====
-    /** Building lifecycle coordinator — owns building creation/removal dispatch */
-    public readonly buildingLifecycle: BuildingLifecycle;
-
     // ===== Internal =====
+    private readonly extraCreatedHandlers: BuildingCreatedHandler[] = [];
+    private readonly extraRemovedHandlers: EntityRemovedHandler[] = [];
     private readonly featureRegistry: FeatureRegistry;
     private readonly subscriptions = new EventSubscriptionManager();
     private readonly eventBus: EventBus;
@@ -142,7 +160,15 @@ export class GameServices {
             eventBus,
             animationService: this.animationService,
         });
-        this.featureRegistry.load(TreeFeature);
+
+        // Bridge manually-created managers so registry features can access them
+        this.featureRegistry.registerExports('building-construction', {
+            buildingStateManager: this.buildingStateManager,
+        });
+        this.featureRegistry.registerExports('inventory', { inventoryManager: this.inventoryManager });
+        this.featureRegistry.registerExports('logistics', { requestManager: this.requestManager });
+
+        this.featureRegistry.loadAll([TreeFeature, MaterialRequestFeature]);
         this.treeSystem = this.featureRegistry.getFeatureExports<TreeFeatureExports>('trees').treeSystem;
         this.treeSystem.setCommandExecutor(executeCommand);
         for (const system of this.featureRegistry.getSystems()) {
@@ -180,28 +206,16 @@ export class GameServices {
         this.settlerTaskSystem.registerWorkHandler(SearchType.STONE, createStonecuttingHandler(gameState));
         this.settlerTaskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, createForesterHandler(this.treeSystem));
 
-        // 10. Material request system
-        this.materialRequestSystem = new MaterialRequestSystem({
-            gameState,
-            buildingStateManager: this.buildingStateManager,
-            inventoryManager: this.inventoryManager,
-            requestManager: this.requestManager,
-        });
-        this.addSystem(this.materialRequestSystem);
-
-        // 11. Inventory visualizer
+        // 10. Inventory visualizer
         this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager, executeCommand);
 
-        // 12. Building lifecycle coordinator
-        this.buildingLifecycle = new BuildingLifecycle({
-            gameState,
-            eventBus,
-            serviceAreaManager: this.serviceAreaManager,
-            inventoryManager: this.inventoryManager,
-            buildingStateManager: this.buildingStateManager,
-            carrierManager: this.carrierManager,
-            logisticsDispatcher: this.logisticsDispatcher,
-            inventoryVisualizer: this.inventoryVisualizer,
+        // 12. Building lifecycle — subscribe to creation/removal events
+        this.subscriptions.subscribe(eventBus, 'building:created', ({ entityId, buildingType, x, y }) => {
+            const entity = gameState.getEntityOrThrow(entityId, 'building lifecycle: created');
+            this.handleBuildingCreated(entityId, buildingType, x, y, entity.player);
+        });
+        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
+            this.handleEntityRemoved(entityId);
         });
 
         // 13. Bridge inventory changes to EventBus for consumers (debug panel, UI)
@@ -228,12 +242,10 @@ export class GameServices {
     }
 
     /** Provide terrain data to movement and construction systems */
-    public setTerrainData(groundType: Uint8Array, groundHeight: Uint8Array, mapSize: MapSize): void {
-        this.movement.setTerrainData(groundType, groundHeight, mapSize.width, mapSize.height);
+    public setTerrainData(terrain: TerrainData): void {
+        this.movement.setTerrainData(terrain.groundType, terrain.groundHeight, terrain.width, terrain.height);
         this.constructionSystem.setTerrainContext({
-            groundType,
-            groundHeight,
-            mapSize,
+            terrain,
             onTerrainModified: () => this.eventBus.emit('terrain:modified', {}),
         });
     }
@@ -241,6 +253,16 @@ export class GameServices {
     /** Ordered tick systems for the frame loop */
     public getTickSystems(): readonly TickSystem[] {
         return this.tickSystems;
+    }
+
+    /** Register an additional building creation handler. */
+    onBuildingCreated(handler: BuildingCreatedHandler): void {
+        this.extraCreatedHandlers.push(handler);
+    }
+
+    /** Register an additional entity removal handler. */
+    onEntityRemoved(handler: EntityRemovedHandler): void {
+        this.extraRemovedHandlers.push(handler);
     }
 
     /** Clean up all event subscriptions and system state */
@@ -251,11 +273,67 @@ export class GameServices {
             }
         }
         this.featureRegistry.destroy();
-        this.buildingLifecycle.destroy();
         this.subscriptions.unsubscribeAll();
+        this.extraCreatedHandlers.length = 0;
+        this.extraRemovedHandlers.length = 0;
     }
 
     private addSystem(system: TickSystem): void {
         this.tickSystems.push(system);
+    }
+
+    // ── Building lifecycle handling ─────────────────────────────────────
+
+    private handleBuildingCreated(
+        entityId: number,
+        buildingType: BuildingType,
+        x: number,
+        y: number,
+        player: number
+    ): void {
+        // Create service area for logistics hubs (taverns/warehouses)
+        if (SERVICE_AREA_BUILDINGS.has(buildingType)) {
+            this.serviceAreaManager.createServiceArea(entityId, player, x, y, buildingType);
+        }
+
+        // Create inventory for buildings with input/output slots
+        if (hasInventory(buildingType) || isProductionBuilding(buildingType)) {
+            this.inventoryManager.createInventory(entityId, buildingType);
+        }
+
+        // Create building construction state
+        this.buildingStateManager.createBuildingState(entityId, buildingType, x, y);
+
+        // Run any extra registered handlers
+        for (const handler of this.extraCreatedHandlers) {
+            handler(entityId, buildingType, x, y, player);
+        }
+    }
+
+    private handleEntityRemoved(entityId: number): void {
+        // Clean up carrier state if this was a carrier
+        if (this.carrierManager.hasCarrier(entityId)) {
+            this.carrierManager.removeCarrier(entityId);
+        }
+
+        // Clean up building construction state
+        this.buildingStateManager.removeBuildingState(entityId);
+
+        // Clean up service area if this building had one
+        this.serviceAreaManager.removeServiceArea(entityId);
+
+        // Clean up logistics state first (releasing reservations needs the inventory)
+        this.logisticsDispatcher.handleBuildingDestroyed(entityId);
+
+        // Clean up inventory after logistics is done with it
+        this.inventoryManager.removeInventory(entityId);
+
+        // Clean up visual inventory stacks
+        this.inventoryVisualizer.removeBuilding(entityId);
+
+        // Run any extra registered handlers
+        for (const handler of this.extraRemovedHandlers) {
+            handler(entityId);
+        }
     }
 }

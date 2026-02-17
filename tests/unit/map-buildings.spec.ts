@@ -13,11 +13,7 @@ function createPopulateOptions(ctx: TestContext, player?: number) {
         player,
         buildingStateManager: ctx.buildingStateManager,
         eventBus: ctx.eventBus,
-        terrain: {
-            groundType: ctx.map.groundType,
-            groundHeight: ctx.map.groundHeight,
-            mapSize: ctx.map.mapSize,
-        },
+        terrain: ctx.map.terrain,
     };
 }
 

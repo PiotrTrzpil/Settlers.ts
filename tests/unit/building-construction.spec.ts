@@ -294,9 +294,9 @@ describe('Building Construction Phases', () => {
 
     describe('BuildingConstructionSystem with terrain', () => {
         it('should transition through all phases and modify terrain', () => {
-            const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
-            groundType.fill(TERRAIN.GRASS);
-            groundHeight.fill(100);
+            const map = createTestMap(64, 64);
+            map.groundType.fill(TERRAIN.GRASS);
+            map.groundHeight.fill(100);
 
             const eventBus = new EventBus();
             const gameState = new GameState(eventBus);
@@ -313,9 +313,7 @@ describe('Building Construction Phases', () => {
 
             let terrainNotified = false;
             const ctx: TerrainContext = {
-                groundType,
-                groundHeight,
-                mapSize,
+                terrain: map.terrain,
                 onTerrainModified: () => {
                     terrainNotified = true;
                 },
@@ -331,7 +329,7 @@ describe('Building Construction Phases', () => {
             // All footprint tiles should have construction ground type
             const footprint = getBuildingFootprint(10, 10, BuildingType.WoodcutterHut);
             for (const tile of footprint) {
-                expect(groundType[mapSize.toIndex(tile.x, tile.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
+                expect(map.groundType[map.mapSize.toIndex(tile.x, tile.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
             }
 
             // Phase 2: ConstructionRising (20-55% = 2-5.5s)
@@ -380,7 +378,7 @@ describe('Barracks unit spawning on construction complete', () => {
     }
 
     it('should spawn swordsmen when barrack construction completes', () => {
-        const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
+        const map = createTestMap(64, 64);
         const { gameState, buildingStateManager } = createTestGameStateWithBSM();
         const barrack = gameState.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
         const bs = buildingStateManager.getBuildingState(barrack.id)!;
@@ -389,9 +387,7 @@ describe('Barracks unit spawning on construction complete', () => {
         expect(gameState.entities.filter(e => e.type === EntityType.Unit)).toHaveLength(0);
 
         const ctx: TerrainContext = {
-            groundType,
-            groundHeight,
-            mapSize,
+            terrain: map.terrain,
         };
 
         // Fast-forward to just before completion
@@ -411,15 +407,13 @@ describe('Barracks unit spawning on construction complete', () => {
     });
 
     it('should spawn units adjacent to the building', () => {
-        const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
+        const map = createTestMap(64, 64);
         const { gameState, buildingStateManager } = createTestGameStateWithBSM();
         const barrack = gameState.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
         const bs = buildingStateManager.getBuildingState(barrack.id)!;
 
         const ctx: TerrainContext = {
-            groundType,
-            groundHeight,
-            mapSize,
+            terrain: map.terrain,
         };
 
         // Complete the building
@@ -434,15 +428,13 @@ describe('Barracks unit spawning on construction complete', () => {
     });
 
     it('should spawn dedicated worker for production buildings when placeBuildingsWithWorker is enabled', () => {
-        const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
+        const map = createTestMap(64, 64);
         const { gameState, buildingStateManager } = createTestGameStateWithBSM();
         const lj = gameState.addEntity(EntityType.Building, BuildingType.WoodcutterHut, 10, 10, 0);
         const bs = buildingStateManager.getBuildingState(lj.id)!;
 
         const ctx: TerrainContext = {
-            groundType,
-            groundHeight,
-            mapSize,
+            terrain: map.terrain,
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;
@@ -456,7 +448,7 @@ describe('Barracks unit spawning on construction complete', () => {
     });
 
     it('should handle limited space around the building gracefully', () => {
-        const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
+        const map = createTestMap(64, 64);
         const { gameState, buildingStateManager } = createTestGameStateWithBSM();
         const barrack = gameState.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
         const bs = buildingStateManager.getBuildingState(barrack.id)!;
@@ -465,17 +457,15 @@ describe('Barracks unit spawning on construction complete', () => {
         for (let y = 6; y <= 15; y++) {
             for (let x = 6; x <= 15; x++) {
                 if (x >= 10 && x <= 11 && y >= 10 && y <= 11) continue; // skip footprint
-                groundType[mapSize.toIndex(x, y)] = 0; // water
+                map.groundType[map.mapSize.toIndex(x, y)] = 0; // water
             }
         }
         // Open up exactly 2 passable tiles
-        groundType[mapSize.toIndex(9, 10)] = TERRAIN.GRASS;
-        groundType[mapSize.toIndex(12, 10)] = TERRAIN.GRASS;
+        map.groundType[map.mapSize.toIndex(9, 10)] = TERRAIN.GRASS;
+        map.groundType[map.mapSize.toIndex(12, 10)] = TERRAIN.GRASS;
 
         const ctx: TerrainContext = {
-            groundType,
-            groundHeight,
-            mapSize,
+            terrain: map.terrain,
         };
 
         // Complete the building
@@ -489,7 +479,7 @@ describe('Barracks unit spawning on construction complete', () => {
     });
 
     it('should not spawn units on water tiles', () => {
-        const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
+        const map = createTestMap(64, 64);
         const { gameState, buildingStateManager } = createTestGameStateWithBSM();
         const barrack = gameState.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
         const bs = buildingStateManager.getBuildingState(barrack.id)!;
@@ -499,14 +489,12 @@ describe('Barracks unit spawning on construction complete', () => {
             for (let x = 6; x <= 15; x++) {
                 // Skip the barrack's own footprint tiles (2x2 at 10,10)
                 if (x >= 10 && x <= 11 && y >= 10 && y <= 11) continue;
-                groundType[mapSize.toIndex(x, y)] = 0; // water
+                map.groundType[map.mapSize.toIndex(x, y)] = 0; // water
             }
         }
 
         const ctx: TerrainContext = {
-            groundType,
-            groundHeight,
-            mapSize,
+            terrain: map.terrain,
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;
@@ -518,15 +506,13 @@ describe('Barracks unit spawning on construction complete', () => {
     });
 
     it('should spawn unselectable carriers from SmallHouse', () => {
-        const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
+        const map = createTestMap(64, 64);
         const { gameState, buildingStateManager } = createTestGameStateWithBSM();
         const house = gameState.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 10, 10, 0);
         const bs = buildingStateManager.getBuildingState(house.id)!;
 
         const ctx: TerrainContext = {
-            groundType,
-            groundHeight,
-            mapSize,
+            terrain: map.terrain,
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;
@@ -541,15 +527,13 @@ describe('Barracks unit spawning on construction complete', () => {
     });
 
     it('should spawn unselectable carriers from MediumHouse', () => {
-        const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
+        const map = createTestMap(64, 64);
         const { gameState, buildingStateManager } = createTestGameStateWithBSM();
         const house = gameState.addEntity(EntityType.Building, BuildingType.ResidenceMedium, 10, 10, 0);
         const bs = buildingStateManager.getBuildingState(house.id)!;
 
         const ctx: TerrainContext = {
-            groundType,
-            groundHeight,
-            mapSize,
+            terrain: map.terrain,
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;
@@ -563,15 +547,13 @@ describe('Barracks unit spawning on construction complete', () => {
     });
 
     it('should spawn unselectable carriers from LargeHouse', () => {
-        const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
+        const map = createTestMap(64, 64);
         const { gameState, buildingStateManager } = createTestGameStateWithBSM();
         const house = gameState.addEntity(EntityType.Building, BuildingType.ResidenceBig, 10, 10, 0);
         const bs = buildingStateManager.getBuildingState(house.id)!;
 
         const ctx: TerrainContext = {
-            groundType,
-            groundHeight,
-            mapSize,
+            terrain: map.terrain,
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;
@@ -585,15 +567,13 @@ describe('Barracks unit spawning on construction complete', () => {
     });
 
     it('should spawn selectable swordsmen from Barrack', () => {
-        const { mapSize, groundType, groundHeight } = createTestMap(64, 64);
+        const map = createTestMap(64, 64);
         const { gameState, buildingStateManager } = createTestGameStateWithBSM();
         const barrack = gameState.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
         const bs = buildingStateManager.getBuildingState(barrack.id)!;
 
         const ctx: TerrainContext = {
-            groundType,
-            groundHeight,
-            mapSize,
+            terrain: map.terrain,
         };
 
         bs.elapsedTime = bs.totalDuration - 0.1;

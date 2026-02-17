@@ -27,11 +27,10 @@ export function validateUnitPlacement(x: number, y: number, ctx: PlacementContex
  * Use validateUnitPlacement for detailed status.
  */
 export function canPlaceUnit(
-    groundType: Uint8Array,
-    mapSize: PlacementContext['mapSize'],
+    terrain: import('../../../terrain').TerrainData,
     tileOccupancy: Map<string, number>,
     x: number,
     y: number
 ): boolean {
-    return canPlaceSingleTile(groundType, mapSize, tileOccupancy, x, y);
+    return canPlaceSingleTile(terrain, tileOccupancy, x, y);
 }

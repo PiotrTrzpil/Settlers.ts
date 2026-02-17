@@ -15,7 +15,7 @@
  */
 
 import { LogHandler } from '@/utilities/log-handler';
-import { Race, SpriteMetadataRegistry } from './sprite-metadata';
+import { Race, SpriteMetadataRegistry } from '../sprite-metadata';
 
 const log = new LogHandler('SpriteAtlasCache');
 

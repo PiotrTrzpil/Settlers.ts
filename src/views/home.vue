@@ -12,7 +12,7 @@
                 </label>
 
                 <label class="checkbox-label">
-                    <input type="checkbox" v-model="gameSettings.state.cacheDisabled" />
+                    <input type="checkbox" v-model="homeSettings.state.cacheDisabled" />
                     Disable sprite cache (slower loading)
                 </label>
 
@@ -52,8 +52,12 @@
 import { ref, watch } from 'vue';
 import { FileManager } from '@/utilities/file-manager';
 import { LocalFileProvider } from '@/utilities/local-file-provider';
-import { gameSettings } from '@/game/game-settings';
-import { clearAllCaches } from '@/game/renderer/sprite-atlas-cache';
+import { GameSettingsManager } from '@/game/game-settings';
+import { clearAllCaches } from '@/game/renderer/sprite-cache';
+
+// Local settings instance — loads from localStorage.
+// When Game is later created, it reads the same persisted state.
+const homeSettings = new GameSettingsManager();
 
 const props = defineProps<{
     fileManager: FileManager;

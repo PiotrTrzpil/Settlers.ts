@@ -194,9 +194,10 @@
                 <!-- Right panel container (layers + settings + debug) -->
                 <div class="right-panels">
                     <layer-panel :counts="layerCounts" @update:visibility="updateLayerVisibility" />
-                    <settings-panel />
+                    <settings-panel :game="game" />
                     <logistics-debug-panel :game="game" />
                     <debug-panel
+                        :game="game"
                         :paused="isPaused"
                         :currentRace="currentRace"
                         @togglePause="togglePause()"
@@ -230,7 +231,6 @@ import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
 import { useBuildingIcons } from '@/composables/useBuildingIcons';
 import { Race, RACE_NAMES, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
-import { gameSettings } from '@/game/game-settings';
 import { SoundManager } from '@/game/audio/sound-manager';
 
 import FileBrowser from '@/components/file-browser.vue';
@@ -297,16 +297,16 @@ const { getIconUrl } = useBuildingIcons(fileManagerRef, currentRace);
 
 // Building placement options
 const placeBuildingsCompleted = computed({
-    get: () => gameSettings.state.placeBuildingsCompleted,
+    get: () => game.value?.settings.state.placeBuildingsCompleted ?? false,
     set: (value: boolean) => {
-        gameSettings.state.placeBuildingsCompleted = value;
+        if (game.value) game.value.settings.state.placeBuildingsCompleted = value;
     },
 });
 
 const placeBuildingsWithWorker = computed({
-    get: () => gameSettings.state.placeBuildingsWithWorker,
+    get: () => game.value?.settings.state.placeBuildingsWithWorker ?? false,
     set: (value: boolean) => {
-        gameSettings.state.placeBuildingsWithWorker = value;
+        if (game.value) game.value.settings.state.placeBuildingsWithWorker = value;
     },
 });
 
@@ -325,7 +325,7 @@ const savedCamera = ref<{ x: number; y: number; zoom: number } | null>(null);
 
 // Watch for graphics settings changes that require context recreation
 watch(
-    () => gameSettings.state.antialias,
+    () => game.value?.settings.state.antialias,
     () => {
         // Save camera position before recreation
         const renderer = rendererRef.value;

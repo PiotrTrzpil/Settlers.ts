@@ -96,7 +96,7 @@ export class BuildingConstructionSystem implements TickSystem {
     /** Handle building removal - restore terrain */
     private onBuildingRemoved(buildingState: BuildingState): void {
         if (!this.terrainContext) return;
-        const { groundType, groundHeight, mapSize } = this.terrainContext;
+        const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
         restoreOriginalTerrain(buildingState, groundType, groundHeight, mapSize);
     }
 
@@ -135,7 +135,7 @@ export class BuildingConstructionSystem implements TickSystem {
         if (buildingState.originalTerrain) return;
         if (!this.terrainContext) return;
 
-        const { groundType, groundHeight, mapSize } = this.terrainContext;
+        const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
         buildingState.originalTerrain = captureOriginalTerrain(buildingState, groundType, groundHeight, mapSize);
     }
 
@@ -145,7 +145,7 @@ export class BuildingConstructionSystem implements TickSystem {
         if (!buildingState.originalTerrain) return false;
         if (!this.terrainContext) return false;
 
-        const { groundType, groundHeight, mapSize } = this.terrainContext;
+        const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
         return applyTerrainLeveling(buildingState, groundType, groundHeight, mapSize, buildingState.phaseProgress);
     }
 
@@ -161,7 +161,7 @@ export class BuildingConstructionSystem implements TickSystem {
         if (!this.terrainContext) return false;
 
         buildingState.terrainModified = true;
-        const { groundType, groundHeight, mapSize } = this.terrainContext;
+        const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
         return applyTerrainLeveling(buildingState, groundType, groundHeight, mapSize, 1.0);
     }
 }

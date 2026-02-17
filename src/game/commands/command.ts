@@ -6,15 +6,15 @@ import {
     setConstructionSiteGroundType,
     applyTerrainLeveling,
 } from '../features/building-construction';
-import { BUILDING_SPAWN_ON_COMPLETE, type SpawnContext } from '../features/building-construction/spawn-units';
+import { BUILDING_SPAWN_ON_COMPLETE } from '../features/building-construction/spawn-units';
 import { BUILDING_UNIT_TYPE } from '../unit-types';
 import { BuildingType } from '../buildings/types';
 import { GameState } from '../game-state';
-import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
+import { canPlaceBuildingFootprint } from '../features/placement';
 import { ringTiles } from '../systems/spatial-search';
-import { MapSize } from '@/utilities/map-size';
+import type { TerrainData } from '../terrain';
 import type { EventBus } from '../event-bus';
-import { gameSettings } from '../game-settings';
+import type { GameSettings } from '../game-settings';
 import { debugStats } from '../debug-stats';
 import type { SettlerTaskSystem } from '../features/settler-tasks';
 import type { TreeSystem } from '../features/trees';
@@ -44,10 +44,10 @@ import {
 
 export interface CommandContext {
     state: GameState;
-    groundType: Uint8Array;
-    groundHeight: Uint8Array;
-    mapSize: MapSize;
+    terrain: TerrainData;
     eventBus: EventBus;
+    /** Game settings (reactive state) — used by placement commands for instant-complete mode */
+    settings: GameSettings;
     /** Optional task system for routing movement through tasks */
     settlerTaskSystem?: SettlerTaskSystem;
     /** Building state manager for construction phases */
@@ -57,19 +57,9 @@ export interface CommandContext {
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): CommandResult {
-    const { state, groundType, groundHeight, mapSize } = ctx;
+    const { state, terrain } = ctx;
 
-    if (
-        !canPlaceBuildingFootprint(
-            groundType,
-            groundHeight,
-            mapSize,
-            state.tileOccupancy,
-            cmd.x,
-            cmd.y,
-            cmd.buildingType
-        )
-    ) {
+    if (!canPlaceBuildingFootprint(terrain, state.tileOccupancy, cmd.x, cmd.y, cmd.buildingType)) {
         return commandFailed(`Cannot place building at (${cmd.x}, ${cmd.y}): invalid placement`);
     }
 
@@ -79,10 +69,11 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
     // This makes the ground visually change right when the building is placed,
     // before the gradual height leveling begins during the TerrainLeveling phase.
     const buildingState = ctx.buildingStateManager.getBuildingState(entity.id)!;
+    const { groundType, groundHeight, mapSize } = terrain;
     buildingState.originalTerrain = captureOriginalTerrain(buildingState, groundType, groundHeight, mapSize);
     setConstructionSiteGroundType(buildingState, groundType, mapSize);
 
-    if (gameSettings.state.placeBuildingsCompleted) {
+    if (ctx.settings.placeBuildingsCompleted) {
         // Instant mode: level heights immediately, then mark completed
         applyTerrainLeveling(buildingState, groundType, groundHeight, mapSize, 1.0);
         buildingState.terrainModified = true;
@@ -103,7 +94,7 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
     });
 
     // If placed as completed, emit event (spawning handled by BuildingConstructionSystem listener)
-    if (gameSettings.state.placeBuildingsCompleted) {
+    if (ctx.settings.placeBuildingsCompleted) {
         ctx.eventBus.emit('building:completed', {
             entityId: entity.id,
             buildingState,
@@ -116,15 +107,10 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
 }
 
 function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): CommandResult {
-    const { state, groundType, mapSize } = ctx;
+    const { state, terrain } = ctx;
 
     const isTileValid = (x: number, y: number) =>
-        x >= 0 &&
-        x < mapSize.width &&
-        y >= 0 &&
-        y < mapSize.height &&
-        isPassable(groundType[mapSize.toIndex(x, y)]) &&
-        !state.getEntityAt(x, y);
+        terrain.isInBounds(x, y) && terrain.isPassable(x, y) && !state.getEntityAt(x, y);
 
     let spawnX = cmd.x;
     let spawnY = cmd.y;
@@ -312,14 +298,14 @@ function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): Com
 }
 
 function executePlaceResource(ctx: CommandContext, cmd: PlaceResourceCommand): CommandResult {
-    const { state, mapSize, groundType } = ctx;
+    const { state, terrain } = ctx;
 
-    if (cmd.x < 0 || cmd.x >= mapSize.width || cmd.y < 0 || cmd.y >= mapSize.height) {
+    if (!terrain.isInBounds(cmd.x, cmd.y)) {
         return commandFailed(`Position (${cmd.x}, ${cmd.y}) is out of bounds`);
     }
 
     // Check passability (not sea/rock)
-    if (!isPassable(groundType[mapSize.toIndex(cmd.x, cmd.y)])) {
+    if (!terrain.isPassable(cmd.x, cmd.y)) {
         return commandFailed(`Position (${cmd.x}, ${cmd.y}) is not passable`);
     }
 
@@ -357,7 +343,7 @@ function executeSpawnVisualResource(ctx: CommandContext, cmd: SpawnVisualResourc
 }
 
 function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsCommand): CommandResult {
-    const { state, groundType, mapSize, eventBus } = ctx;
+    const { state, terrain, eventBus } = ctx;
     const entity = state.getEntityOrThrow(cmd.buildingEntityId, 'completed building for unit spawning');
     const buildingState = ctx.buildingStateManager.getBuildingState(cmd.buildingEntityId)!;
     const { tileX: bx, tileY: by } = buildingState;
@@ -366,14 +352,12 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
     // Spawn units from BUILDING_SPAWN_ON_COMPLETE (carriers from residences, soldiers from barracks)
     const spawnDef = BUILDING_SPAWN_ON_COMPLETE[buildingState.buildingType];
     if (spawnDef) {
-        const spawnCtx: SpawnContext = { groundType, mapSize };
         let spawned = 0;
         for (let radius = 1; radius <= 4 && spawned < spawnDef.count; radius++) {
             for (const tile of ringTiles(bx, by, radius)) {
                 if (spawned >= spawnDef.count) break;
-                if (tile.x < 0 || tile.x >= spawnCtx.mapSize.width || tile.y < 0 || tile.y >= spawnCtx.mapSize.height)
-                    continue;
-                if (!isPassable(spawnCtx.groundType[spawnCtx.mapSize.toIndex(tile.x, tile.y)])) continue;
+                if (!terrain.isInBounds(tile.x, tile.y)) continue;
+                if (!terrain.isPassable(tile.x, tile.y)) continue;
                 if (state.getEntityAt(tile.x, tile.y)) continue;
 
                 const spawnedEntity = state.addEntity(
@@ -406,7 +390,7 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
     }
 
     // Spawn dedicated worker if placeBuildingsWithWorker is enabled
-    if (gameSettings.state.placeBuildingsWithWorker) {
+    if (ctx.settings.placeBuildingsWithWorker) {
         const workerType = BUILDING_UNIT_TYPE[buildingState.buildingType as BuildingType];
         if (workerType !== undefined) {
             const workerEntity = state.addEntity(EntityType.Unit, workerType, bx, by, entity.player);

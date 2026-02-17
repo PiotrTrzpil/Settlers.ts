@@ -3,7 +3,11 @@ import { InputAction, MouseButton, type PointerData } from '../input-actions';
 import type { InputConfig } from '../input-config';
 import { CursorType, type ModeRenderState } from '../render-state';
 import type { IViewPoint } from '@/game/renderer/i-view-point';
-import { gameSettings } from '@/game/game-settings';
+import type { GameSettings } from '@/game/game-settings';
+
+/** Default zoom/pan speeds (used before settings are injected) */
+const DEFAULT_ZOOM_SPEED = 0.05;
+const DEFAULT_PAN_SPEED = 40;
 
 /**
  * Camera mode - handles camera panning and zooming.
@@ -17,6 +21,8 @@ export class CameraMode extends BaseInputMode {
 
     private config: InputConfig;
     private viewPoint: IViewPoint | null = null;
+    /** Game settings — nullable by design, set via setSettings when game loads */
+    private _settings: GameSettings | null = null;
 
     // Drag state - we store the context, position is computed at render time
     private isDraggingCamera = false;
@@ -44,6 +50,11 @@ export class CameraMode extends BaseInputMode {
      */
     setViewPoint(viewPoint: IViewPoint): void {
         this.viewPoint = viewPoint;
+    }
+
+    /** Inject game settings (call when game loads) */
+    setSettings(settings: GameSettings): void {
+        this._settings = settings;
     }
 
     /**
@@ -142,7 +153,7 @@ export class CameraMode extends BaseInputMode {
         if (!this.viewPoint || data.wheelDelta === undefined) return UNHANDLED;
 
         const delta = this.config.invertZoom ? -data.wheelDelta : data.wheelDelta;
-        const zoomSpeed = gameSettings.state.zoomSpeed;
+        const zoomSpeed = this._settings?.zoomSpeed ?? DEFAULT_ZOOM_SPEED;
         const zoomFactor = delta > 0 ? 1 + zoomSpeed : 1 - zoomSpeed;
 
         // Calculate new zoom
@@ -163,26 +174,34 @@ export class CameraMode extends BaseInputMode {
 
         // MOUSE DRAG: Compute camera position from current mouse position (frame-synchronized)
         if (this.isDraggingCamera) {
-            const dpx = this.currentScreenX - this.dragStartScreenX;
-            const dpy = this.currentScreenY - this.dragStartScreenY;
-
-            // Scale factor converts pixel movement to viewPoint units
-            const height = this.viewPoint.canvasHeight;
-            const scale = (20 * this.viewPoint.zoomValue) / height;
-            const invertFactor = this.config.invertPan ? -1 : 1;
-
-            // For isometric projection: moving vertically in screen space
-            // moves both viewPointX and viewPointY
-            const deltaX = -scale * (dpx + dpy) * invertFactor;
-            const deltaY = -scale * 2 * dpy * invertFactor;
-
-            // Set position directly - computed fresh each frame from mouse position
-            this.viewPoint.setRawPosition(this.dragStartCameraX + deltaX, this.dragStartCameraY + deltaY);
+            this.updateDragCamera();
             return; // Don't process keyboard while dragging
         }
 
         // KEYBOARD PAN: Velocity-based, inherently smooth
-        const speed = gameSettings.state.panSpeed * this.viewPoint.zoomValue * deltaTime;
+        this.updateKeyboardPan(deltaTime, context);
+    }
+
+    private updateDragCamera(): void {
+        const dpx = this.currentScreenX - this.dragStartScreenX;
+        const dpy = this.currentScreenY - this.dragStartScreenY;
+
+        // Scale factor converts pixel movement to viewPoint units
+        const height = this.viewPoint!.canvasHeight;
+        const scale = (20 * this.viewPoint!.zoomValue) / height;
+        const invertFactor = this.config.invertPan ? -1 : 1;
+
+        // For isometric projection: moving vertically in screen space
+        // moves both viewPointX and viewPointY
+        const deltaX = -scale * (dpx + dpy) * invertFactor;
+        const deltaY = -scale * 2 * dpy * invertFactor;
+
+        // Set position directly - computed fresh each frame from mouse position
+        this.viewPoint!.setRawPosition(this.dragStartCameraX + deltaX, this.dragStartCameraY + deltaY);
+    }
+
+    private updateKeyboardPan(deltaTime: number, context: InputContext): void {
+        const speed = (this._settings?.panSpeed ?? DEFAULT_PAN_SPEED) * this.viewPoint!.zoomValue * deltaTime;
 
         let dx = 0;
         let dy = 0;
@@ -204,7 +223,7 @@ export class CameraMode extends BaseInputMode {
 
         if (dx !== 0 || dy !== 0) {
             const factor = this.config.invertPan ? -1 : 1;
-            this.viewPoint.moveTarget(dx * factor, dy * factor);
+            this.viewPoint!.moveTarget(dx * factor, dy * factor);
         }
     }
 

@@ -109,7 +109,7 @@ function saveSettings(settings: GameSettings): void {
  * - Automatically saves settings when any value changes
  * - Exposes reactive state for Vue components
  */
-class GameSettingsManager {
+export class GameSettingsManager {
     public readonly state: GameSettings;
 
     private saveTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -157,6 +157,3 @@ class GameSettingsManager {
         return { ...DEFAULT_SETTINGS };
     }
 }
-
-// Singleton instance
-export const gameSettings = new GameSettingsManager();

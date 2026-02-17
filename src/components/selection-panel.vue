@@ -170,7 +170,6 @@ import { BuildingConstructionPhase } from '@/game/features/building-construction
 import { getFatigueLevel } from '@/game/features/carriers/carrier-state';
 import { RequestStatus } from '@/game/features/logistics/resource-request';
 import { debugStats } from '@/game/debug-stats';
-import { gameViewState } from '@/game/game-view-state';
 import {
     CARRIER_STATUS_NAMES,
     CARRIER_STATUS_CLASSES,
@@ -186,15 +185,15 @@ const props = defineProps<{
 // Use gameViewState for reactivity (updated every tick from game loop)
 // Touch tick counter to force re-evaluation when entity properties change
 const selectedEntity = computed<Entity | undefined>(() => {
-    void gameViewState.state.tick;
-    const entityId = gameViewState.state.selectedEntityId;
+    void props.game!.viewState.state.tick;
+    const entityId = props.game!.viewState.state.selectedEntityId;
     if (entityId === null || !props.game) return undefined;
     const entity = props.game.state.getEntity(entityId);
     // Return a shallow copy so Vue detects changes to entity properties
     return entity ? { ...entity } : undefined;
 });
 
-const selectionCount = computed(() => gameViewState.state.selectedCount);
+const selectionCount = computed(() => props.game!.viewState.state.selectedCount);
 
 // Player colors for display
 const PLAYER_COLORS = [
@@ -321,7 +320,7 @@ interface CarrierDebugInfo {
 
 const carrierDebug = computed<CarrierDebugInfo | null>(() => {
     // Touch frameCount to re-evaluate every frame (carrier state changes frequently)
-    void gameViewState.state.tick;
+    void props.game!.viewState.state.tick;
     const entity = selectedEntity.value;
     if (!entity || entity.type !== EntityType.Unit) return null;
     if (!props.game) return null;
@@ -384,7 +383,7 @@ const PHASE_NAMES: Record<BuildingConstructionPhase, string> = {
 
 const buildingDebug = computed<BuildingDebugInfo | null>(() => {
     // Touch frameCount to re-evaluate every frame (building state changes)
-    void gameViewState.state.tick;
+    void props.game!.viewState.state.tick;
     const entity = selectedEntity.value;
     if (!entity || entity.type !== EntityType.Building) return null;
     if (!props.game) return null;

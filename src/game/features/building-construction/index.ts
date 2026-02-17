@@ -33,7 +33,7 @@ export {
 export { BuildingConstructionSystem } from './construction-system';
 
 // Unit spawning constants (logic now routed through spawn_building_units command)
-export { BUILDING_SPAWN_ON_COMPLETE, type SpawnContext } from './spawn-units';
+export { BUILDING_SPAWN_ON_COMPLETE } from './spawn-units';
 
 // Queries (for renderers)
 export { getBuildingVisualState } from './visual-state';

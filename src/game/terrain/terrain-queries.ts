@@ -1,8 +1,8 @@
 /**
  * Pure terrain type queries — passability, buildability, rock detection.
  *
- * These are Layer 1 (systems) so that pathfinding, movement, and other systems
- * can query terrain without importing from the features layer.
+ * These are Layer 0 (pure data) so that any module can query terrain
+ * without importing from the features or systems layers.
  *
  * Based on LandscapeType enum values from the map file.
  */

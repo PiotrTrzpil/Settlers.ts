@@ -10,7 +10,8 @@
 
 import { reactive, watch } from 'vue';
 import type { Game } from './game';
-import { gameSettings } from './game-settings';
+import type { GameSettingsManager } from './game-settings';
+import { spiralSearch } from './utils/spiral-search';
 
 const WINDOW_SIZE = 60;
 const SETTINGS_STORAGE_KEY = 'settlers_debug_settings';
@@ -363,6 +364,7 @@ class DebugStats {
         // Expose on window for Playwright tests (skip in Node.js environment)
         if (typeof window !== 'undefined') {
             (window as any).__settlers_debug__ = this.state;
+            (window as any).__settlers_spiral_search__ = spiralSearch;
         }
 
         // Set up watchers to auto-save settings when they change
@@ -498,12 +500,12 @@ class DebugStats {
 
     /**
      * Update debug stats from a running game (audio state, e2e window refs).
-     * Game view state (entities, selection, mode) is handled by gameViewState.
+     * Game view state (entities, selection, mode) is handled by GameViewState.
      */
-    public updateFromGame(game: Game): void {
+    public updateFromGame(game: Game, settings: GameSettingsManager): void {
         // Expose references for e2e tests (Vue internals are stripped in prod builds)
         (window as any).__settlers_game__ = game;
-        (window as any).__settlers_game_settings__ = gameSettings;
+        (window as any).__settlers_game_settings__ = settings;
 
         this.updateAudioState(game);
     }

@@ -111,12 +111,15 @@
 
 <script setup lang="ts">
 import { reactive, computed, onMounted } from 'vue';
-import { gameSettings } from '@/game/game-settings';
 import type { Game } from '@/game/game';
 import SettingsSlider from './settings/SettingsSlider.vue';
 import SettingsCheckbox from './settings/SettingsCheckbox.vue';
 
-const settings = gameSettings.state;
+const props = defineProps<{
+    game: Game;
+}>();
+
+const settings = props.game.settings.state;
 
 const open = computed({
     get: () => settings.settingsPanelOpen,
@@ -133,36 +136,27 @@ const sections = reactive({
     graphics: true,
 });
 
-// Helper to get game instance
-const getGame = (): Game | null => (window as any).__settlers_game__ ?? null;
-
 // Apply audio settings to game systems
 function onMusicToggle(enabled: boolean) {
-    getGame()?.soundManager.toggleMusic(enabled);
+    props.game.soundManager.toggleMusic(enabled);
 }
 
 function onMusicVolumeChange(vol: number) {
-    getGame()?.soundManager.setMusicVolume(vol);
+    props.game.soundManager.setMusicVolume(vol);
 }
 
 function resetSettings() {
-    gameSettings.resetToDefaults();
+    props.game.settings.resetToDefaults();
     // Re-apply audio settings after reset
-    const game = getGame();
-    if (game) {
-        game.soundManager.toggleMusic(settings.musicEnabled);
-        game.soundManager.setMusicVolume(settings.musicVolume);
-    }
+    props.game.soundManager.toggleMusic(settings.musicEnabled);
+    props.game.soundManager.setMusicVolume(settings.musicVolume);
 }
 
 // Apply initial audio settings when component mounts (in case game is already loaded)
 // Note: Camera settings are applied through use-renderer.ts watchers
 onMounted(() => {
-    const game = getGame();
-    if (game) {
-        game.soundManager.toggleMusic(settings.musicEnabled);
-        game.soundManager.setMusicVolume(settings.musicVolume);
-    }
+    props.game.soundManager.toggleMusic(settings.musicEnabled);
+    props.game.soundManager.setMusicVolume(settings.musicVolume);
 });
 </script>
 

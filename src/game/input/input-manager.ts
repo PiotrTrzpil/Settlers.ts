@@ -17,7 +17,7 @@ import {
     clearKeyboardState,
 } from './input-state';
 import { CameraMode } from './modes/camera-mode';
-import { gameSettings } from '../game-settings';
+import type { GameSettings } from '../game-settings';
 
 /**
  * Tile resolver function type.
@@ -68,6 +68,8 @@ export class InputManager {
     private onModeChange: ModeChangeCallback | null = null;
     private cameraMode: CameraMode;
     private isDestroyed = false;
+    /** Game settings — nullable by design, set via setSettings when game loads */
+    private _settings: GameSettings | null = null;
 
     // Bound event handlers for cleanup
     private boundHandlers: {
@@ -110,6 +112,12 @@ export class InputManager {
         if (options.initialMode) {
             this.currentModeName = options.initialMode;
         }
+    }
+
+    /** Inject game settings (call when game loads). Propagates to CameraMode. */
+    setSettings(settings: GameSettings): void {
+        this._settings = settings;
+        this.cameraMode.setSettings(settings);
     }
 
     /**
@@ -507,8 +515,8 @@ export class InputManager {
             const binding = this.config.bindings.find(b => b.action === action);
             if (e.repeat && !binding?.repeatable) return;
 
-            if (action === InputAction.TogglePause) {
-                gameSettings.state.paused = !gameSettings.state.paused;
+            if (action === InputAction.TogglePause && this._settings) {
+                this._settings.paused = !this._settings.paused;
                 e.preventDefault();
                 return;
             }

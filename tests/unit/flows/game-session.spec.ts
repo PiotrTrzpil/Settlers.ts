@@ -10,7 +10,6 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { gameSettings } from '@/game/game-settings';
 import { createTestMap, TERRAIN, setTerrainAt, type TestMap } from '../helpers/test-map';
 import {
     createTestContext,
@@ -49,8 +48,8 @@ describe('Game Session: multi-system integration sweep', () => {
         map.groundHeight.fill(100);
         ctx.state.movement.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
         // Enable instant completion with workers for this test suite
-        gameSettings.state.placeBuildingsCompleted = true;
-        gameSettings.state.placeBuildingsWithWorker = true;
+        ctx.settings.placeBuildingsCompleted = true;
+        ctx.settings.placeBuildingsWithWorker = true;
     });
 
     it('player builds an economy: lumberjack → sawmill → supply chain validation', () => {
@@ -168,14 +167,7 @@ describe('Game Session: multi-system integration sweep', () => {
             if (buildable) {
                 const fresh = createTestMap();
                 setTerrainAt(fresh, 20, 20, type);
-                const buildResult = canPlaceBuilding(
-                    fresh.groundType,
-                    fresh.groundHeight,
-                    fresh.mapSize,
-                    fresh.occupancy,
-                    20,
-                    20
-                );
+                const buildResult = canPlaceBuilding(fresh.terrain, fresh.occupancy, 20, 20);
                 expect(buildResult).toBe(true);
             }
 

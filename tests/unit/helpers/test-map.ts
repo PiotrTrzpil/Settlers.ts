@@ -6,6 +6,7 @@
  */
 
 import { MapSize } from '@/utilities/map-size';
+import { TerrainData } from '@/game/terrain';
 
 // ─── Terrain type constants ─────────────────────────────────────────
 // Replaces magic numbers scattered across test files.
@@ -37,6 +38,7 @@ export const NON_BUILDABLE_PASSABLE = [TERRAIN.BEACH, TERRAIN.SWAMP, TERRAIN.SNO
 // ─── Test map factory ───────────────────────────────────────────────
 
 export interface TestMap {
+    terrain: TerrainData;
     mapSize: MapSize;
     groundType: Uint8Array;
     groundHeight: Uint8Array;
@@ -53,13 +55,14 @@ export function createTestMap(
     options: {
         terrain?: number;
         flatHeight?: number;
-    } = {},
+    } = {}
 ): TestMap {
     const mapSize = new MapSize(width, height);
     const groundType = new Uint8Array(width * height).fill(options.terrain ?? TERRAIN.GRASS);
     const groundHeight = new Uint8Array(width * height).fill(options.flatHeight ?? 0);
     const occupancy = new Map<string, number>();
-    return { mapSize, groundType, groundHeight, occupancy };
+    const terrain = new TerrainData(groundType, groundHeight, mapSize);
+    return { terrain, mapSize, groundType, groundHeight, occupancy };
 }
 
 // ─── Terrain manipulation helpers ───────────────────────────────────
@@ -93,17 +96,17 @@ export function blockColumnWithGap(map: TestMap, x: number, gapY: number, type: 
 /** Create a height slope across a region. */
 export function createSlope(
     map: TestMap,
-    startX: number, startY: number,
-    endX: number, endY: number,
-    startHeight: number, endHeight: number,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    startHeight: number,
+    endHeight: number
 ): void {
     for (let y = startY; y <= endY; y++) {
         for (let x = startX; x <= endX; x++) {
-            const progress = (endX > startX)
-                ? (x - startX) / (endX - startX)
-                : (endY > startY)
-                    ? (y - startY) / (endY - startY)
-                    : 0;
+            const progress =
+                endX > startX ? (x - startX) / (endX - startX) : endY > startY ? (y - startY) / (endY - startY) : 0;
             const h = Math.round(startHeight + (endHeight - startHeight) * progress);
             map.groundHeight[map.mapSize.toIndex(x, y)] = Math.min(255, Math.max(0, h));
         }

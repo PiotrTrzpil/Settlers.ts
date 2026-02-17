@@ -6,6 +6,8 @@ import { MapSize } from '@/utilities/map-size';
 import { EventBus } from '@/game/event-bus';
 import { BuildingStateManager } from '@/game/features/building-construction';
 import { MovementSystem } from '@/game/systems/movement/index';
+import { TerrainData } from '@/game/terrain';
+import { GameSettingsManager } from '@/game/game-settings';
 
 /**
  * Comprehensive tests for the unit placement, selection, and movement systems.
@@ -43,7 +45,10 @@ describe('Unit Placement, Selection & Movement', () => {
         // Set terrain data for the movement system (required for pathfinding)
         movement.setTerrainData(groundType, groundHeight, mapSize.width, mapSize.height);
 
-        ctx = { state, groundType, groundHeight, mapSize, eventBus, buildingStateManager };
+        const terrain = new TerrainData(groundType, groundHeight, mapSize);
+        const settingsManager = new GameSettingsManager();
+        settingsManager.resetToDefaults();
+        ctx = { state, terrain, eventBus, settings: settingsManager.state, buildingStateManager };
     });
 
     // ── Unit Placement (spawn_unit) ────────────────────────────────────
@@ -127,7 +132,7 @@ describe('Unit Placement, Selection & Movement', () => {
             // Make a small island of water
             for (let y = 0; y < 3; y++) {
                 for (let x = 0; x < 3; x++) {
-                    ctx.groundType[ctx.mapSize.toIndex(x, y)] = 0; // water
+                    ctx.terrain.groundType[ctx.terrain.toIndex(x, y)] = 0; // water
                 }
             }
 

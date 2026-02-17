@@ -37,7 +37,7 @@ export function useDebugMapObjects(getGame: () => Game | null) {
 
         // For now, only spawn test objects since category-based spawning from entity data
         // would require filtering. Trees are loaded automatically on game start.
-        spawnTestObjects(game.state, game.groundType, game.mapSize, category, 50);
+        spawnTestObjects(game.state, game.terrain, category, 50);
         updateMapObjectCounts();
     }
 
@@ -47,10 +47,10 @@ export function useDebugMapObjects(getGame: () => Game | null) {
 
         const entityObjects = game.mapLoader.entityData?.objects;
         if (entityObjects && entityObjects.length > 0) {
-            populateMapObjectsFromEntityData(game.state, entityObjects, game.groundType, game.mapSize);
+            populateMapObjectsFromEntityData(game.state, entityObjects, game.terrain);
         } else {
             for (const cat of ['trees', 'stones', 'resources', 'plants'] as ObjectCategory[]) {
-                spawnTestObjects(game.state, game.groundType, game.mapSize, cat, 30);
+                spawnTestObjects(game.state, game.terrain, cat, 30);
             }
         }
         updateMapObjectCounts();

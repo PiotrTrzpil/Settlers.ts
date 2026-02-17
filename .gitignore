@@ -33,3 +33,6 @@ playwright-report/
 
 # Playwright MCP browser logs
 .playwright-mcp/
+
+# Backup files
+*.bak

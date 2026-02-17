@@ -13,7 +13,7 @@
  */
 
 // Core A* algorithm
-export { findPathAStar, type TerrainData } from './astar';
+export { findPathAStar, type PathfindingTerrain } from './astar';
 
 // Data structures
 export { BucketPriorityQueue } from './bucket-priority-queue';
@@ -25,7 +25,7 @@ export { getHexLine, cubeRound, isHexLinePassable, groupDirectionRuns } from './
 export { smoothPath, type PathSmoothingParams } from './path-smoothing';
 
 // Backward-compatible alias
-import { findPathAStar, type TerrainData } from './astar';
+import { findPathAStar, type PathfindingTerrain } from './astar';
 import { TileCoord } from '../../entity';
 
 /**
@@ -58,7 +58,7 @@ export function findPath(
     tileOccupancy: Map<string, number>,
     ignoreOccupancy: boolean = false
 ): TileCoord[] | null {
-    const terrain: TerrainData = {
+    const terrain: PathfindingTerrain = {
         groundType,
         groundHeight,
         mapWidth,

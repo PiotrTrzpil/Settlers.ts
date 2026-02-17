@@ -35,7 +35,7 @@ import {
     setIndexedDBCache,
     isCacheDisabled,
     type CachedAtlasData,
-} from './sprite-atlas-cache';
+} from './sprite-cache';
 
 /** Simple timer for measuring phases */
 function createTimer() {

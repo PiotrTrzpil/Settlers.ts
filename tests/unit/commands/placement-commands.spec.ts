@@ -14,7 +14,6 @@ import { BuildingType, getBuildingFootprint } from '@/game/buildings';
 import { UnitType } from '@/game/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingConstructionPhase, CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
-import { gameSettings } from '@/game/game-settings';
 import {
     createTestContext,
     placeBuilding,
@@ -193,6 +192,11 @@ describe('Resource Placement Commands', () => {
         expect(resource.subType).toBe(EMaterialType.LOG);
         expect(resource.x).toBe(tile!.x);
         expect(resource.y).toBe(tile!.y);
+
+        // Verify amount stored in resource state
+        const resourceState = ctx.state.resources.states.get(resource.id);
+        expect(resourceState).toBeDefined();
+        expect(resourceState!.quantity).toBe(amount);
     });
 
     it('place_resource with different material types', () => {
@@ -273,7 +277,7 @@ describe('Building Placement Terrain Modification', () => {
     beforeEach(() => {
         ctx = createTestContext();
         // Reset completed mode
-        gameSettings.state.placeBuildingsCompleted = false;
+        ctx.settings.placeBuildingsCompleted = false;
     });
 
     it('should change ground to raw immediately on placement (normal mode)', () => {
@@ -309,7 +313,7 @@ describe('Building Placement Terrain Modification', () => {
     });
 
     it('should change ground and level heights instantly in completed mode', () => {
-        gameSettings.state.placeBuildingsCompleted = true;
+        ctx.settings.placeBuildingsCompleted = true;
 
         const tile = findBuildableTile(ctx.map);
         expect(tile).not.toBeNull();

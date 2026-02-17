@@ -6,7 +6,7 @@
  */
 
 import { TileCoord, tileKey } from '../../entity';
-import { isPassable } from '../terrain-queries';
+import { isPassable } from '../../terrain';
 import { GRID_DELTAS, NUMBER_OF_DIRECTIONS } from '../hex-directions';
 import { MovementController } from './movement-controller';
 import type { SeededRng } from '../../rng';

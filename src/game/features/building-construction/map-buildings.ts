@@ -13,7 +13,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
 import { S4BuildingType } from '@/resources/map/s4-types';
 import type { EventBus } from '../../event-bus';
-import type { MapSize } from '@/utilities/map-size';
+import type { TerrainData } from '../../terrain';
 
 const log = new LogHandler('MapBuildings');
 
@@ -67,15 +67,6 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
 };
 
 /**
- * Terrain context for spawn tile validation and terrain modification.
- */
-interface TerrainContext {
-    groundType: Uint8Array;
-    groundHeight: Uint8Array;
-    mapSize: MapSize;
-}
-
-/**
  * Options for populating map buildings.
  */
 export interface PopulateBuildingsOptions {
@@ -85,8 +76,8 @@ export interface PopulateBuildingsOptions {
     buildingStateManager: BuildingStateManager;
     /** Event bus for emitting unit:spawned events (required for carrier registration) */
     eventBus: EventBus;
-    /** Terrain context for spawn validation (required for unit spawning) */
-    terrain: TerrainContext;
+    /** Terrain data for spawn validation and terrain modification (required) */
+    terrain: TerrainData;
 }
 
 /**

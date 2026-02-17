@@ -1,7 +1,8 @@
 import { EntityType, MapObjectType } from '../entity';
 import { GameState } from '../game-state';
 import { MapSize } from '@/utilities/map-size';
-import { isBuildable } from './terrain-queries';
+import { isBuildable } from '../terrain';
+import type { TerrainData } from '../terrain';
 import { LogHandler } from '@/utilities/log-handler';
 import type { MapObjectData } from '@/resources/map/map-entity-data';
 import { S4TreeType, S4GroundType } from '@/resources/map/s4-types';
@@ -141,18 +142,17 @@ export function analyzeObjectTypes(objectType: Uint8Array): Map<number, number> 
  *
  * @param state - Game state to add entities to
  * @param objectType - Raw object type data from landscape
- * @param groundType - Ground type data (for buildability check)
- * @param mapSize - Map dimensions
+ * @param terrain - Terrain data for buildability checks
  * @param options - Filtering options
  * @returns Number of objects spawned
  */
 export function populateMapObjects(
     state: GameState,
     objectType: Uint8Array,
-    groundType: Uint8Array,
-    mapSize: MapSize,
+    terrain: TerrainData,
     options: PopulateOptions = {}
 ): number {
+    const { groundType, mapSize } = terrain;
     const { category, types, clearExisting } = options;
 
     // Determine which MapObjectTypes to spawn
@@ -209,16 +209,15 @@ export function populateMapObjects(
  *
  * @param state - Game state to add entities to
  * @param objects - Parsed map object data from MapObjects chunk
- * @param groundType - Ground type data (for buildability check)
- * @param mapSize - Map dimensions
+ * @param terrain - Terrain data for buildability checks
  * @returns Number of objects spawned
  */
 export function populateMapObjectsFromEntityData(
     state: GameState,
     objects: MapObjectData[],
-    groundType: Uint8Array,
-    mapSize: MapSize
+    terrain: TerrainData
 ): number {
+    const { groundType, mapSize } = terrain;
     let count = 0;
 
     for (const obj of objects) {
@@ -254,19 +253,18 @@ export function populateMapObjectsFromEntityData(
  * Distributes objects pseudo-randomly across buildable terrain.
  *
  * @param state - Game state to add entities to
- * @param groundType - Ground type data (for buildability check)
- * @param mapSize - Map dimensions
+ * @param terrain - Terrain data for buildability checks
  * @param category - Category of objects to spawn
  * @param count - Number of objects to spawn
  * @returns Number of objects actually spawned
  */
 export function spawnTestObjects(
     state: GameState,
-    groundType: Uint8Array,
-    mapSize: MapSize,
+    terrain: TerrainData,
     category: ObjectCategory,
     count: number = 50
 ): number {
+    const { groundType, mapSize } = terrain;
     const types = getTypesForCategory(category);
     if (types.length === 0) return 0;
 
@@ -548,12 +546,8 @@ function tryPlaceTreeAt(
  * Uses seed trees from map data as starting points for forest clusters.
  */
 // eslint-disable-next-line complexity -- forest expansion algorithm has many steps
-export function expandTrees(
-    state: GameState,
-    groundType: Uint8Array,
-    mapSize: MapSize,
-    options: ExpandTreesOptions = {}
-): number {
+export function expandTrees(state: GameState, terrain: TerrainData, options: ExpandTreesOptions = {}): number {
+    const { groundType, mapSize } = terrain;
     const { seed = 12345, radius = 8, density = 0.3, minSpacing = 1 } = options;
     const w = mapSize.width;
     const h = mapSize.height;

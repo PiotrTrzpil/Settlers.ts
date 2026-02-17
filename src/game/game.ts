@@ -1,17 +1,18 @@
 import { FileManager } from '@/utilities/file-manager';
 import { IMapLoader } from '@/resources/map/imap-loader';
-import { MapSize } from '@/utilities/map-size';
 import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
 import { GameServices } from './game-services';
 import { Command, executeCommand, type CommandResult, type CommandContext } from './commands';
-import { isBuildable } from './features/placement';
+import { TerrainData } from './terrain';
 import { populateMapObjectsFromEntityData, expandTrees } from './systems/map-objects';
 import { populateMapBuildings } from './features/building-construction';
 import { SoundManager } from './audio';
 import { Race } from './renderer/sprite-metadata';
 import { EventBus } from './event-bus';
 import { EntityType } from './entity';
+import { GameSettingsManager } from './game-settings';
+import { GameViewState } from './game-view-state';
 import type { TickSystem } from './tick-system';
 import type { FrameRenderTiming } from './renderer/renderer';
 
@@ -37,13 +38,18 @@ interface IScriptService {
 
 /** contains the game state */
 export class Game {
-    public mapSize: MapSize;
-    public groundHeight: Uint8Array;
-    public groundType: Uint8Array;
+    /** Terrain data — single owner for ground type, ground height, and map dimensions */
+    public readonly terrain: TerrainData;
     public fileManager: FileManager;
     public readonly mapLoader: IMapLoader;
     public state: GameState;
     public readonly eventBus: EventBus;
+
+    /** Game settings — user preferences (camera, audio, graphics, debug) */
+    public readonly settings: GameSettingsManager;
+
+    /** Reactive bridge between GameState and Vue components */
+    public readonly viewState: GameViewState;
 
     /** All game managers and domain systems (composition root) */
     public readonly services: GameServices;
@@ -70,26 +76,30 @@ export class Game {
         const start = performance.now();
         this.fileManager = fileManager;
         this.mapLoader = mapLoader;
-        this.mapSize = mapLoader.mapSize;
-        this.groundHeight = mapLoader.landscape.getGroundHeight();
-        this.groundType = mapLoader.landscape.getGroundType();
+        this.terrain = new TerrainData(
+            mapLoader.landscape.getGroundType(),
+            mapLoader.landscape.getGroundHeight(),
+            mapLoader.mapSize
+        );
 
         this.eventBus = new EventBus();
         this.state = new GameState(this.eventBus);
+        this.settings = new GameSettingsManager();
+        this.viewState = new GameViewState();
 
         // Create all game managers and domain systems
         // Use arrow fn so commandContext is resolved lazily (after services is assigned)
         this.services = new GameServices(this.state, this.eventBus, cmd => this.execute(cmd));
-        this.services.setTerrainData(this.groundType, this.groundHeight, this.mapSize);
+        this.services.setTerrainData(this.terrain);
 
         // Create frame loop and register tick systems
-        this._gameLoop = new GameLoop(this.state, this.services.animationService);
+        this._gameLoop = new GameLoop(this.state, this.services.animationService, this.settings.state, this.viewState);
         for (const system of this.services.getTickSystems()) {
             this._gameLoop.registerSystem(system);
         }
 
         // Wire entity removal notifications to tick systems
-        this.services.buildingLifecycle.onRemoved(entityId => {
+        this.services.onEntityRemoved(entityId => {
             this._gameLoop.notifyEntityRemoved(entityId);
         });
 
@@ -98,17 +108,12 @@ export class Game {
 
         // Populate map objects (trees) from entity data chunk (type 6)
         if (mapLoader.entityData?.objects?.length) {
-            const seedCount = populateMapObjectsFromEntityData(
-                this.state,
-                mapLoader.entityData.objects,
-                this.groundType,
-                this.mapSize
-            );
+            const seedCount = populateMapObjectsFromEntityData(this.state, mapLoader.entityData.objects, this.terrain);
             if (seedCount > 0) {
                 console.log(`Game: Loaded ${seedCount} seed trees from map data`);
 
                 // Expand seed trees into forests
-                const expandedCount = expandTrees(this.state, this.groundType, this.mapSize, {
+                const expandedCount = expandTrees(this.state, this.terrain, {
                     radius: 12,
                     density: 0.7,
                     minSpacing: 1,
@@ -122,11 +127,7 @@ export class Game {
             const count = populateMapBuildings(this.state, mapLoader.entityData.buildings, {
                 buildingStateManager: this.services.buildingStateManager,
                 eventBus: this.eventBus,
-                terrain: {
-                    groundType: this.groundType,
-                    groundHeight: this.groundHeight,
-                    mapSize: this.mapSize,
-                },
+                terrain: this.terrain,
             });
             if (count > 0) {
                 console.log(`Game: Loaded ${count} buildings from map data`);
@@ -154,7 +155,7 @@ export class Game {
         };
 
         console.log(
-            `Game\tMap loaded: ${this.mapSize.width}x${this.mapSize.height} in ${Math.round(performance.now() - start)}ms`
+            `Game\tMap loaded: ${this.terrain.width}x${this.terrain.height} in ${Math.round(performance.now() - start)}ms`
         );
     }
 
@@ -166,10 +167,9 @@ export class Game {
     public get commandContext(): CommandContext {
         return {
             state: this.state,
-            groundType: this.groundType,
-            groundHeight: this.groundHeight,
-            mapSize: this.mapSize,
+            terrain: this.terrain,
             eventBus: this.eventBus,
+            settings: this.settings.state,
             settlerTaskSystem: this.services.settlerTaskSystem,
             buildingStateManager: this.services.buildingStateManager,
             treeSystem: this.services.treeSystem,
@@ -183,8 +183,7 @@ export class Game {
 
     /** Find the first buildable land tile, spiraling out from map center */
     public findLandTile(): { x: number; y: number } | null {
-        const w = this.mapSize.width;
-        const h = this.mapSize.height;
+        const { width: w, height: h } = this.terrain;
         const cx = Math.floor(w / 2);
         const cy = Math.floor(h / 2);
 
@@ -195,7 +194,7 @@ export class Game {
                     const tx = cx + dx;
                     const ty = cy + dy;
                     if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-                    if (isBuildable(this.groundType[this.mapSize.toIndex(tx, ty)])) {
+                    if (this.terrain.isBuildable(tx, ty)) {
                         return { x: tx, y: ty };
                     }
                 }
@@ -269,8 +268,8 @@ export class Game {
                 const service = new ScriptService({
                     gameState: this.state,
                     buildingStateManager: this.services.buildingStateManager,
-                    mapWidth: this.mapSize.width,
-                    mapHeight: this.mapSize.height,
+                    mapWidth: this.terrain.width,
+                    mapHeight: this.terrain.height,
                     landscape: this.mapLoader.landscape,
                     executeCommand: cmd => this.execute(cmd),
                 });

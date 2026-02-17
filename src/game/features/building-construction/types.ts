@@ -89,9 +89,7 @@ export interface BuildingSpawnConfig {
  * Pass this to enable terrain leveling during construction.
  */
 export interface TerrainContext {
-    groundType: Uint8Array;
-    groundHeight: Uint8Array;
-    mapSize: import('@/utilities/map-size').MapSize;
+    terrain: import('../../terrain').TerrainData;
     /** Callback to notify that terrain has changed and needs re-upload to GPU */
     onTerrainModified?: () => void;
 }

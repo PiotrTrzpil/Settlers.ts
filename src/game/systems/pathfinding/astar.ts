@@ -15,7 +15,7 @@
  */
 
 import { tileKey, TileCoord } from '../../entity';
-import { isPassable } from '../terrain-queries';
+import { isPassable } from '../../terrain';
 import { GRID_DELTAS, NUMBER_OF_DIRECTIONS, hexDistance, getApproxDirection } from '../hex-directions';
 import { BucketPriorityQueue } from './bucket-priority-queue';
 import { smoothPath } from './path-smoothing';
@@ -44,7 +44,7 @@ const FLAG_CLOSED = 2;
 /**
  * Terrain information needed for pathfinding.
  */
-export interface TerrainData {
+export interface PathfindingTerrain {
     groundType: Uint8Array;
     groundHeight: Uint8Array;
     mapWidth: number;
@@ -56,7 +56,7 @@ export interface TerrainData {
  * Grouped to reduce parameter passing overhead.
  */
 interface SearchContext {
-    terrain: TerrainData;
+    terrain: PathfindingTerrain;
     goalX: number;
     goalY: number;
     tileOccupancy: Map<string, number>;
@@ -201,7 +201,7 @@ export function findPathAStar(
     startY: number,
     goalX: number,
     goalY: number,
-    terrain: TerrainData,
+    terrain: PathfindingTerrain,
     tileOccupancy: Map<string, number>,
     ignoreOccupancy: boolean = false
 ): TileCoord[] | null {

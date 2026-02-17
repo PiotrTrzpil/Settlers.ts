@@ -9,8 +9,8 @@ import { GameState } from './game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { debugStats } from './debug-stats';
-import { gameViewState } from './game-view-state';
-import { gameSettings } from './game-settings';
+import type { GameSettings } from './game-settings';
+import type { GameViewState } from './game-view-state';
 import type { TickSystem } from './tick-system';
 import type { FrameRenderTiming } from './renderer/renderer';
 import { AnimationService } from './animation/index';
@@ -68,6 +68,8 @@ export class GameLoop {
 
     private readonly gameState: GameState;
     private readonly animationService: AnimationService;
+    private readonly settings: GameSettings;
+    private readonly viewState: GameViewState;
 
     /** Render callback — ONLY rendering, returns render timing if available */
     private onRender: ((alpha: number, deltaSec: number) => FrameRenderTiming | null) | null = null;
@@ -81,9 +83,16 @@ export class GameLoop {
     /** Registered tick systems */
     private systems: TickSystem[] = [];
 
-    constructor(gameState: GameState, animationService: AnimationService) {
+    constructor(
+        gameState: GameState,
+        animationService: AnimationService,
+        settings: GameSettings,
+        viewState: GameViewState
+    ) {
         this.gameState = gameState;
         this.animationService = animationService;
+        this.settings = settings;
+        this.viewState = viewState;
 
         // Bind frame handler once to avoid creating closures every frame
         this.boundFrame = this.frame.bind(this);
@@ -263,7 +272,7 @@ export class GameLoop {
         this.lastTime = now;
         this.accumulator += deltaSec;
 
-        const shouldTick = !this._ticksPaused && !gameSettings.state.paused;
+        const shouldTick = !this._ticksPaused && !this.settings.paused;
         const shouldRender = this.pageVisible || now - this.lastRenderTime >= BACKGROUND_FRAME_DURATION;
 
         // ── LOGIC ── fixed-timestep simulation (isolated from per-frame work)
@@ -287,7 +296,7 @@ export class GameLoop {
     private runLogicPhase(shouldTick: boolean): number {
         const start = performance.now();
         try {
-            const scaledDt = TICK_DURATION * gameSettings.state.gameSpeed;
+            const scaledDt = TICK_DURATION * this.settings.gameSpeed;
             if (shouldTick) {
                 while (this.accumulator >= TICK_DURATION) {
                     this.tick(scaledDt);
@@ -308,7 +317,7 @@ export class GameLoop {
         const start = performance.now();
         try {
             if (shouldTick) {
-                const scaledDeltaMs = deltaSec * 1000 * gameSettings.state.gameSpeed;
+                const scaledDeltaMs = deltaSec * 1000 * this.settings.gameSpeed;
                 this.animationService.update(scaledDeltaMs);
             }
         } catch (e) {
@@ -376,6 +385,6 @@ export class GameLoop {
 
         // Update game view state so Vue components see entity counts/selection
         // even without a render callback (headless/CI environments)
-        gameViewState.updateFromGameState(this.gameState);
+        this.viewState.updateFromGameState(this.gameState);
     }
 }

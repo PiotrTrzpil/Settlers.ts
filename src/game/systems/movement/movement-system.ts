@@ -1,7 +1,7 @@
 import { EntityType, TileCoord, tileKey } from '../../entity';
 import { MovementController, MovementState } from './movement-controller';
 import { findPath } from '../pathfinding';
-import { isPassable } from '../terrain-queries';
+import { isPassable } from '../../terrain';
 import { getAllNeighbors, hexDistance } from '../hex-directions';
 import { findSmartFreeDirection, shouldYieldToPush } from './push-utils';
 import type { TickSystem } from '../../tick-system';

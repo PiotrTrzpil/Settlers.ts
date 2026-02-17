@@ -9,6 +9,7 @@ import { GameState, UnitStateView } from '@/game/game-state';
 import { EntityType, BuildingType, type Entity } from '@/game/entity';
 import { createTestMap, type TestMap } from './test-map';
 import { EventBus } from '@/game/event-bus';
+import { spiralSearch } from '@/game/utils/spiral-search';
 import { MovementSystem } from '@/game/systems/movement/index';
 import {
     BuildingConstructionPhase,
@@ -21,6 +22,7 @@ import { CarrierManager } from '@/game/features/carriers';
 import { BuildingInventoryManager } from '@/game/features/inventory';
 import { ServiceAreaManager } from '@/game/features/service-areas';
 import { RequestManager } from '@/game/features/logistics';
+import { GameSettingsManager, type GameSettings } from '@/game/game-settings';
 
 // ─── GameState factory ──────────────────────────────────────────────
 
@@ -63,6 +65,8 @@ export interface TestContext {
     state: GameState;
     map: TestMap;
     eventBus: EventBus;
+    /** Per-test GameSettings (reactive state) — isolated from other tests */
+    settings: GameSettings;
     // Managers (created by tests, not from GameState)
     carrierManager: CarrierManager;
     inventoryManager: BuildingInventoryManager;
@@ -88,6 +92,8 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     const map = createTestMap(mapWidth, mapHeight);
     const eventBus = new EventBus();
     const state = new GameState(eventBus);
+    const settingsManager = new GameSettingsManager();
+    settingsManager.resetToDefaults();
 
     // Create MovementSystem (owned externally, set on GameState)
     const movement = new MovementSystem({
@@ -127,9 +133,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         executeCommand: cmd => executeCommand(toCommandContext(context), cmd),
     });
     buildingConstructionSystem.setTerrainContext({
-        groundType: map.groundType,
-        groundHeight: map.groundHeight,
-        mapSize: map.mapSize,
+        terrain: map.terrain,
     });
     buildingConstructionSystem.registerEvents(eventBus);
 
@@ -145,6 +149,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         state,
         map,
         eventBus,
+        settings: settingsManager.state,
         carrierManager,
         inventoryManager,
         serviceAreaManager,
@@ -254,12 +259,13 @@ export function tickConstruction(
     eventBus?: EventBus
 ): void {
     const bus = eventBus ?? new EventBus();
+    const settingsManager = new GameSettingsManager();
+    settingsManager.resetToDefaults();
     const cmdCtx: CommandContext = {
         state: gameState,
-        groundType: ctx.groundType,
-        groundHeight: ctx.groundHeight,
-        mapSize: ctx.mapSize,
+        terrain: ctx.terrain,
         eventBus: bus,
+        settings: settingsManager.state,
         buildingStateManager,
     };
     const system = new BuildingConstructionSystem({
@@ -280,10 +286,9 @@ import { executeCommand, type CommandResult, type CommandContext } from '@/game/
 export function toCommandContext(ctx: TestContext, eventBus?: EventBus): CommandContext {
     return {
         state: ctx.state,
-        groundType: ctx.map.groundType,
-        groundHeight: ctx.map.groundHeight,
-        mapSize: ctx.map.mapSize,
+        terrain: ctx.map.terrain,
         eventBus: eventBus ?? ctx.eventBus,
+        settings: ctx.settings,
         buildingStateManager: ctx.buildingStateManager,
     };
 }
@@ -305,9 +310,7 @@ export function createTestEventBus(
         executeCommand: noopExecute,
     });
     system.setTerrainContext({
-        groundType: map.groundType,
-        groundHeight: map.groundHeight,
-        mapSize: map.mapSize,
+        terrain: map.terrain,
     });
     system.registerEvents(eventBus);
     return eventBus;
@@ -383,25 +386,10 @@ export function isTerrainWater(map: TestMap, x: number, y: number): boolean {
  * Returns null if no passable tile found.
  */
 export function findPassableTile(map: TestMap): { x: number; y: number } | null {
-    const cx = Math.floor(map.mapSize.width / 2);
-    const cy = Math.floor(map.mapSize.height / 2);
-
-    // Spiral out from center to find passable tile
-    for (let r = 0; r < 20; r++) {
-        for (let dx = -r; dx <= r; dx++) {
-            for (let dy = -r; dy <= r; dy++) {
-                if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue; // Only check perimeter
-                const x = cx + dx;
-                const y = cy + dy;
-                if (x >= 0 && x < map.mapSize.width && y >= 0 && y < map.mapSize.height) {
-                    if (isTerrainPassable(map, x, y)) {
-                        return { x, y };
-                    }
-                }
-            }
-        }
-    }
-    return null;
+    const { width, height } = map.mapSize;
+    return spiralSearch(Math.floor(width / 2), Math.floor(height / 2), width, height, (x, y) =>
+        isTerrainPassable(map, x, y)
+    );
 }
 
 /**
@@ -409,25 +397,10 @@ export function findPassableTile(map: TestMap): { x: number; y: number } | null 
  * Buildable terrain is grass (16) or desert (64).
  */
 export function findBuildableTile(map: TestMap): { x: number; y: number } | null {
-    const cx = Math.floor(map.mapSize.width / 2);
-    const cy = Math.floor(map.mapSize.height / 2);
+    const { width, height } = map.mapSize;
     const BUILDABLE = [16, 64]; // GRASS, DESERT
-
-    // Spiral out from center
-    for (let r = 0; r < 20; r++) {
-        for (let dx = -r; dx <= r; dx++) {
-            for (let dy = -r; dy <= r; dy++) {
-                if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-                const x = cx + dx;
-                const y = cy + dy;
-                if (x >= 0 && x < map.mapSize.width && y >= 0 && y < map.mapSize.height) {
-                    const index = map.mapSize.toIndex(x, y);
-                    if (BUILDABLE.includes(map.groundType[index])) {
-                        return { x, y };
-                    }
-                }
-            }
-        }
-    }
-    return null;
+    return spiralSearch(Math.floor(width / 2), Math.floor(height / 2), width, height, (x, y) => {
+        const index = map.mapSize.toIndex(x, y);
+        return BUILDABLE.includes(map.groundType[index]);
+    });
 }

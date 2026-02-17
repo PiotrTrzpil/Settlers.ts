@@ -46,6 +46,20 @@ export class FeatureRegistry {
     }
 
     /**
+     * Register exports for a feature created outside the registry.
+     * Enables incremental migration: manually-created managers become
+     * accessible to registry features via ctx.getFeature().
+     */
+    registerExports(featureId: string, exports: Record<string, unknown>): void {
+        if (this.instances.has(featureId)) {
+            throw new Error(`Feature '${featureId}' already registered`);
+        }
+        this.instances.set(featureId, { exports });
+        this.exports.set(featureId, exports);
+        log.debug(`Registered external exports for '${featureId}'`);
+    }
+
+    /**
      * Load a single feature.
      * Dependencies must be loaded first.
      */

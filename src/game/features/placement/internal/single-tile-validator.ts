@@ -47,16 +47,15 @@ export function validateSingleTilePlacement(x: number, y: number, ctx: Placement
  * Use validateSingleTilePlacement for detailed status.
  */
 export function canPlaceSingleTile(
-    groundType: Uint8Array,
-    mapSize: PlacementContext['mapSize'],
+    terrain: import('../../../terrain').TerrainData,
     tileOccupancy: Map<string, number>,
     x: number,
     y: number
 ): boolean {
     const ctx: PlacementContext = {
-        groundType,
-        groundHeight: new Uint8Array(0), // Not needed for single-tile
-        mapSize,
+        groundType: terrain.groundType,
+        groundHeight: terrain.groundHeight,
+        mapSize: terrain.mapSize,
         tileOccupancy,
     };
     return validateSingleTilePlacement(x, y, ctx).canPlace;

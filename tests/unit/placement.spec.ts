@@ -20,17 +20,17 @@ describe('canPlaceBuilding – edge cases', () => {
     });
 
     it('should allow placement on flat grass', () => {
-        expect(canPlaceBuilding(map.groundType, map.groundHeight, map.mapSize, map.occupancy, 10, 10)).toBe(true);
+        expect(canPlaceBuilding(map.terrain, map.occupancy, 10, 10)).toBe(true);
     });
 
     it('should reject placement on water', () => {
         setTerrainAt(map, 10, 10, TERRAIN.WATER);
-        expect(canPlaceBuilding(map.groundType, map.groundHeight, map.mapSize, map.occupancy, 10, 10)).toBe(false);
+        expect(canPlaceBuilding(map.terrain, map.occupancy, 10, 10)).toBe(false);
     });
 
     it('should reject placement on occupied tile', () => {
         map.occupancy.set('10,10', 1);
-        expect(canPlaceBuilding(map.groundType, map.groundHeight, map.mapSize, map.occupancy, 10, 10)).toBe(false);
+        expect(canPlaceBuilding(map.terrain, map.occupancy, 10, 10)).toBe(false);
     });
 
     // Note: canPlaceBuilding no longer checks slope - that's handled by the footprint
@@ -43,7 +43,7 @@ describe('canPlaceBuilding – edge cases', () => {
         setHeightAt(map, 9, 10, 4);
         setHeightAt(map, 10, 11, 4);
         setHeightAt(map, 10, 9, 4);
-        expect(canPlaceBuilding(map.groundType, map.groundHeight, map.mapSize, map.occupancy, 10, 10)).toBe(true);
+        expect(canPlaceBuilding(map.terrain, map.occupancy, 10, 10)).toBe(true);
     });
 
     it('should allow placement regardless of neighbor height (slope handled by footprint check)', () => {
@@ -54,7 +54,7 @@ describe('canPlaceBuilding – edge cases', () => {
         setHeightAt(map, 9, 10, 10);
         setHeightAt(map, 10, 11, 10);
         setHeightAt(map, 10, 9, 10);
-        expect(canPlaceBuilding(map.groundType, map.groundHeight, map.mapSize, map.occupancy, 10, 10)).toBe(true);
+        expect(canPlaceBuilding(map.terrain, map.occupancy, 10, 10)).toBe(true);
     });
 });
 
@@ -66,17 +66,7 @@ describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
     });
 
     it('should allow 2x2 building on flat terrain', () => {
-        expect(
-            canPlaceBuildingFootprint(
-                map.groundType,
-                map.groundHeight,
-                map.mapSize,
-                map.occupancy,
-                10,
-                10,
-                BuildingType.WoodcutterHut
-            )
-        ).toBe(true);
+        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut)).toBe(true);
     });
 
     it('should allow 2x2 building with gradual slope across footprint', () => {
@@ -85,17 +75,7 @@ describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
         setHeightAt(map, 11, 10, 12);
         setHeightAt(map, 10, 11, 12);
         setHeightAt(map, 11, 11, 14);
-        expect(
-            canPlaceBuildingFootprint(
-                map.groundType,
-                map.groundHeight,
-                map.mapSize,
-                map.occupancy,
-                10,
-                10,
-                BuildingType.WoodcutterHut
-            )
-        ).toBe(true);
+        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut)).toBe(true);
     });
 
     it('should allow 3x3 building with large total height range but per-tile gradients within limit', () => {
@@ -109,17 +89,7 @@ describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
         setHeightAt(map, 10, 12, 8);
         setHeightAt(map, 11, 12, 8);
         setHeightAt(map, 12, 12, 8);
-        expect(
-            canPlaceBuildingFootprint(
-                map.groundType,
-                map.groundHeight,
-                map.mapSize,
-                map.occupancy,
-                10,
-                10,
-                BuildingType.StorageArea
-            )
-        ).toBe(true);
+        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.StorageArea)).toBe(true);
     });
 
     it('should reject building when adjacent tiles in footprint have steep slope', () => {
@@ -128,17 +98,7 @@ describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
         setHeightAt(map, 11, 10, 20); // diff = 10 from (10,10)
         setHeightAt(map, 10, 11, 10);
         setHeightAt(map, 11, 11, 10);
-        expect(
-            canPlaceBuildingFootprint(
-                map.groundType,
-                map.groundHeight,
-                map.mapSize,
-                map.occupancy,
-                10,
-                10,
-                BuildingType.WoodcutterHut
-            )
-        ).toBe(false);
+        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
     });
 });
 
@@ -150,17 +110,7 @@ describe('mine terrain restrictions', () => {
     });
 
     it('should reject mine on grass terrain', () => {
-        expect(
-            canPlaceBuildingFootprint(
-                map.groundType,
-                map.groundHeight,
-                map.mapSize,
-                map.occupancy,
-                10,
-                10,
-                BuildingType.CoalMine
-            )
-        ).toBe(false);
+        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.CoalMine)).toBe(false);
     });
 
     it('should allow mine on rock terrain', () => {
@@ -169,17 +119,7 @@ describe('mine terrain restrictions', () => {
         setTerrainAt(map, 11, 10, TERRAIN.ROCK);
         setTerrainAt(map, 10, 11, TERRAIN.ROCK);
         setTerrainAt(map, 11, 11, TERRAIN.ROCK);
-        expect(
-            canPlaceBuildingFootprint(
-                map.groundType,
-                map.groundHeight,
-                map.mapSize,
-                map.occupancy,
-                10,
-                10,
-                BuildingType.CoalMine
-            )
-        ).toBe(true);
+        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.CoalMine)).toBe(true);
     });
 
     it('should reject mine when only some tiles are rock', () => {
@@ -187,17 +127,7 @@ describe('mine terrain restrictions', () => {
         // (11,10) remains grass
         setTerrainAt(map, 10, 11, TERRAIN.ROCK);
         setTerrainAt(map, 11, 11, TERRAIN.ROCK);
-        expect(
-            canPlaceBuildingFootprint(
-                map.groundType,
-                map.groundHeight,
-                map.mapSize,
-                map.occupancy,
-                10,
-                10,
-                BuildingType.CoalMine
-            )
-        ).toBe(false);
+        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.CoalMine)).toBe(false);
     });
 
     it('should reject non-mine building on rock terrain', () => {
@@ -205,17 +135,7 @@ describe('mine terrain restrictions', () => {
         setTerrainAt(map, 11, 10, TERRAIN.ROCK);
         setTerrainAt(map, 10, 11, TERRAIN.ROCK);
         setTerrainAt(map, 11, 11, TERRAIN.ROCK);
-        expect(
-            canPlaceBuildingFootprint(
-                map.groundType,
-                map.groundHeight,
-                map.mapSize,
-                map.occupancy,
-                10,
-                10,
-                BuildingType.WoodcutterHut
-            )
-        ).toBe(false);
+        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
     });
 
     it('should apply restriction to all mine types', () => {
@@ -232,17 +152,7 @@ describe('mine terrain restrictions', () => {
             BuildingType.StoneMine,
             BuildingType.SulfurMine,
         ]) {
-            expect(
-                canPlaceBuildingFootprint(
-                    map.groundType,
-                    map.groundHeight,
-                    map.mapSize,
-                    map.occupancy,
-                    10,
-                    10,
-                    mineType
-                )
-            ).toBe(true);
+            expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, mineType)).toBe(true);
         }
     });
 });

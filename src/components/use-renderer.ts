@@ -25,7 +25,6 @@ import {
 } from '@/game/features/placement';
 import type { CommandResult } from '@/game/commands';
 import { debugStats } from '@/game/debug-stats';
-import { gameViewState } from '@/game/game-view-state';
 import {
     InputManager,
     SelectMode,
@@ -42,7 +41,6 @@ import { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { SelectionBox, PlacementPreview } from '@/game/input/render-state';
 import { createRenderContext, type ServiceAreaRenderData } from '@/game/renderer/render-context';
 import { getBuildingVisualState, BuildingConstructionPhase } from '@/game/features/building-construction';
-import { gameSettings } from '@/game/game-settings';
 import { EntityType } from '@/game/entity';
 
 /** Context object for render callback - avoids excessive callback parameters */
@@ -103,13 +101,13 @@ function syncEntityRendererState(
         .alpha(alpha)
         .layerVisibility(ctx.layerVisibility)
         .settings({
-            showBuildingFootprint: gameSettings.state.showBuildingFootprint,
-            disablePlayerTinting: gameSettings.state.disablePlayerTinting,
-            antialias: gameSettings.state.antialias,
+            showBuildingFootprint: g.settings.state.showBuildingFootprint,
+            disablePlayerTinting: g.settings.state.disablePlayerTinting,
+            antialias: g.settings.state.antialias,
         })
-        .groundHeight(g.groundHeight)
-        .groundType(g.groundType)
-        .mapSize(g.mapSize.width, g.mapSize.height)
+        .groundHeight(g.terrain.groundHeight)
+        .groundType(g.terrain.groundType)
+        .mapSize(g.terrain.width, g.terrain.height)
         .viewPoint(viewPoint)
         .build();
 
@@ -189,7 +187,7 @@ function createUpdateCallback(
 
         // Debug stats + sound
         if (g) {
-            debugStats.updateFromGame(g);
+            debugStats.updateFromGame(g, g.settings);
             g.soundManager.updateListener(renderer.viewPoint.x, renderer.viewPoint.y);
         }
 
@@ -218,7 +216,7 @@ function createRenderCallback(
             syncEntityRendererState(er, g, ctx, alpha, renderer.viewPoint);
 
             const renderState = inputManager?.getRenderState();
-            const mode = gameViewState.state.mode;
+            const mode = g.viewState.state.mode;
             const inPlacementMode = mode === 'place_building' || mode === 'place_resource' || mode === 'place_unit';
             er.buildingIndicatorsEnabled = inPlacementMode;
 
@@ -255,9 +253,9 @@ function updateTileDebugStats(
 
     const game = getGame();
     if (game) {
-        const idx = game.mapSize.toIndex(tileX, tileY);
-        debugStats.state.tileGroundType = game.groundType[idx];
-        debugStats.state.tileGroundHeight = game.groundHeight[idx];
+        const idx = game.terrain.toIndex(tileX, tileY);
+        debugStats.state.tileGroundType = game.terrain.groundType[idx];
+        debugStats.state.tileGroundHeight = game.terrain.groundHeight[idx];
     }
 }
 
@@ -282,15 +280,7 @@ function configurePlaceBuildingMode(
                 const game = getGame();
                 if (!game) return false;
 
-                return canPlaceBuildingFootprint(
-                    game.groundType,
-                    game.groundHeight,
-                    game.mapSize,
-                    game.state.tileOccupancy,
-                    x,
-                    y,
-                    buildingType
-                );
+                return canPlaceBuildingFootprint(game.terrain, game.state.tileOccupancy, x, y, buildingType);
             };
             context.setModeData(modeData);
         }
@@ -323,7 +313,7 @@ function configurePlaceResourceMode(
                 const game = getGame();
                 if (!game) return false;
 
-                return canPlaceResource(game.groundType, game.mapSize, game.state.tileOccupancy, x, y);
+                return canPlaceResource(game.terrain, game.state.tileOccupancy, x, y);
             };
             context.setModeData(modeData);
         }
@@ -356,7 +346,7 @@ function configurePlaceUnitMode(
                 const game = getGame();
                 if (!game) return false;
 
-                return canPlaceUnit(game.groundType, game.mapSize, game.state.tileOccupancy, x, y);
+                return canPlaceUnit(game.terrain, game.state.tileOccupancy, x, y);
             };
             context.setModeData(modeData);
         }
@@ -405,26 +395,24 @@ interface UseRendererOptions {
 /** Handle mode changes and update game view state */
 function handleModeChange(getGame: () => Game | null): (oldMode: string, newMode: string, data?: any) => void {
     return (_oldMode, newMode, data) => {
-        gameViewState.state.mode = newMode;
+        const game = getGame();
+        if (!game) return;
+
+        const vs = game.viewState.state;
+        vs.mode = newMode;
 
         // Update building type
-        gameViewState.state.placeBuildingType =
-            newMode === 'place_building' && data?.buildingType !== undefined ? data.buildingType : 0;
+        vs.placeBuildingType = newMode === 'place_building' && data?.buildingType !== undefined ? data.buildingType : 0;
 
         // Update resource type
-        gameViewState.state.placeResourceType =
-            newMode === 'place_resource' && data?.resourceType !== undefined ? data.resourceType : 0;
+        vs.placeResourceType = newMode === 'place_resource' && data?.resourceType !== undefined ? data.resourceType : 0;
 
         // Update unit type
-        gameViewState.state.placeUnitType =
-            newMode === 'place_unit' && data?.unitType !== undefined ? data.unitType : 0;
+        vs.placeUnitType = newMode === 'place_unit' && data?.unitType !== undefined ? data.unitType : 0;
 
         // Sync with game for backward compatibility
-        const game = getGame();
-        if (game) {
-            game.mode = newMode as any;
-            game.placeBuildingType = gameViewState.state.placeBuildingType;
-        }
+        game.mode = newMode as any;
+        game.placeBuildingType = vs.placeBuildingType;
     };
 }
 
@@ -451,7 +439,13 @@ export function useRenderer({
     function resolveTile(screenX: number, screenY: number): TileCoord | null {
         const game = getGame();
         if (!game || !tilePicker || !renderer) return null;
-        return tilePicker.screenToTile(screenX, screenY, renderer.viewPoint, game.mapSize, game.groundHeight);
+        return tilePicker.screenToTile(
+            screenX,
+            screenY,
+            renderer.viewPoint,
+            game.terrain.mapSize,
+            game.terrain.groundHeight
+        );
     }
 
     /**
@@ -471,9 +465,9 @@ export function useRenderer({
                 debugStats.state.hasTile = true;
                 debugStats.state.tileX = x;
                 debugStats.state.tileY = y;
-                const idx = game.mapSize.toIndex(x, y);
-                debugStats.state.tileGroundType = game.groundType[idx];
-                debugStats.state.tileGroundHeight = game.groundHeight[idx];
+                const idx = game.terrain.toIndex(x, y);
+                debugStats.state.tileGroundType = game.terrain.groundType[idx];
+                debugStats.state.tileGroundHeight = game.terrain.groundHeight[idx];
             }
         }
 
@@ -515,21 +509,27 @@ export function useRenderer({
 
         landscapeRenderer = new LandscapeRenderer(
             game.fileManager,
-            game.mapSize,
-            game.groundType,
-            game.groundHeight,
+            game.terrain.mapSize,
+            game.terrain.groundType,
+            game.terrain.groundHeight,
             getDebugGrid(),
             game.useProceduralTextures
         );
         renderer.add(landscapeRenderer);
 
-        entityRenderer = new EntityRenderer(game.mapSize, game.groundHeight, game.fileManager, game.groundType, {
-            isBuildableTerrain: isBuildable,
-            isMineBuildableTerrain: isMineBuildable,
-            computeSlopeDifficulty,
-            computeHeightRange,
-            maxSlopeDiff: MAX_SLOPE_DIFF,
-        });
+        entityRenderer = new EntityRenderer(
+            game.terrain.mapSize,
+            game.terrain.groundHeight,
+            game.fileManager,
+            game.terrain.groundType,
+            {
+                isBuildableTerrain: isBuildable,
+                isMineBuildableTerrain: isMineBuildable,
+                computeSlopeDifficulty,
+                computeHeightRange,
+                maxSlopeDiff: MAX_SLOPE_DIFF,
+            }
+        );
         entityRenderer.skipSpriteLoading = game.useProceduralTextures;
         entityRenderer.onSpritesLoaded = () => game.enableTicks();
         renderer.add(entityRenderer);
@@ -582,8 +582,12 @@ export function useRenderer({
         if (game == null || renderer == null) return;
 
         debugStats.reset();
-        gameViewState.reset();
+        game.viewState.reset();
         renderer.clear();
+
+        // Inject game settings into ViewPoint and InputManager
+        renderer.viewPoint.setSettings(game.settings.state);
+        if (inputManager) inputManager.setSettings(game.settings.state);
 
         setupRenderers(game);
         initGLAndBindEvents(game);
@@ -606,7 +610,8 @@ export function useRenderer({
         const cavEl = canvas.value!;
         // Pass externalInput: true to disable ViewPoint's legacy mouse handlers
         // since we use InputManager for all input handling
-        renderer = new Renderer(cavEl, { externalInput: true });
+        const game = getGame();
+        renderer = new Renderer(cavEl, { externalInput: true, antialias: game?.settings.state.antialias });
         tilePicker = new TilePicker(cavEl);
 
         createInputManager();
