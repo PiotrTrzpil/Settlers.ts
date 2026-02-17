@@ -9,6 +9,7 @@ import { GameState } from './game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { debugStats } from './debug-stats';
+import { gameViewState } from './game-view-state';
 import { gameSettings } from './game-settings';
 import type { TickSystem } from './tick-system';
 import type { FrameRenderTiming } from './renderer/renderer';
@@ -373,8 +374,8 @@ export class GameLoop {
 
         this.lastTickSystemTimings = timings;
 
-        // Update debug stats from game state so entity counts are available
+        // Update game view state so Vue components see entity counts/selection
         // even without a render callback (headless/CI environments)
-        debugStats.updateFromGameState(this.gameState);
+        gameViewState.updateFromGameState(this.gameState);
     }
 }

@@ -17,9 +17,9 @@
  *
  * ## Point-in-Time Checks
  *
- * For immediate checks without polling, use GamePage.getDebugField() directly:
+ * For immediate checks without polling, use GamePage.getViewField() directly:
  *
- *   const count = await gp.getDebugField('unitCount');
+ *   const count = await gp.getViewField('unitCount');
  *   expect(count).toBe(5);
  *
  * ## Notes
@@ -60,29 +60,35 @@ export const expect = baseExpect.extend({
         let lastEntities: Array<{ type: number; subType: number; player: number; x: number; y: number }> = [];
 
         try {
-            await baseExpect.poll(async() => {
-                const state = await gp.getGameState();
-                lastEntities = state?.entities ?? [];
-                const matching = lastEntities.filter(e => {
-                    if (filter.type !== undefined && e.type !== filter.type) return false;
-                    if (filter.subType !== undefined && e.subType !== filter.subType) return false;
-                    if (filter.player !== undefined && e.player !== filter.player) return false;
-                    if (filter.x !== undefined && e.x !== filter.x) return false;
-                    if (filter.y !== undefined && e.y !== filter.y) return false;
-                    return true;
-                });
-                return matching.length;
-            }, {
-                timeout,
-                intervals: [POLL_INTERVAL],
-                message: `expected entity matching ${JSON.stringify(filter)}`,
-            }).toBeGreaterThan(0);
+            await baseExpect
+                .poll(
+                    async () => {
+                        const state = await gp.getGameState();
+                        lastEntities = state?.entities ?? [];
+                        const matching = lastEntities.filter(e => {
+                            if (filter.type !== undefined && e.type !== filter.type) return false;
+                            if (filter.subType !== undefined && e.subType !== filter.subType) return false;
+                            if (filter.player !== undefined && e.player !== filter.player) return false;
+                            if (filter.x !== undefined && e.x !== filter.x) return false;
+                            if (filter.y !== undefined && e.y !== filter.y) return false;
+                            return true;
+                        });
+                        return matching.length;
+                    },
+                    {
+                        timeout,
+                        intervals: [POLL_INTERVAL],
+                        message: `expected entity matching ${JSON.stringify(filter)}`,
+                    }
+                )
+                .toBeGreaterThan(0);
 
             return { pass: true, message: () => '' };
         } catch {
             return {
                 pass: false,
-                message: () => `expected entity matching ${JSON.stringify(filter)}, but none found among ${lastEntities.length} entities`,
+                message: () =>
+                    `expected entity matching ${JSON.stringify(filter)}, but none found among ${lastEntities.length} entities`,
                 name: 'toHaveEntity',
                 expected: filter,
             };
@@ -97,14 +103,19 @@ export const expect = baseExpect.extend({
         let actual: string | undefined;
 
         try {
-            await baseExpect.poll(async() => {
-                actual = await gp.getDebugField('mode');
-                return actual;
-            }, {
-                timeout,
-                intervals: [POLL_INTERVAL],
-                message: `expected mode "${expectedMode}"`,
-            }).toBe(expectedMode);
+            await baseExpect
+                .poll(
+                    async () => {
+                        actual = await gp.getViewField('mode');
+                        return actual;
+                    },
+                    {
+                        timeout,
+                        intervals: [POLL_INTERVAL],
+                        message: `expected mode "${expectedMode}"`,
+                    }
+                )
+                .toBe(expectedMode);
 
             return { pass: true, message: () => '' };
         } catch {
@@ -130,14 +141,19 @@ export const expect = baseExpect.extend({
         let actual: number | undefined;
 
         try {
-            await baseExpect.poll(async() => {
-                actual = await gp.getDebugField('entityCount');
-                return actual;
-            }, {
-                timeout,
-                intervals: [POLL_INTERVAL],
-                message: `expected ${expected} entities`,
-            }).toBe(expected);
+            await baseExpect
+                .poll(
+                    async () => {
+                        actual = await gp.getViewField('entityCount');
+                        return actual;
+                    },
+                    {
+                        timeout,
+                        intervals: [POLL_INTERVAL],
+                        message: `expected ${expected} entities`,
+                    }
+                )
+                .toBe(expected);
 
             return { pass: true, message: () => '' };
         } catch {
@@ -160,14 +176,19 @@ export const expect = baseExpect.extend({
         let actual: number | undefined;
 
         try {
-            await baseExpect.poll(async() => {
-                actual = await gp.getDebugField('buildingCount');
-                return actual;
-            }, {
-                timeout,
-                intervals: [POLL_INTERVAL],
-                message: `expected ${expected} buildings`,
-            }).toBe(expected);
+            await baseExpect
+                .poll(
+                    async () => {
+                        actual = await gp.getViewField('buildingCount');
+                        return actual;
+                    },
+                    {
+                        timeout,
+                        intervals: [POLL_INTERVAL],
+                        message: `expected ${expected} buildings`,
+                    }
+                )
+                .toBe(expected);
 
             return { pass: true, message: () => '' };
         } catch {
@@ -190,14 +211,19 @@ export const expect = baseExpect.extend({
         let actual: number | undefined;
 
         try {
-            await baseExpect.poll(async() => {
-                actual = await gp.getDebugField('unitCount');
-                return actual;
-            }, {
-                timeout,
-                intervals: [POLL_INTERVAL],
-                message: `expected ${expected} units`,
-            }).toBe(expected);
+            await baseExpect
+                .poll(
+                    async () => {
+                        actual = await gp.getViewField('unitCount');
+                        return actual;
+                    },
+                    {
+                        timeout,
+                        intervals: [POLL_INTERVAL],
+                        message: `expected ${expected} units`,
+                    }
+                )
+                .toBe(expected);
 
             return { pass: true, message: () => '' };
         } catch {
@@ -220,14 +246,19 @@ export const expect = baseExpect.extend({
         let actual: number | undefined;
 
         try {
-            await baseExpect.poll(async() => {
-                actual = await gp.getDebugField('unitsMoving');
-                return actual;
-            }, {
-                timeout,
-                intervals: [POLL_INTERVAL],
-                message: `expected ${expected} units moving`,
-            }).toBe(expected);
+            await baseExpect
+                .poll(
+                    async () => {
+                        actual = await gp.getViewField('unitsMoving');
+                        return actual;
+                    },
+                    {
+                        timeout,
+                        intervals: [POLL_INTERVAL],
+                        message: `expected ${expected} units moving`,
+                    }
+                )
+                .toBe(expected);
 
             return { pass: true, message: () => '' };
         } catch {
@@ -250,14 +281,19 @@ export const expect = baseExpect.extend({
         let actual: number | undefined;
 
         try {
-            await baseExpect.poll(async() => {
-                actual = await gp.getDebugField('unitsMoving');
-                return actual;
-            }, {
-                timeout,
-                intervals: [POLL_INTERVAL],
-                message: `expected at least ${minExpected} units moving`,
-            }).toBeGreaterThanOrEqual(minExpected);
+            await baseExpect
+                .poll(
+                    async () => {
+                        actual = await gp.getViewField('unitsMoving');
+                        return actual;
+                    },
+                    {
+                        timeout,
+                        intervals: [POLL_INTERVAL],
+                        message: `expected at least ${minExpected} units moving`,
+                    }
+                )
+                .toBeGreaterThanOrEqual(minExpected);
 
             return { pass: true, message: () => '' };
         } catch {
@@ -280,14 +316,19 @@ export const expect = baseExpect.extend({
         let actual: number | undefined;
 
         try {
-            await baseExpect.poll(async() => {
-                actual = await gp.getDebugField('unitsMoving');
-                return actual;
-            }, {
-                timeout,
-                intervals: [POLL_INTERVAL],
-                message: `expected no units moving`,
-            }).toBe(0);
+            await baseExpect
+                .poll(
+                    async () => {
+                        actual = await gp.getViewField('unitsMoving');
+                        return actual;
+                    },
+                    {
+                        timeout,
+                        intervals: [POLL_INTERVAL],
+                        message: `expected no units moving`,
+                    }
+                )
+                .toBe(0);
 
             return { pass: true, message: () => '' };
         } catch {
@@ -311,34 +352,38 @@ export const expect = baseExpect.extend({
         expectedY: number,
         toleranceOrOptions?: number | (MatcherOptions & { tolerance?: number })
     ) {
-        const tolerance = typeof toleranceOrOptions === 'number'
-            ? toleranceOrOptions
-            : toleranceOrOptions?.tolerance ?? 5;
-        const timeout = typeof toleranceOrOptions === 'object'
-            ? toleranceOrOptions?.timeout ?? DEFAULT_TIMEOUT
-            : DEFAULT_TIMEOUT;
+        const tolerance =
+            typeof toleranceOrOptions === 'number' ? toleranceOrOptions : (toleranceOrOptions?.tolerance ?? 5);
+        const timeout =
+            typeof toleranceOrOptions === 'object' ? (toleranceOrOptions?.timeout ?? DEFAULT_TIMEOUT) : DEFAULT_TIMEOUT;
 
         let actualX: number | undefined;
         let actualY: number | undefined;
 
         try {
-            await baseExpect.poll(async() => {
-                actualX = await gp.getDebugField('cameraX');
-                actualY = await gp.getDebugField('cameraY');
-                const dx = Math.abs(actualX - expectedX);
-                const dy = Math.abs(actualY - expectedY);
-                return dx <= tolerance && dy <= tolerance;
-            }, {
-                timeout,
-                intervals: [POLL_INTERVAL],
-                message: `expected camera at (${expectedX}, ${expectedY}) ±${tolerance}`,
-            }).toBe(true);
+            await baseExpect
+                .poll(
+                    async () => {
+                        actualX = await gp.getDebugField('cameraX');
+                        actualY = await gp.getDebugField('cameraY');
+                        const dx = Math.abs(actualX - expectedX);
+                        const dy = Math.abs(actualY - expectedY);
+                        return dx <= tolerance && dy <= tolerance;
+                    },
+                    {
+                        timeout,
+                        intervals: [POLL_INTERVAL],
+                        message: `expected camera at (${expectedX}, ${expectedY}) ±${tolerance}`,
+                    }
+                )
+                .toBe(true);
 
             return { pass: true, message: () => '' };
         } catch {
             return {
                 pass: false,
-                message: () => `expected camera at (${expectedX}, ${expectedY}) ±${tolerance}, got (${actualX}, ${actualY})`,
+                message: () =>
+                    `expected camera at (${expectedX}, ${expectedY}) ±${tolerance}, got (${actualX}, ${actualY})`,
                 name: 'toHaveCameraAt',
                 expected: { x: expectedX, y: expectedY },
                 actual: { x: actualX, y: actualY },

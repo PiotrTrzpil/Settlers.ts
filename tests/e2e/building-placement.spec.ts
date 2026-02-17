@@ -14,17 +14,27 @@ import { Timeout } from './wait-config';
 // --- Pointer Event Pipeline ---
 
 test.describe('Pointer Event Pipeline', { tag: '@smoke' }, () => {
-    test('pointer events fire on canvas (not suppressed)', async({ gp }) => {
+    test('pointer events fire on canvas (not suppressed)', async ({ gp }) => {
         const page = gp.page;
 
         const eventLog = await page.evaluate(() => {
-            return new Promise<string[]>((resolve) => {
+            return new Promise<string[]>(resolve => {
                 const canvas = document.querySelector('canvas');
-                if (!canvas) { resolve(['no canvas']); return }
+                if (!canvas) {
+                    resolve(['no canvas']);
+                    return;
+                }
 
                 const log: string[] = [];
-                for (const evt of ['pointerdown', 'pointerup', 'pointermove',
-                    'mousedown', 'mouseup', 'mousemove', 'click']) {
+                for (const evt of [
+                    'pointerdown',
+                    'pointerup',
+                    'pointermove',
+                    'mousedown',
+                    'mouseup',
+                    'mousemove',
+                    'click',
+                ]) {
                     canvas.addEventListener(evt, () => log.push(evt), { once: true });
                 }
 
@@ -32,15 +42,33 @@ test.describe('Pointer Event Pipeline', { tag: '@smoke' }, () => {
                 const cx = rect.left + rect.width / 2;
                 const cy = rect.top + rect.height / 2;
 
-                canvas.dispatchEvent(new PointerEvent('pointerdown', {
-                    clientX: cx, clientY: cy, bubbles: true, button: 0, pointerId: 1
-                }));
-                canvas.dispatchEvent(new PointerEvent('pointermove', {
-                    clientX: cx + 1, clientY: cy, bubbles: true, button: 0, pointerId: 1
-                }));
-                canvas.dispatchEvent(new PointerEvent('pointerup', {
-                    clientX: cx, clientY: cy, bubbles: true, button: 0, pointerId: 1
-                }));
+                canvas.dispatchEvent(
+                    new PointerEvent('pointerdown', {
+                        clientX: cx,
+                        clientY: cy,
+                        bubbles: true,
+                        button: 0,
+                        pointerId: 1,
+                    })
+                );
+                canvas.dispatchEvent(
+                    new PointerEvent('pointermove', {
+                        clientX: cx + 1,
+                        clientY: cy,
+                        bubbles: true,
+                        button: 0,
+                        pointerId: 1,
+                    })
+                );
+                canvas.dispatchEvent(
+                    new PointerEvent('pointerup', {
+                        clientX: cx,
+                        clientY: cy,
+                        bubbles: true,
+                        button: 0,
+                        pointerId: 1,
+                    })
+                );
 
                 requestAnimationFrame(() => resolve(log));
             });
@@ -51,7 +79,7 @@ test.describe('Pointer Event Pipeline', { tag: '@smoke' }, () => {
         expect(eventLog).toContain('pointermove');
     });
 
-    test('canvas click sets hoveredTile via tileClick event', async({ gp }) => {
+    test('canvas click sets hoveredTile via tileClick event', async ({ gp }) => {
         await gp.canvas.click({ position: { x: 400, y: 400 } });
 
         const tileInfo = gp.page.locator('[data-testid="tile-info"]');
@@ -64,7 +92,7 @@ test.describe('Pointer Event Pipeline', { tag: '@smoke' }, () => {
 // --- Building Placement Mode ---
 
 test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
-    test('clicking building button activates place_building mode', async({ gp }) => {
+    test('clicking building button activates place_building mode', async ({ gp }) => {
         const btn = gp.page.locator('[data-testid="btn-woodcutter"]');
         await expect(btn).toBeVisible();
         await btn.click();
@@ -73,7 +101,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await expect(btn).toHaveClass(/active/);
     });
 
-    test('select mode button returns to select mode', async({ gp }) => {
+    test('select mode button returns to select mode', async ({ gp }) => {
         const btn = gp.page.locator('[data-testid="btn-woodcutter"]');
         await expect(btn).toBeVisible();
         await btn.click();
@@ -83,7 +111,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
     });
 
-    test('building placement via game.execute() creates entity with correct attributes', async({ gs }) => {
+    test('building placement via game.execute() creates entity with correct attributes', async ({ gs }) => {
         const buildableTile = await gs.findBuildableTile();
         if (!buildableTile) {
             test.skip();
@@ -101,7 +129,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await expect(gs).toHaveBuildingCount(1);
     });
 
-    test('building placement via canvas click on buildable terrain', async({ gp }) => {
+    test('building placement via canvas click on buildable terrain', async ({ gp }) => {
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
             test.skip();
@@ -115,7 +143,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await gp.page.locator('[data-testid="btn-woodcutter"]').click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
 
-        const countBefore = await gp.getDebugField('buildingCount');
+        const countBefore = await gp.getViewField('buildingCount');
 
         // Click canvas center (camera is now centered on buildable terrain)
         const box = await gp.canvas.boundingBox();
@@ -123,12 +151,12 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
 
         await gp.waitForFrames(1);
 
-        const countAfter = await gp.getDebugField('buildingCount');
+        const countAfter = await gp.getViewField('buildingCount');
         // Due to tile picker precision, click might land on non-buildable tile
         expect(countAfter).toBeGreaterThanOrEqual(countBefore);
     });
 
-    test('clicking canvas while not in placement mode does not place building', async({ gp }) => {
+    test('clicking canvas while not in placement mode does not place building', async ({ gp }) => {
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
             test.skip();
@@ -140,7 +168,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await gp.selectMode();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'select', { timeout: 5000 });
 
-        const buildingsBefore = await gp.getDebugField('buildingCount');
+        const buildingsBefore = await gp.getViewField('buildingCount');
 
         const box = await gp.canvas.boundingBox();
         await gp.canvas.click({ position: { x: box!.width / 2, y: box!.height / 2 }, force: true });
@@ -150,7 +178,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await expect(gp).toHaveBuildingCount(buildingsBefore);
     });
 
-    test('multiple canvas clicks place multiple buildings', async({ gp }) => {
+    test('multiple canvas clicks place multiple buildings', async ({ gp }) => {
         // Enter placement mode
         await gp.page.locator('[data-testid="btn-woodcutter"]').click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_building', { timeout: 5000 });
@@ -162,7 +190,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         await gp.waitForBuildingCount(result.totalBuildings, Timeout.DEFAULT);
     });
 
-    test('different building types can be selected and placed', async({ gp }) => {
+    test('different building types can be selected and placed', async ({ gp }) => {
         const page = gp.page;
 
         // Place a lumberjack first
@@ -195,7 +223,7 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
 // --- Unit Spawning ---
 
 test.describe('Unit Spawning', { tag: '@smoke' }, () => {
-    test('spawn carrier creates entity on passable terrain', async({ gs }) => {
+    test('spawn carrier creates entity on passable terrain', async ({ gs }) => {
         const entity = await gs.spawnUnit(UnitType.Carrier);
         expect(entity).not.toBeNull();
         expect(entity!.x).toBeGreaterThanOrEqual(0);
@@ -207,8 +235,8 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
         expect(terrainCheck!.isPassable).toBe(true);
     });
 
-    test('spawn swordsman creates entity', async({ gs }) => {
-        const countBefore = await gs.getDebugField('entityCount');
+    test('spawn swordsman creates entity', async ({ gs }) => {
+        const countBefore = await gs.getViewField('entityCount');
         const entity = await gs.spawnUnit(UnitType.Swordsman);
 
         // Debug stats throttle updates, so wait for refresh
@@ -216,7 +244,7 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
         expect(entity).not.toBeNull();
     });
 
-    test('clicking canvas then spawning uses clicked tile', async({ gs }) => {
+    test('clicking canvas then spawning uses clicked tile', async ({ gs }) => {
         const buildableTile = await gs.findBuildableTile();
         if (!buildableTile) {
             test.skip();
@@ -229,7 +257,7 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
         expect(entity!.y).toBe(buildableTile.y);
     });
 
-    test('spawned unit is on passable terrain (not water)', async({ gs }) => {
+    test('spawned unit is on passable terrain (not water)', async ({ gs }) => {
         const entity = await gs.spawnUnit(UnitType.Builder);
         expect(entity).not.toBeNull();
 
@@ -243,7 +271,7 @@ test.describe('Unit Spawning', { tag: '@smoke' }, () => {
 // --- Entity Rendering ---
 
 test.describe('Entity Rendering', () => {
-    test('placed building is visually rendered on canvas', async({ gp }) => {
+    test('placed building is visually rendered on canvas', async ({ gp }) => {
         const { check: checkErrors } = gp.collectErrors();
 
         const buildableTile = await gp.findBuildableTile();
@@ -252,7 +280,7 @@ test.describe('Entity Rendering', () => {
             return;
         }
 
-        await test.step('place building at buildable tile', async() => {
+        await test.step('place building at buildable tile', async () => {
             await gp.moveCamera(buildableTile.x, buildableTile.y);
             await gp.samplePixels();
 
@@ -261,8 +289,8 @@ test.describe('Entity Rendering', () => {
             await gp.waitForFrames(15);
         });
 
-        await test.step('verify building exists in game state', async() => {
-            const buildingCount = await gp.getDebugField('buildingCount');
+        await test.step('verify building exists in game state', async () => {
+            const buildingCount = await gp.getViewField('buildingCount');
             expect(buildingCount).toBeGreaterThan(0);
             await gp.samplePixels();
             await expect(gp).toHaveEntity({ type: 2, x: buildableTile.x, y: buildableTile.y });
@@ -271,20 +299,20 @@ test.describe('Entity Rendering', () => {
         checkErrors();
     });
 
-    test('building renders with player color (procedural fallback)', async({ gp }) => {
+    test('building renders with player color (procedural fallback)', async ({ gp }) => {
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
             test.skip();
             return;
         }
 
-        await test.step('place buildings for two different players', async() => {
+        await test.step('place buildings for two different players', async () => {
             const building0 = await gp.placeBuilding(1, buildableTile.x, buildableTile.y, 0);
             expect(building0).not.toBeNull();
             await gp.placeBuilding(1, buildableTile.x + 3, buildableTile.y + 3, 1);
         });
 
-        await test.step('verify buildings exist with different players', async() => {
+        await test.step('verify buildings exist with different players', async () => {
             await gp.waitForFrames(15);
             await expect(gp).toHaveEntity({ type: 2, player: 0 });
 
@@ -293,7 +321,7 @@ test.describe('Entity Rendering', () => {
         });
     });
 
-    test('multiple buildings rendered correctly', async({ gp }) => {
+    test('multiple buildings rendered correctly', async ({ gp }) => {
         const result = await gp.placeMultipleBuildings(5, [1, 2, 3], [0, 1, 2, 3]);
 
         expect(result.placedCount).toBeGreaterThan(0);
@@ -301,14 +329,14 @@ test.describe('Entity Rendering', () => {
         await expect(gp).toHaveBuildingCount(result.placedCount);
     });
 
-    test('building placement preview renders during placement mode', async({ gp }) => {
+    test('building placement preview renders during placement mode', async ({ gp }) => {
         const buildableTile = await gp.findBuildableTile();
         if (!buildableTile) {
             test.skip();
             return;
         }
 
-        await test.step('enter placement mode and hover', async() => {
+        await test.step('enter placement mode and hover', async () => {
             await gp.moveCamera(buildableTile.x, buildableTile.y);
             const btn = gp.page.locator('[data-testid="btn-woodcutter"]');
             await expect(btn).toBeVisible();
@@ -320,7 +348,7 @@ test.describe('Entity Rendering', () => {
             await gp.waitForFrames(10);
         });
 
-        await test.step('verify placement preview is active', async() => {
+        await test.step('verify placement preview is active', async () => {
             await expect(gp).toHaveMode('place_building');
 
             const preview = await gp.getPlacementPreview();

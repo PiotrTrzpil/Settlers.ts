@@ -13,32 +13,45 @@ interface LoadTimings {
 
 /**
  * Mirrors DebugStatsState from src/game/debug-stats.ts.
- * Only the fields tests actually need — kept minimal to avoid drift.
+ * Performance instrumentation, readiness flags, and debug settings.
  */
 interface SettlersDebug {
     gameLoaded: boolean;
     rendererReady: boolean;
     frameCount: number;
+    tickCount: number;
     fps: number;
-    entityCount: number;
-    buildingCount: number;
-    unitCount: number;
-    unitsMoving: number;
-    totalPathSteps: number;
     cameraX: number;
     cameraY: number;
     zoom: number;
     canvasWidth: number;
     canvasHeight: number;
-    mode: string;
-    selectedEntityId: number | null;
-    selectedCount: number;
     // Audio state
     musicEnabled: boolean;
     musicPlaying: boolean;
     currentMusicId: string | null;
     // Load timings
     loadTimings: LoadTimings;
+}
+
+/**
+ * Mirrors GameViewStateData from src/game/game-view-state.ts.
+ * Game state exposed to Vue components: mode, selection, entity counts.
+ */
+interface SettlersView {
+    tick: number;
+    mode: string;
+    placeBuildingType: number;
+    placeResourceType: number;
+    placeUnitType: number;
+    selectedEntityId: number | null;
+    selectedCount: number;
+    entityCount: number;
+    buildingCount: number;
+    unitCount: number;
+    resourceCount: number;
+    unitsMoving: number;
+    totalPathSteps: number;
 }
 
 /**
@@ -428,6 +441,19 @@ export class GamePage {
         return this.page.evaluate(k => (window as any).__settlers_debug__?.[k], key);
     }
 
+    /** Read the full view state object (mode, selection, entity counts). */
+    async getView(): Promise<SettlersView> {
+        return this.page.evaluate(() => {
+            const v = (window as any).__settlers_view__;
+            return { ...v };
+        });
+    }
+
+    /** Read a single view state field. */
+    async getViewField<K extends keyof SettlersView>(key: K): Promise<SettlersView[K]> {
+        return this.page.evaluate(k => (window as any).__settlers_view__?.[k], key);
+    }
+
     // ── Structured data-* attribute reads ───────────────────
 
     async getEntityCount(): Promise<number> {
@@ -572,7 +598,7 @@ export class GamePage {
     async waitForEntityCountAbove(n: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._waitForFunction(
             `state:waitForEntityCountAbove:entityCount > ${n}`,
-            min => (window as any).__settlers_debug__?.entityCount > min,
+            min => (window as any).__settlers_view__?.entityCount > min,
             n,
             { timeout }
         );
@@ -587,7 +613,7 @@ export class GamePage {
     async waitForUnitCount(expected: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._waitForFunction(
             `state:waitForUnitCount:unitCount === ${expected}`,
-            n => (window as any).__settlers_debug__?.unitCount === n,
+            n => (window as any).__settlers_view__?.unitCount === n,
             expected,
             { timeout }
         );
@@ -597,7 +623,7 @@ export class GamePage {
     async waitForBuildingCount(expected: number, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._waitForFunction(
             `state:waitForBuildingCount:buildingCount === ${expected}`,
-            n => (window as any).__settlers_debug__?.buildingCount === n,
+            n => (window as any).__settlers_view__?.buildingCount === n,
             expected,
             { timeout }
         );
@@ -614,8 +640,8 @@ export class GamePage {
                     return new Promise<void>((resolve, reject) => {
                         const deadline = Date.now() + timeoutMs;
                         function check() {
-                            const debug = (window as any).__settlers_debug__;
-                            const moving = debug?.unitsMoving ?? 0;
+                            const view = (window as any).__settlers_view__;
+                            const moving = view?.unitsMoving ?? 0;
                             if (moving >= n) {
                                 resolve();
                             } else if (Date.now() > deadline) {
@@ -643,8 +669,8 @@ export class GamePage {
                     return new Promise<void>((resolve, reject) => {
                         const deadline = Date.now() + timeoutMs;
                         function check() {
-                            const debug = (window as any).__settlers_debug__;
-                            const moving = debug?.unitsMoving ?? 0;
+                            const view = (window as any).__settlers_view__;
+                            const moving = view?.unitsMoving ?? 0;
                             if (moving === 0) {
                                 resolve();
                             } else if (Date.now() > deadline) {
@@ -775,7 +801,7 @@ export class GamePage {
     async waitForMode(expectedMode: string, timeout: number = Timeout.DEFAULT): Promise<void> {
         await this._waitForFunction(
             `render:waitForMode:mode === ${expectedMode}`,
-            mode => (window as any).__settlers_debug__?.mode === mode,
+            mode => (window as any).__settlers_view__?.mode === mode,
             expectedMode,
             { timeout }
         );
@@ -875,7 +901,7 @@ export class GamePage {
                     (e: any) => !idsBefore.has(e.id) && e.type === 4 // EntityType.StackedResource
                 );
                 if (!newEntity) return null;
-                const resourceState = game.state.resourceStates.get(newEntity.id);
+                const resourceState = game.state.resources?.states?.get(newEntity.id);
                 return {
                     id: newEntity.id,
                     type: newEntity.type,

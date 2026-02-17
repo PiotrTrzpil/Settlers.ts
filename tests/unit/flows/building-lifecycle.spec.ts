@@ -78,7 +78,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         };
 
         // Phase 1: TerrainLeveling (0-20%) - Poles phase is skipped (duration=0)
-        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx, ctx.eventBus);
         expect(bs.phase).toBe(BuildingConstructionPhase.TerrainLeveling);
         let visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(true);
@@ -86,7 +86,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         expect(bs.originalTerrain).not.toBeNull();
 
         // Advance through terrain leveling
-        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx, ctx.eventBus);
 
         // Footprint tiles should have construction ground type
         const footprint = getBuildingFootprint(20, 20, BuildingType.WoodcutterHut);
@@ -95,20 +95,20 @@ describe('Building Lifecycle: place → construct → remove', () => {
         }
 
         // Phase 2: ConstructionRising (20-55%)
-        tickConstruction(ctx.state, ctx.buildingStateManager, 2.0, terrainCtx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 2.0, terrainCtx, ctx.eventBus);
         expect(bs.phase).toBe(BuildingConstructionPhase.ConstructionRising);
         visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(true);
         expect(visual.verticalProgress).toBeGreaterThan(0);
 
         // Phase 3: CompletedRising (55-100%)
-        tickConstruction(ctx.state, ctx.buildingStateManager, 4.0, terrainCtx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 4.0, terrainCtx, ctx.eventBus);
         expect(bs.phase).toBe(BuildingConstructionPhase.CompletedRising);
         visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(false);
 
         // Phase 4: Completed
-        tickConstruction(ctx.state, ctx.buildingStateManager, 5.0, terrainCtx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 5.0, terrainCtx, ctx.eventBus);
         expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
         visual = getBuildingVisualState(bs);
         expect(visual.isCompleted).toBe(true);
@@ -210,7 +210,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         };
 
         // TerrainLeveling starts immediately (Poles phase is skipped)
-        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx);
+        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx, ctx.eventBus);
         expect(terrainNotifications).toBeGreaterThan(0); // Terrain mods during TerrainLeveling
     });
 });

@@ -4,7 +4,7 @@
  */
 
 import { Entity, EntityType } from '../entity';
-import { UnitStateLookup } from '../game-state';
+import type { UnitStateLookup } from './render-context';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { IViewPoint } from './i-view-point';

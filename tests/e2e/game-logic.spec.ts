@@ -116,6 +116,50 @@ test.describe('Route Navigation', () => {
     });
 });
 
+// Server freshness & test infrastructure — catch stale servers and broken wiring
+fixtureTest.describe('Test Infrastructure', { tag: '@smoke' }, () => {
+    fixtureTest('server is serving current source code', async ({ gp }) => {
+        // Source hash is injected by Vite at startup and set on window in main.ts.
+        // If it doesn't match the current git working tree, the server is stale.
+        const serverHash = await gp.page.evaluate(() => (window as any).__source_hash__);
+        expect(serverHash).toBeTruthy();
+        expect(typeof serverHash).toBe('string');
+        // Note: we don't compare against the computed hash here because
+        // global-setup already handles auto-restart. This test just verifies
+        // the hash mechanism itself is working (not stripped, not undefined).
+    });
+
+    fixtureTest('game ticks are running and view state updates', async ({ gp }) => {
+        const tickBefore = await gp.getDebugField('tickCount');
+        await gp.waitForTicks(5);
+        const tickAfter = await gp.getDebugField('tickCount');
+        expect(tickAfter).toBeGreaterThan(tickBefore);
+
+        const viewTick = await gp.getViewField('tick');
+        expect(typeof viewTick).toBe('number');
+        expect(viewTick).toBeGreaterThan(0);
+    });
+
+    fixtureTest('all e2e window globals are wired up', async ({ gp }) => {
+        // Verify every window global that GamePage methods depend on.
+        // If any is missing, nearly all other tests will fail with cryptic errors.
+        const globals = await gp.page.evaluate(() => {
+            const w = window as any;
+            return {
+                __settlers_debug__: !!w.__settlers_debug__,
+                __settlers_view__: !!w.__settlers_view__,
+                __settlers_game__: !!w.__settlers_game__,
+                __settlers_input__: !!w.__settlers_input__,
+                __settlers_viewpoint__: !!w.__settlers_viewpoint__,
+                __source_hash__: !!w.__source_hash__,
+            };
+        });
+        for (const [name, exists] of Object.entries(globals)) {
+            expect(exists, `${name} must be set on window`).toBe(true);
+        }
+    });
+});
+
 // Canvas Interaction tests use shared fixture (eliminates 3 waitForReady calls)
 fixtureTest.describe('Canvas Interaction', { tag: '@smoke' }, () => {
     fixtureTest('canvas responds to mouse wheel events without errors', async ({ gp }) => {

@@ -9,6 +9,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { EntityType } from '@/game/entity';
+import type { Command, CommandResult } from '@/game/commands';
 
 const log = new LogHandler('GoodsAPI');
 
@@ -76,6 +77,7 @@ export const S4_GOOD_TYPES = {
 
 export interface GoodsAPIContext {
     gameState: GameState;
+    executeCommand?: (cmd: Command) => CommandResult;
 }
 
 /**
@@ -108,21 +110,16 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
     runtime.registerFunction('Goods', 'AddGoods', (x: number, y: number, goodType: number, amount: number) => {
         log.debug(`AddGoods: ${amount}x type ${goodType} at (${x}, ${y})`);
 
-        // Create stack entity
-        const entity = context.gameState.addEntity(
-            EntityType.StackedResource,
-            goodType,
+        const result = context.executeCommand!({
+            type: 'script_add_goods',
+            materialType: goodType,
             x,
             y,
-            0 // Goods don't belong to a specific player initially
-        );
+            amount,
+        });
 
-        // Set the quantity
-        if (amount > 1) {
-            context.gameState.resources.setQuantity(entity.id, amount);
-        }
-
-        return entity.id;
+        if (!result.success || !result.effects?.length) return -1;
+        return (result.effects[0] as { entityId: number }).entityId;
     });
 
     // Goods.RemoveGoods(player, goodType, amount) - Remove goods from player's inventory
@@ -151,25 +148,19 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
     });
 
     // Goods.AddPileEx(x, y, goodType, amount) - Alias for AddGoods (S4 script compatibility)
-    // Creates a resource pile at the specified location
     runtime.registerFunction('Goods', 'AddPileEx', (x: number, y: number, goodType: number, amount: number) => {
         log.debug(`AddPileEx: ${amount}x type ${goodType} at (${x}, ${y})`);
 
-        // Create stack entity
-        const entity = context.gameState.addEntity(
-            EntityType.StackedResource,
-            goodType,
+        const result = context.executeCommand!({
+            type: 'script_add_goods',
+            materialType: goodType,
             x,
             y,
-            0 // Goods don't belong to a specific player initially
-        );
+            amount,
+        });
 
-        // Set the quantity (defaults to 1, so only update if different)
-        if (amount > 1) {
-            context.gameState.resources.setQuantity(entity.id, amount);
-        }
-
-        return entity.id;
+        if (!result.success || !result.effects?.length) return -1;
+        return (result.effects[0] as { entityId: number }).entityId;
     });
 
     log.debug('Goods API registered');

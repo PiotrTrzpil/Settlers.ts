@@ -17,6 +17,7 @@ import { EntityType, MapObjectType } from '../../entity';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import type { AnimationService } from '../../animation/index';
 import { findEmptySpot } from '../../systems/spatial-search';
+import type { Command, CommandResult } from '../../commands';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('TreeSystem');
@@ -87,6 +88,7 @@ const PLANTABLE_TREE_TYPES: readonly MapObjectType[] = [
 export class TreeSystem implements TickSystem {
     private gameState: GameState;
     private animationService: AnimationService;
+    private executeCommand!: (cmd: Command) => CommandResult;
 
     /** Internal state storage: entityId -> TreeState */
     private readonly states = new Map<number, TreeState>();
@@ -94,6 +96,11 @@ export class TreeSystem implements TickSystem {
     constructor(gameState: GameState, animationService: AnimationService) {
         this.gameState = gameState;
         this.animationService = animationService;
+    }
+
+    /** Set command executor (called after command system is wired up) */
+    setCommandExecutor(executor: (cmd: Command) => CommandResult): void {
+        this.executeCommand = executor;
     }
 
     /**
@@ -304,15 +311,13 @@ export class TreeSystem implements TickSystem {
     plantTree(x: number, y: number, settlerId: number): void {
         const treeType = PLANTABLE_TREE_TYPES[Math.floor(Math.random() * PLANTABLE_TREE_TYPES.length)];
 
-        // Check tile is still valid (nothing placed there while forester was walking)
-        if (this.gameState.getEntityAt(x, y)) {
-            log.debug(`Forester ${settlerId}: tile (${x}, ${y}) occupied, cannot plant`);
-            return;
-        }
+        const result = this.executeCommand({ type: 'plant_tree', treeType, x, y });
 
-        const entity = this.gameState.addEntity(EntityType.MapObject, treeType, x, y, 0);
-        this.register(entity.id, treeType, true);
-        log.debug(`Forester ${settlerId} planted ${MapObjectType[treeType]} at (${x}, ${y})`);
+        if (result.success) {
+            log.debug(`Forester ${settlerId} planted ${MapObjectType[treeType]} at (${x}, ${y})`);
+        } else {
+            log.debug(`Forester ${settlerId}: cannot plant at (${x}, ${y}): ${result.error}`);
+        }
     }
 
     findPlantingSpot(cx: number, cy: number): { x: number; y: number } | null {

@@ -32,6 +32,7 @@ import { loadScriptFromString, validateScript, type ScriptSource } from './scrip
 import type { GameState } from '@/game/game-state';
 import type { IMapLandscape } from '@/resources/map/imap-landscape';
 import type { BuildingStateManager } from '@/game/features/building-construction';
+import type { Command, CommandResult } from '@/game/commands';
 
 const log = new LogHandler('LuaScriptSystem');
 
@@ -59,6 +60,8 @@ export interface LuaScriptSystemConfig {
     difficulty?: number;
     /** Enable debug mode */
     debugEnabled?: boolean;
+    /** Command executor for routing mutations through the command pipeline */
+    executeCommand?: (cmd: Command) => CommandResult;
 }
 
 /**
@@ -139,6 +142,7 @@ export class LuaScriptSystem {
         // Settlers API context
         const settlersContext: SettlersAPIContext = {
             gameState: this.config.gameState,
+            executeCommand: this.config.executeCommand,
         };
         registerSettlersAPI(this.runtime, settlersContext);
 
@@ -146,6 +150,7 @@ export class LuaScriptSystem {
         const buildingsContext: BuildingsAPIContext = {
             gameState: this.config.gameState,
             buildingStateManager: this.config.buildingStateManager,
+            executeCommand: this.config.executeCommand,
         };
         registerBuildingsAPI(this.runtime, buildingsContext);
 
@@ -162,6 +167,7 @@ export class LuaScriptSystem {
         // Goods API context
         const goodsContext: GoodsAPIContext = {
             gameState: this.config.gameState,
+            executeCommand: this.config.executeCommand,
         };
         registerGoodsAPI(this.runtime, goodsContext);
 

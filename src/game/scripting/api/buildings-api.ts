@@ -11,6 +11,7 @@ import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { EntityType, BuildingType } from '@/game/entity';
 import { BuildingConstructionPhase, type BuildingStateManager } from '@/game/features/building-construction';
+import type { Command, CommandResult } from '@/game/commands';
 
 const log = new LogHandler('BuildingsAPI');
 
@@ -125,6 +126,7 @@ function mapS4ToInternalType(s4Type: number): number {
 export interface BuildingsAPIContext {
     gameState: GameState;
     buildingStateManager: BuildingStateManager;
+    executeCommand?: (cmd: Command) => CommandResult;
 }
 
 /**
@@ -163,9 +165,16 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
                 `AddBuilding: type ${buildingType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`
             );
 
-            const entity = context.gameState.addEntity(EntityType.Building, internalType, x, y, player);
+            const result = context.executeCommand!({
+                type: 'script_add_building',
+                buildingType: internalType,
+                x,
+                y,
+                player,
+            });
 
-            return entity.id;
+            if (!result.success || !result.effects?.length) return -1;
+            return (result.effects[0] as { entityId: number }).entityId;
         }
     );
 
@@ -235,9 +244,16 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
                 `AddBuildingEx: type ${buildingType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`
             );
 
-            const entity = context.gameState.addEntity(EntityType.Building, internalType, x, y, player);
+            const result = context.executeCommand!({
+                type: 'script_add_building',
+                buildingType: internalType,
+                x,
+                y,
+                player,
+            });
 
-            return entity.id;
+            if (!result.success || !result.effects?.length) return -1;
+            return (result.effects[0] as { entityId: number }).entityId;
         }
     );
 

@@ -15,7 +15,7 @@ import { BuildingConstructionPhase, type BuildingState, type TerrainContext } fr
 import { determinePhase, calculatePhaseProgress } from './internal/phase-transitions';
 import { captureOriginalTerrain, applyTerrainLeveling, restoreOriginalTerrain } from './terrain';
 import type { BuildingStateManager } from './building-state-manager';
-import { spawnUnitsOnBuildingComplete, type SpawnContext } from './spawn-units';
+import type { Command, CommandResult } from '../../commands';
 
 /**
  * Configuration for BuildingConstructionSystem dependencies.
@@ -23,6 +23,7 @@ import { spawnUnitsOnBuildingComplete, type SpawnContext } from './spawn-units';
 export interface BuildingConstructionSystemConfig {
     gameState: GameState;
     buildingStateManager: BuildingStateManager;
+    executeCommand: (cmd: Command) => CommandResult;
 }
 
 /**
@@ -33,6 +34,7 @@ export interface BuildingConstructionSystemConfig {
 export class BuildingConstructionSystem implements TickSystem {
     private readonly state: GameState;
     private readonly manager: BuildingStateManager;
+    private readonly executeCommand: (cmd: Command) => CommandResult;
     private terrainContext: TerrainContext | undefined; // OK: optional, set via setter
     private eventBus!: EventBus; // MUST be set via registerEvents
 
@@ -42,6 +44,7 @@ export class BuildingConstructionSystem implements TickSystem {
     constructor(config: BuildingConstructionSystemConfig) {
         this.state = config.gameState;
         this.manager = config.buildingStateManager;
+        this.executeCommand = config.executeCommand;
     }
 
     /** Set terrain context for terrain modification during construction */
@@ -55,12 +58,9 @@ export class BuildingConstructionSystem implements TickSystem {
         this.subscriptions.subscribe(eventBus, 'building:removed', ({ buildingState }) => {
             this.onBuildingRemoved(buildingState as BuildingState);
         });
-        // Listen for building:completed to spawn units (handles both tick completion and instant placement)
-        this.subscriptions.subscribe(eventBus, 'building:completed', ({ buildingState }) => {
-            const spawnCtx: SpawnContext | undefined = this.terrainContext
-                ? { groundType: this.terrainContext.groundType, mapSize: this.terrainContext.mapSize }
-                : undefined;
-            spawnUnitsOnBuildingComplete(this.state, buildingState as BuildingState, eventBus, spawnCtx);
+        // Listen for building:completed to spawn units via command pipeline
+        this.subscriptions.subscribe(eventBus, 'building:completed', ({ entityId }) => {
+            this.executeCommand({ type: 'spawn_building_units', buildingEntityId: entityId as number });
         });
     }
 

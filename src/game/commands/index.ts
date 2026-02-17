@@ -17,6 +17,12 @@ export type {
     SelectAreaCommand,
     MoveSelectedUnitsCommand,
     RemoveEntityCommand,
+    SpawnVisualResourceCommand,
+    SpawnBuildingUnitsCommand,
+    PlantTreeCommand,
+    ScriptAddGoodsCommand,
+    ScriptAddBuildingCommand,
+    ScriptAddSettlersCommand,
     CommandResult,
     CommandEffect,
 } from './command-types';

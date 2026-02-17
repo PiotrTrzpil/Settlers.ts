@@ -16,6 +16,7 @@ import { BuildingType, EntityType, getBuildingSize, tileKey, type TileCoord } fr
 import { getBuildingFootprint } from '../../buildings/types';
 import { EMaterialType } from '../../economy/material-type';
 import { MAX_RESOURCE_STACK_SIZE } from '../../entity';
+import type { Command, CommandResult } from '../../commands';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('InventoryVisualizer');
@@ -43,6 +44,7 @@ interface BuildingVisualState {
 export class InventoryVisualizer {
     private gameState: GameState;
     private inventoryManager: BuildingInventoryManager;
+    private executeCommand: (cmd: Command) => CommandResult;
 
     /** Tracks visual state per building */
     private buildingVisuals: Map<number, BuildingVisualState> = new Map();
@@ -56,9 +58,14 @@ export class InventoryVisualizer {
         newAmount: number
     ) => void;
 
-    constructor(gameState: GameState, inventoryManager: BuildingInventoryManager) {
+    constructor(
+        gameState: GameState,
+        inventoryManager: BuildingInventoryManager,
+        executeCommand: (cmd: Command) => CommandResult
+    ) {
         this.gameState = gameState;
         this.inventoryManager = inventoryManager;
+        this.executeCommand = executeCommand;
 
         // Bind the handler so we can unregister it later
         this.changeHandler = this.onInventoryChange.bind(this);
@@ -278,7 +285,7 @@ export class InventoryVisualizer {
     }
 
     /**
-     * Create a visual stacked resource entity.
+     * Create a visual stacked resource entity via the command pipeline.
      * @param reserveForBuilding If true, marks the resource as belonging to the building
      *                           (inputs are reserved, outputs are available for pickup)
      */
@@ -292,23 +299,20 @@ export class InventoryVisualizer {
         const building = this.gameState.getEntity(buildingId);
         if (!building) return null;
 
-        const entity = this.gameState.addEntity(
-            EntityType.StackedResource,
+        const result = this.executeCommand({
+            type: 'spawn_visual_resource',
             materialType,
-            position.x,
-            position.y,
-            building.player
-        );
+            x: position.x,
+            y: position.y,
+            player: building.player,
+            quantity,
+            buildingId: reserveForBuilding ? buildingId : undefined,
+        });
 
-        // Set the initial quantity
-        this.gameState.resources.setQuantity(entity.id, quantity);
+        if (!result.success || !result.effects?.length) return null;
 
-        // Only reserve inputs - outputs are available for carrier pickup
-        if (reserveForBuilding) {
-            this.gameState.resources.setBuildingId(entity.id, buildingId);
-        }
-
-        return entity;
+        const entityId = (result.effects[0] as { entityId: number }).entityId;
+        return { id: entityId };
     }
 
     /**

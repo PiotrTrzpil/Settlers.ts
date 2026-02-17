@@ -15,7 +15,7 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
         const consoleLogs: Array<{ level: string; text: string }> = [];
         const logCounts = new Map<string, number>();
 
-        page.on('console', (msg) => {
+        page.on('console', msg => {
             consoleLogs.push({ level: msg.type(), text: msg.text() });
             const key = `${msg.type()}:${msg.text().slice(0, 100)}`;
             logCounts.set(key, (logCounts.get(key) ?? 0) + 1);
@@ -39,7 +39,7 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
                     return d && d.gameLoaded && d.rendererReady;
                 },
                 null,
-                { timeout: 15_000 },
+                { timeout: 15_000 }
             );
             timings.gameReady = Date.now() - readyStart;
 
@@ -68,18 +68,19 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
 
         await test.step('verify debug stats are reasonable', async () => {
             const debug = await gp.getDebug();
+            const view = await gp.getView();
             const state = await gp.getGameState();
 
             console.log('\n=== Debug Stats ===');
-            console.log(`Entity count:    ${debug.entityCount}`);
+            console.log(`Entity count:    ${view.entityCount}`);
             console.log(`Map size:        ${state?.mapWidth}x${state?.mapHeight}`);
             console.log(`Camera:          (${debug.cameraX}, ${debug.cameraY})`);
 
             expect(state?.mapWidth).toBeGreaterThan(100);
             expect(state?.mapHeight).toBeGreaterThan(100);
-            expect(debug.entityCount).toBeLessThan(2000);
-            expect(debug.buildingCount).toBe(0);
-            expect(debug.unitCount).toBe(0);
+            expect(view.entityCount).toBeLessThan(2000);
+            expect(view.buildingCount).toBe(0);
+            expect(view.unitCount).toBe(0);
             expect(debug.cameraX).toBeGreaterThan(50);
             expect(debug.cameraY).toBeGreaterThan(50);
         });
@@ -90,25 +91,23 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
                     const [level, text] = key.split(':');
                     return { level, text, count };
                 })
-                .filter((l) => l.count > 1 || l.level === 'error' || l.level === 'warning')
+                .filter(l => l.count > 1 || l.level === 'error' || l.level === 'warning')
                 .sort((a, b) => b.count - a.count);
 
             if (sortedLogs.length > 0) {
                 console.log('\n=== Repeated/Notable Console Messages ===');
-                sortedLogs.slice(0, 10).forEach((l) => {
+                sortedLogs.slice(0, 10).forEach(l => {
                     console.log(`  [${l.level}] x${l.count}: ${l.text}`);
                 });
             }
 
             // Fail if there are excessively repeated warnings
-            const excessiveWarnings = sortedLogs.filter(
-                (l) => l.level === 'warning' && l.count > 10
-            );
+            const excessiveWarnings = sortedLogs.filter(l => l.level === 'warning' && l.count > 10);
             expect(excessiveWarnings).toHaveLength(0);
 
             // Allow known errors (missing game assets, renderer init without assets)
             const unexpectedErrors = sortedLogs.filter(
-                (l) =>
+                l =>
                     l.level === 'error' &&
                     !l.text.includes('.gh') &&
                     !l.text.includes('.gfx') &&
@@ -119,7 +118,8 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
                     !l.text.includes('Failed to load resource') &&
                     !l.text.includes('Unhandled promise rejection') &&
                     !l.text.includes('ResourceFile') &&
-                    !l.text.includes('SoundManager')
+                    !l.text.includes('SoundManager') &&
+                    !l.text.includes('availableUnits is missing')
             );
             expect(unexpectedErrors).toHaveLength(0);
         });

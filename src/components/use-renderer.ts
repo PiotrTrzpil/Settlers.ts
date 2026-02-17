@@ -13,9 +13,19 @@ import { Renderer, type FrameRenderTiming } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { type TileCoord } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
-import { canPlaceBuildingFootprint, canPlaceResource, canPlaceUnit } from '@/game/features/placement';
+import {
+    canPlaceBuildingFootprint,
+    canPlaceResource,
+    canPlaceUnit,
+    isBuildable,
+    isMineBuildable,
+    computeSlopeDifficulty,
+    computeHeightRange,
+    MAX_SLOPE_DIFF,
+} from '@/game/features/placement';
 import type { CommandResult } from '@/game/commands';
 import { debugStats } from '@/game/debug-stats';
+import { gameViewState } from '@/game/game-view-state';
 import {
     InputManager,
     SelectMode,
@@ -31,7 +41,8 @@ import {
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { SelectionBox, PlacementPreview } from '@/game/input/render-state';
 import { createRenderContext, type ServiceAreaRenderData } from '@/game/renderer/render-context';
-import { getBuildingVisualState } from '@/game/features/building-construction';
+import { getBuildingVisualState, BuildingConstructionPhase } from '@/game/features/building-construction';
+import { gameSettings } from '@/game/game-settings';
 import { EntityType } from '@/game/entity';
 
 /** Context object for render callback - avoids excessive callback parameters */
@@ -52,9 +63,6 @@ function syncEntityRendererState(
     alpha: number,
     viewPoint: import('@/game/renderer/i-view-point').IViewPoint
 ): void {
-    // Build render context using the builder pattern
-    const buildingStates = g.services.buildingStateManager.buildingStates;
-
     // Collect service areas for selected hub buildings
     const serviceAreas: ServiceAreaRenderData[] = [];
     const sam = g.services.serviceAreaManager;
@@ -68,15 +76,25 @@ function syncEntityRendererState(
         }
     }
 
+    // Feature-specific computation happens here (glue layer), not in the renderer.
+    // The renderer receives pre-computed BuildingRenderState via the context.
+    const bsm = g.services.buildingStateManager;
+    const animService = g.services.animationService;
+
     const renderContext = createRenderContext()
         .entities(g.state.entities)
         .unitStates(g.state.unitStates)
         .resourceStates(g.state.resources.states)
-        .buildingStates(buildingStates)
-        .buildingVisualStateGetter(entityId => {
-            const state = g.services.buildingStateManager.getBuildingState(entityId);
-            return getBuildingVisualState(state);
+        .buildingRenderStateGetter(entityId => {
+            const state = bsm.getBuildingState(entityId);
+            const vs = getBuildingVisualState(state);
+            return {
+                useConstructionSprite: vs.useConstructionSprite,
+                verticalProgress: vs.verticalProgress,
+                showConstructionBackground: vs.phase === BuildingConstructionPhase.CompletedRising,
+            };
         })
+        .animationStateGetter(entityId => animService.getState(entityId))
         .selection({
             primaryId: g.state.selection.selectedEntityId,
             ids: g.state.selection.selectedEntityIds,
@@ -84,6 +102,11 @@ function syncEntityRendererState(
         .selectedServiceAreas(serviceAreas)
         .alpha(alpha)
         .layerVisibility(ctx.layerVisibility)
+        .settings({
+            showBuildingFootprint: gameSettings.state.showBuildingFootprint,
+            disablePlayerTinting: gameSettings.state.disablePlayerTinting,
+            antialias: gameSettings.state.antialias,
+        })
         .groundHeight(g.groundHeight)
         .groundType(g.groundType)
         .mapSize(g.mapSize.width, g.mapSize.height)
@@ -195,7 +218,7 @@ function createRenderCallback(
             syncEntityRendererState(er, g, ctx, alpha, renderer.viewPoint);
 
             const renderState = inputManager?.getRenderState();
-            const mode = debugStats.state.mode;
+            const mode = gameViewState.state.mode;
             const inPlacementMode = mode === 'place_building' || mode === 'place_resource' || mode === 'place_unit';
             er.buildingIndicatorsEnabled = inPlacementMode;
 
@@ -379,27 +402,28 @@ interface UseRendererOptions {
     initialCamera?: { x: number; y: number; zoom: number } | null;
 }
 
-/** Handle mode changes and update debug stats */
+/** Handle mode changes and update game view state */
 function handleModeChange(getGame: () => Game | null): (oldMode: string, newMode: string, data?: any) => void {
     return (_oldMode, newMode, data) => {
-        debugStats.state.mode = newMode;
+        gameViewState.state.mode = newMode;
 
         // Update building type
-        debugStats.state.placeBuildingType =
+        gameViewState.state.placeBuildingType =
             newMode === 'place_building' && data?.buildingType !== undefined ? data.buildingType : 0;
 
         // Update resource type
-        debugStats.state.placeResourceType =
+        gameViewState.state.placeResourceType =
             newMode === 'place_resource' && data?.resourceType !== undefined ? data.resourceType : 0;
 
         // Update unit type
-        debugStats.state.placeUnitType = newMode === 'place_unit' && data?.unitType !== undefined ? data.unitType : 0;
+        gameViewState.state.placeUnitType =
+            newMode === 'place_unit' && data?.unitType !== undefined ? data.unitType : 0;
 
         // Sync with game for backward compatibility
         const game = getGame();
         if (game) {
             game.mode = newMode as any;
-            game.placeBuildingType = debugStats.state.placeBuildingType;
+            game.placeBuildingType = gameViewState.state.placeBuildingType;
         }
     };
 }
@@ -499,8 +523,13 @@ export function useRenderer({
         );
         renderer.add(landscapeRenderer);
 
-        entityRenderer = new EntityRenderer(game.mapSize, game.groundHeight, game.fileManager, game.groundType);
-        entityRenderer.setAnimationService(game.services.animationService);
+        entityRenderer = new EntityRenderer(game.mapSize, game.groundHeight, game.fileManager, game.groundType, {
+            isBuildableTerrain: isBuildable,
+            isMineBuildableTerrain: isMineBuildable,
+            computeSlopeDifficulty,
+            computeHeightRange,
+            maxSlopeDiff: MAX_SLOPE_DIFF,
+        });
         entityRenderer.skipSpriteLoading = game.useProceduralTextures;
         entityRenderer.onSpritesLoaded = () => game.enableTicks();
         renderer.add(entityRenderer);
@@ -553,6 +582,7 @@ export function useRenderer({
         if (game == null || renderer == null) return;
 
         debugStats.reset();
+        gameViewState.reset();
         renderer.clear();
 
         setupRenderers(game);

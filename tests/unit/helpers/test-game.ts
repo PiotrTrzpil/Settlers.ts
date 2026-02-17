@@ -115,10 +115,16 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         eventBus,
     });
 
+    // Pre-declare context variable so the lazy executor closure can capture it
+    // eslint-disable-next-line prefer-const -- must be let: assigned after construction system captures it in a closure
+    let context: TestContext;
+
     // Create and register BuildingConstructionSystem for event handling
+    // Uses a lazy command executor so it references the returned context
     const buildingConstructionSystem = new BuildingConstructionSystem({
         gameState: state,
         buildingStateManager,
+        executeCommand: cmd => executeCommand(toCommandContext(context), cmd),
     });
     buildingConstructionSystem.setTerrainContext({
         groundType: map.groundType,
@@ -135,7 +141,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         buildingStateManager.createBuildingState(entityId, buildingType, x, y);
     });
 
-    return {
+    context = {
         state,
         map,
         eventBus,
@@ -146,6 +152,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         buildingStateManager,
         buildingConstructionSystem,
     };
+    return context;
 }
 
 // ─── Entity creation helpers ────────────────────────────────────────
@@ -243,14 +250,25 @@ export function tickConstruction(
     gameState: GameState,
     buildingStateManager: BuildingStateManager,
     dt: number,
-    ctx: TerrainContext
+    ctx: TerrainContext,
+    eventBus?: EventBus
 ): void {
+    const bus = eventBus ?? new EventBus();
+    const cmdCtx: CommandContext = {
+        state: gameState,
+        groundType: ctx.groundType,
+        groundHeight: ctx.groundHeight,
+        mapSize: ctx.mapSize,
+        eventBus: bus,
+        buildingStateManager,
+    };
     const system = new BuildingConstructionSystem({
         gameState,
         buildingStateManager,
+        executeCommand: cmd => executeCommand(cmdCtx, cmd),
     });
     system.setTerrainContext(ctx);
-    system.registerEvents(new EventBus());
+    system.registerEvents(bus);
     system.tick(dt);
 }
 
@@ -280,9 +298,11 @@ export function createTestEventBus(
     buildingStateManager: BuildingStateManager
 ): EventBus {
     const eventBus = new EventBus();
+    const noopExecute = () => ({ success: true });
     const system = new BuildingConstructionSystem({
         gameState: state,
         buildingStateManager,
+        executeCommand: noopExecute,
     });
     system.setTerrainContext({
         groundType: map.groundType,

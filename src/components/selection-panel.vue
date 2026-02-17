@@ -170,6 +170,7 @@ import { BuildingConstructionPhase } from '@/game/features/building-construction
 import { getFatigueLevel } from '@/game/features/carriers/carrier-state';
 import { RequestStatus } from '@/game/features/logistics/resource-request';
 import { debugStats } from '@/game/debug-stats';
+import { gameViewState } from '@/game/game-view-state';
 import {
     CARRIER_STATUS_NAMES,
     CARRIER_STATUS_CLASSES,
@@ -182,19 +183,18 @@ const props = defineProps<{
     game: Game | null;
 }>();
 
-// Use debugStats for reactivity (it's updated every frame)
-// Include frameCount as dependency and return a fresh snapshot so Vue sees changes
+// Use gameViewState for reactivity (updated every tick from game loop)
+// Touch tick counter to force re-evaluation when entity properties change
 const selectedEntity = computed<Entity | undefined>(() => {
-    // Touch frameCount to make this computed re-evaluate each frame
-    void debugStats.state.frameCount;
-    const entityId = debugStats.state.selectedEntityId;
+    void gameViewState.state.tick;
+    const entityId = gameViewState.state.selectedEntityId;
     if (entityId === null || !props.game) return undefined;
     const entity = props.game.state.getEntity(entityId);
     // Return a shallow copy so Vue detects changes to entity properties
     return entity ? { ...entity } : undefined;
 });
 
-const selectionCount = computed(() => debugStats.state.selectedCount);
+const selectionCount = computed(() => gameViewState.state.selectedCount);
 
 // Player colors for display
 const PLAYER_COLORS = [
@@ -321,7 +321,7 @@ interface CarrierDebugInfo {
 
 const carrierDebug = computed<CarrierDebugInfo | null>(() => {
     // Touch frameCount to re-evaluate every frame (carrier state changes frequently)
-    void debugStats.state.frameCount;
+    void gameViewState.state.tick;
     const entity = selectedEntity.value;
     if (!entity || entity.type !== EntityType.Unit) return null;
     if (!props.game) return null;
@@ -384,7 +384,7 @@ const PHASE_NAMES: Record<BuildingConstructionPhase, string> = {
 
 const buildingDebug = computed<BuildingDebugInfo | null>(() => {
     // Touch frameCount to re-evaluate every frame (building state changes)
-    void debugStats.state.frameCount;
+    void gameViewState.state.tick;
     const entity = selectedEntity.value;
     if (!entity || entity.type !== EntityType.Building) return null;
     if (!props.game) return null;

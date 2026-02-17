@@ -1,4 +1,5 @@
-import { BuildingType, UnitType } from '../entity';
+import { BuildingType, MapObjectType, UnitType } from '../entity';
+import type { EMaterialType } from '../economy/material-type';
 
 /**
  * Formation offsets for multi-unit movement commands.
@@ -78,6 +79,58 @@ export interface MoveSelectedUnitsCommand {
     targetY: number;
 }
 
+// === System Commands (internal, not player-initiated) ===
+
+export interface SpawnVisualResourceCommand {
+    type: 'spawn_visual_resource';
+    materialType: EMaterialType;
+    x: number;
+    y: number;
+    player: number;
+    quantity: number;
+    /** If set, marks the resource as reserved for this building */
+    buildingId?: number;
+}
+
+export interface SpawnBuildingUnitsCommand {
+    type: 'spawn_building_units';
+    buildingEntityId: number;
+}
+
+export interface PlantTreeCommand {
+    type: 'plant_tree';
+    treeType: MapObjectType;
+    x: number;
+    y: number;
+}
+
+// === Script Commands (from Lua scripting API) ===
+
+export interface ScriptAddGoodsCommand {
+    type: 'script_add_goods';
+    materialType: number;
+    x: number;
+    y: number;
+    amount: number;
+}
+
+export interface ScriptAddBuildingCommand {
+    type: 'script_add_building';
+    buildingType: number;
+    x: number;
+    y: number;
+    player: number;
+}
+
+export interface ScriptAddSettlersCommand {
+    type: 'script_add_settlers';
+    unitType: number;
+    x: number;
+    y: number;
+    player: number;
+    amount: number;
+}
+
 // === Selection Commands ===
 
 export interface SelectCommand {
@@ -118,7 +171,13 @@ export type Command =
     | ToggleSelectionCommand
     | SelectAreaCommand
     | MoveSelectedUnitsCommand
-    | RemoveEntityCommand;
+    | RemoveEntityCommand
+    | SpawnVisualResourceCommand
+    | SpawnBuildingUnitsCommand
+    | PlantTreeCommand
+    | ScriptAddGoodsCommand
+    | ScriptAddBuildingCommand
+    | ScriptAddSettlersCommand;
 
 // === Command Result Types ===
 
@@ -132,7 +191,8 @@ export type CommandEffect =
     | { type: 'entity_moved'; entityId: number; fromX: number; fromY: number; toX: number; toY: number }
     | { type: 'selection_changed'; selectedIds: number[] }
     | { type: 'building_placed'; entityId: number; buildingType: BuildingType; x: number; y: number }
-    | { type: 'unit_spawned'; entityId: number; unitType: UnitType; x: number; y: number };
+    | { type: 'unit_spawned'; entityId: number; unitType: UnitType; x: number; y: number }
+    | { type: 'tree_planted'; entityId: number; treeType: MapObjectType; x: number; y: number };
 
 /**
  * Result of command execution.

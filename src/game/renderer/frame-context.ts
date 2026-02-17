@@ -17,7 +17,7 @@
  */
 
 import { Entity, EntityType } from '../entity';
-import { UnitStateLookup } from '../game-state';
+import type { UnitStateLookup } from './render-context';
 import { MapSize } from '@/utilities/map-size';
 import { IViewPoint } from './i-view-point';
 import { heightToWorld, TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';

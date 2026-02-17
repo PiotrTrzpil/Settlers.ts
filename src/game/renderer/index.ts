@@ -12,7 +12,8 @@
 // ============================================================================
 export { Renderer, type FrameRenderTiming, type RendererOptions } from './renderer';
 export { LandscapeRenderer } from './landscape/landscape-renderer';
-export { EntityRenderer, type PlacementPreviewState } from './entity-renderer';
+export { EntityRenderer } from './entity-renderer';
+export type { PlacementPreviewState } from './render-context';
 
 // ============================================================================
 // View/Camera
@@ -23,7 +24,18 @@ export type { IViewPoint, IViewPointReadonly } from './i-view-point';
 // ============================================================================
 // Render Context
 // ============================================================================
-export { type IRenderContext, type SelectionState, RenderContextBuilder, createRenderContext } from './render-context';
+export {
+    type IRenderContext,
+    type SelectionState,
+    type PlacementEntityType,
+    type UnitStateLookup,
+    type UnitRenderState,
+    type BuildingRenderState,
+    type RenderSettings,
+    type ServiceAreaRenderData,
+    RenderContextBuilder,
+    createRenderContext,
+} from './render-context';
 
 // ============================================================================
 // Layer Visibility

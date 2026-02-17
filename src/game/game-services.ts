@@ -28,6 +28,7 @@ import { BuildingLifecycle } from './features/building-lifecycle';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { UnitType } from './entity';
 import { AnimationService } from './animation/index';
+import type { Command, CommandResult } from './commands';
 
 export class GameServices {
     // ===== Animation =====
@@ -82,7 +83,7 @@ export class GameServices {
     private readonly eventBus: EventBus;
     private readonly tickSystems: TickSystem[] = [];
 
-    constructor(gameState: GameState, eventBus: EventBus) {
+    constructor(gameState: GameState, eventBus: EventBus, executeCommand: (cmd: Command) => CommandResult) {
         this.eventBus = eventBus;
 
         // 1. Animation service — other systems depend on it
@@ -119,6 +120,7 @@ export class GameServices {
         this.constructionSystem = new BuildingConstructionSystem({
             gameState,
             buildingStateManager: this.buildingStateManager,
+            executeCommand,
         });
         this.constructionSystem.registerEvents(eventBus);
         this.addSystem(this.constructionSystem);
@@ -142,6 +144,7 @@ export class GameServices {
         });
         this.featureRegistry.load(TreeFeature);
         this.treeSystem = this.featureRegistry.getFeatureExports<TreeFeatureExports>('trees').treeSystem;
+        this.treeSystem.setCommandExecutor(executeCommand);
         for (const system of this.featureRegistry.getSystems()) {
             this.addSystem(system);
         }
@@ -187,7 +190,7 @@ export class GameServices {
         this.addSystem(this.materialRequestSystem);
 
         // 11. Inventory visualizer
-        this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager);
+        this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager, executeCommand);
 
         // 12. Building lifecycle coordinator
         this.buildingLifecycle = new BuildingLifecycle({

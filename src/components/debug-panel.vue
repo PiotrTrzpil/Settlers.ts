@@ -183,23 +183,23 @@
                 <div v-if="sections.entities" class="section-body">
                     <div class="stat-row">
                         <span class="stat-label">Total</span>
-                        <span class="stat-value">{{ stats.entityCount }}</span>
+                        <span class="stat-value">{{ view.entityCount }}</span>
                     </div>
                     <div class="stat-row">
                         <span class="stat-label">Buildings</span>
-                        <span class="stat-value">{{ stats.buildingCount }}</span>
+                        <span class="stat-value">{{ view.buildingCount }}</span>
                     </div>
                     <div class="stat-row">
                         <span class="stat-label">Units</span>
-                        <span class="stat-value">{{ stats.unitCount }}</span>
+                        <span class="stat-value">{{ view.unitCount }}</span>
                     </div>
                     <div class="stat-row">
                         <span class="stat-label">Moving</span>
-                        <span class="stat-value">{{ stats.unitsMoving }}</span>
+                        <span class="stat-value">{{ view.unitsMoving }}</span>
                     </div>
                     <div class="stat-row">
                         <span class="stat-label">Path steps</span>
-                        <span class="stat-value">{{ stats.totalPathSteps }}</span>
+                        <span class="stat-value">{{ view.totalPathSteps }}</span>
                     </div>
                 </div>
             </section>
@@ -342,6 +342,7 @@
 <script setup lang="ts">
 import { reactive, computed } from 'vue';
 import { debugStats } from '@/game/debug-stats';
+import { gameViewState } from '@/game/game-view-state';
 import { gameSettings } from '@/game/game-settings';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
 import type { Game } from '@/game/game';
@@ -359,6 +360,7 @@ defineEmits<{
 }>();
 
 const stats = debugStats.state;
+const view = gameViewState.state;
 const settings = gameSettings.state;
 
 // Use the persisted open state from debug stats

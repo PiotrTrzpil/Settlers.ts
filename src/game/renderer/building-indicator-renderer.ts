@@ -2,14 +2,7 @@ import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { TileCoord, tileKey, BuildingType, getBuildingFootprint, isMineBuilding } from '../entity';
-import {
-    isBuildable,
-    isMineBuildable,
-    PlacementStatus,
-    computeSlopeDifficulty,
-    computeHeightRange,
-    MAX_SLOPE_DIFF,
-} from '../features/placement';
+import { PlacementStatus } from '../features/placement';
 import { ShaderProgram } from './shader-program';
 
 import vertCode from './shaders/entity-vert.glsl';
@@ -17,6 +10,24 @@ import fragCode from './shaders/entity-frag.glsl';
 
 // Re-export PlacementStatus for backward compatibility
 export { PlacementStatus } from '../features/placement';
+
+/**
+ * Injected terrain validation functions for building indicator display.
+ * Decouples the renderer from direct feature module imports.
+ * The glue layer (use-renderer.ts) provides an implementation sourced from features/placement.
+ */
+export interface PlacementChecker {
+    /** Check if a ground type value allows building placement */
+    isBuildableTerrain(groundTypeValue: number): boolean;
+    /** Check if a ground type value allows mine placement */
+    isMineBuildableTerrain(groundTypeValue: number): boolean;
+    /** Compute slope difficulty for a building footprint */
+    computeSlopeDifficulty(footprint: TileCoord[], groundHeight: Uint8Array, mapSize: MapSize): PlacementStatus;
+    /** Compute height range across a footprint (for color gradient) */
+    computeHeightRange(footprint: TileCoord[], groundHeight: Uint8Array, mapSize: MapSize): number;
+    /** Maximum slope difference for gradient normalization */
+    maxSlopeDiff: number;
+}
 
 /**
  * Color mapping for non-buildable statuses (RGBA, 0-1 range).
@@ -77,17 +88,6 @@ export function isBuildableStatus(status: PlacementStatus): boolean {
 }
 
 /**
- * Get gradient color based on height range.
- * Maps height range 0 to MAX_SLOPE_DIFF onto the 10-color gradient.
- */
-function getGradientColor(heightRange: number): number[] {
-    // Map heightRange (0 to MAX_SLOPE_DIFF) to index (0 to 9)
-    const normalizedSlope = Math.min(heightRange / MAX_SLOPE_DIFF, 1.0);
-    const index = Math.min(Math.floor(normalizedSlope * 10), 9);
-    return SLOPE_GRADIENT[index];
-}
-
-/**
  * Renders building placement indicators across the visible terrain.
  * Shows colored dots indicating where buildings can be placed and the
  * relative difficulty (based on slope/terrain).
@@ -100,6 +100,7 @@ export class BuildingIndicatorRenderer {
     private mapSize: MapSize;
     private groundType: Uint8Array;
     private groundHeight: Uint8Array;
+    private placement: PlacementChecker;
 
     // Cached attribute locations
     private aPosition = -1;
@@ -125,10 +126,11 @@ export class BuildingIndicatorRenderer {
     // External dependencies
     public tileOccupancy: Map<string, number> = new Map();
 
-    constructor(mapSize: MapSize, groundType: Uint8Array, groundHeight: Uint8Array) {
+    constructor(mapSize: MapSize, groundType: Uint8Array, groundHeight: Uint8Array, placement: PlacementChecker) {
         this.mapSize = mapSize;
         this.groundType = groundType;
         this.groundHeight = groundHeight;
+        this.placement = placement;
     }
 
     /**
@@ -173,15 +175,17 @@ export class BuildingIndicatorRenderer {
     /** Check individual tile for basic placement requirements */
     private checkTileBasics(tile: TileCoord, isMine: boolean): PlacementStatus | null {
         const idx = this.mapSize.toIndex(tile.x, tile.y);
-        const terrainOk = isMine ? isMineBuildable(this.groundType[idx]) : isBuildable(this.groundType[idx]);
+        const terrainOk = isMine
+            ? this.placement.isMineBuildableTerrain(this.groundType[idx])
+            : this.placement.isBuildableTerrain(this.groundType[idx]);
         if (!terrainOk) return PlacementStatus.InvalidTerrain;
         if (this.tileOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
         return null;
     }
 
-    /** Compute slope difficulty rating using shared placement logic */
+    /** Compute slope difficulty rating using injected placement logic */
     private computeSlopeDifficultyForFootprint(footprint: TileCoord[]): PlacementStatus {
-        return computeSlopeDifficulty(footprint, this.groundHeight, this.mapSize);
+        return this.placement.computeSlopeDifficulty(footprint, this.groundHeight, this.mapSize);
     }
 
     /**
@@ -215,6 +219,16 @@ export class BuildingIndicatorRenderer {
     }
 
     /**
+     * Get gradient color based on height range.
+     * Maps height range 0 to maxSlopeDiff onto the 10-color gradient.
+     */
+    private getGradientColor(heightRange: number): number[] {
+        const normalizedSlope = Math.min(heightRange / this.placement.maxSlopeDiff, 1.0);
+        const index = Math.min(Math.floor(normalizedSlope * 10), 9);
+        return SLOPE_GRADIENT[index];
+    }
+
+    /**
      * Rebuild the indicator cache for visible tiles.
      * Only stores buildable tiles to minimize draw loop iterations.
      */
@@ -244,7 +258,7 @@ export class BuildingIndicatorRenderer {
                     // Compute height range for gradient color
                     const footprint =
                         this.buildingType !== null ? getBuildingFootprint(x, y, this.buildingType) : [{ x, y }];
-                    const heightRange = computeHeightRange(footprint, this.groundHeight, this.mapSize);
+                    const heightRange = this.placement.computeHeightRange(footprint, this.groundHeight, this.mapSize);
                     this.indicatorCache.push({ x, y, status, heightRange });
                 }
             }
@@ -290,7 +304,7 @@ export class BuildingIndicatorRenderer {
 
             const worldPos = TilePicker.tileToWorld(x, y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
 
-            const color = isHovered ? HOVER_COLOR : getGradientColor(indicator.heightRange);
+            const color = isHovered ? HOVER_COLOR : this.getGradientColor(indicator.heightRange);
             const scale = isHovered ? HOVER_DOT_SCALE : INDICATOR_DOT_SCALE;
 
             this.addQuadToBatch(worldPos.worldX, worldPos.worldY, scale, color);

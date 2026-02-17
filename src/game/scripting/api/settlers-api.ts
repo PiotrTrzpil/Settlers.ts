@@ -10,6 +10,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { EntityType, UnitType } from '@/game/entity';
+import type { Command, CommandResult } from '@/game/commands';
 
 const log = new LogHandler('SettlersAPI');
 
@@ -112,6 +113,7 @@ export interface SettlersAPIContext {
     gameState: GameState;
     /** Optional: move a unit to a target position (uses pathfinding) */
     moveUnit?: (entityId: number, targetX: number, targetY: number) => boolean;
+    executeCommand?: (cmd: Command) => CommandResult;
 }
 
 /**
@@ -136,17 +138,16 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
                 `AddSettlers: ${amount}x type ${settlerType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`
             );
 
-            const created: number[] = [];
-            for (let i = 0; i < amount; i++) {
-                // Offset slightly for multiple units
-                const offsetX = x + (i % 3);
-                const offsetY = y + Math.floor(i / 3);
+            const result = context.executeCommand!({
+                type: 'script_add_settlers',
+                unitType: internalType,
+                x,
+                y,
+                player,
+                amount,
+            });
 
-                const entity = context.gameState.addEntity(EntityType.Unit, internalType, offsetX, offsetY, player);
-                created.push(entity.id);
-            }
-
-            return created.length;
+            return result.effects?.length ?? 0;
         }
     );
 

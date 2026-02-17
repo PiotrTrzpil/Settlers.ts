@@ -19,7 +19,7 @@ import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
 import { LayerVisibility, loadLayerVisibility, saveLayerVisibility } from '@/game/renderer/layer-visibility';
-import { debugStats } from '@/game/debug-stats';
+import { gameViewState } from '@/game/game-view-state';
 import { gameSettings } from '@/game/game-settings';
 import type { InputManager } from '@/game/input';
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
@@ -232,7 +232,10 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
             const inputManager = getInputManager();
             if (!game || !inputManager) return;
 
-            if (debugStats.state.mode === 'place_building' && debugStats.state.placeBuildingType === buildingType) {
+            if (
+                gameViewState.state.mode === 'place_building' &&
+                gameViewState.state.placeBuildingType === buildingType
+            ) {
                 inputManager.switchMode('select');
             } else {
                 inputManager.switchMode('place_building', {
@@ -246,7 +249,10 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
             const inputManager = getInputManager();
             if (!getGame() || !inputManager) return;
 
-            if (debugStats.state.mode === 'place_resource' && debugStats.state.placeResourceType === resourceType) {
+            if (
+                gameViewState.state.mode === 'place_resource' &&
+                gameViewState.state.placeResourceType === resourceType
+            ) {
                 inputManager.switchMode('select');
             } else {
                 inputManager.switchMode('place_resource', { resourceType, amount });
@@ -258,7 +264,7 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
             const inputManager = getInputManager();
             if (!game || !inputManager) return;
 
-            if (debugStats.state.mode === 'place_unit' && debugStats.state.placeUnitType === unitType) {
+            if (gameViewState.state.mode === 'place_unit' && gameViewState.state.placeUnitType === unitType) {
                 inputManager.switchMode('select');
             } else {
                 inputManager.switchMode('place_unit', { unitType });
@@ -522,21 +528,21 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
     const isPaused = computed(() => (game.value ? !game.value.isRunning : false));
 
     // Mode state - use debugStats as the single source of truth
-    const currentMode = computed(() => debugStats.state.mode);
-    const placeBuildingType = computed(() => debugStats.state.placeBuildingType);
-    const placeResourceType = computed(() => debugStats.state.placeResourceType);
-    const placeUnitType = computed(() => debugStats.state.placeUnitType);
+    const currentMode = computed(() => gameViewState.state.mode);
+    const placeBuildingType = computed(() => gameViewState.state.placeBuildingType);
+    const placeResourceType = computed(() => gameViewState.state.placeResourceType);
+    const placeUnitType = computed(() => gameViewState.state.placeUnitType);
 
     // Entity counts from debugStats
     const layerCounts = computed<LayerCounts>(() => ({
-        buildings: debugStats.state.buildingCount,
-        units: debugStats.state.unitCount,
-        resources: debugStats.state.resourceCount,
-        environment: debugStats.state.environmentCount,
-        trees: debugStats.state.treeCount,
-        stones: debugStats.state.stoneCount,
-        plants: debugStats.state.plantCount,
-        other: debugStats.state.otherCount,
+        buildings: gameViewState.state.buildingCount,
+        units: gameViewState.state.unitCount,
+        resources: gameViewState.state.resourceCount,
+        environment: gameViewState.state.environmentCount,
+        trees: gameViewState.state.treeCount,
+        stones: gameViewState.state.stoneCount,
+        plants: gameViewState.state.plantCount,
+        other: gameViewState.state.otherCount,
     }));
 
     // =========================================================================
@@ -562,11 +568,11 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
 
     // Update resource placement mode when amount changes
     watch(resourceAmount, () => {
-        if (debugStats.state.mode === 'place_resource' && debugStats.state.placeResourceType) {
+        if (gameViewState.state.mode === 'place_resource' && gameViewState.state.placeResourceType) {
             const inputManager = getInputManager?.();
             if (inputManager) {
                 inputManager.switchMode('place_resource', {
-                    resourceType: debugStats.state.placeResourceType,
+                    resourceType: gameViewState.state.placeResourceType,
                     amount: resourceAmount.value,
                 });
             }

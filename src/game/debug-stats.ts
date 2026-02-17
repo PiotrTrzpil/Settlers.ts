@@ -1,8 +1,15 @@
+/**
+ * debug-stats.ts — Performance instrumentation and debug settings.
+ *
+ * Owns ONLY: FPS/timing metrics, load timings, debug UI settings,
+ * camera/tile overlay state, and readiness flags for e2e tests.
+ *
+ * Game state for Vue components (mode, selection, entity counts) lives
+ * in {@link gameViewState} instead.
+ */
+
 import { reactive, watch } from 'vue';
-import { EntityType, MapObjectType } from './entity';
-import { isResourceDeposit, getEnvironmentSubLayer, EnvironmentSubLayer } from './renderer/layer-visibility';
 import type { Game } from './game';
-import type { GameState } from './game-state';
 import { gameSettings } from './game-settings';
 
 const WINDOW_SIZE = 60;
@@ -85,19 +92,6 @@ export interface DebugStatsState {
     frameTimeMax: number;
     ticksPerSec: number;
 
-    // Entities
-    entityCount: number;
-    buildingCount: number;
-    unitCount: number;
-    resourceCount: number;
-    environmentCount: number;
-    treeCount: number;
-    stoneCount: number;
-    plantCount: number;
-    otherCount: number;
-    unitsMoving: number;
-    totalPathSteps: number;
-
     // Camera (written externally)
     cameraX: number;
     cameraY: number;
@@ -113,14 +107,6 @@ export interface DebugStatsState {
     tileGroundType: number;
     tileGroundHeight: number;
     hasTile: boolean;
-
-    // Game mode (written by InputManager onModeChange callback)
-    mode: string;
-    placeBuildingType: number;
-    placeResourceType: number;
-    placeUnitType: number;
-    selectedEntityId: number | null;
-    selectedCount: number;
 
     // Audio state (for e2e tests)
     musicEnabled: boolean;
@@ -328,17 +314,6 @@ class DebugStats {
             frameTimeMin: 0,
             frameTimeMax: 0,
             ticksPerSec: 0,
-            entityCount: 0,
-            buildingCount: 0,
-            unitCount: 0,
-            resourceCount: 0,
-            environmentCount: 0,
-            treeCount: 0,
-            stoneCount: 0,
-            plantCount: 0,
-            otherCount: 0,
-            unitsMoving: 0,
-            totalPathSteps: 0,
             cameraX: 0,
             cameraY: 0,
             zoom: 0,
@@ -351,12 +326,6 @@ class DebugStats {
             tileGroundType: 0,
             tileGroundHeight: 0,
             hasTile: false,
-            mode: 'select',
-            placeBuildingType: 0,
-            placeResourceType: 0,
-            placeUnitType: 0,
-            selectedEntityId: null,
-            selectedCount: 0,
             musicEnabled: true,
             musicPlaying: false,
             currentMusicId: null,
@@ -428,7 +397,6 @@ class DebugStats {
         this.tickCount = 0;
         this.tickResetTime = 0;
         this.lastRenderTimingUpdate = 0;
-        this.lastEntityCountUpdate = 0;
 
         // Clear render timing samples
         for (const key of Object.keys(this.renderSamples) as (keyof RenderTimingSamples)[]) {
@@ -528,110 +496,15 @@ class DebugStats {
         this.state.renderTimings.tickSystems = systems;
     }
 
-    // Throttle entity counting - no need to count every frame
-    private lastEntityCountUpdate = 0;
-    private static readonly ENTITY_COUNT_INTERVAL = 500; // ms
-
     /**
-     * Update debug stats from game state only (no Game wrapper needed).
-     * Called from GameLoop.tick() so stats update even without a render callback,
-     * enabling headless/CI environments without WebGL.
+     * Update debug stats from a running game (audio state, e2e window refs).
+     * Game view state (entities, selection, mode) is handled by gameViewState.
      */
-    public updateFromGameState(gameState: GameState): void {
-        // Always update total count (cheap)
-        this.state.entityCount = gameState.entities.length;
-
-        // Throttle expensive per-entity counting
-        const now = performance.now();
-        if (now - this.lastEntityCountUpdate < DebugStats.ENTITY_COUNT_INTERVAL) {
-            // Skip detailed counting, just update selection/mode state
-            this.state.selectedEntityId = gameState.selection.selectedEntityId;
-            this.state.selectedCount = gameState.selection.selectedEntityIds.size;
-            return;
-        }
-        this.lastEntityCountUpdate = now;
-
-        let buildings = 0;
-        let units = 0;
-        let resources = 0;
-        let environment = 0;
-        let trees = 0;
-        let stones = 0;
-        let plants = 0;
-        let other = 0;
-
-        for (const e of gameState.entities) {
-            switch (e.type) {
-            case EntityType.Building:
-                buildings++;
-                break;
-            case EntityType.Unit:
-                units++;
-                break;
-            case EntityType.StackedResource:
-                resources++;
-                break;
-            case EntityType.MapObject: {
-                const objType = e.subType as MapObjectType;
-                if (isResourceDeposit(objType)) {
-                    resources++;
-                } else {
-                    environment++;
-                    switch (getEnvironmentSubLayer(objType)) {
-                    case EnvironmentSubLayer.Trees:
-                        trees++;
-                        break;
-                    case EnvironmentSubLayer.Stones:
-                        stones++;
-                        break;
-                    case EnvironmentSubLayer.Plants:
-                        plants++;
-                        break;
-                    case EnvironmentSubLayer.Other:
-                        other++;
-                        break;
-                    }
-                }
-                break;
-            }
-            case EntityType.None:
-                // Skip placeholder/invalid entities
-                break;
-            }
-        }
-        this.state.buildingCount = buildings;
-        this.state.unitCount = units;
-        this.state.resourceCount = resources;
-        this.state.environmentCount = environment;
-        this.state.treeCount = trees;
-        this.state.stoneCount = stones;
-        this.state.plantCount = plants;
-        this.state.otherCount = other;
-
-        let moving = 0;
-        let pathSteps = 0;
-        for (const controller of gameState.movement.getAllControllers()) {
-            const remaining = controller.path.length - controller.pathIndex;
-            if (remaining > 0) {
-                moving++;
-                pathSteps += remaining;
-            }
-        }
-        this.state.unitsMoving = moving;
-        this.state.totalPathSteps = pathSteps;
-
-        // Note: mode and placeBuildingType are managed by InputManager onModeChange callback
-        // to ensure immediate updates without frame delay
-        this.state.selectedEntityId = gameState.selection.selectedEntityId;
-        this.state.selectedCount = gameState.selection.selectedEntityIds.size;
-    }
-
     public updateFromGame(game: Game): void {
         // Expose references for e2e tests (Vue internals are stripped in prod builds)
         (window as any).__settlers_game__ = game;
         (window as any).__settlers_game_settings__ = gameSettings;
 
-        this.updateFromGameState(game.state);
         this.updateAudioState(game);
     }
 

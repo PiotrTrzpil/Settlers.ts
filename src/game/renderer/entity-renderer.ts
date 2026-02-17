@@ -11,12 +11,6 @@ import {
     UnitType,
     MapObjectType,
 } from '../entity';
-import { UnitStateLookup } from '../game-state';
-import {
-    getBuildingVisualState,
-    BuildingConstructionPhase,
-    type BuildingState,
-} from '../features/building-construction';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { LogHandler } from '@/utilities/log-handler';
@@ -26,40 +20,30 @@ import { PLAYER_COLORS, TINT_NEUTRAL, TINT_SELECTED, TINT_PREVIEW_VALID, TINT_PR
 import { EMaterialType } from '../economy';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { PALETTE_TEXTURE_WIDTH } from './palette-texture';
-import { BuildingIndicatorRenderer } from './building-indicator-renderer';
+import { BuildingIndicatorRenderer, type PlacementChecker } from './building-indicator-renderer';
 import { SpriteBatchRenderer } from './sprite-batch-renderer';
 import { SelectionOverlayRenderer } from './selection-overlay-renderer';
-import { getAnimatedSprite, getAnimatedSpriteForDirection } from '../systems/animation';
-import type { AnimationService } from '../animation/index';
+import { getAnimatedSprite, getAnimatedSpriteForDirection } from './animation-helpers';
 import type { AnimationState } from '../animation';
 import { FrameContext, type IFrameContext } from './frame-context';
 import { OptimizedDepthSorter, type OptimizedSortContext } from './optimized-depth-sorter';
 import { profiler } from './debug/render-profiler';
 import { LayerVisibility, DEFAULT_LAYER_VISIBILITY, isMapObjectVisible } from './layer-visibility';
-import type { IRenderContext, ServiceAreaRenderData } from './render-context';
-import { gameSettings } from '../game-settings';
+import type {
+    IRenderContext,
+    ServiceAreaRenderData,
+    PlacementPreviewState,
+    PlacementEntityType,
+    UnitStateLookup,
+    BuildingRenderState,
+    RenderSettings,
+} from './render-context';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
 
-import type { PlacementEntityType } from '../input/render-state';
-
-/**
- * Consolidated placement preview state.
- * Replaces the previous 5 separate preview fields.
- */
-export interface PlacementPreviewState {
-    /** Tile position for the preview */
-    tile: TileCoord;
-    /** Whether placement is valid at this position */
-    valid: boolean;
-    /** Entity type being placed */
-    entityType: PlacementEntityType;
-    /** Specific subtype (BuildingType or EMaterialType as number) */
-    subType: number;
-    /** Variation/direction for sprite rendering (0-7 for resources) */
-    variation?: number;
-}
+// Re-export PlacementPreviewState from its canonical location
+export type { PlacementPreviewState } from './render-context';
 
 import {
     TEXTURE_UNIT_SPRITE_ATLAS,
@@ -87,8 +71,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Extracted managers and renderers
     // OK: nullable - procedural rendering works without sprites (testMap mode)
     public spriteManager: SpriteRenderManager | null = null;
-    // OK: nullable - can render without animations during initialization
-    private animationService: AnimationService | null = null;
     // OK: optional callback for sprite load completion
     private _onSpritesLoaded: (() => void) | null = null;
     private spriteBatchRenderer: SpriteBatchRenderer;
@@ -107,11 +89,25 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Unit states for smooth interpolation and path visualization
     public unitStates: UnitStateLookup = { get: () => undefined };
 
-    // Building states for construction animation
-    public buildingStates: Map<number, BuildingState> = new Map();
+    // Building render state provider (pre-computed in glue layer)
+    private getBuildingRenderState: (entityId: number) => BuildingRenderState = () => ({
+        useConstructionSprite: false,
+        verticalProgress: 1.0,
+        showConstructionBackground: false,
+    });
+
+    // Animation state provider (from context)
+    private getAnimState: (entityId: number) => AnimationState | null = () => null;
 
     // Resource states for stacked resources (quantity tracking)
     public resourceStates: Map<number, StackedResourceState> = new Map();
+
+    // Rendering-relevant settings (from context)
+    private renderSettings: RenderSettings = {
+        showBuildingFootprint: false,
+        disablePlayerTinting: false,
+        antialias: false,
+    };
 
     // Consolidated placement preview state
     public placementPreview: PlacementPreviewState | null = null;
@@ -229,14 +225,29 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     /** Skip sprite loading (for testMap or procedural textures mode) */
     public skipSpriteLoading = false;
 
-    constructor(mapSize: MapSize, groundHeight: Uint8Array, fileManager?: FileManager, groundType?: Uint8Array) {
+    constructor(
+        mapSize: MapSize,
+        groundHeight: Uint8Array,
+        fileManager?: FileManager,
+        groundType?: Uint8Array,
+        placementChecker?: PlacementChecker
+    ) {
         super();
         this.mapSize = mapSize;
         this.groundHeight = groundHeight;
+        // Default no-op placement checker (all tiles invalid) when not provided
+        const checker: PlacementChecker = placementChecker ?? {
+            isBuildableTerrain: () => false,
+            isMineBuildableTerrain: () => false,
+            computeSlopeDifficulty: () => 0 as any,
+            computeHeightRange: () => 0,
+            maxSlopeDiff: 1,
+        };
         this.buildingIndicatorRenderer = new BuildingIndicatorRenderer(
             mapSize,
             groundType ?? new Uint8Array(mapSize.width * mapSize.height),
-            groundHeight
+            groundHeight,
+            checker
         );
         this.spriteBatchRenderer = new SpriteBatchRenderer();
         this.selectionOverlayRenderer = new SelectionOverlayRenderer();
@@ -245,20 +256,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (fileManager) {
             this.spriteManager = new SpriteRenderManager(fileManager, TEXTURE_UNIT_SPRITE_ATLAS);
         }
-    }
-
-    /**
-     * Set the animation service for reading animation state.
-     */
-    public setAnimationService(animationService: AnimationService): void {
-        this.animationService = animationService;
-    }
-
-    /**
-     * Get animation state for an entity from AnimationService.
-     */
-    private getAnimState(entityId: number): AnimationState | null {
-        return this.animationService?.getState(entityId) ?? null;
     }
 
     // eslint-disable-next-line @typescript-eslint/require-await -- sprite loading is fire-and-forget
@@ -345,10 +342,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.selectedEntityId = ctx.selection.primaryId;
         this.selectedEntityIds = ctx.selection.ids as Set<number>;
         this.unitStates = ctx.unitStates;
-        this.buildingStates = ctx.buildingStates as Map<number, BuildingState>;
+        this.getBuildingRenderState = ctx.getBuildingRenderState;
+        this.getAnimState = ctx.getAnimationState;
         this.resourceStates = ctx.resourceStates as Map<number, StackedResourceState>;
         this.renderAlpha = ctx.alpha;
         this.layerVisibility = ctx.layerVisibility;
+        this.renderSettings = ctx.settings;
         this.placementPreview = ctx.placementPreview;
         this.selectedServiceAreas = ctx.selectedServiceAreas;
     }
@@ -463,7 +462,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.frameCullSortTime = performance.now() - cullSortStart;
 
         // Draw building footprints BEFORE entities (ground overlay)
-        if (gameSettings.state.showBuildingFootprint) {
+        if (this.renderSettings.showBuildingFootprint) {
             // Activate color shader for footprints
             super.drawBase(gl, projection);
             gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
@@ -486,7 +485,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Draw service area circles for selected hub buildings
         if (this.selectedServiceAreas.length > 0) {
             // Activate color shader for service area circles
-            if (!gameSettings.state.showBuildingFootprint) {
+            if (!this.renderSettings.showBuildingFootprint) {
                 super.drawBase(gl, projection);
                 gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
                 gl.enableVertexAttribArray(this.aPosition);
@@ -628,12 +627,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private getBuildingSprite(entity: Entity): { sprite: SpriteEntry | null; progress: number } {
         if (!this.spriteManager) return { sprite: null, progress: 1 };
 
-        const buildingState = this.buildingStates.get(entity.id);
-        const visualState = getBuildingVisualState(buildingState);
+        const renderState = this.getBuildingRenderState(entity.id);
         const buildingType = entity.subType as BuildingType;
 
         let sprite: SpriteEntry | null;
-        if (visualState.useConstructionSprite) {
+        if (renderState.useConstructionSprite) {
             sprite =
                 this.spriteManager.getBuildingConstruction(buildingType) ??
                 this.spriteManager.getBuilding(buildingType);
@@ -642,7 +640,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             sprite = this.getAnimatedEntitySprite(entity, fallback);
         }
 
-        return { sprite, progress: visualState.verticalProgress };
+        return { sprite, progress: renderState.verticalProgress };
     }
 
     /** Get sprite entry for a map object entity */
@@ -749,7 +747,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             projection,
             paletteWidth,
             rowsPerPlayer,
-            gameSettings.state.antialias
+            this.renderSettings.antialias
         );
         this.transitioningUnits.length = 0;
 
@@ -820,7 +818,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      * Returns 0 (neutral) if player tinting is disabled, otherwise player + 1.
      */
     private getPlayerRow(entity: Entity): number {
-        if (gameSettings.state.disablePlayerTinting) {
+        if (this.renderSettings.disablePlayerTinting) {
             return 0;
         }
         return entity.player + 1;
@@ -862,10 +860,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private renderConstructionBackground(gl: WebGL2RenderingContext, entity: Entity, viewPoint: IViewPoint): void {
         if (!this.spriteManager) return;
 
-        const buildingState = this.buildingStates.get(entity.id);
-        const visualState = getBuildingVisualState(buildingState);
-
-        if (visualState.phase !== BuildingConstructionPhase.CompletedRising) return;
+        const renderState = this.getBuildingRenderState(entity.id);
+        if (!renderState.showConstructionBackground) return;
 
         const constructionSprite = this.spriteManager.getBuildingConstruction(entity.subType as BuildingType);
         if (!constructionSprite) return;
@@ -1141,7 +1137,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     projection,
                     paletteWidth,
                     rowsPerPlayer,
-                    gameSettings.state.antialias
+                    this.renderSettings.antialias
                 );
                 this.spriteBatchRenderer.addSprite(
                     gl,

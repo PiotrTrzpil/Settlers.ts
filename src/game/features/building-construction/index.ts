@@ -32,8 +32,8 @@ export {
 // System (for registration with GameLoop)
 export { BuildingConstructionSystem } from './construction-system';
 
-// Unit spawning (shared logic for construction completion)
-export { spawnUnitsOnBuildingComplete, BUILDING_SPAWN_ON_COMPLETE, type SpawnContext } from './spawn-units';
+// Unit spawning constants (logic now routed through spawn_building_units command)
+export { BUILDING_SPAWN_ON_COMPLETE, type SpawnContext } from './spawn-units';
 
 // Queries (for renderers)
 export { getBuildingVisualState } from './visual-state';

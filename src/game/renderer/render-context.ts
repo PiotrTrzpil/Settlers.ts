@@ -2,21 +2,93 @@
  * RenderContext Interface
  *
  * Decouples the renderer from game internals by providing a read-only view
- * of all data needed for rendering. This allows:
- * - Clear separation between game state and rendering
- * - Easier testing (mock context implementation)
- * - Better encapsulation (renderer doesn't need direct Game access)
+ * of all data needed for rendering. The renderer imports ONLY from this file
+ * (plus Layer 0 entity/economy types) — never from features, systems, or services.
  *
- * @see docs/modularity-review.md item 8
+ * Feature-specific computation (e.g., building visual state, animation state)
+ * happens in the composable/glue layer (use-renderer.ts) before entering the renderer.
  */
 
-import type { Entity, StackedResourceState } from '../entity';
-import type { UnitStateLookup } from '../game-state';
-import type { BuildingVisualState, BuildingState } from '../features/building-construction';
+import type { Entity, StackedResourceState, TileCoord } from '../entity';
+import type { AnimationState } from '../animation';
 import type { IViewPoint } from './i-view-point';
 import { DEFAULT_LAYER_VISIBILITY, type LayerVisibility } from './layer-visibility';
-import type { PlacementPreviewState } from './entity-renderer';
-import { BuildingConstructionPhase } from '../features/building-construction';
+
+// ============================================================================
+// Renderer-local types (no feature module imports)
+// ============================================================================
+
+/**
+ * Supported placement entity types.
+ * Renderer-local definition — mirrors input/render-state.PlacementEntityType.
+ */
+export type PlacementEntityType = 'building' | 'resource' | 'unit';
+
+/**
+ * Consolidated placement preview state for the renderer.
+ */
+export interface PlacementPreviewState {
+    /** Tile position for the preview */
+    tile: TileCoord;
+    /** Whether placement is valid at this position */
+    valid: boolean;
+    /** Entity type being placed */
+    entityType: PlacementEntityType;
+    /** Specific subtype (BuildingType or EMaterialType as number) */
+    subType: number;
+    /** Variation/direction for sprite rendering (0-7 for resources) */
+    variation?: number;
+}
+
+/**
+ * Renderer's view of a unit's movement state.
+ * Structural subset of the full UnitStateView — no mapping needed.
+ */
+export interface UnitRenderState {
+    readonly prevX: number;
+    readonly prevY: number;
+    readonly moveProgress: number;
+    readonly path: ReadonlyArray<{ x: number; y: number }>;
+    readonly pathIndex: number;
+}
+
+/**
+ * Interface for looking up unit render states by entity ID.
+ * Structurally compatible with GameState's UnitStateLookup.
+ */
+export interface UnitStateLookup {
+    get(entityId: number): UnitRenderState | undefined;
+}
+
+/**
+ * Renderer's view of a building's visual state.
+ * Pre-computed in the glue layer from BuildingState + getBuildingVisualState.
+ * The renderer never needs to know about BuildingConstructionPhase.
+ */
+export interface BuildingRenderState {
+    /** Show construction sprite (true) or completed sprite (false) */
+    useConstructionSprite: boolean;
+    /** Vertical visibility progress (0.0 = hidden, 1.0 = fully visible) */
+    verticalProgress: number;
+    /** Whether to render the construction background (during completed-rising transition) */
+    showConstructionBackground: boolean;
+}
+
+/** Default building render state for completed buildings */
+const DEFAULT_BUILDING_RENDER_STATE: BuildingRenderState = {
+    useConstructionSprite: false,
+    verticalProgress: 1.0,
+    showConstructionBackground: false,
+};
+
+/**
+ * Subset of game settings relevant to rendering.
+ */
+export interface RenderSettings {
+    showBuildingFootprint: boolean;
+    disablePlayerTinting: boolean;
+    antialias: boolean;
+}
 
 /**
  * Lightweight service area data for rendering (avoids importing full ServiceArea type).
@@ -49,10 +121,14 @@ export interface IRenderContext {
     readonly unitStates: UnitStateLookup;
     /** Resource stack states */
     readonly resourceStates: ReadonlyMap<number, StackedResourceState>;
-    /** Building construction states */
-    readonly buildingStates: ReadonlyMap<number, BuildingState>;
-    /** Get the visual state for a building (handles undefined states gracefully) */
-    getBuildingVisualState(entityId: number): BuildingVisualState;
+
+    // === Building Visual State ===
+    /** Get the pre-computed render state for a building entity */
+    getBuildingRenderState(entityId: number): BuildingRenderState;
+
+    // === Animation ===
+    /** Get the animation state for an entity (null if no animation) */
+    getAnimationState(entityId: number): AnimationState | null;
 
     // === Selection ===
     /** Current selection state */
@@ -67,6 +143,8 @@ export interface IRenderContext {
     readonly alpha: number;
     /** Layer visibility settings */
     readonly layerVisibility: LayerVisibility;
+    /** Rendering-relevant game settings */
+    readonly settings: RenderSettings;
 
     // === Terrain Data ===
     /** Ground height array for tile-to-world conversion */
@@ -94,18 +172,13 @@ export class RenderContextBuilder {
     private _entities: readonly Entity[] = [];
     private _unitStates: UnitStateLookup = { get: () => undefined };
     private _resourceStates: ReadonlyMap<number, StackedResourceState> = new Map();
-    private _buildingStates: ReadonlyMap<number, BuildingState> = new Map();
-    private _buildingVisualStateGetter: (entityId: number) => BuildingVisualState = () => ({
-        phase: BuildingConstructionPhase.Completed,
-        verticalProgress: 1,
-        overallProgress: 1,
-        useConstructionSprite: false,
-        isCompleted: true,
-    });
+    private _buildingRenderStateGetter: (entityId: number) => BuildingRenderState = () => DEFAULT_BUILDING_RENDER_STATE;
+    private _animationStateGetter: (entityId: number) => AnimationState | null = () => null;
     private _selection: SelectionState = { primaryId: null, ids: new Set() };
     private _placementPreview: PlacementPreviewState | null = null;
     private _alpha = 0;
     private _layerVisibility: LayerVisibility = { ...DEFAULT_LAYER_VISIBILITY };
+    private _settings: RenderSettings = { showBuildingFootprint: false, disablePlayerTinting: false, antialias: false };
     private _groundHeight: Uint8Array = new Uint8Array(0);
     private _groundType: Uint8Array = new Uint8Array(0);
     private _mapWidth = 0;
@@ -128,13 +201,13 @@ export class RenderContextBuilder {
         return this;
     }
 
-    buildingStates(states: ReadonlyMap<number, BuildingState>): this {
-        this._buildingStates = states;
+    buildingRenderStateGetter(getter: (entityId: number) => BuildingRenderState): this {
+        this._buildingRenderStateGetter = getter;
         return this;
     }
 
-    buildingVisualStateGetter(getter: (entityId: number) => BuildingVisualState): this {
-        this._buildingVisualStateGetter = getter;
+    animationStateGetter(getter: (entityId: number) => AnimationState | null): this {
+        this._animationStateGetter = getter;
         return this;
     }
 
@@ -155,6 +228,11 @@ export class RenderContextBuilder {
 
     layerVisibility(visibility: LayerVisibility): this {
         this._layerVisibility = visibility;
+        return this;
+    }
+
+    settings(s: RenderSettings): this {
+        this._settings = s;
         return this;
     }
 
@@ -193,19 +271,17 @@ export class RenderContextBuilder {
             throw new Error('RenderContext requires viewPoint to be set');
         }
 
-        const buildingStates = this._buildingStates;
-        const buildingVisualStateGetter = this._buildingVisualStateGetter;
-
         return {
             entities: this._entities,
             unitStates: this._unitStates,
             resourceStates: this._resourceStates,
-            buildingStates,
-            getBuildingVisualState: buildingVisualStateGetter,
+            getBuildingRenderState: this._buildingRenderStateGetter,
+            getAnimationState: this._animationStateGetter,
             selection: this._selection,
             placementPreview: this._placementPreview,
             alpha: this._alpha,
             layerVisibility: this._layerVisibility,
+            settings: this._settings,
             groundHeight: this._groundHeight,
             groundType: this._groundType,
             mapWidth: this._mapWidth,

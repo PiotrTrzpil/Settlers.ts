@@ -3,9 +3,17 @@ import {
     BuildingIndicatorRenderer,
     PlacementStatus,
     isBuildableStatus,
+    type PlacementChecker,
 } from '@/game/renderer/building-indicator-renderer';
 import { MapSize } from '@/utilities/map-size';
 import { BuildingType } from '@/game/entity';
+import {
+    isBuildable,
+    isMineBuildable,
+    computeSlopeDifficulty,
+    computeHeightRange,
+    MAX_SLOPE_DIFF,
+} from '@/game/features/placement';
 import { TERRAIN } from './helpers/test-map';
 
 describe('BuildingIndicatorRenderer', () => {
@@ -22,7 +30,14 @@ describe('BuildingIndicatorRenderer', () => {
         groundType.fill(TERRAIN.GRASS);
         groundHeight.fill(100);
 
-        renderer = new BuildingIndicatorRenderer(mapSize, groundType, groundHeight);
+        const placementChecker: PlacementChecker = {
+            isBuildableTerrain: isBuildable,
+            isMineBuildableTerrain: isMineBuildable,
+            computeSlopeDifficulty,
+            computeHeightRange,
+            maxSlopeDiff: MAX_SLOPE_DIFF,
+        };
+        renderer = new BuildingIndicatorRenderer(mapSize, groundType, groundHeight, placementChecker);
         renderer.buildingType = BuildingType.Decoration;
     });
 
@@ -86,18 +101,24 @@ describe('BuildingIndicatorRenderer', () => {
 
     describe('getStatusDescription', () => {
         it('should return descriptions for all statuses', () => {
-            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.Easy))
-                .toBe('Can build: Flat terrain');
-            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.Medium))
-                .toBe('Can build: Slight slope');
-            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.Difficult))
-                .toBe('Can build: Uneven terrain');
-            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.TooSteep))
-                .toBe('Cannot build: Too steep');
-            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.InvalidTerrain))
-                .toBe('Cannot build: Invalid terrain');
-            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.Occupied))
-                .toBe('Cannot build: Occupied');
+            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.Easy)).toBe(
+                'Can build: Flat terrain'
+            );
+            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.Medium)).toBe(
+                'Can build: Slight slope'
+            );
+            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.Difficult)).toBe(
+                'Can build: Uneven terrain'
+            );
+            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.TooSteep)).toBe(
+                'Cannot build: Too steep'
+            );
+            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.InvalidTerrain)).toBe(
+                'Cannot build: Invalid terrain'
+            );
+            expect(BuildingIndicatorRenderer.getStatusDescription(PlacementStatus.Occupied)).toBe(
+                'Cannot build: Occupied'
+            );
         });
     });
 

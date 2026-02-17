@@ -1,4 +1,4 @@
-import { EntityType, EXTENDED_OFFSETS } from '../entity';
+import { EntityType, EXTENDED_OFFSETS, tileKey } from '../entity';
 import {
     BuildingConstructionPhase,
     type BuildingStateManager,
@@ -6,13 +6,18 @@ import {
     setConstructionSiteGroundType,
     applyTerrainLeveling,
 } from '../features/building-construction';
+import { BUILDING_SPAWN_ON_COMPLETE, type SpawnContext } from '../features/building-construction/spawn-units';
+import { BUILDING_UNIT_TYPE } from '../unit-types';
+import { BuildingType } from '../buildings/types';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint, isPassable } from '../features/placement';
+import { ringTiles } from '../systems/spatial-search';
 import { MapSize } from '@/utilities/map-size';
 import type { EventBus } from '../event-bus';
 import { gameSettings } from '../game-settings';
 import { debugStats } from '../debug-stats';
 import type { SettlerTaskSystem } from '../features/settler-tasks';
+import type { TreeSystem } from '../features/trees';
 import {
     Command,
     FORMATION_OFFSETS,
@@ -26,6 +31,12 @@ import {
     SelectAreaCommand,
     MoveSelectedUnitsCommand,
     RemoveEntityCommand,
+    type SpawnVisualResourceCommand,
+    type SpawnBuildingUnitsCommand,
+    type PlantTreeCommand,
+    type ScriptAddGoodsCommand,
+    type ScriptAddBuildingCommand,
+    type ScriptAddSettlersCommand,
     type CommandResult,
     commandSuccess,
     commandFailed,
@@ -41,6 +52,8 @@ export interface CommandContext {
     settlerTaskSystem?: SettlerTaskSystem;
     /** Building state manager for construction phases */
     buildingStateManager: BuildingStateManager;
+    /** Tree system for planting/registration */
+    treeSystem?: TreeSystem;
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): CommandResult {
@@ -327,33 +340,202 @@ function executePlaceResource(ctx: CommandContext, cmd: PlaceResourceCommand): C
     return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedResource' }]);
 }
 
+// === System command handlers ===
+
+function executeSpawnVisualResource(ctx: CommandContext, cmd: SpawnVisualResourceCommand): CommandResult {
+    const { state } = ctx;
+
+    const entity = state.addEntity(EntityType.StackedResource, cmd.materialType, cmd.x, cmd.y, cmd.player);
+
+    state.resources.setQuantity(entity.id, cmd.quantity);
+
+    if (cmd.buildingId !== undefined) {
+        state.resources.setBuildingId(entity.id, cmd.buildingId);
+    }
+
+    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedResource' }]);
+}
+
+function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsCommand): CommandResult {
+    const { state, groundType, mapSize, eventBus } = ctx;
+    const entity = state.getEntityOrThrow(cmd.buildingEntityId, 'completed building for unit spawning');
+    const buildingState = ctx.buildingStateManager.getBuildingState(cmd.buildingEntityId)!;
+    const { tileX: bx, tileY: by } = buildingState;
+    const effects: { type: 'unit_spawned'; entityId: number; unitType: number; x: number; y: number }[] = [];
+
+    // Spawn units from BUILDING_SPAWN_ON_COMPLETE (carriers from residences, soldiers from barracks)
+    const spawnDef = BUILDING_SPAWN_ON_COMPLETE[buildingState.buildingType];
+    if (spawnDef) {
+        const spawnCtx: SpawnContext = { groundType, mapSize };
+        let spawned = 0;
+        for (let radius = 1; radius <= 4 && spawned < spawnDef.count; radius++) {
+            for (const tile of ringTiles(bx, by, radius)) {
+                if (spawned >= spawnDef.count) break;
+                if (tile.x < 0 || tile.x >= spawnCtx.mapSize.width || tile.y < 0 || tile.y >= spawnCtx.mapSize.height)
+                    continue;
+                if (!isPassable(spawnCtx.groundType[spawnCtx.mapSize.toIndex(tile.x, tile.y)])) continue;
+                if (state.getEntityAt(tile.x, tile.y)) continue;
+
+                const spawnedEntity = state.addEntity(
+                    EntityType.Unit,
+                    spawnDef.unitType,
+                    tile.x,
+                    tile.y,
+                    entity.player,
+                    spawnDef.selectable
+                );
+
+                eventBus.emit('unit:spawned', {
+                    entityId: spawnedEntity.id,
+                    unitType: spawnDef.unitType,
+                    x: tile.x,
+                    y: tile.y,
+                    player: entity.player,
+                });
+
+                effects.push({
+                    type: 'unit_spawned',
+                    entityId: spawnedEntity.id,
+                    unitType: spawnDef.unitType,
+                    x: tile.x,
+                    y: tile.y,
+                });
+                spawned++;
+            }
+        }
+    }
+
+    // Spawn dedicated worker if placeBuildingsWithWorker is enabled
+    if (gameSettings.state.placeBuildingsWithWorker) {
+        const workerType = BUILDING_UNIT_TYPE[buildingState.buildingType as BuildingType];
+        if (workerType !== undefined) {
+            const workerEntity = state.addEntity(EntityType.Unit, workerType, bx, by, entity.player);
+
+            // Restore building's tile occupancy — workers "work inside" buildings
+            state.tileOccupancy.set(tileKey(bx, by), buildingState.entityId);
+
+            eventBus.emit('unit:spawned', {
+                entityId: workerEntity.id,
+                unitType: workerType,
+                x: bx,
+                y: by,
+                player: entity.player,
+            });
+
+            effects.push({ type: 'unit_spawned', entityId: workerEntity.id, unitType: workerType, x: bx, y: by });
+        }
+    }
+
+    return commandSuccess(effects);
+}
+
+function executePlantTree(ctx: CommandContext, cmd: PlantTreeCommand): CommandResult {
+    const { state } = ctx;
+
+    // Check tile is still valid
+    if (state.getEntityAt(cmd.x, cmd.y)) {
+        return commandFailed(`Tile (${cmd.x}, ${cmd.y}) is occupied, cannot plant tree`);
+    }
+
+    const entity = state.addEntity(EntityType.MapObject, cmd.treeType, cmd.x, cmd.y, 0);
+
+    // Register with tree system for growth tracking
+    ctx.treeSystem!.register(entity.id, cmd.treeType, true);
+
+    return commandSuccess([{ type: 'tree_planted', entityId: entity.id, treeType: cmd.treeType, x: cmd.x, y: cmd.y }]);
+}
+
+// === Script command handlers ===
+
+function executeScriptAddGoods(ctx: CommandContext, cmd: ScriptAddGoodsCommand): CommandResult {
+    const { state } = ctx;
+
+    const entity = state.addEntity(EntityType.StackedResource, cmd.materialType, cmd.x, cmd.y, 0);
+
+    if (cmd.amount > 1) {
+        state.resources.setQuantity(entity.id, cmd.amount);
+    }
+
+    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedResource' }]);
+}
+
+function executeScriptAddBuilding(ctx: CommandContext, cmd: ScriptAddBuildingCommand): CommandResult {
+    const { state } = ctx;
+
+    const entity = state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
+
+    return commandSuccess([
+        {
+            type: 'building_placed',
+            entityId: entity.id,
+            buildingType: cmd.buildingType as BuildingType,
+            x: cmd.x,
+            y: cmd.y,
+        },
+    ]);
+}
+
+function executeScriptAddSettlers(ctx: CommandContext, cmd: ScriptAddSettlersCommand): CommandResult {
+    const { state, eventBus } = ctx;
+    const effects: { type: 'unit_spawned'; entityId: number; unitType: number; x: number; y: number }[] = [];
+
+    for (let i = 0; i < cmd.amount; i++) {
+        const offsetX = cmd.x + (i % 3);
+        const offsetY = cmd.y + Math.floor(i / 3);
+
+        const entity = state.addEntity(EntityType.Unit, cmd.unitType, offsetX, offsetY, cmd.player);
+
+        eventBus.emit('unit:spawned', {
+            entityId: entity.id,
+            unitType: cmd.unitType,
+            x: offsetX,
+            y: offsetY,
+            player: cmd.player,
+        });
+
+        effects.push({
+            type: 'unit_spawned',
+            entityId: entity.id,
+            unitType: cmd.unitType,
+            x: offsetX,
+            y: offsetY,
+        });
+    }
+
+    return commandSuccess(effects);
+}
+
+// Each handler takes a specific Command subtype, but the map stores them generically
+type CommandHandler = (ctx: CommandContext, cmd: any) => CommandResult;
+
+/** Map of command type -> handler function. Keeps executeCommand under complexity limit. */
+const COMMAND_HANDLERS: Record<Command['type'], CommandHandler> = {
+    place_building: executePlaceBuilding,
+    place_resource: executePlaceResource,
+    spawn_unit: executeSpawnUnit,
+    move_unit: executeMoveUnit,
+    select: executeSelect,
+    select_at_tile: executeSelectAtTile,
+    toggle_selection: executeToggleSelection,
+    select_area: executeSelectArea,
+    move_selected_units: executeMoveSelectedUnits,
+    remove_entity: executeRemoveEntity,
+    spawn_visual_resource: executeSpawnVisualResource,
+    spawn_building_units: executeSpawnBuildingUnits,
+    plant_tree: executePlantTree,
+    script_add_goods: executeScriptAddGoods,
+    script_add_building: executeScriptAddBuilding,
+    script_add_settlers: executeScriptAddSettlers,
+};
+
 /**
- * Execute a player command against the game state.
+ * Execute a command against the game state.
  * Returns a CommandResult with success status, error details, and effects.
  */
 export function executeCommand(ctx: CommandContext, cmd: Command): CommandResult {
-    switch (cmd.type) {
-    case 'place_building':
-        return executePlaceBuilding(ctx, cmd);
-    case 'place_resource':
-        return executePlaceResource(ctx, cmd);
-    case 'spawn_unit':
-        return executeSpawnUnit(ctx, cmd);
-    case 'move_unit':
-        return executeMoveUnit(ctx, cmd);
-    case 'select':
-        return executeSelect(ctx, cmd);
-    case 'select_at_tile':
-        return executeSelectAtTile(ctx, cmd);
-    case 'toggle_selection':
-        return executeToggleSelection(ctx, cmd);
-    case 'select_area':
-        return executeSelectArea(ctx, cmd);
-    case 'move_selected_units':
-        return executeMoveSelectedUnits(ctx, cmd);
-    case 'remove_entity':
-        return executeRemoveEntity(ctx, cmd);
-    default:
-        return commandFailed(`Unknown command type: ${(cmd as any).type}`);
+    const handler = COMMAND_HANDLERS[cmd.type];
+    if (!handler) {
+        return commandFailed(`Unknown command type: ${cmd.type}`);
     }
+    return handler(ctx, cmd);
 }

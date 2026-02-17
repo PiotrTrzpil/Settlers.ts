@@ -25,7 +25,8 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
     beforeEach(() => {
         eventBus = new EventBus();
         gameState = new GameState(eventBus);
-        services = new GameServices(gameState, eventBus);
+        const noopExecute = () => ({ success: true as const });
+        services = new GameServices(gameState, eventBus, noopExecute);
     });
 
     // ---------------------------------------------------------------------------

@@ -78,7 +78,8 @@ export class Game {
         this.state = new GameState(this.eventBus);
 
         // Create all game managers and domain systems
-        this.services = new GameServices(this.state, this.eventBus);
+        // Use arrow fn so commandContext is resolved lazily (after services is assigned)
+        this.services = new GameServices(this.state, this.eventBus, cmd => this.execute(cmd));
         this.services.setTerrainData(this.groundType, this.groundHeight, this.mapSize);
 
         // Create frame loop and register tick systems
@@ -171,6 +172,7 @@ export class Game {
             eventBus: this.eventBus,
             settlerTaskSystem: this.services.settlerTaskSystem,
             buildingStateManager: this.services.buildingStateManager,
+            treeSystem: this.services.treeSystem,
         };
     }
 
@@ -270,6 +272,7 @@ export class Game {
                     mapWidth: this.mapSize.width,
                     mapHeight: this.mapSize.height,
                     landscape: this.mapLoader.landscape,
+                    executeCommand: cmd => this.execute(cmd),
                 });
                 await service.initialize();
                 this._gameLoop.registerSystem(service as unknown as TickSystem);
