@@ -65,15 +65,10 @@ export interface PlacementPreview {
     placementPreview: { entityType: string; subType: number } | null;
 }
 
-export interface BatchBuildingResult {
+export interface BatchPlacementResult {
     placedCount: number;
     positions: Array<{ x: number; y: number }>;
-    totalBuildings: number;
-}
-
-export interface BatchResourceResult {
-    placedCount: number;
-    totalResources: number;
+    totalEntities: number;
 }
 
 export interface EntityFilter {
@@ -87,7 +82,7 @@ export interface EntityFilter {
 /** Read structured game state including entities and map size. */
 export async function getGameState(page: Page): Promise<GameState | null> {
     return page.evaluate(() => {
-        const game = (window as any).__settlers_game__;
+        const game = window.__settlers__?.game;
         if (!game) return null;
         return {
             mode: game.mode,
@@ -112,7 +107,7 @@ export async function getGameState(page: Page): Promise<GameState | null> {
  */
 export async function getEntities(page: Page, filter?: EntityFilter | null): Promise<EntityInfo[]> {
     return page.evaluate(f => {
-        const game = (window as any).__settlers_game__;
+        const game = window.__settlers__?.game;
         if (!game) return [];
         return game.state.entities
             .filter((e: any) => {
@@ -135,7 +130,7 @@ export async function getEntities(page: Page, filter?: EntityFilter | null): Pro
 /** Get the map center coordinates. */
 export async function getMapCenter(page: Page): Promise<{ x: number; y: number }> {
     return page.evaluate(() => {
-        const game = (window as any).__settlers_game__;
+        const game = window.__settlers__!.game!;
         return {
             x: Math.floor(game.terrain.mapSize.width / 2),
             y: Math.floor(game.terrain.mapSize.height / 2),
@@ -147,7 +142,7 @@ export async function getMapCenter(page: Page): Promise<{ x: number; y: number }
 export async function isTerrainPassable(page: Page, x: number, y: number): Promise<TerrainInfo | null> {
     return page.evaluate(
         ({ tx, ty }) => {
-            const game = (window as any).__settlers_game__;
+            const game = window.__settlers__?.game;
             if (!game) return null;
             const idx = game.terrain.mapSize.toIndex(tx, ty);
             const gt = game.terrain.groundType[idx];
@@ -164,7 +159,7 @@ export async function isTerrainPassable(page: Page, x: number, y: number): Promi
 /** Get placement preview state from the entity renderer. */
 export async function getPlacementPreview(page: Page): Promise<PlacementPreview | null> {
     return page.evaluate(() => {
-        const renderer = (window as any).__settlers_entity_renderer__;
+        const renderer = window.__settlers__?.entityRenderer;
         if (!renderer) return null;
         return {
             indicatorsEnabled: renderer.buildingIndicatorsEnabled,
@@ -188,7 +183,7 @@ export async function getPlacementPreview(page: Page): Promise<PlacementPreview 
  */
 export async function setGameSpeed(page: Page, speed: number): Promise<void> {
     await page.evaluate(s => {
-        const settings = (window as any).__settlers_game_settings__;
+        const settings = window.__settlers__?.settings;
         if (settings?.state) {
             settings.state.gameSpeed = s;
         }
@@ -208,7 +203,7 @@ export async function placeBuilding(
 ): Promise<BuildingResult | null> {
     return page.evaluate(
         ({ bt, posX, posY, p }) => {
-            const game = (window as any).__settlers_game__;
+            const game = window.__settlers__?.game;
             if (!game) return null;
             const cmdResult = game.execute({
                 type: 'place_building',
@@ -218,11 +213,11 @@ export async function placeBuilding(
                 player: p,
             });
             if (!cmdResult?.success) return null;
-            const entityId = cmdResult.effects?.[0]?.entityId;
+            const entityId = (cmdResult.effects?.[0] as { entityId?: number })?.entityId;
             if (entityId == null) return null;
             const entity = game.state.getEntity(entityId);
             if (!entity) return null;
-            (window as any).__settlers_view_state__?.forceCountUpdate();
+            window.__settlers__?.viewState?.forceCountUpdate();
             return {
                 id: entity.id,
                 type: entity.type,
@@ -249,7 +244,7 @@ export async function placeResource(
 ): Promise<ResourceResult | null> {
     return page.evaluate(
         ({ mt, posX, posY, amt }) => {
-            const game = (window as any).__settlers_game__;
+            const game = window.__settlers__?.game;
             if (!game) return null;
             const cmdResult = game.execute({
                 type: 'place_resource',
@@ -259,12 +254,12 @@ export async function placeResource(
                 amount: amt,
             });
             if (!cmdResult?.success) return null;
-            const entityId = cmdResult.effects?.[0]?.entityId;
+            const entityId = (cmdResult.effects?.[0] as { entityId?: number })?.entityId;
             if (entityId == null) return null;
             const entity = game.state.getEntity(entityId);
             if (!entity) return null;
             const resourceState = game.state.resources?.states?.get(entityId);
-            (window as any).__settlers_view_state__?.forceCountUpdate();
+            window.__settlers__?.viewState?.forceCountUpdate();
             return {
                 id: entity.id,
                 type: entity.type,
@@ -291,17 +286,17 @@ export async function spawnUnit(
 ): Promise<UnitResult | null> {
     return page.evaluate(
         ({ ut, posX, posY, p }) => {
-            const game = (window as any).__settlers_game__;
+            const game = window.__settlers__?.game;
             if (!game) return null;
             const spawnX = posX ?? Math.floor(game.terrain.mapSize.width / 2);
             const spawnY = posY ?? Math.floor(game.terrain.mapSize.height / 2);
             const cmdResult = game.execute({ type: 'spawn_unit', unitType: ut, x: spawnX, y: spawnY, player: p });
             if (!cmdResult?.success) return null;
-            const entityId = cmdResult.effects?.[0]?.entityId;
+            const entityId = (cmdResult.effects?.[0] as { entityId?: number })?.entityId;
             if (entityId == null) return null;
             const entity = game.state.getEntity(entityId);
             if (!entity) return null;
-            (window as any).__settlers_view_state__?.forceCountUpdate();
+            window.__settlers__?.viewState?.forceCountUpdate();
             return {
                 id: entity.id,
                 type: entity.type,
@@ -321,7 +316,7 @@ export async function spawnUnit(
 export async function moveUnit(page: Page, entityId: number, targetX: number, targetY: number): Promise<boolean> {
     return page.evaluate(
         ({ id, tx, ty }) => {
-            const game = (window as any).__settlers_game__;
+            const game = window.__settlers__?.game;
             if (!game) return false;
             return game.execute({ type: 'move_unit', entityId: id, targetX: tx, targetY: ty })?.success ?? false;
         },
@@ -338,10 +333,9 @@ export async function moveUnit(page: Page, entityId: number, targetX: number, ta
  */
 export async function findBuildableTile(page: Page, buildingType = 1): Promise<{ x: number; y: number } | null> {
     return page.evaluate(bt => {
-        const game = (window as any).__settlers_game__;
+        const game = window.__settlers__?.game;
         if (!game) return null;
-        const search = (window as any)
-            .__settlers_spiral_search__ as typeof import('@/game/utils/spiral-search').spiralSearch;
+        const search = window.__settlers__!.utils!.spiralSearch!;
         const w = game.terrain.mapSize.width;
         const h = game.terrain.mapSize.height;
 
@@ -354,7 +348,7 @@ export async function findBuildableTile(page: Page, buildingType = 1): Promise<{
                 player: 0,
             });
             if (result?.success) {
-                const entityId = result.effects?.[0]?.entityId;
+                const entityId = (result.effects?.[0] as { entityId?: number })?.entityId;
                 if (entityId != null) {
                     game.execute({ type: 'remove_entity', entityId });
                 }
@@ -370,10 +364,9 @@ export async function findBuildableTile(page: Page, buildingType = 1): Promise<{
  */
 export async function findPassableTile(page: Page): Promise<{ x: number; y: number } | null> {
     return page.evaluate(() => {
-        const game = (window as any).__settlers_game__;
+        const game = window.__settlers__?.game;
         if (!game) return null;
-        const search = (window as any)
-            .__settlers_spiral_search__ as typeof import('@/game/utils/spiral-search').spiralSearch;
+        const search = window.__settlers__!.utils!.spiralSearch!;
         const w = game.terrain.mapSize.width;
         const h = game.terrain.mapSize.height;
 
@@ -390,98 +383,204 @@ export async function findPassableTile(page: Page): Promise<{ x: number; y: numb
 
 // ── Batch placement ─────────────────────────────────────────────
 
+export type PlacementSpec =
+    | { kind: 'building'; buildingTypes?: number[]; players?: number[] }
+    | { kind: 'resource'; materialTypes?: number[] };
+
 /**
- * Place multiple buildings at different positions, spiraling from map center.
+ * Place multiple entities at different positions, spiraling from map center.
  */
-export async function placeMultipleBuildings(
-    page: Page,
-    count: number,
-    buildingTypes?: number[],
-    players?: number[]
-): Promise<BatchBuildingResult> {
+export async function placeMultiple(page: Page, count: number, spec: PlacementSpec): Promise<BatchPlacementResult> {
     return page.evaluate(
-        ({ targetCount, types, ps }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { placedCount: 0, positions: [], totalBuildings: 0 };
+        ({ targetCount, s }) => {
+            const game = window.__settlers__?.game;
+            if (!game) return { placedCount: 0, positions: [], totalEntities: 0 };
             const w = game.terrain.mapSize.width;
             const h = game.terrain.mapSize.height;
             const cx = Math.floor(w / 2);
             const cy = Math.floor(h / 2);
             let placed = 0;
             const positions: Array<{ x: number; y: number }> = [];
-            for (let r = 0; r < Math.max(w, h) / 2 && placed < targetCount; r += 3) {
+            for (let r = 0; r < Math.max(w, h) / 2 && placed < targetCount; r += 2) {
                 for (let angle = 0; angle < 8 && placed < targetCount; angle++) {
                     const dx = Math.round(r * Math.cos((angle * Math.PI) / 4));
                     const dy = Math.round(r * Math.sin((angle * Math.PI) / 4));
                     const tx = cx + dx;
                     const ty = cy + dy;
                     if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-                    const bt = types ? types[placed % types.length] : 1;
-                    const p = ps ? ps[placed % ps.length] : 0;
-                    const result = game.execute({
-                        type: 'place_building',
-                        buildingType: bt,
-                        x: tx,
-                        y: ty,
-                        player: p,
-                    });
+
+                    let result;
+                    if (s.kind === 'building') {
+                        const bt = s.buildingTypes ? s.buildingTypes[placed % s.buildingTypes.length] : 1;
+                        const p = s.players ? s.players[placed % s.players.length] : 0;
+                        result = game.execute({ type: 'place_building', buildingType: bt, x: tx, y: ty, player: p });
+                    } else {
+                        const mt = s.materialTypes ? s.materialTypes[placed % s.materialTypes.length] : placed % 3;
+                        result = game.execute({
+                            type: 'place_resource',
+                            materialType: mt,
+                            amount: placed + 1,
+                            x: tx,
+                            y: ty,
+                        });
+                    }
+
                     if (result?.success) {
                         placed++;
                         positions.push({ x: tx, y: ty });
                     }
                 }
             }
+            const entityType = s.kind === 'building' ? 2 : 4;
             return {
                 placedCount: placed,
                 positions,
-                totalBuildings: game.state.entities.filter((e: any) => e.type === 2).length,
+                totalEntities: game.state.entities.filter((e: any) => e.type === entityType).length,
             };
         },
-        { targetCount: count, types: buildingTypes ?? null, ps: players ?? null }
+        { targetCount: count, s: spec }
+    );
+}
+
+// ── Building inventory ───────────────────────────────────────────
+
+export interface InventorySlotInfo {
+    materialType: number;
+    currentAmount: number;
+    maxCapacity: number;
+    reservedAmount: number;
+}
+
+export interface BuildingInventoryInfo {
+    buildingId: number;
+    inputSlots: InventorySlotInfo[];
+    outputSlots: InventorySlotInfo[];
+}
+
+/**
+ * Read a building's inventory state (input/output slots with amounts).
+ * @returns Inventory info, or null if building has no inventory
+ */
+export async function getBuildingInventory(page: Page, buildingId: number): Promise<BuildingInventoryInfo | null> {
+    return page.evaluate(id => {
+        const game = window.__settlers__?.game;
+        if (!game?.services?.inventoryManager) return null;
+        const inv = game.services.inventoryManager.getInventory(id);
+        if (!inv) return null;
+        const mapSlot = (s: any) => ({
+            materialType: s.materialType,
+            currentAmount: s.currentAmount,
+            maxCapacity: s.maxCapacity,
+            reservedAmount: s.reservedAmount,
+        });
+        return {
+            buildingId: id,
+            inputSlots: inv.inputSlots.map(mapSlot),
+            outputSlots: inv.outputSlots.map(mapSlot),
+        };
+    }, buildingId);
+}
+
+// ── Game settings ────────────────────────────────────────────────
+
+/**
+ * Set a game setting value.
+ * @param key Setting key (e.g. 'placeBuildingsCompleted', 'placeBuildingsWithWorker')
+ * @param value Setting value
+ */
+export async function setGameSetting(page: Page, key: string, value: boolean | number | string): Promise<void> {
+    await page.evaluate(
+        ({ k, v }) => {
+            const settings = window.__settlers__?.settings;
+            if (settings?.state) {
+                (settings.state as unknown as Record<string, unknown>)[k] = v;
+            }
+        },
+        { k: key, v: value }
+    );
+}
+
+// ── Tree placement ───────────────────────────────────────────────
+
+/**
+ * Plant a single tree via game.execute() command pipeline.
+ * @param treeType MapObjectType (0=TreeOak)
+ * @returns Entity id of the planted tree, or null if placement failed
+ */
+export async function plantTree(page: Page, x: number, y: number, treeType = 0): Promise<number | null> {
+    return page.evaluate(
+        ({ tx, ty, tt }) => {
+            const game = window.__settlers__?.game;
+            if (!game) return null;
+            const result = game.execute({ type: 'plant_tree', treeType: tt, x: tx, y: ty });
+            if (!result?.success) return null;
+            return (result.effects?.[0] as { entityId?: number })?.entityId ?? null;
+        },
+        { tx: x, ty: y, tt: treeType }
     );
 }
 
 /**
- * Place multiple resources at different positions, spiraling from map center.
+ * Plant multiple trees near a position, respecting spacing and terrain constraints.
+ * Uses the game's built-in spatial search to find valid spots.
+ * @returns Number of trees actually planted
  */
-export async function placeMultipleResources(
+export async function plantTreesNear(
     page: Page,
+    centerX: number,
+    centerY: number,
     count: number,
-    materialTypes?: number[]
-): Promise<BatchResourceResult> {
+    radius = 15
+): Promise<number> {
     return page.evaluate(
-        ({ targetCount, types }) => {
-            const game = (window as any).__settlers_game__;
-            if (!game) return { placedCount: 0, totalResources: 0 };
+        ({ cx, cy, n, r }) => {
+            const game = window.__settlers__?.game;
+            if (!game?.services?.treeSystem) return 0;
+            return game.services.treeSystem.plantTreesNear(cx, cy, n, r);
+        },
+        { cx: centerX, cy: centerY, n: count, r: radius }
+    );
+}
+
+// ── Tile search near position ────────────────────────────────────
+
+/**
+ * Find a buildable tile by spiraling from a given position (not map center).
+ * Useful for placing multiple buildings within the same service area.
+ */
+export async function findBuildableTileNear(
+    page: Page,
+    buildingType: number,
+    centerX: number,
+    centerY: number
+): Promise<{ x: number; y: number } | null> {
+    return page.evaluate(
+        ({ bt, cx, cy }) => {
+            const game = window.__settlers__?.game;
+            if (!game) return null;
+            const search = window.__settlers__!.utils!.spiralSearch!;
             const w = game.terrain.mapSize.width;
             const h = game.terrain.mapSize.height;
-            const cx = Math.floor(w / 2);
-            const cy = Math.floor(h / 2);
-            let placed = 0;
-            for (let r = 0; r < 20 && placed < targetCount; r++) {
-                for (let angle = 0; angle < 8 && placed < targetCount; angle++) {
-                    const dx = Math.round(r * 2 * Math.cos((angle * Math.PI) / 4));
-                    const dy = Math.round(r * 2 * Math.sin((angle * Math.PI) / 4));
-                    const tx = cx + dx;
-                    const ty = cy + dy;
-                    if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-                    const mt = types ? types[placed % types.length] : placed % 3;
-                    const result = game.execute({
-                        type: 'place_resource',
-                        materialType: mt,
-                        amount: placed + 1,
-                        x: tx,
-                        y: ty,
-                    });
-                    if (result?.success) placed++;
+
+            return search(cx, cy, w, h, (tx, ty) => {
+                const result = game.execute({
+                    type: 'place_building',
+                    buildingType: bt,
+                    x: tx,
+                    y: ty,
+                    player: 0,
+                });
+                if (result?.success) {
+                    const entityId = (result.effects?.[0] as { entityId?: number })?.entityId;
+                    if (entityId != null) {
+                        game.execute({ type: 'remove_entity', entityId });
+                    }
+                    return true;
                 }
-            }
-            return {
-                placedCount: placed,
-                totalResources: game.state.entities.filter((e: any) => e.type === 4).length,
-            };
+                return false;
+            });
         },
-        { targetCount: count, types: materialTypes ?? null }
+        { bt: buildingType, cx: centerX, cy: centerY }
     );
 }
 
@@ -494,7 +593,7 @@ export async function placeMultipleResources(
 export async function setCameraPosition(page: Page, tileX: number, tileY: number): Promise<void> {
     await page.evaluate(
         ({ x, y }) => {
-            const vp = (window as any).__settlers_viewpoint__;
+            const vp = window.__settlers__?.viewpoint;
             if (vp?.setPosition) {
                 vp.setPosition(x, y);
             }

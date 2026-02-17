@@ -24,13 +24,13 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
     });
 
     test('resource placement via placeResource helper', async ({ gs }) => {
-        const passableTile = await gs.findPassableTile();
+        const passableTile = await gs.actions.findPassableTile();
         if (!passableTile) {
             test.skip();
             return;
         }
 
-        const resource = await gs.placeResource(1, passableTile.x, passableTile.y, 3);
+        const resource = await gs.actions.placeResource(1, passableTile.x, passableTile.y, 3);
         expect(resource).not.toBeNull();
         expect(resource!.type).toBe(4);
         expect(resource!.subType).toBe(1);
@@ -38,9 +38,9 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
     });
 
     test('multiple resources can be placed at different locations', async ({ gs }) => {
-        const result = await gs.placeMultipleResources(3);
+        const result = await gs.actions.placeMultiple(3, { kind: 'resource' });
         expect(result.placedCount).toBeGreaterThanOrEqual(2);
-        expect(result.totalResources).toBeGreaterThanOrEqual(2);
+        expect(result.totalEntities).toBeGreaterThanOrEqual(2);
     });
 
     test('different resource types can be selected', async ({ gpWithUI: gp }) => {
@@ -57,7 +57,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         const btn1 = page.locator('[data-testid="btn-resource-stone"]');
         if (await btn1.isVisible()) {
             await btn1.click({ force: true });
-            await gp.waitForFrames(2);
+            await gp.wait.waitForFrames(2);
             await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
         }
     });
@@ -67,7 +67,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
 
 test.describe('Resource Rendering', () => {
     test('placed resource is rendered on canvas', async ({ gp }) => {
-        const passableTile = await gp.findPassableTile();
+        const passableTile = await gp.actions.findPassableTile();
         if (!passableTile) {
             test.skip();
             return;
@@ -76,10 +76,10 @@ test.describe('Resource Rendering', () => {
         await gp.moveCamera(passableTile.x, passableTile.y);
         await gp.samplePixels();
 
-        const resource = await gp.placeResource(0, passableTile.x, passableTile.y, 3);
+        const resource = await gp.actions.placeResource(0, passableTile.x, passableTile.y, 3);
         expect(resource).not.toBeNull();
 
-        await gp.waitForFrames(15);
+        await gp.wait.waitForFrames(15);
         await gp.samplePixels();
 
         await expect(gp).toHaveEntity({ type: 4, x: passableTile.x, y: passableTile.y });
@@ -90,9 +90,9 @@ test.describe('Resource Rendering', () => {
         const placed: Array<{ id: number; amount: number }> = [];
 
         for (const amount of amounts) {
-            const tile = await gs.findPassableTile();
+            const tile = await gs.actions.findPassableTile();
             if (!tile) continue;
-            const resource = await gs.placeResource(0, tile.x, tile.y, amount);
+            const resource = await gs.actions.placeResource(0, tile.x, tile.y, amount);
             if (resource) {
                 placed.push({ id: resource.id, amount: resource.amount });
             }
@@ -113,7 +113,7 @@ test.describe('Resource Rendering', () => {
         await btn.click();
         await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
 
-        const passableTile = await gp.findPassableTile();
+        const passableTile = await gp.actions.findPassableTile();
         if (!passableTile) {
             test.skip();
             return;
@@ -122,9 +122,9 @@ test.describe('Resource Rendering', () => {
         await gp.moveCamera(passableTile.x, passableTile.y);
         const box = await gp.canvas.boundingBox();
         await gp.canvas.hover({ position: { x: box!.width / 2, y: box!.height / 2 } });
-        await gp.waitForFrames(10);
+        await gp.wait.waitForFrames(10);
 
-        const preview = await gp.getPlacementPreview();
+        const preview = await gp.actions.getPlacementPreview();
         expect(preview).not.toBeNull();
         expect(preview!.indicatorsEnabled).toBe(true);
     });

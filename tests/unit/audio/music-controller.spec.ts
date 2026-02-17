@@ -1,4 +1,3 @@
-/* eslint-disable max-lines-per-function */
 /**
  * Unit tests for MusicController
  *
@@ -141,9 +140,7 @@ describe('MusicController', () => {
             controller.playMusic('MUSIC_ROMAN_01');
 
             // Simulate track ending and auto-advance being scheduled
-            const onceCall = mockHowlInstance.once.mock.calls.find(
-                (call) => call[0] === 'end'
-            );
+            const onceCall = mockHowlInstance.once.mock.calls.find(call => call[0] === 'end');
             expect(onceCall).toBeDefined();
 
             // Stop before auto-advance fires
@@ -258,9 +255,7 @@ describe('MusicController', () => {
             controller.playMusic('MUSIC_ROMAN_01');
 
             // Get the 'end' handler that was registered
-            const endHandler = firstHowl.once.mock.calls.find(
-                (call) => call[0] === 'end'
-            )?.[1];
+            const endHandler = firstHowl.once.mock.calls.find(call => call[0] === 'end')?.[1];
             expect(endHandler).toBeDefined();
 
             // Play a different track (first track is no longer current)

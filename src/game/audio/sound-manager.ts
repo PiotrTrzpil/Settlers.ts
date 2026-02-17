@@ -48,12 +48,12 @@ export class SoundManager implements IAudioManager {
     public static getInstance(): SoundManager {
         // Use window storage to survive HMR - when the module is hot-replaced,
         // static class properties are reset, but window persists
-        const existing = window.__settlers_sound_manager__;
-        if (existing) {
-            return existing;
+        const bridge = (window.__settlers__ ??= {});
+        if (bridge.soundManager) {
+            return bridge.soundManager;
         }
         const instance = new SoundManager();
-        window.__settlers_sound_manager__ = instance;
+        bridge.soundManager = instance;
         return instance;
     }
 

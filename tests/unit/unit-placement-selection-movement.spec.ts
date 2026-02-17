@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { GameState } from '@/game/game-state';
-import { EntityType, UnitType } from '@/game/entity';
+import { EntityType, UnitType, getUnitTypeSpeed } from '@/game/entity';
 import { executeCommand, type CommandContext } from '@/game/commands';
 import { MapSize } from '@/utilities/map-size';
 import { EventBus } from '@/game/event-bus';
@@ -36,7 +36,22 @@ describe('Unit Placement, Selection & Movement', () => {
             getEntity: id => state.getEntity(id),
         });
         movement.setTileOccupancy(state.tileOccupancy);
-        state.setMovementSystem(movement);
+        state.initMovement(movement);
+
+        // Wire entity lifecycle events (movement controllers, resource state)
+        eventBus.on('entity:created', ({ entityId, type, subType, x, y }) => {
+            if (type === EntityType.Unit) {
+                const speed = getUnitTypeSpeed(subType as UnitType);
+                movement.createController(entityId, x, y, speed);
+            } else if (type === EntityType.StackedResource) {
+                state.resources.createState(entityId);
+            }
+        });
+        eventBus.on('entity:removed', ({ entityId }) => {
+            movement.removeController(entityId);
+            state.resources.removeState(entityId);
+        });
+
         // BuildingStateManager requires dependencies via constructor
         const buildingStateManager = new BuildingStateManager({
             entityProvider: state,

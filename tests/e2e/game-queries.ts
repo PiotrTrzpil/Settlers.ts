@@ -51,7 +51,7 @@ export interface MovementEvent {
 export async function getUnitState(page: Page, unitId: number): Promise<UnitState | null> {
     return page.evaluate(
         ({ id }) => {
-            const game = (window as any).__settlers_game__;
+            const game = window.__settlers__?.game;
             if (!game) return null;
             const us = game.state.unitStates.get(id);
             if (!us) return null;
@@ -73,7 +73,7 @@ export async function getUnitState(page: Page, unitId: number): Promise<UnitStat
 export async function getAnimationState(page: Page, unitId: number): Promise<AnimationState | null> {
     return page.evaluate(
         ({ id }) => {
-            const game = (window as any).__settlers_game__;
+            const game = window.__settlers__?.game;
             const animService = game?.services?.animationService;
             if (!animService) return null;
             const state = animService.getState(id);
@@ -83,7 +83,7 @@ export async function getAnimationState(page: Page, unitId: number): Promise<Ani
                 currentFrame: state.currentFrame,
                 direction: state.direction,
                 playing: state.playing,
-                loop: state.loop,
+                loop: (state as { loop?: boolean }).loop ?? false,
                 elapsedMs: state.elapsedMs,
             };
         },
@@ -97,7 +97,7 @@ export async function getAnimationState(page: Page, unitId: number): Promise<Ani
 export async function getMovementControllerState(page: Page, unitId: number): Promise<MovementControllerState | null> {
     return page.evaluate(
         ({ id }) => {
-            const game = (window as any).__settlers_game__;
+            const game = window.__settlers__?.game;
             if (!game) return null;
             const controller = game.state.movement.getController(id);
             if (!controller) return null;
@@ -129,7 +129,7 @@ export async function sampleAnimationStates(
                 const samples: Array<{ playing: boolean; sequenceKey: string }> = [];
                 let count = 0;
                 function sample() {
-                    const game = (window as any).__settlers_game__;
+                    const game = window.__settlers__?.game;
                     const animService = game?.services?.animationService;
                     if (animService) {
                         const state = animService.getState(id);
@@ -166,7 +166,7 @@ export async function sampleUnitPositions(
                 const positions: Array<{ x: number; y: number }> = [];
                 let count = 0;
                 function sample() {
-                    const game = (window as any).__settlers_game__;
+                    const game = window.__settlers__?.game;
                     if (game) {
                         const u = game.state.getEntity(id);
                         if (u) positions.push({ x: u.x, y: u.y });
@@ -196,7 +196,7 @@ export async function captureMovementEvents(page: Page): Promise<{
     getCount: () => Promise<number>;
 }> {
     await page.evaluate(() => {
-        const game = (window as any).__settlers_game__;
+        const game = window.__settlers__?.game;
         if (!game) return;
         const captured: Array<{ event: string; entityId: number; direction: number }> = [];
         game.eventBus.on('unit:movementStopped', (payload: any) => {

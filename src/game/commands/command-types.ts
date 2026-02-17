@@ -104,6 +104,15 @@ export interface PlantTreeCommand {
     y: number;
 }
 
+export interface PlantTreesAreaCommand {
+    type: 'plant_trees_area';
+    centerX: number;
+    centerY: number;
+    count: number;
+    /** Search radius in tiles (default: 15) */
+    radius?: number;
+}
+
 // === Script Commands (from Lua scripting API) ===
 
 export interface ScriptAddGoodsCommand {
@@ -175,6 +184,7 @@ export type Command =
     | SpawnVisualResourceCommand
     | SpawnBuildingUnitsCommand
     | PlantTreeCommand
+    | PlantTreesAreaCommand
     | ScriptAddGoodsCommand
     | ScriptAddBuildingCommand
     | ScriptAddSettlersCommand;

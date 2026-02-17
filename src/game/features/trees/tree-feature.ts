@@ -12,7 +12,7 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { EventSubscriptionManager } from '../../event-bus';
 import { TreeSystem } from './tree-system';
-import { MapObjectType } from '../../entity';
+import { EntityType, MapObjectType } from '../../entity';
 
 /**
  * Exports provided by TreeFeature.
@@ -37,9 +37,10 @@ export const TreeFeature: FeatureDefinition = {
         const treeSystem = new TreeSystem(ctx.gameState, ctx.animationService);
 
         // Register for map object creation events to auto-register trees
-        subscriptions.subscribe(ctx.eventBus, 'mapObject:created', ({ entityId, objectType }) => {
-            // Register with TreeSystem (it checks if it's actually a tree)
-            treeSystem.register(entityId, objectType as MapObjectType);
+        subscriptions.subscribe(ctx.eventBus, 'entity:created', ({ entityId, type, subType }) => {
+            if (type === EntityType.MapObject) {
+                treeSystem.register(entityId, subType as MapObjectType);
+            }
         });
 
         // Clean up tree state when entities are removed

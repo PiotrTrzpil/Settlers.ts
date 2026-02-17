@@ -105,7 +105,7 @@ fixtureTest.describe('Test Infrastructure', { tag: '@smoke' }, () => {
 
     fixtureTest('game ticks are running and view state updates', async ({ gp }) => {
         const tickBefore = await gp.getDebugField('tickCount');
-        await gp.waitForTicks(5);
+        await gp.wait.waitForTicks(5);
         const tickAfter = await gp.getDebugField('tickCount');
         expect(tickAfter).toBeGreaterThan(tickBefore);
 
@@ -114,22 +114,23 @@ fixtureTest.describe('Test Infrastructure', { tag: '@smoke' }, () => {
         expect(viewTick).toBeGreaterThan(0);
     });
 
-    fixtureTest('all e2e window globals are wired up', async ({ gp }) => {
-        // Verify every window global that GamePage methods depend on.
+    fixtureTest('debug bridge is wired up', async ({ gp }) => {
+        // Verify the __settlers__ bridge has all expected properties.
         // If any is missing, nearly all other tests will fail with cryptic errors.
         const globals = await gp.page.evaluate(() => {
-            const w = window as any;
+            const b = window.__settlers__;
             return {
-                __settlers_debug__: !!w.__settlers_debug__,
-                __settlers_view__: !!w.__settlers_view__,
-                __settlers_game__: !!w.__settlers_game__,
-                __settlers_input__: !!w.__settlers_input__,
-                __settlers_viewpoint__: !!w.__settlers_viewpoint__,
-                __source_hash__: !!w.__source_hash__,
+                bridge: !!b,
+                debug: !!b?.debug,
+                view: !!b?.view,
+                game: !!b?.game,
+                input: !!b?.input,
+                viewpoint: !!b?.viewpoint,
+                __source_hash__: !!(window as any).__source_hash__,
             };
         });
         for (const [name, exists] of Object.entries(globals)) {
-            expect(exists, `${name} must be set on window`).toBe(true);
+            expect(exists, `${name} must be set`).toBe(true);
         }
     });
 });
@@ -214,14 +215,14 @@ fixtureTest.describe('Canvas Events', { tag: '@smoke' }, () => {
         const { check: checkErrors } = gp.collectErrors();
 
         await gp.canvas.dispatchEvent('wheel', { deltaY: 100 });
-        await gp.waitForFrames(1);
+        await gp.wait.waitForFrames(1);
 
         checkErrors();
     });
 
     fixtureTest('canvas handles right-click without showing context menu', async ({ gp }) => {
         await gp.canvas.click({ button: 'right', position: { x: 400, y: 400 }, force: true });
-        await gp.waitForFrames(1);
+        await gp.wait.waitForFrames(1);
     });
 
     fixtureTest('mouse wheel changes camera zoom level', async ({ gp }) => {
@@ -229,7 +230,7 @@ fixtureTest.describe('Canvas Events', { tag: '@smoke' }, () => {
 
         // Zoom in (negative deltaY = scroll up = zoom in)
         await gp.canvas.dispatchEvent('wheel', { deltaY: -300 });
-        await gp.waitForFrames(3);
+        await gp.wait.waitForFrames(3);
 
         const zoomAfter = await gp.getDebugField('zoom');
         fixtureExpect(zoomAfter).not.toBe(zoomBefore);
@@ -239,18 +240,18 @@ fixtureTest.describe('Canvas Events', { tag: '@smoke' }, () => {
 // Entity selection smoke tests
 fixtureTest.describe('Entity Selection', { tag: '@smoke' }, () => {
     fixtureTest('selecting a building updates selection state', async ({ gp }) => {
-        const buildableTile = await gp.findBuildableTile();
+        const buildableTile = await gp.actions.findBuildableTile();
         if (!buildableTile) {
             fixtureTest.skip();
             return;
         }
 
-        const building = await gp.placeBuilding(1, buildableTile.x, buildableTile.y);
+        const building = await gp.actions.placeBuilding(1, buildableTile.x, buildableTile.y);
         fixtureExpect(building).not.toBeNull();
 
         // Select the building and read selection state atomically
         const selection = await gp.page.evaluate(id => {
-            const game = (window as any).__settlers_game__;
+            const game = window.__settlers__?.game;
             const result = game?.execute({ type: 'select', entityId: id });
             const sel = game?.state?.selection;
             return {
@@ -267,19 +268,19 @@ fixtureTest.describe('Entity Selection', { tag: '@smoke' }, () => {
 
     fixtureTest('selecting and deselecting a swordsman updates selection state', async ({ gp }) => {
         // Swordsman (UnitType 2) is Military category → selectable
-        const unit = await gp.spawnUnit(2);
+        const unit = await gp.actions.spawnUnit(2);
         fixtureExpect(unit).not.toBeNull();
 
         // Select, verify, then deselect — all reads are atomic with the execute call
         const afterSelect = await gp.page.evaluate(id => {
-            const game = (window as any).__settlers_game__;
+            const game = window.__settlers__?.game;
             game?.execute({ type: 'select', entityId: id });
             return game?.state?.selection?.selectedEntityIds?.size ?? 0;
         }, unit!.id);
         fixtureExpect(afterSelect).toBe(1);
 
         const afterDeselect = await gp.page.evaluate(() => {
-            const game = (window as any).__settlers_game__;
+            const game = window.__settlers__?.game;
             game?.execute({ type: 'select', entityId: null });
             const sel = game?.state?.selection;
             return {

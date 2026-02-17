@@ -35,7 +35,7 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
             const readyStart = Date.now();
             await page.waitForFunction(
                 () => {
-                    const d = (window as any).__settlers_debug__;
+                    const d = window.__settlers__?.debug;
                     return d && d.gameLoaded && d.rendererReady;
                 },
                 null,
@@ -44,7 +44,7 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
             timings.gameReady = Date.now() - readyStart;
 
             const framesStart = Date.now();
-            await gp.waitForFrames(10, 10_000);
+            await gp.wait.waitForFrames(10, 10_000);
             timings.first10Frames = Date.now() - framesStart;
             timings.total = Date.now() - startTime;
         });
@@ -69,7 +69,7 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
         await test.step('verify debug stats are reasonable', async () => {
             const debug = await gp.getDebug();
             const view = await gp.getView();
-            const state = await gp.getGameState();
+            const state = await gp.actions.getGameState();
 
             console.log('\n=== Debug Stats ===');
             console.log(`Entity count:    ${view.entityCount}`);

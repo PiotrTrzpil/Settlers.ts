@@ -402,7 +402,7 @@ const configIndex = computed(() => {
 });
 
 function applyRiverConfig() {
-    const lr = (window as any).__settlers_landscape__;
+    const lr = window.__settlers__?.landscape;
     if (lr) {
         lr.rebuildRiverTextures({
             slotPermutation: stats.riverSlotPermutation,

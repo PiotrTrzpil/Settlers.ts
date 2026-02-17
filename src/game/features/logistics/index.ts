@@ -83,3 +83,6 @@ export { TransportJob, type TransportJobDeps, type TransportJobStatus } from './
 
 // Logistics dispatcher (connects requests to carriers)
 export { LogisticsDispatcher, type LogisticsDispatcherConfig } from './logistics-dispatcher';
+
+// Feature definition (self-registering via FeatureRegistry)
+export { RequestManagerFeature, type RequestManagerExports } from './request-manager-feature';

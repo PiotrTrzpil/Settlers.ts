@@ -19,7 +19,7 @@ test.describe('Terrain Rendering', { tag: '@screenshot' }, () => {
         const { check: checkErrors } = gp.collectErrors();
 
         await gp.goto({ testMap: true });
-        await gp.waitForReady(10);
+        await gp.wait.waitForReady(10);
         await gp.expectCanvasVisible();
 
         // Verify the debug bridge reports sane state

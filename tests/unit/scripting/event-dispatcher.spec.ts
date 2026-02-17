@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { LuaRuntime } from '@/game/scripting/lua-runtime';
-import { LuaEventDispatcher } from '@/game/scripting/event-dispatcher';
+import { LuaEventDispatcher, type ScriptEventType } from '@/game/scripting/event-dispatcher';
 
 describe('LuaEventDispatcher', () => {
     let runtime: LuaRuntime;
@@ -162,7 +162,7 @@ describe('LuaEventDispatcher', () => {
                         eventFired_${eventType} = true
                     end)
                 `);
-                expect(dispatcher.hasHandlers(eventType as any)).toBe(true);
+                expect(dispatcher.hasHandlers(eventType as ScriptEventType)).toBe(true);
             });
         });
     });

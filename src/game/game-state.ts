@@ -6,10 +6,8 @@ import {
     BuildingType,
     getBuildingFootprint,
     isUnitTypeSelectable,
-    getUnitTypeSpeed,
-    MapObjectType,
 } from './entity';
-import { MovementSystem, MovementController } from './systems/movement/index';
+import type { MovementSystem, MovementController } from './systems/movement/index';
 import { SeededRng, createGameRng } from './rng';
 import { EventBus } from './event-bus';
 import { SelectionManager } from './selection-manager';
@@ -120,17 +118,17 @@ class UnitStateMap implements UnitStateLookup {
  * Extracted concerns (owned here but encapsulated in dedicated classes):
  * - Selection state → SelectionManager
  * - Stacked resource state → StackedResourceManager
- * - Movement → MovementSystem (created externally, set via setMovementSystem)
+ * - Movement → MovementSystem (created externally, set via initMovement)
  */
 export class GameState {
     public entities: Entity[] = [];
     /** O(1) entity lookup by ID */
     private entityMap: Map<number, Entity> = new Map();
 
-    /** Movement system for all units — set via setMovementSystem() before adding entities */
+    /** Movement system for all units — set by GameServices before adding entities */
     public movement!: MovementSystem;
 
-    /** Legacy adapter for backward compatibility — wraps movement system */
+    /** Adapter providing UnitStateView lookup — wraps movement system */
     public unitStates!: UnitStateMap;
 
     /** Seeded RNG for deterministic game logic — use this instead of Math.random() */
@@ -158,10 +156,10 @@ export class GameState {
     }
 
     /**
-     * Set the movement system (created externally by GameLoop).
-     * Must be called before any entities are added.
+     * Initialize the movement system (and legacy unitStates adapter).
+     * Called by GameServices before any entities are added.
      */
-    public setMovementSystem(movement: MovementSystem): void {
+    public initMovement(movement: MovementSystem): void {
         this.movement = movement;
         this.unitStates = new UnitStateMap(movement);
     }
@@ -232,35 +230,16 @@ export class GameState {
             this.tileOccupancy.set(tileKey(x, y), entity.id);
         }
 
-        if (type === EntityType.Unit) {
-            const speed = getUnitTypeSpeed(subType as UnitType);
-            this.movement.createController(entity.id, x, y, speed);
-        }
-
-        if (type === EntityType.Building) {
-            // Emit event for building state, inventory, service areas setup
-            // GameLoop subscribes to handle all building initialization
-            this.eventBus.emit('building:created', {
-                entityId: entity.id,
-                buildingType: subType as BuildingType,
-                x,
-                y,
-            });
-        }
-
-        if (type === EntityType.MapObject) {
-            // Emit event for map object registration (e.g., TreeSystem registers trees)
-            this.eventBus.emit('mapObject:created', {
-                entityId: entity.id,
-                objectType: subType as MapObjectType,
-                x,
-                y,
-            });
-        }
-
-        if (type === EntityType.StackedResource) {
-            this.resources.createState(entity.id);
-        }
+        // Emit generic lifecycle event — subscribers handle type-specific initialization
+        // (e.g., MovementSystem creates controllers for units, TreeSystem registers trees)
+        this.eventBus.emit('entity:created', {
+            entityId: entity.id,
+            type,
+            subType,
+            x,
+            y,
+            player,
+        });
 
         return entity;
     }
@@ -286,10 +265,7 @@ export class GameState {
             this.tileOccupancy.delete(tileKey(entity.x, entity.y));
         }
 
-        this.movement.removeController(id);
-        this.resources.removeState(id);
-
-        // Emit event for system cleanup (carrier state, inventory, service areas, etc.)
+        // Emit event for system cleanup (movement controllers, carrier state, inventory, etc.)
         this.eventBus.emit('entity:removed', { entityId: id });
 
         this.selection.deselect(id);

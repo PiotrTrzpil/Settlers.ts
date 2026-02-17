@@ -19,7 +19,7 @@ export interface AudioState {
 /** Get current audio state from debug bridge. */
 export async function getAudioState(page: Page): Promise<AudioState> {
     return page.evaluate(() => {
-        const d = (window as any).__settlers_debug__;
+        const d = window.__settlers__?.debug;
         return {
             musicEnabled: d?.musicEnabled ?? false,
             musicPlaying: d?.musicPlaying ?? false,
@@ -36,7 +36,7 @@ export async function getAudioState(page: Page): Promise<AudioState> {
  */
 export async function setMusicEnabled(page: Page, enabled: boolean): Promise<void> {
     await page.evaluate(e => {
-        const game = (window as any).__settlers_game__;
+        const game = window.__settlers__?.game;
         game?.soundManager?.toggleMusic(e);
     }, enabled);
 }

@@ -109,7 +109,7 @@ export const expect = baseExpect.extend({
             await baseExpect
                 .poll(
                     async () => {
-                        const state = await gp.getGameState();
+                        const state = await gp.actions.getGameState();
                         lastEntities = state?.entities ?? [];
                         const matching = lastEntities.filter(e => {
                             if (filter.type !== undefined && e.type !== filter.type) return false;

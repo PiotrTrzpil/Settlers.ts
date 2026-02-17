@@ -15,7 +15,7 @@ import { test, expect } from './fixtures';
 test.describe('Sprite Atlas Cache', { tag: ['@requires-assets', '@slow'] }, () => {
     test('IndexedDB cache speeds up page refresh', async ({ gpAssets }) => {
         // Get first load timings (already loaded by gpAssets fixture)
-        const firstLoad = await gpAssets.getLoadTimings();
+        const firstLoad = await gpAssets.sprites.getLoadTimings();
 
         console.log('\n=== First Load (Cache Miss) ===');
         console.log(`Total sprites: ${firstLoad.totalSprites}ms`);
@@ -29,9 +29,9 @@ test.describe('Sprite Atlas Cache', { tag: ['@requires-assets', '@slow'] }, () =
         // === Second load (cache hit) ===
         // Reload the page - IndexedDB cache should persist
         await gpAssets.page.reload();
-        await gpAssets.waitForReady(5, 30_000);
+        await gpAssets.wait.waitForReady(5, 30_000);
 
-        const secondLoad = await gpAssets.getLoadTimings();
+        const secondLoad = await gpAssets.sprites.getLoadTimings();
 
         console.log('\n=== Second Load (Cache Hit) ===');
         console.log(`Total sprites: ${secondLoad.totalSprites}ms`);

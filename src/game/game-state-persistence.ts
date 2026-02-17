@@ -374,7 +374,7 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
     }
 
     // Recreate entities using the normal addEntity path
-    // This emits entity lifecycle events (building:created, mapObject:created, etc.)
+    // This emits entity:created events — subscribers handle type-specific initialization
     for (const e of snapshot.entities) {
         const savedNextId = state.nextId;
         state.nextId = e.id;

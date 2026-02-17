@@ -99,7 +99,7 @@ export class Game {
         }
 
         // Wire entity removal notifications to tick systems
-        this.services.onEntityRemoved(entityId => {
+        this.eventBus.on('entity:removed', ({ entityId }) => {
             this._gameLoop.notifyEntityRemoved(entityId);
         });
 

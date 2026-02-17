@@ -11,16 +11,16 @@ import { test, expect } from './fixtures';
 test.describe('Audio System', { tag: '@smoke' }, () => {
     test('no multiple music IDs playing simultaneously', async ({ gp }) => {
         await gp.unlockAudio();
-        await gp.waitForFrames(1);
+        await gp.wait.waitForFrames(1);
 
         // Sample audio state multiple times over a short period
         const samples: string[] = [];
         for (let i = 0; i < 5; i++) {
-            const state = await gp.getAudioState();
+            const state = await gp.audio.getAudioState();
             if (state.currentMusicId) {
                 samples.push(state.currentMusicId);
             }
-            await gp.waitForFrames(2);
+            await gp.wait.waitForFrames(2);
         }
 
         // If we have samples, they should all be the same (no rapid switching indicating overlap)

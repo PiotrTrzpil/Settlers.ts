@@ -4,9 +4,9 @@
  * Cross-entity index (carriersByTavern) remains in the manager.
  */
 
-import type { EventBus } from '../../event-bus';
+import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { EMaterialType } from '../../economy';
-import type { EntityProvider } from '../../entity';
+import { UnitType, type EntityProvider } from '../../entity';
 import { CarrierStatus, type CarrierState, createCarrierState, canAcceptNewJob } from './carrier-state';
 import type { ServiceAreaManager } from '../service-areas';
 import type { TickSystem } from '../../tick-system';
@@ -48,9 +48,35 @@ export class CarrierManager implements TickSystem {
     /** Service area manager for auto-registration (set via setServiceAreaManager) */
     private serviceAreaManager: ServiceAreaManager | null = null;
 
+    /** Tracked event subscriptions for cleanup */
+    private readonly subscriptions = new EventSubscriptionManager();
+
     constructor(config: CarrierManagerConfig) {
         this.entityProvider = config.entityProvider;
         this.eventBus = config.eventBus;
+    }
+
+    /**
+     * Subscribe to entity lifecycle events.
+     * Auto-registers spawned carriers and removes carrier state on entity removal.
+     */
+    registerEvents(eventBus: EventBus): void {
+        this.subscriptions.subscribe(eventBus, 'unit:spawned', payload => {
+            if (payload.unitType === UnitType.Carrier) {
+                this.autoRegisterCarrier(payload.entityId, payload.x, payload.y, payload.player);
+            }
+        });
+
+        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
+            if (this.hasCarrier(entityId)) {
+                this.removeCarrier(entityId);
+            }
+        });
+    }
+
+    /** Unsubscribe from all tracked events. */
+    unregisterEvents(): void {
+        this.subscriptions.unsubscribeAll();
     }
 
     /**

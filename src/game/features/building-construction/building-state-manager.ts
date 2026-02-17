@@ -7,10 +7,10 @@
  * - System handles per-frame behavior
  */
 
-import type { EventBus } from '../../event-bus';
+import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { BuildingType } from '../../buildings/types';
 import { BuildingConstructionPhase, type BuildingState } from './types';
-import type { EntityProvider } from '../../entity';
+import { EntityType, type EntityProvider } from '../../entity';
 
 /** Default building construction duration in seconds */
 export const DEFAULT_CONSTRUCTION_DURATION = 10;
@@ -37,9 +37,33 @@ export class BuildingStateManager {
     /** Internal state storage: entityId -> BuildingState */
     private readonly states = new Map<number, BuildingState>();
 
+    /** Tracked event subscriptions for cleanup */
+    private readonly subscriptions = new EventSubscriptionManager();
+
     constructor(config: BuildingStateManagerConfig) {
         this.entityProvider = config.entityProvider;
         this.eventBus = config.eventBus;
+    }
+
+    /**
+     * Subscribe to entity lifecycle events.
+     * Creates building states for new buildings and removes them on entity removal.
+     */
+    registerEvents(eventBus: EventBus): void {
+        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, type, subType, x, y }) => {
+            if (type === EntityType.Building) {
+                this.createBuildingState(entityId, subType as BuildingType, x, y);
+            }
+        });
+
+        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
+            this.removeBuildingState(entityId);
+        });
+    }
+
+    /** Unsubscribe from all tracked events. */
+    unregisterEvents(): void {
+        this.subscriptions.unsubscribeAll();
     }
 
     /**

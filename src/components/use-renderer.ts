@@ -377,10 +377,11 @@ async function initRenderersAsync(
 
 /** Expose objects for e2e tests */
 function exposeForE2E(viewPoint: any, landscapeRenderer: any, entityRenderer: any, inputManager: any): void {
-    (window as any).__settlers_viewpoint__ = viewPoint;
-    (window as any).__settlers_landscape__ = landscapeRenderer;
-    (window as any).__settlers_entity_renderer__ = entityRenderer;
-    (window as any).__settlers_input__ = inputManager;
+    const bridge = (window.__settlers__ ??= {});
+    bridge.viewpoint = viewPoint;
+    bridge.landscape = landscapeRenderer;
+    bridge.entityRenderer = entityRenderer;
+    bridge.input = inputManager;
 }
 
 interface UseRendererOptions {

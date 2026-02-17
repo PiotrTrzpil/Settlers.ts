@@ -9,7 +9,8 @@
  * - StorageArea - Warehouses that can have their own service areas
  *
  * Public API:
- * - Types: ServiceArea, ServiceAreaEvents, BuildingQueryOptions, BuildingWithDistance
+ * - Feature: ServiceAreaFeature (self-registering via FeatureRegistry)
+ * - Types: ServiceArea, ServiceAreaExports, ServiceAreaEvents, BuildingQueryOptions, BuildingWithDistance
  * - Constants: DEFAULT_SERVICE_RADIUS, MIN_SERVICE_RADIUS, MAX_SERVICE_RADIUS
  * - Manager: ServiceAreaManager (with event system)
  * - Queries: getBuildingsInServiceArea, getHubsServingPosition,
@@ -49,3 +50,6 @@ export {
     getNearestTavernForBuilding,
     getTavernsServingBothPositions,
 } from './service-area-queries';
+
+// Feature definition (self-registering via FeatureRegistry)
+export { ServiceAreaFeature, type ServiceAreaExports } from './service-area-feature';

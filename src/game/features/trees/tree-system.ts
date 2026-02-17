@@ -320,15 +320,33 @@ export class TreeSystem implements TickSystem {
         }
     }
 
-    findPlantingSpot(cx: number, cy: number): { x: number; y: number } | null {
+    findPlantingSpot(cx: number, cy: number, radius?: number): { x: number; y: number } | null {
         return findEmptySpot(cx, cy, {
             gameState: this.gameState,
-            searchRadius: PLANTING_SEARCH_RADIUS,
+            searchRadius: radius ?? PLANTING_SEARCH_RADIUS,
             minDistanceSq: MIN_TREE_DISTANCE_SQ,
             proximityFilter: entity =>
                 entity.type === EntityType.MapObject &&
                 OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType] === 'trees',
         });
+    }
+
+    /**
+     * Plant multiple trees near a position, respecting spacing and terrain constraints.
+     * Uses expanding ring search to find valid spots, so trees spread naturally from center.
+     * @returns Number of trees actually planted
+     */
+    plantTreesNear(cx: number, cy: number, count: number, radius = PLANTING_SEARCH_RADIUS): number {
+        let planted = 0;
+        for (let i = 0; i < count; i++) {
+            const spot = this.findPlantingSpot(cx, cy, radius);
+            if (!spot) break;
+
+            const treeType = PLANTABLE_TREE_TYPES[Math.floor(Math.random() * PLANTABLE_TREE_TYPES.length)];
+            const result = this.executeCommand({ type: 'plant_tree', treeType, x: spot.x, y: spot.y });
+            if (result.success) planted++;
+        }
+        return planted;
     }
 
     // ─────────────────────────────────────────────────────────────

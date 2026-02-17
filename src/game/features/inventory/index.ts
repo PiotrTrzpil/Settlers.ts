@@ -46,3 +46,6 @@ export {
 
 // Inventory visualization
 export { InventoryVisualizer } from './inventory-visualizer';
+
+// Feature definition (self-registering via FeatureRegistry)
+export { InventoryFeature, type InventoryExports } from './inventory-feature';

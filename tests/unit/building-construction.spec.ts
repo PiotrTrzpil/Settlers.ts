@@ -304,9 +304,7 @@ describe('Building Construction Phases', () => {
                 entityProvider: gameState,
                 eventBus,
             });
-            eventBus.on('building:created', ({ entityId, buildingType, x, y }) => {
-                buildingStateManager.createBuildingState(entityId, buildingType, x, y);
-            });
+            buildingStateManager.registerEvents(eventBus);
             gameState.addEntity(EntityType.Building, BuildingType.WoodcutterHut, 10, 10, 0);
             const bs = buildingStateManager.buildingStates.values().next().value as BuildingState;
             bs.totalDuration = 10; // 10 seconds total
@@ -366,14 +364,12 @@ describe('Barracks unit spawning on construction complete', () => {
             getEntity: id => gameState.getEntity(id),
         });
         movement.setTileOccupancy(gameState.tileOccupancy);
-        gameState.setMovementSystem(movement);
+        gameState.initMovement(movement);
         const buildingStateManager = new BuildingStateManager({
             entityProvider: gameState,
             eventBus,
         });
-        eventBus.on('building:created', ({ entityId, buildingType, x, y }) => {
-            buildingStateManager.createBuildingState(entityId, buildingType, x, y);
-        });
+        buildingStateManager.registerEvents(eventBus);
         return { gameState, buildingStateManager };
     }
 

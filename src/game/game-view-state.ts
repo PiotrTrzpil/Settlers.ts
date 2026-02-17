@@ -5,13 +5,14 @@
  * input mode, selection, and entity counts. Updated from the game loop
  * every tick.
  *
- * Exposed on `window.__settlers_view__` for e2e tests.
+ * Exposed on `window.__settlers__.view` for e2e tests.
  */
 
 import { reactive } from 'vue';
 import { EntityType, MapObjectType } from './entity';
 import { isResourceDeposit, getEnvironmentSubLayer, EnvironmentSubLayer } from './renderer/layer-visibility';
 import type { GameState } from './game-state';
+import { getBridge } from './debug-bridge';
 
 export interface GameViewStateData {
     /** Increments every update — use as a reactive dirty flag in Vue computeds */
@@ -70,11 +71,10 @@ export class GameViewState {
             totalPathSteps: 0,
         });
 
-        // Expose on window for e2e tests (skip in Node.js environment)
-        if (typeof window !== 'undefined') {
-            (window as any).__settlers_view__ = this.state;
-            (window as any).__settlers_view_state__ = this;
-        }
+        // Expose on bridge for e2e tests
+        const bridge = getBridge();
+        bridge.view = this.state;
+        bridge.viewState = this;
     }
 
     /**

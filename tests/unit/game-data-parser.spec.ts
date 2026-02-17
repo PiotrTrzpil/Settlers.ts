@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom';
 
 // Set up DOMParser for Node environment
 const dom = new JSDOM('');
-(global as any).DOMParser = dom.window.DOMParser;
+(global as unknown as { DOMParser: typeof DOMParser }).DOMParser = dom.window.DOMParser;
 
 import { parseBuildingInfo } from '@/resources/game-data/building-info-parser';
 import { parseJobInfo } from '@/resources/game-data/job-info-parser';

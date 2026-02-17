@@ -17,6 +17,7 @@ import { getBuildingFootprint } from '../../buildings/types';
 import { EMaterialType } from '../../economy/material-type';
 import { MAX_RESOURCE_STACK_SIZE } from '../../entity';
 import type { Command, CommandResult } from '../../commands';
+import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('InventoryVisualizer');
@@ -58,6 +59,9 @@ export class InventoryVisualizer {
         newAmount: number
     ) => void;
 
+    /** Tracked event subscriptions for cleanup */
+    private readonly subscriptions = new EventSubscriptionManager();
+
     constructor(
         gameState: GameState,
         inventoryManager: BuildingInventoryManager,
@@ -73,9 +77,25 @@ export class InventoryVisualizer {
     }
 
     /**
+     * Subscribe to entity lifecycle events.
+     * Cleans up visual inventory stacks when buildings are removed.
+     */
+    registerEvents(eventBus: EventBus): void {
+        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
+            this.removeBuilding(entityId);
+        });
+    }
+
+    /** Unsubscribe from all tracked events. */
+    unregisterEvents(): void {
+        this.subscriptions.unsubscribeAll();
+    }
+
+    /**
      * Clean up event listeners.
      */
     dispose(): void {
+        this.unregisterEvents();
         this.inventoryManager.offChange(this.changeHandler);
         this.buildingVisuals.clear();
     }

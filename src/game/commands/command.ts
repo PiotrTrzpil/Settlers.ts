@@ -34,6 +34,7 @@ import {
     type SpawnVisualResourceCommand,
     type SpawnBuildingUnitsCommand,
     type PlantTreeCommand,
+    type PlantTreesAreaCommand,
     type ScriptAddGoodsCommand,
     type ScriptAddBuildingCommand,
     type ScriptAddSettlersCommand,
@@ -429,6 +430,14 @@ function executePlantTree(ctx: CommandContext, cmd: PlantTreeCommand): CommandRe
     return commandSuccess([{ type: 'tree_planted', entityId: entity.id, treeType: cmd.treeType, x: cmd.x, y: cmd.y }]);
 }
 
+function executePlantTreesArea(ctx: CommandContext, cmd: PlantTreesAreaCommand): CommandResult {
+    const planted = ctx.treeSystem!.plantTreesNear(cmd.centerX, cmd.centerY, cmd.count, cmd.radius);
+    if (planted === 0) {
+        return commandFailed(`Could not plant any trees near (${cmd.centerX}, ${cmd.centerY})`);
+    }
+    return commandSuccess([{ type: 'entity_created', entityId: 0, entityType: `${planted} trees planted` }]);
+}
+
 // === Script command handlers ===
 
 function executeScriptAddGoods(ctx: CommandContext, cmd: ScriptAddGoodsCommand): CommandResult {
@@ -507,6 +516,7 @@ const COMMAND_HANDLERS: Record<Command['type'], CommandHandler> = {
     spawn_visual_resource: executeSpawnVisualResource,
     spawn_building_units: executeSpawnBuildingUnits,
     plant_tree: executePlantTree,
+    plant_trees_area: executePlantTreesArea,
     script_add_goods: executeScriptAddGoods,
     script_add_building: executeScriptAddBuilding,
     script_add_settlers: executeScriptAddSettlers,

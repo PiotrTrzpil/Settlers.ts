@@ -6,7 +6,7 @@
  */
 
 import { GameState, UnitStateView } from '@/game/game-state';
-import { EntityType, BuildingType, type Entity } from '@/game/entity';
+import { EntityType, BuildingType, UnitType, getUnitTypeSpeed, type Entity } from '@/game/entity';
 import { createTestMap, type TestMap } from './test-map';
 import { EventBus } from '@/game/event-bus';
 import { spiralSearch } from '@/game/utils/spiral-search';
@@ -29,7 +29,6 @@ import { GameSettingsManager, type GameSettings } from '@/game/game-settings';
 export function createGameState(): GameState {
     const eventBus = new EventBus();
     const state = new GameState(eventBus);
-    // GameState needs a MovementSystem before entities can be added
     const movement = new MovementSystem({
         eventBus,
         rng: state.rng,
@@ -40,8 +39,31 @@ export function createGameState(): GameState {
         getEntity: id => state.getEntity(id),
     });
     movement.setTileOccupancy(state.tileOccupancy);
-    state.setMovementSystem(movement);
+    state.initMovement(movement);
+
+    // Wire entity lifecycle events (mirrors GameServices subscriptions)
+    wireEntityLifecycleEvents(eventBus, movement, state);
     return state;
+}
+
+/**
+ * Wire entity:created / entity:removed event subscriptions.
+ * Mirrors the production wiring done by GameServices — creates movement controllers
+ * for units and resource state for stacked resources.
+ */
+function wireEntityLifecycleEvents(eventBus: EventBus, movement: MovementSystem, state: GameState): void {
+    eventBus.on('entity:created', ({ entityId, type, subType, x, y }) => {
+        if (type === EntityType.Unit) {
+            const speed = getUnitTypeSpeed(subType as UnitType);
+            movement.createController(entityId, x, y, speed);
+        } else if (type === EntityType.StackedResource) {
+            state.resources.createState(entityId);
+        }
+    });
+    eventBus.on('entity:removed', ({ entityId }) => {
+        movement.removeController(entityId);
+        state.resources.removeState(entityId);
+    });
 }
 
 // ─── Unified test context ───────────────────────────────────────────
@@ -106,7 +128,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         getEntity: id => state.getEntity(id),
     });
     movement.setTileOccupancy(state.tileOccupancy);
-    state.setMovementSystem(movement);
+    state.initMovement(movement);
 
     // Create managers with required dependencies via constructor
     const carrierManager = new CarrierManager({
@@ -140,10 +162,9 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     // Initialize terrain data on movement system
     movement.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
 
-    // Subscribe to building creation events for building state initialization
-    eventBus.on('building:created', ({ entityId, buildingType, x, y }) => {
-        buildingStateManager.createBuildingState(entityId, buildingType, x, y);
-    });
+    // Wire entity lifecycle events (movement controllers, resource state, building state)
+    wireEntityLifecycleEvents(eventBus, movement, state);
+    buildingStateManager.registerEvents(eventBus);
 
     context = {
         state,

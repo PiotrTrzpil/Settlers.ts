@@ -115,6 +115,12 @@ export class LogisticsDispatcher implements TickSystem {
         this.subscriptions.subscribe(eventBus, 'carrier:removed', payload => {
             this.handleCarrierRemoved(payload.entityId);
         });
+
+        // Clean up logistics state when buildings are destroyed
+        // Must be registered before inventory cleanup (inventory needed for reservation release)
+        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
+            this.handleBuildingDestroyed(entityId);
+        });
     }
 
     /**

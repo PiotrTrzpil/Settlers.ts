@@ -30,7 +30,7 @@ export interface JilLookupResult {
 /** Check if the entity renderer has sprites loaded. */
 export async function hasSpritesLoaded(page: Page): Promise<boolean> {
     return page.evaluate(() => {
-        const renderer = (window as any).__settlers_entity_renderer__;
+        const renderer = window.__settlers__?.entityRenderer;
         if (!renderer) return false;
         const spriteManager = (renderer as any).spriteManager;
         return spriteManager?.hasSprites === true;
@@ -43,7 +43,7 @@ export async function hasSpritesLoaded(page: Page): Promise<boolean> {
  */
 export async function getLoadedUnitSprites(page: Page): Promise<LoadedUnitSprites | null> {
     return page.evaluate(() => {
-        const renderer = (window as any).__settlers_entity_renderer__;
+        const renderer = window.__settlers__?.entityRenderer;
         if (!renderer) return null;
         const spriteManager = (renderer as any).spriteManager;
         if (!spriteManager) return null;
@@ -63,7 +63,7 @@ export async function getLoadedUnitSprites(page: Page): Promise<LoadedUnitSprite
 /** Get the unit sprite registry size. */
 export async function getSpriteRegistrySize(page: Page): Promise<number> {
     return page.evaluate(() => {
-        const renderer = (window as any).__settlers_entity_renderer__;
+        const renderer = window.__settlers__?.entityRenderer;
         const registry = (renderer as any)?.spriteManager?._spriteRegistry;
         return (registry?.getBuildingCount?.() ?? 0) + (registry?.getUnitCount?.() ?? 0);
     });
@@ -76,7 +76,7 @@ export async function getSpriteRegistrySize(page: Page): Promise<number> {
 export async function testJilLookup(page: Page, fileId: string, jobIndices: number[]): Promise<JilLookupResult | null> {
     return page.evaluate(
         async ({ fid, indices }) => {
-            const renderer = (window as any).__settlers_entity_renderer__;
+            const renderer = window.__settlers__?.entityRenderer;
             const spriteLoader = (renderer as any)?.spriteManager?.spriteLoader;
             if (!spriteLoader) return null;
             const fileSet = await spriteLoader.loadFileSet(fid);
@@ -98,7 +98,7 @@ export async function testJilLookup(page: Page, fileId: string, jobIndices: numb
 /** Get sprite load timings from debug state. */
 export async function getLoadTimings(page: Page): Promise<LoadTimings> {
     return page.evaluate(() => {
-        const d = (window as any).__settlers_debug__;
+        const d = window.__settlers__?.debug;
         return {
             totalSprites: d?.loadTimings?.totalSprites ?? 0,
             cacheHit: d?.loadTimings?.cacheHit ?? false,

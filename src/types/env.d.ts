@@ -1,14 +1,14 @@
 /// <reference types="vite/client" />
 
-import type { SoundManager } from '@/game/audio/sound-manager';
+import type { SettlersBridge } from '@/game/debug-bridge';
 
 /**
- * Global window extensions for HMR-safe singletons and debug helpers.
+ * Global window extensions for the debug/test bridge and HMR singletons.
  */
 declare global {
     interface Window {
-        /** HMR-safe SoundManager singleton */
-        __settlers_sound_manager__?: SoundManager;
+        /** Consolidated debug/test bridge — single entry point for all game internals */
+        __settlers__?: SettlersBridge;
         /** Debug helper for audio state inspection */
         debugSound?: () => void;
     }

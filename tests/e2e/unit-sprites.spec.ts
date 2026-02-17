@@ -14,29 +14,29 @@ import { test, expect } from './fixtures';
 
 test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () => {
     test('should load unit sprites from sprite registry', async ({ gpAssets }) => {
-        const loadedUnits = await gpAssets.getLoadedUnitSprites();
+        const loadedUnits = await gpAssets.sprites.getLoadedUnitSprites();
         expect(loadedUnits).not.toBeNull();
         expect(loadedUnits!.loadedCount).toBeGreaterThan(0);
     });
 
     test('should render swordsman with texture not just color dot', async ({ gpAssets }) => {
-        const registrySize = await gpAssets.getSpriteRegistrySize();
+        const registrySize = await gpAssets.sprites.getSpriteRegistrySize();
         expect(registrySize).toBeGreaterThan(0);
 
         // Spawn a swordsman via game.execute()
-        const unit = await gpAssets.spawnUnit(6); // Swordsman = UnitType 6
+        const unit = await gpAssets.actions.spawnUnit(6); // Swordsman = UnitType 6
         expect(unit).not.toBeNull();
 
         await expect(gpAssets).toHaveEntity({ type: 1 }); // EntityType.Unit
 
-        const units = await gpAssets.getEntities({ type: 1 });
+        const units = await gpAssets.actions.getEntities({ type: 1 });
         expect(units.length).toBeGreaterThan(0);
         expect(units[0].subType).toBeGreaterThan(0);
     });
 
     test('JIL index lookup returns correct job for high indices', async ({ gpAssets }) => {
         // Test specific job indices: Carrier=#1, Builder=#19, Swordsman=#227, Bowman=#236
-        const jilResult = await gpAssets.testJilLookup('20', [1, 19, 227, 236]);
+        const jilResult = await gpAssets.sprites.testJilLookup('20', [1, 19, 227, 236]);
         expect(jilResult).not.toBeNull();
 
         // Job 1 (Carrier) should exist

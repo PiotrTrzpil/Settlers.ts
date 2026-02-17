@@ -2,6 +2,10 @@
  * GameServices — composition root for all game managers and systems.
  *
  * Creates, wires, and owns every domain manager and tick system.
+ * Each feature/manager self-subscribes to lifecycle events via registerEvents()
+ * or FeatureRegistry. This module contains no domain logic — only construction,
+ * wiring, and the entity:removed handler ordering constraint.
+ *
  * GameLoop (frame scheduling) and Game (public façade) depend on this;
  * this module knows nothing about either of them.
  */
@@ -22,35 +26,21 @@ import { CarrierManager } from './features/carriers';
 import {
     InventoryVisualizer,
     BuildingInventoryManager,
-    hasInventory,
-    isProductionBuilding,
+    InventoryFeature,
+    type InventoryExports,
 } from './features/inventory';
-import { LogisticsDispatcher, RequestManager } from './features/logistics';
-import { ServiceAreaManager } from './features/service-areas';
+import {
+    LogisticsDispatcher,
+    RequestManager,
+    RequestManagerFeature,
+    type RequestManagerExports,
+} from './features/logistics';
+import { ServiceAreaManager, ServiceAreaFeature, type ServiceAreaExports } from './features/service-areas';
 import { FeatureRegistry } from './features/feature-registry';
 import { TreeFeature, TreeSystem, type TreeFeatureExports } from './features/trees';
 import { EventBus, EventSubscriptionManager } from './event-bus';
-import { BuildingType, UnitType } from './entity';
+import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
 import { AnimationService } from './animation/index';
-
-type BuildingCreatedHandler = (
-    entityId: number,
-    buildingType: BuildingType,
-    x: number,
-    y: number,
-    player: number
-) => void;
-type EntityRemovedHandler = (entityId: number) => void;
-
-/**
- * Building types that act as logistics hubs (taverns/carrier bases).
- * These buildings get service areas when created.
- */
-const SERVICE_AREA_BUILDINGS: ReadonlySet<BuildingType> = new Set([
-    BuildingType.ResidenceSmall,
-    BuildingType.ResidenceMedium,
-    BuildingType.ResidenceBig,
-]);
 import type { Command, CommandResult } from './commands';
 
 export class GameServices {
@@ -62,14 +52,14 @@ export class GameServices {
     /** Carrier manager — tracks carrier state and assignments */
     public readonly carrierManager: CarrierManager;
 
-    /** Building inventory manager — tracks building input/output slots */
-    public readonly inventoryManager: BuildingInventoryManager;
+    /** Building inventory manager — tracks building input/output slots (via FeatureRegistry) */
+    public readonly inventoryManager!: BuildingInventoryManager;
 
-    /** Service area manager — tracks logistics service areas */
-    public readonly serviceAreaManager: ServiceAreaManager;
+    /** Service area manager — tracks logistics service areas (via FeatureRegistry) */
+    public readonly serviceAreaManager!: ServiceAreaManager;
 
-    /** Request manager — tracks material delivery requests */
-    public readonly requestManager: RequestManager;
+    /** Request manager — tracks material delivery requests (via FeatureRegistry) */
+    public readonly requestManager!: RequestManager;
 
     /** Building state manager — tracks construction state for all buildings */
     public readonly buildingStateManager: BuildingStateManager;
@@ -94,8 +84,6 @@ export class GameServices {
     public readonly treeSystem: TreeSystem;
 
     // ===== Internal =====
-    private readonly extraCreatedHandlers: BuildingCreatedHandler[] = [];
-    private readonly extraRemovedHandlers: EntityRemovedHandler[] = [];
     private readonly featureRegistry: FeatureRegistry;
     private readonly subscriptions = new EventSubscriptionManager();
     private readonly eventBus: EventBus;
@@ -107,14 +95,11 @@ export class GameServices {
         // 1. Animation service — other systems depend on it
         this.animationService = new AnimationService();
 
-        // 2. Managers
+        // 2. Manually-created managers (complex wiring that isn't yet feature-based)
         this.carrierManager = new CarrierManager({
             entityProvider: gameState,
             eventBus,
         });
-        this.inventoryManager = new BuildingInventoryManager();
-        this.serviceAreaManager = new ServiceAreaManager();
-        this.requestManager = new RequestManager();
         this.buildingStateManager = new BuildingStateManager({
             entityProvider: gameState,
             eventBus,
@@ -131,7 +116,7 @@ export class GameServices {
             getEntity: id => gameState.getEntity(id),
         });
         this.movement.setTileOccupancy(gameState.tileOccupancy);
-        gameState.setMovementSystem(this.movement);
+        gameState.initMovement(this.movement);
         this.addSystem(this.movement);
 
         // 4. Building construction system
@@ -143,18 +128,14 @@ export class GameServices {
         this.constructionSystem.registerEvents(eventBus);
         this.addSystem(this.constructionSystem);
 
-        // 5. Carrier manager (also a TickSystem for fatigue recovery)
-        this.carrierManager.setServiceAreaManager(this.serviceAreaManager);
+        // 5. Register early lifecycle events — building state and carriers self-subscribe.
+        //    Must happen before feature loading so handlers fire in the right order.
+        this.buildingStateManager.registerEvents(eventBus);
+        this.carrierManager.registerEvents(eventBus);
         this.addSystem(this.carrierManager);
 
-        // Auto-register carriers on spawn
-        this.subscriptions.subscribe(eventBus, 'unit:spawned', payload => {
-            if (payload.unitType === UnitType.Carrier) {
-                this.carrierManager.autoRegisterCarrier(payload.entityId, payload.x, payload.y, payload.player);
-            }
-        });
-
-        // 6. Feature registry — load self-registering features
+        // 6. Feature registry — load self-registering features.
+        //    Features subscribe to entity:created/entity:removed for their own state.
         this.featureRegistry = new FeatureRegistry({
             gameState,
             eventBus,
@@ -165,10 +146,24 @@ export class GameServices {
         this.featureRegistry.registerExports('building-construction', {
             buildingStateManager: this.buildingStateManager,
         });
-        this.featureRegistry.registerExports('inventory', { inventoryManager: this.inventoryManager });
-        this.featureRegistry.registerExports('logistics', { requestManager: this.requestManager });
 
-        this.featureRegistry.loadAll([TreeFeature, MaterialRequestFeature]);
+        this.featureRegistry.loadAll([
+            ServiceAreaFeature,
+            InventoryFeature,
+            RequestManagerFeature,
+            TreeFeature,
+            MaterialRequestFeature,
+        ]);
+
+        // Retrieve managers created by features
+        this.serviceAreaManager =
+            this.featureRegistry.getFeatureExports<ServiceAreaExports>('service-areas').serviceAreaManager;
+        this.inventoryManager = this.featureRegistry.getFeatureExports<InventoryExports>('inventory').inventoryManager;
+        this.requestManager = this.featureRegistry.getFeatureExports<RequestManagerExports>('logistics').requestManager;
+
+        // Wire carrier manager to service areas (now available after feature loading)
+        this.carrierManager.setServiceAreaManager(this.serviceAreaManager);
+
         this.treeSystem = this.featureRegistry.getFeatureExports<TreeFeatureExports>('trees').treeSystem;
         this.treeSystem.setCommandExecutor(executeCommand);
         for (const system of this.featureRegistry.getSystems()) {
@@ -186,7 +181,8 @@ export class GameServices {
         });
         this.addSystem(this.settlerTaskSystem);
 
-        // 8. Logistics dispatcher
+        // 8. Logistics dispatcher — registers for carrier events AND entity:removed.
+        //    MUST be registered before inventory removal (logistics needs inventory for reservation release).
         this.logisticsDispatcher = new LogisticsDispatcher({
             gameState,
             carrierManager: this.carrierManager,
@@ -206,38 +202,30 @@ export class GameServices {
         this.settlerTaskSystem.registerWorkHandler(SearchType.STONE, createStonecuttingHandler(gameState));
         this.settlerTaskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, createForesterHandler(this.treeSystem));
 
-        // 10. Inventory visualizer
+        // 10. Inventory visualizer — subscribes to entity:removed for visual cleanup
         this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager, executeCommand);
+        this.inventoryVisualizer.registerEvents(eventBus);
 
-        // 12. Building lifecycle — subscribe to creation/removal events
-        this.subscriptions.subscribe(eventBus, 'building:created', ({ entityId, buildingType, x, y }) => {
-            const entity = gameState.getEntityOrThrow(entityId, 'building lifecycle: created');
-            this.handleBuildingCreated(entityId, buildingType, x, y, entity.player);
+        // 11. Core entity lifecycle — movement controllers and resource state.
+        //     These are not feature-specific, so they stay in the composition root.
+        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, type, subType, x, y }) => {
+            if (type === EntityType.Unit) {
+                const speed = getUnitTypeSpeed(subType as UnitType);
+                this.movement.createController(entityId, x, y, speed);
+            } else if (type === EntityType.StackedResource) {
+                gameState.resources.createState(entityId);
+            }
         });
         this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
-            this.handleEntityRemoved(entityId);
+            this.movement.removeController(entityId);
+            gameState.resources.removeState(entityId);
         });
 
-        // 13. Bridge inventory changes to EventBus for consumers (debug panel, UI)
-        this.inventoryManager.onChange((buildingId, materialType, slotType, previousAmount, newAmount) => {
-            this.eventBus.emit('inventory:changed', {
-                buildingId,
-                materialType,
-                slotType,
-                previousAmount,
-                newAmount,
-            });
-        });
-
-        // 14. Bridge request creation to EventBus for consumers (debug panel, UI)
-        this.requestManager.on('requestAdded', ({ request }) => {
-            this.eventBus.emit('request:created', {
-                requestId: request.id,
-                buildingId: request.buildingId,
-                materialType: request.materialType,
-                amount: request.amount,
-                priority: request.priority,
-            });
+        // 12. Late inventory removal — MUST happen after logistics cleanup (step 8).
+        //     Logistics releases inventory reservations during entity:removed, so
+        //     inventory data must still exist when that handler fires.
+        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
+            this.inventoryManager.removeInventory(entityId);
         });
     }
 
@@ -255,16 +243,6 @@ export class GameServices {
         return this.tickSystems;
     }
 
-    /** Register an additional building creation handler. */
-    onBuildingCreated(handler: BuildingCreatedHandler): void {
-        this.extraCreatedHandlers.push(handler);
-    }
-
-    /** Register an additional entity removal handler. */
-    onEntityRemoved(handler: EntityRemovedHandler): void {
-        this.extraRemovedHandlers.push(handler);
-    }
-
     /** Clean up all event subscriptions and system state */
     public destroy(): void {
         for (const system of this.tickSystems) {
@@ -273,67 +251,13 @@ export class GameServices {
             }
         }
         this.featureRegistry.destroy();
+        this.buildingStateManager.unregisterEvents();
+        this.carrierManager.unregisterEvents();
+        this.inventoryVisualizer.unregisterEvents();
         this.subscriptions.unsubscribeAll();
-        this.extraCreatedHandlers.length = 0;
-        this.extraRemovedHandlers.length = 0;
     }
 
     private addSystem(system: TickSystem): void {
         this.tickSystems.push(system);
-    }
-
-    // ── Building lifecycle handling ─────────────────────────────────────
-
-    private handleBuildingCreated(
-        entityId: number,
-        buildingType: BuildingType,
-        x: number,
-        y: number,
-        player: number
-    ): void {
-        // Create service area for logistics hubs (taverns/warehouses)
-        if (SERVICE_AREA_BUILDINGS.has(buildingType)) {
-            this.serviceAreaManager.createServiceArea(entityId, player, x, y, buildingType);
-        }
-
-        // Create inventory for buildings with input/output slots
-        if (hasInventory(buildingType) || isProductionBuilding(buildingType)) {
-            this.inventoryManager.createInventory(entityId, buildingType);
-        }
-
-        // Create building construction state
-        this.buildingStateManager.createBuildingState(entityId, buildingType, x, y);
-
-        // Run any extra registered handlers
-        for (const handler of this.extraCreatedHandlers) {
-            handler(entityId, buildingType, x, y, player);
-        }
-    }
-
-    private handleEntityRemoved(entityId: number): void {
-        // Clean up carrier state if this was a carrier
-        if (this.carrierManager.hasCarrier(entityId)) {
-            this.carrierManager.removeCarrier(entityId);
-        }
-
-        // Clean up building construction state
-        this.buildingStateManager.removeBuildingState(entityId);
-
-        // Clean up service area if this building had one
-        this.serviceAreaManager.removeServiceArea(entityId);
-
-        // Clean up logistics state first (releasing reservations needs the inventory)
-        this.logisticsDispatcher.handleBuildingDestroyed(entityId);
-
-        // Clean up inventory after logistics is done with it
-        this.inventoryManager.removeInventory(entityId);
-
-        // Clean up visual inventory stacks
-        this.inventoryVisualizer.removeBuilding(entityId);
-
-        // Run any extra registered handlers
-        for (const handler of this.extraRemovedHandlers) {
-            handler(entityId);
-        }
     }
 }

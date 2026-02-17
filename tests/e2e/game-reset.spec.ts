@@ -14,25 +14,25 @@ test.describe('Game State Reset', { tag: '@smoke' }, () => {
         const { check: checkErrors } = gp.collectErrors();
 
         // Place a storage area + woodcutter (triggers inventory + logistics registration)
-        const storageTile = await gp.findBuildableTile(2);
+        const storageTile = await gp.actions.findBuildableTile(2);
         if (!storageTile) {
             test.skip();
             return;
         }
-        await gp.placeBuilding(2, storageTile.x, storageTile.y);
+        await gp.actions.placeBuilding(2, storageTile.x, storageTile.y);
 
-        const woodcutterTile = await gp.findBuildableTile(1);
+        const woodcutterTile = await gp.actions.findBuildableTile(1);
         if (!woodcutterTile) {
             test.skip();
             return;
         }
-        await gp.placeBuilding(1, woodcutterTile.x, woodcutterTile.y);
+        await gp.actions.placeBuilding(1, woodcutterTile.x, woodcutterTile.y);
 
         // Spawn a carrier so logistics can create reservations
-        await gp.spawnUnit(0);
+        await gp.actions.spawnUnit(0);
 
         // Let the game tick so logistics dispatches requests/reservations
-        await gp.waitForFrames(30);
+        await gp.wait.waitForFrames(30);
 
         await expect(gp).toHaveBuildingCount(2);
 
@@ -48,8 +48,12 @@ test.describe('Game State Reset', { tag: '@smoke' }, () => {
     test('reset is idempotent — double reset does not throw', async ({ gp }) => {
         const { check: checkErrors } = gp.collectErrors();
 
-        await gp.placeBuilding(2, (await gp.findBuildableTile(2))!.x, (await gp.findBuildableTile(2))!.y);
-        await gp.waitForFrames(5);
+        await gp.actions.placeBuilding(
+            2,
+            (await gp.actions.findBuildableTile(2))!.x,
+            (await gp.actions.findBuildableTile(2))!.y
+        );
+        await gp.wait.waitForFrames(5);
 
         await gp.resetGameState();
         await gp.resetGameState();
@@ -60,26 +64,26 @@ test.describe('Game State Reset', { tag: '@smoke' }, () => {
 
     test('entities can be placed after reset', async ({ gp }) => {
         // Place, reset, place again — verifies systems are in clean state
-        const tile1 = await gp.findBuildableTile(1);
+        const tile1 = await gp.actions.findBuildableTile(1);
         if (!tile1) {
             test.skip();
             return;
         }
-        await gp.placeBuilding(1, tile1.x, tile1.y);
+        await gp.actions.placeBuilding(1, tile1.x, tile1.y);
         await expect(gp).toHaveBuildingCount(1);
 
         await gp.resetGameState();
         await expect(gp).toHaveBuildingCount(0);
 
-        const tile2 = await gp.findBuildableTile(1);
+        const tile2 = await gp.actions.findBuildableTile(1);
         if (!tile2) {
             test.skip();
             return;
         }
-        await gp.placeBuilding(1, tile2.x, tile2.y);
+        await gp.actions.placeBuilding(1, tile2.x, tile2.y);
         await expect(gp).toHaveBuildingCount(1);
 
-        await gp.spawnUnit(0);
-        await gp.waitForUnitCount(1, Timeout.DEFAULT);
+        await gp.actions.spawnUnit(0);
+        await gp.wait.waitForUnitCount(1, Timeout.DEFAULT);
     });
 });

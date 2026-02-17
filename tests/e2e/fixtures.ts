@@ -16,7 +16,7 @@
  *
  *   // Basic: clean slate with test map loaded (fastest, no UI interaction)
  *   test('my test', async ({ gp }) => {
- *       await gp.spawnUnit(1);
+ *       await gp.actions.spawnUnit(1);
  *   });
  *
  *   // With UI: for tests that interact with sidebar buttons
@@ -26,7 +26,7 @@
  *
  *   // Preset: building already placed
  *   test('with building', async ({ gpWithBuilding }) => {
- *       const buildings = await gpWithBuilding.getEntities({ type: 2 });
+ *       const buildings = await gpWithBuilding.actions.getEntities({ type: 2 });
  *   });
  *
  *   // Preset: unit already moving
@@ -135,7 +135,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
             // Navigate and wait for full readiness
             await gp.goto({ testMap: true });
-            await gp.waitForReady(Frames.RENDER_SETTLE, Timeout.ASSET_LOAD);
+            await gp.wait.waitForReady(Frames.RENDER_SETTLE, Timeout.ASSET_LOAD);
 
             await use(page);
 
@@ -165,7 +165,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
             // Navigate and wait for game state only (not renderer)
             await gp.goto({ testMap: true });
-            await gp.waitForGameReady(5, Timeout.ASSET_LOAD);
+            await gp.wait.waitForGameReady(5, Timeout.ASSET_LOAD);
 
             await use(page);
 
@@ -202,12 +202,12 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
             // Load real game (not test map)
             await gp.goto({ testMap: false });
-            await gp.waitForReady(5, 30_000);
+            await gp.wait.waitForReady(5, 30_000);
 
             // Wait for sprites to actually be loaded (happens async after rendererReady)
             await page.waitForFunction(
                 () => {
-                    const renderer = (window as any).__settlers_entity_renderer__;
+                    const renderer = window.__settlers__?.entityRenderer;
                     return renderer?.spriteManager?.hasSprites === true;
                 },
                 { timeout: 30_000 }
@@ -235,7 +235,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             await gp.resetGameState();
 
             // Use 4x speed by default for faster tests
-            await gp.setGameSpeed(4.0);
+            await gp.actions.setGameSpeed(4.0);
 
             await use(gp);
         },
@@ -247,7 +247,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         async ({ gameStatePage }, use) => {
             const gp = new GamePage(gameStatePage);
             await gp.resetGameState();
-            await gp.setGameSpeed(4.0);
+            await gp.actions.setGameSpeed(4.0);
             await use(gp);
         },
         { timeout: Timeout.MOVEMENT },
@@ -258,7 +258,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         async ({ testMapPage }, use) => {
             const gp = new GamePage(testMapPage);
             await gp.resetGameState();
-            await gp.setGameSpeed(1.0);
+            await gp.actions.setGameSpeed(1.0);
             await use(gp);
         },
         { timeout: Timeout.MOVEMENT },
@@ -286,13 +286,13 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             await gp.resetGameState();
 
             // Place a building at a valid location
-            const tile = await gp.findBuildableTile(1);
+            const tile = await gp.actions.findBuildableTile(1);
             if (tile) {
-                await gp.placeBuilding(1, tile.x, tile.y);
+                await gp.actions.placeBuilding(1, tile.x, tile.y);
             }
 
             // Quick sync - just need one render tick to register the building
-            await gp.waitForFrames(Frames.IMMEDIATE, Timeout.FAST);
+            await gp.wait.waitForFrames(Frames.IMMEDIATE, Timeout.FAST);
             await use(gp);
         },
         { timeout: Timeout.MOVEMENT },
@@ -305,10 +305,10 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             await gp.resetGameState();
 
             // Spawn a carrier at map center
-            await gp.spawnUnit(1);
+            await gp.actions.spawnUnit(1);
 
             // Wait for entity to appear
-            await gp.waitForUnitCount(1, Timeout.DEFAULT);
+            await gp.wait.waitForUnitCount(1, Timeout.DEFAULT);
             await use(gp);
         },
         { timeout: Timeout.MOVEMENT },
@@ -321,11 +321,11 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             await gp.resetGameState();
 
             // Spawn and move a unit
-            const unit = await gp.spawnUnit(1);
+            const unit = await gp.actions.spawnUnit(1);
             if (unit) {
-                await gp.moveUnit(unit.id, unit.x + 10, unit.y);
+                await gp.actions.moveUnit(unit.id, unit.x + 10, unit.y);
                 // Wait for movement to start
-                await gp.waitForUnitsMoving(1, Timeout.DEFAULT);
+                await gp.wait.waitForUnitsMoving(1, Timeout.DEFAULT);
             }
 
             await use(gp);
@@ -340,7 +340,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             await gp.resetGameState();
 
             // Center camera
-            const state = await gp.getGameState();
+            const state = await gp.actions.getGameState();
             if (state) {
                 const cx = Math.floor(state.mapWidth / 2);
                 const cy = Math.floor(state.mapHeight / 2);
@@ -357,7 +357,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         async ({ testMapPage }, use) => {
             const gp = new GamePage(testMapPage);
             await gp.resetGameState();
-            await gp.setGameSpeed(4.0);
+            await gp.actions.setGameSpeed(4.0);
 
             await use(gp);
         },
@@ -370,7 +370,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             const gp = new GamePage(assetPage);
 
             // Check if assets loaded - skip in CI, fail locally
-            const hasSprites = await gp.hasSpritesLoaded();
+            const hasSprites = await gp.sprites.hasSpritesLoaded();
             if (!hasSprites) {
                 if (isCloudEnv()) {
                     testInfo.skip(true, 'CI environment - game assets not available');

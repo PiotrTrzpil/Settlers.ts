@@ -7,7 +7,9 @@
  */
 
 import type { BuildingType } from './buildings/types';
+import type { BuildingState } from './features/building-construction';
 import type { UnitType } from './unit-types';
+import type { EntityType } from './entity';
 import type { EMaterialType } from './economy';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
@@ -26,34 +28,12 @@ export interface GameEvents {
     /** Emitted when building construction completes */
     'building:completed': {
         entityId: number;
-        buildingState: {
-            entityId: number;
-            buildingType: BuildingType;
-            phase: number;
-            phaseProgress: number;
-            totalDuration: number;
-            elapsedTime: number;
-            tileX: number;
-            tileY: number;
-            originalTerrain: unknown;
-            terrainModified: boolean;
-        };
+        buildingState: BuildingState;
     };
     /** Emitted when a building is removed/cancelled */
     'building:removed': {
         entityId: number;
-        buildingState: {
-            entityId: number;
-            buildingType: BuildingType;
-            phase: number;
-            phaseProgress: number;
-            totalDuration: number;
-            elapsedTime: number;
-            tileX: number;
-            tileY: number;
-            originalTerrain: unknown;
-            terrainModified: boolean;
-        };
+        buildingState: BuildingState;
     };
     /** Emitted when a unit is spawned */
     'unit:spawned': {
@@ -186,33 +166,25 @@ export interface GameEvents {
     // === Entity Lifecycle Events ===
 
     /**
+     * Emitted when any entity is added to the game.
+     * Systems subscribe to handle type-specific initialization
+     * (e.g., MovementSystem creates controllers for units).
+     */
+    'entity:created': {
+        entityId: number;
+        type: EntityType;
+        subType: number;
+        x: number;
+        y: number;
+        player: number;
+    };
+
+    /**
      * Emitted when any entity is removed from the game.
      * Systems should subscribe to clean up per-entity state.
      */
     'entity:removed': {
         entityId: number;
-    };
-
-    /**
-     * Emitted when a building entity is created (via addEntity).
-     * Used for initializing building-specific state (inventory, service areas, construction).
-     */
-    'building:created': {
-        entityId: number;
-        buildingType: BuildingType;
-        x: number;
-        y: number;
-    };
-
-    /**
-     * Emitted when a map object entity is created (via addEntity).
-     * Used for registering objects with their respective systems (e.g., trees).
-     */
-    'mapObject:created': {
-        entityId: number;
-        objectType: number;
-        x: number;
-        y: number;
     };
 }
 

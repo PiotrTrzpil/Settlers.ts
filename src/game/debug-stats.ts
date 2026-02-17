@@ -12,6 +12,7 @@ import { reactive, watch } from 'vue';
 import type { Game } from './game';
 import type { GameSettingsManager } from './game-settings';
 import { spiralSearch } from './utils/spiral-search';
+import { getBridge } from './debug-bridge';
 
 const WINDOW_SIZE = 60;
 const SETTINGS_STORAGE_KEY = 'settlers_debug_settings';
@@ -361,11 +362,10 @@ class DebugStats {
             },
         });
 
-        // Expose on window for Playwright tests (skip in Node.js environment)
-        if (typeof window !== 'undefined') {
-            (window as any).__settlers_debug__ = this.state;
-            (window as any).__settlers_spiral_search__ = spiralSearch;
-        }
+        // Expose on window for Playwright tests
+        const bridge = getBridge();
+        bridge.debug = this.state;
+        bridge.utils = { spiralSearch };
 
         // Set up watchers to auto-save settings when they change
         this.setupSettingsWatchers();
@@ -504,8 +504,9 @@ class DebugStats {
      */
     public updateFromGame(game: Game, settings: GameSettingsManager): void {
         // Expose references for e2e tests (Vue internals are stripped in prod builds)
-        (window as any).__settlers_game__ = game;
-        (window as any).__settlers_game_settings__ = settings;
+        const bridge = getBridge();
+        bridge.game = game;
+        bridge.settings = settings;
 
         this.updateAudioState(game);
     }
