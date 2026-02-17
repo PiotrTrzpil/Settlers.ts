@@ -70,13 +70,7 @@ export class SelectMode extends BaseInputMode {
     override onPointerDown(data: PointerData, context: InputContext): InputResult {
         if (data.button === MouseButton.Left) {
             // Start potential drag selection
-            context.state.startDrag(
-                data.screenX,
-                data.screenY,
-                data.button,
-                data.tileX,
-                data.tileY
-            );
+            context.state.startDrag(data.screenX, data.screenY, data.button, data.tileX, data.tileY);
             return HANDLED;
         }
         return UNHANDLED;
@@ -129,8 +123,12 @@ export class SelectMode extends BaseInputMode {
     override onDragEnd(data: DragData, context: InputContext): InputResult {
         if (data.button === MouseButton.Left && data.isDragging) {
             // Box selection
-            if (data.startTileX !== undefined && data.startTileY !== undefined &&
-                data.currentTileX !== undefined && data.currentTileY !== undefined) {
+            if (
+                data.startTileX !== undefined &&
+                data.startTileY !== undefined &&
+                data.currentTileX !== undefined &&
+                data.currentTileY !== undefined
+            ) {
                 context.executeCommand({
                     type: 'select_area',
                     x1: data.startTileX,

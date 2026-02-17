@@ -1,64 +1,57 @@
 <template>
-  <div class="file-viewer">
-    <div class="controls">
-      <span class="label">GH File:</span>
-      <file-browser
-        :fileManager="fileManager"
-        @select="onFileSelect"
-        filter=".gh6|.gl6|.gh5|.gl5"
-        storageKey="viewer_gh_file"
-        class="browser"
-      />
-      <span class="info">{{ ghContent.length }} images</span>
-      <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
-      <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridImages)">Grid</button>
-    </div>
-
-    <!-- Grid View -->
-    <div v-if="viewMode === 'grid' && ghContent.length > 0" class="grid-container">
-      <div
-        v-for="(img, index) in ghContent"
-        :key="img.dataOffset"
-        class="grid-item"
-        :class="{ selected: selectedItem === img }"
-        @click="selectImage(img)"
-      >
-        <canvas
-          :ref="el => setCanvasRef(el as HTMLCanvasElement, index)"
-          :width="Math.min(img.width, 200)"
-          :height="Math.min(img.height, 200)"
-          class="grid-canvas"
-        />
-        <div class="grid-label">
-          #{{ index }} ({{ img.width }}x{{ img.height }})
+    <div class="file-viewer">
+        <div class="controls">
+            <span class="label">GH File:</span>
+            <file-browser
+                :fileManager="fileManager"
+                @select="onFileSelect"
+                filter=".gh6|.gl6|.gh5|.gl5"
+                storageKey="viewer_gh_file"
+                class="browser"
+            />
+            <span class="info">{{ ghContent.length }} images</span>
+            <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
+            <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridImages)">Grid</button>
         </div>
-        <div class="grid-type">{{ toImageTypeStr(img.imageType) }}</div>
-      </div>
+
+        <!-- Grid View -->
+        <div v-if="viewMode === 'grid' && ghContent.length > 0" class="grid-container">
+            <div
+                v-for="(img, index) in ghContent"
+                :key="img.dataOffset"
+                class="grid-item"
+                :class="{ selected: selectedItem === img }"
+                @click="selectImage(img)"
+            >
+                <canvas
+                    :ref="el => setCanvasRef(el as HTMLCanvasElement, index)"
+                    :width="Math.min(img.width, 200)"
+                    :height="Math.min(img.height, 200)"
+                    class="grid-canvas"
+                />
+                <div class="grid-label">#{{ index }} ({{ img.width }}x{{ img.height }})</div>
+                <div class="grid-type">{{ toImageTypeStr(img.imageType) }}</div>
+            </div>
+        </div>
+
+        <!-- Single View -->
+        <div v-if="viewMode === 'single'" class="single-view">
+            <select class="item-select" v-model="selectedItem" @change="onSelectItem">
+                <option v-for="(item, index) of ghContent" :key="item.dataOffset" :value="item">
+                    #{{ index }} - {{ pad(item.dataOffset, 10) }} Size: {{ item.width }}x{{ item.height }}
+                    {{ toImageTypeStr(item.imageType) }}
+                </option>
+            </select>
+
+            <template v-if="selectedItem != null">
+                <pre class="item-info">{{ selectedItem.toString() }}</pre>
+            </template>
+
+            <div class="canvas-wrapper">
+                <canvas ref="ghCav" class="main-canvas"> Sorry! Your browser does not support HTML5 Canvas. </canvas>
+            </div>
+        </div>
     </div>
-
-    <!-- Single View -->
-    <div v-if="viewMode === 'single'" class="single-view">
-      <select
-        class="item-select"
-        v-model="selectedItem"
-        @change="onSelectItem"
-      >
-        <option v-for="(item, index) of ghContent" :key="item.dataOffset" :value="item">
-          #{{ index }} - {{ pad(item.dataOffset, 10) }} Size: {{ item.width }}x{{ item.height }} {{ toImageTypeStr(item.imageType) }}
-        </option>
-      </select>
-
-      <template v-if="selectedItem != null">
-        <pre class="item-info">{{ selectedItem.toString() }}</pre>
-      </template>
-
-      <div class="canvas-wrapper">
-        <canvas ref="ghCav" class="main-canvas">
-          Sorry! Your browser does not support HTML5 Canvas.
-        </canvas>
-      </div>
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -102,7 +95,7 @@ async function load(file: IFileSource) {
 
     ghContent.value = collectImages(
         () => ghFile.getImageCount(),
-        (i) => ghFile.getImage(i)
+        i => ghFile.getImage(i)
     );
 
     // Auto-select first item
@@ -146,7 +139,7 @@ function onSelectItem() {
 watchGridMode(renderAllGridImages, () => ghContent.value.length > 0);
 
 // Render single view when switching to single mode
-watch(viewMode, (newMode) => {
+watch(viewMode, newMode => {
     if (newMode === 'single' && selectedItem.value) {
         void nextTick(() => onSelectItem());
     }

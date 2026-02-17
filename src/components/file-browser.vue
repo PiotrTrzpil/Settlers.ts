@@ -1,9 +1,9 @@
 <template>
-  <select @change="selectFile" v-model="selectedFile">
-    <option v-for="file of files" :key="file.path" :value="file">
-      {{file.path}}
-    </option>
-  </select>
+    <select @change="selectFile" v-model="selectedFile">
+        <option v-for="file of files" :key="file.path" :value="file">
+            {{ file.path }}
+        </option>
+    </select>
 </template>
 
 <script setup lang="ts">
@@ -86,7 +86,13 @@ function selectFile() {
     emit('select', selectedFile.value);
 }
 
-watch(() => props.filter, () => doFilter());
-watch(() => props.fileManager, () => doFilter());
+watch(
+    () => props.filter,
+    () => doFilter()
+);
+watch(
+    () => props.fileManager,
+    () => doFilter()
+);
 doFilter();
 </script>

@@ -143,7 +143,7 @@ export class CameraMode extends BaseInputMode {
 
         const delta = this.config.invertZoom ? -data.wheelDelta : data.wheelDelta;
         const zoomSpeed = gameSettings.state.zoomSpeed;
-        const zoomFactor = delta > 0 ? (1 + zoomSpeed) : (1 - zoomSpeed);
+        const zoomFactor = delta > 0 ? 1 + zoomSpeed : 1 - zoomSpeed;
 
         // Calculate new zoom
         const newZoom = Math.max(
@@ -168,7 +168,7 @@ export class CameraMode extends BaseInputMode {
 
             // Scale factor converts pixel movement to viewPoint units
             const height = this.viewPoint.canvasHeight;
-            const scale = 20 * this.viewPoint.zoomValue / height;
+            const scale = (20 * this.viewPoint.zoomValue) / height;
             const invertFactor = this.config.invertPan ? -1 : 1;
 
             // For isometric projection: moving vertically in screen space
@@ -177,10 +177,7 @@ export class CameraMode extends BaseInputMode {
             const deltaY = -scale * 2 * dpy * invertFactor;
 
             // Set position directly - computed fresh each frame from mouse position
-            this.viewPoint.setRawPosition(
-                this.dragStartCameraX + deltaX,
-                this.dragStartCameraY + deltaY
-            );
+            this.viewPoint.setRawPosition(this.dragStartCameraX + deltaX, this.dragStartCameraY + deltaY);
             return; // Don't process keyboard while dragging
         }
 

@@ -5,11 +5,7 @@ import { GilFileReader } from '@/resources/gfx/gil-file-reader';
 import { PaletteCollection } from '@/resources/gfx/palette-collection';
 import { PilFileReader } from '@/resources/gfx/pil-file-reader';
 import { BuildingType } from '@/game/entity';
-import {
-    BUILDING_ICON_FILE_NUMBERS,
-    BUILDING_ICON_INDICES,
-    Race
-} from '@/game/renderer/sprite-metadata';
+import { BUILDING_ICON_FILE_NUMBERS, BUILDING_ICON_INDICES, Race } from '@/game/renderer/sprite-metadata';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('BuildingIcons');
@@ -129,7 +125,12 @@ function renderIconToDataUrl(gfxReader: GfxFileReader, iconIndex: number): strin
  * Get or create a cached icon data URL.
  * @param selected - If true, returns the selected variant
  */
-function getCachedIconUrl(race: Race, buildingType: BuildingType, gfxReader: GfxFileReader, selected = false): string | null {
+function getCachedIconUrl(
+    race: Race,
+    buildingType: BuildingType,
+    gfxReader: GfxFileReader,
+    selected = false
+): string | null {
     const cacheKey = `${race}-${buildingType}-${selected ? 'sel' : 'unsel'}`;
 
     if (iconDataUrlCache.has(cacheKey)) {
@@ -152,10 +153,7 @@ function getCachedIconUrl(race: Race, buildingType: BuildingType, gfxReader: Gfx
  * Composable for loading and displaying building icons.
  * Icons are race-specific and cached for fast switching.
  */
-export function useBuildingIcons(
-    fileManager: Ref<FileManager | null>,
-    currentRace: Ref<Race>
-) {
+export function useBuildingIcons(fileManager: Ref<FileManager | null>, currentRace: Ref<Race>) {
     const iconsLoaded = ref(false);
     const iconUrls = ref<Map<BuildingType, string>>(new Map());
     const selectedIconUrls = ref<Map<BuildingType, string>>(new Map());
@@ -197,14 +195,18 @@ export function useBuildingIcons(
     }
 
     // Load icons when file manager becomes available
-    watch(fileManager, () => {
-        if (fileManager.value) {
-            void loadIconsForRace(currentRace.value);
-        }
-    }, { immediate: true });
+    watch(
+        fileManager,
+        () => {
+            if (fileManager.value) {
+                void loadIconsForRace(currentRace.value);
+            }
+        },
+        { immediate: true }
+    );
 
     // Update icons when race changes
-    watch(currentRace, (newRace) => {
+    watch(currentRace, newRace => {
         void loadIconsForRace(newRace);
     });
 

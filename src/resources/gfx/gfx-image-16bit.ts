@@ -32,9 +32,9 @@ export class GfxImage16Bit implements IGfxImage {
             const value2 = buffer[pos];
             pos++;
 
-            imgData[j++] = value2 & 0xF8; // r
-            imgData[j++] = (value1 >> 3) | (value2 << 5) & 0xFC; // g
-            imgData[j++] = (value1 << 3) & 0xF8; // b
+            imgData[j++] = value2 & 0xf8; // r
+            imgData[j++] = (value1 >> 3) | ((value2 << 5) & 0xfc); // g
+            imgData[j++] = (value1 << 3) & 0xf8; // b
             imgData[j++] = 255; // alpha
         }
     }
@@ -60,7 +60,7 @@ export class GfxImage16Bit implements IGfxImage {
         return new Uint16Array(buffer.buffer, pos, length / 2);
     }
 
-    constructor(reader: BinaryReader, width:number, rowCount:number) {
+    constructor(reader: BinaryReader, width: number, rowCount: number) {
         this.data = reader;
         this.rowCount = rowCount;
         this.width = width;
@@ -74,11 +74,27 @@ export class GfxImage16Bit implements IGfxImage {
     }
 
     public toString(): string {
-        return ImageType[this.imageType] + ' - ' +
-                        'size: (' + this.width + ' x' + this.height + ') ' +
-                        'rows: ' + this.rowCount + '; ' +
-                        'data offset ' + this.dataOffset + '; ' +
-                        'data size ' + this.getDataSize() + ' ' +
-                        'flags: ' + this.flag1 + '    ' + this.flag2;
+        return (
+            ImageType[this.imageType] +
+            ' - ' +
+            'size: (' +
+            this.width +
+            ' x' +
+            this.height +
+            ') ' +
+            'rows: ' +
+            this.rowCount +
+            '; ' +
+            'data offset ' +
+            this.dataOffset +
+            '; ' +
+            'data size ' +
+            this.getDataSize() +
+            ' ' +
+            'flags: ' +
+            this.flag1 +
+            '    ' +
+            this.flag2
+        );
     }
 }

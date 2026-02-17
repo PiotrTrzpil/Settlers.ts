@@ -47,17 +47,25 @@
                         <span class="stat-label">Ticks</span>
                         <span class="stat-value">{{ stats.renderTimings.ticks }} ms</span>
                     </div>
+                    <div v-for="(ms, name) in stats.renderTimings.tickSystems" :key="name" class="stat-row sub-stat">
+                        <span class="stat-label">{{ name }}</span>
+                        <span class="stat-value">{{ ms }} ms</span>
+                    </div>
                     <div class="stat-row">
                         <span class="stat-label">Animations</span>
                         <span class="stat-value">{{ stats.renderTimings.animations }} ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Update</span>
+                        <span class="stat-value">{{ stats.renderTimings.update }} ms</span>
                     </div>
                     <div class="stat-row">
                         <span class="stat-label">Callback</span>
                         <span class="stat-value">{{ stats.renderTimings.callback }} ms</span>
                     </div>
                     <div class="stat-row">
-                        <span class="stat-label">Other</span>
-                        <span class="stat-value">{{ stats.renderTimings.other }} ms</span>
+                        <span class="stat-label">Idle</span>
+                        <span class="stat-value">{{ stats.renderTimings.idle }} ms</span>
                     </div>
                     <div class="stat-row">
                         <span class="stat-label">Render</span>

@@ -65,7 +65,7 @@ export class LibFileHeader {
     private readHeader(data: BinaryReader, offset: number): boolean {
         const HeaderSize = 6 * 4;
 
-        if ((offset < 0) || (data.length < offset + HeaderSize)) {
+        if (offset < 0 || data.length < offset + HeaderSize) {
             LibFileHeader.log.error('Unable to process LibFileHeader of ' + data.filename + ' - wrong offset');
             return false;
         }

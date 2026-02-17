@@ -3,8 +3,7 @@
  * Keeps UI responsive during heavy async workloads.
  */
 
-const yieldToEventLoop = (): Promise<void> =>
-    new Promise(resolve => requestAnimationFrame(() => resolve()));
+const yieldToEventLoop = (): Promise<void> => new Promise(resolve => requestAnimationFrame(() => resolve()));
 
 const DEFAULT_BATCH_SIZE = 5;
 
@@ -73,7 +72,7 @@ export async function processBatchedWithHandler<T, R>(
 ): Promise<void> {
     await processBatched(
         items,
-        async(item) => {
+        async item => {
             const result = await processor(item);
             handler(result, item);
         },

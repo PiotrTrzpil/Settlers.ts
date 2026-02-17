@@ -1,4 +1,3 @@
-
 /**
  * Helper to convert Map to array of entries for JSON serialization
  */

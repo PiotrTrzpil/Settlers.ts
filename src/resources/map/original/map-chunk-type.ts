@@ -1,4 +1,3 @@
-
 export enum MapChunkType {
     UnknownType = 0,
 

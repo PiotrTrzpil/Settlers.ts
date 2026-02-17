@@ -88,8 +88,17 @@ export class ShaderDataTexture extends ShaderTexture {
         const type = gl.UNSIGNED_BYTE;
 
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, this.width, this.height, border,
-            format, type, this.imgData);
+        gl.texImage2D(
+            gl.TEXTURE_2D,
+            level,
+            internalFormat,
+            this.width,
+            this.height,
+            border,
+            format,
+            type,
+            this.imgData
+        );
 
         this.uploaded = true;
         this.dirty = false;

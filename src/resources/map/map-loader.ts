@@ -6,7 +6,7 @@ import { SaveGameLoader } from './original/original-savegame/savegame-loader';
 /** handel the loading of a map */
 export class MapLoader {
     /** return the map content of a loaded game */
-    public static getLoader(reader: BinaryReader) : IMapLoader | null {
+    public static getLoader(reader: BinaryReader): IMapLoader | null {
         switch (MapLoader.getFileExtension(reader.filename).toLowerCase()) {
         case 'exe':
             return new SaveGameLoader(reader);

@@ -15,10 +15,18 @@ export function tileKey(x: number, y: number): string {
 
 /** 4-directional neighbor offsets (right, left, down, up) */
 export const CARDINAL_OFFSETS: ReadonlyArray<readonly [number, number]> = [
-    [1, 0], [-1, 0], [0, 1], [0, -1]
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
 ];
 
 /** 6-directional neighbor offsets (cardinal + two diagonals) */
 export const EXTENDED_OFFSETS: ReadonlyArray<readonly [number, number]> = [
-    [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+    [1, 1],
+    [-1, -1],
 ];

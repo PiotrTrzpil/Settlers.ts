@@ -26,12 +26,13 @@ declare const __BUILD_TIME__: string;
  * Schema version for cache invalidation.
  * Bump this when animation sequence names or sprite data format changes.
  */
-const CACHE_SCHEMA_VERSION = 7;  // v7: 2x sprite scale (PIXELS_TO_WORLD = 1/32)
+const CACHE_SCHEMA_VERSION = 7; // v7: 2x sprite scale (PIXELS_TO_WORLD = 1/32)
 
 /** Current build version for cache invalidation */
-const BUILD_VERSION = typeof __BUILD_TIME__ !== 'undefined'
-    ? `${__BUILD_TIME__}-v${CACHE_SCHEMA_VERSION}`
-    : `dev-v${CACHE_SCHEMA_VERSION}`;
+const BUILD_VERSION =
+    typeof __BUILD_TIME__ !== 'undefined'
+        ? `${__BUILD_TIME__}-v${CACHE_SCHEMA_VERSION}`
+        : `dev-v${CACHE_SCHEMA_VERSION}`;
 
 /** IndexedDB constants */
 const DB_NAME = 'settlers-atlas-cache';
@@ -103,7 +104,9 @@ export function getAtlasCache(race: Race): CachedAtlasData | null {
 
     // Version check - invalidate if schema changed
     if (entry.version !== BUILD_VERSION) {
-        log.debug(`Module cache: version mismatch for ${Race[race]} (cached: ${entry.version}, current: ${BUILD_VERSION})`);
+        log.debug(
+            `Module cache: version mismatch for ${Race[race]} (cached: ${entry.version}, current: ${BUILD_VERSION})`
+        );
         moduleCache.delete(race);
         return null;
     }
@@ -114,7 +117,9 @@ export function getAtlasCache(race: Race): CachedAtlasData | null {
 /** Store atlas data in the module-level cache */
 export function setAtlasCache(race: Race, data: CachedAtlasData): void {
     moduleCache.set(race, { version: BUILD_VERSION, data });
-    log.debug(`Module cache: stored ${Race[race]} (${data.layerCount} layers, ${(data.imgData.length / 1024 / 1024).toFixed(1)}MB)`);
+    log.debug(
+        `Module cache: stored ${Race[race]} (${data.layerCount} layers, ${(data.imgData.length / 1024 / 1024).toFixed(1)}MB)`
+    );
 }
 
 /** Clear cached atlas from module cache */
@@ -154,7 +159,7 @@ function openDB(): Promise<IDBDatabase> {
 
         request.onsuccess = () => resolve(request.result);
 
-        request.onupgradeneeded = (event) => {
+        request.onupgradeneeded = event => {
             const db = (event.target as IDBOpenDBRequest).result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
                 db.createObjectStore(STORE_NAME, { keyPath: 'race' });
@@ -174,7 +179,7 @@ async function withStore<T>(
     try {
         const db = await openDB();
         const store = db.transaction(STORE_NAME, mode).objectStore(STORE_NAME);
-        return new Promise((resolve) => {
+        return new Promise(resolve => {
             const request = operation(store);
             request.onerror = () => {
                 log.debug(`IndexedDB operation failed: ${request.error}`);
@@ -198,7 +203,9 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
     }
 
     if (entry.version !== BUILD_VERSION) {
-        log.debug(`IndexedDB: version mismatch for ${Race[race]} (cached: ${entry.version}, current: ${BUILD_VERSION})`);
+        log.debug(
+            `IndexedDB: version mismatch for ${Race[race]} (cached: ${entry.version}, current: ${BUILD_VERSION})`
+        );
         return null;
     }
 
@@ -250,10 +257,12 @@ export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Prom
         timestamp: data.timestamp,
         paletteOffsets: data.paletteOffsets,
         paletteTotalColors: data.paletteTotalColors,
-        paletteBuffer: data.paletteData ? (data.paletteData.buffer as ArrayBuffer).slice(
-            data.paletteData.byteOffset,
-            data.paletteData.byteOffset + data.paletteData.byteLength
-        ) : undefined,
+        paletteBuffer: data.paletteData
+            ? (data.paletteData.buffer as ArrayBuffer).slice(
+                data.paletteData.byteOffset,
+                data.paletteData.byteOffset + data.paletteData.byteLength
+            )
+            : undefined,
         paletteRows: data.paletteRows,
     };
 
@@ -275,12 +284,13 @@ async function tryPutWithRetry(entry: IndexedDBAtlasEntry): Promise<IDBValidKey 
         const db = await openDB();
         const store = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME);
 
-        return await new Promise((resolve) => {
+        return await new Promise(resolve => {
             const request = store.put(entry);
 
             request.onerror = async() => {
                 const error = request.error;
-                const isMemoryError = error?.name === 'DataCloneError' ||
+                const isMemoryError =
+                    error?.name === 'DataCloneError' ||
                     error?.message?.includes('out of memory') ||
                     error?.name === 'QuotaExceededError';
 

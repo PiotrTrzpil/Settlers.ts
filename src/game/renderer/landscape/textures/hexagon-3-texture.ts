@@ -16,8 +16,14 @@ export class Hexagon3Texture extends LandscapeTextureBase implements ILandscapeT
     private t3: LandscapeType;
 
     constructor(
-        layout: AtlasLayout, t1: LandscapeType, t2: LandscapeType, t3: LandscapeType,
-        x1: number, y1: number, x2: number, y2: number
+        layout: AtlasLayout,
+        t1: LandscapeType,
+        t2: LandscapeType,
+        t3: LandscapeType,
+        x1: number,
+        y1: number,
+        x2: number,
+        y2: number
     ) {
         super(layout);
 
@@ -32,22 +38,16 @@ export class Hexagon3Texture extends LandscapeTextureBase implements ILandscapeT
     }
 
     public getTextureA(tp: TexturePoint, x: number, y: number): [number, number] {
-        const use2 = ((x + y) % 2) === 0;
-        const { destX, destY } = this.layout.get(
-            use2 ? this.srcX2 : this.srcX1,
-            use2 ? this.srcY2 : this.srcY1
-        );
+        const use2 = (x + y) % 2 === 0;
+        const { destX, destY } = this.layout.get(use2 ? this.srcX2 : this.srcX1, use2 ? this.srcY2 : this.srcY1);
 
         // todo: add rotation-specific sub-tile offsets when the correct layout is known
         return [destX, destY];
     }
 
     public getTextureB(tp: TexturePoint, x: number, y: number): [number, number] {
-        const use2 = ((x + y) % 2) === 0;
-        const { destX, destY } = this.layout.get(
-            use2 ? this.srcX2 : this.srcX1,
-            use2 ? this.srcY2 : this.srcY1
-        );
+        const use2 = (x + y) % 2 === 0;
+        const { destX, destY } = this.layout.get(use2 ? this.srcX2 : this.srcX1, use2 ? this.srcY2 : this.srcY1);
 
         // todo: add rotation-specific sub-tile offsets when the correct layout is known
         return [destX, destY];
@@ -57,7 +57,7 @@ export class Hexagon3Texture extends LandscapeTextureBase implements ILandscapeT
         return [
             new TexturePoint(this.t1, this.t2, this.t3),
             new TexturePoint(this.t3, this.t1, this.t2),
-            new TexturePoint(this.t2, this.t3, this.t1)
+            new TexturePoint(this.t2, this.t3, this.t1),
         ];
     }
 

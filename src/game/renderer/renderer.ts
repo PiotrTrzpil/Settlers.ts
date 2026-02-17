@@ -65,9 +65,17 @@ export class Renderer {
 
     /** Timing data from the last draw call */
     private lastRenderTiming: FrameRenderTiming = {
-        render: 0, landscape: 0, entities: 0, cullSort: 0,
-        visibleCount: 0, drawCalls: 0, spriteCount: 0,
-        indicators: 0, textured: 0, color: 0, selection: 0,
+        render: 0,
+        landscape: 0,
+        entities: 0,
+        cullSort: 0,
+        visibleCount: 0,
+        drawCalls: 0,
+        spriteCount: 0,
+        indicators: 0,
+        textured: 0,
+        color: 0,
+        selection: 0,
     };
 
     /** Per-layer error tracking to prevent log flooding */
@@ -84,9 +92,13 @@ export class Renderer {
         function processWebGlDebugErrors(err: any, funcName: string, args: any) {
             const argString = WebGLDebugUtils.glFunctionArgsToString(funcName, args) ?? '';
 
-            webGlogger.error(WebGLDebugUtils.glEnumToString(err) +
-            ' was caused by calling: ' + funcName + ' ' +
-            argString.substring(0, 300));
+            webGlogger.error(
+                WebGLDebugUtils.glEnumToString(err) +
+                    ' was caused by calling: ' +
+                    funcName +
+                    ' ' +
+                    argString.substring(0, 300)
+            );
         }
 
         this.canvas = canvas;
@@ -103,7 +115,10 @@ export class Renderer {
         try {
             if (WebGLDebugUtils) {
                 Renderer.log.debug('Run with WebGL debug');
-                newGl = WebGLDebugUtils.makeDebugContext(newGl, processWebGlDebugErrors) as WebGL2RenderingContext | null;
+                newGl = WebGLDebugUtils.makeDebugContext(
+                    newGl,
+                    processWebGlDebugErrors
+                ) as WebGL2RenderingContext | null;
             }
         } catch {
             // WebGLDebugUtils is optional; not available in production
@@ -172,7 +187,7 @@ export class Renderer {
         // Note: top=-1, bottom=1 in original ortho, so Y is inverted (sy = -zoomV)
         const m = this.projectionMatrix;
         const sx = zoomV / aspect;
-        const sy = -zoomV;  // Negative because top < bottom in ortho params
+        const sy = -zoomV; // Negative because top < bottom in ortho params
         m[0] = sx;
         m[1] = 0;
         m[2] = 0;
@@ -185,8 +200,8 @@ export class Renderer {
         m[9] = 0;
         m[10] = -1;
         m[11] = 0;
-        m[12] = -zoomV;  // translate X component
-        m[13] = zoomV;   // translate Y component
+        m[12] = -zoomV; // translate X component
+        m[13] = zoomV; // translate Y component
         m[14] = 0;
         m[15] = 1;
 
@@ -194,8 +209,15 @@ export class Renderer {
         const frameStart = performance.now();
         let landscapeTime = 0;
         let entityTiming = {
-            cullSort: 0, entities: 0, visibleCount: 0, drawCalls: 0, spriteCount: 0,
-            indicators: 0, textured: 0, color: 0, selection: 0,
+            cullSort: 0,
+            entities: 0,
+            visibleCount: 0,
+            drawCalls: 0,
+            spriteCount: 0,
+            indicators: 0,
+            textured: 0,
+            color: 0,
+            selection: 0,
         };
 
         for (let i = 0; i < this.renderers.length; i++) {

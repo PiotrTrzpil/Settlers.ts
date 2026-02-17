@@ -20,11 +20,7 @@ import { isPassable } from './terrain';
  * @param ctx Game context for validation
  * @returns Placement result with canPlace and detailed status
  */
-export function validateSingleTilePlacement(
-    x: number,
-    y: number,
-    ctx: PlacementContext
-): PlacementResult {
+export function validateSingleTilePlacement(x: number, y: number, ctx: PlacementContext): PlacementResult {
     // Bounds check
     if (x < 0 || y < 0 || x >= ctx.mapSize.width || y >= ctx.mapSize.height) {
         return { canPlace: false, status: PlacementStatus.InvalidTerrain };

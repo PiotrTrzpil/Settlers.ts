@@ -21,11 +21,7 @@ const log = new LogHandler('ObjectParser');
 /**
  * Parse MapObjects chunk data
  */
-export function parseMapObjects(
-    reader: BinaryReader,
-    mapWidth: number,
-    mapHeight: number
-): MapObjectData[] {
+export function parseMapObjects(reader: BinaryReader, mapWidth: number, mapHeight: number): MapObjectData[] {
     const objects: MapObjectData[] = [];
     const dataLength = reader.length;
 

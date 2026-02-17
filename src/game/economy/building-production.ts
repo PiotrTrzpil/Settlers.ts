@@ -64,188 +64,271 @@ export const BUILDING_PRODUCTIONS: ReadonlyMap<BuildingType, ProductionChain> = 
  */
 export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly ConstructionCost[]> = new Map([
     // Military
-    [BuildingType.GuardTowerSmall, [
-        { material: EMaterialType.BOARD, count: 4 },
-        { material: EMaterialType.STONE, count: 6 },
-    ]],
-    [BuildingType.Barrack, [
-        { material: EMaterialType.BOARD, count: 4 },
-        { material: EMaterialType.STONE, count: 4 },
-    ]],
+    [
+        BuildingType.GuardTowerSmall,
+        [
+            { material: EMaterialType.BOARD, count: 4 },
+            { material: EMaterialType.STONE, count: 6 },
+        ],
+    ],
+    [
+        BuildingType.Barrack,
+        [
+            { material: EMaterialType.BOARD, count: 4 },
+            { material: EMaterialType.STONE, count: 4 },
+        ],
+    ],
 
     // Storage
-    [BuildingType.StorageArea, [
-        { material: EMaterialType.BOARD, count: 4 },
-        { material: EMaterialType.STONE, count: 4 },
-    ]],
+    [
+        BuildingType.StorageArea,
+        [
+            { material: EMaterialType.BOARD, count: 4 },
+            { material: EMaterialType.STONE, count: 4 },
+        ],
+    ],
 
     // Wood industry
-    [BuildingType.WoodcutterHut, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 1 },
-    ]],
-    [BuildingType.Sawmill, [
-        { material: EMaterialType.BOARD, count: 3 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
-    [BuildingType.ForesterHut, [
-        { material: EMaterialType.BOARD, count: 2 },
-    ]],
+    [
+        BuildingType.WoodcutterHut,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 1 },
+        ],
+    ],
+    [
+        BuildingType.Sawmill,
+        [
+            { material: EMaterialType.BOARD, count: 3 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
+    [BuildingType.ForesterHut, [{ material: EMaterialType.BOARD, count: 2 }]],
 
     // Stone
-    [BuildingType.StonecutterHut, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 1 },
-    ]],
+    [
+        BuildingType.StonecutterHut,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 1 },
+        ],
+    ],
 
     // Food industry
-    [BuildingType.GrainFarm, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 3 },
-    ]],
-    [BuildingType.Mill, [
-        { material: EMaterialType.BOARD, count: 3 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
-    [BuildingType.Bakery, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
-    [BuildingType.FisherHut, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 1 },
-    ]],
-    [BuildingType.AnimalRanch, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
-    [BuildingType.Slaughterhouse, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
-    [BuildingType.WaterworkHut, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 1 },
-    ]],
+    [
+        BuildingType.GrainFarm,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 3 },
+        ],
+    ],
+    [
+        BuildingType.Mill,
+        [
+            { material: EMaterialType.BOARD, count: 3 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
+    [
+        BuildingType.Bakery,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
+    [
+        BuildingType.FisherHut,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 1 },
+        ],
+    ],
+    [
+        BuildingType.AnimalRanch,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
+    [
+        BuildingType.Slaughterhouse,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
+    [
+        BuildingType.WaterworkHut,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 1 },
+        ],
+    ],
 
     // Mining
-    [BuildingType.CoalMine, [
-        { material: EMaterialType.BOARD, count: 3 },
-    ]],
-    [BuildingType.IronMine, [
-        { material: EMaterialType.BOARD, count: 3 },
-    ]],
-    [BuildingType.GoldMine, [
-        { material: EMaterialType.BOARD, count: 3 },
-    ]],
+    [BuildingType.CoalMine, [{ material: EMaterialType.BOARD, count: 3 }]],
+    [BuildingType.IronMine, [{ material: EMaterialType.BOARD, count: 3 }]],
+    [BuildingType.GoldMine, [{ material: EMaterialType.BOARD, count: 3 }]],
 
     // Metal industry
-    [BuildingType.IronSmelter, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 3 },
-    ]],
-    [BuildingType.SmeltGold, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 3 },
-    ]],
-    [BuildingType.WeaponSmith, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
-    [BuildingType.ToolSmith, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
+    [
+        BuildingType.IronSmelter,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 3 },
+        ],
+    ],
+    [
+        BuildingType.SmeltGold,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 3 },
+        ],
+    ],
+    [
+        BuildingType.WeaponSmith,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
+    [
+        BuildingType.ToolSmith,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
 
     // Population
-    [BuildingType.LivingHouse, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
+    [
+        BuildingType.LivingHouse,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
 
     // Wine
-    [BuildingType.WinePress, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
+    [
+        BuildingType.WinePress,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
 
     // Additional buildings
-    [BuildingType.HunterHut, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 1 },
-    ]],
-    [BuildingType.DonkeyRanch, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
-    [BuildingType.StoneMine, [
-        { material: EMaterialType.BOARD, count: 3 },
-    ]],
-    [BuildingType.SulfurMine, [
-        { material: EMaterialType.BOARD, count: 3 },
-    ]],
-    [BuildingType.HealerHut, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
-    [BuildingType.AmmunitionMaker, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
-    [BuildingType.SiegeWorkshop, [
-        { material: EMaterialType.BOARD, count: 4 },
-        { material: EMaterialType.STONE, count: 3 },
-    ]],
+    [
+        BuildingType.HunterHut,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 1 },
+        ],
+    ],
+    [
+        BuildingType.DonkeyRanch,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
+    [BuildingType.StoneMine, [{ material: EMaterialType.BOARD, count: 3 }]],
+    [BuildingType.SulfurMine, [{ material: EMaterialType.BOARD, count: 3 }]],
+    [
+        BuildingType.HealerHut,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
+    [
+        BuildingType.AmmunitionMaker,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
+    [
+        BuildingType.SiegeWorkshop,
+        [
+            { material: EMaterialType.BOARD, count: 4 },
+            { material: EMaterialType.STONE, count: 3 },
+        ],
+    ],
 
     // Houses
-    [BuildingType.ResidenceSmall, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
-    [BuildingType.ResidenceMedium, [
-        { material: EMaterialType.BOARD, count: 3 },
-        { material: EMaterialType.STONE, count: 3 },
-    ]],
-    [BuildingType.ResidenceBig, [
-        { material: EMaterialType.BOARD, count: 4 },
-        { material: EMaterialType.STONE, count: 4 },
-    ]],
+    [
+        BuildingType.ResidenceSmall,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 2 },
+        ],
+    ],
+    [
+        BuildingType.ResidenceMedium,
+        [
+            { material: EMaterialType.BOARD, count: 3 },
+            { material: EMaterialType.STONE, count: 3 },
+        ],
+    ],
+    [
+        BuildingType.ResidenceBig,
+        [
+            { material: EMaterialType.BOARD, count: 4 },
+            { material: EMaterialType.STONE, count: 4 },
+        ],
+    ],
 
     // Military structures
-    [BuildingType.LookoutTower, [
-        { material: EMaterialType.BOARD, count: 2 },
-        { material: EMaterialType.STONE, count: 4 },
-    ]],
-    [BuildingType.GuardTowerBig, [
-        { material: EMaterialType.BOARD, count: 6 },
-        { material: EMaterialType.STONE, count: 8 },
-    ]],
-    [BuildingType.Castle, [
-        { material: EMaterialType.BOARD, count: 8 },
-        { material: EMaterialType.STONE, count: 12 },
-    ]],
+    [
+        BuildingType.LookoutTower,
+        [
+            { material: EMaterialType.BOARD, count: 2 },
+            { material: EMaterialType.STONE, count: 4 },
+        ],
+    ],
+    [
+        BuildingType.GuardTowerBig,
+        [
+            { material: EMaterialType.BOARD, count: 6 },
+            { material: EMaterialType.STONE, count: 8 },
+        ],
+    ],
+    [
+        BuildingType.Castle,
+        [
+            { material: EMaterialType.BOARD, count: 8 },
+            { material: EMaterialType.STONE, count: 12 },
+        ],
+    ],
 
     // Temples
-    [BuildingType.SmallTemple, [
-        { material: EMaterialType.BOARD, count: 3 },
-        { material: EMaterialType.STONE, count: 4 },
-    ]],
-    [BuildingType.LargeTemple, [
-        { material: EMaterialType.BOARD, count: 5 },
-        { material: EMaterialType.STONE, count: 8 },
-    ]],
+    [
+        BuildingType.SmallTemple,
+        [
+            { material: EMaterialType.BOARD, count: 3 },
+            { material: EMaterialType.STONE, count: 4 },
+        ],
+    ],
+    [
+        BuildingType.LargeTemple,
+        [
+            { material: EMaterialType.BOARD, count: 5 },
+            { material: EMaterialType.STONE, count: 8 },
+        ],
+    ],
 
     // Special
-    [BuildingType.Shipyard, [
-        { material: EMaterialType.BOARD, count: 4 },
-        { material: EMaterialType.STONE, count: 3 },
-    ]],
-    [BuildingType.Decoration, [
-        { material: EMaterialType.STONE, count: 1 },
-    ]],
-    [BuildingType.LargeDecoration, [
-        { material: EMaterialType.STONE, count: 2 },
-    ]],
+    [
+        BuildingType.Shipyard,
+        [
+            { material: EMaterialType.BOARD, count: 4 },
+            { material: EMaterialType.STONE, count: 3 },
+        ],
+    ],
+    [BuildingType.Decoration, [{ material: EMaterialType.STONE, count: 1 }]],
+    [BuildingType.LargeDecoration, [{ material: EMaterialType.STONE, count: 2 }]],
 ]);
 
 /**

@@ -12,7 +12,7 @@ export class TexturePoint {
     }
 
     public getKey(): number {
-        return this.t0 << 16 | this.t1 << 8 | this.t2;
+        return (this.t0 << 16) | (this.t1 << 8) | this.t2;
     }
 
     public toString(): string {

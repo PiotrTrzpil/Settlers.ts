@@ -31,12 +31,7 @@ export interface TerrainAccessor {
 /**
  * Check if a tile is a valid push destination.
  */
-function isValidPushTile(
-    nx: number,
-    ny: number,
-    occupancy: TileOccupancyAccessor,
-    terrain?: TerrainAccessor,
-): boolean {
+function isValidPushTile(nx: number, ny: number, occupancy: TileOccupancyAccessor, terrain?: TerrainAccessor): boolean {
     // Bounds check
     if (terrain) {
         if (nx < 0 || nx >= terrain.mapWidth || ny < 0 || ny >= terrain.mapHeight) {
@@ -70,7 +65,7 @@ export function findSmartFreeDirection(
     rng: SeededRng,
     terrain?: TerrainAccessor,
     goalX?: number,
-    goalY?: number,
+    goalY?: number
 ): TileCoord | null {
     // Collect all valid directions
     const validDirs: { coord: TileCoord; score: number }[] = [];
@@ -124,7 +119,7 @@ export function findRandomFreeDirection(
     y: number,
     occupancy: TileOccupancyAccessor,
     rng: SeededRng,
-    terrain?: TerrainAccessor,
+    terrain?: TerrainAccessor
 ): TileCoord | null {
     // Create shuffled direction indices using seeded RNG
     const dirs: number[] = [];
@@ -175,15 +170,9 @@ export function executePush(
     occupancy: TileOccupancyAccessor,
     rng: SeededRng,
     terrain: TerrainAccessor | undefined,
-    onPositionUpdate: (entityId: number, x: number, y: number) => void,
+    onPositionUpdate: (entityId: number, x: number, y: number) => void
 ): boolean {
-    const freeDir = findRandomFreeDirection(
-        blockedController.tileX,
-        blockedController.tileY,
-        occupancy,
-        rng,
-        terrain,
-    );
+    const freeDir = findRandomFreeDirection(blockedController.tileX, blockedController.tileY, occupancy, rng, terrain);
     if (!freeDir) return false;
 
     // Handle the push in the controller
@@ -213,7 +202,7 @@ export function pushUnit(
     occupancy: TileOccupancyAccessor,
     rng: SeededRng,
     terrain: TerrainAccessor | undefined,
-    onPositionUpdate: (entityId: number, x: number, y: number) => void,
+    onPositionUpdate: (entityId: number, x: number, y: number) => void
 ): boolean {
     if (!shouldYieldToPush(pushingEntityId, blockedController.entityId)) {
         return false;

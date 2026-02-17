@@ -27,4 +27,3 @@ export const PLAYER_TINTS: readonly (readonly number[])[] = PLAYER_COLORS.map(pl
     const b = 1.0 + (playerColor[2] - 1.0) * PLAYER_TINT_STRENGTH;
     return [r, g, b, 1.0] as const;
 });
-

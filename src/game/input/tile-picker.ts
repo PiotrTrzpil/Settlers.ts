@@ -1,11 +1,7 @@
 import { TileCoord } from '../entity';
 import { IViewPointReadonly } from '../renderer/i-view-point';
 import { MapSize } from '@/utilities/map-size';
-import {
-    screenToTile,
-    tileToWorld,
-    heightToWorld,
-} from '../systems/coordinate-system';
+import { screenToTile, tileToWorld, heightToWorld } from '../systems/coordinate-system';
 
 /**
  * TilePicker - Thin wrapper around coordinate-system functions.
@@ -65,13 +61,17 @@ export class TilePicker {
         const intY = Math.floor(tileY);
 
         if (intX < 0 || intX >= mapSize.width || intY < 0 || intY >= mapSize.height) {
-            console.warn(`TilePicker.tileToWorld: tile (${tileX}, ${tileY}) out of bounds [0-${mapSize.width}, 0-${mapSize.height}]`);
+            console.warn(
+                `TilePicker.tileToWorld: tile (${tileX}, ${tileY}) out of bounds [0-${mapSize.width}, 0-${mapSize.height}]`
+            );
             // Return a default position to avoid NaN
             return tileToWorld(tileX, tileY, 0, viewPointX, viewPointY);
         }
 
         if (tileX !== intX || tileY !== intY) {
-            console.warn(`TilePicker.tileToWorld: fractional coordinates (${tileX}, ${tileY}) - use pure tileToWorld() instead`);
+            console.warn(
+                `TilePicker.tileToWorld: fractional coordinates (${tileX}, ${tileY}) - use pure tileToWorld() instead`
+            );
         }
 
         const idx = mapSize.toIndex(intX, intY);

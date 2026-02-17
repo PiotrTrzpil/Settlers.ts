@@ -41,12 +41,7 @@ export { LuaScriptSystem } from './lua-script-system';
 export type { LuaScriptSystemConfig } from './lua-script-system';
 
 // Script loading
-export {
-    loadScriptFromMapData,
-    loadScriptFromString,
-    validateScript,
-    extractScriptMetadata,
-} from './script-loader';
+export { loadScriptFromMapData, loadScriptFromString, validateScript, extractScriptMetadata } from './script-loader';
 export type { ScriptSource } from './script-loader';
 
 // Compatibility

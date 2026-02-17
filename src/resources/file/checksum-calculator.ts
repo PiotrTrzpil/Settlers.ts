@@ -4,7 +4,7 @@ import { BinaryReader } from './binary-reader';
 export class ChecksumCalculator {
     static keyTable: Uint16Array = ChecksumCalculator.createKeyTable();
 
-    public static calc(data: BinaryReader, offset = -1, length = -1) :number {
+    public static calc(data: BinaryReader, offset = -1, length = -1): number {
         const keyTable = ChecksumCalculator.keyTable;
 
         /// set offset
@@ -20,11 +20,11 @@ export class ChecksumCalculator {
         let key = 0;
 
         for (let i = 0; i < length; i++) {
-            key = (key >> 8) ^ keyTable[(data.readByte() ^ key) & 0xFF];
+            key = (key >> 8) ^ keyTable[(data.readByte() ^ key) & 0xff];
         }
 
         /// swap high and lower byte
-        return ((key << 8) | (key >> 8)) & 0xFFFF;
+        return ((key << 8) | (key >> 8)) & 0xffff;
     }
 
     /** Create a Table of keys needed for calculating the checksum */
@@ -40,7 +40,7 @@ export class ChecksumCalculator {
                 if (pos & 1) {
                     value = value | (1 << j);
                 } else {
-                    value = value & (~(1 << j));
+                    value = value & ~(1 << j);
                 }
                 pos = pos >> 1;
             }
@@ -61,16 +61,16 @@ export class ChecksumCalculator {
 
             for (let j = 15; j > 0; j--) {
                 if (pos & 1) {
-                    value = value | ((1 << j));
+                    value = value | (1 << j);
                 } else {
-                    value = value & (~(1 << j));
+                    value = value & ~(1 << j);
                 }
 
                 pos = pos >> 1;
             }
 
             /// - save key to table
-            table[i] = value & 0xFFFF;
+            table[i] = value & 0xffff;
         }
 
         return table;

@@ -19,11 +19,7 @@ import type { TileCoord } from '@/game/coordinates';
  * @param hotSpotY Y coordinate of the building's anchor point (in tile coords from top of bitmask)
  * @returns Array of tile coordinates relative to the building's placement position (0,0)
  */
-export function decodeBuildingFootprint(
-    buildingPosLines: number[],
-    hotSpotX: number,
-    hotSpotY: number
-): TileCoord[] {
+export function decodeBuildingFootprint(buildingPosLines: number[], hotSpotX: number, hotSpotY: number): TileCoord[] {
     const tiles: TileCoord[] = [];
 
     for (let row = 0; row < buildingPosLines.length; row++) {
@@ -55,11 +51,7 @@ export function decodeBuildingFootprint(
  * Returns tiles relative to building placement position (0,0).
  */
 export function getBuildingFootprintFromInfo(info: BuildingInfo): TileCoord[] {
-    return decodeBuildingFootprint(
-        info.buildingPosLines,
-        info.hotSpotX,
-        info.hotSpotY
-    );
+    return decodeBuildingFootprint(info.buildingPosLines, info.hotSpotX, info.hotSpotY);
 }
 
 /**
@@ -70,11 +62,7 @@ export function getBuildingFootprintFromInfo(info: BuildingInfo): TileCoord[] {
  * @param placeY World Y coordinate where building is placed
  * @returns Array of absolute world tile coordinates
  */
-export function getBuildingFootprintAt(
-    info: BuildingInfo,
-    placeX: number,
-    placeY: number
-): TileCoord[] {
+export function getBuildingFootprintAt(info: BuildingInfo, placeX: number, placeY: number): TileCoord[] {
     const relativeFootprint = getBuildingFootprintFromInfo(info);
     return relativeFootprint.map(tile => ({
         x: placeX + tile.x,

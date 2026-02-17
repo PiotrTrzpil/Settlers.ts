@@ -1,4 +1,3 @@
-
 /**
  * 101100000000010000000000000001
 10110000000000
@@ -40,13 +39,13 @@ export class GhFileReader {
     private flag4 = 0;
 
     /** return the number of images in this gfx file */
-    public getImageCount() :number {
+    public getImageCount(): number {
         return this.images ? this.images.length : 0;
     }
 
     /** return a Image by index */
-    public getImage(index:number) : IGfxImage | null {
-        if ((index < 0) || (index >= this.images.length)) {
+    public getImage(index: number): IGfxImage | null {
+        if (index < 0 || index >= this.images.length) {
             GhFileReader.log.error('Image Index out of range: ' + index);
             return null;
         }
@@ -84,7 +83,7 @@ export class GhFileReader {
             const rowCount = reader.readByte();
             size = reader.readIntBE();
 
-            let img:IGfxImage;
+            let img: IGfxImage;
 
             switch (imageType) {
             case 0:
@@ -116,15 +115,25 @@ export class GhFileReader {
 
     /** return the image of a given type */
     public findImageByType<T>(type: ImageType): T | undefined {
-        return this.images.find((i) => i.imageType === type) as T | undefined;
+        return this.images.find(i => i.imageType === type) as T | undefined;
     }
 
     /** return a debug text-string */
-    public toString():string {
-        return 'gh: ' + this.magic.toString(16) + '; ' +
-                    this.flag1 + ', ' +
-                    this.flag2 + ', ' +
-                    this.flag3 + ', ' +
-                    this.flag4.toString(16) + '    --    ' + this.flag4.toString(2) + ', ';
+    public toString(): string {
+        return (
+            'gh: ' +
+            this.magic.toString(16) +
+            '; ' +
+            this.flag1 +
+            ', ' +
+            this.flag2 +
+            ', ' +
+            this.flag3 +
+            ', ' +
+            this.flag4.toString(16) +
+            '    --    ' +
+            this.flag4.toString(2) +
+            ', '
+        );
     }
 }

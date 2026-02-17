@@ -30,7 +30,7 @@ class FileCache {
         if (this.db) return this.db;
         if (this.dbPromise) return this.dbPromise;
 
-        this.dbPromise = new Promise((resolve) => {
+        this.dbPromise = new Promise(resolve => {
             try {
                 const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
                 request.onerror = () => resolve(null);
@@ -38,7 +38,7 @@ class FileCache {
                     this.db = request.result;
                     resolve(this.db);
                 };
-                request.onupgradeneeded = (event) => {
+                request.onupgradeneeded = event => {
                     const db = (event.target as IDBOpenDBRequest).result;
                     if (!db.objectStoreNames.contains(this.STORE_NAME)) {
                         db.createObjectStore(this.STORE_NAME);
@@ -56,7 +56,7 @@ class FileCache {
         const db = await this.openDb();
         if (!db) return null;
 
-        return new Promise((resolve) => {
+        return new Promise(resolve => {
             try {
                 const tx = db.transaction(this.STORE_NAME, 'readonly');
                 const store = tx.objectStore(this.STORE_NAME);
@@ -84,8 +84,8 @@ class FileCache {
 }
 
 /**
-* Handle Files loading from remote/web
-*/
+ * Handle Files loading from remote/web
+ */
 export class RemoteFile {
     private static log: LogHandler = new LogHandler('RemoteFile');
     private rootPath?: string;
@@ -145,15 +145,16 @@ export class RemoteFile {
     /** Check if a file should be cached (GFX/GIL/JIL/DIL/palette files) */
     private isCacheableFile(url: string): boolean {
         const lower = url.toLowerCase();
-        return lower.includes('/gfx/') && (
-            lower.endsWith('.gfx') ||
-            lower.endsWith('.gil') ||
-            lower.endsWith('.jil') ||
-            lower.endsWith('.dil') ||
-            lower.endsWith('.pil') ||
-            lower.endsWith('.pi4') ||
-            lower.endsWith('.pa6') ||
-            lower.endsWith('.p46')
+        return (
+            lower.includes('/gfx/') &&
+            (lower.endsWith('.gfx') ||
+                lower.endsWith('.gil') ||
+                lower.endsWith('.jil') ||
+                lower.endsWith('.dil') ||
+                lower.endsWith('.pil') ||
+                lower.endsWith('.pi4') ||
+                lower.endsWith('.pa6') ||
+                lower.endsWith('.p46'))
         );
     }
 
@@ -188,8 +189,8 @@ export class RemoteFile {
             return '';
         }
 
-        url = url.substring(0, (url.indexOf('#') === -1) ? url.length : url.indexOf('#'));
-        url = url.substring(0, (url.indexOf('?') === -1) ? url.length : url.indexOf('?'));
+        url = url.substring(0, url.indexOf('#') === -1 ? url.length : url.indexOf('#'));
+        url = url.substring(0, url.indexOf('?') === -1 ? url.length : url.indexOf('?'));
         url = url.substring(url.lastIndexOf('/') + 1, url.length);
 
         return url;

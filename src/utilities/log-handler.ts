@@ -15,7 +15,7 @@ export class LogHandler {
             type: LogType.Error,
             source: this._moduleName,
             msg,
-            exception
+            exception,
         });
     }
 
@@ -24,7 +24,7 @@ export class LogHandler {
         LogHandler.manager.push({
             type: LogType.Warn,
             source: this._moduleName,
-            msg
+            msg,
         });
     }
 
@@ -33,7 +33,7 @@ export class LogHandler {
         LogHandler.manager.push({
             type: LogType.Info,
             source: this._moduleName,
-            msg
+            msg,
         });
     }
 
@@ -42,7 +42,7 @@ export class LogHandler {
         LogHandler.manager.push({
             type: LogType.Debug,
             source: this._moduleName,
-            msg
+            msg,
         });
     }
 

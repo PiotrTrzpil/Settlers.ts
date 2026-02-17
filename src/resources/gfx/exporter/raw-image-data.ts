@@ -16,12 +16,7 @@ export class RawImageData {
     /** Get pixel color at position (RGBA) */
     public getPixel(x: number, y: number): [number, number, number, number] {
         const offset = (y * this.width + x) * 4;
-        return [
-            this.data[offset],
-            this.data[offset + 1],
-            this.data[offset + 2],
-            this.data[offset + 3]
-        ];
+        return [this.data[offset], this.data[offset + 1], this.data[offset + 2], this.data[offset + 3]];
     }
 
     /** Set pixel color at position (RGBA) */
@@ -35,11 +30,7 @@ export class RawImageData {
 
     /** Create from browser ImageData */
     public static fromImageData(imageData: ImageData): RawImageData {
-        return new RawImageData(
-            imageData.width,
-            imageData.height,
-            new Uint8ClampedArray(imageData.data)
-        );
+        return new RawImageData(imageData.width, imageData.height, new Uint8ClampedArray(imageData.data));
     }
 
     /** Convert to browser ImageData if available */
@@ -51,11 +42,7 @@ export class RawImageData {
     }
 
     /** Create from Uint32Array (RGBA as packed 32-bit values) */
-    public static fromUint32Array(
-        width: number,
-        height: number,
-        data: Uint32Array
-    ): RawImageData {
+    public static fromUint32Array(width: number, height: number, data: Uint32Array): RawImageData {
         const rawData = new Uint8ClampedArray(data.buffer as ArrayBuffer);
         return new RawImageData(width, height, rawData);
     }

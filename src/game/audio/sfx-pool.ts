@@ -52,12 +52,15 @@ export class SfxPool {
 
         if (x !== undefined && y !== undefined) {
             howl.pos(x, y, 0, id);
-            howl.pannerAttr({
-                panningModel: 'HRTF',
-                refDistance: 5,
-                rolloffFactor: 1,
-                distanceModel: 'inverse',
-            }, id);
+            howl.pannerAttr(
+                {
+                    panningModel: 'HRTF',
+                    refDistance: 5,
+                    rolloffFactor: 1,
+                    distanceModel: 'inverse',
+                },
+                id
+            );
         }
 
         return { howl, id };

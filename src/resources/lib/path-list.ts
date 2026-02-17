@@ -17,8 +17,8 @@ export class PathList {
     }
 
     /** return the path-name for a given path index */
-    public getPath(pathIndex: number):string {
-        if ((pathIndex < 0) || (pathIndex >= this.pathNames.length)) {
+    public getPath(pathIndex: number): string {
+        if (pathIndex < 0 || pathIndex >= this.pathNames.length) {
             return '/??/';
         }
         return this.pathNames[pathIndex];

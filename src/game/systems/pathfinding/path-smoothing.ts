@@ -25,8 +25,10 @@ export interface PathSmoothingParams {
  * Uses hex grid line drawing to check all tiles along the path.
  */
 function hasLineOfSight(
-    startX: number, startY: number,
-    endX: number, endY: number,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
     params: PathSmoothingParams
 ): boolean {
     const tiles = getHexLine(startX, startY, endX, endY);
@@ -62,7 +64,8 @@ function hasLineOfSight(
  * Uses binary-search-like optimization for long paths.
  */
 function findFurthestVisible(
-    currentX: number, currentY: number,
+    currentX: number,
+    currentY: number,
     path: TileCoord[],
     startIdx: number,
     params: PathSmoothingParams
@@ -90,7 +93,8 @@ function findFurthestVisible(
  */
 export function smoothPath(
     path: TileCoord[],
-    startX: number, startY: number,
+    startX: number,
+    startY: number,
     params: PathSmoothingParams
 ): TileCoord[] {
     if (path.length <= 1) {

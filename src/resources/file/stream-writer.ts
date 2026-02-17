@@ -14,7 +14,7 @@ export class StreamWriter {
         Object.seal(this);
     }
 
-    public getReader():BinaryReader {
+    public getReader(): BinaryReader {
         return new BinaryReader(this.data, 0, this.pos);
     }
 
@@ -34,25 +34,25 @@ export class StreamWriter {
     }
 
     /** return the position the stream is writing to */
-    public getWriteOffset() :number {
+    public getWriteOffset(): number {
         return this.pos;
     }
 
-    public getLength():number {
+    public getLength(): number {
         return this.data.length;
     }
 
-    public eof() : boolean {
-        return ((this.pos < 0) || (this.pos >= this.data.length));
+    public eof(): boolean {
+        return this.pos < 0 || this.pos >= this.data.length;
     }
 
-    public getLeftSize() :number {
-        return (this.data.length - this.pos);
+    public getLeftSize(): number {
+        return this.data.length - this.pos;
     }
 
     /** Write one byte to the stream */
     public setByte(value: number): boolean {
-        if ((this.pos < 0) || (this.pos > this.data.length)) {
+        if (this.pos < 0 || this.pos > this.data.length) {
             StreamWriter.log.error('write out of data: size: ' + this.data.length + ' @ ' + this.pos);
             return false;
         }

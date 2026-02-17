@@ -44,19 +44,11 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
     /**
      * Units are placed directly at cursor position (no offset).
      */
-    protected resolveAnchorPosition(
-        tileX: number,
-        tileY: number,
-        _unitType: UnitType
-    ): { x: number; y: number } {
+    protected resolveAnchorPosition(tileX: number, tileY: number, _unitType: UnitType): { x: number; y: number } {
         return { x: tileX, y: tileY };
     }
 
-    protected createPlacementCommand(
-        x: number,
-        y: number,
-        data: PlacementModeData<UnitType>
-    ): Record<string, unknown> {
+    protected createPlacementCommand(x: number, y: number, data: PlacementModeData<UnitType>): Record<string, unknown> {
         return {
             type: this.getCommandType(),
             unitType: data.subType,
@@ -69,9 +61,7 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
     /**
      * Initialize mode data, handling multiple enter data formats.
      */
-    protected override initializeModeData(
-        enterData: PlaceUnitEnterData
-    ): PlaceUnitModeData {
+    protected override initializeModeData(enterData: PlaceUnitEnterData): PlaceUnitModeData {
         // Support unitType and subType for flexibility
         const unitType = (enterData.unitType ?? enterData.subType)!;
 
@@ -88,10 +78,7 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
     /**
      * Handle enter with backward-compatible data format.
      */
-    override onEnter(
-        context: InputContext,
-        enterData?: PlacementModeEnterData<UnitType>
-    ): void {
+    override onEnter(context: InputContext, enterData?: PlacementModeEnterData<UnitType>): void {
         const legacyData = enterData as PlaceUnitEnterData | undefined;
         const unitType = legacyData?.unitType ?? enterData?.subType;
 

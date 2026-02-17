@@ -8,8 +8,15 @@ export class GeneralMapInformation {
     public startResources = MapStartResources.unknown;
 
     public toString(): string {
-        return 'gameType: ' + MapGameType[this.gameType] + '; ' +
-                        'playerCount: ' + this.playerCount + '; ' +
-                        'startResources: ' + MapStartResources[this.startResources];
+        return (
+            'gameType: ' +
+            MapGameType[this.gameType] +
+            '; ' +
+            'playerCount: ' +
+            this.playerCount +
+            '; ' +
+            'startResources: ' +
+            MapStartResources[this.startResources]
+        );
     }
 }

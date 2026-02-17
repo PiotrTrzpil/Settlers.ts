@@ -3,9 +3,9 @@ import { BinaryReader } from '../file/binary-reader';
 import { ResourceFile } from './resource-file';
 
 /** interprets a .pil file -
-         *    pil may stand for: "palette index list" file"
-         *    it is a list of file indexes used to read a .pa5 or .pa6 file
-         * */
+ *    pil may stand for: "palette index list" file"
+ *    it is a list of file indexes used to read a .pa5 or .pa6 file
+ * */
 export class PilFileReader extends ResourceFile {
     private static log: LogHandler = new LogHandler('PilFileReader');
 

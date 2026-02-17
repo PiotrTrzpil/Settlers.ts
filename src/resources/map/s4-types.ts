@@ -7,26 +7,26 @@
 /** Ground/terrain type values (Byte 1 of WorldField) */
 export enum S4GroundType {
     // Water types (0-7)
-    WATER1 = 0,       // No waves (ignores pond flag)
-    WATER2 = 1,       // Respects pond flag
+    WATER1 = 0, // No waves (ignores pond flag)
+    WATER2 = 1, // Respects pond flag
     WATER3 = 2,
     WATER4 = 3,
     WATER5 = 4,
     WATER6 = 5,
     WATER7 = 6,
-    WATER8 = 7,       // Deep sea
+    WATER8 = 7, // Deep sea
 
     // Grass types
     GRASS = 16,
-    GRASS_ROCK = 17,        // Transition: grass-grass-rock
+    GRASS_ROCK = 17, // Transition: grass-grass-rock
     GRASS_ISLE = 18,
-    GRASS_DESERT = 20,      // Transition: grass-grass-desert
-    GRASS_SWAMP = 21,       // Transition: grass-grass-swamp
-    GRASS_MUD = 23,         // Transition: grass-grass-mud
+    GRASS_DESERT = 20, // Transition: grass-grass-desert
+    GRASS_SWAMP = 21, // Transition: grass-grass-swamp
+    GRASS_MUD = 23, // Transition: grass-grass-mud
 
     // Dark grass
     DARKGRASS = 24,
-    DARKGRASS_GRASS = 25,   // Transition: darkgrass-darkgrass-grass
+    DARKGRASS_GRASS = 25, // Transition: darkgrass-darkgrass-grass
 
     // Roads
     SANDYROAD = 28,
@@ -34,19 +34,19 @@ export enum S4GroundType {
 
     // Rock
     ROCK = 32,
-    ROCK_GRASS = 33,        // Transition: rock-rock-grass
-    ROCK_SNOW = 35,         // Transition: rock-rock-snow
+    ROCK_GRASS = 33, // Transition: rock-rock-grass
+    ROCK_SNOW = 35, // Transition: rock-rock-snow
 
     // Beach
     BEACH = 48,
 
     // Desert
     DESERT = 64,
-    DESERT_GRASS = 65,      // Transition: desert-desert-grass
+    DESERT_GRASS = 65, // Transition: desert-desert-grass
 
     // Swamp
     SWAMP = 80,
-    SWAMP_GRASS = 81,       // Transition: swamp-swamp-grass
+    SWAMP_GRASS = 81, // Transition: swamp-swamp-grass
 
     // River
     RIVER1 = 96,
@@ -56,57 +56,141 @@ export enum S4GroundType {
 
     // Snow
     SNOW = 128,
-    SNOW_ROCK = 129,        // Transition: snow-snow-rock
+    SNOW_ROCK = 129, // Transition: snow-snow-rock
 
     // Mud
     MUD = 144,
-    MUD_GRASS = 145,        // Transition: mud-mud-grass
+    MUD_GRASS = 145, // Transition: mud-mud-grass
 }
 
 /** Resource type values (stored in separate resource map layer) */
 export enum S4ResourceType {
     NONE = 0,
     // Fish (1-16) - amount encoded in value
-    FISH_1 = 1, FISH_2 = 2, FISH_3 = 3, FISH_4 = 4,
-    FISH_5 = 5, FISH_6 = 6, FISH_7 = 7, FISH_8 = 8,
-    FISH_9 = 9, FISH_10 = 10, FISH_11 = 11, FISH_12 = 12,
-    FISH_13 = 13, FISH_14 = 14, FISH_15 = 15, FISH_16 = 16,
+    FISH_1 = 1,
+    FISH_2 = 2,
+    FISH_3 = 3,
+    FISH_4 = 4,
+    FISH_5 = 5,
+    FISH_6 = 6,
+    FISH_7 = 7,
+    FISH_8 = 8,
+    FISH_9 = 9,
+    FISH_10 = 10,
+    FISH_11 = 11,
+    FISH_12 = 12,
+    FISH_13 = 13,
+    FISH_14 = 14,
+    FISH_15 = 15,
+    FISH_16 = 16,
 
     // Coal (17-32)
-    COAL_1 = 17, COAL_2 = 18, COAL_3 = 19, COAL_4 = 20,
-    COAL_5 = 21, COAL_6 = 22, COAL_7 = 23, COAL_8 = 24,
-    COAL_9 = 25, COAL_10 = 26, COAL_11 = 27, COAL_12 = 28,
-    COAL_13 = 29, COAL_14 = 30, COAL_15 = 31, COAL_16 = 32,
+    COAL_1 = 17,
+    COAL_2 = 18,
+    COAL_3 = 19,
+    COAL_4 = 20,
+    COAL_5 = 21,
+    COAL_6 = 22,
+    COAL_7 = 23,
+    COAL_8 = 24,
+    COAL_9 = 25,
+    COAL_10 = 26,
+    COAL_11 = 27,
+    COAL_12 = 28,
+    COAL_13 = 29,
+    COAL_14 = 30,
+    COAL_15 = 31,
+    COAL_16 = 32,
 
     // Iron (33-48)
-    IRON_1 = 33, IRON_2 = 34, IRON_3 = 35, IRON_4 = 36,
-    IRON_5 = 37, IRON_6 = 38, IRON_7 = 39, IRON_8 = 40,
-    IRON_9 = 41, IRON_10 = 42, IRON_11 = 43, IRON_12 = 44,
-    IRON_13 = 45, IRON_14 = 46, IRON_15 = 47, IRON_16 = 48,
+    IRON_1 = 33,
+    IRON_2 = 34,
+    IRON_3 = 35,
+    IRON_4 = 36,
+    IRON_5 = 37,
+    IRON_6 = 38,
+    IRON_7 = 39,
+    IRON_8 = 40,
+    IRON_9 = 41,
+    IRON_10 = 42,
+    IRON_11 = 43,
+    IRON_12 = 44,
+    IRON_13 = 45,
+    IRON_14 = 46,
+    IRON_15 = 47,
+    IRON_16 = 48,
 
     // Gold (49-64)
-    GOLD_1 = 49, GOLD_2 = 50, GOLD_3 = 51, GOLD_4 = 52,
-    GOLD_5 = 53, GOLD_6 = 54, GOLD_7 = 55, GOLD_8 = 56,
-    GOLD_9 = 57, GOLD_10 = 58, GOLD_11 = 59, GOLD_12 = 60,
-    GOLD_13 = 61, GOLD_14 = 62, GOLD_15 = 63, GOLD_16 = 64,
+    GOLD_1 = 49,
+    GOLD_2 = 50,
+    GOLD_3 = 51,
+    GOLD_4 = 52,
+    GOLD_5 = 53,
+    GOLD_6 = 54,
+    GOLD_7 = 55,
+    GOLD_8 = 56,
+    GOLD_9 = 57,
+    GOLD_10 = 58,
+    GOLD_11 = 59,
+    GOLD_12 = 60,
+    GOLD_13 = 61,
+    GOLD_14 = 62,
+    GOLD_15 = 63,
+    GOLD_16 = 64,
 
     // Sulphur (65-80)
-    SULPHUR_1 = 65, SULPHUR_2 = 66, SULPHUR_3 = 67, SULPHUR_4 = 68,
-    SULPHUR_5 = 69, SULPHUR_6 = 70, SULPHUR_7 = 71, SULPHUR_8 = 72,
-    SULPHUR_9 = 73, SULPHUR_10 = 74, SULPHUR_11 = 75, SULPHUR_12 = 76,
-    SULPHUR_13 = 77, SULPHUR_14 = 78, SULPHUR_15 = 79, SULPHUR_16 = 80,
+    SULPHUR_1 = 65,
+    SULPHUR_2 = 66,
+    SULPHUR_3 = 67,
+    SULPHUR_4 = 68,
+    SULPHUR_5 = 69,
+    SULPHUR_6 = 70,
+    SULPHUR_7 = 71,
+    SULPHUR_8 = 72,
+    SULPHUR_9 = 73,
+    SULPHUR_10 = 74,
+    SULPHUR_11 = 75,
+    SULPHUR_12 = 76,
+    SULPHUR_13 = 77,
+    SULPHUR_14 = 78,
+    SULPHUR_15 = 79,
+    SULPHUR_16 = 80,
 
     // Stone Mine (81-96) - underground stone
-    STONEMINE_1 = 81, STONEMINE_2 = 82, STONEMINE_3 = 83, STONEMINE_4 = 84,
-    STONEMINE_5 = 85, STONEMINE_6 = 86, STONEMINE_7 = 87, STONEMINE_8 = 88,
-    STONEMINE_9 = 89, STONEMINE_10 = 90, STONEMINE_11 = 91, STONEMINE_12 = 92,
-    STONEMINE_13 = 93, STONEMINE_14 = 94, STONEMINE_15 = 95, STONEMINE_16 = 96,
+    STONEMINE_1 = 81,
+    STONEMINE_2 = 82,
+    STONEMINE_3 = 83,
+    STONEMINE_4 = 84,
+    STONEMINE_5 = 85,
+    STONEMINE_6 = 86,
+    STONEMINE_7 = 87,
+    STONEMINE_8 = 88,
+    STONEMINE_9 = 89,
+    STONEMINE_10 = 90,
+    STONEMINE_11 = 91,
+    STONEMINE_12 = 92,
+    STONEMINE_13 = 93,
+    STONEMINE_14 = 94,
+    STONEMINE_15 = 95,
+    STONEMINE_16 = 96,
 
     // Surface Stone (97-112)
-    STONE_1 = 97, STONE_2 = 98, STONE_3 = 99, STONE_4 = 100,
-    STONE_5 = 101, STONE_6 = 102, STONE_7 = 103, STONE_8 = 104,
-    STONE_9 = 105, STONE_10 = 106, STONE_11 = 107, STONE_12 = 108,
-    STONE_13 = 109, STONE_14 = 110, STONE_15 = 111, STONE_16 = 112,
+    STONE_1 = 97,
+    STONE_2 = 98,
+    STONE_3 = 99,
+    STONE_4 = 100,
+    STONE_5 = 101,
+    STONE_6 = 102,
+    STONE_7 = 103,
+    STONE_8 = 104,
+    STONE_9 = 105,
+    STONE_10 = 106,
+    STONE_11 = 107,
+    STONE_12 = 108,
+    STONE_13 = 109,
+    STONE_14 = 110,
+    STONE_15 = 111,
+    STONE_16 = 112,
 
     // Wood/Trees
     WOOD = 113,
@@ -349,7 +433,7 @@ export function parseTerrainAttributes(byte: number): {
         isDarkBorder: (byte & 0x80) !== 0,
         isDarkLand: (byte & 0x40) !== 0,
         isPond: (byte & 0x20) !== 0,
-        sunLevel: byte & 0x1F,
+        sunLevel: byte & 0x1f,
     };
 }
 
@@ -360,7 +444,7 @@ export function parseGameplayAttributes(byte: number): {
 } {
     return {
         isFoundingStone: (byte & 0x80) !== 0,
-        fogOfWarLevel: byte & 0x3F,
+        fogOfWarLevel: byte & 0x3f,
     };
 }
 
@@ -466,11 +550,7 @@ export function getGroundTypeColor(type: number): [number, number, number] {
     // Water types (0-7) use gradient
     if (type >= 0 && type <= 7) {
         const depth = type / 7;
-        return [
-            Math.floor(40 - depth * 20),
-            Math.floor(100 + depth * 20),
-            Math.floor(160 + depth * 40),
-        ];
+        return [Math.floor(40 - depth * 20), Math.floor(100 + depth * 20), Math.floor(160 + depth * 40)];
     }
     return groundColorMap[type] ?? [100, 100, 100];
 }

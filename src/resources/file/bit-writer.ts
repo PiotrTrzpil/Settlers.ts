@@ -16,15 +16,15 @@ export class BitWriter {
 
         while (length > 0) {
             const spaceBitCount = 8 - chByteLen;
-            const needBitCount = (spaceBitCount < length) ? spaceBitCount : length;
+            const needBitCount = spaceBitCount < length ? spaceBitCount : length;
 
             // shift to the right or to the left?
             const shiftNum = spaceBitCount - length;
             if (shiftNum < 0) {
                 // the value we need to write to current byte
                 //  needs more bits than remain
-                chByte = chByte | (value >> (-shiftNum));
-                value = value & ((1 << (-shiftNum)) - 1);
+                chByte = chByte | (value >> -shiftNum);
+                value = value & ((1 << -shiftNum) - 1);
                 length -= needBitCount;
             } else {
                 // the value we need to write to current byte

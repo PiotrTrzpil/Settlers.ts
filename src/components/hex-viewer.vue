@@ -1,56 +1,52 @@
 <template>
-  <div class="optionSelect">
-    <input type="radio" id="none" value="" v-model="type">
-    <label for="none">none</label>
+    <div class="optionSelect">
+        <input type="radio" id="none" value="" v-model="type" />
+        <label for="none">none</label>
 
-    <input type="radio" id="text" value="text" v-model="type">
-    <label for="text">text</label>
+        <input type="radio" id="text" value="text" v-model="type" />
+        <label for="text">text</label>
 
-    <input type="radio" id="hex" value="hex" v-model="type">
-    <label for="hex">hex</label>
+        <input type="radio" id="hex" value="hex" v-model="type" />
+        <label for="hex">hex</label>
 
-    <template v-if="width">
-      <input type="radio" id="img" value="img" v-model="type">
-      <label for="img">image</label>
+        <template v-if="width">
+            <input type="radio" id="img" value="img" v-model="type" />
+            <label for="img">image</label>
+        </template>
+
+        <button @click="onSaveFile()">save</button>
+    </div>
+
+    <br />
+
+    <template v-if="type !== 'img'">
+        <pre class="content">{{ content }}</pre>
+
+        <a href="#" v-if="isTrimmed" @click="showAll">show all</a>
     </template>
 
-    <button @click="onSaveFile()">save</button>
-  </div>
+    <div v-show="type === 'img'">
+        <label
+            >Bytes per Pixle:
+            <input type="number" v-model.number="bytePerPixel" @change="updateContent" />
+        </label>
 
-  <br />
+        <label>
+            Byte offset:
+            <input type="number" v-model.number="byteOffset" @change="updateContent" />
+        </label>
 
-  <template v-if="type!=='img'">
-    <pre class="content">{{content}}</pre>
+        <label>
+            Width:
+            <input type="number" v-model.number="useWidth" @change="updateContent" />
+        </label>
 
-    <a href="#" v-if="isTrimmed" @click="showAll">show all</a>
-  </template>
+        <br />
+        {{ imagePointInfo }}
+        <br />
 
- <div v-show="type==='img'">
-    <label>Bytes per Pixle:
-      <input type="number" v-model.number="bytePerPixel" @change="updateContent" />
-    </label>
-
-    <label> Byte offset:
-      <input type="number" v-model.number="byteOffset" @change="updateContent" />
-    </label>
-
-    <label> Width:
-      <input type="number" v-model.number="useWidth" @change="updateContent" />
-    </label>
-
-    <br />
-    {{imagePointInfo}}
-    <br />
-
-    <canvas
-      height="800"
-      width="800"
-      ref="cav"
-      class="cav"
-      @mousemove="onMouseMove"
-    />
-  </div>
-
+        <canvas height="800" width="800" ref="cav" class="cav" @mousemove="onMouseMove" />
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -105,18 +101,17 @@ function onMouseMove(evt: MouseEvent) {
     const y = Math.trunc(evt.clientY - rect.top);
 
     imagePointInfo.value =
-        ' x: ' + x +
-        ' y: ' + y +
-        ' value: ' + peekValue(
-            props.value,
-            x, y,
-            bytePerPixel.value, byteOffset.value,
-            useWidth.value ?? 1);
+        ' x: ' +
+        x +
+        ' y: ' +
+        y +
+        ' value: ' +
+        peekValue(props.value, x, y, bytePerPixel.value, byteOffset.value, useWidth.value ?? 1);
 }
 
 function peekValue(data: BinaryReader, x: number, y: number, bpp: number, offset: number, w: number) {
     const intX = Math.floor(x);
-    if ((intX < 0) || (intX >= w)) {
+    if (intX < 0 || intX >= w) {
         return;
     }
 
@@ -146,9 +141,12 @@ function updateContent() {
             if (cavEl) {
                 toImg(
                     props.value,
-                    bytePerPixel.value, byteOffset.value,
-                    useWidth.value ?? 1, props.height ?? 1,
-                    cavEl);
+                    bytePerPixel.value,
+                    byteOffset.value,
+                    useWidth.value ?? 1,
+                    props.height ?? 1,
+                    cavEl
+                );
             }
         }
         break;
@@ -158,11 +156,11 @@ function updateContent() {
 }
 
 function toImg(data: BinaryReader, bpp: number, offset: number, w: number, h: number, cavEl: HTMLCanvasElement) {
-    if ((!cavEl) || (!cavEl.getContext)) {
+    if (!cavEl || !cavEl.getContext) {
         return;
     }
 
-    if ((w > 5000) || (h > 5000)) {
+    if (w > 5000 || h > 5000) {
         return;
     }
 
@@ -200,7 +198,7 @@ function createHexLine(hexValues: string, asciiValues: string) {
 }
 
 function getMaxLengthAndSetTrimmed(source: BinaryReader) {
-    if ((doNotTrim.value) || (source.length <= 10000)) {
+    if (doNotTrim.value || source.length <= 10000) {
         isTrimmed.value = false;
         return source.length;
     }
@@ -229,7 +227,7 @@ function toHex(source: BinaryReader): string {
         const char = source.readByte();
 
         lineHex += (char < 16 ? '0' : '') + char.toString(16) + ' ';
-        lineLetters += (char < 16) ? '' : String.fromCharCode(char);
+        lineLetters += char < 16 ? '' : String.fromCharCode(char);
         length++;
 
         if (length > 32) {
@@ -243,14 +241,20 @@ function toHex(source: BinaryReader): string {
     return result + createHexLine(lineHex, lineLetters);
 }
 
-watch(() => props.value, () => {
-    doNotTrim.value = false;
-    updateContent();
-});
+watch(
+    () => props.value,
+    () => {
+        doNotTrim.value = false;
+        updateContent();
+    }
+);
 
-watch(() => props.width, () => {
-    useWidth.value = props.width ?? 128;
-});
+watch(
+    () => props.width,
+    () => {
+        useWidth.value = props.width ?? 128;
+    }
+);
 
 watch(type, () => {
     updateContent();
@@ -258,20 +262,19 @@ watch(type, () => {
 </script>
 
 <style scoped>
-
-.content{
-  font-family:"Courier New", Courier, monospace;
-  text-align: left;
-  white-space: pre-wrap;
+.content {
+    font-family: 'Courier New', Courier, monospace;
+    text-align: left;
+    white-space: pre-wrap;
 }
 
 .cav {
-  margin: 3px;
-  border: 1px solid red;
+    margin: 3px;
+    border: 1px solid red;
 }
 
-.optionSelect input, .optionSelect button {
-  margin-left: 10px;
+.optionSelect input,
+.optionSelect button {
+    margin-left: 10px;
 }
-
 </style>

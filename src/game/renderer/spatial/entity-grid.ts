@@ -54,8 +54,8 @@ export interface GridStats {
     maxEntitiesPerCell: number;
     avgEntitiesPerCell: number;
     emptyCells: number;
-    queriedCells: number;  // From last query
-    returnedEntities: number;  // From last query
+    queriedCells: number; // From last query
+    returnedEntities: number; // From last query
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -72,7 +72,7 @@ export class EntityGrid {
     private readonly cells: GridCell[];
 
     // Entity position tracking for efficient updates
-    private readonly entityCells: Map<number, number>;  // entityId -> cellIndex
+    private readonly entityCells: Map<number, number>; // entityId -> cellIndex
 
     // Last query stats
     private lastQueryCells = 0;

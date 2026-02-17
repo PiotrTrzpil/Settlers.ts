@@ -11,7 +11,7 @@ import { FileManager } from '@/utilities/file-manager';
 export function pad(value: string | number, size: number): string {
     const str = ('' + value + '').split(' ').join('\u00a0');
     const padSize = Math.max(0, size - str.length);
-    return str + ('\u00a0'.repeat(padSize));
+    return str + '\u00a0'.repeat(padSize);
 }
 
 /** Render an IGfxImage to a canvas element */
@@ -105,6 +105,6 @@ export function parseGfxReaders(files: GfxFileSet): ParsedGfxReaders {
         jilFileReader,
         dilFileReader,
         paletteCollection,
-        files
+        files,
     };
 }

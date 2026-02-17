@@ -93,14 +93,17 @@ export class SpriteLoader {
         const paletteExt = pilFileExists ? '.pa6' : '.p46';
 
         // Load all required files
-        const files = await this.fileManager.readFiles({
-            gfx: `${fileId}.gfx`,
-            gil: `${fileId}.gil`,
-            jil: `${fileId}.jil`,
-            dil: `${fileId}.dil`,
-            palette: `${fileId}${paletteExt}`,
-            paletteIndex: `${fileId}${paletteIndexExt}`,
-        }, true);
+        const files = await this.fileManager.readFiles(
+            {
+                gfx: `${fileId}.gfx`,
+                gil: `${fileId}.gil`,
+                jil: `${fileId}.jil`,
+                dil: `${fileId}.dil`,
+                palette: `${fileId}${paletteExt}`,
+                paletteIndex: `${fileId}${paletteIndexExt}`,
+            },
+            true
+        );
 
         // Check minimum required files
         if (!files.gfx?.length || !files.gil?.length || !files.palette?.length || !files.paletteIndex?.length) {
@@ -119,17 +122,13 @@ export class SpriteLoader {
         const jilReader = files.jil?.length ? new JilFileReader(files.jil) : null;
         const dilReader = files.dil?.length ? new DilFileReader(files.dil) : null;
 
-        const gfxReader = new GfxFileReader(
-            files.gfx,
-            gilReader,
-            jilReader,
-            dilReader,
-            paletteCollection
-        );
+        const gfxReader = new GfxFileReader(files.gfx, gilReader, jilReader, dilReader, paletteCollection);
 
         const parseTime = performance.now() - parseStart;
         if (parseTime > 50) {
-            console.warn(`[SpriteLoader] parseFileSet(${fileId}) took ${parseTime.toFixed(1)}ms (gil=${gilReader.length} images)`);
+            console.warn(
+                `[SpriteLoader] parseFileSet(${fileId}) took ${parseTime.toFixed(1)}ms (gil=${gilReader.length} images)`
+            );
         }
 
         const fileSet: LoadedGfxFileSet = {
@@ -166,10 +165,7 @@ export class SpriteLoader {
      * Get a GFX image by job index without decoding.
      * Shared helper for sync and async loading.
      */
-    private getJobImage(
-        fileSet: LoadedGfxFileSet,
-        config: JobSpriteConfig
-    ): GfxImage | null {
+    private getJobImage(fileSet: LoadedGfxFileSet, config: JobSpriteConfig): GfxImage | null {
         const start = performance.now();
         const { jobIndex, directionIndex = 1, frameIndex = 0 } = config;
 
@@ -183,7 +179,9 @@ export class SpriteLoader {
         const totalJobs = fileSet.jilReader.length;
         const jobItem = fileSet.jilReader.getItem(jobIndex);
         if (!jobItem) {
-            SpriteLoader.log.debug(`Job index ${jobIndex} not found in file ${fileSet.fileId} (total jobs: ${totalJobs})`);
+            SpriteLoader.log.debug(
+                `Job index ${jobIndex} not found in file ${fileSet.fileId} (total jobs: ${totalJobs})`
+            );
             return null;
         }
         // Note: removed verbose per-job loading log - too noisy during normal operation
@@ -246,11 +244,7 @@ export class SpriteLoader {
     /**
      * Get a GFX image by direct GIL index without decoding.
      */
-    private getDirectImage(
-        fileSet: LoadedGfxFileSet,
-        gilIndex: number,
-        paletteIndex: number
-    ): GfxImage | null {
+    private getDirectImage(fileSet: LoadedGfxFileSet, gilIndex: number, paletteIndex: number): GfxImage | null {
         const gfxOffset = fileSet.gilReader.getImageOffset(gilIndex);
         const gfxImage = fileSet.gfxReader.readImage(gfxOffset, paletteIndex);
 
@@ -276,7 +270,13 @@ export class SpriteLoader {
      * Trim palette index rows by skipping top/bottom.
      * Returns a Uint16Array with only the retained rows.
      */
-    private trimIndices(indices: Uint16Array, width: number, height: number, trimTop: number, trimBottom: number): Uint16Array {
+    private trimIndices(
+        indices: Uint16Array,
+        width: number,
+        height: number,
+        trimTop: number,
+        trimBottom: number
+    ): Uint16Array {
         const newHeight = height - trimTop - trimBottom;
         if (newHeight <= 0 || newHeight === height) return indices;
 
@@ -294,7 +294,9 @@ export class SpriteLoader {
      * Synchronous fallback using indexed decoding — used only when workers unavailable.
      */
     private packSpriteIntoAtlasFallback(
-        gfxImage: GfxImage, atlas: EntityTextureAtlas, paletteBaseOffset: number
+        gfxImage: GfxImage,
+        atlas: EntityTextureAtlas,
+        paletteBaseOffset: number
     ): LoadedSprite | null {
         const trimmedHeight = gfxImage.height - SpriteLoader.TRIM_TOP - SpriteLoader.TRIM_BOTTOM;
         if (trimmedHeight <= 0) {
@@ -310,8 +312,11 @@ export class SpriteLoader {
 
         const rawIndices = gfxImage.getIndexData(paletteBaseOffset);
         const trimmedIndices = this.trimIndices(
-            rawIndices, gfxImage.width, gfxImage.height,
-            SpriteLoader.TRIM_TOP, SpriteLoader.TRIM_BOTTOM
+            rawIndices,
+            gfxImage.width,
+            gfxImage.height,
+            SpriteLoader.TRIM_TOP,
+            SpriteLoader.TRIM_BOTTOM
         );
 
         atlas.blitIndices(region, trimmedIndices);
@@ -335,7 +340,9 @@ export class SpriteLoader {
      * @param paletteBaseOffset Base offset for this file's palette in the combined texture
      */
     private async packSpriteIntoAtlas(
-        gfxImage: GfxImage, atlas: EntityTextureAtlas, paletteBaseOffset: number
+        gfxImage: GfxImage,
+        atlas: EntityTextureAtlas,
+        paletteBaseOffset: number
     ): Promise<LoadedSprite | null> {
         const pool = getDecoderPool();
 
@@ -394,11 +401,7 @@ export class SpriteLoader {
     /**
      * Get the number of frames for a job/direction combination.
      */
-    public getFrameCount(
-        fileSet: LoadedGfxFileSet,
-        jobIndex: number,
-        directionIndex: number
-    ): number {
+    public getFrameCount(fileSet: LoadedGfxFileSet, jobIndex: number, directionIndex: number): number {
         if (!fileSet.jilReader || !fileSet.dilReader) {
             return 0;
         }

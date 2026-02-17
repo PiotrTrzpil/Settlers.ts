@@ -31,14 +31,6 @@
 export { RawImageData } from './raw-image-data';
 export { PngEncoder, encodePNG, encodePNGSync } from './png-encoder';
 export type { IFileReader, IFileWriter } from './file-system';
-export {
-    NodeFileSystem,
-    BrowserFileSystem,
-    MemoryFileSystem,
-    createFileSystem
-} from './file-system';
+export { NodeFileSystem, BrowserFileSystem, MemoryFileSystem, createFileSystem } from './file-system';
 export type { ExportOptions, ExportResult, GfxFileInfo } from './gfx-image-exporter';
-export {
-    GfxImageExporter,
-    createGfxExporter
-} from './gfx-image-exporter';
+export { GfxImageExporter, createGfxExporter } from './gfx-image-exporter';

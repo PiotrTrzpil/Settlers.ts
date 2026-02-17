@@ -17,11 +17,16 @@ export enum RaceIndex {
 /** Map race ID string to numeric index */
 export function raceIdToIndex(raceId: RaceId): RaceIndex {
     switch (raceId) {
-    case 'RACE_ROMAN': return RaceIndex.Roman;
-    case 'RACE_VIKING': return RaceIndex.Viking;
-    case 'RACE_MAYA': return RaceIndex.Maya;
-    case 'RACE_DARK': return RaceIndex.Dark;
-    case 'RACE_TROJAN': return RaceIndex.Trojan;
+    case 'RACE_ROMAN':
+        return RaceIndex.Roman;
+    case 'RACE_VIKING':
+        return RaceIndex.Viking;
+    case 'RACE_MAYA':
+        return RaceIndex.Maya;
+    case 'RACE_DARK':
+        return RaceIndex.Dark;
+    case 'RACE_TROJAN':
+        return RaceIndex.Trojan;
     }
 }
 

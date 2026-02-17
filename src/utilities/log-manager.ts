@@ -2,7 +2,7 @@ export enum LogType {
     Error,
     Debug,
     Warn,
-    Info
+    Info,
 }
 
 export interface ILogMessage {
@@ -13,7 +13,7 @@ export interface ILogMessage {
     index?: number;
 }
 
-export type LogMessageCallback = ((msg: ILogMessage) => void);
+export type LogMessageCallback = (msg: ILogMessage) => void;
 
 /** Minimum interval between identical log messages (in ms) */
 const LOG_THROTTLE_MS = 1000;
@@ -113,9 +113,8 @@ export class LogManager {
         }
 
         // Not throttled - log to console
-        const suppressedNote = state && state.suppressedCount > 0
-            ? ` (${state.suppressedCount} similar suppressed)`
-            : '';
+        const suppressedNote =
+            state && state.suppressedCount > 0 ? ` (${state.suppressedCount} similar suppressed)` : '';
 
         // Reset or create throttle state
         this.throttleState.set(throttleKey, { lastTime: now, suppressedCount: 0 });

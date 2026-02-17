@@ -34,11 +34,7 @@ export function getEntityWorldPos(entity: Entity, ctx: WorldPositionContext): Wo
     if (entity.type === EntityType.Unit) {
         return getInterpolatedWorldPos(entity, ctx);
     }
-    return TilePicker.tileToWorld(
-        entity.x, entity.y,
-        ctx.groundHeight, ctx.mapSize,
-        ctx.viewPoint.x, ctx.viewPoint.y
-    );
+    return TilePicker.tileToWorld(entity.x, entity.y, ctx.groundHeight, ctx.mapSize, ctx.viewPoint.x, ctx.viewPoint.y);
 }
 
 /**
@@ -48,31 +44,39 @@ export function getEntityWorldPos(entity: Entity, ctx: WorldPositionContext): Wo
 export function getInterpolatedWorldPos(entity: Entity, ctx: WorldPositionContext): WorldPosition {
     const unitState = ctx.unitStates.get(entity.id);
 
-    const isStationary = !unitState ||
-        (unitState.prevX === entity.x && unitState.prevY === entity.y);
+    const isStationary = !unitState || (unitState.prevX === entity.x && unitState.prevY === entity.y);
 
     if (isStationary) {
         return TilePicker.tileToWorld(
-            entity.x, entity.y,
-            ctx.groundHeight, ctx.mapSize,
-            ctx.viewPoint.x, ctx.viewPoint.y
+            entity.x,
+            entity.y,
+            ctx.groundHeight,
+            ctx.mapSize,
+            ctx.viewPoint.x,
+            ctx.viewPoint.y
         );
     }
 
     const prevPos = TilePicker.tileToWorld(
-        unitState.prevX, unitState.prevY,
-        ctx.groundHeight, ctx.mapSize,
-        ctx.viewPoint.x, ctx.viewPoint.y
+        unitState.prevX,
+        unitState.prevY,
+        ctx.groundHeight,
+        ctx.mapSize,
+        ctx.viewPoint.x,
+        ctx.viewPoint.y
     );
     const currPos = TilePicker.tileToWorld(
-        entity.x, entity.y,
-        ctx.groundHeight, ctx.mapSize,
-        ctx.viewPoint.x, ctx.viewPoint.y
+        entity.x,
+        entity.y,
+        ctx.groundHeight,
+        ctx.mapSize,
+        ctx.viewPoint.x,
+        ctx.viewPoint.y
     );
 
     const t = Math.max(0, Math.min(unitState.moveProgress, 1));
     return {
         worldX: prevPos.worldX + (currPos.worldX - prevPos.worldX) * t,
-        worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t
+        worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t,
     };
 }

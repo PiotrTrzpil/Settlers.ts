@@ -43,5 +43,5 @@ export enum LandscapeType {
 
     Mud = 144,
     MudToGras1 = 145,
-    MudToGras2 = 23
+    MudToGras2 = 23,
 }

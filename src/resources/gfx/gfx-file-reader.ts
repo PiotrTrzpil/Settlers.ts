@@ -28,7 +28,7 @@ export class GfxFileReader extends ResourceFile {
 
     /** return a Image by index */
     public getImage(index: number): GfxImage | null {
-        if ((index < 0) || (index >= this.gilFileReader.length)) {
+        if (index < 0 || index >= this.gilFileReader.length) {
             GfxFileReader.log.error('Image Index out of range: ' + index);
             return null;
         }
@@ -47,9 +47,7 @@ export class GfxFileReader extends ResourceFile {
             }
         }
 
-        return this.readImage(
-            gfxOffset,
-            jobIndex);
+        return this.readImage(gfxOffset, jobIndex);
     }
 
     constructor(
@@ -57,7 +55,8 @@ export class GfxFileReader extends ResourceFile {
         gilFileReader: GilFileReader,
         jilFileReader: JilFileReader | null,
         dilFileReader: DilFileReader | null,
-        paletteCollection: PaletteCollection) {
+        paletteCollection: PaletteCollection
+    ) {
         super();
 
         this.reader = reader;

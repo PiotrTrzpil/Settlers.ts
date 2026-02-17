@@ -172,9 +172,18 @@ export class PaletteTextureManager {
                 } else {
                     // Apply player tint
                     if (srcOff + 3 < neutralData.length) {
-                        this.fullPaletteBuffer[dstOff + 0] = Math.min(255, Math.round(neutralData[srcOff + 0] * tint[0]));
-                        this.fullPaletteBuffer[dstOff + 1] = Math.min(255, Math.round(neutralData[srcOff + 1] * tint[1]));
-                        this.fullPaletteBuffer[dstOff + 2] = Math.min(255, Math.round(neutralData[srcOff + 2] * tint[2]));
+                        this.fullPaletteBuffer[dstOff + 0] = Math.min(
+                            255,
+                            Math.round(neutralData[srcOff + 0] * tint[0])
+                        );
+                        this.fullPaletteBuffer[dstOff + 1] = Math.min(
+                            255,
+                            Math.round(neutralData[srcOff + 1] * tint[1])
+                        );
+                        this.fullPaletteBuffer[dstOff + 2] = Math.min(
+                            255,
+                            Math.round(neutralData[srcOff + 2] * tint[2])
+                        );
                         this.fullPaletteBuffer[dstOff + 3] = neutralData[srcOff + 3];
                     }
                 }
@@ -185,7 +194,7 @@ export class PaletteTextureManager {
 
         PaletteTextureManager.log.debug(
             `Created player palettes: ${this.numPlayerRows} players x ${this.rowsPerPlayer} rows ` +
-            `(texture: ${width}x${textureHeight}, totalColors: ${this.totalColors}, ${(totalBytes / 1024).toFixed(1)}KB)`
+                `(texture: ${width}x${textureHeight}, totalColors: ${this.totalColors}, ${(totalBytes / 1024).toFixed(1)}KB)`
         );
     }
 
@@ -247,9 +256,14 @@ export class PaletteTextureManager {
         if (this.fullPaletteBuffer) {
             // Upload 2D palette layout (width x height)
             gl.texImage2D(
-                gl.TEXTURE_2D, 0, gl.RGBA8,
-                width, height,
-                0, gl.RGBA, gl.UNSIGNED_BYTE,
+                gl.TEXTURE_2D,
+                0,
+                gl.RGBA8,
+                width,
+                height,
+                0,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
                 this.fullPaletteBuffer
             );
         } else {
@@ -258,12 +272,7 @@ export class PaletteTextureManager {
             const singleRowHeight = Math.ceil(this.totalColors / width);
             const tempBuffer = new Uint8Array(width * singleRowHeight * 4);
             tempBuffer.set(this.paletteBuffer.subarray(0, this.paletteUsedBytes));
-            gl.texImage2D(
-                gl.TEXTURE_2D, 0, gl.RGBA8,
-                width, singleRowHeight,
-                0, gl.RGBA, gl.UNSIGNED_BYTE,
-                tempBuffer
-            );
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, singleRowHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, tempBuffer);
         }
 
         this.gpuWidth = width;
@@ -272,7 +281,7 @@ export class PaletteTextureManager {
 
         PaletteTextureManager.log.debug(
             `Uploaded palette texture: ${width}x${height} ` +
-            `(${this.totalColors} colors, ${this.numPlayerRows} players, ${((width * height * 4) / 1024).toFixed(1)}KB)`
+                `(${this.totalColors} colors, ${this.numPlayerRows} players, ${((width * height * 4) / 1024).toFixed(1)}KB)`
         );
     }
 

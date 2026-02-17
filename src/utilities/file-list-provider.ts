@@ -24,15 +24,13 @@ export class FileListProvider implements IFileProvider {
     public async readFiles(): Promise<IFileSource[]> {
         const fileNames = await this.loadFileList();
 
-        return fileNames.map((f) => new FileListFile(f));
+        return fileNames.map(f => new FileListFile(f));
     }
 
     private async loadFileList() {
         const fp = new RemoteFile(import.meta.env.BASE_URL);
         const fileListText = await fp.loadString('file-list.txt');
 
-        return fileListText
-            .split(/\r?\n/)
-            .map((f) => Path.fixPath(f));
+        return fileListText.split(/\r?\n/).map(f => Path.fixPath(f));
     }
 }

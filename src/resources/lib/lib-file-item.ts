@@ -41,7 +41,7 @@ export class LibFileItem {
 
         this.pathName = pathNames.getPath(this.pathIndex);
 
-        return (!data.eof());
+        return !data.eof();
     }
 
     /** return the full "path+file name of this file */
@@ -55,7 +55,7 @@ export class LibFileItem {
         }
 
         const c1 = ChecksumCalculator.calc(this.reader, this.offset, this.length);
-        return (c1 === this.checksum);
+        return c1 === this.checksum;
     }
 
     /** return the data reader for a given filename */
@@ -81,8 +81,23 @@ export class LibFileItem {
     }
 
     public toString(): string {
-        return 'Name: ' + this.getFullName() + ';    PathId: ' + this.pathIndex + ';    Offset: ' + this.offset +
-                ';    Length: ' + this.length + ';    DecompressedLength: ' + this.decompressedLength +
-                ';    isCompressed: ' + this.isCompressed + ';    Checksum: ' + this.checksum + ';    Unknown: ' + this.unknown;
+        return (
+            'Name: ' +
+            this.getFullName() +
+            ';    PathId: ' +
+            this.pathIndex +
+            ';    Offset: ' +
+            this.offset +
+            ';    Length: ' +
+            this.length +
+            ';    DecompressedLength: ' +
+            this.decompressedLength +
+            ';    isCompressed: ' +
+            this.isCompressed +
+            ';    Checksum: ' +
+            this.checksum +
+            ';    Unknown: ' +
+            this.unknown
+        );
     }
 }

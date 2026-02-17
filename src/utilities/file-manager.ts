@@ -82,7 +82,7 @@ export class FileManager {
 
     /** return a file matching a given file name */
     public findFile(filePath: string, exactMatch = true): IFileSource | null {
-        const file = this.files.find((f) => this.checkFileNameFilter(f.name, filePath, exactMatch));
+        const file = this.files.find(f => this.checkFileNameFilter(f.name, filePath, exactMatch));
         return file ?? null;
     }
 
@@ -97,7 +97,10 @@ export class FileManager {
     }
 
     /** return a map of files content for a given file-name-map */
-    public async readFiles(fileNames: { [key: string]: string }, exactMatch = true): Promise<{[key: string]: BinaryReader}> {
+    public async readFiles(
+        fileNames: { [key: string]: string },
+        exactMatch = true
+    ): Promise<{ [key: string]: BinaryReader }> {
         const fileList: Promise<BinaryReader | null>[] = [];
         const fileKeys: string[] = [];
 
@@ -110,7 +113,7 @@ export class FileManager {
         // wait for all files to be loaded
         const resultFiles = await Promise.all(fileList);
 
-        const result: {[key: string]: (BinaryReader)} = {};
+        const result: { [key: string]: BinaryReader } = {};
 
         for (let i = 0; i < fileKeys.length; i++) {
             result[fileKeys[i]] = resultFiles[i] ?? new BinaryReader();
@@ -122,13 +125,8 @@ export class FileManager {
 
     /** return a all files matching a given filter string */
     public filter(filterStr?: string): IFileSource[] {
-        const filterArray = (filterStr ?? '')
-            .split('|')
-            .map((f) => Path.fixPath(f));
+        const filterArray = (filterStr ?? '').split('|').map(f => Path.fixPath(f));
 
-        return this.files
-            .filter((f) => filterArray
-                .find((filter) => this.checkFileNameFilter(f.name, filter, false))
-            );
+        return this.files.filter(f => filterArray.find(filter => this.checkFileNameFilter(f.name, filter, false)));
     }
 }

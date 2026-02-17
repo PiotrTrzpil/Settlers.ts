@@ -311,7 +311,7 @@ export class TreeSystem implements TickSystem {
         log.debug(`Forester ${settlerId} planted ${MapObjectType[treeType]} at (${x}, ${y})`);
     }
 
-    findPlantingSpot(cx: number, cy: number): { entityId: number | null; x: number; y: number } | null {
+    findPlantingSpot(cx: number, cy: number): { x: number; y: number } | null {
         return findEmptySpot(cx, cy, {
             gameState: this.gameState,
             searchRadius: PLANTING_SEARCH_RADIUS,

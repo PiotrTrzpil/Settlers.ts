@@ -62,7 +62,7 @@ export class GfxImage implements IGfxImage {
 
                 // Palette index 0 = transparent, index 1 = shadow/semi-transparent
                 const color = value === 0 ? 0x00000000 : 0x40000000;
-                for (let i = 0; (i < count) && (j < length); i++) {
+                for (let i = 0; i < count && j < length; i++) {
                     imgData[j++] = color;
                 }
             } else {
@@ -112,13 +112,33 @@ export class GfxImage implements IGfxImage {
     }
 
     public toString(): string {
-        return ImageType[this.imageType] + ' - ' +
-                    'size: (' + this.width + ' x' + this.height + ') ' +
-                    'pos (' + this.left + ', ' + this.top + ') ' +
-                    'type ' + this.imgType + '; ' +
-                    'data offset ' + this.dataOffset + '; ' +
-                    'flags: ' + this.flag1 + ' / ' + this.flag2 + ' ' +
-                    'header Type: ' + this.headType;
+        return (
+            ImageType[this.imageType] +
+            ' - ' +
+            'size: (' +
+            this.width +
+            ' x' +
+            this.height +
+            ') ' +
+            'pos (' +
+            this.left +
+            ', ' +
+            this.top +
+            ') ' +
+            'type ' +
+            this.imgType +
+            '; ' +
+            'data offset ' +
+            this.dataOffset +
+            '; ' +
+            'flags: ' +
+            this.flag1 +
+            ' / ' +
+            this.flag2 +
+            ' ' +
+            'header Type: ' +
+            this.headType
+        );
     }
 
     /**

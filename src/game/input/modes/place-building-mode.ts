@@ -75,9 +75,7 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
      * Initialize mode data from validated enter data.
      * Note: onEnter ensures buildingType is always defined before calling this.
      */
-    protected override initializeModeData(
-        enterData: PlaceBuildingEnterData
-    ): PlaceBuildingModeData {
+    protected override initializeModeData(enterData: PlaceBuildingEnterData): PlaceBuildingModeData {
         // buildingType is guaranteed by onEnter validation
         const buildingType = enterData.buildingType;
 
@@ -94,10 +92,7 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
     /**
      * Handle enter with backward-compatible data format.
      */
-    override onEnter(
-        context: InputContext,
-        enterData?: PlacementModeEnterData<BuildingType>
-    ): void {
+    override onEnter(context: InputContext, enterData?: PlacementModeEnterData<BuildingType>): void {
         // Support both buildingType and subType for backward compatibility
         const legacyData = enterData as PlaceBuildingEnterData | undefined;
         const buildingType = legacyData?.buildingType ?? enterData?.subType;

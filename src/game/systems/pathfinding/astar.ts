@@ -74,10 +74,7 @@ interface SearchContext {
 /**
  * Check if a tile can be entered.
  */
-function canEnterTile(
-    nx: number, ny: number, nIdx: number,
-    ctx: SearchContext
-): boolean {
+function canEnterTile(nx: number, ny: number, nIdx: number, ctx: SearchContext): boolean {
     // Already processed?
     if (ctx.flags[nIdx] & FLAG_CLOSED) return false;
 
@@ -105,8 +102,10 @@ function canEnterTile(
  * @param ctx Search context
  */
 function computePriority(
-    cx: number, cy: number,
-    nx: number, ny: number,
+    cx: number,
+    cy: number,
+    nx: number,
+    ny: number,
     gCost: number,
     direction: number,
     ctx: SearchContext
@@ -131,11 +130,7 @@ function computePriority(
 /**
  * Process a single neighbor during A* expansion.
  */
-function processNeighbor(
-    cx: number, cy: number, currentIdx: number,
-    direction: number,
-    ctx: SearchContext
-): void {
+function processNeighbor(cx: number, cy: number, currentIdx: number, direction: number, ctx: SearchContext): void {
     const [dx, dy] = GRID_DELTAS[direction];
     const nx = cx + dx;
     const ny = cy + dy;
@@ -167,11 +162,7 @@ function processNeighbor(
  * Reconstruct path from parent array.
  * Returns waypoints from start (exclusive) to goal (inclusive).
  */
-function reconstructPath(
-    goalIdx: number,
-    parent: Int32Array,
-    mapWidth: number
-): TileCoord[] {
+function reconstructPath(goalIdx: number, parent: Int32Array, mapWidth: number): TileCoord[] {
     const path: TileCoord[] = [];
     let idx = goalIdx;
 
@@ -239,10 +230,14 @@ export function findPathAStar(
 
     const ctx: SearchContext = {
         terrain,
-        goalX, goalY,
+        goalX,
+        goalY,
         tileOccupancy,
         ignoreOccupancy,
-        gCost, parent, flags, openQueue
+        gCost,
+        parent,
+        flags,
+        openQueue,
     };
 
     // Initialize start node
@@ -276,7 +271,7 @@ export function findPathAStar(
                 mapWidth,
                 mapHeight,
                 tileOccupancy,
-                ignoreOccupancy
+                ignoreOccupancy,
             });
         }
 

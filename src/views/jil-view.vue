@@ -1,101 +1,101 @@
 <template>
-  <div class="file-viewer">
-    <div class="controls">
-      <span class="label">Jil File:</span>
-      <file-browser
-        :fileManager="fileManager"
-        @select="onFileSelect"
-        filter=".jil"
-        storageKey="viewer_jil_file"
-        class="browser"
-      />
-      <span class="info">{{ jilList.length }} jobs</span>
-      <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
-      <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridSprites)">Grid</button>
-      <SettingsCheckbox v-if="viewMode === 'single'" v-model="doAnimation" label="Animate" />
-    </div>
-
-    <!-- Grid View: All job sprites in a grid with multiple directions -->
-    <div v-if="viewMode === 'grid'" class="grid-container">
-      <div
-        v-for="item in jilList"
-        :key="item.index"
-        class="grid-item"
-        :class="{
-          selected: selectedJil?.index === item.index,
-          mapped: getBuildingForJob(item.index) !== null || getCarrierJobInfo(item.index)?.isMapped,
-          'single-dir': getDirectionCount(item.index) === 1,
-          'multi-dir': getDirectionCount(item.index) > 1
-        }"
-        @click="selectJobFromGrid(item)"
-      >
-        <div class="direction-grid" :class="'dirs-' + Math.min(getDirectionCount(item.index), 8)">
-          <div v-for="dir in Math.min(getDirectionCount(item.index), 8)" :key="dir" class="direction-cell">
-            <canvas
-              :ref="el => setCanvasRef(el as HTMLCanvasElement, `${item.index}-${dir - 1}`)"
-              width="200"
-              height="200"
-              class="grid-canvas"
+    <div class="file-viewer">
+        <div class="controls">
+            <span class="label">Jil File:</span>
+            <file-browser
+                :fileManager="fileManager"
+                @select="onFileSelect"
+                filter=".jil"
+                storageKey="viewer_jil_file"
+                class="browser"
             />
-            <span v-if="getDirectionCount(item.index) > 1" class="dir-label">D{{ dir - 1 }}</span>
-          </div>
+            <span class="info">{{ jilList.length }} jobs</span>
+            <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
+            <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridSprites)">Grid</button>
+            <SettingsCheckbox v-if="viewMode === 'single'" v-model="doAnimation" label="Animate" />
         </div>
-        <div class="grid-label">
-          <span class="job-index">Job #{{ item.index }}</span>
-          <span v-if="getBuildingForJob(item.index)" class="building-name">
-            {{ getBuildingForJob(item.index) }}
-          </span>
-          <span v-else-if="getCarrierJobInfo(item.index)"
-                :class="getCarrierJobInfo(item.index)?.isMapped ? 'carrier-mapped' : 'carrier-unmapped'">
-            {{ getCarrierJobInfo(item.index)?.material }}
-          </span>
+
+        <!-- Grid View: All job sprites in a grid with multiple directions -->
+        <div v-if="viewMode === 'grid'" class="grid-container">
+            <div
+                v-for="item in jilList"
+                :key="item.index"
+                class="grid-item"
+                :class="{
+                    selected: selectedJil?.index === item.index,
+                    mapped: getBuildingForJob(item.index) !== null || getCarrierJobInfo(item.index)?.isMapped,
+                    'single-dir': getDirectionCount(item.index) === 1,
+                    'multi-dir': getDirectionCount(item.index) > 1,
+                }"
+                @click="selectJobFromGrid(item)"
+            >
+                <div class="direction-grid" :class="'dirs-' + Math.min(getDirectionCount(item.index), 8)">
+                    <div v-for="dir in Math.min(getDirectionCount(item.index), 8)" :key="dir" class="direction-cell">
+                        <canvas
+                            :ref="el => setCanvasRef(el as HTMLCanvasElement, `${item.index}-${dir - 1}`)"
+                            width="200"
+                            height="200"
+                            class="grid-canvas"
+                        />
+                        <span v-if="getDirectionCount(item.index) > 1" class="dir-label">D{{ dir - 1 }}</span>
+                    </div>
+                </div>
+                <div class="grid-label">
+                    <span class="job-index">Job #{{ item.index }}</span>
+                    <span v-if="getBuildingForJob(item.index)" class="building-name">
+                        {{ getBuildingForJob(item.index) }}
+                    </span>
+                    <span
+                        v-else-if="getCarrierJobInfo(item.index)"
+                        :class="getCarrierJobInfo(item.index)?.isMapped ? 'carrier-mapped' : 'carrier-unmapped'"
+                    >
+                        {{ getCarrierJobInfo(item.index)?.material }}
+                    </span>
+                </div>
+            </div>
         </div>
-      </div>
+
+        <!-- Single View: Detailed sprite browser -->
+        <div v-if="viewMode === 'single'" class="single-view">
+            <div class="selectors">
+                <div class="selector-group">
+                    <label>Job (JIL):</label>
+                    <select v-model="selectedJil" @change="onSelectJil">
+                        <option v-for="item of jilList" :key="item.index" :value="item">
+                            #{{ pad(item.index, 3) }} {{ getJobLabel(item.index) }} - Size: {{ pad(item.length, 3) }}
+                        </option>
+                    </select>
+                </div>
+
+                <div class="selector-group">
+                    <label>Direction (DIL):</label>
+                    <select v-model="selectedDil" @change="onSelectDil">
+                        <option v-for="item of dilList" :key="item.index" :value="item">
+                            #{{ pad(item.index, 3) }} - {{ item.length }} frames
+                        </option>
+                    </select>
+                </div>
+
+                <div class="selector-group">
+                    <label>Frame (GIL):</label>
+                    <select v-model="selectedGil" @change="onSelectGil">
+                        <option v-for="item of gilList" :key="item.index" :value="item">
+                            #{{ pad(item.index, 3) }}
+                        </option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="sprite-info" v-if="currentImageInfo">
+                <span>Size: {{ currentImageInfo.width }}×{{ currentImageInfo.height }}</span>
+                <span>Offset: ({{ currentImageInfo.left }}, {{ currentImageInfo.top }})</span>
+            </div>
+
+            <div class="canvas-wrapper">
+                <canvas ref="ghCav" class="main-canvas"> Sorry! Your browser does not support HTML5 Canvas. </canvas>
+            </div>
+        </div>
     </div>
-
-    <!-- Single View: Detailed sprite browser -->
-    <div v-if="viewMode === 'single'" class="single-view">
-      <div class="selectors">
-        <div class="selector-group">
-          <label>Job (JIL):</label>
-          <select v-model="selectedJil" @change="onSelectJil">
-            <option v-for="item of jilList" :key="item.index" :value="item">
-              #{{ pad(item.index, 3) }} {{ getJobLabel(item.index) }} - Size: {{ pad(item.length, 3) }}
-            </option>
-          </select>
-        </div>
-
-        <div class="selector-group">
-          <label>Direction (DIL):</label>
-          <select v-model="selectedDil" @change="onSelectDil">
-            <option v-for="item of dilList" :key="item.index" :value="item">
-              #{{ pad(item.index, 3) }} - {{ item.length }} frames
-            </option>
-          </select>
-        </div>
-
-        <div class="selector-group">
-          <label>Frame (GIL):</label>
-          <select v-model="selectedGil" @change="onSelectGil">
-            <option v-for="item of gilList" :key="item.index" :value="item">
-              #{{ pad(item.index, 3) }}
-            </option>
-          </select>
-        </div>
-      </div>
-
-      <div class="sprite-info" v-if="currentImageInfo">
-        <span>Size: {{ currentImageInfo.width }}×{{ currentImageInfo.height }}</span>
-        <span>Offset: ({{ currentImageInfo.left }}, {{ currentImageInfo.top }})</span>
-      </div>
-
-      <div class="canvas-wrapper">
-        <canvas ref="ghCav" class="main-canvas">
-          Sorry! Your browser does not support HTML5 Canvas.
-        </canvas>
-      </div>
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -108,7 +108,13 @@ import { LogHandler } from '@/utilities/log-handler';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { IndexFileItem } from '@/resources/gfx/index-file-item';
 import { pad, loadGfxFileSet, parseGfxReaders, renderImageToCanvas } from '@/utilities/view-helpers';
-import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, GFX_FILE_NUMBERS, CARRIER_MATERIAL_JOB_INDICES, SETTLER_FILE_NUMBERS } from '@/game/renderer/sprite-metadata';
+import {
+    BUILDING_JOB_INDICES,
+    RESOURCE_JOB_INDICES,
+    GFX_FILE_NUMBERS,
+    CARRIER_MATERIAL_JOB_INDICES,
+    SETTLER_FILE_NUMBERS,
+} from '@/game/renderer/sprite-metadata';
 import { BuildingType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 
@@ -409,43 +415,43 @@ watchGridMode(renderAllGridSprites, () => jilList.value.length > 0);
 <style scoped>
 /* Carrier job status labels */
 .carrier-mapped {
-  color: #4caf50;
-  font-weight: bold;
-  font-size: 0.85em;
+    color: #4caf50;
+    font-weight: bold;
+    font-size: 0.85em;
 }
 
 .carrier-unmapped {
-  color: #ff9800;
-  font-size: 0.8em;
-  opacity: 0.8;
+    color: #ff9800;
+    font-size: 0.8em;
+    opacity: 0.8;
 }
 
 /* JIL-specific overrides for sprites with multiple directions */
 .grid-container {
-  grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
-  gap: 8px;
-  padding: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+    gap: 8px;
+    padding: 10px;
 }
 
 .grid-item {
-  padding: 8px 4px 4px 8px;
+    padding: 8px 4px 4px 8px;
 }
 
 /* Direction grid fills available space */
 .direction-grid {
-  gap: 2px;
-  padding: 2px;
-  flex: 1;
-  width: 100%;
+    gap: 2px;
+    padding: 2px;
+    flex: 1;
+    width: 100%;
 }
 
 .dir-label {
-  margin-top: 0;
-  font-size: 8px;
+    margin-top: 0;
+    font-size: 8px;
 }
 
 .grid-label {
-  margin-top: 2px;
+    margin-top: 2px;
 }
 
 /* Override ALL base canvas sizes - scale to fill cell */
@@ -458,40 +464,40 @@ watchGridMode(renderAllGridSprites, () => jilList.value.length > 0);
 .direction-grid.dirs-6 .grid-canvas,
 .direction-grid.dirs-7 .grid-canvas,
 .direction-grid.dirs-8 .grid-canvas {
-  width: 100% !important;
-  height: auto !important;
-  max-width: none !important;
-  max-height: none !important;
+    width: 100% !important;
+    height: auto !important;
+    max-width: none !important;
+    max-height: none !important;
 }
 
 /* Grid layouts - use fr units to fill space */
 .direction-grid.dirs-1 {
-  display: grid;
-  grid-template-columns: 1fr;
-  max-width: 200px;
-  margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    max-width: 200px;
+    margin: 0 auto;
 }
 
 .direction-grid.dirs-2 {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
 }
 
 .direction-grid.dirs-3,
 .direction-grid.dirs-4 {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
 }
 
 .direction-grid.dirs-5,
 .direction-grid.dirs-6 {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
 }
 
 .direction-grid.dirs-7,
 .direction-grid.dirs-8 {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
 }
 </style>

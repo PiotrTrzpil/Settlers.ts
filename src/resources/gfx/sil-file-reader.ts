@@ -24,7 +24,7 @@ export class SilFileReader extends ResourceFile {
         // 0: 32771 (0x8003) - Version?
         // ...
         // 28: 6568 -> End of first file.
-        // The first file starts at 28 in .snd? 
+        // The first file starts at 28 in .snd?
         // Let's assume the list of offsets starts at 28 in .sil?
 
         // In 0.sil:

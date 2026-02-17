@@ -78,8 +78,8 @@ function createZlibStored(data: Uint8Array): Uint8Array {
         output[pos++] = (blockSize >> 8) & 0xff;
 
         // NLEN (one's complement of LEN)
-        output[pos++] = (~blockSize) & 0xff;
-        output[pos++] = ((~blockSize) >> 8) & 0xff;
+        output[pos++] = ~blockSize & 0xff;
+        output[pos++] = (~blockSize >> 8) & 0xff;
 
         // Copy data
         output.set(data.subarray(offset, offset + blockSize), pos);
@@ -196,11 +196,11 @@ function createIHDR(width: number, height: number): Uint8Array {
     const data = new Uint8Array(13);
     writeUint32BE(data, width, 0);
     writeUint32BE(data, height, 4);
-    data[8] = 8;   // bit depth
-    data[9] = 6;   // color type: RGBA
-    data[10] = 0;  // compression method
-    data[11] = 0;  // filter method
-    data[12] = 0;  // interlace method
+    data[8] = 8; // bit depth
+    data[9] = 6; // color type: RGBA
+    data[10] = 0; // compression method
+    data[11] = 0; // filter method
+    data[12] = 0; // interlace method
     return createChunk('IHDR', data);
 }
 
@@ -229,10 +229,7 @@ export function encodePNGSync(image: RawImageData | ImageData): Uint8Array {
         filteredData[rowStart] = 0; // Filter type: None
 
         const srcStart = y * width * 4;
-        filteredData.set(
-            data.subarray(srcStart, srcStart + width * 4),
-            rowStart + 1
-        );
+        filteredData.set(data.subarray(srcStart, srcStart + width * 4), rowStart + 1);
     }
 
     // Compress filtered data
@@ -276,10 +273,7 @@ export async function encodePNG(image: RawImageData | ImageData): Promise<Uint8A
         filteredData[rowStart] = 0; // Filter type: None
 
         const srcStart = y * width * 4;
-        filteredData.set(
-            data.subarray(srcStart, srcStart + width * 4),
-            rowStart + 1
-        );
+        filteredData.set(data.subarray(srcStart, srcStart + width * 4), rowStart + 1);
     }
 
     // Compress filtered data (async for better compression)

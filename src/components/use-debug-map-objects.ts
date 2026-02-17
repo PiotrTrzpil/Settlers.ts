@@ -8,7 +8,7 @@ import {
     clearMapObjects,
     spawnTestObjects,
     countMapObjectsByCategory,
-    type ObjectCategory
+    type ObjectCategory,
 } from '@/game/systems/map-objects';
 
 export function useDebugMapObjects(getGame: () => Game | null) {

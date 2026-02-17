@@ -71,9 +71,9 @@ export const RAW_TO_OBJECT_TYPE: Map<number, MapObjectType> = new Map([
 
     // Community / Siedler-Portal known values (Secondary / Magic Bytes)
     // Keeping these for now as requested user inputs, but S4ModApi suggests 1-18 is the primary range
-    [0xC4, MapObjectType.TreeOak],
-    [0xC5, MapObjectType.TreePine],
-    [0xC6, MapObjectType.TreeCoconut], // Palm -> Coconut/Date
+    [0xc4, MapObjectType.TreeOak],
+    [0xc5, MapObjectType.TreePine],
+    [0xc6, MapObjectType.TreeCoconut], // Palm -> Coconut/Date
 ]);
 
 /**
@@ -302,11 +302,7 @@ export function spawnTestObjects(
  * @param types - Only clear these specific types (optional)
  * @returns Number of objects removed
  */
-export function clearMapObjects(
-    state: GameState,
-    category?: ObjectCategory,
-    types?: MapObjectType[]
-): number {
+export function clearMapObjects(state: GameState, category?: ObjectCategory, types?: MapObjectType[]): number {
     // Determine which types to clear
     let allowedTypes: Set<MapObjectType> | null = null;
     if (types) {
@@ -359,10 +355,7 @@ export function countMapObjectsByCategory(state: GameState): Map<ObjectCategory,
 // ============================================================================
 
 /** Palm tree types (allowed on beach/sand) */
-const PALM_TREES = new Set([
-    MapObjectType.TreeCoconut,
-    MapObjectType.TreeDate,
-]);
+const PALM_TREES = new Set([MapObjectType.TreeCoconut, MapObjectType.TreeDate]);
 
 /** Check if terrain allows trees */
 function canHaveTrees(terrain: number): boolean {
@@ -376,7 +369,8 @@ function canHaveTrees(terrain: number): boolean {
     if (terrain === S4GroundType.SNOW || terrain === S4GroundType.SNOW_ROCK) return false;
 
     // No trees on rock/mountains
-    if (terrain === S4GroundType.ROCK || terrain === S4GroundType.ROCK_GRASS || terrain === S4GroundType.ROCK_SNOW) return false;
+    if (terrain === S4GroundType.ROCK || terrain === S4GroundType.ROCK_GRASS || terrain === S4GroundType.ROCK_SNOW)
+        return false;
 
     // No trees on roads
     if (terrain === S4GroundType.SANDYROAD || terrain === S4GroundType.COBBLEDROAD) return false;
@@ -386,9 +380,7 @@ function canHaveTrees(terrain: number): boolean {
 
 /** Check if terrain is beach/sand (only palms allowed) */
 function isBeachTerrain(terrain: number): boolean {
-    return terrain === S4GroundType.BEACH ||
-           terrain === S4GroundType.DESERT ||
-           terrain === S4GroundType.DESERT_GRASS;
+    return terrain === S4GroundType.BEACH || terrain === S4GroundType.DESERT || terrain === S4GroundType.DESERT_GRASS;
 }
 
 /** Filter tree type based on terrain */
@@ -414,13 +406,13 @@ function hash(x: number, y: number, seed: number): number {
 function noise(x: number, y: number, seed: number, scale: number): number {
     const sx = Math.floor(x / scale);
     const sy = Math.floor(y / scale);
-    const fx = (x / scale) - sx;
-    const fy = (y / scale) - sy;
+    const fx = x / scale - sx;
+    const fy = y / scale - sy;
 
-    const v00 = (hash(sx, sy, seed) & 0xFFFF) / 0xFFFF;
-    const v10 = (hash(sx + 1, sy, seed) & 0xFFFF) / 0xFFFF;
-    const v01 = (hash(sx, sy + 1, seed) & 0xFFFF) / 0xFFFF;
-    const v11 = (hash(sx + 1, sy + 1, seed) & 0xFFFF) / 0xFFFF;
+    const v00 = (hash(sx, sy, seed) & 0xffff) / 0xffff;
+    const v10 = (hash(sx + 1, sy, seed) & 0xffff) / 0xffff;
+    const v01 = (hash(sx, sy + 1, seed) & 0xffff) / 0xffff;
+    const v11 = (hash(sx + 1, sy + 1, seed) & 0xffff) / 0xffff;
 
     const v0 = v00 + (v10 - v00) * fx;
     const v1 = v01 + (v11 - v01) * fx;
@@ -430,11 +422,7 @@ function noise(x: number, y: number, seed: number, scale: number): number {
 /** Multi-scale noise for natural forest density variation */
 function forestDensityNoise(x: number, y: number, seed: number): number {
     // Large scale noise creates big forest regions vs clearings
-    return (
-        noise(x, y, seed, 128) * 0.5 +
-        noise(x, y, seed + 1000, 64) * 0.3 +
-        noise(x, y, seed + 2000, 32) * 0.2
-    );
+    return noise(x, y, seed, 128) * 0.5 + noise(x, y, seed + 1000, 64) * 0.3 + noise(x, y, seed + 2000, 32) * 0.2;
 }
 
 /** Options for expanding trees */
@@ -482,11 +470,16 @@ function selectTreeTypeForExpansion(
 
 /** Check if tree should be placed at position */
 function shouldPlaceTree(
-    dx: number, dy: number, nx: number, ny: number,
-    radius: number, density: number, seed: number
+    dx: number,
+    dy: number,
+    nx: number,
+    ny: number,
+    radius: number,
+    density: number,
+    seed: number
 ): boolean {
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const distFactor = 1 - (dist / (radius + 1));
+    const distFactor = 1 - dist / (radius + 1);
 
     const densityNoise = forestDensityNoise(nx, ny, 99999);
     if (densityNoise < 0.4) return false;
@@ -498,7 +491,10 @@ function shouldPlaceTree(
 }
 
 /** Collect existing trees from game state */
-function collectSeedTrees(state: GameState, mapSize: MapSize): {
+function collectSeedTrees(
+    state: GameState,
+    mapSize: MapSize
+): {
     seeds: Array<{ x: number; y: number; type: MapObjectType }>;
     occupied: Set<number>;
 } {
@@ -517,10 +513,19 @@ function collectSeedTrees(state: GameState, mapSize: MapSize): {
 
 /** Try to place a tree at position, returns true if placed */
 function tryPlaceTreeAt(
-    nx: number, ny: number, dx: number, dy: number,
-    seedType: MapObjectType, groundType: Uint8Array, occupied: Set<number>,
-    state: GameState, mapSize: MapSize, radius: number, density: number,
-    seed: number, minSpacing: number
+    nx: number,
+    ny: number,
+    dx: number,
+    dy: number,
+    seedType: MapObjectType,
+    groundType: Uint8Array,
+    occupied: Set<number>,
+    state: GameState,
+    mapSize: MapSize,
+    radius: number,
+    density: number,
+    seed: number,
+    minSpacing: number
 ): boolean {
     const idx = mapSize.toIndex(nx, ny);
     if (occupied.has(idx)) return false;
@@ -569,7 +574,23 @@ export function expandTrees(
                 const ny = sy + dy;
                 if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
 
-                if (tryPlaceTreeAt(nx, ny, dx, dy, seedType, groundType, occupied, state, mapSize, radius, density, seed, minSpacing)) {
+                if (
+                    tryPlaceTreeAt(
+                        nx,
+                        ny,
+                        dx,
+                        dy,
+                        seedType,
+                        groundType,
+                        occupied,
+                        state,
+                        mapSize,
+                        radius,
+                        density,
+                        seed,
+                        minSpacing
+                    )
+                ) {
                     count++;
                 }
             }

@@ -11,10 +11,10 @@ const log = new LogHandler('AIAPI');
 
 /** AI behavior mode constants */
 export const AI_MODE_CONSTANTS = {
-    PASSIVE: 0,      // AI does nothing
-    DEFENSIVE: 1,    // AI only defends
-    AGGRESSIVE: 2,   // AI attacks when able
-    ECONOMIC: 3,     // AI focuses on economy
+    PASSIVE: 0, // AI does nothing
+    DEFENSIVE: 1, // AI only defends
+    AGGRESSIVE: 2, // AI attacks when able
+    ECONOMIC: 3, // AI focuses on economy
 } as const;
 
 export interface AIAPIContext {
@@ -74,18 +74,14 @@ export function registerAIAPI(runtime: LuaRuntime, _context: AIAPIContext): void
     });
 
     // AI.SetPriority(player, buildingType, priority) - Set building construction priority
-    runtime.registerFunction('AI', 'SetPriority', (
-        player: number, buildingType: number, priority: number
-    ) => {
+    runtime.registerFunction('AI', 'SetPriority', (player: number, buildingType: number, priority: number) => {
         log.debug(`AI.SetPriority: player ${player}, building ${buildingType}, priority ${priority}`);
         // TODO: Implement AI priority setting
         return true;
     });
 
     // AI.SendSquad(player, targetPlayer, soldierCount) - Send soldiers to attack
-    runtime.registerFunction('AI', 'SendSquad', (
-        player: number, targetPlayer: number, soldierCount: number
-    ) => {
+    runtime.registerFunction('AI', 'SendSquad', (player: number, targetPlayer: number, soldierCount: number) => {
         log.debug(`AI.SendSquad: player ${player} sends ${soldierCount} soldiers to attack player ${targetPlayer}`);
         // TODO: Implement squad sending
         return true;
@@ -97,17 +93,15 @@ export function registerAIAPI(runtime: LuaRuntime, _context: AIAPIContext): void
     //   AI.SetPlayerVar(2, "AttackMode", 0, 2, 2)
     //   AI.SetPlayerVar(2, "AttackDelay", 500, 50, 10)
     //   AI.SetPlayerVar(2, "SoldierLimitAbsolute", 50, 100, 300)
-    runtime.registerFunction('AI', 'SetPlayerVar', (
-        player: number,
-        varName: string,
-        val1: number,
-        val2?: number,
-        val3?: number
-    ) => {
-        log.debug(`AI.SetPlayerVar: player ${player}, ${varName} = [${val1}, ${val2}, ${val3}]`);
-        // TODO: Store and use these values when AI system is implemented
-        return true;
-    });
+    runtime.registerFunction(
+        'AI',
+        'SetPlayerVar',
+        (player: number, varName: string, val1: number, val2?: number, val3?: number) => {
+            log.debug(`AI.SetPlayerVar: player ${player}, ${varName} = [${val1}, ${val2}, ${val3}]`);
+            // TODO: Store and use these values when AI system is implemented
+            return true;
+        }
+    );
 
     log.debug('AI API registered');
 }

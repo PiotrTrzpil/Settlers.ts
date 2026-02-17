@@ -20,7 +20,7 @@ export class DecodeSettlers {
         const data = new Uint8Array(size);
 
         for (let i = 0; i < size; i++) {
-            data[i] = (source.readByte() ^ araCrypt.getNextKey()) & 0xFF;
+            data[i] = (source.readByte() ^ araCrypt.getNextKey()) & 0xff;
         }
 
         return new BinaryReader(data);

@@ -123,21 +123,31 @@ export function useInputManager(options: UseInputManagerOptions): UseInputManage
     }
 
     // Watch for canvas changes
-    watch(() => options.canvas.value, (newCanvas) => {
-        if (newCanvas) {
-            initManager();
-        }
-    }, { immediate: true });
+    watch(
+        () => options.canvas.value,
+        newCanvas => {
+            if (newCanvas) {
+                initManager();
+            }
+        },
+        { immediate: true }
+    );
 
     // Watch for tile resolver changes
-    watch(() => options.tileResolver?.value, (resolver) => {
-        manager.value?.setTileResolver(resolver ?? null);
-    });
+    watch(
+        () => options.tileResolver?.value,
+        resolver => {
+            manager.value?.setTileResolver(resolver ?? null);
+        }
+    );
 
     // Watch for command executor changes
-    watch(() => options.commandExecutor?.value, (executor) => {
-        manager.value?.setCommandExecutor(executor ?? null);
-    });
+    watch(
+        () => options.commandExecutor?.value,
+        executor => {
+            manager.value?.setCommandExecutor(executor ?? null);
+        }
+    );
 
     // Cleanup on unmount
     onUnmounted(() => {
@@ -216,10 +226,7 @@ export function useInputManager(options: UseInputManagerOptions): UseInputManage
 /**
  * Create input manager for testing or non-Vue contexts.
  */
-export function createInputManager(
-    target: Ref<HTMLElement | null>,
-    config?: InputConfig
-): InputManager {
+export function createInputManager(target: Ref<HTMLElement | null>, config?: InputConfig): InputManager {
     const manager = new InputManager({
         target,
         config,

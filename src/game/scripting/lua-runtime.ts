@@ -54,11 +54,11 @@ export class LuaRuntime {
 
         // Remove dangerous functions/libraries
         const dangerous = [
-            'os',           // OS access
-            'io',           // File I/O
-            'loadfile',     // Load files
-            'dofile',       // Execute files
-            'package',      // Module loading
+            'os', // OS access
+            'io', // File I/O
+            'loadfile', // Load files
+            'dofile', // Execute files
+            'package', // Module loading
         ];
 
         for (const name of dangerous) {
@@ -76,12 +76,17 @@ export class LuaRuntime {
      * Set up instruction counting to prevent infinite loops
      */
     private setupInstructionLimit(L: lua_State): void {
-        lua.lua_sethook(L, () => {
-            this.instructionCount += INSTRUCTION_CHECK_INTERVAL;
-            if (this.instructionCount > MAX_INSTRUCTIONS) {
-                lauxlib.luaL_error(L, toLuaStr('Script exceeded maximum instruction count'));
-            }
-        }, lua.LUA_MASKCOUNT, INSTRUCTION_CHECK_INTERVAL);
+        lua.lua_sethook(
+            L,
+            () => {
+                this.instructionCount += INSTRUCTION_CHECK_INTERVAL;
+                if (this.instructionCount > MAX_INSTRUCTIONS) {
+                    lauxlib.luaL_error(L, toLuaStr('Script exceeded maximum instruction count'));
+                }
+            },
+            lua.LUA_MASKCOUNT,
+            INSTRUCTION_CHECK_INTERVAL
+        );
     }
 
     /**

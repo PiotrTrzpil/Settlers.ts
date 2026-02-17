@@ -20,17 +20,17 @@ export class OriginalMapFile {
         this.processFileChunks(data);
     }
 
-    public getChunkCount() : number {
+    public getChunkCount(): number {
         return this.mapChunks.length;
     }
 
     /** return a chunk by it's index */
-    public getChunkByIndex(index:number):MapChunk {
+    public getChunkByIndex(index: number): MapChunk {
         return this.mapChunks[index];
     }
 
     /** return a chunk by it's type */
-    public getChunkByType(type:MapChunkType): MapChunk | null {
+    public getChunkByType(type: MapChunkType): MapChunk | null {
         const s = this.mapChunks;
         for (let i = 0; i < s.length; i++) {
             if (s[i].chunkType === type) {
@@ -41,7 +41,7 @@ export class OriginalMapFile {
     }
 
     /** return a reader to the chunk of a given type */
-    public getChunkReader(chunkType:MapChunkType, minLength:number | null = null):BinaryReader | null {
+    public getChunkReader(chunkType: MapChunkType, minLength: number | null = null): BinaryReader | null {
         const chunk = this.getChunkByType(chunkType);
         if (!chunk) {
             this.log.error("Unable to find chunk '" + MapChunkType[chunkType] + "' in map file");
@@ -55,8 +55,14 @@ export class OriginalMapFile {
         }
 
         if (reader.length < minLength) {
-            this.log.error("Bad length of chunk '" + MapChunkType[chunkType] +
-                                        "' in map file. Expect size of " + minLength + ' get ' + reader.length);
+            this.log.error(
+                "Bad length of chunk '" +
+                    MapChunkType[chunkType] +
+                    "' in map file. Expect size of " +
+                    minLength +
+                    ' get ' +
+                    reader.length
+            );
 
             return null;
         }
@@ -65,9 +71,9 @@ export class OriginalMapFile {
     }
 
     /** read the file and all chunks */
-    private processFileChunks(data: BinaryReader):boolean {
+    private processFileChunks(data: BinaryReader): boolean {
         /// settler4 save games are prefixed by a windows executable
-        if ((data.length < 100)) {
+        if (data.length < 100) {
             this.log.error('Not a Settlers save game: ' + data.filename);
             return false;
         }
@@ -82,7 +88,7 @@ export class OriginalMapFile {
             dataStartOffset = 0;
         }
 
-        if ((data.length <= dataStartOffset + 8)) {
+        if (data.length <= dataStartOffset + 8) {
             this.log.error('Not a Settlers save game: ' + data.filename);
         }
 

@@ -32,7 +32,7 @@ export class Decompress extends Packer {
 
             newIndex.push(length);
             newValues.push(base);
-            base += (1 << length);
+            base += 1 << length;
         }
 
         return new IndexValueTable(newIndex, newValues);
@@ -89,14 +89,20 @@ export class Decompress extends Packer {
 
             // Execute codeword
             if (codeWord < 0x0100) {
-                if (writer.eof()) { Decompress.log.error('OutBuffer is to small!'); break }
+                if (writer.eof()) {
+                    Decompress.log.error('OutBuffer is to small!');
+                    break;
+                }
                 writer.setByte(codeWord);
             } else if (codeWord === 0x110) {
                 codeTable.generateCodes();
                 huffmanTable = this.buildNewHuffmanTable(inData);
             } else if (codeWord === 0x0111) {
                 const result = this.handleEndOfStream(inData, writer);
-                if (result === 'done') { done = true; break }
+                if (result === 'done') {
+                    done = true;
+                    break;
+                }
                 if (result === 'error') break;
             } else if (!this.fromDictionary(inData, writer, codeWord)) {
                 Decompress.log.error('Bad dictionary entry!');

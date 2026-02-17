@@ -11,7 +11,7 @@ export class AtlasLayout {
     private mapping = new Map<number, { destX: number; destY: number }>();
 
     private static key(srcX: number, srcY: number): number {
-        return (srcX << 16) | (srcY & 0xFFFF);
+        return (srcX << 16) | (srcY & 0xffff);
     }
 
     /** Record a source→dest mapping. */

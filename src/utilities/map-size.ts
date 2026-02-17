@@ -2,10 +2,10 @@ import { LogHandler } from './log-handler';
 
 /**
  * Stores height and width of the map
-*/
+ */
 export class MapSize {
-    public readonly width : number;
-    public readonly height : number;
+    public readonly width: number;
+    public readonly height: number;
 
     // allowed sizes: 256, 320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024
     public constructor(width: number, height: number) {
@@ -24,8 +24,8 @@ export class MapSize {
     }
 
     /** Get the map index position from x,y coordinates */
-    public toIndex(x: number, y: number) : number {
-        return (x % this.width) + ((y % this.height) * this.width);
+    public toIndex(x: number, y: number): number {
+        return (x % this.width) + (y % this.height) * this.width;
     }
 
     public toString(): string {

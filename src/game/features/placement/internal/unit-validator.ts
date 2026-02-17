@@ -18,11 +18,7 @@ import { validateSingleTilePlacement, canPlaceSingleTile } from './single-tile-v
  * @param ctx Game context for validation
  * @returns Placement result with canPlace and detailed status
  */
-export function validateUnitPlacement(
-    x: number,
-    y: number,
-    ctx: PlacementContext
-): PlacementResult {
+export function validateUnitPlacement(x: number, y: number, ctx: PlacementContext): PlacementResult {
     return validateSingleTilePlacement(x, y, ctx);
 }
 

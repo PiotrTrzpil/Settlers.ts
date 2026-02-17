@@ -15,13 +15,21 @@ export class Hexagon2Texture extends LandscapeTextureBase implements ILandscapeT
     private innerType: LandscapeType;
     private useTwo: boolean;
 
-    constructor(layout: AtlasLayout, typeOut: LandscapeType, typeIn: LandscapeType, x1: number, y1: number, x2?: number, y2?: number) {
+    constructor(
+        layout: AtlasLayout,
+        typeOut: LandscapeType,
+        typeIn: LandscapeType,
+        x1: number,
+        y1: number,
+        x2?: number,
+        y2?: number
+    ) {
         super(layout);
 
         this.srcX1 = x1 * TextureBlockSizeX;
         this.srcY1 = y1 * TextureBlockSizeY;
 
-        if ((x2 != null) && (y2 != null)) {
+        if (x2 != null && y2 != null) {
             this.useTwo = true;
             this.srcX2 = x2 * TextureBlockSizeX;
             this.srcY2 = y2 * TextureBlockSizeY;
@@ -40,25 +48,25 @@ export class Hexagon2Texture extends LandscapeTextureBase implements ILandscapeT
      *  resolves to the same atlas dest positions. */
     public withTypes(outerType: LandscapeType, innerType: LandscapeType): Hexagon2Texture {
         return new Hexagon2Texture(
-            this.layout, outerType, innerType,
-            this.srcX1 / TextureBlockSizeX, this.srcY1 / TextureBlockSizeY,
+            this.layout,
+            outerType,
+            innerType,
+            this.srcX1 / TextureBlockSizeX,
+            this.srcY1 / TextureBlockSizeY,
             this.useTwo ? this.srcX2 / TextureBlockSizeX : undefined,
             this.useTwo ? this.srcY2 / TextureBlockSizeY : undefined
         );
     }
 
     public getTextureA(tp: TexturePoint, x: number, y: number): [number, number] {
-        const use2 = ((x + y) % 2) === 0;
-        const { destX, destY } = this.layout.get(
-            use2 ? this.srcX2 : this.srcX1,
-            use2 ? this.srcY2 : this.srcY1
-        );
+        const use2 = (x + y) % 2 === 0;
+        const { destX, destY } = this.layout.get(use2 ? this.srcX2 : this.srcX1, use2 ? this.srcY2 : this.srcY1);
 
         // Identify which corner is the "minority" type (the one that differs from the other two).
         // This works correctly even after fallback substitution (e.g., River3→River4) where
         // the original TexturePoint types don't match the texture's innerType.
-        const t0IsMinority = (tp.t0 !== tp.t1) && (tp.t0 !== tp.t2);
-        const t1IsMinority = (tp.t1 !== tp.t0) && (tp.t1 !== tp.t2);
+        const t0IsMinority = tp.t0 !== tp.t1 && tp.t0 !== tp.t2;
+        const t1IsMinority = tp.t1 !== tp.t0 && tp.t1 !== tp.t2;
 
         if (t0IsMinority) {
             return [destX + 2, destY + 1];
@@ -70,17 +78,14 @@ export class Hexagon2Texture extends LandscapeTextureBase implements ILandscapeT
     }
 
     public getTextureB(tp: TexturePoint, x: number, y: number): [number, number] {
-        const use2 = ((x + y) % 2) === 0;
-        const { destX, destY } = this.layout.get(
-            use2 ? this.srcX2 : this.srcX1,
-            use2 ? this.srcY2 : this.srcY1
-        );
+        const use2 = (x + y) % 2 === 0;
+        const { destX, destY } = this.layout.get(use2 ? this.srcX2 : this.srcX1, use2 ? this.srcY2 : this.srcY1);
 
         // Identify which corner is the "minority" type (the one that differs from the other two).
         // This works correctly even after fallback substitution (e.g., River3→River4) where
         // the original TexturePoint types don't match the texture's innerType.
-        const t0IsMinority = (tp.t0 !== tp.t1) && (tp.t0 !== tp.t2);
-        const t1IsMinority = (tp.t1 !== tp.t0) && (tp.t1 !== tp.t2);
+        const t0IsMinority = tp.t0 !== tp.t1 && tp.t0 !== tp.t2;
+        const t1IsMinority = tp.t1 !== tp.t0 && tp.t1 !== tp.t2;
 
         if (t0IsMinority) {
             return [destX + 2, destY + 1];
@@ -95,7 +100,7 @@ export class Hexagon2Texture extends LandscapeTextureBase implements ILandscapeT
         return [
             new TexturePoint(this.outerType, this.outerType, this.innerType),
             new TexturePoint(this.innerType, this.outerType, this.outerType),
-            new TexturePoint(this.outerType, this.innerType, this.outerType)
+            new TexturePoint(this.outerType, this.innerType, this.outerType),
         ];
     }
 

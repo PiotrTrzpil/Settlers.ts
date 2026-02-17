@@ -218,7 +218,7 @@ export class EntityTextureAtlas extends ShaderTexture {
         if (indices.length !== region.width * region.height) {
             EntityTextureAtlas.log.error(
                 `Blit size mismatch: region ${region.width}x${region.height} (${region.width * region.height} pixels), ` +
-                `indices length ${indices.length}`
+                    `indices length ${indices.length}`
             );
             return;
         }
@@ -239,7 +239,9 @@ export class EntityTextureAtlas extends ShaderTexture {
 
         const elapsed = performance.now() - start;
         if (elapsed > SLOW_OP_THRESHOLD_MS) {
-            console.warn(`[Atlas] blitIndices L${region.layer} ${region.width}x${region.height} took ${elapsed.toFixed(1)}ms`);
+            console.warn(
+                `[Atlas] blitIndices L${region.layer} ${region.width}x${region.height} took ${elapsed.toFixed(1)}ms`
+            );
         }
     }
 
@@ -275,21 +277,31 @@ export class EntityTextureAtlas extends ShaderTexture {
         if (this.layers.length !== this.gpuLayerCount) {
             // Layer count changed — reallocate the 3D texture
             gl.texImage3D(
-                gl.TEXTURE_2D_ARRAY, 0,
-                gl.R16UI,
-                LAYER_SIZE, LAYER_SIZE, this.layers.length,
+                gl.TEXTURE_2D_ARRAY,
                 0,
-                gl.RED_INTEGER, gl.UNSIGNED_SHORT,
+                gl.R16UI,
+                LAYER_SIZE,
+                LAYER_SIZE,
+                this.layers.length,
+                0,
+                gl.RED_INTEGER,
+                gl.UNSIGNED_SHORT,
                 null // Allocate without data
             );
 
             // Upload all layers
             for (let i = 0; i < this.layers.length; i++) {
                 gl.texSubImage3D(
-                    gl.TEXTURE_2D_ARRAY, 0,
-                    0, 0, i,
-                    LAYER_SIZE, LAYER_SIZE, 1,
-                    gl.RED_INTEGER, gl.UNSIGNED_SHORT,
+                    gl.TEXTURE_2D_ARRAY,
+                    0,
+                    0,
+                    0,
+                    i,
+                    LAYER_SIZE,
+                    LAYER_SIZE,
+                    1,
+                    gl.RED_INTEGER,
+                    gl.UNSIGNED_SHORT,
                     this.layers[i]
                 );
             }
@@ -313,11 +325,18 @@ export class EntityTextureAtlas extends ShaderTexture {
                 const srcOffset = dirty.minY * LAYER_SIZE + dirty.minX;
 
                 gl.texSubImage3D(
-                    gl.TEXTURE_2D_ARRAY, 0,
-                    dirty.minX, dirty.minY, i,
-                    dirtyW, dirtyH, 1,
-                    gl.RED_INTEGER, gl.UNSIGNED_SHORT,
-                    this.layers[i], srcOffset
+                    gl.TEXTURE_2D_ARRAY,
+                    0,
+                    dirty.minX,
+                    dirty.minY,
+                    i,
+                    dirtyW,
+                    dirtyH,
+                    1,
+                    gl.RED_INTEGER,
+                    gl.UNSIGNED_SHORT,
+                    this.layers[i],
+                    srcOffset
                 );
 
                 gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
@@ -368,11 +387,11 @@ export class EntityTextureAtlas extends ShaderTexture {
      */
     public load(gl: WebGL2RenderingContext): void {
         const totalPixels = this.layers.length * LAYER_SIZE * LAYER_SIZE;
-        const memoryMB = (totalPixels * 2 / 1024 / 1024).toFixed(1);
+        const memoryMB = ((totalPixels * 2) / 1024 / 1024).toFixed(1);
 
         EntityTextureAtlas.log.debug(
             `Atlas final: ${this.layers.length} layers @ ${LAYER_SIZE}x${LAYER_SIZE} (${memoryMB}MB), ` +
-            `${this.reservedRegions.length} sprites`
+                `${this.reservedRegions.length} sprites`
         );
 
         this.update(gl);
@@ -426,7 +445,7 @@ export class EntityTextureAtlas extends ShaderTexture {
                     const a = paletteData[pi + 3];
                     dst[dstRow + x] = (a << 24) | (b << 16) | (g << 8) | r;
                 } else {
-                    dst[dstRow + x] = 0xFFFF00FF; // magenta for missing palette
+                    dst[dstRow + x] = 0xffff00ff; // magenta for missing palette
                 }
             }
         }
@@ -476,11 +495,7 @@ export class EntityTextureAtlas extends ShaderTexture {
     /**
      * Restore atlas state from cached data.
      */
-    public restoreFromCache(
-        imgData: Uint16Array,
-        layerCount: number,
-        slots: CachedSlot[][],
-    ): void {
+    public restoreFromCache(imgData: Uint16Array, layerCount: number, slots: CachedSlot[][]): void {
         const start = performance.now();
 
         const pixelsPerLayer = LAYER_SIZE * LAYER_SIZE;
@@ -497,11 +512,13 @@ export class EntityTextureAtlas extends ShaderTexture {
 
             // Restore slots for this layer
             const layerSlotData = slots[i] || [];
-            this.layerSlots.push(layerSlotData.map(s => {
-                const slot = new Slot(s.y, s.width, s.height);
-                slot.x = s.x;
-                return slot;
-            }));
+            this.layerSlots.push(
+                layerSlotData.map(s => {
+                    const slot = new Slot(s.y, s.width, s.height);
+                    slot.x = s.x;
+                    return slot;
+                })
+            );
 
             this.dirtyRegions.push(null);
         }
@@ -513,9 +530,7 @@ export class EntityTextureAtlas extends ShaderTexture {
         this.gpuLayerCount = 0;
 
         const elapsed = performance.now() - start;
-        EntityTextureAtlas.log.debug(
-            `Restored atlas from cache: ${layerCount} layers in ${elapsed.toFixed(1)}ms`
-        );
+        EntityTextureAtlas.log.debug(`Restored atlas from cache: ${layerCount} layers in ${elapsed.toFixed(1)}ms`);
     }
 
     /**
@@ -532,5 +547,4 @@ export class EntityTextureAtlas extends ShaderTexture {
         atlas.restoreFromCache(imgData, layerCount, slots);
         return atlas;
     }
-
 }

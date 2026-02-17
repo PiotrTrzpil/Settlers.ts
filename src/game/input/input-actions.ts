@@ -13,7 +13,7 @@ export enum InputAction {
 
     // Selection
     Select = 'select',
-    SelectAdd = 'select_add',          // Add to selection (shift+click)
+    SelectAdd = 'select_add', // Add to selection (shift+click)
     SelectAll = 'select_all',
     DeselectAll = 'deselect_all',
 

@@ -6,7 +6,7 @@ import { IndexValueTable, Packer, SymbolDirectory } from './packer';
 /**
  *    Lz + Huffman compressing
  *    source: https://bitbucket.org/AngryKirC/noxedit2014/src/master/Shared/Kirc/NoxLzCompression.cs
-*/
+ */
 export class Compression extends Packer {
     private static log: LogHandler = new LogHandler('Compression');
 
@@ -21,12 +21,12 @@ export class Compression extends Packer {
             // ignore left-length data smaller than 4
             return {
                 matchLen: 0,
-                offset: 0
+                offset: 0,
             };
         }
 
         // Scan LZ window for at least 4 bytes matching these from src
-        let back = outPos - (Compression.WINDOW_SIZE / 3); // offset back to some position (less = faster)
+        let back = outPos - Compression.WINDOW_SIZE / 3; // offset back to some position (less = faster)
         if (back < 0) {
             back = 0; // start index cannot be negative
         }
@@ -47,7 +47,7 @@ export class Compression extends Packer {
             // find the length ot the matching sequence
             let matchLen = 4;
             while (src[back + matchLen] === src[outPos + matchLen]) {
-                if ((outPos + matchLen + 1) >= srcLen) {
+                if (outPos + matchLen + 1 >= srcLen) {
                     break; // boundary chk
                 }
                 matchLen += 1;
@@ -57,7 +57,7 @@ export class Compression extends Packer {
                     // this is the maximum of bytes that can be copied
                     return {
                         matchLen: 517,
-                        offset: back
+                        offset: back,
                     };
                 }
 
@@ -68,11 +68,16 @@ export class Compression extends Packer {
 
         return {
             matchLen: maxLength,
-            offset: maxOffset
+            offset: maxOffset,
         };
     }
 
-    private writeSymbol(symbol: number, charCodeTable: SymbolDirectory, bitWriter: BitWriter, huffmanTable: IndexValueTable) {
+    private writeSymbol(
+        symbol: number,
+        charCodeTable: SymbolDirectory,
+        bitWriter: BitWriter,
+        huffmanTable: IndexValueTable
+    ) {
         // increment symbol counter
         charCodeTable.inc(symbol);
         // Search for that symbol in the Huffman alphabet
@@ -91,7 +96,7 @@ export class Compression extends Packer {
             // check if offset is less than pos itself
             if (huffmanPos >= refOff) {
                 // enough bits to represent remaining part of the offset
-                if (refLen >= (huffmanPos - refOff)) {
+                if (refLen >= huffmanPos - refOff) {
                     break;
                 }
                 // if not then lookup next entry
@@ -117,10 +122,10 @@ export class Compression extends Packer {
         const huffmanTable = Packer.DefaultHuffmanTable;
         const charCodeTable = Packer.createSymbolDirectory();
 
-        while ((outPos < srcLen)) {
+        while (outPos < srcLen) {
             rebuild--;
 
-            if ((rebuild < 0)) {
+            if (rebuild < 0) {
                 //  Rebuild symbol alphabet
                 //  so that more frequent symbols will be on top and will take less bits to encode
                 this.writeSymbol(0x110, charCodeTable, bitWriter, huffmanTable);
@@ -168,7 +173,7 @@ export class Compression extends Packer {
                 for (tabPos = 0; tabPos < 8; tabPos++) {
                     // maximum offset value that can be represented by using this table entry
                     refLen = Packer.LengthTable.value[tabPos] + (1 << Packer.LengthTable.index[tabPos]) - 1;
-                    if ((matchLen - 4) <= refLen) {
+                    if (matchLen - 4 <= refLen) {
                         break;
                     }
                 }
@@ -185,7 +190,8 @@ export class Compression extends Packer {
             // encode DISTANCE_TABLE
             for (tabPos = 0; tabPos < 8; tabPos++) {
                 // maximum offset value that can be represented by using this table entry
-                refLen = (Packer.DistanceTable.value[tabPos] << 9) + (1 << (9 + Packer.DistanceTable.index[tabPos])) - 1;
+                refLen =
+                    (Packer.DistanceTable.value[tabPos] << 9) + (1 << (9 + Packer.DistanceTable.index[tabPos])) - 1;
                 if (wndoff <= refLen) {
                     break;
                 }

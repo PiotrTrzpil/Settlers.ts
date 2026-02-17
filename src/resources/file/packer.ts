@@ -41,8 +41,8 @@ export class SymbolDirectory {
         result.push(48);
         result.push(255);
 
-        for (let i = 1; (i <= 273); i++) {
-            if (result.findIndex((j) => j === i) < 0) {
+        for (let i = 1; i <= 273; i++) {
+            if (result.findIndex(j => j === i) < 0) {
                 result.push(i);
             }
         }
@@ -64,7 +64,7 @@ export class SymbolDirectory {
             // create index array [0, 1, 2, 3, ...]
             Array.from(Array(Packer.Symbols).keys())
                 // sort index by quantities... to be stable we use "quantities + index" as value
-                .sort((x1, x2) => ((this.quantities[x2] << 16) + x2) - ((this.quantities[x1] << 16) + x1))
+                .sort((x1, x2) => (this.quantities[x2] << 16) + x2 - ((this.quantities[x1] << 16) + x1))
         );
 
         // we reduce the original quantity by 2 to the impact for the next CreateCodeTableFromFrequency() call
@@ -87,7 +87,7 @@ export class Packer {
     //  LZ77 table indexing sequence length
     protected static LengthTable = new IndexValueTable(
         [1, 2, 3, 4, 5, 6, 7, 8],
-        [0x008, 0x00A, 0x00E, 0x016, 0x026, 0x046, 0x086, 0x106]
+        [0x008, 0x00a, 0x00e, 0x016, 0x026, 0x046, 0x086, 0x106]
     );
 
     // LZ77 table indexing sequence offset in window
@@ -98,6 +98,6 @@ export class Packer {
 
     protected static DefaultHuffmanTable = new IndexValueTable(
         [0x2, 0x3, 0x3, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x5, 0x5, 0x5],
-        [0x0, 0x4, 0xC, 0x14, 0x24, 0x34, 0x44, 0x54, 0x64, 0x74, 0x84, 0x94, 0xA4, 0xB4, 0xD4, 0xF4]
+        [0x0, 0x4, 0xc, 0x14, 0x24, 0x34, 0x44, 0x54, 0x64, 0x74, 0x84, 0x94, 0xa4, 0xb4, 0xd4, 0xf4]
     );
 }

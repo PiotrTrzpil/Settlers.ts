@@ -16,11 +16,11 @@ export class SaveGameLoader extends OriginalMapFile implements IMapLoader {
     public mapSize: MapSize = new MapSize(0, 0);
 
     public unknown1 = 0;
-    public unknown2= 0;
-    public unknown3= 0;
-    public unknown4= 0;
-    public unknown5= 0;
-    public unknown6= 0;
+    public unknown2 = 0;
+    public unknown3 = 0;
+    public unknown4 = 0;
+    public unknown5 = 0;
+    public unknown6 = 0;
 
     constructor(data: BinaryReader) {
         super(data);
@@ -60,13 +60,29 @@ export class SaveGameLoader extends OriginalMapFile implements IMapLoader {
     }
 
     public override toString(): string {
-        return this.general.toString() + '; ' +
-                        this.mapSize.toString() + '; ' +
-                        'unk1: ' + this.unknown1 + '; ' +
-                        'unk2: ' + this.unknown2 + '; ' +
-                        'unk3: ' + this.unknown3 + '; ' +
-                        'unk4: ' + this.unknown4 + '; ' +
-                        'unk5: ' + this.unknown5 + '; ' +
-                        'unk6: ' + this.unknown6 + '; ';
+        return (
+            this.general.toString() +
+            '; ' +
+            this.mapSize.toString() +
+            '; ' +
+            'unk1: ' +
+            this.unknown1 +
+            '; ' +
+            'unk2: ' +
+            this.unknown2 +
+            '; ' +
+            'unk3: ' +
+            this.unknown3 +
+            '; ' +
+            'unk4: ' +
+            this.unknown4 +
+            '; ' +
+            'unk5: ' +
+            this.unknown5 +
+            '; ' +
+            'unk6: ' +
+            this.unknown6 +
+            '; '
+        );
     }
 }

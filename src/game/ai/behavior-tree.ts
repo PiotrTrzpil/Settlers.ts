@@ -54,7 +54,7 @@ export class Selector<T> extends Node<T> {
 export class Parallel<T> extends Node<T> {
     constructor(
         public readonly children: Node<T>[],
-        public readonly requireAll: boolean = true,
+        public readonly requireAll: boolean = true
     ) {
         super();
     }
@@ -134,7 +134,7 @@ export class StatusAction<T> extends Node<T> {
 export class Guard<T> extends Node<T> {
     constructor(
         public readonly conditionFn: (entity: T) => boolean,
-        public readonly child: Node<T>,
+        public readonly child: Node<T>
     ) {
         super();
     }
@@ -151,7 +151,7 @@ export class Guard<T> extends Node<T> {
 export class Repeat<T> extends Node<T> {
     constructor(
         public readonly conditionFn: (entity: T) => boolean,
-        public readonly child: Node<T>,
+        public readonly child: Node<T>
     ) {
         super();
     }
@@ -172,7 +172,7 @@ export class RepeatCount<T> extends Node<T> {
 
     constructor(
         public readonly times: number,
-        public readonly child: Node<T>,
+        public readonly child: Node<T>
     ) {
         super();
     }
@@ -228,7 +228,7 @@ export class Sleep<T> extends Node<T> {
 export class ResetAfter<T> extends Node<T> {
     constructor(
         public readonly resetFn: (entity: T) => void,
-        public readonly child: Node<T>,
+        public readonly child: Node<T>
     ) {
         super();
     }
@@ -268,17 +268,11 @@ export function statusAction<T>(callback: (entity: T) => NodeStatus): StatusActi
     return new StatusAction(callback);
 }
 
-export function guard<T>(
-    conditionFn: (entity: T) => boolean,
-    child: Node<T>,
-): Guard<T> {
+export function guard<T>(conditionFn: (entity: T) => boolean, child: Node<T>): Guard<T> {
     return new Guard(conditionFn, child);
 }
 
-export function repeat<T>(
-    conditionFn: (entity: T) => boolean,
-    child: Node<T>,
-): Repeat<T> {
+export function repeat<T>(conditionFn: (entity: T) => boolean, child: Node<T>): Repeat<T> {
     return new Repeat(conditionFn, child);
 }
 
@@ -290,9 +284,6 @@ export function sleep<T>(durationFn: (entity: T) => number): Sleep<T> {
     return new Sleep(durationFn);
 }
 
-export function resetAfter<T>(
-    resetFn: (entity: T) => void,
-    child: Node<T>,
-): ResetAfter<T> {
+export function resetAfter<T>(resetFn: (entity: T) => void, child: Node<T>): ResetAfter<T> {
     return new ResetAfter(resetFn, child);
 }

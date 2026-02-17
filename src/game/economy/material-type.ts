@@ -38,17 +38,17 @@ export enum EMaterialType {
 
     // Additional resources
     SULFUR = 24,
-    ARMOR = 25,  // Leader helmets/equipment
-    BATTLEAXE = 26,    // Heavy battle axes (different from tool axe)
-    AGAVE = 27,         // Mayan crop/plant
-    BLOWGUN = 28,       // Mayan weapon
-    GOAT = 29,          // Mayan livestock
-    MEAD = 30,          // Honey wine
-    HONEY = 31,         // Raw honey (for mead)
-    SHEEP = 32,         // Livestock
-    SHOVEL = 33,        // Tool for pioneers/landscapers
-    CATAPULT = 34,      // Siege ammunition
-    GOOSE = 35,         // Livestock (geese)
+    ARMOR = 25, // Leader helmets/equipment
+    BATTLEAXE = 26, // Heavy battle axes (different from tool axe)
+    AGAVE = 27, // Mayan crop/plant
+    BLOWGUN = 28, // Mayan weapon
+    GOAT = 29, // Mayan livestock
+    MEAD = 30, // Honey wine
+    HONEY = 31, // Raw honey (for mead)
+    SHEEP = 32, // Livestock
+    SHOVEL = 33, // Tool for pioneers/landscapers
+    CATAPULT = 34, // Siege ammunition
+    GOOSE = 35, // Livestock (geese)
 
     // Special
     NO_MATERIAL = 99,

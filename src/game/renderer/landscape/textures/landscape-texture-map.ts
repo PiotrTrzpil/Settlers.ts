@@ -17,12 +17,12 @@ export type RiverSlotId = 'A' | 'B' | 'C';
  *  Roles: [0]=inner (River3↔River1), [1]=outer (Grass↔River4), [2]=middle (River4↔River3)
  *  With gradientReverse layout: A=(2,72)=inner, B=(0,74)=middle, C=(2,74)=outer */
 export const RIVER_SLOT_PERMS: readonly [RiverSlotId, RiverSlotId, RiverSlotId][] = [
-    ['A', 'C', 'B'],  // 0: identity - inner=A, outer=C, middle=B
-    ['A', 'B', 'C'],  // 1: inner=A, outer=B, middle=C
-    ['B', 'A', 'C'],  // 2: inner=B, outer=A, middle=C
-    ['B', 'C', 'A'],  // 3: inner=B, outer=C, middle=A
-    ['C', 'A', 'B'],  // 4: inner=C, outer=A, middle=B
-    ['C', 'B', 'A'],  // 5: inner=C, outer=B, middle=A
+    ['A', 'C', 'B'], // 0: identity - inner=A, outer=C, middle=B
+    ['A', 'B', 'C'], // 1: inner=A, outer=B, middle=C
+    ['B', 'A', 'C'], // 2: inner=B, outer=A, middle=C
+    ['B', 'C', 'A'], // 3: inner=B, outer=C, middle=A
+    ['C', 'A', 'B'], // 4: inner=C, outer=A, middle=B
+    ['C', 'B', 'A'], // 5: inner=C, outer=B, middle=A
 ];
 
 export interface RiverConfig {
@@ -38,15 +38,18 @@ export interface RiverConfig {
 
 export class LandscapeTextureMap {
     private static log = new LogHandler('LandscapeTextureMap');
-    private lookup: {[key: number]: ILandscapeTexture} = {};
+    private lookup: { [key: number]: ILandscapeTexture } = {};
     private textures: ILandscapeTexture[] = [];
     private layout = new AtlasLayout();
 
     /** River atlas slot objects — source positions map to dest via the shared layout */
     private riverSlots: {
-        slotALeft: Hexagon2Texture; slotARight: Hexagon2Texture;
-        slotBLeft: Hexagon2Texture; slotBRight: Hexagon2Texture;
-        slotCLeft: Hexagon2Texture; slotCRight: Hexagon2Texture;
+        slotALeft: Hexagon2Texture;
+        slotARight: Hexagon2Texture;
+        slotBLeft: Hexagon2Texture;
+        slotBRight: Hexagon2Texture;
+        slotCLeft: Hexagon2Texture;
+        slotCRight: Hexagon2Texture;
     } | null = null;
     /** Lookup keys currently registered for river Hexagon2Textures */
     private riverHexKeys: number[] = [];
@@ -67,7 +70,13 @@ export class LandscapeTextureMap {
         }
     }
 
-    private addTextureGradient1(type1: LandscapeType, type2: LandscapeType, type3: LandscapeType, type4: LandscapeType, row: number) {
+    private addTextureGradient1(
+        type1: LandscapeType,
+        type2: LandscapeType,
+        type3: LandscapeType,
+        type4: LandscapeType,
+        row: number
+    ) {
         const L = this.layout;
         // Using Hexagon2Texture for SmallLandscapeTexture!
         this.addTexture(new SmallLandscapeTexture(L, type2, 0, row));
@@ -100,8 +109,12 @@ export class LandscapeTextureMap {
      * swapFirstPair=true:  first pair is (type3,type4) then (type4,type3) (formerly addTextureGradient3)
      */
     private addTextureGradientReverse(
-        type1: LandscapeType, type2: LandscapeType, type3: LandscapeType, type4: LandscapeType,
-        row: number, swapFirstPair: boolean
+        type1: LandscapeType,
+        type2: LandscapeType,
+        type3: LandscapeType,
+        type4: LandscapeType,
+        row: number,
+        swapFirstPair: boolean
     ) {
         const L = this.layout;
         const firstA = swapFirstPair ? type3 : type4;
@@ -182,10 +195,14 @@ export class LandscapeTextureMap {
         this.addTexture(new Hexagon2Texture(L, LandscapeType.Water0, LandscapeType.Beach, 1, 22, 1, 23));
         // variation: Hexagon2Texture(LandscapeType.Water0, LandscapeType.Beach, 1, 23)
 
-        this.addTexture(new Hexagon3Texture(L, LandscapeType.Beach, LandscapeType.Grass, LandscapeType.Water0, 2, 22, 3, 22));
+        this.addTexture(
+            new Hexagon3Texture(L, LandscapeType.Beach, LandscapeType.Grass, LandscapeType.Water0, 2, 22, 3, 22)
+        );
         // variation: Hexagon3Texture(LandscapeType.Beach, LandscapeType.Grass, LandscapeType.Water0, 3, 22)
 
-        this.addTexture(new Hexagon3Texture(L, LandscapeType.Grass, LandscapeType.Beach, LandscapeType.Water0, 2, 23, 3, 23));
+        this.addTexture(
+            new Hexagon3Texture(L, LandscapeType.Grass, LandscapeType.Beach, LandscapeType.Water0, 2, 23, 3, 23)
+        );
         // variation: Hexagon3Texture(LandscapeType.Grass, LandscapeType.Beach, LandscapeType.Water0, 3, 23)
 
         // next row
@@ -216,7 +233,13 @@ export class LandscapeTextureMap {
 
         // next row
         // [grass] 16 -> 17 -> 33 -> 32 [rock] @ 36..39
-        this.addTextureGradient1(LandscapeType.Grass, LandscapeType.RockToGras2, LandscapeType.RockToGras1, LandscapeType.Rock, 36);
+        this.addTextureGradient1(
+            LandscapeType.Grass,
+            LandscapeType.RockToGras2,
+            LandscapeType.RockToGras1,
+            LandscapeType.Rock,
+            36
+        );
 
         // next row
         this.addTexture(new BigLandscapeTexture(L, LandscapeType.Desert, 40));
@@ -224,29 +247,49 @@ export class LandscapeTextureMap {
         // https://github.com/tomsoftware/sied3/blob/master/src/clTexturesLoadHelper.cpp
         // [grass] 16 -> 20 -> 65 -> 64 [desert] @ 44..47
         this.addTextureGradientReverse(
-            LandscapeType.Grass, LandscapeType.DesertToGras2, LandscapeType.DesertToGras1,
-            LandscapeType.Desert, 44, true
+            LandscapeType.Grass,
+            LandscapeType.DesertToGras2,
+            LandscapeType.DesertToGras1,
+            LandscapeType.Desert,
+            44,
+            true
         );
 
         // ///////
         // [mud] 80 -> 81 -> 21 -> 16 [gras] @ 48..51
         this.addTextureGradientReverse(
-            LandscapeType.Grass, LandscapeType.MudToGras2, LandscapeType.MudToGras1,
-            LandscapeType.Mud, 48, false
+            LandscapeType.Grass,
+            LandscapeType.MudToGras2,
+            LandscapeType.MudToGras1,
+            LandscapeType.Mud,
+            48,
+            false
         );
 
         this.addTexture(new BigLandscapeTexture(L, LandscapeType.Mud, 52));
 
         // ///////
         // [swamp] 80 -> 81 -> 21 -> 16 [gras] @ 56..59
-        this.addTextureGradient1(LandscapeType.Grass, LandscapeType.SwampToGras2, LandscapeType.SwampToGras1, LandscapeType.Swamp, 56);
+        this.addTextureGradient1(
+            LandscapeType.Grass,
+            LandscapeType.SwampToGras2,
+            LandscapeType.SwampToGras1,
+            LandscapeType.Swamp,
+            56
+        );
 
         // next row
         this.addTexture(new BigLandscapeTexture(L, LandscapeType.Swamp, 60));
 
         // ///////
         // [rock] 32 -> 35 -> 129 -> 128 [ice] @ 64..67
-        this.addTextureGradient1(LandscapeType.Rock, LandscapeType.SnowToRock2, LandscapeType.SnowToRock1, LandscapeType.Snow, 64);
+        this.addTextureGradient1(
+            LandscapeType.Rock,
+            LandscapeType.SnowToRock2,
+            LandscapeType.SnowToRock1,
+            LandscapeType.Snow,
+            64
+        );
 
         // next row
         this.addTexture(new BigLandscapeTexture(L, LandscapeType.Snow, 68));
@@ -330,17 +373,17 @@ export class LandscapeTextureMap {
         };
 
         const perm = RIVER_SLOT_PERMS[rc.slotPermutation % RIVER_SLOT_PERMS.length];
-        const innerPair  = slotPairs[perm[0]];
-        const outerPair  = slotPairs[perm[1]];
+        const innerPair = slotPairs[perm[0]];
+        const outerPair = slotPairs[perm[1]];
         const middlePair = slotPairs[perm[2]];
 
         // Apply left/right flips per role
-        const iLeft  = rc.flipInner ? innerPair.right  : innerPair.left;
-        const iRight = rc.flipInner ? innerPair.left   : innerPair.right;
-        const oLeft  = rc.flipOuter ? outerPair.right  : outerPair.left;
-        const oRight = rc.flipOuter ? outerPair.left   : outerPair.right;
-        const mLeft  = rc.flipMiddle ? middlePair.right : middlePair.left;
-        const mRight = rc.flipMiddle ? middlePair.left  : middlePair.right;
+        const iLeft = rc.flipInner ? innerPair.right : innerPair.left;
+        const iRight = rc.flipInner ? innerPair.left : innerPair.right;
+        const oLeft = rc.flipOuter ? outerPair.right : outerPair.left;
+        const oRight = rc.flipOuter ? outerPair.left : outerPair.right;
+        const mLeft = rc.flipMiddle ? middlePair.right : middlePair.left;
+        const mRight = rc.flipMiddle ? middlePair.left : middlePair.right;
 
         // Create new Hex2 objects with correct type assignments.
         // The shared layout already maps their src positions → atlas dest positions.
@@ -370,15 +413,18 @@ export class LandscapeTextureMap {
         // the intermediate River4 step. Use Grass↔River4 as a visual approximation.
         const types = [t1, t2, t3];
         const hasGrass = types.includes(LandscapeType.Grass);
-        const riverTypes = types.filter(t =>
-            t === LandscapeType.River1 || t === LandscapeType.River2 ||
-            t === LandscapeType.River3 || t === LandscapeType.River4
+        const riverTypes = types.filter(
+            t =>
+                t === LandscapeType.River1 ||
+                t === LandscapeType.River2 ||
+                t === LandscapeType.River3 ||
+                t === LandscapeType.River4
         );
 
         if (hasGrass && riverTypes.length > 0) {
             // Substitute any river type with River4 for lookup purposes
             const substituted = types.map(t =>
-                (t === LandscapeType.River1 || t === LandscapeType.River2 || t === LandscapeType.River3)
+                t === LandscapeType.River1 || t === LandscapeType.River2 || t === LandscapeType.River3
                     ? LandscapeType.River4
                     : t
             ) as [LandscapeType, LandscapeType, LandscapeType];
@@ -401,7 +447,13 @@ export class LandscapeTextureMap {
         return null;
     }
 
-    public getTextureA(t1: LandscapeType, t2: LandscapeType, t3: LandscapeType, x: number, y: number): [number, number] {
+    public getTextureA(
+        t1: LandscapeType,
+        t2: LandscapeType,
+        t3: LandscapeType,
+        x: number,
+        y: number
+    ): [number, number] {
         const tp = new TexturePoint(t1, t2, t3);
         const text = this.lookup[tp.getKey()] ?? this.findFallback(t1, t2, t3);
         if (!text) {
@@ -411,7 +463,13 @@ export class LandscapeTextureMap {
         return text.getTextureA(tp, x, y);
     }
 
-    public getTextureB(t4: LandscapeType, t5: LandscapeType, t6: LandscapeType, x: number, y: number): [number, number] {
+    public getTextureB(
+        t4: LandscapeType,
+        t5: LandscapeType,
+        t6: LandscapeType,
+        x: number,
+        y: number
+    ): [number, number] {
         const tp = new TexturePoint(t4, t5, t6);
         const text = this.lookup[tp.getKey()] ?? this.findFallback(t4, t5, t6);
         if (!text) {

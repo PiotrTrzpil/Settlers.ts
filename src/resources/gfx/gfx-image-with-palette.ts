@@ -62,8 +62,7 @@ export class GfxImageWithPalette implements IGfxImage {
     }
 
     public getDataSize(): number {
-        return this.width * this.height +
-                    Math.floor(this.height / this.chunkHeight) * 3 * 256;
+        return this.width * this.height + Math.floor(this.height / this.chunkHeight) * 3 * 256;
     }
 
     public getImageData(): ImageData {
@@ -89,12 +88,30 @@ export class GfxImageWithPalette implements IGfxImage {
     }
 
     public toString(): string {
-        return ImageType[this.imageType] + ' - ' +
-                    'size: (' + this.width + ' x ' + this.height + ') ' +
-                    'data offset ' + this.dataOffset + ' ' +
-                    'data size ' + this.getDataSize() + ' ' +
-                    'rows: ' + this.rowCount + '; ' +
-                    'chunkHeight: ' + this.chunkHeight + ' ' +
-                    'flags: ' + this.flag1 + ' / ' + this.flag2;
+        return (
+            ImageType[this.imageType] +
+            ' - ' +
+            'size: (' +
+            this.width +
+            ' x ' +
+            this.height +
+            ') ' +
+            'data offset ' +
+            this.dataOffset +
+            ' ' +
+            'data size ' +
+            this.getDataSize() +
+            ' ' +
+            'rows: ' +
+            this.rowCount +
+            '; ' +
+            'chunkHeight: ' +
+            this.chunkHeight +
+            ' ' +
+            'flags: ' +
+            this.flag1 +
+            ' / ' +
+            this.flag2
+        );
     }
 }

@@ -120,10 +120,7 @@ export function getDefaultInputConfig(): InputConfig {
 /**
  * Merge user config with defaults.
  */
-export function mergeInputConfig(
-    defaults: InputConfig,
-    overrides: Partial<InputConfig>
-): InputConfig {
+export function mergeInputConfig(defaults: InputConfig, overrides: Partial<InputConfig>): InputConfig {
     return {
         ...defaults,
         ...overrides,
@@ -134,20 +131,12 @@ export function mergeInputConfig(
 /**
  * Find all bindings for a given action.
  */
-export function findBindingsForAction(
-    config: InputConfig,
-    action: InputAction
-): KeyBinding[] {
+export function findBindingsForAction(config: InputConfig, action: InputAction): KeyBinding[] {
     return config.bindings.filter(b => b.action === action);
 }
 
 /** Check if required modifiers are pressed */
-function checkRequiredModifiers(
-    binding: KeyBinding,
-    shiftKey: boolean,
-    ctrlKey: boolean,
-    altKey: boolean
-): boolean {
+function checkRequiredModifiers(binding: KeyBinding, shiftKey: boolean, ctrlKey: boolean, altKey: boolean): boolean {
     if (binding.shift && !shiftKey) return false;
     if (binding.ctrl && !ctrlKey) return false;
     if (binding.alt && !altKey) return false;

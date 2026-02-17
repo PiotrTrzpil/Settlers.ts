@@ -40,11 +40,7 @@ export interface BuildingQueryOptions {
  * @param serviceArea The service area to check against
  * @returns true if the position is within the service area
  */
-export function isPositionInServiceArea(
-    x: number,
-    y: number,
-    serviceArea: ServiceArea,
-): boolean {
+export function isPositionInServiceArea(x: number, y: number, serviceArea: ServiceArea): boolean {
     const distance = hexDistance(x, y, serviceArea.centerX, serviceArea.centerY);
     return distance <= serviceArea.radius;
 }
@@ -60,7 +56,7 @@ export function isPositionInServiceArea(
 export function getBuildingsInServiceArea(
     serviceArea: ServiceArea,
     gameState: GameState,
-    options: BuildingQueryOptions = {},
+    options: BuildingQueryOptions = {}
 ): number[] {
     const { playerId, includeSelf = true } = options;
     const buildingIds: number[] = [];
@@ -95,7 +91,7 @@ export function getHubsServingPosition(
     x: number,
     y: number,
     serviceAreaManager: ServiceAreaManager,
-    options: BuildingQueryOptions = {},
+    options: BuildingQueryOptions = {}
 ): number[] {
     const { playerId } = options;
     const hubIds: number[] = [];
@@ -129,7 +125,7 @@ export function getNearestHubForPosition(
     y: number,
     serviceAreaManager: ServiceAreaManager,
     gameState: GameState,
-    options: BuildingQueryOptions = {},
+    options: BuildingQueryOptions = {}
 ): number | undefined {
     const { playerId } = options;
     let nearestHubId: number | undefined;
@@ -170,7 +166,7 @@ export function isPositionInAnyServiceArea(
     x: number,
     y: number,
     serviceAreaManager: ServiceAreaManager,
-    options: BuildingQueryOptions = {},
+    options: BuildingQueryOptions = {}
 ): boolean {
     const { playerId } = options;
 
@@ -206,7 +202,7 @@ export interface BuildingWithDistance {
 export function getBuildingsInServiceAreaByDistance(
     serviceArea: ServiceArea,
     gameState: GameState,
-    options: BuildingQueryOptions = {},
+    options: BuildingQueryOptions = {}
 ): BuildingWithDistance[] {
     const { playerId, includeSelf = true } = options;
     const buildings: BuildingWithDistance[] = [];
@@ -220,12 +216,7 @@ export function getBuildingsInServiceAreaByDistance(
         // Optionally exclude the service area's own building
         if (!includeSelf && entity.id === serviceArea.buildingId) continue;
 
-        const distance = hexDistance(
-            entity.x,
-            entity.y,
-            serviceArea.centerX,
-            serviceArea.centerY,
-        );
+        const distance = hexDistance(entity.x, entity.y, serviceArea.centerX, serviceArea.centerY);
 
         if (distance <= serviceArea.radius) {
             buildings.push({ buildingId: entity.id, distance });
@@ -258,7 +249,7 @@ export function getHubsServingBothPositions(
     destX: number,
     destY: number,
     serviceAreaManager: ServiceAreaManager,
-    options: BuildingQueryOptions = {},
+    options: BuildingQueryOptions = {}
 ): number[] {
     const { playerId } = options;
     const hubIds: number[] = [];

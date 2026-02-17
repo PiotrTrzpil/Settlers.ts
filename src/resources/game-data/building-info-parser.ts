@@ -12,13 +12,7 @@ import type {
     PositionOffset,
     BoundingRect,
 } from './types';
-import {
-    parseXML,
-    getChildText,
-    getChildNumber,
-    getChildBool,
-    getValueArray,
-} from './xml-utils';
+import { parseXML, getChildText, getChildNumber, getChildBool, getValueArray } from './xml-utils';
 
 const log = new LogHandler('BuildingInfoParser');
 

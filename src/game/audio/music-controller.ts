@@ -47,7 +47,7 @@ export class MusicController {
     /** Re-entrancy guard - prevents overlapping playMusic calls */
     private isTransitioning = false;
 
-    constructor(private soundManager: IAudioManager) { }
+    constructor(private soundManager: IAudioManager) {}
 
     public get currentMusicId(): string | null {
         return this._currentMusicId;
@@ -279,10 +279,8 @@ export class MusicController {
         const prefix = MusicController.RACE_MUSIC_PREFIX[race];
 
         // Filter: Match prefix, is music, NOT a battle track
-        const tracks = SOUND_LIBRARY.filter(s =>
-            s.type === SoundType.Music &&
-            s.id.startsWith(prefix) &&
-            !s.id.includes('FIGHT')
+        const tracks = SOUND_LIBRARY.filter(
+            s => s.type === SoundType.Music && s.id.startsWith(prefix) && !s.id.includes('FIGHT')
         );
 
         if (tracks.length === 0) {
@@ -291,9 +289,8 @@ export class MusicController {
         }
 
         // Avoid repeating the last track if we have options
-        const availableTracks = tracks.length > 1 && this.lastMusicId
-            ? tracks.filter(t => t.id !== this.lastMusicId)
-            : tracks;
+        const availableTracks =
+            tracks.length > 1 && this.lastMusicId ? tracks.filter(t => t.id !== this.lastMusicId) : tracks;
 
         const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
         this.playMusic(randomTrack.id);

@@ -48,10 +48,7 @@ export interface InputState {
 /**
  * Create input state tracker.
  */
-export function createInputState(
-    target: Ref<HTMLElement | null>,
-    config: InputConfig
-): InputState {
+export function createInputState(target: Ref<HTMLElement | null>, config: InputConfig): InputState {
     // Mouse position tracking via VueUse
     const mouseOptions: UseMouseOptions = {
         target,
@@ -70,16 +67,15 @@ export function createInputState(
     const pressedKeys = ref(new Set<string>());
 
     // Modifier keys (computed from pressedKeys)
-    const shiftHeld = computed(() =>
-        pressedKeys.value.has('ShiftLeft') || pressedKeys.value.has('ShiftRight')
+    const shiftHeld = computed(() => pressedKeys.value.has('ShiftLeft') || pressedKeys.value.has('ShiftRight'));
+    const ctrlHeld = computed(
+        () =>
+            pressedKeys.value.has('ControlLeft') ||
+            pressedKeys.value.has('ControlRight') ||
+            pressedKeys.value.has('MetaLeft') ||
+            pressedKeys.value.has('MetaRight')
     );
-    const ctrlHeld = computed(() =>
-        pressedKeys.value.has('ControlLeft') || pressedKeys.value.has('ControlRight') ||
-        pressedKeys.value.has('MetaLeft') || pressedKeys.value.has('MetaRight')
-    );
-    const altHeld = computed(() =>
-        pressedKeys.value.has('AltLeft') || pressedKeys.value.has('AltRight')
-    );
+    const altHeld = computed(() => pressedKeys.value.has('AltLeft') || pressedKeys.value.has('AltRight'));
 
     // Drag state
     const drag = ref<DragData | null>(null);
@@ -90,20 +86,18 @@ export function createInputState(
 
     function isMousePressed(button: MouseButton): boolean {
         switch (button) {
-        case MouseButton.Left: return leftPressed.value;
-        case MouseButton.Right: return rightPressed.value;
-        case MouseButton.Middle: return middlePressed.value;
-        default: return false;
+        case MouseButton.Left:
+            return leftPressed.value;
+        case MouseButton.Right:
+            return rightPressed.value;
+        case MouseButton.Middle:
+            return middlePressed.value;
+        default:
+            return false;
         }
     }
 
-    function startDrag(
-        x: number,
-        y: number,
-        button: MouseButton,
-        tileX?: number,
-        tileY?: number
-    ): void {
+    function startDrag(x: number, y: number, button: MouseButton, tileX?: number, tileY?: number): void {
         drag.value = {
             startX: x,
             startY: y,

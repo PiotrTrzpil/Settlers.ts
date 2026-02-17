@@ -48,16 +48,16 @@ export class Palette {
             // G: ((value1 >> 3) | (value2 << 5)) & 0xFC (Top 3 of byte 1 | Bottom 3 of byte 2)
             // B: (value1 << 3) & 0xF8 (Bottom 5 bits of byte 1)
 
-            let r = value2 & 0xF8;
-            let g = ((value1 >> 3) | (value2 << 5)) & 0xFC;
-            let b = (value1 << 3) & 0xF8;
+            let r = value2 & 0xf8;
+            let g = ((value1 >> 3) | (value2 << 5)) & 0xfc;
+            let b = (value1 << 3) & 0xf8;
 
             // Fix color artifacts by replicating higher bits into the lower empty bits
             // This converts 5/6-bit color to full 8-bit range (e.g. 0..31 -> 0..255)
             // instead of just shifting (0..31 -> 0..248), which causes banding.
-            r |= (r >> 5);
-            g |= (g >> 6);
-            b |= (b >> 5);
+            r |= r >> 5;
+            g |= g >> 6;
+            b |= b >> 5;
 
             this.setRGB(i, r, g, b);
         }

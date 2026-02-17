@@ -1,23 +1,18 @@
 <template>
-  <label class="control-row">
-    <input
-      type="checkbox"
-      :checked="modelValue"
-      tabindex="-1"
-      @change="onChange"
-    />
-    <span>{{ label }}</span>
-  </label>
+    <label class="control-row">
+        <input type="checkbox" :checked="modelValue" tabindex="-1" @change="onChange" />
+        <span>{{ label }}</span>
+    </label>
 </template>
 
 <script setup lang="ts">
 defineProps<{
-  label: string;
-  modelValue: boolean;
+    label: string;
+    modelValue: boolean;
 }>();
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: boolean): void;
+    (e: 'update:modelValue', value: boolean): void;
 }>();
 
 function onChange(e: Event) {
@@ -29,20 +24,20 @@ function onChange(e: Event) {
 
 <style scoped>
 .control-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 0;
-  cursor: pointer;
-  color: #a08050;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    cursor: pointer;
+    color: #a08050;
 }
 
 .control-row:hover {
-  color: #c8a96e;
+    color: #c8a96e;
 }
 
-.control-row input[type="checkbox"] {
-  accent-color: #d4a030;
-  cursor: pointer;
+.control-row input[type='checkbox'] {
+    accent-color: #d4a030;
+    cursor: pointer;
 }
 </style>

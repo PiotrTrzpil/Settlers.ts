@@ -6,11 +6,7 @@
  */
 
 import { EntityType } from '../entity';
-import {
-    AnimationState,
-    AnimationData,
-    getCurrentAnimationSprite,
-} from '../animation';
+import { AnimationState, AnimationData, getCurrentAnimationSprite } from '../animation';
 import { SpriteEntry } from '../renderer/sprite-metadata';
 
 /**
@@ -87,7 +83,9 @@ export function getAnimatedSpriteForDirection(
 
     const directionMap = animationData.sequences.get(animationState.sequenceKey);
     if (!directionMap) {
-        throw new Error(`Animation sequence '${animationState.sequenceKey}' not found. Available: ${[...animationData.sequences.keys()].join(', ')}`);
+        throw new Error(
+            `Animation sequence '${animationState.sequenceKey}' not found. Available: ${[...animationData.sequences.keys()].join(', ')}`
+        );
     }
 
     const sequence = directionMap?.get(direction);
@@ -101,4 +99,3 @@ export function getAnimatedSpriteForDirection(
         : Math.min(animationState.currentFrame, sequence.frames.length - 1);
     return sequence.frames[frameIndex];
 }
-

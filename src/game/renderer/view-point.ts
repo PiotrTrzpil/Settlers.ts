@@ -188,7 +188,7 @@ export class ViewPoint implements IViewPoint {
         // Scale factor converts pixel movement to viewPoint units
         // Derived from the isometric projection to keep tiles "sticky" under cursor
         const height = this.canvas.clientHeight;
-        const scale = 20 * this.zoomValue / height;
+        const scale = (20 * this.zoomValue) / height;
 
         const dpx = e.offsetX - this.downX;
         const dpy = e.offsetY - this.downY;
@@ -268,8 +268,14 @@ export class ViewPoint implements IViewPoint {
 
         if (this.keysDown.has('d')) dx += speed;
         if (this.keysDown.has('a')) dx -= speed;
-        if (this.keysDown.has('s')) { dy += speed * 2; dx += speed }
-        if (this.keysDown.has('w')) { dy -= speed * 2; dx -= speed }
+        if (this.keysDown.has('s')) {
+            dy += speed * 2;
+            dx += speed;
+        }
+        if (this.keysDown.has('w')) {
+            dy -= speed * 2;
+            dx -= speed;
+        }
 
         if (dx === 0 && dy === 0) return;
 
@@ -301,9 +307,7 @@ export class ViewPoint implements IViewPoint {
         const oldZoomValue = this.zoomValue;
 
         // Multiplicative zoom for uniform feel at all zoom levels
-        const factor = direction > 0
-            ? (1 + this.zoomSpeed)
-            : (1 / (1 + this.zoomSpeed));
+        const factor = direction > 0 ? 1 + this.zoomSpeed : 1 / (1 + this.zoomSpeed);
         this.zoomValue = Math.max(0.5, Math.min(30, this.zoomValue * factor));
 
         // Adjust camera so the world point under the cursor stays fixed.

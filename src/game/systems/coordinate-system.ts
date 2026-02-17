@@ -211,12 +211,7 @@ export function tileToWorld(
     const instanceY = tileY - vpY.int;
 
     return {
-        worldX:
-            TILE_CENTER_X +
-            instanceX -
-            instanceY * 0.5 -
-            vpX.frac +
-            vpY.frac * 0.5,
+        worldX: TILE_CENTER_X + instanceX - instanceY * 0.5 - vpX.frac + vpY.frac * 0.5,
         worldY: (TILE_CENTER_Y + instanceY - heightWorld - vpY.frac) * 0.5,
     };
 }
@@ -237,8 +232,7 @@ export function worldToTileFractional(
 
     // Reverse the forward transform
     const instanceY = worldY * 2 - TILE_CENTER_Y + heightWorld + vpY.frac;
-    const instanceX =
-        worldX - TILE_CENTER_X + instanceY * 0.5 + vpX.frac - vpY.frac * 0.5;
+    const instanceX = worldX - TILE_CENTER_X + instanceY * 0.5 + vpX.frac - vpY.frac * 0.5;
 
     return {
         tileX: instanceX + vpX.int,
@@ -301,13 +295,7 @@ export function screenToTile(params: ScreenToTileParams): { x: number; y: number
     const world = ndcToWorld(ndc.ndcX, ndc.ndcY, zoom, aspect);
 
     // Initial estimate with height = 0
-    let tile = worldToTileFractional(
-        world.worldX,
-        world.worldY,
-        0,
-        viewPointX,
-        viewPointY
-    );
+    let tile = worldToTileFractional(world.worldX, world.worldY, 0, viewPointX, viewPointY);
 
     let tileX = clamp(Math.round(tile.tileX), 0, mapWidth - 1);
     let tileY = clamp(Math.round(tile.tileY), 0, mapHeight - 1);
@@ -318,13 +306,7 @@ export function screenToTile(params: ScreenToTileParams): { x: number; y: number
         const h = groundHeight[idx];
         const hWorld = heightToWorld(h);
 
-        tile = worldToTileFractional(
-            world.worldX,
-            world.worldY,
-            hWorld,
-            viewPointX,
-            viewPointY
-        );
+        tile = worldToTileFractional(world.worldX, world.worldY, hWorld, viewPointX, viewPointY);
 
         const newTileX = clamp(Math.round(tile.tileX), 0, mapWidth - 1);
         const newTileY = clamp(Math.round(tile.tileY), 0, mapHeight - 1);
@@ -365,17 +347,7 @@ export interface TileToScreenParams {
  * Convert tile coordinates to screen coordinates.
  */
 export function tileToScreen(params: TileToScreenParams): { screenX: number; screenY: number } {
-    const {
-        tileX,
-        tileY,
-        canvasWidth,
-        canvasHeight,
-        zoom,
-        viewPointX,
-        viewPointY,
-        mapWidth,
-        groundHeight,
-    } = params;
+    const { tileX, tileY, canvasWidth, canvasHeight, zoom, viewPointX, viewPointY, mapWidth, groundHeight } = params;
 
     const aspect = canvasWidth / canvasHeight;
 
@@ -407,10 +379,7 @@ export function tileToWorldPos(
     viewPointY: number
 ): { worldX: number; worldY: number } {
     const idx = tileY * mapWidth + tileX;
-    const h =
-        tileX >= 0 && tileX < mapWidth && tileY >= 0 && tileY < mapHeight
-            ? groundHeight[idx]
-            : 0;
+    const h = tileX >= 0 && tileX < mapWidth && tileY >= 0 && tileY < mapHeight ? groundHeight[idx] : 0;
     const hWorld = heightToWorld(h);
     return tileToWorld(tileX, tileY, hWorld, viewPointX, viewPointY);
 }

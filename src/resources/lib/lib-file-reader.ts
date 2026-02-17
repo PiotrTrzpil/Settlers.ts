@@ -19,13 +19,13 @@ export class LibFileReader {
         Object.seal(this);
     }
 
-    public getFileCount() : number {
-        return (this.fileInfos) ? this.fileInfos.length : 0;
+    public getFileCount(): number {
+        return this.fileInfos ? this.fileInfos.length : 0;
     }
 
     /** return the checksum for a given file index */
     public getChecksum(fileIndex: number): number {
-        if ((fileIndex < 0) || (fileIndex >= this.fileInfos.length)) {
+        if (fileIndex < 0 || fileIndex >= this.fileInfos.length) {
             return -1;
         }
 
@@ -34,7 +34,7 @@ export class LibFileReader {
 
     /** return the full path name for a given file index */
     public getFullPathName(fileIndex: number): string {
-        if ((fileIndex < 0) || (fileIndex >= this.fileInfos.length)) {
+        if (fileIndex < 0 || fileIndex >= this.fileInfos.length) {
             return '';
         }
         if (!this.pathList) {
@@ -47,12 +47,12 @@ export class LibFileReader {
     }
 
     /** return the data for a given file */
-    public getFileInfo(fileIndex:number): LibFileItem {
+    public getFileInfo(fileIndex: number): LibFileItem {
         return this.fileInfos[fileIndex];
     }
 
     /** return the data for a given file */
-    public getFileInfoByFileName(pathName: string, fileName: string, quiet:boolean): LibFileItem | null {
+    public getFileInfoByFileName(pathName: string, fileName: string, quiet: boolean): LibFileItem | null {
         const index = this.getFileIndexFromFileName(pathName, fileName);
         if (index < 0) {
             if (!quiet) {
@@ -77,7 +77,7 @@ export class LibFileReader {
 
         const file = filename.toUpperCase();
         for (let i = 0; i < this.fileInfos.length; i++) {
-            if ((this.fileInfos[i].pathIndex === pathIndex) && (this.fileInfos[i].fileName.toUpperCase() === file)) {
+            if (this.fileInfos[i].pathIndex === pathIndex && this.fileInfos[i].fileName.toUpperCase() === file) {
                 return i;
             }
         }

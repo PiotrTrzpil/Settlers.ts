@@ -7,13 +7,7 @@
 
 import { LogHandler } from '@/utilities/log-handler';
 import { RemoteFile } from '@/utilities/remote-file';
-import type {
-    GameData,
-    RaceId,
-    BuildingInfo,
-    JobInfo,
-    ObjectInfo,
-} from './types';
+import type { GameData, RaceId, BuildingInfo, JobInfo, ObjectInfo } from './types';
 import { parseBuildingInfo } from './building-info-parser';
 import { parseJobInfo } from './job-info-parser';
 import { parseObjectInfo } from './object-info-parser';

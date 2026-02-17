@@ -69,7 +69,8 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
 /** Map MapObjectType to its environment sub-layer category */
 export function getEnvironmentSubLayer(objectType: MapObjectType): EnvironmentSubLayer {
     // Trees
-    if (objectType >= 0 && objectType <= 18) { // S4_TREE_ENUM range
+    if (objectType >= 0 && objectType <= 18) {
+        // S4_TREE_ENUM range
         return EnvironmentSubLayer.Trees;
     }
 
@@ -87,19 +88,13 @@ export function isResourceDeposit(_objectType: MapObjectType): boolean {
 // ============================================================================
 
 /** Check if a specific environment sub-layer is visible */
-export function isEnvironmentSubLayerVisible(
-    visibility: LayerVisibility,
-    subLayer: EnvironmentSubLayer
-): boolean {
+export function isEnvironmentSubLayerVisible(visibility: LayerVisibility, subLayer: EnvironmentSubLayer): boolean {
     if (!visibility.environment) return false;
     return visibility.environmentLayers[subLayer];
 }
 
 /** Check if a specific MapObjectType should be visible */
-export function isMapObjectVisible(
-    visibility: LayerVisibility,
-    objectType: MapObjectType
-): boolean {
+export function isMapObjectVisible(visibility: LayerVisibility, objectType: MapObjectType): boolean {
     // Resource deposits are controlled by the Resources layer
     if (isResourceDeposit(objectType)) {
         return visibility.resources;

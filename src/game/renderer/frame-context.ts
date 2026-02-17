@@ -20,11 +20,7 @@ import { Entity, EntityType } from '../entity';
 import { UnitStateLookup } from '../game-state';
 import { MapSize } from '@/utilities/map-size';
 import { IViewPoint } from './i-view-point';
-import {
-    heightToWorld,
-    TILE_CENTER_X,
-    TILE_CENTER_Y,
-} from '../systems/coordinate-system';
+import { heightToWorld, TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PUBLIC INTERFACES (immutable contracts)
@@ -204,14 +200,7 @@ export class FrameContext implements IFrameContext {
             }
 
             // Compute world position (with interpolation for units)
-            computeEntityWorldPos(
-                entity,
-                unitStates,
-                groundHeight,
-                mapSize,
-                viewPoint,
-                tempPos
-            );
+            computeEntityWorldPos(entity, unitStates, groundHeight, mapSize, viewPoint, tempPos);
 
             // World bounds culling
             if (!isInWorldBounds(tempPos, worldBounds)) {
@@ -248,8 +237,8 @@ export class FrameContext implements IFrameContext {
 function computeWorldBounds(viewPoint: IViewPoint): Bounds {
     const { zoom, aspectRatio: aspect } = viewPoint;
     return {
-        minX: (-1 + zoom) * aspect / zoom - WORLD_MARGIN,
-        maxX: (1 + zoom) * aspect / zoom + WORLD_MARGIN,
+        minX: ((-1 + zoom) * aspect) / zoom - WORLD_MARGIN,
+        maxX: ((1 + zoom) * aspect) / zoom + WORLD_MARGIN,
         minY: (zoom - 1) / zoom - WORLD_MARGIN,
         maxY: (zoom + 1) / zoom + WORLD_MARGIN_BOTTOM,
     };
@@ -296,16 +285,16 @@ function worldToTileApprox(worldX: number, worldY: number, viewPoint: IViewPoint
  * Check if entity is within tile bounds.
  */
 function isInTileBounds(entity: Entity, bounds: Bounds): boolean {
-    return entity.x >= bounds.minX && entity.x <= bounds.maxX &&
-           entity.y >= bounds.minY && entity.y <= bounds.maxY;
+    return entity.x >= bounds.minX && entity.x <= bounds.maxX && entity.y >= bounds.minY && entity.y <= bounds.maxY;
 }
 
 /**
  * Check if world position is within bounds.
  */
 function isInWorldBounds(pos: MutableWorldPos, bounds: Bounds): boolean {
-    return pos.worldX >= bounds.minX && pos.worldX <= bounds.maxX &&
-           pos.worldY >= bounds.minY && pos.worldY <= bounds.maxY;
+    return (
+        pos.worldX >= bounds.minX && pos.worldX <= bounds.maxX && pos.worldY >= bounds.minY && pos.worldY <= bounds.maxY
+    );
 }
 
 /**

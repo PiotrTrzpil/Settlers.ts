@@ -9,20 +9,14 @@ import { createEmptyEntityData } from '../../map-entity-data';
 import { MapChunkType } from '../map-chunk-type';
 import { OriginalLandscape } from '../original-landscape';
 import { OriginalMapFile } from '../original-map-file';
-import {
-    parsePlayerInformation,
-    parseBuildings,
-    parseSettlers,
-    parseStacks,
-    parseMapObjects,
-} from '../chunk-parsers';
+import { parsePlayerInformation, parseBuildings, parseSettlers, parseStacks, parseMapObjects } from '../chunk-parsers';
 
 /** load a .map or a .edm map */
 export class OriginalMapLoader extends OriginalMapFile implements IMapLoader {
     private logLoader: LogHandler = new LogHandler('OriginalMapLoader');
 
     public general: GeneralMapInformation = new GeneralMapInformation();
-    public mapSize : MapSize = new MapSize(0, 0);
+    public mapSize: MapSize = new MapSize(0, 0);
 
     public unknown5 = 0;
     public unknown6 = 0;
@@ -121,9 +115,17 @@ export class OriginalMapLoader extends OriginalMapFile implements IMapLoader {
     }
 
     public override toString(): string {
-        return this.general.toString() + '; ' +
-                        this.mapSize.toString() + '; ' +
-                        'unk5: ' + this.unknown5 + '; ' +
-                        'unk6: ' + this.unknown6 + '; ';
+        return (
+            this.general.toString() +
+            '; ' +
+            this.mapSize.toString() +
+            '; ' +
+            'unk5: ' +
+            this.unknown5 +
+            '; ' +
+            'unk6: ' +
+            this.unknown6 +
+            '; '
+        );
     }
 }

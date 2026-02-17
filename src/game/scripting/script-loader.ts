@@ -28,9 +28,7 @@ export interface ScriptSource {
 export function loadScriptFromMapData(scriptData: ArrayBuffer | Uint8Array): ScriptSource | null {
     try {
         // Script chunk format: typically raw UTF-8 or Windows-1252 encoded text
-        const data = scriptData instanceof ArrayBuffer
-            ? new Uint8Array(scriptData)
-            : scriptData;
+        const data = scriptData instanceof ArrayBuffer ? new Uint8Array(scriptData) : scriptData;
 
         // Try UTF-8 first
         const decoder = new TextDecoder('utf-8', { fatal: false });

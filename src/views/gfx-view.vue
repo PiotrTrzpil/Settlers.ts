@@ -1,59 +1,55 @@
 <template>
-  <div class="file-viewer">
-    <div class="controls">
-      <span class="label">Gfx File:</span>
-      <file-browser
-        :fileManager="fileManager"
-        @select="onFileSelect"
-        filter=".gfx"
-        storageKey="viewer_gfx_file"
-        class="browser"
-      />
-      <span class="info">{{ gfxContent?.length }} images</span>
-      <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
-      <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridImages)">Grid</button>
+    <div class="file-viewer">
+        <div class="controls">
+            <span class="label">Gfx File:</span>
+            <file-browser
+                :fileManager="fileManager"
+                @select="onFileSelect"
+                filter=".gfx"
+                storageKey="viewer_gfx_file"
+                class="browser"
+            />
+            <span class="info">{{ gfxContent?.length }} images</span>
+            <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
+            <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridImages)">Grid</button>
+        </div>
+
+        <!-- Grid View -->
+        <div v-if="viewMode === 'grid' && gfxContent.length > 0" class="grid-container">
+            <div
+                v-for="(img, index) in gfxContent"
+                :key="img.dataOffset"
+                class="grid-item"
+                :class="{ selected: selectedItem === img }"
+                @click="selectImage(img, index)"
+            >
+                <canvas
+                    :ref="el => setCanvasRef(el as HTMLCanvasElement, index)"
+                    :width="Math.min(img.width, 200)"
+                    :height="Math.min(img.height, 200)"
+                    class="grid-canvas"
+                />
+                <div class="grid-label">#{{ index }} ({{ img.width }}x{{ img.height }})</div>
+            </div>
+        </div>
+
+        <!-- Single View -->
+        <div v-if="viewMode === 'single'" class="single-view">
+            <select class="item-select" v-model="selectedItem" @change="onSelectItem">
+                <option v-for="(item, index) of gfxContent" :key="item.dataOffset" :value="item">
+                    #{{ index }} - {{ pad(item.dataOffset, 10) }} Size: {{ item.width }} x {{ item.height }}
+                </option>
+            </select>
+
+            <template v-if="selectedItem != null">
+                <pre class="item-info">{{ selectedItem.toString() }}</pre>
+            </template>
+
+            <div class="canvas-wrapper">
+                <canvas height="600" width="600" ref="mainCanvas" class="main-canvas" />
+            </div>
+        </div>
     </div>
-
-    <!-- Grid View -->
-    <div v-if="viewMode === 'grid' && gfxContent.length > 0" class="grid-container">
-      <div
-        v-for="(img, index) in gfxContent"
-        :key="img.dataOffset"
-        class="grid-item"
-        :class="{ selected: selectedItem === img }"
-        @click="selectImage(img, index)"
-      >
-        <canvas
-          :ref="el => setCanvasRef(el as HTMLCanvasElement, index)"
-          :width="Math.min(img.width, 200)"
-          :height="Math.min(img.height, 200)"
-          class="grid-canvas"
-        />
-        <div class="grid-label">#{{ index }} ({{ img.width }}x{{ img.height }})</div>
-      </div>
-    </div>
-
-    <!-- Single View -->
-    <div v-if="viewMode === 'single'" class="single-view">
-      <select
-        class="item-select"
-        v-model="selectedItem"
-        @change="onSelectItem"
-      >
-        <option v-for="(item, index) of gfxContent" :key="item.dataOffset" :value="item">
-          #{{ index }} - {{ pad(item.dataOffset, 10) }} Size: {{ item.width }} x {{ item.height }}
-        </option>
-      </select>
-
-      <template v-if="selectedItem != null">
-        <pre class="item-info">{{ selectedItem.toString() }}</pre>
-      </template>
-
-      <div class="canvas-wrapper">
-        <canvas height="600" width="600" ref="mainCanvas" class="main-canvas" />
-      </div>
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -107,7 +103,7 @@ async function doLoad(fileId: string) {
     const gfx = gfxFile.value;
     gfxContent.value = collectImages(
         () => gfx.getImageCount(),
-        (i) => gfx.getImage(i)
+        i => gfx.getImage(i)
     );
 
     log.debug('File: ' + fileId + ' with ' + gfxContent.value.length + ' images');

@@ -11,7 +11,9 @@ export class BinaryReader {
 
     constructor(
         dataArray?: BinaryReader | Uint8Array | ArrayBuffer,
-        offset = 0, length: number | null = null, filename: string | null = null
+        offset = 0,
+        length: number | null = null,
+        filename: string | null = null
     ) {
         if (offset === null) {
             offset = 0;
@@ -52,17 +54,17 @@ export class BinaryReader {
         this.length = length;
         this.pos = this.hiddenOffset;
 
-        this.filename = (filename) || '[Unknown]';
+        this.filename = filename || '[Unknown]';
 
         Object.seal(this);
     }
 
     /** return the selected data as new Uint8Array */
     public getBuffer(offset = 0, length = -1): Uint8Array {
-        const l = (length >= 0) ? Math.min(this.length, length) : this.length;
+        const l = length >= 0 ? Math.min(this.length, length) : this.length;
         const o = this.hiddenOffset + offset;
 
-        if ((l !== this.data.length) || (o > 0)) {
+        if (l !== this.data.length || o > 0) {
             return new Uint8Array(this.data.slice(o, o + l));
         } else {
             return this.data;
@@ -72,11 +74,13 @@ export class BinaryReader {
     /** Read one Byte from stream */
     public readByte(offset: number | null = null): number {
         if (offset !== null) {
-            this.pos = (offset + this.hiddenOffset);
+            this.pos = offset + this.hiddenOffset;
         }
 
-        if ((this.pos < 0) || (this.pos > this.data.length)) {
-            BinaryReader.log.error('read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos);
+        if (this.pos < 0 || this.pos > this.data.length) {
+            BinaryReader.log.error(
+                'read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos
+            );
             return 0;
         }
 
@@ -93,7 +97,11 @@ export class BinaryReader {
         }
 
         if (length === 4) {
-            const v = (this.data[offset] << 24) | (this.data[offset + 1] << 16) | (this.data[offset + 2] << 8) | (this.data[offset + 3]);
+            const v =
+                (this.data[offset] << 24) |
+                (this.data[offset + 1] << 16) |
+                (this.data[offset + 2] << 8) |
+                this.data[offset + 3];
             this.pos = offset + 4;
             return v;
         }
@@ -115,17 +123,21 @@ export class BinaryReader {
             offset = this.pos;
         }
 
-        if ((this.pos < 0) || (this.pos + 4 > this.data.length)) {
-            BinaryReader.log.error('read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos);
+        if (this.pos < 0 || this.pos + 4 > this.data.length) {
+            BinaryReader.log.error(
+                'read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos
+            );
             return 0;
         }
 
         this.pos = offset + 4;
 
-        return (this.data[offset]) |
+        return (
+            this.data[offset] |
             (this.data[offset + 1] << 8) |
             (this.data[offset + 2] << 16) |
-            (this.data[offset + 3] << 24);
+            (this.data[offset + 3] << 24)
+        );
     }
 
     /** Read one Word (2 Byte) from stream (big ending) */
@@ -135,7 +147,7 @@ export class BinaryReader {
         }
 
         this.pos = offset + 2;
-        return (this.data[offset] << 8) | (this.data[offset + 1]);
+        return (this.data[offset] << 8) | this.data[offset + 1];
     }
 
     /** Read one Word (2 Byte) from stream (big ending) */
@@ -145,8 +157,7 @@ export class BinaryReader {
         }
 
         this.pos = offset + 2;
-        return (this.data[offset]) |
-            (this.data[offset + 1] << 8);
+        return this.data[offset] | (this.data[offset + 1] << 8);
     }
 
     /** Read a String */
@@ -217,14 +228,14 @@ export class BinaryReader {
     }
 
     /** set the current curser position */
-    public setOffset(newPos: number) : void {
+    public setOffset(newPos: number): void {
         this.pos = newPos + this.hiddenOffset;
     }
 
     /** return true if the curser position is out of data */
     public eof(): boolean {
         const pos = this.pos - this.hiddenOffset;
-        return ((pos >= this.length) || (pos < 0));
+        return pos >= this.length || pos < 0;
     }
 
     /** return a String of the data */

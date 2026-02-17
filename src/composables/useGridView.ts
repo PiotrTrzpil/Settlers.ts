@@ -54,7 +54,7 @@ export function useGridView<K = number>(initialMode: ViewMode = 'grid') {
      * Call this in component setup with your render function and data check.
      */
     function watchGridMode(renderCallback: () => void, hasData: () => boolean) {
-        watch(viewMode, async(newMode) => {
+        watch(viewMode, async newMode => {
             if (newMode === 'grid' && hasData()) {
                 await nextTick();
                 renderCallback();

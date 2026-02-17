@@ -115,11 +115,7 @@ function decodeRawIndexed(
 }
 
 self.onmessage = (e: MessageEvent<DecodeRequest>) => {
-    const {
-        id, buffer, offset, width, height, imgType,
-        paletteOffset,
-        trimTop = 0, trimBottom = 0,
-    } = e.data;
+    const { id, buffer, offset, width, height, imgType, paletteOffset, trimTop = 0, trimBottom = 0 } = e.data;
     // Note: paletteBaseOffset is no longer used here - it's added per-sprite in the shader
 
     const bufferView = new Uint8Array(buffer);
@@ -131,17 +127,9 @@ self.onmessage = (e: MessageEvent<DecodeRequest>) => {
 
     let indexData: Uint16Array;
     if (imgType !== 32) {
-        indexData = decodeRLEIndexed(
-            bufferView, offset, width * height,
-            paletteOffset,
-            skipPixels, outputLength
-        );
+        indexData = decodeRLEIndexed(bufferView, offset, width * height, paletteOffset, skipPixels, outputLength);
     } else {
-        indexData = decodeRawIndexed(
-            bufferView, offset,
-            paletteOffset,
-            skipPixels, outputLength
-        );
+        indexData = decodeRawIndexed(bufferView, offset, paletteOffset, skipPixels, outputLength);
     }
 
     const response: DecodeResponse = { id, indices: indexData, width, height: trimmedHeight };

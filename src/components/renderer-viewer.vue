@@ -1,17 +1,8 @@
 <template>
     <div class="renderer-container">
-        <canvas
-          height="800"
-          width="800"
-          ref="cav"
-          class="cav"
-        />
+        <canvas height="800" width="800" ref="cav" class="cav" />
         <!-- Selection box overlay for drag selection -->
-        <div
-            v-if="selectionBox"
-            class="selection-box"
-            :style="selectionBoxStyle"
-        />
+        <div v-if="selectionBox" class="selection-box" :style="selectionBoxStyle" />
     </div>
 </template>
 
@@ -40,7 +31,7 @@ const { setRace, getRace, getInputManager, getCamera, selectionBox } = useRender
     getGame: () => props.game,
     getDebugGrid: () => props.debugGrid,
     getLayerVisibility: () => props.layerVisibility ?? DEFAULT_LAYER_VISIBILITY,
-    onTileClick: (tile) => emit('tileClick', tile),
+    onTileClick: tile => emit('tileClick', tile),
     initialCamera: props.initialCamera,
 });
 

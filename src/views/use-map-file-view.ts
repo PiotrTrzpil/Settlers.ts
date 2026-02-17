@@ -7,7 +7,14 @@ import type { IMapLoader } from '@/resources/map/imap-loader';
 import type { MapEntityData } from '@/resources/map/map-entity-data';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
-import { getGroundTypeName, parseResourceValue, S4Tribe, S4SettlerType, S4BuildingType, S4GoodType } from '@/resources/map/s4-types';
+import {
+    getGroundTypeName,
+    parseResourceValue,
+    S4Tribe,
+    S4SettlerType,
+    S4BuildingType,
+    S4GoodType,
+} from '@/resources/map/s4-types';
 
 const log = new LogHandler('MapFileView');
 
@@ -103,12 +110,18 @@ function getChunkCategory(type: MapChunkType): ChunkInfo['category'] {
 /** Get icon for a chunk category */
 function getCategoryIcon(category: ChunkInfo['category']): string {
     switch (category) {
-    case 'general': return '📋';
-    case 'landscape': return '🗺️';
-    case 'entities': return '🏠';
-    case 'player': return '👤';
-    case 'savegame': return '💾';
-    case 'unknown': return '❓';
+    case 'general':
+        return '📋';
+    case 'landscape':
+        return '🗺️';
+    case 'entities':
+        return '🏠';
+    case 'player':
+        return '👤';
+    case 'savegame':
+        return '💾';
+    case 'unknown':
+        return '❓';
     }
 }
 
@@ -369,9 +382,7 @@ export interface UseMapFileViewReturn {
     selectChunk: (chunk: ChunkInfo | null) => void;
 }
 
-export function useMapFileView(
-    getFileManager: () => FileManager | null
-): UseMapFileViewReturn {
+export function useMapFileView(getFileManager: () => FileManager | null): UseMapFileViewReturn {
     const fileName = ref<string | null>(null);
     const mapInfo = ref('');
     const mapLoader = ref<IMapLoader | null>(null);

@@ -42,7 +42,7 @@ export class IndexFile extends ResourceFile {
         return {
             index,
             offset: (offset - 20) >> 2,
-            length: length >> 2
+            length: length >> 2,
         };
     }
 

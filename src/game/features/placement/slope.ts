@@ -16,7 +16,10 @@ interface TileCoord {
 
 /** Cardinal direction offsets for neighbor checking */
 const CARDINAL_OFFSETS: ReadonlyArray<[number, number]> = [
-    [1, 0], [-1, 0], [0, 1], [0, -1],
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
 ];
 
 /**
@@ -87,11 +90,7 @@ export function computeSlopeDifficulty(
 /**
  * Check if slope is valid (within MAX_SLOPE_DIFF).
  */
-export function isSlopeValid(
-    tiles: TileCoord[],
-    groundHeight: Uint8Array,
-    mapSize: MapSize
-): boolean {
+export function isSlopeValid(tiles: TileCoord[], groundHeight: Uint8Array, mapSize: MapSize): boolean {
     const status = computeSlopeDifficulty(tiles, groundHeight, mapSize);
     return status !== PlacementStatus.TooSteep;
 }
@@ -101,11 +100,7 @@ export function isSlopeValid(
  * Returns (maxHeight - minHeight) for the entire footprint.
  * Used for continuous color gradients in the building indicator.
  */
-export function computeHeightRange(
-    tiles: TileCoord[],
-    groundHeight: Uint8Array,
-    mapSize: MapSize
-): number {
+export function computeHeightRange(tiles: TileCoord[], groundHeight: Uint8Array, mapSize: MapSize): number {
     if (tiles.length <= 1) return 0;
 
     let minHeight = 255;

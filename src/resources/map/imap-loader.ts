@@ -5,14 +5,14 @@ import type { MapEntityData } from './map-entity-data';
 
 /** Interface for map loaders */
 export interface IMapLoader {
-        landscape: IMapLandscape;
+    landscape: IMapLandscape;
 
-        /** General information about the map */
-        general: GeneralMapInformation;
+    /** General information about the map */
+    general: GeneralMapInformation;
 
-        /** return the size of the map */
-        mapSize : MapSize;
+    /** return the size of the map */
+    mapSize: MapSize;
 
-        /** Optional entity data parsed from map chunks (players, buildings, settlers, stacks) */
-        entityData?: MapEntityData;
+    /** Optional entity data parsed from map chunks (players, buildings, settlers, stacks) */
+    entityData?: MapEntityData;
 }

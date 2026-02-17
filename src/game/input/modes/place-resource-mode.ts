@@ -77,9 +77,7 @@ export class PlaceResourceMode extends BasePlacementMode<EMaterialType> {
      * Initialize mode data, handling multiple legacy enter data formats.
      * Note: This is only called after onEnter validates materialType exists.
      */
-    protected override initializeModeData(
-        enterData: PlaceResourceEnterData
-    ): PlaceResourceModeData {
+    protected override initializeModeData(enterData: PlaceResourceEnterData): PlaceResourceModeData {
         // Support materialType, resourceType, and subType for backward compatibility
         // Non-null assertion is safe because onEnter validates before calling this
         const materialType = (enterData.materialType ?? enterData.resourceType ?? enterData.subType)!;
@@ -99,10 +97,7 @@ export class PlaceResourceMode extends BasePlacementMode<EMaterialType> {
     /**
      * Handle enter with backward-compatible data format.
      */
-    override onEnter(
-        context: InputContext,
-        enterData?: PlacementModeEnterData<EMaterialType>
-    ): void {
+    override onEnter(context: InputContext, enterData?: PlacementModeEnterData<EMaterialType>): void {
         // Support multiple legacy property names
         const legacyData = enterData as PlaceResourceEnterData | undefined;
         const materialType = legacyData?.materialType ?? legacyData?.resourceType ?? enterData?.subType;

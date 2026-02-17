@@ -10,13 +10,13 @@ export class GilFileReader extends IndexFile {
     private static log: LogHandler = new LogHandler('GilFileReader');
 
     /** return the number of images stored in the gfx file */
-    public getImageCount():number {
+    public getImageCount(): number {
         return this.offsetTable ? this.offsetTable.length : 0;
     }
 
     /** return the file offset of a gfx image */
     public getImageOffset(index: number): number {
-        if ((index < 0) || (index >= this.offsetTable.length)) {
+        if (index < 0 || index >= this.offsetTable.length) {
             GilFileReader.log.error('Gfx-Index out of range: ' + index);
             return -1;
         }

@@ -1,18 +1,9 @@
 <template>
-  <div class="map-preview">
-    <canvas
-      ref="canvas"
-      class="preview-canvas"
-      @mousemove="onMouseMove"
-      @mouseleave="hoveredCoord = null"
-    />
-    <div v-if="hoveredCoord" class="coord-tooltip">
-      {{ hoveredCoord.x }}, {{ hoveredCoord.y }}
+    <div class="map-preview">
+        <canvas ref="canvas" class="preview-canvas" @mousemove="onMouseMove" @mouseleave="hoveredCoord = null" />
+        <div v-if="hoveredCoord" class="coord-tooltip">{{ hoveredCoord.x }}, {{ hoveredCoord.y }}</div>
+        <div v-if="!hasPreviewData" class="no-preview">No preview data available</div>
     </div>
-    <div v-if="!hasPreviewData" class="no-preview">
-      No preview data available
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -123,45 +114,48 @@ onMounted(() => {
     renderPreview();
 });
 
-watch(() => props.mapLoader, () => {
-    renderPreview();
-});
+watch(
+    () => props.mapLoader,
+    () => {
+        renderPreview();
+    }
+);
 </script>
 
 <style scoped>
 .map-preview {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #0d0a05;
-  border-radius: 4px;
-  padding: 8px;
-  min-height: 100px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0d0a05;
+    border-radius: 4px;
+    padding: 8px;
+    min-height: 100px;
 }
 
 .preview-canvas {
-  border: 1px solid #3a2810;
-  border-radius: 2px;
-  cursor: crosshair;
-  image-rendering: pixelated;
+    border: 1px solid #3a2810;
+    border-radius: 2px;
+    cursor: crosshair;
+    image-rendering: pixelated;
 }
 
 .coord-tooltip {
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
-  padding: 2px 6px;
-  background: rgba(0, 0, 0, 0.8);
-  color: #c8a96e;
-  font-size: 10px;
-  font-family: 'Courier New', monospace;
-  border-radius: 2px;
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, 0.8);
+    color: #c8a96e;
+    font-size: 10px;
+    font-family: 'Courier New', monospace;
+    border-radius: 2px;
 }
 
 .no-preview {
-  color: #6a5030;
-  font-size: 12px;
-  text-align: center;
+    color: #6a5030;
+    font-size: 12px;
+    text-align: center;
 }
 </style>

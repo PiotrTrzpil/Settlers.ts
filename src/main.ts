@@ -15,7 +15,7 @@ if (import.meta.hot) {
     });
 
     // Force reload for renderer files - instances don't auto-update on HMR
-    import.meta.hot.on('vite:beforeUpdate', (payload) => {
+    import.meta.hot.on('vite:beforeUpdate', payload => {
         const rendererPaths = [
             '/src/game/renderer/entity-renderer.ts',
             '/src/game/renderer/landscape/landscape-renderer.ts',

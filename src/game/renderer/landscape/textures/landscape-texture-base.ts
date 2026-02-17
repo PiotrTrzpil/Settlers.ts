@@ -9,7 +9,13 @@ export class LandscapeTextureBase {
         this.layout = layout;
     }
 
-    protected copyImage(srcImg: GfxImage16Bit, destTextureMap: TextureMap16Bit, width: number, srcX: number, srcY: number): void {
+    protected copyImage(
+        srcImg: GfxImage16Bit,
+        destTextureMap: TextureMap16Bit,
+        width: number,
+        srcX: number,
+        srcY: number
+    ): void {
         // Skip if this source position was already copied (shared by multiple textures)
         if (this.layout.has(srcX, srcY)) return;
 

@@ -21,7 +21,7 @@ export class MapChunk {
         return MapChunkType[this.chunkType] ?? '';
     }
 
-    public getReader() : BinaryReader {
+    public getReader(): BinaryReader {
         if (!this.reader) {
             return new BinaryReader();
         }
@@ -35,7 +35,7 @@ export class MapChunk {
     }
 
     /** return the position of the next section header in the file */
-    public calcNextChunkOffset():number {
+    public calcNextChunkOffset(): number {
         return this.offset + this.length;
     }
 
@@ -45,11 +45,11 @@ export class MapChunk {
         }
 
         const c1 = ChecksumCalculator.calc(this.reader, this.offset, this.length);
-        return (c1 === this.checksum);
+        return c1 === this.checksum;
     }
 
     /** read the header of a section */
-    public readFromFile(data: BinaryReader, offset:number):boolean {
+    public readFromFile(data: BinaryReader, offset: number): boolean {
         const SectionHeaderSize = 24;
         const plainData = DecodeSettlers.getReader(data, SectionHeaderSize, offset);
 
@@ -78,7 +78,19 @@ export class MapChunk {
     }
 
     public toString(): string {
-        return 'Chunk @ ' + this.offset + ', size: ' + this.unpackedLength + '; Type=' + this.chunkType + '; checksum=' +
-                this.checksum + ', unknown1=' + this.unknown1 + ', unknown2=' + this.unknown2;
+        return (
+            'Chunk @ ' +
+            this.offset +
+            ', size: ' +
+            this.unpackedLength +
+            '; Type=' +
+            this.chunkType +
+            '; checksum=' +
+            this.checksum +
+            ', unknown1=' +
+            this.unknown1 +
+            ', unknown2=' +
+            this.unknown2
+        );
     }
 }

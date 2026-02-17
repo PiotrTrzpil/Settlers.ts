@@ -77,7 +77,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         for (let i = 0; i < groundHeightMap.length; i++) {
             if (groundHeightMap[i] > maxH) maxH = groundHeightMap[i];
         }
-        this.heightMarginY = Math.ceil(maxH / 255 * TILE_HEIGHT_SCALE);
+        this.heightMarginY = Math.ceil((maxH / 255) * TILE_HEIGHT_SCALE);
 
         Object.seal(this);
     }
@@ -109,7 +109,11 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         this.landscapeTextureMap.copyTexture(img, this.texture);
     }
 
-    private createLandHeightBuffer(mapSize: MapSize, textureIndex: number, groundHeightMap: Uint8Array): ShaderDataTexture {
+    private createLandHeightBuffer(
+        mapSize: MapSize,
+        textureIndex: number,
+        groundHeightMap: Uint8Array
+    ): ShaderDataTexture {
         const result = new ShaderDataTexture(mapSize.width, mapSize.height, 1, textureIndex);
 
         for (let y = 0; y < mapSize.height; y++) {
@@ -166,7 +170,11 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         this.texture.load(gl);
 
         this.landTypeBuffer = this.createLandTypeBuffer(this.mapSize, TEXTURE_UNIT_LAND_TYPE, this.groundTypeMap);
-        this.landHeightBuffer = this.createLandHeightBuffer(this.mapSize, TEXTURE_UNIT_LAND_HEIGHT, this.groundHeightMap);
+        this.landHeightBuffer = this.createLandHeightBuffer(
+            this.mapSize,
+            TEXTURE_UNIT_LAND_HEIGHT,
+            this.groundHeightMap
+        );
 
         this.numVertices = 6;
 
@@ -179,11 +187,20 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     //    /-----/-----/-----/
     //   / 0/1 / 1/1 / 2/1 /
     //  /-----/-----/-----/
-    private getInstancePosArray(width: number, height: number, startX: number, startY: number): Int16Array<ArrayBuffer> {
+    private getInstancePosArray(
+        width: number,
+        height: number,
+        startX: number,
+        startY: number
+    ): Int16Array<ArrayBuffer> {
         // Return cached array if dimensions haven't changed
-        if (this.cachedInstancePos
-            && this.cachedInstanceW === width && this.cachedInstanceH === height
-            && this.cachedInstanceSX === startX && this.cachedInstanceSY === startY) {
+        if (
+            this.cachedInstancePos &&
+            this.cachedInstanceW === width &&
+            this.cachedInstanceH === height &&
+            this.cachedInstanceSX === startX &&
+            this.cachedInstanceSY === startY
+        ) {
             return this.cachedInstancePos;
         }
 
@@ -293,7 +310,6 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
     }
 
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-
         super.drawBase(gl, projection);
 
         const sp = this.shaderProgram;

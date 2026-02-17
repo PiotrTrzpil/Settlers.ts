@@ -13,7 +13,7 @@ import { BuildingConstructionPhase } from '../types';
  */
 export const PHASE_DURATIONS: Record<BuildingConstructionPhase, number> = {
     [BuildingConstructionPhase.Poles]: 0,
-    [BuildingConstructionPhase.TerrainLeveling]: 0.20,
+    [BuildingConstructionPhase.TerrainLeveling]: 0.2,
     [BuildingConstructionPhase.ConstructionRising]: 0.35,
     [BuildingConstructionPhase.CompletedRising]: 0.45,
     [BuildingConstructionPhase.Completed]: 0, // Terminal phase

@@ -1,15 +1,15 @@
 /**
-* Handle path name modification
-*/
+ * Handle path name modification
+ */
 export class Path {
     /** fix the path separator */
-    public static fixPath(path:string):string {
+    public static fixPath(path: string): string {
         return path.split('\\').join('/');
     }
 
     /** add an ending path separator */
-    public static addEndingSlash(path:string):string {
-        if ((path[path.length - 1] === '/') || (path[path.length - 1] === '\\')) {
+    public static addEndingSlash(path: string): string {
+        if (path[path.length - 1] === '/' || path[path.length - 1] === '\\') {
             return path;
         }
 
@@ -17,7 +17,7 @@ export class Path {
     }
 
     /** add a filename to a path */
-    public static combine(path1?:string, path2?:string, path3?:string):string {
+    public static combine(path1?: string, path2?: string, path3?: string): string {
         if (!path1 && !path2 && !path3) {
             return '';
         }
@@ -40,13 +40,13 @@ export class Path {
     }
 
     /** return the filename of a file path */
-    public static getFileName(fullFileName:string):string {
+    public static getFileName(fullFileName: string): string {
         const pos = fullFileName.lastIndexOf('/');
         if (pos < 0) {
             return fullFileName;
         }
 
-        if ((pos + 1) >= fullFileName.length) {
+        if (pos + 1 >= fullFileName.length) {
             return '';
         }
 
@@ -54,7 +54,7 @@ export class Path {
     }
 
     /** return only the filename without the Extension e.g. "c:/abc/test.txt" -> "test" */
-    public static getFileNameWithoutExtension(fullFileName:string):string {
+    public static getFileNameWithoutExtension(fullFileName: string): string {
         const fileName = Path.getFileName(fullFileName);
         const pos = fileName.lastIndexOf('.');
         if (pos < 0) {
@@ -65,7 +65,7 @@ export class Path {
     }
 
     /** return the path of a filename */
-    public static getPathName(fullFileName:string):string {
+    public static getPathName(fullFileName: string): string {
         const pos = fullFileName.lastIndexOf('/');
         if (pos <= 0) {
             return '';

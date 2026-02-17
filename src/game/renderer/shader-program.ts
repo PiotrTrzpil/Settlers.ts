@@ -2,8 +2,8 @@ import { LogHandler } from '@/utilities/log-handler';
 import { ShaderObject } from './shader-object';
 
 export enum ShaderType {
-        VERTEX_SHADER,
-        FRAGMENT_SHADER
+    VERTEX_SHADER,
+    FRAGMENT_SHADER,
 }
 
 export class ShaderProgram implements ShaderObject {
@@ -88,7 +88,7 @@ export class ShaderProgram implements ShaderObject {
     }
 
     public use(): void {
-        if ((!this.shaderProgram) || (!this.gl)) {
+        if (!this.shaderProgram || !this.gl) {
             return;
         }
 
@@ -107,7 +107,7 @@ export class ShaderProgram implements ShaderObject {
 
     public setMatrix(name: string, values: Float32Array): void {
         const gl = this.gl;
-        if ((!this.shaderProgram) || (!gl)) {
+        if (!this.shaderProgram || !gl) {
             return;
         }
 
@@ -122,7 +122,7 @@ export class ShaderProgram implements ShaderObject {
 
     public setVector2(name: string, a1: number, a2: number): void {
         const gl = this.gl;
-        if ((!this.shaderProgram) || (!gl)) {
+        if (!this.shaderProgram || !gl) {
             return;
         }
 
@@ -156,7 +156,7 @@ export class ShaderProgram implements ShaderObject {
 
     public setAttribute(name: string, values: BufferSource, size: number, type: number, divisor: number): void {
         const gl = this.gl;
-        if ((!this.shaderProgram) || (!gl)) {
+        if (!this.shaderProgram || !gl) {
             return;
         }
 
@@ -200,7 +200,7 @@ export class ShaderProgram implements ShaderObject {
     }
 
     public bindTexture(name: string, textureId: number): void {
-        if ((!this.shaderProgram) || (!this.gl)) {
+        if (!this.shaderProgram || !this.gl) {
             return;
         }
 
@@ -214,7 +214,7 @@ export class ShaderProgram implements ShaderObject {
     }
 
     public setUniformInt(name: string, value: number): void {
-        if ((!this.shaderProgram) || (!this.gl)) {
+        if (!this.shaderProgram || !this.gl) {
             return;
         }
 

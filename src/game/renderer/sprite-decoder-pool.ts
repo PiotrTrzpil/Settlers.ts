@@ -142,8 +142,8 @@ export class SpriteDecoderPool {
         }
 
         const start = performance.now();
-        const warmUpPromises = this.workers.map((worker) => {
-            return new Promise<void>((resolve) => {
+        const warmUpPromises = this.workers.map(worker => {
+            return new Promise<void>(resolve => {
                 const id = this.nextRequestId++;
 
                 const handler = (e: MessageEvent<DecodeResponse>) => {

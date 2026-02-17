@@ -28,7 +28,7 @@ export class GfxImage8Bit implements IGfxImage {
             const value1 = buffer[pos];
             pos++;
 
-            imgData[j++] = value1;// r
+            imgData[j++] = value1; // r
             imgData[j++] = value1; // g
             imgData[j++] = value1; // b
             imgData[j++] = 255; // alpha
@@ -59,9 +59,21 @@ export class GfxImage8Bit implements IGfxImage {
     }
 
     public toString(): string {
-        return ImageType[this.imageType] + ' - ' +
-                    'size: (' + this.width + ' x' + this.height + ') ' +
-                    'data offset ' + this.dataOffset + '; ' +
-                    'flags: ' + this.flag1 + '    ' + this.flag2;
+        return (
+            ImageType[this.imageType] +
+            ' - ' +
+            'size: (' +
+            this.width +
+            ' x' +
+            this.height +
+            ') ' +
+            'data offset ' +
+            this.dataOffset +
+            '; ' +
+            'flags: ' +
+            this.flag1 +
+            '    ' +
+            this.flag2
+        );
     }
 }

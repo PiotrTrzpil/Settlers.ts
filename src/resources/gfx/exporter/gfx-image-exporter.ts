@@ -109,7 +109,7 @@ export class GfxImageExporter {
                 pilPath: hasPil ? pilPath : pi4Path,
                 jilPath: hasJil ? jilPath : undefined,
                 dilPath: hasDil ? dilPath : undefined,
-                imageCount: 0 // Will be populated when loading
+                imageCount: 0, // Will be populated when loading
             });
         }
 
@@ -137,7 +137,7 @@ export class GfxImageExporter {
             this.fileReader.readFile(info.palettePath),
             this.fileReader.readFile(info.pilPath),
             info.jilPath ? this.fileReader.readFile(info.jilPath).catch(() => null) : Promise.resolve(null),
-            info.dilPath ? this.fileReader.readFile(info.dilPath).catch(() => null) : Promise.resolve(null)
+            info.dilPath ? this.fileReader.readFile(info.dilPath).catch(() => null) : Promise.resolve(null),
         ]);
 
         const gilReader = new GilFileReader(gilData);
@@ -168,12 +168,7 @@ export class GfxImageExporter {
     /**
      * Build export filename for an image
      */
-    private buildExportFilename(
-        index: number,
-        image: IGfxImage,
-        includeMetadata: boolean,
-        padLength = 5
-    ): string {
+    private buildExportFilename(index: number, image: IGfxImage, includeMetadata: boolean, padLength = 5): string {
         let filename = `${index.toString().padStart(padLength, '0')}`;
 
         if (includeMetadata) {
@@ -189,11 +184,7 @@ export class GfxImageExporter {
     /**
      * Export a single image to PNG
      */
-    async exportImage(
-        image: IGfxImage,
-        outputPath: string,
-        _includeMetadata = false
-    ): Promise<void> {
+    async exportImage(image: IGfxImage, outputPath: string, _includeMetadata = false): Promise<void> {
         const rawData = this.imageToRawData(image);
         const pngData = await encodePNG(rawData);
         await this.fileWriter.writeFile(outputPath, pngData as Uint8Array<ArrayBuffer>);
@@ -202,16 +193,13 @@ export class GfxImageExporter {
     /**
      * Export all images from a GFX file set
      */
-    async exportGfxFile(
-        info: GfxFileInfo,
-        options: ExportOptions
-    ): Promise<ExportResult> {
+    async exportGfxFile(info: GfxFileInfo, options: ExportOptions): Promise<ExportResult> {
         const result: ExportResult = {
             success: true,
             exportedCount: 0,
             failedCount: 0,
             errors: [],
-            files: []
+            files: [],
         };
 
         try {
@@ -220,15 +208,11 @@ export class GfxImageExporter {
             info.imageCount = imageCount;
 
             // Create output directory
-            const outputDir = this.fileWriter.join(
-                options.outputDir,
-                options.filenamePrefix || info.baseName
-            );
+            const outputDir = this.fileWriter.join(options.outputDir, options.filenamePrefix || info.baseName);
             await this.fileWriter.mkdir(outputDir);
 
             // Determine which images to export
-            const indices = options.imageIndices ??
-                Array.from({ length: imageCount }, (_, i) => i);
+            const indices = options.imageIndices ?? Array.from({ length: imageCount }, (_, i) => i);
 
             for (let i = 0; i < indices.length; i++) {
                 const index = indices[i];
@@ -250,9 +234,7 @@ export class GfxImageExporter {
                         continue;
                     }
 
-                    const filename = this.buildExportFilename(
-                        index, image, options.includeMetadata ?? false, 5
-                    );
+                    const filename = this.buildExportFilename(index, image, options.includeMetadata ?? false, 5);
                     const outputPath = this.fileWriter.join(outputDir, filename);
                     await this.exportImage(image, outputPath);
 
@@ -274,16 +256,13 @@ export class GfxImageExporter {
     /**
      * Export all images from a GH file
      */
-    async exportGhFile(
-        path: string,
-        options: ExportOptions
-    ): Promise<ExportResult> {
+    async exportGhFile(path: string, options: ExportOptions): Promise<ExportResult> {
         const result: ExportResult = {
             success: true,
             exportedCount: 0,
             failedCount: 0,
             errors: [],
-            files: []
+            files: [],
         };
 
         try {
@@ -291,14 +270,10 @@ export class GfxImageExporter {
             const imageCount = reader.getImageCount();
 
             const baseName = this.fileReader.basenameWithoutExt(path);
-            const outputDir = this.fileWriter.join(
-                options.outputDir,
-                options.filenamePrefix || baseName
-            );
+            const outputDir = this.fileWriter.join(options.outputDir, options.filenamePrefix || baseName);
             await this.fileWriter.mkdir(outputDir);
 
-            const indices = options.imageIndices ??
-                Array.from({ length: imageCount }, (_, i) => i);
+            const indices = options.imageIndices ?? Array.from({ length: imageCount }, (_, i) => i);
 
             for (let i = 0; i < indices.length; i++) {
                 const index = indices[i];
@@ -319,9 +294,7 @@ export class GfxImageExporter {
                         continue;
                     }
 
-                    const filename = this.buildExportFilename(
-                        index, image, options.includeMetadata ?? false, 3
-                    );
+                    const filename = this.buildExportFilename(index, image, options.includeMetadata ?? false, 3);
                     const outputPath = this.fileWriter.join(outputDir, filename);
                     await this.exportImage(image, outputPath);
 
@@ -343,16 +316,13 @@ export class GfxImageExporter {
     /**
      * Export all GFX files from a directory
      */
-    async exportDirectory(
-        sourceDir: string,
-        options: ExportOptions
-    ): Promise<ExportResult> {
+    async exportDirectory(sourceDir: string, options: ExportOptions): Promise<ExportResult> {
         const combinedResult: ExportResult = {
             success: true,
             exportedCount: 0,
             failedCount: 0,
             errors: [],
-            files: []
+            files: [],
         };
 
         // Find and export GFX files
@@ -391,10 +361,7 @@ export class GfxImageExporter {
     /**
      * Export a single GFX file by path (auto-detects companion files)
      */
-    async exportSingleFile(
-        filePath: string,
-        options: ExportOptions
-    ): Promise<ExportResult> {
+    async exportSingleFile(filePath: string, options: ExportOptions): Promise<ExportResult> {
         const lower = filePath.toLowerCase();
 
         if (lower.endsWith('.gh5') || lower.endsWith('.gh6')) {
@@ -427,7 +394,7 @@ export class GfxImageExporter {
                 pilPath: hasPil ? pilPath : pi4Path,
                 jilPath: hasJil ? jilPath : undefined,
                 dilPath: hasDil ? dilPath : undefined,
-                imageCount: 0
+                imageCount: 0,
             };
 
             return this.exportGfxFile(info, options);
@@ -438,7 +405,7 @@ export class GfxImageExporter {
             exportedCount: 0,
             failedCount: 0,
             errors: [`Unknown file type: ${filePath}`],
-            files: []
+            files: [],
         };
     }
 
@@ -474,7 +441,7 @@ export class GfxImageExporter {
                     width: image.width,
                     height: image.height,
                     left: image.left,
-                    top: image.top
+                    top: image.top,
                 });
             }
         }
@@ -486,9 +453,6 @@ export class GfxImageExporter {
 /**
  * Create an exporter with the given file system implementations
  */
-export function createGfxExporter(
-    fileReader: IFileReader,
-    fileWriter: IFileWriter
-): GfxImageExporter {
+export function createGfxExporter(fileReader: IFileReader, fileWriter: IFileWriter): GfxImageExporter {
     return new GfxImageExporter(fileReader, fileWriter);
 }

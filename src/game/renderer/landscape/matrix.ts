@@ -56,7 +56,14 @@ export class Matrix {
     }
 
     /** Creates a 4-by-4 orthographic projection matrix */
-    public static createOrthographic(left: number, right: number, bottom: number, top: number, near: number, far: number): Matrix {
+    public static createOrthographic(
+        left: number,
+        right: number,
+        bottom: number,
+        top: number,
+        near: number,
+        far: number
+    ): Matrix {
         const mat = new Float32Array(16);
 
         mat[0] = 2 / (right - left);

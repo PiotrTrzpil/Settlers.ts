@@ -367,12 +367,12 @@ export class RenderProfiler {
 
     private logSummary(): void {
         const stats = this.getRollingStats();
-        const budget = stats.avgFrameTimeUs / 16666.67 * 100; // % of 60fps budget
+        const budget = (stats.avgFrameTimeUs / 16666.67) * 100; // % of 60fps budget
         console.log(
             `[RENDER] ${stats.avgFps.toFixed(1)} FPS | ` +
-            `${(stats.avgFrameTimeUs / 1000).toFixed(2)}ms (${budget.toFixed(0)}% budget) | ` +
-            `${stats.avgDrawCalls.toFixed(0)} draws | ` +
-            `${stats.avgVisibleEntities.toFixed(0)} entities`
+                `${(stats.avgFrameTimeUs / 1000).toFixed(2)}ms (${budget.toFixed(0)}% budget) | ` +
+                `${stats.avgDrawCalls.toFixed(0)} draws | ` +
+                `${stats.avgVisibleEntities.toFixed(0)} entities`
         );
     }
 
@@ -380,12 +380,12 @@ export class RenderProfiler {
         const m = this.currentMetrics;
         console.log(
             `[RENDER] frame: ${(m.frameTimeUs / 1000).toFixed(2)}ms | ` +
-            `cull: ${(m.cullTimeUs / 1000).toFixed(2)}ms | ` +
-            `sort: ${(m.sortTimeUs / 1000).toFixed(2)}ms | ` +
-            `draw: ${(m.drawTimeUs / 1000).toFixed(2)}ms | ` +
-            `${m.visibleEntities}/${m.totalEntities} entities | ` +
-            `${m.drawCallCount} draws | ` +
-            `${m.batchFlushCount} flushes`
+                `cull: ${(m.cullTimeUs / 1000).toFixed(2)}ms | ` +
+                `sort: ${(m.sortTimeUs / 1000).toFixed(2)}ms | ` +
+                `draw: ${(m.drawTimeUs / 1000).toFixed(2)}ms | ` +
+                `${m.visibleEntities}/${m.totalEntities} entities | ` +
+                `${m.drawCallCount} draws | ` +
+                `${m.batchFlushCount} flushes`
         );
     }
 
