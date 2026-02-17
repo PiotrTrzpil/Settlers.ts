@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 import vue from '@vitejs/plugin-vue';
 import glsl from 'vite-plugin-glsl';
 import { resolve } from 'path';
+import { computeSourceHash } from './tests/e2e/source-hash';
 
 // Only include polyfills in browser builds, not in test environment
 const isTest = process.env.VITEST === 'true';
@@ -29,6 +30,8 @@ export default defineConfig({
     define: {
         // Build timestamp for cache invalidation on server restart
         __BUILD_TIME__: JSON.stringify(Date.now().toString()),
+        // Source hash for stale server detection in e2e tests
+        __SOURCE_HASH__: JSON.stringify(computeSourceHash()),
     },
     resolve: {
         alias: {

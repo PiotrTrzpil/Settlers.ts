@@ -5,6 +5,13 @@ import App from './app.vue';
 import router from './router';
 import { LogHandler } from './utilities/log-handler';
 
+declare const __SOURCE_HASH__: string;
+
+/** Expose source hash for stale server detection by e2e tests */
+if (typeof __SOURCE_HASH__ !== 'undefined') {
+    (window as any).__source_hash__ = __SOURCE_HASH__;
+}
+
 const log = new LogHandler('Global');
 
 // Force full page reload when HMR fails (prevents stale code issues)

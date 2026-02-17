@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { TEST_SERVER_PORT } from './tests/e2e/test-server';
 
 /**
  * Playwright configuration with project-based test tiers.
@@ -23,7 +24,7 @@ const isCloudEnv = process.env.CI || process.env.CLAUDE_CODE_REMOTE === 'true';
 
 // Base settings shared across projects
 const baseSettings = {
-    baseURL: 'http://localhost:4173',
+    baseURL: `http://localhost:${TEST_SERVER_PORT}`,
     headless: true,
     viewport: { width: 1280, height: 720 },
     bypassCSP: true,
@@ -125,8 +126,10 @@ export default defineConfig({
     ],
 
     webServer: {
-        command: process.env.CI ? 'npm run build:full && npx vite preview --port 4173' : 'npx vite --port 4173',
-        url: 'http://localhost:4173',
+        command: process.env.CI
+            ? `npm run build:full && npx vite preview --port ${TEST_SERVER_PORT}`
+            : `npx vite --port ${TEST_SERVER_PORT}`,
+        url: `http://localhost:${TEST_SERVER_PORT}`,
         timeout: process.env.CI ? 120_000 : 30_000,
         reuseExistingServer: !process.env.CI,
     },
