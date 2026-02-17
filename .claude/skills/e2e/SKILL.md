@@ -24,7 +24,7 @@ Run `pnpm lint` and wait for it to complete. If lint fails, report about it, the
 npx playwright test --project=smoke --reporter=list 2>&1 | tee /tmp/e2e-smoke.log &
 ```
 
-Poll `/tmp/e2e-smoke.log` every 10 seconds using `tail -20` until you see "passed" or "failed" in the output.
+Poll `/tmp/e2e-smoke.log` every 10 seconds using `tail -20` until you see "passed" or "failed" in the output. But run it in such a way that you don't wait for next poll if the tests complete early.
 
 ### 3. If smoke fails → investigate immediately
 
@@ -39,7 +39,7 @@ Poll `/tmp/e2e-smoke.log` every 10 seconds using `tail -20` until you see "passe
 npx playwright test --project=default --project=slow --reporter=list 2>&1 | tee /tmp/e2e-full.log &
 ```
 
-Poll `/tmp/e2e-full.log` every 10 seconds. **As soon as any test failure appears** in the output (look for `✘` or `FAILED` or `Error` lines), start investigating it immediately — read the test, read the source, identify the issue — while the remaining tests continue running in background.
+Poll `/tmp/e2e-full.log` every 10 seconds (But run it in such a way that you don't wait for next poll if the tests complete early). **As soon as any test failure appears** in the output (look for `✘` or `FAILED` or `Error` lines), start investigating it immediately — read the test, read the source, identify the issue — while the remaining tests continue running in background.
 
 ### 5. Report results
 

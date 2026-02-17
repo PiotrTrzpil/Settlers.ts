@@ -9,6 +9,7 @@ You are fixing a bug with a focus on understanding root causes and preventing si
 ultrathink
 
 **IMPORTANT: Do NOT use plan mode. Investigate and fix the bug directly.**
+Also, you may be working concurrently with other workers or the user. do not stash anything, do not revert anything.
 
 ## Bug Description
 
