@@ -3,19 +3,6 @@
  * This is a barrel file that re-exports from specialized modules.
  */
 
-// === Entity State Types (imported for Entity interface) ===
-// These are imported as types to avoid circular dependencies.
-// The actual implementations live in their respective systems/features.
-
-/** Tree growth/cutting state - see TreeSystem */
-export type { TreeState, TreeStage } from './systems/tree-system';
-
-/** Building construction state - see BuildingStateManager */
-export type { BuildingState } from './features/building-construction/types';
-
-/** Carrier job/status state - see CarrierManager */
-export type { CarrierState, CarrierStatus } from './features/carriers/carrier-state';
-
 /** Material carrying state - used by any unit that can carry materials */
 import type { EMaterialType } from './economy';
 
@@ -86,27 +73,6 @@ export interface Entity {
      * Default is 0.
      */
     variation?: number;
-    // === Per-Entity State (RFC: Entity-Owned State) ===
-    // State that lives on the entity rather than in system Maps.
-    // See docs/rfcs/entity-component-architecture.md
-
-    /**
-     * Tree growth/cutting state.
-     * Only present for MapObject entities that are trees.
-     */
-    tree?: import('./systems/tree-system').TreeState;
-
-    /**
-     * Building construction state.
-     * Present for all buildings - tracks construction phase (including Completed).
-     */
-    construction?: import('./features/building-construction/types').BuildingState;
-
-    /**
-     * Carrier job and status state.
-     * Only present for carrier units.
-     */
-    carrier?: import('./features/carriers/carrier-state').CarrierState;
 
     /**
      * Material being carried by this unit.
@@ -127,41 +93,8 @@ export interface EntityProvider {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Component helpers - throw with context when accessing required components
+// Carrying helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Get carrier state from an entity, throwing if not present.
- * Use when the entity MUST be a carrier.
- */
-export function getCarrierState(entity: Entity): NonNullable<Entity['carrier']> {
-    if (!entity.carrier) {
-        throw new Error(`Entity ${entity.id} is not a carrier (has no carrier state)`);
-    }
-    return entity.carrier;
-}
-
-/**
- * Get tree state from an entity, throwing if not present.
- * Use when the entity MUST be a tree.
- */
-export function getTreeState(entity: Entity): NonNullable<Entity['tree']> {
-    if (!entity.tree) {
-        throw new Error(`Entity ${entity.id} is not a tree (has no tree state)`);
-    }
-    return entity.tree;
-}
-
-/**
- * Get construction state from an entity, throwing if not present.
- * Use when the entity MUST have construction state.
- */
-export function getConstructionState(entity: Entity): NonNullable<Entity['construction']> {
-    if (!entity.construction) {
-        throw new Error(`Entity ${entity.id} has no construction state`);
-    }
-    return entity.construction;
-}
 
 /**
  * Get carrying state from an entity, throwing if not present.

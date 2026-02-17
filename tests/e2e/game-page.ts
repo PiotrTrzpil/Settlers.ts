@@ -1057,7 +1057,7 @@ export class GamePage {
         return this.page.evaluate(
             ({ id }) => {
                 const game = (window as any).__settlers_game__;
-                const animService = game?.gameLoop?.animationService;
+                const animService = game?.services?.animationService;
                 if (!animService) return null;
                 const state = animService.getState(id);
                 if (!state) return null;
@@ -1132,7 +1132,7 @@ export class GamePage {
                     let count = 0;
                     function sample() {
                         const game = (window as any).__settlers_game__;
-                        const animService = game?.gameLoop?.animationService;
+                        const animService = game?.services?.animationService;
                         if (animService) {
                             const state = animService.getState(id);
                             if (state) {

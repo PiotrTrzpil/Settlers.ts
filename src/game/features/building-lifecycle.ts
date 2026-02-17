@@ -132,6 +132,9 @@ export class BuildingLifecycle {
             this.carrierManager.removeCarrier(entityId);
         }
 
+        // Clean up building construction state
+        this.buildingStateManager.removeBuildingState(entityId);
+
         // Clean up service area if this building had one
         this.serviceAreaManager.removeServiceArea(entityId);
 

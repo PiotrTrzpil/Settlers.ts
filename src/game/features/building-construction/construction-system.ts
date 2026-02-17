@@ -53,14 +53,14 @@ export class BuildingConstructionSystem implements TickSystem {
     registerEvents(eventBus: EventBus): void {
         this.eventBus = eventBus;
         this.subscriptions.subscribe(eventBus, 'building:removed', ({ buildingState }) => {
-            this.onBuildingRemoved(buildingState);
+            this.onBuildingRemoved(buildingState as BuildingState);
         });
         // Listen for building:completed to spawn units (handles both tick completion and instant placement)
         this.subscriptions.subscribe(eventBus, 'building:completed', ({ buildingState }) => {
             const spawnCtx: SpawnContext | undefined = this.terrainContext
                 ? { groundType: this.terrainContext.groundType, mapSize: this.terrainContext.mapSize }
                 : undefined;
-            spawnUnitsOnBuildingComplete(this.state, buildingState, eventBus, spawnCtx);
+            spawnUnitsOnBuildingComplete(this.state, buildingState as BuildingState, eventBus, spawnCtx);
         });
     }
 

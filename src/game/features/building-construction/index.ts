@@ -46,3 +46,6 @@ export {
     restoreOriginalTerrain,
     CONSTRUCTION_SITE_GROUND_TYPE,
 } from './terrain';
+
+// Map building population (for loading buildings from map files)
+export { type PopulateBuildingsOptions, populateMapBuildings, mapS4BuildingType } from './map-buildings';

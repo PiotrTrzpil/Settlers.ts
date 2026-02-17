@@ -12,7 +12,7 @@ import { MapSize } from '@/utilities/map-size';
 import type { EventBus } from '../event-bus';
 import { gameSettings } from '../game-settings';
 import { debugStats } from '../debug-stats';
-import type { SettlerTaskSystem } from '../systems/settler-tasks';
+import type { SettlerTaskSystem } from '../features/settler-tasks';
 import {
     Command,
     FORMATION_OFFSETS,

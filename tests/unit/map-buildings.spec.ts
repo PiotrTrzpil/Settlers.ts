@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestContext, type TestContext } from './helpers/test-game';
-import { populateMapBuildings, mapS4BuildingType } from '@/game/systems/map-buildings';
+import { populateMapBuildings, mapS4BuildingType } from '@/game/features/building-construction';
 import { S4BuildingType } from '@/resources/map/s4-types';
 import { BuildingType } from '@/game/buildings/types';
 import { EntityType } from '@/game/entity';

@@ -1,7 +1,7 @@
 import { EntityType, MapObjectType } from '../entity';
 import { GameState } from '../game-state';
 import { MapSize } from '@/utilities/map-size';
-import { isBuildable } from '../features/placement';
+import { isBuildable } from './terrain-queries';
 import { LogHandler } from '@/utilities/log-handler';
 import type { MapObjectData } from '@/resources/map/map-entity-data';
 import { S4TreeType, S4GroundType } from '@/resources/map/s4-types';

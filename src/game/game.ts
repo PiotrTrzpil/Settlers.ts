@@ -3,14 +3,17 @@ import { IMapLoader } from '@/resources/map/imap-loader';
 import { MapSize } from '@/utilities/map-size';
 import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
+import { GameServices } from './game-services';
 import { Command, executeCommand, type CommandResult, type CommandContext } from './commands';
 import { isBuildable } from './features/placement';
 import { populateMapObjectsFromEntityData, expandTrees } from './systems/map-objects';
-import { populateMapBuildings } from './systems/map-buildings';
+import { populateMapBuildings } from './features/building-construction';
 import { SoundManager } from './audio';
 import { Race } from './renderer/sprite-metadata';
 import { EventBus } from './event-bus';
 import { EntityType } from './entity';
+import type { TickSystem } from './tick-system';
+import type { FrameRenderTiming } from './renderer/renderer';
 
 /** Options for resetToCleanState */
 export interface ResetOptions {
@@ -41,7 +44,13 @@ export class Game {
     public readonly mapLoader: IMapLoader;
     public state: GameState;
     public readonly eventBus: EventBus;
-    public gameLoop: GameLoop;
+
+    /** All game managers and domain systems (composition root) */
+    public readonly services: GameServices;
+
+    /** Frame loop — private; use delegation methods on Game instead */
+    private readonly _gameLoop: GameLoop;
+
     // Script service is optional - only loaded when Lua is enabled
     private scriptService: IScriptService | null = null;
 
@@ -67,8 +76,21 @@ export class Game {
 
         this.eventBus = new EventBus();
         this.state = new GameState(this.eventBus);
-        this.gameLoop = new GameLoop(this.state, this.eventBus);
-        this.gameLoop.setTerrainData(this.groundType, this.groundHeight, this.mapSize.width, this.mapSize.height);
+
+        // Create all game managers and domain systems
+        this.services = new GameServices(this.state, this.eventBus);
+        this.services.setTerrainData(this.groundType, this.groundHeight, this.mapSize);
+
+        // Create frame loop and register tick systems
+        this._gameLoop = new GameLoop(this.state, this.services.animationService);
+        for (const system of this.services.getTickSystems()) {
+            this._gameLoop.registerSystem(system);
+        }
+
+        // Wire entity removal notifications to tick systems
+        this.services.buildingLifecycle.onRemoved(entityId => {
+            this._gameLoop.notifyEntityRemoved(entityId);
+        });
 
         // Scripting system is initialized lazily when loadScript is called
         // This avoids bundling Lua/wasmoon when scripting is disabled
@@ -97,7 +119,7 @@ export class Game {
         // Populate buildings from map entity data (if available)
         if (mapLoader.entityData?.buildings?.length) {
             const count = populateMapBuildings(this.state, mapLoader.entityData.buildings, {
-                buildingStateManager: this.gameLoop.buildingStateManager,
+                buildingStateManager: this.services.buildingStateManager,
                 eventBus: this.eventBus,
                 terrain: {
                     groundType: this.groundType,
@@ -147,8 +169,8 @@ export class Game {
             groundHeight: this.groundHeight,
             mapSize: this.mapSize,
             eventBus: this.eventBus,
-            settlerTaskSystem: this.gameLoop.settlerTaskSystem,
-            buildingStateManager: this.gameLoop.buildingStateManager,
+            settlerTaskSystem: this.services.settlerTaskSystem,
+            buildingStateManager: this.services.buildingStateManager,
         };
     }
 
@@ -217,18 +239,12 @@ export class Game {
 
         // Rebuild inventory visualizer to sync with new entity state
         if (rebuildInventory) {
-            this.gameLoop.inventoryVisualizer.rebuildFromExistingEntities();
+            this.services.inventoryVisualizer.rebuildFromExistingEntities();
         }
 
         return idsToRemove.length;
     }
 
-    /**
-     * Load and execute a mission script for the current map.
-     *
-     * @param mapFilename The map filename to derive script path from
-     * @returns Load result with success status
-     */
     /**
      * Load and execute a Lua script for the map.
      * Scripting is only loaded when enabled in settings.
@@ -250,13 +266,13 @@ export class Game {
             if (!this.scriptService) {
                 const service = new ScriptService({
                     gameState: this.state,
-                    buildingStateManager: this.gameLoop.buildingStateManager,
+                    buildingStateManager: this.services.buildingStateManager,
                     mapWidth: this.mapSize.width,
                     mapHeight: this.mapSize.height,
                     landscape: this.mapLoader.landscape,
                 });
                 await service.initialize();
-                this.gameLoop.registerSystem(service);
+                this._gameLoop.registerSystem(service as unknown as TickSystem);
                 this.scriptService = service;
             }
 
@@ -267,19 +283,42 @@ export class Game {
         }
     }
 
+    // ===== Frame loop delegation =====
+
     /** Start the game loop */
     public start(): void {
-        this.gameLoop.start();
+        this._gameLoop.start();
     }
 
     /** Stop the game loop */
     public stop(): void {
-        this.gameLoop.stop();
+        this._gameLoop.stop();
+    }
+
+    /** Whether the game loop is currently running */
+    public get isRunning(): boolean {
+        return this._gameLoop.isRunning;
+    }
+
+    /** Enable game ticks (call after sprites are loaded) */
+    public enableTicks(): void {
+        this._gameLoop.enableTicks();
+    }
+
+    /** Set the per-frame render callback */
+    public setRenderCallback(callback: (alpha: number, deltaSec: number) => FrameRenderTiming | null): void {
+        this._gameLoop.setRenderCallback(callback);
+    }
+
+    /** Set the per-frame update callback (input, sound, debug stats) */
+    public setUpdateCallback(callback: (deltaSec: number) => void): void {
+        this._gameLoop.setUpdateCallback(callback);
     }
 
     /** Destroy the game and clean up all resources */
     public destroy(): void {
         this.scriptService?.destroy();
-        this.gameLoop.destroy();
+        this.services.destroy();
+        this._gameLoop.destroy();
     }
 }

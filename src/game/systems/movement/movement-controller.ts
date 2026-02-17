@@ -433,4 +433,19 @@ export class MovementController {
         this._path = [...newPath];
         this._pathIndex = 0;
     }
+
+    /**
+     * Replace path from a given index onward with a new suffix.
+     * Keeps everything before suffixStartIndex, replaces the rest.
+     */
+    replacePathSuffix(newSuffix: TileCoord[], suffixStartIndex: number): void {
+        this._path = [...this._path.slice(0, suffixStartIndex), ...newSuffix];
+    }
+
+    /**
+     * Reset blocked time (e.g. after escalated repath succeeds).
+     */
+    resetBlockedTime(): void {
+        this._blockedTime = 0;
+    }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MaterialRequestSystem, type MaterialRequestSystemConfig } from '@/game/systems/production-system';
+import { MaterialRequestSystem, type MaterialRequestSystemConfig } from '@/game/features/material-requests';
 import { BuildingType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';

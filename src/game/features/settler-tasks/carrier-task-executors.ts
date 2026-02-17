@@ -8,7 +8,7 @@
 
 import { type Entity, setCarrying, clearCarrying } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
-import { CarrierStatus } from '../../features/carriers';
+import { CarrierStatus } from '../carriers';
 import { TaskType, TaskResult, type TaskNode, type CarrierJobState } from './types';
 import type { TaskContext } from './task-executors';
 import { moveToPosition } from './task-executors';

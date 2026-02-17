@@ -8,7 +8,7 @@ import { EntityType } from './entity';
 import { BuildingConstructionPhase } from './features/building-construction';
 import type { EMaterialType } from './economy/material-type';
 import { CarrierStatus } from './features/carriers/carrier-state';
-import type { TreeStage } from './systems/tree-system';
+import type { TreeStage } from './features/trees/tree-system';
 import { type RequestPriority, RequestStatus } from './features/logistics/resource-request';
 
 const STORAGE_KEY = 'settlers_game_state';
@@ -185,7 +185,7 @@ function serializeSlots(slots: SlotLike[]): SerializedInventorySlot[] {
 
 function serializeInventories(game: Game): SerializedBuildingInventory[] {
     const result: SerializedBuildingInventory[] = [];
-    for (const inv of game.gameLoop.inventoryManager.getAllInventories()) {
+    for (const inv of game.services.inventoryManager.getAllInventories()) {
         result.push({
             entityId: inv.buildingId,
             buildingType: inv.buildingType,
@@ -198,7 +198,7 @@ function serializeInventories(game: Game): SerializedBuildingInventory[] {
 
 function serializeCarriers(game: Game): SerializedCarrier[] {
     const result: SerializedCarrier[] = [];
-    for (const carrier of game.gameLoop.carrierManager.getAllCarriers()) {
+    for (const carrier of game.services.carrierManager.getAllCarriers()) {
         const entity = game.state.getEntity(carrier.entityId);
         result.push({
             entityId: carrier.entityId,
@@ -214,23 +214,21 @@ function serializeCarriers(game: Game): SerializedCarrier[] {
 
 function serializeTrees(game: Game): SerializedTree[] {
     const trees: SerializedTree[] = [];
-    for (const entity of game.state.entities) {
-        if (entity.tree) {
-            trees.push({
-                entityId: entity.id,
-                stage: entity.tree.stage,
-                progress: entity.tree.progress,
-                stumpTimer: entity.tree.stumpTimer,
-                currentOffset: entity.tree.currentOffset,
-            });
-        }
+    for (const [entityId, state] of game.services.treeSystem.getAllTreeStates()) {
+        trees.push({
+            entityId,
+            stage: state.stage,
+            progress: state.progress,
+            stumpTimer: state.stumpTimer,
+            currentOffset: state.currentOffset,
+        });
     }
     return trees;
 }
 
 function serializeRequests(game: Game): SerializedRequest[] {
     const result: SerializedRequest[] = [];
-    for (const req of game.gameLoop.requestManager.getAllRequests()) {
+    for (const req of game.services.requestManager.getAllRequests()) {
         result.push({
             id: req.id,
             buildingId: req.buildingId,
@@ -252,7 +250,7 @@ function serializeRequests(game: Game): SerializedRequest[] {
  */
 export function createSnapshot(game: Game): GameStateSnapshot {
     const gameState = game.state;
-    const { buildingStateManager } = game.gameLoop;
+    const { buildingStateManager } = game.services;
 
     const entities = gameState.entities.map(e => ({
         id: e.id,
@@ -359,7 +357,7 @@ export function hasSavedGameState(): boolean {
 
 function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
     const state = game.state;
-    const { buildingStateManager } = game.gameLoop;
+    const { buildingStateManager } = game.services;
 
     // Build lookup maps for per-entity overrides
     const savedBuildingStates = new Map<number, SerializedBuildingState>();
@@ -406,14 +404,12 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
         if (e.type === EntityType.MapObject) {
             const savedTree = savedTreeStates.get(e.id);
             if (savedTree) {
-                const entity = state.getEntityOrThrow(e.id, 'restored map object');
-                entity.tree = {
+                game.services.treeSystem.restoreTreeState(e.id, {
                     stage: savedTree.stage,
                     progress: savedTree.progress,
                     stumpTimer: savedTree.stumpTimer,
                     currentOffset: savedTree.currentOffset,
-                };
-                entity.variation = savedTree.currentOffset;
+                });
             }
         }
     }
@@ -433,7 +429,7 @@ function restoreInventories(game: Game, snapshot: GameStateSnapshot): void {
     if (!snapshot.buildingInventories) return;
     // Reset reservations to 0 since in-progress requests are reset to pending
     for (const inv of snapshot.buildingInventories) {
-        game.gameLoop.inventoryManager.restoreInventory({
+        game.services.inventoryManager.restoreInventory({
             ...inv,
             inputSlots: inv.inputSlots.map(s => ({ ...s, reserved: 0 })),
             outputSlots: inv.outputSlots.map(s => ({ ...s, reserved: 0 })),
@@ -450,7 +446,7 @@ function restoreCarriers(game: Game, snapshot: GameStateSnapshot): void {
             c.status === CarrierStatus.PickingUp ||
             c.status === CarrierStatus.Delivering;
 
-        game.gameLoop.carrierManager.restoreCarrier({
+        game.services.carrierManager.restoreCarrier({
             entityId: c.entityId,
             homeBuilding: c.homeBuilding,
             status: isJobStatus ? CarrierStatus.Idle : c.status,
@@ -466,7 +462,7 @@ function restoreRequests(game: Game, snapshot: GameStateSnapshot): void {
     // Reset in-progress requests to pending since carriers restart idle
     for (const req of snapshot.requests) {
         const wasInProgress = req.status === RequestStatus.InProgress;
-        game.gameLoop.requestManager.restoreRequest({
+        game.services.requestManager.restoreRequest({
             id: req.id,
             buildingId: req.buildingId,
             materialType: req.materialType,

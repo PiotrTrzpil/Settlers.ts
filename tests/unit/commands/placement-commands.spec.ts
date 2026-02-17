@@ -303,7 +303,7 @@ describe('Building Placement Terrain Modification', () => {
         expect(result.success).toBe(true);
 
         const building = ctx.state.entities.find(e => e.type === EntityType.Building)!;
-        const buildingState = building.construction!;
+        const buildingState = ctx.buildingStateManager.getBuildingState(building.id)!;
         expect(buildingState.originalTerrain).not.toBeNull();
         expect(buildingState.originalTerrain!.tiles.length).toBeGreaterThan(0);
     });
@@ -337,7 +337,8 @@ describe('Building Placement Terrain Modification', () => {
 
         // Building should be completed
         const building = ctx.state.entities.find(e => e.type === EntityType.Building)!;
-        expect(building.construction!.phase).toBe(BuildingConstructionPhase.Completed);
-        expect(building.construction!.terrainModified).toBe(true);
+        const buildingState = ctx.buildingStateManager.getBuildingState(building.id)!;
+        expect(buildingState.phase).toBe(BuildingConstructionPhase.Completed);
+        expect(buildingState.terrainModified).toBe(true);
     });
 });

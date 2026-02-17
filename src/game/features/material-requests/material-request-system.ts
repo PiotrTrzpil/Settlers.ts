@@ -8,14 +8,14 @@
  * Active request tracking is delegated to the RequestManager (single source of truth).
  */
 
-import type { TickSystem } from '../tick-system';
-import type { GameState } from '../game-state';
-import { EntityType, BuildingType } from '../entity';
-import { EMaterialType } from '../economy';
+import type { TickSystem } from '../../tick-system';
+import type { GameState } from '../../game-state';
+import { EntityType, BuildingType } from '../../entity';
+import { EMaterialType } from '../../economy';
 import { LogHandler } from '@/utilities/log-handler';
-import { RequestPriority, type RequestManager } from '../features/logistics';
-import { getInventoryConfig, type InventoryConfig, type BuildingInventoryManager } from '../features/inventory';
-import { BuildingConstructionPhase, type BuildingStateManager } from '../features/building-construction';
+import { RequestPriority, type RequestManager } from '../logistics';
+import { getInventoryConfig, type InventoryConfig, type BuildingInventoryManager } from '../inventory';
+import { BuildingConstructionPhase, type BuildingStateManager } from '../building-construction';
 
 const log = new LogHandler('MaterialRequestSystem');
 

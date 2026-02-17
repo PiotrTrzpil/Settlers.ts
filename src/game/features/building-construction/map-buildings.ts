@@ -3,20 +3,16 @@
  * Maps S4BuildingType to our internal BuildingType and creates completed buildings.
  */
 
-import { EntityType } from '../entity';
-import { BuildingType } from '../buildings/types';
-import {
-    BuildingConstructionPhase,
-    type BuildingStateManager,
-    captureOriginalTerrain,
-    setConstructionSiteGroundType,
-    applyTerrainLeveling,
-} from '../features/building-construction';
-import { GameState } from '../game-state';
+import { EntityType } from '../../entity';
+import { BuildingType } from '../../buildings/types';
+import { BuildingConstructionPhase } from './types';
+import type { BuildingStateManager } from './building-state-manager';
+import { captureOriginalTerrain, setConstructionSiteGroundType, applyTerrainLeveling } from './terrain';
+import { GameState } from '../../game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
 import { S4BuildingType } from '@/resources/map/s4-types';
-import type { EventBus } from '../event-bus';
+import type { EventBus } from '../../event-bus';
 import type { MapSize } from '@/utilities/map-size';
 
 const log = new LogHandler('MapBuildings');

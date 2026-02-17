@@ -1,8 +1,8 @@
 import { EntityType, TileCoord, tileKey } from '../../entity';
 import { MovementController, MovementState } from './movement-controller';
 import { findPath } from '../pathfinding';
-import { isPassable } from '../../features/placement';
-import { GRID_DELTAS, getAllNeighbors } from '../hex-directions';
+import { isPassable } from '../terrain-queries';
+import { getAllNeighbors, hexDistance } from '../hex-directions';
 import { findSmartFreeDirection, shouldYieldToPush } from './push-utils';
 import type { TickSystem } from '../../tick-system';
 import type { EventBus } from '../../event-bus';
@@ -10,6 +10,12 @@ import type { SeededRng } from '../../rng';
 
 /** How many steps ahead to look when doing prefix path repair */
 const PATH_REPAIR_DISTANCE = 10;
+
+/** After this many seconds blocked, do a full repath ignoring the blocker */
+const BLOCKED_REPATH_TIMEOUT = 0.5;
+
+/** After this many seconds blocked, give up and stop */
+const BLOCKED_GIVEUP_TIMEOUT = 2.0;
 
 /**
  * Callback for updating entity position in the game state.
@@ -193,9 +199,27 @@ export class MovementSystem implements TickSystem {
             return false;
         }
 
-        if (!this.tryResolveObstacle(controller, blockingEntityId)) {
-            controller.setBlocked(deltaSec);
+        // Escalation based on how long we've been blocked:
+        // 1. Try normal obstacle resolution (detour / path repair / push)
+        // 2. After BLOCKED_REPATH_TIMEOUT: full repath ignoring occupancy
+        // 3. After BLOCKED_GIVEUP_TIMEOUT: give up and stop
+        if (controller.blockedTime >= BLOCKED_GIVEUP_TIMEOUT) {
+            controller.clearPath();
             return true;
+        }
+
+        if (controller.blockedTime >= BLOCKED_REPATH_TIMEOUT) {
+            // Escalated repath: ignore occupancy to find ANY path to goal
+            if (this.tryEscalatedRepath(controller)) return false;
+        }
+
+        if (!this.tryResolveObstacle(controller, blockingEntityId)) {
+            // Try mutual yielding: if we can't push them (they have lower ID),
+            // and they're also walking, we step sideways ourselves
+            if (!this.tryYield(controller, blockingEntityId)) {
+                controller.setBlocked(deltaSec);
+                return true;
+            }
         }
 
         // After resolution, re-check if the CURRENT waypoint is still blocked
@@ -320,78 +344,122 @@ export class MovementSystem implements TickSystem {
 
     /**
      * Try to resolve an obstacle blocking the path.
-     * Strategies: detour, path repair, or push.
+     * Strategies: detour (step sideways + repath), path repair, or push.
      */
     private tryResolveObstacle(controller: MovementController, blockingEntityId: number): boolean {
-        // Strategy a: Try a 1-tile detour
+        // Strategy a: Try a 1-tile sidestep + repath remaining path
         if (this.hasTerrainData()) {
             const detour = this.findDetour(controller);
             if (detour) {
                 controller.insertDetour(detour);
+                // After inserting the sidestep, repair the rest of the path
+                // so we don't walk back into the blocker
+                this.tryPathRepairAfterDetour(controller);
                 return true;
             }
         }
 
-        // Strategy b: Recalculate path
+        // Strategy b: Recalculate path around the obstacle
         if (this.tryPathRepair(controller)) return true;
 
         // Strategy c: Push the blocking unit
         return this.pushUnit(controller.entityId, blockingEntityId);
     }
 
-    /** Check if a tile is a valid detour candidate */
-    private isValidDetourTile(neighbor: TileCoord, blockedWp: TileCoord): boolean {
+    /** Check if a tile is a valid sidestep candidate */
+    private isValidSidestepTile(nx: number, ny: number): boolean {
         if (!this.groundType || !this.mapWidth || !this.mapHeight || !this.tileOccupancy) {
             return false;
         }
 
-        if (neighbor.x === blockedWp.x && neighbor.y === blockedWp.y) return false;
-        if (neighbor.x < 0 || neighbor.x >= this.mapWidth) return false;
-        if (neighbor.y < 0 || neighbor.y >= this.mapHeight) return false;
+        if (nx < 0 || nx >= this.mapWidth || ny < 0 || ny >= this.mapHeight) return false;
 
-        const nIdx = neighbor.x + neighbor.y * this.mapWidth;
+        const nIdx = nx + ny * this.mapWidth;
         if (!isPassable(this.groundType[nIdx])) return false;
-        if (this.tileOccupancy.has(tileKey(neighbor.x, neighbor.y))) return false;
+        if (this.tileOccupancy.has(tileKey(nx, ny))) return false;
 
         return true;
     }
 
-    /** Check if neighbor is adjacent to the rejoin point */
-    private isAdjacentToRejoin(neighbor: TileCoord, rejoinWp: TileCoord): boolean {
-        const rdx = neighbor.x - rejoinWp.x;
-        const rdy = neighbor.y - rejoinWp.y;
-        return GRID_DELTAS.some(([gx, gy]) => gx === rdx && gy === rdy);
-    }
-
     /**
-     * Find a 1-tile detour around a blocked tile.
-     * Caller must verify hasTerrainData() before calling.
+     * Find a 1-tile sidestep around a blocked tile.
+     * Prefers tiles that are closer to the goal (or at least not further away).
+     * No longer requires adjacency to the rejoin point — path repair handles reconnection.
      */
     private findDetour(controller: MovementController): TileCoord | null {
         const blockedWp = controller.nextWaypoint;
         if (!blockedWp) return null;
 
-        const nextIdx = controller.pathIndex + 1;
-        const rejoinWp = nextIdx < controller.path.length ? controller.path[nextIdx] : blockedWp;
-
+        const goal = controller.goal;
         const neighbors = getAllNeighbors({ x: controller.tileX, y: controller.tileY });
 
+        // Score each valid neighbor: prefer tiles closer to goal, avoid going backward
+        let best: TileCoord | null = null;
+        let bestScore = -Infinity;
+
         for (const neighbor of neighbors) {
-            if (!this.isValidDetourTile(neighbor, blockedWp)) continue;
-            if (this.isAdjacentToRejoin(neighbor, rejoinWp)) return neighbor;
+            // Don't sidestep onto the blocked tile itself
+            if (neighbor.x === blockedWp.x && neighbor.y === blockedWp.y) continue;
+            if (!this.isValidSidestepTile(neighbor.x, neighbor.y)) continue;
+
+            let score = 0;
+            if (goal) {
+                const currDist = hexDistance(controller.tileX, controller.tileY, goal.x, goal.y);
+                const newDist = hexDistance(neighbor.x, neighbor.y, goal.x, goal.y);
+                score = currDist - newDist; // positive = getting closer
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best = neighbor;
+            }
         }
 
-        return null;
+        return best;
     }
 
     /**
-     * Repath a controller from its current position to a goal.
+     * After inserting a sidestep detour, repair the path from the detour tile to the goal.
+     * This replaces the old path suffix so the unit doesn't walk back into the blocker.
      */
-    private repathToGoal(controller: MovementController, goal: TileCoord): void {
+    private tryPathRepairAfterDetour(controller: MovementController): void {
         if (!this.hasTerrainData() || !this.tileOccupancy) return;
 
-        // Don't repath if already at goal
-        if (controller.tileX === goal.x && controller.tileY === goal.y) return;
+        const goal = controller.goal;
+        if (!goal) return;
+
+        // The detour tile is at pathIndex (just inserted), path continues from pathIndex+1
+        const detourTile = controller.path[controller.pathIndex];
+        if (!detourTile) return;
+
+        const newSuffix = findPath(
+            detourTile.x,
+            detourTile.y,
+            goal.x,
+            goal.y,
+            this.groundType!,
+            this.groundHeight!,
+            this.mapWidth!,
+            this.mapHeight!,
+            this.tileOccupancy,
+            false // respect occupancy to route around blockers
+        );
+
+        if (newSuffix && newSuffix.length > 0) {
+            // Replace: keep the detour tile at pathIndex, replace everything after with the new suffix
+            controller.replacePathSuffix(newSuffix, controller.pathIndex + 1);
+        }
+        // If repath fails, the old path suffix remains — unit will try again next tick
+    }
+
+    /**
+     * Escalated repath: used after being blocked for a while.
+     * Does a full repath ignoring occupancy to find any path to goal.
+     */
+    private tryEscalatedRepath(controller: MovementController): boolean {
+        if (!this.hasTerrainData() || !this.tileOccupancy) return false;
+
+        const goal = controller.goal;
+        if (!goal) return false;
 
         const newPath = findPath(
             controller.tileX,
@@ -403,8 +471,102 @@ export class MovementSystem implements TickSystem {
             this.mapWidth!,
             this.mapHeight!,
             this.tileOccupancy,
-            true // ignoreOccupancy for planning
+            true // ignore occupancy — just find ANY path
         );
+
+        if (newPath && newPath.length > 0) {
+            controller.replacePath(newPath);
+            controller.resetBlockedTime();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Mutual yielding: when we can't push the blocker (they have lower ID or are moving),
+     * and we have room, step sideways ourselves to let them pass.
+     */
+    private tryYield(controller: MovementController, blockingEntityId: number): boolean {
+        if (!this.hasTerrainData() || !this.tileOccupancy) return false;
+
+        // Only yield if the blocker is also moving (two walkers meeting)
+        const blockerController = this.controllers.get(blockingEntityId);
+        if (!blockerController || blockerController.state === 'idle') return false;
+
+        // Find a free sidestep tile
+        const neighbors = getAllNeighbors({ x: controller.tileX, y: controller.tileY });
+        const goal = controller.goal;
+
+        let best: TileCoord | null = null;
+        let bestScore = -Infinity;
+
+        for (const neighbor of neighbors) {
+            if (!this.isValidSidestepTile(neighbor.x, neighbor.y)) continue;
+
+            let score = 0;
+            if (goal) {
+                const currDist = hexDistance(controller.tileX, controller.tileY, goal.x, goal.y);
+                const newDist = hexDistance(neighbor.x, neighbor.y, goal.x, goal.y);
+                score = currDist - newDist;
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best = neighbor;
+            }
+        }
+
+        if (!best) return false;
+
+        // Execute the yield: move ourselves sideways and repath
+        controller.handlePush(best.x, best.y);
+        this.updatePosition(controller.entityId, best.x, best.y);
+
+        if (goal) {
+            this.repathToGoal(controller, goal);
+        }
+
+        return true;
+    }
+
+    /**
+     * Repath a controller from its current position to a goal.
+     * Uses occupancy-aware pathfinding so the new path routes around nearby units.
+     */
+    private repathToGoal(controller: MovementController, goal: TileCoord): void {
+        if (!this.hasTerrainData() || !this.tileOccupancy) return;
+
+        // Don't repath if already at goal
+        if (controller.tileX === goal.x && controller.tileY === goal.y) return;
+
+        // Try occupancy-aware path first (avoids walking back into the pusher)
+        let newPath = findPath(
+            controller.tileX,
+            controller.tileY,
+            goal.x,
+            goal.y,
+            this.groundType!,
+            this.groundHeight!,
+            this.mapWidth!,
+            this.mapHeight!,
+            this.tileOccupancy,
+            false // respect occupancy to route around nearby units
+        );
+
+        // Fall back to ignoring occupancy if no path found (e.g. surrounded)
+        if (!newPath || newPath.length === 0) {
+            newPath = findPath(
+                controller.tileX,
+                controller.tileY,
+                goal.x,
+                goal.y,
+                this.groundType!,
+                this.groundHeight!,
+                this.mapWidth!,
+                this.mapHeight!,
+                this.tileOccupancy,
+                true
+            );
+        }
 
         if (newPath && newPath.length > 0) {
             controller.redirectPath(newPath);

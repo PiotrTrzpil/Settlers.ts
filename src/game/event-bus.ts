@@ -6,12 +6,9 @@
  * One bad handler won't crash the loop or prevent other handlers from running.
  */
 
-import type { BuildingState } from './features/building-construction';
 import type { BuildingType } from './buildings/types';
 import type { UnitType } from './unit-types';
-import type { BuildingCleanupResult } from './features/logistics/logistics-dispatcher';
 import type { EMaterialType } from './economy';
-import type { RequestPriority } from './features/logistics';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { toastError } from './toast-notifications';
@@ -29,12 +26,34 @@ export interface GameEvents {
     /** Emitted when building construction completes */
     'building:completed': {
         entityId: number;
-        buildingState: BuildingState;
+        buildingState: {
+            entityId: number;
+            buildingType: BuildingType;
+            phase: number;
+            phaseProgress: number;
+            totalDuration: number;
+            elapsedTime: number;
+            tileX: number;
+            tileY: number;
+            originalTerrain: unknown;
+            terrainModified: boolean;
+        };
     };
     /** Emitted when a building is removed/cancelled */
     'building:removed': {
         entityId: number;
-        buildingState: BuildingState;
+        buildingState: {
+            entityId: number;
+            buildingType: BuildingType;
+            phase: number;
+            phaseProgress: number;
+            totalDuration: number;
+            elapsedTime: number;
+            tileX: number;
+            tileY: number;
+            originalTerrain: unknown;
+            terrainModified: boolean;
+        };
     };
     /** Emitted when a unit is spawned */
     'unit:spawned': {
@@ -137,7 +156,11 @@ export interface GameEvents {
     // === Logistics Events ===
 
     /** Emitted when logistics cleanup completes after a building is destroyed */
-    'logistics:buildingCleanedUp': BuildingCleanupResult;
+    'logistics:buildingCleanedUp': {
+        buildingId: number;
+        requestsCancelled: number;
+        jobsCancelled: number;
+    };
 
     /** Emitted when a new resource request is created */
     'request:created': {
@@ -145,7 +168,8 @@ export interface GameEvents {
         buildingId: number;
         materialType: EMaterialType;
         amount: number;
-        priority: RequestPriority;
+        /** RequestPriority enum value (0=High, 1=Normal, 2=Low) */
+        priority: number;
     };
 
     // === Inventory Events ===

@@ -3,7 +3,7 @@
  */
 
 import type { EMaterialType } from '../../economy';
-import type { TransportJob } from '../../features/logistics/transport-job';
+import type { TransportJob } from '../logistics/transport-job';
 
 /** Task types - atomic actions a settler can perform */
 export enum TaskType {

@@ -8,11 +8,11 @@
 import { UnitType, type Entity, setCarrying, clearCarrying } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
-import { hexDistance } from '../hex-directions';
+import { hexDistance } from '../../systems/hex-directions';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
-import type { BuildingInventoryManager, InventoryVisualizer } from '../../features/inventory';
-import type { CarrierManager } from '../../features/carriers';
+import type { BuildingInventoryManager, InventoryVisualizer } from '../inventory';
+import type { CarrierManager } from '../carriers';
 import {
     TaskType,
     TaskResult,

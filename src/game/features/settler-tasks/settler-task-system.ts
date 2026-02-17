@@ -16,7 +16,7 @@ import type { TickSystem } from '../../tick-system';
 import { EntityType, UnitType, Entity, clearCarrying } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
-import { hexDistance } from '../hex-directions';
+import { hexDistance } from '../../systems/hex-directions';
 import { ANIMATION_SEQUENCES } from '../../animation';
 import { resolveTaskAnimation, type AnimationService } from '../../animation/index';
 import {
@@ -35,8 +35,8 @@ import {
 import { executeTask, type TaskContext } from './task-executors';
 import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDefinitions } from './loader';
 import type { EventBus } from '../../event-bus';
-import type { BuildingInventoryManager, InventoryVisualizer } from '../../features/inventory';
-import type { CarrierManager } from '../../features/carriers';
+import type { BuildingInventoryManager, InventoryVisualizer } from '../inventory';
+import type { CarrierManager } from '../carriers';
 import { createWorkplaceHandler, createCarrierHandler, isOutputFull, findNearestWorkplace } from './work-handlers';
 
 const log = new LogHandler('SettlerTaskSystem');

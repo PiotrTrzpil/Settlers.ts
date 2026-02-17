@@ -15,7 +15,7 @@
  */
 
 import { tileKey, TileCoord } from '../../entity';
-import { isPassable } from '../../features/placement';
+import { isPassable } from '../terrain-queries';
 import { GRID_DELTAS, NUMBER_OF_DIRECTIONS, hexDistance, getApproxDirection } from '../hex-directions';
 import { BucketPriorityQueue } from './bucket-priority-queue';
 import { smoothPath } from './path-smoothing';

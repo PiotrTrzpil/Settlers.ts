@@ -53,11 +53,11 @@ function syncEntityRendererState(
     viewPoint: import('@/game/renderer/i-view-point').IViewPoint
 ): void {
     // Build render context using the builder pattern
-    const buildingStates = g.gameLoop.buildingStateManager.buildingStates;
+    const buildingStates = g.services.buildingStateManager.buildingStates;
 
     // Collect service areas for selected hub buildings
     const serviceAreas: ServiceAreaRenderData[] = [];
-    const sam = g.gameLoop.serviceAreaManager;
+    const sam = g.services.serviceAreaManager;
     for (const id of g.state.selection.selectedEntityIds) {
         const entity = g.state.getEntity(id);
         if (entity && entity.type === EntityType.Building) {
@@ -74,7 +74,7 @@ function syncEntityRendererState(
         .resourceStates(g.state.resources.states)
         .buildingStates(buildingStates)
         .buildingVisualStateGetter(entityId => {
-            const state = g.gameLoop.buildingStateManager.getBuildingState(entityId);
+            const state = g.services.buildingStateManager.getBuildingState(entityId);
             return getBuildingVisualState(state);
         })
         .selection({
@@ -500,9 +500,9 @@ export function useRenderer({
         renderer.add(landscapeRenderer);
 
         entityRenderer = new EntityRenderer(game.mapSize, game.groundHeight, game.fileManager, game.groundType);
-        entityRenderer.setAnimationService(game.gameLoop.animationService);
+        entityRenderer.setAnimationService(game.services.animationService);
         entityRenderer.skipSpriteLoading = game.useProceduralTextures;
-        entityRenderer.onSpritesLoaded = () => game.gameLoop.enableTicks();
+        entityRenderer.onSpritesLoaded = () => game.enableTicks();
         renderer.add(entityRenderer);
     }
 
@@ -518,7 +518,7 @@ export function useRenderer({
         } else {
             debugStats.state.gameLoaded = true;
             if (game.useProceduralTextures) {
-                game.gameLoop.enableTicks();
+                game.enableTicks();
             }
         }
 
@@ -538,10 +538,10 @@ export function useRenderer({
         });
 
         // Register update callback (input, sound, debug stats — runs before render)
-        game.gameLoop.setUpdateCallback(createUpdateCallback(contextGetter, renderer, selectionBox));
+        game.setUpdateCallback(createUpdateCallback(contextGetter, renderer, selectionBox));
 
         // Register render callback (visual sync + GPU draw only)
-        game.gameLoop.setRenderCallback(createRenderCallback(contextGetter, renderer));
+        game.setRenderCallback(createRenderCallback(contextGetter, renderer));
     }
 
     /**

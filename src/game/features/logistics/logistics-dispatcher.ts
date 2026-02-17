@@ -26,7 +26,7 @@ import { InventoryReservationManager } from './inventory-reservation';
 import { TransportJob } from './transport-job';
 import { LogHandler } from '@/utilities/log-handler';
 import type { BuildingInventoryManager } from '../inventory';
-import { buildCarrierJob, type SettlerTaskSystem } from '../../systems/settler-tasks';
+import { buildCarrierJob, type SettlerTaskSystem } from '../settler-tasks';
 
 /** Configuration for LogisticsDispatcher dependencies */
 export interface LogisticsDispatcherConfig {

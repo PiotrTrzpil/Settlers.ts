@@ -8,7 +8,7 @@
 
 import { ANIMATION_SEQUENCES, carrySequenceKey, workSequenceKey } from '../animation';
 import { UnitType, type Entity } from '../entity';
-import type { AnimationType } from '../systems/settler-tasks/types';
+import type { AnimationType } from '../features/settler-tasks/types';
 
 /** What animation should play on an entity */
 export interface AnimationIntent {

@@ -10,13 +10,13 @@
 
 import type { GameState } from '../../game-state';
 import { EntityType, MapObjectType, UnitType, BuildingType, type Entity } from '../../entity';
-import type { BuildingInventoryManager } from '../../features/inventory';
+import type { BuildingInventoryManager } from '../inventory';
 import { LogHandler } from '@/utilities/log-handler';
 import type { TaskNode } from './types';
 import { TaskType, type EntityWorkHandler, type PositionWorkHandler } from './types';
-import type { TreeSystem } from '../tree-system';
-import { OBJECT_TYPE_CATEGORY } from '../map-objects';
-import { findNearestEntity } from '../spatial-search';
+import type { TreeSystem } from '../trees/tree-system';
+import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
+import { findNearestEntity } from '../../systems/spatial-search';
 import { getWorkerWorkplaces } from '../../unit-types';
 
 // ─────────────────────────────────────────────────────────────

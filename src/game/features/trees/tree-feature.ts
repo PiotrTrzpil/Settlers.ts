@@ -11,7 +11,7 @@
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { EventSubscriptionManager } from '../../event-bus';
-import { TreeSystem } from '../../systems/tree-system';
+import { TreeSystem } from './tree-system';
 import { MapObjectType } from '../../entity';
 
 /**
@@ -40,6 +40,11 @@ export const TreeFeature: FeatureDefinition = {
         subscriptions.subscribe(ctx.eventBus, 'mapObject:created', ({ entityId, objectType }) => {
             // Register with TreeSystem (it checks if it's actually a tree)
             treeSystem.register(entityId, objectType as MapObjectType);
+        });
+
+        // Clean up tree state when entities are removed
+        subscriptions.subscribe(ctx.eventBus, 'entity:removed', ({ entityId }) => {
+            treeSystem.unregister(entityId);
         });
 
         return {

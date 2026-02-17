@@ -361,44 +361,44 @@ export function useLogisticsDebug(getGame: () => Game | null): {
             return;
         }
 
-        const gameLoop = game.gameLoop;
+        const svc = game.services;
         const gameState = game.state;
         const stats = createEmptyStats();
         const now = Date.now();
 
         // Gather requests
-        const { pending, rawPending, inProgress } = gatherRequests(
-            gameLoop.requestManager.getAllRequests(),
-            now,
-            stats
-        );
+        const { pending, rawPending, inProgress } = gatherRequests(svc.requestManager.getAllRequests(), now, stats);
 
         // Gather carriers
-        const carriers = gatherCarriers(gameLoop.carrierManager.getAllCarriers(), id => gameState.getEntity(id), stats);
+        const carriers = gatherCarriers(svc.carrierManager.getAllCarriers(), id => gameState.getEntity(id), stats);
 
-        // Count unregistered carriers (carrier units without entity.carrier)
+        // Count unregistered carriers (carrier units without carrier state in manager)
         for (const entity of gameState.entities) {
-            if (entity.type === EntityType.Unit && entity.subType === UnitType.Carrier && !entity.carrier) {
+            if (
+                entity.type === EntityType.Unit &&
+                entity.subType === UnitType.Carrier &&
+                !svc.carrierManager.hasCarrier(entity.id)
+            ) {
                 stats.unregisteredCarriers++;
             }
         }
 
         // Gather reservations
         const reservations = gatherReservations(
-            gameLoop.logisticsDispatcher.getReservationManager().getAllReservations(),
+            svc.logisticsDispatcher.getReservationManager().getAllReservations(),
             stats
         );
 
         // Gather hubs
-        const hubs = gatherHubs(gameLoop.serviceAreaManager.getAllServiceAreas(), gameLoop.carrierManager, stats);
+        const hubs = gatherHubs(svc.serviceAreaManager.getAllServiceAreas(), svc.carrierManager, stats);
 
         // Diagnose why pending requests are unfulfilled (limit to displayed items to avoid perf issues)
         const diagnosticConfig: DiagnosticConfig = {
             gameState,
-            inventoryManager: gameLoop.inventoryManager,
-            serviceAreaManager: gameLoop.serviceAreaManager,
-            carrierManager: gameLoop.carrierManager,
-            reservationManager: gameLoop.logisticsDispatcher.getReservationManager(),
+            inventoryManager: svc.inventoryManager,
+            serviceAreaManager: svc.serviceAreaManager,
+            carrierManager: svc.carrierManager,
+            reservationManager: svc.logisticsDispatcher.getReservationManager(),
         };
         const diagnosticLimit = Math.min(rawPending.length, MAX_LIST_ITEMS);
         for (let i = 0; i < diagnosticLimit; i++) {

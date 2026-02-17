@@ -7,8 +7,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SettlerTaskSystem, type SettlerTaskSystemConfig } from '@/game/systems/settler-tasks/settler-task-system';
-import { SearchType, type EntityWorkHandler, type PositionWorkHandler } from '@/game/systems/settler-tasks/types';
+import { SettlerTaskSystem, type SettlerTaskSystemConfig } from '@/game/features/settler-tasks/settler-task-system';
+import { SearchType, type EntityWorkHandler, type PositionWorkHandler } from '@/game/features/settler-tasks/types';
 import { AnimationService } from '@/game/animation/animation-service';
 import { EntityType } from '@/game/entity';
 import { UnitType } from '@/game/unit-types';

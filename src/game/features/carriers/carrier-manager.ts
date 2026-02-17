@@ -1,13 +1,12 @@
 /**
  * CarrierManager - Manages all carrier states, fatigue recovery, and auto-registration.
  *
- * State is stored on entity.carrier (RFC: Entity-Owned State).
  * Cross-entity index (carriersByTavern) remains in the manager.
  */
 
 import type { EventBus } from '../../event-bus';
 import { EMaterialType } from '../../economy';
-import { type EntityProvider, getCarrierState } from '../../entity';
+import type { EntityProvider } from '../../entity';
 import { CarrierStatus, type CarrierState, createCarrierState, canAcceptNewJob } from './carrier-state';
 import type { ServiceAreaManager } from '../service-areas';
 import type { TickSystem } from '../../tick-system';
@@ -30,14 +29,15 @@ export interface CarrierManagerConfig {
 /**
  * Manages carrier state for all carrier units.
  * Tracks carriers by their home tavern, handles fatigue recovery, and auto-registers spawned carriers.
- *
- * State is stored on entity.carrier (RFC: Entity-Owned State).
  */
 export class CarrierManager implements TickSystem {
     private static log = new LogHandler('CarrierManager');
 
     /** Entity provider for accessing entities */
     private readonly entityProvider: EntityProvider;
+
+    /** Internal state storage: carrierId -> CarrierState */
+    private readonly states = new Map<number, CarrierState>();
 
     /** Index of tavern ID -> Set of carrier entity IDs (cross-entity state stays in manager) */
     private carriersByTavern: Map<number, Set<number>> = new Map();
@@ -67,17 +67,16 @@ export class CarrierManager implements TickSystem {
      * @returns The created carrier state
      */
     createCarrier(entityId: number, homeBuilding: number): CarrierState {
-        const entity = this.entityProvider.getEntity(entityId);
-        if (!entity) {
+        if (!this.entityProvider.getEntity(entityId)) {
             throw new Error(`Cannot create carrier: entity ${entityId} not found`);
         }
-        if (entity.carrier) {
+        if (this.states.has(entityId)) {
             throw new Error(`Carrier with entity ID ${entityId} already exists`);
         }
 
         const state = createCarrierState(entityId, homeBuilding);
 
-        entity.carrier = state;
+        this.states.set(entityId, state);
         this.addToTavernIndex(homeBuilding, entityId);
 
         this.eventBus.emit('carrier:created', { entityId, homeBuilding });
@@ -92,15 +91,14 @@ export class CarrierManager implements TickSystem {
      * @returns true if the carrier was removed, false if it didn't exist
      */
     removeCarrier(entityId: number): boolean {
-        const entity = this.entityProvider.getEntity(entityId);
-        const state = entity?.carrier;
+        const state = this.states.get(entityId);
         if (!state) return false;
 
         const hadActiveJob = state.status !== CarrierStatus.Idle && state.status !== CarrierStatus.Resting;
         const homeBuilding = state.homeBuilding;
 
         this.removeFromTavernIndex(homeBuilding, entityId);
-        delete entity.carrier;
+        this.states.delete(entityId);
 
         this.eventBus.emit('carrier:removed', { entityId, homeBuilding, hadActiveJob });
 
@@ -113,7 +111,7 @@ export class CarrierManager implements TickSystem {
      * @returns The carrier state, or undefined if not found
      */
     getCarrier(entityId: number): CarrierState | undefined {
-        return this.entityProvider.getEntity(entityId)?.carrier;
+        return this.states.get(entityId);
     }
 
     /**
@@ -125,8 +123,13 @@ export class CarrierManager implements TickSystem {
      * @throws Error if carrier not found
      */
     getCarrierOrThrow(entityId: number, context?: string): CarrierState {
-        const entity = this.entityProvider.getEntityOrThrow(entityId, context ?? 'carrier');
-        return getCarrierState(entity);
+        const state = this.states.get(entityId);
+        if (!state) {
+            throw new Error(
+                `Entity ${entityId} is not a carrier (has no carrier state)${context ? ` [${context}]` : ''}`
+            );
+        }
+        return state;
     }
 
     /**
@@ -135,7 +138,7 @@ export class CarrierManager implements TickSystem {
      * @returns true if the carrier exists
      */
     hasCarrier(entityId: number): boolean {
-        return this.entityProvider.getEntity(entityId)?.carrier !== undefined;
+        return this.states.has(entityId);
     }
 
     /**
@@ -149,7 +152,7 @@ export class CarrierManager implements TickSystem {
 
         const result: CarrierState[] = [];
         for (const id of carrierIds) {
-            const state = this.entityProvider.getEntity(id)?.carrier;
+            const state = this.states.get(id);
             if (state) result.push(state);
         }
         return result;
@@ -198,7 +201,7 @@ export class CarrierManager implements TickSystem {
      * @returns true if the carrier can accept a new job
      */
     canAssignJobTo(carrierId: number): boolean {
-        const state = this.entityProvider.getEntity(carrierId)?.carrier;
+        const state = this.states.get(carrierId);
         if (!state) return false;
         return state.status === CarrierStatus.Idle && canAcceptNewJob(state.fatigue);
     }
@@ -210,8 +213,7 @@ export class CarrierManager implements TickSystem {
      * @throws Error if carrier not found
      */
     setStatus(carrierId: number, status: CarrierStatus): void {
-        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for setStatus');
-        const state = getCarrierState(entity);
+        const state = this.getCarrierOrThrow(carrierId, 'setStatus');
 
         const previousStatus = state.status;
         if (previousStatus === status) return; // No change needed
@@ -232,9 +234,7 @@ export class CarrierManager implements TickSystem {
      * @throws Error if carrier not found
      */
     setFatigue(carrierId: number, fatigue: number): void {
-        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for setFatigue');
-        const state = getCarrierState(entity);
-
+        const state = this.getCarrierOrThrow(carrierId, 'setFatigue');
         state.fatigue = Math.max(0, Math.min(100, fatigue));
     }
 
@@ -245,9 +245,7 @@ export class CarrierManager implements TickSystem {
      * @throws Error if carrier not found
      */
     addFatigue(carrierId: number, amount: number): void {
-        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for addFatigue');
-        const state = getCarrierState(entity);
-
+        const state = this.getCarrierOrThrow(carrierId, 'addFatigue');
         this.setFatigue(carrierId, state.fatigue + amount);
     }
 
@@ -260,8 +258,7 @@ export class CarrierManager implements TickSystem {
      * @throws Error if carrier not found
      */
     reassignToTavern(carrierId: number, newTavernId: number): boolean {
-        const entity = this.entityProvider.getEntityOrThrow(carrierId, 'carrier for reassignToTavern');
-        const state = getCarrierState(entity);
+        const state = this.getCarrierOrThrow(carrierId, 'reassignToTavern');
 
         // Prevent reassignment while carrier is busy (valid condition, not a bug)
         if (state.status !== CarrierStatus.Idle) return false;
@@ -355,37 +352,24 @@ export class CarrierManager implements TickSystem {
 
     /**
      * Get all carrier states.
-     * Uses the tavern index to avoid scanning all entities.
      * @returns Iterator of all carrier states
      */
     *getAllCarriers(): IterableIterator<CarrierState> {
-        for (const carrierIds of this.carriersByTavern.values()) {
-            for (const id of carrierIds) {
-                const state = this.entityProvider.getEntity(id)?.carrier;
-                if (state) yield state;
-            }
-        }
+        yield* this.states.values();
     }
 
     /**
      * Get the number of carriers.
-     * Uses the tavern index to avoid scanning all entities.
      */
     get size(): number {
-        let count = 0;
-        for (const carrierIds of this.carriersByTavern.values()) {
-            count += carrierIds.size;
-        }
-        return count;
+        return this.states.size;
     }
 
     /**
      * Clear all carrier states.
      */
     clear(): void {
-        for (const entity of this.entityProvider.entities) {
-            delete entity.carrier;
-        }
+        this.states.clear();
         this.carriersByTavern.clear();
     }
 
@@ -406,13 +390,12 @@ export class CarrierManager implements TickSystem {
             throw new Error(`Cannot restore carrier: entity ${data.entityId} not found`);
         }
 
-        // Store carrier state on entity (RFC: Entity-Owned State)
-        entity.carrier = {
+        this.states.set(data.entityId, {
             entityId: data.entityId,
             homeBuilding: data.homeBuilding,
             fatigue: data.fatigue,
             status: data.status,
-        };
+        });
 
         // Restore carrying state if carrier was carrying material
         if (data.carryingMaterial !== null && data.carryingAmount > 0) {

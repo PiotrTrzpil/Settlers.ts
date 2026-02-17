@@ -284,7 +284,7 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
         togglePause(): void {
             const g = getGame();
             if (!g) return;
-            if (g.gameLoop.isRunning) g.stop();
+            if (g.isRunning) g.stop();
             else g.start();
         },
 
@@ -299,7 +299,7 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
             const restored = gameStatePersistence.restoreToInitialState(g);
             if (restored) {
                 // Rebuild inventory visualizer state from restored entities
-                g.gameLoop.inventoryVisualizer.rebuildFromExistingEntities();
+                g.services.inventoryVisualizer.rebuildFromExistingEntities();
                 log.info('Game state reset to initial map state');
             } else {
                 // Fallback: no initial state, use clean reset (keeps environment)
@@ -394,7 +394,7 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
                     log.info('Restoring saved game state...');
                     restoreFromSnapshot(game.value, snapshot);
                     // Rebuild inventory visualizer state from restored entities
-                    game.value.gameLoop.inventoryVisualizer.rebuildFromExistingEntities();
+                    game.value.services.inventoryVisualizer.rebuildFromExistingEntities();
                 }
 
                 // Start auto-saving (won't save initial state again since we already did)
@@ -431,7 +431,7 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
                 log.info('Restoring saved game state...');
                 restoreFromSnapshot(result.game, snapshot);
                 // Rebuild inventory visualizer state from restored entities
-                result.game.gameLoop.inventoryVisualizer.rebuildFromExistingEntities();
+                result.game.services.inventoryVisualizer.rebuildFromExistingEntities();
             }
 
             // Start auto-saving (won't save initial state again since we already did)
@@ -519,7 +519,7 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
             : undefined
     );
     const selectionCount = computed(() => game.value?.state.selection.selectedEntityIds.size ?? 0);
-    const isPaused = computed(() => (game.value ? !game.value.gameLoop.isRunning : false));
+    const isPaused = computed(() => (game.value ? !game.value.isRunning : false));
 
     // Mode state - use debugStats as the single source of truth
     const currentMode = computed(() => debugStats.state.mode);

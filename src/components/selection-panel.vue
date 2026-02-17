@@ -287,7 +287,7 @@ const buildingStatus = computed(() => {
     if (!entity || entity.type !== EntityType.Building) return null;
     if (!props.game) return null;
 
-    const state = props.game.gameLoop.buildingStateManager.getBuildingState(entity.id);
+    const state = props.game.services.buildingStateManager.getBuildingState(entity.id);
     if (!state) return 'unknown';
 
     if (state.phase === BuildingConstructionPhase.Completed) return 'completed';
@@ -324,10 +324,10 @@ const carrierDebug = computed<CarrierDebugInfo | null>(() => {
     void debugStats.state.frameCount;
     const entity = selectedEntity.value;
     if (!entity || entity.type !== EntityType.Unit) return null;
-    if (!entity.carrier) return null;
     if (!props.game) return null;
 
-    const carrier = entity.carrier;
+    const carrier = props.game.services.carrierManager.getCarrier(entity.id);
+    if (!carrier) return null;
     const fatigueLevel = getFatigueLevel(carrier.fatigue);
 
     // Get path info from movement system
@@ -389,10 +389,10 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
     if (!entity || entity.type !== EntityType.Building) return null;
     if (!props.game) return null;
 
-    const gameLoop = props.game.gameLoop;
-    const buildingState = gameLoop.buildingStateManager.getBuildingState(entity.id);
-    const inventory = gameLoop.inventoryManager.getInventory(entity.id);
-    const requests = [...gameLoop.requestManager.getRequestsForBuilding(entity.id, false)];
+    const svc = props.game.services;
+    const buildingState = svc.buildingStateManager.getBuildingState(entity.id);
+    const inventory = svc.inventoryManager.getInventory(entity.id);
+    const requests = [...svc.requestManager.getRequestsForBuilding(entity.id, false)];
 
     // Construction info
     const isConstructing = buildingState !== undefined && buildingState.phase !== BuildingConstructionPhase.Completed;
@@ -420,7 +420,7 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 
     if (inventory) {
         for (const slot of inventory.inputSlots) {
-            const reserved = gameLoop.logisticsDispatcher
+            const reserved = svc.logisticsDispatcher
                 .getReservationManager()
                 .getReservedAmount(entity.id, slot.materialType);
             inventorySlots.push({
@@ -431,7 +431,7 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
             });
         }
         for (const slot of inventory.outputSlots) {
-            const reserved = gameLoop.logisticsDispatcher
+            const reserved = svc.logisticsDispatcher
                 .getReservationManager()
                 .getReservedAmount(entity.id, slot.materialType);
             inventorySlots.push({
