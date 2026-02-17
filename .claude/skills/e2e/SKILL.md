@@ -20,6 +20,8 @@ Run `pnpm lint` and wait for it to complete. If lint fails, report about it, the
 
 ### 2. Run smoke tests in background
 
+First restart game server if the tests use already running dev server.
+
 ```sh
 npx playwright test --project=smoke --reporter=list 2>&1 | tee /tmp/e2e-smoke.log &
 ```

@@ -55,7 +55,7 @@ If you are doing some editing patterns that are similar in many files:
 - changing imports
 - removing the same thing in many files.
 
-ALWAYS prefer mass approaches, e.g. sed and others.
+ALWAYS prefer mass approaches, e.g. `sd` and others. (but carefully, first think deeper if your pattern to find will not miss some similar cases (maybe do some fuzzy search first), and do a dry run of replace somehow first or a limited run before running on all needed files.)
 
 - **Validate after your changes**: Run full unit test suite after you are done with a large change.
 
