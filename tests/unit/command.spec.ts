@@ -8,14 +8,7 @@ import {
     CONSTRUCTION_SITE_GROUND_TYPE,
 } from '@/game/features/building-construction';
 import { TERRAIN, setTerrainAt, blockColumn } from './helpers/test-map';
-import {
-    createTestContext,
-    addUnit,
-    addBuilding,
-    createTestEventBus,
-    toCommandContext,
-    type TestContext,
-} from './helpers/test-game';
+import { createTestContext, addUnit, addBuilding, toCommandContext, type TestContext } from './helpers/test-game';
 
 // Note: Happy-path command tests (place_building, spawn_unit, select, deselect,
 // area select, remove entity) are covered by flow integration tests in flows/.
@@ -125,8 +118,7 @@ describe('Command System – edge cases', () => {
 
             expect(ctx.map.groundType[ctx.map.mapSize.toIndex(10, 10)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
 
-            const eventBus = createTestEventBus(ctx.state, ctx.map, ctx.buildingStateManager);
-            executeCommand(toCommandContext(ctx, eventBus), {
+            executeCommand(toCommandContext(ctx), {
                 type: 'remove_entity',
                 entityId: building.id,
             });

@@ -10,14 +10,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TERRAIN, setTerrainAt, setHeightAt, type TestMap } from '../helpers/test-map';
-import {
-    createTestContext,
-    addBuilding,
-    placeBuilding,
-    removeEntity,
-    tickConstruction,
-    type TestContext,
-} from '../helpers/test-game';
+import { createTestContext, addBuilding, placeBuilding, removeEntity, type TestContext } from '../helpers/test-game';
 import { EntityType, BuildingType, getBuildingFootprint } from '@/game/entity';
 import {
     BuildingConstructionPhase,
@@ -26,7 +19,6 @@ import {
     restoreOriginalTerrain,
     getBuildingVisualState,
     CONSTRUCTION_SITE_GROUND_TYPE,
-    type TerrainContext,
 } from '@/game/features/building-construction';
 
 describe('Building Lifecycle: place → construct → remove', () => {
@@ -60,7 +52,6 @@ describe('Building Lifecycle: place → construct → remove', () => {
         expect(workerBeforeComplete).toBeUndefined();
 
         // ── Step 2: Verify tile occupancy ──
-        // The tile should be occupied by the building (not necessarily with ID 1)
         const occupyingEntityId = ctx.state.tileOccupancy.get('20,20');
         expect(occupyingEntityId).toBeDefined();
         expect(ctx.state.getEntity(occupyingEntityId!)).toBe(building);
@@ -70,13 +61,8 @@ describe('Building Lifecycle: place → construct → remove', () => {
         expect(bs).toBeDefined();
         bs.totalDuration = 10;
 
-        const terrainCtx: TerrainContext = {
-            terrain: map.terrain,
-            onTerrainModified: () => {},
-        };
-
         // Phase 1: TerrainLeveling (0-20%) - Poles phase is skipped (duration=0)
-        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx, ctx.eventBus);
+        ctx.buildingConstructionSystem.tick(0.5);
         expect(bs.phase).toBe(BuildingConstructionPhase.TerrainLeveling);
         let visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(true);
@@ -84,7 +70,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         expect(bs.originalTerrain).not.toBeNull();
 
         // Advance through terrain leveling
-        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx, ctx.eventBus);
+        ctx.buildingConstructionSystem.tick(0.5);
 
         // Footprint tiles should have construction ground type
         const footprint = getBuildingFootprint(20, 20, BuildingType.WoodcutterHut);
@@ -93,20 +79,20 @@ describe('Building Lifecycle: place → construct → remove', () => {
         }
 
         // Phase 2: ConstructionRising (20-55%)
-        tickConstruction(ctx.state, ctx.buildingStateManager, 2.0, terrainCtx, ctx.eventBus);
+        ctx.buildingConstructionSystem.tick(2.0);
         expect(bs.phase).toBe(BuildingConstructionPhase.ConstructionRising);
         visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(true);
         expect(visual.verticalProgress).toBeGreaterThan(0);
 
         // Phase 3: CompletedRising (55-100%)
-        tickConstruction(ctx.state, ctx.buildingStateManager, 4.0, terrainCtx, ctx.eventBus);
+        ctx.buildingConstructionSystem.tick(4.0);
         expect(bs.phase).toBe(BuildingConstructionPhase.CompletedRising);
         visual = getBuildingVisualState(bs);
         expect(visual.useConstructionSprite).toBe(false);
 
         // Phase 4: Completed
-        tickConstruction(ctx.state, ctx.buildingStateManager, 5.0, terrainCtx, ctx.eventBus);
+        ctx.buildingConstructionSystem.tick(5.0);
         expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
         visual = getBuildingVisualState(bs);
         expect(visual.isCompleted).toBe(true);
@@ -193,20 +179,20 @@ describe('Building Lifecycle: place → construct → remove', () => {
     });
 
     it('construction with terrain modification notifies callback', () => {
+        let terrainNotifications = 0;
+        ctx.buildingConstructionSystem.setTerrainContext({
+            terrain: ctx.map.terrain,
+            onTerrainModified: () => {
+                terrainNotifications++;
+            },
+        });
+
         addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut, 0);
         const bs = [...ctx.buildingStateManager.buildingStates.values()][0];
         bs.totalDuration = 10;
 
-        let terrainNotifications = 0;
-        const terrainCtx: TerrainContext = {
-            terrain: map.terrain,
-            onTerrainModified: () => {
-                terrainNotifications++;
-            },
-        };
-
         // TerrainLeveling starts immediately (Poles phase is skipped)
-        tickConstruction(ctx.state, ctx.buildingStateManager, 0.5, terrainCtx, ctx.eventBus);
-        expect(terrainNotifications).toBeGreaterThan(0); // Terrain mods during TerrainLeveling
+        ctx.buildingConstructionSystem.tick(0.5);
+        expect(terrainNotifications).toBeGreaterThan(0);
     });
 });

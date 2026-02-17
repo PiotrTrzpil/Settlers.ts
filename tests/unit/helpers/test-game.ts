@@ -16,7 +16,6 @@ import {
     BuildingConstructionSystem,
     BuildingStateManager,
     type BuildingState,
-    type TerrainContext,
 } from '@/game/features/building-construction';
 import { CarrierManager } from '@/game/features/carriers';
 import { BuildingInventoryManager } from '@/game/features/inventory';
@@ -268,35 +267,16 @@ export function makeBuildingState(
     };
 }
 
+// ─── Construction helpers ───────────────────────────────────────────
+
 /**
- * Create a BuildingConstructionSystem with terrain context and tick it.
- * Used for testing construction progression.
+ * Fast-forward a building to construction completion.
+ * Sets elapsed time to just before completion, then ticks the system to trigger the Completed phase.
  */
-export function tickConstruction(
-    gameState: GameState,
-    buildingStateManager: BuildingStateManager,
-    dt: number,
-    ctx: TerrainContext,
-    eventBus?: EventBus
-): void {
-    const bus = eventBus ?? new EventBus();
-    const settingsManager = new GameSettingsManager();
-    settingsManager.resetToDefaults();
-    const cmdCtx: CommandContext = {
-        state: gameState,
-        terrain: ctx.terrain,
-        eventBus: bus,
-        settings: settingsManager.state,
-        buildingStateManager,
-    };
-    const system = new BuildingConstructionSystem({
-        gameState,
-        buildingStateManager,
-        executeCommand: cmd => executeCommand(cmdCtx, cmd),
-    });
-    system.setTerrainContext(ctx);
-    system.registerEvents(bus);
-    system.tick(dt);
+export function completeConstruction(ctx: TestContext, entityId: number): void {
+    const bs = ctx.buildingStateManager.getBuildingState(entityId)!;
+    bs.elapsedTime = bs.totalDuration - 0.1;
+    ctx.buildingConstructionSystem.tick(0.2);
 }
 
 // ─── Command execution helpers ──────────────────────────────────────
@@ -312,29 +292,6 @@ export function toCommandContext(ctx: TestContext, eventBus?: EventBus): Command
         settings: ctx.settings,
         buildingStateManager: ctx.buildingStateManager,
     };
-}
-
-/**
- * Create an EventBus wired up with a BuildingConstructionSystem for terrain restoration.
- * Used by test helpers that need building removal to restore terrain.
- */
-export function createTestEventBus(
-    state: GameState,
-    map: TestMap,
-    buildingStateManager: BuildingStateManager
-): EventBus {
-    const eventBus = new EventBus();
-    const noopExecute = () => ({ success: true });
-    const system = new BuildingConstructionSystem({
-        gameState: state,
-        buildingStateManager,
-        executeCommand: noopExecute,
-    });
-    system.setTerrainContext({
-        terrain: map.terrain,
-    });
-    system.registerEvents(eventBus);
-    return eventBus;
 }
 
 /** Execute a place_building command. Returns CommandResult. */
@@ -372,8 +329,7 @@ export function selectEntity(ctx: TestContext, entityId: number | null): Command
 
 /** Execute a remove_entity command. Returns CommandResult. */
 export function removeEntity(ctx: TestContext, entityId: number): CommandResult {
-    const bus = createTestEventBus(ctx.state, ctx.map, ctx.buildingStateManager);
-    return executeCommand(toCommandContext(ctx, bus), { type: 'remove_entity', entityId });
+    return executeCommand(toCommandContext(ctx), { type: 'remove_entity', entityId });
 }
 
 /** Execute a place_resource command. Returns CommandResult. */
