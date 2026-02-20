@@ -13,43 +13,16 @@
         </div>
 
         <div class="single-view">
-            <div class="selector-group">
-                <label>Item</label>
+            <ItemSelector label="Item">
                 <select class="item-select" v-model="selectedItem" @change="onSelectItem">
                     <option v-for="(item, index) of libContent" :key="item.getFullName()" :value="item">
                         #{{ index }} - {{ item.getFullName() }} ({{ formatSize(item.decompressedLength) }})
                     </option>
                 </select>
-            </div>
+            </ItemSelector>
 
             <template v-if="selectedItem != null">
-                <div class="lib-item-details">
-                    <div class="detail-row">
-                        <span class="detail-label">File Name:</span>
-                        <span class="detail-value">{{ selectedItem.getFullName() }}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Compressed:</span>
-                        <span class="detail-value">{{ formatSize(selectedItem.length) }}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Decompressed:</span>
-                        <span class="detail-value">{{ formatSize(selectedItem.decompressedLength) }}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Compression Ratio:</span>
-                        <span class="detail-value">{{ getCompressionRatio(selectedItem) }}%</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Checksum Valid:</span>
-                        <span
-                            class="detail-value"
-                            :class="{ valid: selectedItem.checkChecksum(), invalid: !selectedItem.checkChecksum() }"
-                        >
-                            {{ selectedItem.checkChecksum() ? 'Yes' : 'No' }}
-                        </span>
-                    </div>
-                </div>
+                <PropertyList :rows="detailRows" />
 
                 <div class="hex-section">
                     <div class="section-header">Content Preview</div>
@@ -63,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef } from 'vue';
+import { ref, computed, shallowRef } from 'vue';
 import { LibFileReader } from '@/resources/lib/lib-file-reader';
 import { LibFileItem } from '@/resources/lib/lib-file-item';
 import { BinaryReader } from '@/resources/file/binary-reader';
@@ -71,6 +44,8 @@ import { FileManager, IFileSource } from '@/utilities/file-manager';
 
 import FileBrowser from '@/components/file-browser.vue';
 import HexViewer from '@/components/hex-viewer.vue';
+import ItemSelector from '@/components/ItemSelector.vue';
+import PropertyList from '@/components/PropertyList.vue';
 
 defineProps<{
     fileManager: FileManager;
@@ -79,6 +54,19 @@ defineProps<{
 const libContent = ref<LibFileItem[]>([]);
 const selectedItem = ref<LibFileItem | null>(null);
 const selectedItemReader = shallowRef<BinaryReader | null>(null);
+
+const detailRows = computed(() => {
+    const item = selectedItem.value;
+    if (!item) return [];
+    const valid = item.checkChecksum();
+    return [
+        { label: 'File Name', value: item.getFullName() },
+        { label: 'Compressed', value: formatSize(item.length) },
+        { label: 'Decompressed', value: formatSize(item.decompressedLength) },
+        { label: 'Compression Ratio', value: `${getCompressionRatio(item)}%` },
+        { label: 'Checksum Valid', value: valid ? 'Yes' : 'No', class: valid ? 'valid' : 'invalid' },
+    ];
+});
 
 function onFileSelect(file: IFileSource) {
     void load(file);
@@ -132,43 +120,6 @@ function fillLibList(libReader: LibFileReader): LibFileItem[] {
 <style src="@/styles/file-viewer.css"></style>
 
 <style scoped>
-.lib-item-details {
-    background: var(--bg-darkest);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 12px;
-    margin-bottom: 12px;
-}
-
-.detail-row {
-    display: flex;
-    padding: 4px 0;
-    border-bottom: 1px solid var(--border-faint);
-}
-
-.detail-row:last-child {
-    border-bottom: none;
-}
-
-.detail-label {
-    color: var(--text-secondary);
-    width: 140px;
-    flex-shrink: 0;
-}
-
-.detail-value {
-    color: var(--text);
-    font-family: monospace;
-}
-
-.detail-value.valid {
-    color: #4a8030;
-}
-
-.detail-value.invalid {
-    color: #a04030;
-}
-
 .hex-section {
     flex: 1;
     display: flex;

@@ -58,32 +58,29 @@
         <!-- Single View: Detailed sprite browser -->
         <div v-if="viewMode === 'single'" class="single-view">
             <div class="selectors">
-                <div class="selector-group">
-                    <label>Job (JIL):</label>
+                <ItemSelector label="Job (JIL):">
                     <select v-model="selectedJil" @change="onSelectJil">
                         <option v-for="item of jilList" :key="item.index" :value="item">
                             #{{ pad(item.index, 3) }} {{ getJobLabel(item.index) }} - Size: {{ pad(item.length, 3) }}
                         </option>
                     </select>
-                </div>
+                </ItemSelector>
 
-                <div class="selector-group">
-                    <label>Direction (DIL):</label>
+                <ItemSelector label="Direction (DIL):">
                     <select v-model="selectedDil" @change="onSelectDil">
                         <option v-for="item of dilList" :key="item.index" :value="item">
                             #{{ pad(item.index, 3) }} - {{ item.length }} frames
                         </option>
                     </select>
-                </div>
+                </ItemSelector>
 
-                <div class="selector-group">
-                    <label>Frame (GIL):</label>
+                <ItemSelector label="Frame (GIL):">
                     <select v-model="selectedGil" @change="onSelectGil">
                         <option v-for="item of gilList" :key="item.index" :value="item">
                             #{{ pad(item.index, 3) }}
                         </option>
                     </select>
-                </div>
+                </ItemSelector>
             </div>
 
             <div class="sprite-info" v-if="currentImageInfo">
@@ -124,6 +121,7 @@ import { useCompositeGridView } from '@/composables/useGridView';
 
 import FileBrowser from '@/components/file-browser.vue';
 import SettingsCheckbox from '@/components/settings/SettingsCheckbox.vue';
+import ItemSelector from '@/components/ItemSelector.vue';
 
 const log = new LogHandler('JilView');
 

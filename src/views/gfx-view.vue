@@ -4,7 +4,7 @@
             <span class="label">Gfx File:</span>
             <file-browser
                 :fileManager="fileManager"
-                @select="onFileSelect"
+                @select="file => onFileSelect(file, load)"
                 filter=".gfx"
                 storageKey="viewer_gfx_file"
                 class="browser"
@@ -15,23 +15,13 @@
         </div>
 
         <!-- Grid View -->
-        <div v-if="viewMode === 'grid' && gfxContent.length > 0" class="grid-container">
-            <div
-                v-for="(img, index) in gfxContent"
-                :key="img.dataOffset"
-                class="grid-item"
-                :class="{ selected: selectedItem === img }"
-                @click="selectImage(img, index)"
-            >
-                <canvas
-                    :ref="el => setCanvasRef(el as HTMLCanvasElement, index)"
-                    :width="Math.min(img.width, 200)"
-                    :height="Math.min(img.height, 200)"
-                    class="grid-canvas"
-                />
-                <div class="grid-label">#{{ index }} ({{ img.width }}x{{ img.height }})</div>
-            </div>
-        </div>
+        <ImageGridViewer
+            v-if="viewMode === 'grid'"
+            :items="gfxContent"
+            :selected-item="selectedItem"
+            :set-canvas-ref="setCanvasRef"
+            @select="(img, i) => selectImage(img, i)"
+        />
 
         <!-- Single View -->
         <div v-if="viewMode === 'single'" class="single-view">
@@ -53,16 +43,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, useTemplateRef, nextTick } from 'vue';
+import { ref, useTemplateRef } from 'vue';
 import { IGfxImage } from '@/resources/gfx/igfx-image';
 import { Path } from '@/utilities/path';
 import { GfxFileReader } from '@/resources/gfx/gfx-file-reader';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { pad, renderImageToCanvas, collectImages, loadGfxFileSet, parseGfxReaders } from '@/utilities/view-helpers';
-import { useSimpleGridView } from '@/composables/useGridView';
+import { useFileViewer } from '@/composables/useFileViewer';
 
 import FileBrowser from '@/components/file-browser.vue';
+import ImageGridViewer from '@/components/ImageGridViewer.vue';
 
 const log = new LogHandler('GfxView');
 
@@ -72,19 +63,12 @@ const props = defineProps<{
 
 const mainCanvas = useTemplateRef<HTMLCanvasElement>('mainCanvas');
 
-// Use composable for grid view functionality
-const { viewMode, setCanvasRef, clearRefs, canvasRefs, switchToGrid, watchGridMode } = useSimpleGridView('grid');
+const { viewMode, setCanvasRef, switchToGrid, watchGridMode, onFileSelect, renderAfterLoad, renderGridImages } =
+    useFileViewer('grid');
 
-const fileName = ref<string | null>(null);
 const gfxContent = ref<IGfxImage[]>([]);
 const selectedItem = ref<IGfxImage | null>(null);
 const gfxFile = ref<GfxFileReader | null>(null);
-
-function onFileSelect(file: IFileSource) {
-    fileName.value = file.name;
-    clearRefs();
-    void load(file);
-}
 
 async function load(file: IFileSource) {
     if (!props.fileManager) return;
@@ -108,21 +92,11 @@ async function doLoad(fileId: string) {
 
     log.debug('File: ' + fileId + ' with ' + gfxContent.value.length + ' images');
 
-    // Render grid after DOM updates
-    if (viewMode.value === 'grid') {
-        await nextTick();
-        renderAllGridImages();
-    }
+    await renderAfterLoad(renderAllGridImages);
 }
 
 function renderAllGridImages() {
-    for (let i = 0; i < gfxContent.value.length; i++) {
-        const canvas = canvasRefs.get(i);
-        const img = gfxContent.value[i];
-        if (canvas && img) {
-            renderImageToCanvas(img, canvas);
-        }
-    }
+    renderGridImages(gfxContent.value);
 }
 
 function selectImage(img: IGfxImage, index: number) {
