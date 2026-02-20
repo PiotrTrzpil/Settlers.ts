@@ -1,157 +1,153 @@
 <template>
-    <div class="debug-panel" :class="{ collapsed: !open }">
-        <PanelToggleButton v-model:open="open" label="Debug" title="Debug Panel" />
+    <OverlayPanel v-model:open="open" label="Debug" title="Debug Panel">
+        <!-- Performance -->
+        <CollapseSection title="Performance">
+            <StatRow label="FPS"
+                ><span :class="fpsClass">{{ stats.fps }}</span></StatRow
+            >
+            <StatRow label="Frame (avg)" :value="`${stats.frameTimeMs} ms`" />
+            <StatRow label="Frame (min/max)" :value="`${stats.frameTimeMin} / ${stats.frameTimeMax} ms`" />
+            <StatRow label="Ticks/sec" :value="stats.ticksPerSec" />
+        </CollapseSection>
 
-        <div v-if="open" class="panel-sections">
-            <!-- Performance -->
-            <CollapseSection title="Performance">
-                <StatRow label="FPS"
-                    ><span :class="fpsClass">{{ stats.fps }}</span></StatRow
-                >
-                <StatRow label="Frame (avg)" :value="`${stats.frameTimeMs} ms`" />
-                <StatRow label="Frame (min/max)" :value="`${stats.frameTimeMin} / ${stats.frameTimeMax} ms`" />
-                <StatRow label="Ticks/sec" :value="stats.ticksPerSec" />
-            </CollapseSection>
+        <!-- Render Timings -->
+        <CollapseSection title="Frame Timings" :default-open="false">
+            <StatRow label="Frame" :value="`${stats.renderTimings.frame} ms`" total />
+            <StatRow label="Ticks" :value="`${stats.renderTimings.ticks} ms`" />
+            <StatRow
+                v-for="(ms, name) in stats.renderTimings.tickSystems"
+                :key="name"
+                :label="name"
+                :value="`${ms} ms`"
+                :depth="1"
+            />
+            <StatRow label="Animations" :value="`${stats.renderTimings.animations} ms`" />
+            <StatRow label="Update" :value="`${stats.renderTimings.update} ms`" />
+            <StatRow label="Callback" :value="`${stats.renderTimings.callback} ms`" />
+            <StatRow label="Idle" :value="`${stats.renderTimings.idle} ms`" />
+            <StatRow label="Render" :value="`${stats.renderTimings.render} ms`" />
+            <StatRow label="Landscape" :value="`${stats.renderTimings.landscape} ms`" :depth="1" />
+            <StatRow label="Cull/Sort" :value="`${stats.renderTimings.cullSort} ms`" :depth="1" />
+            <StatRow label="Entities" :value="`${stats.renderTimings.entities} ms`" :depth="1" />
+            <StatRow label="Indicators" :value="`${stats.renderTimings.indicators} ms`" :depth="2" />
+            <StatRow label="Textured" :value="`${stats.renderTimings.textured} ms`" :depth="2" />
+            <StatRow label="Color" :value="`${stats.renderTimings.color} ms`" :depth="2" />
+            <StatRow label="Selection" :value="`${stats.renderTimings.selection} ms`" :depth="2" />
+            <StatRow label="Visible" :value="stats.renderTimings.visibleCount" :depth="1" />
+            <StatRow label="Sprites" :value="stats.renderTimings.spriteCount" :depth="1" />
+            <StatRow label="Draw calls" :value="stats.renderTimings.drawCalls" :depth="1" />
+        </CollapseSection>
 
-            <!-- Render Timings -->
-            <CollapseSection title="Frame Timings" :default-open="false">
-                <StatRow label="Frame" :value="`${stats.renderTimings.frame} ms`" total />
-                <StatRow label="Ticks" :value="`${stats.renderTimings.ticks} ms`" />
-                <StatRow
-                    v-for="(ms, name) in stats.renderTimings.tickSystems"
-                    :key="name"
-                    :label="name"
-                    :value="`${ms} ms`"
-                    :depth="1"
+        <!-- Load Timings -->
+        <CollapseSection title="Load Timings" :default-open="false">
+            <StatRow label="Landscape" :value="`${stats.loadTimings.landscape} ms`" />
+            <StatRow label="File preload" :value="`${stats.loadTimings.filePreload} ms`" />
+            <StatRow label="Atlas alloc" :value="`${stats.loadTimings.atlasAlloc} ms`" />
+            <StatRow label="Buildings" :value="`${stats.loadTimings.buildings} ms`" />
+            <StatRow label="Map objects" :value="`${stats.loadTimings.mapObjects} ms`" />
+            <StatRow label="Resources" :value="`${stats.loadTimings.resources} ms`" />
+            <StatRow label="Units" :value="`${stats.loadTimings.units} ms`" />
+            <StatRow label="GPU upload" :value="`${stats.loadTimings.gpuUpload} ms`" />
+            <StatRow label="Total sprites" :value="`${stats.loadTimings.totalSprites} ms`" total />
+            <StatRow label="Atlas size" :value="stats.loadTimings.atlasSize || '-'" />
+            <StatRow label="Sprite count" :value="stats.loadTimings.spriteCount" />
+            <StatRow label="Cache"
+                ><span :class="cacheClass">{{ cacheLabel }}</span></StatRow
+            >
+        </CollapseSection>
+
+        <!-- Entities -->
+        <CollapseSection title="Entities">
+            <StatRow label="Total" :value="view.entityCount" />
+            <StatRow label="Buildings" :value="view.buildingCount" />
+            <StatRow label="Units" :value="view.unitCount" />
+            <StatRow label="Moving" :value="view.unitsMoving" />
+            <StatRow label="Path steps" :value="view.totalPathSteps" />
+        </CollapseSection>
+
+        <!-- Camera -->
+        <CollapseSection title="Camera">
+            <StatRow label="Position" :value="`${stats.cameraX}, ${stats.cameraY}`" />
+            <StatRow label="Zoom" :value="`${stats.zoom}x`" />
+            <StatRow label="Canvas" :value="`${stats.canvasWidth} x ${stats.canvasHeight}`" />
+        </CollapseSection>
+
+        <!-- Tile -->
+        <CollapseSection title="Tile">
+            <template v-if="stats.hasTile">
+                <StatRow label="Coords" :value="`${stats.tileX}, ${stats.tileY}`" />
+                <StatRow label="Ground type" :value="stats.tileGroundType" />
+                <StatRow label="Height" :value="stats.tileGroundHeight" />
+            </template>
+            <StatRow v-else label="Move mouse over map" dim />
+        </CollapseSection>
+
+        <!-- Controls -->
+        <CollapseSection title="Controls">
+            <div class="control-buttons">
+                <button class="ctrl-btn" @click="$emit('togglePause')">
+                    {{ paused ? 'Resume' : 'Pause' }}
+                </button>
+                <button class="ctrl-btn danger" @click="$emit('resetGameState')">Reset State</button>
+            </div>
+            <Checkbox v-model="settings.showBuildingFootprint" label="Show building footprints" />
+            <div class="river-debug">
+                <span class="river-heading stat-label">River textures</span>
+                <StatRow label="Slots (I/O/M)">
+                    <span class="perm-control">
+                        <button class="perm-btn" @click="cycleSlotPerm(-1)">&lt;</button>
+                        <span class="perm-value">{{ slotPermLabel }}</span>
+                        <button class="perm-btn" @click="cycleSlotPerm(1)">&gt;</button>
+                    </span>
+                </StatRow>
+                <Checkbox
+                    v-model="stats.riverFlipInner"
+                    label="Flip inner (River3↔River1)"
+                    @update:modelValue="applyRiverConfig()"
                 />
-                <StatRow label="Animations" :value="`${stats.renderTimings.animations} ms`" />
-                <StatRow label="Update" :value="`${stats.renderTimings.update} ms`" />
-                <StatRow label="Callback" :value="`${stats.renderTimings.callback} ms`" />
-                <StatRow label="Idle" :value="`${stats.renderTimings.idle} ms`" />
-                <StatRow label="Render" :value="`${stats.renderTimings.render} ms`" />
-                <StatRow label="Landscape" :value="`${stats.renderTimings.landscape} ms`" :depth="1" />
-                <StatRow label="Cull/Sort" :value="`${stats.renderTimings.cullSort} ms`" :depth="1" />
-                <StatRow label="Entities" :value="`${stats.renderTimings.entities} ms`" :depth="1" />
-                <StatRow label="Indicators" :value="`${stats.renderTimings.indicators} ms`" :depth="2" />
-                <StatRow label="Textured" :value="`${stats.renderTimings.textured} ms`" :depth="2" />
-                <StatRow label="Color" :value="`${stats.renderTimings.color} ms`" :depth="2" />
-                <StatRow label="Selection" :value="`${stats.renderTimings.selection} ms`" :depth="2" />
-                <StatRow label="Visible" :value="stats.renderTimings.visibleCount" :depth="1" />
-                <StatRow label="Sprites" :value="stats.renderTimings.spriteCount" :depth="1" />
-                <StatRow label="Draw calls" :value="stats.renderTimings.drawCalls" :depth="1" />
-            </CollapseSection>
+                <Checkbox
+                    v-model="stats.riverFlipOuter"
+                    label="Flip outer (Grass↔River4)"
+                    @update:modelValue="applyRiverConfig()"
+                />
+                <Checkbox
+                    v-model="stats.riverFlipMiddle"
+                    label="Flip middle (River4↔River3)"
+                    @update:modelValue="applyRiverConfig()"
+                />
+                <StatRow label="" dim :value="`${configIndex}/48`" />
+            </div>
+        </CollapseSection>
 
-            <!-- Load Timings -->
-            <CollapseSection title="Load Timings" :default-open="false">
-                <StatRow label="Landscape" :value="`${stats.loadTimings.landscape} ms`" />
-                <StatRow label="File preload" :value="`${stats.loadTimings.filePreload} ms`" />
-                <StatRow label="Atlas alloc" :value="`${stats.loadTimings.atlasAlloc} ms`" />
-                <StatRow label="Buildings" :value="`${stats.loadTimings.buildings} ms`" />
-                <StatRow label="Map objects" :value="`${stats.loadTimings.mapObjects} ms`" />
-                <StatRow label="Resources" :value="`${stats.loadTimings.resources} ms`" />
-                <StatRow label="Units" :value="`${stats.loadTimings.units} ms`" />
-                <StatRow label="GPU upload" :value="`${stats.loadTimings.gpuUpload} ms`" />
-                <StatRow label="Total sprites" :value="`${stats.loadTimings.totalSprites} ms`" total />
-                <StatRow label="Atlas size" :value="stats.loadTimings.atlasSize || '-'" />
-                <StatRow label="Sprite count" :value="stats.loadTimings.spriteCount" />
-                <StatRow label="Cache"
-                    ><span :class="cacheClass">{{ cacheLabel }}</span></StatRow
-                >
-            </CollapseSection>
-
-            <!-- Entities -->
-            <CollapseSection title="Entities">
-                <StatRow label="Total" :value="view.entityCount" />
-                <StatRow label="Buildings" :value="view.buildingCount" />
-                <StatRow label="Units" :value="view.unitCount" />
-                <StatRow label="Moving" :value="view.unitsMoving" />
-                <StatRow label="Path steps" :value="view.totalPathSteps" />
-            </CollapseSection>
-
-            <!-- Camera -->
-            <CollapseSection title="Camera">
-                <StatRow label="Position" :value="`${stats.cameraX}, ${stats.cameraY}`" />
-                <StatRow label="Zoom" :value="`${stats.zoom}x`" />
-                <StatRow label="Canvas" :value="`${stats.canvasWidth} x ${stats.canvasHeight}`" />
-            </CollapseSection>
-
-            <!-- Tile -->
-            <CollapseSection title="Tile">
-                <template v-if="stats.hasTile">
-                    <StatRow label="Coords" :value="`${stats.tileX}, ${stats.tileY}`" />
-                    <StatRow label="Ground type" :value="stats.tileGroundType" />
-                    <StatRow label="Height" :value="stats.tileGroundHeight" />
-                </template>
-                <StatRow v-else label="Move mouse over map" dim />
-            </CollapseSection>
-
-            <!-- Controls -->
-            <CollapseSection title="Controls">
-                <div class="control-buttons">
-                    <button class="ctrl-btn" @click="$emit('togglePause')">
-                        {{ paused ? 'Resume' : 'Pause' }}
-                    </button>
-                    <button class="ctrl-btn danger" @click="$emit('resetGameState')">Reset State</button>
-                </div>
-                <Checkbox v-model="settings.showBuildingFootprint" label="Show building footprints" />
-                <div class="river-debug">
-                    <span class="river-heading stat-label">River textures</span>
-                    <StatRow label="Slots (I/O/M)">
-                        <span class="perm-control">
-                            <button class="perm-btn" @click="cycleSlotPerm(-1)">&lt;</button>
-                            <span class="perm-value">{{ slotPermLabel }}</span>
-                            <button class="perm-btn" @click="cycleSlotPerm(1)">&gt;</button>
-                        </span>
-                    </StatRow>
-                    <Checkbox
-                        v-model="stats.riverFlipInner"
-                        label="Flip inner (River3↔River1)"
-                        @update:modelValue="applyRiverConfig()"
-                    />
-                    <Checkbox
-                        v-model="stats.riverFlipOuter"
-                        label="Flip outer (Grass↔River4)"
-                        @update:modelValue="applyRiverConfig()"
-                    />
-                    <Checkbox
-                        v-model="stats.riverFlipMiddle"
-                        label="Flip middle (River4↔River3)"
-                        @update:modelValue="applyRiverConfig()"
-                    />
-                    <StatRow label="" dim :value="`${configIndex}/48`" />
-                </div>
-            </CollapseSection>
-
-            <!-- Map Objects -->
-            <CollapseSection title="Map Objects" :default-open="false">
-                <div class="map-obj-row">
-                    <span class="stat-label">Trees</span>
-                    <span class="stat-value">{{ mapObjectCounts.trees }}</span>
-                    <button class="spawn-btn" @click="spawnCategory('trees')">+</button>
-                </div>
-                <div class="map-obj-row">
-                    <span class="stat-label">Stones</span>
-                    <span class="stat-value">{{ mapObjectCounts.stones }}</span>
-                    <button class="spawn-btn" @click="spawnCategory('stones')">+</button>
-                </div>
-                <div class="map-obj-row">
-                    <span class="stat-label">Resources</span>
-                    <span class="stat-value">{{ mapObjectCounts.resources }}</span>
-                    <button class="spawn-btn" @click="spawnCategory('resources')">+</button>
-                </div>
-                <div class="map-obj-row">
-                    <span class="stat-label">Plants</span>
-                    <span class="stat-value">{{ mapObjectCounts.plants }}</span>
-                    <button class="spawn-btn" @click="spawnCategory('plants')">+</button>
-                </div>
-                <div class="map-obj-actions">
-                    <button class="ctrl-btn" @click="spawnAllFromMap()">From Map</button>
-                    <button class="ctrl-btn" @click="clearAllMapObjects()">Clear</button>
-                </div>
-                <StatRow v-if="!hasObjectTypeData" label="No map object data (test map)" dim />
-            </CollapseSection>
-        </div>
-    </div>
+        <!-- Map Objects -->
+        <CollapseSection title="Map Objects" :default-open="false">
+            <div class="map-obj-row">
+                <span class="stat-label">Trees</span>
+                <span class="stat-value">{{ mapObjectCounts.trees }}</span>
+                <button class="spawn-btn" @click="spawnCategory('trees')">+</button>
+            </div>
+            <div class="map-obj-row">
+                <span class="stat-label">Stones</span>
+                <span class="stat-value">{{ mapObjectCounts.stones }}</span>
+                <button class="spawn-btn" @click="spawnCategory('stones')">+</button>
+            </div>
+            <div class="map-obj-row">
+                <span class="stat-label">Resources</span>
+                <span class="stat-value">{{ mapObjectCounts.resources }}</span>
+                <button class="spawn-btn" @click="spawnCategory('resources')">+</button>
+            </div>
+            <div class="map-obj-row">
+                <span class="stat-label">Plants</span>
+                <span class="stat-value">{{ mapObjectCounts.plants }}</span>
+                <button class="spawn-btn" @click="spawnCategory('plants')">+</button>
+            </div>
+            <div class="map-obj-actions">
+                <button class="ctrl-btn" @click="spawnAllFromMap()">From Map</button>
+                <button class="ctrl-btn" @click="clearAllMapObjects()">Clear</button>
+            </div>
+            <StatRow v-if="!hasObjectTypeData" label="No map object data (test map)" dim />
+        </CollapseSection>
+    </OverlayPanel>
 </template>
 
 <script setup lang="ts">
@@ -163,7 +159,7 @@ import { useDebugMapObjects } from './use-debug-map-objects';
 import Checkbox from './Checkbox.vue';
 import CollapseSection from './CollapseSection.vue';
 import StatRow from './StatRow.vue';
-import PanelToggleButton from './PanelToggleButton.vue';
+import OverlayPanel from './OverlayPanel.vue';
 
 const props = defineProps<{
     paused: boolean;
@@ -248,27 +244,6 @@ const cacheClass = computed(() => {
 </script>
 
 <style scoped>
-.debug-panel {
-    background: rgba(13, 10, 5, 0.92);
-    border: 1px solid var(--border-strong);
-    border-radius: 4px;
-    color: var(--text);
-    font-size: 11px;
-    font-family: monospace;
-    min-width: 200px;
-    max-height: 100%;
-    overflow-y: auto;
-    pointer-events: auto;
-}
-
-.debug-panel.collapsed {
-    min-width: 0;
-}
-
-.panel-sections {
-    padding: 2px 0;
-}
-
 /* Stat label/value used directly in map-obj and river sections */
 .stat-label {
     color: var(--text-muted);
@@ -418,19 +393,5 @@ const cacheClass = computed(() => {
     display: flex;
     gap: 4px;
     margin-top: 6px;
-}
-
-/* Scrollbar */
-.debug-panel::-webkit-scrollbar {
-    width: 4px;
-}
-
-.debug-panel::-webkit-scrollbar-track {
-    background: var(--bg-darkest);
-}
-
-.debug-panel::-webkit-scrollbar-thumb {
-    background: var(--border-mid);
-    border-radius: 2px;
 }
 </style>

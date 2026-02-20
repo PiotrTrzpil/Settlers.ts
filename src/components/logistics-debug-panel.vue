@@ -1,136 +1,129 @@
 <template>
-    <div class="logistics-panel" :class="{ collapsed: !open }">
-        <PanelToggleButton v-model:open="open" label="Logistics" title="Logistics Debug Panel" />
+    <OverlayPanel v-model:open="open" label="Logistics" title="Logistics Debug Panel">
+        <!-- Settings (always visible, no toggle) -->
+        <section class="settings-section">
+            <Checkbox v-model="selectAllUnits" label="All units selectable" />
+        </section>
 
-        <div v-if="open" class="panel-sections">
-            <!-- Settings (always visible, no toggle) -->
-            <section class="settings-section">
-                <Checkbox v-model="selectAllUnits" label="All units selectable" />
-            </section>
+        <!-- Overview (always open) -->
+        <CollapseSection title="Overview">
+            <StatRow label="Requests (pending)" :value="stats.pendingCount" />
+            <StatRow label="Requests (in progress)" :value="stats.inProgressCount" />
+            <StatRow v-if="stats.stalledCount > 0" label="Requests (stalled)">
+                <span class="value-stalled">{{ stats.stalledCount }}</span>
+            </StatRow>
+            <StatRow label="Carriers" :value="stats.carrierCount" />
+            <StatRow v-if="stats.unregisteredCarriers > 0" label="Unregistered">
+                <span class="value-warning">{{ stats.unregisteredCarriers }}</span>
+            </StatRow>
+            <StatRow label="Hubs" :value="`${stats.hubCount} (${stats.totalHubCapacity} cap)`" />
+            <StatRow v-if="stats.hubsAtCapacity > 0" label="Hubs at capacity">
+                <span class="value-warning">{{ stats.hubsAtCapacity }}</span>
+            </StatRow>
+            <StatRow label="Reservations" :value="stats.reservationCount" />
+        </CollapseSection>
 
-            <!-- Overview (always open) -->
-            <CollapseSection title="Overview">
-                <StatRow label="Requests (pending)" :value="stats.pendingCount" />
-                <StatRow label="Requests (in progress)" :value="stats.inProgressCount" />
-                <StatRow v-if="stats.stalledCount > 0" label="Requests (stalled)">
-                    <span class="value-stalled">{{ stats.stalledCount }}</span>
-                </StatRow>
-                <StatRow label="Carriers" :value="stats.carrierCount" />
-                <StatRow v-if="stats.unregisteredCarriers > 0" label="Unregistered">
-                    <span class="value-warning">{{ stats.unregisteredCarriers }}</span>
-                </StatRow>
-                <StatRow label="Hubs" :value="`${stats.hubCount} (${stats.totalHubCapacity} cap)`" />
-                <StatRow v-if="stats.hubsAtCapacity > 0" label="Hubs at capacity">
-                    <span class="value-warning">{{ stats.hubsAtCapacity }}</span>
-                </StatRow>
-                <StatRow label="Reservations" :value="stats.reservationCount" />
-            </CollapseSection>
+        <!-- Requests -->
+        <CollapseSection :title="`Requests (${stats.pendingCount + stats.inProgressCount})`">
+            <div v-if="state.pendingRequests.length === 0 && state.inProgressRequests.length === 0" class="empty-state">
+                No active requests
+            </div>
+            <div v-for="req in allRequests" :key="req.id" class="request-row">
+                <span class="req-material">{{ req.material }}</span>
+                <span class="req-priority" :class="'priority-' + req.priority.toLowerCase()">
+                    {{ req.priority[0] }}
+                </span>
+                <span class="req-target">→ #{{ req.buildingId }}</span>
+                <span class="req-age">{{ req.age }}s</span>
+                <span v-if="req.inProgress" class="req-status in-progress">⚙</span>
+                <span v-else class="req-status pending">⏳</span>
+                <span v-if="req.reason" class="req-reason">{{ req.reason }}</span>
+            </div>
+            <div v-if="hasMoreRequests" class="more-indicator">+{{ totalRequests - 15 }} more</div>
+        </CollapseSection>
 
-            <!-- Requests -->
-            <CollapseSection :title="`Requests (${stats.pendingCount + stats.inProgressCount})`">
-                <div
-                    v-if="state.pendingRequests.length === 0 && state.inProgressRequests.length === 0"
-                    class="empty-state"
-                >
-                    No active requests
-                </div>
-                <div v-for="req in allRequests" :key="req.id" class="request-row">
-                    <span class="req-material">{{ req.material }}</span>
-                    <span class="req-priority" :class="'priority-' + req.priority.toLowerCase()">
-                        {{ req.priority[0] }}
-                    </span>
-                    <span class="req-target">→ #{{ req.buildingId }}</span>
-                    <span class="req-age">{{ req.age }}s</span>
-                    <span v-if="req.inProgress" class="req-status in-progress">⚙</span>
-                    <span v-else class="req-status pending">⏳</span>
-                    <span v-if="req.reason" class="req-reason">{{ req.reason }}</span>
-                </div>
-                <div v-if="hasMoreRequests" class="more-indicator">+{{ totalRequests - 15 }} more</div>
-            </CollapseSection>
+        <!-- Carriers -->
+        <CollapseSection :title="`Carriers (${stats.carrierCount})`" :default-open="false">
+            <div class="carrier-breakdown">
+                <span class="breakdown-item">
+                    <span class="breakdown-label">Idle:</span>
+                    <span class="breakdown-value">{{ stats.idleCarriers }}</span>
+                </span>
+                <span class="breakdown-item">
+                    <span class="breakdown-label">Walk:</span>
+                    <span class="breakdown-value">{{ stats.walkingCarriers }}</span>
+                </span>
+                <span class="breakdown-item">
+                    <span class="breakdown-label">Pickup:</span>
+                    <span class="breakdown-value">{{ stats.pickingUpCarriers }}</span>
+                </span>
+                <span class="breakdown-item">
+                    <span class="breakdown-label">Deliver:</span>
+                    <span class="breakdown-value">{{ stats.deliveringCarriers }}</span>
+                </span>
+                <span class="breakdown-item">
+                    <span class="breakdown-label">Rest:</span>
+                    <span class="breakdown-value">{{ stats.restingCarriers }}</span>
+                </span>
+            </div>
+            <div class="fatigue-breakdown">
+                <span class="fatigue-item fresh">Fresh: {{ stats.freshCarriers }}</span>
+                <span class="fatigue-item tired">Tired: {{ stats.tiredCarriers }}</span>
+                <span class="fatigue-item exhausted">Exhausted: {{ stats.exhaustedCarriers }}</span>
+                <span class="fatigue-item collapsed" v-if="stats.collapsedCarriers > 0">
+                    Collapsed: {{ stats.collapsedCarriers }}
+                </span>
+            </div>
+            <div v-if="state.carriers.length === 0" class="empty-state">No carriers</div>
+            <div v-for="carrier in state.carriers" :key="carrier.entityId" class="carrier-row">
+                <span class="carrier-id">#{{ carrier.entityId }}</span>
+                <span class="carrier-status" :class="'status-' + carrier.status.toLowerCase()">
+                    {{ carrier.status }}
+                </span>
+                <span class="carrier-fatigue" :class="'fatigue-' + carrier.fatigueLevel.toLowerCase()">
+                    {{ carrier.fatigue }}%
+                </span>
+                <span v-if="carrier.carryingMaterial" class="carrier-carrying">
+                    {{ carrier.carryingMaterial }}
+                </span>
+            </div>
+        </CollapseSection>
 
-            <!-- Carriers -->
-            <CollapseSection :title="`Carriers (${stats.carrierCount})`" :default-open="false">
-                <div class="carrier-breakdown">
-                    <span class="breakdown-item">
-                        <span class="breakdown-label">Idle:</span>
-                        <span class="breakdown-value">{{ stats.idleCarriers }}</span>
-                    </span>
-                    <span class="breakdown-item">
-                        <span class="breakdown-label">Walk:</span>
-                        <span class="breakdown-value">{{ stats.walkingCarriers }}</span>
-                    </span>
-                    <span class="breakdown-item">
-                        <span class="breakdown-label">Pickup:</span>
-                        <span class="breakdown-value">{{ stats.pickingUpCarriers }}</span>
-                    </span>
-                    <span class="breakdown-item">
-                        <span class="breakdown-label">Deliver:</span>
-                        <span class="breakdown-value">{{ stats.deliveringCarriers }}</span>
-                    </span>
-                    <span class="breakdown-item">
-                        <span class="breakdown-label">Rest:</span>
-                        <span class="breakdown-value">{{ stats.restingCarriers }}</span>
-                    </span>
-                </div>
-                <div class="fatigue-breakdown">
-                    <span class="fatigue-item fresh">Fresh: {{ stats.freshCarriers }}</span>
-                    <span class="fatigue-item tired">Tired: {{ stats.tiredCarriers }}</span>
-                    <span class="fatigue-item exhausted">Exhausted: {{ stats.exhaustedCarriers }}</span>
-                    <span class="fatigue-item collapsed" v-if="stats.collapsedCarriers > 0">
-                        Collapsed: {{ stats.collapsedCarriers }}
-                    </span>
-                </div>
-                <div v-if="state.carriers.length === 0" class="empty-state">No carriers</div>
-                <div v-for="carrier in state.carriers" :key="carrier.entityId" class="carrier-row">
-                    <span class="carrier-id">#{{ carrier.entityId }}</span>
-                    <span class="carrier-status" :class="'status-' + carrier.status.toLowerCase()">
-                        {{ carrier.status }}
-                    </span>
-                    <span class="carrier-fatigue" :class="'fatigue-' + carrier.fatigueLevel.toLowerCase()">
-                        {{ carrier.fatigue }}%
-                    </span>
-                    <span v-if="carrier.carryingMaterial" class="carrier-carrying">
-                        {{ carrier.carryingMaterial }}
-                    </span>
-                </div>
-            </CollapseSection>
+        <!-- Active Jobs -->
+        <CollapseSection :title="`Active Jobs (${activeJobCount})`" :default-open="false">
+            <div v-if="carriersWithJobs.length === 0" class="empty-state">No active jobs</div>
+            <div v-for="carrier in carriersWithJobs" :key="carrier.entityId" class="job-row">
+                <span class="job-carrier">#{{ carrier.entityId }}</span>
+                <span class="job-type">{{ carrier.jobType }}</span>
+                <span v-if="carrier.carryingMaterial" class="job-material">
+                    {{ carrier.carryingMaterial }} ×{{ carrier.carryingAmount }}
+                </span>
+            </div>
+        </CollapseSection>
 
-            <!-- Active Jobs -->
-            <CollapseSection :title="`Active Jobs (${activeJobCount})`" :default-open="false">
-                <div v-if="carriersWithJobs.length === 0" class="empty-state">No active jobs</div>
-                <div v-for="carrier in carriersWithJobs" :key="carrier.entityId" class="job-row">
-                    <span class="job-carrier">#{{ carrier.entityId }}</span>
-                    <span class="job-type">{{ carrier.jobType }}</span>
-                    <span v-if="carrier.carryingMaterial" class="job-material">
-                        {{ carrier.carryingMaterial }} ×{{ carrier.carryingAmount }}
-                    </span>
-                </div>
-            </CollapseSection>
+        <!-- Reservations -->
+        <CollapseSection :title="`Reservations (${stats.reservationCount})`" :default-open="false">
+            <div v-if="state.reservations.length === 0" class="empty-state">No reservations</div>
+            <div v-for="res in state.reservations" :key="res.id" class="reservation-row">
+                <span class="res-building">#{{ res.buildingId }}</span>
+                <span class="res-material">{{ res.material }}</span>
+                <span class="res-amount">×{{ res.amount }}</span>
+                <span class="res-request">→ req#{{ res.requestId }}</span>
+            </div>
+        </CollapseSection>
 
-            <!-- Reservations -->
-            <CollapseSection :title="`Reservations (${stats.reservationCount})`" :default-open="false">
-                <div v-if="state.reservations.length === 0" class="empty-state">No reservations</div>
-                <div v-for="res in state.reservations" :key="res.id" class="reservation-row">
-                    <span class="res-building">#{{ res.buildingId }}</span>
-                    <span class="res-material">{{ res.material }}</span>
-                    <span class="res-amount">×{{ res.amount }}</span>
-                    <span class="res-request">→ req#{{ res.requestId }}</span>
-                </div>
-            </CollapseSection>
-
-            <!-- Hubs -->
-            <CollapseSection :title="`Hubs (${stats.hubCount})`" :default-open="false">
-                <div v-if="state.hubs.length === 0" class="empty-state">No hubs</div>
-                <div v-for="hub in state.hubs" :key="hub.buildingId" class="hub-row">
-                    <span class="hub-id">#{{ hub.buildingId }}</span>
-                    <span class="hub-capacity" :class="{ 'hub-full': hub.isFull }">
-                        {{ hub.carrierCount }}/{{ hub.capacity }}
-                    </span>
-                    <Badge v-if="hub.isFull" color="alert">FULL</Badge>
-                </div>
-            </CollapseSection>
-        </div>
-    </div>
+        <!-- Hubs -->
+        <CollapseSection :title="`Hubs (${stats.hubCount})`" :default-open="false">
+            <div v-if="state.hubs.length === 0" class="empty-state">No hubs</div>
+            <div v-for="hub in state.hubs" :key="hub.buildingId" class="hub-row">
+                <span class="hub-id">#{{ hub.buildingId }}</span>
+                <span class="hub-capacity" :class="{ 'hub-full': hub.isFull }">
+                    {{ hub.carrierCount }}/{{ hub.capacity }}
+                </span>
+                <Badge v-if="hub.isFull" color="alert">FULL</Badge>
+            </div>
+        </CollapseSection>
+    </OverlayPanel>
 </template>
 
 <script setup lang="ts">
@@ -143,7 +136,7 @@ import { isUnitTypeSelectable, UnitType } from '@/game/unit-types';
 import Checkbox from './Checkbox.vue';
 import CollapseSection from './CollapseSection.vue';
 import StatRow from './StatRow.vue';
-import PanelToggleButton from './PanelToggleButton.vue';
+import OverlayPanel from './OverlayPanel.vue';
 import Badge from './Badge.vue';
 
 const props = defineProps<{
@@ -203,27 +196,6 @@ const activeJobCount = computed(() => carriersWithJobs.value.length);
 </script>
 
 <style scoped>
-.logistics-panel {
-    background: rgba(13, 10, 5, 0.92);
-    border: 1px solid var(--border-strong);
-    border-radius: 4px;
-    color: var(--text);
-    font-size: 11px;
-    font-family: monospace;
-    min-width: 200px;
-    max-height: 100%;
-    overflow-y: auto;
-    pointer-events: auto;
-}
-
-.logistics-panel.collapsed {
-    min-width: 0;
-}
-
-.panel-sections {
-    padding: 2px 0;
-}
-
 /* Settings section (no header, always visible) */
 .settings-section {
     padding: 4px 10px;
@@ -494,17 +466,5 @@ const activeJobCount = computed(() => carriersWithJobs.value.length);
 }
 .hub-capacity.hub-full {
     color: var(--status-alert);
-}
-
-/* Scrollbar */
-.logistics-panel::-webkit-scrollbar {
-    width: 4px;
-}
-.logistics-panel::-webkit-scrollbar-track {
-    background: var(--bg-darkest);
-}
-.logistics-panel::-webkit-scrollbar-thumb {
-    background: var(--border-mid);
-    border-radius: 2px;
 }
 </style>
