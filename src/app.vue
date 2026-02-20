@@ -52,13 +52,47 @@ onMounted(async() => {
 </script>
 
 <style>
+:root {
+    /* Backgrounds */
+    --bg-darkest: #0d0a05;
+    --bg-dark: #1a1209;
+    --bg-mid: #2c1e0e;
+    --bg-raised: #3a2810;
+
+    /* Borders */
+    --border-faint: #2a1e0e;
+    --border-soft: #3a2a10;
+    --border: #3a2810;
+    --border-mid: #4a3218;
+    --border-strong: #5c3d1a;
+    --border-hover: #6a4a20;
+    --border-active: #d4a030;
+
+    /* Text */
+    --text-ghost: #4a3a2a;
+    --text-faint: #5a4a3a;
+    --text-dim: #6a5030;
+    --text-muted: #7a6a4a;
+    --text-secondary: #8a7040;
+    --text: #c8a96e;
+    --text-bright: #d4b27a;
+    --text-emphasis: #e8c87e;
+    --text-accent: #d4a030;
+
+    /* Status */
+    --status-good: #80c080;
+    --status-warn: #e0c060;
+    --status-alert: #e0a040;
+    --status-bad: #d04040;
+}
+
 html,
 body {
     margin: 0;
     padding: 0;
     height: 100%;
     overflow: hidden;
-    background: #0d0a05;
+    background: var(--bg-darkest);
 }
 
 #app {
@@ -66,19 +100,19 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-align: left;
-    color: #c8a96e;
+    color: var(--text);
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background: #0d0a05;
+    background: var(--bg-darkest);
 }
 
 #nav {
     display: flex;
     gap: 2px;
     padding: 0;
-    background: #0d0a05;
-    border-bottom: 2px solid #5c3d1a;
+    background: var(--bg-darkest);
+    border-bottom: 2px solid var(--border-strong);
     flex-shrink: 0;
 }
 
@@ -87,7 +121,7 @@ body {
     padding: 6px 14px;
     font-weight: bold;
     font-size: 12px;
-    color: #8a7040;
+    color: var(--text-secondary);
     text-decoration: none;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -98,14 +132,14 @@ body {
 }
 
 #nav a:hover {
-    color: #c8a96e;
-    background: #1a1209;
+    color: var(--text);
+    background: var(--bg-dark);
 }
 
 #nav a.router-link-exact-active {
-    color: #e8c87e;
-    background: #1a1209;
-    border-bottom-color: #d4a030;
+    color: var(--text-emphasis);
+    background: var(--bg-dark);
+    border-bottom-color: var(--text-accent);
 }
 
 .app-shell {
@@ -123,9 +157,9 @@ body {
 
 /* Global dark-themed form controls */
 select {
-    background: #1a1209;
-    color: #c8a96e;
-    border: 1px solid #4a3218;
+    background: var(--bg-dark);
+    color: var(--text);
+    border: 1px solid var(--border-mid);
     border-radius: 3px;
     padding: 4px 8px;
     font-size: 12px;
@@ -142,17 +176,17 @@ select {
 }
 
 select:hover {
-    border-color: #6a4a20;
-    background-color: #2c1e0e;
+    border-color: var(--border-hover);
+    background-color: var(--bg-mid);
 }
 
 select:focus {
-    border-color: #d4a030;
+    border-color: var(--border-active);
 }
 
 select option {
-    background: #1a1209;
-    color: #c8a96e;
+    background: var(--bg-dark);
+    color: var(--text);
 }
 
 /* Custom checkbox */
@@ -162,8 +196,8 @@ input[type='checkbox'] {
     appearance: none;
     width: 14px;
     height: 14px;
-    background: #1a1209;
-    border: 1px solid #4a3218;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-mid);
     border-radius: 2px;
     cursor: pointer;
     vertical-align: middle;
@@ -172,13 +206,13 @@ input[type='checkbox'] {
 }
 
 input[type='checkbox']:hover {
-    border-color: #6a4a20;
-    background: #2c1e0e;
+    border-color: var(--border-hover);
+    background: var(--bg-mid);
 }
 
 input[type='checkbox']:checked {
-    background: #3a2810;
-    border-color: #d4a030;
+    background: var(--bg-raised);
+    border-color: var(--border-active);
 }
 
 input[type='checkbox']:checked::after {
@@ -188,7 +222,7 @@ input[type='checkbox']:checked::after {
     top: 0px;
     width: 4px;
     height: 8px;
-    border: solid #e8c87e;
+    border: solid var(--text-emphasis);
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
 }

@@ -32,9 +32,9 @@ function onClick(e: MouseEvent) {
 <style scoped>
 .settings-btn {
     padding: 4px 8px;
-    background: #2c1e0e;
-    color: #c8a96e;
-    border: 1px solid #4a3218;
+    background: var(--bg-mid);
+    color: var(--text);
+    border: 1px solid var(--border-mid);
     border-radius: 3px;
     cursor: pointer;
     font-size: 10px;
@@ -47,8 +47,8 @@ function onClick(e: MouseEvent) {
 }
 
 .settings-btn:hover:not(:disabled) {
-    background: #3a2810;
-    border-color: #6a4a20;
+    background: var(--bg-raised);
+    border-color: var(--border-hover);
 }
 
 .settings-btn:disabled {
@@ -57,9 +57,9 @@ function onClick(e: MouseEvent) {
 }
 
 .settings-btn.active {
-    background: #4a3218;
-    border-color: #8a6a30;
-    color: #e8c88e;
+    background: var(--border-mid);
+    border-color: var(--border-hover);
+    color: var(--text-emphasis);
 }
 
 .settings-btn.small {

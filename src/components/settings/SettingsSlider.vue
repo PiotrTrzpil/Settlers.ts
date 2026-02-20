@@ -50,7 +50,7 @@ const displayValue = computed(() => {
 }
 
 .setting-label {
-    color: #7a6a4a;
+    color: var(--text-muted);
     width: 80px;
     flex-shrink: 0;
 }
@@ -65,7 +65,7 @@ const displayValue = computed(() => {
 .slider-value input[type='range'] {
     flex: 1;
     height: 4px;
-    accent-color: #d4a030;
+    accent-color: var(--text-accent);
     cursor: pointer;
 }
 
@@ -75,7 +75,7 @@ const displayValue = computed(() => {
 }
 
 .slider-value-display {
-    color: #d4b27a;
+    color: var(--text-bright);
     min-width: 28px;
     text-align: right;
     font-variant-numeric: tabular-nums;
