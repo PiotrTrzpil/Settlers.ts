@@ -60,9 +60,8 @@ Consult `docs/design-rules.md` and `docs/architecture/feature-modules.md` for pr
 
 ### 4. Validate
 
-- Run `get_diagnostics` on all modified files
 - Run targeted unit tests: `pnpm vitest run <relevant-test-file>`
-- If touching multiple modules: `pnpm lint`
+- Run lint: `pnpm lint`
 - Verify no imports from `internal/` by external code
 - Check the pre-commit review checklist (CLAUDE.md): no optional chaining on required deps, use `getEntityOrThrow`, no silent fallbacks
 

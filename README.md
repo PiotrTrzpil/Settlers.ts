@@ -34,11 +34,11 @@ See [docs/game-files-setup.md](docs/game-files-setup.md) for manual setup, expec
 ### 2. Install and run
 
 ```sh
-npm install
-npm run serve
+pnpm install
+pnpm dev
 ```
 
-Open http://localhost:8080/
+Open http://localhost:5173/
 
 
 # Development
@@ -46,19 +46,19 @@ Open http://localhost:8080/
 ### Build for production
 
 ```sh
-npm run build
+pnpm build
 ```
 
 ### Lint
 
 ```sh
-npm run lint -- --fix
+pnpm lint:fix
 ```
 
 ### Tests
 
 ```sh
-npm run test:unit
+pnpm test:unit
 ```
 
 
