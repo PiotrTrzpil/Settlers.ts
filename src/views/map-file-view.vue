@@ -358,8 +358,8 @@ function getBarWidth(count: number, total: number): string {
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: #0d0a05;
-    color: #c8a96e;
+    background: var(--bg-darkest);
+    color: var(--text);
 }
 
 /* Header */
@@ -368,15 +368,15 @@ function getBarWidth(count: number, total: number): string {
     align-items: center;
     gap: 16px;
     padding: 12px 16px;
-    background: #1a1209;
-    border-bottom: 1px solid #3a2810;
+    background: var(--bg-dark);
+    border-bottom: 1px solid var(--border);
 }
 
 .view-header h1 {
     margin: 0;
     font-size: 16px;
     font-weight: 600;
-    color: #e8c87e;
+    color: var(--text-emphasis);
 }
 
 .file-selector {
@@ -394,14 +394,14 @@ function getBarWidth(count: number, total: number): string {
     justify-content: center;
     flex: 1;
     gap: 12px;
-    color: #8a7040;
+    color: var(--text-secondary);
 }
 
 .spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid #3a2810;
-    border-top-color: #d4a030;
+    border: 3px solid var(--border);
+    border-top-color: var(--text-accent);
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -413,7 +413,7 @@ function getBarWidth(count: number, total: number): string {
 }
 
 .error-state {
-    color: #c85050;
+    color: var(--status-bad);
 }
 
 .error-icon {
@@ -423,7 +423,7 @@ function getBarWidth(count: number, total: number): string {
     align-items: center;
     justify-content: center;
     background: #3a1515;
-    border: 2px solid #c85050;
+    border: 2px solid var(--status-bad);
     border-radius: 50%;
     font-weight: bold;
 }
@@ -439,7 +439,7 @@ function getBarWidth(count: number, total: number): string {
 
 .empty-state h2 {
     margin: 0;
-    color: #c8a96e;
+    color: var(--text);
 }
 
 .empty-state p {
@@ -475,8 +475,8 @@ function getBarWidth(count: number, total: number): string {
 
 /* Cards */
 .card {
-    background: #1a1209;
-    border: 1px solid #3a2810;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 12px;
 }
@@ -487,8 +487,8 @@ function getBarWidth(count: number, total: number): string {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #8a7040;
-    border-bottom: 1px solid #2a1a0a;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-faint);
     padding-bottom: 8px;
 }
 
@@ -507,7 +507,7 @@ function getBarWidth(count: number, total: number): string {
 
 .metadata-item .label {
     font-size: 12px;
-    color: #8a7040;
+    color: var(--text-secondary);
 }
 
 .metadata-item .value {
@@ -560,7 +560,7 @@ function getBarWidth(count: number, total: number): string {
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
-    color: #6a5030;
+    color: var(--text-dim);
     margin: 0 0 4px;
     padding: 4px 0;
 }
@@ -571,7 +571,7 @@ function getBarWidth(count: number, total: number): string {
 
 .category-count {
     margin-left: auto;
-    background: #2a1a0a;
+    background: var(--border-faint);
     padding: 1px 6px;
     border-radius: 8px;
     font-size: 10px;
@@ -582,24 +582,24 @@ function getBarWidth(count: number, total: number): string {
     justify-content: space-between;
     align-items: center;
     padding: 6px 8px;
-    background: #0d0a05;
-    border: 1px solid #2a1a0a;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border-faint);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.15s;
     font-size: 12px;
-    color: #c8a96e;
+    color: var(--text);
     text-align: left;
 }
 
 .chunk-item:hover {
-    background: #1a1209;
-    border-color: #4a3218;
+    background: var(--bg-dark);
+    border-color: var(--border-mid);
 }
 
 .chunk-item.selected {
-    background: #2a1a0a;
-    border-color: #d4a030;
+    background: var(--border-faint);
+    border-color: var(--text-accent);
 }
 
 .chunk-name {
@@ -608,7 +608,7 @@ function getBarWidth(count: number, total: number): string {
 
 .chunk-size {
     font-size: 11px;
-    color: #6a5030;
+    color: var(--text-dim);
 }
 
 /* Preview card */
@@ -618,7 +618,7 @@ function getBarWidth(count: number, total: number): string {
 
 /* Resource Summary */
 .resources-summary-card {
-    background: linear-gradient(135deg, #1a1209, #2a1a0a);
+    background: linear-gradient(135deg, var(--bg-dark), var(--border-faint));
 }
 
 .resource-summary {
@@ -632,8 +632,8 @@ function getBarWidth(count: number, total: number): string {
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    background: #0d0a05;
-    border: 1px solid #3a2810;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
     border-radius: 6px;
     min-width: 120px;
 }
@@ -644,14 +644,14 @@ function getBarWidth(count: number, total: number): string {
 
 .resource-name {
     font-size: 12px;
-    color: #8a7040;
+    color: var(--text-secondary);
 }
 
 .resource-count {
     margin-left: auto;
     font-size: 14px;
     font-weight: 600;
-    color: #e8c87e;
+    color: var(--text-emphasis);
 }
 
 .resource-item.fish {
@@ -664,7 +664,7 @@ function getBarWidth(count: number, total: number): string {
     border-left: 3px solid #8a8a8a;
 }
 .resource-item.gold {
-    border-left: 3px solid #d4a030;
+    border-left: 3px solid var(--text-accent);
 }
 .resource-item.sulphur {
     border-left: 3px solid #c8c040;
@@ -682,7 +682,7 @@ function getBarWidth(count: number, total: number): string {
 /* Stats card */
 .stat-total {
     font-weight: 400;
-    color: #6a5030;
+    color: var(--text-dim);
     font-size: 12px;
 }
 
@@ -707,19 +707,19 @@ function getBarWidth(count: number, total: number): string {
 }
 
 .stat-label {
-    color: #8a7040;
+    color: var(--text-secondary);
 }
 
 .bar-container {
     height: 12px;
-    background: #0d0a05;
+    background: var(--bg-darkest);
     border-radius: 2px;
     overflow: hidden;
 }
 
 .bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #d4a030, #e8c87e);
+    background: linear-gradient(90deg, var(--text-accent), var(--text-emphasis));
     border-radius: 2px;
 }
 
@@ -733,7 +733,7 @@ function getBarWidth(count: number, total: number): string {
 
 .stat-count {
     text-align: right;
-    color: #6a5030;
+    color: var(--text-dim);
 }
 
 /* Chunk details card */
@@ -747,7 +747,7 @@ function getBarWidth(count: number, total: number): string {
     margin-left: auto;
     font-size: 11px;
     font-weight: 400;
-    color: #6a5030;
+    color: var(--text-dim);
 }
 
 .chunk-meta {
@@ -755,21 +755,21 @@ function getBarWidth(count: number, total: number): string {
     gap: 16px;
     margin-bottom: 12px;
     padding: 8px;
-    background: #0d0a05;
+    background: var(--bg-darkest);
     border-radius: 4px;
     font-size: 12px;
-    color: #8a7040;
+    color: var(--text-secondary);
 }
 
 /* Raw info */
 .raw-info {
     margin: 0;
     padding: 8px;
-    background: #0d0a05;
+    background: var(--bg-darkest);
     border-radius: 4px;
     font-family: 'Courier New', monospace;
     font-size: 11px;
-    color: #8a7040;
+    color: var(--text-secondary);
     white-space: pre-wrap;
     overflow-x: auto;
     max-height: 200px;
@@ -778,7 +778,7 @@ function getBarWidth(count: number, total: number): string {
 
 /* Entity Data card */
 .entity-data-card {
-    background: linear-gradient(135deg, #1a1209, #1a1a12);
+    background: linear-gradient(135deg, var(--bg-dark), #1a1a12);
 }
 
 .entity-section {
@@ -793,12 +793,12 @@ function getBarWidth(count: number, total: number): string {
     margin: 0 0 8px;
     font-size: 12px;
     font-weight: 600;
-    color: #c8a96e;
+    color: var(--text);
 }
 
 .entity-count {
     font-weight: 400;
-    color: #6a5030;
+    color: var(--text-dim);
 }
 
 .entity-list {
@@ -814,19 +814,19 @@ function getBarWidth(count: number, total: number): string {
     align-items: center;
     gap: 8px;
     padding: 4px 8px;
-    background: #0d0a05;
+    background: var(--bg-darkest);
     border-radius: 3px;
     font-size: 11px;
 }
 
 .players-list .entity-row {
     background: #1a1a0a;
-    border-left: 2px solid #d4a030;
+    border-left: 2px solid var(--text-accent);
 }
 
 .entity-type {
     flex: 1;
-    color: #c8a96e;
+    color: var(--text);
 }
 
 .entity-player {
@@ -838,15 +838,15 @@ function getBarWidth(count: number, total: number): string {
 }
 
 .entity-amount {
-    color: #6a5030;
+    color: var(--text-dim);
     min-width: 50px;
     text-align: right;
 }
 
 .player-index {
     padding: 2px 6px;
-    background: #d4a030;
-    color: #1a1209;
+    background: var(--text-accent);
+    color: var(--bg-dark);
     border-radius: 3px;
     font-weight: 600;
     font-size: 10px;
@@ -854,24 +854,24 @@ function getBarWidth(count: number, total: number): string {
 
 .player-tribe {
     flex: 1;
-    color: #c8a96e;
+    color: var(--text);
 }
 
 .player-pos {
-    color: #6a5030;
+    color: var(--text-dim);
     font-size: 10px;
 }
 
 .entity-more {
     padding: 4px 8px;
-    color: #6a5030;
+    color: var(--text-dim);
     font-size: 11px;
     font-style: italic;
 }
 
 .entity-empty {
     padding: 12px;
-    color: #6a5030;
+    color: var(--text-dim);
     font-size: 12px;
     text-align: center;
     font-style: italic;
@@ -883,10 +883,10 @@ function getBarWidth(count: number, total: number): string {
     height: 8px;
 }
 ::-webkit-scrollbar-track {
-    background: #0d0a05;
+    background: var(--bg-darkest);
 }
 ::-webkit-scrollbar-thumb {
-    background: #3a2810;
+    background: var(--border);
     border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {

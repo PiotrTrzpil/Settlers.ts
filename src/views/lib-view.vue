@@ -133,8 +133,8 @@ function fillLibList(libReader: LibFileReader): LibFileItem[] {
 
 <style scoped>
 .lib-item-details {
-    background: #0d0a05;
-    border: 1px solid #3a2a10;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 12px;
     margin-bottom: 12px;
@@ -143,7 +143,7 @@ function fillLibList(libReader: LibFileReader): LibFileItem[] {
 .detail-row {
     display: flex;
     padding: 4px 0;
-    border-bottom: 1px solid #2a1a08;
+    border-bottom: 1px solid var(--border-faint);
 }
 
 .detail-row:last-child {
@@ -151,13 +151,13 @@ function fillLibList(libReader: LibFileReader): LibFileItem[] {
 }
 
 .detail-label {
-    color: #8a7040;
+    color: var(--text-secondary);
     width: 140px;
     flex-shrink: 0;
 }
 
 .detail-value {
-    color: #c8a96e;
+    color: var(--text);
     font-family: monospace;
 }
 
@@ -178,7 +178,7 @@ function fillLibList(libReader: LibFileReader): LibFileItem[] {
 
 .section-header {
     font-size: 11px;
-    color: #8a7040;
+    color: var(--text-secondary);
     text-transform: uppercase;
     margin-bottom: 8px;
 }
@@ -188,7 +188,7 @@ function fillLibList(libReader: LibFileReader): LibFileItem[] {
     justify-content: center;
     align-items: center;
     flex: 1;
-    color: #5a4a30;
+    color: var(--text-faint);
     font-style: italic;
 }
 </style>
