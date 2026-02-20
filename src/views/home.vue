@@ -1,55 +1,74 @@
 <template>
     <div class="home">
-        <h1>Wellcome to Settlers.ts</h1>
+        <div class="home-card">
+            <div class="home-header">
+                <h1 class="home-title">Settlers.ts</h1>
+                <p class="home-subtitle">A Settlers 4 browser remake</p>
+            </div>
 
-        <div v-if="isValidSettlers">
-            <button class="play-btn" @click="$router.push('/map-view')">Play</button>
+            <div v-if="isValidSettlers" class="home-body">
+                <button class="play-btn" @click="$router.push('/map-view')">&#9654; Play</button>
 
-            <div class="options">
-                <label class="checkbox-label">
-                    <input type="checkbox" v-model="luaEnabled" @change="saveLuaSetting" />
-                    Enable Lua scripting (experimental)
-                </label>
+                <div class="options">
+                    <div class="options-title">Settings</div>
 
-                <label class="checkbox-label">
-                    <input type="checkbox" v-model="homeSettings.state.cacheDisabled" />
-                    Disable sprite cache (slower loading)
-                </label>
+                    <Checkbox v-model="luaEnabled" label="Enable Lua scripting" @update:modelValue="saveLuaSetting">
+                        <Badge color="neutral">experimental</Badge>
+                    </Checkbox>
 
-                <div class="cache-controls">
-                    <button class="clear-cache-btn" @click="handleClearCache" :disabled="isClearing">
-                        {{ isClearing ? 'Clearing...' : 'Clear Cache' }}
-                    </button>
-                    <span class="hint">Clears all cached sprite data</span>
+                    <Checkbox v-model="homeSettings.state.cacheDisabled" label="Disable sprite cache">
+                        <span class="hint-inline">(slower loading)</span>
+                    </Checkbox>
+
+                    <div class="cache-controls">
+                        <button class="secondary-btn" @click="handleClearCache" :disabled="isClearing">
+                            {{ isClearing ? 'Clearing...' : 'Clear Cache' }}
+                        </button>
+                        <span class="hint">Clears all cached sprite data</span>
+                    </div>
                 </div>
             </div>
+
+            <div v-else class="home-body setup-section">
+                <h2 class="setup-title">Setup Required</h2>
+                <p class="setup-desc">
+                    Provide your Settlers 4 game directory to begin.<br />
+                    Files are only accessed by your browser — nothing is uploaded.
+                </p>
+
+                <div class="file-select-group">
+                    <div class="file-select-option">
+                        <span class="file-select-label">Select game folder</span>
+                        <label class="file-btn">
+                            Browse Folder
+                            <input type="file" directory webkitdirectory multiple @change="selectFiles" />
+                        </label>
+                    </div>
+
+                    <div class="divider-or">or</div>
+
+                    <div class="file-select-option">
+                        <span class="file-select-label">Select individual files</span>
+                        <label class="file-btn">
+                            Browse Files
+                            <input type="file" multiple name="files[]" @change="selectFiles" />
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="home-footer">
+                Found a bug or want to contribute?
+                <a href="https://github.com/tomsoftware/Settlers.ts" target="_blank" rel="noopener">View on GitHub</a>
+            </div>
         </div>
-        <div v-else>
-            ❌ Please select your Settlers 4 directory!
-
-            <br /><br />
-
-            To start you need to provide the directory of your Settlers 4 copy.<br />
-            Please use the file selector to select it:<br />
-            (Files are only accessed by your browser and are not uploaded)<br />
-            <br />
-
-            Open via directory access:<br />
-            <input type="file" directory webkitdirectory multiple @change="selectFiles" />
-            <br />
-            or<br />
-
-            Open via multi file select:<br />
-            <input type="file" multiple name="files[]" @change="selectFiles" />
-        </div>
-
-        <h3>You found a bug / you like to contribute?</h3>
-        Find the source at <a href="https://github.com/tomsoftware/Settlers.ts">github</a>
     </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import Badge from '@/components/Badge.vue';
+import Checkbox from '@/components/Checkbox.vue';
 import { FileManager } from '@/utilities/file-manager';
 import { LocalFileProvider } from '@/utilities/local-file-provider';
 import { GameSettingsManager } from '@/game/game-settings';
@@ -129,79 +148,238 @@ checkIsValidSettlers();
 </script>
 
 <style scoped>
+.home {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 24px;
+    background: var(--bg-darkest);
+}
+
+.home-card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Header */
+.home-header {
+    padding: 28px 32px 20px;
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+}
+
+.home-title {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-emphasis);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.home-subtitle {
+    margin: 6px 0 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+}
+
+/* Body */
+.home-body {
+    padding: 24px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+/* Play button */
 .play-btn {
-    font-size: 1.5em;
-    padding: 12px 48px;
-    margin: 20px 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    padding: 12px 56px;
     cursor: pointer;
-    background: #4caf50;
-    color: white;
-    border: none;
+    background: #3a6e28;
+    color: #e8f4e0;
+    border: 1px solid #4a8e34;
     border-radius: 6px;
+    letter-spacing: 1px;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+    width: 100%;
 }
 
 .play-btn:hover {
-    background: #388e3c;
+    background: #4a8e34;
+    border-color: #5aae44;
 }
 
+/* Options panel */
 .options {
-    margin-top: 16px;
-    padding: 12px;
-    background: #2a2a2a;
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
     border-radius: 6px;
-    display: inline-block;
 }
 
-.checkbox-label {
-    display: flex;
-    align-items: center;
+.options-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 12px;
+}
+
+/* Style Checkbox component to match the home page context */
+.options :deep(.control-row) {
+    color: var(--text);
+    font-size: 0.875rem;
     gap: 8px;
-    cursor: pointer;
-    color: #aaa;
-    font-size: 0.9em;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
 }
 
-.checkbox-label:last-of-type {
+.options :deep(.control-row:last-of-type) {
     margin-bottom: 0;
 }
 
-.checkbox-label input {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
+.hint-inline {
+    color: var(--text-dim);
+    font-size: 0.8rem;
 }
 
 .cache-controls {
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid #444;
+    border-top: 1px solid var(--bg-mid);
     display: flex;
     align-items: center;
     gap: 12px;
 }
 
-.clear-cache-btn {
-    padding: 6px 16px;
-    background: #555;
-    color: white;
-    border: none;
+.secondary-btn {
+    padding: 5px 14px;
+    background: var(--bg-mid);
+    color: var(--text);
+    border: 1px solid var(--border-mid);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.85em;
+    font-size: 0.8rem;
+    transition: background 0.15s;
 }
 
-.clear-cache-btn:hover:not(:disabled) {
-    background: #666;
+.secondary-btn:hover:not(:disabled) {
+    background: var(--bg-raised);
+    border-color: var(--border-hover);
 }
 
-.clear-cache-btn:disabled {
-    opacity: 0.6;
+.secondary-btn:disabled {
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
 .hint {
-    color: #777;
-    font-size: 0.8em;
+    color: var(--text-dim);
+    font-size: 0.78rem;
+}
+
+/* Setup section */
+.setup-section {
+    text-align: center;
+}
+
+.setup-title {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text);
+    font-weight: 600;
+}
+
+.setup-desc {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.file-select-group {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.file-select-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg-darkest);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.file-select-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.file-btn {
+    display: inline-block;
+    padding: 6px 16px;
+    background: var(--bg-mid);
+    color: var(--text);
+    border: 1px solid var(--border-mid);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-family: inherit;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+
+.file-btn:hover {
+    background: var(--bg-raised);
+    border-color: var(--border-hover);
+}
+
+.file-btn input[type='file'] {
+    display: none;
+}
+
+.divider-or {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--border-strong);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Footer */
+.home-footer {
+    padding: 14px 32px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    background: var(--bg-darkest);
+}
+
+.home-footer a {
+    color: var(--text-accent);
+    text-decoration: none;
+    margin-left: 4px;
+}
+
+.home-footer a:hover {
+    color: var(--text-emphasis);
+    text-decoration: underline;
 }
 </style>

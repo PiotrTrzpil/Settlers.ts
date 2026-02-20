@@ -12,7 +12,7 @@
             <span class="info">{{ jilList.length }} jobs</span>
             <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
             <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridSprites)">Grid</button>
-            <SettingsCheckbox v-if="viewMode === 'single'" v-model="doAnimation" label="Animate" />
+            <Checkbox v-if="viewMode === 'single'" v-model="doAnimation" label="Animate" />
         </div>
 
         <!-- Grid View: All job sprites in a grid with multiple directions -->
@@ -120,7 +120,7 @@ const SETTLER_FILE_IDS = new Set(Object.values(SETTLER_FILE_NUMBERS));
 import { useCompositeGridView } from '@/composables/useGridView';
 
 import FileBrowser from '@/components/file-browser.vue';
-import SettingsCheckbox from '@/components/settings/SettingsCheckbox.vue';
+import Checkbox from '@/components/Checkbox.vue';
 import ItemSelector from '@/components/ItemSelector.vue';
 
 const log = new LogHandler('JilView');

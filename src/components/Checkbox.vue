@@ -1,7 +1,7 @@
 <template>
     <label class="control-row">
         <input type="checkbox" :checked="modelValue" tabindex="-1" @change="onChange" />
-        <span>{{ label }}</span>
+        <span class="control-label">{{ label }}<slot /></span>
     </label>
 </template>
 
@@ -29,15 +29,21 @@ function onChange(e: Event) {
     gap: 6px;
     padding: 2px 0;
     cursor: pointer;
-    color: #a08050;
+    color: var(--text-secondary);
 }
 
 .control-row:hover {
-    color: #c8a96e;
+    color: var(--text);
+}
+
+.control-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .control-row input[type='checkbox'] {
-    accent-color: #d4a030;
+    accent-color: var(--text-accent);
     cursor: pointer;
 }
 </style>

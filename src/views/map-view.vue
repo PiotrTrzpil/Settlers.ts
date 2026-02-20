@@ -37,8 +37,8 @@
 
                 <!-- Buildings tab -->
                 <div v-if="activeTab === 'buildings'" class="tab-content building-list" data-testid="building-palette">
-                    <SettingsCheckbox v-model="placeBuildingsCompleted" label="Place as completed" />
-                    <SettingsCheckbox v-model="placeBuildingsWithWorker" label="Place with worker" />
+                    <Checkbox v-model="placeBuildingsCompleted" label="Place as completed" />
+                    <Checkbox v-model="placeBuildingsWithWorker" label="Place with worker" />
                     <button
                         v-for="b in availableBuildings"
                         :key="b.type"
@@ -240,7 +240,7 @@ import LayerPanel from '@/components/layer-panel.vue';
 import SettingsPanel from '@/components/settings-panel.vue';
 import SelectionPanel from '@/components/selection-panel.vue';
 import LogisticsDebugPanel from '@/components/logistics-debug-panel.vue';
-import SettingsCheckbox from '@/components/settings/SettingsCheckbox.vue';
+import Checkbox from '@/components/Checkbox.vue';
 
 const props = defineProps<{
     fileManager: FileManager;

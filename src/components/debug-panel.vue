@@ -1,351 +1,169 @@
 <template>
     <div class="debug-panel" :class="{ collapsed: !open }">
-        <button class="debug-toggle-btn" @click="open = !open" title="Debug Panel">
-            <span class="toggle-icon">{{ open ? '&#x25BC;' : '&#x25B6;' }}</span>
-            <span class="toggle-label">Debug</span>
-        </button>
+        <PanelToggleButton v-model:open="open" label="Debug" title="Debug Panel" />
 
-        <div v-if="open" class="debug-sections">
+        <div v-if="open" class="panel-sections">
             <!-- Performance -->
-            <section class="debug-section">
-                <h3 class="section-header" @click="sections.perf = !sections.perf">
-                    <span class="caret">{{ sections.perf ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Performance
-                </h3>
-                <div v-if="sections.perf" class="section-body">
-                    <div class="stat-row">
-                        <span class="stat-label">FPS</span>
-                        <span class="stat-value" :class="fpsClass">{{ stats.fps }}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Frame (avg)</span>
-                        <span class="stat-value">{{ stats.frameTimeMs }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Frame (min/max)</span>
-                        <span class="stat-value">{{ stats.frameTimeMin }} / {{ stats.frameTimeMax }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Ticks/sec</span>
-                        <span class="stat-value">{{ stats.ticksPerSec }}</span>
-                    </div>
-                </div>
-            </section>
+            <CollapseSection title="Performance">
+                <StatRow label="FPS"
+                    ><span :class="fpsClass">{{ stats.fps }}</span></StatRow
+                >
+                <StatRow label="Frame (avg)" :value="`${stats.frameTimeMs} ms`" />
+                <StatRow label="Frame (min/max)" :value="`${stats.frameTimeMin} / ${stats.frameTimeMax} ms`" />
+                <StatRow label="Ticks/sec" :value="stats.ticksPerSec" />
+            </CollapseSection>
 
             <!-- Render Timings -->
-            <section class="debug-section">
-                <h3 class="section-header" @click="sections.renderTimings = !sections.renderTimings">
-                    <span class="caret">{{ sections.renderTimings ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Frame Timings
-                </h3>
-                <div v-if="sections.renderTimings" class="section-body">
-                    <div class="stat-row total-row">
-                        <span class="stat-label">Frame</span>
-                        <span class="stat-value">{{ stats.renderTimings.frame }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Ticks</span>
-                        <span class="stat-value">{{ stats.renderTimings.ticks }} ms</span>
-                    </div>
-                    <div v-for="(ms, name) in stats.renderTimings.tickSystems" :key="name" class="stat-row sub-stat">
-                        <span class="stat-label">{{ name }}</span>
-                        <span class="stat-value">{{ ms }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Animations</span>
-                        <span class="stat-value">{{ stats.renderTimings.animations }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Update</span>
-                        <span class="stat-value">{{ stats.renderTimings.update }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Callback</span>
-                        <span class="stat-value">{{ stats.renderTimings.callback }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Idle</span>
-                        <span class="stat-value">{{ stats.renderTimings.idle }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Render</span>
-                        <span class="stat-value">{{ stats.renderTimings.render }} ms</span>
-                    </div>
-                    <div class="stat-row sub-stat">
-                        <span class="stat-label">Landscape</span>
-                        <span class="stat-value">{{ stats.renderTimings.landscape }} ms</span>
-                    </div>
-                    <div class="stat-row sub-stat">
-                        <span class="stat-label">Cull/Sort</span>
-                        <span class="stat-value">{{ stats.renderTimings.cullSort }} ms</span>
-                    </div>
-                    <div class="stat-row sub-stat">
-                        <span class="stat-label">Entities</span>
-                        <span class="stat-value">{{ stats.renderTimings.entities }} ms</span>
-                    </div>
-                    <div class="stat-row sub-stat depth-2">
-                        <span class="stat-label">Indicators</span>
-                        <span class="stat-value">{{ stats.renderTimings.indicators }} ms</span>
-                    </div>
-                    <div class="stat-row sub-stat depth-2">
-                        <span class="stat-label">Textured</span>
-                        <span class="stat-value">{{ stats.renderTimings.textured }} ms</span>
-                    </div>
-                    <div class="stat-row sub-stat depth-2">
-                        <span class="stat-label">Color</span>
-                        <span class="stat-value">{{ stats.renderTimings.color }} ms</span>
-                    </div>
-                    <div class="stat-row sub-stat depth-2">
-                        <span class="stat-label">Selection</span>
-                        <span class="stat-value">{{ stats.renderTimings.selection }} ms</span>
-                    </div>
-                    <div class="stat-row sub-stat">
-                        <span class="stat-label">Visible</span>
-                        <span class="stat-value">{{ stats.renderTimings.visibleCount }}</span>
-                    </div>
-                    <div class="stat-row sub-stat">
-                        <span class="stat-label">Sprites</span>
-                        <span class="stat-value">{{ stats.renderTimings.spriteCount }}</span>
-                    </div>
-                    <div class="stat-row sub-stat">
-                        <span class="stat-label">Draw calls</span>
-                        <span class="stat-value">{{ stats.renderTimings.drawCalls }}</span>
-                    </div>
-                </div>
-            </section>
+            <CollapseSection title="Frame Timings" :default-open="false">
+                <StatRow label="Frame" :value="`${stats.renderTimings.frame} ms`" total />
+                <StatRow label="Ticks" :value="`${stats.renderTimings.ticks} ms`" />
+                <StatRow
+                    v-for="(ms, name) in stats.renderTimings.tickSystems"
+                    :key="name"
+                    :label="name"
+                    :value="`${ms} ms`"
+                    :depth="1"
+                />
+                <StatRow label="Animations" :value="`${stats.renderTimings.animations} ms`" />
+                <StatRow label="Update" :value="`${stats.renderTimings.update} ms`" />
+                <StatRow label="Callback" :value="`${stats.renderTimings.callback} ms`" />
+                <StatRow label="Idle" :value="`${stats.renderTimings.idle} ms`" />
+                <StatRow label="Render" :value="`${stats.renderTimings.render} ms`" />
+                <StatRow label="Landscape" :value="`${stats.renderTimings.landscape} ms`" :depth="1" />
+                <StatRow label="Cull/Sort" :value="`${stats.renderTimings.cullSort} ms`" :depth="1" />
+                <StatRow label="Entities" :value="`${stats.renderTimings.entities} ms`" :depth="1" />
+                <StatRow label="Indicators" :value="`${stats.renderTimings.indicators} ms`" :depth="2" />
+                <StatRow label="Textured" :value="`${stats.renderTimings.textured} ms`" :depth="2" />
+                <StatRow label="Color" :value="`${stats.renderTimings.color} ms`" :depth="2" />
+                <StatRow label="Selection" :value="`${stats.renderTimings.selection} ms`" :depth="2" />
+                <StatRow label="Visible" :value="stats.renderTimings.visibleCount" :depth="1" />
+                <StatRow label="Sprites" :value="stats.renderTimings.spriteCount" :depth="1" />
+                <StatRow label="Draw calls" :value="stats.renderTimings.drawCalls" :depth="1" />
+            </CollapseSection>
 
             <!-- Load Timings -->
-            <section class="debug-section">
-                <h3 class="section-header" @click="sections.loadTimings = !sections.loadTimings">
-                    <span class="caret">{{ sections.loadTimings ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Load Timings
-                </h3>
-                <div v-if="sections.loadTimings" class="section-body">
-                    <div class="stat-row">
-                        <span class="stat-label">Landscape</span>
-                        <span class="stat-value">{{ stats.loadTimings.landscape }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">File preload</span>
-                        <span class="stat-value">{{ stats.loadTimings.filePreload }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Atlas alloc</span>
-                        <span class="stat-value">{{ stats.loadTimings.atlasAlloc }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Buildings</span>
-                        <span class="stat-value">{{ stats.loadTimings.buildings }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Map objects</span>
-                        <span class="stat-value">{{ stats.loadTimings.mapObjects }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Resources</span>
-                        <span class="stat-value">{{ stats.loadTimings.resources }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Units</span>
-                        <span class="stat-value">{{ stats.loadTimings.units }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">GPU upload</span>
-                        <span class="stat-value">{{ stats.loadTimings.gpuUpload }} ms</span>
-                    </div>
-                    <div class="stat-row total-row">
-                        <span class="stat-label">Total sprites</span>
-                        <span class="stat-value">{{ stats.loadTimings.totalSprites }} ms</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Atlas size</span>
-                        <span class="stat-value">{{ stats.loadTimings.atlasSize || '-' }}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Sprite count</span>
-                        <span class="stat-value">{{ stats.loadTimings.spriteCount }}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Cache</span>
-                        <span class="stat-value" :class="cacheClass">
-                            {{ cacheLabel }}
-                        </span>
-                    </div>
-                </div>
-            </section>
+            <CollapseSection title="Load Timings" :default-open="false">
+                <StatRow label="Landscape" :value="`${stats.loadTimings.landscape} ms`" />
+                <StatRow label="File preload" :value="`${stats.loadTimings.filePreload} ms`" />
+                <StatRow label="Atlas alloc" :value="`${stats.loadTimings.atlasAlloc} ms`" />
+                <StatRow label="Buildings" :value="`${stats.loadTimings.buildings} ms`" />
+                <StatRow label="Map objects" :value="`${stats.loadTimings.mapObjects} ms`" />
+                <StatRow label="Resources" :value="`${stats.loadTimings.resources} ms`" />
+                <StatRow label="Units" :value="`${stats.loadTimings.units} ms`" />
+                <StatRow label="GPU upload" :value="`${stats.loadTimings.gpuUpload} ms`" />
+                <StatRow label="Total sprites" :value="`${stats.loadTimings.totalSprites} ms`" total />
+                <StatRow label="Atlas size" :value="stats.loadTimings.atlasSize || '-'" />
+                <StatRow label="Sprite count" :value="stats.loadTimings.spriteCount" />
+                <StatRow label="Cache"
+                    ><span :class="cacheClass">{{ cacheLabel }}</span></StatRow
+                >
+            </CollapseSection>
 
             <!-- Entities -->
-            <section class="debug-section">
-                <h3 class="section-header" @click="sections.entities = !sections.entities">
-                    <span class="caret">{{ sections.entities ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Entities
-                </h3>
-                <div v-if="sections.entities" class="section-body">
-                    <div class="stat-row">
-                        <span class="stat-label">Total</span>
-                        <span class="stat-value">{{ view.entityCount }}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Buildings</span>
-                        <span class="stat-value">{{ view.buildingCount }}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Units</span>
-                        <span class="stat-value">{{ view.unitCount }}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Moving</span>
-                        <span class="stat-value">{{ view.unitsMoving }}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Path steps</span>
-                        <span class="stat-value">{{ view.totalPathSteps }}</span>
-                    </div>
-                </div>
-            </section>
+            <CollapseSection title="Entities">
+                <StatRow label="Total" :value="view.entityCount" />
+                <StatRow label="Buildings" :value="view.buildingCount" />
+                <StatRow label="Units" :value="view.unitCount" />
+                <StatRow label="Moving" :value="view.unitsMoving" />
+                <StatRow label="Path steps" :value="view.totalPathSteps" />
+            </CollapseSection>
 
             <!-- Camera -->
-            <section class="debug-section">
-                <h3 class="section-header" @click="sections.camera = !sections.camera">
-                    <span class="caret">{{ sections.camera ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Camera
-                </h3>
-                <div v-if="sections.camera" class="section-body">
-                    <div class="stat-row">
-                        <span class="stat-label">Position</span>
-                        <span class="stat-value">{{ stats.cameraX }}, {{ stats.cameraY }}</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Zoom</span>
-                        <span class="stat-value">{{ stats.zoom }}x</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Canvas</span>
-                        <span class="stat-value">{{ stats.canvasWidth }} x {{ stats.canvasHeight }}</span>
-                    </div>
-                </div>
-            </section>
+            <CollapseSection title="Camera">
+                <StatRow label="Position" :value="`${stats.cameraX}, ${stats.cameraY}`" />
+                <StatRow label="Zoom" :value="`${stats.zoom}x`" />
+                <StatRow label="Canvas" :value="`${stats.canvasWidth} x ${stats.canvasHeight}`" />
+            </CollapseSection>
 
             <!-- Tile -->
-            <section class="debug-section">
-                <h3 class="section-header" @click="sections.tile = !sections.tile">
-                    <span class="caret">{{ sections.tile ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Tile
-                </h3>
-                <div v-if="sections.tile" class="section-body">
-                    <template v-if="stats.hasTile">
-                        <div class="stat-row">
-                            <span class="stat-label">Coords</span>
-                            <span class="stat-value">{{ stats.tileX }}, {{ stats.tileY }}</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Ground type</span>
-                            <span class="stat-value">{{ stats.tileGroundType }}</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Height</span>
-                            <span class="stat-value">{{ stats.tileGroundHeight }}</span>
-                        </div>
-                    </template>
-                    <div v-else class="stat-row">
-                        <span class="stat-label dim">Move mouse over map</span>
-                    </div>
-                </div>
-            </section>
+            <CollapseSection title="Tile">
+                <template v-if="stats.hasTile">
+                    <StatRow label="Coords" :value="`${stats.tileX}, ${stats.tileY}`" />
+                    <StatRow label="Ground type" :value="stats.tileGroundType" />
+                    <StatRow label="Height" :value="stats.tileGroundHeight" />
+                </template>
+                <StatRow v-else label="Move mouse over map" dim />
+            </CollapseSection>
 
             <!-- Controls -->
-            <section class="debug-section">
-                <h3 class="section-header" @click="sections.controls = !sections.controls">
-                    <span class="caret">{{ sections.controls ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Controls
-                </h3>
-                <div v-if="sections.controls" class="section-body">
-                    <div class="control-buttons">
-                        <button class="ctrl-btn" @click="$emit('togglePause')">
-                            {{ paused ? 'Resume' : 'Pause' }}
-                        </button>
-                        <button class="ctrl-btn danger" @click="$emit('resetGameState')">Reset State</button>
-                    </div>
-                    <SettingsCheckbox v-model="settings.showBuildingFootprint" label="Show building footprints" />
-                    <div class="river-debug">
-                        <span class="stat-label river-heading">River textures</span>
-                        <div class="stat-row">
-                            <span class="stat-label">Slots (I/O/M)</span>
-                            <span class="perm-control">
-                                <button class="perm-btn" @click="cycleSlotPerm(-1)">&lt;</button>
-                                <span class="perm-value">{{ slotPermLabel }}</span>
-                                <button class="perm-btn" @click="cycleSlotPerm(1)">&gt;</button>
-                            </span>
-                        </div>
-                        <SettingsCheckbox
-                            v-model="stats.riverFlipInner"
-                            label="Flip inner (River3↔River1)"
-                            @update:modelValue="applyRiverConfig()"
-                        />
-                        <SettingsCheckbox
-                            v-model="stats.riverFlipOuter"
-                            label="Flip outer (Grass↔River4)"
-                            @update:modelValue="applyRiverConfig()"
-                        />
-                        <SettingsCheckbox
-                            v-model="stats.riverFlipMiddle"
-                            label="Flip middle (River4↔River3)"
-                            @update:modelValue="applyRiverConfig()"
-                        />
-                        <div class="stat-row">
-                            <span class="stat-label dim">{{ configIndex }}/48</span>
-                        </div>
-                    </div>
+            <CollapseSection title="Controls">
+                <div class="control-buttons">
+                    <button class="ctrl-btn" @click="$emit('togglePause')">
+                        {{ paused ? 'Resume' : 'Pause' }}
+                    </button>
+                    <button class="ctrl-btn danger" @click="$emit('resetGameState')">Reset State</button>
                 </div>
-            </section>
+                <Checkbox v-model="settings.showBuildingFootprint" label="Show building footprints" />
+                <div class="river-debug">
+                    <span class="river-heading stat-label">River textures</span>
+                    <StatRow label="Slots (I/O/M)">
+                        <span class="perm-control">
+                            <button class="perm-btn" @click="cycleSlotPerm(-1)">&lt;</button>
+                            <span class="perm-value">{{ slotPermLabel }}</span>
+                            <button class="perm-btn" @click="cycleSlotPerm(1)">&gt;</button>
+                        </span>
+                    </StatRow>
+                    <Checkbox
+                        v-model="stats.riverFlipInner"
+                        label="Flip inner (River3↔River1)"
+                        @update:modelValue="applyRiverConfig()"
+                    />
+                    <Checkbox
+                        v-model="stats.riverFlipOuter"
+                        label="Flip outer (Grass↔River4)"
+                        @update:modelValue="applyRiverConfig()"
+                    />
+                    <Checkbox
+                        v-model="stats.riverFlipMiddle"
+                        label="Flip middle (River4↔River3)"
+                        @update:modelValue="applyRiverConfig()"
+                    />
+                    <StatRow label="" dim :value="`${configIndex}/48`" />
+                </div>
+            </CollapseSection>
 
             <!-- Map Objects -->
-            <section class="debug-section">
-                <h3 class="section-header" @click="sections.mapObjects = !sections.mapObjects">
-                    <span class="caret">{{ sections.mapObjects ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Map Objects
-                </h3>
-                <div v-if="sections.mapObjects" class="section-body">
-                    <div class="map-obj-row">
-                        <span class="stat-label">Trees</span>
-                        <span class="stat-value">{{ mapObjectCounts.trees }}</span>
-                        <button class="spawn-btn" @click="spawnCategory('trees')">+</button>
-                    </div>
-                    <div class="map-obj-row">
-                        <span class="stat-label">Stones</span>
-                        <span class="stat-value">{{ mapObjectCounts.stones }}</span>
-                        <button class="spawn-btn" @click="spawnCategory('stones')">+</button>
-                    </div>
-                    <div class="map-obj-row">
-                        <span class="stat-label">Resources</span>
-                        <span class="stat-value">{{ mapObjectCounts.resources }}</span>
-                        <button class="spawn-btn" @click="spawnCategory('resources')">+</button>
-                    </div>
-                    <div class="map-obj-row">
-                        <span class="stat-label">Plants</span>
-                        <span class="stat-value">{{ mapObjectCounts.plants }}</span>
-                        <button class="spawn-btn" @click="spawnCategory('plants')">+</button>
-                    </div>
-                    <div class="map-obj-actions">
-                        <button class="ctrl-btn" @click="spawnAllFromMap()">From Map</button>
-                        <button class="ctrl-btn" @click="clearAllMapObjects()">Clear</button>
-                    </div>
-                    <div v-if="!hasObjectTypeData" class="stat-row">
-                        <span class="stat-label dim">No map object data (test map)</span>
-                    </div>
+            <CollapseSection title="Map Objects" :default-open="false">
+                <div class="map-obj-row">
+                    <span class="stat-label">Trees</span>
+                    <span class="stat-value">{{ mapObjectCounts.trees }}</span>
+                    <button class="spawn-btn" @click="spawnCategory('trees')">+</button>
                 </div>
-            </section>
+                <div class="map-obj-row">
+                    <span class="stat-label">Stones</span>
+                    <span class="stat-value">{{ mapObjectCounts.stones }}</span>
+                    <button class="spawn-btn" @click="spawnCategory('stones')">+</button>
+                </div>
+                <div class="map-obj-row">
+                    <span class="stat-label">Resources</span>
+                    <span class="stat-value">{{ mapObjectCounts.resources }}</span>
+                    <button class="spawn-btn" @click="spawnCategory('resources')">+</button>
+                </div>
+                <div class="map-obj-row">
+                    <span class="stat-label">Plants</span>
+                    <span class="stat-value">{{ mapObjectCounts.plants }}</span>
+                    <button class="spawn-btn" @click="spawnCategory('plants')">+</button>
+                </div>
+                <div class="map-obj-actions">
+                    <button class="ctrl-btn" @click="spawnAllFromMap()">From Map</button>
+                    <button class="ctrl-btn" @click="clearAllMapObjects()">Clear</button>
+                </div>
+                <StatRow v-if="!hasObjectTypeData" label="No map object data (test map)" dim />
+            </CollapseSection>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue';
+import { computed } from 'vue';
 import { debugStats } from '@/game/debug-stats';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
 import type { Game } from '@/game/game';
 import { useDebugMapObjects } from './use-debug-map-objects';
-import SettingsCheckbox from './settings/SettingsCheckbox.vue';
+import Checkbox from './Checkbox.vue';
+import CollapseSection from './CollapseSection.vue';
+import StatRow from './StatRow.vue';
+import PanelToggleButton from './PanelToggleButton.vue';
 
 const props = defineProps<{
     paused: boolean;
@@ -368,17 +186,6 @@ const open = computed({
     set: (value: boolean) => {
         stats.debugPanelOpen = value;
     },
-});
-
-const sections = reactive({
-    perf: true,
-    renderTimings: false,
-    loadTimings: false,
-    entities: true,
-    camera: true,
-    tile: true,
-    controls: true,
-    mapObjects: false,
 });
 
 // Map objects functionality (extracted to composable)
@@ -443,9 +250,9 @@ const cacheClass = computed(() => {
 <style scoped>
 .debug-panel {
     background: rgba(13, 10, 5, 0.92);
-    border: 1px solid #5c3d1a;
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
-    color: #c8a96e;
+    color: var(--text);
     font-size: 11px;
     font-family: monospace;
     min-width: 200px;
@@ -458,108 +265,33 @@ const cacheClass = computed(() => {
     min-width: 0;
 }
 
-.debug-toggle-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    padding: 6px 10px;
-    background: #2c1e0e;
-    color: #d4b27a;
-    border: none;
-    border-bottom: 1px solid #3a2a10;
-    cursor: pointer;
-    font-size: 11px;
-    font-family: monospace;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.debug-toggle-btn:hover {
-    background: #3a2810;
-}
-
-.toggle-icon {
-    font-size: 8px;
-    width: 10px;
-}
-
-.debug-sections {
+.panel-sections {
     padding: 2px 0;
 }
 
-.debug-section {
-    border-bottom: 1px solid #2a1e0e;
-}
-
-.debug-section:last-child {
-    border-bottom: none;
-}
-
-.section-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    margin: 0;
-    font-size: 10px;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #8a7040;
-    cursor: pointer;
-    user-select: none;
-}
-
-.section-header:hover {
-    color: #c8a96e;
-    background: rgba(60, 40, 16, 0.3);
-}
-
-.caret {
-    font-size: 7px;
-    width: 10px;
-}
-
-.section-body {
-    padding: 2px 10px 6px;
-}
-
-.stat-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 1px 0;
-    gap: 12px;
-}
-
+/* Stat label/value used directly in map-obj and river sections */
 .stat-label {
-    color: #7a6a4a;
-}
-
-.stat-label.dim {
-    color: #4a3a2a;
-    font-style: italic;
+    color: var(--text-muted);
 }
 
 .stat-value {
-    color: #d4b27a;
+    color: var(--text-bright);
     text-align: right;
 }
 
+/* Status colors */
 .fps-good {
-    color: #80c080;
+    color: var(--status-good);
 }
 .fps-ok {
-    color: #d4a030;
+    color: var(--text-accent);
 }
 .fps-bad {
-    color: #d04040;
+    color: var(--status-bad);
 }
 
 .cache-hit-hmr {
-    color: #80c080;
+    color: var(--status-good);
     font-weight: bold;
 }
 .cache-hit-idb {
@@ -567,41 +299,10 @@ const cacheClass = computed(() => {
     font-weight: bold;
 }
 .cache-miss {
-    color: #7a6a4a;
+    color: var(--text-muted);
 }
 
-.sub-stat {
-    padding-left: 12px;
-}
-.sub-stat .stat-label {
-    color: #5a4a3a;
-    font-size: 10px;
-}
-.sub-stat .stat-value {
-    color: #a08050;
-    font-size: 10px;
-}
-.sub-stat.depth-2 {
-    padding-left: 24px;
-}
-.sub-stat.depth-2 .stat-label {
-    color: #4a3a2a;
-}
-.sub-stat.depth-2 .stat-value {
-    color: #8a6a40;
-}
-
-.total-row {
-    margin-top: 4px;
-    padding-top: 4px;
-    border-top: 1px solid #3a2a10;
-    font-weight: bold;
-}
-
-.total-row .stat-value {
-    color: #e0c080;
-}
-
+/* Controls section */
 .control-buttons {
     display: flex;
     gap: 4px;
@@ -611,9 +312,9 @@ const cacheClass = computed(() => {
 .ctrl-btn {
     flex: 1;
     padding: 4px 8px;
-    background: #2c1e0e;
-    color: #c8a96e;
-    border: 1px solid #4a3218;
+    background: var(--bg-mid);
+    color: var(--text);
+    border: 1px solid var(--border-mid);
     border-radius: 3px;
     cursor: pointer;
     font-size: 10px;
@@ -623,8 +324,8 @@ const cacheClass = computed(() => {
 }
 
 .ctrl-btn:hover {
-    background: #3a2810;
-    border-color: #6a4a20;
+    background: var(--bg-raised);
+    border-color: var(--border-hover);
 }
 
 .ctrl-btn.danger {
@@ -638,9 +339,14 @@ const cacheClass = computed(() => {
     border-color: #8a3030;
 }
 
+/* River debug */
+.river-debug {
+    margin-top: 6px;
+}
+
 .river-heading {
     display: block;
-    margin-top: 6px;
+    margin-bottom: 4px;
 }
 
 .perm-control {
@@ -651,9 +357,9 @@ const cacheClass = computed(() => {
 
 .perm-btn {
     padding: 1px 6px;
-    background: #2c1e0e;
-    color: #c8a96e;
-    border: 1px solid #4a3218;
+    background: var(--bg-mid);
+    color: var(--text);
+    border: 1px solid var(--border-mid);
     border-radius: 2px;
     cursor: pointer;
     font-size: 10px;
@@ -662,29 +368,15 @@ const cacheClass = computed(() => {
 }
 
 .perm-btn:hover {
-    background: #3a2810;
-    border-color: #6a4a20;
+    background: var(--bg-raised);
+    border-color: var(--border-hover);
 }
 
 .perm-value {
-    color: #d4b27a;
+    color: var(--text-bright);
     font-weight: bold;
     min-width: 36px;
     text-align: center;
-}
-
-/* Scrollbar */
-.debug-panel::-webkit-scrollbar {
-    width: 4px;
-}
-
-.debug-panel::-webkit-scrollbar-track {
-    background: #0d0a05;
-}
-
-.debug-panel::-webkit-scrollbar-thumb {
-    background: #4a3218;
-    border-radius: 2px;
 }
 
 /* Map Objects section */
@@ -707,7 +399,7 @@ const cacheClass = computed(() => {
 .spawn-btn {
     padding: 1px 6px;
     background: #1a3a1a;
-    color: #80c080;
+    color: var(--status-good);
     border: 1px solid #2a5a2a;
     border-radius: 2px;
     cursor: pointer;
@@ -726,5 +418,19 @@ const cacheClass = computed(() => {
     display: flex;
     gap: 4px;
     margin-top: 6px;
+}
+
+/* Scrollbar */
+.debug-panel::-webkit-scrollbar {
+    width: 4px;
+}
+
+.debug-panel::-webkit-scrollbar-track {
+    background: var(--bg-darkest);
+}
+
+.debug-panel::-webkit-scrollbar-thumb {
+    background: var(--border-mid);
+    border-radius: 2px;
 }
 </style>

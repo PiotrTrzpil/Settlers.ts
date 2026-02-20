@@ -1,119 +1,71 @@
 <template>
     <div class="settings-panel" :class="{ collapsed: !open }">
-        <button class="settings-toggle-btn" @click="open = !open" title="Settings Panel">
-            <span class="toggle-icon">{{ open ? '&#x25BC;' : '&#x25B6;' }}</span>
-            <span class="toggle-label">Settings</span>
-        </button>
+        <PanelToggleButton v-model:open="open" label="Settings" title="Settings Panel" />
 
-        <div v-if="open" class="settings-sections">
-            <!-- Game Settings -->
-            <section class="settings-section">
-                <h3 class="section-header" @click="sections.game = !sections.game">
-                    <span class="caret">{{ sections.game ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Game
-                </h3>
-                <div v-if="sections.game" class="section-body">
-                    <SettingsCheckbox label="Paused" v-model="settings.paused" />
-                    <SettingsSlider
-                        label="Game speed"
-                        v-model="settings.gameSpeed"
-                        :min="0.25"
-                        :max="4"
-                        :step="0.25"
-                        :disabled="settings.paused"
-                    />
-                </div>
-            </section>
+        <div v-if="open" class="panel-sections">
+            <CollapseSection title="Game">
+                <Checkbox label="Paused" v-model="settings.paused" />
+                <SettingsSlider
+                    label="Game speed"
+                    v-model="settings.gameSpeed"
+                    :min="0.25"
+                    :max="4"
+                    :step="0.25"
+                    :disabled="settings.paused"
+                />
+            </CollapseSection>
 
-            <!-- Camera Settings -->
-            <section class="settings-section">
-                <h3 class="section-header" @click="sections.camera = !sections.camera">
-                    <span class="caret">{{ sections.camera ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Camera
-                </h3>
-                <div v-if="sections.camera" class="section-body">
-                    <SettingsSlider
-                        label="Zoom speed"
-                        v-model="settings.zoomSpeed"
-                        :min="0.01"
-                        :max="0.1"
-                        :step="0.01"
-                    />
-                    <SettingsSlider label="Pan speed" v-model="settings.panSpeed" :min="5" :max="100" :step="5" />
-                </div>
-            </section>
+            <CollapseSection title="Camera">
+                <SettingsSlider label="Zoom speed" v-model="settings.zoomSpeed" :min="0.01" :max="0.1" :step="0.01" />
+                <SettingsSlider label="Pan speed" v-model="settings.panSpeed" :min="5" :max="100" :step="5" />
+            </CollapseSection>
 
-            <!-- Audio Settings -->
-            <section class="settings-section">
-                <h3 class="section-header" @click="sections.audio = !sections.audio">
-                    <span class="caret">{{ sections.audio ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Audio
-                </h3>
-                <div v-if="sections.audio" class="section-body">
-                    <SettingsCheckbox
-                        label="Enable Music"
-                        v-model="settings.musicEnabled"
-                        @update:modelValue="onMusicToggle"
-                    />
-                    <SettingsSlider
-                        label="Music volume"
-                        v-model="settings.musicVolume"
-                        :min="0"
-                        :max="1"
-                        :step="0.1"
-                        :disabled="!settings.musicEnabled"
-                        @update:modelValue="onMusicVolumeChange"
-                    />
-                    <SettingsCheckbox label="Enable SFX" v-model="settings.sfxEnabled" />
-                    <SettingsSlider
-                        label="SFX volume"
-                        v-model="settings.sfxVolume"
-                        :min="0"
-                        :max="1"
-                        :step="0.1"
-                        :disabled="!settings.sfxEnabled"
-                    />
-                </div>
-            </section>
+            <CollapseSection title="Audio">
+                <Checkbox label="Enable Music" v-model="settings.musicEnabled" @update:modelValue="onMusicToggle" />
+                <SettingsSlider
+                    label="Music volume"
+                    v-model="settings.musicVolume"
+                    :min="0"
+                    :max="1"
+                    :step="0.1"
+                    :disabled="!settings.musicEnabled"
+                    @update:modelValue="onMusicVolumeChange"
+                />
+                <Checkbox label="Enable SFX" v-model="settings.sfxEnabled" />
+                <SettingsSlider
+                    label="SFX volume"
+                    v-model="settings.sfxVolume"
+                    :min="0"
+                    :max="1"
+                    :step="0.1"
+                    :disabled="!settings.sfxEnabled"
+                />
+            </CollapseSection>
 
-            <!-- Display Settings -->
-            <section class="settings-section">
-                <h3 class="section-header" @click="sections.display = !sections.display">
-                    <span class="caret">{{ sections.display ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Display
-                </h3>
-                <div v-if="sections.display" class="section-body">
-                    <SettingsCheckbox label="Debug grid" v-model="settings.showDebugGrid" />
-                    <SettingsCheckbox label="Disable player tinting" v-model="settings.disablePlayerTinting" />
-                </div>
-            </section>
+            <CollapseSection title="Display">
+                <Checkbox label="Debug grid" v-model="settings.showDebugGrid" />
+                <Checkbox label="Disable player tinting" v-model="settings.disablePlayerTinting" />
+            </CollapseSection>
 
-            <!-- Graphics Settings -->
-            <section class="settings-section">
-                <h3 class="section-header" @click="sections.graphics = !sections.graphics">
-                    <span class="caret">{{ sections.graphics ? '&#x25BC;' : '&#x25B6;' }}</span>
-                    Graphics
-                </h3>
-                <div v-if="sections.graphics" class="section-body">
-                    <SettingsCheckbox label="Anti-aliasing (MSAA)" v-model="settings.antialias" />
-                </div>
-            </section>
+            <CollapseSection title="Graphics">
+                <Checkbox label="Anti-aliasing (MSAA)" v-model="settings.antialias" />
+            </CollapseSection>
 
             <!-- Reset button -->
-            <section class="settings-section">
-                <div class="reset-section">
-                    <button class="reset-btn" @click="resetSettings">Reset to Defaults</button>
-                </div>
+            <section class="reset-section">
+                <button class="reset-btn" @click="resetSettings">Reset to Defaults</button>
             </section>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 import type { Game } from '@/game/game';
 import SettingsSlider from './settings/SettingsSlider.vue';
-import SettingsCheckbox from './settings/SettingsCheckbox.vue';
+import Checkbox from './Checkbox.vue';
+import CollapseSection from './CollapseSection.vue';
+import PanelToggleButton from './PanelToggleButton.vue';
 
 const props = defineProps<{
     game: Game;
@@ -126,14 +78,6 @@ const open = computed({
     set: (value: boolean) => {
         settings.settingsPanelOpen = value;
     },
-});
-
-const sections = reactive({
-    game: true,
-    camera: true,
-    audio: true,
-    display: true,
-    graphics: true,
 });
 
 // Apply audio settings to game systems
@@ -163,9 +107,9 @@ onMounted(() => {
 <style scoped>
 .settings-panel {
     background: rgba(13, 10, 5, 0.92);
-    border: 1px solid #5c3d1a;
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
-    color: #c8a96e;
+    color: var(--text);
     font-size: 11px;
     font-family: monospace;
     min-width: 180px;
@@ -178,76 +122,13 @@ onMounted(() => {
     min-width: 0;
 }
 
-.settings-toggle-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    padding: 6px 10px;
-    background: #2c1e0e;
-    color: #d4b27a;
-    border: none;
-    border-bottom: 1px solid #3a2a10;
-    cursor: pointer;
-    font-size: 11px;
-    font-family: monospace;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.settings-toggle-btn:hover {
-    background: #3a2810;
-}
-
-.toggle-icon {
-    font-size: 8px;
-    width: 10px;
-}
-
-.settings-sections {
+.panel-sections {
     padding: 2px 0;
-}
-
-.settings-section {
-    border-bottom: 1px solid #2a1e0e;
-}
-
-.settings-section:last-child {
-    border-bottom: none;
-}
-
-.section-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    margin: 0;
-    font-size: 10px;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #8a7040;
-    cursor: pointer;
-    user-select: none;
-}
-
-.section-header:hover {
-    color: #c8a96e;
-    background: rgba(60, 40, 16, 0.3);
-}
-
-.caret {
-    font-size: 7px;
-    width: 10px;
-}
-
-.section-body {
-    padding: 2px 10px 6px;
 }
 
 .reset-section {
     padding: 6px 10px;
+    border-top: 1px solid var(--border-faint);
 }
 
 .reset-btn {
@@ -275,11 +156,11 @@ onMounted(() => {
 }
 
 .settings-panel::-webkit-scrollbar-track {
-    background: #0d0a05;
+    background: var(--bg-darkest);
 }
 
 .settings-panel::-webkit-scrollbar-thumb {
-    background: #4a3218;
+    background: var(--border-mid);
     border-radius: 2px;
 }
 </style>
