@@ -16,36 +16,30 @@
             <div class="panel-header">
                 <span class="header-icon">{{ entityIcon }}</span>
                 <span class="header-title">{{ entityTypeName }}</span>
-                <span v-if="selectionCount > 1" class="multi-select-badge">+{{ selectionCount - 1 }}</span>
+                <Badge v-if="selectionCount > 1" color="count" :round="true">+{{ selectionCount - 1 }}</Badge>
             </div>
 
             <div class="panel-body">
                 <!-- Player info (always shown) -->
-                <div class="info-row">
-                    <span class="label">Player:</span>
-                    <span class="value player-badge" :style="{ background: playerColor }">
+                <StatRow label="Player">
+                    <span class="player-badge" :style="{ background: playerColor }">
                         {{ selectedEntity.player }}
                     </span>
-                </div>
+                </StatRow>
 
                 <!-- Unit-specific info -->
                 <template v-if="isUnit">
-                    <div class="info-row">
-                        <span class="label">Category:</span>
-                        <span class="value category-badge" :class="unitCategory">{{ unitCategory }}</span>
-                    </div>
-                    <div v-if="carriedMaterial" class="info-row">
-                        <span class="label">Carrying:</span>
-                        <span class="value">{{ carriedMaterial }}</span>
-                    </div>
+                    <StatRow label="Category">
+                        <span class="category-badge" :class="unitCategory">{{ unitCategory }}</span>
+                    </StatRow>
+                    <StatRow v-if="carriedMaterial" label="Carrying" :value="carriedMaterial" />
                 </template>
 
                 <!-- Building-specific info -->
                 <template v-if="isBuilding">
-                    <div v-if="buildingStatus" class="info-row">
-                        <span class="label">Status:</span>
-                        <span class="value status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
-                    </div>
+                    <StatRow v-if="buildingStatus" label="Status">
+                        <span class="status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
+                    </StatRow>
                 </template>
 
                 <!-- Debug Info Section (only when debug panel is open) -->
@@ -57,45 +51,28 @@
                         </div>
                         <template v-if="debugExpanded">
                             <!-- Common debug info -->
-                            <div class="info-row">
-                                <span class="label">ID:</span>
-                                <span class="value">#{{ selectedEntity.id }}</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="label">Position:</span>
-                                <span class="value">({{ selectedEntity.x }}, {{ selectedEntity.y }})</span>
-                            </div>
-                            <div v-if="isBuilding" class="info-row">
-                                <span class="label">Size:</span>
-                                <span class="value">{{ buildingSize }}</span>
-                            </div>
+                            <StatRow label="ID" :value="'#' + selectedEntity.id" />
+                            <StatRow label="Position" :value="`(${selectedEntity.x}, ${selectedEntity.y})`" />
+                            <StatRow v-if="isBuilding" label="Size" :value="buildingSize" />
 
                             <!-- Carrier Debug Info -->
                             <template v-if="isUnit && carrierDebug">
-                                <div class="info-row">
-                                    <span class="label">Status:</span>
-                                    <span class="value" :class="'carrier-status-' + carrierDebug.statusClass">
+                                <StatRow label="Status">
+                                    <span :class="'carrier-status-' + carrierDebug.statusClass">
                                         {{ carrierDebug.status }}
                                     </span>
-                                </div>
-                                <div class="info-row">
-                                    <span class="label">Fatigue:</span>
-                                    <span class="value" :class="'fatigue-' + carrierDebug.fatigueClass">
+                                </StatRow>
+                                <StatRow label="Fatigue">
+                                    <span :class="'fatigue-' + carrierDebug.fatigueClass">
                                         {{ carrierDebug.fatigue }}% ({{ carrierDebug.fatigueLevel }})
                                     </span>
-                                </div>
-                                <div class="info-row">
-                                    <span class="label">Home:</span>
-                                    <span class="value">#{{ carrierDebug.homeBuilding }}</span>
-                                </div>
-                                <template v-if="carrierDebug.pathLength > 0">
-                                    <div class="info-row">
-                                        <span class="label">Path:</span>
-                                        <span class="value"
-                                            >{{ carrierDebug.pathProgress }}/{{ carrierDebug.pathLength }}</span
-                                        >
-                                    </div>
-                                </template>
+                                </StatRow>
+                                <StatRow label="Home" :value="'#' + carrierDebug.homeBuilding" />
+                                <StatRow
+                                    v-if="carrierDebug.pathLength > 0"
+                                    label="Path"
+                                    :value="`${carrierDebug.pathProgress}/${carrierDebug.pathLength}`"
+                                />
                             </template>
 
                             <!-- Building Debug Info -->
@@ -103,53 +80,51 @@
                                 <!-- Construction -->
                                 <template v-if="buildingDebug.isConstructing">
                                     <div class="debug-subsection">Construction</div>
-                                    <div class="info-row sub-row">
-                                        <span class="label">Phase:</span>
-                                        <span class="value">{{ buildingDebug.constructionPhase }}</span>
-                                    </div>
-                                    <div class="info-row sub-row">
-                                        <span class="label">Progress:</span>
-                                        <span class="value">{{ buildingDebug.constructionProgress }}%</span>
-                                    </div>
+                                    <StatRow label="Phase" :value="buildingDebug.constructionPhase" :depth="1" />
+                                    <StatRow
+                                        label="Progress"
+                                        :value="buildingDebug.constructionProgress + '%'"
+                                        :depth="1"
+                                    />
                                 </template>
 
                                 <!-- Production -->
                                 <template v-if="buildingDebug.hasProduction">
                                     <div class="debug-subsection">Material Requests</div>
-                                    <div v-if="buildingDebug.pendingInputs.length > 0" class="info-row sub-row">
-                                        <span class="label">Pending:</span>
-                                        <span class="value">{{ buildingDebug.pendingInputs.join(', ') }}</span>
-                                    </div>
+                                    <StatRow
+                                        v-if="buildingDebug.pendingInputs.length > 0"
+                                        label="Pending"
+                                        :value="buildingDebug.pendingInputs.join(', ')"
+                                        :depth="1"
+                                    />
                                 </template>
 
                                 <!-- Inventory -->
                                 <template v-if="buildingDebug.hasInventory">
                                     <div class="debug-subsection">Inventory</div>
-                                    <div
+                                    <StatRow
                                         v-for="slot in buildingDebug.inventorySlots"
                                         :key="slot.material"
-                                        class="info-row sub-row"
+                                        :label="slot.type"
+                                        :depth="1"
                                     >
-                                        <span class="label">{{ slot.type }}:</span>
-                                        <span class="value">
-                                            {{ slot.material }} {{ slot.amount }}
-                                            <span v-if="slot.reserved > 0" class="reserved"
-                                                >({{ slot.reserved }} res)</span
-                                            >
-                                        </span>
-                                    </div>
+                                        {{ slot.material }} {{ slot.amount }}
+                                        <span v-if="slot.reserved > 0" class="reserved">({{ slot.reserved }} res)</span>
+                                    </StatRow>
                                 </template>
 
                                 <!-- Requests -->
                                 <template v-if="buildingDebug.requestCount > 0">
                                     <div class="debug-subsection">Requests ({{ buildingDebug.requestCount }})</div>
-                                    <div v-for="req in buildingDebug.requests" :key="req.id" class="info-row sub-row">
-                                        <span class="label">#{{ req.id }}:</span>
-                                        <span class="value">
-                                            {{ req.material }}
-                                            <span :class="'req-status-' + req.status">{{ req.statusLabel }}</span>
-                                        </span>
-                                    </div>
+                                    <StatRow
+                                        v-for="req in buildingDebug.requests"
+                                        :key="req.id"
+                                        :label="'#' + req.id"
+                                        :depth="1"
+                                    >
+                                        {{ req.material }}
+                                        <span :class="'req-status-' + req.status">{{ req.statusLabel }}</span>
+                                    </StatRow>
                                 </template>
                             </template>
                         </template>
@@ -162,6 +137,8 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import Badge from './Badge.vue';
+import StatRow from './StatRow.vue';
 import type { Entity } from '@/game/entity';
 import { EntityType, UnitType, BuildingType, getBuildingSize } from '@/game/entity';
 import { UNIT_TYPE_CONFIG, getUnitCategory, UnitCategory } from '@/game/unit-types';
@@ -467,9 +444,9 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 <style scoped>
 .selection-panel {
     background: rgba(13, 10, 5, 0.92);
-    border: 1px solid #5c3d1a;
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
-    color: #c8a96e;
+    color: var(--text);
     font-size: 11px;
     font-family: monospace;
     min-width: 160px;
@@ -481,8 +458,8 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
-    background: #2c1e0e;
-    border-bottom: 1px solid #3a2a10;
+    background: var(--bg-mid);
+    border-bottom: 1px solid var(--border-soft);
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -494,35 +471,39 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 
 .header-title {
     flex: 1;
-    color: #d4b27a;
-}
-
-.multi-select-badge {
-    background: #4a3518;
-    color: #e8c87e;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-size: 9px;
+    color: var(--text-bright);
 }
 
 .panel-body {
     padding: 6px 10px;
 }
 
-.info-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+/* StatRow overrides for in-game selection panel context */
+.panel-body :deep(.stat-row) {
     padding: 3px 0;
+    align-items: center;
 }
 
-.label {
-    color: #8a7040;
+.panel-body :deep(.stat-label) {
+    color: var(--text-secondary);
     font-size: 10px;
 }
 
-.value {
-    color: #e8c87e;
+.panel-body :deep(.stat-value) {
+    color: var(--text-emphasis);
+}
+
+.panel-body :deep(.sub-1) {
+    padding-left: 8px;
+}
+
+.panel-body :deep(.sub-1 .stat-label) {
+    font-size: 9px;
+    color: #6a5a3a;
+}
+
+.panel-body :deep(.sub-1 .stat-value) {
+    font-size: 9px;
 }
 
 .player-badge {
@@ -536,13 +517,13 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 .info-section {
     margin-top: 6px;
     padding-top: 6px;
-    border-top: 1px solid #2a1e0e;
+    border-top: 1px solid var(--border-faint);
 }
 
 .section-label {
     font-size: 9px;
     text-transform: uppercase;
-    color: #6a5030;
+    color: var(--text-dim);
     margin-bottom: 4px;
     letter-spacing: 0.5px;
 }
@@ -566,12 +547,12 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 
 .category-badge.specialist {
     background: #4a4020;
-    color: #e0c060;
+    color: var(--status-warn);
 }
 
 .category-badge.worker {
     background: #204020;
-    color: #80c080;
+    color: var(--status-good);
 }
 
 .status-badge {
@@ -583,12 +564,12 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 
 .status-badge.completed {
     background: #204020;
-    color: #80c080;
+    color: var(--status-good);
 }
 
 .status-badge.building {
     background: #4a4020;
-    color: #e0c060;
+    color: var(--status-warn);
 }
 
 .status-badge.unknown {
@@ -597,7 +578,7 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 }
 
 .empty-state {
-    color: #6a5030;
+    color: var(--text-dim);
     font-size: 10px;
     font-style: italic;
     text-align: center;
@@ -606,7 +587,7 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 
 /* Debug Section */
 .debug-section {
-    border-top-color: #3a2a10;
+    border-top-color: var(--border-soft);
 }
 
 .debug-label {
@@ -617,7 +598,7 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 }
 
 .debug-label:hover {
-    color: #8a7040;
+    color: var(--text-secondary);
 }
 
 .caret {
@@ -631,25 +612,12 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
     margin-top: 4px;
     margin-bottom: 2px;
     padding-left: 4px;
-    border-left: 2px solid #3a2a10;
-}
-
-.sub-row {
-    padding-left: 8px;
-}
-
-.sub-row .label {
-    font-size: 9px;
-    color: #6a5a3a;
-}
-
-.sub-row .value {
-    font-size: 9px;
+    border-left: 2px solid var(--border-soft);
 }
 
 /* Carrier status colors */
 .carrier-status-idle {
-    color: #80c080;
+    color: var(--status-good);
 }
 
 .carrier-status-walking {
@@ -670,11 +638,11 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 
 /* Fatigue colors */
 .fatigue-fresh {
-    color: #80c080;
+    color: var(--status-good);
 }
 
 .fatigue-tired {
-    color: #e0c060;
+    color: var(--status-warn);
 }
 
 .fatigue-exhausted {
@@ -682,7 +650,7 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 }
 
 .fatigue-collapsed {
-    color: #d04040;
+    color: var(--status-bad);
 }
 
 /* Request status colors */
@@ -691,11 +659,11 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 }
 
 .req-status-progress {
-    color: #80c080;
+    color: var(--status-good);
 }
 
 .reserved {
-    color: #7a6a4a;
+    color: var(--text-muted);
     font-size: 8px;
 }
 </style>
