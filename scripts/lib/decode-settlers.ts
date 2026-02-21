@@ -1,6 +1,7 @@
 import { AraCrypt } from './ara-crypt';
 import { BinaryReader } from './binary-reader';
 
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility namespace class
 export class DecodeSettlers {
     public static getReader(source: BinaryReader, size: number, offset = -1): BinaryReader {
         const araCrypt = new AraCrypt();
@@ -17,7 +18,7 @@ export class DecodeSettlers {
         const data = new Uint8Array(size);
 
         for (let i = 0; i < size; i++) {
-            data[i] = (source.readByte() ^ araCrypt.getNextKey()) & 0xFF;
+            data[i] = (source.readByte() ^ araCrypt.getNextKey()) & 0xff;
         }
 
         return new BinaryReader(data);

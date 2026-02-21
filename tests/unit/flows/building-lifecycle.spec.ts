@@ -188,7 +188,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         });
 
         addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut, 0);
-        const bs = [...ctx.buildingStateManager.buildingStates.values()][0];
+        const bs = [...ctx.buildingStateManager.buildingStates.values()][0]!;
         bs.totalDuration = 10;
 
         // TerrainLeveling starts immediately (Poles phase is skipped)

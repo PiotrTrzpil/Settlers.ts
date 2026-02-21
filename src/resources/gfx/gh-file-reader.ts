@@ -40,7 +40,7 @@ export class GhFileReader {
 
     /** return the number of images in this gfx file */
     public getImageCount(): number {
-        return this.images ? this.images.length : 0;
+        return this.images.length;
     }
 
     /** return a Image by index */
@@ -49,7 +49,7 @@ export class GhFileReader {
             GhFileReader.log.error('Image Index out of range: ' + index);
             return null;
         }
-        return this.images[index];
+        return this.images[index] ?? null;
     }
 
     constructor(reader: BinaryReader) {

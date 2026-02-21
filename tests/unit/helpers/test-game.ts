@@ -345,7 +345,7 @@ export function placeResource(ctx: TestContext, x: number, y: number, materialTy
  */
 export function isTerrainPassable(map: TestMap, x: number, y: number): boolean {
     const index = map.mapSize.toIndex(x, y);
-    const terrainType = map.groundType[index];
+    const terrainType = map.groundType[index]!;
     return terrainType > 8; // Water types are 0-8
 }
 
@@ -354,7 +354,7 @@ export function isTerrainPassable(map: TestMap, x: number, y: number): boolean {
  */
 export function isTerrainWater(map: TestMap, x: number, y: number): boolean {
     const index = map.mapSize.toIndex(x, y);
-    const terrainType = map.groundType[index];
+    const terrainType = map.groundType[index]!;
     return terrainType <= 8;
 }
 
@@ -378,6 +378,6 @@ export function findBuildableTile(map: TestMap): { x: number; y: number } | null
     const BUILDABLE = [16, 64]; // GRASS, DESERT
     return spiralSearch(Math.floor(width / 2), Math.floor(height / 2), width, height, (x, y) => {
         const index = map.mapSize.toIndex(x, y);
-        return BUILDABLE.includes(map.groundType[index]);
+        return BUILDABLE.includes(map.groundType[index]!);
     });
 }

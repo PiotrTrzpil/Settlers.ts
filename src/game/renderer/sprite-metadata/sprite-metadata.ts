@@ -444,9 +444,7 @@ export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
  * E.g., AGAVE resource is job #1, carrier with AGAVE is job #2.
  */
 export const CARRIER_MATERIAL_JOB_INDICES: Partial<Record<EMaterialType, number>> = Object.fromEntries(
-    Object.entries(RESOURCE_JOB_INDICES)
-        .filter(([, idx]) => idx !== undefined)
-        .map(([type, idx]) => [Number(type), idx! + 1])
+    Object.entries(RESOURCE_JOB_INDICES).map(([type, idx]) => [Number(type), idx + 1])
 ) as Partial<Record<EMaterialType, number>>;
 
 /**
@@ -467,12 +465,10 @@ export function getResourceSpriteMap(): Partial<Record<EMaterialType, ResourceSp
     const result: Partial<Record<EMaterialType, ResourceSpriteInfo>> = {};
 
     for (const [typeStr, jobIndex] of Object.entries(RESOURCE_JOB_INDICES)) {
-        if (jobIndex !== undefined) {
-            result[Number(typeStr) as EMaterialType] = {
-                file: GFX_FILE_NUMBERS.RESOURCES,
-                index: jobIndex,
-            };
-        }
+        result[Number(typeStr) as EMaterialType] = {
+            file: GFX_FILE_NUMBERS.RESOURCES,
+            index: jobIndex,
+        };
     }
 
     return result;
@@ -497,8 +493,8 @@ export function getUnitSpriteMap(race: Race): Partial<Record<UnitType, UnitSprit
     const result: Partial<Record<UnitType, UnitSpriteInfo>> = {};
 
     for (const [typeStr, jobIndex] of Object.entries(UNIT_JOB_INDICES)) {
-        // Skip undefined and negative indices (not yet identified)
-        if (jobIndex !== undefined && jobIndex >= 0) {
+        // Skip negative indices (not yet identified)
+        if (jobIndex >= 0) {
             result[Number(typeStr) as UnitType] = {
                 file: fileNum,
                 index: jobIndex,
@@ -518,12 +514,10 @@ export function getBuildingSpriteMap(race: Race): Partial<Record<BuildingType, B
     const result: Partial<Record<BuildingType, BuildingSpriteInfo>> = {};
 
     for (const [typeStr, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
-        if (jobIndex !== undefined) {
-            result[Number(typeStr) as BuildingType] = {
-                file: fileNum,
-                index: jobIndex,
-            };
-        }
+        result[Number(typeStr) as BuildingType] = {
+            file: fileNum,
+            index: jobIndex,
+        };
     }
 
     return result;
@@ -812,6 +806,7 @@ export class SpriteMetadataRegistry {
      * @param frameDurationMs Duration per frame in milliseconds
      * @param loop Whether the animation loops
      */
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- animation registration handles directions, sequences, and fallback
     public registerAnimatedEntity(
         entityType: EntityType,
         subType: number,
@@ -829,7 +824,7 @@ export class SpriteMetadataRegistry {
             if (frames.length === 0) continue;
 
             if (!firstFrame) {
-                firstFrame = frames[0];
+                firstFrame = frames[0]!;
             }
 
             directionMap.set(direction, {
@@ -852,7 +847,7 @@ export class SpriteMetadataRegistry {
             for (const [direction, frames] of directionFrames) {
                 if (frames.length > 0) {
                     idleDirectionMap.set(direction, {
-                        frames: [frames[0]],
+                        frames: [frames[0]!],
                         frameDurationMs,
                         loop: false, // Single frame, no loop needed
                     });

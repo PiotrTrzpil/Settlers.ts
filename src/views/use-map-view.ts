@@ -68,11 +68,6 @@ async function loadMapFile(
 ): Promise<{ game: Game | null; mapInfo: string }> {
     try {
         const fileData = await file.readBinary();
-        if (!fileData) {
-            log.error('Unable to load ' + file.name);
-            return { game: null, mapInfo: '' };
-        }
-
         const mapContent = MapLoader.getLoader(fileData);
         if (!mapContent) {
             log.error('Unsupported map format: ' + file.name);
@@ -326,7 +321,7 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
     // Check if testMap query param is present - use computed for reactivity
     // in case the route isn't fully resolved when the composable first runs
     const isTestMap = computed(() => {
-        const param = route.query.testMap;
+        const param = route.query['testMap'];
         return param === 'true' || param === '';
     });
 
@@ -351,14 +346,11 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
      */
     async function loadMap(file: IFileSource | null, options: { isTestMap?: boolean } = {}): Promise<boolean> {
         const fm = getFileManager();
-        if (!fm) {
-            log.debug('Cannot load map: FileManager not available');
-            return false;
-        }
 
         // Guard: prevent concurrent loads
         if (mapLoadState.isLoading) {
-            log.debug(`Skipping map load${file ? ` for ${file.name}` : ''} - already loading`);
+            const fileDesc = file ? ' for ' + file.name : '';
+            log.debug(`Skipping map load${fileDesc} - already loading`);
             return false;
         }
 
@@ -474,10 +466,9 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
         } else {
             // Auto-load first available map
             const fm = getFileManager();
-            if (!fm) return;
             const maps = fm.filter('.map');
             if (maps.length > 0) {
-                void loadMap(maps[0]);
+                void loadMap(maps[0]!);
             }
         }
     }
@@ -584,11 +575,11 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
 
     // Update resource placement mode when amount changes
     watch(resourceAmount, () => {
-        if (game.value?.viewState.state.mode === 'place_resource' && game.value?.viewState.state.placeResourceType) {
+        if (game.value?.viewState.state.mode === 'place_resource' && game.value.viewState.state.placeResourceType) {
             const inputManager = getInputManager?.();
             if (inputManager) {
                 inputManager.switchMode('place_resource', {
-                    resourceType: game.value?.viewState.state.placeResourceType,
+                    resourceType: game.value.viewState.state.placeResourceType,
                     amount: resourceAmount.value,
                 });
             }

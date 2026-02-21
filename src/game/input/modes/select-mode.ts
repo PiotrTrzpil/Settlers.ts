@@ -20,7 +20,7 @@ export class SelectMode extends BaseInputMode {
 
     override onAction(action: InputAction, context: InputContext): InputResult {
         // Only handles actions relevant to select mode; others fall through to UNHANDLED
-        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- partial: unknown actions fall through to UNHANDLED
         switch (action) {
         case InputAction.DeselectAll:
             context.executeCommand({ type: 'select', entityId: null });

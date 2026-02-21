@@ -19,6 +19,7 @@ class RequestError extends Error {
  * Simple IndexedDB cache for binary file data.
  * Files rarely change, so we cache them indefinitely.
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- static utility class with shared state via static properties
 class FileCache {
     private static DB_NAME = 'settlers-file-cache';
     private static DB_VERSION = 1;

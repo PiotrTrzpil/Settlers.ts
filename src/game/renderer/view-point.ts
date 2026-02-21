@@ -172,6 +172,7 @@ export class ViewPoint implements IViewPoint {
         window.removeEventListener('keydown', this.handleKeyDown);
         window.removeEventListener('keyup', this.handleKeyUp);
 
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive null check for destroy() called before init
         if (this.canvas == null) {
             return;
         }

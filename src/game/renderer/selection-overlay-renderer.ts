@@ -60,12 +60,8 @@ export class SelectionOverlayRenderer {
             // Skip frames for units - they use dots instead
             if (entity.type === EntityType.Unit) continue;
 
-            let minX = Infinity,
-                minY = Infinity;
-            let maxX = -Infinity,
-                maxY = -Infinity;
-            let centerX = 0,
-                centerY = 0;
+            let minX: number, minY: number;
+            let maxX: number, maxY: number;
 
             if (entity.type === EntityType.Building) {
                 // Get footprint tiles and calculate bounding box in world coordinates
@@ -98,8 +94,8 @@ export class SelectionOverlayRenderer {
             }
 
             // Calculate center and half-sizes for drawing
-            centerX = (minX + maxX) / 2;
-            centerY = (minY + maxY) / 2;
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
             const halfWidth = (maxX - minX) / 2;
             const halfHeight = (maxY - minY) / 2;
 
@@ -112,7 +108,7 @@ export class SelectionOverlayRenderer {
             // Top edge
             this.fillRectVertices(-halfWidth, halfHeight - t, halfWidth, halfHeight);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-            gl.vertexAttrib4f(aColor, FRAME_COLOR[0], FRAME_COLOR[1], FRAME_COLOR[2], FRAME_COLOR[3]);
+            gl.vertexAttrib4f(aColor, FRAME_COLOR[0]!, FRAME_COLOR[1]!, FRAME_COLOR[2]!, FRAME_COLOR[3]!);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
 
             // Bottom edge
@@ -151,10 +147,10 @@ export class SelectionOverlayRenderer {
         const ct = t * 1.8; // Corner thickness
         gl.vertexAttrib4f(
             aColor,
-            FRAME_CORNER_COLOR[0],
-            FRAME_CORNER_COLOR[1],
-            FRAME_CORNER_COLOR[2],
-            FRAME_CORNER_COLOR[3]
+            FRAME_CORNER_COLOR[0]!,
+            FRAME_CORNER_COLOR[1]!,
+            FRAME_CORNER_COLOR[2]!,
+            FRAME_CORNER_COLOR[3]!
         );
 
         // Top-left corner (horizontal + vertical)
@@ -203,7 +199,7 @@ export class SelectionOverlayRenderer {
     ): void {
         if (selectedEntityIds.size === 0) return;
 
-        gl.vertexAttrib4f(aColor, PATH_COLOR[0], PATH_COLOR[1], PATH_COLOR[2], PATH_COLOR[3]);
+        gl.vertexAttrib4f(aColor, PATH_COLOR[0]!, PATH_COLOR[1]!, PATH_COLOR[2]!, PATH_COLOR[3]!);
 
         for (const entityId of selectedEntityIds) {
             const unitState = ctx.unitStates.get(entityId);
@@ -211,7 +207,7 @@ export class SelectionOverlayRenderer {
 
             const maxDots = Math.min(unitState.path.length, unitState.pathIndex + MAX_PATH_DOTS);
             for (let i = unitState.pathIndex; i < maxDots; i++) {
-                const wp = unitState.path[i];
+                const wp = unitState.path[i]!;
                 const worldPos = TilePicker.tileToWorld(
                     wp.x,
                     wp.y,
@@ -259,10 +255,10 @@ export class SelectionOverlayRenderer {
             gl.vertexAttrib2f(aEntityPos, worldPos.worldX, worldPos.worldY - spriteTopOffset);
             gl.vertexAttrib4f(
                 aColor,
-                SELECTION_DOT_COLOR[0],
-                SELECTION_DOT_COLOR[1],
-                SELECTION_DOT_COLOR[2],
-                SELECTION_DOT_COLOR[3]
+                SELECTION_DOT_COLOR[0]!,
+                SELECTION_DOT_COLOR[1]!,
+                SELECTION_DOT_COLOR[2]!,
+                SELECTION_DOT_COLOR[3]!
             );
             this.fillQuadVertices(0, 0, SELECTION_DOT_SCALE);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
@@ -280,10 +276,10 @@ export class SelectionOverlayRenderer {
             gl.vertexAttrib2f(aEntityPos, originPos.worldX, originPos.worldY);
             gl.vertexAttrib4f(
                 aColor,
-                SELECTION_ORIGIN_DOT_COLOR[0],
-                SELECTION_ORIGIN_DOT_COLOR[1],
-                SELECTION_ORIGIN_DOT_COLOR[2],
-                SELECTION_ORIGIN_DOT_COLOR[3]
+                SELECTION_ORIGIN_DOT_COLOR[0]!,
+                SELECTION_ORIGIN_DOT_COLOR[1]!,
+                SELECTION_ORIGIN_DOT_COLOR[2]!,
+                SELECTION_ORIGIN_DOT_COLOR[3]!
             );
             this.fillQuadVertices(0, 0, SELECTION_ORIGIN_DOT_SCALE);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
@@ -310,10 +306,10 @@ export class SelectionOverlayRenderer {
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
         gl.vertexAttrib4f(
             aColor,
-            FOOTPRINT_TILE_COLOR[0],
-            FOOTPRINT_TILE_COLOR[1],
-            FOOTPRINT_TILE_COLOR[2],
-            FOOTPRINT_TILE_COLOR[3]
+            FOOTPRINT_TILE_COLOR[0]!,
+            FOOTPRINT_TILE_COLOR[1]!,
+            FOOTPRINT_TILE_COLOR[2]!,
+            FOOTPRINT_TILE_COLOR[3]!
         );
 
         // Diamond vertex data for a single tile (6 vertices for 2 triangles)
@@ -361,10 +357,10 @@ export class SelectionOverlayRenderer {
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
         gl.vertexAttrib4f(
             aColor,
-            SERVICE_AREA_CIRCLE_COLOR[0],
-            SERVICE_AREA_CIRCLE_COLOR[1],
-            SERVICE_AREA_CIRCLE_COLOR[2],
-            SERVICE_AREA_CIRCLE_COLOR[3]
+            SERVICE_AREA_CIRCLE_COLOR[0]!,
+            SERVICE_AREA_CIRCLE_COLOR[1]!,
+            SERVICE_AREA_CIRCLE_COLOR[2]!,
+            SERVICE_AREA_CIRCLE_COLOR[3]!
         );
 
         const segments = SERVICE_AREA_CIRCLE_SEGMENTS;
@@ -391,7 +387,7 @@ export class SelectionOverlayRenderer {
                 const sampleY = Math.round(tileY);
                 const inBounds =
                     sampleX >= 0 && sampleX < ctx.mapSize.width && sampleY >= 0 && sampleY < ctx.mapSize.height;
-                const h = inBounds ? heightToWorld(ctx.groundHeight[ctx.mapSize.toIndex(sampleX, sampleY)]) : baseH;
+                const h = inBounds ? heightToWorld(ctx.groundHeight[ctx.mapSize.toIndex(sampleX, sampleY)]!) : baseH;
 
                 points.push(tileToWorld(tileX, tileY, h, ctx.viewPoint.x, ctx.viewPoint.y));
             }
@@ -411,8 +407,8 @@ export class SelectionOverlayRenderer {
 
             // Draw quad segments connecting consecutive circle points
             for (let i = 0; i < points.length - 1; i++) {
-                const p0 = points[i];
-                const p1 = points[i + 1];
+                const p0 = points[i]!;
+                const p1 = points[i + 1]!;
 
                 // Direction vector from p0 to p1
                 const dx = p1.worldX - p0.worldX;
@@ -537,8 +533,8 @@ export class SelectionOverlayRenderer {
     private fillQuadVertices(worldX: number, worldY: number, scale: number): void {
         const verts = this.vertexData;
         for (let i = 0; i < 6; i++) {
-            verts[i * 2] = BASE_QUAD[i * 2] * scale + worldX;
-            verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1] * scale + worldY;
+            verts[i * 2] = BASE_QUAD[i * 2]! * scale + worldX;
+            verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1]! * scale + worldY;
         }
     }
 

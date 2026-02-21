@@ -51,7 +51,7 @@ if (typeof globalThis.ImageData === 'undefined') {
                 // new ImageData(data, width, height?)
                 this.data = dataOrWidth;
                 this.width = widthOrHeight;
-                this.height = heightOrSettings as number ?? (dataOrWidth.length / 4 / widthOrHeight);
+                this.height = (heightOrSettings as number) ?? dataOrWidth.length / 4 / widthOrHeight;
             }
         }
     };
@@ -78,7 +78,7 @@ const CRC32_TABLE = new Uint32Array(256);
     for (let n = 0; n < 256; n++) {
         let c = n;
         for (let k = 0; k < 8; k++) {
-            c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+            c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
         }
         CRC32_TABLE[n] = c;
     }
@@ -88,7 +88,7 @@ function crc32(data: Uint8Array, start = 0, length?: number): number {
     const len = length ?? data.length - start;
     let crc = 0xffffffff;
     for (let i = start; i < start + len; i++) {
-        crc = CRC32_TABLE[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
+        crc = CRC32_TABLE[(crc ^ data[i]!) & 0xff]! ^ (crc >>> 8);
     }
     return crc ^ 0xffffffff;
 }
@@ -139,8 +139,8 @@ async function encodePng(imageData: ImageData): Promise<Uint8Array> {
     const ihdrData = new Uint8Array(13);
     writeUint32BE(ihdrData, width, 0);
     writeUint32BE(ihdrData, height, 4);
-    ihdrData[8] = 8;  // bit depth
-    ihdrData[9] = 6;  // RGBA
+    ihdrData[8] = 8; // bit depth
+    ihdrData[9] = 6; // RGBA
     ihdrData[10] = 0; // compression
     ihdrData[11] = 0; // filter
     ihdrData[12] = 0; // interlace
@@ -151,9 +151,12 @@ async function encodePng(imageData: ImageData): Promise<Uint8Array> {
 
     const png = new Uint8Array(PNG_SIGNATURE.length + ihdr.length + idat.length + iend.length);
     let offset = 0;
-    png.set(PNG_SIGNATURE, offset); offset += PNG_SIGNATURE.length;
-    png.set(ihdr, offset); offset += ihdr.length;
-    png.set(idat, offset); offset += idat.length;
+    png.set(PNG_SIGNATURE, offset);
+    offset += PNG_SIGNATURE.length;
+    png.set(ihdr, offset);
+    offset += ihdr.length;
+    png.set(idat, offset);
+    offset += idat.length;
     png.set(iend, offset);
 
     return png;
@@ -178,7 +181,7 @@ function parseIndices(str: string): number[] {
 
     for (const part of parts) {
         if (part.includes('-')) {
-            const [start, end] = part.split('-').map(Number);
+            const [start, end] = part.split('-').map(Number) as [number, number];
             for (let i = start; i <= end; i++) {
                 result.push(i);
             }
@@ -196,13 +199,13 @@ function parseArgs(args: string[]): CliOptions {
         output: './output',
         metadata: false,
         info: false,
-        verbose: false
+        verbose: false,
     };
 
     const positional: string[] = [];
 
     for (let i = 0; i < args.length; i++) {
-        const arg = args[i];
+        const arg = args[i]!;
 
         if (arg === '--indices' || arg === '-i') {
             options.indices = parseIndices(args[++i] || '');
@@ -314,7 +317,7 @@ async function findGfxCompanions(gfxPath: string): Promise<GfxFileSet | null> {
         palettePath: hasPa6 ? pa6Path : p46Path,
         pilPath: hasPil ? pilPath : pi4Path,
         jilPath: hasJil ? jilPath : undefined,
-        dilPath: hasDil ? dilPath : undefined
+        dilPath: hasDil ? dilPath : undefined,
     };
 }
 
@@ -323,7 +326,7 @@ async function loadGfxReader(fileSet: GfxFileSet): Promise<GfxFileReader> {
         readBinaryFile(fileSet.gfxPath),
         readBinaryFile(fileSet.gilPath),
         readBinaryFile(fileSet.palettePath),
-        readBinaryFile(fileSet.pilPath)
+        readBinaryFile(fileSet.pilPath),
     ]);
 
     const jilData = fileSet.jilPath ? await readBinaryFile(fileSet.jilPath).catch(() => null) : null;
@@ -344,6 +347,7 @@ async function exportImage(image: IGfxImage, outputPath: string): Promise<void> 
     await fs.writeFile(outputPath, pngData);
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- GFX file export with multiple format branches
 async function exportGfxFile(
     fileSet: GfxFileSet,
     outputDir: string,
@@ -461,7 +465,7 @@ async function showGfxInfo(fileSet: GfxFileSet): Promise<void> {
             if (validCount <= 20) {
                 console.log(
                     `  [${i.toString().padStart(5)}] ${image.width}x${image.height} ` +
-                    `offset: (${image.left}, ${image.top})`
+                        `offset: (${image.left}, ${image.top})`
                 );
             }
         }
@@ -486,19 +490,13 @@ async function showGhInfo(filePath: string): Promise<void> {
     for (let i = 0; i < imageCount; i++) {
         const image = reader.getImage(i);
         if (image) {
-            console.log(
-                `  [${i.toString().padStart(3)}] ${image.width}x${image.height} ` +
-                `type: ${image.imageType}`
-            );
+            console.log(`  [${i.toString().padStart(3)}] ${image.width}x${image.height} ` + `type: ${image.imageType}`);
         }
     }
 }
 
-async function processLibFile(
-    libPath: string,
-    outputDir: string,
-    options: CliOptions
-): Promise<void> {
+// eslint-disable-next-line sonarjs/cognitive-complexity -- LIB archive processing with nested format handling
+async function processLibFile(libPath: string, outputDir: string, options: CliOptions): Promise<void> {
     const data = await readBinaryFile(libPath);
     const reader = new LibFileReader(data);
     const fileCount = reader.getFileCount();
@@ -647,11 +645,8 @@ async function processLibFile(
     }
 }
 
-async function processDirectory(
-    dirPath: string,
-    outputDir: string,
-    options: CliOptions
-): Promise<void> {
+// eslint-disable-next-line sonarjs/cognitive-complexity -- directory processing with recursive file type detection
+async function processDirectory(dirPath: string, outputDir: string, options: CliOptions): Promise<void> {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
     let totalExported = 0;
@@ -756,7 +751,7 @@ async function main(): Promise<void> {
     }
 }
 
-main().catch((err) => {
+main().catch(err => {
     console.error('Error:', err.message);
     process.exit(1);
 });

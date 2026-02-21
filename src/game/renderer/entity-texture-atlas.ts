@@ -161,14 +161,14 @@ export class EntityTextureAtlas extends ShaderTexture {
 
         // Try to fit in the last layer first
         let layerIndex = this.layers.length - 1;
-        let slots = this.layerSlots[layerIndex];
+        let slots = this.layerSlots[layerIndex]!;
 
         // Find an existing slot with matching height and enough space
         let slot = slots.find(s => s.height === bucketHeight && s.leftSize >= paddedWidth);
 
         if (!slot) {
             // Need a new row — check if we have vertical space in current layer
-            const freeY = slots.length > 0 ? slots[slots.length - 1].bottom : 0;
+            const freeY = slots.length > 0 ? slots[slots.length - 1]!.bottom : 0;
 
             if (freeY + bucketHeight > LAYER_SIZE) {
                 // Current layer is full — add a new layer
@@ -180,7 +180,7 @@ export class EntityTextureAtlas extends ShaderTexture {
                 }
 
                 layerIndex = this.addLayer();
-                slots = this.layerSlots[layerIndex];
+                slots = this.layerSlots[layerIndex]!;
 
                 // New layer always has space at Y=0
                 slot = new Slot(0, LAYER_SIZE, bucketHeight);
@@ -225,7 +225,7 @@ export class EntityTextureAtlas extends ShaderTexture {
 
         const start = performance.now();
 
-        const dst = this.layers[region.layer];
+        const dst = this.layers[region.layer]!;
         const rowLen = region.width;
 
         for (let y = 0; y < region.height; y++) {
@@ -302,7 +302,7 @@ export class EntityTextureAtlas extends ShaderTexture {
                     1,
                     gl.RED_INTEGER,
                     gl.UNSIGNED_SHORT,
-                    this.layers[i]
+                    this.layers[i]!
                 );
             }
 
@@ -335,7 +335,7 @@ export class EntityTextureAtlas extends ShaderTexture {
                     1,
                     gl.RED_INTEGER,
                     gl.UNSIGNED_SHORT,
-                    this.layers[i],
+                    this.layers[i]!,
                     srcOffset
                 );
 
@@ -401,7 +401,7 @@ export class EntityTextureAtlas extends ShaderTexture {
      * Fill the first layer with a procedural pattern for testing/fallback.
      */
     public fillProceduralPattern(): void {
-        const layer = this.layers[0];
+        const layer = this.layers[0]!;
         for (let y = 0; y < LAYER_SIZE; y++) {
             for (let x = 0; x < LAYER_SIZE; x++) {
                 const idx = y * LAYER_SIZE + x;
@@ -422,7 +422,7 @@ export class EntityTextureAtlas extends ShaderTexture {
             return null;
         }
 
-        const layer = this.layers[region.layer];
+        const layer = this.layers[region.layer]!;
         const imageData = new ImageData(region.width, region.height);
         const dst = new Uint32Array(imageData.data.buffer);
 
@@ -431,7 +431,7 @@ export class EntityTextureAtlas extends ShaderTexture {
             const dstRow = y * region.width;
 
             for (let x = 0; x < region.width; x++) {
-                const index = layer[srcRow + x];
+                const index = layer[srcRow + x]!;
 
                 if (index === 0) {
                     dst[dstRow + x] = 0x00000000; // transparent
@@ -439,10 +439,10 @@ export class EntityTextureAtlas extends ShaderTexture {
                     dst[dstRow + x] = 0x40000000; // shadow
                 } else if (paletteData && index * 4 + 3 < paletteData.length) {
                     const pi = index * 4;
-                    const r = paletteData[pi];
-                    const g = paletteData[pi + 1];
-                    const b = paletteData[pi + 2];
-                    const a = paletteData[pi + 3];
+                    const r = paletteData[pi]!;
+                    const g = paletteData[pi + 1]!;
+                    const b = paletteData[pi + 2]!;
+                    const a = paletteData[pi + 3]!;
                     dst[dstRow + x] = (a << 24) | (b << 16) | (g << 8) | r;
                 } else {
                     dst[dstRow + x] = 0xffff00ff; // magenta for missing palette
@@ -462,9 +462,9 @@ export class EntityTextureAtlas extends ShaderTexture {
         const result = new Uint8Array(this.layers.length * bytesPerLayer);
         for (let i = 0; i < this.layers.length; i++) {
             const layerBytes = new Uint8Array(
-                this.layers[i].buffer,
-                this.layers[i].byteOffset,
-                this.layers[i].byteLength
+                this.layers[i]!.buffer,
+                this.layers[i]!.byteOffset,
+                this.layers[i]!.byteLength
             );
             result.set(layerBytes, i * bytesPerLayer);
         }

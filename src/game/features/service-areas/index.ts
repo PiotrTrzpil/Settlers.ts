@@ -45,9 +45,12 @@ export {
     isPositionInAnyServiceArea,
     getBuildingsInServiceAreaByDistance,
     getHubsServingBothPositions,
-    // Legacy aliases (deprecated)
+    // Legacy aliases (deprecated) — intentional backward-compat shims, keep for external callers
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward-compat re-export shims
     getTavernsServingBuilding,
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward-compat re-export shims
     getNearestTavernForBuilding,
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward-compat re-export shims
     getTavernsServingBothPositions,
 } from './service-area-queries';
 

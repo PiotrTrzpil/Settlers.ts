@@ -31,7 +31,7 @@ test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () 
 
         const units = await gpAssets.actions.getEntities({ type: 1 });
         expect(units.length).toBeGreaterThan(0);
-        expect(units[0].subType).toBeGreaterThan(0);
+        expect(units[0]!.subType).toBeGreaterThan(0);
     });
 
     test('JIL index lookup returns correct job for high indices', async ({ gpAssets }) => {
@@ -40,19 +40,19 @@ test.describe('Unit Sprite Loading', { tag: ['@requires-assets', '@slow'] }, () 
         expect(jilResult).not.toBeNull();
 
         // Job 1 (Carrier) should exist
-        expect(jilResult!.results[1].exists).toBe(true);
+        expect(jilResult!.results[1]!.exists).toBe(true);
 
         // Job 19 (Builder) should exist
-        expect(jilResult!.results[19].exists).toBe(true);
+        expect(jilResult!.results[19]!.exists).toBe(true);
 
         // Job 227 (Swordsman) should exist if total jobs > 227
         if (jilResult!.totalJobs > 227) {
-            expect(jilResult!.results[227].exists).toBe(true);
+            expect(jilResult!.results[227]!.exists).toBe(true);
         }
 
         // Job 236 (Bowman) should exist if total jobs > 236
         if (jilResult!.totalJobs > 236) {
-            expect(jilResult!.results[236].exists).toBe(true);
+            expect(jilResult!.results[236]!.exists).toBe(true);
         }
     });
 });

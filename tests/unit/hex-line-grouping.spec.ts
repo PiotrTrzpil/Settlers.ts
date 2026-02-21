@@ -8,8 +8,8 @@ function getDirections(tiles: TileCoord[]): Array<{ dx: number; dy: number }> {
     const dirs: Array<{ dx: number; dy: number }> = [];
     for (let i = 0; i < tiles.length - 1; i++) {
         dirs.push({
-            dx: tiles[i + 1].x - tiles[i].x,
-            dy: tiles[i + 1].y - tiles[i].y,
+            dx: tiles[i + 1]!.x - tiles[i]!.x,
+            dy: tiles[i + 1]!.y - tiles[i]!.y,
         });
     }
     return dirs;
@@ -20,7 +20,7 @@ function countDirectionChanges(tiles: TileCoord[]): number {
     const dirs = getDirections(tiles);
     let changes = 0;
     for (let i = 1; i < dirs.length; i++) {
-        if (dirs[i].dx !== dirs[i - 1].dx || dirs[i].dy !== dirs[i - 1].dy) {
+        if (dirs[i]!.dx !== dirs[i - 1]!.dx || dirs[i]!.dy !== dirs[i - 1]!.dy) {
             changes++;
         }
     }
@@ -34,7 +34,7 @@ function maxRunLength(tiles: TileCoord[]): number {
     let maxRun = 1;
     let currentRun = 1;
     for (let i = 1; i < dirs.length; i++) {
-        if (dirs[i].dx === dirs[i - 1].dx && dirs[i].dy === dirs[i - 1].dy) {
+        if (dirs[i]!.dx === dirs[i - 1]!.dx && dirs[i]!.dy === dirs[i - 1]!.dy) {
             currentRun++;
             maxRun = Math.max(maxRun, currentRun);
         } else {
@@ -60,7 +60,7 @@ describe('Hex line grouping', () => {
     it('should ensure all consecutive tiles are hex neighbors', () => {
         const line = getHexLine(0, 0, 6, 6);
         for (let i = 0; i < line.length - 1; i++) {
-            const dist = hexDistance(line[i].x, line[i].y, line[i + 1].x, line[i + 1].y);
+            const dist = hexDistance(line[i]!.x, line[i]!.y, line[i + 1]!.x, line[i + 1]!.y);
             expect(dist).toBe(1);
         }
     });

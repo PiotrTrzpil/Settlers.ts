@@ -27,7 +27,7 @@ function parseJob(jobEl: Element): JobInfo {
 
     const nodeElements = jobEl.getElementsByTagName('node');
     for (let i = 0; i < nodeElements.length; i++) {
-        nodes.push(parseJobNode(nodeElements[i]));
+        nodes.push(parseJobNode(nodeElements[i]!));
     }
 
     return { id, nodes };
@@ -42,15 +42,16 @@ export function parseJobInfo(xmlContent: string): Map<RaceId, RaceJobData> {
 
     const raceElements = doc.getElementsByTagName('race');
     for (let i = 0; i < raceElements.length; i++) {
-        const raceEl = raceElements[i];
+        const raceEl = raceElements[i]!;
         const raceId = raceEl.getAttribute('id') as RaceId;
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- getAttribute may return null despite cast
         if (!raceId) continue;
 
         const jobs = new Map<string, JobInfo>();
         const jobElements = raceEl.getElementsByTagName('job');
 
         for (let j = 0; j < jobElements.length; j++) {
-            const job = parseJob(jobElements[j]);
+            const job = parseJob(jobElements[j]!);
             jobs.set(job.id, job);
         }
 

@@ -394,6 +394,7 @@ export class LuaRuntime {
     /**
      * Convert Lua table to JS object
      */
+    // eslint-disable-next-line sonarjs/function-return-type -- intentionally returns array or object depending on Lua table structure
     private tableToObject(idx: number): Record<string, any> | any[] {
         const result: Record<string, any> = {};
         let isArray = true;

@@ -15,11 +15,12 @@ export class BinaryReader {
         length: number | null = null,
         filename: string | null = null
     ) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, sonarjs/different-types-comparison -- JS callers
         if (offset === null) {
             offset = 0;
         }
 
-        let dataLength = 0;
+        let dataLength: number;
         let srcHiddenOffset = 0;
 
         if (dataArray == null) {
@@ -84,7 +85,7 @@ export class BinaryReader {
             return 0;
         }
 
-        const v = this.data[this.pos];
+        const v = this.data[this.pos]!;
         this.pos++;
 
         return v;
@@ -98,17 +99,17 @@ export class BinaryReader {
 
         if (length === 4) {
             const v =
-                (this.data[offset] << 24) |
-                (this.data[offset + 1] << 16) |
-                (this.data[offset + 2] << 8) |
-                this.data[offset + 3];
+                (this.data[offset]! << 24) |
+                (this.data[offset + 1]! << 16) |
+                (this.data[offset + 2]! << 8) |
+                this.data[offset + 3]!;
             this.pos = offset + 4;
             return v;
         }
 
         let v = 0;
         for (let i = length; i > 0; i--) {
-            v = (v << 8) | this.data[offset];
+            v = (v << 8) | this.data[offset]!;
             offset++;
         }
 
@@ -133,10 +134,10 @@ export class BinaryReader {
         this.pos = offset + 4;
 
         return (
-            this.data[offset] |
-            (this.data[offset + 1] << 8) |
-            (this.data[offset + 2] << 16) |
-            (this.data[offset + 3] << 24)
+            this.data[offset]! |
+            (this.data[offset + 1]! << 8) |
+            (this.data[offset + 2]! << 16) |
+            (this.data[offset + 3]! << 24)
         );
     }
 
@@ -147,7 +148,7 @@ export class BinaryReader {
         }
 
         this.pos = offset + 2;
-        return (this.data[offset] << 8) | this.data[offset + 1];
+        return (this.data[offset]! << 8) | this.data[offset + 1]!;
     }
 
     /** Read one Word (2 Byte) from stream (big ending) */
@@ -157,7 +158,7 @@ export class BinaryReader {
         }
 
         this.pos = offset + 2;
-        return this.data[offset] | (this.data[offset + 1] << 8);
+        return this.data[offset]! | (this.data[offset + 1]! << 8);
     }
 
     /** Read a String */
@@ -169,7 +170,7 @@ export class BinaryReader {
         let result = '';
 
         while (this.pos < this.length) {
-            const v: number = this.data[this.pos];
+            const v: number = this.data[this.pos]!;
             this.pos++;
             if (v === 0) {
                 return result;
@@ -193,7 +194,7 @@ export class BinaryReader {
         let result = '';
 
         for (let i = 0; i < length; i++) {
-            const v: number = this.data[this.pos];
+            const v: number = this.data[this.pos]!;
             this.pos++;
 
             result += String.fromCharCode(v);
@@ -214,7 +215,7 @@ export class BinaryReader {
         let result = '';
 
         for (let i = 0; i < length; i++) {
-            const v: number = this.data[this.pos];
+            const v: number = this.data[this.pos]!;
             this.pos++;
 
             result += ('0' + v.toString(16)).slice(-2) + spacer;

@@ -103,7 +103,7 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
             expect(inventory?.buildingType).toBe(BuildingType.WoodcutterHut);
             // Woodcutter has LOG output slot
             expect(inventory?.outputSlots.length).toBeGreaterThan(0);
-            expect(inventory?.outputSlots[0].materialType).toBe(EMaterialType.LOG);
+            expect(inventory?.outputSlots[0]!.materialType).toBe(EMaterialType.LOG);
         });
 
         it('should create inventory with input slots for processing buildings', () => {
@@ -113,8 +113,8 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
             expect(inventory).toBeDefined();
             // Sawmill has LOG input and BOARD output
             expect(inventory?.inputSlots.length).toBeGreaterThan(0);
-            expect(inventory?.inputSlots[0].materialType).toBe(EMaterialType.LOG);
-            expect(inventory?.outputSlots[0].materialType).toBe(EMaterialType.BOARD);
+            expect(inventory?.inputSlots[0]!.materialType).toBe(EMaterialType.LOG);
+            expect(inventory?.outputSlots[0]!.materialType).toBe(EMaterialType.BOARD);
         });
     });
 
@@ -250,7 +250,7 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
             expect(services.requestManager.getPendingCount()).toBe(1);
             const pending = services.requestManager.getPendingRequests();
             expect(pending).toHaveLength(1);
-            expect(pending[0].materialType).toBe(EMaterialType.LOG);
+            expect(pending[0]!.materialType).toBe(EMaterialType.LOG);
         });
     });
 

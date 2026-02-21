@@ -151,9 +151,8 @@ export class CarrierManager implements TickSystem {
     getCarrierOrThrow(entityId: number, context?: string): CarrierState {
         const state = this.states.get(entityId);
         if (!state) {
-            throw new Error(
-                `Entity ${entityId} is not a carrier (has no carrier state)${context ? ` [${context}]` : ''}`
-            );
+            const contextSuffix = context ? ` [${context}]` : '';
+            throw new Error(`Entity ${entityId} is not a carrier (has no carrier state)${contextSuffix}`);
         }
         return state;
     }

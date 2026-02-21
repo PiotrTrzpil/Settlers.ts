@@ -43,7 +43,7 @@ export class SfxPool {
         }
 
         // Round-robin through the pool
-        const howl = this.pool[this.currentIndex];
+        const howl = this.pool[this.currentIndex]!;
         this.currentIndex = (this.currentIndex + 1) % this.pool.length;
 
         const id = howl.play();

@@ -36,7 +36,7 @@ function hasLineOfSight(
 
     // Check each intermediate tile (skip start, include end)
     for (let i = 1; i < tiles.length; i++) {
-        const { x, y } = tiles[i];
+        const { x, y } = tiles[i]!;
 
         // Bounds check
         if (x < 0 || x >= mapWidth || y < 0 || y >= mapHeight) {
@@ -45,7 +45,7 @@ function hasLineOfSight(
 
         // Terrain check
         const idx = x + y * mapWidth;
-        if (!isPassable(groundType[idx])) {
+        if (!isPassable(groundType[idx]!)) {
             return false;
         }
 
@@ -72,7 +72,7 @@ function findFurthestVisible(
 ): number {
     // Try from the end backwards to find the furthest visible point
     for (let j = path.length - 1; j > startIdx; j--) {
-        if (hasLineOfSight(currentX, currentY, path[j].x, path[j].y, params)) {
+        if (hasLineOfSight(currentX, currentY, path[j]!.x, path[j]!.y, params)) {
             return j;
         }
     }
@@ -110,9 +110,9 @@ export function smoothPath(
     while (i < path.length) {
         const furthest = findFurthestVisible(currentX, currentY, path, i, params);
 
-        keyWaypoints.push(path[furthest]);
-        currentX = path[furthest].x;
-        currentY = path[furthest].y;
+        keyWaypoints.push(path[furthest]!);
+        currentX = path[furthest]!.x;
+        currentY = path[furthest]!.y;
         i = furthest + 1;
     }
 
@@ -126,7 +126,7 @@ export function smoothPath(
 
         // Add all tiles except the first (which is current position)
         for (let k = 1; k < lineTiles.length; k++) {
-            smoothed.push(lineTiles[k]);
+            smoothed.push(lineTiles[k]!);
         }
 
         currentX = waypoint.x;

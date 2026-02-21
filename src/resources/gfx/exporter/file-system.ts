@@ -202,6 +202,7 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
         return new BinaryReader(new Uint8Array(buffer), 0, null, file.name);
     }
 
+    // eslint-disable-next-line sonarjs/no-identical-functions -- same pattern shared by multiple filesystem backend classes
     async readFiles(paths: string[]): Promise<Map<string, BinaryReader>> {
         const result = new Map<string, BinaryReader>();
         const promises = paths.map(async p => {
@@ -299,6 +300,7 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
         return parts.filter(Boolean).join('/').replace(/\/+/g, '/').replace(/\/$/, '');
     }
 
+    // eslint-disable-next-line sonarjs/no-identical-functions -- same path utility shared by multiple filesystem backend classes
     dirname(path: string): string {
         const lastSlash = path.lastIndexOf('/');
         if (lastSlash <= 0) return '.';
@@ -310,6 +312,7 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
         return lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
     }
 
+    // eslint-disable-next-line sonarjs/no-identical-functions -- same path utility shared by multiple filesystem backend classes
     basenameWithoutExt(path: string): string {
         const name = this.basename(path);
         const dotIndex = name.lastIndexOf('.');
@@ -392,6 +395,7 @@ export class MemoryFileSystem implements IFileReader, IFileWriter {
         return parts.filter(Boolean).join('/').replace(/\/+/g, '/').replace(/\/$/, '');
     }
 
+    // eslint-disable-next-line sonarjs/no-identical-functions -- same path utility shared by multiple filesystem backend classes
     dirname(path: string): string {
         const lastSlash = path.lastIndexOf('/');
         if (lastSlash <= 0) return '.';
@@ -403,6 +407,7 @@ export class MemoryFileSystem implements IFileReader, IFileWriter {
         return lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
     }
 
+    // eslint-disable-next-line sonarjs/no-identical-functions -- same path utility shared by multiple filesystem backend classes
     basenameWithoutExt(path: string): string {
         const name = this.basename(path);
         const dotIndex = name.lastIndexOf('.');
@@ -414,7 +419,7 @@ export class MemoryFileSystem implements IFileReader, IFileWriter {
  * Detect the current platform and create appropriate file system
  */
 export function createFileSystem(): IFileReader & IFileWriter {
-    if (typeof process !== 'undefined' && process.versions?.node) {
+    if (typeof process !== 'undefined' && process.versions.node) {
         return new NodeFileSystem();
     }
     return new BrowserFileSystem();

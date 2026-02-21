@@ -174,10 +174,8 @@ export class MusicController {
             const musicToCleanup = this.fadingOutMusic;
             this.fadeOutTimeoutId = setTimeout(() => {
                 this.fadeOutTimeoutId = null;
-                if (musicToCleanup) {
-                    musicToCleanup.stop();
-                    musicToCleanup.unload();
-                }
+                musicToCleanup.stop();
+                musicToCleanup.unload();
                 if (this.fadingOutMusic === musicToCleanup) {
                     this.fadingOutMusic = null;
                 }
@@ -202,7 +200,7 @@ export class MusicController {
         }
 
         // Check for suspended audio context (autoplay policy)
-        if (typeof Howler !== 'undefined' && Howler.ctx && Howler.ctx.state === 'suspended') {
+        if (typeof Howler !== 'undefined' && Howler.ctx.state === 'suspended') {
             this.pendingMusicId = soundId;
             this.pendingFadeDuration = fadeDuration;
             MusicController.log.debug(`AudioContext suspended, queuing music: ${soundId}`);
@@ -292,7 +290,8 @@ export class MusicController {
         const availableTracks =
             tracks.length > 1 && this.lastMusicId ? tracks.filter(t => t.id !== this.lastMusicId) : tracks;
 
-        const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+        // eslint-disable-next-line sonarjs/pseudo-random -- intentional game randomness for music selection
+        const randomTrack = availableTracks[Math.floor(Math.random() * availableTracks.length)]!;
         this.playMusic(randomTrack.id);
     }
 

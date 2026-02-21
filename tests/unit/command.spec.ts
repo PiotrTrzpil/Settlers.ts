@@ -61,7 +61,7 @@ describe('Command System – edge cases', () => {
 
             const result = executeCommand(toCommandContext(ctx), {
                 type: 'move_unit',
-                entityId: ctx.state.entities[0].id,
+                entityId: ctx.state.entities[0]!.id,
                 targetX: 20,
                 targetY: 5,
             });
@@ -83,7 +83,7 @@ describe('Command System – edge cases', () => {
             });
 
             expect(ctx.state.selection.selectedEntityIds.size).toBe(1);
-            const selectedId = Array.from(ctx.state.selection.selectedEntityIds)[0];
+            const selectedId = Array.from(ctx.state.selection.selectedEntityIds)[0]!;
             expect(ctx.state.getEntity(selectedId)?.type).toBe(EntityType.Unit);
         });
     });

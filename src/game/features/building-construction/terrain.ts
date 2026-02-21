@@ -48,8 +48,8 @@ export function captureOriginalTerrain(
         tiles.push({
             x: tile.x,
             y: tile.y,
-            originalGroundType: groundType[idx],
-            originalGroundHeight: groundHeight[idx],
+            originalGroundType: groundType[idx]!,
+            originalGroundHeight: groundHeight[idx]!,
             isFootprint: true,
         });
     }
@@ -69,8 +69,8 @@ export function captureOriginalTerrain(
             tiles.push({
                 x: nx,
                 y: ny,
-                originalGroundType: groundType[nIdx],
-                originalGroundHeight: groundHeight[nIdx],
+                originalGroundType: groundType[nIdx]!,
+                originalGroundHeight: groundHeight[nIdx]!,
                 isFootprint: false,
             });
         }

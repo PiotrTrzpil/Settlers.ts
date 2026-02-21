@@ -68,7 +68,7 @@ export function getAnimatedSpriteForDirection(
         );
     }
 
-    const sequence = directionMap?.get(direction);
+    const sequence = directionMap.get(direction);
     if (!sequence || sequence.frames.length === 0) {
         return fallbackSprite;
     }
@@ -77,5 +77,5 @@ export function getAnimatedSpriteForDirection(
     const frameIndex = sequence.loop
         ? animationState.currentFrame % sequence.frames.length
         : Math.min(animationState.currentFrame, sequence.frames.length - 1);
-    return sequence.frames[frameIndex];
+    return sequence.frames[frameIndex]!;
 }

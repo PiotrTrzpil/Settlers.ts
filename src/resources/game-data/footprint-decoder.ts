@@ -24,7 +24,7 @@ export function decodeBuildingFootprint(buildingPosLines: number[], hotSpotX: nu
 
     for (let row = 0; row < buildingPosLines.length; row++) {
         // Treat as unsigned 32-bit by >>> 0
-        const lineBits = buildingPosLines[row] >>> 0;
+        const lineBits = buildingPosLines[row]! >>> 0;
 
         // Check each bit position (bit 31 = x position 0, bit 0 = x position 31)
         for (let bit = 31; bit >= 0; bit--) {
@@ -85,10 +85,10 @@ export function getFootprintBounds(tiles: TileCoord[]): {
         return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
     }
 
-    let minX = tiles[0].x;
-    let maxX = tiles[0].x;
-    let minY = tiles[0].y;
-    let maxY = tiles[0].y;
+    let minX = tiles[0]!.x;
+    let maxX = tiles[0]!.x;
+    let minY = tiles[0]!.y;
+    let maxY = tiles[0]!.y;
 
     for (const tile of tiles) {
         if (tile.x < minX) minX = tile.x;

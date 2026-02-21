@@ -168,8 +168,7 @@ const props = defineProps<{
 }>();
 
 defineEmits<{
-    (e: 'togglePause'): void;
-    (e: 'resetGameState'): void;
+    (e: 'togglePause' | 'resetGameState'): void;
 }>();
 
 const stats = debugStats.state;
@@ -190,7 +189,7 @@ const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clea
     useDebugMapObjects(getGame);
 
 const slotPermLabel = computed(() => {
-    const perm = RIVER_SLOT_PERMS[stats.riverSlotPermutation % RIVER_SLOT_PERMS.length];
+    const perm = RIVER_SLOT_PERMS[stats.riverSlotPermutation % RIVER_SLOT_PERMS.length]!;
     return perm.join('-');
 });
 

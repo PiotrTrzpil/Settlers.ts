@@ -298,6 +298,7 @@ export class SettlerTaskSystem implements TickSystem {
      * Called by GameLoop when an entity is removed.
      * Properly interrupts work in progress so domain systems can clean up.
      */
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- complex cleanup for active tasks
     onEntityRemoved(entityId: number): void {
         const runtime = this.runtimes.get(entityId);
         if (!runtime) return;
@@ -496,7 +497,8 @@ export class SettlerTaskSystem implements TickSystem {
         switch (runtime.state) {
         case SettlerState.IDLE:
             this.handleIdle(settler, config, runtime);
-            // Also handle idle turning when not working
+            // Also handle idle turning when not working (handleIdle may change state to WORKING)
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- handleIdle mutates runtime.state
             if (runtime.state === SettlerState.IDLE) {
                 this.updateIdleTurning(settler, runtime, dt);
             }
@@ -591,7 +593,7 @@ export class SettlerTaskSystem implements TickSystem {
         config: SettlerConfig,
         target: { entityId: number; x: number; y: number } | null
     ): { jobId: string; tasks: TaskNode[] } | null {
-        const prefix = UnitType[settler.subType].toLowerCase();
+        const prefix = UnitType[settler.subType]!.toLowerCase();
 
         // Phase 1: If a target entity was found, try jobs that need one
         if (target) {
@@ -670,7 +672,7 @@ export class SettlerTaskSystem implements TickSystem {
             return;
         }
 
-        const task = tasks[job.taskIndex];
+        const task = tasks[job.taskIndex]!;
 
         // Apply animation for current task (on first tick of task)
         if (job.progress === 0) {
@@ -687,7 +689,7 @@ export class SettlerTaskSystem implements TickSystem {
             job.progress = 0;
             // Apply animation for next task if there is one
             if (job.taskIndex < tasks.length) {
-                this.applyTaskAnimation(settler, tasks[job.taskIndex]);
+                this.applyTaskAnimation(settler, tasks[job.taskIndex]!);
             }
             break;
 

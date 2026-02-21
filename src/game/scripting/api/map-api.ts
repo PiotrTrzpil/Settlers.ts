@@ -175,6 +175,7 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
     });
 
     // Map.FlattenGround(x, y, range) - Flatten terrain in area
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- multi-pass terrain flattening algorithm
     runtime.registerFunction('Map', 'FlattenGround', (x: number, y: number, range: number) => {
         if (!context.groundHeight) {
             log.debug(`FlattenGround(${x}, ${y}, ${range}) - no terrain data available`);
@@ -191,7 +192,7 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
                 const ty = y + dy;
                 if (tx >= 0 && tx < context.mapWidth && ty >= 0 && ty < context.mapHeight) {
                     const idx = ty * context.mapWidth + tx;
-                    totalHeight += context.groundHeight[idx];
+                    totalHeight += context.groundHeight[idx]!;
                     count++;
                 }
             }

@@ -5,21 +5,37 @@ import vueParser from 'vue-eslint-parser';
 import unusedImports from 'eslint-plugin-unused-imports';
 import importX from 'eslint-plugin-import-x';
 import globals from 'globals';
+import sonarjs from 'eslint-plugin-sonarjs';
+import eslintComments from '@eslint-community/eslint-plugin-eslint-comments';
 
 export default tseslint.config(
     // Global ignores
     {
-        ignores: ['dist/**', 'node_modules/**', '*.cjs', '*.js']
+        ignores: ['dist/**', 'node_modules/**', '*.cjs', '*.js', 'scripts/**/*.js']
     },
 
     // Base: ESLint recommended
     js.configs.recommended,
 
-    // TypeScript recommended (replaces @typescript-eslint/eslint-plugin + parser)
-    ...tseslint.configs.recommended,
+    // TypeScript strict (replaces recommended — adds no-invalid-void-type,
+    // no-non-null-asserted-nullish-coalescing, prefer-literal-enum-member,
+    // unified-signatures, no-extraneous-class, no-useless-constructor)
+    ...tseslint.configs.strict,
+
+    // Project style uses !. intentionally (getEntityOrThrow pattern) — disable globally
+    { rules: { '@typescript-eslint/no-non-null-assertion': 'off' } },
 
     // Vue essential rules
     ...pluginVue.configs['flat/essential'],
+
+    // SonarJS: bug-detection focused rules
+    sonarjs.configs.recommended,
+    {
+        rules: {
+            // TODOs in code are legitimate development markers, not lint violations
+            'sonarjs/todo-tag': 'off',
+        }
+    },
 
     // Main config for TS + Vue files
     {
@@ -27,6 +43,7 @@ export default tseslint.config(
         plugins: {
             'unused-imports': unusedImports,
             'import-x': importX,
+            '@eslint-community/eslint-comments': eslintComments,
         },
         languageOptions: {
             ecmaVersion: 2020,
@@ -84,6 +101,12 @@ export default tseslint.config(
             '@typescript-eslint/await-thenable': 'error',
             '@typescript-eslint/require-await': 'warn',
 
+            // Additional strictTypeChecked rules (selective)
+            '@typescript-eslint/no-unnecessary-condition': 'error',
+            '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+            '@typescript-eslint/no-deprecated': 'warn',
+            '@typescript-eslint/no-array-delete': 'error',
+
             // Complexity limits
             complexity: ['error', { max: 15 }],
             'max-depth': ['error', 4],
@@ -91,7 +114,14 @@ export default tseslint.config(
             // Length limits
             'max-len': ['error', { code: 140, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
             'max-lines': ['error', { max: 600, skipBlankLines: true, skipComments: true }],
-            'max-lines-per-function': ['error', { max: 250, skipBlankLines: true, skipComments: true }]
+            'max-lines-per-function': ['error', { max: 250, skipBlankLines: true, skipComments: true }],
+
+            // ESLint comments — require a description for every disable comment
+            '@eslint-community/eslint-comments/require-description': 'warn',
+            '@eslint-community/eslint-comments/no-unlimited-disable': 'error',
+            '@eslint-community/eslint-comments/no-unused-enable': 'error',
+            '@eslint-community/eslint-comments/no-duplicate-disable': 'error',
+            '@eslint-community/eslint-comments/disable-enable-pair': ['error', { allowWholeFile: true }],
         }
     },
 
@@ -123,7 +153,31 @@ export default tseslint.config(
             '@typescript-eslint/no-explicit-any': 'off',
             'max-lines-per-function': 'off',
             'max-depth': ['error', 5],
-            'max-len': ['error', { code: 150, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }]
+            'max-len': ['error', { code: 150, ignoreUrls: true, ignoreStrings: true, ignoreTemplateLiterals: true }],
+            // Playwright tests naturally nest functions in page.evaluate() and callbacks
+            'sonarjs/no-nested-functions': 'off',
+            // Template literals in test assertions are often nested for clarity
+            'sonarjs/no-nested-template-literals': 'off',
+            // Ternaries in test helpers are idiomatic
+            'sonarjs/no-nested-conditional': 'off',
+            // E2E helpers tend to be complex state machines
+            'sonarjs/cognitive-complexity': 'off',
+        }
+    },
+
+    // Scripts and test setup use OS commands and crypto intentionally
+    {
+        files: ['tests/**/*.ts', 'scripts/**/*.ts'],
+        rules: {
+            // Test setup legitimately uses OS commands (launching browsers, etc.)
+            'sonarjs/os-command': 'off',
+            'sonarjs/no-os-command-from-path': 'off',
+            // SHA-1 used for file checksums (integrity, not security)
+            'sonarjs/hashing': 'off',
+            // Nested templates common in test assertion strings
+            'sonarjs/no-nested-template-literals': 'off',
+            // Allow _-prefixed unused args in script helpers (intentional no-ops)
+            '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
         }
     },
 

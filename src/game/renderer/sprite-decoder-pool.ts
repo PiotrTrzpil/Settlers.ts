@@ -73,7 +73,7 @@ export class SpriteDecoderPool {
             this.pendingRequests.set(id, { resolve, reject });
 
             // Round-robin worker selection
-            const worker = this.workers[this.nextWorkerIndex];
+            const worker = this.workers[this.nextWorkerIndex]!;
             this.nextWorkerIndex = (this.nextWorkerIndex + 1) % this.workers.length;
 
             // Only slice the portion of the buffer the worker needs
@@ -118,6 +118,7 @@ export class SpriteDecoderPool {
         };
 
         const result = await this.sendRequest(request, buffer);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive check on worker response payload
         if (!result.indices) {
             throw new Error(`Indexed decode failed: no indices for ${width}x${height}`);
         }

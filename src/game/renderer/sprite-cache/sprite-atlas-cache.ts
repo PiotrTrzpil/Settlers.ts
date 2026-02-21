@@ -291,7 +291,7 @@ async function tryPutWithRetry(entry: IndexedDBAtlasEntry): Promise<IDBValidKey 
                 const error = request.error;
                 const isMemoryError =
                     error?.name === 'DataCloneError' ||
-                    error?.message?.includes('out of memory') ||
+                    error?.message.includes('out of memory') ||
                     error?.name === 'QuotaExceededError';
 
                 if (isMemoryError) {

@@ -68,6 +68,7 @@ export class GfxImageExporter {
     /**
      * Find all GFX file sets in a directory
      */
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- file set discovery involves multi-extension probing and deduplication
     async findGfxFileSets(directory: string): Promise<GfxFileInfo[]> {
         const files = await this.fileReader.listFiles(directory);
         const gfxFiles = files.filter(f => f.toLowerCase().endsWith('.gfx'));
@@ -215,7 +216,7 @@ export class GfxImageExporter {
             const indices = options.imageIndices ?? Array.from({ length: imageCount }, (_, i) => i);
 
             for (let i = 0; i < indices.length; i++) {
-                const index = indices[i];
+                const index = indices[i]!;
 
                 if (options.onProgress) {
                     options.onProgress(i + 1, indices.length, `${info.baseName}/${index}`);
@@ -276,7 +277,7 @@ export class GfxImageExporter {
             const indices = options.imageIndices ?? Array.from({ length: imageCount }, (_, i) => i);
 
             for (let i = 0; i < indices.length; i++) {
-                const index = indices[i];
+                const index = indices[i]!;
 
                 if (options.onProgress) {
                     options.onProgress(i + 1, indices.length, `${baseName}/${index}`);

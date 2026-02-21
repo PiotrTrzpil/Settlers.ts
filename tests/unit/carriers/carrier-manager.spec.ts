@@ -129,7 +129,7 @@ describe('CarrierManager', () => {
             const carriers = manager.getCarriersForTavern(100);
 
             expect(carriers).toHaveLength(1);
-            expect(carriers[0].entityId).toBe(1);
+            expect(carriers[0]!.entityId).toBe(1);
         });
     });
 
@@ -148,7 +148,7 @@ describe('CarrierManager', () => {
             const available = manager.getAvailableCarriers(100);
 
             expect(available).toHaveLength(1);
-            expect(available[0].entityId).toBe(1);
+            expect(available[0]!.entityId).toBe(1);
         });
 
         it('should return empty array when all carriers are busy', () => {
@@ -166,7 +166,7 @@ describe('CarrierManager', () => {
             const available = manager.getAvailableCarriers(100);
 
             expect(available).toHaveLength(1);
-            expect(available[0].homeBuilding).toBe(100);
+            expect(available[0]!.homeBuilding).toBe(100);
         });
 
         it('should exclude carriers with high fatigue (Exhausted or Collapsed)', () => {
@@ -180,7 +180,7 @@ describe('CarrierManager', () => {
             const available = manager.getAvailableCarriers(100);
 
             expect(available).toHaveLength(1);
-            expect(available[0].entityId).toBe(1);
+            expect(available[0]!.entityId).toBe(1);
         });
 
         it('should include carriers with moderate fatigue (Tired)', () => {
@@ -202,7 +202,7 @@ describe('CarrierManager', () => {
             const busy = manager.getBusyCarriers(100);
 
             expect(busy).toHaveLength(1);
-            expect(busy[0].entityId).toBe(2);
+            expect(busy[0]!.entityId).toBe(2);
         });
     });
 

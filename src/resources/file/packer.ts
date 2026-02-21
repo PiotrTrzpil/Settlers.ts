@@ -23,7 +23,7 @@ export class SymbolDirectory {
         const r: number[] = [];
 
         for (let i = 0; i < table.length; i++) {
-            r[table[i]] = i;
+            r[table[i]!] = i;
         }
 
         return r;
@@ -51,12 +51,12 @@ export class SymbolDirectory {
     }
 
     public findIndex(code: number): number {
-        return this.codeIndexLookup[code];
+        return this.codeIndexLookup[code]!;
     }
 
     /** increment quantity for symbol */
     public inc(symbol: number): void {
-        this.quantities[symbol]++;
+        this.quantities[symbol]!++;
     }
 
     public generateCodes(): void {
@@ -64,21 +64,22 @@ export class SymbolDirectory {
             // create index array [0, 1, 2, 3, ...]
             Array.from(Array(Packer.Symbols).keys())
                 // sort index by quantities... to be stable we use "quantities + index" as value
-                .sort((x1, x2) => (this.quantities[x2] << 16) + x2 - ((this.quantities[x1] << 16) + x1))
+                .sort((x1, x2) => (this.quantities[x2]! << 16) + x2 - ((this.quantities[x1]! << 16) + x1))
         );
 
         // we reduce the original quantity by 2 to the impact for the next CreateCodeTableFromFrequency() call
         for (let i = 0; i < Packer.Symbols; i++) {
-            this.quantities[i] = this.quantities[i] / 2;
+            this.quantities[i] = this.quantities[i]! / 2;
         }
 
         this.codeIndexLookup = this.createIndexLookup(this.codeTable);
     }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility namespace class with static members only
 export class Packer {
     ///  Max number of Huffman encoded symbols
-    public static Symbols = 274;
+    public static readonly Symbols = 274;
 
     public static createSymbolDirectory(): SymbolDirectory {
         return new SymbolDirectory(Packer.Symbols);

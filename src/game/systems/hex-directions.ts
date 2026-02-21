@@ -49,8 +49,8 @@ export const Y_SCALE = (Math.sqrt(3) / 2) * 0.999999;
  */
 export function getNextHexPoint(pos: TileCoord, direction: EDirection): TileCoord {
     return {
-        x: pos.x + GRID_DELTA_X[direction],
-        y: pos.y + GRID_DELTA_Y[direction],
+        x: pos.x + GRID_DELTA_X[direction]!,
+        y: pos.y + GRID_DELTA_Y[direction]!,
     };
 }
 
@@ -61,8 +61,8 @@ export function getAllNeighbors(pos: TileCoord): TileCoord[] {
     const neighbors: TileCoord[] = [];
     for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
         neighbors.push({
-            x: pos.x + GRID_DELTA_X[d],
-            y: pos.y + GRID_DELTA_Y[d],
+            x: pos.x + GRID_DELTA_X[d]!,
+            y: pos.y + GRID_DELTA_Y[d]!,
         });
     }
     return neighbors;
@@ -183,8 +183,8 @@ export const WORLD_DISTANCE_PER_DIRECTION: readonly number[] = [
  */
 export function getStepDistanceFactor(dx: number, dy: number): number {
     for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-        if (GRID_DELTA_X[d] === dx && GRID_DELTA_Y[d] === dy) {
-            return WORLD_DISTANCE_PER_DIRECTION[d];
+        if (GRID_DELTA_X[d]! === dx && GRID_DELTA_Y[d]! === dy) {
+            return WORLD_DISTANCE_PER_DIRECTION[d]!;
         }
     }
     return 1.0;

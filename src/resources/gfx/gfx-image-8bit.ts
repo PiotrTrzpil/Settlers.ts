@@ -25,7 +25,7 @@ export class GfxImage8Bit implements IGfxImage {
     private getImageData8Bit(buffer: Uint8Array, imgData: Uint8ClampedArray, pos: number, length: number) {
         let j = 0;
         while (j < length) {
-            const value1 = buffer[pos];
+            const value1 = buffer[pos]!;
             pos++;
 
             imgData[j++] = value1; // r

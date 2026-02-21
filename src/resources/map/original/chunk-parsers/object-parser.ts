@@ -21,6 +21,7 @@ const log = new LogHandler('ObjectParser');
 /**
  * Parse MapObjects chunk data
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- map chunk binary parsing requires many conditional branches
 export function parseMapObjects(reader: BinaryReader, mapWidth: number, mapHeight: number): MapObjectData[] {
     const objects: MapObjectData[] = [];
     const dataLength = reader.length;
@@ -40,7 +41,7 @@ export function parseMapObjects(reader: BinaryReader, mapWidth: number, mapHeigh
         // 4 bytes per tile (interleaved format)
         // Use byte 0 which contains tree type (confirmed via terrain analysis)
         for (let i = 0; i < tileCount; i++) {
-            const objectType = data[i * 4]; // Byte 0 = object type
+            const objectType = data[i * 4]!; // Byte 0 = object type
             if (objectType >= S4TreeType.OAK && objectType <= S4TreeType.OLIVE_SMALL) {
                 objects.push({
                     x: i % mapWidth,
@@ -52,7 +53,7 @@ export function parseMapObjects(reader: BinaryReader, mapWidth: number, mapHeigh
     } else if (bytesPerTile === 1) {
         // 1 byte per tile format
         for (let i = 0; i < tileCount; i++) {
-            const objectType = data[i];
+            const objectType = data[i]!;
             if (objectType >= S4TreeType.OAK && objectType <= S4TreeType.OLIVE_SMALL) {
                 objects.push({
                     x: i % mapWidth,

@@ -38,8 +38,8 @@ describe('MaterialRequestSystem', () => {
 
             const pending = ctx.requestManager.getPendingRequests();
             expect(pending.length).toBe(1);
-            expect(pending[0].buildingId).toBe(sawmill.id);
-            expect(pending[0].materialType).toBe(EMaterialType.LOG);
+            expect(pending[0]!.buildingId).toBe(sawmill.id);
+            expect(pending[0]!.materialType).toBe(EMaterialType.LOG);
         });
 
         it('should create material requests for WeaponSmith (IRONBAR + COAL inputs)', () => {
@@ -64,7 +64,7 @@ describe('MaterialRequestSystem', () => {
 
             const pending = ctx.requestManager.getPendingRequests();
             expect(pending.length).toBe(1);
-            expect(pending[0].materialType).toBe(EMaterialType.GRAIN);
+            expect(pending[0]!.materialType).toBe(EMaterialType.GRAIN);
         });
 
         it('should create material requests for IronSmelter (IRONORE + COAL inputs)', () => {
@@ -89,7 +89,7 @@ describe('MaterialRequestSystem', () => {
 
             const pending = ctx.requestManager.getPendingRequests();
             expect(pending.length).toBe(1);
-            expect(pending[0].materialType).toBe(EMaterialType.PIG);
+            expect(pending[0]!.materialType).toBe(EMaterialType.PIG);
         });
 
         it('should not create requests for buildings without input slots', () => {
@@ -132,7 +132,7 @@ describe('MaterialRequestSystem', () => {
             system.tick();
             const firstPending = ctx.requestManager.getPendingRequests();
             expect(firstPending.length).toBe(1);
-            const firstRequest = firstPending[0];
+            const firstRequest = firstPending[0]!;
 
             // Simulate carrier picking up and delivering: assign then fulfill
             ctx.requestManager.assignRequest(firstRequest.id, 999, 888);
@@ -146,8 +146,8 @@ describe('MaterialRequestSystem', () => {
             system.tick();
             const newPending = ctx.requestManager.getPendingRequests();
             expect(newPending.length).toBe(1);
-            expect(newPending[0].materialType).toBe(EMaterialType.LOG);
-            expect(newPending[0].id).not.toBe(firstRequest.id);
+            expect(newPending[0]!.materialType).toBe(EMaterialType.LOG);
+            expect(newPending[0]!.id).not.toBe(firstRequest.id);
         });
 
         it('should stop requesting when input reaches threshold', () => {

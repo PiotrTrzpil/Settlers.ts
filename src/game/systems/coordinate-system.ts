@@ -303,7 +303,7 @@ export function screenToTile(params: ScreenToTileParams): { x: number; y: number
     // Iterative height refinement
     for (let iter = 0; iter < MAX_HEIGHT_ITERATIONS; iter++) {
         const idx = tileY * mapWidth + tileX;
-        const h = groundHeight[idx];
+        const h = groundHeight[idx]!;
         const hWorld = heightToWorld(h);
 
         tile = worldToTileFractional(world.worldX, world.worldY, hWorld, viewPointX, viewPointY);
@@ -353,7 +353,7 @@ export function tileToScreen(params: TileToScreenParams): { screenX: number; scr
 
     // Get height at tile
     const idx = tileY * mapWidth + tileX;
-    const hWorld = heightToWorld(groundHeight[idx]);
+    const hWorld = heightToWorld(groundHeight[idx]!);
 
     // Tile → World → NDC → Screen
     const world = tileToWorld(tileX, tileY, hWorld, viewPointX, viewPointY);
@@ -379,7 +379,7 @@ export function tileToWorldPos(
     viewPointY: number
 ): { worldX: number; worldY: number } {
     const idx = tileY * mapWidth + tileX;
-    const h = tileX >= 0 && tileX < mapWidth && tileY >= 0 && tileY < mapHeight ? groundHeight[idx] : 0;
+    const h = tileX >= 0 && tileX < mapWidth && tileY >= 0 && tileY < mapHeight ? groundHeight[idx]! : 0;
     const hWorld = heightToWorld(h);
     return tileToWorld(tileX, tileY, hWorld, viewPointX, viewPointY);
 }

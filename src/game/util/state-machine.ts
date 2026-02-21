@@ -31,7 +31,7 @@ export interface StateConfig<TState extends string, TContext> {
     /** Called when exiting this state */
     onExit?: (ctx: TContext) => void;
     /** Called every tick. Return event name to auto-transition. */
-    onTick?: (ctx: TContext, dt: number) => string | void;
+    onTick?: (ctx: TContext, dt: number) => string | undefined;
 }
 
 /** State machine definition (reusable template) */

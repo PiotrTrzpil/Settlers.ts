@@ -21,7 +21,7 @@ export class Decompress extends Packer {
 
         for (let i = 0; i < 16; i++) {
             length--;
-            let bitValue = 0;
+            let bitValue: number;
             do {
                 length++;
                 bitValue = inData.read(1);
@@ -29,7 +29,7 @@ export class Decompress extends Packer {
 
             newIndex.push(length);
             newValues.push(base);
-            base += (1 << length);
+            base += 1 << length;
         }
 
         return new IndexValueTable(newIndex, newValues);
@@ -55,6 +55,7 @@ export class Decompress extends Packer {
         return 'done';
     }
 
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- Huffman decompression algorithm requires complex bit-level control flow
     public unpack(inDataSrc: BinaryReader, inOffset: number, inLength: number, outLength: number): BinaryReader {
         const inData = new BitReader(inDataSrc, inOffset, inLength);
         const writer = new StreamWriter(outLength);
@@ -69,8 +70,8 @@ export class Decompress extends Packer {
                 break;
             }
 
-            const codeWordLength = huffmanTable.index[codeType];
-            let codeWordIndex = huffmanTable.value[codeType];
+            const codeWordLength = huffmanTable.index[codeType]!;
+            let codeWordIndex = huffmanTable.value[codeType]!;
 
             if (codeWordLength > 0) {
                 codeWordIndex += inData.read(codeWordLength);
@@ -80,18 +81,24 @@ export class Decompress extends Packer {
                 }
             }
 
-            const codeWord = codeTable.codeTable[codeWordIndex];
+            const codeWord = codeTable.codeTable[codeWordIndex]!;
             codeTable.inc(codeWord);
 
             if (codeWord < 0x0100) {
-                if (writer.eof()) { Decompress.log.error('OutBuffer is to small!'); break }
+                if (writer.eof()) {
+                    Decompress.log.error('OutBuffer is to small!');
+                    break;
+                }
                 writer.setByte(codeWord);
             } else if (codeWord === 0x110) {
                 codeTable.generateCodes();
                 huffmanTable = this.buildNewHuffmanTable(inData);
             } else if (codeWord === 0x0111) {
                 const result = this.handleEndOfStream(inData, writer);
-                if (result === 'done') { done = true; break }
+                if (result === 'done') {
+                    done = true;
+                    break;
+                }
                 if (result === 'error') break;
             } else if (!this.fromDictionary(inData, writer, codeWord)) {
                 Decompress.log.error('Bad dictionary entry!');
@@ -113,14 +120,14 @@ export class Decompress extends Packer {
             entryLength += codeWord - 0x0100;
         } else {
             const index = codeWord - 0x0108;
-            const bitCount = Packer.LengthTable.index[index];
+            const bitCount = Packer.LengthTable.index[index]!;
             const readInByte = inData.read(bitCount);
-            entryLength += Packer.LengthTable.value[index] + readInByte;
+            entryLength += Packer.LengthTable.value[index]! + readInByte;
         }
 
         const distanceIndex = inData.read(3);
-        const distanceLength = Packer.DistanceTable.index[distanceIndex] + 1;
-        const baseValue = Packer.DistanceTable.value[distanceIndex];
+        const distanceLength = Packer.DistanceTable.index[distanceIndex]! + 1;
+        const baseValue = Packer.DistanceTable.value[distanceIndex]!;
 
         const base = inData.read(8);
         const offsetValue = inData.read(distanceLength);

@@ -193,16 +193,16 @@ describe('Inventory Configs', () => {
         it('should return correct config for Sawmill (inputs and outputs)', () => {
             const config = getInventoryConfig(BuildingType.Sawmill);
             expect(config.inputSlots).toHaveLength(1);
-            expect(config.inputSlots[0].materialType).toBe(EMaterialType.LOG);
+            expect(config.inputSlots[0]!.materialType).toBe(EMaterialType.LOG);
             expect(config.outputSlots).toHaveLength(1);
-            expect(config.outputSlots[0].materialType).toBe(EMaterialType.BOARD);
+            expect(config.outputSlots[0]!.materialType).toBe(EMaterialType.BOARD);
         });
 
         it('should return correct config for WoodcutterHut (output only)', () => {
             const config = getInventoryConfig(BuildingType.WoodcutterHut);
             expect(config.inputSlots).toHaveLength(0);
             expect(config.outputSlots).toHaveLength(1);
-            expect(config.outputSlots[0].materialType).toBe(EMaterialType.LOG);
+            expect(config.outputSlots[0]!.materialType).toBe(EMaterialType.LOG);
         });
 
         it('should return correct config for Bakery (multiple inputs)', () => {
@@ -212,7 +212,7 @@ describe('Inventory Configs', () => {
             expect(inputMaterials).toContain(EMaterialType.FLOUR);
             expect(inputMaterials).toContain(EMaterialType.WATER);
             expect(config.outputSlots).toHaveLength(1);
-            expect(config.outputSlots[0].materialType).toBe(EMaterialType.BREAD);
+            expect(config.outputSlots[0]!.materialType).toBe(EMaterialType.BREAD);
         });
 
         it('should return empty config for unknown building type', () => {
@@ -276,10 +276,10 @@ describe('BuildingInventoryManager', () => {
             expect(inventory.buildingId).toBe(100);
             expect(inventory.buildingType).toBe(BuildingType.Sawmill);
             expect(inventory.inputSlots).toHaveLength(1);
-            expect(inventory.inputSlots[0].materialType).toBe(EMaterialType.LOG);
-            expect(inventory.inputSlots[0].maxCapacity).toBe(DEFAULT_INPUT_CAPACITY);
+            expect(inventory.inputSlots[0]!.materialType).toBe(EMaterialType.LOG);
+            expect(inventory.inputSlots[0]!.maxCapacity).toBe(DEFAULT_INPUT_CAPACITY);
             expect(inventory.outputSlots).toHaveLength(1);
-            expect(inventory.outputSlots[0].materialType).toBe(EMaterialType.BOARD);
+            expect(inventory.outputSlots[0]!.materialType).toBe(EMaterialType.BOARD);
         });
 
         it('should create empty inventory for buildings without production', () => {
@@ -325,7 +325,7 @@ describe('BuildingInventoryManager', () => {
 
             expect(deposited).toBe(5);
             const inventory = manager.getInventory(100)!;
-            expect(inventory.inputSlots[0].currentAmount).toBe(5);
+            expect(inventory.inputSlots[0]!.currentAmount).toBe(5);
         });
 
         it('should withdraw material from output slot', () => {
@@ -336,18 +336,16 @@ describe('BuildingInventoryManager', () => {
             expect(withdrawn).toBe(3);
 
             const inventory = manager.getInventory(100)!;
-            expect(inventory.outputSlots[0].currentAmount).toBe(2);
+            expect(inventory.outputSlots[0]!.currentAmount).toBe(2);
         });
 
         it('should throw when depositing wrong material type', () => {
             manager.createInventory(100, BuildingType.Sawmill);
-            expect(() => manager.depositInput(100, EMaterialType.STONE, 5))
-                .toThrow(/has no input slot for STONE/);
+            expect(() => manager.depositInput(100, EMaterialType.STONE, 5)).toThrow(/has no input slot for STONE/);
         });
 
         it('should throw when withdrawing from non-existent building', () => {
-            expect(() => manager.withdrawOutput(999, EMaterialType.BOARD, 5))
-                .toThrow(/Building 999 has no inventory/);
+            expect(() => manager.withdrawOutput(999, EMaterialType.BOARD, 5)).toThrow(/Building 999 has no inventory/);
         });
     });
 
@@ -473,7 +471,7 @@ describe('BuildingInventoryManager', () => {
             manager.createInventory(100, BuildingType.WoodcutterHut);
             // Fill the output slot
             const inventory = manager.getInventory(100)!;
-            inventory.outputSlots[0].currentAmount = inventory.outputSlots[0].maxCapacity;
+            inventory.outputSlots[0]!.currentAmount = inventory.outputSlots[0]!.maxCapacity;
 
             expect(manager.canStoreOutput(100)).toBe(false);
         });

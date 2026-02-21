@@ -71,7 +71,7 @@ export interface MatchOptions {
  * @param options Matching options
  * @returns The best match, or null if no suitable source found
  */
-// eslint-disable-next-line complexity -- multi-step matching algorithm
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- multi-step matching algorithm
 export function matchRequestToSupply(
     request: ResourceRequest,
     gameState: GameState,
@@ -168,7 +168,7 @@ export function matchRequestToSupply(
     candidates.sort((a, b) => a.distance - b.distance);
 
     // Find the best candidate: prefer one with sufficient quantity, but accept partial
-    let bestCandidate = candidates[0];
+    let bestCandidate = candidates[0]!;
 
     // Look for a candidate with enough material (accounting for reservations)
     for (const candidate of candidates) {

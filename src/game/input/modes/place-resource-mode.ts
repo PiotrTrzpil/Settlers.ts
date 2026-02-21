@@ -44,7 +44,7 @@ export class PlaceResourceMode extends BasePlacementMode<EMaterialType> {
     }
 
     protected getSubTypeName(subType: EMaterialType): string {
-        return EMaterialType[subType] ?? `Material#${subType}`;
+        return EMaterialType[subType];
     }
 
     /**
@@ -63,7 +63,7 @@ export class PlaceResourceMode extends BasePlacementMode<EMaterialType> {
         y: number,
         data: PlacementModeData<EMaterialType>
     ): Record<string, unknown> {
-        const amount = (data.extra.amount as number) ?? 1;
+        const amount = data.extra['amount'] as number;
         return {
             type: this.getCommandType(),
             materialType: data.subType,
@@ -123,7 +123,7 @@ export class PlaceResourceMode extends BasePlacementMode<EMaterialType> {
     protected override getPreviewExtra(data: PlacementModeData<EMaterialType>): Record<string, unknown> {
         return {
             ...data.extra,
-            amount: (data as PlaceResourceModeData).amount ?? data.extra.amount ?? 1,
+            amount: (data as PlaceResourceModeData).amount,
         };
     }
 
@@ -132,7 +132,7 @@ export class PlaceResourceMode extends BasePlacementMode<EMaterialType> {
      */
     protected override getStatusText(data: PlacementModeData<EMaterialType>): string {
         const typeName = this.getSubTypeName(data.subType);
-        const amount = (data as PlaceResourceModeData).amount ?? 1;
+        const amount = (data as PlaceResourceModeData).amount;
         return `Place Resource ${typeName} (x${amount})`;
     }
 }

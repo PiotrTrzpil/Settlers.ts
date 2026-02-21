@@ -12,7 +12,7 @@ function printHex(buffer: Buffer, name: string) {
     console.log(`\n--- ${name} (First 64 bytes) ---`);
     let output = '';
     for (let i = 0; i < Math.min(64, buffer.length); i++) {
-        output += buffer[i].toString(16).padStart(2, '0') + ' ';
+        output += buffer[i]!.toString(16).padStart(2, '0') + ' ';
         if ((i + 1) % 16 === 0) output += '\n';
     }
     console.log(output);
@@ -20,8 +20,8 @@ function printHex(buffer: Buffer, name: string) {
     console.log('--- ASCII ---');
     let ascii = '';
     for (let i = 0; i < Math.min(64, buffer.length); i++) {
-        const c = buffer[i];
-        ascii += (c >= 32 && c <= 126) ? String.fromCharCode(c) : '.';
+        const c = buffer[i]!;
+        ascii += c >= 32 && c <= 126 ? String.fromCharCode(c) : '.';
     }
     console.log(ascii);
 
@@ -47,7 +47,7 @@ if (fs.existsSync(silPath)) {
 
 if (fs.existsSync(sndPath)) {
     const snd = fs.readFileSync(sndPath);
-    // printHex(snd, '0.snd');
+    // (printHex call removed — call printHex(snd, '0.snd') manually to debug raw bytes)
 
     console.log('\n--- Scanning 0.snd for "RIFF" ---');
     let count = 0;
@@ -62,10 +62,9 @@ if (fs.existsSync(sndPath)) {
             console.log(`  - End: ${i + 8 + size}`);
 
             // Check Format - WAVE signature
-            const isWave = snd[i + 8] === 0x57 && snd[i + 9] === 0x41 &&
-                           snd[i + 10] === 0x56 && snd[i + 11] === 0x45;
-            const hasFmtChunk = snd[i + 12] === 0x66 && snd[i + 13] === 0x6d &&
-                                snd[i + 14] === 0x74 && snd[i + 15] === 0x20;
+            const isWave = snd[i + 8] === 0x57 && snd[i + 9] === 0x41 && snd[i + 10] === 0x56 && snd[i + 11] === 0x45;
+            const hasFmtChunk =
+                snd[i + 12] === 0x66 && snd[i + 13] === 0x6d && snd[i + 14] === 0x74 && snd[i + 15] === 0x20;
 
             if (isWave) {
                 console.log(`  - Type: WAVE`);

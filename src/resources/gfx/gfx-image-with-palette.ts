@@ -55,7 +55,7 @@ export class GfxImageWithPalette implements IGfxImage {
             }
             c--;
 
-            const index = buffer[pos++];
+            const index = buffer[pos++]!;
 
             i[j++] = p.getColor(index);
         }

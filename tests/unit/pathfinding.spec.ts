@@ -111,24 +111,24 @@ describe('Hex Directions', () => {
             const neighbors = getAllNeighbors({ x: 10, y: 10 });
             expect(neighbors).toHaveLength(6);
             expect(neighbors).toEqual([
-                { x: 11, y: 9 },   // NORTH_EAST
-                { x: 11, y: 10 },  // EAST
-                { x: 10, y: 11 },  // SOUTH_EAST
-                { x: 9, y: 11 },   // SOUTH_WEST
-                { x: 9, y: 10 },   // WEST
-                { x: 10, y: 9 },   // NORTH_WEST
+                { x: 11, y: 9 }, // NORTH_EAST
+                { x: 11, y: 10 }, // EAST
+                { x: 10, y: 11 }, // SOUTH_EAST
+                { x: 9, y: 11 }, // SOUTH_WEST
+                { x: 9, y: 10 }, // WEST
+                { x: 10, y: 9 }, // NORTH_WEST
             ]);
         });
 
         it('should return correct neighbors for origin (0, 0)', () => {
             const neighbors = getAllNeighbors({ x: 0, y: 0 });
             expect(neighbors).toEqual([
-                { x: 1, y: -1 },   // NORTH_EAST
-                { x: 1, y: 0 },    // EAST
-                { x: 0, y: 1 },    // SOUTH_EAST
-                { x: -1, y: 1 },   // SOUTH_WEST
-                { x: -1, y: 0 },   // WEST
-                { x: 0, y: -1 },   // NORTH_WEST
+                { x: 1, y: -1 }, // NORTH_EAST
+                { x: 1, y: 0 }, // EAST
+                { x: 0, y: 1 }, // SOUTH_EAST
+                { x: -1, y: 1 }, // SOUTH_WEST
+                { x: -1, y: 0 }, // WEST
+                { x: 0, y: -1 }, // NORTH_WEST
             ]);
         });
     });
@@ -158,18 +158,18 @@ describe('Hex Directions', () => {
 
         it('should match GRID_DELTA_X and GRID_DELTA_Y', () => {
             for (let d = 0; d < 6; d++) {
-                expect(GRID_DELTAS[d][0]).toBe(GRID_DELTA_X[d]);
-                expect(GRID_DELTAS[d][1]).toBe(GRID_DELTA_Y[d]);
+                expect(GRID_DELTAS[d]![0]).toBe(GRID_DELTA_X[d]);
+                expect(GRID_DELTAS[d]![1]).toBe(GRID_DELTA_Y[d]);
             }
         });
 
         it('opposite directions should cancel out', () => {
-            expect(GRID_DELTA_X[EDirection.NORTH_EAST] + GRID_DELTA_X[EDirection.SOUTH_WEST]).toBe(0);
-            expect(GRID_DELTA_Y[EDirection.NORTH_EAST] + GRID_DELTA_Y[EDirection.SOUTH_WEST]).toBe(0);
-            expect(GRID_DELTA_X[EDirection.EAST] + GRID_DELTA_X[EDirection.WEST]).toBe(0);
-            expect(GRID_DELTA_Y[EDirection.EAST] + GRID_DELTA_Y[EDirection.WEST]).toBe(0);
-            expect(GRID_DELTA_X[EDirection.SOUTH_EAST] + GRID_DELTA_X[EDirection.NORTH_WEST]).toBe(0);
-            expect(GRID_DELTA_Y[EDirection.SOUTH_EAST] + GRID_DELTA_Y[EDirection.NORTH_WEST]).toBe(0);
+            expect(GRID_DELTA_X[EDirection.NORTH_EAST]! + GRID_DELTA_X[EDirection.SOUTH_WEST]!).toBe(0);
+            expect(GRID_DELTA_Y[EDirection.NORTH_EAST]! + GRID_DELTA_Y[EDirection.SOUTH_WEST]!).toBe(0);
+            expect(GRID_DELTA_X[EDirection.EAST]! + GRID_DELTA_X[EDirection.WEST]!).toBe(0);
+            expect(GRID_DELTA_Y[EDirection.EAST]! + GRID_DELTA_Y[EDirection.WEST]!).toBe(0);
+            expect(GRID_DELTA_X[EDirection.SOUTH_EAST]! + GRID_DELTA_X[EDirection.NORTH_WEST]!).toBe(0);
+            expect(GRID_DELTA_Y[EDirection.SOUTH_EAST]! + GRID_DELTA_Y[EDirection.NORTH_WEST]!).toBe(0);
         });
     });
 
@@ -225,12 +225,12 @@ describe('Hex Distance', () => {
 
     it('should return 1 for all 6 adjacent hex tiles', () => {
         const adjacent: [number, number][] = [
-            [6, 5],  // EAST
-            [6, 4],  // NORTH_EAST
-            [5, 6],  // SOUTH_EAST
-            [5, 4],  // NORTH_WEST
-            [4, 6],  // SOUTH_WEST
-            [4, 5],  // WEST
+            [6, 5], // EAST
+            [6, 4], // NORTH_EAST
+            [5, 6], // SOUTH_EAST
+            [5, 4], // NORTH_WEST
+            [4, 6], // SOUTH_WEST
+            [4, 5], // WEST
         ];
         for (const [x, y] of adjacent) {
             expect(hexDistance(5, 5, x, y)).toBeCloseTo(1, 3);
@@ -255,7 +255,7 @@ describe('Hex Distance', () => {
     });
 
     it('Y_SCALE should equal sqrt(3)/2 * 0.999999', () => {
-        expect(Y_SCALE).toBeCloseTo(Math.sqrt(3) / 2 * 0.999999, 10);
+        expect(Y_SCALE).toBeCloseTo((Math.sqrt(3) / 2) * 0.999999, 10);
     });
 });
 
@@ -271,12 +271,12 @@ describe('Path smoothness', () => {
         if (path.length < 2) return 0;
 
         let changes = 0;
-        let prevDx = path[0].x - startX;
-        let prevDy = path[0].y - startY;
+        let prevDx = path[0]!.x - startX;
+        let prevDy = path[0]!.y - startY;
 
         for (let i = 1; i < path.length; i++) {
-            const dx = path[i].x - path[i - 1].x;
-            const dy = path[i].y - path[i - 1].y;
+            const dx = path[i]!.x - path[i - 1]!.x;
+            const dy = path[i]!.y - path[i - 1]!.y;
             if (dx !== prevDx || dy !== prevDy) {
                 changes++;
             }
@@ -388,7 +388,11 @@ describe('Path obstacle repair', () => {
             const controllerA = state.movement.getController(unitA.id)!;
 
             const result = pushUnit(
-                unitB.id, controllerA, state.tileOccupancy, state.rng, makeTerrain(map),
+                unitB.id,
+                controllerA,
+                state.tileOccupancy,
+                state.rng,
+                makeTerrain(map),
                 (id, x, y) => state.updateEntityPosition(id, x, y)
             );
             expect(result).toBe(false);
@@ -400,7 +404,11 @@ describe('Path obstacle repair', () => {
             const controllerB = state.movement.getController(unitB.id)!;
 
             const result = pushUnit(
-                unitA.id, controllerB, state.tileOccupancy, state.rng, makeTerrain(map),
+                unitA.id,
+                controllerB,
+                state.tileOccupancy,
+                state.rng,
+                makeTerrain(map),
                 (id, x, y) => state.updateEntityPosition(id, x, y)
             );
             expect(result).toBe(true);
@@ -414,7 +422,11 @@ describe('Path obstacle repair', () => {
             const controllerA = state.movement.getController(unitA.id)!;
 
             const result = pushUnit(
-                unitA.id, controllerA, state.tileOccupancy, state.rng, makeTerrain(map),
+                unitA.id,
+                controllerA,
+                state.tileOccupancy,
+                state.rng,
+                makeTerrain(map),
                 (id, x, y) => state.updateEntityPosition(id, x, y)
             );
             expect(result).toBe(false);
@@ -461,11 +473,7 @@ describe('Path obstacle repair', () => {
             addUnit(state, 5, 5);
             addUnit(state, 6, 5);
 
-            const path = findPath(
-                5, 5, 7, 5,
-                map.groundType, map.groundHeight, 64, 64,
-                state.tileOccupancy,
-            );
+            const path = findPath(5, 5, 7, 5, map.groundType, map.groundHeight, 64, 64, state.tileOccupancy);
 
             expect(path).not.toBe(null);
             expect(path![path!.length - 1]).toEqual({ x: 7, y: 5 });

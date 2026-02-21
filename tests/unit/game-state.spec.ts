@@ -32,7 +32,7 @@ describe('GameState – edge cases', () => {
         const { entity: e2 } = addUnit(state, 10, 10);
         state.removeEntity(e1.id);
         expect(state.entities).toHaveLength(1);
-        expect(state.entities[0].id).toBe(e2.id);
+        expect(state.entities[0]!.id).toBe(e2.id);
     });
 
     it('should update entity coordinates and occupancy', () => {

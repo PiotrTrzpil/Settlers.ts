@@ -129,7 +129,7 @@ export class EntityGrid {
         // Add all entities
         for (const entity of entities) {
             const cellIndex = this.getCellIndex(entity.x, entity.y);
-            this.cells[cellIndex].entities.push(entity);
+            this.cells[cellIndex]!.entities.push(entity);
             this.entityCells.set(entity.id, cellIndex);
         }
     }
@@ -150,7 +150,7 @@ export class EntityGrid {
         if (oldCellIndex === newCellIndex) return;
 
         // Remove from old cell
-        const oldCell = this.cells[oldCellIndex];
+        const oldCell = this.cells[oldCellIndex]!;
         const idx = oldCell.entities.indexOf(entity);
         if (idx !== -1) {
             // Swap with last element and pop (O(1) removal)
@@ -161,7 +161,7 @@ export class EntityGrid {
         }
 
         // Add to new cell
-        this.cells[newCellIndex].entities.push(entity);
+        this.cells[newCellIndex]!.entities.push(entity);
         this.entityCells.set(entity.id, newCellIndex);
     }
 
@@ -170,7 +170,7 @@ export class EntityGrid {
      */
     public addEntity(entity: Entity): void {
         const cellIndex = this.getCellIndex(entity.x, entity.y);
-        this.cells[cellIndex].entities.push(entity);
+        this.cells[cellIndex]!.entities.push(entity);
         this.entityCells.set(entity.id, cellIndex);
     }
 
@@ -181,7 +181,7 @@ export class EntityGrid {
         const cellIndex = this.entityCells.get(entity.id);
         if (cellIndex === undefined) return;
 
-        const cell = this.cells[cellIndex];
+        const cell = this.cells[cellIndex]!;
         const idx = cell.entities.indexOf(entity);
         if (idx !== -1) {
             const last = cell.entities.pop()!;
@@ -216,7 +216,7 @@ export class EntityGrid {
         for (let cy = minCellY; cy <= maxCellY; cy++) {
             for (let cx = minCellX; cx <= maxCellX; cx++) {
                 const cellIndex = cy * this.gridWidth + cx;
-                const cell = this.cells[cellIndex];
+                const cell = this.cells[cellIndex]!;
                 this.lastQueryCells++;
 
                 // Add all entities from this cell

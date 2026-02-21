@@ -18,7 +18,7 @@ export class MapChunk {
     private reader?: BinaryReader;
 
     public get chunkTypeAsString(): string {
-        return MapChunkType[this.chunkType] ?? '';
+        return MapChunkType[this.chunkType];
     }
 
     public getReader(): BinaryReader {

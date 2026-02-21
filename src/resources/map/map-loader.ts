@@ -4,6 +4,7 @@ import { OriginalMapLoader } from './original/original-map/game-map-loader';
 import { SaveGameLoader } from './original/original-savegame/savegame-loader';
 
 /** handel the loading of a map */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility namespace class with static members only
 export class MapLoader {
     /** return the map content of a loaded game */
     public static getLoader(reader: BinaryReader): IMapLoader | null {
@@ -26,6 +27,6 @@ export class MapLoader {
             return '';
         }
 
-        return fileName.substr(pos + 1);
+        return fileName.substring(pos + 1);
     }
 }

@@ -329,7 +329,7 @@ function computeTileWorldPos(
     out: MutableWorldPos
 ): void {
     const idx = mapSize.toIndex(tileX, tileY);
-    const hWorld = heightToWorld(groundHeight[idx]);
+    const hWorld = heightToWorld(groundHeight[idx]!);
 
     const vpIntX = Math.floor(viewPoint.x);
     const vpIntY = Math.floor(viewPoint.y);

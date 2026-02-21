@@ -138,7 +138,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
     // ─────────────────────────────────────────────────────────────────
 
     override onEnter(context: InputContext, enterData?: PlacementModeEnterData<TSubType>): void {
-        if (!enterData?.subType && enterData?.subType !== 0) {
+        if (enterData?.subType == null) {
             // No subtype specified, switch back to select
             context.switchMode('select');
             return;
@@ -154,7 +154,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
 
     override onAction(action: InputAction, context: InputContext): InputResult {
         // Only handles placement-relevant actions; others fall through to UNHANDLED
-        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check -- partial: unknown actions fall through to UNHANDLED
         switch (action) {
         case InputAction.CancelPlacement:
         case InputAction.DeselectAll:

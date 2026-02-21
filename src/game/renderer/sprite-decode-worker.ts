@@ -42,6 +42,7 @@ export interface DecodeResponse {
  * Index 0 = transparent, index 1 = shadow, others = paletteOffset + value
  * (paletteBaseOffset is added per-sprite in the shader to avoid Uint16 overflow)
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- RLE decode has inherent branching complexity
 function decodeRLEIndexed(
     buffer: Uint8Array,
     pos: number,
@@ -58,12 +59,12 @@ function decodeRLEIndexed(
     let dstIdx = 0;
 
     while (srcIdx < totalPixels && pos < bufferLength) {
-        const value = buffer[pos];
+        const value = buffer[pos]!;
         pos++;
 
         if (value <= 1) {
             if (pos >= bufferLength) break;
-            const count = buffer[pos];
+            const count = buffer[pos]!;
             pos++;
 
             // 0 = transparent, 1 = shadow — stored directly as special indices
@@ -104,7 +105,7 @@ function decodeRawIndexed(
 
     let j = 0;
     while (j < outputLength && pos < bufferLength) {
-        const value = buffer[pos];
+        const value = buffer[pos]!;
         pos++;
         // Raw mode has no special transparent/shadow handling in original code.
         // Every byte is a palette lookup. paletteBaseOffset added in shader.

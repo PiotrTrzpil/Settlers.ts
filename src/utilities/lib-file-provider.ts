@@ -36,10 +36,6 @@ export class LibFileProvider implements IFileProxyProvider {
     public fileNameFilter = '.lib';
 
     public async processFile(newFiles: IFileSource): Promise<IFileSource[] | null> {
-        if (!newFiles) {
-            return null;
-        }
-
         LibFileProvider.logHandler.debug('Read lib ' + newFiles.name);
 
         const baseLibPath = Path.getPathName(newFiles.name);

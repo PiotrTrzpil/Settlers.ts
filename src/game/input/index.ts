@@ -40,6 +40,7 @@ export {
     type ModeRenderState,
     type PlacementPreview,
     type PlacementEntityType,
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- legacy type still used by use-renderer.ts for backward compat
     type BuildingPreview,
     type SelectionBox,
     type PathPreview,

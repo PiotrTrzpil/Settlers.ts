@@ -7,10 +7,24 @@
 import * as fs from 'fs';
 
 const TREE_NAMES: Record<number, string> = {
-    1: 'OAK', 2: 'BEECH', 3: 'ASH', 4: 'LINDEN', 5: 'BIRCH',
-    6: 'POPLAR', 7: 'CHESTNUT', 8: 'MAPLE', 9: 'FIR', 10: 'SPRUCE',
-    11: 'COCONUT', 12: 'DATE', 13: 'WALNUT', 14: 'CORKOAK',
-    15: 'PINE', 16: 'PINE2', 17: 'OLIVE_L', 18: 'OLIVE_S'
+    1: 'OAK',
+    2: 'BEECH',
+    3: 'ASH',
+    4: 'LINDEN',
+    5: 'BIRCH',
+    6: 'POPLAR',
+    7: 'CHESTNUT',
+    8: 'MAPLE',
+    9: 'FIR',
+    10: 'SPRUCE',
+    11: 'COCONUT',
+    12: 'DATE',
+    13: 'WALNUT',
+    14: 'CORKOAK',
+    15: 'PINE',
+    16: 'PINE2',
+    17: 'OLIVE_L',
+    18: 'OLIVE_S',
 };
 
 // Ground types
@@ -40,6 +54,7 @@ interface Candidate {
 }
 
 // Simple LZSS decompression (Settlers format) - with safety limits
+// eslint-disable-next-line sonarjs/cognitive-complexity -- LZSS decompression algorithm requires complex bit-level control flow
 function decompress(src: Uint8Array, dstLen: number): Uint8Array {
     // Safety check
     if (dstLen > 50_000_000) {
@@ -55,19 +70,19 @@ function decompress(src: Uint8Array, dstLen: number): Uint8Array {
 
     while (dstPos < dstLen && srcPos < src.length && iterations < maxIterations) {
         iterations++;
-        const flag = src[srcPos++];
+        const flag = src[srcPos++]!;
 
         for (let bit = 0; bit < 8 && dstPos < dstLen && srcPos < src.length; bit++) {
             if ((flag & (1 << bit)) !== 0) {
                 // Literal byte
-                dst[dstPos++] = src[srcPos++];
+                dst[dstPos++] = src[srcPos++]!;
             } else {
                 // Back-reference
                 if (srcPos + 1 >= src.length) break;
-                const lo = src[srcPos++];
-                const hi = src[srcPos++];
-                const offset = ((hi & 0xF0) << 4) | lo;
-                const length = (hi & 0x0F) + 3;
+                const lo = src[srcPos++]!;
+                const hi = src[srcPos++]!;
+                const offset = ((hi & 0xf0) << 4) | lo;
+                const length = (hi & 0x0f) + 3;
 
                 if (offset === 0) continue;
 
@@ -75,7 +90,7 @@ function decompress(src: Uint8Array, dstLen: number): Uint8Array {
                 if (readPos < 0) readPos = 0;
 
                 for (let i = 0; i < length && dstPos < dstLen; i++) {
-                    dst[dstPos++] = dst[readPos++];
+                    dst[dstPos++] = dst[readPos++]!;
                 }
             }
         }
@@ -91,17 +106,17 @@ function decompress(src: Uint8Array, dstLen: number): Uint8Array {
 // Decode XOR-encoded header
 function decodeHeader(data: Uint8Array, offset: number, length: number): Uint8Array {
     const result = new Uint8Array(length);
-    const key = [0xB6, 0x9C, 0x76, 0x5A, 0x8D, 0xE3, 0x2C, 0xF9];
+    const key = [0xb6, 0x9c, 0x76, 0x5a, 0x8d, 0xe3, 0x2c, 0xf9];
 
     for (let i = 0; i < length; i++) {
-        result[i] = data[offset + i] ^ key[i % 8];
+        result[i] = data[offset + i]! ^ key[i % 8]!;
     }
 
     return result;
 }
 
 function readInt32LE(data: Uint8Array, offset: number): number {
-    return data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
+    return data[offset]! | (data[offset + 1]! << 8) | (data[offset + 2]! << 16) | (data[offset + 3]! << 24);
 }
 
 function parseChunks(data: Uint8Array): ChunkInfo[] {
@@ -124,7 +139,7 @@ function parseChunks(data: Uint8Array): ChunkInfo[] {
             type: chunkType,
             offset: offset + 24,
             length,
-            unpackedLength
+            unpackedLength,
         });
 
         offset += 24 + length;
@@ -143,7 +158,7 @@ function getChunkData(fileData: Uint8Array, chunk: ChunkInfo): Uint8Array {
     return decompress(rawData, chunk.unpackedLength);
 }
 
-function calcVariance(positions: Array<{x: number; y: number}>, mapWidth: number, mapHeight: number): number {
+function calcVariance(positions: Array<{ x: number; y: number }>, mapWidth: number, mapHeight: number): number {
     if (positions.length < 10) return 0;
     const gridSize = 16;
     const cellW = Math.ceil(mapWidth / gridSize);
@@ -152,12 +167,13 @@ function calcVariance(positions: Array<{x: number; y: number}>, mapWidth: number
     for (const pos of positions) {
         const cx = Math.min(gridSize - 1, Math.floor(pos.x / cellW));
         const cy = Math.min(gridSize - 1, Math.floor(pos.y / cellH));
-        grid[cy * gridSize + cx]++;
+        grid[cy * gridSize + cx]!++;
     }
     const mean = grid.reduce((a, b) => a + b, 0) / grid.length;
     return grid.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / grid.length;
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- multi-factor tree candidate analysis
 function analyzeCandidate(
     name: string,
     objectData: Uint8Array,
@@ -168,8 +184,11 @@ function analyzeCandidate(
 ): Candidate {
     const tileCount = mapWidth * mapHeight;
     const distribution = new Map<number, number>();
-    const positions: Array<{x: number; y: number}> = [];
-    let onWater = 0, onSnow = 0, onDesert = 0, onGrass = 0;
+    const positions: Array<{ x: number; y: number }> = [];
+    let onWater = 0,
+        onSnow = 0,
+        onDesert = 0,
+        onGrass = 0;
 
     for (let i = 0; i < tileCount; i++) {
         const val = extractor(objectData, i);
@@ -179,7 +198,7 @@ function analyzeCandidate(
             const y = Math.floor(i / mapWidth);
             positions.push({ x, y });
 
-            const gt = groundType[i];
+            const gt = groundType[i]!;
             if (WATER_TYPES.has(gt)) onWater++;
             else if (SNOW_TYPES.has(gt)) onSnow++;
             else if (DESERT_TYPES.has(gt)) onDesert++;
@@ -191,7 +210,7 @@ function analyzeCandidate(
     const count = positions.length;
 
     const idealMin = tileCount * 0.005;
-    const idealMax = tileCount * 0.20;
+    const idealMax = tileCount * 0.2;
     const countOK = count >= idealMin && count <= idealMax;
 
     const waterPenalty = count > 0 ? (onWater / count) * 100 : 0;
@@ -200,18 +219,28 @@ function analyzeCandidate(
     const typeBonus = Math.min(20, distribution.size * 2);
     const varianceBonus = Math.min(30, variance / 50);
 
-    const score =
-        (countOK ? 50 : count < idealMin ? count / idealMin * 25 : 25) +
-        varianceBonus + typeBonus + grassBonus - waterPenalty - snowPenalty;
+    let countScore: number;
+    if (countOK) countScore = 50;
+    else if (count < idealMin) countScore = (count / idealMin) * 25;
+    else countScore = 25;
+
+    const score = countScore + varianceBonus + typeBonus + grassBonus - waterPenalty - snowPenalty;
 
     return {
-        name, count, variance,
+        name,
+        count,
+        variance,
         types: distribution.size,
-        onWater, onSnow, onDesert, onGrass,
-        distribution, score
+        onWater,
+        onSnow,
+        onDesert,
+        onGrass,
+        distribution,
+        score,
     };
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- CLI entry point with multiple analysis steps
 async function main() {
     const mapPath = process.argv[2];
     if (!mapPath) {
@@ -254,7 +283,7 @@ async function main() {
     // Extract ground type (byte 1 of each 4-byte tile)
     const groundType = new Uint8Array(tileCount);
     for (let i = 0; i < tileCount; i++) {
-        groundType[i] = landscapeData[i * 4 + 1];
+        groundType[i] = landscapeData[i * 4 + 1]!;
     }
 
     // Find MapObjects (type 6)
@@ -275,26 +304,45 @@ async function main() {
 
     if (bytesPerTile === 4) {
         for (let b = 0; b < 4; b++) {
-            candidates.push(analyzeCandidate(`INTRLV_B${b}`, objectData, groundType, mapWidth, mapHeight,
-                (d, i) => d[i * 4 + b]));
+            candidates.push(
+                analyzeCandidate(`INTRLV_B${b}`, objectData, groundType, mapWidth, mapHeight, (d, i) => d[i * 4 + b]!)
+            );
         }
 
         for (let l = 0; l < 4; l++) {
-            candidates.push(analyzeCandidate(`CONSEC_L${l}`, objectData, groundType, mapWidth, mapHeight,
-                (d, i) => d[l * tileCount + i]));
+            candidates.push(
+                analyzeCandidate(
+                    `CONSEC_L${l}`,
+                    objectData,
+                    groundType,
+                    mapWidth,
+                    mapHeight,
+                    (d, i) => d[l * tileCount + i]!
+                )
+            );
         }
 
-        candidates.push(analyzeCandidate('B0_IF_B2_64', objectData, groundType, mapWidth, mapHeight,
-            (d, i) => (d[i * 4 + 2] === 64 || d[i * 4 + 2] === 65) ? d[i * 4] : 0));
+        candidates.push(
+            analyzeCandidate('B0_IF_B2_64', objectData, groundType, mapWidth, mapHeight, (d, i) =>
+                d[i * 4 + 2] === 64 || d[i * 4 + 2] === 65 ? d[i * 4]! : 0
+            )
+        );
 
-        candidates.push(analyzeCandidate('B0_IF_B2_NZ', objectData, groundType, mapWidth, mapHeight,
-            (d, i) => d[i * 4 + 2] !== 0 ? d[i * 4] : 0));
+        candidates.push(
+            analyzeCandidate('B0_IF_B2_NZ', objectData, groundType, mapWidth, mapHeight, (d, i) =>
+                d[i * 4 + 2] !== 0 ? d[i * 4]! : 0
+            )
+        );
 
-        candidates.push(analyzeCandidate('B0_OR_B1', objectData, groundType, mapWidth, mapHeight,
-            (d, i) => {
-                const b0 = d[i * 4], b1 = d[i * 4 + 1];
-                return (b0 >= 1 && b0 <= 18) ? b0 : (b1 >= 1 && b1 <= 18) ? b1 : 0;
-            }));
+        candidates.push(
+            analyzeCandidate('B0_OR_B1', objectData, groundType, mapWidth, mapHeight, (d, i) => {
+                const b0 = d[i * 4]!,
+                    b1 = d[i * 4 + 1]!;
+                if (b0 >= 1 && b0 <= 18) return b0;
+                if (b1 >= 1 && b1 <= 18) return b1;
+                return 0;
+            })
+        );
     }
 
     candidates.sort((a, b) => b.score - a.score);
@@ -305,15 +353,15 @@ async function main() {
     console.log('='.repeat(100));
     console.log(
         'Name'.padEnd(14) +
-        'Count'.padStart(8) +
-        'Var'.padStart(7) +
-        'Types'.padStart(6) +
-        'Water'.padStart(7) +
-        'Snow'.padStart(6) +
-        'Desert'.padStart(7) +
-        'Grass'.padStart(7) +
-        'Score'.padStart(7) +
-        '  Distribution'
+            'Count'.padStart(8) +
+            'Var'.padStart(7) +
+            'Types'.padStart(6) +
+            'Water'.padStart(7) +
+            'Snow'.padStart(6) +
+            'Desert'.padStart(7) +
+            'Grass'.padStart(7) +
+            'Score'.padStart(7) +
+            '  Distribution'
     );
     console.log('-'.repeat(100));
 
@@ -324,26 +372,27 @@ async function main() {
             .map(([t, n]) => `${TREE_NAMES[t] || t}:${n}`)
             .join(', ');
 
-        const waterPct = c.count > 0 ? (c.onWater / c.count * 100).toFixed(0) + '%' : '-';
-        const snowPct = c.count > 0 ? (c.onSnow / c.count * 100).toFixed(0) + '%' : '-';
-        const desertPct = c.count > 0 ? (c.onDesert / c.count * 100).toFixed(0) + '%' : '-';
-        const grassPct = c.count > 0 ? (c.onGrass / c.count * 100).toFixed(0) + '%' : '-';
+        const waterPct = c.count > 0 ? ((c.onWater / c.count) * 100).toFixed(0) + '%' : '-';
+        const snowPct = c.count > 0 ? ((c.onSnow / c.count) * 100).toFixed(0) + '%' : '-';
+        const desertPct = c.count > 0 ? ((c.onDesert / c.count) * 100).toFixed(0) + '%' : '-';
+        const grassPct = c.count > 0 ? ((c.onGrass / c.count) * 100).toFixed(0) + '%' : '-';
 
         console.log(
             c.name.padEnd(14) +
-            c.count.toString().padStart(8) +
-            c.variance.toFixed(0).padStart(7) +
-            c.types.toString().padStart(6) +
-            waterPct.padStart(7) +
-            snowPct.padStart(6) +
-            desertPct.padStart(7) +
-            grassPct.padStart(7) +
-            c.score.toFixed(1).padStart(7) +
-            '  ' + distStr
+                c.count.toString().padStart(8) +
+                c.variance.toFixed(0).padStart(7) +
+                c.types.toString().padStart(6) +
+                waterPct.padStart(7) +
+                snowPct.padStart(6) +
+                desertPct.padStart(7) +
+                grassPct.padStart(7) +
+                c.score.toFixed(1).padStart(7) +
+                '  ' +
+                distStr
         );
     }
 
-    const best = candidates[0];
+    const best = candidates[0]!;
     console.log('\n' + '='.repeat(100));
     console.log(`BEST: ${best.name} - ${best.count} trees, ${best.variance.toFixed(0)} variance, ${best.types} types`);
     console.log('='.repeat(100));

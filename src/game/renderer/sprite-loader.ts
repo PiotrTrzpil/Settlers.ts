@@ -106,7 +106,12 @@ export class SpriteLoader {
         );
 
         // Check minimum required files
-        if (!files.gfx?.length || !files.gil?.length || !files.palette?.length || !files.paletteIndex?.length) {
+        if (
+            !files['gfx']?.length ||
+            !files['gil']?.length ||
+            !files['palette']?.length ||
+            !files['paletteIndex']?.length
+        ) {
             SpriteLoader.log.debug(`GFX file set ${fileId} not available`);
             return null;
         }
@@ -114,15 +119,15 @@ export class SpriteLoader {
         // Build readers - these parse binary files synchronously on main thread
         const parseStart = performance.now();
 
-        const gilReader = new GilFileReader(files.gil);
-        const pilReader = new PilFileReader(files.paletteIndex);
-        const paletteCollection = new PaletteCollection(files.palette, pilReader);
+        const gilReader = new GilFileReader(files['gil']);
+        const pilReader = new PilFileReader(files['paletteIndex']);
+        const paletteCollection = new PaletteCollection(files['palette'], pilReader);
 
         // JIL/DIL are optional (for direct GIL access vs job-based access)
-        const jilReader = files.jil?.length ? new JilFileReader(files.jil) : null;
-        const dilReader = files.dil?.length ? new DilFileReader(files.dil) : null;
+        const jilReader = files['jil']?.length ? new JilFileReader(files['jil']) : null;
+        const dilReader = files['dil']?.length ? new DilFileReader(files['dil']) : null;
 
-        const gfxReader = new GfxFileReader(files.gfx, gilReader, jilReader, dilReader, paletteCollection);
+        const gfxReader = new GfxFileReader(files['gfx'], gilReader, jilReader, dilReader, paletteCollection);
 
         const parseTime = performance.now() - parseStart;
         if (parseTime > 50) {
@@ -191,7 +196,7 @@ export class SpriteLoader {
             return null;
         }
 
-        const dirItem = dirItems[directionIndex];
+        const dirItem = dirItems[directionIndex]!;
         const frameItems = fileSet.gilReader.getItems(dirItem.offset, dirItem.length);
         if (frameIndex >= frameItems.length) {
             SpriteLoader.log.debug(`Frame ${frameIndex} out of range for job ${jobIndex} direction ${directionIndex}`);
@@ -199,10 +204,11 @@ export class SpriteLoader {
         }
 
         // Get the GFX image
-        const frameItem = frameItems[frameIndex];
+        const frameItem = frameItems[frameIndex]!;
         const gfxOffset = fileSet.gilReader.getImageOffset(frameItem.index);
         const gfxImage = fileSet.gfxReader.readImage(gfxOffset, jobIndex);
 
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- readImage may return null at GFX file boundary
         if (!gfxImage) {
             SpriteLoader.log.debug(`Failed to read image for job ${jobIndex} in file ${fileSet.fileId}`);
             return null;
@@ -248,6 +254,7 @@ export class SpriteLoader {
         const gfxOffset = fileSet.gilReader.getImageOffset(gilIndex);
         const gfxImage = fileSet.gfxReader.readImage(gfxOffset, paletteIndex);
 
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- readImage may return null at GFX file boundary
         if (!gfxImage) {
             SpriteLoader.log.debug(`Failed to read image at GIL index ${gilIndex}`);
             return null;
@@ -416,7 +423,7 @@ export class SpriteLoader {
             return 0;
         }
 
-        const dirItem = dirItems[directionIndex];
+        const dirItem = dirItems[directionIndex]!;
         return dirItem.length;
     }
 
@@ -450,7 +457,7 @@ export class SpriteLoader {
             return null;
         }
 
-        const dirItem = dirItems[directionIndex];
+        const dirItem = dirItems[directionIndex]!;
         const frameItems = fileSet.gilReader.getItems(dirItem.offset, dirItem.length);
 
         if (frameItems.length === 0) {
@@ -461,10 +468,11 @@ export class SpriteLoader {
         // Collect all frame images first
         const frameImages: GfxImage[] = [];
         for (let i = 0; i < frameItems.length; i++) {
-            const frameItem = frameItems[i];
+            const frameItem = frameItems[i]!;
             const gfxOffset = fileSet.gilReader.getImageOffset(frameItem.index);
             const gfxImage = fileSet.gfxReader.readImage(gfxOffset, jobIndex);
 
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- readImage may return null at GFX file boundary
             if (gfxImage) {
                 frameImages.push(gfxImage);
             }

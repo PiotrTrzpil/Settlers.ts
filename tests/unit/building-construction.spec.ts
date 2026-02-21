@@ -57,8 +57,8 @@ describe('Terrain Leveling', () => {
 
             const footprintTiles = captured.tiles.filter(t => t.isFootprint);
             expect(footprintTiles).toHaveLength(1);
-            expect(footprintTiles[0].x).toBe(10);
-            expect(footprintTiles[0].y).toBe(10);
+            expect(footprintTiles[0]!.x).toBe(10);
+            expect(footprintTiles[0]!.y).toBe(10);
         });
 
         it('should capture cardinal neighbors of the footprint', () => {
@@ -384,7 +384,7 @@ describe('Unit spawning on construction complete', () => {
         expect(ctx.buildingStateManager.getBuildingState(lj.id)!.phase).toBe(BuildingConstructionPhase.Completed);
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
         expect(units).toHaveLength(1);
-        expect(units[0].subType).toBe(UnitType.Woodcutter);
+        expect(units[0]!.subType).toBe(UnitType.Woodcutter);
     });
 
     it('should handle limited space around the building gracefully', () => {

@@ -87,7 +87,7 @@ export class SelectionManager {
         for (const id of entityIds) {
             this.selectedEntityIds.add(id);
         }
-        this.selectedEntityId = entityIds.length > 0 ? entityIds[0] : null;
+        this.selectedEntityId = entityIds.length > 0 ? entityIds[0]! : null;
     }
 
     /**

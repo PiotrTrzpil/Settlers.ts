@@ -76,10 +76,10 @@ interface SearchContext {
  */
 function canEnterTile(nx: number, ny: number, nIdx: number, ctx: SearchContext): boolean {
     // Already processed?
-    if (ctx.flags[nIdx] & FLAG_CLOSED) return false;
+    if (ctx.flags[nIdx]! & FLAG_CLOSED) return false;
 
     // Impassable terrain?
-    if (!isPassable(ctx.terrain.groundType[nIdx])) return false;
+    if (!isPassable(ctx.terrain.groundType[nIdx]!)) return false;
 
     // Occupied by another unit? (allow goal tile even if occupied)
     const isGoal = nx === ctx.goalX && ny === ctx.goalY;
@@ -131,7 +131,7 @@ function computePriority(
  * Process a single neighbor during A* expansion.
  */
 function processNeighbor(cx: number, cy: number, currentIdx: number, direction: number, ctx: SearchContext): void {
-    const [dx, dy] = GRID_DELTAS[direction];
+    const [dx, dy] = GRID_DELTAS[direction]!;
     const nx = cx + dx;
     const ny = cy + dy;
 
@@ -145,13 +145,13 @@ function processNeighbor(cx: number, cy: number, currentIdx: number, direction: 
     if (!canEnterTile(nx, ny, nIdx, ctx)) return;
 
     // Compute tentative g-cost
-    const tentativeG = ctx.gCost[currentIdx] + MOVE_COST;
+    const tentativeG = ctx.gCost[currentIdx]! + MOVE_COST;
 
     // Only update if this is a better path
-    if (tentativeG < ctx.gCost[nIdx]) {
+    if (tentativeG < ctx.gCost[nIdx]!) {
         ctx.gCost[nIdx] = tentativeG;
         ctx.parent[nIdx] = currentIdx;
-        ctx.flags[nIdx] |= FLAG_OPEN;
+        ctx.flags[nIdx]! |= FLAG_OPEN;
 
         const priority = computePriority(cx, cy, nx, ny, tentativeG, direction, ctx);
         ctx.openQueue.insert(nIdx, priority);
@@ -166,11 +166,11 @@ function reconstructPath(goalIdx: number, parent: Int32Array, mapWidth: number):
     const path: TileCoord[] = [];
     let idx = goalIdx;
 
-    while (parent[idx] !== -1) {
+    while (parent[idx]! !== -1) {
         const x = idx % mapWidth;
         const y = (idx - x) / mapWidth;
         path.push({ x, y });
-        idx = parent[idx];
+        idx = parent[idx]!;
     }
 
     path.reverse();
@@ -213,7 +213,7 @@ export function findPathAStar(
     // Check if goal is reachable at all
     const { mapWidth, mapHeight, groundType } = terrain;
     const goalIdx = goalX + goalY * mapWidth;
-    if (!isPassable(groundType[goalIdx])) {
+    if (!isPassable(groundType[goalIdx]!)) {
         return null;
     }
 
@@ -253,7 +253,7 @@ export function findPathAStar(
         const currentIdx = openQueue.popMin();
 
         // Skip if already processed (can happen with duplicate insertions)
-        if (flags[currentIdx] & FLAG_CLOSED) continue;
+        if (flags[currentIdx]! & FLAG_CLOSED) continue;
         flags[currentIdx] = FLAG_CLOSED;
         nodesSearched++;
 

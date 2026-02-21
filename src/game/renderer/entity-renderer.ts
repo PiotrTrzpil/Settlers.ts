@@ -288,7 +288,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 .then(loaded => {
                     if (loaded) {
                         EntityRenderer.log.debug(
-                            `Sprite loading complete: ${this.spriteManager!.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${Race[this.spriteManager!.currentRace ?? Race.Roman]}`
+                            `Sprite loading complete: ${this.spriteManager!.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${Race[this.spriteManager!.currentRace]}`
                         );
                     }
                     // Notify when sprites are loaded (even if loading failed, animations are ready)
@@ -465,7 +465,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (this.renderSettings.showBuildingFootprint) {
             // Activate color shader for footprints
             super.drawBase(gl, projection);
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
             gl.enableVertexAttribArray(this.aPosition);
             gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
             gl.disableVertexAttribArray(this.aEntityPos);
@@ -473,7 +473,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
             this.selectionOverlayRenderer.drawBuildingFootprints(
                 gl,
-                this.dynamicBuffer!,
+                this.dynamicBuffer,
                 this.sortedEntities,
                 this.aPosition,
                 this.aEntityPos,
@@ -487,7 +487,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             // Activate color shader for service area circles
             if (!this.renderSettings.showBuildingFootprint) {
                 super.drawBase(gl, projection);
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
                 gl.enableVertexAttribArray(this.aPosition);
                 gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
                 gl.disableVertexAttribArray(this.aEntityPos);
@@ -496,7 +496,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
             this.selectionOverlayRenderer.drawServiceAreaCircles(
                 gl,
-                this.dynamicBuffer!,
+                this.dynamicBuffer,
                 this.selectedServiceAreas,
                 this.aEntityPos,
                 this.aColor,
@@ -529,7 +529,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Draw selection frames (color shader) - must be after entities
         this.selectionOverlayRenderer.drawSelectionFrames(
             gl,
-            this.dynamicBuffer!,
+            this.dynamicBuffer,
             this.sortedEntities,
             this.selectedEntityIds,
             this.aEntityPos,
@@ -540,7 +540,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Draw selection dots for selected units (on top of frames)
         this.selectionOverlayRenderer.drawSelectionDots(
             gl,
-            this.dynamicBuffer!,
+            this.dynamicBuffer,
             this.sortedEntities,
             this.selectedEntityIds,
             this.aEntityPos,
@@ -659,6 +659,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /** Get sprite entry for a unit entity (returns null if transitioning) */
+    // eslint-disable-next-line sonarjs/function-return-type -- intentional mixed return: null, SpriteEntry, or sentinel string
     private getUnitSprite(entity: Entity): SpriteEntry | null | 'transitioning' {
         if (!this.spriteManager) return null;
 
@@ -730,6 +731,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     /**
      * Draw entities using the sprite shader and atlas texture (batched).
      */
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- batched sprite draw loop requires multiple branching stages
     private drawTexturedEntities(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
 
@@ -778,10 +780,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     worldPos.worldY,
                     resolved.sprite,
                     playerRow,
-                    tint[0],
-                    tint[1],
-                    tint[2],
-                    tint[3],
+                    tint[0]!,
+                    tint[1]!,
+                    tint[2]!,
+                    tint[3]!,
                     resolved.progress
                 );
             } else {
@@ -791,10 +793,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     worldPos.worldY,
                     resolved.sprite,
                     playerRow,
-                    tint[0],
-                    tint[1],
-                    tint[2],
-                    tint[3]
+                    tint[0]!,
+                    tint[1]!,
+                    tint[2]!,
+                    tint[3]!
                 );
             }
             this.frameSpriteCount++;
@@ -950,10 +952,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 newSprite,
                 blendFactor,
                 playerRow,
-                tint[0],
-                tint[1],
-                tint[2],
-                tint[3]
+                tint[0]!,
+                tint[1]!,
+                tint[2]!,
+                tint[3]!
             );
         }
 
@@ -996,7 +998,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     ): void {
         super.drawBase(gl, projection);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
         gl.enableVertexAttribArray(this.aPosition);
         gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
         gl.disableVertexAttribArray(this.aEntityPos);
@@ -1012,7 +1014,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             if (texturedBuildingsHandled && this.hasTexturedSprite(entity)) continue;
 
             const isSelected = this.selectedEntityIds.has(entity.id);
-            const playerColor = PLAYER_COLORS[entity.player % PLAYER_COLORS.length];
+            const playerColor = PLAYER_COLORS[entity.player % PLAYER_COLORS.length]!;
             const color = isSelected ? [1.0, 1.0, 0.0, 1.0] : playerColor;
             const scale = this.getEntityScale(entity.type);
 
@@ -1021,7 +1023,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
             this.fillQuadVertices(0, 0, scale);
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-            gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
+            gl.vertexAttrib4f(this.aColor, color[0]!, color[1]!, color[2]!, color[3]!);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
     }
@@ -1145,10 +1147,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     worldPos.worldY,
                     spriteEntry,
                     0,
-                    tint[0],
-                    tint[1],
-                    tint[2],
-                    tint[3]
+                    tint[0]!,
+                    tint[1]!,
+                    tint[2]!,
+                    tint[3]!
                 );
                 this.spriteBatchRenderer.endSpriteBatch(gl);
                 return;
@@ -1157,13 +1159,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         // Fallback to color preview
         this.shaderProgram.use();
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer!);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
 
         const color = valid ? PREVIEW_VALID_COLOR : PREVIEW_INVALID_COLOR;
         gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
         this.fillQuadVertices(0, 0, BUILDING_SCALE);
         gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-        gl.vertexAttrib4f(this.aColor, color[0], color[1], color[2], color[3]);
+        gl.vertexAttrib4f(this.aColor, color[0]!, color[1]!, color[2]!, color[3]!);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
@@ -1196,8 +1198,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private fillQuadVertices(worldX: number, worldY: number, scale: number): void {
         const verts = this.vertexData;
         for (let i = 0; i < 6; i++) {
-            verts[i * 2] = BASE_QUAD[i * 2] * scale + worldX;
-            verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1] * scale + worldY;
+            verts[i * 2] = BASE_QUAD[i * 2]! * scale + worldX;
+            verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1]! * scale + worldY;
         }
     }
 

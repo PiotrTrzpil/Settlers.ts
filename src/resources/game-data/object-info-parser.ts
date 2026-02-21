@@ -33,7 +33,7 @@ export function parseObjectInfo(xmlContent: string): Map<string, ObjectInfo> {
 
     const objectElements = doc.getElementsByTagName('object');
     for (let i = 0; i < objectElements.length; i++) {
-        const obj = parseObject(objectElements[i]);
+        const obj = parseObject(objectElements[i]!);
         result.set(obj.id, obj);
     }
 

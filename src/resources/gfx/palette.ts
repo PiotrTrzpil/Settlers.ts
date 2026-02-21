@@ -15,7 +15,7 @@ export class Palette {
     }
 
     public getColor(index: number): number {
-        return this.palette[index];
+        return this.palette[index]!;
     }
 
     /** Get the raw palette data for worker transfer */
@@ -25,9 +25,9 @@ export class Palette {
 
     public read3BytePalette(buffer: Uint8Array, pos: number): number {
         for (let i = 0; i < this.palette.length; i++) {
-            const r = buffer[pos++];
-            const g = buffer[pos++];
-            const b = buffer[pos++];
+            const r = buffer[pos++]!;
+            const g = buffer[pos++]!;
+            const b = buffer[pos++]!;
 
             this.setRGB(i, r, g, b);
         }

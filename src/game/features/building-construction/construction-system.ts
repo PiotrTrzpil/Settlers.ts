@@ -56,11 +56,11 @@ export class BuildingConstructionSystem implements TickSystem {
     registerEvents(eventBus: EventBus): void {
         this.eventBus = eventBus;
         this.subscriptions.subscribe(eventBus, 'building:removed', ({ buildingState }) => {
-            this.onBuildingRemoved(buildingState as BuildingState);
+            this.onBuildingRemoved(buildingState);
         });
         // Listen for building:completed to spawn units via command pipeline
         this.subscriptions.subscribe(eventBus, 'building:completed', ({ entityId }) => {
-            this.executeCommand({ type: 'spawn_building_units', buildingEntityId: entityId as number });
+            this.executeCommand({ type: 'spawn_building_units', buildingEntityId: entityId });
         });
     }
 
@@ -120,7 +120,7 @@ export class BuildingConstructionSystem implements TickSystem {
 
         if (newPhase === BuildingConstructionPhase.Completed && previousPhase !== BuildingConstructionPhase.Completed) {
             // Emit event - unit spawning is handled by the building:completed event listener
-            this.eventBus!.emit('building:completed', {
+            this.eventBus.emit('building:completed', {
                 entityId: buildingState.entityId,
                 buildingState,
             });

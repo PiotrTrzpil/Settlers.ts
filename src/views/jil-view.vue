@@ -162,28 +162,22 @@ function getDirectionCount(jobIndex: number): number {
 // Build reverse lookup from job index to building name
 const jobToBuildingName = new Map<number, string>();
 for (const [typeStr, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
-    if (jobIndex !== undefined) {
-        const buildingType = Number(typeStr) as BuildingType;
-        jobToBuildingName.set(jobIndex, BuildingType[buildingType]);
-    }
+    const buildingType = Number(typeStr) as BuildingType;
+    jobToBuildingName.set(jobIndex, BuildingType[buildingType]);
 }
 
 // Build reverse lookup from job index to resource/material name
 const jobToResourceName = new Map<number, string>();
 for (const [typeStr, jobIndex] of Object.entries(RESOURCE_JOB_INDICES)) {
-    if (jobIndex !== undefined) {
-        const materialType = Number(typeStr) as EMaterialType;
-        jobToResourceName.set(jobIndex, EMaterialType[materialType]);
-    }
+    const materialType = Number(typeStr) as EMaterialType;
+    jobToResourceName.set(jobIndex, EMaterialType[materialType]);
 }
 
 // Build reverse lookup from job index to carrier material name (mapped materials)
 const jobToCarrierMaterial = new Map<number, string>();
 for (const [typeStr, jobIndex] of Object.entries(CARRIER_MATERIAL_JOB_INDICES)) {
-    if (jobIndex !== undefined) {
-        const materialType = Number(typeStr) as EMaterialType;
-        jobToCarrierMaterial.set(jobIndex, EMaterialType[materialType]);
-    }
+    const materialType = Number(typeStr) as EMaterialType;
+    jobToCarrierMaterial.set(jobIndex, EMaterialType[materialType]);
 }
 
 // Building files are race-specific: 10=Roman, 11=Viking, 12=Mayan, 14=Trojan
@@ -218,8 +212,9 @@ function getCarrierJobInfo(jobIndex: number): CarrierJobInfo | null {
 
 function getCurrentFileId(): number | null {
     if (!fileName.value) return null;
-    const match = fileName.value.match(/(\d+)\.jil$/i);
-    return match ? parseInt(match[1], 10) : null;
+    // eslint-disable-next-line sonarjs/slow-regex -- simple filename pattern, not user-controlled
+    const match = /(\d+)\.jil$/i.exec(fileName.value);
+    return match ? parseInt(match[1]!, 10) : null;
 }
 
 function getNameForJob(jobIndex: number): string | null {
@@ -265,7 +260,6 @@ function onFileSelect(file: IFileSource) {
 
 // eslint-disable-next-line @typescript-eslint/require-await -- delegates to doLoad
 async function load(file: IFileSource) {
-    if (!props.fileManager) return;
     const fileId = Path.getFileNameWithoutExtension(file.name);
     void doLoad(fileId);
 }
@@ -298,13 +292,13 @@ async function doLoad(fileId: string) {
     // Compute direction counts for each job
     directionCounts.value.clear();
     for (const item of jilList.value) {
-        const dirItems = dilFileReader.value!.getItems(item.offset, item.length);
+        const dirItems = dilFileReader.value.getItems(item.offset, item.length);
         directionCounts.value.set(item.index, dirItems.length);
     }
 
     // Auto-select first item
     if (jilList.value.length > 0) {
-        selectedJil.value = jilList.value[0];
+        selectedJil.value = jilList.value[0] ?? null;
         onSelectJil();
     }
 
@@ -319,7 +313,7 @@ function onSelectJil() {
     if (!selectedJil.value || !dilFileReader.value) return;
 
     dilList.value = dilFileReader.value.getItems(selectedJil.value.offset, selectedJil.value.length);
-    selectedDil.value = dilList.value[0];
+    selectedDil.value = dilList.value[0] ?? null;
     onSelectDil();
 }
 
@@ -327,7 +321,7 @@ function onSelectDil() {
     if (!selectedDil.value || !gilFileReader.value) return;
 
     gilList.value = gilFileReader.value.getItems(selectedDil.value.offset, selectedDil.value.length);
-    selectedGil.value = gilList.value[0];
+    selectedGil.value = gilList.value[0] ?? null;
     onSelectGil();
 }
 
@@ -336,8 +330,6 @@ function onSelectGil() {
 
     const offset = gilFileReader.value.getImageOffset(selectedGil.value.index);
     const gfx = gfxFileReader.value.readImage(offset, selectedJil.value.index);
-    if (!gfx) return;
-
     currentImageInfo.value = {
         width: gfx.width,
         height: gfx.height,
@@ -347,7 +339,7 @@ function onSelectGil() {
 
     const img = gfx.getImageData();
     const cavEl = ghCav.value;
-    if (!cavEl?.getContext) return;
+    if (!cavEl) return;
 
     cavEl.width = img.width;
     cavEl.height = img.height;
@@ -358,10 +350,10 @@ function onSelectGil() {
 }
 
 function onAnimate() {
-    if (!gilList.value?.length || !doAnimation.value) return;
+    if (!gilList.value.length || !doAnimation.value) return;
 
     const nextFrameIndex = (gilList.value.findIndex(f => f === selectedGil.value) + 1) % gilList.value.length;
-    selectedGil.value = gilList.value[nextFrameIndex];
+    selectedGil.value = gilList.value[nextFrameIndex]!;
     onSelectGil();
 }
 
@@ -378,12 +370,11 @@ function renderAllGridSprites() {
             const canvas = canvasRefs.get(`${item.index}-${dirIdx}`);
             if (!canvas) continue;
 
-            const frameItems = gilFileReader.value.getItems(dirItems[dirIdx].offset, dirItems[dirIdx].length);
+            const frameItems = gilFileReader.value.getItems(dirItems[dirIdx]!.offset, dirItems[dirIdx]!.length);
             if (frameItems.length === 0) continue;
 
-            const offset = gilFileReader.value.getImageOffset(frameItems[0].index);
+            const offset = gilFileReader.value.getImageOffset(frameItems[0]!.index);
             const gfx = gfxFileReader.value.readImage(offset, item.index);
-            if (!gfx) continue;
 
             renderImageToCanvas(gfx, canvas);
         }

@@ -85,7 +85,7 @@ export class OptimizedDepthSorter {
 
         // Compute depth keys (as floats for precision)
         for (let i = 0; i < count; i++) {
-            const entity = entities[i];
+            const entity = entities[i]!;
             // Visible entities MUST have cached world positions
             const worldPos = ctx.getWorldPos(entity)!;
             const spriteEntry = this.getSpriteEntry(entity, ctx.spriteManager);
@@ -101,17 +101,17 @@ export class OptimizedDepthSorter {
         // Convert to regular array for sort (TypedArray.sort doesn't take comparator)
         const indexArray: number[] = [];
         for (let i = 0; i < count; i++) {
-            indexArray[i] = indices[i];
+            indexArray[i] = indices[i]!;
         }
         indexArray.length = count;
-        indexArray.sort((a, b) => keys[a] - keys[b]);
+        indexArray.sort((a, b) => keys[a]! - keys[b]!);
 
         // Reorder entities using sorted indices
         for (let i = 0; i < count; i++) {
-            this.tempEntities[i] = entities[indexArray[i]];
+            this.tempEntities[i] = entities[indexArray[i]!]!;
         }
         for (let i = 0; i < count; i++) {
-            entities[i] = this.tempEntities[i];
+            entities[i] = this.tempEntities[i]!;
         }
 
         this.lastEntityCount = count;

@@ -190,7 +190,7 @@ export class SoundManager implements IAudioManager {
                 return;
             }
 
-            if (Howler.ctx && Howler.ctx.state === 'suspended') {
+            if (Howler.ctx.state === 'suspended') {
                 unlocking = true;
 
                 // Remove listeners IMMEDIATELY to prevent duplicate calls
@@ -291,7 +291,7 @@ export class SoundManager implements IAudioManager {
             if (!this.sndReader) {
                 return null;
             }
-            const index = parseInt(config.path.split(':')[1], 10);
+            const index = parseInt(config.path.split(':')[1]!, 10);
             const blobUrl = this.sndReader.getSound(index);
 
             if (blobUrl) {
@@ -315,7 +315,7 @@ export class SoundManager implements IAudioManager {
             onplayerror: (_id, err) => {
                 SoundManager.log.error(`Failed to play sound ${config.id}: ${err}`);
                 // Unlock audio context if needed
-                if (Howler.ctx && Howler.ctx.state === 'suspended') {
+                if (Howler.ctx.state === 'suspended') {
                     void Howler.ctx
                         .resume()
                         .then(() => {
@@ -355,7 +355,7 @@ export class SoundManager implements IAudioManager {
 
         if (config.type === SoundType.SFX && config.path.startsWith('Snd:')) {
             if (!this.sndReader) return null;
-            const index = parseInt(config.path.split(':')[1], 10);
+            const index = parseInt(config.path.split(':')[1]!, 10);
             const blobUrl = this.sndReader.getSound(index);
             if (!blobUrl) return null;
             src = [blobUrl];

@@ -20,6 +20,7 @@ const log = new LogHandler('SettlerParser');
  * @param reader BinaryReader positioned at start of chunk data
  * @returns Array of settler data entries
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- map chunk binary parsing requires many conditional branches
 export function parseSettlers(reader: BinaryReader): MapSettlerData[] {
     const settlers: MapSettlerData[] = [];
     const dataLength = reader.length;

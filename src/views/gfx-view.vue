@@ -71,7 +71,6 @@ const selectedItem = ref<IGfxImage | null>(null);
 const gfxFile = ref<GfxFileReader | null>(null);
 
 async function load(file: IFileSource) {
-    if (!props.fileManager) return;
     const fileId = Path.getFileNameWithoutExtension(file.name);
     await doLoad(fileId);
 }

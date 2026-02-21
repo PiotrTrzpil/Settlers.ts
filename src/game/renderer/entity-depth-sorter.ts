@@ -46,7 +46,7 @@ export class EntityDepthSorter {
 
         // Compute depth keys for all entities
         for (let i = 0; i < count; i++) {
-            const entity = entities[i];
+            const entity = entities[i]!;
             const worldPos = getEntityWorldPos(entity, ctx);
             const spriteEntry = this.getSpriteEntry(entity, ctx.spriteManager);
             this.depthKeys[i] = this.computeDepthKey(entity, worldPos.worldY, spriteEntry);
@@ -56,14 +56,14 @@ export class EntityDepthSorter {
         // Sort indices by depth key (smaller = behind = drawn first)
         const depthKeys = this.depthKeys;
         this.sortIndices.length = count;
-        this.sortIndices.sort((a, b) => depthKeys[a] - depthKeys[b]);
+        this.sortIndices.sort((a, b) => depthKeys[a]! - depthKeys[b]!);
 
         // Reorder entities using temp array
         for (let i = 0; i < count; i++) {
-            this.sortTempEntities[i] = entities[this.sortIndices[i]];
+            this.sortTempEntities[i] = entities[this.sortIndices[i]!]!;
         }
         for (let i = 0; i < count; i++) {
-            entities[i] = this.sortTempEntities[i];
+            entities[i] = this.sortTempEntities[i]!;
         }
     }
 

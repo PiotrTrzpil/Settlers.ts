@@ -29,7 +29,7 @@ export class StreamWriter {
             return 0;
         }
 
-        return this.data[offset];
+        return this.data[offset]!;
     }
 
     public getWriteOffset(): number {
@@ -41,15 +41,15 @@ export class StreamWriter {
     }
 
     public eof(): boolean {
-        return ((this.pos < 0) || (this.pos >= this.data.length));
+        return this.pos < 0 || this.pos >= this.data.length;
     }
 
     public getLeftSize(): number {
-        return (this.data.length - this.pos);
+        return this.data.length - this.pos;
     }
 
     public setByte(value: number): boolean {
-        if ((this.pos < 0) || (this.pos > this.data.length)) {
+        if (this.pos < 0 || this.pos > this.data.length) {
             StreamWriter.log.error('write out of data: size: ' + this.data.length + ' @ ' + this.pos);
             return false;
         }

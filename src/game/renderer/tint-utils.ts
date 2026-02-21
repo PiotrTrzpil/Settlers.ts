@@ -22,8 +22,8 @@ const PLAYER_TINT_STRENGTH = 0.4;
 
 // Pre-computed player tints for palette row generation
 export const PLAYER_TINTS: readonly (readonly number[])[] = PLAYER_COLORS.map(playerColor => {
-    const r = 1.0 + (playerColor[0] - 1.0) * PLAYER_TINT_STRENGTH;
-    const g = 1.0 + (playerColor[1] - 1.0) * PLAYER_TINT_STRENGTH;
-    const b = 1.0 + (playerColor[2] - 1.0) * PLAYER_TINT_STRENGTH;
+    const r = 1.0 + (playerColor[0]! - 1.0) * PLAYER_TINT_STRENGTH;
+    const g = 1.0 + (playerColor[1]! - 1.0) * PLAYER_TINT_STRENGTH;
+    const b = 1.0 + (playerColor[2]! - 1.0) * PLAYER_TINT_STRENGTH;
     return [r, g, b, 1.0] as const;
 });

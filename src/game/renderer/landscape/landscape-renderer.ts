@@ -75,7 +75,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         // Each tile row covers ~0.5 screen units, so extra rows = ceil(maxHeight).
         let maxH = 0;
         for (let i = 0; i < groundHeightMap.length; i++) {
-            if (groundHeightMap[i] > maxH) maxH = groundHeightMap[i];
+            if (groundHeightMap[i]! > maxH) maxH = groundHeightMap[i]!;
         }
         this.heightMarginY = Math.ceil((maxH / 255) * TILE_HEIGHT_SCALE);
 
@@ -118,7 +118,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
 
         for (let y = 0; y < mapSize.height; y++) {
             for (let x = 0; x < mapSize.width; x++) {
-                const heightValue = groundHeightMap[mapSize.toIndex(x, y)];
+                const heightValue = groundHeightMap[mapSize.toIndex(x, y)]!;
                 result.update(x, y, heightValue);
             }
         }
@@ -144,10 +144,10 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
                 //  /------\\/
                 // t2       t3
 
-                const t1 = groundTypeMap[mapSize.toIndex(x, y)];
-                const t2 = groundTypeMap[mapSize.toIndex(x, y + 1)];
-                const t3 = groundTypeMap[mapSize.toIndex(x + 1, y + 1)];
-                const t4 = groundTypeMap[mapSize.toIndex(x + 1, y)];
+                const t1 = groundTypeMap[mapSize.toIndex(x, y)]!;
+                const t2 = groundTypeMap[mapSize.toIndex(x, y + 1)]!;
+                const t3 = groundTypeMap[mapSize.toIndex(x + 1, y + 1)]!;
+                const t4 = groundTypeMap[mapSize.toIndex(x + 1, y)]!;
 
                 const a = map.getTextureA(t1, t2, t3, x, y);
                 const b = map.getTextureB(t1, t3, t4, x, y);
@@ -247,10 +247,10 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         // Rebuild land type buffer
         for (let y = 0; y < h; y++) {
             for (let x = 0; x < w; x++) {
-                const t1 = this.groundTypeMap[this.mapSize.toIndex(x, y)];
-                const t2 = this.groundTypeMap[this.mapSize.toIndex(x, y + 1)];
-                const t3 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y + 1)];
-                const t4 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y)];
+                const t1 = this.groundTypeMap[this.mapSize.toIndex(x, y)]!;
+                const t2 = this.groundTypeMap[this.mapSize.toIndex(x, y + 1)]!;
+                const t3 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y + 1)]!;
+                const t4 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y)]!;
                 const a = map.getTextureA(t1, t2, t3, x, y);
                 const b = map.getTextureB(t1, t3, t4, x, y);
                 this.landTypeBuffer.update(x, y, a[0], a[1], b[0], b[1]);
@@ -260,7 +260,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         // Rebuild land height buffer
         for (let y = 0; y < h; y++) {
             for (let x = 0; x < w; x++) {
-                const heightValue = this.groundHeightMap[this.mapSize.toIndex(x, y)];
+                const heightValue = this.groundHeightMap[this.mapSize.toIndex(x, y)]!;
                 this.landHeightBuffer.update(x, y, heightValue);
             }
         }
@@ -278,10 +278,10 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
             const w = this.mapSize.width;
             for (let y = 0; y < h; y++) {
                 for (let x = 0; x < w; x++) {
-                    const t1 = this.groundTypeMap[this.mapSize.toIndex(x, y)];
-                    const t2 = this.groundTypeMap[this.mapSize.toIndex(x, y + 1)];
-                    const t3 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y + 1)];
-                    const t4 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y)];
+                    const t1 = this.groundTypeMap[this.mapSize.toIndex(x, y)]!;
+                    const t2 = this.groundTypeMap[this.mapSize.toIndex(x, y + 1)]!;
+                    const t3 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y + 1)]!;
+                    const t4 = this.groundTypeMap[this.mapSize.toIndex(x + 1, y)]!;
                     const a = map.getTextureA(t1, t2, t3, x, y);
                     const b = map.getTextureB(t1, t3, t4, x, y);
                     this.landTypeBuffer.update(x, y, a[0], a[1], b[0], b[1]);
@@ -313,9 +313,6 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         super.drawBase(gl, projection);
 
         const sp = this.shaderProgram;
-        if (!sp) {
-            return;
-        }
 
         // Rebuild terrain buffers if marked dirty
         if (this.terrainDirty) {

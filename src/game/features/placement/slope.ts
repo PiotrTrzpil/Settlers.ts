@@ -33,6 +33,7 @@ const CARDINAL_OFFSETS: ReadonlyArray<[number, number]> = [
  * External neighbors (outside the footprint) are NOT checked because terrain
  * leveling during construction will smooth those edges anyway.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- iterative slope calculation over tile neighbours
 export function computeSlopeDifficulty(
     tiles: TileCoord[],
     groundHeight: Uint8Array,
@@ -52,7 +53,7 @@ export function computeSlopeDifficulty(
     // Check each tile's gradient against its cardinal neighbors WITHIN the footprint
     for (const tile of tiles) {
         const idx = mapSize.toIndex(tile.x, tile.y);
-        const h = groundHeight[idx];
+        const h = groundHeight[idx]!;
 
         for (const [dx, dy] of CARDINAL_OFFSETS) {
             const nx = tile.x + dx;
@@ -71,7 +72,7 @@ export function computeSlopeDifficulty(
                 continue;
             }
 
-            const nh = groundHeight[nIdx];
+            const nh = groundHeight[nIdx]!;
             const diff = Math.abs(h - nh);
 
             if (diff > MAX_SLOPE_DIFF) {
@@ -107,7 +108,7 @@ export function computeHeightRange(tiles: TileCoord[], groundHeight: Uint8Array,
     let maxHeight = 0;
 
     for (const tile of tiles) {
-        const h = groundHeight[mapSize.toIndex(tile.x, tile.y)];
+        const h = groundHeight[mapSize.toIndex(tile.x, tile.y)]!;
         minHeight = Math.min(minHeight, h);
         maxHeight = Math.max(maxHeight, h);
     }

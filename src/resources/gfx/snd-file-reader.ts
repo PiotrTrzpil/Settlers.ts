@@ -54,10 +54,10 @@ export class SndFileReader extends ResourceFile {
         // Subsequent files start where the previous one ended.
         let start = 28;
         if (index > 0) {
-            start = this.sil.offsets[index - 1];
+            start = this.sil.offsets[index - 1]!;
         }
 
-        const end = this.sil.offsets[index];
+        const end = this.sil.offsets[index]!;
         const length = end - start;
 
         if (length <= 0) {

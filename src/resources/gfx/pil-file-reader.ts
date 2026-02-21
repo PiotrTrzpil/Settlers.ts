@@ -12,7 +12,7 @@ export class PilFileReader extends ResourceFile {
     private offsetTable: Int32Array;
 
     public getOffset(gfxImageIndex: number): number {
-        return this.offsetTable[gfxImageIndex];
+        return this.offsetTable[gfxImageIndex]!;
     }
 
     public get length(): number {

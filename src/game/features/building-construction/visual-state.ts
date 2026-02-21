@@ -26,17 +26,8 @@ export function getBuildingVisualState(buildingState: BuildingState | undefined)
 
     switch (phase) {
     case BuildingConstructionPhase.Poles:
-        // Poles phase: show nothing or poles (we'll show construction sprite at 0 height)
-        return {
-            useConstructionSprite: true,
-            verticalProgress: 0.0,
-            overallProgress,
-            isCompleted: false,
-            phase,
-        };
-
     case BuildingConstructionPhase.TerrainLeveling:
-        // Terrain leveling: still no building visible (terrain modification)
+        // Poles/leveling phase: show nothing or poles (we'll show construction sprite at 0 height)
         return {
             useConstructionSprite: true,
             verticalProgress: 0.0,

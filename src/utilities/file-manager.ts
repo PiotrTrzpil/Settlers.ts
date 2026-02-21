@@ -105,7 +105,7 @@ export class FileManager {
         const fileKeys: string[] = [];
 
         for (const key of Object.keys(fileNames)) {
-            const f = this.readFile(fileNames[key], exactMatch);
+            const f = this.readFile(fileNames[key]!, exactMatch);
             fileList.push(f);
             fileKeys.push(key);
         }
@@ -116,7 +116,7 @@ export class FileManager {
         const result: { [key: string]: BinaryReader } = {};
 
         for (let i = 0; i < fileKeys.length; i++) {
-            result[fileKeys[i]] = resultFiles[i] ?? new BinaryReader();
+            result[fileKeys[i]!] = resultFiles[i] ?? new BinaryReader();
         }
 
         // return the result file map

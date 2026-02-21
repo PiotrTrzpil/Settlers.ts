@@ -65,8 +65,8 @@ export class ShaderDataTexture extends ShaderTexture {
 
         // WebGL2 sized internal formats with matching unsized format enums.
         // R8 replaces ALPHA, RG8 replaces LUMINANCE_ALPHA.
-        let internalFormat: GLenum = gl.RGBA8;
-        let format: GLenum = gl.RGBA;
+        let internalFormat: GLenum;
+        let format: GLenum;
 
         switch (this.numberOfElements) {
         case 1:

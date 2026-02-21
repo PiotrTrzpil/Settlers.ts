@@ -45,6 +45,7 @@ export class Hexagon3Texture extends LandscapeTextureBase implements ILandscapeT
         return [destX, destY];
     }
 
+    // eslint-disable-next-line sonarjs/no-identical-functions -- intentionally identical; correct rotation offsets TBD
     public getTextureB(tp: TexturePoint, x: number, y: number): [number, number] {
         const use2 = (x + y) % 2 === 0;
         const { destX, destY } = this.layout.get(use2 ? this.srcX2 : this.srcX1, use2 ? this.srcY2 : this.srcY1);

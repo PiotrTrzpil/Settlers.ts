@@ -1,6 +1,7 @@
 import { AraCrypt } from './ara-crypt';
 import { BinaryReader } from './binary-reader';
 
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility namespace class with static members only
 export class DecodeSettlers {
     public static getReader(source: BinaryReader, size: number, offset = -1): BinaryReader {
         const araCrypt = new AraCrypt();

@@ -77,9 +77,9 @@ describe('Resource Request System', () => {
                 const pending = requestManager.getPendingRequests();
 
                 expect(pending.length).toBe(3);
-                expect(pending[0].id).toBe(high.id); // High priority first
-                expect(pending[1].id).toBe(normal.id); // Then normal
-                expect(pending[2].id).toBe(low.id); // Then low
+                expect(pending[0]!.id).toBe(high.id); // High priority first
+                expect(pending[1]!.id).toBe(normal.id); // Then normal
+                expect(pending[2]!.id).toBe(low.id); // Then low
             });
 
             it('should order same-priority requests by timestamp', () => {
@@ -89,9 +89,9 @@ describe('Resource Request System', () => {
 
                 const pending = requestManager.getPendingRequests();
 
-                expect(pending[0].id).toBe(r1.id);
-                expect(pending[1].id).toBe(r2.id);
-                expect(pending[2].id).toBe(r3.id);
+                expect(pending[0]!.id).toBe(r1.id);
+                expect(pending[1]!.id).toBe(r2.id);
+                expect(pending[2]!.id).toBe(r3.id);
             });
 
             it('should not include in-progress requests', () => {
@@ -103,7 +103,7 @@ describe('Resource Request System', () => {
                 const pending = requestManager.getPendingRequests();
 
                 expect(pending.length).toBe(1);
-                expect(pending[0].materialType).toBe(EMaterialType.STONE);
+                expect(pending[0]!.materialType).toBe(EMaterialType.STONE);
             });
         });
 
@@ -276,9 +276,9 @@ describe('Resource Supply System', () => {
             const supplies = getAvailableSupplies(ctx.state, ctx.inventoryManager, EMaterialType.LOG);
 
             expect(supplies.length).toBe(1);
-            expect(supplies[0].buildingId).toBe(building.id);
-            expect(supplies[0].materialType).toBe(EMaterialType.LOG);
-            expect(supplies[0].availableAmount).toBe(5);
+            expect(supplies[0]!.buildingId).toBe(building.id);
+            expect(supplies[0]!.materialType).toBe(EMaterialType.LOG);
+            expect(supplies[0]!.availableAmount).toBe(5);
         });
 
         it('should return empty array when no supplies exist', () => {
@@ -328,7 +328,7 @@ describe('Resource Supply System', () => {
             );
 
             expect(supplies.length).toBe(1);
-            expect(supplies[0].buildingId).toBe(insideBuilding.id);
+            expect(supplies[0]!.buildingId).toBe(insideBuilding.id);
         });
     });
 
@@ -479,12 +479,12 @@ describe('Fulfillment Matcher', () => {
 
             expect(matches.length).toBe(3);
             // Should be sorted by distance (nearest first)
-            expect(matches[0].distance).toBe(2); // wcNear at (22,20)
-            expect(matches[1].distance).toBe(4); // wcMid at (24,20)
-            expect(matches[2].distance).toBe(7); // wcFar at (27,20)
-            expect(matches[0].sourceBuilding).toBe(wcNear.id);
-            expect(matches[1].sourceBuilding).toBe(wcMid.id);
-            expect(matches[2].sourceBuilding).toBe(wcFar.id);
+            expect(matches[0]!.distance).toBe(2); // wcNear at (22,20)
+            expect(matches[1]!.distance).toBe(4); // wcMid at (24,20)
+            expect(matches[2]!.distance).toBe(7); // wcFar at (27,20)
+            expect(matches[0]!.sourceBuilding).toBe(wcNear.id);
+            expect(matches[1]!.sourceBuilding).toBe(wcMid.id);
+            expect(matches[2]!.sourceBuilding).toBe(wcFar.id);
         });
     });
 
@@ -556,8 +556,8 @@ describe('Priority and Ordering', () => {
 
         const pending = requestManager.getPendingRequests();
 
-        expect(pending[0].id).toBe(high.id);
-        expect(pending[1].id).toBe(normal.id);
+        expect(pending[0]!.id).toBe(high.id);
+        expect(pending[1]!.id).toBe(normal.id);
     });
 
     it('should process older requests first at same priority', () => {
@@ -566,8 +566,8 @@ describe('Priority and Ordering', () => {
 
         const pending = requestManager.getPendingRequests();
 
-        expect(pending[0].id).toBe(first.id);
-        expect(pending[1].id).toBe(second.id);
+        expect(pending[0]!.id).toBe(first.id);
+        expect(pending[1]!.id).toBe(second.id);
     });
 });
 
@@ -710,9 +710,9 @@ describe('Player Filtering', () => {
         const suppliesAll = getAvailableSupplies(ctx.state, ctx.inventoryManager, EMaterialType.LOG);
 
         expect(suppliesPlayer0.length).toBe(1);
-        expect(suppliesPlayer0[0].buildingId).toBe(player0Building.id);
+        expect(suppliesPlayer0[0]!.buildingId).toBe(player0Building.id);
         expect(suppliesPlayer1.length).toBe(1);
-        expect(suppliesPlayer1[0].buildingId).toBe(player1Building.id);
+        expect(suppliesPlayer1[0]!.buildingId).toBe(player1Building.id);
         expect(suppliesAll.length).toBe(2);
     });
 });

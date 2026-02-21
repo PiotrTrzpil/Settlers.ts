@@ -340,7 +340,7 @@ export class InputManager {
             screenY,
             tileX: resolvedTile?.x,
             tileY: resolvedTile?.y,
-            button: ((e as PointerEvent).button as MouseButton) ?? MouseButton.Left,
+            button: (e as PointerEvent).button as MouseButton,
             shiftKey: e.shiftKey,
             ctrlKey: e.ctrlKey || e.metaKey,
             altKey: e.altKey,
@@ -423,7 +423,7 @@ export class InputManager {
         // Check if this was a drag
         if (dragData?.isDragging) {
             // Try camera mode first
-            let result = this.cameraMode.onDragEnd?.(dragData, context) ?? { handled: false };
+            let result = this.cameraMode.onDragEnd(dragData, context);
             if (result.handled) {
                 this.state.endDrag();
                 this.applyResult(result, e);
@@ -462,7 +462,7 @@ export class InputManager {
 
             if (this.state.drag.value.isDragging) {
                 // Try camera mode first
-                let result = this.cameraMode.onDrag?.(this.state.drag.value, context) ?? { handled: false };
+                let result = this.cameraMode.onDrag(this.state.drag.value, context);
                 if (result.handled) {
                     this.applyResult(result, e);
                     return;

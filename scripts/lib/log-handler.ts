@@ -2,7 +2,7 @@
 export class LogHandler {
     constructor(private name: string) {}
 
-    debug(...args: unknown[]): void {
+    debug(..._args: unknown[]): void {
         // Silent by default
     }
 

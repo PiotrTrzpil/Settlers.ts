@@ -64,7 +64,7 @@ export interface DiagnosticConfig {
  * 4. Is any supply reachable via shared hub? → NoSharedHub
  * 5. Is a carrier available in valid hubs? → NoCarrier / CarriersBusy
  */
-// eslint-disable-next-line complexity
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- complex multi-step diagnostic algorithm
 export function diagnoseUnfulfilledRequest(request: ResourceRequest, config: DiagnosticConfig): UnfulfilledReason {
     const { gameState, inventoryManager, serviceAreaManager, carrierManager, reservationManager } = config;
 

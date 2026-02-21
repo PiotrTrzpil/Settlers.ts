@@ -16,10 +16,6 @@ export function pad(value: string | number, size: number): string {
 
 /** Render an IGfxImage to a canvas element */
 export function renderImageToCanvas(img: IGfxImage, canvas: HTMLCanvasElement): void {
-    if (!canvas || !canvas.getContext) {
-        return;
-    }
-
     canvas.height = img.height;
     const context = canvas.getContext('2d');
 
@@ -68,21 +64,21 @@ export interface ParsedGfxReaders {
 export async function loadGfxFileSet(fileManager: FileManager, fileId: string): Promise<GfxFileSet> {
     const fileNameList: { [key: string]: string } = {};
 
-    fileNameList.gfx = fileId + '.gfx';
-    fileNameList.gil = fileId + '.gil';
+    fileNameList['gfx'] = fileId + '.gfx';
+    fileNameList['gil'] = fileId + '.gil';
 
     const pilFileExists = fileManager.findFile(fileId + '.pil', false);
 
     if (pilFileExists) {
-        fileNameList.paletteIndex = fileId + '.pil';
-        fileNameList.palette = fileId + '.pa6';
+        fileNameList['paletteIndex'] = fileId + '.pil';
+        fileNameList['palette'] = fileId + '.pa6';
     } else {
-        fileNameList.paletteIndex = fileId + '.pi4';
-        fileNameList.palette = fileId + '.p46';
+        fileNameList['paletteIndex'] = fileId + '.pi4';
+        fileNameList['palette'] = fileId + '.p46';
     }
 
-    fileNameList.dil = fileId + '.dil';
-    fileNameList.jil = fileId + '.jil';
+    fileNameList['dil'] = fileId + '.dil';
+    fileNameList['jil'] = fileId + '.jil';
 
     const files = await fileManager.readFiles(fileNameList, true);
     return files as unknown as GfxFileSet;

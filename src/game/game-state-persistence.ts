@@ -128,7 +128,8 @@ export interface GameStateSnapshot {
     trees?: SerializedTree[];
     /** Resource requests (pending and in-progress) */
     requests?: SerializedRequest[];
-    /** Production cycle progress per building */
+    /** Production cycle progress per building (deprecated v5 field, kept for backward compat) */
+    // eslint-disable-next-line @typescript-eslint/no-deprecated, sonarjs/deprecation -- backward compat with saved snapshots (v5)
     productions?: SerializedProduction[];
     /** Modified terrain ground types (base64-encoded Uint8Array) */
     terrainGroundType?: string;
@@ -151,7 +152,7 @@ export function setCurrentMapId(mapId: string): void {
 function uint8ArrayToBase64(arr: Uint8Array): string {
     let binary = '';
     for (let i = 0; i < arr.length; i++) {
-        binary += String.fromCharCode(arr[i]);
+        binary += String.fromCharCode(arr[i]!);
     }
     return btoa(binary);
 }
@@ -355,6 +356,7 @@ export function hasSavedGameState(): boolean {
 
 // === Restore Helpers ===
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- complex entity restoration from snapshot
 function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
     const state = game.state;
     const { buildingStateManager } = game.services;

@@ -26,10 +26,10 @@ export class GfxImage16Bit implements IGfxImage {
     private getImageData16Bit(buffer: Uint8Array, imgData: Uint8ClampedArray, pos: number, length: number) {
         let j = 0;
         while (j < length) {
-            const value1 = buffer[pos];
+            const value1 = buffer[pos]!;
             pos++;
 
-            const value2 = buffer[pos];
+            const value2 = buffer[pos]!;
             pos++;
 
             imgData[j++] = value2 & 0xf8; // r

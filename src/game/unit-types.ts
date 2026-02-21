@@ -92,7 +92,7 @@ const SELECTABLE_CATEGORIES: ReadonlySet<UnitCategory> = new Set([
 
 /** Get the category for a unit type. */
 export function getUnitCategory(unitType: UnitType): UnitCategory {
-    return UNIT_TYPE_CONFIG[unitType]?.category ?? UnitCategory.Worker;
+    return UNIT_TYPE_CONFIG[unitType].category;
 }
 
 /** Check if a unit type is selectable (Military and Religious categories). */
@@ -108,7 +108,7 @@ export function isUnitTypeMilitary(unitType: UnitType): boolean {
 
 /** Get the default speed for a unit type. */
 export function getUnitTypeSpeed(unitType: UnitType): number {
-    return UNIT_TYPE_CONFIG[unitType]?.speed ?? 2;
+    return UNIT_TYPE_CONFIG[unitType].speed;
 }
 
 /** Get all unit types in a specific category. */

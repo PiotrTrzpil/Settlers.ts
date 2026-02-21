@@ -86,6 +86,7 @@ export class LogManager {
         }
     }
 
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- dispatches to multiple consumers with level filtering
     public push(msg: ILogMessage): void {
         msg.index = this.logMsgCount++;
 

@@ -11,13 +11,15 @@ export class BinaryReader {
 
     constructor(
         dataArray?: BinaryReader | Uint8Array | ArrayBuffer,
-        offset = 0, length: number | null = null, filename: string | null = null
+        offset = 0,
+        length: number | null = null,
+        filename: string | null = null
     ) {
         if (offset === null) {
             offset = 0;
         }
 
-        let dataLength = 0;
+        let dataLength: number;
         let srcHiddenOffset = 0;
 
         if (dataArray == null) {
@@ -51,16 +53,16 @@ export class BinaryReader {
         this.length = length;
         this.pos = this.hiddenOffset;
 
-        this.filename = (filename) || '[Unknown]';
+        this.filename = filename || '[Unknown]';
 
         Object.seal(this);
     }
 
     public getBuffer(offset = 0, length = -1): Uint8Array {
-        const l = (length >= 0) ? Math.min(this.length, length) : this.length;
+        const l = length >= 0 ? Math.min(this.length, length) : this.length;
         const o = this.hiddenOffset + offset;
 
-        if ((l !== this.data.length) || (o > 0)) {
+        if (l !== this.data.length || o > 0) {
             return new Uint8Array(this.data.slice(o, o + l));
         } else {
             return this.data;
@@ -69,15 +71,17 @@ export class BinaryReader {
 
     public readByte(offset: number | null = null): number {
         if (offset !== null) {
-            this.pos = (offset + this.hiddenOffset);
+            this.pos = offset + this.hiddenOffset;
         }
 
-        if ((this.pos < 0) || (this.pos > this.data.length)) {
-            BinaryReader.log.error('read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos);
+        if (this.pos < 0 || this.pos > this.data.length) {
+            BinaryReader.log.error(
+                'read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos
+            );
             return 0;
         }
 
-        const v = this.data[this.pos];
+        const v = this.data[this.pos]!;
         this.pos++;
 
         return v;
@@ -89,14 +93,18 @@ export class BinaryReader {
         }
 
         if (length === 4) {
-            const v = (this.data[offset] << 24) | (this.data[offset + 1] << 16) | (this.data[offset + 2] << 8) | (this.data[offset + 3]);
+            const v =
+                (this.data[offset]! << 24) |
+                (this.data[offset + 1]! << 16) |
+                (this.data[offset + 2]! << 8) |
+                this.data[offset + 3]!;
             this.pos = offset + 4;
             return v;
         }
 
         let v = 0;
         for (let i = length; i > 0; i--) {
-            v = (v << 8) | this.data[offset];
+            v = (v << 8) | this.data[offset]!;
             offset++;
         }
 
@@ -110,17 +118,21 @@ export class BinaryReader {
             offset = this.pos;
         }
 
-        if ((this.pos < 0) || (this.pos + 4 > this.data.length)) {
-            BinaryReader.log.error('read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos);
+        if (this.pos < 0 || this.pos + 4 > this.data.length) {
+            BinaryReader.log.error(
+                'read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos
+            );
             return 0;
         }
 
         this.pos = offset + 4;
 
-        return (this.data[offset]) |
-            (this.data[offset + 1] << 8) |
-            (this.data[offset + 2] << 16) |
-            (this.data[offset + 3] << 24);
+        return (
+            this.data[offset]! |
+            (this.data[offset + 1]! << 8) |
+            (this.data[offset + 2]! << 16) |
+            (this.data[offset + 3]! << 24)
+        );
     }
 
     public readWord(offset: number | null = null): number {
@@ -129,7 +141,7 @@ export class BinaryReader {
         }
 
         this.pos = offset + 2;
-        return (this.data[offset] << 8) | (this.data[offset + 1]);
+        return (this.data[offset]! << 8) | this.data[offset + 1]!;
     }
 
     public readWordBE(offset?: number): number {
@@ -138,8 +150,7 @@ export class BinaryReader {
         }
 
         this.pos = offset + 2;
-        return (this.data[offset]) |
-            (this.data[offset + 1] << 8);
+        return this.data[offset]! | (this.data[offset + 1]! << 8);
     }
 
     public readNullString(offset: number | null = null): string {
@@ -150,7 +161,7 @@ export class BinaryReader {
         let result = '';
 
         while (this.pos < this.length) {
-            const v: number = this.data[this.pos];
+            const v: number = this.data[this.pos]!;
             this.pos++;
             if (v === 0) {
                 return result;
@@ -173,7 +184,7 @@ export class BinaryReader {
         let result = '';
 
         for (let i = 0; i < length; i++) {
-            const v: number = this.data[this.pos];
+            const v: number = this.data[this.pos]!;
             this.pos++;
 
             result += String.fromCharCode(v);
@@ -191,6 +202,6 @@ export class BinaryReader {
 
     public eof(): boolean {
         const pos = this.pos - this.hiddenOffset;
-        return ((pos >= this.length) || (pos < 0));
+        return pos >= this.length || pos < 0;
     }
 }

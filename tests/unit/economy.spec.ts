@@ -13,9 +13,7 @@ import { BuildingType } from '@/game/entity';
 
 describe('Material Types', () => {
     it('should have a config for every EMaterialType value', () => {
-        const materialValues = Object.values(EMaterialType).filter(
-            (v) => typeof v === 'number'
-        ) as EMaterialType[];
+        const materialValues = Object.values(EMaterialType).filter(v => typeof v === 'number') as EMaterialType[];
 
         for (const mat of materialValues) {
             expect(MATERIAL_CONFIGS.has(mat)).toBe(true);
@@ -43,8 +41,8 @@ describe('Material Types', () => {
     it('should have DROPPABLE_MATERIALS sorted by default priority index (non-decreasing)', () => {
         // Priority indices can be equal for similar materials (e.g., GRAIN/AGAVE, BOW/BLOWGUN)
         for (let i = 1; i < DROPPABLE_MATERIALS.length; i++) {
-            const prevPriority = getMaterialPriority(DROPPABLE_MATERIALS[i - 1]);
-            const currPriority = getMaterialPriority(DROPPABLE_MATERIALS[i]);
+            const prevPriority = getMaterialPriority(DROPPABLE_MATERIALS[i - 1]!);
+            const currPriority = getMaterialPriority(DROPPABLE_MATERIALS[i]!);
             expect(currPriority).toBeGreaterThanOrEqual(prevPriority);
         }
     });
@@ -52,7 +50,7 @@ describe('Material Types', () => {
     it('should have reasonable number of unique priority levels', () => {
         // Some materials share priorities (similar types like GRAIN/AGAVE)
         // but we should have a reasonable spread of priorities
-        const priorities = DROPPABLE_MATERIALS.map((m) => getMaterialPriority(m));
+        const priorities = DROPPABLE_MATERIALS.map(m => getMaterialPriority(m));
         const uniquePriorities = new Set(priorities);
         // At least 80% of materials should have distinct priorities
         expect(uniquePriorities.size).toBeGreaterThanOrEqual(priorities.length * 0.8);
@@ -139,24 +137,16 @@ describe('getBuildingTypesRequestingMaterial', () => {
 
 describe('Construction Costs', () => {
     it('should have construction costs defined for all BuildingType values', () => {
-        const buildingValues = Object.values(BuildingType).filter(
-            (v) => typeof v === 'number'
-        ) as BuildingType[];
+        const buildingValues = Object.values(BuildingType).filter(v => typeof v === 'number') as BuildingType[];
 
         for (const bt of buildingValues) {
-            expect(
-                CONSTRUCTION_COSTS.has(bt),
-                `Missing construction costs for ${BuildingType[bt]}`
-            ).toBe(true);
+            expect(CONSTRUCTION_COSTS.has(bt), `Missing construction costs for ${BuildingType[bt]}`).toBe(true);
         }
     });
 
     it('should have at least one material cost per building', () => {
         for (const [buildingType, costs] of CONSTRUCTION_COSTS) {
-            expect(
-                costs.length,
-                `${BuildingType[buildingType]} has no construction costs`
-            ).toBeGreaterThan(0);
+            expect(costs.length, `${BuildingType[buildingType]} has no construction costs`).toBeGreaterThan(0);
         }
     });
 
@@ -181,10 +171,9 @@ describe('Construction Costs', () => {
 
     it('should use BOARD and/or STONE as construction materials', () => {
         for (const [, costs] of CONSTRUCTION_COSTS) {
-            const materials = costs.map((c) => c.material);
+            const materials = costs.map(c => c.material);
             const usesBuildingMaterials =
-                materials.includes(EMaterialType.BOARD) ||
-                materials.includes(EMaterialType.STONE);
+                materials.includes(EMaterialType.BOARD) || materials.includes(EMaterialType.STONE);
             expect(usesBuildingMaterials).toBe(true);
         }
     });

@@ -309,7 +309,8 @@ export class TreeSystem implements TickSystem {
     // ─────────────────────────────────────────────────────────────
 
     plantTree(x: number, y: number, settlerId: number): void {
-        const treeType = PLANTABLE_TREE_TYPES[Math.floor(Math.random() * PLANTABLE_TREE_TYPES.length)];
+        // eslint-disable-next-line sonarjs/pseudo-random -- intentional game randomness for tree planting
+        const treeType = PLANTABLE_TREE_TYPES[Math.floor(Math.random() * PLANTABLE_TREE_TYPES.length)]!;
 
         const result = this.executeCommand({ type: 'plant_tree', treeType, x, y });
 
@@ -342,7 +343,8 @@ export class TreeSystem implements TickSystem {
             const spot = this.findPlantingSpot(cx, cy, radius);
             if (!spot) break;
 
-            const treeType = PLANTABLE_TREE_TYPES[Math.floor(Math.random() * PLANTABLE_TREE_TYPES.length)];
+            // eslint-disable-next-line sonarjs/pseudo-random -- intentional game randomness for tree planting
+            const treeType = PLANTABLE_TREE_TYPES[Math.floor(Math.random() * PLANTABLE_TREE_TYPES.length)]!;
             const result = this.executeCommand({ type: 'plant_tree', treeType, x: spot.x, y: spot.y });
             if (result.success) planted++;
         }

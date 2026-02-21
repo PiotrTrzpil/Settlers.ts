@@ -100,8 +100,8 @@ export function groupDirectionRuns(tiles: TileCoord[]): TileCoord[] {
     const dirs: Array<{ dx: number; dy: number }> = [];
     for (let i = 0; i < n; i++) {
         dirs.push({
-            dx: tiles[i + 1].x - tiles[i].x,
-            dy: tiles[i + 1].y - tiles[i].y,
+            dx: tiles[i + 1]!.x - tiles[i]!.x,
+            dy: tiles[i + 1]!.y - tiles[i]!.y,
         });
     }
 
@@ -111,13 +111,13 @@ export function groupDirectionRuns(tiles: TileCoord[]): TileCoord[] {
     // Skip the swap if it would create a run of 3+ (keep runs at ~2).
     let i = 0;
     while (i < dirs.length - 2) {
-        const curr = dirs[i];
-        const next = dirs[i + 1];
-        const after = dirs[i + 2];
+        const curr = dirs[i]!;
+        const next = dirs[i + 1]!;
+        const after = dirs[i + 2]!;
 
         if (curr.dx === after.dx && curr.dy === after.dy && (curr.dx !== next.dx || curr.dy !== next.dy)) {
             // Would this create a run of 3+? Check if previous step is same direction.
-            if (i > 0 && dirs[i - 1].dx === after.dx && dirs[i - 1].dy === after.dy) {
+            if (i > 0 && dirs[i - 1]!.dx === after.dx && dirs[i - 1]!.dy === after.dy) {
                 i++;
                 continue;
             }
@@ -132,9 +132,9 @@ export function groupDirectionRuns(tiles: TileCoord[]): TileCoord[] {
     }
 
     // Rebuild tile coordinates from directions
-    const result: TileCoord[] = [tiles[0]];
-    let x = tiles[0].x;
-    let y = tiles[0].y;
+    const result: TileCoord[] = [tiles[0]!];
+    let x = tiles[0]!.x;
+    let y = tiles[0]!.y;
     for (const dir of dirs) {
         x += dir.dx;
         y += dir.dy;
@@ -165,7 +165,7 @@ export function isHexLinePassable(
 
     // Check all tiles (skip start since we're already there)
     for (let i = 1; i < tiles.length; i++) {
-        if (!isPassableFn(tiles[i].x, tiles[i].y)) {
+        if (!isPassableFn(tiles[i]!.x, tiles[i]!.y)) {
             return false;
         }
     }

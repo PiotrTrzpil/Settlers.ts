@@ -207,28 +207,28 @@ const DEFAULT_FALLBACK_COLOR: [number, number, number, number] = [0.5, 0.5, 0.5,
 /** Lookup table mapping MapObjectType to fallback colors */
 const MAP_OBJECT_COLOR_LOOKUP: Partial<Record<MapObjectType, [number, number, number, number]>> = {
     // Trees
-    [MapObjectType.TreePine]: FALLBACK_ENTITY_COLORS.tree_pine,
-    [MapObjectType.TreeOak]: FALLBACK_ENTITY_COLORS.tree_deciduous,
-    [MapObjectType.TreeBirch]: FALLBACK_ENTITY_COLORS.tree_birch,
-    // [MapObjectType.TreePalm]: FALLBACK_ENTITY_COLORS.tree_palm, // Duplicate of TreeCoconut (10)
-    // [MapObjectType.TreeCypress]: FALLBACK_ENTITY_COLORS.tree_cypress, // Duplicate of TreeFir (8)
-    [MapObjectType.TreeDead]: FALLBACK_ENTITY_COLORS.tree_dead,
+    [MapObjectType.TreePine]: FALLBACK_ENTITY_COLORS['tree_pine'],
+    [MapObjectType.TreeOak]: FALLBACK_ENTITY_COLORS['tree_deciduous'],
+    [MapObjectType.TreeBirch]: FALLBACK_ENTITY_COLORS['tree_birch'],
+    // [MapObjectType.TreePalm]: FALLBACK_ENTITY_COLORS['tree_palm'], // Duplicate of TreeCoconut (10)
+    // [MapObjectType.TreeCypress]: FALLBACK_ENTITY_COLORS['tree_cypress'], // Duplicate of TreeFir (8)
+    [MapObjectType.TreeDead]: FALLBACK_ENTITY_COLORS['tree_dead'],
     // Add missing S4 trees if needed, mapping to generic colors
-    [MapObjectType.TreeBeech]: FALLBACK_ENTITY_COLORS.tree_deciduous,
-    [MapObjectType.TreeAsh]: FALLBACK_ENTITY_COLORS.tree_deciduous,
-    [MapObjectType.TreeLinden]: FALLBACK_ENTITY_COLORS.tree_deciduous,
-    [MapObjectType.TreePoplar]: FALLBACK_ENTITY_COLORS.tree_deciduous,
-    [MapObjectType.TreeChestnut]: FALLBACK_ENTITY_COLORS.tree_deciduous,
-    [MapObjectType.TreeMaple]: FALLBACK_ENTITY_COLORS.tree_deciduous,
-    [MapObjectType.TreeFir]: FALLBACK_ENTITY_COLORS.tree_pine,
-    [MapObjectType.TreeSpruce]: FALLBACK_ENTITY_COLORS.tree_pine,
-    [MapObjectType.TreeCoconut]: FALLBACK_ENTITY_COLORS.tree_palm,
-    [MapObjectType.TreeDate]: FALLBACK_ENTITY_COLORS.tree_palm,
-    [MapObjectType.TreeWalnut]: FALLBACK_ENTITY_COLORS.tree_deciduous,
-    [MapObjectType.TreeCorkOak]: FALLBACK_ENTITY_COLORS.tree_deciduous,
-    [MapObjectType.TreePine2]: FALLBACK_ENTITY_COLORS.tree_pine,
-    [MapObjectType.TreeOliveLarge]: FALLBACK_ENTITY_COLORS.tree_deciduous,
-    [MapObjectType.TreeOliveSmall]: FALLBACK_ENTITY_COLORS.tree_deciduous,
+    [MapObjectType.TreeBeech]: FALLBACK_ENTITY_COLORS['tree_deciduous'],
+    [MapObjectType.TreeAsh]: FALLBACK_ENTITY_COLORS['tree_deciduous'],
+    [MapObjectType.TreeLinden]: FALLBACK_ENTITY_COLORS['tree_deciduous'],
+    [MapObjectType.TreePoplar]: FALLBACK_ENTITY_COLORS['tree_deciduous'],
+    [MapObjectType.TreeChestnut]: FALLBACK_ENTITY_COLORS['tree_deciduous'],
+    [MapObjectType.TreeMaple]: FALLBACK_ENTITY_COLORS['tree_deciduous'],
+    [MapObjectType.TreeFir]: FALLBACK_ENTITY_COLORS['tree_pine'],
+    [MapObjectType.TreeSpruce]: FALLBACK_ENTITY_COLORS['tree_pine'],
+    [MapObjectType.TreeCoconut]: FALLBACK_ENTITY_COLORS['tree_palm'],
+    [MapObjectType.TreeDate]: FALLBACK_ENTITY_COLORS['tree_palm'],
+    [MapObjectType.TreeWalnut]: FALLBACK_ENTITY_COLORS['tree_deciduous'],
+    [MapObjectType.TreeCorkOak]: FALLBACK_ENTITY_COLORS['tree_deciduous'],
+    [MapObjectType.TreePine2]: FALLBACK_ENTITY_COLORS['tree_pine'],
+    [MapObjectType.TreeOliveLarge]: FALLBACK_ENTITY_COLORS['tree_deciduous'],
+    [MapObjectType.TreeOliveSmall]: FALLBACK_ENTITY_COLORS['tree_deciduous'],
 };
 
 /** Get fallback color for a MapObjectType */

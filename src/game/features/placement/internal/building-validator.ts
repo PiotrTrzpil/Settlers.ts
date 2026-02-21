@@ -28,7 +28,7 @@ function isFootprintInBounds(footprint: TileCoord[], ctx: PlacementContext): boo
  */
 function checkTileBasics(tile: TileCoord, ctx: PlacementContext, isMine: boolean): PlacementStatus | null {
     const idx = ctx.mapSize.toIndex(tile.x, tile.y);
-    const terrainOk = isMine ? isMineBuildable(ctx.groundType[idx]) : isBuildable(ctx.groundType[idx]);
+    const terrainOk = isMine ? isMineBuildable(ctx.groundType[idx]!) : isBuildable(ctx.groundType[idx]!);
     if (!terrainOk) return PlacementStatus.InvalidTerrain;
     if (ctx.tileOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
     return null;
@@ -107,7 +107,7 @@ export function canPlaceBuilding(
 ): boolean {
     const idx = terrain.toIndex(x, y);
 
-    if (!isBuildable(terrain.groundType[idx])) {
+    if (!isBuildable(terrain.groundType[idx]!)) {
         return false;
     }
 

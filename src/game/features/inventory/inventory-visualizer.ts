@@ -227,10 +227,10 @@ export class InventoryVisualizer {
 
         for (const tile of footprint) {
             for (const [dx, dy] of [
-                [0, -1],
-                [1, 0],
-                [0, 1],
-                [-1, 0],
+                [0, -1] as [number, number],
+                [1, 0] as [number, number],
+                [0, 1] as [number, number],
+                [-1, 0] as [number, number],
             ]) {
                 const nx = tile.x + dx;
                 const ny = tile.y + dy;

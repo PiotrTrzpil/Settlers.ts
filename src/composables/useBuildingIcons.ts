@@ -44,25 +44,25 @@ async function loadIconGfx(fileManager: FileManager, race: Race): Promise<GfxFil
             // Check for palette files
             const pilFileExists = fileManager.findFile(fileId + '.pil', false);
             if (pilFileExists) {
-                fileNameList.paletteIndex = fileId + '.pil';
-                fileNameList.palette = fileId + '.pa6';
+                fileNameList['paletteIndex'] = fileId + '.pil';
+                fileNameList['palette'] = fileId + '.pa6';
             } else {
-                fileNameList.paletteIndex = fileId + '.pi4';
-                fileNameList.palette = fileId + '.p46';
+                fileNameList['paletteIndex'] = fileId + '.pi4';
+                fileNameList['palette'] = fileId + '.p46';
             }
 
             const files = await fileManager.readFiles(fileNameList, true);
-            if (!files.gfx || !files.gil || !files.paletteIndex || !files.palette) {
+            if (!files['gfx'] || !files['gil'] || !files['paletteIndex'] || !files['palette']) {
                 log.error(`Failed to load icon GFX files for race ${race}`);
                 return null;
             }
 
-            const paletteIndexReader = new PilFileReader(files.paletteIndex);
-            const paletteCollection = new PaletteCollection(files.palette, paletteIndexReader);
-            const gilFileReader = new GilFileReader(files.gil);
+            const paletteIndexReader = new PilFileReader(files['paletteIndex']);
+            const paletteCollection = new PaletteCollection(files['palette'], paletteIndexReader);
+            const gilFileReader = new GilFileReader(files['gil']);
 
             const reader = new GfxFileReader(
-                files.gfx,
+                files['gfx'],
                 gilFileReader,
                 null, // No JIL for direct index access
                 null, // No DIL for direct index access
@@ -90,7 +90,6 @@ async function loadIconGfx(fileManager: FileManager, race: Race): Promise<GfxFil
  */
 function getIconIndex(race: Race, buildingType: BuildingType, selected = false): number {
     const raceIcons = BUILDING_ICON_INDICES[race];
-    if (!raceIcons) return -1;
     const indices = raceIcons[buildingType];
     if (!indices) return -1;
     return selected ? indices[1] : indices[0];
@@ -177,7 +176,7 @@ export function useBuildingIcons(fileManager: Ref<FileManager | null>, currentRa
         const newUrls = new Map<BuildingType, string>();
         const newSelectedUrls = new Map<BuildingType, string>();
 
-        const raceIcons = BUILDING_ICON_INDICES[race] || {};
+        const raceIcons = BUILDING_ICON_INDICES[race];
         for (const [typeStr] of Object.entries(raceIcons)) {
             const buildingType = Number(typeStr) as BuildingType;
             const url = getCachedIconUrl(race, buildingType, gfxReader, false);

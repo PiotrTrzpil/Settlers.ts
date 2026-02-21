@@ -24,7 +24,7 @@ export class BitReader {
     }
 
     public sourceLeftLength(): number {
-        return Math.max(0, (this.data.length - this.pos));
+        return Math.max(0, this.data.length - this.pos);
     }
 
     public getBufferLength(): number {
@@ -44,10 +44,10 @@ export class BitReader {
                 return 0;
             }
 
-            const readInByte = this.data[this.pos];
+            const readInByte = this.data[this.pos]!;
             this.pos++;
 
-            this.buffer |= (readInByte << (24 - this.bufferLen));
+            this.buffer |= readInByte << (24 - this.bufferLen);
             this.bufferLen += 8;
         }
 
@@ -60,7 +60,7 @@ export class BitReader {
     }
 
     public eof(): boolean {
-        return ((this.pos >= this.data.length) && (this.bufferLen <= 0));
+        return this.pos >= this.data.length && this.bufferLen <= 0;
     }
 
     public toString(): string {

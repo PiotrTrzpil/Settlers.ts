@@ -1,6 +1,7 @@
 /**
  * Handle path name modification
  */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- static utility class used throughout codebase
 export class Path {
     /** fix the path separator */
     public static fixPath(path: string): string {
@@ -50,7 +51,7 @@ export class Path {
             return '';
         }
 
-        return fullFileName.substr(pos + 1);
+        return fullFileName.substring(pos + 1);
     }
 
     /** return only the filename without the Extension e.g. "c:/abc/test.txt" -> "test" */
@@ -61,7 +62,7 @@ export class Path {
             return fileName;
         }
 
-        return fileName.substr(0, pos);
+        return fileName.substring(0, pos);
     }
 
     /** return the path of a filename */
@@ -71,6 +72,6 @@ export class Path {
             return '';
         }
 
-        return fullFileName.substr(0, pos);
+        return fullFileName.substring(0, pos);
     }
 }

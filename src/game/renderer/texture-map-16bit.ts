@@ -28,7 +28,7 @@ export class TextureMapImage {
             const srcOffset = (srcY + y) * srcImg.width + srcX;
             const destOffset = (this.y + y) * this.imgWidthHeight + this.x + destX;
             for (let x = 0; x < width; x++) {
-                this.imgData[destOffset + x] = img[srcOffset + x];
+                this.imgData[destOffset + x] = img[srcOffset + x]!;
             }
         }
     }
@@ -145,7 +145,7 @@ export class TextureMap16Bit extends ShaderTexture {
                 const bx = Math.floor(x / 256);
                 const by = Math.floor(y / 256);
                 const idx = (bx + by * Math.ceil(size / 256)) % PROCEDURAL_PALETTE.length;
-                this.imgData[y * size + x] = PROCEDURAL_PALETTE[idx];
+                this.imgData[y * size + x] = PROCEDURAL_PALETTE[idx]!;
             }
         }
     }

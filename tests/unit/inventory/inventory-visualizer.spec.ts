@@ -45,7 +45,7 @@ describe('InventoryVisualizer', () => {
             expect(resources.length).toBe(1);
 
             // Verify quantity
-            const resourceState = ctx.state.resources.states.get(resources[0].id);
+            const resourceState = ctx.state.resources.states.get(resources[0]!.id);
             expect(resourceState?.quantity).toBe(3);
         });
 
@@ -60,7 +60,7 @@ describe('InventoryVisualizer', () => {
                 e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
-            const resourceId = resources[0].id;
+            const resourceId = resources[0]!.id;
 
             // Deposit more
             inventoryManager.depositOutput(building.id, EMaterialType.LOG, 3);
@@ -98,7 +98,7 @@ describe('InventoryVisualizer', () => {
             );
             expect(resources.length).toBe(1);
 
-            const resource = resources[0];
+            const resource = resources[0]!;
             // Should be near the building (not on it)
             const onBuilding = resource.x >= 10 && resource.x <= 11 && resource.y >= 10 && resource.y <= 11;
             expect(onBuilding).toBe(false);
@@ -142,7 +142,7 @@ describe('InventoryVisualizer', () => {
             expect(resources.length).toBe(1);
 
             // Verify quantity
-            const resourceState = ctx.state.resources.states.get(resources[0].id);
+            const resourceState = ctx.state.resources.states.get(resources[0]!.id);
             expect(resourceState?.quantity).toBe(3);
         });
 
@@ -167,8 +167,8 @@ describe('InventoryVisualizer', () => {
             expect(boards.length).toBe(1);
 
             // They should be at different positions
-            const logPos = { x: logs[0].x, y: logs[0].y };
-            const boardPos = { x: boards[0].x, y: boards[0].y };
+            const logPos = { x: logs[0]!.x, y: logs[0]!.y };
+            const boardPos = { x: boards[0]!.x, y: boards[0]!.y };
             expect(logPos.x !== boardPos.x || logPos.y !== boardPos.y).toBe(true);
         });
 
@@ -201,7 +201,7 @@ describe('InventoryVisualizer', () => {
                 e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
-            expect(ctx.state.resources.getBuildingId(resources[0].id)).toBe(building.id);
+            expect(ctx.state.resources.getBuildingId(resources[0]!.id)).toBe(building.id);
 
             // Remove building's visual stacks
             visualizer.removeBuilding(building.id);
@@ -211,12 +211,12 @@ describe('InventoryVisualizer', () => {
                 e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
-            expect(ctx.state.resources.getBuildingId(resources[0].id)).toBeUndefined();
+            expect(ctx.state.resources.getBuildingId(resources[0]!.id)).toBeUndefined();
 
             // Now findNearestResource should find it (it's free)
             const found = ctx.state.resources.findNearestResource(10, 10, EMaterialType.LOG, 10);
             expect(found).toBeDefined();
-            expect(found?.id).toBe(resources[0].id);
+            expect(found?.id).toBe(resources[0]!.id);
         });
 
         it('output stacks become free after building removal', () => {
@@ -230,7 +230,7 @@ describe('InventoryVisualizer', () => {
                 e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
-            expect(ctx.state.resources.getBuildingId(resources[0].id)).toBe(building.id);
+            expect(ctx.state.resources.getBuildingId(resources[0]!.id)).toBe(building.id);
 
             // Remove building
             visualizer.removeBuilding(building.id);
@@ -240,7 +240,7 @@ describe('InventoryVisualizer', () => {
                 e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
-            expect(ctx.state.resources.getBuildingId(resources[0].id)).toBeUndefined();
+            expect(ctx.state.resources.getBuildingId(resources[0]!.id)).toBeUndefined();
 
             // Now findNearestResource should find it
             const found = ctx.state.resources.findNearestResource(10, 10, EMaterialType.LOG, 10);
@@ -280,7 +280,7 @@ describe('InventoryVisualizer', () => {
                 e => e.type === EntityType.StackedResource && e.subType === EMaterialType.LOG
             );
             expect(resources.length).toBe(1);
-            expect(ctx.state.resources.states.get(resources[0].id)?.quantity).toBe(4);
+            expect(ctx.state.resources.states.get(resources[0]!.id)?.quantity).toBe(4);
 
             newVisualizer.dispose();
         });
@@ -300,7 +300,7 @@ describe('InventoryVisualizer', () => {
             expect(resources.length).toBe(1);
 
             // Input resource should be marked as belonging to this building
-            const resourceBuildingId = ctx.state.resources.getBuildingId(resources[0].id);
+            const resourceBuildingId = ctx.state.resources.getBuildingId(resources[0]!.id);
             expect(resourceBuildingId).toBe(building.id);
 
             // findNearestResource should NOT find it (it's reserved)
@@ -320,7 +320,7 @@ describe('InventoryVisualizer', () => {
             expect(resources.length).toBe(1);
 
             // Output resource should be marked as belonging to building
-            const resourceBuildingId = ctx.state.resources.getBuildingId(resources[0].id);
+            const resourceBuildingId = ctx.state.resources.getBuildingId(resources[0]!.id);
             expect(resourceBuildingId).toBe(building.id);
 
             // findNearestResource should NOT find it (carriers must use inventory API)

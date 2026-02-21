@@ -42,7 +42,7 @@ export { expect } from './matchers';
  * Set by global-setup.ts after probing browser capabilities.
  */
 export function isWebGLAvailable(): boolean {
-    return process.env.E2E_WEBGL_AVAILABLE !== 'false';
+    return process.env['E2E_WEBGL_AVAILABLE'] !== 'false';
 }
 
 /**
@@ -50,7 +50,7 @@ export function isWebGLAvailable(): boolean {
  * In local environments, asset tests should fail if assets are missing.
  */
 export function isCloudEnv(): boolean {
-    return process.env.CI === 'true' || process.env.CLAUDE_CODE_REMOTE === 'true';
+    return process.env['CI'] === 'true' || process.env['CLAUDE_CODE_REMOTE'] === 'true';
 }
 
 /** Fixture types for test function signature */
@@ -89,7 +89,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
                         '  1. Use gs fixture for game-state-only tests (no rendering)\n' +
                         '  2. Run: npx playwright test game-logic --reporter=list\n' +
                         '  3. Set CLAUDE_CODE_REMOTE=true or CI=true to enable SwiftShader\n' +
-                        `Detected renderer: ${process.env.E2E_RENDERER || 'unknown'}`
+                        `Detected renderer: ${process.env['E2E_RENDERER'] || 'unknown'}`
                 );
             }
 
@@ -107,7 +107,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             if (WaitProfiler.isEnabled()) {
                 // Use compact summary by default, full report with WAIT_PROFILER_VERBOSE=1
                 const report =
-                    process.env.WAIT_PROFILER_VERBOSE === '1'
+                    process.env['WAIT_PROFILER_VERBOSE'] === '1'
                         ? WaitProfiler.getReport()
                         : WaitProfiler.getCompactSummary();
                 if (report) console.log(report);
@@ -135,7 +135,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
             if (WaitProfiler.isEnabled()) {
                 const report =
-                    process.env.WAIT_PROFILER_VERBOSE === '1'
+                    process.env['WAIT_PROFILER_VERBOSE'] === '1'
                         ? WaitProfiler.getReport()
                         : WaitProfiler.getCompactSummary();
                 if (report) console.log(report);

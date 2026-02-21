@@ -98,12 +98,12 @@ describe('Game Data XML Parsers', () => {
             expect(ammoMaker!.pileNumber).toBe(2);
             expect(ammoMaker!.piles).toHaveLength(2);
 
-            const stonePile = ammoMaker!.piles[0];
+            const stonePile = ammoMaker!.piles[0]!;
             expect(stonePile.good).toBe('GOOD_STONE');
             expect(stonePile.xOffset).toBe(3);
             expect(stonePile.yOffset).toBe(3);
 
-            const ammoPile = ammoMaker!.piles[1];
+            const ammoPile = ammoMaker!.piles[1]!;
             expect(ammoPile.good).toBe('GOOD_AMMO');
         });
 
@@ -112,9 +112,9 @@ describe('Game Data XML Parsers', () => {
             const ammoMaker = roman?.buildings.get('BUILDING_AMMOMAKERHUT');
 
             expect(ammoMaker!.builderInfos).toHaveLength(3);
-            expect(ammoMaker!.builderInfos[0].xOffset).toBe(3);
-            expect(ammoMaker!.builderInfos[0].yOffset).toBe(1);
-            expect(ammoMaker!.builderInfos[0].dir).toBe(4);
+            expect(ammoMaker!.builderInfos[0]!.xOffset).toBe(3);
+            expect(ammoMaker!.builderInfos[0]!.yOffset).toBe(1);
+            expect(ammoMaker!.builderInfos[0]!.dir).toBe(4);
         });
 
         it('should parse animLists', () => {
@@ -153,7 +153,7 @@ describe('Game Data XML Parsers', () => {
             expect(job!.id).toBe('JOB_CARRIER_IDLE1');
             expect(job!.nodes).toHaveLength(2);
 
-            const firstNode = job!.nodes[0];
+            const firstNode = job!.nodes[0]!;
             expect(firstNode.task).toBe('CEntityTask::WORK');
             expect(firstNode.jobPart).toBe('C_IDLE1');
             expect(firstNode.duration).toBe(0);
@@ -161,7 +161,7 @@ describe('Game Data XML Parsers', () => {
             expect(firstNode.forward).toBe(1);
             expect(firstNode.visible).toBe(1);
 
-            const secondNode = job!.nodes[1];
+            const secondNode = job!.nodes[1]!;
             expect(secondNode.task).toBe('CEntityTask::WAIT');
             expect(secondNode.jobPart).toBe('C_WALK');
         });
@@ -173,7 +173,7 @@ describe('Game Data XML Parsers', () => {
 
             expect(goIntoStrike).toBeDefined();
             expect(quitStrike).toBeDefined();
-            expect(goIntoStrike!.nodes[0].jobPart).toBe('C_STRIKE1');
+            expect(goIntoStrike!.nodes[0]!.jobPart).toBe('C_STRIKE1');
         });
     });
 

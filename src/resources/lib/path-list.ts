@@ -9,7 +9,7 @@ export class PathList {
         const path = Path.fixPath(pathName).toUpperCase();
 
         for (let i = 0; i < this.pathNames.length; i++) {
-            if (this.pathNames[i].toUpperCase() === path) {
+            if (this.pathNames[i]!.toUpperCase() === path) {
                 return i;
             }
         }
@@ -21,14 +21,14 @@ export class PathList {
         if (pathIndex < 0 || pathIndex >= this.pathNames.length) {
             return '/??/';
         }
-        return this.pathNames[pathIndex];
+        return this.pathNames[pathIndex]!;
     }
 
     constructor(paths: string[]) {
         this.pathNames = new Array<string>(paths.length);
 
         for (let i = 0; i < paths.length; i++) {
-            this.pathNames[i] = Path.fixPath(paths[i]);
+            this.pathNames[i] = Path.fixPath(paths[i]!);
         }
 
         Object.seal(this);

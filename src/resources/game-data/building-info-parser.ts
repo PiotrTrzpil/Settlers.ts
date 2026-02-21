@@ -66,14 +66,14 @@ function parseBuilding(buildingEl: Element): BuildingInfo {
     const piles: BuildingPileInfo[] = [];
     const pileElements = buildingEl.getElementsByTagName('pile');
     for (let i = 0; i < pileElements.length; i++) {
-        piles.push(parsePile(pileElements[i]));
+        piles.push(parsePile(pileElements[i]!));
     }
 
     // Parse builder infos
     const builderInfos: BuilderInfo[] = [];
     const builderInfoElements = buildingEl.getElementsByTagName('builderInfo');
     for (let i = 0; i < builderInfoElements.length; i++) {
-        builderInfos.push(parseBuilderInfo(builderInfoElements[i]));
+        builderInfos.push(parseBuilderInfo(builderInfoElements[i]!));
     }
 
     // Parse animLists
@@ -82,7 +82,8 @@ function parseBuilding(buildingEl: Element): BuildingInfo {
     if (animListsContainer) {
         const animListElements = animListsContainer.getElementsByTagName('animList');
         for (let i = 0; i < animListElements.length; i++) {
-            const text = animListElements[i].textContent?.trim();
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- textContent may be null at runtime despite TS type
+            const text = animListElements[i]!.textContent?.trim();
             if (text) animLists.push(text);
         }
     }
@@ -130,15 +131,16 @@ export function parseBuildingInfo(xmlContent: string): Map<RaceId, RaceBuildingD
 
     const raceElements = doc.getElementsByTagName('race');
     for (let i = 0; i < raceElements.length; i++) {
-        const raceEl = raceElements[i];
+        const raceEl = raceElements[i]!;
         const raceId = raceEl.getAttribute('id') as RaceId;
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- getAttribute may return null despite cast
         if (!raceId) continue;
 
         const buildings = new Map<string, BuildingInfo>();
         const buildingElements = raceEl.getElementsByTagName('building');
 
         for (let j = 0; j < buildingElements.length; j++) {
-            const building = parseBuilding(buildingElements[j]);
+            const building = parseBuilding(buildingElements[j]!);
             buildings.set(building.id, building);
         }
 

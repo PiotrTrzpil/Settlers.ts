@@ -5,6 +5,7 @@
 /** Get text content of a child element by tag name */
 export function getChildText(parent: Element, tagName: string): string {
     const el = parent.getElementsByTagName(tagName)[0];
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- el may be undefined, textContent may be null at runtime
     return el?.textContent?.trim() ?? '';
 }
 
@@ -31,7 +32,8 @@ export function getValueArray(parent: Element, containerTag: string): number[] {
     const values: number[] = [];
     const valueElements = container.getElementsByTagName('value');
     for (let i = 0; i < valueElements.length; i++) {
-        const text = valueElements[i].textContent?.trim() ?? '0';
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- textContent may be null at runtime
+        const text = valueElements[i]!.textContent?.trim() ?? '0';
         values.push(parseInt(text, 10));
     }
     return values;
@@ -42,7 +44,8 @@ export function getTextArray(parent: Element, tagName: string): string[] {
     const elements = parent.getElementsByTagName(tagName);
     const result: string[] = [];
     for (let i = 0; i < elements.length; i++) {
-        const text = elements[i].textContent?.trim();
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- textContent may be null at runtime
+        const text = elements[i]!.textContent?.trim();
         if (text) result.push(text);
     }
     return result;

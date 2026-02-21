@@ -120,5 +120,5 @@ export function getCurrentAnimationSprite(
     const frameIndex = sequence.loop
         ? state.currentFrame % sequence.frames.length
         : Math.min(state.currentFrame, sequence.frames.length - 1);
-    return sequence.frames[frameIndex];
+    return sequence.frames[frameIndex] ?? null;
 }

@@ -29,7 +29,7 @@ export function validateSingleTilePlacement(x: number, y: number, ctx: Placement
     const idx = ctx.mapSize.toIndex(x, y);
 
     // Must be passable terrain (not water, rock)
-    if (!isPassable(ctx.groundType[idx])) {
+    if (!isPassable(ctx.groundType[idx]!)) {
         return { canPlace: false, status: PlacementStatus.InvalidTerrain };
     }
 

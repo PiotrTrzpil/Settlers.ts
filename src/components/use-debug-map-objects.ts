@@ -20,7 +20,7 @@ export function useDebugMapObjects(getGame: () => Game | null) {
         if (!game) return;
 
         // Check if map has entity data with objects (trees)
-        hasObjectTypeData.value = (game.mapLoader.entityData?.objects?.length ?? 0) > 0;
+        hasObjectTypeData.value = (game.mapLoader.entityData?.objects.length ?? 0) > 0;
         const counts = countMapObjectsByCategory(game.state);
         mapObjectCounts.value = {
             trees: counts.get('trees') ?? 0,

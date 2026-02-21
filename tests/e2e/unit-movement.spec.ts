@@ -63,8 +63,8 @@ test.describe('Unit Movement', { tag: '@smoke' }, () => {
 
         // Verify no large jumps (teleporting) - max 2 tiles per sample
         for (let i = 1; i < positions.length; i++) {
-            const dx = Math.abs(positions[i].x - positions[i - 1].x);
-            const dy = Math.abs(positions[i].y - positions[i - 1].y);
+            const dx = Math.abs(positions[i]!.x - positions[i - 1]!.x);
+            const dy = Math.abs(positions[i]!.y - positions[i - 1]!.y);
             expect(dx).toBeLessThanOrEqual(2);
             expect(dy).toBeLessThanOrEqual(2);
         }

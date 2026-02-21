@@ -127,8 +127,8 @@ describe('BuildingIndicatorRenderer', () => {
             const easyColor = BuildingIndicatorRenderer.getStatusColor(PlacementStatus.Easy);
             const invalidColor = BuildingIndicatorRenderer.getStatusColor(PlacementStatus.InvalidTerrain);
 
-            expect(easyColor[1]).toBeGreaterThan(easyColor[0]); // greenish
-            expect(invalidColor[0]).toBeGreaterThan(invalidColor[1]); // reddish
+            expect(easyColor[1]!).toBeGreaterThan(easyColor[0]!); // greenish
+            expect(invalidColor[0]!).toBeGreaterThan(invalidColor[1]!); // reddish
         });
     });
 

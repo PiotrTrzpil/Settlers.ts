@@ -11,7 +11,8 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
         const gp = new GamePage(page);
         const { check: checkErrors } = gp.collectErrors();
 
-        // Collect console messages for analysis
+        // Collect console messages for analysis (used for test failure diagnostics)
+        // eslint-disable-next-line sonarjs/no-unused-collection -- retained for debugging test failures
         const consoleLogs: Array<{ level: string; text: string }> = [];
         const logCounts = new Map<string, number>();
 
@@ -26,11 +27,11 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
 
         await test.step('navigate and wait for game ready', async () => {
             await gp.goto({ testMap: true });
-            timings.navigation = Date.now() - startTime;
+            timings['navigation'] = Date.now() - startTime;
 
             const uiStart = Date.now();
             await gp.waitForGameUi(15_000);
-            timings.gameUiMount = Date.now() - uiStart;
+            timings['gameUiMount'] = Date.now() - uiStart;
 
             const readyStart = Date.now();
             await page.waitForFunction(
@@ -41,26 +42,26 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
                 null,
                 { timeout: 15_000 }
             );
-            timings.gameReady = Date.now() - readyStart;
+            timings['gameReady'] = Date.now() - readyStart;
 
             const framesStart = Date.now();
             await gp.wait.waitForFrames(10, 10_000);
-            timings.first10Frames = Date.now() - framesStart;
-            timings.total = Date.now() - startTime;
+            timings['first10Frames'] = Date.now() - framesStart;
+            timings['total'] = Date.now() - startTime;
         });
 
         await test.step('verify timing is acceptable', async () => {
             const debug = await gp.getDebug();
 
             console.log('\n=== Map Loading Timings ===');
-            console.log(`Navigation:      ${timings.navigation}ms`);
-            console.log(`Game UI mount:   ${timings.gameUiMount}ms`);
-            console.log(`Game ready:      ${timings.gameReady}ms`);
-            console.log(`First 10 frames: ${timings.first10Frames}ms`);
-            console.log(`Total:           ${timings.total}ms`);
+            console.log(`Navigation:      ${timings['navigation']}ms`);
+            console.log(`Game UI mount:   ${timings['gameUiMount']}ms`);
+            console.log(`Game ready:      ${timings['gameReady']}ms`);
+            console.log(`First 10 frames: ${timings['first10Frames']}ms`);
+            console.log(`Total:           ${timings['total']}ms`);
             console.log(`FPS:             ${debug.fps}`);
 
-            expect(timings.total).toBeLessThan(30_000);
+            expect(timings['total']).toBeLessThan(30_000);
             expect(debug.gameLoaded).toBe(true);
             expect(debug.rendererReady).toBe(true);
             expect(debug.frameCount).toBeGreaterThan(0);
@@ -88,8 +89,9 @@ test.describe('Map Loading', { tag: '@smoke' }, () => {
         await test.step('verify no excessive console warnings', async () => {
             const sortedLogs = Array.from(logCounts.entries())
                 .map(([key, count]) => {
-                    const [level, text] = key.split(':');
-                    return { level, text, count };
+                    const [level, ...textParts] = key.split(':');
+                    const text = textParts.join(':');
+                    return { level: level!, text, count };
                 })
                 .filter(l => l.count > 1 || l.level === 'error' || l.level === 'warning')
                 .sort((a, b) => b.count - a.count);

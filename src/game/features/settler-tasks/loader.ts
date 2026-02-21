@@ -35,7 +35,7 @@ const ANIMATION_TYPES: ReadonlySet<string> = new Set<AnimationType>([
 
 function parseMaterialType(name: string | undefined): EMaterialType | undefined {
     if (name === undefined) return undefined;
-    const value = EMaterialType[name as keyof typeof EMaterialType];
+    const value = EMaterialType[name as keyof typeof EMaterialType] as EMaterialType | undefined;
     if (value === undefined) {
         throw new Error(
             `Unknown material type in YAML: "${name}". Valid: ${Object.keys(EMaterialType)

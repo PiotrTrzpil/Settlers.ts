@@ -26,7 +26,7 @@ function crc32(data: Uint8Array, start = 0, length?: number): number {
     const len = length ?? data.length - start;
     let crc = 0xffffffff;
     for (let i = start; i < start + len; i++) {
-        crc = CRC32_TABLE[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
+        crc = CRC32_TABLE[(crc ^ data[i]!) & 0xff]! ^ (crc >>> 8);
     }
     return crc ^ 0xffffffff;
 }
@@ -37,7 +37,7 @@ function adler32(data: Uint8Array): number {
     const MOD = 65521;
 
     for (let i = 0; i < data.length; i++) {
-        a = (a + data[i]) % MOD;
+        a = (a + data[i]!) % MOD;
         b = (b + a) % MOD;
     }
 
@@ -94,7 +94,7 @@ function createZlibStored(data: Uint8Array): Uint8Array {
     output[pos++] = (checksum >> 24) & 0xff;
     output[pos++] = (checksum >> 16) & 0xff;
     output[pos++] = (checksum >> 8) & 0xff;
-    output[pos++] = checksum & 0xff;
+    output[pos] = checksum & 0xff;
 
     return output;
 }
@@ -102,9 +102,10 @@ function createZlibStored(data: Uint8Array): Uint8Array {
 /**
  * Try to use platform deflate for better compression
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- platform detection with multiple fallback strategies
 async function deflateWithPlatform(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
     // Try Node.js zlib first
-    if (typeof process !== 'undefined' && process.versions?.node) {
+    if (typeof process !== 'undefined' && process.versions.node) {
         try {
             const zlib = await import('zlib');
             return new Promise((resolve, reject) => {
@@ -132,6 +133,7 @@ async function deflateWithPlatform(data: Uint8Array<ArrayBuffer>): Promise<Uint8
             for (;;) {
                 const { done, value } = await reader.read();
                 if (done) break;
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- undefined in some stream impls
                 if (value) chunks.push(value);
             }
 
@@ -300,6 +302,7 @@ export async function encodePNG(image: RawImageData | ImageData): Promise<Uint8A
     return png;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility namespace class with static members only
 export class PngEncoder {
     /**
      * Encode image to PNG bytes (sync version, no compression)

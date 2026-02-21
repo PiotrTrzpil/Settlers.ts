@@ -43,7 +43,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         expect(spawned.success).toBe(true);
         expect(ctx.state.entities).toHaveLength(1);
 
-        const unit = ctx.state.entities[0];
+        const unit = ctx.state.entities[0]!;
         expect(unit.type).toBe(EntityType.Unit);
         expect(unit.x).toBe(5);
         expect(unit.y).toBe(5);
@@ -60,7 +60,7 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const moved = moveUnit(ctx, unit.id, 10, 5);
         expect(moved.success).toBe(true);
         expect(unitState!.path.length).toBeGreaterThan(0);
-        expect(unitState!.path[unitState!.path.length - 1]).toEqual({ x: 10, y: 5 });
+        expect(unitState!.path[unitState!.path.length - 1]!).toEqual({ x: 10, y: 5 });
 
         // ── Step 3: Simulate movement updates ──
         // Progress starts at 1 when path is set (for immediate responsiveness).

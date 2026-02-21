@@ -190,6 +190,7 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
     });
 
     // Buildings.Amount(player, buildingType, state?) - Count buildings
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- complex state filter logic for Lua scripting API
     runtime.registerFunction('Buildings', 'Amount', (player: number, buildingType: number, state?: number) => {
         const internalType = mapS4ToInternalType(buildingType);
         let count = 0;

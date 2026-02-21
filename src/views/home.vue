@@ -112,18 +112,13 @@ async function handleClearCache(): Promise<void> {
 }
 
 function checkIsValidSettlers() {
-    if (!props.fileManager) {
-        isValidSettlers.value = false;
-        return;
-    }
-
     // Classic editions have game.lib; History Edition has unpacked files
     isValidSettlers.value =
         props.fileManager.findFile('game.lib', false) != null || props.fileManager.findFile('2.gh6', false) != null;
 }
 
 async function selectFiles(e: Event) {
-    if (!e || !e.target) {
+    if (!e.target) {
         return;
     }
 

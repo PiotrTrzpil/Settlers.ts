@@ -53,8 +53,8 @@ class WaitProfilerImpl {
     private readonly verbose: boolean;
 
     constructor() {
-        this.enabled = process.env.WAIT_PROFILER !== '0';
-        this.verbose = process.env.WAIT_PROFILER_VERBOSE === '1';
+        this.enabled = process.env['WAIT_PROFILER'] !== '0';
+        this.verbose = process.env['WAIT_PROFILER_VERBOSE'] === '1';
     }
 
     isEnabled(): boolean {

@@ -106,7 +106,7 @@ function onMouseMove(evt: MouseEvent) {
         ' y: ' +
         y +
         ' value: ' +
-        peekValue(props.value, x, y, bytePerPixel.value, byteOffset.value, useWidth.value ?? 1);
+        peekValue(props.value, x, y, bytePerPixel.value, byteOffset.value, useWidth.value);
 }
 
 function peekValue(data: BinaryReader, x: number, y: number, bpp: number, offset: number, w: number) {
@@ -139,14 +139,7 @@ function updateContent() {
         {
             const cavEl = cav.value;
             if (cavEl) {
-                toImg(
-                    props.value,
-                    bytePerPixel.value,
-                    byteOffset.value,
-                    useWidth.value ?? 1,
-                    props.height ?? 1,
-                    cavEl
-                );
+                toImg(props.value, bytePerPixel.value, byteOffset.value, useWidth.value, props.height ?? 1, cavEl);
             }
         }
         break;
@@ -156,10 +149,6 @@ function updateContent() {
 }
 
 function toImg(data: BinaryReader, bpp: number, offset: number, w: number, h: number, cavEl: HTMLCanvasElement) {
-    if (!cavEl || !cavEl.getContext) {
-        return;
-    }
-
     if (w > 5000 || h > 5000) {
         return;
     }
@@ -172,7 +161,7 @@ function toImg(data: BinaryReader, bpp: number, offset: number, w: number, h: nu
     const length = Math.min(buffer.length - offset, w * h * bpp);
 
     for (let i = offset; i < length; i += bpp) {
-        const value = buffer[i];
+        const value = buffer[i]!;
 
         imgData[j++] = value; // r
         imgData[j++] = value; // g

@@ -5,9 +5,9 @@ import { resolve } from 'path';
 import { computeSourceHash } from './tests/e2e/source-hash';
 
 // Only include polyfills in browser builds, not in test environment
-const isTest = process.env.VITEST === 'true';
+const isTest = process.env['VITEST'] === 'true';
 // Fast build skips fengari/node-polyfills (incompatible with rolldown-vite)
-const isFastBuild = process.env.FAST_BUILD === '1';
+const isFastBuild = process.env['FAST_BUILD'] === '1';
 
 // Load node polyfills plugin only when needed (full build + non-test)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,7 +59,7 @@ export default defineConfig({
     test: {
         environment: 'node',
         include: ['tests/unit/**/*.spec.ts'],
-        reporters: process.env.CI ? ['verbose', 'github-actions'] : ['verbose'],
+        reporters: process.env['CI'] ? ['verbose', 'github-actions'] : ['verbose'],
         // Vitest 4 defaults to 'forks' pool with sensible parallelism
         // Timeouts to prevent hung processes
         testTimeout: 10000,

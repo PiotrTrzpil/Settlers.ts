@@ -145,7 +145,7 @@ export async function isTerrainPassable(page: Page, x: number, y: number): Promi
             const game = window.__settlers__?.game;
             if (!game) return null;
             const idx = game.terrain.mapSize.toIndex(tx, ty);
-            const gt = game.terrain.groundType[idx];
+            const gt = game.terrain.groundType[idx]!;
             return {
                 groundType: gt,
                 isPassable: gt > 8 && gt !== 32,
@@ -372,7 +372,7 @@ export async function findPassableTile(page: Page): Promise<{ x: number; y: numb
 
         return search(Math.floor(w / 2), Math.floor(h / 2), w, h, (tx, ty) => {
             const idx = game.terrain.mapSize.toIndex(tx, ty);
-            const gt = game.terrain.groundType[idx];
+            const gt = game.terrain.groundType[idx]!;
             const isPassable = gt > 8 && gt !== 32;
             const key = `${tx},${ty}`;
             const isOccupied = game.state.tileOccupancy?.has(key);
@@ -411,11 +411,11 @@ export async function placeMultiple(page: Page, count: number, spec: PlacementSp
 
                     let result;
                     if (s.kind === 'building') {
-                        const bt = s.buildingTypes ? s.buildingTypes[placed % s.buildingTypes.length] : 1;
-                        const p = s.players ? s.players[placed % s.players.length] : 0;
+                        const bt = s.buildingTypes ? s.buildingTypes[placed % s.buildingTypes.length]! : 1;
+                        const p = s.players ? s.players[placed % s.players.length]! : 0;
                         result = game.execute({ type: 'place_building', buildingType: bt, x: tx, y: ty, player: p });
                     } else {
-                        const mt = s.materialTypes ? s.materialTypes[placed % s.materialTypes.length] : placed % 3;
+                        const mt = s.materialTypes ? s.materialTypes[placed % s.materialTypes.length]! : placed % 3;
                         result = game.execute({
                             type: 'place_resource',
                             materialType: mt,

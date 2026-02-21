@@ -457,7 +457,7 @@ export class RequestManager {
      * Unsubscribe from a request event.
      */
     off<K extends keyof RequestManagerEvents>(event: K, listener: RequestEventListener<K>): void {
-        const listeners = this.listeners[event] as Set<RequestEventListener<K>> | undefined;
+        const listeners = this.listeners[event];
         if (listeners) {
             listeners.delete(listener);
         }
@@ -467,7 +467,7 @@ export class RequestManager {
      * Emit a request event.
      */
     private emit<K extends keyof RequestManagerEvents>(event: K, data: RequestManagerEvents[K]): void {
-        const listeners = this.listeners[event] as Set<RequestEventListener<K>> | undefined;
+        const listeners = this.listeners[event];
         if (listeners) {
             for (const listener of listeners) {
                 listener(data);

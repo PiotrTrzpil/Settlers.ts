@@ -49,7 +49,7 @@ export class BitReader {
                 return 0;
             }
 
-            const readInByte = this.data[this.pos];
+            const readInByte = this.data[this.pos]!;
             this.pos++;
 
             this.buffer |= readInByte << (24 - this.bufferLen);

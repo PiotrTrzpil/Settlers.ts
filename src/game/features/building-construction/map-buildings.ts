@@ -108,7 +108,7 @@ export function populateMapBuildings(
         const buildingType = S4_TO_BUILDING_TYPE[buildingData.buildingType];
         if (buildingType === undefined) {
             log.debug(
-                `Skipping unmapped building type: ${S4BuildingType[buildingData.buildingType] ?? buildingData.buildingType} at (${buildingData.x}, ${buildingData.y})`
+                `Skipping unmapped building type: ${S4BuildingType[buildingData.buildingType]} at (${buildingData.x}, ${buildingData.y})`
             );
             skipped++;
             continue;

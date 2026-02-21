@@ -39,31 +39,31 @@ export class TerrainData {
 
     /** Get ground height at tile coordinates */
     getHeight(x: number, y: number): number {
-        return this.groundHeight[this.mapSize.toIndex(x, y)];
+        return this.groundHeight[this.mapSize.toIndex(x, y)]!;
     }
 
     /** Get ground type value at tile coordinates */
     getType(x: number, y: number): number {
-        return this.groundType[this.mapSize.toIndex(x, y)];
+        return this.groundType[this.mapSize.toIndex(x, y)]!;
     }
 
     /** Check if tile is passable (units can walk on it) */
     isPassable(x: number, y: number): boolean {
-        return isPassable(this.groundType[this.mapSize.toIndex(x, y)]);
+        return isPassable(this.groundType[this.mapSize.toIndex(x, y)]!);
     }
 
     /** Check if tile is buildable for normal buildings */
     isBuildable(x: number, y: number): boolean {
-        return isBuildable(this.groundType[this.mapSize.toIndex(x, y)]);
+        return isBuildable(this.groundType[this.mapSize.toIndex(x, y)]!);
     }
 
     /** Check if tile is rock/mountain terrain */
     isRock(x: number, y: number): boolean {
-        return isRock(this.groundType[this.mapSize.toIndex(x, y)]);
+        return isRock(this.groundType[this.mapSize.toIndex(x, y)]!);
     }
 
     /** Check if tile is buildable for mine buildings */
     isMineBuildable(x: number, y: number): boolean {
-        return isMineBuildable(this.groundType[this.mapSize.toIndex(x, y)]);
+        return isMineBuildable(this.groundType[this.mapSize.toIndex(x, y)]!);
     }
 }

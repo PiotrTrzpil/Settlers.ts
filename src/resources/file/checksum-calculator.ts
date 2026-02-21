@@ -1,8 +1,9 @@
 import { BinaryReader } from './binary-reader';
 
 /** Calculates a settlers 4 the check sum */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class -- utility namespace class with static members only
 export class ChecksumCalculator {
-    static keyTable: Uint16Array = ChecksumCalculator.createKeyTable();
+    static readonly keyTable: Uint16Array = ChecksumCalculator.createKeyTable();
 
     public static calc(data: BinaryReader, offset = -1, length = -1): number {
         const keyTable = ChecksumCalculator.keyTable;
@@ -20,7 +21,7 @@ export class ChecksumCalculator {
         let key = 0;
 
         for (let i = 0; i < length; i++) {
-            key = (key >> 8) ^ keyTable[(data.readByte() ^ key) & 0xff];
+            key = (key >> 8) ^ keyTable[(data.readByte() ^ key) & 0xff]!;
         }
 
         /// swap high and lower byte
@@ -28,6 +29,7 @@ export class ChecksumCalculator {
     }
 
     /** Create a Table of keys needed for calculating the checksum */
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- bitwise key table generation algorithm has inherent complexity
     private static createKeyTable() {
         const table = new Uint16Array(256);
 

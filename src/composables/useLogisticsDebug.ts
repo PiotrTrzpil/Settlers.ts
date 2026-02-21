@@ -250,11 +250,11 @@ function gatherRequests(
     const indices = pending.map((_, i) => i);
     indices.sort((a, b) => {
         const priorityOrder = { High: 0, Normal: 1, Low: 2 };
-        const pDiff = priorityOrder[pending[a].priority] - priorityOrder[pending[b].priority];
-        return pDiff !== 0 ? pDiff : pending[b].age - pending[a].age;
+        const pDiff = priorityOrder[pending[a]!.priority] - priorityOrder[pending[b]!.priority];
+        return pDiff !== 0 ? pDiff : pending[b]!.age - pending[a]!.age;
     });
-    const sortedPending = indices.map(i => pending[i]);
-    const sortedRawPending = indices.map(i => rawPending[i]);
+    const sortedPending = indices.map(i => pending[i]!);
+    const sortedRawPending = indices.map(i => rawPending[i]!);
 
     return { pending: sortedPending, rawPending: sortedRawPending, inProgress };
 }
@@ -284,8 +284,8 @@ function gatherCarriers(
         });
 
         stats.carrierCount++;
-        (stats[STATUS_STAT_KEYS[carrier.status]] as number)++;
-        (stats[FATIGUE_STAT_KEYS[fatigueLevel]] as number)++;
+        stats[STATUS_STAT_KEYS[carrier.status]]++;
+        stats[FATIGUE_STAT_KEYS[fatigueLevel]]++;
     }
 
     carriers.sort((a, b) => a.entityId - b.entityId);
@@ -402,8 +402,8 @@ export function useLogisticsDebug(getGame: () => Game | null): {
         };
         const diagnosticLimit = Math.min(rawPending.length, MAX_LIST_ITEMS);
         for (let i = 0; i < diagnosticLimit; i++) {
-            const reason = diagnoseUnfulfilledRequest(rawPending[i], diagnosticConfig);
-            pending[i].reason = UNFULFILLED_REASON_LABELS[reason];
+            const reason = diagnoseUnfulfilledRequest(rawPending[i]!, diagnosticConfig);
+            pending[i]!.reason = UNFULFILLED_REASON_LABELS[reason];
         }
 
         state.value = {

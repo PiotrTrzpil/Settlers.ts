@@ -18,9 +18,9 @@ export class AraCrypt {
     }
 
     public getNextKey(): number {
-        let key0 = this.keyState[0];
-        let key1 = this.keyState[1];
-        let key2 = this.keyState[2];
+        let key0 = this.keyState[0]!;
+        let key1 = this.keyState[1]!;
+        let key2 = this.keyState[2]!;
 
         let resultKey = 0;
         let bit1 = key1 & 1;

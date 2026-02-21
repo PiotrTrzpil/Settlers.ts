@@ -38,7 +38,7 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
     }
 
     protected getSubTypeName(subType: UnitType): string {
-        return UnitType[subType] ?? `Unit#${subType}`;
+        return UnitType[subType];
     }
 
     /**

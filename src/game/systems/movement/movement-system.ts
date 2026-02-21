@@ -300,7 +300,7 @@ export class MovementSystem implements TickSystem {
     /** Recalculate a prefix of the path */
     private repairPathPrefix(controller: MovementController): boolean {
         const prefixTargetIdx = Math.min(controller.pathIndex + PATH_REPAIR_DISTANCE, controller.path.length - 1);
-        const prefixTarget = controller.path[prefixTargetIdx];
+        const prefixTarget = controller.path[prefixTargetIdx]!;
         const newPrefix = findPath(
             controller.tileX,
             controller.tileY,
@@ -322,7 +322,7 @@ export class MovementSystem implements TickSystem {
 
     /** Recalculate the entire remaining path */
     private repairFullPath(controller: MovementController): boolean {
-        const goal = controller.path[controller.path.length - 1];
+        const goal = controller.path[controller.path.length - 1]!;
         const newPath = findPath(
             controller.tileX,
             controller.tileY,
@@ -375,7 +375,7 @@ export class MovementSystem implements TickSystem {
         if (nx < 0 || nx >= this.mapWidth || ny < 0 || ny >= this.mapHeight) return false;
 
         const nIdx = nx + ny * this.mapWidth;
-        if (!isPassable(this.groundType[nIdx])) return false;
+        if (!isPassable(this.groundType[nIdx]!)) return false;
         if (this.tileOccupancy.has(tileKey(nx, ny))) return false;
 
         return true;
@@ -588,6 +588,7 @@ export class MovementSystem implements TickSystem {
         // Don't push a unit that's mid-transit - would cause visual teleport
         if (blockedController.isInTransit) return false;
 
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive guard for optional system dependencies
         if (!this.tileOccupancy || !this.rng) return false;
 
         const terrain = this.hasTerrainData()

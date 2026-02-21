@@ -162,6 +162,7 @@ const props = defineProps<{
 // Use gameViewState for reactivity (updated every tick from game loop)
 // Touch tick counter to force re-evaluation when entity properties change
 const selectedEntity = computed<Entity | undefined>(() => {
+    // eslint-disable-next-line sonarjs/void-use -- intentionally touch reactive tick to trigger re-evaluation
     void props.game!.viewState.state.tick;
     const entityId = props.game!.viewState.state.selectedEntityId;
     if (entityId === null || !props.game) return undefined;
@@ -194,16 +195,16 @@ const entityTypeName = computed(() => {
 
     if (entity.type === EntityType.Unit) {
         const config = UNIT_TYPE_CONFIG[entity.subType as UnitType];
-        return config?.name ?? `Unit #${entity.subType}`;
+        return config.name;
     }
 
     if (entity.type === EntityType.Building) {
         const typeName = BuildingType[entity.subType as BuildingType];
         // Convert PascalCase to readable format (e.g., WoodcutterHut -> Woodcutter Hut)
-        return typeName?.replace(/([A-Z])/g, ' $1').trim() ?? `Building #${entity.subType}`;
+        return typeName.replace(/([A-Z])/g, ' $1').trim();
     }
 
-    return EntityType[entity.type] ?? 'Unknown';
+    return EntityType[entity.type];
 });
 
 // Icon for the entity type
@@ -245,8 +246,8 @@ const carriedMaterial = computed(() => {
     const entity = selectedEntity.value;
     if (!entity || entity.type !== EntityType.Unit) return null;
     const material = entity.carrying?.material;
-    if (material === undefined || material === null) return null;
-    return EMaterialType[material] ?? `Material #${material}`;
+    if (material === undefined) return null;
+    return EMaterialType[material];
 });
 
 // Building size
@@ -297,6 +298,7 @@ interface CarrierDebugInfo {
 
 const carrierDebug = computed<CarrierDebugInfo | null>(() => {
     // Touch frameCount to re-evaluate every frame (carrier state changes frequently)
+    // eslint-disable-next-line sonarjs/void-use -- intentionally touch reactive tick to trigger re-evaluation
     void props.game!.viewState.state.tick;
     const entity = selectedEntity.value;
     if (!entity || entity.type !== EntityType.Unit) return null;
@@ -360,6 +362,7 @@ const PHASE_NAMES: Record<BuildingConstructionPhase, string> = {
 
 const buildingDebug = computed<BuildingDebugInfo | null>(() => {
     // Touch frameCount to re-evaluate every frame (building state changes)
+    // eslint-disable-next-line sonarjs/void-use -- intentionally touch reactive tick to trigger re-evaluation
     void props.game!.viewState.state.tick;
     const entity = selectedEntity.value;
     if (!entity || entity.type !== EntityType.Building) return null;
@@ -388,7 +391,7 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
         r => r.status !== RequestStatus.Fulfilled && r.status !== RequestStatus.Cancelled
     );
     const hasProduction = activeRequests.length > 0 || inventory !== undefined;
-    const pendingInputs = activeRequests.map(r => EMaterialType[r.materialType] ?? `#${r.materialType}`);
+    const pendingInputs = activeRequests.map(r => EMaterialType[r.materialType]);
 
     // Inventory info
     const hasInventory = inventory !== undefined;
@@ -401,7 +404,7 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
                 .getReservedAmount(entity.id, slot.materialType);
             inventorySlots.push({
                 type: 'In',
-                material: EMaterialType[slot.materialType] ?? `#${slot.materialType}`,
+                material: EMaterialType[slot.materialType],
                 amount: slot.currentAmount,
                 reserved,
             });
@@ -412,7 +415,7 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
                 .getReservedAmount(entity.id, slot.materialType);
             inventorySlots.push({
                 type: 'Out',
-                material: EMaterialType[slot.materialType] ?? `#${slot.materialType}`,
+                material: EMaterialType[slot.materialType],
                 amount: slot.currentAmount,
                 reserved,
             });
@@ -422,7 +425,7 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
     // Request info
     const requestInfos: RequestInfo[] = requests.slice(0, 5).map(req => ({
         id: req.id,
-        material: EMaterialType[req.materialType] ?? `#${req.materialType}`,
+        material: EMaterialType[req.materialType],
         status: req.status === RequestStatus.InProgress ? 'progress' : 'pending',
         statusLabel: req.status === RequestStatus.InProgress ? '⚙' : '⏳',
     }));

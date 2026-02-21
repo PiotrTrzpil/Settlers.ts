@@ -121,7 +121,7 @@ function updatePlacementModeState(er: EntityRenderer, renderState: any): void {
 
     // Handle new unified PlacementPreview type
     if (preview?.type === 'placement') {
-        const amount = (preview.extra?.amount as number) ?? 1;
+        const amount = (preview.extra?.['amount'] as number | undefined) ?? 1;
         const variation = preview.entityType === 'resource' ? Math.max(0, Math.min(amount - 1, 7)) : undefined;
 
         er.placementPreview = {
@@ -133,7 +133,7 @@ function updatePlacementModeState(er: EntityRenderer, renderState: any): void {
         };
     }
     // Handle legacy BuildingPreview/ResourcePreview types for backward compatibility
-    else if (preview?.type === 'building' || preview?.type === 'resource') {
+    else if (preview && (preview.type === 'building' || preview.type === 'resource')) {
         const entityType = preview.type as PlacementEntityType;
         const subType = preview.type === 'building' ? (preview as any).buildingType : (preview as any).materialType;
         const amount = preview.type === 'resource' ? ((preview as any).amount ?? 1) : 1;
@@ -180,7 +180,7 @@ function createUpdateCallback(
             const renderState = inputManager?.getRenderState();
             selectionBox.value = renderState?.preview?.type === 'selection_box' ? renderState.preview : null;
 
-            if (renderState?.cursor && renderer.canvas) {
+            if (renderState?.cursor) {
                 renderer.canvas.style.cursor = renderState.cursor;
             }
         }
@@ -254,8 +254,8 @@ function updateTileDebugStats(
     const game = getGame();
     if (game) {
         const idx = game.terrain.toIndex(tileX, tileY);
-        debugStats.state.tileGroundType = game.terrain.groundType[idx];
-        debugStats.state.tileGroundHeight = game.terrain.groundHeight[idx];
+        debugStats.state.tileGroundType = game.terrain.groundType[idx]!;
+        debugStats.state.tileGroundHeight = game.terrain.groundHeight[idx]!;
     }
 }
 
@@ -467,8 +467,8 @@ export function useRenderer({
                 debugStats.state.tileX = x;
                 debugStats.state.tileY = y;
                 const idx = game.terrain.toIndex(x, y);
-                debugStats.state.tileGroundType = game.terrain.groundType[idx];
-                debugStats.state.tileGroundHeight = game.terrain.groundHeight[idx];
+                debugStats.state.tileGroundType = game.terrain.groundType[idx]!;
+                debugStats.state.tileGroundHeight = game.terrain.groundHeight[idx]!;
             }
         }
 

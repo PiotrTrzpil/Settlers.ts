@@ -56,7 +56,7 @@ export class LibFileHeader {
 
         for (let i = 0; i < count; i++) {
             result[i] = new LibFileItem();
-            result[i].read(this.reader, fileNames[i], pathNames);
+            result[i]!.read(this.reader, fileNames[i]!, pathNames);
         }
 
         return result;

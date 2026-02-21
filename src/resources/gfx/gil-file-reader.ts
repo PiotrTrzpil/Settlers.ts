@@ -11,7 +11,7 @@ export class GilFileReader extends IndexFile {
 
     /** return the number of images stored in the gfx file */
     public getImageCount(): number {
-        return this.offsetTable ? this.offsetTable.length : 0;
+        return this.offsetTable.length;
     }
 
     /** return the file offset of a gfx image */
@@ -20,7 +20,7 @@ export class GilFileReader extends IndexFile {
             GilFileReader.log.error('Gfx-Index out of range: ' + index);
             return -1;
         }
-        return this.offsetTable[index];
+        return this.offsetTable[index]!;
     }
 
     constructor(resourceReader: BinaryReader) {

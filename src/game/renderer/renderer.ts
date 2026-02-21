@@ -222,8 +222,8 @@ export class Renderer {
         };
 
         for (let i = 0; i < this.renderers.length; i++) {
-            const r = this.renderers[i];
-            const layerState = this.layerErrors[i];
+            const r = this.renderers[i]!;
+            const layerState = this.layerErrors[i]!;
             const start = performance.now();
 
             try {
@@ -300,7 +300,7 @@ export class Renderer {
 
     /** Handle a render layer error with throttled logging and toast notification */
     private handleLayerError(index: number, renderer: IRenderer, error: unknown): void {
-        const state = this.layerErrors[index];
+        const state = this.layerErrors[index]!;
         state.consecutiveFailures++;
 
         const err = error instanceof Error ? error : new Error(String(error));

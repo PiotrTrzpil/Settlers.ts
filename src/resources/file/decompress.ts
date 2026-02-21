@@ -24,7 +24,7 @@ export class Decompress extends Packer {
 
         for (let i = 0; i < 16; i++) {
             length--;
-            let bitValue = 0;
+            let bitValue: number;
             do {
                 length++;
                 bitValue = inData.read(1);
@@ -59,6 +59,7 @@ export class Decompress extends Packer {
         return 'done';
     }
 
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- LZ77+Huffman decompress algorithm has inherent structural complexity
     public unpack(inDataSrc: BinaryReader, inOffset: number, inLength: number, outLength: number): BinaryReader {
         const inData = new BitReader(inDataSrc, inOffset, inLength);
         const writer = new StreamWriter(outLength);
@@ -73,8 +74,8 @@ export class Decompress extends Packer {
                 break;
             }
 
-            const codeWordLength = huffmanTable.index[codeType];
-            let codeWordIndex = huffmanTable.value[codeType];
+            const codeWordLength = huffmanTable.index[codeType]!;
+            let codeWordIndex = huffmanTable.value[codeType]!;
 
             if (codeWordLength > 0) {
                 codeWordIndex += inData.read(codeWordLength);
@@ -84,7 +85,7 @@ export class Decompress extends Packer {
                 }
             }
 
-            const codeWord = codeTable.codeTable[codeWordIndex];
+            const codeWord = codeTable.codeTable[codeWordIndex]!;
             codeTable.inc(codeWord);
 
             // Execute codeword
@@ -125,14 +126,14 @@ export class Decompress extends Packer {
             entryLength += codeWord - 0x0100;
         } else {
             const index = codeWord - 0x0108;
-            const bitCount = Packer.LengthTable.index[index];
+            const bitCount = Packer.LengthTable.index[index]!;
             const readInByte = inData.read(bitCount);
-            entryLength += Packer.LengthTable.value[index] + readInByte;
+            entryLength += Packer.LengthTable.value[index]! + readInByte;
         }
 
         const distanceIndex = inData.read(3);
-        const distanceLength = Packer.DistanceTable.index[distanceIndex] + 1;
-        const baseValue = Packer.DistanceTable.value[distanceIndex];
+        const distanceLength = Packer.DistanceTable.index[distanceIndex]! + 1;
+        const baseValue = Packer.DistanceTable.value[distanceIndex]!;
 
         const base = inData.read(8);
         const offsetValue = inData.read(distanceLength);

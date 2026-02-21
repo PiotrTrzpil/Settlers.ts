@@ -87,7 +87,7 @@ async function load(file: IFileSource) {
 
     // Auto-select first item
     if (ghContent.value.length > 0) {
-        selectedItem.value = ghContent.value[0];
+        selectedItem.value = ghContent.value[0] ?? null;
     }
 
     await renderAfterLoad(renderAllGridImages);

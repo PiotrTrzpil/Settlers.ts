@@ -12,6 +12,7 @@
  * @param maxRadius - Maximum search radius (default: half the larger dimension)
  * @returns The first matching coordinate, or null if none found
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- triple nested loops required for spiral traversal
 export function spiralSearch(
     cx: number,
     cy: number,

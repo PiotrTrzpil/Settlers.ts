@@ -57,12 +57,12 @@ const SLOPE_GRADIENT: number[][] = [
 
 /** Legacy STATUS_COLORS for compatibility with tests */
 const STATUS_COLORS: Record<PlacementStatus, number[]> = {
-    [PlacementStatus.InvalidTerrain]: UNBUILDABLE_COLORS[PlacementStatus.InvalidTerrain],
-    [PlacementStatus.Occupied]: UNBUILDABLE_COLORS[PlacementStatus.Occupied],
-    [PlacementStatus.TooSteep]: UNBUILDABLE_COLORS[PlacementStatus.TooSteep],
-    [PlacementStatus.Difficult]: SLOPE_GRADIENT[7],
-    [PlacementStatus.Medium]: SLOPE_GRADIENT[4],
-    [PlacementStatus.Easy]: SLOPE_GRADIENT[0],
+    [PlacementStatus.InvalidTerrain]: UNBUILDABLE_COLORS[PlacementStatus.InvalidTerrain]!,
+    [PlacementStatus.Occupied]: UNBUILDABLE_COLORS[PlacementStatus.Occupied]!,
+    [PlacementStatus.TooSteep]: UNBUILDABLE_COLORS[PlacementStatus.TooSteep]!,
+    [PlacementStatus.Difficult]: SLOPE_GRADIENT[7]!,
+    [PlacementStatus.Medium]: SLOPE_GRADIENT[4]!,
+    [PlacementStatus.Easy]: SLOPE_GRADIENT[0]!,
 };
 
 // Hover highlight - brighter version
@@ -176,8 +176,8 @@ export class BuildingIndicatorRenderer {
     private checkTileBasics(tile: TileCoord, isMine: boolean): PlacementStatus | null {
         const idx = this.mapSize.toIndex(tile.x, tile.y);
         const terrainOk = isMine
-            ? this.placement.isMineBuildableTerrain(this.groundType[idx])
-            : this.placement.isBuildableTerrain(this.groundType[idx]);
+            ? this.placement.isMineBuildableTerrain(this.groundType[idx]!)
+            : this.placement.isBuildableTerrain(this.groundType[idx]!);
         if (!terrainOk) return PlacementStatus.InvalidTerrain;
         if (this.tileOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
         return null;
@@ -225,7 +225,7 @@ export class BuildingIndicatorRenderer {
     private getGradientColor(heightRange: number): number[] {
         const normalizedSlope = Math.min(heightRange / this.placement.maxSlopeDiff, 1.0);
         const index = Math.min(Math.floor(normalizedSlope * 10), 9);
-        return SLOPE_GRADIENT[index];
+        return SLOPE_GRADIENT[index]!;
     }
 
     /**
@@ -374,16 +374,16 @@ export class BuildingIndicatorRenderer {
         for (let i = 0; i < 6; i++) {
             const vertOffset = offset + i * 8;
             // Quad offset (a_position)
-            this.batchBuffer[vertOffset] = quadOffsets[i * 2];
-            this.batchBuffer[vertOffset + 1] = quadOffsets[i * 2 + 1];
+            this.batchBuffer[vertOffset] = quadOffsets[i * 2]!;
+            this.batchBuffer[vertOffset + 1] = quadOffsets[i * 2 + 1]!;
             // Entity world position (a_entityPos)
             this.batchBuffer[vertOffset + 2] = worldX;
             this.batchBuffer[vertOffset + 3] = worldY;
             // Color (a_color)
-            this.batchBuffer[vertOffset + 4] = color[0];
-            this.batchBuffer[vertOffset + 5] = color[1];
-            this.batchBuffer[vertOffset + 6] = color[2];
-            this.batchBuffer[vertOffset + 7] = color[3];
+            this.batchBuffer[vertOffset + 4] = color[0]!;
+            this.batchBuffer[vertOffset + 5] = color[1]!;
+            this.batchBuffer[vertOffset + 6] = color[2]!;
+            this.batchBuffer[vertOffset + 7] = color[3]!;
         }
 
         this.batchCount++;

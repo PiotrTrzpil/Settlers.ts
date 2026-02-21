@@ -13,9 +13,6 @@ export class RendererBase {
 
     public drawBase(gl: WebGL2RenderingContext, projection: Float32Array): void {
         const sp = this.shaderProgram;
-        if (!sp) {
-            return;
-        }
 
         // activate shader and bind its VAO
         sp.use();

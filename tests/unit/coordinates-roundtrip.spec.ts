@@ -9,13 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { TilePicker } from '@/game/input/tile-picker';
 import { MapSize } from '@/utilities/map-size';
 import { IViewPointReadonly } from '@/game/renderer/i-view-point';
-import {
-    TILE_CENTER_X,
-    heightToWorld,
-    worldToNdc,
-    ndcToScreen,
-    tileToWorld,
-} from '@/game/systems/coordinate-system';
+import { TILE_CENTER_X, heightToWorld, worldToNdc, ndcToScreen, tileToWorld } from '@/game/systems/coordinate-system';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
@@ -42,21 +36,12 @@ describe('round-trip: tile → world → screen → tile', () => {
     const canvas = createMockCanvas();
     const picker = new TilePicker(canvas);
 
-    function roundTrip(
-        tileX: number,
-        tileY: number,
-        groundHeight: Uint8Array,
-        viewPoint: IViewPointReadonly
-    ) {
-        const world = TilePicker.tileToWorld(
-            tileX, tileY, groundHeight, MAP_SIZE, viewPoint.x, viewPoint.y
-        );
+    function roundTrip(tileX: number, tileY: number, groundHeight: Uint8Array, viewPoint: IViewPointReadonly) {
+        const world = TilePicker.tileToWorld(tileX, tileY, groundHeight, MAP_SIZE, viewPoint.x, viewPoint.y);
         const aspect = CANVAS_WIDTH / CANVAS_HEIGHT;
         const ndc = worldToNdc(world.worldX, world.worldY, viewPoint.zoom, aspect);
         const screen = ndcToScreen(ndc.ndcX, ndc.ndcY, CANVAS_WIDTH, CANVAS_HEIGHT);
-        return picker.screenToTile(
-            screen.screenX, screen.screenY, viewPoint, MAP_SIZE, groundHeight
-        );
+        return picker.screenToTile(screen.screenX, screen.screenY, viewPoint, MAP_SIZE, groundHeight);
     }
 
     describe('flat terrain', () => {
@@ -133,13 +118,20 @@ describe('round-trip: tile → world → screen → tile', () => {
         }
         const vp = createViewPoint();
 
-        const offsets = [[0, 0], [0, 5], [0, -5], [5, 0], [-5, 0], [3, 3]];
+        const offsets = [
+            [0, 0],
+            [0, 5],
+            [0, -5],
+            [5, 0],
+            [-5, 0],
+            [3, 3],
+        ];
         for (const [dx, dy] of offsets) {
-            it(`offset(${dx}, ${dy}) on slope`, () => {
-                const result = roundTrip(320 + dx, 320 + dy, slopedHeight, vp);
+            it(`offset(${dx!}, ${dy!}) on slope`, () => {
+                const result = roundTrip(320 + dx!, 320 + dy!, slopedHeight, vp);
                 expect(result).not.toBeNull();
-                expect(result!.x).toBe(320 + dx);
-                expect(result!.y).toBe(320 + dy);
+                expect(result!.x).toBe(320 + dx!);
+                expect(result!.y).toBe(320 + dy!);
             });
         }
     });
@@ -150,7 +142,8 @@ describe('round-trip: tile → world → screen → tile', () => {
             for (let dx = -20; dx <= 20; dx++) {
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 const h = Math.max(100, Math.min(150, 150 - dist * 2.5));
-                const x = 320 + dx, y = 320 + dy;
+                const x = 320 + dx,
+                    y = 320 + dy;
                 if (x >= 0 && x < 640 && y >= 0 && y < 640) {
                     hillyHeight[MAP_SIZE.toIndex(x, y)] = h;
                 }
@@ -186,7 +179,8 @@ describe('round-trip: tile → world → screen → tile', () => {
             for (let dx = -10; dx <= 10; dx++) {
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 const h = Math.max(100, Math.min(255, 255 - dist * 15));
-                const x = 320 + dx, y = 320 + dy;
+                const x = 320 + dx,
+                    y = 320 + dy;
                 if (x >= 0 && x < 640 && y >= 0 && y < 640) {
                     steepHeight[MAP_SIZE.toIndex(x, y)] = h;
                 }

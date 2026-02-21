@@ -12,7 +12,7 @@ export function analyzeResourceTypes(resourceType: Uint8Array): Map<number, numb
     const counts = new Map<number, number>();
 
     for (let i = 0; i < resourceType.length; i++) {
-        const val = resourceType[i];
+        const val = resourceType[i]!;
         if (val !== 0) {
             counts.set(val, (counts.get(val) ?? 0) + 1);
         }

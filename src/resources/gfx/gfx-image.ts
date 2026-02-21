@@ -51,13 +51,13 @@ export class GfxImage implements IGfxImage {
 
         let j = 0;
         while (j < length && pos < bufferLength) {
-            const value = buffer[pos];
+            const value = buffer[pos]!;
             pos++;
 
             if (value <= 1) {
                 // Bounds check before reading count byte
                 if (pos >= bufferLength) break;
-                const count = buffer[pos];
+                const count = buffer[pos]!;
                 pos++;
 
                 // Palette index 0 = transparent, index 1 = shadow/semi-transparent
@@ -79,7 +79,7 @@ export class GfxImage implements IGfxImage {
 
         let j = 0;
         while (j < length && pos < bufferLength) {
-            const value = buffer[pos];
+            const value = buffer[pos]!;
             pos++;
 
             imgData[j++] = palette.getColor(paletteOffset + value);
@@ -149,6 +149,7 @@ export class GfxImage implements IGfxImage {
      *
      * @param _paletteBaseOffset Deprecated, kept for API compatibility but ignored
      */
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- RLE index decode loop with multiple image type branches
     public getIndexData(_paletteBaseOffset: number): Uint16Array {
         const length = this.width * this.height;
         const indices = new Uint16Array(length);
@@ -161,10 +162,10 @@ export class GfxImage implements IGfxImage {
             // RLE encoding
             let j = 0;
             while (j < length && pos < bufferLength) {
-                const value = buffer[pos++];
+                const value = buffer[pos++]!;
                 if (value <= 1) {
                     if (pos >= bufferLength) break;
-                    const count = buffer[pos++];
+                    const count = buffer[pos++]!;
                     for (let i = 0; i < count && j < length; i++) {
                         indices[j++] = value; // 0 = transparent, 1 = shadow
                     }
@@ -177,7 +178,7 @@ export class GfxImage implements IGfxImage {
         } else {
             // No encoding
             for (let j = 0; j < length && pos < bufferLength; j++) {
-                const value = buffer[pos++];
+                const value = buffer[pos++]!;
                 // paletteBaseOffset added in shader
                 indices[j] = pOff + value;
             }

@@ -105,8 +105,10 @@ export function createSlope(
 ): void {
     for (let y = startY; y <= endY; y++) {
         for (let x = startX; x <= endX; x++) {
-            const progress =
-                endX > startX ? (x - startX) / (endX - startX) : endY > startY ? (y - startY) / (endY - startY) : 0;
+            let progress: number;
+            if (endX > startX) progress = (x - startX) / (endX - startX);
+            else if (endY > startY) progress = (y - startY) / (endY - startY);
+            else progress = 0;
             const h = Math.round(startHeight + (endHeight - startHeight) * progress);
             map.groundHeight[map.mapSize.toIndex(x, y)] = Math.min(255, Math.max(0, h));
         }

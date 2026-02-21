@@ -193,7 +193,7 @@ function executeWaitForWork(settler: Entity, job: JobState, ctx: TaskContext, ha
  * Work on target entity. Always starts immediately — canWork() gating
  * is handled by the preceding WAIT_FOR_WORK task.
  */
-// eslint-disable-next-line complexity -- handler boundary requires per-call guards
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- handler boundary requires per-call guards
 function executeWorkOnEntity(
     settler: Entity,
     job: JobState,

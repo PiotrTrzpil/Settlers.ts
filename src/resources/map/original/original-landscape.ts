@@ -30,11 +30,10 @@ export class OriginalLandscape implements IMapLandscape {
 
         if (land.length !== result.length * 4) {
             OriginalLandscape.log.error('Size of landscape Data is wrong: ' + land.length + '!==' + result.length * 4);
-            // return new Uint8Array(0);
         }
 
         for (let i = offset, j = 0; i < land.length; i += 4, j++) {
-            result[j] = land[i];
+            result[j] = land[i]!;
         }
 
         return result;

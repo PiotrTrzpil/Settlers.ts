@@ -231,7 +231,7 @@ export class ServiceAreaManager {
      * Unsubscribe from a service area event.
      */
     off<K extends keyof ServiceAreaEvents>(event: K, listener: ServiceAreaEventListener<K>): void {
-        const listeners = this.listeners[event] as Set<ServiceAreaEventListener<K>> | undefined;
+        const listeners = this.listeners[event];
         if (listeners) {
             listeners.delete(listener);
         }
@@ -241,7 +241,7 @@ export class ServiceAreaManager {
      * Emit a service area event.
      */
     private emit<K extends keyof ServiceAreaEvents>(event: K, data: ServiceAreaEvents[K]): void {
-        const listeners = this.listeners[event] as Set<ServiceAreaEventListener<K>> | undefined;
+        const listeners = this.listeners[event];
         if (listeners) {
             for (const listener of listeners) {
                 listener(data);

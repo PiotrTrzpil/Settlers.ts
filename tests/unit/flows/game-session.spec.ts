@@ -125,7 +125,7 @@ describe('Game Session: multi-system integration sweep', () => {
         executeCommand(toCommandContext(ctx, new EventBus()), { type: 'select_area', x1: 14, y1: 14, x2: 16, y2: 16 });
         // Should select the unit at (15,15), prefer units over buildings
         expect(ctx.state.selection.selectedEntityIds.size).toBeGreaterThanOrEqual(1);
-        const selectedId = Array.from(ctx.state.selection.selectedEntityIds)[0];
+        const selectedId = Array.from(ctx.state.selection.selectedEntityIds)[0]!;
         const selected = ctx.state.getEntity(selectedId);
         expect(selected?.type).toBe(EntityType.Unit);
 
@@ -192,7 +192,7 @@ describe('Game Session: multi-system integration sweep', () => {
 
         // Should prefer units
         expect(ctx.state.selection.selectedEntityIds.size).toBe(1);
-        const selectedId = Array.from(ctx.state.selection.selectedEntityIds)[0];
+        const selectedId = Array.from(ctx.state.selection.selectedEntityIds)[0]!;
         const selected = ctx.state.getEntity(selectedId);
         expect(selected?.type).toBe(EntityType.Unit);
 

@@ -26,15 +26,15 @@ export class OriginalMapFile {
 
     /** return a chunk by it's index */
     public getChunkByIndex(index: number): MapChunk {
-        return this.mapChunks[index];
+        return this.mapChunks[index]!;
     }
 
     /** return a chunk by it's type */
     public getChunkByType(type: MapChunkType): MapChunk | null {
         const s = this.mapChunks;
         for (let i = 0; i < s.length; i++) {
-            if (s[i].chunkType === type) {
-                return s[i];
+            if (s[i]!.chunkType === type) {
+                return s[i]!;
             }
         }
         return null;

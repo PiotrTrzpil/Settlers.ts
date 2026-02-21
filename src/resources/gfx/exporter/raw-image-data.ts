@@ -16,7 +16,7 @@ export class RawImageData {
     /** Get pixel color at position (RGBA) */
     public getPixel(x: number, y: number): [number, number, number, number] {
         const offset = (y * this.width + x) * 4;
-        return [this.data[offset], this.data[offset + 1], this.data[offset + 2], this.data[offset + 3]];
+        return [this.data[offset]!, this.data[offset + 1]!, this.data[offset + 2]!, this.data[offset + 3]!];
     }
 
     /** Set pixel color at position (RGBA) */

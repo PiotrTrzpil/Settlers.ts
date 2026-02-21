@@ -29,7 +29,7 @@ if (import.meta.hot) {
             '/src/game/renderer/sprite-batch-renderer.ts',
             '/src/game/renderer/renderer.ts',
         ];
-        const needsReload = payload.updates?.some((update: { path: string }) =>
+        const needsReload = payload.updates.some((update: { path: string }) =>
             rendererPaths.some(p => update.path.endsWith(p))
         );
         if (needsReload) {

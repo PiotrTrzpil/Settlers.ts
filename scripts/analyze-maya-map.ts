@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { OriginalMapLoader } from '@/resources/map/original/original-map/game-map-loader';
@@ -19,11 +18,12 @@ try {
         process.exit(1);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- analysis script probing internal API
     const landscape = loader.landscape as any;
 
     const off1 = landscape.getSlice(1); // Ground
     const off2 = landscape.getSlice(2); // Species (Subtype)
-    const _off3 = landscape.getSlice(3); // Type (always 64?)
+    // Slice 3 = Type (always 64?) — not used in current analysis
 
     console.log(`Total tiles: ${off2.length}`);
 
@@ -61,7 +61,6 @@ try {
     for (const [g, c] of [...groundCountsForSpecies8.entries()].sort((a, b) => b[1] - a[1])) {
         console.log(`Offset 1 = ${g}: ${c}`);
     }
-
 } catch (e) {
     console.error('Error:', e);
 }

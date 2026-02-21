@@ -154,7 +154,7 @@ export class MovementController {
 
     /** Get next waypoint, or null if no more waypoints */
     get nextWaypoint(): TileCoord | null {
-        return this._pathIndex < this._path.length ? this._path[this._pathIndex] : null;
+        return this._pathIndex < this._path.length ? (this._path[this._pathIndex] ?? null) : null;
     }
 
     /** Current facing direction (0-5 for hex directions). Updated when movement steps occur. */
@@ -164,7 +164,7 @@ export class MovementController {
 
     /** Get the current goal (final waypoint), or null if no path. */
     get goal(): TileCoord | null {
-        return this._path.length > 0 ? this._path[this._path.length - 1] : null;
+        return this._path.length > 0 ? (this._path[this._path.length - 1] ?? null) : null;
     }
 
     // === Path Management ===
@@ -287,7 +287,7 @@ export class MovementController {
     executeMove(): TileCoord | null {
         if (!this.canMove()) return null;
 
-        const wp = this._path[this._pathIndex];
+        const wp = this._path[this._pathIndex]!;
 
         // Store previous position for interpolation
         this._prevTileX = this._tileX;

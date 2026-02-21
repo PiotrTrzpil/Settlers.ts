@@ -116,7 +116,7 @@ export function analyzeObjectTypes(objectType: Uint8Array): Map<number, number> 
     const counts = new Map<number, number>();
 
     for (let i = 0; i < objectType.length; i++) {
-        const val = objectType[i];
+        const val = objectType[i]!;
         if (val !== 0) {
             counts.set(val, (counts.get(val) ?? 0) + 1);
         }
@@ -146,6 +146,7 @@ export function analyzeObjectTypes(objectType: Uint8Array): Map<number, number> 
  * @param options - Filtering options
  * @returns Number of objects spawned
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- map population loop has multiple filter conditions
 export function populateMapObjects(
     state: GameState,
     objectType: Uint8Array,
@@ -175,13 +176,13 @@ export function populateMapObjects(
     for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
             const idx = mapSize.toIndex(x, y);
-            const rawValue = objectType[idx];
+            const rawValue = objectType[idx]!;
 
             // Skip empty tiles
             if (rawValue === 0) continue;
 
             // Skip unbuildable terrain (water, etc.)
-            if (!isBuildable(groundType[idx])) continue;
+            if (!isBuildable(groundType[idx]!)) continue;
 
             // Skip already occupied tiles
             if (state.getEntityAt(x, y)) continue;
@@ -198,7 +199,8 @@ export function populateMapObjects(
         }
     }
 
-    log.debug(`Populated ${count} map objects${category ? ` (${category})` : ''}`);
+    const catSuffix = category ? ` (${category})` : '';
+    log.debug(`Populated ${count} map objects${catSuffix}`);
     return count;
 }
 
@@ -231,7 +233,7 @@ export function populateMapObjectsFromEntityData(
         const idx = mapSize.toIndex(x, y);
 
         // Skip unbuildable terrain (water, etc.)
-        if (!isBuildable(groundType[idx])) continue;
+        if (!isBuildable(groundType[idx]!)) continue;
 
         // Skip already occupied tiles
         if (state.getEntityAt(x, y)) continue;
@@ -279,11 +281,11 @@ export function spawnTestObjects(
         const idx = mapSize.toIndex(x, y);
 
         // Skip unbuildable or occupied
-        if (!isBuildable(groundType[idx])) continue;
+        if (!isBuildable(groundType[idx]!)) continue;
         if (state.getEntityAt(x, y)) continue;
 
         // Cycle through types in category
-        const objectType = types[i % types.length];
+        const objectType = types[i % types.length]!;
         state.addEntity(EntityType.MapObject, objectType, x, y, 0);
         spawned++;
     }
@@ -321,7 +323,8 @@ export function clearMapObjects(state: GameState, category?: ObjectCategory, typ
         state.removeEntity(entity.id);
     }
 
-    log.debug(`Cleared ${toRemove.length} map objects${category ? ` (${category})` : ''}`);
+    const catSuffix = category ? ` (${category})` : '';
+    log.debug(`Cleared ${toRemove.length} map objects${catSuffix}`);
     return toRemove.length;
 }
 
@@ -340,6 +343,7 @@ export function countMapObjectsByCategory(state: GameState): Map<ObjectCategory,
     for (const entity of state.entities) {
         if (entity.type !== EntityType.MapObject) continue;
         const category = OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType];
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- subType may not be a valid MapObjectType at runtime
         if (category) {
             counts.set(category, (counts.get(category) ?? 0) + 1);
         }
@@ -463,7 +467,7 @@ function selectTreeTypeForExpansion(
     const allowed = allTreeTypes.filter(t => isTreeAllowedOnTerrain(t, terrain));
     if (allowed.length === 0) return seedType;
 
-    return allowed[Math.abs(hash(x, y, seed + 3000)) % allowed.length];
+    return allowed[Math.abs(hash(x, y, seed + 3000)) % allowed.length]!;
 }
 
 /** Check if tree should be placed at position */
@@ -528,7 +532,7 @@ function tryPlaceTreeAt(
     const idx = mapSize.toIndex(nx, ny);
     if (occupied.has(idx)) return false;
 
-    const terrain = groundType[idx];
+    const terrain = groundType[idx]!;
     if (!isBuildable(terrain) || !canHaveTrees(terrain)) return false;
     if (!shouldPlaceTree(dx, dy, nx, ny, radius, density, seed)) return false;
     if (minSpacing > 0 && hasNearbyTree(nx, ny, occupied, mapSize)) return false;
@@ -545,7 +549,7 @@ function tryPlaceTreeAt(
  * Expand existing trees by adding more trees around them.
  * Uses seed trees from map data as starting points for forest clusters.
  */
-// eslint-disable-next-line complexity -- forest expansion algorithm has many steps
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- forest expansion algorithm has many steps
 export function expandTrees(state: GameState, terrain: TerrainData, options: ExpandTreesOptions = {}): number {
     const { groundType, mapSize } = terrain;
     const { seed = 12345, radius = 8, density = 0.3, minSpacing = 1 } = options;

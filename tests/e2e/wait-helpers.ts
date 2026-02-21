@@ -23,7 +23,7 @@ async function waitForFunction<T>(
     }
 
     const [category, method, ...conditionParts] = label.split(':');
-    const condition = conditionParts.join(':') || method;
+    const condition = conditionParts.join(':') || method || label;
     const startTime = performance.now();
     let timedOut = false;
 
@@ -60,7 +60,7 @@ async function profiledWait<T>(label: string, timeout: number, fn: () => Promise
     }
 
     const [category, method, ...conditionParts] = label.split(':');
-    const condition = conditionParts.join(':') || method;
+    const condition = conditionParts.join(':') || method || label;
     const startTime = performance.now();
     let timedOut = false;
 

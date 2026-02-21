@@ -11,7 +11,7 @@ declare module 'fengari' {
     export type LuaString = string | Uint8Array;
 
     // Opaque type representing Lua state
-    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type, sonarjs/class-name -- opaque type; matches fengari naming
     export interface lua_State {}
 
     export namespace lua {

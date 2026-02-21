@@ -139,7 +139,7 @@ describe('ServiceAreaManager', () => {
 
             const player1Areas = manager.getServiceAreasForPlayer(1);
             expect(player1Areas).toHaveLength(1);
-            expect(player1Areas[0].buildingId).toBe(3);
+            expect(player1Areas[0]!.buildingId).toBe(3);
         });
     });
 
@@ -460,12 +460,12 @@ describe('getBuildingsInServiceAreaByDistance', () => {
 
         // All 4 buildings should be within radius 15
         expect(buildings.length).toBe(4);
-        expect(buildings[0].buildingId).toBe(hub.id);
-        expect(buildings[0].distance).toBe(0);
+        expect(buildings[0]!.buildingId).toBe(hub.id);
+        expect(buildings[0]!.distance).toBe(0);
 
         // Verify sorting by distance (ascending)
         for (let i = 1; i < buildings.length; i++) {
-            expect(buildings[i].distance).toBeGreaterThanOrEqual(buildings[i - 1].distance);
+            expect(buildings[i]!.distance).toBeGreaterThanOrEqual(buildings[i - 1]!.distance);
         }
     });
 

@@ -39,11 +39,10 @@ function isValidPushTile(nx: number, ny: number, occupancy: TileOccupancyAccesso
         }
         // Passability check
         const nIdx = nx + ny * terrain.mapWidth;
-        if (!isPassable(terrain.groundType[nIdx])) return false;
+        if (!isPassable(terrain.groundType[nIdx]!)) return false;
     }
     // Occupancy check
-    if (occupancy.has(tileKey(nx, ny))) return false;
-    return true;
+    return !occupancy.has(tileKey(nx, ny));
 }
 
 /**
@@ -71,7 +70,7 @@ export function findSmartFreeDirection(
     const validDirs: { coord: TileCoord; score: number }[] = [];
 
     for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-        const [dx, dy] = GRID_DELTAS[d];
+        const [dx, dy] = GRID_DELTAS[d]!;
         const nx = x + dx;
         const ny = y + dy;
 
@@ -95,12 +94,12 @@ export function findSmartFreeDirection(
     validDirs.sort((a, b) => b.score - a.score);
 
     // Among top-scoring directions (within 1 point), pick randomly
-    const topScore = validDirs[0].score;
+    const topScore = validDirs[0]!.score;
     const topDirs = validDirs.filter(d => d.score >= topScore - 1);
 
     // Use RNG to pick from top directions for some variety
     const idx = rng.nextInt(topDirs.length);
-    return topDirs[idx].coord;
+    return topDirs[idx]!.coord;
 }
 
 /**
@@ -129,7 +128,7 @@ export function findRandomFreeDirection(
     rng.shuffle(dirs);
 
     for (const d of dirs) {
-        const [dx, dy] = GRID_DELTAS[d];
+        const [dx, dy] = GRID_DELTAS[d]!;
         const nx = x + dx;
         const ny = y + dy;
 

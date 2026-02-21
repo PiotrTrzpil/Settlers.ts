@@ -101,7 +101,7 @@ async function load(file: IFileSource) {
 
     // Auto-select first item
     if (libContent.value.length > 0) {
-        selectedItem.value = libContent.value[0];
+        selectedItem.value = libContent.value[0] ?? null;
         onSelectItem();
     }
 }

@@ -62,6 +62,7 @@ export class ShaderProgram implements ShaderObject {
         // Create a shader program object to store combined shader program
         this.shaderProgram = this.gl.createProgram();
 
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive null check at WebGL API boundary
         if (!this.shaderProgram) {
             ShaderProgram.log.error('Unable to create new shader Program');
             return false;

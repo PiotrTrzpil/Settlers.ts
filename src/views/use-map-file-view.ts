@@ -140,7 +140,7 @@ function toChunkInfo(chunk: MapChunk): ChunkInfo {
 function analyzeBytes(data: Uint8Array): Record<number, number> {
     const counts: Record<number, number> = {};
     for (let i = 0; i < data.length; i++) {
-        const val = data[i];
+        const val = data[i]!;
         if (val === 0) continue;
         counts[val] = (counts[val] || 0) + 1;
     }
@@ -150,7 +150,6 @@ function analyzeBytes(data: Uint8Array): Record<number, number> {
 /** Calculate statistics from map loader */
 function calculateStats(loader: IMapLoader): MapStats | null {
     const l = loader.landscape;
-    if (!l) return null;
 
     const terrainList: StatEntry[] = [];
     const resourceList: StatEntry[] = [];
@@ -171,7 +170,7 @@ function calculateStats(loader: IMapLoader): MapStats | null {
 
     // Analyze terrain types (byte 1 of WorldField - terrainId)
     const groundData = l.getGroundType();
-    if (groundData) {
+    {
         const terrainCounts = analyzeBytes(groundData);
         for (const [val, count] of Object.entries(terrainCounts)) {
             terrainList.push({
@@ -247,7 +246,7 @@ function processEntityData(entityData: MapEntityData | undefined): EntitySummary
     for (const p of entityData.players) {
         summary.players.push({
             index: p.playerIndex,
-            tribe: S4Tribe[p.tribe] ?? `Unknown(${p.tribe})`,
+            tribe: S4Tribe[p.tribe],
             startX: p.startX,
             startY: p.startY,
         });
@@ -262,7 +261,7 @@ function processEntityData(entityData: MapEntityData | undefined): EntitySummary
             existing.count++;
         } else {
             settlerMap.set(key, {
-                type: S4SettlerType[s.settlerType] ?? `Unknown(${s.settlerType})`,
+                type: S4SettlerType[s.settlerType],
                 count: 1,
                 player: s.player,
             });
@@ -279,7 +278,7 @@ function processEntityData(entityData: MapEntityData | undefined): EntitySummary
             existing.count++;
         } else {
             buildingMap.set(key, {
-                type: S4BuildingType[b.buildingType] ?? `Unknown(${b.buildingType})`,
+                type: S4BuildingType[b.buildingType],
                 count: 1,
                 player: b.player,
             });
@@ -295,7 +294,7 @@ function processEntityData(entityData: MapEntityData | undefined): EntitySummary
             existing.totalAmount += s.amount;
         } else {
             stackMap.set(s.materialType, {
-                type: S4GoodType[s.materialType] ?? `Unknown(${s.materialType})`,
+                type: S4GoodType[s.materialType],
                 totalAmount: s.amount,
             });
         }
@@ -431,9 +430,6 @@ export function useMapFileView(getFileManager: () => FileManager | null): UseMap
 
         try {
             const fileData = await file.readBinary();
-            if (!fileData) {
-                throw new Error('Unable to read file: ' + file.name);
-            }
 
             const loader = MapLoader.getLoader(fileData);
             if (!loader) {

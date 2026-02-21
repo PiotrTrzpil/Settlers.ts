@@ -116,7 +116,7 @@ export class RenderProfiler {
         if (typeof localStorage !== 'undefined') {
             const saved = localStorage.getItem(LOG_LEVEL_KEY);
             if (saved && this.isValidLevel(saved)) {
-                this.level = saved as LogLevel;
+                this.level = saved;
             }
         }
     }

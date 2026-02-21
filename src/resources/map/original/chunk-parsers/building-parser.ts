@@ -20,6 +20,7 @@ const log = new LogHandler('BuildingParser');
  * @param reader BinaryReader positioned at start of chunk data
  * @returns Array of building data entries
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- map chunk binary parsing requires many conditional branches
 export function parseBuildings(reader: BinaryReader): MapBuildingData[] {
     const buildings: MapBuildingData[] = [];
     const dataLength = reader.length;

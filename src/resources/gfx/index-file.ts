@@ -34,7 +34,7 @@ export class IndexFile extends ResourceFile {
 
         for (let i = index + 1; i < l; i++) {
             if (this.offsetTable[i]) {
-                length = this.offsetTable[i] - offset;
+                length = this.offsetTable[i]! - offset;
                 break;
             }
         }

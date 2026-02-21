@@ -74,9 +74,6 @@ export class LibFileItem {
         const reader = decompress.unpack(this.reader, this.offset, this.length, this.decompressedLength);
         reader.filename = fullName;
 
-        // console.log(this.reader.readStringHex(this.length, this.offset));
-        // console.log(pack.readStringHex());
-
         return reader;
     }
 

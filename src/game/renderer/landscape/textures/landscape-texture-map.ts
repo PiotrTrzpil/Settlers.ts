@@ -361,6 +361,7 @@ export class LandscapeTextureMap {
 
         // Remove old river Hex2 entries from lookup
         for (const key of this.riverHexKeys) {
+            // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- dynamic key deletion required for river slot cleanup
             delete this.lookup[key];
         }
         this.riverHexKeys = [];
@@ -372,7 +373,7 @@ export class LandscapeTextureMap {
             C: { left: this.riverSlots.slotCLeft, right: this.riverSlots.slotCRight },
         };
 
-        const perm = RIVER_SLOT_PERMS[rc.slotPermutation % RIVER_SLOT_PERMS.length];
+        const perm = RIVER_SLOT_PERMS[rc.slotPermutation % RIVER_SLOT_PERMS.length]!;
         const innerPair = slotPairs[perm[0]];
         const outerPair = slotPairs[perm[1]];
         const middlePair = slotPairs[perm[2]];

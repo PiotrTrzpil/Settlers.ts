@@ -542,6 +542,7 @@ export class SpriteRenderManager {
         // Determine which GFX files we need
         const buildingFiles = new Set<number>();
         for (const info of Object.values(spriteMap)) {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial<Record> values may be undefined at runtime
             if (info) buildingFiles.add(info.file);
         }
 
@@ -623,7 +624,6 @@ export class SpriteRenderManager {
      * Load building sprites from a GFX file set.
      * Uses SafeLoadBatch to ensure GPU upload before registration.
      */
-    // eslint-disable-next-line complexity -- sprite loading handles multiple file formats
     private async loadBuildingSprites(
         fileNum: number,
         atlas: EntityTextureAtlas,
@@ -633,7 +633,7 @@ export class SpriteRenderManager {
     ): Promise<boolean> {
         const fileId = `${fileNum}`;
         const fileSet = await this.spriteLoader.loadFileSet(fileId);
-        if (!fileSet?.jilReader || !fileSet?.dilReader) {
+        if (!fileSet?.jilReader || !fileSet.dilReader) {
             SpriteRenderManager.log.debug(`GFX/JIL/DIL files not available for ${fileNum}`);
             return false;
         }
@@ -652,6 +652,7 @@ export class SpriteRenderManager {
 
             // Load all buildings for this file
             for (const [typeStr, info] of Object.entries(spriteMap)) {
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial<Record> values may be undefined
                 if (!info || info.file !== fileNum) continue;
                 const buildingType = Number(typeStr) as BuildingType;
 
@@ -789,7 +790,6 @@ export class SpriteRenderManager {
 
         // Process each tree type progressively (using SafeLoadBatch)
         for (const [typeStr, baseJobIndex] of Object.entries(TREE_JOB_INDICES)) {
-            if (baseJobIndex === undefined) continue;
             const treeType = Number(typeStr) as MapObjectType;
 
             const batch = new SafeLoadBatch<TreeStageData>();
@@ -807,7 +807,7 @@ export class SpriteRenderManager {
                     batch.add({
                         treeType,
                         offset,
-                        firstFrame: anim.frames[0].entry,
+                        firstFrame: anim.frames[0]!.entry,
                         allFrames: offset === TREE_JOB_OFFSET.NORMAL ? anim.frames.map(f => f.entry) : null,
                     });
                 }
@@ -849,6 +849,7 @@ export class SpriteRenderManager {
         let loadedCount = 0;
 
         for (const [typeStr, info] of Object.entries(mapObjectSpriteMap)) {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial<Record> values may be undefined at runtime
             if (!info || info.file !== GFX_FILE_NUMBERS.RESOURCES) continue;
 
             const type = Number(typeStr) as MapObjectType;
@@ -881,7 +882,7 @@ export class SpriteRenderManager {
     ): Promise<boolean> {
         const fileId = `${GFX_FILE_NUMBERS.RESOURCES}`;
         const fileSet = await this.spriteLoader.loadFileSet(fileId);
-        if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
+        if (!fileSet?.jilReader || !fileSet.dilReader) return false;
 
         const paletteBase = this.getPaletteBaseOffset(fileId);
 
@@ -889,6 +890,7 @@ export class SpriteRenderManager {
         const batch = new SafeLoadBatch<ResourceData>();
 
         for (const [typeStr, info] of Object.entries(getResourceSpriteMap())) {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial<Record> values may be undefined at runtime
             if (!info) continue;
             const type = Number(typeStr) as EMaterialType;
 
@@ -923,7 +925,7 @@ export class SpriteRenderManager {
     ): Promise<boolean> {
         const fileId = `${SETTLER_FILE_NUMBERS[race]}`;
         const fileSet = await this.spriteLoader.loadFileSet(fileId);
-        if (!fileSet?.jilReader || !fileSet?.dilReader) return false;
+        if (!fileSet?.jilReader || !fileSet.dilReader) return false;
 
         const paletteBase = this.getPaletteBaseOffset(fileId);
 
@@ -931,6 +933,7 @@ export class SpriteRenderManager {
         const batch = new SafeLoadBatch<UnitData>();
 
         for (const [typeStr, info] of Object.entries(getUnitSpriteMap(race))) {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial<Record> values may be undefined at runtime
             if (!info) continue;
             const unitType = Number(typeStr) as UnitType;
 
@@ -963,7 +966,7 @@ export class SpriteRenderManager {
             );
             for (const [dir, frames] of data.directionFrames) {
                 if (frames.length > 0) {
-                    registry.registerUnit(data.unitType, dir, frames[0]);
+                    registry.registerUnit(data.unitType, dir, frames[0]!);
                 }
             }
         });
@@ -991,7 +994,6 @@ export class SpriteRenderManager {
         const batch = new SafeLoadBatch<CarrierData>();
 
         for (const [typeStr, jobIndex] of Object.entries(CARRIER_MATERIAL_JOB_INDICES)) {
-            if (jobIndex === undefined) continue;
             const materialType = Number(typeStr) as EMaterialType;
 
             const loadedDirs = await this.spriteLoader.loadJobAllDirections(
@@ -1067,6 +1069,7 @@ export class SpriteRenderManager {
     /**
      * Load worker-specific animation sequences using SafeLoadBatch.
      */
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- per-unit, per-direction, per-sequence branching
     private async loadWorkerAnimations(
         fileSet: LoadedGfxFileSet,
         atlas: EntityTextureAtlas,
@@ -1091,7 +1094,7 @@ export class SpriteRenderManager {
             const workJobIndices = workerData.work as readonly number[];
 
             for (let workIndex = 0; workIndex < workJobIndices.length; workIndex++) {
-                const jobIndex = workJobIndices[workIndex];
+                const jobIndex = workJobIndices[workIndex]!;
                 const dirCount = this.spriteLoader.getDirectionCount(fileSet, jobIndex);
                 if (dirCount === 0) continue;
 

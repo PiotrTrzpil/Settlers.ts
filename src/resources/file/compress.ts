@@ -11,10 +11,10 @@ export class Compression extends Packer {
     private static log: LogHandler = new LogHandler('Compression');
 
     // LZ77 history window length (64KB)
-    static WINDOW_SIZE = 65536;
+    static readonly WINDOW_SIZE = 65536;
 
     //  Compressor will rebuild symbol alphabet after this #of symbols
-    static REBUILD_COUNTER = 8192 + 1;
+    static readonly REBUILD_COUNTER = 8192 + 1;
 
     private find(src: Uint8Array, srcLen: number, outPos: number) {
         if (outPos + 4 >= srcLen) {
@@ -84,15 +84,15 @@ export class Compression extends Packer {
         const huffmanPos = charCodeTable.findIndex(symbol);
 
         let refOff = 0;
-        let tabPos = 0;
+        let tabPos: number;
 
         // Encode symbol reference
         // we want to have this encoded in less #of bits
         for (tabPos = 0; tabPos < 16; tabPos++) {
             // maximum value that can be represented directly by #bits
-            const refLen = (1 << huffmanTable.index[tabPos]) - 1;
+            const refLen = (1 << huffmanTable.index[tabPos]!) - 1;
             // this val is added to the offset
-            refOff = huffmanTable.value[tabPos];
+            refOff = huffmanTable.value[tabPos]!;
             // check if offset is less than pos itself
             if (huffmanPos >= refOff) {
                 // enough bits to represent remaining part of the offset
@@ -110,9 +110,10 @@ export class Compression extends Packer {
         const remain = huffmanPos - refOff;
         // write encoded symbol
         bitWriter.write(tabPos, 4);
-        bitWriter.write(remain, huffmanTable.index[tabPos]);
+        bitWriter.write(remain, huffmanTable.index[tabPos]!);
     }
 
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- LZ77+Huffman compress algorithm has inherent structural complexity
     public pack(src: Uint8Array, srcLen: number): BinaryReader {
         let rebuild: number = Compression.REBUILD_COUNTER;
         let tabPos: number;
@@ -137,9 +138,9 @@ export class Compression extends Packer {
                 // TODO actually *REBUILD* symbol indexer according to symbol usage frequency
                 // For now just output default table
                 for (let i = 0; i < 16; i += 1) {
-                    let back = huffmanTable.index[i];
+                    let back = huffmanTable.index[i]!;
                     if (i >= 1) {
-                        back -= huffmanTable.index[i - 1];
+                        back -= huffmanTable.index[i - 1]!;
                     }
                     while (back > 0) {
                         back--;
@@ -157,7 +158,7 @@ export class Compression extends Packer {
 
             if (matchLen < 4) {
                 // Literal symbol (plain byte)
-                this.writeSymbol(src[outPos], charCodeTable, bitWriter, huffmanTable);
+                this.writeSymbol(src[outPos]!, charCodeTable, bitWriter, huffmanTable);
                 outPos++;
                 continue;
             }
@@ -172,7 +173,7 @@ export class Compression extends Packer {
                 // else use length table
                 for (tabPos = 0; tabPos < 8; tabPos++) {
                     // maximum offset value that can be represented by using this table entry
-                    refLen = Packer.LengthTable.value[tabPos] + (1 << Packer.LengthTable.index[tabPos]) - 1;
+                    refLen = Packer.LengthTable.value[tabPos]! + (1 << Packer.LengthTable.index[tabPos]!) - 1;
                     if (matchLen - 4 <= refLen) {
                         break;
                     }
@@ -180,7 +181,7 @@ export class Compression extends Packer {
                 this.writeSymbol(0x108 + tabPos, charCodeTable, bitWriter, huffmanTable);
 
                 // write entry index and offset
-                bitWriter.write(matchLen - Packer.LengthTable.value[tabPos] - 4, Packer.LengthTable.index[tabPos]);
+                bitWriter.write(matchLen - Packer.LengthTable.value[tabPos]! - 4, Packer.LengthTable.index[tabPos]!);
             }
 
             // if there was an application of LZ77
@@ -191,7 +192,7 @@ export class Compression extends Packer {
             for (tabPos = 0; tabPos < 8; tabPos++) {
                 // maximum offset value that can be represented by using this table entry
                 refLen =
-                    (Packer.DistanceTable.value[tabPos] << 9) + (1 << (9 + Packer.DistanceTable.index[tabPos])) - 1;
+                    (Packer.DistanceTable.value[tabPos]! << 9) + (1 << (9 + Packer.DistanceTable.index[tabPos]!)) - 1;
                 if (wndoff <= refLen) {
                     break;
                 }
@@ -199,7 +200,10 @@ export class Compression extends Packer {
 
             // write code
             bitWriter.write(tabPos, 3);
-            bitWriter.write(wndoff - (Packer.DistanceTable.value[tabPos] << 9), Packer.DistanceTable.index[tabPos] + 9);
+            bitWriter.write(
+                wndoff - (Packer.DistanceTable.value[tabPos]! << 9),
+                Packer.DistanceTable.index[tabPos]! + 9
+            );
         }
 
         // write end of data

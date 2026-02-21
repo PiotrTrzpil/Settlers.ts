@@ -73,7 +73,7 @@ async function detectBrowserCapabilities(launchArgs: string[]): Promise<BrowserC
 function getServerPid(port: number): number | null {
     try {
         const output = execSync(`lsof -ti :${port}`, { encoding: 'utf-8' }).trim();
-        const pid = parseInt(output.split('\n')[0], 10);
+        const pid = parseInt(output.split('\n')[0]!, 10);
         return isNaN(pid) ? null : pid;
     } catch {
         return null;
@@ -146,7 +146,7 @@ async function ensureFreshServer(port: number, launchArgs: string[]): Promise<vo
 }
 
 export default async function globalSetup() {
-    const isCloudEnv = process.env.CI || process.env.CLAUDE_CODE_REMOTE === 'true';
+    const isCloudEnv = process.env['CI'] || process.env['CLAUDE_CODE_REMOTE'] === 'true';
 
     // Build launch args matching playwright.config.ts
     const launchArgs = ['--disable-web-security', '--disable-features=IsolateOrigins,site-per-process'];
@@ -160,7 +160,7 @@ export default async function globalSetup() {
     // ── Stale server detection ───────────────────────────────────────────
     // Kill any existing server on the test port if it's serving outdated code.
     // This prevents test failures caused by zombie servers from previous sessions.
-    if (!process.env.CI) {
+    if (!process.env['CI']) {
         await ensureFreshServer(TEST_SERVER_PORT, launchArgs);
     }
 
@@ -171,7 +171,7 @@ export default async function globalSetup() {
     if (!capabilities) {
         console.log('⚠️  Could not detect browser capabilities (browser launch failed)');
         console.log('   Tests requiring WebGL may fail.\n');
-        process.env.E2E_WEBGL_AVAILABLE = 'false';
+        process.env['E2E_WEBGL_AVAILABLE'] = 'false';
         return;
     }
 
@@ -187,9 +187,9 @@ export default async function globalSetup() {
     }
 
     // Set environment variables for tests to use
-    process.env.E2E_WEBGL_AVAILABLE = capabilities.webgl2 ? 'true' : 'false';
-    process.env.E2E_SOFTWARE_RENDERER = capabilities.isSoftwareRenderer ? 'true' : 'false';
-    process.env.E2E_RENDERER = capabilities.renderer;
+    process.env['E2E_WEBGL_AVAILABLE'] = capabilities.webgl2 ? 'true' : 'false';
+    process.env['E2E_SOFTWARE_RENDERER'] = capabilities.isSoftwareRenderer ? 'true' : 'false';
+    process.env['E2E_RENDERER'] = capabilities.renderer;
 
     // If WebGL2 is not available and we're in cloud, try enabling SwiftShader
     if (!capabilities.webgl2 && !isCloudEnv) {
@@ -201,7 +201,7 @@ export default async function globalSetup() {
             console.log('   ✓ SwiftShader enables WebGL2');
             console.log('   Consider setting CI=true or CLAUDE_CODE_REMOTE=true to auto-enable');
             // Update env to signal that SwiftShader works
-            process.env.E2E_SWIFTSHADER_AVAILABLE = 'true';
+            process.env['E2E_SWIFTSHADER_AVAILABLE'] = 'true';
         } else {
             console.log('   ✗ SwiftShader did not enable WebGL2');
         }

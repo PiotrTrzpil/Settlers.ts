@@ -76,12 +76,12 @@ test.describe('Logistics Chain', { tag: '@slow' }, () => {
         await test.step('verify inventories created', async () => {
             const woodcutterInv = await gp.actions.getBuildingInventory(woodcutterId);
             expect(woodcutterInv).not.toBeNull();
-            expect(woodcutterInv!.outputSlots[0].materialType).toBe(LOG);
+            expect(woodcutterInv!.outputSlots[0]!.materialType).toBe(LOG);
 
             const sawmillInv = await gp.actions.getBuildingInventory(sawmillId);
             expect(sawmillInv).not.toBeNull();
-            expect(sawmillInv!.inputSlots[0].materialType).toBe(LOG);
-            expect(sawmillInv!.outputSlots[0].materialType).toBe(BOARD);
+            expect(sawmillInv!.inputSlots[0]!.materialType).toBe(LOG);
+            expect(sawmillInv!.outputSlots[0]!.materialType).toBe(BOARD);
         });
 
         await test.step('woodcutter produces log', async () => {
@@ -112,7 +112,7 @@ test.describe('Logistics Chain', { tag: '@slow' }, () => {
             await gp.wait.waitForBuildingOutput(sawmillId, BOARD, 1, 20_000);
 
             const inv = await gp.actions.getBuildingInventory(sawmillId);
-            expect(inv!.outputSlots[0].currentAmount).toBeGreaterThanOrEqual(1);
+            expect(inv!.outputSlots[0]!.currentAmount).toBeGreaterThanOrEqual(1);
         });
     });
 });

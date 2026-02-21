@@ -19,12 +19,11 @@ export class DilFileReader extends IndexFile {
         let lastGood = 0;
 
         for (let i = 0; i < offsetTable.length; i++) {
-            if (offsetTable[i] === 0) {
+            if (offsetTable[i]! === 0) {
                 continue;
             }
 
-            if (offsetTable[i] > offset) {
-                // DilFileReader.log.debug(gilIndex + ' --> ' + lastGood);
+            if (offsetTable[i]! > offset) {
                 return lastGood;
             }
             lastGood = i;

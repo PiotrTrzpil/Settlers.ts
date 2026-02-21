@@ -53,10 +53,6 @@ function saveSelection(path: string): void {
 }
 
 function doFilter() {
-    if (!props.fileManager) {
-        return;
-    }
-
     files.value = props.fileManager.filter(props.filter).sort(naturalSort);
 
     // Try to restore previously selected file
@@ -72,8 +68,8 @@ function doFilter() {
 
     // Auto-select first file if available and nothing selected
     if (files.value.length > 0 && !selectedFile.value) {
-        selectedFile.value = files.value[0];
-        emit('select', selectedFile.value);
+        selectedFile.value = files.value[0] ?? null;
+        emit('select', selectedFile.value!);
     }
 }
 

@@ -193,6 +193,7 @@ export class LogisticsDispatcher implements TickSystem {
      * Assign pending requests to available carriers.
      * Limits assignments per tick to prevent frame drops.
      */
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- complex carrier dispatch algorithm
     private assignPendingRequests(): void {
         const pendingRequests = this.requestManager.getPendingRequests();
         let assignmentCount = 0;
@@ -417,7 +418,7 @@ export class LogisticsDispatcher implements TickSystem {
         // Release any remaining reservations at this building (defensive — jobs should have handled this)
         this.reservationManager.releaseReservationsForBuilding(buildingId);
 
-        this.eventBus!.emit('logistics:buildingCleanedUp', result);
+        this.eventBus.emit('logistics:buildingCleanedUp', result);
 
         if (result.requestsCancelled + result.jobsCancelled > 0) {
             console.debug(

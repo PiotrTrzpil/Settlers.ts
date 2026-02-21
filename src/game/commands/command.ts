@@ -248,8 +248,8 @@ function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCom
         toY: number;
     }[] = [];
     for (let i = 0; i < selectedUnits.length; i++) {
-        const unit = selectedUnits[i];
-        const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)];
+        const unit = selectedUnits[i]!;
+        const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)]!;
         const targetX = cmd.targetX + offset[0];
         const targetY = cmd.targetY + offset[1];
 
@@ -343,6 +343,7 @@ function executeSpawnVisualResource(ctx: CommandContext, cmd: SpawnVisualResourc
     return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedResource' }]);
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- complex game state machine for unit spawning
 function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsCommand): CommandResult {
     const { state, terrain, eventBus } = ctx;
     const entity = state.getEntityOrThrow(cmd.buildingEntityId, 'completed building for unit spawning');
@@ -392,7 +393,7 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
 
     // Spawn dedicated worker if placeBuildingsWithWorker is enabled
     if (ctx.settings.placeBuildingsWithWorker) {
-        const workerType = BUILDING_UNIT_TYPE[buildingState.buildingType as BuildingType];
+        const workerType = BUILDING_UNIT_TYPE[buildingState.buildingType];
         if (workerType !== undefined) {
             const workerEntity = state.addEntity(EntityType.Unit, workerType, bx, by, entity.player);
 
@@ -528,8 +529,5 @@ const COMMAND_HANDLERS: Record<Command['type'], CommandHandler> = {
  */
 export function executeCommand(ctx: CommandContext, cmd: Command): CommandResult {
     const handler = COMMAND_HANDLERS[cmd.type];
-    if (!handler) {
-        return commandFailed(`Unknown command type: ${cmd.type}`);
-    }
     return handler(ctx, cmd);
 }

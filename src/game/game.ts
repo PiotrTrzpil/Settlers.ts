@@ -107,7 +107,7 @@ export class Game {
         // This avoids bundling Lua/wasmoon when scripting is disabled
 
         // Populate map objects (trees) from entity data chunk (type 6)
-        if (mapLoader.entityData?.objects?.length) {
+        if (mapLoader.entityData?.objects.length) {
             const seedCount = populateMapObjectsFromEntityData(this.state, mapLoader.entityData.objects, this.terrain);
             if (seedCount > 0) {
                 console.log(`Game: Loaded ${seedCount} seed trees from map data`);
@@ -123,7 +123,7 @@ export class Game {
         }
 
         // Populate buildings from map entity data (if available)
-        if (mapLoader.entityData?.buildings?.length) {
+        if (mapLoader.entityData?.buildings.length) {
             const count = populateMapBuildings(this.state, mapLoader.entityData.buildings, {
                 buildingStateManager: this.services.buildingStateManager,
                 eventBus: this.eventBus,
@@ -134,7 +134,8 @@ export class Game {
             }
         }
 
-        // Initialize Audio
+        // Initialize Audio (async init called from constructor — sonarjs/no-async-constructor)
+        // eslint-disable-next-line sonarjs/no-async-constructor -- fire-and-forget audio init, failure is non-fatal
         this.soundManager
             .init(this.fileManager)
             .then(() => {
@@ -151,7 +152,7 @@ export class Game {
         window.debugSound = () => {
             console.log('--- Sound Debug ---');
             console.log('Current Music ID:', this.soundManager.currentMusicId);
-            console.log('Audio Context State:', Howler.ctx ? Howler.ctx.state : 'No Context');
+            console.log('Audio Context State:', Howler.ctx.state);
         };
 
         console.log(
@@ -182,6 +183,7 @@ export class Game {
     }
 
     /** Find the first buildable land tile, spiraling out from map center */
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- spiral search with per-tile boundary checks
     public findLandTile(): { x: number; y: number } | null {
         const { width: w, height: h } = this.terrain;
         const cx = Math.floor(w / 2);
@@ -278,7 +280,7 @@ export class Game {
                 this.scriptService = service;
             }
 
-            return this.scriptService!.loadScriptForMap(mapFilename);
+            return this.scriptService.loadScriptForMap(mapFilename);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             return { success: false, scriptPath: null, error: msg };

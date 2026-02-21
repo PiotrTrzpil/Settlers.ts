@@ -30,7 +30,7 @@ export class StreamWriter {
             return 0;
         }
 
-        return this.data[offset];
+        return this.data[offset]!;
     }
 
     /** return the position the stream is writing to */

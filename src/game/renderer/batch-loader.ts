@@ -26,20 +26,15 @@ export async function processBatched<T, R>(
         // Create promises for this batch without slicing
         const promises: Promise<R>[] = new Array(batchCount);
         for (let j = 0; j < batchCount; j++) {
-            promises[j] = processor(items[i + j]);
+            promises[j] = processor(items[i + j]!);
         }
 
         const batchResults = await Promise.all(promises);
 
         // Copy results without spread operator
         for (let j = 0; j < batchResults.length; j++) {
-            results[resultIdx++] = batchResults[j];
+            results[resultIdx++] = batchResults[j]!;
         }
-
-        // const batchTime = performance.now() - batchStart;
-        // if (batchTime > SLOW_BATCH_THRESHOLD_MS) {
-        //     console.info(`[Batch] batch ${Math.floor(i / batchSize) + 1} (${batchCount} items) took ${batchTime.toFixed(1)}ms`);
-        // }
 
         if (batchEnd < items.length) {
             await yieldToEventLoop();

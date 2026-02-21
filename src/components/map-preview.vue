@@ -28,20 +28,16 @@ function renderPreview() {
 
     try {
         const landscape = props.mapLoader.landscape;
-        if (!landscape) {
-            hasPreviewData.value = false;
-            return;
-        }
 
         const groundData = landscape.getGroundType();
-        if (!groundData || groundData.length === 0) {
+        if (groundData.length === 0) {
             hasPreviewData.value = false;
             return;
         }
 
         const mapSize = props.mapLoader.mapSize;
-        const width = mapSize?.width ?? 256;
-        const height = mapSize?.height ?? 256;
+        const width = mapSize.width;
+        const height = mapSize.height;
 
         // Set canvas size with max limit for performance
         const maxSize = 300;
@@ -69,7 +65,7 @@ function renderPreview() {
                 const pixelIdx = (y * displayWidth + x) * 4;
 
                 if (srcIdx < groundData.length) {
-                    const terrainType = groundData[srcIdx];
+                    const terrainType = groundData[srcIdx]!;
                     const [r, g, b] = getGroundTypeColor(terrainType);
                     data[pixelIdx] = r;
                     data[pixelIdx + 1] = g;

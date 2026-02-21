@@ -37,7 +37,7 @@ export class BucketPriorityQueue {
             this.bucketHeads.push(0);
         }
 
-        this.buckets[bucketIndex].push(nodeId);
+        this.buckets[bucketIndex]!.push(nodeId);
 
         if (bucketIndex < this.minBucket) {
             this.minBucket = bucketIndex;
@@ -52,13 +52,13 @@ export class BucketPriorityQueue {
      */
     popMin(): number {
         while (this.minBucket < this.buckets.length) {
-            const bucket = this.buckets[this.minBucket];
-            const head = this.bucketHeads[this.minBucket];
+            const bucket = this.buckets[this.minBucket]!;
+            const head = this.bucketHeads[this.minBucket]!;
 
             if (head < bucket.length) {
                 this._size--;
-                this.bucketHeads[this.minBucket]++;
-                return bucket[head];
+                this.bucketHeads[this.minBucket]!++;
+                return bucket[head]!;
             }
 
             // Bucket exhausted - clear to free memory and move on

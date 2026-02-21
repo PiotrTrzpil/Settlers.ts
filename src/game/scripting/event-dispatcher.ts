@@ -211,7 +211,7 @@ export class LuaEventDispatcher {
      */
     private createEventRegistrationFunction(L: lua_State, eventName: ScriptEventType): void {
         // Capture 'this' for use in closure
-        // eslint-disable-next-line @typescript-eslint/no-this-alias
+        // eslint-disable-next-line @typescript-eslint/no-this-alias -- needed to capture class instance in Lua C function closure
         const dispatcher = this;
 
         lua.lua_pushcfunction(L, (luaState: lua_State) => {

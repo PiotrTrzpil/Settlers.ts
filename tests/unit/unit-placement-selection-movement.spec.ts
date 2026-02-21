@@ -80,10 +80,10 @@ describe('Unit Placement, Selection & Movement', () => {
 
             expect(result.success).toBe(true);
             expect(state.entities).toHaveLength(1);
-            expect(state.entities[0].type).toBe(EntityType.Unit);
-            expect(state.entities[0].subType).toBe(UnitType.Carrier);
-            expect(state.entities[0].x).toBe(10);
-            expect(state.entities[0].y).toBe(10);
+            expect(state.entities[0]!.type).toBe(EntityType.Unit);
+            expect(state.entities[0]!.subType).toBe(UnitType.Carrier);
+            expect(state.entities[0]!.x).toBe(10);
+            expect(state.entities[0]!.y).toBe(10);
         });
 
         it('should spawn a swordsman at the given position', () => {
@@ -96,7 +96,7 @@ describe('Unit Placement, Selection & Movement', () => {
             });
 
             expect(result.success).toBe(true);
-            expect(state.entities[0].subType).toBe(UnitType.Swordsman);
+            expect(state.entities[0]!.subType).toBe(UnitType.Swordsman);
         });
 
         it('should create unit state with default speed', () => {
@@ -109,7 +109,7 @@ describe('Unit Placement, Selection & Movement', () => {
             });
 
             expect(result.success).toBe(true);
-            const unitState = state.unitStates.get(state.entities[0].id);
+            const unitState = state.unitStates.get(state.entities[0]!.id);
             expect(unitState).toBeDefined();
             expect(unitState!.speed).toBe(2);
             expect(unitState!.path).toHaveLength(0);
@@ -192,8 +192,8 @@ describe('Unit Placement, Selection & Movement', () => {
                 player: 1,
             });
 
-            expect(state.entities[0].player).toBe(0);
-            expect(state.entities[1].player).toBe(1);
+            expect(state.entities[0]!.player).toBe(0);
+            expect(state.entities[1]!.player).toBe(1);
         });
 
         it('should spawn all unit types', () => {
@@ -201,7 +201,7 @@ describe('Unit Placement, Selection & Movement', () => {
             for (let i = 0; i < types.length; i++) {
                 const result = executeCommand(ctx, {
                     type: 'spawn_unit',
-                    unitType: types[i],
+                    unitType: types[i]!,
                     x: 10 + i * 2,
                     y: 10,
                     player: 0,
@@ -464,8 +464,8 @@ describe('Unit Placement, Selection & Movement', () => {
             expect(us2!.path.length).toBeGreaterThan(0);
 
             // Units should have different targets (formation offsets)
-            const target1 = us1!.path[us1!.path.length - 1];
-            const target2 = us2!.path[us2!.path.length - 1];
+            const target1 = us1!.path[us1!.path.length - 1]!;
+            const target2 = us2!.path[us2!.path.length - 1]!;
             expect(target1.x !== target2.x || target1.y !== target2.y).toBe(true);
         });
 
@@ -609,7 +609,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 player: 0,
             });
 
-            const unit = state.entities[0];
+            const unit = state.entities[0]!;
             expect(unit).toBeDefined();
 
             // Select at tile
@@ -688,8 +688,8 @@ describe('Unit Placement, Selection & Movement', () => {
 
             // All units should have moved from their start positions
             for (let i = 0; i < state.entities.length; i++) {
-                const entity = state.entities[i];
-                const start = startPositions[i];
+                const entity = state.entities[i]!;
+                const start = startPositions[i]!;
                 const moved = entity.x !== start.x || entity.y !== start.y;
                 expect(moved).toBe(true);
             }
@@ -719,8 +719,8 @@ describe('Unit Placement, Selection & Movement', () => {
                 player: 0,
             });
 
-            const unit1 = state.entities[0];
-            const unit2 = state.entities[1];
+            const unit1 = state.entities[0]!;
+            const unit2 = state.entities[1]!;
 
             // Select first (normal click)
             executeCommand(ctx, {
@@ -787,7 +787,7 @@ describe('Unit Placement, Selection & Movement', () => {
             });
 
             expect(state.selection.selectedEntityIds.size).toBe(1);
-            const selectedId = Array.from(state.selection.selectedEntityIds)[0];
+            const selectedId = Array.from(state.selection.selectedEntityIds)[0]!;
             expect(state.getEntity(selectedId)!.type).toBe(EntityType.Unit);
         });
 

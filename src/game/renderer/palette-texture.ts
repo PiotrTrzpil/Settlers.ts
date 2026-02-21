@@ -133,6 +133,7 @@ export class PaletteTextureManager {
      * @param playerTints Array of [r, g, b, a] multiplicative tints per player.
      *   Values are typically close to 1.0 (e.g. [0.68, 0.84, 1.0, 1.0] for blue player).
      */
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- palette layout with nested loops and blending
     public createPlayerPalettes(playerTints: readonly (readonly number[])[]): void {
         const numPlayers = playerTints.length;
         this.numPlayerRows = 1 + numPlayers; // row 0 = neutral, rows 1..N = players
@@ -151,7 +152,7 @@ export class PaletteTextureManager {
 
         // Fill all player rows
         for (let p = 0; p < this.numPlayerRows; p++) {
-            const tint = p === 0 ? [1, 1, 1, 1] : playerTints[p - 1];
+            const tint = p === 0 ? [1, 1, 1, 1] : playerTints[p - 1]!;
             const playerBaseRow = p * this.rowsPerPlayer;
 
             // Copy colors into 2D layout
@@ -164,27 +165,27 @@ export class PaletteTextureManager {
                 if (i < 2 || p === 0) {
                     // Reserved indices (0,1) or neutral row: copy directly
                     if (srcOff + 3 < neutralData.length) {
-                        this.fullPaletteBuffer[dstOff + 0] = neutralData[srcOff + 0];
-                        this.fullPaletteBuffer[dstOff + 1] = neutralData[srcOff + 1];
-                        this.fullPaletteBuffer[dstOff + 2] = neutralData[srcOff + 2];
-                        this.fullPaletteBuffer[dstOff + 3] = neutralData[srcOff + 3];
+                        this.fullPaletteBuffer[dstOff + 0] = neutralData[srcOff + 0]!;
+                        this.fullPaletteBuffer[dstOff + 1] = neutralData[srcOff + 1]!;
+                        this.fullPaletteBuffer[dstOff + 2] = neutralData[srcOff + 2]!;
+                        this.fullPaletteBuffer[dstOff + 3] = neutralData[srcOff + 3]!;
                     }
                 } else {
                     // Apply player tint
                     if (srcOff + 3 < neutralData.length) {
                         this.fullPaletteBuffer[dstOff + 0] = Math.min(
                             255,
-                            Math.round(neutralData[srcOff + 0] * tint[0])
+                            Math.round(neutralData[srcOff + 0]! * tint[0]!)
                         );
                         this.fullPaletteBuffer[dstOff + 1] = Math.min(
                             255,
-                            Math.round(neutralData[srcOff + 1] * tint[1])
+                            Math.round(neutralData[srcOff + 1]! * tint[1]!)
                         );
                         this.fullPaletteBuffer[dstOff + 2] = Math.min(
                             255,
-                            Math.round(neutralData[srcOff + 2] * tint[2])
+                            Math.round(neutralData[srcOff + 2]! * tint[2]!)
                         );
-                        this.fullPaletteBuffer[dstOff + 3] = neutralData[srcOff + 3];
+                        this.fullPaletteBuffer[dstOff + 3] = neutralData[srcOff + 3]!;
                     }
                 }
             }
