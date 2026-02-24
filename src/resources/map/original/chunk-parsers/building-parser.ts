@@ -49,13 +49,13 @@ export function parseBuildings(reader: BinaryReader): MapBuildingData[] {
         const startPos = reader.getOffset();
 
         // Read coordinates as little-endian words
-        const x = reader.readWordBE();
-        const y = reader.readWordBE();
+        const x = reader.readWord();
+        const y = reader.readWord();
 
         // Read building type
         let buildingType: number;
         if (entrySize >= 8) {
-            buildingType = reader.readWordBE();
+            buildingType = reader.readWord();
         } else {
             buildingType = reader.readByte();
         }

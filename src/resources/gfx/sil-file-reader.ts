@@ -51,7 +51,7 @@ export class SilFileReader extends ResourceFile {
 
         // We need to read all offsets.
         while (!d.eof()) {
-            const val = d.readInt();
+            const val = d.readIntBE();
             if (val === 0) break; // End of list?
             this.offsets.push(val);
         }

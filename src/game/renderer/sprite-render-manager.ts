@@ -27,7 +27,7 @@ import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
 import { ANIMATION_DEFAULTS, AnimationData, carrySequenceKey, workSequenceKey } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy';
-import { PLAYER_TINTS } from './tint-utils';
+import { TEAM_COLOR_PALETTES } from '@/resources/gfx/team-colors';
 import {
     getAtlasCache,
     setAtlasCache,
@@ -509,13 +509,20 @@ export class SpriteRenderManager {
 
     /**
      * Register palettes from loaded file sets into the combined palette texture.
+     * Only settler/unit files get team color slot registration — buildings use
+     * separate flag sprites for team colors, not palette substitution.
      */
-    private async registerPalettesForFiles(fileIds: string[]): Promise<void> {
+    private async registerPalettesForFiles(fileIds: string[], teamColorFileIds: Set<string>): Promise<void> {
         for (const fileId of fileIds) {
             const fileSet = await this.spriteLoader.loadFileSet(fileId);
             if (fileSet) {
                 const paletteData = fileSet.paletteCollection.getPalette().getData();
-                this._paletteManager.registerPalette(fileId, paletteData);
+                const baseOffset = this._paletteManager.registerPalette(fileId, paletteData);
+
+                if (teamColorFileIds.has(fileId)) {
+                    const uniqueOffsets = fileSet.paletteCollection.getUniquePaletteOffsets();
+                    this._paletteManager.registerTeamColorSlots(baseOffset, uniqueOffsets);
+                }
             }
         }
     }
@@ -560,7 +567,8 @@ export class SpriteRenderManager {
         ];
         await Promise.all([...allFileIds.map(id => this.spriteLoader.loadFileSet(id)), warmUpDecoderPool()]);
 
-        await this.registerPalettesForFiles(allFileIds);
+        const settlerFileId = `${SETTLER_FILE_NUMBERS[race]}`;
+        await this.registerPalettesForFiles(allFileIds, new Set([settlerFileId]));
         const filePreload = t.lap();
 
         // Create atlas and registry
@@ -598,8 +606,8 @@ export class SpriteRenderManager {
 
         atlas.update(gl);
 
-        // Create player-tinted palette rows, then upload to GPU
-        this._paletteManager.createPlayerPalettes(PLAYER_TINTS);
+        // Create per-player palette rows with S4 team color substitution, then upload to GPU
+        this._paletteManager.createPlayerPalettes(TEAM_COLOR_PALETTES.length);
         this._paletteManager.upload(gl);
 
         const gpuUpload = t.lap();
@@ -899,7 +907,8 @@ export class SpriteRenderManager {
                     fileSet,
                     { jobIndex: info.index, directionIndex: dir, frameIndex: 0 },
                     atlas,
-                    paletteBase
+                    paletteBase,
+                    1
                 );
                 if (sprite) {
                     batch.add({ type, dir, entry: sprite.entry });

@@ -110,8 +110,8 @@ export class OriginalMapFile {
         /// start of the save game data
         data.setOffset(offset);
 
-        this.checksum = data.readIntBE();
-        this.mapFileVersion = data.readIntBE();
+        this.checksum = data.readInt();
+        this.mapFileVersion = data.readInt();
 
         this.log.debug('Save game version: ' + this.mapFileVersion + ' checksum: ' + this.checksum);
 

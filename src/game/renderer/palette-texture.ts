@@ -1,4 +1,13 @@
 import { LogHandler } from '@/utilities/log-handler';
+import {
+    TEAM_COLOR_PALETTES,
+    HARDCODED_TEAM_START,
+    HARDCODED_TEAM_END,
+    FILE_TEAM_START,
+    FILE_TEAM_END,
+    FILE_TEAM_COUNT,
+    rgb565ToRgba,
+} from '@/resources/gfx/team-colors';
 
 /**
  * Fixed palette texture width for 2D layout.
@@ -74,6 +83,14 @@ export class PaletteTextureManager {
     private gpuWidth = 0;
     private gpuHeight = 0;
 
+    /**
+     * Palette window base positions in the combined palette.
+     * Each entry is a combined-palette index where a 256-color palette window starts.
+     * Indices 193-223 relative to each window use hardcoded team gradients.
+     * Indices 224-255 relative to each window use file-based team colors.
+     */
+    private teamColorSlots: number[] = [];
+
     constructor(textureUnit: number) {
         this.textureUnit = textureUnit;
     }
@@ -127,15 +144,31 @@ export class PaletteTextureManager {
     }
 
     /**
-     * Create per-player tinted palette rows.
-     * Call after all palettes are registered.
+     * Register palette window positions for team color substitution.
+     * Each unique paletteOffset marks a 256-color window. Within each window:
+     *   - Indices 193-223 are replaced with hardcoded team gradients
+     *   - Indices 224-255 are replaced with file-based team colors (at paletteOffset + 256 + 32*team)
      *
-     * @param playerTints Array of [r, g, b, a] multiplicative tints per player.
-     *   Values are typically close to 1.0 (e.g. [0.68, 0.84, 1.0, 1.0] for blue player).
+     * @param baseOffset The base offset for this file in the combined palette
+     * @param paletteOffsets All unique PIL-derived paletteOffset values for this file
      */
-    // eslint-disable-next-line sonarjs/cognitive-complexity -- palette layout with nested loops and blending
-    public createPlayerPalettes(playerTints: readonly (readonly number[])[]): void {
-        const numPlayers = playerTints.length;
+    public registerTeamColorSlots(baseOffset: number, paletteOffsets: number[]): void {
+        for (const offset of paletteOffsets) {
+            this.teamColorSlots.push(baseOffset + offset);
+        }
+    }
+
+    /**
+     * Create per-player palette rows using S4 team color substitution.
+     *
+     * S4 has two team color ranges per 256-color palette window:
+     *   - Indices 193-223: replaced with hardcoded RGB565 team gradients (entries 1-31)
+     *   - Indices 224-255: replaced with per-window team colors from the PA6 file,
+     *     stored at paletteWindowBase + 256 + 32*team in the combined palette buffer
+     *
+     * @param numPlayers Number of player teams (up to 8)
+     */
+    public createPlayerPalettes(numPlayers: number): void {
         this.numPlayerRows = 1 + numPlayers; // row 0 = neutral, rows 1..N = players
 
         // Calculate 2D layout dimensions
@@ -150,43 +183,23 @@ export class PaletteTextureManager {
 
         const neutralData = this.paletteBuffer.subarray(0, this.paletteUsedBytes);
 
+        // Build a sorted array of window bases for binary search
+        const windowBases = [...this.teamColorSlots].sort((a, b) => a - b);
+
         // Fill all player rows
         for (let p = 0; p < this.numPlayerRows; p++) {
-            const tint = p === 0 ? [1, 1, 1, 1] : playerTints[p - 1]!;
             const playerBaseRow = p * this.rowsPerPlayer;
+            const teamIndex = p - 1; // -1 for neutral row
 
-            // Copy colors into 2D layout
             for (let i = 0; i < this.totalColors; i++) {
                 const localRow = Math.floor(i / width);
                 const localCol = i % width;
                 const dstOff = ((playerBaseRow + localRow) * width + localCol) * 4;
-                const srcOff = i * 4;
 
-                if (i < 2 || p === 0) {
-                    // Reserved indices (0,1) or neutral row: copy directly
-                    if (srcOff + 3 < neutralData.length) {
-                        this.fullPaletteBuffer[dstOff + 0] = neutralData[srcOff + 0]!;
-                        this.fullPaletteBuffer[dstOff + 1] = neutralData[srcOff + 1]!;
-                        this.fullPaletteBuffer[dstOff + 2] = neutralData[srcOff + 2]!;
-                        this.fullPaletteBuffer[dstOff + 3] = neutralData[srcOff + 3]!;
-                    }
+                if (p === 0) {
+                    this.copyNeutralColor(neutralData, i, dstOff);
                 } else {
-                    // Apply player tint
-                    if (srcOff + 3 < neutralData.length) {
-                        this.fullPaletteBuffer[dstOff + 0] = Math.min(
-                            255,
-                            Math.round(neutralData[srcOff + 0]! * tint[0]!)
-                        );
-                        this.fullPaletteBuffer[dstOff + 1] = Math.min(
-                            255,
-                            Math.round(neutralData[srcOff + 1]! * tint[1]!)
-                        );
-                        this.fullPaletteBuffer[dstOff + 2] = Math.min(
-                            255,
-                            Math.round(neutralData[srcOff + 2]! * tint[2]!)
-                        );
-                        this.fullPaletteBuffer[dstOff + 3] = neutralData[srcOff + 3]!;
-                    }
+                    this.writeTeamColor(neutralData, windowBases, i, teamIndex, dstOff);
                 }
             }
         }
@@ -194,9 +207,80 @@ export class PaletteTextureManager {
         this.dirty = true;
 
         PaletteTextureManager.log.debug(
-            `Created player palettes: ${this.numPlayerRows} players x ${this.rowsPerPlayer} rows ` +
-                `(texture: ${width}x${textureHeight}, totalColors: ${this.totalColors}, ${(totalBytes / 1024).toFixed(1)}KB)`
+            `Created player palettes: ${this.numPlayerRows} rows x ${this.rowsPerPlayer} rows/player ` +
+                `(texture: ${width}x${textureHeight}, teamSlots: ${this.teamColorSlots.length}, ` +
+                `totalColors: ${this.totalColors}, ${(totalBytes / 1024).toFixed(1)}KB)`
         );
+    }
+
+    /** Write the correct team-colored value for a single combined palette index. */
+    private writeTeamColor(
+        neutralData: Uint8Array,
+        windowBases: number[],
+        combinedIdx: number,
+        teamIndex: number,
+        dstOff: number
+    ): void {
+        const windowBase = this.findWindowBase(windowBases, combinedIdx);
+        if (windowBase === -1) {
+            this.copyNeutralColor(neutralData, combinedIdx, dstOff);
+            return;
+        }
+
+        const localOffset = combinedIdx - windowBase;
+
+        if (localOffset >= HARDCODED_TEAM_START && localOffset <= HARDCODED_TEAM_END) {
+            // Range 193-223: hardcoded team gradient (entries 1-31)
+            const gradientIndex = localOffset - (HARDCODED_TEAM_START - 1);
+            const teamPalette = TEAM_COLOR_PALETTES[teamIndex % TEAM_COLOR_PALETTES.length]!;
+            const [r, g, b, a] = rgb565ToRgba(teamPalette[gradientIndex]!);
+            this.fullPaletteBuffer![dstOff + 0] = r;
+            this.fullPaletteBuffer![dstOff + 1] = g;
+            this.fullPaletteBuffer![dstOff + 2] = b;
+            this.fullPaletteBuffer![dstOff + 3] = a;
+        } else if (localOffset >= FILE_TEAM_START && localOffset <= FILE_TEAM_END) {
+            // Range 224-255: per-window team colors from PA6 file
+            const fileTeamIdx = windowBase + 256 + FILE_TEAM_COUNT * teamIndex + (localOffset - FILE_TEAM_START);
+            this.copyNeutralColor(neutralData, fileTeamIdx, dstOff);
+        } else {
+            this.copyNeutralColor(neutralData, combinedIdx, dstOff);
+        }
+    }
+
+    /** Copy a color from the neutral palette buffer to the destination in fullPaletteBuffer. */
+    private copyNeutralColor(neutralData: Uint8Array, srcIndex: number, dstOff: number): void {
+        const srcOff = srcIndex * 4;
+        if (srcOff + 3 < neutralData.length) {
+            this.fullPaletteBuffer![dstOff + 0] = neutralData[srcOff + 0]!;
+            this.fullPaletteBuffer![dstOff + 1] = neutralData[srcOff + 1]!;
+            this.fullPaletteBuffer![dstOff + 2] = neutralData[srcOff + 2]!;
+            this.fullPaletteBuffer![dstOff + 3] = neutralData[srcOff + 3]!;
+        }
+    }
+
+    /**
+     * Find the palette window base that contains the given combined index.
+     * Returns -1 if the index doesn't fall within any registered window (0-255 range).
+     */
+    private findWindowBase(sortedBases: number[], combinedIndex: number): number {
+        // Binary search for the largest base <= combinedIndex
+        let lo = 0;
+        let hi = sortedBases.length - 1;
+        let result = -1;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (sortedBases[mid]! <= combinedIndex) {
+                result = sortedBases[mid]!;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        // Check if the index is within the 256-color window
+        if (result !== -1 && combinedIndex - result < 256) {
+            return result;
+        }
+        return -1;
     }
 
     /**

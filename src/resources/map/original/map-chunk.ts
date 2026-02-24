@@ -61,18 +61,18 @@ export class MapChunk {
         this.offset = SectionHeaderSize + offset;
 
         /// all sections have a type and a length... also the "end of file" section
-        this.chunkType = plainData.readIntBE();
-        this.length = plainData.readIntBE();
+        this.chunkType = plainData.readInt();
+        this.length = plainData.readInt();
 
         if (this.chunkType === 0) {
             /// this is the "end of file" section
             return false;
         }
 
-        this.unpackedLength = plainData.readIntBE();
-        this.checksum = plainData.readIntBE();
-        this.unknown1 = plainData.readIntBE();
-        this.unknown2 = plainData.readIntBE();
+        this.unpackedLength = plainData.readInt();
+        this.checksum = plainData.readInt();
+        this.unknown1 = plainData.readInt();
+        this.unknown2 = plainData.readInt();
 
         return true;
     }

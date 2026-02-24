@@ -46,8 +46,8 @@ function validateTribe(value: number): S4Tribe {
  * Parse 8+ byte format entry (with coordinates)
  */
 function parse8ByteEntry(reader: BinaryReader, entrySize: number): MapPlayerInfo {
-    const x = reader.readWord();
-    const y = reader.readWord();
+    const x = reader.readWordBE();
+    const y = reader.readWordBE();
     const tribeValue = reader.readByte();
     const playerIndex = reader.readByte();
 

@@ -49,13 +49,13 @@ export function parseSettlers(reader: BinaryReader): MapSettlerData[] {
         const startPos = reader.getOffset();
 
         // Read coordinates as little-endian words
-        const x = reader.readWordBE();
-        const y = reader.readWordBE();
+        const x = reader.readWord();
+        const y = reader.readWord();
 
         // Read settler type
         let settlerType: number;
         if (entrySize >= 8) {
-            settlerType = reader.readWordBE();
+            settlerType = reader.readWord();
         } else {
             settlerType = reader.readByte();
         }

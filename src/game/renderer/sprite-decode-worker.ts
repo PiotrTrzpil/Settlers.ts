@@ -39,15 +39,16 @@ export interface DecodeResponse {
 
 /**
  * Decode RLE to palette indices (indexed mode).
- * Index 0 = transparent, index 1 = shadow, others = paletteOffset + value
- * (paletteBaseOffset is added per-sprite in the shader to avoid Uint16 overflow)
+ * Index 0 = transparent, index 1 = shadow, others = raw value + 2.
+ * The +2 offset prevents raw values 0/1 from colliding with transparent/shadow.
+ * paletteOffset + paletteBaseOffset are added per-sprite in the shader via v_paletteBase.
  */
 // eslint-disable-next-line sonarjs/cognitive-complexity -- RLE decode has inherent branching complexity
 function decodeRLEIndexed(
     buffer: Uint8Array,
     pos: number,
     _length: number,
-    paletteOffset: number,
+    _paletteOffset: number,
     skipPixels: number,
     outputLength: number
 ): Uint16Array {
@@ -76,9 +77,8 @@ function decodeRLEIndexed(
             }
         } else {
             if (srcIdx >= skipPixels) {
-                // Relative index: sprite palette offset + pixel value
-                // paletteBaseOffset will be added in shader
-                indices[dstIdx++] = paletteOffset + value;
+                // Store raw value + 2 to avoid collision with special indices 0/1
+                indices[dstIdx++] = value + 2;
             }
             srcIdx++;
         }
@@ -89,12 +89,13 @@ function decodeRLEIndexed(
 
 /**
  * Decode raw (no RLE) to palette indices (indexed mode).
- * paletteBaseOffset is added per-sprite in the shader to avoid Uint16 overflow.
+ * Stores raw value + 2 to avoid collision with special indices 0 (transparent) / 1 (shadow).
+ * paletteOffset + paletteBaseOffset are added per-sprite in the shader via v_paletteBase.
  */
 function decodeRawIndexed(
     buffer: Uint8Array,
     pos: number,
-    paletteOffset: number,
+    _paletteOffset: number,
     skipPixels: number,
     outputLength: number
 ): Uint16Array {
@@ -107,9 +108,8 @@ function decodeRawIndexed(
     while (j < outputLength && pos < bufferLength) {
         const value = buffer[pos]!;
         pos++;
-        // Raw mode has no special transparent/shadow handling in original code.
-        // Every byte is a palette lookup. paletteBaseOffset added in shader.
-        indices[j++] = paletteOffset + value;
+        // +2 offset: raw value 0/1 must not be treated as transparent/shadow
+        indices[j++] = value + 2;
     }
 
     return indices;

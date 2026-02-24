@@ -38,14 +38,14 @@ export class GfxImage implements IGfxImage {
     private data: BinaryReader;
 
     private palette: Palette;
-    private paletteOffset: number;
+    private _paletteOffset: number;
 
     public getDataSize(): number {
         return 0;
     }
 
     private getImageDataWithRunLengthEncoding(buffer: Uint8Array, imgData: Uint32Array, pos: number, length: number) {
-        const paletteOffset = this.paletteOffset;
+        const paletteOffset = this._paletteOffset;
         const palette = this.palette;
         const bufferLength = buffer.length;
 
@@ -73,7 +73,7 @@ export class GfxImage implements IGfxImage {
     }
 
     private getImageDataWithNoEncoding(buffer: Uint8Array, imgData: Uint32Array, pos: number, length: number) {
-        const paletteOffset = this.paletteOffset;
+        const paletteOffset = this._paletteOffset;
         const palette = this.palette;
         const bufferLength = buffer.length;
 
@@ -103,10 +103,15 @@ export class GfxImage implements IGfxImage {
         return img;
     }
 
+    /** Palette offset within the file's palette data (for per-sprite palette base) */
+    public get paletteOffset(): number {
+        return this._paletteOffset;
+    }
+
     constructor(reader: BinaryReader, palette: Palette, paletteOffset: number) {
         this.data = reader;
         this.palette = palette;
-        this.paletteOffset = paletteOffset;
+        this._paletteOffset = paletteOffset;
 
         Object.seal(this);
     }
@@ -144,19 +149,17 @@ export class GfxImage implements IGfxImage {
     /**
      * Get palette indices (Uint16Array) for this sprite.
      * Used for synchronous indexed decoding (fallback when workers unavailable).
-     * Index 0 = transparent, 1 = shadow, others = paletteOffset + value.
-     * paletteBaseOffset is added per-sprite in the shader to avoid Uint16 overflow.
-     *
-     * @param _paletteBaseOffset Deprecated, kept for API compatibility but ignored
+     * Index 0 = transparent, 1 = shadow, others = raw value + 2.
+     * The +2 offset prevents raw values 0/1 from colliding with transparent/shadow.
+     * paletteOffset and paletteBaseOffset are added per-sprite in the shader via v_paletteBase.
      */
     // eslint-disable-next-line sonarjs/cognitive-complexity -- RLE index decode loop with multiple image type branches
-    public getIndexData(_paletteBaseOffset: number): Uint16Array {
+    public getIndexData(): Uint16Array {
         const length = this.width * this.height;
         const indices = new Uint16Array(length);
         const buffer = this.data.getBuffer();
         const bufferLength = buffer.length;
         let pos = this.dataOffset;
-        const pOff = this.paletteOffset;
 
         if (this.imgType !== 32) {
             // RLE encoding
@@ -170,17 +173,17 @@ export class GfxImage implements IGfxImage {
                         indices[j++] = value; // 0 = transparent, 1 = shadow
                     }
                 } else {
-                    // Relative index: paletteOffset + value
-                    // paletteBaseOffset will be added in shader
-                    indices[j++] = pOff + value;
+                    // Store raw value + 2 to avoid collision with special indices 0/1.
+                    // paletteOffset + paletteBaseOffset added in shader via v_paletteBase.
+                    indices[j++] = value + 2;
                 }
             }
         } else {
-            // No encoding
+            // No encoding — all bytes are palette indices
             for (let j = 0; j < length && pos < bufferLength; j++) {
                 const value = buffer[pos++]!;
-                // paletteBaseOffset added in shader
-                indices[j] = pOff + value;
+                // +2 offset: raw value 0/1 must not be treated as transparent/shadow
+                indices[j] = value + 2;
             }
         }
 
@@ -196,7 +199,7 @@ export class GfxImage implements IGfxImage {
             height: this.height,
             imgType: this.imgType,
             paletteData: this.palette.getData(),
-            paletteOffset: this.paletteOffset,
+            paletteOffset: this._paletteOffset,
         };
     }
 }

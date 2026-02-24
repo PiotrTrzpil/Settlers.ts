@@ -159,11 +159,12 @@ export class SpriteLoader {
         fileSet: LoadedGfxFileSet,
         config: JobSpriteConfig,
         atlas: EntityTextureAtlas,
-        paletteBaseOffset: number
+        paletteBaseOffset: number,
+        trimBottom?: number
     ): Promise<LoadedSprite | null> {
         const gfxImage = this.getJobImage(fileSet, config);
         if (!gfxImage) return null;
-        return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset);
+        return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset, trimBottom);
     }
 
     /**
@@ -303,9 +304,11 @@ export class SpriteLoader {
     private packSpriteIntoAtlasFallback(
         gfxImage: GfxImage,
         atlas: EntityTextureAtlas,
-        paletteBaseOffset: number
+        paletteBaseOffset: number,
+        trimBottomOverride?: number
     ): LoadedSprite | null {
-        const trimmedHeight = gfxImage.height - SpriteLoader.TRIM_TOP - SpriteLoader.TRIM_BOTTOM;
+        const trimBottom = trimBottomOverride ?? SpriteLoader.TRIM_BOTTOM;
+        const trimmedHeight = gfxImage.height - SpriteLoader.TRIM_TOP - trimBottom;
         if (trimmedHeight <= 0) {
             SpriteLoader.log.debug(`Sprite too small after trimming: ${gfxImage.width}x${gfxImage.height}`);
             return null;
@@ -317,24 +320,26 @@ export class SpriteLoader {
             return null;
         }
 
-        const rawIndices = gfxImage.getIndexData(paletteBaseOffset);
+        const rawIndices = gfxImage.getIndexData();
         const trimmedIndices = this.trimIndices(
             rawIndices,
             gfxImage.width,
             gfxImage.height,
             SpriteLoader.TRIM_TOP,
-            SpriteLoader.TRIM_BOTTOM
+            trimBottom
         );
 
         atlas.blitIndices(region, trimmedIndices);
 
+        // Include per-sprite paletteOffset in the base so the shader
+        // can reconstruct the full palette index without Uint16 overflow
         const entry: SpriteEntry = {
             atlasRegion: region,
             offsetX: -gfxImage.left * PIXELS_TO_WORLD,
             offsetY: -(gfxImage.top - SpriteLoader.TRIM_TOP) * PIXELS_TO_WORLD,
             widthWorld: gfxImage.width * PIXELS_TO_WORLD,
             heightWorld: trimmedHeight * PIXELS_TO_WORLD,
-            paletteBaseOffset,
+            paletteBaseOffset: paletteBaseOffset + gfxImage.paletteOffset,
         };
 
         return { image: gfxImage, region, entry };
@@ -349,18 +354,20 @@ export class SpriteLoader {
     private async packSpriteIntoAtlas(
         gfxImage: GfxImage,
         atlas: EntityTextureAtlas,
-        paletteBaseOffset: number
+        paletteBaseOffset: number,
+        trimBottomOverride?: number
     ): Promise<LoadedSprite | null> {
         const pool = getDecoderPool();
 
         if (!pool.isAvailable) {
-            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset);
+            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset, trimBottomOverride);
         }
 
         const params = gfxImage.getDecodeParams();
+        const trimBottom = trimBottomOverride ?? SpriteLoader.TRIM_BOTTOM;
 
         const trimmedWidth = params.width;
-        const trimmedHeight = params.height - SpriteLoader.TRIM_TOP - SpriteLoader.TRIM_BOTTOM;
+        const trimmedHeight = params.height - SpriteLoader.TRIM_TOP - trimBottom;
 
         if (trimmedHeight <= 0) {
             SpriteLoader.log.debug(`Sprite too small after trimming: ${params.width}x${params.height}`);
@@ -384,24 +391,26 @@ export class SpriteLoader {
                 params.paletteOffset,
                 paletteBaseOffset,
                 SpriteLoader.TRIM_TOP,
-                SpriteLoader.TRIM_BOTTOM
+                trimBottom
             );
 
             atlas.blitIndices(region, indices);
 
+            // Include per-sprite paletteOffset in the base so the shader
+            // can reconstruct the full palette index without Uint16 overflow
             const entry: SpriteEntry = {
                 atlasRegion: region,
                 offsetX: -gfxImage.left * PIXELS_TO_WORLD,
                 offsetY: -(gfxImage.top - SpriteLoader.TRIM_TOP) * PIXELS_TO_WORLD,
                 widthWorld: trimmedWidth * PIXELS_TO_WORLD,
                 heightWorld: trimmedHeight * PIXELS_TO_WORLD,
-                paletteBaseOffset,
+                paletteBaseOffset: paletteBaseOffset + params.paletteOffset,
             };
 
             return { image: gfxImage, region, entry };
         } catch (e) {
             SpriteLoader.log.debug(`Worker decode failed, falling back to sync: ${e}`);
-            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset);
+            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset, trimBottomOverride);
         }
     }
 

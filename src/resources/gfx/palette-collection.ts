@@ -23,6 +23,15 @@ export class PaletteCollection extends ResourceFile {
         return this.pilFile.length;
     }
 
+    /** Get all unique palette offsets from the PIL file (for team color slot identification) */
+    public getUniquePaletteOffsets(): number[] {
+        const offsets = new Set<number>();
+        for (let i = 0; i < this.pilFile.length; i++) {
+            offsets.add(this.getOffset(i));
+        }
+        return [...offsets];
+    }
+
     public constructor(pa6File: BinaryReader, pilFile: PilFileReader) {
         super();
 

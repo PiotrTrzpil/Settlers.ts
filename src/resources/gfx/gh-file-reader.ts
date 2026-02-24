@@ -61,11 +61,11 @@ export class GhFileReader {
         }
 
         /// file header
-        this.magic = reader.readIntBE();
-        this.flag1 = reader.readIntBE();
-        this.flag2 = reader.readIntBE();
-        this.flag3 = reader.readIntBE();
-        this.flag4 = reader.readIntBE();
+        this.magic = reader.readInt();
+        this.flag1 = reader.readInt();
+        this.flag2 = reader.readInt();
+        this.flag3 = reader.readInt();
+        this.flag4 = reader.readInt();
 
         let filePos = reader.getOffset();
 
@@ -81,7 +81,7 @@ export class GhFileReader {
             const flag1 = reader.readByte();
             const flag2 = reader.readByte();
             const rowCount = reader.readByte();
-            size = reader.readIntBE();
+            size = reader.readInt();
 
             let img: IGfxImage;
 

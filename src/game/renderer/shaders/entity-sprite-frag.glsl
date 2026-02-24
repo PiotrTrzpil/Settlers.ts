@@ -62,9 +62,9 @@ void main() {
         return;
     }
 
-    // Add per-sprite palette base offset to get final index in combined palette
-    // This avoids Uint16 overflow in the atlas texture
-    int linearIndex = int(index) + int(v_paletteBase);
+    // Atlas stores raw value + 2 (to avoid collision with 0=transparent, 1=shadow).
+    // Subtract 2, then add per-sprite palette base (fileBaseOffset + paletteOffset).
+    int linearIndex = int(index) - 2 + int(v_paletteBase);
 
     // Safety: if paletteWidth is 0 or invalid, show magenta
     if (u_paletteWidth <= 0) {

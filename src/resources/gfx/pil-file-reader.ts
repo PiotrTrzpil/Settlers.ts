@@ -30,7 +30,7 @@ export class PilFileReader extends ResourceFile {
         this.offsetTable = new Int32Array(imageCount);
 
         for (let i = 0; i < imageCount; i++) {
-            this.offsetTable[i] = reader.readIntBE();
+            this.offsetTable[i] = reader.readInt();
         }
 
         Object.seal(this);

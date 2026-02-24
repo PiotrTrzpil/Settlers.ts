@@ -91,8 +91,31 @@ export class BinaryReader {
         return v;
     }
 
-    /** Read one DWord (4 Byte) from stream (little ending) */
-    public readInt(offset: number | null = null, length = 4): number {
+    /** Read one DWord (4 Byte) from stream (little-endian) */
+    public readInt(offset: number | null = null): number {
+        if (offset == null) {
+            offset = this.pos;
+        }
+
+        if (this.pos < 0 || this.pos + 4 > this.data.length) {
+            BinaryReader.log.error(
+                'read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos
+            );
+            return 0;
+        }
+
+        this.pos = offset + 4;
+
+        return (
+            this.data[offset]! |
+            (this.data[offset + 1]! << 8) |
+            (this.data[offset + 2]! << 16) |
+            (this.data[offset + 3]! << 24)
+        );
+    }
+
+    /** Read one DWord (4 Byte) from stream (big-endian) */
+    public readIntBE(offset: number | null = null, length = 4): number {
         if (offset === null) {
             offset = this.pos;
         }
@@ -118,47 +141,24 @@ export class BinaryReader {
         return v;
     }
 
-    /** Read one DWord (4 Byte) from stream (big ending) */
-    public readIntBE(offset: number | null = null): number {
-        if (offset == null) {
-            offset = this.pos;
-        }
-
-        if (this.pos < 0 || this.pos + 4 > this.data.length) {
-            BinaryReader.log.error(
-                'read out of data: ' + this.filename + ' - size: ' + this.data.length + ' @ ' + this.pos
-            );
-            return 0;
-        }
-
-        this.pos = offset + 4;
-
-        return (
-            this.data[offset]! |
-            (this.data[offset + 1]! << 8) |
-            (this.data[offset + 2]! << 16) |
-            (this.data[offset + 3]! << 24)
-        );
-    }
-
-    /** Read one Word (2 Byte) from stream (big ending) */
-    public readWord(offset: number | null = null): number {
-        if (offset === null) {
-            offset = this.pos;
-        }
-
-        this.pos = offset + 2;
-        return (this.data[offset]! << 8) | this.data[offset + 1]!;
-    }
-
-    /** Read one Word (2 Byte) from stream (big ending) */
-    public readWordBE(offset?: number): number {
+    /** Read one Word (2 Byte) from stream (little-endian) */
+    public readWord(offset?: number): number {
         if (offset == null) {
             offset = this.pos;
         }
 
         this.pos = offset + 2;
         return this.data[offset]! | (this.data[offset + 1]! << 8);
+    }
+
+    /** Read one Word (2 Byte) from stream (big-endian) */
+    public readWordBE(offset: number | null = null): number {
+        if (offset === null) {
+            offset = this.pos;
+        }
+
+        this.pos = offset + 2;
+        return (this.data[offset]! << 8) | this.data[offset + 1]!;
     }
 
     /** Read a String */

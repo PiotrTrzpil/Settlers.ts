@@ -85,8 +85,8 @@ export function parseStacks(reader: BinaryReader): MapStackData[] {
     for (let i = 0; i < entryCount && !reader.eof(); i++) {
         const startPos = reader.getOffset();
 
-        const x = reader.readWordBE();
-        const y = reader.readWordBE();
+        const x = reader.readWord();
+        const y = reader.readWord();
         const { materialType, amount } = readMaterialAndAmount(reader, entrySize);
 
         skipRemainingBytes(reader, startPos, entrySize);

@@ -26,7 +26,7 @@ declare const __BUILD_TIME__: string;
  * Schema version for cache invalidation.
  * Bump this when animation sequence names or sprite data format changes.
  */
-const CACHE_SCHEMA_VERSION = 7; // v7: 2x sprite scale (PIXELS_TO_WORLD = 1/32)
+const CACHE_SCHEMA_VERSION = 10; // v10: fix Uint16 overflow — atlas stores value+2, paletteOffset moved to vertex attribute
 
 /** Current build version for cache invalidation */
 const BUILD_VERSION =

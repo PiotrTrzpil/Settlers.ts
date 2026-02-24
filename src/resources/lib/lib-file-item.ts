@@ -31,13 +31,13 @@ export class LibFileItem {
 
         this.fileName = fileName;
 
-        this.offset = data.readIntBE();
-        this.length = data.readIntBE();
-        this.decompressedLength = data.readIntBE();
-        this.pathIndex = data.readWordBE();
-        this.unknown = data.readWordBE();
-        this.isCompressed = data.readIntBE() === 1;
-        this.checksum = data.readIntBE();
+        this.offset = data.readInt();
+        this.length = data.readInt();
+        this.decompressedLength = data.readInt();
+        this.pathIndex = data.readWord();
+        this.unknown = data.readWord();
+        this.isCompressed = data.readInt() === 1;
+        this.checksum = data.readInt();
 
         this.pathName = pathNames.getPath(this.pathIndex);
 

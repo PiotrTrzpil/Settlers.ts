@@ -73,12 +73,12 @@ export class LibFileHeader {
         data.setOffset(offset);
         this.headerOffset = offset;
 
-        this.length = data.readIntBE();
-        this.unknown = data.readIntBE();
-        this.pathNameListLength = data.readIntBE();
-        this.pathNameCount = data.readIntBE();
-        this.fileNameListLength = data.readIntBE();
-        this.fileNameCount = data.readIntBE();
+        this.length = data.readInt();
+        this.unknown = data.readInt();
+        this.pathNameListLength = data.readInt();
+        this.pathNameCount = data.readInt();
+        this.fileNameListLength = data.readInt();
+        this.fileNameCount = data.readInt();
 
         this.pathNameListOffset = this.headerOffset + HeaderSize;
         this.fileNameListOffset = this.pathNameListOffset + this.pathNameListLength;

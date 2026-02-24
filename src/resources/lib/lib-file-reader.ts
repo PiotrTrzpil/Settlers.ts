@@ -87,7 +87,7 @@ export class LibFileReader {
 
     /** read the meta data of the file */
     private processFile(data: BinaryReader) {
-        const offset = data.readIntBE(data.length - 4);
+        const offset = data.readInt(data.length - 4);
 
         const header = new LibFileHeader(data, offset);
         if (header.fileNameCount <= 0) {

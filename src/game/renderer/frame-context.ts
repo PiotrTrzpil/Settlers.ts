@@ -87,11 +87,20 @@ export interface IFrameContext {
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Margin added to world bounds for safe culling (top/left/right) */
+/** Base margin added to world bounds for safe culling (units, small sprites) */
 const WORLD_MARGIN = 2.0;
+
+/** Extra left margin to account for shadows that extend to the right of an entity's base */
+const WORLD_MARGIN_LEFT = 3.5;
 
 /** Extra margin for bottom of screen to account for tall sprites (trees extend upward from base) */
 const WORLD_MARGIN_BOTTOM = 5.0;
+
+/**
+ * Additional margin for buildings whose sprites extend well beyond their base tile.
+ * Large buildings can be 300+ pixels wide/tall (≈10 world units at PIXELS_TO_WORLD=1/32).
+ */
+const BUILDING_EXTRA_MARGIN = 5.0;
 
 /** Margin added to tile bounds to catch edge cases */
 const TILE_MARGIN = 10;
@@ -202,8 +211,9 @@ export class FrameContext implements IFrameContext {
             // Compute world position (with interpolation for units)
             computeEntityWorldPos(entity, unitStates, groundHeight, mapSize, viewPoint, tempPos);
 
-            // World bounds culling
-            if (!isInWorldBounds(tempPos, worldBounds)) {
+            // World bounds culling — buildings get extra margin for their large sprites
+            const extraMargin = entity.type === EntityType.Building ? BUILDING_EXTRA_MARGIN : 0;
+            if (!isInWorldBounds(tempPos, worldBounds, extraMargin)) {
                 culledCount++;
                 continue;
             }
@@ -237,7 +247,7 @@ export class FrameContext implements IFrameContext {
 function computeWorldBounds(viewPoint: IViewPoint): Bounds {
     const { zoom, aspectRatio: aspect } = viewPoint;
     return {
-        minX: ((-1 + zoom) * aspect) / zoom - WORLD_MARGIN,
+        minX: ((-1 + zoom) * aspect) / zoom - WORLD_MARGIN_LEFT,
         maxX: ((1 + zoom) * aspect) / zoom + WORLD_MARGIN,
         minY: (zoom - 1) / zoom - WORLD_MARGIN,
         maxY: (zoom + 1) / zoom + WORLD_MARGIN_BOTTOM,
@@ -291,9 +301,12 @@ function isInTileBounds(entity: Entity, bounds: Bounds): boolean {
 /**
  * Check if world position is within bounds.
  */
-function isInWorldBounds(pos: MutableWorldPos, bounds: Bounds): boolean {
+function isInWorldBounds(pos: MutableWorldPos, bounds: Bounds, extraMargin: number = 0): boolean {
     return (
-        pos.worldX >= bounds.minX && pos.worldX <= bounds.maxX && pos.worldY >= bounds.minY && pos.worldY <= bounds.maxY
+        pos.worldX >= bounds.minX - extraMargin &&
+        pos.worldX <= bounds.maxX + extraMargin &&
+        pos.worldY >= bounds.minY - extraMargin &&
+        pos.worldY <= bounds.maxY + extraMargin
     );
 }
 

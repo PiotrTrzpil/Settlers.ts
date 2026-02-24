@@ -101,15 +101,15 @@ export class OriginalMapLoader extends OriginalMapFile implements IMapLoader {
         }
 
         this.general = new GeneralMapInformation();
-        this.general.gameType = reader.readIntBE();
-        this.general.playerCount = reader.readIntBE();
-        this.general.startResources = reader.readIntBE();
+        this.general.gameType = reader.readInt();
+        this.general.playerCount = reader.readInt();
+        this.general.startResources = reader.readInt();
 
-        const mapSize = reader.readIntBE();
+        const mapSize = reader.readInt();
         this.mapSize = new MapSize(mapSize, mapSize);
 
-        this.unknown5 = reader.readIntBE();
-        this.unknown6 = reader.readIntBE();
+        this.unknown5 = reader.readInt();
+        this.unknown6 = reader.readInt();
 
         return true;
     }

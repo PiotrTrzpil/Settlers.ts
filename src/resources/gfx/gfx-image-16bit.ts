@@ -32,9 +32,18 @@ export class GfxImage16Bit implements IGfxImage {
             const value2 = buffer[pos]!;
             pos++;
 
-            imgData[j++] = value2 & 0xf8; // r
-            imgData[j++] = (value1 >> 3) | ((value2 << 5) & 0xfc); // g
-            imgData[j++] = (value1 << 3) & 0xf8; // b
+            let r = value2 & 0xf8;
+            let g = ((value1 >> 3) | (value2 << 5)) & 0xfc;
+            let b = (value1 << 3) & 0xf8;
+
+            // Expand 5/6-bit to full 8-bit range via bit replication (0-248 → 0-255)
+            r |= r >> 5;
+            g |= g >> 6;
+            b |= b >> 5;
+
+            imgData[j++] = r;
+            imgData[j++] = g;
+            imgData[j++] = b;
             imgData[j++] = 255; // alpha
         }
     }

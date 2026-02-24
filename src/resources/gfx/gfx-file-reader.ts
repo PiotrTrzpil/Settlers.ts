@@ -20,6 +20,7 @@ export class GfxFileReader extends ResourceFile {
 
     // private images: GfxImage[] = []
     private isWordHeader = false;
+    private lastGoodJobIndex = 0;
 
     /** return the number of images in this gfx file */
     public getImageCount(): number {
@@ -42,8 +43,9 @@ export class GfxFileReader extends ResourceFile {
             jobIndex = this.jilFileReader.reverseLookupOffset(dirOffset);
 
             if (jobIndex === -1) {
-                GfxFileReader.log.error('unable to resolve job Index: ' + index);
-                return null;
+                jobIndex = this.lastGoodJobIndex;
+            } else {
+                this.lastGoodJobIndex = jobIndex;
             }
         }
 
@@ -77,7 +79,7 @@ export class GfxFileReader extends ResourceFile {
 
         reader.setOffset(offset);
 
-        const imgHeadType = reader.readWordBE();
+        const imgHeadType = reader.readWord();
 
         reader.setOffset(offset);
 
@@ -94,23 +96,23 @@ export class GfxFileReader extends ResourceFile {
 
             newImg.imgType = 0;
 
-            newImg.flag1 = reader.readWordBE();
-            newImg.flag2 = reader.readWordBE();
+            newImg.flag1 = reader.readWord();
+            newImg.flag2 = reader.readWord();
 
             newImg.dataOffset = offset + 8;
         } else {
             this.isWordHeader = false;
 
             newImg.headType = false;
-            newImg.width = reader.readWordBE();
-            newImg.height = reader.readWordBE();
-            newImg.left = reader.readWordBE();
-            newImg.top = reader.readWordBE();
+            newImg.width = reader.readWord();
+            newImg.height = reader.readWord();
+            newImg.left = reader.readWord();
+            newImg.top = reader.readWord();
 
             newImg.imgType = reader.readByte();
 
             newImg.flag1 = reader.readByte();
-            newImg.flag2 = reader.readIntBE(2);
+            newImg.flag2 = reader.readInt(2);
 
             newImg.dataOffset = offset + 12;
         }

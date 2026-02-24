@@ -23,8 +23,8 @@ out vec4 fragColor;
 vec4 resolveIndex(uint index) {
     if (index == 0u) return vec4(0.0);                                                   // transparent
     if (index == 1u) return vec4(0.0, 0.0, 0.0, 0.25);                                  // shadow
-    // Add per-sprite palette base offset, then convert to 2D coordinates
-    int linearIndex = int(index) + int(v_paletteBase);
+    // Atlas stores raw value + 2 (avoids 0/1 collision). Subtract 2, add palette base.
+    int linearIndex = int(index) - 2 + int(v_paletteBase);
     int localX = linearIndex % u_paletteWidth;
     int localY = linearIndex / u_paletteWidth;
     int finalY = int(v_playerRow) * u_paletteRowsPerPlayer + localY;

@@ -22,11 +22,11 @@ export class ResourceFile {
         }
 
         /// file header
-        this.magic = reader.readIntBE();
-        this.flag1 = reader.readIntBE();
-        this.flag2 = reader.readIntBE();
-        this.flag3 = reader.readIntBE();
-        this.flag4 = reader.readIntBE();
+        this.magic = reader.readInt();
+        this.flag1 = reader.readInt();
+        this.flag2 = reader.readInt();
+        this.flag3 = reader.readInt();
+        this.flag4 = reader.readInt();
 
         return new BinaryReader(reader, this.headerSize);
     }
