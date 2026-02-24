@@ -148,9 +148,11 @@ export class TreeSystem implements TickSystem {
             if (entity) {
                 entity.variation = offset;
 
-                // Normal trees (offset 3) have sway animation
+                // Normal trees (offset 3) have sway animation — random start frame to desync
                 if (offset === TREE_OFFSET.NORMAL) {
-                    this.animationService.play(entityId, 'default', { loop: true });
+                    // eslint-disable-next-line sonarjs/pseudo-random -- intentional visual variation
+                    const startFrame = Math.floor(Math.random() * 100);
+                    this.animationService.play(entityId, 'default', { loop: true, startFrame });
                 }
             }
         }
@@ -182,9 +184,11 @@ export class TreeSystem implements TickSystem {
         // Set initial sprite variation
         entity.variation = offset;
 
-        // Normal trees have sway animation
+        // Normal trees have sway animation — random start frame to desync
         if (offset === TREE_OFFSET.NORMAL) {
-            this.animationService.play(entityId, 'default', { loop: true });
+            // eslint-disable-next-line sonarjs/pseudo-random -- intentional visual variation
+            const startFrame = Math.floor(Math.random() * 100);
+            this.animationService.play(entityId, 'default', { loop: true, startFrame });
         }
     }
 

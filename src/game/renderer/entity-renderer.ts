@@ -48,12 +48,24 @@ export type { PlacementPreviewState } from './render-context';
 import {
     TEXTURE_UNIT_SPRITE_ATLAS,
     BASE_QUAD,
+    ENTITY_SCALE,
     BUILDING_SCALE,
     UNIT_SCALE,
     RESOURCE_SCALE,
     PREVIEW_VALID_COLOR,
     PREVIEW_INVALID_COLOR,
 } from './entity-renderer-constants';
+
+/** Apply ENTITY_SCALE to a sprite's world dimensions and offsets. */
+function scaleSprite(sprite: SpriteEntry): SpriteEntry {
+    return {
+        ...sprite,
+        widthWorld: sprite.widthWorld * ENTITY_SCALE,
+        heightWorld: sprite.heightWorld * ENTITY_SCALE,
+        offsetX: sprite.offsetX * ENTITY_SCALE,
+        offsetY: sprite.offsetY * ENTITY_SCALE,
+    };
+}
 
 /**
  * Renders entities (units and buildings) as colored quads or textured sprites.
@@ -773,12 +785,14 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const isSelected = this.selectedEntityIds.has(entity.id);
             const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
 
+            const sprite = scaleSprite(resolved.sprite);
+
             if (resolved.progress < 1.0) {
                 this.spriteBatchRenderer.addSpritePartial(
                     gl,
                     worldPos.worldX,
                     worldPos.worldY,
-                    resolved.sprite,
+                    sprite,
                     playerRow,
                     tint[0]!,
                     tint[1]!,
@@ -791,7 +805,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                     gl,
                     worldPos.worldX,
                     worldPos.worldY,
-                    resolved.sprite,
+                    sprite,
                     playerRow,
                     tint[0]!,
                     tint[1]!,
@@ -938,6 +952,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
             if (!oldSprite || !newSprite) continue;
 
+            const scaledOld = scaleSprite(oldSprite);
+            const scaledNew = scaleSprite(newSprite);
+
             // Use cached world position from frame context
             const cachedPos = this.frameContext?.getWorldPos(entity);
             const worldPos = cachedPos ?? this.getInterpolatedWorldPos(entity, viewPoint);
@@ -948,8 +965,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 gl,
                 worldPos.worldX,
                 worldPos.worldY,
-                oldSprite,
-                newSprite,
+                scaledOld,
+                scaledNew,
                 blendFactor,
                 playerRow,
                 tint[0]!,
@@ -1130,8 +1147,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         // Try to render with sprite based on entity type
         if (this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
-            const spriteEntry = this.getPreviewSprite(entityType, subType, variation);
-            if (spriteEntry) {
+            const rawSprite = this.getPreviewSprite(entityType, subType, variation);
+            if (rawSprite) {
+                const spriteEntry = scaleSprite(rawSprite);
                 const paletteWidth = PALETTE_TEXTURE_WIDTH;
                 const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
                 this.spriteBatchRenderer.beginSpriteBatch(

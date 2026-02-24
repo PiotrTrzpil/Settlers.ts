@@ -21,8 +21,11 @@ export const MAX_PATH_DOTS = 30;
 // Base quad vertices for instanced rendering
 export const BASE_QUAD = new Float32Array([-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5]);
 
-// Entity scale factors
-export const BUILDING_SCALE = 1.0;
+// Global scale applied to all entity sprites (buildings, units, trees, resources)
+export const ENTITY_SCALE = 1.5;
+
+// Entity scale factors (for procedural/fallback rendering)
+export const BUILDING_SCALE = 1.5;
 export const UNIT_SCALE = 0.6;
 export const RESOURCE_SCALE = 0.5;
 export const PATH_DOT_SCALE = 0.24;

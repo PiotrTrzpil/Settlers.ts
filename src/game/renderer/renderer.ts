@@ -107,7 +107,11 @@ export class Renderer {
         // Note: onMove callback removed - the game loop now drives all rendering via drawOnce()
 
         const antialias = options?.antialias ?? true;
-        let newGl = canvas.getContext('webgl2', { antialias, preserveDrawingBuffer: true });
+        let newGl = canvas.getContext('webgl2', {
+            antialias,
+            preserveDrawingBuffer: true,
+            powerPreference: 'high-performance',
+        });
         if (!newGl) {
             Renderer.log.error('Unable to initialize WebGL2. Your browser may not support it.');
             return;
