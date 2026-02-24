@@ -162,6 +162,11 @@ export class MovementController {
         return this._direction;
     }
 
+    /** Explicitly set facing direction without moving (e.g. face a work target). */
+    setDirection(direction: EDirection): void {
+        this._direction = direction;
+    }
+
     /** Get the current goal (final waypoint), or null if no path. */
     get goal(): TileCoord | null {
         return this._path.length > 0 ? (this._path[this._path.length - 1] ?? null) : null;

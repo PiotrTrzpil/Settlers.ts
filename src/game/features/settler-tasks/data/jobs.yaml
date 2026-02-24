@@ -51,8 +51,11 @@ forester.plant:
   - task: SEARCH_POS
     anim: walk
 
-  - task: GO_TO_POS
+  - task: GO_ADJACENT_POS
     anim: walk
+
+  - task: FACE_POS
+    anim: idle
 
   - task: WORK
     anim: plant
@@ -65,8 +68,11 @@ farmer.plant:
   - task: SEARCH_POS
     anim: walk
 
-  - task: GO_TO_POS
+  - task: GO_ADJACENT_POS
     anim: walk
+
+  - task: FACE_POS
+    anim: idle
 
   - task: WORK
     anim: plant

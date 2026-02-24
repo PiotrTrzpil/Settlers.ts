@@ -325,9 +325,19 @@ export class GameState {
         const entity = this.entityMap.get(id);
         if (!entity) return;
 
-        this.tileOccupancy.delete(tileKey(entity.x, entity.y));
+        // Only clear old occupancy if this entity still owns the tile
+        // (another entity like a planted tree may have overwritten it)
+        const oldKey = tileKey(entity.x, entity.y);
+        if (this.tileOccupancy.get(oldKey) === id) {
+            this.tileOccupancy.delete(oldKey);
+        }
         entity.x = newX;
         entity.y = newY;
-        this.tileOccupancy.set(tileKey(newX, newY), id);
+        // Units must not overwrite static entity (building/map object) occupancy
+        const newKey = tileKey(newX, newY);
+        const occupant = this.tileOccupancy.get(newKey);
+        if (occupant === undefined || this.entityMap.get(occupant)?.type === EntityType.Unit) {
+            this.tileOccupancy.set(newKey, id);
+        }
     }
 }

@@ -418,8 +418,9 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
 function executePlantTree(ctx: CommandContext, cmd: PlantTreeCommand): CommandResult {
     const { state } = ctx;
 
-    // Check tile is still valid
-    if (state.getEntityAt(cmd.x, cmd.y)) {
+    // Check tile is still valid — ignore units (the forester stands on the tile while planting)
+    const existing = state.getEntityAt(cmd.x, cmd.y);
+    if (existing && existing.type !== EntityType.Unit) {
         return commandFailed(`Tile (${cmd.x}, ${cmd.y}) is occupied, cannot plant tree`);
     }
 

@@ -17,6 +17,10 @@ export enum TaskType {
     GO_TO_DEST = 'GO_TO_DEST',
     /** Return to home building */
     GO_HOME = 'GO_HOME',
+    /** Move to a tile adjacent to a target position (not onto it) */
+    GO_ADJACENT_POS = 'GO_ADJACENT_POS',
+    /** Face toward the target position (set direction without moving) */
+    FACE_POS = 'FACE_POS',
     /** Search for a position (e.g., where to plant) */
     SEARCH_POS = 'SEARCH_POS',
     /** Wait until target entity is ready to be worked on (canWork check) */

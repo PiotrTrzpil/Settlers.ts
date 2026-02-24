@@ -8,7 +8,7 @@
 import { UnitType, type Entity, setCarrying, clearCarrying } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
-import { hexDistance } from '../../systems/hex-directions';
+import { hexDistance, getAllNeighbors, getApproxDirection } from '../../systems/hex-directions';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../inventory';
@@ -93,6 +93,12 @@ export function executeTask(
     case TaskType.GO_TO_POS:
         return executeGoToPos(settler, job, ctx);
 
+    case TaskType.GO_ADJACENT_POS:
+        return executeGoAdjacentPos(settler, job, ctx);
+
+    case TaskType.FACE_POS:
+        return executeFacePos(settler, job, ctx);
+
     case TaskType.WAIT:
         return executeWait(job, task, dt);
 
@@ -157,6 +163,82 @@ function executeGoToPos(settler: Entity, job: JobState, ctx: TaskContext): TaskR
         );
     }
     return moveToPosition(settler, job.data.targetPos.x, job.data.targetPos.y, ctx);
+}
+
+/**
+ * Move to a walkable tile adjacent to targetPos (not onto the target itself).
+ * Picks the closest unoccupied neighbor. Generic — usable by any unit that
+ * works on an adjacent tile (forester, farmer, etc.).
+ */
+function executeGoAdjacentPos(settler: Entity, job: JobState, ctx: TaskContext): TaskResult {
+    if (job.type !== 'worker') return TaskResult.FAILED;
+    if (!job.data.targetPos) {
+        throw new Error(
+            `Settler ${settler.id} (${UnitType[settler.subType]}): GO_ADJACENT_POS requires targetPos. Check job YAML.`
+        );
+    }
+
+    const { x: targetX, y: targetY } = job.data.targetPos;
+    const controller = ctx.gameState.movement.getController(settler.id);
+    if (!controller) return TaskResult.FAILED;
+
+    const dist = hexDistance(settler.x, settler.y, targetX, targetY);
+
+    // Already on an adjacent tile and idle — done
+    if (dist === 1 && controller.state === 'idle') {
+        return TaskResult.DONE;
+    }
+
+    // Need to start (or restart) movement
+    if (controller.state === 'idle') {
+        const neighbor = findBestAdjacentTile(settler.x, settler.y, targetX, targetY, ctx);
+        if (!neighbor) return TaskResult.FAILED;
+
+        const moved = ctx.gameState.movement.moveUnit(settler.id, neighbor.x, neighbor.y);
+        if (!moved) return TaskResult.FAILED;
+    }
+
+    return TaskResult.CONTINUE;
+}
+
+/** Pick the unoccupied neighbor of (targetX, targetY) closest to the settler. */
+function findBestAdjacentTile(
+    settlerX: number,
+    settlerY: number,
+    targetX: number,
+    targetY: number,
+    ctx: TaskContext
+): { x: number; y: number } | null {
+    const neighbors = getAllNeighbors({ x: targetX, y: targetY });
+    let best: { x: number; y: number } | null = null;
+    let bestDist = Infinity;
+
+    for (const n of neighbors) {
+        if (ctx.gameState.getEntityAt(n.x, n.y)) continue;
+        const d = hexDistance(settlerX, settlerY, n.x, n.y);
+        if (d < bestDist) {
+            bestDist = d;
+            best = n;
+        }
+    }
+    return best;
+}
+
+/** Face the settler toward targetPos without moving. */
+function executeFacePos(settler: Entity, job: JobState, ctx: TaskContext): TaskResult {
+    if (job.type !== 'worker') return TaskResult.FAILED;
+    if (!job.data.targetPos) {
+        throw new Error(
+            `Settler ${settler.id} (${UnitType[settler.subType]}): FACE_POS requires targetPos. Check job YAML.`
+        );
+    }
+
+    const controller = ctx.gameState.movement.getController(settler.id);
+    if (!controller) return TaskResult.FAILED;
+
+    const dir = getApproxDirection(settler.x, settler.y, job.data.targetPos.x, job.data.targetPos.y);
+    controller.setDirection(dir);
+    return TaskResult.DONE;
 }
 
 // ─────────────────────────────────────────────────────────────

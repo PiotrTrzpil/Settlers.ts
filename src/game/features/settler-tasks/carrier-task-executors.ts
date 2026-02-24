@@ -22,6 +22,7 @@ const FATIGUE_PER_DELIVERY = 5;
  * Try to execute a carrier-specific task.
  * Returns null for tasks that should be handled by the generic dispatcher.
  */
+// eslint-disable-next-line complexity -- exhaustive switch over all task types
 export function executeCarrierTask(
     settler: Entity,
     job: CarrierJobState,
@@ -50,6 +51,8 @@ export function executeCarrierTask(
     case TaskType.STAY:
     case TaskType.WORK:
     case TaskType.WAIT:
+    case TaskType.GO_ADJACENT_POS:
+    case TaskType.FACE_POS:
         return null; // Not carrier-specific — fall through to generic dispatcher
     }
 }
