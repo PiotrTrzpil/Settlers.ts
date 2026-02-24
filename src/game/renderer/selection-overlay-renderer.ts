@@ -318,19 +318,33 @@ export class SelectionOverlayRenderer {
         for (const entity of buildings) {
             const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType);
 
+            // Build a set of footprint vertex positions for face-inclusion checks.
+            // Footprint positions are vertices; a terrain face at (x,y) is only fully
+            // covered when all 4 corner vertices (x,y), (x+1,y), (x,y+1), (x+1,y+1) are present.
+            const vertexSet = new Set<number>();
+            for (const t of footprint) {
+                vertexSet.add(t.x * 65536 + t.y);
+            }
+
             for (const tile of footprint) {
-                // Get height at integer tile position (fractional coords don't work with groundHeight lookup)
+                // Only draw if all 4 face corners are in the footprint
+                if (
+                    !vertexSet.has((tile.x + 1) * 65536 + tile.y) ||
+                    !vertexSet.has(tile.x * 65536 + (tile.y + 1)) ||
+                    !vertexSet.has((tile.x + 1) * 65536 + (tile.y + 1))
+                ) {
+                    continue;
+                }
+
                 const idx = ctx.mapSize.toIndex(tile.x, tile.y);
                 const hWorld = heightToWorld(ctx.groundHeight[idx] ?? 0);
 
-                // Get world positions for the 4 corners of the tile diamond using pure tileToWorld
-                // Top: (x+0.5, y), Right: (x+1, y+0.5), Bottom: (x+0.5, y+1), Left: (x, y+0.5)
-                const top = tileToWorld(tile.x + 0.5, tile.y, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
-                const right = tileToWorld(tile.x + 1, tile.y + 0.5, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
-                const bottom = tileToWorld(tile.x + 0.5, tile.y + 1, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
-                const left = tileToWorld(tile.x, tile.y + 0.5, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
+                // Terrain face diamond: vertices at (x,y), (x+1,y), (x+1,y+1), (x,y+1)
+                const top = tileToWorld(tile.x, tile.y, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
+                const right = tileToWorld(tile.x + 1, tile.y, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
+                const bottom = tileToWorld(tile.x + 1, tile.y + 1, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
+                const left = tileToWorld(tile.x, tile.y + 1, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
 
-                // Use helper to fill vertices with proper coordinate transformation
                 const center = this.fillDiamondFromWorldPositions(diamondVerts, top, right, bottom, left);
                 gl.vertexAttrib2f(aEntityPos, center.centerX, center.centerY);
 

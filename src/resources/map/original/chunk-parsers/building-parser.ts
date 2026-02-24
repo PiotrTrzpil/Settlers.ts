@@ -1,6 +1,13 @@
 /**
  * Parser for MapBuildings chunk (type 8)
  * Extracts starting building data from map files
+ *
+ * Binary format (20 bytes per entry):
+ *   Bytes 0-1:  x position (uint16 LE)
+ *   Bytes 2-3:  y position (uint16 LE)
+ *   Byte  4:    building type (S4BuildingType)
+ *   Byte  5:    player index
+ *   Bytes 6-19: flags/extra data (unknown, skipped)
  */
 
 import { BinaryReader } from '@/resources/file/binary-reader';
@@ -10,17 +17,15 @@ import type { MapBuildingData } from '../../map-entity-data';
 
 const log = new LogHandler('BuildingParser');
 
+/** Bytes per building entry in the chunk */
+const ENTRY_SIZE = 20;
+
 /**
  * Parse MapBuildings chunk data
- *
- * Expected format (estimated based on S4ModApi):
- * - 8 bytes per building entry
- * - Entry: x (2 bytes), y (2 bytes), type (2 bytes), player (1 byte), flags (1 byte)
  *
  * @param reader BinaryReader positioned at start of chunk data
  * @returns Array of building data entries
  */
-// eslint-disable-next-line sonarjs/cognitive-complexity -- map chunk binary parsing requires many conditional branches
 export function parseBuildings(reader: BinaryReader): MapBuildingData[] {
     const buildings: MapBuildingData[] = [];
     const dataLength = reader.length;
@@ -30,53 +35,40 @@ export function parseBuildings(reader: BinaryReader): MapBuildingData[] {
         return buildings;
     }
 
-    // Estimate entry size - try 8 bytes first (most common for entity data)
-    const possibleEntrySizes = [8, 12, 10, 6];
-    let entrySize = 8;
+    const entryCount = Math.floor(dataLength / ENTRY_SIZE);
+    const remainder = dataLength % ENTRY_SIZE;
 
-    for (const size of possibleEntrySizes) {
-        if (dataLength % size === 0) {
-            entrySize = size;
-            break;
-        }
+    log.debug(`Parsing buildings: ${dataLength} bytes, ${entryCount} entries (${ENTRY_SIZE} bytes each)`);
+    if (remainder !== 0) {
+        log.debug(`Warning: ${remainder} trailing bytes after entries`);
     }
-
-    const entryCount = Math.floor(dataLength / entrySize);
-
-    log.debug(`Parsing buildings: ${dataLength} bytes, ${entryCount} entries (${entrySize} bytes each)`);
 
     for (let i = 0; i < entryCount && !reader.eof(); i++) {
         const startPos = reader.getOffset();
 
-        // Read coordinates as little-endian words
         const x = reader.readWord();
         const y = reader.readWord();
-
-        // Read building type
-        let buildingType: number;
-        if (entrySize >= 8) {
-            buildingType = reader.readWord();
-        } else {
-            buildingType = reader.readByte();
-        }
-
-        // Read player
+        const buildingType = reader.readByte();
         const player = reader.readByte();
 
-        // Skip remaining bytes in entry
+        // Skip remaining 14 bytes of the entry
         const bytesRead = reader.getOffset() - startPos;
-        for (let j = bytesRead; j < entrySize; j++) {
+        for (let j = bytesRead; j < ENTRY_SIZE; j++) {
             reader.readByte();
         }
 
-        // Validate building type - skip silently if invalid (chunk format may differ)
-        if (!isValidBuildingType(buildingType)) {
+        // Skip empty/padding entries
+        if (x === 0 && y === 0 && buildingType === 0) {
             continue;
         }
 
-        // Validate coordinates - must be within reasonable map bounds
-        // and have at least some minimal value (buildings at 0,0 are suspicious)
-        if (x > 10000 || y > 10000 || (x < 10 && y < 10)) {
+        if (!isValidBuildingType(buildingType)) {
+            log.debug(`Skipping invalid building type ${buildingType} at (${x}, ${y})`);
+            continue;
+        }
+
+        if (x > 10000 || y > 10000) {
+            log.debug(`Skipping out-of-bounds building at (${x}, ${y})`);
             continue;
         }
 
@@ -86,12 +78,6 @@ export function parseBuildings(reader: BinaryReader): MapBuildingData[] {
             buildingType: buildingType as S4BuildingType,
             player,
         });
-
-        // Safety check
-        if (reader.getOffset() === startPos) {
-            log.error('Parser stuck, breaking');
-            break;
-        }
     }
 
     log.debug(`Parsed ${buildings.length} building entries`);
@@ -103,6 +89,5 @@ export function parseBuildings(reader: BinaryReader): MapBuildingData[] {
  */
 function isValidBuildingType(value: number): boolean {
     // Valid building types are 1-82 (see S4BuildingType enum)
-    // 0 (NONE) is not a valid building type
     return value >= 1 && value <= 82;
 }
