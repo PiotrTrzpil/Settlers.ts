@@ -747,7 +747,7 @@ export class SpriteMetadataRegistry {
      * Serialize registry data for caching.
      * Converts Maps to arrays for JSON compatibility.
      */
-    public serialize(): any {
+    public serialize(): Record<string, unknown> {
         // Helper to serialize AnimatedSpriteEntry (nested AnimationData maps)
         const serializeAnimEntry = (entry: AnimatedSpriteEntry) => {
             const sequences = mapToArray(entry.animationData.sequences).map(([seqKey, dirMap]) => {

@@ -439,11 +439,9 @@ export function useMapFileView(getFileManager: () => FileManager | null): UseMap
             mapLoader.value = loader;
             mapInfo.value = loader.toString();
 
-            // Cast to OriginalMapFile to access chunks
-            const origFile = loader as unknown as OriginalMapFile;
-            if (typeof origFile.getChunkCount === 'function') {
-                mapFile.value = origFile;
-                chunks.value = buildChunkList(origFile);
+            if (loader instanceof OriginalMapFile) {
+                mapFile.value = loader;
+                chunks.value = buildChunkList(loader);
             } else {
                 mapFile.value = null;
                 chunks.value = [];

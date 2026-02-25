@@ -13,7 +13,6 @@ import { EventBus } from './event-bus';
 import { EntityType } from './entity';
 import { GameSettingsManager } from './game-settings';
 import { GameViewState } from './game-view-state';
-import type { TickSystem } from './tick-system';
 import type { FrameRenderTiming } from './renderer/renderer';
 
 /** Options for resetToCleanState */
@@ -296,7 +295,7 @@ export class Game {
                     executeCommand: cmd => this.execute(cmd),
                 });
                 await service.initialize();
-                this._gameLoop.registerSystem(service as unknown as TickSystem);
+                this._gameLoop.registerSystem(service);
                 this.scriptService = service;
             }
 

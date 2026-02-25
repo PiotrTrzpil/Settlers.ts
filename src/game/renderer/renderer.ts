@@ -90,7 +90,7 @@ export class Renderer {
     constructor(canvas: HTMLCanvasElement, options?: RendererOptions) {
         const webGlogger = new LogHandler('WebGL');
 
-        function processWebGlDebugErrors(err: any, funcName: string, args: any) {
+        function processWebGlDebugErrors(err: number, funcName: string, args: IArguments) {
             const argString = WebGLDebugUtils.glFunctionArgsToString(funcName, args) ?? '';
 
             webGlogger.error(

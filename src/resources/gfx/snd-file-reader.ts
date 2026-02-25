@@ -70,8 +70,7 @@ export class SndFileReader extends ResourceFile {
         // The buffer should already be a valid WAV file including RIFF header
         // We verify the header "RIFF" just in case
         if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) {
-            // Cast to any to avoid strict ArrayBufferLike issues with Blob constructor in some TS configs
-            const blob = new Blob([buffer as any], { type: 'audio/wav' });
+            const blob = new Blob([buffer.slice(0)], { type: 'audio/wav' });
             const url = URL.createObjectURL(blob);
             this.blobUrlCache.set(index, url);
             return url;
