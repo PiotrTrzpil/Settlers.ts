@@ -11,5 +11,7 @@ declare global {
         __settlers__?: SettlersBridge;
         /** Debug helper for audio state inspection */
         debugSound?: () => void;
+        /** Build hash exposed for stale-server detection by e2e tests */
+        __source_hash__?: string;
     }
 }

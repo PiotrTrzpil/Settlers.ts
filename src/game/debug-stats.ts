@@ -382,10 +382,9 @@ class DebugStats {
     }
 
     private saveSettings(): void {
-        const settings = {} as PersistedDebugSettings;
-        for (const key of PERSISTED_KEYS) {
-            (settings as any)[key] = this.state[key];
-        }
+        const settings = Object.fromEntries(
+            PERSISTED_KEYS.map(key => [key, this.state[key]])
+        ) as unknown as PersistedDebugSettings;
         saveDebugSettings(settings);
     }
 

@@ -61,7 +61,7 @@ export class Game {
     private scriptService: IScriptService | null = null;
 
     /** Current interaction mode */
-    public mode: 'select' | 'place_building' | 'move' = 'select';
+    public mode: string = 'select';
 
     /** Building type to place (when mode === 'place_building') */
     public placeBuildingType = 0;

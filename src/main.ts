@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import Toast from 'vue-toastification';
+import type { ToastOptionsAndRequiredContent } from 'vue-toastification/dist/types/types';
 import 'vue-toastification/dist/index.css';
 import App from './app.vue';
 import router from './router';
@@ -9,7 +10,7 @@ declare const __SOURCE_HASH__: string;
 
 /** Expose source hash for stale server detection by e2e tests */
 if (typeof __SOURCE_HASH__ !== 'undefined') {
-    (window as any).__source_hash__ = __SOURCE_HASH__;
+    window.__source_hash__ = __SOURCE_HASH__;
 }
 
 const log = new LogHandler('Global');
@@ -62,7 +63,11 @@ app.use(Toast, {
     hideProgressBar: false,
     closeOnClick: true,
     draggable: false,
-    filterBeforeCreate(toast: any, toasts: any[]) {
+    // eslint-disable-next-line sonarjs/function-return-type -- API requires false|toast union
+    filterBeforeCreate(
+        toast: ToastOptionsAndRequiredContent,
+        toasts: ToastOptionsAndRequiredContent[]
+    ): ToastOptionsAndRequiredContent | false {
         // Deduplicate: suppress if identical toast already visible
         if (toasts.filter(t => t.content === toast.content).length > 0) {
             return false;

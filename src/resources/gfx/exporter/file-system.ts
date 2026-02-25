@@ -166,7 +166,7 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
         this.files.clear();
         for (const file of fileList) {
             // Use webkitRelativePath if available, otherwise just the name
-            const path = (file as any).webkitRelativePath || file.name;
+            const path = file.webkitRelativePath || file.name;
             this.files.set(path.toLowerCase(), file);
         }
     }
@@ -178,14 +178,14 @@ export class BrowserFileSystem implements IFileReader, IFileWriter {
     }
 
     private async scanDirectory(handle: FileSystemDirectoryHandle, basePath: string): Promise<void> {
-        for await (const [name, entry] of (handle as any).entries()) {
+        for await (const [name, entry] of handle.entries()) {
             const path = basePath ? `${basePath}/${name}` : name;
 
             if (entry.kind === 'file') {
-                const file = await entry.getFile();
+                const file = await (entry as FileSystemFileHandle).getFile();
                 this.files.set(path.toLowerCase(), file);
-            } else if (entry.kind === 'directory') {
-                await this.scanDirectory(entry, path);
+            } else {
+                await this.scanDirectory(entry as FileSystemDirectoryHandle, path);
             }
         }
     }

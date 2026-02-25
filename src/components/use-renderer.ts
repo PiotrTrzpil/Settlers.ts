@@ -10,6 +10,7 @@ import { Game } from '@/game/game';
 import { LandscapeRenderer } from '@/game/renderer/landscape/landscape-renderer';
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { Renderer, type FrameRenderTiming } from '@/game/renderer/renderer';
+import type { ViewPoint } from '@/game/renderer/view-point';
 import { TilePicker } from '@/game/input/tile-picker';
 import { type TileCoord } from '@/game/entity';
 import { Race } from '@/game/renderer/sprite-metadata';
@@ -23,7 +24,7 @@ import {
     computeHeightRange,
     MAX_SLOPE_DIFF,
 } from '@/game/features/placement';
-import type { CommandResult } from '@/game/commands';
+import type { Command, CommandResult } from '@/game/commands';
 import { debugStats } from '@/game/debug-stats';
 import {
     InputManager,
@@ -35,10 +36,10 @@ import {
     type PlaceResourceModeData,
     type PlaceUnitModeData,
     getDefaultInputConfig,
-    type PlacementEntityType,
 } from '@/game/input';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
-import type { SelectionBox, PlacementPreview } from '@/game/input/render-state';
+// eslint-disable-next-line sonarjs/deprecation -- legacy preview types kept for backward compat branch
+import type { SelectionBox, BuildingPreview, ResourcePreview, ModeRenderState } from '@/game/input/render-state';
 import { createRenderContext, type ServiceAreaRenderData } from '@/game/renderer/render-context';
 import { getBuildingVisualState, BuildingConstructionPhase } from '@/game/features/building-construction';
 import { EntityType } from '@/game/entity';
@@ -116,8 +117,8 @@ function syncEntityRendererState(
 }
 
 /** Handle placement mode rendering state using consolidated preview */
-function updatePlacementModeState(er: EntityRenderer, renderState: any): void {
-    const preview = renderState?.preview as PlacementPreview | undefined;
+function updatePlacementModeState(er: EntityRenderer, renderState: ModeRenderState | null | undefined): void {
+    const preview = renderState?.preview;
 
     // Handle new unified PlacementPreview type
     if (preview?.type === 'placement') {
@@ -132,20 +133,27 @@ function updatePlacementModeState(er: EntityRenderer, renderState: any): void {
             race: preview.race,
             variation,
         };
-    }
-    // Handle legacy BuildingPreview/ResourcePreview types for backward compatibility
-    else if (preview && (preview.type === 'building' || preview.type === 'resource')) {
-        const entityType = preview.type as PlacementEntityType;
-        const subType = preview.type === 'building' ? (preview as any).buildingType : (preview as any).materialType;
-        const amount = preview.type === 'resource' ? ((preview as any).amount ?? 1) : 1;
-        const variation = preview.type === 'resource' ? Math.max(0, Math.min(amount - 1, 7)) : undefined;
-
+    } else if (preview?.type === 'building') {
+        // Handle legacy BuildingPreview for backward compatibility
+        // eslint-disable-next-line sonarjs/deprecation, @typescript-eslint/no-deprecated -- legacy union type
+        const buildingPreview: BuildingPreview = preview;
         er.placementPreview = {
-            tile: { x: preview.x, y: preview.y },
-            valid: preview.valid,
-            entityType,
-            subType,
-            variation,
+            tile: { x: buildingPreview.x, y: buildingPreview.y },
+            valid: buildingPreview.valid,
+            entityType: 'building',
+            subType: buildingPreview.buildingType,
+        };
+    } else if (preview?.type === 'resource') {
+        // Handle legacy ResourcePreview for backward compatibility
+        // eslint-disable-next-line sonarjs/deprecation, @typescript-eslint/no-deprecated -- legacy union type
+        const resourcePreview: ResourcePreview = preview;
+        const amount = resourcePreview.amount ?? 1;
+        er.placementPreview = {
+            tile: { x: resourcePreview.x, y: resourcePreview.y },
+            valid: resourcePreview.valid,
+            entityType: 'resource',
+            subType: resourcePreview.materialType,
+            variation: Math.max(0, Math.min(amount - 1, 7)),
         };
     } else {
         er.placementPreview = null;
@@ -377,12 +385,17 @@ async function initRenderersAsync(
 }
 
 /** Expose objects for e2e tests */
-function exposeForE2E(viewPoint: any, landscapeRenderer: any, entityRenderer: any, inputManager: any): void {
+function exposeForE2E(
+    viewPoint: ViewPoint,
+    landscapeRenderer: LandscapeRenderer,
+    entityRenderer: EntityRenderer,
+    inputManager: InputManager | null
+): void {
     const bridge = (window.__settlers__ ??= {});
     bridge.viewpoint = viewPoint;
     bridge.landscape = landscapeRenderer;
     bridge.entityRenderer = entityRenderer;
-    bridge.input = inputManager;
+    bridge.input = inputManager ?? undefined;
 }
 
 interface UseRendererOptions {
@@ -395,7 +408,9 @@ interface UseRendererOptions {
 }
 
 /** Handle mode changes and update game view state */
-function handleModeChange(getGame: () => Game | null): (oldMode: string, newMode: string, data?: any) => void {
+function handleModeChange(
+    getGame: () => Game | null
+): (oldMode: string, newMode: string, data?: Record<string, unknown>) => void {
     return (_oldMode, newMode, data) => {
         const game = getGame();
         if (!game) return;
@@ -404,16 +419,19 @@ function handleModeChange(getGame: () => Game | null): (oldMode: string, newMode
         vs.mode = newMode;
 
         // Update building type
-        vs.placeBuildingType = newMode === 'place_building' && data?.buildingType !== undefined ? data.buildingType : 0;
+        vs.placeBuildingType =
+            newMode === 'place_building' && data?.['buildingType'] !== undefined ? (data['buildingType'] as number) : 0;
 
         // Update resource type
-        vs.placeResourceType = newMode === 'place_resource' && data?.resourceType !== undefined ? data.resourceType : 0;
+        vs.placeResourceType =
+            newMode === 'place_resource' && data?.['resourceType'] !== undefined ? (data['resourceType'] as number) : 0;
 
         // Update unit type
-        vs.placeUnitType = newMode === 'place_unit' && data?.unitType !== undefined ? data.unitType : 0;
+        vs.placeUnitType =
+            newMode === 'place_unit' && data?.['unitType'] !== undefined ? (data['unitType'] as number) : 0;
 
         // Sync with game for backward compatibility
-        game.mode = newMode as any;
+        game.mode = newMode;
         game.placeBuildingType = vs.placeBuildingType;
     };
 }
@@ -454,14 +472,14 @@ export function useRenderer({
      * Execute a game command, updating debug stats for tile clicks.
      * Returns CommandResult with success status, error details, and effects.
      */
-    function executeCommand(command: any): CommandResult {
+    function executeCommand(command: Record<string, unknown>): CommandResult {
         const game = getGame();
         if (!game) return { success: false, error: 'Game not initialized' };
 
         // Track tile info for debug stats on tile-targeting commands
-        if (command.type === 'select_at_tile' || command.type === 'move_selected_units') {
-            const x = command.x ?? command.targetX;
-            const y = command.y ?? command.targetY;
+        if (command['type'] === 'select_at_tile' || command['type'] === 'move_selected_units') {
+            const x = (command['x'] ?? command['targetX']) as number | undefined;
+            const y = (command['y'] ?? command['targetY']) as number | undefined;
             if (x !== undefined && y !== undefined) {
                 onTileClick({ x, y });
                 debugStats.state.hasTile = true;
@@ -473,7 +491,7 @@ export function useRenderer({
             }
         }
 
-        return game.execute(command);
+        return game.execute(command as unknown as Command);
     }
 
     /**

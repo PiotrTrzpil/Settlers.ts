@@ -448,9 +448,9 @@ export class RequestManager {
      */
     on<K extends keyof RequestManagerEvents>(event: K, listener: RequestEventListener<K>): void {
         if (!this.listeners[event]) {
-            this.listeners[event] = new Set() as any;
+            this.listeners[event] = new Set<RequestEventListener<K>>() as any; // TS limitation with mapped type writes
         }
-        (this.listeners[event] as Set<RequestEventListener<K>>).add(listener);
+        this.listeners[event]!.add(listener);
     }
 
     /**
