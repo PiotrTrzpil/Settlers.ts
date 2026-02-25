@@ -100,6 +100,20 @@ export class StoneSystem {
         entity.variation = this.getVariation(state);
     }
 
+    /**
+     * Restore stone state from serialized data.
+     * Overwrites the fresh state created by register().
+     */
+    restoreStoneState(entityId: number, data: { stage: StoneStage; variant: number; level: number }): void {
+        const state: StoneState = {
+            stage: data.stage,
+            variant: data.variant,
+            level: data.level,
+        };
+        this.states.set(entityId, state);
+        this.updateVisual(entityId, state);
+    }
+
     /** Remove stone state when entity is removed. */
     unregister(entityId: number): void {
         this.states.delete(entityId);

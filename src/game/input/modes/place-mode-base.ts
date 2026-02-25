@@ -19,8 +19,6 @@ export interface PlacementModeData<TSubType = number> {
     previewY: number;
     /** Whether current preview position is valid */
     previewValid: boolean;
-    /** Validation function - injected by use-renderer */
-    validatePlacement?: (x: number, y: number, subType: TSubType) => boolean;
     /** Additional data specific to the entity type */
     extra: Record<string, unknown>;
 }
@@ -56,6 +54,13 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
 
     /** Current player placing entities */
     protected currentPlayer = 0;
+
+    constructor(
+        private readonly validatePlacement: (x: number, y: number, subType: TSubType) => boolean,
+        private readonly onTileHover?: (x: number, y: number) => void
+    ) {
+        super();
+    }
 
     /**
      * Get the command type string for executing placement.
@@ -207,18 +212,13 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
             return UNHANDLED;
         }
 
+        this.onTileHover?.(data.tileX, data.tileY);
+
         // Calculate anchor position (may differ from cursor tile)
         const anchor = this.resolveAnchorPosition(data.tileX, data.tileY, modeData.subType);
         modeData.previewX = anchor.x;
         modeData.previewY = anchor.y;
-
-        // Validate placement if validator is available
-        if (modeData.validatePlacement) {
-            modeData.previewValid = modeData.validatePlacement(anchor.x, anchor.y, modeData.subType);
-        } else {
-            // Default to valid if no validator (will be injected later)
-            modeData.previewValid = true;
-        }
+        modeData.previewValid = this.validatePlacement(anchor.x, anchor.y, modeData.subType);
 
         context.setModeData(modeData);
         return HANDLED;
@@ -253,22 +253,6 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
             },
             statusText: this.getStatusText(modeData),
         };
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Public API for external configuration
-    // ─────────────────────────────────────────────────────────────────
-
-    /**
-     * Set the placement validator function.
-     * Called by use-renderer to inject game-aware validation.
-     */
-    setValidator(context: InputContext, validator: (x: number, y: number, subType: TSubType) => boolean): void {
-        const modeData = context.getModeData<PlacementModeData<TSubType>>();
-        if (modeData) {
-            modeData.validatePlacement = validator;
-            context.setModeData(modeData);
-        }
     }
 
     // ─────────────────────────────────────────────────────────────────

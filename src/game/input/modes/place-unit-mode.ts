@@ -4,6 +4,8 @@ import { UnitType } from '../../entity';
 import type { Race } from '../../race';
 import type { PlacementEntityType } from '../render-state';
 
+type UnitValidator = (x: number, y: number, unitType: UnitType) => boolean;
+
 /**
  * Unit-specific mode data.
  * Extends base placement data with unit type.

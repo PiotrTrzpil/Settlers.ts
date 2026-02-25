@@ -7,6 +7,7 @@
  */
 
 import { LogHandler } from '@/utilities/log-handler';
+import { Race } from '../../race';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { EntityType, BuildingType } from '@/game/entity';
@@ -126,6 +127,8 @@ function mapS4ToInternalType(s4Type: number): number {
 export interface BuildingsAPIContext {
     gameState: GameState;
     buildingStateManager: BuildingStateManager;
+    /** Per-player race mapping (player index → Race) */
+    playerRaces?: Map<number, Race>;
     executeCommand?: (cmd: Command) => CommandResult;
 }
 
@@ -171,6 +174,7 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
                 x,
                 y,
                 player,
+                race: context.playerRaces?.get(player) ?? Race.Roman,
             });
 
             if (!result.success || !result.effects?.length) return -1;
@@ -251,6 +255,7 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
                 x,
                 y,
                 player,
+                race: context.playerRaces?.get(player) ?? Race.Roman,
             });
 
             if (!result.success || !result.effects?.length) return -1;

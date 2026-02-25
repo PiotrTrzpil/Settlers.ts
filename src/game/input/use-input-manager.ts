@@ -114,7 +114,7 @@ export function useInputManager(options: UseInputManagerOptions): UseInputManage
 
         // Register default modes
         manager.value.registerMode(new SelectMode());
-        manager.value.registerMode(new PlaceBuildingMode());
+        manager.value.registerMode(new PlaceBuildingMode(() => true));
 
         // Attach event listeners
         manager.value.attach();
@@ -234,7 +234,7 @@ export function createInputManager(target: Ref<HTMLElement | null>, config?: Inp
     });
 
     manager.registerMode(new SelectMode());
-    manager.registerMode(new PlaceBuildingMode());
+    manager.registerMode(new PlaceBuildingMode(() => true));
 
     return manager;
 }

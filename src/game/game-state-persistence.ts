@@ -5,16 +5,19 @@
 
 import type { Game } from './game';
 import { EntityType } from './entity';
+import type { CarryingState } from './entity';
+import type { Race } from './race';
 import { BuildingConstructionPhase } from './features/building-construction';
 import type { EMaterialType } from './economy/material-type';
 import { CarrierStatus } from './features/carriers/carrier-state';
 import type { TreeStage } from './features/trees/tree-system';
+import type { StoneStage } from './features/stones/stone-system';
 import { type RequestPriority, RequestStatus } from './features/logistics/resource-request';
 
 const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
-const SNAPSHOT_VERSION = 5; // Bumped for terrain persistence
+const SNAPSHOT_VERSION = 6; // Bumped for race, carrying, hidden, stones
 
 /**
  * Serialized building construction state.
@@ -72,6 +75,16 @@ export interface SerializedTree {
 }
 
 /**
+ * Serialized stone state.
+ */
+export interface SerializedStone {
+    entityId: number;
+    stage: StoneStage;
+    variant: number;
+    level: number;
+}
+
+/**
  * Serialized resource request.
  */
 export interface SerializedRequest {
@@ -113,6 +126,9 @@ export interface GameStateSnapshot {
         y: number;
         player: number;
         variation?: number;
+        race?: Race;
+        carrying?: CarryingState;
+        hidden?: boolean;
     }>;
     nextId: number;
     rngSeed: number;
@@ -126,6 +142,8 @@ export interface GameStateSnapshot {
     carriers?: SerializedCarrier[];
     /** Tree states (stage, progress, stump timer) */
     trees?: SerializedTree[];
+    /** Stone states (depletion level, variant) */
+    stones?: SerializedStone[];
     /** Resource requests (pending and in-progress) */
     requests?: SerializedRequest[];
     /** Production cycle progress per building (deprecated v5 field, kept for backward compat) */
@@ -227,6 +245,22 @@ function serializeTrees(game: Game): SerializedTree[] {
     return trees;
 }
 
+function serializeStones(game: Game): SerializedStone[] {
+    const stones: SerializedStone[] = [];
+    for (const entity of game.state.entities) {
+        if (entity.type !== EntityType.MapObject) continue;
+        const state = game.services.stoneSystem.getStoneState(entity.id);
+        if (!state) continue;
+        stones.push({
+            entityId: entity.id,
+            stage: state.stage,
+            variant: state.variant,
+            level: state.level,
+        });
+    }
+    return stones;
+}
+
 function serializeRequests(game: Game): SerializedRequest[] {
     const result: SerializedRequest[] = [];
     for (const req of game.services.requestManager.getAllRequests()) {
@@ -261,6 +295,9 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         y: e.y,
         player: e.player,
         variation: e.variation,
+        race: e.race,
+        carrying: e.carrying,
+        hidden: e.hidden || undefined,
     }));
 
     const resourceQuantities: Array<{ entityId: number; quantity: number; buildingId?: number }> = [];
@@ -292,6 +329,7 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         buildingInventories: serializeInventories(game),
         carriers: serializeCarriers(game),
         trees: serializeTrees(game),
+        stones: serializeStones(game),
         requests: serializeRequests(game),
         terrainGroundType: uint8ArrayToBase64(game.terrain.groundType),
         terrainGroundHeight: uint8ArrayToBase64(game.terrain.groundHeight),
@@ -361,7 +399,8 @@ export function clearSavedTreeState(): void {
         const treeIds = new Set(snapshot.entities.filter(e => e.type === EntityType.MapObject).map(e => e.id));
         snapshot.entities = snapshot.entities.filter(e => e.type !== EntityType.MapObject);
         snapshot.trees = [];
-        // Drop resource quantities that belonged to tree entities
+        snapshot.stones = [];
+        // Drop resource quantities that belonged to map object entities
         snapshot.resourceQuantities = snapshot.resourceQuantities.filter(r => !treeIds.has(r.entityId));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     } catch {
@@ -378,6 +417,13 @@ export function hasSavedGameState(): boolean {
 }
 
 // === Restore Helpers ===
+
+/** Restore entity properties that addEntity doesn't set (race, carrying, hidden). */
+function restoreEntityProps(entity: import('./entity').Entity, saved: GameStateSnapshot['entities'][number]): void {
+    if (saved.race !== undefined) entity.race = saved.race;
+    if (saved.carrying) entity.carrying = saved.carrying;
+    if (saved.hidden) entity.hidden = saved.hidden;
+}
 
 // eslint-disable-next-line sonarjs/cognitive-complexity -- complex entity restoration from snapshot
 function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
@@ -397,6 +443,12 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
             savedTreeStates.set(t.entityId, t);
         }
     }
+    const savedStoneStates = new Map<number, SerializedStone>();
+    if (snapshot.stones) {
+        for (const s of snapshot.stones) {
+            savedStoneStates.set(s.entityId, s);
+        }
+    }
 
     // Recreate entities using the normal addEntity path
     // This emits entity:created events — subscribers handle type-specific initialization
@@ -404,8 +456,11 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
         const savedNextId = state.nextId;
         state.nextId = e.id;
 
-        state.addEntity(e.type, e.subType, e.x, e.y, e.player, undefined, e.variation);
+        const entity = state.addEntity(e.type, e.subType, e.x, e.y, e.player, undefined, e.variation);
         state.nextId = Math.max(savedNextId, e.id + 1);
+
+        // Restore per-entity properties not covered by addEntity
+        restoreEntityProps(entity, e);
 
         // Restore building state (overwrites the fresh state created by addEntity)
         if (e.type === EntityType.Building) {
@@ -425,7 +480,7 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
             }
         }
 
-        // Restore tree state (overwrites the fresh state created by register())
+        // Restore map object state (overwrites the fresh state created by register())
         if (e.type === EntityType.MapObject) {
             const savedTree = savedTreeStates.get(e.id);
             if (savedTree) {
@@ -434,6 +489,14 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
                     progress: savedTree.progress,
                     stumpTimer: savedTree.stumpTimer,
                     currentOffset: savedTree.currentOffset,
+                });
+            }
+            const savedStone = savedStoneStates.get(e.id);
+            if (savedStone) {
+                game.services.stoneSystem.restoreStoneState(e.id, {
+                    stage: savedStone.stage,
+                    variant: savedStone.variant,
+                    level: savedStone.level,
                 });
             }
         }

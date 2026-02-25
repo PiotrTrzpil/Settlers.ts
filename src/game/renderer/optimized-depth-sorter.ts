@@ -136,6 +136,10 @@ export class OptimizedDepthSorter {
             depth -= FLAT_TREE_DEPTH_BIAS;
         }
 
+        if (entity.depthBias) {
+            depth += entity.depthBias;
+        }
+
         return depth;
     }
 
@@ -184,6 +188,8 @@ export class OptimizedDepthSorter {
             return DEPTH_FACTOR_UNIT;
         case EntityType.StackedResource:
             return DEPTH_FACTOR_RESOURCE;
+        case EntityType.Decoration:
+            return DEPTH_FACTOR_BUILDING;
         case EntityType.None:
             return 1.0;
         }
@@ -204,6 +210,7 @@ export class OptimizedDepthSorter {
             return spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
         case EntityType.StackedResource:
             return spriteManager.getResource(entity.subType as EMaterialType);
+        case EntityType.Decoration:
         case EntityType.None:
             return null;
         }

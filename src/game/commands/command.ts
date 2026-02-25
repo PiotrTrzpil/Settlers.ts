@@ -462,6 +462,7 @@ function executeScriptAddBuilding(ctx: CommandContext, cmd: ScriptAddBuildingCom
     const { state } = ctx;
 
     const entity = state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
+    entity.race = cmd.race;
 
     return commandSuccess([
         {

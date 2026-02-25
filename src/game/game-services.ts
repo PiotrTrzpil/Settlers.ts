@@ -39,6 +39,7 @@ import { ServiceAreaManager, ServiceAreaFeature, type ServiceAreaExports } from 
 import { FeatureRegistry } from './features/feature-registry';
 import { TreeFeature, TreeSystem, type TreeFeatureExports } from './features/trees';
 import { StoneFeature, StoneSystem, type StoneFeatureExports } from './features/stones';
+import { FlagFeature } from './features/flags';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
 import { AnimationService } from './animation/index';
@@ -158,6 +159,7 @@ export class GameServices {
             TreeFeature,
             StoneFeature,
             MaterialRequestFeature,
+            FlagFeature,
         ]);
 
         // Retrieve managers created by features

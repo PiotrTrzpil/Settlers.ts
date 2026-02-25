@@ -33,8 +33,10 @@ describe('PlaceBuildingMode', () => {
     let executedCommands: Command[];
     let switchedToMode: string | null;
 
+    const alwaysValid = () => true;
+
     beforeEach(() => {
-        mode = new PlaceBuildingMode();
+        mode = new PlaceBuildingMode(alwaysValid);
         modeData = undefined;
         executedCommands = [];
         switchedToMode = null;
@@ -151,11 +153,12 @@ describe('PlaceBuildingMode', () => {
             expect(modeData!.previewValid).toBe(true); // Default without validator
         });
 
-        it('should use validator function when provided', () => {
+        it('should use validator function from constructor', () => {
             const validator = vi.fn().mockReturnValue(false);
-            modeData!.validatePlacement = validator;
+            const validatedMode = new PlaceBuildingMode(validator);
+            validatedMode.onEnter(mockContext, { buildingType: BuildingType.WoodcutterHut });
 
-            mode.onPointerMove(createPointerData({ tileX: 10, tileY: 10 }), mockContext);
+            validatedMode.onPointerMove(createPointerData({ tileX: 10, tileY: 10 }), mockContext);
 
             expect(validator).toHaveBeenCalled();
             expect(modeData!.previewValid).toBe(false);

@@ -81,6 +81,7 @@ export class GameViewState {
      * Update view state from game state.
      * Called from GameLoop.tick() so Vue components see up-to-date data.
      */
+    // eslint-disable-next-line complexity -- switch-exhaustiveness-check forces explicit cases for EntityType.Decoration
     public updateFromGameState(gameState: GameState): void {
         this.state.tick++;
 
@@ -141,8 +142,8 @@ export class GameViewState {
                 }
                 break;
             }
+            case EntityType.Decoration:
             case EntityType.None:
-                // Skip placeholder/invalid entities
                 break;
             }
         }

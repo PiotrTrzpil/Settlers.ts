@@ -32,11 +32,10 @@ import {
     PlaceBuildingMode,
     PlaceResourceMode,
     PlaceUnitMode,
-    type PlaceBuildingModeData,
-    type PlaceResourceModeData,
-    type PlaceUnitModeData,
+    StackAdjustMode,
     getDefaultInputConfig,
 } from '@/game/input';
+import { StackPositions } from '@/game/features/inventory/stack-positions';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
 // eslint-disable-next-line sonarjs/deprecation -- legacy preview types kept for backward compat branch
 import type { SelectionBox, BuildingPreview, ResourcePreview, ModeRenderState } from '@/game/input/render-state';
@@ -234,6 +233,8 @@ function createRenderCallback(
             } else {
                 clearPlacementModeState(er);
             }
+
+            er.tileHighlights = renderState?.highlights ?? [];
         }
 
         if (landscapeRenderer) landscapeRenderer.debugGrid = ctx.debugGrid;
@@ -269,101 +270,26 @@ function updateTileDebugStats(
 }
 
 /**
- * Configure the PlaceBuildingMode with validation and debug stats integration.
+ * Create StackAdjustMode with lazy game dependency resolution.
+ * Dependencies are resolved on each use via the getDeps callback.
  */
-function configurePlaceBuildingMode(
-    getGame: () => Game | null,
-    onTileClick: (tile: { x: number; y: number }) => void
-): PlaceBuildingMode {
-    const mode = new PlaceBuildingMode();
-    const originalOnPointerMove = mode.onPointerMove.bind(mode);
+function createStackAdjustMode(getGame: () => Game | null): StackAdjustMode {
+    const stackPositions = new StackPositions();
+    let connected = false;
 
-    mode.onPointerMove = (data, context) => {
-        if (data.tileX !== undefined && data.tileY !== undefined) {
-            updateTileDebugStats(data.tileX, data.tileY, getGame, onTileClick);
+    return new StackAdjustMode(() => {
+        const game = getGame();
+        if (!game) return null;
+        if (!connected) {
+            game.services.inventoryVisualizer.setStackPositions(stackPositions);
+            connected = true;
         }
-
-        const modeData = context.getModeData<PlaceBuildingModeData>();
-        if (modeData && !modeData.validatePlacement) {
-            modeData.validatePlacement = (x: number, y: number, buildingType) => {
-                const game = getGame();
-                if (!game) return false;
-
-                return canPlaceBuildingFootprint(game.terrain, game.state.tileOccupancy, x, y, buildingType);
-            };
-            context.setModeData(modeData);
-        }
-
-        return originalOnPointerMove(data, context);
-    };
-
-    return mode;
-}
-
-/**
- * Configure PlaceResourceMode with validation and debug stats integration.
- * Uses centralized canPlaceResource validation.
- */
-function configurePlaceResourceMode(
-    getGame: () => Game | null,
-    onTileClick: (tile: { x: number; y: number }) => void
-): PlaceResourceMode {
-    const mode = new PlaceResourceMode();
-    const originalOnPointerMove = mode.onPointerMove.bind(mode);
-
-    mode.onPointerMove = (data, context) => {
-        if (data.tileX !== undefined && data.tileY !== undefined) {
-            updateTileDebugStats(data.tileX, data.tileY, getGame, onTileClick);
-        }
-
-        const modeData = context.getModeData<PlaceResourceModeData>();
-        if (modeData && !modeData.validatePlacement) {
-            modeData.validatePlacement = (x: number, y: number) => {
-                const game = getGame();
-                if (!game) return false;
-
-                return canPlaceResource(game.terrain, game.state.tileOccupancy, x, y);
-            };
-            context.setModeData(modeData);
-        }
-
-        return originalOnPointerMove(data, context);
-    };
-
-    return mode;
-}
-
-/**
- * Configure PlaceUnitMode with validation and debug stats integration.
- * Uses centralized canPlaceUnit validation.
- */
-function configurePlaceUnitMode(
-    getGame: () => Game | null,
-    onTileClick: (tile: { x: number; y: number }) => void
-): PlaceUnitMode {
-    const mode = new PlaceUnitMode();
-    const originalOnPointerMove = mode.onPointerMove.bind(mode);
-
-    mode.onPointerMove = (data, context) => {
-        if (data.tileX !== undefined && data.tileY !== undefined) {
-            updateTileDebugStats(data.tileX, data.tileY, getGame, onTileClick);
-        }
-
-        const modeData = context.getModeData<PlaceUnitModeData>();
-        if (modeData && !modeData.validatePlacement) {
-            modeData.validatePlacement = (x: number, y: number) => {
-                const game = getGame();
-                if (!game) return false;
-
-                return canPlaceUnit(game.terrain, game.state.tileOccupancy, x, y);
-            };
-            context.setModeData(modeData);
-        }
-
-        return originalOnPointerMove(data, context);
-    };
-
-    return mode;
+        return {
+            gameState: game.state,
+            inventoryVisualizer: game.services.inventoryVisualizer,
+            stackPositions,
+        };
+    });
 }
 
 /**
@@ -510,9 +436,29 @@ export function useRenderer({
         });
 
         inputManager.registerMode(new SelectMode());
-        inputManager.registerMode(configurePlaceBuildingMode(getGame, onTileClick));
-        inputManager.registerMode(configurePlaceResourceMode(getGame, onTileClick));
-        inputManager.registerMode(configurePlaceUnitMode(getGame, onTileClick));
+        const tileHover = (x: number, y: number) => updateTileDebugStats(x, y, getGame, onTileClick);
+
+        inputManager.registerMode(
+            new PlaceBuildingMode((x, y, buildingType) => {
+                const game = getGame();
+                return game
+                    ? canPlaceBuildingFootprint(game.terrain, game.state.tileOccupancy, x, y, buildingType)
+                    : false;
+            }, tileHover)
+        );
+        inputManager.registerMode(
+            new PlaceResourceMode((x, y) => {
+                const game = getGame();
+                return game ? canPlaceResource(game.terrain, game.state.tileOccupancy, x, y) : false;
+            }, tileHover)
+        );
+        inputManager.registerMode(
+            new PlaceUnitMode((x, y) => {
+                const game = getGame();
+                return game ? canPlaceUnit(game.terrain, game.state.tileOccupancy, x, y) : false;
+            }, tileHover)
+        );
+        inputManager.registerMode(createStackAdjustMode(getGame));
         inputManager.attach();
 
         // Connect camera mode to the ViewPoint

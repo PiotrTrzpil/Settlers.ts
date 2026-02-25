@@ -83,6 +83,7 @@ export class EntityDepthSorter {
             return spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
         case EntityType.StackedResource:
             return spriteManager.getResource(entity.subType as EMaterialType);
+        case EntityType.Decoration:
         case EntityType.None:
             return null;
         }
@@ -114,6 +115,9 @@ export class EntityDepthSorter {
             case EntityType.StackedResource:
                 depthFactor = DEPTH_FACTOR_RESOURCE;
                 break;
+            case EntityType.Decoration:
+                depthFactor = DEPTH_FACTOR_BUILDING;
+                break;
             case EntityType.None:
                 depthFactor = 1.0;
                 break;
@@ -126,6 +130,10 @@ export class EntityDepthSorter {
         // Fallen/cut tree stages (variation 4-10) render behind standing trees, units, buildings
         if (entity.type === EntityType.MapObject && entity.variation! >= 4) {
             depth -= FLAT_TREE_DEPTH_BIAS;
+        }
+
+        if (entity.depthBias) {
+            depth += entity.depthBias;
         }
 
         return depth;

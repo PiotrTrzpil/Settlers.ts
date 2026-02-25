@@ -26,6 +26,8 @@ export enum EntityType {
     MapObject = 3,
     /** Stacked resources on the ground (logs, planks, etc.) */
     StackedResource = 4,
+    /** Visual-only decorations (flags, signs) — no tile occupancy */
+    Decoration = 5,
 }
 
 // === Re-exports from specialized modules ===
@@ -94,6 +96,12 @@ export interface Entity {
      * When true, the entity is not rendered (e.g., a settler inside a building).
      */
     hidden?: boolean;
+
+    /**
+     * Extra depth added during sort. Positive values push the entity in front of others.
+     * Used by debug tools (e.g., stack-adjust preview sprites).
+     */
+    depthBias?: number;
 }
 
 /**

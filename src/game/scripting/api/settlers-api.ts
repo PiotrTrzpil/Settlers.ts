@@ -112,6 +112,8 @@ function mapS4ToInternalType(s4Type: number): number {
 
 export interface SettlersAPIContext {
     gameState: GameState;
+    /** Per-player race mapping (player index → Race) */
+    playerRaces?: Map<number, Race>;
     /** Optional: move a unit to a target position (uses pathfinding) */
     moveUnit?: (entityId: number, targetX: number, targetY: number) => boolean;
     executeCommand?: (cmd: Command) => CommandResult;
@@ -146,7 +148,7 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
                 y,
                 player,
                 amount,
-                race: Race.Roman, // TODO: derive from player race
+                race: context.playerRaces?.get(player) ?? Race.Roman,
             });
 
             return result.effects?.length ?? 0;

@@ -280,6 +280,20 @@ export class SpriteRenderManager {
     }
 
     /**
+     * Get a flag sprite frame for a player index and animation frame.
+     * @param playerIndex 0-7 (8 team colors)
+     * @param frame Animation frame index (0-23)
+     */
+    public getFlag(playerIndex: number, frame: number): SpriteEntry | null {
+        return this._spriteRegistry?.getFlag(playerIndex, frame) ?? null;
+    }
+
+    /** Number of flag animation frames for a player color. */
+    public getFlagFrameCount(playerIndex: number): number {
+        return this._spriteRegistry?.getFlagFrameCount(playerIndex) ?? 0;
+    }
+
+    /**
      * Extract a sprite region from the atlas as RGBA ImageData.
      * Handles palette lookup internally — callers don't need to know about palettes.
      */
@@ -785,6 +799,10 @@ export class SpriteRenderManager {
         const decoCount = await this.loadDecorationSprites(fileSet5, atlas, registry, gl, paletteBase5);
         loadCount += decoCount;
 
+        // Load flag sprites (8 player colors × 24 animation frames)
+        const flagCount = await this.loadFlagSprites(fileSet5, atlas, registry, gl, paletteBase5);
+        loadCount += flagCount;
+
         // Load resource map objects (coal, iron, etc.) using direction-based structure
         if (fileSet3) {
             const paletteBase3 = this.getPaletteBaseOffset(`${GFX_FILE_NUMBERS.RESOURCES}`);
@@ -976,6 +994,58 @@ export class SpriteRenderManager {
     ): Promise<{ firstFrame: SpriteEntry; allFrames: null } | null> {
         const sprite = await this.spriteLoader.loadDirectSprite(fileSet, ref.gilIndex, null, atlas, paletteBaseOffset);
         return sprite ? { firstFrame: sprite.entry, allFrames: null } : null;
+    }
+
+    /**
+     * Load small animated flag sprites (8 player colors × 24 frames).
+     * Flags are loaded from MAP_OBJECT_SPRITES in the landscape GFX file (5.gfx).
+     */
+    private async loadFlagSprites(
+        fileSet: LoadedGfxFileSet,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry,
+        gl: WebGL2RenderingContext,
+        paletteBaseOffset: number
+    ): Promise<number> {
+        const FLAG_RANGES = [
+            MAP_OBJECT_SPRITES.FLAG_SMALL_RED,
+            MAP_OBJECT_SPRITES.FLAG_SMALL_BLUE,
+            MAP_OBJECT_SPRITES.FLAG_SMALL_GREEN,
+            MAP_OBJECT_SPRITES.FLAG_SMALL_YELLOW,
+            MAP_OBJECT_SPRITES.FLAG_SMALL_PURPLE,
+            MAP_OBJECT_SPRITES.FLAG_SMALL_ORANGE,
+            MAP_OBJECT_SPRITES.FLAG_SMALL_TEAL,
+            MAP_OBJECT_SPRITES.FLAG_SMALL_WHITE,
+        ];
+
+        type FlagData = { playerIndex: number; frame: number; entry: SpriteEntry };
+        const batch = new SafeLoadBatch<FlagData>();
+
+        for (let playerIndex = 0; playerIndex < FLAG_RANGES.length; playerIndex++) {
+            const range = FLAG_RANGES[playerIndex]!;
+            for (let frame = 0; frame < range.count; frame++) {
+                const gilIndex = range.start + frame;
+                const sprite = await this.spriteLoader.loadDirectSprite(
+                    fileSet,
+                    gilIndex,
+                    null,
+                    atlas,
+                    paletteBaseOffset
+                );
+                if (sprite) {
+                    batch.add({ playerIndex, frame, entry: sprite.entry });
+                }
+            }
+        }
+
+        let loaded = 0;
+        batch.finalize(atlas, gl, data => {
+            registry.registerFlag(data.playerIndex, data.frame, data.entry);
+            loaded++;
+        });
+
+        SpriteRenderManager.log.debug(`Loaded ${loaded} flag sprites`);
+        return loaded;
     }
 
     /**

@@ -33,6 +33,7 @@ import type { GameState } from '@/game/game-state';
 import type { IMapLandscape } from '@/resources/map/imap-landscape';
 import type { BuildingStateManager } from '@/game/features/building-construction';
 import type { Command, CommandResult } from '@/game/commands';
+import type { Race } from '@/game/race';
 
 const log = new LogHandler('LuaScriptSystem');
 
@@ -60,6 +61,8 @@ export interface LuaScriptSystemConfig {
     difficulty?: number;
     /** Enable debug mode */
     debugEnabled?: boolean;
+    /** Per-player race mapping (player index → Race) */
+    playerRaces?: Map<number, Race>;
     /** Command executor for routing mutations through the command pipeline */
     executeCommand?: (cmd: Command) => CommandResult;
 }
@@ -142,6 +145,7 @@ export class LuaScriptSystem {
         // Settlers API context
         const settlersContext: SettlersAPIContext = {
             gameState: this.config.gameState,
+            playerRaces: this.config.playerRaces,
             executeCommand: this.config.executeCommand,
         };
         registerSettlersAPI(this.runtime, settlersContext);
@@ -150,6 +154,7 @@ export class LuaScriptSystem {
         const buildingsContext: BuildingsAPIContext = {
             gameState: this.config.gameState,
             buildingStateManager: this.config.buildingStateManager,
+            playerRaces: this.config.playerRaces,
             executeCommand: this.config.executeCommand,
         };
         registerBuildingsAPI(this.runtime, buildingsContext);

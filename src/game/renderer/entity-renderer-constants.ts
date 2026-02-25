@@ -1,7 +1,13 @@
 /**
- * Constants for entity rendering.
+ * Constants and helper functions for entity rendering.
  * Extracted from entity-renderer.ts for cleaner organization.
  */
+
+import type { Entity } from '../entity';
+import { EntityType, MapObjectType } from '../entity';
+import type { SpriteEntry } from './sprite-metadata';
+import { Race } from './sprite-metadata';
+import type { RaceId } from '@/resources/game-data';
 
 // Color shader constants (for non-textured rendering)
 export const SELECTED_COLOR = [1.0, 1.0, 1.0, 1.0]; // White highlight
@@ -84,7 +90,87 @@ export const SERVICE_AREA_CIRCLE_SEGMENTS = 64; // Number of segments for circle
  */
 export const SHADER_VERTEX_SCALE = 0.4;
 
+// Flag rendering constants
+/** Scale factor for flag sprites */
+export const FLAG_SCALE = ENTITY_SCALE;
+/** Flag animation speed: frames per second */
+export const FLAG_ANIM_FPS = 12;
+
 // Maximum entities for batch buffer allocation
 export const MAX_BATCH_ENTITIES = 500;
 // 6 vertices per quad, 10 floats per vertex (posX, posY, texU, texV, texLayer, playerRow, r, g, b, a)
 export const FLOATS_PER_ENTITY = 6 * 10;
+
+/** Map decoration object type (19-255) to a hue in degrees (30=orange → 280=violet). */
+export function decoTypeToHue(subType: number): number {
+    const t = Math.max(0, Math.min(1, (subType - 19) / (100 - 19)));
+    return 30 + t * 250; // 30° (orange) to 280° (violet)
+}
+
+/** Convert hue to an RGBA color array for WebGL (saturation=0.9, lightness=0.55). */
+export function decoHueToRgb(subType: number): number[] {
+    const h = decoTypeToHue(subType) / 360;
+    const s = 0.9;
+    const l = 0.55;
+    // HSL → RGB
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h * 6) % 2) - 1));
+    const m = l - c / 2;
+    let r: number, g: number, b: number;
+    const sector = Math.floor(h * 6);
+    if (sector === 0) {
+        r = c;
+        g = x;
+        b = 0;
+    } else if (sector === 1) {
+        r = x;
+        g = c;
+        b = 0;
+    } else if (sector === 2) {
+        r = 0;
+        g = c;
+        b = x;
+    } else if (sector === 3) {
+        r = 0;
+        g = x;
+        b = c;
+    } else if (sector === 4) {
+        r = x;
+        g = 0;
+        b = c;
+    } else {
+        r = c;
+        g = 0;
+        b = x;
+    }
+    return [r + m, g + m, b + m, 1.0];
+}
+
+/** Race enum → RaceId string for BuildingInfo lookup */
+export const RACE_TO_RACE_ID: Record<Race, RaceId> = {
+    [Race.Roman]: 'RACE_ROMAN',
+    [Race.Viking]: 'RACE_VIKING',
+    [Race.Mayan]: 'RACE_MAYA',
+    [Race.DarkTribe]: 'RACE_DARK',
+    [Race.Trojan]: 'RACE_TROJAN',
+};
+
+/** Apply a scale factor to a sprite's world dimensions and offsets. */
+export function scaleSprite(sprite: SpriteEntry, scale: number = ENTITY_SCALE): SpriteEntry {
+    return {
+        ...sprite,
+        widthWorld: sprite.widthWorld * scale,
+        heightWorld: sprite.heightWorld * scale,
+        offsetX: sprite.offsetX * scale,
+        offsetY: sprite.offsetY * scale,
+    };
+}
+
+/** Get sprite scale for an entity: decorations use FLAG_SCALE, trees/stones ENTITY_SCALE, other map objects DECORATION_SCALE. */
+export function getSpriteScale(entity: Entity): number {
+    if (entity.type === EntityType.Decoration) return FLAG_SCALE;
+    if (entity.type !== EntityType.MapObject) return ENTITY_SCALE;
+    if (entity.subType <= MapObjectType.TreeOliveSmall) return ENTITY_SCALE;
+    if (entity.subType === MapObjectType.ResourceStone) return ENTITY_SCALE;
+    return DECORATION_SCALE;
+}

@@ -134,6 +134,8 @@ export interface ScriptAddBuildingCommand {
     x: number;
     y: number;
     player: number;
+    /** Race for the building sprite (Race enum value) */
+    race: Race;
 }
 
 export interface ScriptAddSettlersCommand {

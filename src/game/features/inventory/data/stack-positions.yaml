@@ -1,0 +1,920 @@
+WoodcutterHut:
+  Roman:
+    output:
+      LOG:
+        dx: 3
+        dy: 4
+  Viking:
+    output:
+      LOG:
+        dx: 5
+        dy: 0
+  Mayan:
+    output:
+      LOG:
+        dx: 4
+        dy: 0
+  Trojan:
+    output:
+      LOG:
+        dx: 5
+        dy: 0
+Sawmill:
+  Roman:
+    output:
+      BOARD:
+        dx: 5
+        dy: 2
+    input:
+      LOG:
+        dx: 2
+        dy: 5
+  Viking:
+    output:
+      BOARD:
+        dx: 3
+        dy: 0
+    input:
+      LOG:
+        dx: 6
+        dy: 7
+  Mayan:
+    output:
+      BOARD:
+        dx: 5
+        dy: 0
+    input:
+      LOG:
+        dx: 7
+        dy: 3
+  Trojan:
+    output:
+      BOARD:
+        dx: 7
+        dy: 0
+    input:
+      LOG:
+        dx: 7
+        dy: 5
+StonecutterHut:
+  Roman:
+    output:
+      STONE:
+        dx: 5
+        dy: 3
+  Viking:
+    output:
+      STONE:
+        dx: 5
+        dy: 0
+  Mayan:
+    output:
+      STONE:
+        dx: 4
+        dy: -1
+  Trojan:
+    output:
+      STONE:
+        dx: 4
+        dy: 0
+GrainFarm:
+  Roman:
+    output:
+      GRAIN:
+        dx: 7
+        dy: 0
+  Viking:
+    output:
+      GRAIN:
+        dx: 4
+        dy: -1
+  Mayan:
+    output:
+      GRAIN:
+        dx: 7
+        dy: 0
+  Trojan:
+    output:
+      GRAIN:
+        dx: 7
+        dy: 0
+Mill:
+  Roman:
+    output:
+      FLOUR:
+        dx: 4
+        dy: 0
+    input:
+      GRAIN:
+        dx: 5
+        dy: 4
+  Viking:
+    output:
+      FLOUR:
+        dx: 6
+        dy: 0
+    input:
+      GRAIN:
+        dx: 7
+        dy: 5
+  Mayan:
+    output:
+      FLOUR:
+        dx: 4
+        dy: -2
+    input:
+      GRAIN:
+        dx: 4
+        dy: 4
+  Trojan:
+    output:
+      FLOUR:
+        dx: 5
+        dy: 0
+    input:
+      GRAIN:
+        dx: 6
+        dy: 5
+Bakery:
+  Roman:
+    output:
+      BREAD:
+        dx: 6
+        dy: 0
+    input:
+      FLOUR:
+        dx: 7
+        dy: 3
+      WATER:
+        dx: 7
+        dy: 2
+  Viking:
+    output:
+      BREAD:
+        dx: 5
+        dy: 0
+    input:
+      FLOUR:
+        dx: 6
+        dy: 7
+      WATER:
+        dx: 6
+        dy: 6
+  Mayan:
+    output:
+      BREAD:
+        dx: 5
+        dy: 0
+    input:
+      FLOUR:
+        dx: 6
+        dy: 5
+      WATER:
+        dx: 6
+        dy: 4
+  Trojan:
+    output:
+      BREAD:
+        dx: 5
+        dy: 0
+    input:
+      FLOUR:
+        dx: 6
+        dy: 7
+      WATER:
+        dx: 6
+        dy: 6
+FisherHut:
+  Roman:
+    output:
+      FISH:
+        dx: 3
+        dy: -2
+  Viking:
+    output:
+      FISH:
+        dx: 4
+        dy: -1
+  Mayan:
+    output:
+      FISH:
+        dx: 5
+        dy: 0
+  Trojan:
+    output:
+      FISH:
+        dx: 6
+        dy: 0
+AnimalRanch:
+  Roman:
+    output:
+      PIG:
+        dx: 6
+        dy: 0
+    input:
+      GRAIN:
+        dx: 7
+        dy: 9
+  Viking:
+    output:
+      PIG:
+        dx: 5
+        dy: -1
+    input:
+      GRAIN:
+        dx: 7
+        dy: 6
+  Mayan:
+    output:
+      PIG:
+        dx: 7
+        dy: 0
+    input:
+      GRAIN:
+        dx: 9
+        dy: 5
+  Trojan:
+    output:
+      PIG:
+        dx: 8
+        dy: 0
+    input:
+      GRAIN:
+        dx: 10
+        dy: 8
+Slaughterhouse:
+  Roman:
+    output:
+      MEAT:
+        dx: 4
+        dy: 0
+    input:
+      PIG:
+        dx: 7
+        dy: 7
+  Viking:
+    output:
+      MEAT:
+        dx: 5
+        dy: 0
+    input:
+      PIG:
+        dx: 5
+        dy: 5
+  Mayan:
+    output:
+      MEAT:
+        dx: 6
+        dy: 0
+    input:
+      PIG:
+        dx: 8
+        dy: 6
+  Trojan:
+    output:
+      MEAT:
+        dx: 4
+        dy: 0
+    input:
+      PIG:
+        dx: 7
+        dy: 6
+WaterworkHut:
+  Roman:
+    output:
+      WATER:
+        dx: 4
+        dy: 0
+  Viking:
+    output:
+      WATER:
+        dx: 4
+        dy: -2
+  Mayan:
+    output:
+      WATER:
+        dx: 4
+        dy: 0
+  Trojan:
+    output:
+      WATER:
+        dx: 5
+        dy: 0
+CoalMine:
+  Roman:
+    output:
+      COAL:
+        dx: 3
+        dy: 0
+    input:
+      BREAD:
+        dx: 4
+        dy: 4
+  Viking:
+    output:
+      COAL:
+        dx: 4
+        dy: 0
+    input:
+      BREAD:
+        dx: 5
+        dy: 1
+  Mayan:
+    output:
+      COAL:
+        dx: 3
+        dy: 0
+    input:
+      BREAD:
+        dx: 4
+        dy: 3
+  Trojan:
+    output:
+      COAL:
+        dx: 4
+        dy: 0
+    input:
+      BREAD:
+        dx: 4
+        dy: 5
+IronMine:
+  Roman:
+    output:
+      IRONORE:
+        dx: 3
+        dy: 0
+    input:
+      BREAD:
+        dx: 3
+        dy: 2
+  Viking:
+    output:
+      IRONORE:
+        dx: 3
+        dy: 0
+    input:
+      BREAD:
+        dx: 4
+        dy: 3
+  Mayan:
+    output:
+      IRONORE:
+        dx: 4
+        dy: 0
+    input:
+      BREAD:
+        dx: 4
+        dy: 3
+  Trojan:
+    output:
+      IRONORE:
+        dx: 3
+        dy: -1
+    input:
+      BREAD:
+        dx: 4
+        dy: 3
+GoldMine:
+  Roman:
+    output:
+      GOLDORE:
+        dx: 4
+        dy: 0
+    input:
+      BREAD:
+        dx: 5
+        dy: 2
+  Viking:
+    output:
+      GOLDORE:
+        dx: 3
+        dy: 0
+    input:
+      BREAD:
+        dx: 4
+        dy: 4
+  Mayan:
+    output:
+      GOLDORE:
+        dx: 3
+        dy: 0
+    input:
+      BREAD:
+        dx: 3
+        dy: 3
+  Trojan:
+    output:
+      GOLDORE:
+        dx: 3
+        dy: -1
+    input:
+      BREAD:
+        dx: 4
+        dy: 3
+IronSmelter:
+  Roman:
+    output:
+      IRONBAR:
+        dx: 6
+        dy: 0
+    input:
+      IRONORE:
+        dx: 6
+        dy: 5
+      COAL:
+        dx: 6
+        dy: 4
+  Viking:
+    output:
+      IRONBAR:
+        dx: 6
+        dy: 0
+    input:
+      IRONORE:
+        dx: 6
+        dy: 3
+      COAL:
+        dx: 6
+        dy: 2
+  Mayan:
+    output:
+      IRONBAR:
+        dx: 5
+        dy: -1
+    input:
+      IRONORE:
+        dx: 5
+        dy: 5
+      COAL:
+        dx: 5
+        dy: 4
+  Trojan:
+    output:
+      IRONBAR:
+        dx: 5
+        dy: 0
+    input:
+      IRONORE:
+        dx: 6
+        dy: 8
+      COAL:
+        dx: 6
+        dy: 7
+SmeltGold:
+  Roman:
+    output:
+      GOLDBAR:
+        dx: 6
+        dy: 0
+    input:
+      GOLDORE:
+        dx: 7
+        dy: 3
+      COAL:
+        dx: 7
+        dy: 2
+  Viking:
+    output:
+      GOLDBAR:
+        dx: 5
+        dy: -1
+    input:
+      GOLDORE:
+        dx: 5
+        dy: 3
+      COAL:
+        dx: 5
+        dy: 2
+  Mayan:
+    output:
+      GOLDBAR:
+        dx: 4
+        dy: -2
+    input:
+      GOLDORE:
+        dx: 4
+        dy: 4
+      COAL:
+        dx: 4
+        dy: 3
+  Trojan:
+    output:
+      GOLDBAR:
+        dx: 6
+        dy: 0
+    input:
+      GOLDORE:
+        dx: 8
+        dy: 5
+      COAL:
+        dx: 8
+        dy: 4
+WeaponSmith:
+  Roman:
+    output:
+      SWORD:
+        dx: 4
+        dy: 0
+    input:
+      IRONBAR:
+        dx: 5
+        dy: 6
+      COAL:
+        dx: 5
+        dy: 5
+  Viking:
+    output:
+      SWORD:
+        dx: 5
+        dy: 0
+    input:
+      IRONBAR:
+        dx: 7
+        dy: 8
+      COAL:
+        dx: 7
+        dy: 7
+  Mayan:
+    output:
+      SWORD:
+        dx: 5
+        dy: 0
+    input:
+      IRONBAR:
+        dx: 6
+        dy: 8
+      COAL:
+        dx: 6
+        dy: 7
+  Trojan:
+    output:
+      SWORD:
+        dx: 7
+        dy: 0
+    input:
+      IRONBAR:
+        dx: 7
+        dy: 6
+      COAL:
+        dx: 7
+        dy: 5
+ToolSmith:
+  Roman:
+    output:
+      AXE:
+        dx: 6
+        dy: 0
+    input:
+      IRONBAR:
+        dx: 8
+        dy: 7
+      COAL:
+        dx: 8
+        dy: 6
+  Viking:
+    output:
+      AXE:
+        dx: 5
+        dy: 0
+    input:
+      IRONBAR:
+        dx: 6
+        dy: 6
+      COAL:
+        dx: 6
+        dy: 5
+  Mayan:
+    output:
+      AXE:
+        dx: 5
+        dy: 0
+    input:
+      IRONBAR:
+        dx: 6
+        dy: 7
+      COAL:
+        dx: 6
+        dy: 6
+  Trojan:
+    output:
+      AXE:
+        dx: 6
+        dy: 0
+    input:
+      IRONBAR:
+        dx: 7
+        dy: 7
+      COAL:
+        dx: 6
+        dy: 9
+Barrack:
+  Roman:
+    input:
+      SWORD:
+        dx: 9
+        dy: 8
+  Viking:
+    input:
+      SWORD:
+        dx: 10
+        dy: 8
+  Mayan:
+    input:
+      SWORD:
+        dx: 9
+        dy: 8
+  Trojan:
+    input:
+      SWORD:
+        dx: 7
+        dy: 4
+HunterHut:
+  Roman:
+    output:
+      MEAT:
+        dx: 5
+        dy: 0
+  Viking:
+    output:
+      MEAT:
+        dx: 5
+        dy: 0
+  Mayan:
+    output:
+      MEAT:
+        dx: 4
+        dy: 0
+  Trojan:
+    output:
+      MEAT:
+        dx: 4
+        dy: -1
+StoneMine:
+  Roman:
+    output:
+      STONE:
+        dx: 4
+        dy: 0
+    input:
+      BREAD:
+        dx: 4
+        dy: 4
+  Viking:
+    output:
+      STONE:
+        dx: 4
+        dy: 0
+    input:
+      BREAD:
+        dx: 4
+        dy: 4
+  Mayan:
+    output:
+      STONE:
+        dx: 4
+        dy: 0
+    input:
+      BREAD:
+        dx: 4
+        dy: 1
+  Trojan:
+    output:
+      STONE:
+        dx: 4
+        dy: 0
+    input:
+      BREAD:
+        dx: 4
+        dy: 4
+SulfurMine:
+  Roman:
+    output:
+      SULFUR:
+        dx: 3
+        dy: 0
+    input:
+      BREAD:
+        dx: 3
+        dy: 2
+  Viking:
+    output:
+      SULFUR:
+        dx: 5
+        dy: 0
+    input:
+      BREAD:
+        dx: 6
+        dy: 2
+  Mayan:
+    output:
+      SULFUR:
+        dx: 3
+        dy: 0
+    input:
+      BREAD:
+        dx: 3
+        dy: 2
+  Trojan:
+    output:
+      SULFUR:
+        dx: 4
+        dy: 0
+    input:
+      BREAD:
+        dx: 4
+        dy: 4
+Vinyard:
+  Roman:
+    output:
+      WINE:
+        dx: 4
+        dy: 0
+  Viking:
+    output:
+      WINE:
+        dx: 2
+        dy: 0
+  Mayan:
+    output:
+      WINE:
+        dx: 2
+        dy: 0
+  Trojan:
+    output:
+      WINE:
+        dx: 2
+        dy: 0
+AgaveFarmerHut:
+  Roman:
+    output:
+      AGAVE:
+        dx: 2
+        dy: 0
+  Viking:
+    output:
+      AGAVE:
+        dx: 2
+        dy: 0
+  Mayan:
+    output:
+      AGAVE:
+        dx: 4
+        dy: 0
+  Trojan:
+    output:
+      AGAVE:
+        dx: 2
+        dy: 0
+TequilaMakerHut:
+  Roman:
+    output:
+      TEQUILA:
+        dx: 2
+        dy: 0
+    input:
+      AGAVE:
+        dx: 2
+        dy: 1
+  Viking:
+    output:
+      TEQUILA:
+        dx: 2
+        dy: 0
+    input:
+      AGAVE:
+        dx: 2
+        dy: 1
+  Mayan:
+    output:
+      TEQUILA:
+        dx: 7
+        dy: 0
+    input:
+      AGAVE:
+        dx: 8
+        dy: 5
+  Trojan:
+    output:
+      TEQUILA:
+        dx: 2
+        dy: 0
+    input:
+      AGAVE:
+        dx: 2
+        dy: 1
+BeekeeperHut:
+  Roman:
+    output:
+      HONEY:
+        dx: 2
+        dy: 0
+  Viking:
+    output:
+      HONEY:
+        dx: 5
+        dy: 0
+  Mayan:
+    output:
+      HONEY:
+        dx: 2
+        dy: 0
+  Trojan:
+    output:
+      HONEY:
+        dx: 2
+        dy: 0
+MeadMakerHut:
+  Roman:
+    output:
+      MEAD:
+        dx: 2
+        dy: 0
+    input:
+      HONEY:
+        dx: 2
+        dy: 1
+  Viking:
+    output:
+      MEAD:
+        dx: 6
+        dy: 0
+    input:
+      HONEY:
+        dx: 6
+        dy: 6
+  Mayan:
+    output:
+      MEAD:
+        dx: 2
+        dy: 0
+    input:
+      HONEY:
+        dx: 2
+        dy: 1
+  Trojan:
+    output:
+      MEAD:
+        dx: 2
+        dy: 0
+    input:
+      HONEY:
+        dx: 2
+        dy: 1
+SunflowerFarmerHut:
+  Roman:
+    output:
+      SUNFLOWER:
+        dx: 2
+        dy: 0
+  Viking:
+    output:
+      SUNFLOWER:
+        dx: 2
+        dy: 0
+  Mayan:
+    output:
+      SUNFLOWER:
+        dx: 2
+        dy: 0
+  Trojan:
+    output:
+      SUNFLOWER:
+        dx: 8
+        dy: 0
+SunflowerOilMakerHut:
+  Roman:
+    output:
+      SUNFLOWEROIL:
+        dx: 2
+        dy: 0
+    input:
+      SUNFLOWER:
+        dx: 2
+        dy: 1
+  Viking:
+    output:
+      SUNFLOWEROIL:
+        dx: 2
+        dy: 0
+    input:
+      SUNFLOWER:
+        dx: 2
+        dy: 1
+  Mayan:
+    output:
+      SUNFLOWEROIL:
+        dx: 2
+        dy: 0
+    input:
+      SUNFLOWER:
+        dx: 2
+        dy: 1
+  Trojan:
+    output:
+      SUNFLOWEROIL:
+        dx: 6
+        dy: 0
+    input:
+      SUNFLOWER:
+        dx: 7
+        dy: 3

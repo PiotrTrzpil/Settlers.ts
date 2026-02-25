@@ -4,6 +4,8 @@ import { BuildingType, getBuildingSize } from '../../entity';
 import type { Race } from '../../race';
 import type { PlacementEntityType } from '../render-state';
 
+type BuildingValidator = (x: number, y: number, buildingType: BuildingType) => boolean;
+
 /**
  * Building-specific mode data.
  * Extends base placement data with building type.
@@ -115,16 +117,5 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
         };
 
         super.onEnter(context, normalizedData);
-    }
-
-    /**
-     * Set the placement validator function.
-     * Overloaded for backward compatibility with building-specific signature.
-     */
-    override setValidator(
-        context: InputContext,
-        validator: (x: number, y: number, buildingType: BuildingType) => boolean
-    ): void {
-        super.setValidator(context, validator);
     }
 }

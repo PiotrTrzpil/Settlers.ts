@@ -198,7 +198,8 @@ export class GameState {
                 break;
             case EntityType.MapObject:
             case EntityType.StackedResource:
-                // Map objects and resources are never selectable
+            case EntityType.Decoration:
+                // Map objects, resources, and decorations are never selectable
                 resolvedSelectable = false;
                 break;
             case EntityType.None:
@@ -222,8 +223,11 @@ export class GameState {
         this.entities.push(entity);
         this.entityMap.set(entity.id, entity);
 
-        // Add occupancy for all tiles in the entity's footprint
-        if (type === EntityType.Building) {
+        // Add occupancy for all tiles in the entity's footprint.
+        // Decoration entities (flags, signs) are visual-only — no tile occupancy.
+        if (type === EntityType.Decoration) {
+            // no-op: decorations don't occupy tiles
+        } else if (type === EntityType.Building) {
             const footprint = getBuildingFootprint(x, y, subType as BuildingType);
             for (const tile of footprint) {
                 this.tileOccupancy.set(tileKey(tile.x, tile.y), entity.id);

@@ -8,6 +8,7 @@ import {
     TileCoord,
     BuildingType,
     getBuildingFootprint,
+    getBuildingXmlId,
     UnitType,
     MapObjectType,
 } from '../entity';
@@ -16,7 +17,7 @@ import { TilePicker } from '../input/tile-picker';
 import { TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
-import { SpriteEntry, Race } from './sprite-metadata';
+import { SpriteEntry, Race, PIXELS_TO_WORLD } from './sprite-metadata';
 import { PLAYER_COLORS, TINT_NEUTRAL, TINT_SELECTED, TINT_PREVIEW_VALID, TINT_PREVIEW_INVALID } from './tint-utils';
 import { EMaterialType } from '../economy';
 import { SpriteRenderManager } from './sprite-render-manager';
@@ -30,6 +31,8 @@ import { FrameContext, type IFrameContext } from './frame-context';
 import { OptimizedDepthSorter, type OptimizedSortContext } from './optimized-depth-sorter';
 import { profiler } from './debug/render-profiler';
 import { LayerVisibility, DEFAULT_LAYER_VISIBILITY, isMapObjectVisible } from './layer-visibility';
+import type { TileHighlight } from '../input/render-state';
+import { getGameDataLoader } from '@/resources/game-data';
 import type {
     IRenderContext,
     ServiceAreaRenderData,
@@ -49,78 +52,19 @@ export type { PlacementPreviewState } from './render-context';
 import {
     TEXTURE_UNIT_SPRITE_ATLAS,
     BASE_QUAD,
-    ENTITY_SCALE,
-    DECORATION_SCALE,
     BUILDING_SCALE,
     UNIT_SCALE,
     RESOURCE_SCALE,
     PREVIEW_VALID_COLOR,
     PREVIEW_INVALID_COLOR,
+    FLAG_SCALE,
+    FLAG_ANIM_FPS,
+    decoHueToRgb,
+    decoTypeToHue,
+    RACE_TO_RACE_ID,
+    scaleSprite,
+    getSpriteScale,
 } from './entity-renderer-constants';
-
-/** Map decoration object type (19-255) to a hue in degrees (30=orange → 280=violet). */
-function decoTypeToHue(subType: number): number {
-    const t = Math.max(0, Math.min(1, (subType - 19) / (100 - 19)));
-    return 30 + t * 250; // 30° (orange) to 280° (violet)
-}
-
-/** Convert hue to an RGBA color array for WebGL (saturation=0.9, lightness=0.55). */
-function decoHueToRgb(subType: number): number[] {
-    const h = decoTypeToHue(subType) / 360;
-    const s = 0.9;
-    const l = 0.55;
-    // HSL → RGB
-    const c = (1 - Math.abs(2 * l - 1)) * s;
-    const x = c * (1 - Math.abs(((h * 6) % 2) - 1));
-    const m = l - c / 2;
-    let r: number, g: number, b: number;
-    const sector = Math.floor(h * 6);
-    if (sector === 0) {
-        r = c;
-        g = x;
-        b = 0;
-    } else if (sector === 1) {
-        r = x;
-        g = c;
-        b = 0;
-    } else if (sector === 2) {
-        r = 0;
-        g = c;
-        b = x;
-    } else if (sector === 3) {
-        r = 0;
-        g = x;
-        b = c;
-    } else if (sector === 4) {
-        r = x;
-        g = 0;
-        b = c;
-    } else {
-        r = c;
-        g = 0;
-        b = x;
-    }
-    return [r + m, g + m, b + m, 1.0];
-}
-
-/** Apply a scale factor to a sprite's world dimensions and offsets. */
-function scaleSprite(sprite: SpriteEntry, scale: number = ENTITY_SCALE): SpriteEntry {
-    return {
-        ...sprite,
-        widthWorld: sprite.widthWorld * scale,
-        heightWorld: sprite.heightWorld * scale,
-        offsetX: sprite.offsetX * scale,
-        offsetY: sprite.offsetY * scale,
-    };
-}
-
-/** Get sprite scale for an entity: decorations use DECORATION_SCALE, everything else ENTITY_SCALE. */
-function getSpriteScale(entity: Entity): number {
-    if (entity.type !== EntityType.MapObject) return ENTITY_SCALE;
-    if (entity.subType <= MapObjectType.TreeOliveSmall) return ENTITY_SCALE;
-    if (entity.subType === MapObjectType.ResourceStone) return ENTITY_SCALE;
-    return DECORATION_SCALE;
-}
 
 /**
  * Renders entities (units and buildings) as colored quads or textured sprites.
@@ -169,6 +113,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Resource states for stacked resources (quantity tracking)
     public resourceStates: Map<number, StackedResourceState> = new Map();
 
+    // Flag animation: time accumulator for cycling through 24 frames
+    private flagAnimTime = 0;
+
     // Rendering-relevant settings (from context)
     private renderSettings: RenderSettings = {
         showBuildingFootprint: false,
@@ -181,6 +128,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     /** Debug: decoration labels collected during drawColorEntities (screen-space) */
     public debugDecoLabels: Array<{ screenX: number; screenY: number; type: number; hue: number }> = [];
+
+    /** Tile highlight rings from input modes (e.g., stack-adjust tool). */
+    public tileHighlights: TileHighlight[] = [];
 
     // Legacy preview fields - maintained for backward compatibility
     // These map to/from the consolidated placementPreview state
@@ -489,6 +439,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.frameDrawCalls = 0;
         this.frameSpriteCount = 0;
 
+        // Advance flag animation time (use wall clock for smooth animation)
+        this.flagAnimTime = performance.now() / 1000;
+
         // Enable blending for semi-transparent entities
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -517,7 +470,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             viewPoint,
             unitStates: this.unitStates,
         };
-        if (this.layerVisibility.showPathfinding) {
+        if (this.layerVisibility.showPathfinding)
             this.selectionOverlayRenderer.drawSelectedUnitPath(
                 gl,
                 this.dynamicBuffer,
@@ -526,7 +479,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 this.aColor,
                 selectionCtx
             );
-        }
 
         // Sort entities by depth for correct painter's algorithm rendering
         const cullSortStart = performance.now();
@@ -619,6 +571,17 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             this.aColor,
             selectionCtx
         );
+
+        // Draw tile highlight rings (debug tools like stack-adjust)
+        if (this.tileHighlights.length > 0)
+            this.selectionOverlayRenderer.drawTileHighlights(
+                gl,
+                this.dynamicBuffer,
+                this.tileHighlights,
+                this.aEntityPos,
+                this.aColor,
+                selectionCtx
+            );
         this.frameSelectionTime = performance.now() - selectionStart;
 
         // Draw placement preview
@@ -751,6 +714,29 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /**
+     * Look up the flag pixel offset from BuildingInfo for a flag decoration entity.
+     * The entity's subType is the BuildingType of the parent building.
+     */
+    private getFlagPixelOffset(entity: Entity): { x: number; y: number } | null {
+        const loader = getGameDataLoader();
+        if (!loader.isLoaded()) return null;
+        const xmlId = getBuildingXmlId(entity.subType as BuildingType);
+        if (!xmlId) return null;
+        const info = loader.getBuilding(RACE_TO_RACE_ID[entity.race], xmlId);
+        if (!info) return null;
+        return { x: info.flag.xOffset, y: info.flag.yOffset };
+    }
+
+    /** Get sprite entry for a flag decoration entity (animated) */
+    private getFlagSprite(entity: Entity): SpriteEntry | null {
+        if (!this.spriteManager) return null;
+        const frameCount = this.spriteManager.getFlagFrameCount(entity.player);
+        if (frameCount === 0) return null;
+        const frame = Math.floor(this.flagAnimTime * FLAG_ANIM_FPS) % frameCount;
+        return this.spriteManager.getFlag(entity.player, frame);
+    }
+
+    /**
      * Resolve an entity's sprite for rendering.
      */
     private resolveEntitySprite(entity: Entity): {
@@ -789,6 +775,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 return { skip: false, transitioning: true, sprite: null, progress: 1 };
             }
             return { skip: false, transitioning: false, sprite: result, progress: 1 };
+        }
+        if (entity.type === EntityType.Decoration) {
+            return { skip: false, transitioning: false, sprite: this.getFlagSprite(entity), progress: 1 };
         }
         return { skip: true, transitioning: false, sprite: null, progress: 1 };
     }
@@ -930,6 +919,18 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             worldPos.worldY -= TILE_CENTER_Y * 0.5;
         }
 
+        // Decoration entities (flags): position relative to parent building tile vertex,
+        // plus the flag pixel offset from BuildingInfo.
+        if (entity.type === EntityType.Decoration) {
+            worldPos.worldX -= TILE_CENTER_X;
+            worldPos.worldY -= TILE_CENTER_Y * 0.5;
+            const flagOffset = this.getFlagPixelOffset(entity);
+            if (flagOffset) {
+                worldPos.worldX += flagOffset.x * PIXELS_TO_WORLD * FLAG_SCALE;
+                worldPos.worldY += flagOffset.y * PIXELS_TO_WORLD * FLAG_SCALE;
+            }
+        }
+
         // Add random visual offset for MapObjects (trees, stones) to break up the grid.
         // Applied to all tree variations so the position stays consistent through growth/cutting/stump stages.
         if (entity.type === EntityType.MapObject) {
@@ -1064,6 +1065,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return !!this.spriteManager.getResource(entity.subType as EMaterialType);
         case EntityType.Unit:
             return !!this.spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
+        case EntityType.Decoration:
+            return this.spriteManager.getFlagFrameCount(entity.player) > 0;
         case EntityType.None:
             return false;
         }
@@ -1332,6 +1335,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return this.layerVisibility.units;
         case EntityType.MapObject:
             return isMapObjectVisible(this.layerVisibility, entity.subType as MapObjectType);
+        case EntityType.Decoration:
+            // Flags are visible when buildings are visible
+            return this.layerVisibility.buildings;
         case EntityType.StackedResource:
         case EntityType.None:
             return true;

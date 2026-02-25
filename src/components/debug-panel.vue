@@ -90,6 +90,12 @@
                 </button>
                 <button class="ctrl-btn danger" @click="$emit('resetGameState')">Reset State</button>
             </div>
+            <div class="control-buttons" style="margin-top: 4px">
+                <button class="ctrl-btn" :class="{ active: isStackAdjustMode }" @click="toggleStackAdjust">
+                    {{ isStackAdjustMode ? 'Exit Stacks' : 'Adjust Stacks' }}
+                </button>
+                <button class="ctrl-btn" @click="generateStackDefaults">Defaults</button>
+            </div>
         </CollapseSection>
 
         <!-- Map Objects -->
@@ -131,10 +137,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { debugStats } from '@/game/debug-stats';
+import { getBridge } from '@/game/debug-bridge';
 
 import type { Game } from '@/game/game';
 import { clearSavedTreeState } from '@/game/game-state-persistence';
+import { AVAILABLE_RACES } from '@/game/race';
 import { useDebugMapObjects } from './use-debug-map-objects';
+import type { StackAdjustMode } from '@/game/input/modes/stack-adjust-mode';
 import Checkbox from './Checkbox.vue';
 import CollapseSection from './CollapseSection.vue';
 import StatRow from './StatRow.vue';
@@ -172,6 +181,37 @@ function onTreeExpansionChange(val: boolean): void {
 const getGame = (): Game | null => props.game;
 const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clearAllMapObjects } =
     useDebugMapObjects(getGame);
+
+// Stack adjust mode
+const isStackAdjustMode = computed(() => getBridge().input?.getModeName() === 'stack-adjust');
+
+function toggleStackAdjust(): void {
+    const input = getBridge().input;
+    if (!input) return;
+    if (input.getModeName() === 'stack-adjust') {
+        input.switchMode('select');
+    } else {
+        input.switchMode('stack-adjust');
+    }
+}
+
+function getStackAdjustMode(): StackAdjustMode | null {
+    const input = getBridge().input;
+    if (!input) return null;
+    const mode = input.getCurrentMode();
+    return mode?.name === 'stack-adjust' ? (mode as StackAdjustMode) : null;
+}
+
+function generateStackDefaults(): void {
+    const mode = getStackAdjustMode();
+    const positions = mode?.getStackPositions();
+    if (!positions) {
+        console.log('Enter stack-adjust mode first');
+        return;
+    }
+    props.game.services.inventoryVisualizer.generateDefaultPositions(positions, AVAILABLE_RACES);
+    console.log('Generated default stack positions. Saved to stack-positions.yaml.');
+}
 
 const fpsClass = computed(() => {
     if (stats.fps >= 55) return 'fps-good';
@@ -252,6 +292,12 @@ const cacheClass = computed(() => {
 .ctrl-btn:hover {
     background: var(--bg-raised);
     border-color: var(--border-hover);
+}
+
+.ctrl-btn.active {
+    background: #1a3a1a;
+    border-color: #2a6a2a;
+    color: var(--status-good);
 }
 
 .ctrl-btn.danger {

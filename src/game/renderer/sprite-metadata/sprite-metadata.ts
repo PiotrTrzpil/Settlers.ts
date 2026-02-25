@@ -331,6 +331,8 @@ export class SpriteMetadataRegistry {
     private resources: Map<EMaterialType, Map<number, SpriteEntry>> = new Map();
     /** Unit sprites keyed by race → unitType → direction */
     private unitsByRace: Map<number, Map<UnitType, Map<number, SpriteEntry>>> = new Map();
+    /** Flag sprites keyed by playerIndex → frame[] */
+    private flags: Map<number, SpriteEntry[]> = new Map();
 
     /**
      * Animated entities: shared storage for map objects/resources (race-independent).
@@ -425,6 +427,36 @@ export class SpriteMetadataRegistry {
      */
     public getMapObject(type: MapObjectType, variation: number = 0): SpriteEntry | null {
         return this.mapObjects.get(type)?.[variation] ?? null;
+    }
+
+    /**
+     * Register a flag sprite frame for a player index.
+     * @param playerIndex 0-7 (8 team colors)
+     * @param frame Animation frame index (0-23)
+     */
+    public registerFlag(playerIndex: number, frame: number, entry: SpriteEntry): void {
+        let frames = this.flags.get(playerIndex);
+        if (!frames) {
+            frames = [];
+            this.flags.set(playerIndex, frames);
+        }
+        frames[frame] = entry;
+    }
+
+    /**
+     * Get a flag sprite frame for a player index and animation frame.
+     */
+    public getFlag(playerIndex: number, frame: number): SpriteEntry | null {
+        return this.flags.get(playerIndex)?.[frame] ?? null;
+    }
+
+    /** Number of flag animation frames per player color. */
+    public getFlagFrameCount(playerIndex: number): number {
+        return this.flags.get(playerIndex)?.length ?? 0;
+    }
+
+    public hasFlagSprites(): boolean {
+        return this.flags.size > 0;
     }
 
     /**
@@ -740,6 +772,7 @@ export class SpriteMetadataRegistry {
         this.animatedByRace.clear();
         this.resources.clear();
         this.unitsByRace.clear();
+        this.flags.clear();
         this._loadedRaces.clear();
     }
 
@@ -795,6 +828,7 @@ export class SpriteMetadataRegistry {
             mapObjects: mapToArray(this.mapObjects),
             resources: mapToArray(this.resources).map(([k, v]) => [k, mapToArray(v)]),
             unitsByRace: serializedUnits,
+            flags: mapToArray(this.flags),
             animatedEntities: serializedAnimatedEntities,
             animatedByRace: serializedAnimatedByRace,
             loadedRaces: [...this._loadedRaces],
@@ -852,6 +886,7 @@ export class SpriteMetadataRegistry {
         }
 
         if (data.mapObjects) registry.mapObjects = arrayToMap(data.mapObjects);
+        if (data.flags) registry.flags = arrayToMap(data.flags);
 
         if (data.resources) {
             registry.resources = new Map(
