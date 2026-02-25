@@ -1,6 +1,12 @@
 /**
  * Parser for MapPlayerInformation chunk (type 2)
- * Extracts tribe assignment for each player
+ * Extracts tribe, start position, and name for each player.
+ *
+ * Format: 45 bytes per player entry (uint32 LE fields):
+ *   - tribe    (4 bytes) — S4Tribe enum value
+ *   - startX   (4 bytes)
+ *   - startY   (4 bytes)
+ *   - name     (33 bytes) — null-terminated ASCII string
  */
 
 import { BinaryReader } from '@/resources/file/binary-reader';
@@ -10,31 +16,12 @@ import type { MapPlayerInfo } from '../../map-entity-data';
 
 const log = new LogHandler('PlayerInfoParser');
 
-/**
- * Determine entry size from data length
- */
-function determineEntrySize(dataLength: number): number {
-    const possibleEntrySizes = [8, 12, 4, 2];
-    for (const size of possibleEntrySizes) {
-        if (dataLength % size === 0 && dataLength / size <= 8) {
-            return size;
-        }
-    }
-    return 8;
-}
+/** Known entry size: 4 (tribe) + 4 (x) + 4 (y) + 33 (name) = 45 bytes */
+const ENTRY_SIZE = 45;
 
-/**
- * Skip remaining bytes in entry to align reader
- */
-function skipRemainingBytes(reader: BinaryReader, bytesRead: number, entrySize: number): void {
-    for (let j = bytesRead; j < entrySize; j++) {
-        reader.readByte();
-    }
-}
+/** Name field length in bytes */
+const NAME_LENGTH = 33;
 
-/**
- * Validate tribe value and clamp to valid range
- */
 function validateTribe(value: number): S4Tribe {
     if (value >= S4Tribe.ROMAN && value <= S4Tribe.TROJAN) {
         return value as S4Tribe;
@@ -43,73 +30,7 @@ function validateTribe(value: number): S4Tribe {
 }
 
 /**
- * Parse 8+ byte format entry (with coordinates)
- */
-function parse8ByteEntry(reader: BinaryReader, entrySize: number): MapPlayerInfo {
-    const x = reader.readWordBE();
-    const y = reader.readWordBE();
-    const tribeValue = reader.readByte();
-    const playerIndex = reader.readByte();
-
-    skipRemainingBytes(reader, 6, entrySize);
-
-    const tribe = validateTribe(tribeValue);
-    const hasValidPos = x > 10 && y > 10 && x < 10000 && y < 10000;
-
-    return {
-        playerIndex,
-        tribe,
-        startX: hasValidPos ? x : undefined,
-        startY: hasValidPos ? y : undefined,
-    };
-}
-
-/**
- * Parse 4 byte format entry (index, tribe, padding)
- */
-function parse4ByteEntry(reader: BinaryReader, entrySize: number): MapPlayerInfo {
-    const playerIndex = reader.readByte();
-    const tribeValue = reader.readByte();
-
-    skipRemainingBytes(reader, 2, entrySize);
-
-    return {
-        playerIndex,
-        tribe: validateTribe(tribeValue),
-    };
-}
-
-/**
- * Parse 2 byte format entry (index, tribe)
- */
-function parse2ByteEntry(reader: BinaryReader): MapPlayerInfo {
-    const playerIndex = reader.readByte();
-    const tribeValue = reader.readByte();
-
-    return {
-        playerIndex,
-        tribe: validateTribe(tribeValue),
-    };
-}
-
-/**
- * Parse 1 byte format entry (just tribe, index implied)
- */
-function parse1ByteEntry(reader: BinaryReader, index: number): MapPlayerInfo {
-    const tribeValue = reader.readByte();
-
-    return {
-        playerIndex: index,
-        tribe: validateTribe(tribeValue),
-    };
-}
-
-/**
- * Parse MapPlayerInformation chunk data
- *
- * Format varies by map type. Common formats:
- * - 8 bytes per player: x (2 bytes), y (2 bytes), tribe (1 byte), player (1 byte), padding (2 bytes)
- * - 4 bytes per player: player (1 byte), tribe (1 byte), padding (2 bytes)
+ * Parse MapPlayerInformation chunk data.
  *
  * @param reader BinaryReader positioned at start of chunk data
  * @returns Array of player info entries
@@ -123,29 +44,31 @@ export function parsePlayerInformation(reader: BinaryReader): MapPlayerInfo[] {
         return players;
     }
 
-    const entrySize = determineEntrySize(dataLength);
-    const entryCount = Math.floor(dataLength / entrySize);
+    if (dataLength % ENTRY_SIZE !== 0) {
+        log.warn(`Player info chunk size ${dataLength} is not a multiple of ${ENTRY_SIZE} — format may differ`);
+    }
 
-    log.debug(`Parsing player info: ${dataLength} bytes, ${entryCount} entries (${entrySize} bytes each)`);
+    const entryCount = Math.floor(dataLength / ENTRY_SIZE);
 
     for (let i = 0; i < entryCount && !reader.eof(); i++) {
-        const startPos = reader.getOffset();
+        const tribe = validateTribe(reader.readInt());
+        const startX = reader.readInt();
+        const startY = reader.readInt();
+        const name = reader.readString(NAME_LENGTH).replaceAll('\0', '');
 
-        if (entrySize >= 8) {
-            players.push(parse8ByteEntry(reader, entrySize));
-        } else if (entrySize >= 4) {
-            players.push(parse4ByteEntry(reader, entrySize));
-        } else if (entrySize === 2) {
-            players.push(parse2ByteEntry(reader));
-        } else {
-            players.push(parse1ByteEntry(reader, i));
-        }
+        const hasValidPos = startX > 0 && startY > 0 && startX < 10000 && startY < 10000;
 
-        // Safety check
-        if (reader.getOffset() === startPos) {
-            log.error('Parser stuck, breaking');
-            break;
-        }
+        const playerIndex = i + 1;
+
+        players.push({
+            playerIndex,
+            tribe,
+            startX: hasValidPos ? startX : undefined,
+            startY: hasValidPos ? startY : undefined,
+        });
+
+        const nameStr = name ? `, name="${name}"` : '';
+        log.debug(`Player ${playerIndex}: tribe=${S4Tribe[tribe]}, pos=(${startX}, ${startY})${nameStr}`);
     }
 
     log.debug(`Parsed ${players.length} player entries`);

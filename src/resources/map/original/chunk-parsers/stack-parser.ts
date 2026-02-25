@@ -54,7 +54,7 @@ function skipRemainingBytes(reader: BinaryReader, startPos: number, entrySize: n
 function isValidStackEntry(x: number, y: number, materialType: number, amount: number): boolean {
     if (x > MAX_COORDINATE || y > MAX_COORDINATE) return false;
     if (materialType < 0 || materialType > MAX_GOOD_TYPE) return false;
-    if (amount === 0 || amount > 255) return false;
+    if (amount === 0 || amount > 8) return false;
     return true;
 }
 
