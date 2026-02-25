@@ -505,7 +505,9 @@ function executeScriptAddSettlers(ctx: CommandContext, cmd: ScriptAddSettlersCom
     return commandSuccess(effects);
 }
 
-// Each handler takes a specific Command subtype, but the map stores them generically
+// Each handler takes a specific Command subtype, but the map stores them generically.
+// cmd is typed `any` intentionally: each handler is matched to its Command subtype at
+// runtime via the COMMAND_HANDLERS map, so variance errors would be false positives.
 type CommandHandler = (ctx: CommandContext, cmd: any) => CommandResult;
 
 /** Map of command type -> handler function. Keeps executeCommand under complexity limit. */

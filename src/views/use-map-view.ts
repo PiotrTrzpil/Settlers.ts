@@ -20,7 +20,7 @@ import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
 import { LayerVisibility, loadLayerVisibility, saveLayerVisibility } from '@/game/renderer/layer-visibility';
 import type { InputManager } from '@/game/input';
-import { EntityRenderer } from '@/game/renderer/entity-renderer';
+import { getBridge } from '@/game/debug-bridge';
 import {
     gameStatePersistence,
     loadSnapshot,
@@ -194,12 +194,9 @@ const availableResources = DROPPABLE_MATERIALS.map(type => {
 });
 
 /** Update resource icons from the sprite manager */
-function updateResourceIconsFromManager(game: Game | null, resourceIcons: Ref<Record<number, string>>): void {
-    const g = game as any;
-    if (!g?.renderer) return;
-
-    const renderer = g.renderer as unknown as EntityRenderer;
-    if (!renderer.spriteManager?.hasSprites) return;
+function updateResourceIconsFromManager(_game: Game | null, resourceIcons: Ref<Record<number, string>>): void {
+    const renderer = getBridge().entityRenderer;
+    if (!renderer?.spriteManager?.hasSprites) return;
 
     const manager = renderer.spriteManager;
     if (!manager.spriteAtlas) return;

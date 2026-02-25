@@ -21,7 +21,7 @@ import { PLAYER_COLORS, TINT_NEUTRAL, TINT_SELECTED, TINT_PREVIEW_VALID, TINT_PR
 import { EMaterialType } from '../economy';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { PALETTE_TEXTURE_WIDTH } from './palette-texture';
-import { BuildingIndicatorRenderer, type PlacementChecker } from './building-indicator-renderer';
+import { BuildingIndicatorRenderer, PlacementStatus, type PlacementChecker } from './building-indicator-renderer';
 import { SpriteBatchRenderer } from './sprite-batch-renderer';
 import { SelectionOverlayRenderer } from './selection-overlay-renderer';
 import { getAnimatedSprite, getAnimatedSpriteForDirection } from './animation-helpers';
@@ -309,7 +309,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const checker: PlacementChecker = placementChecker ?? {
             isBuildableTerrain: () => false,
             isMineBuildableTerrain: () => false,
-            computeSlopeDifficulty: () => 0 as any,
+            computeSlopeDifficulty: () => PlacementStatus.InvalidTerrain,
             computeHeightRange: () => 0,
             maxSlopeDiff: 1,
         };

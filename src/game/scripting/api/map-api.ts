@@ -49,13 +49,13 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
         if (context.landscape) {
             const heights = context.landscape.getGroundHeight();
             const idx = y * context.mapWidth + x;
-            return heights[idx] || 0;
+            return heights[idx] ?? 0;
         }
 
         // Fall back to direct array
         if (context.groundHeight) {
             const idx = y * context.mapWidth + x;
-            return context.groundHeight[idx] || 0;
+            return context.groundHeight[idx] ?? 0;
         }
 
         return 0;
@@ -89,13 +89,13 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
         if (context.landscape) {
             const types = context.landscape.getGroundType();
             const idx = y * context.mapWidth + x;
-            return types[idx] || 0;
+            return types[idx] ?? 0;
         }
 
         // Fall back to direct array
         if (context.groundType) {
             const idx = y * context.mapWidth + x;
-            return context.groundType[idx] || 0;
+            return context.groundType[idx] ?? 0;
         }
 
         return 0;
@@ -113,7 +113,7 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
         if (context.landscape?.getGameplayAttributes) {
             const attributes = context.landscape.getGameplayAttributes();
             const idx = y * context.mapWidth + x;
-            return attributes[idx] || 0;
+            return attributes[idx] ?? 0;
         }
 
         return 0;
@@ -136,10 +136,10 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
         if (context.landscape) {
             const types = context.landscape.getGroundType();
             const idx = y * context.mapWidth + x;
-            terrainType = types[idx] || 0;
+            terrainType = types[idx] ?? 0;
         } else if (context.groundType) {
             const idx = y * context.mapWidth + x;
-            terrainType = context.groundType[idx] || 0;
+            terrainType = context.groundType[idx] ?? 0;
         }
 
         // Use the placement module's passability check
@@ -158,10 +158,10 @@ export function registerMapAPI(runtime: LuaRuntime, context: MapAPIContext): voi
         if (context.landscape) {
             const types = context.landscape.getGroundType();
             const idx = y * context.mapWidth + x;
-            terrainType = types[idx] || 0;
+            terrainType = types[idx] ?? 0;
         } else if (context.groundType) {
             const idx = y * context.mapWidth + x;
-            terrainType = context.groundType[idx] || 0;
+            terrainType = context.groundType[idx] ?? 0;
         }
 
         // Use the placement module's buildability check

@@ -7,8 +7,7 @@ import { GfxImageExporter } from '../src/resources/gfx/exporter/gfx-image-export
 
 // Polyfill ImageData for Node.js (used by GfxImage.getImageData)
 if (typeof globalThis.ImageData === 'undefined') {
-     
-    (globalThis as Record<string, unknown>).ImageData = class ImageData {
+    (globalThis as Record<string, unknown>)['ImageData'] = class ImageData {
         width: number;
         height: number;
         data: Uint8ClampedArray;

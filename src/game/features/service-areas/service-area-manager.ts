@@ -222,9 +222,9 @@ export class ServiceAreaManager {
      */
     on<K extends keyof ServiceAreaEvents>(event: K, listener: ServiceAreaEventListener<K>): void {
         if (!this.listeners[event]) {
-            this.listeners[event] = new Set() as any;
+            this.listeners[event] = new Set<ServiceAreaEventListener<K>>() as any; // TS limitation with mapped type writes
         }
-        (this.listeners[event] as Set<ServiceAreaEventListener<K>>).add(listener);
+        this.listeners[event]!.add(listener);
     }
 
     /**

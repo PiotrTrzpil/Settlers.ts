@@ -203,8 +203,11 @@ function saveDebugSettings(settings: PersistedDebugSettings): void {
     }
 }
 
-/** Keys present in a timing sample (excludes tickSystems which is handled separately) */
-type RenderTimingKey = keyof RenderTimingSamples;
+/** Numeric timing keys in RenderTimings (excludes tickSystems which is a map, not a number) */
+type RenderTimingKey = Exclude<keyof RenderTimings, 'tickSystems'>;
+
+/** Accumulation arrays for computing per-key averages */
+type RenderTimingSamples = Record<RenderTimingKey, number[]>;
 
 /** A single frame's timing sample */
 type RenderTimingSample = Record<RenderTimingKey, number> & { tickSystems: Record<string, number> };
@@ -231,26 +234,6 @@ const RENDER_TIMING_KEYS: readonly RenderTimingKey[] = [
 
 /** Integer-valued timing keys (no fractional rounding needed) */
 const INTEGER_TIMING_KEYS = new Set<RenderTimingKey>(['visibleCount', 'drawCalls', 'spriteCount']);
-
-interface RenderTimingSamples {
-    frame: number[];
-    ticks: number[];
-    animations: number[];
-    update: number[];
-    callback: number[];
-    idle: number[];
-    render: number[];
-    landscape: number[];
-    entities: number[];
-    cullSort: number[];
-    visibleCount: number[];
-    drawCalls: number[];
-    spriteCount: number[];
-    indicators: number[];
-    textured: number[];
-    color: number[];
-    selection: number[];
-}
 
 /** How often to update render timing averages (ms) */
 const RENDER_TIMING_UPDATE_INTERVAL = 1000;
@@ -382,10 +365,9 @@ class DebugStats {
     }
 
     private saveSettings(): void {
-        const settings = {} as PersistedDebugSettings;
-        for (const key of PERSISTED_KEYS) {
-            (settings as any)[key] = this.state[key];
-        }
+        const settings = Object.fromEntries(
+            PERSISTED_KEYS.map(key => [key, this.state[key]])
+        ) as unknown as PersistedDebugSettings;
         saveDebugSettings(settings);
     }
 
@@ -483,7 +465,7 @@ class DebugStats {
 
         for (const key of RENDER_TIMING_KEYS) {
             const value = avg(this.renderSamples[key]);
-            (this.state.renderTimings as unknown as Record<string, number>)[key] = INTEGER_TIMING_KEYS.has(key)
+            this.state.renderTimings[key] = INTEGER_TIMING_KEYS.has(key)
                 ? Math.round(value)
                 : Math.round(value * 100) / 100;
             this.renderSamples[key].length = 0;

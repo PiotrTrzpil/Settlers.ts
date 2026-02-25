@@ -13,9 +13,9 @@ export interface InputContext {
     /** Current tile under cursor (if resolved) */
     currentTile: TileCoord | null;
     /** Execute a game command. Returns CommandResult with success, error, and effects. */
-    executeCommand: (command: any) => CommandResult;
+    executeCommand: (command: Record<string, unknown>) => CommandResult;
     /** Switch to a different mode */
-    switchMode: (mode: string, data?: any) => void;
+    switchMode: (mode: string, data?: Record<string, unknown>) => void;
     /** Get mode-specific data */
     getModeData: <T>() => T | undefined;
     /** Set mode-specific data */
@@ -56,7 +56,7 @@ export interface InputMode {
      * @param context Input context
      * @param data Optional data passed when switching to this mode
      */
-    onEnter?(context: InputContext, data?: any): void;
+    onEnter?(context: InputContext, data?: Record<string, unknown>): void;
 
     /**
      * Called when leaving this mode.
@@ -145,7 +145,7 @@ export abstract class BaseInputMode implements InputMode {
     abstract readonly name: string;
     abstract readonly displayName: string;
 
-    onEnter(_context: InputContext, _data?: any): void {
+    onEnter(_context: InputContext, _data?: Record<string, unknown>): void {
         // Default: do nothing
     }
 

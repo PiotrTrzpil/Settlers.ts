@@ -28,12 +28,12 @@ export type TileResolver = (screenX: number, screenY: number) => TileCoord | nul
  * Command executor function type.
  * Returns CommandResult with success status, error details, and effects.
  */
-export type CommandExecutor = (command: any) => CommandResult;
+export type CommandExecutor = (command: Record<string, unknown>) => CommandResult;
 
 /**
  * Mode change callback.
  */
-export type ModeChangeCallback = (oldMode: string, newMode: string, data?: any) => void;
+export type ModeChangeCallback = (oldMode: string, newMode: string, data?: Record<string, unknown>) => void;
 
 /**
  * Input manager configuration.
@@ -62,7 +62,7 @@ export class InputManager {
     private state: InputState;
     private modes: Map<string, InputMode> = new Map();
     private currentModeName: string = 'select';
-    private modeData: Map<string, any> = new Map();
+    private modeData: Map<string, unknown> = new Map();
     private tileResolver: TileResolver | null = null;
     private commandExecutor: CommandExecutor | null = null;
     private onModeChange: ModeChangeCallback | null = null;
@@ -152,7 +152,7 @@ export class InputManager {
     /**
      * Switch to a different mode.
      */
-    switchMode(name: string, data?: any): void {
+    switchMode(name: string, data?: Record<string, unknown>): void {
         const oldMode = this.getCurrentMode();
         const newMode = this.modes.get(name);
 
