@@ -1,4 +1,5 @@
 import type { BuildingType } from '../entity';
+import type { Race } from '../race';
 
 /**
  * Supported placement entity types.
@@ -29,6 +30,8 @@ export interface PlacementPreview {
     entityType: PlacementEntityType;
     /** Specific subtype (BuildingType, EMaterialType, etc as number) */
     subType: number;
+    /** Race for the entity being placed. Only for buildings/units. */
+    race?: Race;
     /** Anchor X position */
     x: number;
     /** Anchor Y position */

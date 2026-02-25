@@ -3,32 +3,13 @@ import { EMaterialType } from '../../economy';
 import { AtlasRegion } from '../entity-texture-atlas';
 import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS, ANIMATION_SEQUENCES } from '../../animation';
 import { mapToArray, arrayToMap } from './sprite-metadata-helpers';
+import { Race } from '../../race';
+
+// Re-export Race types from their canonical location for backward compatibility
+export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace } from '../../race';
 
 /** Conversion factor from sprite pixels to world-space units */
 export const PIXELS_TO_WORLD = 1.0 / 32.0;
-
-/**
- * Available races/civilizations with their GFX file numbers.
- */
-export enum Race {
-    Roman = 10,
-    Viking = 11,
-    Mayan = 12,
-    DarkTribe = 13, // Uses different building mappings
-    Trojan = 14,
-}
-
-/** Display names for races */
-export const RACE_NAMES: Record<Race, string> = {
-    [Race.Roman]: 'Roman',
-    [Race.Viking]: 'Viking',
-    [Race.Mayan]: 'Mayan',
-    [Race.DarkTribe]: 'Dark Tribe',
-    [Race.Trojan]: 'Trojan',
-};
-
-/** List of all available races for UI (excludes DarkTribe which has different mappings) */
-export const AVAILABLE_RACES: Race[] = [Race.Roman, Race.Viking, Race.Mayan, Race.Trojan];
 
 /**
  * GFX file numbers for different content types.
@@ -682,47 +663,86 @@ export interface AnimatedSpriteEntry {
  * Built during initialization after sprites are loaded and packed into the atlas.
  */
 export class SpriteMetadataRegistry {
-    private buildings: Map<BuildingType, BuildingSpriteEntries> = new Map();
+    /** Building sprites keyed by race → buildingType */
+    private buildingsByRace: Map<number, Map<BuildingType, BuildingSpriteEntries>> = new Map();
     private mapObjects: Map<MapObjectType, SpriteEntry[]> = new Map();
     private resources: Map<EMaterialType, Map<number, SpriteEntry>> = new Map();
-    /** Unit sprites indexed by type and direction (static, first frame only for fallback) */
-    private units: Map<UnitType, Map<number, SpriteEntry>> = new Map();
+    /** Unit sprites keyed by race → unitType → direction */
+    private unitsByRace: Map<number, Map<UnitType, Map<number, SpriteEntry>>> = new Map();
 
     /**
-     * Unified animated entities storage.
+     * Animated entities: shared storage for map objects/resources (race-independent).
      * Maps EntityType -> subType -> AnimatedSpriteEntry
-     * Replaces separate animatedBuildings, animatedMapObjects, animatedUnits maps.
      */
     private animatedEntities: Map<EntityType, Map<number, AnimatedSpriteEntry>> = new Map();
 
     /**
+     * Animated entities: per-race storage for buildings and units.
+     * Maps Race -> EntityType -> subType -> AnimatedSpriteEntry
+     */
+    private animatedByRace: Map<number, Map<EntityType, Map<number, AnimatedSpriteEntry>>> = new Map();
+
+    /** Set of races that have building/unit sprites loaded */
+    private _loadedRaces: Set<number> = new Set();
+
+    /** Get all races that have sprites loaded */
+    get loadedRaces(): ReadonlySet<number> {
+        return this._loadedRaces;
+    }
+
+    /**
      * Register sprite entries for a building type (both construction and completed).
      */
-    public registerBuilding(type: BuildingType, construction: SpriteEntry | null, completed: SpriteEntry | null): void {
-        this.buildings.set(type, { construction, completed });
+    public registerBuilding(
+        type: BuildingType,
+        construction: SpriteEntry | null,
+        completed: SpriteEntry | null,
+        race: number
+    ): void {
+        let raceMap = this.buildingsByRace.get(race);
+        if (!raceMap) {
+            raceMap = new Map();
+            this.buildingsByRace.set(race, raceMap);
+        }
+        raceMap.set(type, { construction, completed });
+        this._loadedRaces.add(race);
     }
 
     /**
-     * Look up the completed sprite entry for a building type (legacy/default).
-     * Returns null if no sprite is registered for this type.
+     * Look up the completed sprite entry for a building type and race.
+     * Falls back to any loaded race if the requested race has no sprites.
      */
-    public getBuilding(type: BuildingType): SpriteEntry | null {
-        return this.buildings.get(type)?.completed ?? null;
+    public getBuilding(type: BuildingType, race: number): SpriteEntry | null {
+        return (
+            this.buildingsByRace.get(race)?.get(type)?.completed ?? this.getBuildingFallback(type)?.completed ?? null
+        );
     }
 
     /**
-     * Look up the construction sprite entry for a building type.
-     * Returns null if no sprite is registered for this type.
+     * Look up the construction sprite entry for a building type and race.
      */
-    public getBuildingConstruction(type: BuildingType): SpriteEntry | null {
-        return this.buildings.get(type)?.construction ?? null;
+    public getBuildingConstruction(type: BuildingType, race: number): SpriteEntry | null {
+        return (
+            this.buildingsByRace.get(race)?.get(type)?.construction ??
+            this.getBuildingFallback(type)?.construction ??
+            null
+        );
     }
 
     /**
-     * Get both construction and completed sprites for a building type.
+     * Get both construction and completed sprites for a building type and race.
      */
-    public getBuildingSprites(type: BuildingType): BuildingSpriteEntries | null {
-        return this.buildings.get(type) ?? null;
+    public getBuildingSprites(type: BuildingType, race: number): BuildingSpriteEntries | null {
+        return this.buildingsByRace.get(race)?.get(type) ?? this.getBuildingFallback(type) ?? null;
+    }
+
+    /** Fallback: find building in any loaded race */
+    private getBuildingFallback(type: BuildingType): BuildingSpriteEntries | null {
+        for (const raceMap of this.buildingsByRace.values()) {
+            const entry = raceMap.get(type);
+            if (entry) return entry;
+        }
+        return null;
     }
 
     /**
@@ -772,25 +792,39 @@ export class SpriteMetadataRegistry {
      * Register a sprite entry for a unit type and direction.
      * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT
      */
-    public registerUnit(type: UnitType, direction: number, entry: SpriteEntry): void {
-        let dirMap = this.units.get(type);
+    public registerUnit(type: UnitType, direction: number, entry: SpriteEntry, race: number): void {
+        let raceMap = this.unitsByRace.get(race);
+        if (!raceMap) {
+            raceMap = new Map();
+            this.unitsByRace.set(race, raceMap);
+        }
+        let dirMap = raceMap.get(type);
         if (!dirMap) {
             dirMap = new Map();
-            this.units.set(type, dirMap);
+            raceMap.set(type, dirMap);
         }
         dirMap.set(direction, entry);
+        this._loadedRaces.add(race);
     }
 
     /**
-     * Look up the sprite entry for a unit type and direction.
+     * Look up the sprite entry for a unit type, direction, and race.
      * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT (defaults to 0)
-     * Returns null if no sprite is registered for this type/direction.
      */
-    public getUnit(type: UnitType, direction: number = 0): SpriteEntry | null {
-        const dirMap = this.units.get(type);
+    public getUnit(type: UnitType, direction: number = 0, race?: number): SpriteEntry | null {
+        const dirMap =
+            (race !== undefined ? this.unitsByRace.get(race)?.get(type) : undefined) ?? this.getUnitFallback(type);
         if (!dirMap) return null;
-        // Try requested direction, fall back to direction 0 if not found
         return dirMap.get(direction) ?? dirMap.get(0) ?? null;
+    }
+
+    /** Fallback: find unit in any loaded race */
+    private getUnitFallback(type: UnitType): Map<number, SpriteEntry> | undefined {
+        for (const raceMap of this.unitsByRace.values()) {
+            const dirMap = raceMap.get(type);
+            if (dirMap) return dirMap;
+        }
+        return undefined;
     }
 
     // ========== Unified Animation API ==========
@@ -806,13 +840,14 @@ export class SpriteMetadataRegistry {
      * @param frameDurationMs Duration per frame in milliseconds
      * @param loop Whether the animation loops
      */
-    // eslint-disable-next-line sonarjs/cognitive-complexity -- animation registration handles directions, sequences, and fallback
+    // eslint-disable-next-line sonarjs/cognitive-complexity, complexity -- multi-path animation setup
     public registerAnimatedEntity(
         entityType: EntityType,
         subType: number,
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-        loop: boolean = true
+        loop: boolean = true,
+        race?: number
     ): void {
         if (directionFrames.size === 0) return;
 
@@ -884,18 +919,35 @@ export class SpriteMetadataRegistry {
             defaultSequence: ANIMATION_SEQUENCES.DEFAULT,
         };
 
-        // Get or create the subType map for this entity type
-        let subTypeMap = this.animatedEntities.get(entityType);
-        if (!subTypeMap) {
-            subTypeMap = new Map();
-            this.animatedEntities.set(entityType, subTypeMap);
-        }
-
-        subTypeMap.set(subType, {
+        const entry: AnimatedSpriteEntry = {
             staticSprite: firstFrame,
             animationData,
             isAnimated: directionFrames.size > 0,
-        });
+        };
+
+        // Race-specific storage for buildings and units; shared storage for everything else
+        const isRaceSpecific =
+            race !== undefined && (entityType === EntityType.Building || entityType === EntityType.Unit);
+        if (isRaceSpecific) {
+            let raceMap = this.animatedByRace.get(race);
+            if (!raceMap) {
+                raceMap = new Map();
+                this.animatedByRace.set(race, raceMap);
+            }
+            let subTypeMap = raceMap.get(entityType);
+            if (!subTypeMap) {
+                subTypeMap = new Map();
+                raceMap.set(entityType, subTypeMap);
+            }
+            subTypeMap.set(subType, entry);
+        } else {
+            let subTypeMap = this.animatedEntities.get(entityType);
+            if (!subTypeMap) {
+                subTypeMap = new Map();
+                this.animatedEntities.set(entityType, subTypeMap);
+            }
+            subTypeMap.set(subType, entry);
+        }
     }
 
     /**
@@ -911,9 +963,13 @@ export class SpriteMetadataRegistry {
         sequenceKey: string,
         directionFrames: Map<number, SpriteEntry[]>,
         frameDurationMs: number = ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-        loop: boolean = true
+        loop: boolean = true,
+        race?: number
     ): void {
-        const entry = this.animatedEntities.get(entityType)?.get(subType);
+        const entry =
+            race !== undefined
+                ? this.animatedByRace.get(race)?.get(entityType)?.get(subType)
+                : this.animatedEntities.get(entityType)?.get(subType);
         if (!entry) return;
 
         const directionMap = new Map<number, AnimationSequence>();
@@ -928,19 +984,27 @@ export class SpriteMetadataRegistry {
     }
 
     /**
-     * Get animated entity data. Unified method for all entity types.
-     * O(1) lookup using nested Maps.
+     * Get animated entity data. Checks race-specific storage first (for buildings/units),
+     * then falls back to shared storage (for map objects, resources).
      */
-    public getAnimatedEntity(entityType: EntityType, subType: number): AnimatedSpriteEntry | null {
+    public getAnimatedEntity(entityType: EntityType, subType: number, race?: number): AnimatedSpriteEntry | null {
+        if (race !== undefined) {
+            const raceEntry = this.animatedByRace.get(race)?.get(entityType)?.get(subType);
+            if (raceEntry) return raceEntry;
+            // Fallback: try any loaded race
+            for (const raceMap of this.animatedByRace.values()) {
+                const entry = raceMap.get(entityType)?.get(subType);
+                if (entry) return entry;
+            }
+        }
         return this.animatedEntities.get(entityType)?.get(subType) ?? null;
     }
 
     /**
      * Check if an entity type/subtype has animation data.
-     * O(1) lookup.
      */
-    public hasAnimation(entityType: EntityType, subType: number): boolean {
-        const entry = this.animatedEntities.get(entityType)?.get(subType);
+    public hasAnimation(entityType: EntityType, subType: number, race?: number): boolean {
+        const entry = this.getAnimatedEntity(entityType, subType, race);
         return entry?.isAnimated ?? false;
     }
 
@@ -948,7 +1012,7 @@ export class SpriteMetadataRegistry {
      * Check if any building sprites have been registered.
      */
     public hasBuildingSprites(): boolean {
-        return this.buildings.size > 0;
+        return this.buildingsByRace.size > 0;
     }
 
     /**
@@ -969,14 +1033,16 @@ export class SpriteMetadataRegistry {
      * Check if any unit sprites have been registered.
      */
     public hasUnitSprites(): boolean {
-        return this.units.size > 0;
+        return this.unitsByRace.size > 0;
     }
 
     /**
      * Get the number of registered building sprites.
      */
     public getBuildingCount(): number {
-        return this.buildings.size;
+        let count = 0;
+        for (const raceMap of this.buildingsByRace.values()) count += raceMap.size;
+        return count;
     }
 
     /**
@@ -990,7 +1056,9 @@ export class SpriteMetadataRegistry {
      * Get the number of registered unit sprites.
      */
     public getUnitCount(): number {
-        return this.units.size;
+        let count = 0;
+        for (const raceMap of this.unitsByRace.values()) count += raceMap.size;
+        return count;
     }
 
     /**
@@ -1004,11 +1072,13 @@ export class SpriteMetadataRegistry {
      * Clear all registered sprites.
      */
     public clear(): void {
-        this.buildings.clear();
+        this.buildingsByRace.clear();
         this.mapObjects.clear();
         this.animatedEntities.clear();
+        this.animatedByRace.clear();
         this.resources.clear();
-        this.units.clear();
+        this.unitsByRace.clear();
+        this._loadedRaces.clear();
     }
 
     /**
@@ -1030,17 +1100,42 @@ export class SpriteMetadataRegistry {
             };
         };
 
-        // Serialize unified animated entities map
+        // Serialize shared animated entities (map objects, resources)
         const serializedAnimatedEntities = mapToArray(this.animatedEntities).map(([entityType, subTypeMap]) => {
             return [entityType, mapToArray(subTypeMap).map(([subType, entry]) => [subType, serializeAnimEntry(entry)])];
         });
 
+        // Serialize race-specific animated entities (buildings, units)
+        const serializedAnimatedByRace = mapToArray(this.animatedByRace).map(([race, entityTypeMap]) => {
+            const entityTypes = mapToArray(entityTypeMap).map(([entityType, subTypeMap]) => {
+                return [
+                    entityType,
+                    mapToArray(subTypeMap).map(([subType, entry]) => [subType, serializeAnimEntry(entry)]),
+                ];
+            });
+            return [race, entityTypes];
+        });
+
+        // Serialize per-race buildings
+        const serializedBuildings = mapToArray(this.buildingsByRace).map(([race, typeMap]) => [
+            race,
+            mapToArray(typeMap),
+        ]);
+
+        // Serialize per-race units
+        const serializedUnits = mapToArray(this.unitsByRace).map(([race, typeMap]) => [
+            race,
+            mapToArray(typeMap).map(([k, v]) => [k, mapToArray(v)]),
+        ]);
+
         return {
-            buildings: mapToArray(this.buildings),
+            buildingsByRace: serializedBuildings,
             mapObjects: mapToArray(this.mapObjects),
             resources: mapToArray(this.resources).map(([k, v]) => [k, mapToArray(v)]),
-            units: mapToArray(this.units).map(([k, v]) => [k, mapToArray(v)]),
+            unitsByRace: serializedUnits,
             animatedEntities: serializedAnimatedEntities,
+            animatedByRace: serializedAnimatedByRace,
+            loadedRaces: [...this._loadedRaces],
         };
     }
 
@@ -1078,10 +1173,22 @@ export class SpriteMetadataRegistry {
     /**
      * Deserialize registry data from cache.
      */
+    // eslint-disable-next-line sonarjs/cognitive-complexity, complexity -- legacy format compat requires branching
     public static deserialize(data: any): SpriteMetadataRegistry {
         const registry = new SpriteMetadataRegistry();
 
-        if (data.buildings) registry.buildings = arrayToMap(data.buildings);
+        // Deserialize per-race buildings (new format)
+        if (data.buildingsByRace) {
+            for (const [race, typeArr] of data.buildingsByRace) {
+                registry.buildingsByRace.set(race, arrayToMap(typeArr));
+                registry._loadedRaces.add(race);
+            }
+        } else if (data.buildings) {
+            // Legacy: single-race buildings stored without race key — treat as Race.Roman (10)
+            registry.buildingsByRace.set(10, arrayToMap(data.buildings));
+            registry._loadedRaces.add(10);
+        }
+
         if (data.mapObjects) registry.mapObjects = arrayToMap(data.mapObjects);
 
         if (data.resources) {
@@ -1093,13 +1200,29 @@ export class SpriteMetadataRegistry {
             );
         }
 
-        if (data.units) {
-            registry.units = new Map(
-                (data.units as Array<[UnitType, Array<[number, SpriteEntry]>]>).map(([k, v]) => [k, arrayToMap(v)])
+        // Deserialize per-race units (new format)
+        if (data.unitsByRace) {
+            for (const [race, typeArr] of data.unitsByRace) {
+                registry.unitsByRace.set(
+                    race,
+                    new Map(
+                        (typeArr as Array<[UnitType, Array<[number, SpriteEntry]>]>).map(([k, v]) => [k, arrayToMap(v)])
+                    )
+                );
+                registry._loadedRaces.add(race);
+            }
+        } else if (data.units) {
+            // Legacy: single-race units — treat as Race.Roman (10)
+            registry.unitsByRace.set(
+                10,
+                new Map(
+                    (data.units as Array<[UnitType, Array<[number, SpriteEntry]>]>).map(([k, v]) => [k, arrayToMap(v)])
+                )
             );
+            registry._loadedRaces.add(10);
         }
 
-        // Deserialize unified animated entities
+        // Deserialize shared animated entities (map objects, resources)
         if (data.animatedEntities) {
             for (const [entityType, subTypeArr] of data.animatedEntities) {
                 const subTypeMap = new Map<number, AnimatedSpriteEntry>();
@@ -1107,6 +1230,21 @@ export class SpriteMetadataRegistry {
                     subTypeMap.set(subType, SpriteMetadataRegistry.deserializeAnimEntry(entryData));
                 }
                 registry.animatedEntities.set(entityType, subTypeMap);
+            }
+        }
+
+        // Deserialize race-specific animated entities (buildings, units)
+        if (data.animatedByRace) {
+            for (const [race, entityTypeArr] of data.animatedByRace) {
+                const entityTypeMap = new Map<EntityType, Map<number, AnimatedSpriteEntry>>();
+                for (const [entityType, subTypeArr] of entityTypeArr) {
+                    const subTypeMap = new Map<number, AnimatedSpriteEntry>();
+                    for (const [subType, entryData] of subTypeArr) {
+                        subTypeMap.set(subType, SpriteMetadataRegistry.deserializeAnimEntry(entryData));
+                    }
+                    entityTypeMap.set(entityType, subTypeMap);
+                }
+                registry.animatedByRace.set(race, entityTypeMap);
             }
         }
 
@@ -1126,6 +1264,10 @@ export class SpriteMetadataRegistry {
             EntityType.Unit,
             registry.animatedEntities
         );
+
+        if (data.loadedRaces) {
+            for (const race of data.loadedRaces) registry._loadedRaces.add(race);
+        }
 
         return registry;
     }

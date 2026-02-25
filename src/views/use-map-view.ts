@@ -223,7 +223,7 @@ function updateResourceIconsFromManager(game: Game | null, resourceIcons: Ref<Re
 /** Create mode toggle handler */
 function createModeToggler(getGame: () => Game | null, getInputManager: () => InputManager | null) {
     return {
-        setPlaceMode(buildingType: number): void {
+        setPlaceMode(buildingType: number, race: number): void {
             const game = getGame();
             const inputManager = getInputManager();
             if (!game || !inputManager) return;
@@ -237,6 +237,7 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
                 inputManager.switchMode('place_building', {
                     buildingType,
                     player: game.currentPlayer,
+                    race,
                 });
             }
         },

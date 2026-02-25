@@ -129,6 +129,7 @@ function updatePlacementModeState(er: EntityRenderer, renderState: any): void {
             valid: preview.valid,
             entityType: preview.entityType,
             subType: preview.subType,
+            race: preview.race,
             variation,
         };
     }
@@ -663,12 +664,17 @@ export function useRenderer({
         };
     }
 
+    function getDecoLabels(): Array<{ screenX: number; screenY: number; type: number; hue: number }> {
+        return entityRenderer?.debugDecoLabels ?? [];
+    }
+
     return {
         getRenderer: () => renderer,
         setRace,
         getRace,
         getInputManager,
         getCamera,
+        getDecoLabels,
         selectionBox,
     };
 }

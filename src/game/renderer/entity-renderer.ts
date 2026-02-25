@@ -56,6 +56,51 @@ import {
     PREVIEW_INVALID_COLOR,
 } from './entity-renderer-constants';
 
+/** Map decoration object type (19-255) to a hue in degrees (30=orange → 280=violet). */
+function decoTypeToHue(subType: number): number {
+    const t = Math.max(0, Math.min(1, (subType - 19) / (100 - 19)));
+    return 30 + t * 250; // 30° (orange) to 280° (violet)
+}
+
+/** Convert hue to an RGBA color array for WebGL (saturation=0.9, lightness=0.55). */
+function decoHueToRgb(subType: number): number[] {
+    const h = decoTypeToHue(subType) / 360;
+    const s = 0.9;
+    const l = 0.55;
+    // HSL → RGB
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h * 6) % 2) - 1));
+    const m = l - c / 2;
+    let r: number, g: number, b: number;
+    const sector = Math.floor(h * 6);
+    if (sector === 0) {
+        r = c;
+        g = x;
+        b = 0;
+    } else if (sector === 1) {
+        r = x;
+        g = c;
+        b = 0;
+    } else if (sector === 2) {
+        r = 0;
+        g = c;
+        b = x;
+    } else if (sector === 3) {
+        r = 0;
+        g = x;
+        b = c;
+    } else if (sector === 4) {
+        r = x;
+        g = 0;
+        b = c;
+    } else {
+        r = c;
+        g = 0;
+        b = x;
+    }
+    return [r + m, g + m, b + m, 1.0];
+}
+
 /** Apply ENTITY_SCALE to a sprite's world dimensions and offsets. */
 function scaleSprite(sprite: SpriteEntry): SpriteEntry {
     return {
@@ -123,6 +168,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // Consolidated placement preview state
     public placementPreview: PlacementPreviewState | null = null;
+
+    /** Debug: decoration labels collected during drawColorEntities (screen-space) */
+    public debugDecoLabels: Array<{ screenX: number; screenY: number; type: number; hue: number }> = [];
 
     // Legacy preview fields - maintained for backward compatibility
     // These map to/from the consolidated placementPreview state
@@ -615,7 +663,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             return fallbackSprite;
         }
 
-        const animatedEntry = this.spriteManager.getAnimatedEntity(entity.type, entity.subType);
+        const animatedEntry = this.spriteManager.getAnimatedEntity(entity.type, entity.subType, entity.race);
         if (!animatedEntry) {
             return fallbackSprite;
         }
@@ -645,10 +693,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         let sprite: SpriteEntry | null;
         if (renderState.useConstructionSprite) {
             sprite =
-                this.spriteManager.getBuildingConstruction(buildingType) ??
-                this.spriteManager.getBuilding(buildingType);
+                this.spriteManager.getBuildingConstruction(buildingType, entity.race) ??
+                this.spriteManager.getBuilding(buildingType, entity.race);
         } else {
-            const fallback = this.spriteManager.getBuilding(buildingType);
+            const fallback = this.spriteManager.getBuilding(buildingType, entity.race);
             sprite = this.getAnimatedEntitySprite(entity, fallback);
         }
 
@@ -682,7 +730,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         const direction = animState?.direction ?? 0;
         const unitType = entity.subType as UnitType;
-        const fallback = this.spriteManager.getUnit(unitType, direction);
+        const fallback = this.spriteManager.getUnit(unitType, direction, entity.race);
 
         return this.getAnimatedEntitySprite(entity, fallback);
     }
@@ -985,13 +1033,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         switch (entity.type) {
         case EntityType.Building:
-            return !!this.spriteManager.getBuilding(entity.subType as BuildingType);
+            return !!this.spriteManager.getBuilding(entity.subType as BuildingType, entity.race);
         case EntityType.MapObject:
             return !!this.spriteManager.getMapObject(entity.subType as MapObjectType);
         case EntityType.StackedResource:
             return !!this.spriteManager.getResource(entity.subType as EMaterialType);
         case EntityType.Unit:
-            return !!this.spriteManager.getUnit(entity.subType as UnitType);
+            return !!this.spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
         case EntityType.None:
             return false;
         }
@@ -1007,6 +1055,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     /**
      * Draw entities using the color shader (solid quads).
      */
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- render loop with entity-type branching
     private drawColorEntities(
         gl: WebGL2RenderingContext,
         projection: Float32Array,
@@ -1021,9 +1070,14 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.disableVertexAttribArray(this.aEntityPos);
         gl.disableVertexAttribArray(this.aColor);
 
+        const canvasW = gl.canvas.width;
+        const canvasH = gl.canvas.height;
+        this.debugDecoLabels.length = 0;
+
         for (const entity of this.sortedEntities) {
-            // Map objects are only rendered via sprite batch (no dot fallback)
-            if (entity.type === EntityType.MapObject) {
+            // Map objects with sprites are rendered via sprite batch
+            // Non-tree map objects (subType > 17, no sprite) fall through to dot rendering
+            if (entity.type === EntityType.MapObject && entity.subType <= 17) {
                 continue;
             }
 
@@ -1031,9 +1085,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             if (texturedBuildingsHandled && this.hasTexturedSprite(entity)) continue;
 
             const isSelected = this.selectedEntityIds.has(entity.id);
+            // Non-tree map objects (decorations) get per-type colored dots (orange→violet)
+            const isDecoration = entity.type === EntityType.MapObject && entity.subType > 17;
             const playerColor = PLAYER_COLORS[entity.player % PLAYER_COLORS.length]!;
-            const color = isSelected ? [1.0, 1.0, 0.0, 1.0] : playerColor;
-            const scale = this.getEntityScale(entity.type);
+            const baseColor = isDecoration ? decoHueToRgb(entity.subType) : playerColor;
+            const color = isSelected ? [1.0, 1.0, 0.0, 1.0] : baseColor;
+            const scale = isDecoration ? 0.8 : this.getEntityScale(entity.type);
 
             const worldPos = this.getEntityWorldPos(entity, viewPoint);
 
@@ -1042,6 +1099,20 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
             gl.vertexAttrib4f(this.aColor, color[0]!, color[1]!, color[2]!, color[3]!);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            // Collect screen position for debug labels
+            if (isDecoration) {
+                const clipX = projection[0]! * worldPos.worldX + projection[12]!;
+                const clipY = projection[5]! * worldPos.worldY + projection[13]!;
+                const sx = (clipX * 0.5 + 0.5) * canvasW;
+                const sy = (-clipY * 0.5 + 0.5) * canvasH;
+                this.debugDecoLabels.push({
+                    screenX: sx,
+                    screenY: sy,
+                    type: entity.subType,
+                    hue: decoTypeToHue(entity.subType),
+                });
+            }
         }
     }
 
@@ -1132,7 +1203,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const preview = this.placementPreview;
         if (!preview) return;
 
-        const { tile, valid, entityType, subType, variation } = preview;
+        const { tile, valid, entityType, subType, race, variation } = preview;
 
         const worldPos = TilePicker.tileToWorld(
             tile.x,
@@ -1147,7 +1218,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         // Try to render with sprite based on entity type
         if (this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
-            const rawSprite = this.getPreviewSprite(entityType, subType, variation);
+            const rawSprite = this.getPreviewSprite(entityType, subType, variation, race);
             if (rawSprite) {
                 const spriteEntry = scaleSprite(rawSprite);
                 const paletteWidth = PALETTE_TEXTURE_WIDTH;
@@ -1193,17 +1264,22 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      * Adding a new type to PlacementEntityType will cause a compile error here
      * until the case is added.
      */
-    private getPreviewSprite(entityType: PlacementEntityType, subType: number, variation?: number): SpriteEntry | null {
+    private getPreviewSprite(
+        entityType: PlacementEntityType,
+        subType: number,
+        variation?: number,
+        race?: number
+    ): SpriteEntry | null {
         if (!this.spriteManager) return null;
 
         switch (entityType) {
         case 'building':
-            return this.spriteManager.getBuilding(subType as BuildingType);
+            return this.spriteManager.getBuilding(subType as BuildingType, race);
         case 'resource':
             return this.spriteManager.getResource(subType as EMaterialType, variation ?? 0);
         case 'unit':
             // Units use direction 0 (facing right) for preview
-            return this.spriteManager.getUnit(subType as UnitType, 0);
+            return this.spriteManager.getUnit(subType as UnitType, 0, race);
         default: {
             // Exhaustive check: if this errors, a new PlacementEntityType was added
             // but not handled above. Add a case for it.

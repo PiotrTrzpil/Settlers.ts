@@ -76,6 +76,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
+                race: 10,
             });
 
             expect(result.success).toBe(true);
@@ -93,6 +94,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 20,
                 y: 20,
                 player: 0,
+                race: 10,
             });
 
             expect(result.success).toBe(true);
@@ -106,6 +108,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
+                race: 10,
             });
 
             expect(result.success).toBe(true);
@@ -125,6 +128,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
+                race: 10,
             });
 
             // Spawn second unit at same location
@@ -134,6 +138,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
+                race: 10,
             });
 
             expect(result.success).toBe(true);
@@ -157,6 +162,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 1,
                 y: 1,
                 player: 0,
+                race: 10,
             });
 
             expect(result.success).toBe(false);
@@ -169,6 +175,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 15,
                 y: 15,
                 player: 0,
+                race: 10,
             });
 
             expect(state.getEntityAt(15, 15)).toBeDefined();
@@ -182,6 +189,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
+                race: 10,
             });
 
             executeCommand(ctx, {
@@ -190,6 +198,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 20,
                 y: 20,
                 player: 1,
+                race: 10,
             });
 
             expect(state.entities[0]!.player).toBe(0);
@@ -205,6 +214,7 @@ describe('Unit Placement, Selection & Movement', () => {
                     x: 10 + i * 2,
                     y: 10,
                     player: 0,
+                    race: 10,
                 });
                 expect(result.success).toBe(true);
             }
@@ -607,6 +617,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 5,
                 y: 5,
                 player: 0,
+                race: 10,
             });
 
             const unit = state.entities[0]!;
@@ -650,6 +661,7 @@ describe('Unit Placement, Selection & Movement', () => {
                     x: 5 + i,
                     y: 5,
                     player: 0,
+                    race: 10,
                 });
             }
             expect(state.entities).toHaveLength(3);
@@ -709,6 +721,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 5,
                 y: 5,
                 player: 0,
+                race: 10,
             });
 
             executeCommand(ctx, {
@@ -717,6 +730,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 x: 10,
                 y: 10,
                 player: 0,
+                race: 10,
             });
 
             const unit1 = state.entities[0]!;

@@ -23,6 +23,7 @@ export {
     Race,
     RACE_NAMES,
     AVAILABLE_RACES,
+    s4TribeToRace,
 
     // GFX file numbers
     GFX_FILE_NUMBERS,

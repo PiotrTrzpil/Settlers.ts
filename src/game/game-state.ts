@@ -7,6 +7,7 @@ import {
     getBuildingFootprint,
     isUnitTypeSelectable,
 } from './entity';
+import { Race } from './race';
 import type { MovementSystem, MovementController } from './systems/movement/index';
 import { SeededRng, createGameRng } from './rng';
 import { EventBus } from './event-bus';
@@ -213,6 +214,7 @@ export class GameState {
             y,
             player,
             subType,
+            race: Race.Roman,
             selectable: resolvedSelectable,
             variation: variation ?? 0,
         };

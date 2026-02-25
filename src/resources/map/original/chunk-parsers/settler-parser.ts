@@ -1,6 +1,13 @@
 /**
  * Parser for MapSettlers chunk (type 7)
  * Extracts starting settler data from map files
+ *
+ * Binary format (12 bytes per entry):
+ *   Bytes 0-1:  x position (uint16 LE)
+ *   Bytes 2-3:  y position (uint16 LE)
+ *   Byte  4:    settler type (S4SettlerType)
+ *   Byte  5:    player index
+ *   Bytes 6-11: flags/extra data (unknown, skipped)
  */
 
 import { BinaryReader } from '@/resources/file/binary-reader';
@@ -10,17 +17,15 @@ import type { MapSettlerData } from '../../map-entity-data';
 
 const log = new LogHandler('SettlerParser');
 
+/** Bytes per settler entry in the chunk */
+const ENTRY_SIZE = 12;
+
 /**
  * Parse MapSettlers chunk data
- *
- * Expected format (estimated based on S4ModApi):
- * - 8 bytes per settler entry
- * - Entry: x (2 bytes), y (2 bytes), type (2 bytes), player (1 byte), flags (1 byte)
  *
  * @param reader BinaryReader positioned at start of chunk data
  * @returns Array of settler data entries
  */
-// eslint-disable-next-line sonarjs/cognitive-complexity -- map chunk binary parsing requires many conditional branches
 export function parseSettlers(reader: BinaryReader): MapSettlerData[] {
     const settlers: MapSettlerData[] = [];
     const dataLength = reader.length;
@@ -30,48 +35,40 @@ export function parseSettlers(reader: BinaryReader): MapSettlerData[] {
         return settlers;
     }
 
-    // Estimate entry size - try 8 bytes first (most common for entity data)
-    const possibleEntrySizes = [8, 12, 10, 6];
-    let entrySize = 8;
+    const entryCount = Math.floor(dataLength / ENTRY_SIZE);
+    const remainder = dataLength % ENTRY_SIZE;
 
-    for (const size of possibleEntrySizes) {
-        if (dataLength % size === 0) {
-            entrySize = size;
-            break;
-        }
+    log.debug(`Parsing settlers: ${dataLength} bytes, ${entryCount} entries (${ENTRY_SIZE} bytes each)`);
+    if (remainder !== 0) {
+        log.debug(`Warning: ${remainder} trailing bytes after entries`);
     }
-
-    const entryCount = Math.floor(dataLength / entrySize);
-
-    log.debug(`Parsing settlers: ${dataLength} bytes, ${entryCount} entries (${entrySize} bytes each)`);
 
     for (let i = 0; i < entryCount && !reader.eof(); i++) {
         const startPos = reader.getOffset();
 
-        // Read coordinates as little-endian words
         const x = reader.readWord();
         const y = reader.readWord();
-
-        // Read settler type
-        let settlerType: number;
-        if (entrySize >= 8) {
-            settlerType = reader.readWord();
-        } else {
-            settlerType = reader.readByte();
-        }
-
-        // Read player
+        const settlerType = reader.readByte();
         const player = reader.readByte();
 
-        // Skip remaining bytes in entry
+        // Skip remaining 6 bytes
         const bytesRead = reader.getOffset() - startPos;
-        for (let j = bytesRead; j < entrySize; j++) {
+        for (let j = bytesRead; j < ENTRY_SIZE; j++) {
             reader.readByte();
         }
 
-        // Validate settler type and coordinates
-        if (!isValidSettlerType(settlerType)) continue;
-        if (x > 10000 || y > 10000) continue;
+        // Skip empty/padding entries
+        if (x === 0 && y === 0 && settlerType === 0) {
+            continue;
+        }
+
+        if (!isValidSettlerType(settlerType)) {
+            continue;
+        }
+
+        if (x > 10000 || y > 10000) {
+            continue;
+        }
 
         settlers.push({
             x,
@@ -79,12 +76,6 @@ export function parseSettlers(reader: BinaryReader): MapSettlerData[] {
             settlerType: settlerType as S4SettlerType,
             player,
         });
-
-        // Safety check
-        if (reader.getOffset() === startPos) {
-            log.error('Parser stuck, breaking');
-            break;
-        }
     }
 
     log.debug(`Parsed ${settlers.length} settler entries`);
@@ -96,6 +87,5 @@ export function parseSettlers(reader: BinaryReader): MapSettlerData[] {
  */
 function isValidSettlerType(value: number): boolean {
     // Valid settler types are 1-66 (see S4SettlerType enum)
-    // Also accept 0 as NONE
-    return value >= 0 && value <= 66;
+    return value >= 1 && value <= 66;
 }

@@ -1,6 +1,7 @@
 import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
 import { InputAction, MouseButton, type PointerData, type DragData } from '../input-actions';
 import { CursorType, type ModeRenderState, type SelectionBox } from '../render-state';
+import { Race } from '../../race';
 
 /**
  * Select mode - default mode for selecting entities and issuing commands.
@@ -43,6 +44,7 @@ export class SelectMode extends BaseInputMode {
                     x: tile.x,
                     y: tile.y,
                     player: 0,
+                    race: Race.Roman,
                 });
             }
             return HANDLED;
@@ -57,6 +59,7 @@ export class SelectMode extends BaseInputMode {
                     x: tile.x,
                     y: tile.y,
                     player: 0,
+                    race: Race.Roman,
                 });
             }
             return HANDLED;

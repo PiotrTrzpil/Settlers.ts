@@ -1,6 +1,7 @@
 import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
 import { InputAction, MouseButton, type PointerData } from '../input-actions';
 import { CursorType, type ModeRenderState, type PlacementPreview, type PlacementEntityType } from '../render-state';
+import type { Race } from '../../race';
 import { LogHandler } from '../../../utilities/log-handler';
 
 /**
@@ -10,6 +11,8 @@ import { LogHandler } from '../../../utilities/log-handler';
 export interface PlacementModeData<TSubType = number> {
     /** The specific entity subtype being placed */
     subType: TSubType;
+    /** Race for the entity being placed (Race enum value). Only for buildings/units. */
+    race?: Race;
     /** Current preview anchor position X */
     previewX: number;
     /** Current preview anchor position Y */
@@ -32,6 +35,8 @@ export interface PlacementModeEnterData<TSubType = number> {
     subType?: TSubType;
     /** Player placing the entity (optional, defaults to current player) */
     player?: number;
+    /** Race for the entity being placed (Race enum value). Only for buildings/units. */
+    race?: Race;
     /** Additional configuration data */
     [key: string]: unknown;
 }
@@ -103,6 +108,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
     protected initializeModeData(enterData: PlacementModeEnterData<TSubType>): PlacementModeData<TSubType> {
         return {
             subType: enterData.subType!,
+            race: enterData.race,
             previewX: 0,
             previewY: 0,
             previewValid: false,
@@ -231,6 +237,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
             type: 'placement',
             entityType: this.entityType,
             subType: modeData.subType as number,
+            race: modeData.race,
             x: modeData.previewX,
             y: modeData.previewY,
             valid: modeData.previewValid,

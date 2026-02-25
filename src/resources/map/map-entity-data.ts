@@ -3,7 +3,7 @@
  * Interfaces for parsed entity data from map file chunks
  */
 
-import { S4Tribe, S4BuildingType, S4SettlerType, S4GoodType, S4TreeType } from './s4-types';
+import { S4Tribe, S4BuildingType, S4SettlerType, S4GoodType } from './s4-types';
 
 /** Player information from MapPlayerInformation chunk (type 2) */
 export interface MapPlayerInfo {
@@ -43,7 +43,8 @@ export interface MapStackData {
 export interface MapObjectData {
     x: number;
     y: number;
-    objectType: S4TreeType;
+    /** Raw object type byte from the map file (1-18 = trees, >18 = decorations/other) */
+    objectType: number;
 }
 
 /** Aggregated entity data from all entity chunks */

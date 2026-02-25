@@ -46,6 +46,8 @@ export interface LayerVisibility {
     resources: boolean;
     /** Sub-layer visibility (only applies when environment is true) */
     environmentLayers: EnvironmentLayerVisibility;
+    /** Debug: when set, only show map objects with this raw type value. null = show all. */
+    debugObjectTypeFilter: number | null;
 }
 
 /** Default layer visibility (all visible) */
@@ -60,6 +62,7 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
         plants: true,
         other: true,
     },
+    debugObjectTypeFilter: null,
 };
 
 // ============================================================================
@@ -95,6 +98,18 @@ export function isEnvironmentSubLayerVisible(visibility: LayerVisibility, subLay
 
 /** Check if a specific MapObjectType should be visible */
 export function isMapObjectVisible(visibility: LayerVisibility, objectType: MapObjectType): boolean {
+    // Debug filter: when set, only show objects matching this raw type value.
+    // Trees have subType 0-17 (mapped from raw 1-18), non-trees have raw type as subType.
+    if (visibility.debugObjectTypeFilter !== null) {
+        const filter = visibility.debugObjectTypeFilter;
+        // For trees (subType 0-17): raw type = subType + 1
+        if (objectType >= 0 && objectType <= 17) {
+            return objectType + 1 === filter;
+        }
+        // For non-trees: subType IS the raw type
+        return objectType === filter;
+    }
+
     // Resource deposits are controlled by the Resources layer
     if (isResourceDeposit(objectType)) {
         return visibility.resources;
@@ -143,6 +158,7 @@ export function loadLayerVisibility(): LayerVisibility {
                 plants: parsed.environmentLayers?.plants ?? DEFAULT_LAYER_VISIBILITY.environmentLayers.plants,
                 other: parsed.environmentLayers?.other ?? DEFAULT_LAYER_VISIBILITY.environmentLayers.other,
             },
+            debugObjectTypeFilter: null, // Never persist debug filter
         };
     } catch (e) {
         console.warn('Failed to load layer visibility from localStorage:', e);

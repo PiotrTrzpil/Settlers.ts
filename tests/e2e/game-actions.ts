@@ -211,6 +211,7 @@ export async function placeBuilding(
                 x: posX,
                 y: posY,
                 player: p,
+                race: 10,
             });
             if (!cmdResult?.success) return null;
             const entityId = (cmdResult.effects?.[0] as { entityId?: number })?.entityId;
@@ -290,7 +291,14 @@ export async function spawnUnit(
             if (!game) return null;
             const spawnX = posX ?? Math.floor(game.terrain.mapSize.width / 2);
             const spawnY = posY ?? Math.floor(game.terrain.mapSize.height / 2);
-            const cmdResult = game.execute({ type: 'spawn_unit', unitType: ut, x: spawnX, y: spawnY, player: p });
+            const cmdResult = game.execute({
+                type: 'spawn_unit',
+                unitType: ut,
+                x: spawnX,
+                y: spawnY,
+                player: p,
+                race: 10,
+            });
             if (!cmdResult?.success) return null;
             const entityId = (cmdResult.effects?.[0] as { entityId?: number })?.entityId;
             if (entityId == null) return null;
@@ -346,6 +354,7 @@ export async function findBuildableTile(page: Page, buildingType = 1): Promise<{
                 x: tx,
                 y: ty,
                 player: 0,
+                race: 10,
             });
             if (result?.success) {
                 const entityId = (result.effects?.[0] as { entityId?: number })?.entityId;
@@ -413,7 +422,14 @@ export async function placeMultiple(page: Page, count: number, spec: PlacementSp
                     if (s.kind === 'building') {
                         const bt = s.buildingTypes ? s.buildingTypes[placed % s.buildingTypes.length]! : 1;
                         const p = s.players ? s.players[placed % s.players.length]! : 0;
-                        result = game.execute({ type: 'place_building', buildingType: bt, x: tx, y: ty, player: p });
+                        result = game.execute({
+                            type: 'place_building',
+                            buildingType: bt,
+                            x: tx,
+                            y: ty,
+                            player: p,
+                            race: 10,
+                        });
                     } else {
                         const mt = s.materialTypes ? s.materialTypes[placed % s.materialTypes.length]! : placed % 3;
                         result = game.execute({
@@ -569,6 +585,7 @@ export async function findBuildableTileNear(
                     x: tx,
                     y: ty,
                     player: 0,
+                    race: 10,
                 });
                 if (result?.success) {
                     const entityId = (result.effects?.[0] as { entityId?: number })?.entityId;

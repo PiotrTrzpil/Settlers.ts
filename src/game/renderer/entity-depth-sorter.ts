@@ -75,11 +75,11 @@ export class EntityDepthSorter {
 
         switch (entity.type) {
         case EntityType.Building:
-            return spriteManager.getBuilding(entity.subType as BuildingType);
+            return spriteManager.getBuilding(entity.subType as BuildingType, entity.race);
         case EntityType.MapObject:
             return spriteManager.getMapObject(entity.subType as MapObjectType);
         case EntityType.Unit:
-            return spriteManager.getUnit(entity.subType as UnitType);
+            return spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
         case EntityType.StackedResource:
             return spriteManager.getResource(entity.subType as EMaterialType);
         case EntityType.None:

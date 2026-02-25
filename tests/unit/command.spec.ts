@@ -30,6 +30,7 @@ describe('Command System – edge cases', () => {
                 x: 10,
                 y: 10,
                 player: 0,
+                race: 10,
             });
 
             expect(result.success).toBe(false);
@@ -55,6 +56,7 @@ describe('Command System – edge cases', () => {
                 x: 5,
                 y: 5,
                 player: 0,
+                race: 10,
             });
 
             blockColumn(ctx.map, 15);

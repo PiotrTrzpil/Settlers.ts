@@ -7,6 +7,7 @@
  */
 
 import { LogHandler } from '@/utilities/log-handler';
+import { Race } from '../../race';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { EntityType, UnitType } from '@/game/entity';
@@ -145,6 +146,7 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
                 y,
                 player,
                 amount,
+                race: Race.Roman, // TODO: derive from player race
             });
 
             return result.effects?.length ?? 0;

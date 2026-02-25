@@ -1,7 +1,13 @@
 <template>
     <div class="map-view-root">
         <!-- Main game area: sidebar + canvas -->
-        <div v-if="game" class="game-layout" data-testid="game-ui">
+        <div
+            v-if="game"
+            class="game-layout"
+            data-testid="game-ui"
+            @mouseup="blurNonTextInput"
+            @change="blurNonTextInput"
+        >
             <!-- LEFT SIDEBAR -->
             <aside class="sidebar">
                 <!-- Race selector at top of sidebar -->
@@ -270,7 +276,7 @@ const {
     layerCounts,
     onFileSelect,
     onTileClick,
-    setPlaceMode,
+    setPlaceMode: setPlaceModeBase,
     setPlaceResourceMode,
     setPlaceUnitMode,
     setSelectMode,
@@ -282,6 +288,21 @@ const {
     () => props.fileManager,
     () => rendererRef.value?.getInputManager?.() ?? null
 );
+
+/** Blur buttons, selects, and non-text inputs after interaction so keyboard focus returns to the game. */
+function blurNonTextInput(e: Event): void {
+    const el = document.activeElement as HTMLElement | null;
+    if (!el) return;
+    const tag = el.tagName;
+    // SELECT elements must only blur on 'change' — blurring on mouseup kills the dropdown before the user can pick.
+    if (tag === 'SELECT') {
+        if (e.type === 'change') el.blur();
+        return;
+    }
+    if (tag === 'BUTTON' || (tag === 'INPUT' && (el as HTMLInputElement).type === 'checkbox')) {
+        el.blur();
+    }
+}
 
 // Race selection
 const currentRace = ref<Race>(Race.Roman);
@@ -310,12 +331,15 @@ const placeBuildingsWithWorker = computed({
     },
 });
 
-async function onRaceChange() {
-    const renderer = rendererRef.value;
-    if (renderer && typeof renderer.setRace === 'function') {
-        await renderer.setRace(currentRace.value);
-    }
-    // Switch music to match the selected race
+function setPlaceMode(buildingType: number) {
+    setPlaceModeBase(buildingType, currentRace.value);
+}
+
+function onRaceChange() {
+    // Only switch music — building icons already react to currentRace.
+    // We intentionally do NOT call renderer.setRace() here because that
+    // would re-skin every building on the map. The race selector only
+    // controls which buildings appear in the placement menu.
     SoundManager.getInstance().playRandomMusic(currentRace.value);
 }
 

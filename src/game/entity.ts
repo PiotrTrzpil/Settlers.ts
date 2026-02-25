@@ -5,6 +5,7 @@
 
 /** Material carrying state - used by any unit that can carry materials */
 import type { EMaterialType } from './economy';
+import type { Race } from './race';
 
 export interface CarryingState {
     material: EMaterialType;
@@ -73,6 +74,14 @@ export interface Entity {
      * Default is 0.
      */
     variation?: number;
+
+    /**
+     * Race/civilization this entity belongs to (matches Race enum values: 10=Roman, 11=Viking, etc.).
+     * Determines which sprite set is used for rendering.
+     * Set from the owning player's tribe when loading from map, or from the UI selection when placing.
+     * Required for buildings and units; unused for map objects and stacked resources.
+     */
+    race: Race;
 
     /**
      * Material being carried by this unit.

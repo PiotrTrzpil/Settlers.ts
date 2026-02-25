@@ -209,10 +209,14 @@ export function populateMapObjects(
  * This is the CORRECT way to load trees - from the MapObjects chunk (type 6),
  * not from landscape byte 2 which contains terrain attributes.
  *
+ * For trees (raw type 1-18), converts to MapObjectType (0-17).
+ * For non-trees (raw type >18), stores the raw byte value as subType directly.
+ * The raw values don't conflict with MapObjectType enum (trees 0-17, resources 100-104).
+ *
  * @param state - Game state to add entities to
  * @param objects - Parsed map object data from MapObjects chunk
  * @param terrain - Terrain data for buildability checks
- * @returns Number of objects spawned
+ * @returns Number of tree objects spawned (non-trees are also added but not counted for expansion)
  */
 export function populateMapObjectsFromEntityData(
     state: GameState,
@@ -220,10 +224,11 @@ export function populateMapObjectsFromEntityData(
     terrain: TerrainData
 ): number {
     const { groundType, mapSize } = terrain;
-    let count = 0;
+    let treeCount = 0;
+    let decoCount = 0;
 
     for (const obj of objects) {
-        const { x, y, objectType: s4TreeType } = obj;
+        const { x, y, objectType: rawType } = obj;
 
         // Validate coordinates
         if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) {
@@ -232,22 +237,24 @@ export function populateMapObjectsFromEntityData(
 
         const idx = mapSize.toIndex(x, y);
 
-        // Skip unbuildable terrain (water, etc.)
-        if (!isBuildable(groundType[idx]!)) continue;
-
-        // Skip already occupied tiles
-        if (state.getEntityAt(x, y)) continue;
-
-        // Convert S4TreeType to MapObjectType
-        const mappedType = s4TreeTypeToMapObjectType(s4TreeType);
-        if (mappedType === null) continue;
-
-        state.addEntity(EntityType.MapObject, mappedType, x, y, 0);
-        count++;
+        // Try to map as tree first (raw 1-18 → MapObjectType 0-17)
+        const mappedType = s4TreeTypeToMapObjectType(rawType as S4TreeType);
+        if (mappedType !== null) {
+            // Trees require buildable terrain and unoccupied tiles
+            if (!isBuildable(groundType[idx]!)) continue;
+            if (state.getEntityAt(x, y)) continue;
+            state.addEntity(EntityType.MapObject, mappedType, x, y, 0);
+            treeCount++;
+        } else {
+            // Non-tree decorations: skip only water, allow occupied tiles (skip silently)
+            if (state.getEntityAt(x, y)) continue;
+            state.addEntity(EntityType.MapObject, rawType, x, y, 0);
+            decoCount++;
+        }
     }
 
-    log.debug(`Populated ${count} map objects from ${objects.length} tile entries`);
-    return count;
+    log.debug(`Populated ${treeCount} trees + ${decoCount} decorations from ${objects.length} tile entries`);
+    return treeCount;
 }
 
 /**
@@ -404,29 +411,6 @@ function hash(x: number, y: number, seed: number): number {
     return h ^ (h >> 16);
 }
 
-/** Get noise value 0-1 for position (used for density variation) */
-function noise(x: number, y: number, seed: number, scale: number): number {
-    const sx = Math.floor(x / scale);
-    const sy = Math.floor(y / scale);
-    const fx = x / scale - sx;
-    const fy = y / scale - sy;
-
-    const v00 = (hash(sx, sy, seed) & 0xffff) / 0xffff;
-    const v10 = (hash(sx + 1, sy, seed) & 0xffff) / 0xffff;
-    const v01 = (hash(sx, sy + 1, seed) & 0xffff) / 0xffff;
-    const v11 = (hash(sx + 1, sy + 1, seed) & 0xffff) / 0xffff;
-
-    const v0 = v00 + (v10 - v00) * fx;
-    const v1 = v01 + (v11 - v01) * fx;
-    return v0 + (v1 - v0) * fy;
-}
-
-/** Multi-scale noise for natural forest density variation */
-function forestDensityNoise(x: number, y: number, seed: number): number {
-    // Large scale noise creates big forest regions vs clearings
-    return noise(x, y, seed, 128) * 0.5 + noise(x, y, seed + 1000, 64) * 0.3 + noise(x, y, seed + 2000, 32) * 0.2;
-}
-
 /** Options for expanding trees */
 export interface ExpandTreesOptions {
     /** Random seed for reproducible generation */
@@ -470,6 +454,11 @@ function selectTreeTypeForExpansion(
     return allowed[Math.abs(hash(x, y, seed + 3000)) % allowed.length]!;
 }
 
+/** Smoothstep: 0 at edge, 1 at center, smooth cubic transition */
+function smoothstep(t: number): number {
+    return t * t * (3 - 2 * t);
+}
+
 /** Check if tree should be placed at position */
 function shouldPlaceTree(
     dx: number,
@@ -481,15 +470,14 @@ function shouldPlaceTree(
     seed: number
 ): boolean {
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const distFactor = 1 - dist / (radius + 1);
+    if (dist > radius) return false;
 
-    const densityNoise = forestDensityNoise(nx, ny, 99999);
-    if (densityNoise < 0.4) return false;
+    // Smooth fade: 1.0 at center, 0.0 at edge
+    const distFactor = smoothstep(1 - dist / radius);
 
-    const densityMult = (densityNoise - 0.4) * 5;
     const randVal = (Math.abs(hash(nx, ny, seed)) % 1000) / 1000;
 
-    return randVal <= density * distFactor * densityMult;
+    return randVal <= density * distFactor;
 }
 
 /** Collect existing trees from game state */

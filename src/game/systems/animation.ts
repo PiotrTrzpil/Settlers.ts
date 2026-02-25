@@ -33,15 +33,17 @@ export interface AnimationDataProvider {
      * Get animation data for any entity type.
      * @param entityType The entity type (Building, Unit, MapObject, etc.)
      * @param subType The specific type within that category (BuildingType, UnitType, etc.)
+     * @param race Optional race (Race enum value) for race-specific animations
      */
-    getAnimationData(entityType: EntityType, subType: number): AnimationData | null;
+    getAnimationData(entityType: EntityType, subType: number, race: number): AnimationData | null;
 
     /**
      * Check if an entity type has animation data.
      * @param entityType The entity type
      * @param subType The specific type within that category
+     * @param race Race enum value for race-specific animations
      */
-    hasAnimation(entityType: EntityType, subType: number): boolean;
+    hasAnimation(entityType: EntityType, subType: number, race: number): boolean;
 }
 
 // Re-export sprite resolution functions from their canonical location in the renderer module

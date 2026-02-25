@@ -348,6 +348,29 @@ export function clearSavedGameState(): void {
 }
 
 /**
+ * Strip MapObject entities and tree states from the saved snapshot.
+ * Used when the tree expansion setting changes so the next reload
+ * re-populates trees from map data with the new setting.
+ */
+export function clearSavedTreeState(): void {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) return;
+
+        const snapshot = JSON.parse(stored) as GameStateSnapshot;
+        const treeIds = new Set(snapshot.entities.filter(e => e.type === EntityType.MapObject).map(e => e.id));
+        snapshot.entities = snapshot.entities.filter(e => e.type !== EntityType.MapObject);
+        snapshot.trees = [];
+        // Drop resource quantities that belonged to tree entities
+        snapshot.resourceQuantities = snapshot.resourceQuantities.filter(r => !treeIds.has(r.entityId));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    } catch {
+        // If anything fails, just clear the whole thing
+        localStorage.removeItem(STORAGE_KEY);
+    }
+}
+
+/**
  * Check if there's a saved game state.
  */
 export function hasSavedGameState(): boolean {

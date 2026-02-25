@@ -20,6 +20,7 @@ import {
     TREE_JOB_INDICES,
     CARRIER_MATERIAL_JOB_INDICES,
     WORKER_JOB_INDICES,
+    AVAILABLE_RACES,
 } from './sprite-metadata';
 import { SpriteLoader, type LoadedGfxFileSet } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
@@ -203,17 +204,17 @@ export class SpriteRenderManager {
     }
 
     /**
-     * Get a building sprite entry by type (completed state, for backwards compatibility).
+     * Get a building sprite entry by type and race (completed state).
      */
-    public getBuilding(type: BuildingType): SpriteEntry | null {
-        return this._spriteRegistry?.getBuilding(type) ?? null;
+    public getBuilding(type: BuildingType, race?: number): SpriteEntry | null {
+        return this._spriteRegistry?.getBuilding(type, race ?? this._currentRace) ?? null;
     }
 
     /**
-     * Get a building construction sprite entry by type.
+     * Get a building construction sprite entry by type and race.
      */
-    public getBuildingConstruction(type: BuildingType): SpriteEntry | null {
-        return this._spriteRegistry?.getBuildingConstruction(type) ?? null;
+    public getBuildingConstruction(type: BuildingType, race?: number): SpriteEntry | null {
+        return this._spriteRegistry?.getBuildingConstruction(type, race ?? this._currentRace) ?? null;
     }
 
     /**
@@ -228,22 +229,22 @@ export class SpriteRenderManager {
     /**
      * Get animated entity data for any entity type. O(1) lookup.
      */
-    public getAnimatedEntity(entityType: EntityType, subType: number): AnimatedSpriteEntry | null {
-        return this._spriteRegistry?.getAnimatedEntity(entityType, subType) ?? null;
+    public getAnimatedEntity(entityType: EntityType, subType: number, race?: number): AnimatedSpriteEntry | null {
+        return this._spriteRegistry?.getAnimatedEntity(entityType, subType, race) ?? null;
     }
 
     /**
      * Check if any entity type has animation frames. O(1) lookup.
      */
-    public hasAnimation(entityType: EntityType, subType: number): boolean {
-        return this._spriteRegistry?.hasAnimation(entityType, subType) ?? false;
+    public hasAnimation(entityType: EntityType, subType: number, race?: number): boolean {
+        return this._spriteRegistry?.hasAnimation(entityType, subType, race) ?? false;
     }
 
     /**
      * Get animation data for any entity type. O(1) lookup.
      */
-    public getAnimationData(entityType: EntityType, subType: number): AnimationData | null {
-        const entry = this._spriteRegistry?.getAnimatedEntity(entityType, subType);
+    public getAnimationData(entityType: EntityType, subType: number, race?: number): AnimationData | null {
+        const entry = this._spriteRegistry?.getAnimatedEntity(entityType, subType, race);
         return entry?.animationData ?? null;
     }
 
@@ -253,8 +254,10 @@ export class SpriteRenderManager {
      */
     public asAnimationProvider(): AnimationDataProvider {
         return {
-            getAnimationData: (entityType: EntityType, subType: number) => this.getAnimationData(entityType, subType),
-            hasAnimation: (entityType: EntityType, subType: number) => this.hasAnimation(entityType, subType),
+            getAnimationData: (entityType: EntityType, subType: number, race?: number) =>
+                this.getAnimationData(entityType, subType, race),
+            hasAnimation: (entityType: EntityType, subType: number, race?: number) =>
+                this.hasAnimation(entityType, subType, race),
         };
     }
 
@@ -269,8 +272,8 @@ export class SpriteRenderManager {
      * Get a unit sprite entry by type and direction.
      * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT (defaults to 0)
      */
-    public getUnit(type: UnitType, direction: number = 0): SpriteEntry | null {
-        return this._spriteRegistry?.getUnit(type, direction) ?? null;
+    public getUnit(type: UnitType, direction: number = 0, race?: number): SpriteEntry | null {
+        return this._spriteRegistry?.getUnit(type, direction, race) ?? null;
     }
 
     /**
@@ -536,21 +539,28 @@ export class SpriteRenderManager {
     /**
      * Load sprites for a specific race.
      */
+    // eslint-disable-next-line sonarjs/cognitive-complexity, complexity -- multi-race sprite loading requires sequential file I/O
     private async loadSpritesForRace(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
-        // Try cache first
-        if (await this.tryRestoreFromCache(gl, race)) {
-            return true;
-        }
+        // Skip single-race cache — we now load all races into one atlas.
+        // TODO: implement multi-race cache key
 
         // Full load from files
         const t = createTimer();
-        const spriteMap = getBuildingSpriteMap(race);
 
-        // Determine which GFX files we need
+        // Load buildings and units for ALL available races (race-specific)
+        // Map objects and resources are shared across races
+        const racesToLoad = AVAILABLE_RACES;
+
+        // Collect all building GFX files across all races
         const buildingFiles = new Set<number>();
-        for (const info of Object.values(spriteMap)) {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial<Record> values may be undefined at runtime
-            if (info) buildingFiles.add(info.file);
+        const spriteMapsPerRace = new Map<Race, Partial<Record<BuildingType, { file: number; index: number }>>>();
+        for (const r of racesToLoad) {
+            const spriteMap = getBuildingSpriteMap(r);
+            spriteMapsPerRace.set(r, spriteMap);
+            for (const info of Object.values(spriteMap)) {
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial values
+                if (info) buildingFiles.add(info.file);
+            }
         }
 
         if (buildingFiles.size === 0) {
@@ -558,23 +568,22 @@ export class SpriteRenderManager {
             return false;
         }
 
-        // Preload all files and warm up workers in parallel
+        // Preload all files for all races and warm up workers in parallel
         const allFileIds = [
             ...Array.from(buildingFiles).map(String),
             `${GFX_FILE_NUMBERS.MAP_OBJECTS}`,
             `${GFX_FILE_NUMBERS.RESOURCES}`,
-            `${SETTLER_FILE_NUMBERS[race]}`,
+            ...racesToLoad.map(r => `${SETTLER_FILE_NUMBERS[r]}`),
         ];
         await Promise.all([...allFileIds.map(id => this.spriteLoader.loadFileSet(id)), warmUpDecoderPool()]);
 
-        const settlerFileId = `${SETTLER_FILE_NUMBERS[race]}`;
-        await this.registerPalettesForFiles(allFileIds, new Set([settlerFileId]));
+        const teamColorFileIds = new Set(racesToLoad.map(r => `${SETTLER_FILE_NUMBERS[r]}`));
+        await this.registerPalettesForFiles(allFileIds, teamColorFileIds);
         const filePreload = t.lap();
 
-        // Create atlas and registry
-        // MAX_ARRAY_TEXTURE_LAYERS is typically 256-2048 in WebGL2
+        // Create atlas and registry with larger capacity for multi-race sprites
         const maxArrayLayers = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) as number;
-        const atlas = new EntityTextureAtlas(Math.min(64, maxArrayLayers), this.textureUnit);
+        const atlas = new EntityTextureAtlas(Math.min(256, maxArrayLayers), this.textureUnit);
         const atlasAlloc = t.lap();
         const registry = new SpriteMetadataRegistry();
 
@@ -582,11 +591,14 @@ export class SpriteRenderManager {
         this._spriteAtlas = atlas;
         this._spriteRegistry = registry;
 
-        // Load all sprite categories
+        // Load building sprites for every race
         let loadedAny = false;
-        for (const fileNum of buildingFiles) {
-            if (await this.loadBuildingSprites(fileNum, atlas, registry, spriteMap, gl)) {
-                loadedAny = true;
+        for (const r of racesToLoad) {
+            const spriteMap = spriteMapsPerRace.get(r)!;
+            for (const fileNum of buildingFiles) {
+                if (await this.loadBuildingSprites(fileNum, atlas, registry, spriteMap, gl, r)) {
+                    loadedAny = true;
+                }
             }
         }
         const buildings = t.lap();
@@ -597,7 +609,13 @@ export class SpriteRenderManager {
         const resourcesLoaded = await this.loadResourceSprites(atlas, registry, gl);
         const resources = t.lap();
 
-        const unitsLoaded = await this.loadUnitSprites(race, atlas, registry, gl);
+        // Load unit sprites for every race
+        let unitsLoaded = false;
+        for (const r of racesToLoad) {
+            if (await this.loadUnitSprites(r, atlas, registry, gl)) {
+                unitsLoaded = true;
+            }
+        }
         const units = t.lap();
 
         if (!loadedAny && !mapObjectsLoaded && !resourcesLoaded && !unitsLoaded) {
@@ -637,7 +655,8 @@ export class SpriteRenderManager {
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry,
         spriteMap: Partial<Record<BuildingType, { file: number; index: number }>>,
-        gl: WebGL2RenderingContext
+        gl: WebGL2RenderingContext,
+        race: Race
     ): Promise<boolean> {
         const fileId = `${fileNum}`;
         const fileSet = await this.spriteLoader.loadFileSet(fileId);
@@ -715,10 +734,11 @@ export class SpriteRenderManager {
                         data.buildingType,
                         frames,
                         ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                        true
+                        true,
+                        race
                     );
                 }
-                registry.registerBuilding(data.buildingType, data.constructionEntry, data.completedEntry);
+                registry.registerBuilding(data.buildingType, data.constructionEntry, data.completedEntry, race);
             });
 
             return batch.count > 0;
@@ -971,11 +991,12 @@ export class SpriteRenderManager {
                 data.unitType,
                 data.directionFrames,
                 ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                true
+                true,
+                race
             );
             for (const [dir, frames] of data.directionFrames) {
                 if (frames.length > 0) {
-                    registry.registerUnit(data.unitType, dir, frames[0]!);
+                    registry.registerUnit(data.unitType, dir, frames[0]!, race);
                 }
             }
         });
@@ -983,8 +1004,8 @@ export class SpriteRenderManager {
         SpriteRenderManager.log.debug(`Loaded ${batch.count} animated units for ${Race[race]}`);
 
         // Load carrier variants and worker animations (also need safe pattern)
-        await this.loadCarrierVariants(fileSet, atlas, registry, gl, paletteBase);
-        await this.loadWorkerAnimations(fileSet, atlas, registry, gl, paletteBase);
+        await this.loadCarrierVariants(fileSet, atlas, registry, gl, paletteBase, race);
+        await this.loadWorkerAnimations(fileSet, atlas, registry, gl, paletteBase, race);
 
         return batch.count > 0;
     }
@@ -997,7 +1018,8 @@ export class SpriteRenderManager {
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry,
         gl: WebGL2RenderingContext,
-        paletteBaseOffset: number
+        paletteBaseOffset: number,
+        race: Race
     ): Promise<number> {
         type CarrierData = { materialType: EMaterialType; directionFrames: Map<number, SpriteEntry[]> };
         const batch = new SafeLoadBatch<CarrierData>();
@@ -1039,7 +1061,8 @@ export class SpriteRenderManager {
                     carrySequenceKey(data.materialType),
                     data.directionFrames,
                     ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                    true
+                    true,
+                    race
                 );
             }
         });
@@ -1084,7 +1107,8 @@ export class SpriteRenderManager {
         atlas: EntityTextureAtlas,
         registry: SpriteMetadataRegistry,
         gl: WebGL2RenderingContext,
-        paletteBaseOffset: number
+        paletteBaseOffset: number,
+        race: Race
     ): Promise<void> {
         type WorkAnimData = {
             unitType: UnitType;
@@ -1142,7 +1166,8 @@ export class SpriteRenderManager {
                 data.seqKey,
                 data.frames,
                 ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                true
+                true,
+                race
             );
             loadedCount++;
         });

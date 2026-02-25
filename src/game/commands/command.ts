@@ -65,6 +65,7 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
     }
 
     const entity = state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
+    entity.race = cmd.race;
 
     // Immediately capture terrain and change ground to raw earth under the building.
     // This makes the ground visually change right when the building is placed,
@@ -126,6 +127,7 @@ function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): CommandRe
     }
 
     const entity = state.addEntity(EntityType.Unit, cmd.unitType, spawnX, spawnY, cmd.player);
+    entity.race = cmd.race;
 
     ctx.eventBus.emit('unit:spawned', {
         entityId: entity.id,
@@ -370,6 +372,7 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
                     entity.player,
                     spawnDef.selectable
                 );
+                spawnedEntity.race = entity.race;
 
                 eventBus.emit('unit:spawned', {
                     entityId: spawnedEntity.id,
@@ -396,6 +399,7 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
         const workerType = BUILDING_UNIT_TYPE[buildingState.buildingType];
         if (workerType !== undefined) {
             const workerEntity = state.addEntity(EntityType.Unit, workerType, bx, by, entity.player);
+            workerEntity.race = entity.race;
 
             // Restore building's tile occupancy — workers "work inside" buildings
             state.tileOccupancy.set(tileKey(bx, by), buildingState.entityId);
@@ -479,6 +483,7 @@ function executeScriptAddSettlers(ctx: CommandContext, cmd: ScriptAddSettlersCom
         const offsetY = cmd.y + Math.floor(i / 3);
 
         const entity = state.addEntity(EntityType.Unit, cmd.unitType, offsetX, offsetY, cmd.player);
+        entity.race = cmd.race;
 
         eventBus.emit('unit:spawned', {
             entityId: entity.id,

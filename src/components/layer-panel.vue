@@ -82,6 +82,33 @@
                     @update:modelValue="saveAndEmit()"
                 />
             </div>
+
+            <!-- Object type filter -->
+            <div class="obj-filter">
+                <label class="filter-row">
+                    <input
+                        type="checkbox"
+                        :checked="visibility.debugObjectTypeFilter !== null"
+                        @change="toggleObjectFilter"
+                    />
+                    <span>Filter by type</span>
+                </label>
+                <div v-if="visibility.debugObjectTypeFilter !== null" class="filter-controls">
+                    <button class="filter-btn" @click="changeObjectFilter(-1)">&minus;</button>
+                    <input
+                        type="number"
+                        class="filter-input"
+                        :value="visibility.debugObjectTypeFilter"
+                        min="1"
+                        max="255"
+                        @input="onFilterInput"
+                    />
+                    <button class="filter-btn" @click="changeObjectFilter(1)">+</button>
+                </div>
+                <div v-if="visibility.debugObjectTypeFilter !== null" class="filter-info">
+                    {{ objectFilterLabel }}
+                </div>
+            </div>
         </CollapseSection>
 
         <!-- Quick actions -->
@@ -191,6 +218,34 @@ function hideAll(): void {
     saveAndEmit();
 }
 
+// Object type filter
+const objectFilterLabel = computed(() => {
+    const t = visibility.debugObjectTypeFilter;
+    if (t === null) return '';
+    if (t >= 1 && t <= 18) return `Tree type ${t}`;
+    return `Raw type ${t}`;
+});
+
+function toggleObjectFilter(e: Event): void {
+    const checked = (e.target as HTMLInputElement).checked;
+    visibility.debugObjectTypeFilter = checked ? 1 : null;
+    saveAndEmit();
+}
+
+function changeObjectFilter(delta: number): void {
+    const current = visibility.debugObjectTypeFilter ?? 1;
+    visibility.debugObjectTypeFilter = Math.max(1, Math.min(255, current + delta));
+    saveAndEmit();
+}
+
+function onFilterInput(e: Event): void {
+    const val = parseInt((e.target as HTMLInputElement).value, 10);
+    if (!isNaN(val) && val >= 1 && val <= 255) {
+        visibility.debugObjectTypeFilter = val;
+        saveAndEmit();
+    }
+}
+
 function saveAndEmit(): void {
     saveLayerVisibility(visibility);
     emit('update:visibility', { ...visibility, environmentLayers: { ...visibility.environmentLayers } });
@@ -224,5 +279,77 @@ emit('update:visibility', { ...visibility, environmentLayers: { ...visibility.en
 
 .quick-actions :deep(button) {
     flex: 1;
+}
+
+/* Object type filter */
+.obj-filter {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-faint, #2a1e0e);
+}
+
+.filter-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    color: #a08050;
+    font-size: 10px;
+}
+
+.filter-row input[type='checkbox'] {
+    accent-color: #d4a030;
+    cursor: pointer;
+}
+
+.filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.filter-btn {
+    width: 22px;
+    height: 22px;
+    background: #1a1a2a;
+    border: 1px solid #3a3a5a;
+    border-radius: 3px;
+    color: #c8a96e;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.filter-btn:hover {
+    background: #2a2a4a;
+    border-color: #d4a030;
+}
+
+.filter-input {
+    width: 48px;
+    height: 22px;
+    background: #0a0a1a;
+    border: 1px solid #3a3a5a;
+    border-radius: 3px;
+    color: #c8a96e;
+    text-align: center;
+    font-size: 11px;
+    -moz-appearance: textfield;
+}
+
+.filter-input::-webkit-inner-spin-button,
+.filter-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.filter-info {
+    margin-top: 3px;
+    font-size: 9px;
+    color: #8080a0;
 }
 </style>

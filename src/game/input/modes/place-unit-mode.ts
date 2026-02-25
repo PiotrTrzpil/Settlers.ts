@@ -1,6 +1,7 @@
 import { BasePlacementMode, type PlacementModeData, type PlacementModeEnterData } from './place-mode-base';
 import type { InputContext } from '../input-mode';
 import { UnitType } from '../../entity';
+import type { Race } from '../../race';
 import type { PlacementEntityType } from '../render-state';
 
 /**
@@ -10,6 +11,8 @@ import type { PlacementEntityType } from '../render-state';
 export interface PlaceUnitModeData extends PlacementModeData<UnitType> {
     /** The unit type being placed (alias for subType) */
     unitType: UnitType;
+    /** Race for the placed unit */
+    race: Race;
 }
 
 /**
@@ -55,6 +58,7 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
             x,
             y,
             player: 0, // TODO: Get from current player context
+            race: data.race!,
         };
     }
 
@@ -68,6 +72,7 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
         return {
             subType: unitType,
             unitType,
+            race: enterData.race!,
             previewX: 0,
             previewY: 0,
             previewValid: false,

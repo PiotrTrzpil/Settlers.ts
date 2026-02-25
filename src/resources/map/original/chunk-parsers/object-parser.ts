@@ -13,15 +13,14 @@
 
 import { BinaryReader } from '@/resources/file/binary-reader';
 import { LogHandler } from '@/utilities/log-handler';
-import { S4TreeType } from '../../s4-types';
 import type { MapObjectData } from '../../map-entity-data';
 
 const log = new LogHandler('ObjectParser');
 
 /**
- * Parse MapObjects chunk data
+ * Parse MapObjects chunk data.
+ * Returns ALL non-zero object types (trees 1-18, decorations >18).
  */
-// eslint-disable-next-line sonarjs/cognitive-complexity -- map chunk binary parsing requires many conditional branches
 export function parseMapObjects(reader: BinaryReader, mapWidth: number, mapHeight: number): MapObjectData[] {
     const objects: MapObjectData[] = [];
     const dataLength = reader.length;
@@ -39,14 +38,13 @@ export function parseMapObjects(reader: BinaryReader, mapWidth: number, mapHeigh
 
     if (bytesPerTile === 4) {
         // 4 bytes per tile (interleaved format)
-        // Use byte 0 which contains tree type (confirmed via terrain analysis)
         for (let i = 0; i < tileCount; i++) {
             const objectType = data[i * 4]!; // Byte 0 = object type
-            if (objectType >= S4TreeType.OAK && objectType <= S4TreeType.OLIVE_SMALL) {
+            if (objectType !== 0) {
                 objects.push({
                     x: i % mapWidth,
                     y: Math.floor(i / mapWidth),
-                    objectType: objectType as S4TreeType,
+                    objectType,
                 });
             }
         }
@@ -54,11 +52,11 @@ export function parseMapObjects(reader: BinaryReader, mapWidth: number, mapHeigh
         // 1 byte per tile format
         for (let i = 0; i < tileCount; i++) {
             const objectType = data[i]!;
-            if (objectType >= S4TreeType.OAK && objectType <= S4TreeType.OLIVE_SMALL) {
+            if (objectType !== 0) {
                 objects.push({
                     x: i % mapWidth,
                     y: Math.floor(i / mapWidth),
-                    objectType: objectType as S4TreeType,
+                    objectType,
                 });
             }
         }
@@ -66,6 +64,6 @@ export function parseMapObjects(reader: BinaryReader, mapWidth: number, mapHeigh
         log.debug(`Unknown format: ${bytesPerTile} bytes/tile`);
     }
 
-    log.debug(`Parsed ${objects.length} map objects (trees)`);
+    log.debug(`Parsed ${objects.length} map objects (all types)`);
     return objects;
 }

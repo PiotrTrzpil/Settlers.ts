@@ -10,6 +10,7 @@
  */
 
 import type { Entity, StackedResourceState, TileCoord } from '../entity';
+import type { Race } from '../race';
 import type { AnimationState } from '../animation';
 import type { IViewPoint } from './i-view-point';
 import { DEFAULT_LAYER_VISIBILITY, type LayerVisibility } from './layer-visibility';
@@ -36,6 +37,8 @@ export interface PlacementPreviewState {
     entityType: PlacementEntityType;
     /** Specific subtype (BuildingType or EMaterialType as number) */
     subType: number;
+    /** Race for the entity being placed. Optional — only for buildings/units. */
+    race?: Race;
     /** Variation/direction for sprite rendering (0-7 for resources) */
     variation?: number;
 }

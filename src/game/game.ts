@@ -8,7 +8,7 @@ import { TerrainData } from './terrain';
 import { populateMapObjectsFromEntityData, expandTrees } from './systems/map-objects';
 import { populateMapBuildings } from './features/building-construction';
 import { SoundManager } from './audio';
-import { Race } from './renderer/sprite-metadata';
+import { Race, s4TribeToRace } from './race';
 import { EventBus } from './event-bus';
 import { EntityType } from './entity';
 import { GameSettingsManager } from './game-settings';
@@ -72,6 +72,9 @@ export class Game {
     /** When true, renderers use procedural textures instead of loading game assets */
     public useProceduralTextures = false;
 
+    /** Per-player race mapping (player index → Race enum value), populated from map data */
+    public readonly playerRaces: Map<number, Race> = new Map();
+
     public constructor(fileManager: FileManager, mapLoader: IMapLoader) {
         const start = performance.now();
         this.fileManager = fileManager;
@@ -106,19 +109,35 @@ export class Game {
         // Scripting system is initialized lazily when loadScript is called
         // This avoids bundling Lua/wasmoon when scripting is disabled
 
-        // Populate map objects (trees) from entity data chunk (type 6)
-        if (mapLoader.entityData?.objects.length) {
-            const seedCount = populateMapObjectsFromEntityData(this.state, mapLoader.entityData.objects, this.terrain);
-            if (seedCount > 0) {
-                console.log(`Game: Loaded ${seedCount} seed trees from map data`);
+        // Build per-player race mapping from map data
+        if (mapLoader.entityData?.players.length) {
+            for (const p of mapLoader.entityData.players) {
+                this.playerRaces.set(p.playerIndex, s4TribeToRace(p.tribe));
+            }
+        }
 
-                // Expand seed trees into forests
+        // Populate map objects (trees + decorations) from entity data chunk (type 6)
+        if (mapLoader.entityData?.objects.length) {
+            const beforeCount = this.state.entities.length;
+            const seedCount = populateMapObjectsFromEntityData(this.state, mapLoader.entityData.objects, this.terrain);
+            const totalAdded = this.state.entities.length - beforeCount;
+            const decoCount = totalAdded - seedCount;
+            console.log(`Game: Loaded ${seedCount} seed trees + ${decoCount} decorations from map data`);
+
+            // Expand seed trees into forests (unless disabled via localStorage)
+            const expandRaw = localStorage.getItem('settlers_treeExpansion');
+            const expandEnabled = expandRaw !== 'false';
+            if (seedCount > 0 && expandEnabled) {
                 const expandedCount = expandTrees(this.state, this.terrain, {
-                    radius: 12,
-                    density: 0.7,
+                    radius: 10,
+                    density: 0.04,
                     minSpacing: 1,
                 });
-                console.log(`Game: Expanded into ${expandedCount} additional trees`);
+                console.log(`Game: Expanded into ${expandedCount} additional trees (from ${seedCount} seeds)`);
+            } else if (!expandEnabled) {
+                console.log(
+                    `Game: Tree expansion DISABLED (localStorage=${expandRaw}), showing ${seedCount} seed trees only`
+                );
             }
         }
 
@@ -128,6 +147,7 @@ export class Game {
                 buildingStateManager: this.services.buildingStateManager,
                 eventBus: this.eventBus,
                 terrain: this.terrain,
+                playerRaces: this.playerRaces,
             });
             if (count > 0) {
                 console.log(`Game: Loaded ${count} buildings from map data`);

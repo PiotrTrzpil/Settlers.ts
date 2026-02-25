@@ -1,6 +1,7 @@
 import { BasePlacementMode, type PlacementModeData, type PlacementModeEnterData } from './place-mode-base';
 import type { InputContext } from '../input-mode';
 import { BuildingType, getBuildingSize } from '../../entity';
+import type { Race } from '../../race';
 import type { PlacementEntityType } from '../render-state';
 
 /**
@@ -11,6 +12,8 @@ export interface PlaceBuildingModeData extends PlacementModeData<BuildingType> {
     // Building type is stored in subType
     // Kept for backward compatibility in external code
     buildingType: BuildingType;
+    /** Race for the placed building */
+    race: Race;
 }
 
 /**
@@ -68,6 +71,7 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
             x,
             y,
             player: this.currentPlayer,
+            race: data.race!,
         };
     }
 
@@ -82,6 +86,7 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
         return {
             subType: buildingType,
             buildingType,
+            race: enterData.race!,
             previewX: 0,
             previewY: 0,
             previewValid: false,

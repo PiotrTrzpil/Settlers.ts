@@ -1,13 +1,14 @@
 <template>
     <div class="renderer-container">
         <canvas height="800" width="800" ref="cav" class="cav" />
+        <canvas ref="overlayCanvas" class="overlay-canvas" />
         <!-- Selection box overlay for drag selection -->
         <div v-if="selectionBox" class="selection-box" :style="selectionBoxStyle" />
     </div>
 </template>
 
 <script setup lang="ts">
-import { useTemplateRef, computed } from 'vue';
+import { useTemplateRef, computed, watchEffect, onUnmounted } from 'vue';
 import { Game } from '@/game/game';
 import { useRenderer } from './use-renderer';
 import { Race } from '@/game/renderer/sprite-metadata';
@@ -25,14 +26,73 @@ const emit = defineEmits<{
 }>();
 
 const cav = useTemplateRef<HTMLCanvasElement>('cav');
+const overlayCanvas = useTemplateRef<HTMLCanvasElement>('overlayCanvas');
 
-const { setRace, getRace, getInputManager, getCamera, selectionBox } = useRenderer({
+const { setRace, getRace, getInputManager, getCamera, getDecoLabels, selectionBox } = useRenderer({
     canvas: cav,
     getGame: () => props.game,
     getDebugGrid: () => props.debugGrid,
     getLayerVisibility: () => props.layerVisibility ?? DEFAULT_LAYER_VISIBILITY,
     onTileClick: tile => emit('tileClick', tile),
     initialCamera: props.initialCamera,
+});
+
+// Draw debug decoration labels on the 2D overlay canvas
+let overlayRafId = 0;
+function drawOverlayLabels(): void {
+    overlayRafId = requestAnimationFrame(drawOverlayLabels);
+
+    const canvas = overlayCanvas.value;
+    const glCanvas = cav.value;
+    if (!canvas || !glCanvas) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = glCanvas.clientWidth;
+    const h = glCanvas.clientHeight;
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        canvas.style.width = `${w}px`;
+        canvas.style.height = `${h}px`;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const labels = getDecoLabels();
+    if (labels.length === 0) return;
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    // Account for DPR: screen positions from WebGL are in physical pixels
+    const invDpr = 1 / dpr;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#000';
+    ctx.lineJoin = 'round';
+    for (const label of labels) {
+        const x = label.screenX * invDpr;
+        const y = label.screenY * invDpr;
+        const text = String(label.type);
+        ctx.strokeText(text, x, y - 4);
+        ctx.fillStyle = `hsl(${label.hue}, 90%, 65%)`;
+        ctx.fillText(text, x, y - 4);
+    }
+    ctx.restore();
+}
+
+watchEffect(() => {
+    if (cav.value) {
+        drawOverlayLabels();
+    }
+});
+
+onUnmounted(() => {
+    if (overlayRafId) cancelAnimationFrame(overlayRafId);
 });
 
 // Compute selection box style from screen coordinates
@@ -65,6 +125,13 @@ defineExpose({ setRace, getRace, getInputManager, getCamera, Race });
 
 .cav {
     display: block;
+}
+
+.overlay-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
 }
 
 .selection-box {

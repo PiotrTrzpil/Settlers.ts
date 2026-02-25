@@ -1,4 +1,5 @@
 import { BuildingType, MapObjectType, UnitType } from '../entity';
+import type { Race } from '../race';
 import type { EMaterialType } from '../economy/material-type';
 
 /**
@@ -41,6 +42,8 @@ export interface PlaceBuildingCommand {
     x: number;
     y: number;
     player: number;
+    /** Race for the building sprite (Race enum value) */
+    race: Race;
 }
 
 export interface PlaceResourceCommand {
@@ -64,6 +67,8 @@ export interface SpawnUnitCommand {
     x: number;
     y: number;
     player: number;
+    /** Race for the unit sprite (Race enum value) */
+    race: Race;
 }
 
 export interface MoveUnitCommand {
@@ -138,6 +143,8 @@ export interface ScriptAddSettlersCommand {
     y: number;
     player: number;
     amount: number;
+    /** Race for the unit sprite (Race enum value) */
+    race: Race;
 }
 
 // === Selection Commands ===

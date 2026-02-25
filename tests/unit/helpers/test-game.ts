@@ -302,12 +302,12 @@ export function placeBuilding(
     buildingType: number = BuildingType.WoodcutterHut,
     player = 0
 ): CommandResult {
-    return executeCommand(toCommandContext(ctx), { type: 'place_building', buildingType, x, y, player });
+    return executeCommand(toCommandContext(ctx), { type: 'place_building', buildingType, x, y, player, race: 10 });
 }
 
 /** Execute a spawn_unit command. Returns CommandResult. */
 export function spawnUnit(ctx: TestContext, x: number, y: number, unitType = 0, player = 0): CommandResult {
-    return executeCommand(toCommandContext(ctx), { type: 'spawn_unit', unitType, x, y, player });
+    return executeCommand(toCommandContext(ctx), { type: 'spawn_unit', unitType, x, y, player, race: 10 });
 }
 
 /** Execute a move_unit command. Returns CommandResult. */

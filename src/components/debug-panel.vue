@@ -121,6 +121,11 @@
 
         <!-- Map Objects -->
         <CollapseSection title="Map Objects" :default-open="false">
+            <Checkbox
+                v-model="treeExpansionEnabled"
+                label="Tree expansion (reload)"
+                @update:modelValue="onTreeExpansionChange"
+            />
             <div class="map-obj-row">
                 <span class="stat-label">Trees</span>
                 <span class="stat-value">{{ mapObjectCounts.trees }}</span>
@@ -151,10 +156,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { debugStats } from '@/game/debug-stats';
 import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
 import type { Game } from '@/game/game';
+import { clearSavedTreeState } from '@/game/game-state-persistence';
 import { useDebugMapObjects } from './use-debug-map-objects';
 import Checkbox from './Checkbox.vue';
 import CollapseSection from './CollapseSection.vue';
@@ -182,6 +188,14 @@ const open = computed({
         stats.debugPanelOpen = value;
     },
 });
+
+// Tree expansion toggle (persisted in localStorage, requires reload)
+const treeExpansionEnabled = ref(localStorage.getItem('settlers_treeExpansion') !== 'false');
+function onTreeExpansionChange(val: boolean): void {
+    localStorage.setItem('settlers_treeExpansion', val ? 'true' : 'false');
+    // Strip tree entities from saved state so next reload re-populates from map data
+    clearSavedTreeState();
+}
 
 // Map objects functionality (extracted to composable)
 const getGame = (): Game | null => props.game;

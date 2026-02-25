@@ -4,6 +4,7 @@
  */
 
 import { EntityType } from '../../entity';
+import { Race } from '../../race';
 import { BuildingType } from '../../buildings/types';
 import { BuildingConstructionPhase } from './types';
 import type { BuildingStateManager } from './building-state-manager';
@@ -78,6 +79,8 @@ export interface PopulateBuildingsOptions {
     eventBus: EventBus;
     /** Terrain data for spawn validation and terrain modification (required) */
     terrain: TerrainData;
+    /** Per-player race mapping (player index → Race) for assigning race to buildings */
+    playerRaces?: Map<number, Race>;
 }
 
 /**
@@ -130,6 +133,9 @@ export function populateMapBuildings(
             buildingData.y,
             buildingData.player
         );
+
+        // Assign race from the owning player's tribe (default to Roman)
+        entity.race = options.playerRaces?.get(buildingData.player) ?? Race.Roman;
 
         // Override the building state to be completed (pre-existing building)
         // buildingStateManager is required, getBuildingState returns the state we just created
