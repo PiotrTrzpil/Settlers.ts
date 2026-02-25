@@ -89,6 +89,11 @@ export interface Entity {
      * Set on PICKUP, cleared on DROPOFF.
      */
     carrying?: CarryingState;
+
+    /**
+     * When true, the entity is not rendered (e.g., a settler inside a building).
+     */
+    hidden?: boolean;
 }
 
 /**

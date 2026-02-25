@@ -7,6 +7,7 @@ import {
     DEPTH_FACTOR_MAP_OBJECT,
     DEPTH_FACTOR_UNIT,
     DEPTH_FACTOR_RESOURCE,
+    FLAT_TREE_DEPTH_BIAS,
 } from './entity-renderer-constants';
 import { getEntityWorldPos, type WorldPositionContext } from './world-position';
 
@@ -120,6 +121,11 @@ export class EntityDepthSorter {
 
             // Depth point = base position + offset to the depth line within sprite
             depth = worldY + offsetY + heightWorld * depthFactor;
+        }
+
+        // Fallen/cut tree stages (variation 4-10) render behind standing trees, units, buildings
+        if (entity.type === EntityType.MapObject && entity.variation! >= 4) {
+            depth -= FLAT_TREE_DEPTH_BIAS;
         }
 
         return depth;

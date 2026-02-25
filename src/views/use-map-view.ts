@@ -108,7 +108,13 @@ const availableBuildings = [
     { type: BuildingType.AnimalRanch, id: 'pigfarm', name: 'Pig Farm', icon: '🐷' },
     { type: BuildingType.Slaughterhouse, id: 'slaughterhouse', name: 'Slaughter', icon: '🥩' },
     { type: BuildingType.WaterworkHut, id: 'waterworks', name: 'Waterworks', icon: '💧' },
-    { type: BuildingType.WinePress, id: 'winepress', name: 'Wine Press', icon: '🍷' },
+    { type: BuildingType.Vinyard, id: 'vinyard', name: 'Vineyard', icon: '🍇' },
+    { type: BuildingType.BeekeeperHut, id: 'beekeeper', name: 'Beekeeper', icon: '🐝' },
+    { type: BuildingType.MeadMakerHut, id: 'meadmaker', name: 'Mead Maker', icon: '🍯' },
+    { type: BuildingType.AgaveFarmerHut, id: 'agavefarmer', name: 'Agave Farm', icon: '🌵' },
+    { type: BuildingType.TequilaMakerHut, id: 'tequilamaker', name: 'Tequila Maker', icon: '🥃' },
+    { type: BuildingType.SunflowerFarmerHut, id: 'sunflowerfarmer', name: 'Sunflower Farm', icon: '🌻' },
+    { type: BuildingType.SunflowerOilMakerHut, id: 'sunfloweroilmaker', name: 'Oil Press', icon: '🫒' },
     { type: BuildingType.DonkeyRanch, id: 'donkeyfarm', name: 'Donkey Farm', icon: '🫏' },
 
     // --- Mining & Smelting ---
@@ -137,8 +143,8 @@ const availableBuildings = [
     { type: BuildingType.SmallTemple, id: 'smalltemple', name: 'Small Temple', icon: '⛩️' },
     { type: BuildingType.LargeTemple, id: 'largetemple', name: 'Large Temple', icon: '🕌' },
     { type: BuildingType.Shipyard, id: 'shipyard', name: 'Shipyard', icon: '⛵' },
-    { type: BuildingType.Decoration, id: 'decoration', name: 'Decoration', icon: '🌸' },
-    { type: BuildingType.LargeDecoration, id: 'largedeco', name: 'Large Deco', icon: '🌳' },
+    { type: BuildingType.Eyecatcher01, id: 'eyecatcher01', name: 'Eyecatcher 1', icon: '🕯️' },
+    { type: BuildingType.Eyecatcher02, id: 'eyecatcher02', name: 'Eyecatcher 2', icon: '🏛️' },
 ];
 
 /** Units available in the UI - must include ALL UnitType values */

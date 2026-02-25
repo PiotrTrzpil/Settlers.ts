@@ -3,8 +3,11 @@
  * Adapted from JSettlers MaterialsOfBuildings for Settlers 4.
  */
 
+import { parse as parseYaml } from 'yaml';
 import { BuildingType } from '../entity';
+import { Race } from '../race';
 import { EMaterialType } from './material-type';
+import costsYaml from './data/construction-costs.yaml?raw';
 
 export interface ProductionChain {
     /** Materials consumed per production cycle */
@@ -51,285 +54,97 @@ export const BUILDING_PRODUCTIONS: ReadonlyMap<BuildingType, ProductionChain> = 
     [BuildingType.WeaponSmith, { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.SWORD }],
     [BuildingType.ToolSmith, { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.AXE }],
 
-    // Wine
-    [BuildingType.WinePress, { inputs: [], output: EMaterialType.WINE }],
+    // Drink production (race-specific)
+    [BuildingType.Vinyard, { inputs: [], output: EMaterialType.WINE }],
+    [BuildingType.BeekeeperHut, { inputs: [], output: EMaterialType.HONEY }],
+    [BuildingType.MeadMakerHut, { inputs: [EMaterialType.HONEY], output: EMaterialType.MEAD }],
+    [BuildingType.AgaveFarmerHut, { inputs: [], output: EMaterialType.AGAVE }],
+    [BuildingType.TequilaMakerHut, { inputs: [EMaterialType.AGAVE], output: EMaterialType.TEQUILA }],
+    [BuildingType.SunflowerFarmerHut, { inputs: [], output: EMaterialType.SUNFLOWER }],
+    [BuildingType.SunflowerOilMakerHut, { inputs: [EMaterialType.SUNFLOWER], output: EMaterialType.SUNFLOWEROIL }],
 
     // Military — barrack converts weapons to soldiers, no material output
     [BuildingType.Barrack, { inputs: [EMaterialType.SWORD], output: EMaterialType.NO_MATERIAL }],
 ]);
 
+// ── Construction costs loaded from YAML (per building, per race) ──
+
+interface RawCostEntry {
+    stone?: number;
+    boards?: number;
+    gold?: number;
+}
+type RawCostsYaml = Record<string, Record<string, RawCostEntry>>;
+
+const RACE_NAME_TO_ENUM: Record<string, Race> = {
+    Roman: Race.Roman,
+    Viking: Race.Viking,
+    Mayan: Race.Mayan,
+    Trojan: Race.Trojan,
+    DarkTribe: Race.DarkTribe,
+};
+
+const MATERIAL_KEY_TO_ENUM: Record<string, EMaterialType> = {
+    stone: EMaterialType.STONE,
+    boards: EMaterialType.BOARD,
+    gold: EMaterialType.GOLDBAR,
+};
+
+function resolveBuildingType(name: string): BuildingType {
+    if (!(name in BuildingType)) throw new Error(`Unknown BuildingType in construction-costs.yaml: ${name}`);
+    return BuildingType[name as keyof typeof BuildingType];
+}
+
+function parseRaceCosts(entry: RawCostEntry): ConstructionCost[] {
+    const materials: ConstructionCost[] = [];
+    for (const [key, count] of Object.entries(entry)) {
+        const mat = MATERIAL_KEY_TO_ENUM[key];
+        if (mat === undefined) throw new Error(`Unknown material key in construction-costs.yaml: ${key}`);
+        if (count > 0) materials.push({ material: mat, count });
+    }
+    return materials;
+}
+
+function buildCostTable(): Map<BuildingType, Map<Race, readonly ConstructionCost[]>> {
+    const raw = parseYaml(costsYaml) as RawCostsYaml;
+    const table = new Map<BuildingType, Map<Race, readonly ConstructionCost[]>>();
+
+    for (const [buildingName, raceCosts] of Object.entries(raw)) {
+        const bt = resolveBuildingType(buildingName);
+        const raceMap = new Map<Race, readonly ConstructionCost[]>();
+        for (const [raceName, costs] of Object.entries(raceCosts)) {
+            const race = RACE_NAME_TO_ENUM[raceName];
+            if (race === undefined) throw new Error(`Unknown race in construction-costs.yaml: ${raceName}`);
+            raceMap.set(race, parseRaceCosts(costs));
+        }
+        table.set(bt, raceMap);
+    }
+    return table;
+}
+
+const CONSTRUCTION_COST_TABLE = buildCostTable();
+
 /**
- * Construction material costs for each building type.
- * Every BuildingType must have an entry.
+ * Get construction costs for a building type and race.
+ * Falls back to Roman costs, then to the first available race's costs.
  */
-export const CONSTRUCTION_COSTS: ReadonlyMap<BuildingType, readonly ConstructionCost[]> = new Map([
-    // Military
-    [
-        BuildingType.GuardTowerSmall,
-        [
-            { material: EMaterialType.BOARD, count: 4 },
-            { material: EMaterialType.STONE, count: 6 },
-        ],
-    ],
-    [
-        BuildingType.Barrack,
-        [
-            { material: EMaterialType.BOARD, count: 4 },
-            { material: EMaterialType.STONE, count: 4 },
-        ],
-    ],
+export function getConstructionCosts(buildingType: BuildingType, race: Race): readonly ConstructionCost[] {
+    const raceMap = CONSTRUCTION_COST_TABLE.get(buildingType);
+    if (!raceMap) throw new Error(`No construction costs for ${BuildingType[buildingType]}`);
+    return raceMap.get(race) ?? raceMap.get(Race.Roman) ?? raceMap.values().next().value!;
+}
 
-    // Storage
-    [
-        BuildingType.StorageArea,
-        [
-            { material: EMaterialType.BOARD, count: 4 },
-            { material: EMaterialType.STONE, count: 4 },
-        ],
-    ],
+/** All building types that have construction costs defined. */
+export function getBuildingTypesWithCosts(): BuildingType[] {
+    return [...CONSTRUCTION_COST_TABLE.keys()];
+}
 
-    // Wood industry
-    [
-        BuildingType.WoodcutterHut,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 1 },
-        ],
-    ],
-    [
-        BuildingType.Sawmill,
-        [
-            { material: EMaterialType.BOARD, count: 3 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-    [BuildingType.ForesterHut, [{ material: EMaterialType.BOARD, count: 2 }]],
-
-    // Stone
-    [
-        BuildingType.StonecutterHut,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 1 },
-        ],
-    ],
-
-    // Food industry
-    [
-        BuildingType.GrainFarm,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 3 },
-        ],
-    ],
-    [
-        BuildingType.Mill,
-        [
-            { material: EMaterialType.BOARD, count: 3 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-    [
-        BuildingType.Bakery,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-    [
-        BuildingType.FisherHut,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 1 },
-        ],
-    ],
-    [
-        BuildingType.AnimalRanch,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-    [
-        BuildingType.Slaughterhouse,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-    [
-        BuildingType.WaterworkHut,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 1 },
-        ],
-    ],
-
-    // Mining
-    [BuildingType.CoalMine, [{ material: EMaterialType.BOARD, count: 3 }]],
-    [BuildingType.IronMine, [{ material: EMaterialType.BOARD, count: 3 }]],
-    [BuildingType.GoldMine, [{ material: EMaterialType.BOARD, count: 3 }]],
-
-    // Metal industry
-    [
-        BuildingType.IronSmelter,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 3 },
-        ],
-    ],
-    [
-        BuildingType.SmeltGold,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 3 },
-        ],
-    ],
-    [
-        BuildingType.WeaponSmith,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-    [
-        BuildingType.ToolSmith,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-
-    // Population
-    [
-        BuildingType.LivingHouse,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-
-    // Wine
-    [
-        BuildingType.WinePress,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-
-    // Additional buildings
-    [
-        BuildingType.HunterHut,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 1 },
-        ],
-    ],
-    [
-        BuildingType.DonkeyRanch,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-    [BuildingType.StoneMine, [{ material: EMaterialType.BOARD, count: 3 }]],
-    [BuildingType.SulfurMine, [{ material: EMaterialType.BOARD, count: 3 }]],
-    [
-        BuildingType.HealerHut,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-    [
-        BuildingType.AmmunitionMaker,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-    [
-        BuildingType.SiegeWorkshop,
-        [
-            { material: EMaterialType.BOARD, count: 4 },
-            { material: EMaterialType.STONE, count: 3 },
-        ],
-    ],
-
-    // Houses
-    [
-        BuildingType.ResidenceSmall,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 2 },
-        ],
-    ],
-    [
-        BuildingType.ResidenceMedium,
-        [
-            { material: EMaterialType.BOARD, count: 3 },
-            { material: EMaterialType.STONE, count: 3 },
-        ],
-    ],
-    [
-        BuildingType.ResidenceBig,
-        [
-            { material: EMaterialType.BOARD, count: 4 },
-            { material: EMaterialType.STONE, count: 4 },
-        ],
-    ],
-
-    // Military structures
-    [
-        BuildingType.LookoutTower,
-        [
-            { material: EMaterialType.BOARD, count: 2 },
-            { material: EMaterialType.STONE, count: 4 },
-        ],
-    ],
-    [
-        BuildingType.GuardTowerBig,
-        [
-            { material: EMaterialType.BOARD, count: 6 },
-            { material: EMaterialType.STONE, count: 8 },
-        ],
-    ],
-    [
-        BuildingType.Castle,
-        [
-            { material: EMaterialType.BOARD, count: 8 },
-            { material: EMaterialType.STONE, count: 12 },
-        ],
-    ],
-
-    // Temples
-    [
-        BuildingType.SmallTemple,
-        [
-            { material: EMaterialType.BOARD, count: 3 },
-            { material: EMaterialType.STONE, count: 4 },
-        ],
-    ],
-    [
-        BuildingType.LargeTemple,
-        [
-            { material: EMaterialType.BOARD, count: 5 },
-            { material: EMaterialType.STONE, count: 8 },
-        ],
-    ],
-
-    // Special
-    [
-        BuildingType.Shipyard,
-        [
-            { material: EMaterialType.BOARD, count: 4 },
-            { material: EMaterialType.STONE, count: 3 },
-        ],
-    ],
-    [BuildingType.Decoration, [{ material: EMaterialType.STONE, count: 1 }]],
-    [BuildingType.LargeDecoration, [{ material: EMaterialType.STONE, count: 2 }]],
-]);
+/** Get the race map for a building (for tests/inspection). */
+export function getConstructionCostRaceMap(
+    buildingType: BuildingType
+): ReadonlyMap<Race, readonly ConstructionCost[]> | undefined {
+    return CONSTRUCTION_COST_TABLE.get(buildingType);
+}
 
 /**
  * Returns all building types that consume the given material as a production input.

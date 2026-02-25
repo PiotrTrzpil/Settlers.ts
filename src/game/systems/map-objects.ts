@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- data-heavy file: decoration type catalogue + sprite pools */
 import { EntityType, MapObjectType } from '../entity';
 import { GameState } from '../game-state';
 import { MapSize } from '@/utilities/map-size';
@@ -6,6 +7,7 @@ import type { TerrainData } from '../terrain';
 import { LogHandler } from '@/utilities/log-handler';
 import type { MapObjectData } from '@/resources/map/map-entity-data';
 import { S4TreeType, S4GroundType } from '@/resources/map/s4-types';
+import { MAP_OBJECT_SPRITES } from '@/game/renderer/sprite-metadata/gil-indices';
 
 const log = new LogHandler('MapObjects');
 
@@ -87,6 +89,344 @@ export function s4TreeTypeToMapObjectType(s4Type: S4TreeType): MapObjectType | n
         return (s4Type - 1) as MapObjectType;
     }
     return null;
+}
+
+// ============================================================
+// Decoration types (raw byte values > 18)
+// ============================================================
+
+/** Description of a decoration object type observed on the map */
+export interface DecorationTypeInfo {
+    /** Raw byte value from map file */
+    raw: number;
+    /** Best guess at what this is */
+    label: string;
+    /** Category: 'stone', 'plants', 'river', 'desert', 'sea', etc. */
+    category: string;
+    /** Where it was observed on the map */
+    notes: string;
+}
+
+/**
+ * Observed decoration types — raw byte values > 18 from the map objects chunk.
+ * Values 1-18 are trees (mapped above in RAW_TO_OBJECT_TYPE / s4TreeTypeToMapObjectType).
+ */
+export const DECORATION_TYPES: DecorationTypeInfo[] = [
+    // 56-58: Mountain core decorations
+    { raw: 56, label: 'MountainEdge56', category: 'stone', notes: 'Near mountain edge' },
+    { raw: 57, label: 'Mountain57', category: 'stone', notes: 'On mountain' },
+    { raw: 58, label: 'Mountain58', category: 'stone', notes: 'On mountain (inferred from 57)' },
+
+    // 59-75: Mountain edge decorations — rocks/rubble near mountain-grass transitions
+    {
+        raw: 59,
+        label: 'MountainEdge59',
+        category: 'stone',
+        notes: 'Near mountain edges, mostly on mountain but some on grass',
+    },
+    { raw: 60, label: 'MountainEdge60', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 61, label: 'MountainEdge61', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 62, label: 'MountainEdge62', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 63, label: 'MountainEdge63', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 64, label: 'MountainEdge64', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 65, label: 'MountainEdge65', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 66, label: 'MountainEdge66', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 67, label: 'MountainEdge67', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 68, label: 'MountainEdge68', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 69, label: 'MountainEdge69', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 70, label: 'MountainEdge70', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 71, label: 'MountainEdge71', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 72, label: 'MountainEdge72', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 73, label: 'MountainEdge73', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 74, label: 'MountainEdge74', category: 'stone', notes: 'Near mountain edges' },
+    { raw: 75, label: 'MountainEdge75', category: 'stone', notes: 'Near mountain edges' },
+
+    // 19-29, 31: Landscape decorations just above tree range (common/uncommon)
+    { raw: 19, label: 'Landscape19', category: 'plants', notes: 'Common landscape feature (15k)' },
+    { raw: 20, label: 'Landscape20', category: 'plants', notes: 'Common landscape feature (14k)' },
+    { raw: 21, label: 'Landscape21', category: 'plants', notes: 'Common landscape feature (12k)' },
+    { raw: 22, label: 'Landscape22', category: 'plants', notes: 'Common landscape feature (12k)' },
+    { raw: 23, label: 'Landscape23', category: 'plants', notes: 'Uncommon landscape feature (2.6k)' },
+    { raw: 24, label: 'Landscape24', category: 'plants', notes: 'Uncommon landscape feature (2k)' },
+    { raw: 25, label: 'Landscape25', category: 'plants', notes: 'Uncommon landscape feature (1.8k)' },
+    { raw: 26, label: 'Landscape26', category: 'plants', notes: 'Uncommon landscape feature (1.6k)' },
+    { raw: 27, label: 'Landscape27', category: 'plants', notes: 'Uncommon landscape feature (1.8k)' },
+    { raw: 28, label: 'Landscape28', category: 'plants', notes: 'Uncommon landscape feature (1.8k)' },
+    { raw: 29, label: 'Landscape29', category: 'plants', notes: 'Uncommon landscape feature (3k)' },
+    { raw: 31, label: 'Landscape31', category: 'plants', notes: 'Uncommon landscape feature (857)' },
+
+    // 43: River decoration
+    { raw: 43, label: 'River43', category: 'river', notes: 'Near rivers' },
+
+    // 44-49: Common grass decorations (~35k each across maps)
+    { raw: 44, label: 'Grass44', category: 'plants', notes: 'On grass' },
+    { raw: 45, label: 'Grass45', category: 'plants', notes: 'On grass' },
+    { raw: 46, label: 'Grass46', category: 'plants', notes: 'On grass' },
+    { raw: 47, label: 'Grass47', category: 'plants', notes: 'On grass' },
+    { raw: 48, label: 'Grass48', category: 'plants', notes: 'On grass' },
+    { raw: 49, label: 'Grass49', category: 'plants', notes: 'On grass' },
+
+    // 50-55: Desert / shore decorations
+    { raw: 50, label: 'Desert50', category: 'desert', notes: 'On desert terrain' },
+    { raw: 51, label: 'Desert51', category: 'desert', notes: 'On desert terrain (possibly)' },
+    { raw: 52, label: 'Desert52', category: 'desert', notes: 'On desert terrain' },
+    { raw: 53, label: 'Desert53', category: 'desert', notes: 'On desert terrain' },
+    { raw: 54, label: 'Desert54', category: 'desert_rare', notes: 'Near desert, very rare' },
+    { raw: 55, label: 'Shore55', category: 'sea', notes: 'Near sea / on sea near shore, rare — possibly map data bug' },
+
+    // 76: Common grass decoration (201k across maps)
+    { raw: 76, label: 'Grass76', category: 'plants', notes: 'On grass' },
+
+    // 77-84: River decorations — reeds, river stones, etc.
+    { raw: 77, label: 'River77', category: 'river', notes: 'Mostly near rivers' },
+    { raw: 78, label: 'River78', category: 'river', notes: 'Mostly near rivers' },
+    { raw: 79, label: 'Grass79', category: 'plants', notes: 'On grass near rivers' },
+    { raw: 80, label: 'Grass80', category: 'plants', notes: 'On grass near rivers' },
+    { raw: 81, label: 'Grass81', category: 'plants', notes: 'On grass' },
+    { raw: 82, label: 'Grass82', category: 'plants', notes: 'On grass' },
+    { raw: 83, label: 'River83', category: 'river', notes: 'Mostly near rivers' },
+    { raw: 84, label: 'River84', category: 'river', notes: 'Mostly near rivers' },
+
+    // 85: Common grass decoration (124k), 87: uncommon (672), 86: absent from all maps
+    { raw: 85, label: 'Grass85', category: 'plants', notes: 'On grass' },
+    { raw: 87, label: 'GrassRare87', category: 'plants_rare', notes: 'On grass, uncommon (672)' },
+
+    // 107-110, 119: Sea decorations — on water tiles
+    { raw: 107, label: 'Sea107', category: 'sea', notes: 'On sea' },
+    { raw: 108, label: 'Sea108', category: 'sea', notes: 'On sea' },
+    { raw: 109, label: 'Sea109', category: 'sea', notes: 'On sea' },
+    { raw: 110, label: 'Sea110', category: 'sea', notes: 'On sea' },
+
+    // 116: Rare grass decoration
+    { raw: 116, label: 'GrassRare116', category: 'plants_rare', notes: 'On grass, rare' },
+
+    // 119: Sea
+    { raw: 119, label: 'Sea119', category: 'sea', notes: 'On sea' },
+
+    // 120-122: Desert edge decorations
+    { raw: 120, label: 'Desert120', category: 'desert', notes: 'On desert or desert edge' },
+    { raw: 121, label: 'Desert121', category: 'desert', notes: 'On desert or desert edge' },
+    { raw: 122, label: 'Desert122', category: 'desert', notes: 'On desert' },
+
+    // 123: Not seen on test map, may exist on other maps
+    // { raw: 123, label: 'Unknown123', category: 'unknown', notes: 'Not present on test map' },
+
+    // 124-135: Harvestable stone — 12 depletion stages (124=lv1 nearly gone, 135=lv12 full).
+    // NOT decorations; mapped to ResourceStone in populateMapObjectsFromEntityData.
+
+    // 136, 152, 155-159: Grass decorations
+    { raw: 136, label: 'StoneEdge136', category: 'stone', notes: 'Near harvestable stones (22k)' },
+    { raw: 152, label: 'GrassRare152', category: 'plants_rare', notes: 'On grass, uncommon (2k)' },
+    { raw: 154, label: 'GrassRare154', category: 'plants_rare', notes: 'On grass, rare (210)' },
+    { raw: 155, label: 'GrassRare155', category: 'plants_rare', notes: 'On grass, rare (187)' },
+    { raw: 156, label: 'GrassRare156', category: 'plants_rare', notes: 'On grass, rare (180)' },
+    { raw: 157, label: 'GrassRare157', category: 'plants_rare', notes: 'On grass, rare (185)' },
+    { raw: 158, label: 'GrassRare158', category: 'plants_rare', notes: 'On grass, uncommon (1149)' },
+    { raw: 159, label: 'GrassRare159', category: 'plants_rare', notes: 'On grass, rare (336)' },
+
+    // 163-164: Sea (shallow)
+    { raw: 163, label: 'River163', category: 'river', notes: 'Near rivers' },
+    { raw: 164, label: 'Lake164', category: 'lake', notes: 'On lakes (242k)' },
+
+    // 165-168: River decorations
+    { raw: 165, label: 'River165', category: 'river', notes: 'Near rivers' },
+    { raw: 166, label: 'River166', category: 'river', notes: 'Near rivers' },
+    { raw: 167, label: 'Lake167', category: 'lake', notes: 'On lakes (85k)' },
+    { raw: 168, label: 'Lake168', category: 'lake', notes: 'On lakes (85k)' },
+
+    // 169-172: Beach decorations
+    { raw: 169, label: 'Beach169', category: 'beach', notes: 'On beach' },
+    { raw: 170, label: 'Beach170', category: 'beach', notes: 'On beach' },
+    { raw: 171, label: 'Beach171', category: 'beach', notes: 'On beach' },
+    { raw: 172, label: 'Beach172', category: 'beach', notes: 'On beach' },
+
+    // 173-177: Common beach/shore decorations (27k-37k each)
+    { raw: 173, label: 'Beach173', category: 'beach', notes: 'On beach/shore (27k)' },
+    { raw: 174, label: 'Beach174', category: 'beach', notes: 'On beach/shore (34k)' },
+    { raw: 175, label: 'Beach175', category: 'beach', notes: 'On beach/shore (29k)' },
+    { raw: 176, label: 'Beach176', category: 'beach', notes: 'On beach/shore (26k)' },
+    { raw: 177, label: 'Beach177', category: 'beach', notes: 'On beach/shore (37k)' },
+
+    // 178: Mountain edge rock (common, 14k across maps)
+    { raw: 178, label: 'MountainEdge178', category: 'stone', notes: 'Near mountain edge' },
+
+    // 179-180: Desert
+    { raw: 179, label: 'Desert179', category: 'desert', notes: 'On desert' },
+    { raw: 180, label: 'Desert180', category: 'desert', notes: 'On desert' },
+
+    // 181: Grass
+    { raw: 181, label: 'Grass181', category: 'plants', notes: 'On grass' },
+
+    // 182-183: Mountain edge
+    { raw: 182, label: 'MountainEdge182', category: 'stone', notes: 'On some mountain edges' },
+    { raw: 183, label: 'MountainEdge183', category: 'stone', notes: 'On mountain edges, similar to 182' },
+
+    // 184-188: River decorations
+    { raw: 184, label: 'River184', category: 'river', notes: 'Mostly near rivers' },
+    { raw: 185, label: 'River185', category: 'river', notes: 'Mostly near rivers' },
+    { raw: 186, label: 'Grass186', category: 'plants', notes: 'On grass' },
+    { raw: 187, label: 'Grass187', category: 'plants', notes: 'On grass near rivers' },
+    { raw: 188, label: 'River188', category: 'river', notes: 'Mostly near rivers' },
+
+    // 215: Snow terrain decoration
+    { raw: 215, label: 'Snow215', category: 'snow', notes: 'On snow terrain (718)' },
+
+    // 218-219: Rare desert decorations
+    { raw: 218, label: 'Desert218', category: 'desert_rare', notes: 'On desert, rare' },
+    { raw: 219, label: 'Desert219', category: 'desert_rare', notes: 'On desert, rare' },
+
+    // 221-222: Common desert decorations (7.6k-13k)
+    { raw: 221, label: 'Desert221', category: 'desert', notes: 'On desert (13k)' },
+    { raw: 222, label: 'Desert222', category: 'desert', notes: 'On desert (7.6k)' },
+];
+
+// ============================================================
+// Decoration raw value → sprite assignment
+// ============================================================
+
+/** Sprite reference for a decoration — either static or animated */
+export interface DecorationSpriteRef {
+    /** GIL index in file 5 (first frame for animated) */
+    gilIndex: number;
+    /** Number of animation frames (1 = static) */
+    frames: number;
+}
+
+function staticRef(gilIndex: number): DecorationSpriteRef {
+    return { gilIndex, frames: 1 };
+}
+
+function animRef(range: { start: number; count: number }): DecorationSpriteRef {
+    return { gilIndex: range.start, frames: range.count };
+}
+
+const S = MAP_OBJECT_SPRITES;
+
+/** Sprite pools per decoration category — cycled across raw values within that category */
+const CATEGORY_SPRITE_POOLS: Record<string, DecorationSpriteRef[]> = {
+    stone: [
+        staticRef(S.ROCK_TALL_A),
+        staticRef(S.ROCK_DEBRIS),
+        staticRef(S.ROCK_PILE_SMALL),
+        staticRef(S.BOULDER_MEDIUM),
+        staticRef(S.ROCK_MOSSY_A),
+        staticRef(S.ROCK_OUTCROP),
+        staticRef(S.BOULDER_ROUND),
+        staticRef(S.BOULDER_FLAT_A),
+        staticRef(S.BOULDER_FLAT_B),
+        staticRef(S.ROCK_POINTED),
+        staticRef(S.ROCK_CLIFF),
+        staticRef(S.PEBBLE),
+        staticRef(S.ROCK_CAVE),
+        staticRef(S.ROCK_SPIRE),
+    ],
+    plants: [
+        animRef(S.BUSH_SMALL_YELLOW),
+        animRef(S.BUSH_LARGE_DARK),
+        animRef(S.BUSH_MEDIUM_BERRY),
+        animRef(S.BUSH_VARIANT_C),
+        animRef(S.BUSH_VARIANT_D),
+        animRef(S.BUSH_VARIANT_E),
+        animRef(S.BUSH_RED_BERRY),
+        animRef(S.BUSH_DARK_GREEN),
+        animRef(S.GRASS_FLOWERS_ORANGE),
+        animRef(S.GRASS_WEEDS_SMALL),
+        animRef(S.GRASS_SMALL_ORANGE),
+        animRef(S.GRASS_REEDS_MEDIUM_A),
+        animRef(S.GRASS_REEDS_MEDIUM_B),
+        animRef(S.GRASS_REEDS_LARGE_A),
+        animRef(S.GRASS_REEDS_LARGE_B),
+        animRef(S.GRASS_FLOWERS_YELLOW),
+        animRef(S.GRASS_PLANT_SMALL),
+        animRef(S.GRASS_REEDS_WIDE),
+        staticRef(S.DAISIES),
+        // Additional sprites to cover expanded raw value count
+        staticRef(S.RUBBLE_MEDIUM),
+        staticRef(S.RUBBLE_SMALL),
+        staticRef(S.DEBRIS_SMALL),
+        staticRef(S.BROKEN_PILLAR_C),
+        staticRef(S.BROKEN_PILLAR_A),
+        staticRef(S.BROKEN_PILLAR_B),
+    ],
+    river: [
+        animRef(S.RIVER_REEDS_TALL),
+        animRef(S.RIVER_FERNS),
+        animRef(S.RIVER_FLOWERS_LARGE),
+        animRef(S.CATTAIL_SINGLE),
+        animRef(S.CATTAIL_DOUBLE),
+        animRef(S.CATTAIL_TRIPLE),
+    ],
+    desert: [
+        staticRef(S.CACTUS),
+        staticRef(S.DESERT_CACTUS_LARGE),
+        staticRef(S.DESERT_CACTUS_MEDIUM),
+        staticRef(S.DESERT_CACTUS_SMALL),
+        staticRef(S.ROCK_SPIRE),
+        staticRef(S.DESERT_CACTUS_SPROUT),
+        staticRef(S.DESERT_PLANT_A),
+        staticRef(S.DESERT_PLANT_B),
+        staticRef(S.DESERT_PLANT_C),
+        staticRef(S.DESERT_PLANT_D),
+        staticRef(S.DESERT_PLANT_E),
+        staticRef(S.DESERT_PLANT_F),
+        staticRef(S.DESERT_PLANT_G),
+    ],
+    sea: [animRef(S.SEA_ROCK_A), animRef(S.SEA_ROCK_B), animRef(S.SEA_ROCK_C), animRef(S.SEA_ROCK_D)],
+    beach: [
+        staticRef(S.SEASHELL),
+        staticRef(S.STARFISH),
+        staticRef(S.BEACH_DECO_J),
+        staticRef(S.BEACH_DECO_K),
+        staticRef(S.BEACH_DECO_L),
+    ],
+    // Rare variants — distinctive objects that stand out on the landscape
+    plants_rare: [
+        staticRef(S.MUSHROOM_RING),
+        staticRef(S.SCARECROW),
+        staticRef(S.ROMAN_COLUMN_OVERGROWN_A),
+        staticRef(S.BROKEN_PILLAR_A),
+        staticRef(S.ANCIENT_COLUMN),
+        animRef(S.BUILDING_RUIN_ANIM),
+        staticRef(S.STONE_STATUE),
+        staticRef(S.SMALL_ANIMAL),
+        staticRef(S.GRAVE_A),
+        staticRef(S.WAGON_WRECK),
+        staticRef(S.VINE_GROUND_COVER),
+        staticRef(S.AMANITA_MUSHROOM),
+        // Reserved for very rare values only: POND, STONE_CROSS_RUIN
+    ],
+    desert_rare: [staticRef(S.SKELETON_LARGE), staticRef(S.SKELETON_SMALL), staticRef(S.WAGON_WRECK)],
+    beach_rare: [staticRef(S.BOAT_WRECK), staticRef(S.SHIPWRECK)],
+    lake: [staticRef(S.LAKE_DECO_A), staticRef(S.LAKE_DECO_B), staticRef(S.LAKE_DECO_C)],
+    snow: [staticRef(S.SNOWMAN), staticRef(S.SNOWMAN_B), staticRef(S.DARK_STONE_BLOCK)],
+    stone_rare: [staticRef(S.ROCK_CAVE), staticRef(S.ROCK_SPIRE)],
+};
+
+/**
+ * Build a map from raw decoration byte value → sprite reference.
+ * Cycles through the sprite pool for each category so that
+ * different raw values within the same category get different sprites.
+ */
+export function buildDecorationSpriteMap(): Map<number, DecorationSpriteRef> {
+    const map = new Map<number, DecorationSpriteRef>();
+
+    // Group raw values by category (preserving DECORATION_TYPES order)
+    const byCategory = new Map<string, number[]>();
+    for (const deco of DECORATION_TYPES) {
+        const list = byCategory.get(deco.category) ?? [];
+        list.push(deco.raw);
+        byCategory.set(deco.category, list);
+    }
+
+    for (const [category, rawValues] of byCategory) {
+        const pool = CATEGORY_SPRITE_POOLS[category];
+        if (!pool?.length) continue;
+        for (let i = 0; i < rawValues.length; i++) {
+            map.set(rawValues[i]!, pool[i % pool.length]!);
+        }
+    }
+
+    return map;
 }
 
 /** Get all MapObjectTypes for a given category */
@@ -204,20 +544,81 @@ export function populateMapObjects(
     return count;
 }
 
+/** Raw value range for harvestable stone: 124 (nearly depleted) to 135 (full). */
+const STONE_RAW_MIN = 124;
+const STONE_RAW_MAX = 135;
+
+/** Convert raw stone object value to initial depletion level (1-12). */
+function rawStoneToLevel(rawType: number): number {
+    return rawType - STONE_RAW_MIN + 1;
+}
+
+interface ClassifiedObject {
+    type: MapObjectType;
+    variation?: number;
+    /** Whether this object requires buildable terrain. */
+    needsBuildable: boolean;
+}
+
+/**
+ * Classify a raw object type byte from the map file.
+ * Returns the mapped MapObjectType + optional initial variation,
+ * or null if the raw value should be stored as-is (decoration).
+ */
+function classifyRawObjectType(rawType: number): ClassifiedObject | null {
+    // Trees (raw 1-18 → MapObjectType 0-17)
+    const tree = s4TreeTypeToMapObjectType(rawType as S4TreeType);
+    if (tree !== null) return { type: tree, needsBuildable: true };
+
+    // Harvestable stone (raw 124-135 → ResourceStone with initial depletion level)
+    if (rawType >= STONE_RAW_MIN && rawType <= STONE_RAW_MAX) {
+        return { type: MapObjectType.ResourceStone, variation: rawStoneToLevel(rawType), needsBuildable: false };
+    }
+
+    return null;
+}
+
+function isTreeType(type: MapObjectType): boolean {
+    return type <= MapObjectType.TreeOliveSmall;
+}
+
 /**
  * Populate map objects from parsed entity data (MapObjects chunk).
  * This is the CORRECT way to load trees - from the MapObjects chunk (type 6),
  * not from landscape byte 2 which contains terrain attributes.
  *
  * For trees (raw type 1-18), converts to MapObjectType (0-17).
- * For non-trees (raw type >18), stores the raw byte value as subType directly.
- * The raw values don't conflict with MapObjectType enum (trees 0-17, resources 100-104).
+ * For harvestable stone (raw 124-135), converts to ResourceStone with initial depletion level.
+ * For other values (>18), stores the raw byte value as subType directly (decorations).
  *
  * @param state - Game state to add entities to
  * @param objects - Parsed map object data from MapObjects chunk
  * @param terrain - Terrain data for buildability checks
  * @returns Number of tree objects spawned (non-trees are also added but not counted for expansion)
  */
+/** Result of adding a single map object: 'tree', 'deco', or null (skipped). */
+function addMapObject(
+    state: GameState,
+    x: number,
+    y: number,
+    rawType: number,
+    groundType: Uint8Array,
+    mapSize: MapSize
+): 'tree' | 'deco' | null {
+    if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) return null;
+    if (state.getEntityAt(x, y)) return null;
+
+    const classified = classifyRawObjectType(rawType);
+    if (classified) {
+        if (classified.needsBuildable && !isBuildable(groundType[mapSize.toIndex(x, y)]!)) return null;
+        state.addEntity(EntityType.MapObject, classified.type, x, y, 0, undefined, classified.variation);
+        return isTreeType(classified.type) ? 'tree' : 'deco';
+    }
+
+    state.addEntity(EntityType.MapObject, rawType, x, y, 0);
+    return 'deco';
+}
+
 export function populateMapObjectsFromEntityData(
     state: GameState,
     objects: MapObjectData[],
@@ -228,29 +629,9 @@ export function populateMapObjectsFromEntityData(
     let decoCount = 0;
 
     for (const obj of objects) {
-        const { x, y, objectType: rawType } = obj;
-
-        // Validate coordinates
-        if (x < 0 || x >= mapSize.width || y < 0 || y >= mapSize.height) {
-            continue;
-        }
-
-        const idx = mapSize.toIndex(x, y);
-
-        // Try to map as tree first (raw 1-18 → MapObjectType 0-17)
-        const mappedType = s4TreeTypeToMapObjectType(rawType as S4TreeType);
-        if (mappedType !== null) {
-            // Trees require buildable terrain and unoccupied tiles
-            if (!isBuildable(groundType[idx]!)) continue;
-            if (state.getEntityAt(x, y)) continue;
-            state.addEntity(EntityType.MapObject, mappedType, x, y, 0);
-            treeCount++;
-        } else {
-            // Non-tree decorations: skip only water, allow occupied tiles (skip silently)
-            if (state.getEntityAt(x, y)) continue;
-            state.addEntity(EntityType.MapObject, rawType, x, y, 0);
-            decoCount++;
-        }
+        const result = addMapObject(state, obj.x, obj.y, obj.objectType, groundType, mapSize);
+        if (result === 'tree') treeCount++;
+        else if (result === 'deco') decoCount++;
     }
 
     log.debug(`Populated ${treeCount} trees + ${decoCount} decorations from ${objects.length} tile entries`);

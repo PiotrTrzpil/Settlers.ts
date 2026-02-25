@@ -51,7 +51,7 @@ describe('Terrain Leveling', () => {
 
         it('should capture 1 footprint tile for a 1x1 decoration', () => {
             const map = createTestMap();
-            const bs = makeBuildingState(10, 10, BuildingType.Decoration);
+            const bs = makeBuildingState(10, 10, BuildingType.Eyecatcher01);
 
             const captured = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
 

@@ -15,6 +15,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import type { TaskNode } from './types';
 import { TaskType, type EntityWorkHandler, type PositionWorkHandler } from './types';
 import type { TreeSystem } from '../trees/tree-system';
+import type { StoneSystem } from '../stones/stone-system';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { findNearestEntity } from '../../systems/spatial-search';
 import { getWorkerWorkplaces } from '../../unit-types';
@@ -180,16 +181,43 @@ const stonecuttingLog = new LogHandler('StonecuttingHandler');
 
 /**
  * Create a handler for STONE search type (stonecutters).
- * Simple harvest: find stone → work on it → resource removed.
+ * Uses StoneSystem for depletion tracking (13 visual stages per stone).
+ * Each work session depletes one level; stone is removed when fully depleted.
  */
-export function createStonecuttingHandler(gameState: GameState): EntityWorkHandler {
-    return createSimpleHarvestHandler({
-        gameState,
-        log: stonecuttingLog,
-        workerLabel: 'Stonecutter',
-        searchRadius: STONECUTTER_SEARCH_RADIUS,
-        targetFilter: entity => entity.subType === MapObjectType.ResourceStone,
-    });
+export function createStonecuttingHandler(gameState: GameState, stoneSystem: StoneSystem): EntityWorkHandler {
+    return {
+        type: 'entity',
+
+        findTarget: (x: number, y: number) => {
+            return findNearestEntity(gameState, x, y, STONECUTTER_SEARCH_RADIUS, entity => {
+                if (entity.type !== EntityType.MapObject) return false;
+                return entity.subType === MapObjectType.ResourceStone && stoneSystem.canMine(entity.id);
+            });
+        },
+
+        canWork: (targetId: number) => {
+            return stoneSystem.canMine(targetId) || stoneSystem.isMining(targetId);
+        },
+
+        onWorkStart: (targetId: number) => {
+            stoneSystem.startMining(targetId);
+        },
+
+        onWorkTick: (_targetId: number, progress: number) => {
+            return progress >= 1;
+        },
+
+        onWorkComplete: (targetId: number, settlerX: number, settlerY: number) => {
+            const depleted = stoneSystem.completeMining(targetId);
+            stonecuttingLog.debug(
+                `Stonecutter mined stone ${targetId} at (${settlerX}, ${settlerY})${depleted ? ' — depleted' : ''}`
+            );
+        },
+
+        onWorkInterrupt: (targetId: number) => {
+            stoneSystem.cancelMining(targetId);
+        },
+    };
 }
 
 // ─────────────────────────────────────────────────────────────

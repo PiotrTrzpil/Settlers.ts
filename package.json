@@ -30,6 +30,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@tanstack/vue-virtual": "^3.13.19",
     "@vueuse/core": "^14.2.1",
     "fengari": "^0.1.5",
     "fengari-interop": "^0.1.4",

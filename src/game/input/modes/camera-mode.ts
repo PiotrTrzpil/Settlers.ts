@@ -138,10 +138,12 @@ export class CameraMode extends BaseInputMode {
         this.currentScreenX = data.screenX;
         this.currentScreenY = data.screenY;
 
-        // Check if we've exceeded threshold for "real" movement
+        // Check if we've exceeded threshold for "real" movement.
+        // Threshold must be generous — right-click is also used for unit commands,
+        // and even small hand tremor during a click can exceed a low threshold.
         const dpx = data.screenX - this.dragStartScreenX;
         const dpy = data.screenY - this.dragStartScreenY;
-        const moveThreshold = 3;
+        const moveThreshold = 8;
         if (Math.abs(dpx) >= moveThreshold || Math.abs(dpy) >= moveThreshold) {
             this.didMoveCamera = true;
         }
@@ -172,9 +174,13 @@ export class CameraMode extends BaseInputMode {
     override onUpdate(deltaTime: number, context: InputContext): void {
         if (!this.viewPoint) return;
 
-        // MOUSE DRAG: Compute camera position from current mouse position (frame-synchronized)
+        // MOUSE DRAG: Compute camera position from current mouse position (frame-synchronized).
+        // Only move the camera once movement exceeds the threshold — this prevents small
+        // jitter during right-clicks that are actually unit commands.
         if (this.isDraggingCamera) {
-            this.updateDragCamera();
+            if (this.didMoveCamera) {
+                this.updateDragCamera();
+            }
             return; // Don't process keyboard while dragging
         }
 

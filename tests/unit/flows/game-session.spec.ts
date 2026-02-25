@@ -27,12 +27,13 @@ import { executeCommand } from '@/game/commands';
 import { EventBus } from '@/game/event-bus';
 import {
     BUILDING_PRODUCTIONS,
-    CONSTRUCTION_COSTS,
+    getConstructionCosts,
     getBuildingTypesRequestingMaterial,
     EMaterialType,
     isMaterialDroppable,
     getMaterialPriority,
 } from '@/game/economy';
+import { Race } from '@/game/race';
 import { isPassable, isBuildable, canPlaceBuilding } from '@/game/features/placement';
 import { findPath } from '@/game/systems/pathfinding';
 
@@ -81,7 +82,7 @@ describe('Game Session: multi-system integration sweep', () => {
         expect(trunkConsumers).toContain(BuildingType.Sawmill);
 
         // ── Verify construction costs use standard materials ──
-        const lumberjackCost = CONSTRUCTION_COSTS.get(BuildingType.WoodcutterHut)!;
+        const lumberjackCost = getConstructionCosts(BuildingType.WoodcutterHut, Race.Roman);
         expect(lumberjackCost.length).toBeGreaterThan(0);
         for (const cost of lumberjackCost) {
             expect(isMaterialDroppable(cost.material)).toBe(true);

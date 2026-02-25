@@ -1,0 +1,325 @@
+# Construction costs per building type per race.
+# Extracted from Siedler4/GameData/buildingInfo.xml
+# Materials: stone, boards, gold (zero values omitted)
+
+WoodcutterHut:
+  Roman: { stone: 2, boards: 2 }
+  Viking: { boards: 3 }
+  Mayan: { stone: 3, boards: 1 }
+  Trojan: { stone: 3, boards: 1 }
+
+StorageArea:
+  Roman: { stone: 2, boards: 2 }
+  Viking: { stone: 2, boards: 2 }
+  Mayan: { stone: 2, boards: 2 }
+  Trojan: { stone: 2, boards: 2 }
+
+Sawmill:
+  Roman: { stone: 4, boards: 3 }
+  Viking: { stone: 1, boards: 4 }
+  Mayan: { stone: 5, boards: 2 }
+  Trojan: { stone: 4, boards: 4 }
+
+StonecutterHut:
+  Roman: { stone: 3, boards: 2 }
+  Viking: { stone: 1, boards: 3 }
+  Mayan: { stone: 3, boards: 1 }
+  Trojan: { stone: 2, boards: 2 }
+
+GrainFarm:
+  Roman: { stone: 6, boards: 6 }
+  Viking: { stone: 4, boards: 8 }
+  Mayan: { stone: 9, boards: 3 }
+  Trojan: { stone: 5, boards: 8 }
+
+Mill:
+  Roman: { stone: 3, boards: 3 }
+  Viking: { stone: 2, boards: 4 }
+  Mayan: { stone: 4, boards: 2 }
+  Trojan: { stone: 2, boards: 5 }
+
+Bakery:
+  Roman: { stone: 5, boards: 4 }
+  Viking: { stone: 3, boards: 5 }
+  Mayan: { stone: 6, boards: 3 }
+  Trojan: { stone: 4, boards: 6 }
+
+FisherHut:
+  Roman: { stone: 2, boards: 3 }
+  Viking: { stone: 1, boards: 4 }
+  Mayan: { stone: 3, boards: 2 }
+  Trojan: { stone: 1, boards: 4 }
+
+AnimalRanch:
+  Roman: { stone: 6, boards: 6 }
+  Viking: { stone: 4, boards: 8 }
+  Mayan: { stone: 8, boards: 3 }
+  Trojan: { stone: 5, boards: 8 }
+
+Slaughterhouse:
+  Roman: { stone: 4, boards: 4 }
+  Viking: { stone: 3, boards: 5 }
+  Mayan: { stone: 6, boards: 2 }
+  Trojan: { stone: 3, boards: 6 }
+
+WaterworkHut:
+  Roman: { stone: 3, boards: 3 }
+  Viking: { stone: 1, boards: 5 }
+  Mayan: { stone: 4, boards: 2 }
+  Trojan: { stone: 3, boards: 4 }
+
+CoalMine:
+  Roman: { stone: 1, boards: 4 }
+  Viking: { stone: 1, boards: 4 }
+  Mayan: { stone: 3, boards: 2 }
+  Trojan: { stone: 3, boards: 3 }
+
+IronMine:
+  Roman: { stone: 1, boards: 4 }
+  Viking: { stone: 1, boards: 4 }
+  Mayan: { stone: 3, boards: 2 }
+  Trojan: { stone: 3, boards: 3 }
+
+GoldMine:
+  Roman: { stone: 1, boards: 5 }
+  Viking: { stone: 1, boards: 5 }
+  Mayan: { stone: 4, boards: 2 }
+  Trojan: { stone: 3, boards: 4 }
+
+IronSmelter:
+  Roman: { stone: 6, boards: 4 }
+  Viking: { stone: 4, boards: 6 }
+  Mayan: { stone: 7, boards: 3 }
+  Trojan: { stone: 6, boards: 4 }
+
+SmeltGold:
+  Roman: { stone: 6, boards: 4 }
+  Viking: { stone: 4, boards: 6 }
+  Mayan: { stone: 7, boards: 3 }
+  Trojan: { stone: 3, boards: 1 }
+
+WeaponSmith:
+  Roman: { stone: 7, boards: 5 }
+  Viking: { stone: 5, boards: 7 }
+  Mayan: { stone: 8, boards: 3 }
+  Trojan: { stone: 8, boards: 6 }
+
+ToolSmith:
+  Roman: { stone: 5, boards: 3 }
+  Viking: { stone: 3, boards: 5 }
+  Mayan: { stone: 6, boards: 2 }
+  Trojan: { stone: 4, boards: 5 }
+
+Barrack:
+  Roman: { stone: 5, boards: 4 }
+  Viking: { stone: 3, boards: 6 }
+  Mayan: { stone: 6, boards: 3 }
+  Trojan: { stone: 6, boards: 4 }
+
+ForesterHut:
+  Roman: { stone: 1, boards: 3 }
+  Viking: { boards: 2 }
+  Mayan: { stone: 3, boards: 1 }
+  Trojan: { stone: 2, boards: 2 }
+
+LivingHouse:
+  Roman: { stone: 2, boards: 2 }
+  Viking: { stone: 3, boards: 1 }
+  Mayan: { stone: 3, boards: 1 }
+  Trojan: { stone: 3, boards: 2 }
+
+GuardTowerSmall:
+  Roman: { stone: 3, boards: 2 }
+  Viking: { stone: 2, boards: 3 }
+  Mayan: { stone: 3, boards: 2 }
+  Trojan: { stone: 3, boards: 3 }
+
+HunterHut:
+  Roman: { stone: 3, boards: 3 }
+  Viking: { stone: 2, boards: 4 }
+  Mayan: { stone: 4, boards: 2 }
+  Trojan: { stone: 2, boards: 4 }
+
+DonkeyRanch:
+  Roman: { stone: 6, boards: 6 }
+  Viking: { stone: 4, boards: 8 }
+  Mayan: { stone: 9, boards: 3 }
+  Trojan: { stone: 5, boards: 8 }
+
+StoneMine:
+  Roman: { stone: 1, boards: 4 }
+  Viking: { stone: 2, boards: 3 }
+  Mayan: { stone: 2, boards: 3 }
+  Trojan: { stone: 2, boards: 4 }
+
+SulfurMine:
+  Roman: { stone: 2, boards: 3 }
+  Viking: { stone: 1, boards: 4 }
+  Mayan: { stone: 3, boards: 2 }
+  Trojan: { stone: 3, boards: 3 }
+
+HealerHut:
+  Roman: { stone: 3, boards: 3 }
+  Viking: { stone: 2, boards: 4 }
+  Mayan: { stone: 4, boards: 2 }
+  Trojan: { stone: 2, boards: 2 }
+
+ResidenceSmall:
+  Roman: { stone: 3, boards: 3 }
+  Viking: { stone: 2, boards: 3 }
+  Mayan: { stone: 3, boards: 2 }
+  Trojan: { stone: 4, boards: 1 }
+
+ResidenceMedium:
+  Roman: { stone: 6, boards: 5 }
+  Viking: { stone: 4, boards: 8 }
+  Mayan: { stone: 8, boards: 4 }
+  Trojan: { stone: 7, boards: 3 }
+
+ResidenceBig:
+  Roman: { stone: 12, boards: 10 }
+  Viking: { stone: 9, boards: 15 }
+  Mayan: { stone: 14, boards: 10 }
+  Trojan: { stone: 14, boards: 10 }
+
+GuardTowerBig:
+  Roman: { stone: 7, boards: 7 }
+  Viking: { stone: 6, boards: 7 }
+  Mayan: { stone: 7, boards: 6 }
+  Trojan: { stone: 8, boards: 8 }
+
+Castle:
+  Roman: { stone: 12, boards: 8 }
+  Viking: { stone: 8, boards: 12 }
+  Mayan: { stone: 14, boards: 6 }
+  Trojan: { stone: 14, boards: 9 }
+
+AmmunitionMaker:
+  Roman: { stone: 3, boards: 3 }
+  Mayan: { stone: 4, boards: 2 }
+  Trojan: { stone: 3, boards: 4 }
+
+SmallTemple:
+  Roman: { stone: 5, boards: 7 }
+  Viking: { stone: 4, boards: 6 }
+  Mayan: { stone: 6, boards: 3 }
+  Trojan: { stone: 5, boards: 3 }
+
+LargeTemple:
+  Roman: { stone: 7, boards: 8, gold: 2 }
+  Viking: { stone: 4, boards: 8, gold: 2 }
+  Mayan: { stone: 8, boards: 4, gold: 2 }
+  Trojan: { stone: 7, boards: 4, gold: 2 }
+
+LookoutTower:
+  Roman: { stone: 2, boards: 2 }
+  Viking: { stone: 2, boards: 4 }
+  Mayan: { stone: 4, boards: 2 }
+  Trojan: { stone: 2, boards: 2 }
+
+Shipyard:
+  Roman: { stone: 5, boards: 3 }
+  Viking: { stone: 3, boards: 5 }
+  Mayan: { stone: 6, boards: 1 }
+  Trojan: { stone: 5, boards: 2 }
+
+Eyecatcher01:
+  Roman: { stone: 2, boards: 2, gold: 2 }
+  Viking: { stone: 1, boards: 3, gold: 2 }
+  Mayan: { stone: 2, gold: 1 }
+  Trojan: { stone: 2, gold: 3 }
+
+# Drink production (race-specific buildings)
+Vinyard:
+  Roman: { stone: 5, boards: 5 }
+
+BeekeeperHut:
+  Viking: { stone: 2, boards: 4 }
+
+MeadMakerHut:
+  Viking: { stone: 3, boards: 4 }
+
+AgaveFarmerHut:
+  Mayan: { stone: 3, boards: 3 }
+
+TequilaMakerHut:
+  Mayan: { stone: 5, boards: 2 }
+
+SunflowerFarmerHut:
+  Trojan: { stone: 2, boards: 4 }
+
+SunflowerOilMakerHut:
+  Trojan: { stone: 2, boards: 4 }
+
+SiegeWorkshop:
+  Roman: { stone: 6, boards: 5 }
+  Viking: { stone: 4, boards: 7 }
+  Mayan: { stone: 7, boards: 3 }
+  Trojan: { stone: 6, boards: 4 }
+
+Eyecatcher02:
+  Roman: { stone: 5, boards: 1, gold: 3 }
+  Viking: { boards: 2, gold: 2 }
+  Mayan: { stone: 5, gold: 3 }
+  Trojan: { stone: 4, boards: 2, gold: 2 }
+
+Eyecatcher03:
+  Roman: { stone: 1, gold: 5 }
+  Viking: { boards: 3, gold: 2 }
+  Mayan: { stone: 6, boards: 1, gold: 3 }
+  Trojan: { stone: 2, boards: 1, gold: 4 }
+
+Eyecatcher04:
+  Roman: { stone: 6, boards: 1, gold: 3 }
+  Viking: { stone: 1, boards: 2, gold: 2 }
+  Mayan: { stone: 5, boards: 2, gold: 3 }
+  Trojan: { stone: 4, boards: 2, gold: 2 }
+
+Eyecatcher05:
+  Roman: { stone: 4, boards: 2, gold: 2 }
+  Viking: { stone: 2, boards: 4, gold: 3 }
+  Mayan: { stone: 3, boards: 2, gold: 2 }
+  Trojan: { stone: 3, boards: 1, gold: 1 }
+
+Eyecatcher06:
+  Roman: { stone: 5, boards: 2, gold: 1 }
+  Viking: { stone: 2, gold: 2 }
+  Mayan: { stone: 5, boards: 1, gold: 2 }
+  Trojan: { stone: 4, gold: 1 }
+
+Eyecatcher07:
+  Roman: { stone: 2, boards: 3, gold: 1 }
+  Viking: { boards: 2, gold: 2 }
+  Mayan: { stone: 6, gold: 3 }
+  Trojan: { stone: 6, gold: 3 }
+
+Eyecatcher08:
+  Roman: { stone: 5, boards: 2, gold: 3 }
+  Viking: { stone: 3, boards: 1, gold: 3 }
+  Mayan: { stone: 4, gold: 3 }
+  Trojan: { stone: 5, gold: 3 }
+
+Eyecatcher09:
+  Roman: { stone: 3, boards: 1, gold: 3 }
+  Viking: { stone: 2, boards: 1, gold: 3 }
+  Mayan: { stone: 5, boards: 1, gold: 3 }
+  Trojan: { stone: 3, boards: 3, gold: 4 }
+
+Eyecatcher10:
+  Roman: { stone: 2, gold: 1 }
+  Viking: { stone: 3, boards: 2, gold: 2 }
+  Mayan: { stone: 4, gold: 2 }
+  Trojan: { stone: 4, boards: 2, gold: 3 }
+
+Eyecatcher11:
+  Roman: { stone: 4, boards: 2, gold: 3 }
+  Viking: { stone: 4, boards: 3, gold: 3 }
+  Mayan: { stone: 5, gold: 2 }
+  Trojan: { stone: 4, boards: 3, gold: 2 }
+
+Eyecatcher12:
+  Roman: { stone: 1, boards: 2, gold: 1 }
+  Viking: { stone: 5, boards: 1, gold: 2 }
+  Mayan: { stone: 6, boards: 2, gold: 3 }
+  Trojan: { stone: 5, boards: 3, gold: 3 }
+

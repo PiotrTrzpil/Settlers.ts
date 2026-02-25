@@ -48,6 +48,12 @@ export interface LayerVisibility {
     environmentLayers: EnvironmentLayerVisibility;
     /** Debug: when set, only show map objects with this raw type value. null = show all. */
     debugObjectTypeFilter: number | null;
+    /** When false, decorations render as colored dots + labels instead of textures */
+    decorationTextures: boolean;
+    /** Show building footprint tile overlays */
+    showBuildingFootprint: boolean;
+    /** Show pathfinding dots for selected units */
+    showPathfinding: boolean;
 }
 
 /** Default layer visibility (all visible) */
@@ -63,6 +69,9 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
         other: true,
     },
     debugObjectTypeFilter: null,
+    decorationTextures: true,
+    showBuildingFootprint: false,
+    showPathfinding: true,
 };
 
 // ============================================================================
@@ -145,19 +154,14 @@ export function loadLayerVisibility(): LayerVisibility {
         if (!stored) return { ...DEFAULT_LAYER_VISIBILITY };
 
         const parsed = JSON.parse(stored) as Partial<LayerVisibility>;
+        const defaults = DEFAULT_LAYER_VISIBILITY;
+        const envDefaults = defaults.environmentLayers;
 
         // Merge with defaults to handle missing fields from older saves
         return {
-            buildings: parsed.buildings ?? DEFAULT_LAYER_VISIBILITY.buildings,
-            units: parsed.units ?? DEFAULT_LAYER_VISIBILITY.units,
-            environment: parsed.environment ?? DEFAULT_LAYER_VISIBILITY.environment,
-            resources: parsed.resources ?? DEFAULT_LAYER_VISIBILITY.resources,
-            environmentLayers: {
-                trees: parsed.environmentLayers?.trees ?? DEFAULT_LAYER_VISIBILITY.environmentLayers.trees,
-                stones: parsed.environmentLayers?.stones ?? DEFAULT_LAYER_VISIBILITY.environmentLayers.stones,
-                plants: parsed.environmentLayers?.plants ?? DEFAULT_LAYER_VISIBILITY.environmentLayers.plants,
-                other: parsed.environmentLayers?.other ?? DEFAULT_LAYER_VISIBILITY.environmentLayers.other,
-            },
+            ...defaults,
+            ...parsed,
+            environmentLayers: { ...envDefaults, ...parsed.environmentLayers },
             debugObjectTypeFilter: null, // Never persist debug filter
         };
     } catch (e) {

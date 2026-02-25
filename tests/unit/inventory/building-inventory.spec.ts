@@ -231,7 +231,7 @@ describe('Inventory Configs', () => {
 
         it('should return false for buildings without inventory', () => {
             expect(hasInventory(BuildingType.GuardTowerSmall)).toBe(false);
-            expect(hasInventory(BuildingType.Decoration)).toBe(false);
+            expect(hasInventory(BuildingType.Eyecatcher01)).toBe(false);
         });
     });
 

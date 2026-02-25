@@ -22,12 +22,15 @@ import {
     WORKER_JOB_INDICES,
     AVAILABLE_RACES,
 } from './sprite-metadata';
+import { MAP_OBJECT_SPRITES } from './sprite-metadata/gil-indices';
+import { STONE_DEPLETION_STAGES } from '../features/stones/stone-system';
 import { SpriteLoader, type LoadedGfxFileSet } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
 import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
 import { ANIMATION_DEFAULTS, AnimationData, carrySequenceKey, workSequenceKey } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy';
+import { buildDecorationSpriteMap, type DecorationSpriteRef } from '../systems/map-objects';
 import { TEAM_COLOR_PALETTES } from '@/resources/gfx/team-colors';
 import {
     getAtlasCache,
@@ -774,6 +777,14 @@ export class SpriteRenderManager {
         const treeCount = await this.loadTreeSprites(fileSet5, atlas, registry, gl, paletteBase5);
         loadCount += treeCount;
 
+        // Load stone depletion sprites (harvestable stones with 13 stages × 2 variants)
+        const stoneCount = await this.loadStoneSprites(fileSet5, atlas, registry, gl, paletteBase5);
+        loadCount += stoneCount;
+
+        // Load decoration sprites (non-tree map objects) using direct GIL indices
+        const decoCount = await this.loadDecorationSprites(fileSet5, atlas, registry, gl, paletteBase5);
+        loadCount += decoCount;
+
         // Load resource map objects (coal, iron, etc.) using direction-based structure
         if (fileSet3) {
             const paletteBase3 = this.getPaletteBaseOffset(`${GFX_FILE_NUMBERS.RESOURCES}`);
@@ -862,6 +873,109 @@ export class SpriteRenderManager {
 
         SpriteRenderManager.log.debug(`Loaded ${totalLoaded} tree sprites`);
         return totalLoaded;
+    }
+
+    /**
+     * Load harvestable stone depletion sprites from direct GIL indices.
+     * 2 variants (A, B) × 13 stages = 26 sprites for ResourceStone.
+     * Variation layout: variant * 13 + stage (A: 0-12, B: 13-25).
+     */
+    private async loadStoneSprites(
+        fileSet: LoadedGfxFileSet,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry,
+        gl: WebGL2RenderingContext,
+        paletteBaseOffset: number
+    ): Promise<number> {
+        type StoneStageData = { variation: number; entry: SpriteEntry };
+        const batch = new SafeLoadBatch<StoneStageData>();
+
+        const variants = [MAP_OBJECT_SPRITES.STONE_STAGES_A, MAP_OBJECT_SPRITES.STONE_STAGES_B];
+
+        for (let v = 0; v < variants.length; v++) {
+            const range = variants[v]!;
+            for (let stage = 0; stage < range.count; stage++) {
+                const gilIndex = range.start + stage;
+                const sprite = await this.spriteLoader.loadDirectSprite(
+                    fileSet,
+                    gilIndex,
+                    null,
+                    atlas,
+                    paletteBaseOffset
+                );
+                if (sprite) {
+                    batch.add({ variation: v * STONE_DEPLETION_STAGES + stage, entry: sprite.entry });
+                }
+            }
+        }
+
+        let loaded = 0;
+        batch.finalize(atlas, gl, data => {
+            registry.registerMapObject(MapObjectType.ResourceStone, data.entry, data.variation);
+            loaded++;
+        });
+
+        SpriteRenderManager.log.debug(`Loaded ${loaded} stone depletion sprites`);
+        return loaded;
+    }
+
+    /**
+     * Load decoration sprites (non-tree map objects) using direct GIL indices.
+     * Deduplicates by GIL index so each unique sprite is loaded once,
+     * then registered for all raw byte values that share it.
+     */
+    private async loadDecorationSprites(
+        fileSet: LoadedGfxFileSet,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry,
+        gl: WebGL2RenderingContext,
+        paletteBaseOffset: number
+    ): Promise<number> {
+        const decoMap = buildDecorationSpriteMap();
+
+        // Deduplicate: group raw values by gilIndex to avoid loading the same sprite multiple times
+        const byGilIndex = new Map<number, { ref: DecorationSpriteRef; rawValues: number[] }>();
+        for (const [raw, ref] of decoMap) {
+            const existing = byGilIndex.get(ref.gilIndex);
+            if (existing) {
+                existing.rawValues.push(raw);
+            } else {
+                byGilIndex.set(ref.gilIndex, { ref, rawValues: [raw] });
+            }
+        }
+
+        type DecoData = { rawValues: number[]; firstFrame: SpriteEntry; allFrames: SpriteEntry[] | null };
+        const batch = new SafeLoadBatch<DecoData>();
+
+        for (const { ref, rawValues } of byGilIndex.values()) {
+            const loaded = await this.loadDecoEntry(fileSet, ref, atlas, paletteBaseOffset);
+            if (loaded) batch.add({ rawValues, ...loaded });
+        }
+
+        let totalRegistered = 0;
+        const uniqueCount = batch.count;
+        batch.finalize(atlas, gl, data => {
+            for (const raw of data.rawValues) {
+                registry.registerMapObject(raw as MapObjectType, data.firstFrame);
+                totalRegistered++;
+            }
+        });
+
+        SpriteRenderManager.log.debug(
+            `Loaded ${uniqueCount} unique decoration sprites → ${totalRegistered} registrations`
+        );
+        return totalRegistered;
+    }
+
+    /** Load a single decoration sprite (first frame only, no animation for now) */
+    private async loadDecoEntry(
+        fileSet: LoadedGfxFileSet,
+        ref: DecorationSpriteRef,
+        atlas: EntityTextureAtlas,
+        paletteBaseOffset: number
+    ): Promise<{ firstFrame: SpriteEntry; allFrames: null } | null> {
+        const sprite = await this.spriteLoader.loadDirectSprite(fileSet, ref.gilIndex, null, atlas, paletteBaseOffset);
+        return sprite ? { firstFrame: sprite.entry, allFrames: null } : null;
     }
 
     /**

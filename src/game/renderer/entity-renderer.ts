@@ -13,6 +13,7 @@ import {
 } from '../entity';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
+import { TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
 import { SpriteEntry, Race } from './sprite-metadata';
@@ -49,6 +50,7 @@ import {
     TEXTURE_UNIT_SPRITE_ATLAS,
     BASE_QUAD,
     ENTITY_SCALE,
+    DECORATION_SCALE,
     BUILDING_SCALE,
     UNIT_SCALE,
     RESOURCE_SCALE,
@@ -101,15 +103,23 @@ function decoHueToRgb(subType: number): number[] {
     return [r + m, g + m, b + m, 1.0];
 }
 
-/** Apply ENTITY_SCALE to a sprite's world dimensions and offsets. */
-function scaleSprite(sprite: SpriteEntry): SpriteEntry {
+/** Apply a scale factor to a sprite's world dimensions and offsets. */
+function scaleSprite(sprite: SpriteEntry, scale: number = ENTITY_SCALE): SpriteEntry {
     return {
         ...sprite,
-        widthWorld: sprite.widthWorld * ENTITY_SCALE,
-        heightWorld: sprite.heightWorld * ENTITY_SCALE,
-        offsetX: sprite.offsetX * ENTITY_SCALE,
-        offsetY: sprite.offsetY * ENTITY_SCALE,
+        widthWorld: sprite.widthWorld * scale,
+        heightWorld: sprite.heightWorld * scale,
+        offsetX: sprite.offsetX * scale,
+        offsetY: sprite.offsetY * scale,
     };
+}
+
+/** Get sprite scale for an entity: decorations use DECORATION_SCALE, everything else ENTITY_SCALE. */
+function getSpriteScale(entity: Entity): number {
+    if (entity.type !== EntityType.MapObject) return ENTITY_SCALE;
+    if (entity.subType <= MapObjectType.TreeOliveSmall) return ENTITY_SCALE;
+    if (entity.subType === MapObjectType.ResourceStone) return ENTITY_SCALE;
+    return DECORATION_SCALE;
 }
 
 /**
@@ -507,14 +517,16 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             viewPoint,
             unitStates: this.unitStates,
         };
-        this.selectionOverlayRenderer.drawSelectedUnitPath(
-            gl,
-            this.dynamicBuffer,
-            this.selectedEntityIds,
-            this.aEntityPos,
-            this.aColor,
-            selectionCtx
-        );
+        if (this.layerVisibility.showPathfinding) {
+            this.selectionOverlayRenderer.drawSelectedUnitPath(
+                gl,
+                this.dynamicBuffer,
+                this.selectedEntityIds,
+                this.aEntityPos,
+                this.aColor,
+                selectionCtx
+            );
+        }
 
         // Sort entities by depth for correct painter's algorithm rendering
         const cullSortStart = performance.now();
@@ -707,6 +719,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private getMapObjectSprite(entity: Entity): SpriteEntry | null {
         if (!this.spriteManager) return null;
 
+        // When decoration textures are disabled, skip sprites for non-tree objects (dots/labels instead)
+        if (!this.layerVisibility.decorationTextures && entity.subType > 17) return null;
+
         const mapObjectType = entity.subType as MapObjectType;
         const variation = entity.variation ?? 0;
         const fallback = this.spriteManager.getMapObject(mapObjectType, variation);
@@ -833,7 +848,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const isSelected = this.selectedEntityIds.has(entity.id);
             const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
 
-            const sprite = scaleSprite(resolved.sprite);
+            const sprite = scaleSprite(resolved.sprite, getSpriteScale(entity));
 
             if (resolved.progress < 1.0) {
                 this.spriteBatchRenderer.addSpritePartial(
@@ -907,9 +922,17 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             );
         }
 
-        // Add random visual offset for MapObjects (trees, stones) to break up the grid
-        // Only apply to normal trees (variation 3, not being cut/growing) to avoid position mismatch with woodcutters
-        if (entity.type === EntityType.MapObject && (entity.variation === undefined || entity.variation === 3)) {
+        // Buildings: render at tile top vertex instead of parallelogram center.
+        // GFX sprite offsets (left/top) are authored relative to the tile vertex,
+        // not the center, so undo the TILE_CENTER shift.
+        if (entity.type === EntityType.Building) {
+            worldPos.worldX -= TILE_CENTER_X;
+            worldPos.worldY -= TILE_CENTER_Y * 0.5;
+        }
+
+        // Add random visual offset for MapObjects (trees, stones) to break up the grid.
+        // Applied to all tree variations so the position stays consistent through growth/cutting/stump stages.
+        if (entity.type === EntityType.MapObject) {
             const seed = entity.x * 12.9898 + entity.y * 78.233;
             const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.3 - 0.15;
             const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.3 - 0.15;
@@ -1035,6 +1058,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         case EntityType.Building:
             return !!this.spriteManager.getBuilding(entity.subType as BuildingType, entity.race);
         case EntityType.MapObject:
+            if (!this.layerVisibility.decorationTextures && entity.subType > 17) return false;
             return !!this.spriteManager.getMapObject(entity.subType as MapObjectType);
         case EntityType.StackedResource:
             return !!this.spriteManager.getResource(entity.subType as EMaterialType);

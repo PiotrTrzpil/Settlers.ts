@@ -8,6 +8,7 @@ import type { UnitStateLookup } from './render-context';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { IViewPoint } from './i-view-point';
+import { TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
 
 /**
  * Minimal context required for world position calculations.
@@ -29,12 +30,25 @@ export interface WorldPosition {
 
 /**
  * Get world position for an entity (with interpolation for units).
+ * Buildings are shifted to the tile vertex (matching sprite anchor convention).
  */
 export function getEntityWorldPos(entity: Entity, ctx: WorldPositionContext): WorldPosition {
     if (entity.type === EntityType.Unit) {
         return getInterpolatedWorldPos(entity, ctx);
     }
-    return TilePicker.tileToWorld(entity.x, entity.y, ctx.groundHeight, ctx.mapSize, ctx.viewPoint.x, ctx.viewPoint.y);
+    const pos = TilePicker.tileToWorld(
+        entity.x,
+        entity.y,
+        ctx.groundHeight,
+        ctx.mapSize,
+        ctx.viewPoint.x,
+        ctx.viewPoint.y
+    );
+    if (entity.type === EntityType.Building) {
+        pos.worldX -= TILE_CENTER_X;
+        pos.worldY -= TILE_CENTER_Y * 0.5;
+    }
+    return pos;
 }
 
 /**

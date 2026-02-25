@@ -6,10 +6,13 @@ import {
     isMaterialDroppable,
     getMaterialPriority,
     BUILDING_PRODUCTIONS,
-    CONSTRUCTION_COSTS,
+    getConstructionCosts,
+    getBuildingTypesWithCosts,
+    getConstructionCostRaceMap,
     getBuildingTypesRequestingMaterial,
 } from '@/game/economy';
 import { BuildingType } from '@/game/entity';
+import { Race, AVAILABLE_RACES } from '@/game/race';
 
 describe('Material Types', () => {
     it('should have a config for every EMaterialType value', () => {
@@ -138,43 +141,72 @@ describe('getBuildingTypesRequestingMaterial', () => {
 describe('Construction Costs', () => {
     it('should have construction costs defined for all BuildingType values', () => {
         const buildingValues = Object.values(BuildingType).filter(v => typeof v === 'number') as BuildingType[];
+        const covered = getBuildingTypesWithCosts();
 
         for (const bt of buildingValues) {
-            expect(CONSTRUCTION_COSTS.has(bt), `Missing construction costs for ${BuildingType[bt]}`).toBe(true);
+            expect(covered.includes(bt), `Missing construction costs for ${BuildingType[bt]}`).toBe(true);
         }
     });
 
-    it('should have at least one material cost per building', () => {
-        for (const [buildingType, costs] of CONSTRUCTION_COSTS) {
-            expect(costs.length, `${BuildingType[buildingType]} has no construction costs`).toBeGreaterThan(0);
+    it('should have at least one material cost per building per race', () => {
+        for (const bt of getBuildingTypesWithCosts()) {
+            for (const race of AVAILABLE_RACES) {
+                const costs = getConstructionCosts(bt, race);
+                expect(costs.length, `${BuildingType[bt]} (${Race[race]}) has no construction costs`).toBeGreaterThan(
+                    0
+                );
+            }
         }
     });
 
     it('should only use valid material types in construction costs', () => {
-        for (const [buildingType, costs] of CONSTRUCTION_COSTS) {
-            for (const cost of costs) {
-                expect(
-                    MATERIAL_CONFIGS.has(cost.material),
-                    `${BuildingType[buildingType]} uses invalid material ${EMaterialType[cost.material]}`
-                ).toBe(true);
+        for (const bt of getBuildingTypesWithCosts()) {
+            const raceMap = getConstructionCostRaceMap(bt)!;
+            for (const [race, costs] of raceMap) {
+                for (const cost of costs) {
+                    expect(
+                        MATERIAL_CONFIGS.has(cost.material),
+                        `${BuildingType[bt]} (${Race[race]}) uses invalid material ${EMaterialType[cost.material]}`
+                    ).toBe(true);
+                }
             }
         }
     });
 
     it('should have positive counts for all materials', () => {
-        for (const [, costs] of CONSTRUCTION_COSTS) {
-            for (const cost of costs) {
-                expect(cost.count).toBeGreaterThan(0);
+        for (const bt of getBuildingTypesWithCosts()) {
+            const raceMap = getConstructionCostRaceMap(bt)!;
+            for (const [, costs] of raceMap) {
+                for (const cost of costs) {
+                    expect(cost.count).toBeGreaterThan(0);
+                }
             }
         }
     });
 
     it('should use BOARD and/or STONE as construction materials', () => {
-        for (const [, costs] of CONSTRUCTION_COSTS) {
-            const materials = costs.map(c => c.material);
-            const usesBuildingMaterials =
-                materials.includes(EMaterialType.BOARD) || materials.includes(EMaterialType.STONE);
-            expect(usesBuildingMaterials).toBe(true);
+        for (const bt of getBuildingTypesWithCosts()) {
+            for (const race of AVAILABLE_RACES) {
+                const costs = getConstructionCosts(bt, race);
+                const materials = costs.map(c => c.material);
+                const usesBuildingMaterials =
+                    materials.includes(EMaterialType.BOARD) || materials.includes(EMaterialType.STONE);
+                expect(usesBuildingMaterials, `${BuildingType[bt]} (${Race[race]}) has no BOARD or STONE`).toBe(true);
+            }
         }
+    });
+
+    it('should return different costs for different races', () => {
+        // Castle is known to differ between Roman and Viking
+        const romanCastle = getConstructionCosts(BuildingType.Castle, Race.Roman);
+        const vikingCastle = getConstructionCosts(BuildingType.Castle, Race.Viking);
+        expect(romanCastle).not.toEqual(vikingCastle);
+    });
+
+    it('should fall back to Roman costs for races without entries', () => {
+        // DarkTribe has no standard buildings — should get Roman costs
+        const darkCosts = getConstructionCosts(BuildingType.WoodcutterHut, Race.DarkTribe);
+        const romanCosts = getConstructionCosts(BuildingType.WoodcutterHut, Race.Roman);
+        expect(darkCosts).toEqual(romanCosts);
     });
 });

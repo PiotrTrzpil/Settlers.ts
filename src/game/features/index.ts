@@ -16,6 +16,7 @@
  * - building-construction: Building construction phases
  * - placement: Building placement validation
  * - trees: Tree lifecycle (growth, cutting, decay)
+ * - stones: Stone mining depletion and visual variants
  */
 
 // Feature system infrastructure
@@ -42,3 +43,6 @@ export * from './placement';
 
 // Trees (first feature using self-registration)
 export * from './trees';
+
+// Stones (mining depletion with visual variants)
+export * from './stones';

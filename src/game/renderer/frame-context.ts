@@ -196,6 +196,12 @@ export class FrameContext implements IFrameContext {
         const tempPos: MutableWorldPos = { worldX: 0, worldY: 0 };
 
         for (const entity of entities) {
+            // Skip hidden entities (e.g., settlers inside buildings)
+            if (entity.hidden) {
+                culledCount++;
+                continue;
+            }
+
             // Fast tile-based culling first
             if (!isInTileBounds(entity, tileBounds)) {
                 culledCount++;

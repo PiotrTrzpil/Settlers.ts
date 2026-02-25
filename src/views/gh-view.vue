@@ -11,7 +11,7 @@
             />
             <span class="info">{{ ghContent.length }} images</span>
             <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
-            <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridImages)">Grid</button>
+            <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(() => {})">Grid</button>
         </div>
 
         <!-- Grid View -->
@@ -21,6 +21,7 @@
             :selected-item="selectedItem"
             :set-canvas-ref="setCanvasRef"
             @select="img => selectImage(img)"
+            @visible="(s, e) => renderVisibleImages(ghContent, s, e)"
         >
             <template #default="{ img }">
                 <div class="grid-type">{{ toImageTypeStr(img.imageType) }}</div>
@@ -65,8 +66,7 @@ defineProps<{
 
 const ghCav = useTemplateRef<HTMLCanvasElement>('ghCav');
 
-const { viewMode, setCanvasRef, switchToGrid, watchGridMode, onFileSelect, renderAfterLoad, renderGridImages } =
-    useFileViewer('grid');
+const { viewMode, setCanvasRef, switchToGrid, onFileSelect, renderVisibleImages } = useFileViewer('grid');
 
 const ghContent = ref<IGfxImage[]>([]);
 const selectedItem = ref<IGfxImage | null>(null);
@@ -89,12 +89,6 @@ async function load(file: IFileSource) {
     if (ghContent.value.length > 0) {
         selectedItem.value = ghContent.value[0] ?? null;
     }
-
-    await renderAfterLoad(renderAllGridImages);
-}
-
-function renderAllGridImages() {
-    renderGridImages(ghContent.value);
 }
 
 function selectImage(img: IGfxImage) {
@@ -111,9 +105,6 @@ function onSelectItem() {
     ghCav.value.height = img.height;
     renderImageToCanvas(img, ghCav.value);
 }
-
-// Re-render when view mode changes
-watchGridMode(renderAllGridImages, () => ghContent.value.length > 0);
 
 // Render single view when switching to single mode
 watch(viewMode, newMode => {

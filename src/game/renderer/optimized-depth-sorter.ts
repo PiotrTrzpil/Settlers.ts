@@ -21,6 +21,7 @@ import {
     DEPTH_FACTOR_MAP_OBJECT,
     DEPTH_FACTOR_UNIT,
     DEPTH_FACTOR_RESOURCE,
+    FLAT_TREE_DEPTH_BIAS,
 } from './entity-renderer-constants';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -128,6 +129,11 @@ export class OptimizedDepthSorter {
             const { offsetY, heightWorld } = spriteEntry;
             const depthFactor = this.getDepthFactor(entity.type);
             depth = depth + offsetY + heightWorld * depthFactor;
+        }
+
+        // Fallen/cut tree stages (variation 4-10) render behind standing trees, units, buildings
+        if (entity.type === EntityType.MapObject && entity.variation! >= 4) {
+            depth -= FLAT_TREE_DEPTH_BIAS;
         }
 
         return depth;

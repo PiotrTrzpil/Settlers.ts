@@ -3,6 +3,35 @@
         <template #toggle-extra>
             <Badge v-if="!open" color="success">{{ visibleCount }}/{{ totalCount }}</Badge>
         </template>
+        <CollapseSection title="Landscape" :default-open="false">
+            <div class="river-debug">
+                <span class="river-heading stat-label">River textures</span>
+                <StatRow label="Slots (I/O/M)">
+                    <span class="perm-control">
+                        <button class="perm-btn" @click="cycleSlotPerm(-1)">&lt;</button>
+                        <span class="perm-value">{{ slotPermLabel }}</span>
+                        <button class="perm-btn" @click="cycleSlotPerm(1)">&gt;</button>
+                    </span>
+                </StatRow>
+                <Checkbox
+                    v-model="stats.riverFlipInner"
+                    label="Flip inner (River3↔River1)"
+                    @update:modelValue="applyRiverConfig()"
+                />
+                <Checkbox
+                    v-model="stats.riverFlipOuter"
+                    label="Flip outer (Grass↔River4)"
+                    @update:modelValue="applyRiverConfig()"
+                />
+                <Checkbox
+                    v-model="stats.riverFlipMiddle"
+                    label="Flip middle (River4↔River3)"
+                    @update:modelValue="applyRiverConfig()"
+                />
+                <StatRow label="" dim :value="`${configIndex}/48`" />
+            </div>
+        </CollapseSection>
+
         <CollapseSection title="Main Layers">
             <LayerCheckbox
                 v-model="visibility.buildings"
@@ -11,6 +40,16 @@
                 :count="props.counts?.buildings"
                 @update:modelValue="saveAndEmit()"
             />
+            <div class="sub-layers" :class="{ disabled: !visibility.buildings }">
+                <LayerCheckbox
+                    v-model="visibility.showBuildingFootprint"
+                    label="Footprints"
+                    emoji="👣"
+                    :disabled="!visibility.buildings"
+                    sub
+                    @update:modelValue="saveAndEmit()"
+                />
+            </div>
             <LayerCheckbox
                 v-model="visibility.units"
                 label="Units"
@@ -18,6 +57,16 @@
                 :count="props.counts?.units"
                 @update:modelValue="saveAndEmit()"
             />
+            <div class="sub-layers" :class="{ disabled: !visibility.units }">
+                <LayerCheckbox
+                    v-model="visibility.showPathfinding"
+                    label="Pathfinding"
+                    emoji="🔍"
+                    :disabled="!visibility.units"
+                    sub
+                    @update:modelValue="saveAndEmit()"
+                />
+            </div>
             <LayerCheckbox
                 v-model="visibility.resources"
                 label="Resources"
@@ -81,32 +130,43 @@
                     sub
                     @update:modelValue="saveAndEmit()"
                 />
-            </div>
+                <div class="other-options" :class="{ disabled: !otherEnabled }">
+                    <LayerCheckbox
+                        v-model="visibility.decorationTextures"
+                        label="Textures"
+                        emoji="🖼️"
+                        :disabled="!otherEnabled"
+                        sub
+                        @update:modelValue="saveAndEmit()"
+                    />
 
-            <!-- Object type filter -->
-            <div class="obj-filter">
-                <label class="filter-row">
-                    <input
-                        type="checkbox"
-                        :checked="visibility.debugObjectTypeFilter !== null"
-                        @change="toggleObjectFilter"
-                    />
-                    <span>Filter by type</span>
-                </label>
-                <div v-if="visibility.debugObjectTypeFilter !== null" class="filter-controls">
-                    <button class="filter-btn" @click="changeObjectFilter(-1)">&minus;</button>
-                    <input
-                        type="number"
-                        class="filter-input"
-                        :value="visibility.debugObjectTypeFilter"
-                        min="1"
-                        max="255"
-                        @input="onFilterInput"
-                    />
-                    <button class="filter-btn" @click="changeObjectFilter(1)">+</button>
-                </div>
-                <div v-if="visibility.debugObjectTypeFilter !== null" class="filter-info">
-                    {{ objectFilterLabel }}
+                    <!-- Object type filter -->
+                    <div class="obj-filter">
+                        <label class="filter-row">
+                            <input
+                                type="checkbox"
+                                :checked="visibility.debugObjectTypeFilter !== null"
+                                :disabled="!otherEnabled"
+                                @change="toggleObjectFilter"
+                            />
+                            <span>Filter by type</span>
+                        </label>
+                        <div v-if="visibility.debugObjectTypeFilter !== null" class="filter-controls">
+                            <button class="filter-btn" @click="changeObjectFilter(-1)">&minus;</button>
+                            <input
+                                type="number"
+                                class="filter-input"
+                                :value="visibility.debugObjectTypeFilter"
+                                min="1"
+                                max="255"
+                                @input="onFilterInput"
+                            />
+                            <button class="filter-btn" @click="changeObjectFilter(1)">+</button>
+                        </div>
+                        <div v-if="visibility.debugObjectTypeFilter !== null" class="filter-info">
+                            {{ objectFilterLabel }}
+                        </div>
+                    </div>
                 </div>
             </div>
         </CollapseSection>
@@ -124,9 +184,12 @@
 <script setup lang="ts">
 import { reactive, computed } from 'vue';
 import { LayerVisibility, loadLayerVisibility, saveLayerVisibility } from '@/game/renderer/layer-visibility';
+import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
 import { debugStats } from '@/game/debug-stats';
 import type { LayerCounts } from '@/views/use-map-view';
 import LayerCheckbox from './LayerCheckbox.vue';
+import Checkbox from './Checkbox.vue';
+import StatRow from './StatRow.vue';
 import SettingsButton from './settings/SettingsButton.vue';
 import CollapseSection from './CollapseSection.vue';
 import OverlayPanel from './OverlayPanel.vue';
@@ -151,7 +214,44 @@ const open = computed({
 // Layer visibility state
 const visibility = reactive<LayerVisibility>(loadLayerVisibility());
 
+// River texture debug state
+const stats = debugStats.state;
+
+const slotPermLabel = computed(() => {
+    const perm = RIVER_SLOT_PERMS[stats.riverSlotPermutation % RIVER_SLOT_PERMS.length]!;
+    return perm.join('-');
+});
+
+const configIndex = computed(() => {
+    return (
+        stats.riverSlotPermutation * 8 +
+        (stats.riverFlipInner ? 4 : 0) +
+        (stats.riverFlipOuter ? 2 : 0) +
+        (stats.riverFlipMiddle ? 1 : 0) +
+        1
+    );
+});
+
+function applyRiverConfig() {
+    const lr = window.__settlers__?.landscape;
+    if (lr) {
+        lr.rebuildRiverTextures({
+            slotPermutation: stats.riverSlotPermutation,
+            flipInner: stats.riverFlipInner,
+            flipOuter: stats.riverFlipOuter,
+            flipMiddle: stats.riverFlipMiddle,
+        });
+    }
+}
+
+function cycleSlotPerm(dir: number) {
+    const len = RIVER_SLOT_PERMS.length;
+    stats.riverSlotPermutation = (((stats.riverSlotPermutation + dir) % len) + len) % len;
+    applyRiverConfig();
+}
+
 // Computed values
+const otherEnabled = computed(() => visibility.environment && visibility.environmentLayers.other);
 const totalCount = 4; // Buildings, Units, Resources, Environment
 
 const visibleCount = computed(() => {
@@ -256,6 +356,50 @@ emit('update:visibility', { ...visibility, environmentLayers: { ...visibility.en
 </script>
 
 <style scoped>
+/* River texture debug */
+.river-debug {
+    margin-top: 2px;
+}
+
+.river-heading {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.stat-label {
+    color: var(--text-muted);
+}
+
+.perm-control {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.perm-btn {
+    padding: 1px 6px;
+    background: var(--bg-mid);
+    color: var(--text);
+    border: 1px solid var(--border-mid);
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 10px;
+    font-family: monospace;
+    line-height: 1;
+}
+
+.perm-btn:hover {
+    background: var(--bg-raised);
+    border-color: var(--border-hover);
+}
+
+.perm-value {
+    color: var(--text-bright);
+    font-weight: bold;
+    min-width: 36px;
+    text-align: center;
+}
+
 .sub-layers {
     padding-left: 8px;
     border-left: 2px solid var(--border);
@@ -264,6 +408,17 @@ emit('update:visibility', { ...visibility, environmentLayers: { ...visibility.en
 
 .sub-layers.disabled {
     opacity: 0.5;
+}
+
+.other-options {
+    padding-left: 12px;
+    border-left: 2px solid var(--border-faint, #2a1e0e);
+    margin-left: 8px;
+}
+
+.other-options.disabled {
+    opacity: 0.4;
+    pointer-events: none;
 }
 
 /* Quick actions */

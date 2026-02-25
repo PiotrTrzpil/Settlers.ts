@@ -37,14 +37,14 @@ const open = defineModel<boolean>('open', { required: true });
     color: var(--text);
     font-size: 11px;
     font-family: monospace;
-    min-width: var(--panel-min-width, 200px);
+    width: var(--panel-min-width, 200px);
     max-height: 100%;
     overflow-y: auto;
     pointer-events: auto;
 }
 
 .overlay-panel.collapsed {
-    min-width: 0;
+    width: auto;
 }
 
 .panel-sections {

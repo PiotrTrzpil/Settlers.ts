@@ -48,12 +48,18 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
     [S4BuildingType.VEHICLEHALL]: BuildingType.SiegeWorkshop,
     [S4BuildingType.BARRACKS]: BuildingType.Barrack,
     [S4BuildingType.CHARCOALMAKER]: BuildingType.CoalMine, // Approximation
-    [S4BuildingType.TRAININGCENTER]: BuildingType.Barrack, // Approximation
+    [S4BuildingType.TRAININGCENTER]: BuildingType.LivingHouse,
     [S4BuildingType.HEALERHUT]: BuildingType.HealerHut,
     [S4BuildingType.AMMOMAKERHUT]: BuildingType.AmmunitionMaker,
     [S4BuildingType.SHIPYARD]: BuildingType.Shipyard,
     [S4BuildingType.STORAGEAREA]: BuildingType.StorageArea,
-    [S4BuildingType.VINYARD]: BuildingType.WinePress,
+    [S4BuildingType.VINYARD]: BuildingType.Vinyard,
+    [S4BuildingType.AGAVEFARMERHUT]: BuildingType.AgaveFarmerHut,
+    [S4BuildingType.TEQUILAMAKERHUT]: BuildingType.TequilaMakerHut,
+    [S4BuildingType.BEEKEEPERHUT]: BuildingType.BeekeeperHut,
+    [S4BuildingType.MEADMAKERHUT]: BuildingType.MeadMakerHut,
+    [S4BuildingType.SUNFLOWERFARMERHUT]: BuildingType.SunflowerFarmerHut,
+    [S4BuildingType.SUNFLOWEROILMAKERHUT]: BuildingType.SunflowerOilMakerHut,
     [S4BuildingType.RESIDENCESMALL]: BuildingType.ResidenceSmall,
     [S4BuildingType.RESIDENCEMEDIUM]: BuildingType.ResidenceMedium,
     [S4BuildingType.RESIDENCEBIG]: BuildingType.ResidenceBig,
@@ -65,6 +71,19 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
     [S4BuildingType.CASTLE]: BuildingType.Castle,
     [S4BuildingType.FORTRESS]: BuildingType.Castle, // Approximation
     [S4BuildingType.MANACOPTERHALL]: BuildingType.SiegeWorkshop, // Approximation
+    // Eyecatchers / monuments
+    [S4BuildingType.EYECATCHER01]: BuildingType.Eyecatcher01,
+    [S4BuildingType.EYECATCHER02]: BuildingType.Eyecatcher02,
+    [S4BuildingType.EYECATCHER03]: BuildingType.Eyecatcher03,
+    [S4BuildingType.EYECATCHER04]: BuildingType.Eyecatcher04,
+    [S4BuildingType.EYECATCHER05]: BuildingType.Eyecatcher05,
+    [S4BuildingType.EYECATCHER06]: BuildingType.Eyecatcher06,
+    [S4BuildingType.EYECATCHER07]: BuildingType.Eyecatcher07,
+    [S4BuildingType.EYECATCHER08]: BuildingType.Eyecatcher08,
+    [S4BuildingType.EYECATCHER09]: BuildingType.Eyecatcher09,
+    [S4BuildingType.EYECATCHER10]: BuildingType.Eyecatcher10,
+    [S4BuildingType.EYECATCHER11]: BuildingType.Eyecatcher11,
+    [S4BuildingType.EYECATCHER12]: BuildingType.Eyecatcher12,
 };
 
 /**

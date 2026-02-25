@@ -90,33 +90,6 @@
                 </button>
                 <button class="ctrl-btn danger" @click="$emit('resetGameState')">Reset State</button>
             </div>
-            <Checkbox v-model="settings.showBuildingFootprint" label="Show building footprints" />
-            <div class="river-debug">
-                <span class="river-heading stat-label">River textures</span>
-                <StatRow label="Slots (I/O/M)">
-                    <span class="perm-control">
-                        <button class="perm-btn" @click="cycleSlotPerm(-1)">&lt;</button>
-                        <span class="perm-value">{{ slotPermLabel }}</span>
-                        <button class="perm-btn" @click="cycleSlotPerm(1)">&gt;</button>
-                    </span>
-                </StatRow>
-                <Checkbox
-                    v-model="stats.riverFlipInner"
-                    label="Flip inner (River3↔River1)"
-                    @update:modelValue="applyRiverConfig()"
-                />
-                <Checkbox
-                    v-model="stats.riverFlipOuter"
-                    label="Flip outer (Grass↔River4)"
-                    @update:modelValue="applyRiverConfig()"
-                />
-                <Checkbox
-                    v-model="stats.riverFlipMiddle"
-                    label="Flip middle (River4↔River3)"
-                    @update:modelValue="applyRiverConfig()"
-                />
-                <StatRow label="" dim :value="`${configIndex}/48`" />
-            </div>
         </CollapseSection>
 
         <!-- Map Objects -->
@@ -158,7 +131,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { debugStats } from '@/game/debug-stats';
-import { RIVER_SLOT_PERMS } from '@/game/renderer/landscape/textures/landscape-texture-map';
+
 import type { Game } from '@/game/game';
 import { clearSavedTreeState } from '@/game/game-state-persistence';
 import { useDebugMapObjects } from './use-debug-map-objects';
@@ -179,8 +152,6 @@ defineEmits<{
 
 const stats = debugStats.state;
 const view = props.game.viewState.state;
-const settings = props.game.settings.state;
-
 // Use the persisted open state from debug stats
 const open = computed({
     get: () => stats.debugPanelOpen,
@@ -201,39 +172,6 @@ function onTreeExpansionChange(val: boolean): void {
 const getGame = (): Game | null => props.game;
 const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clearAllMapObjects } =
     useDebugMapObjects(getGame);
-
-const slotPermLabel = computed(() => {
-    const perm = RIVER_SLOT_PERMS[stats.riverSlotPermutation % RIVER_SLOT_PERMS.length]!;
-    return perm.join('-');
-});
-
-const configIndex = computed(() => {
-    return (
-        stats.riverSlotPermutation * 8 +
-        (stats.riverFlipInner ? 4 : 0) +
-        (stats.riverFlipOuter ? 2 : 0) +
-        (stats.riverFlipMiddle ? 1 : 0) +
-        1
-    );
-});
-
-function applyRiverConfig() {
-    const lr = window.__settlers__?.landscape;
-    if (lr) {
-        lr.rebuildRiverTextures({
-            slotPermutation: stats.riverSlotPermutation,
-            flipInner: stats.riverFlipInner,
-            flipOuter: stats.riverFlipOuter,
-            flipMiddle: stats.riverFlipMiddle,
-        });
-    }
-}
-
-function cycleSlotPerm(dir: number) {
-    const len = RIVER_SLOT_PERMS.length;
-    stats.riverSlotPermutation = (((stats.riverSlotPermutation + dir) % len) + len) % len;
-    applyRiverConfig();
-}
 
 const fpsClass = computed(() => {
     if (stats.fps >= 55) return 'fps-good';
@@ -328,45 +266,6 @@ const cacheClass = computed(() => {
 }
 
 /* River debug */
-.river-debug {
-    margin-top: 6px;
-}
-
-.river-heading {
-    display: block;
-    margin-bottom: 4px;
-}
-
-.perm-control {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.perm-btn {
-    padding: 1px 6px;
-    background: var(--bg-mid);
-    color: var(--text);
-    border: 1px solid var(--border-mid);
-    border-radius: 2px;
-    cursor: pointer;
-    font-size: 10px;
-    font-family: monospace;
-    line-height: 1;
-}
-
-.perm-btn:hover {
-    background: var(--bg-raised);
-    border-color: var(--border-hover);
-}
-
-.perm-value {
-    color: var(--text-bright);
-    font-weight: bold;
-    min-width: 36px;
-    text-align: center;
-}
-
 /* Map Objects section */
 .map-obj-row {
     display: flex;

@@ -39,5 +39,19 @@ export function useFileViewer(initialMode: ViewMode = 'grid') {
         }
     }
 
-    return { ...gridView, fileName, onFileSelect, renderAfterLoad, renderGridImages };
+    /**
+     * Render only the visible range of images (called by VirtualGrid @visible).
+     * Always re-renders because virtualized canvases are destroyed/recreated on scroll.
+     */
+    function renderVisibleImages(images: IGfxImage[], startIndex: number, endIndex: number) {
+        for (let i = startIndex; i < endIndex; i++) {
+            const canvas = gridView.canvasRefs.get(i);
+            const img = images[i];
+            if (canvas && img) {
+                renderImageToCanvas(img, canvas);
+            }
+        }
+    }
+
+    return { ...gridView, fileName, onFileSelect, renderAfterLoad, renderGridImages, renderVisibleImages };
 }

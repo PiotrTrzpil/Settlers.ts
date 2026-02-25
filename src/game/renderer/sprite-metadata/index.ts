@@ -61,6 +61,7 @@ export {
     TREE_JOB_INDICES,
     type MapObjectSpriteInfo,
     getMapObjectSpriteMap,
+    MAP_OBJECT_SPRITES,
 
     // Sprite entries
     type SpriteEntry,

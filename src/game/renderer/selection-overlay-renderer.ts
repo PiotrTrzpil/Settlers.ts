@@ -1,12 +1,13 @@
 import { Entity, EntityType, BuildingType, getBuildingFootprint } from '../entity';
 import { TilePicker } from '../input/tile-picker';
-import { tileToWorld, heightToWorld } from '../systems/coordinate-system';
+import { tileToWorld, heightToWorld, TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
 import { getEntityWorldPos, getInterpolatedWorldPos, type WorldPositionContext } from './world-position';
 import type { ServiceAreaRenderData } from './render-context';
 import {
     FRAME_COLOR,
     FRAME_CORNER_COLOR,
     PATH_COLOR,
+    PATH_TARGET_COLOR,
     MAX_PATH_DOTS,
     BUILDING_SCALE,
     UNIT_SCALE,
@@ -25,6 +26,11 @@ import {
     SERVICE_AREA_CIRCLE_SEGMENTS,
     SHADER_VERTEX_SCALE,
 } from './entity-renderer-constants';
+
+/** Shift a world position from tile center to tile vertex (matching building sprite anchor). */
+function shiftBuildingWorldPos(pos: { worldX: number; worldY: number }): { worldX: number; worldY: number } {
+    return { worldX: pos.worldX - TILE_CENTER_X, worldY: pos.worldY - TILE_CENTER_Y * 0.5 };
+}
 
 /**
  * Context needed for rendering selection overlays.
@@ -222,6 +228,110 @@ export class SelectionOverlayRenderer {
                 gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
                 gl.drawArrays(gl.TRIANGLES, 0, 6);
             }
+
+            // Draw tile-sized circle at final destination
+            const target = unitState.path[unitState.path.length - 1]!;
+            this.drawTargetCircle(gl, buffer, aEntityPos, aColor, target.x, target.y, ctx);
+
+            // Restore path color for next unit
+            gl.vertexAttrib4f(aColor, PATH_COLOR[0]!, PATH_COLOR[1]!, PATH_COLOR[2]!, PATH_COLOR[3]!);
+        }
+    }
+
+    /**
+     * Draw a thick circle on the target tile as a ring of quad segments.
+     */
+    private drawTargetCircle(
+        gl: WebGL2RenderingContext,
+        buffer: WebGLBuffer,
+        aEntityPos: number,
+        aColor: number,
+        tileX: number,
+        tileY: number,
+        ctx: SelectionRenderContext
+    ): void {
+        const segments = 16;
+        const radius = 0.5; // half-tile in tile space
+        const lineWidth = 0.15;
+
+        const idx = ctx.mapSize.toIndex(Math.round(tileX), Math.round(tileY));
+        const hWorld = heightToWorld(ctx.groundHeight[idx] ?? 0);
+
+        // Generate circle points in tile space, centered on the tile
+        const centerTileX = tileX + 0.5;
+        const centerTileY = tileY + 0.5;
+        const points: { worldX: number; worldY: number }[] = [];
+        for (let i = 0; i <= segments; i++) {
+            const angle = (i / segments) * Math.PI * 2;
+            points.push(
+                tileToWorld(
+                    centerTileX + Math.cos(angle) * radius,
+                    centerTileY + Math.sin(angle) * radius,
+                    hWorld,
+                    ctx.viewPoint.x,
+                    ctx.viewPoint.y
+                )
+            );
+        }
+
+        // Compute center for entityPos
+        let cx = 0,
+            cy = 0;
+        for (const p of points) {
+            cx += p.worldX;
+            cy += p.worldY;
+        }
+        cx /= points.length;
+        cy /= points.length;
+        gl.vertexAttrib2f(aEntityPos, cx, cy);
+
+        gl.vertexAttrib4f(
+            aColor,
+            PATH_TARGET_COLOR[0]!,
+            PATH_TARGET_COLOR[1]!,
+            PATH_TARGET_COLOR[2]!,
+            PATH_TARGET_COLOR[3]!
+        );
+
+        const invScale = 1 / SHADER_VERTEX_SCALE;
+        const segmentVerts = new Float32Array(12);
+
+        for (let i = 0; i < points.length - 1; i++) {
+            const p0 = points[i]!;
+            const p1 = points[i + 1]!;
+
+            const dx = p1.worldX - p0.worldX;
+            const dy = p1.worldY - p0.worldY;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            if (len < 0.001) continue;
+
+            const nx = (-dy / len) * lineWidth * 0.5;
+            const ny = (dx / len) * lineWidth * 0.5;
+
+            const ax = (p0.worldX + nx - cx) * invScale;
+            const ay = (p0.worldY + ny - cy) * invScale;
+            const bx = (p0.worldX - nx - cx) * invScale;
+            const by = (p0.worldY - ny - cy) * invScale;
+            const cx2 = (p1.worldX - nx - cx) * invScale;
+            const cy2 = (p1.worldY - ny - cy) * invScale;
+            const dx2 = (p1.worldX + nx - cx) * invScale;
+            const dy2 = (p1.worldY + ny - cy) * invScale;
+
+            segmentVerts[0] = ax;
+            segmentVerts[1] = ay;
+            segmentVerts[2] = bx;
+            segmentVerts[3] = by;
+            segmentVerts[4] = cx2;
+            segmentVerts[5] = cy2;
+            segmentVerts[6] = ax;
+            segmentVerts[7] = ay;
+            segmentVerts[8] = cx2;
+            segmentVerts[9] = cy2;
+            segmentVerts[10] = dx2;
+            segmentVerts[11] = dy2;
+
+            gl.bufferData(gl.ARRAY_BUFFER, segmentVerts, gl.DYNAMIC_DRAW);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
     }
 
@@ -340,10 +450,19 @@ export class SelectionOverlayRenderer {
                 const hWorld = heightToWorld(ctx.groundHeight[idx] ?? 0);
 
                 // Terrain face diamond: vertices at (x,y), (x+1,y), (x+1,y+1), (x,y+1)
-                const top = tileToWorld(tile.x, tile.y, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
-                const right = tileToWorld(tile.x + 1, tile.y, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
-                const bottom = tileToWorld(tile.x + 1, tile.y + 1, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
-                const left = tileToWorld(tile.x, tile.y + 1, hWorld, ctx.viewPoint.x, ctx.viewPoint.y);
+                // Shift to tile vertex (matching building sprite anchor)
+                const top = shiftBuildingWorldPos(
+                    tileToWorld(tile.x, tile.y, hWorld, ctx.viewPoint.x, ctx.viewPoint.y)
+                );
+                const right = shiftBuildingWorldPos(
+                    tileToWorld(tile.x + 1, tile.y, hWorld, ctx.viewPoint.x, ctx.viewPoint.y)
+                );
+                const bottom = shiftBuildingWorldPos(
+                    tileToWorld(tile.x + 1, tile.y + 1, hWorld, ctx.viewPoint.x, ctx.viewPoint.y)
+                );
+                const left = shiftBuildingWorldPos(
+                    tileToWorld(tile.x, tile.y + 1, hWorld, ctx.viewPoint.x, ctx.viewPoint.y)
+                );
 
                 const center = this.fillDiamondFromWorldPositions(diamondVerts, top, right, bottom, left);
                 gl.vertexAttrib2f(aEntityPos, center.centerX, center.centerY);
@@ -493,12 +612,9 @@ export class SelectionOverlayRenderer {
 
             for (const offset of cornerOffsets) {
                 // Use pure tileToWorld for fractional coords (tile corners)
-                const worldPos = tileToWorld(
-                    tile.x + offset.dx,
-                    tile.y + offset.dy,
-                    hWorld,
-                    ctx.viewPoint.x,
-                    ctx.viewPoint.y
+                // Shift to tile vertex (matching building sprite anchor)
+                const worldPos = shiftBuildingWorldPos(
+                    tileToWorld(tile.x + offset.dx, tile.y + offset.dy, hWorld, ctx.viewPoint.x, ctx.viewPoint.y)
                 );
                 minX = Math.min(minX, worldPos.worldX);
                 minY = Math.min(minY, worldPos.worldY);

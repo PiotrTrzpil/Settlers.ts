@@ -216,6 +216,7 @@ export class SettlerTaskSystem implements TickSystem {
         }
 
         // Set up move task
+        entity.hidden = false;
         runtime.moveTask = {
             type: 'move',
             targetX,
@@ -276,6 +277,7 @@ export class SettlerTaskSystem implements TickSystem {
         }
 
         // Set runtime state
+        entity.hidden = false;
         runtime.state = SettlerState.WORKING;
         runtime.job = job;
         runtime.moveTask = null;
@@ -536,7 +538,7 @@ export class SettlerTaskSystem implements TickSystem {
     ): WorkerJobData {
         return {
             targetId: target?.entityId ?? null,
-            targetPos: null,
+            targetPos: target ? { x: target.x, y: target.y } : null,
             homeId: homeBuilding?.id ?? null,
             carryingGood: null,
         };
@@ -568,6 +570,7 @@ export class SettlerTaskSystem implements TickSystem {
             return;
         }
 
+        settler.hidden = false;
         runtime.state = SettlerState.WORKING;
         runtime.job = {
             type: 'worker',
@@ -624,7 +627,11 @@ export class SettlerTaskSystem implements TickSystem {
      * Check if a job's first task requires an entity target from findTarget.
      */
     private jobNeedsEntityTarget(firstTask: TaskNode): boolean {
-        return firstTask.task === TaskType.GO_TO_TARGET || firstTask.task === TaskType.WORK_ON_ENTITY;
+        return (
+            firstTask.task === TaskType.GO_TO_TARGET ||
+            firstTask.task === TaskType.GO_ADJACENT_POS ||
+            firstTask.task === TaskType.WORK_ON_ENTITY
+        );
     }
 
     /**
@@ -648,8 +655,9 @@ export class SettlerTaskSystem implements TickSystem {
 
         const dist = hexDistance(settler.x, settler.y, homeBuilding.x, homeBuilding.y);
 
-        // If already at home, just stay idle
+        // If already at home, hide inside building
         if (dist <= 1) {
+            settler.hidden = true;
             this.setIdleAnimation(settler);
             return;
         }
@@ -687,6 +695,8 @@ export class SettlerTaskSystem implements TickSystem {
         case TaskResult.DONE:
             job.taskIndex++;
             job.progress = 0;
+            // Sync direction immediately (FACE_POS sets it mid-tick, avoid one-frame lag)
+            this.updateDirectionTracking(settler, runtime);
             // Apply animation for next task if there is one
             if (job.taskIndex < tasks.length) {
                 this.applyTaskAnimation(settler, tasks[job.taskIndex]!);
@@ -704,11 +714,20 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     private completeJob(settler: Entity, runtime: UnitRuntime): void {
+        const homeId = runtime.job!.data.homeId;
         log.debug(`Settler ${settler.id} completed job ${runtime.job!.jobId}`);
         runtime.state = SettlerState.IDLE;
         runtime.job = null;
         this.setIdleAnimation(settler);
         runtime.idleState.idleTime = 0;
+
+        // Hide settler if they finished at their home building
+        if (homeId) {
+            const home = this.gameState.getEntity(homeId);
+            if (home && hexDistance(settler.x, settler.y, home.x, home.y) <= 1) {
+                settler.hidden = true;
+            }
+        }
     }
 
     private interruptJob(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {

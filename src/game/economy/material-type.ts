@@ -49,6 +49,9 @@ export enum EMaterialType {
     SHOVEL = 33, // Tool for pioneers/landscapers
     CATAPULT = 34, // Siege ammunition
     GOOSE = 35, // Livestock (geese)
+    TEQUILA = 36, // Mayan drink
+    SUNFLOWER = 37, // Trojan crop
+    SUNFLOWEROIL = 38, // Trojan drink
 
     // Special
     NO_MATERIAL = 99,
@@ -115,6 +118,9 @@ export const MATERIAL_CONFIGS: ReadonlyMap<EMaterialType, MaterialTypeConfig> = 
     [EMaterialType.SHOVEL, { droppable: true, defaultPriorityIndex: 21, distributionConfigurable: false }], // Tool
     [EMaterialType.CATAPULT, { droppable: true, defaultPriorityIndex: 26, distributionConfigurable: false }], // Siege
     [EMaterialType.GOOSE, { droppable: false, defaultPriorityIndex: 34, distributionConfigurable: false }], // Livestock
+    [EMaterialType.TEQUILA, { droppable: true, defaultPriorityIndex: 35, distributionConfigurable: true }], // Mayan drink
+    [EMaterialType.SUNFLOWER, { droppable: true, defaultPriorityIndex: 36, distributionConfigurable: true }], // Trojan crop
+    [EMaterialType.SUNFLOWEROIL, { droppable: true, defaultPriorityIndex: 37, distributionConfigurable: true }], // Trojan drink
 
     // Non-droppable
     [EMaterialType.NO_MATERIAL, { droppable: false, defaultPriorityIndex: -1, distributionConfigurable: false }],

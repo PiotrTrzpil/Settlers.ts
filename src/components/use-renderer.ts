@@ -101,7 +101,7 @@ function syncEntityRendererState(
         .alpha(alpha)
         .layerVisibility(ctx.layerVisibility)
         .settings({
-            showBuildingFootprint: g.settings.state.showBuildingFootprint,
+            showBuildingFootprint: ctx.layerVisibility.showBuildingFootprint,
             disablePlayerTinting: g.settings.state.disablePlayerTinting,
             antialias: g.settings.state.antialias,
         })

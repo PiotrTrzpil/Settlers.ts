@@ -208,12 +208,54 @@ export const INVENTORY_CONFIGS: ReadonlyMap<BuildingType, InventoryConfig> = new
         },
     ],
 
-    // Wine
+    // Drink production (race-specific)
     [
-        BuildingType.WinePress,
+        BuildingType.Vinyard,
         {
             inputSlots: [],
             outputSlots: [{ materialType: EMaterialType.WINE, maxCapacity: DEFAULT_OUTPUT_CAPACITY }],
+        },
+    ],
+    [
+        BuildingType.BeekeeperHut,
+        {
+            inputSlots: [],
+            outputSlots: [{ materialType: EMaterialType.HONEY, maxCapacity: DEFAULT_OUTPUT_CAPACITY }],
+        },
+    ],
+    [
+        BuildingType.MeadMakerHut,
+        {
+            inputSlots: [{ materialType: EMaterialType.HONEY, maxCapacity: DEFAULT_INPUT_CAPACITY }],
+            outputSlots: [{ materialType: EMaterialType.MEAD, maxCapacity: DEFAULT_OUTPUT_CAPACITY }],
+        },
+    ],
+    [
+        BuildingType.AgaveFarmerHut,
+        {
+            inputSlots: [],
+            outputSlots: [{ materialType: EMaterialType.AGAVE, maxCapacity: DEFAULT_OUTPUT_CAPACITY }],
+        },
+    ],
+    [
+        BuildingType.TequilaMakerHut,
+        {
+            inputSlots: [{ materialType: EMaterialType.AGAVE, maxCapacity: DEFAULT_INPUT_CAPACITY }],
+            outputSlots: [{ materialType: EMaterialType.TEQUILA, maxCapacity: DEFAULT_OUTPUT_CAPACITY }],
+        },
+    ],
+    [
+        BuildingType.SunflowerFarmerHut,
+        {
+            inputSlots: [],
+            outputSlots: [{ materialType: EMaterialType.SUNFLOWER, maxCapacity: DEFAULT_OUTPUT_CAPACITY }],
+        },
+    ],
+    [
+        BuildingType.SunflowerOilMakerHut,
+        {
+            inputSlots: [{ materialType: EMaterialType.SUNFLOWER, maxCapacity: DEFAULT_INPUT_CAPACITY }],
+            outputSlots: [{ materialType: EMaterialType.SUNFLOWEROIL, maxCapacity: DEFAULT_OUTPUT_CAPACITY }],
         },
     ],
 
@@ -247,8 +289,8 @@ export const INVENTORY_CONFIGS: ReadonlyMap<BuildingType, InventoryConfig> = new
     [BuildingType.SmallTemple, { inputSlots: [], outputSlots: [] }],
     [BuildingType.LargeTemple, { inputSlots: [], outputSlots: [] }],
     [BuildingType.Shipyard, { inputSlots: [], outputSlots: [] }],
-    [BuildingType.Decoration, { inputSlots: [], outputSlots: [] }],
-    [BuildingType.LargeDecoration, { inputSlots: [], outputSlots: [] }],
+    [BuildingType.Eyecatcher01, { inputSlots: [], outputSlots: [] }],
+    [BuildingType.Eyecatcher02, { inputSlots: [], outputSlots: [] }],
     [BuildingType.DonkeyRanch, { inputSlots: [], outputSlots: [] }],
     [BuildingType.HealerHut, { inputSlots: [], outputSlots: [] }],
     [BuildingType.AmmunitionMaker, { inputSlots: [], outputSlots: [] }],

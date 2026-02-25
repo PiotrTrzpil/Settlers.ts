@@ -11,7 +11,7 @@
             />
             <span class="info">{{ gfxContent?.length }} images</span>
             <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
-            <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridImages)">Grid</button>
+            <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(() => {})">Grid</button>
         </div>
 
         <!-- Grid View -->
@@ -21,6 +21,7 @@
             :selected-item="selectedItem"
             :set-canvas-ref="setCanvasRef"
             @select="(img, i) => selectImage(img, i)"
+            @visible="(s, e) => renderVisibleImages(gfxContent, s, e)"
         />
 
         <!-- Single View -->
@@ -63,8 +64,7 @@ const props = defineProps<{
 
 const mainCanvas = useTemplateRef<HTMLCanvasElement>('mainCanvas');
 
-const { viewMode, setCanvasRef, switchToGrid, watchGridMode, onFileSelect, renderAfterLoad, renderGridImages } =
-    useFileViewer('grid');
+const { viewMode, setCanvasRef, switchToGrid, onFileSelect, renderVisibleImages } = useFileViewer('grid');
 
 const gfxContent = ref<IGfxImage[]>([]);
 const selectedItem = ref<IGfxImage | null>(null);
@@ -79,9 +79,15 @@ async function doLoad(fileId: string) {
     const fileSet = await loadGfxFileSet(props.fileManager, fileId);
     const readers = parseGfxReaders(fileSet);
 
-    // For the GFX viewer, don't use jil/dil - just browse raw images by gil index
-    // This avoids reverse lookup errors for images outside the job/direction tables
-    gfxFile.value = new GfxFileReader(fileSet.gfx, readers.gilFileReader, null, null, readers.paletteCollection);
+    // Pass jil/dil when available so reverse lookup resolves the correct palette per image.
+    // Images not found in job tables fall back to lastGoodJobIndex in GfxFileReader.getImage().
+    gfxFile.value = new GfxFileReader(
+        fileSet.gfx,
+        readers.gilFileReader,
+        readers.jilFileReader,
+        readers.dilFileReader,
+        readers.paletteCollection
+    );
 
     const gfx = gfxFile.value;
     gfxContent.value = collectImages(
@@ -90,12 +96,6 @@ async function doLoad(fileId: string) {
     );
 
     log.debug('File: ' + fileId + ' with ' + gfxContent.value.length + ' images');
-
-    await renderAfterLoad(renderAllGridImages);
-}
-
-function renderAllGridImages() {
-    renderGridImages(gfxContent.value);
 }
 
 function selectImage(img: IGfxImage, index: number) {
@@ -108,9 +108,6 @@ function onSelectItem() {
     if (!img || !mainCanvas.value) return;
     renderImageToCanvas(img, mainCanvas.value);
 }
-
-// Re-render grid when toggled on
-watchGridMode(renderAllGridImages, () => gfxContent.value.length > 0);
 </script>
 
 <style src="@/styles/file-viewer.css"></style>

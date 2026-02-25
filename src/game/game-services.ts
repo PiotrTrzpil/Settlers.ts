@@ -38,6 +38,7 @@ import {
 import { ServiceAreaManager, ServiceAreaFeature, type ServiceAreaExports } from './features/service-areas';
 import { FeatureRegistry } from './features/feature-registry';
 import { TreeFeature, TreeSystem, type TreeFeatureExports } from './features/trees';
+import { StoneFeature, StoneSystem, type StoneFeatureExports } from './features/stones';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
 import { AnimationService } from './animation/index';
@@ -82,6 +83,9 @@ export class GameServices {
 
     /** Tree lifecycle system — growth and cutting states */
     public readonly treeSystem: TreeSystem;
+
+    /** Stone mining system — depletion and variant tracking */
+    public readonly stoneSystem: StoneSystem;
 
     // ===== Internal =====
     private readonly featureRegistry: FeatureRegistry;
@@ -152,6 +156,7 @@ export class GameServices {
             InventoryFeature,
             RequestManagerFeature,
             TreeFeature,
+            StoneFeature,
             MaterialRequestFeature,
         ]);
 
@@ -166,6 +171,7 @@ export class GameServices {
 
         this.treeSystem = this.featureRegistry.getFeatureExports<TreeFeatureExports>('trees').treeSystem;
         this.treeSystem.setCommandExecutor(executeCommand);
+        this.stoneSystem = this.featureRegistry.getFeatureExports<StoneFeatureExports>('stones').stoneSystem;
         for (const system of this.featureRegistry.getSystems()) {
             this.addSystem(system);
         }
@@ -199,7 +205,10 @@ export class GameServices {
             SearchType.TREE,
             createWoodcuttingHandler(gameState, this.treeSystem)
         );
-        this.settlerTaskSystem.registerWorkHandler(SearchType.STONE, createStonecuttingHandler(gameState));
+        this.settlerTaskSystem.registerWorkHandler(
+            SearchType.STONE,
+            createStonecuttingHandler(gameState, this.stoneSystem)
+        );
         this.settlerTaskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, createForesterHandler(this.treeSystem));
 
         // 10. Inventory visualizer — subscribes to entity:removed for visual cleanup

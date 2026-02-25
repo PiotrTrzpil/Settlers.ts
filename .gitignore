@@ -31,8 +31,12 @@ test-results/
 tests/e2e/.results/
 playwright-report/
 
-# Playwright MCP browser logs
+# Playwright MCP/CLI browser logs
 .playwright-mcp/
+.playwright-cli/
+
+# Script output
+output/
 
 # Backup files
 *.bak

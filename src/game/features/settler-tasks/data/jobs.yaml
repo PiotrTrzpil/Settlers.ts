@@ -6,8 +6,11 @@
 #   - Specific: chop, harvest, plant, mine, hammer, dig
 
 woodcutter.work:
-  - task: GO_TO_TARGET
+  - task: GO_ADJACENT_POS
     anim: walk
+
+  - task: FACE_POS
+    anim: idle
 
   - task: WAIT_FOR_WORK
     anim: idle
@@ -27,8 +30,11 @@ woodcutter.work:
     anim: dropoff
 
 stonecutter.work:
-  - task: GO_TO_TARGET
+  - task: GO_ADJACENT_POS
     anim: walk
+
+  - task: FACE_POS
+    anim: idle
 
   - task: WAIT_FOR_WORK
     anim: idle

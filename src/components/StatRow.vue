@@ -52,6 +52,7 @@ withDefaults(
 .stat-value {
     color: var(--text-bright);
     text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 /* Sub-rows (depth 1) */

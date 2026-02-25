@@ -8,6 +8,8 @@ export const SELECTED_COLOR = [1.0, 1.0, 1.0, 1.0]; // White highlight
 export const FRAME_COLOR = [1.0, 1.0, 0.0, 0.85]; // Yellow selection frame
 export const FRAME_CORNER_COLOR = [1.0, 1.0, 1.0, 0.95]; // White corner accents
 export const PATH_COLOR = [0.3, 1.0, 0.6, 0.4]; // Green path indicator
+export const PATH_TARGET_COLOR = [1.0, 0.3, 0.1, 0.9]; // Orange target marker
+export const PATH_TARGET_RING_COLOR = [1.0, 0.6, 0.2, 0.5]; // Outer ring glow
 export const PREVIEW_VALID_COLOR = [0.3, 1.0, 0.3, 0.5]; // Green ghost building
 export const PREVIEW_INVALID_COLOR = [1.0, 0.3, 0.3, 0.5]; // Red ghost building
 
@@ -24,11 +26,16 @@ export const BASE_QUAD = new Float32Array([-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.
 // Global scale applied to all entity sprites (buildings, units, trees, resources)
 export const ENTITY_SCALE = 1.5;
 
+// Scale for decoration sprites (non-tree, non-stone map objects like bushes, flowers, rocks)
+export const DECORATION_SCALE = 1.0;
+
 // Entity scale factors (for procedural/fallback rendering)
 export const BUILDING_SCALE = 1.5;
 export const UNIT_SCALE = 0.6;
 export const RESOURCE_SCALE = 0.5;
 export const PATH_DOT_SCALE = 0.24;
+export const PATH_TARGET_SCALE = 0.4;
+export const PATH_TARGET_RING_SCALE = 0.7;
 
 /**
  * Depth factors for different entity types.
@@ -40,6 +47,13 @@ export const DEPTH_FACTOR_BUILDING = 0.5; // Middle of building
 export const DEPTH_FACTOR_MAP_OBJECT = 0.85; // Near bottom (trees, stones have base at bottom)
 export const DEPTH_FACTOR_UNIT = 1.0; // At feet (units stand on ground)
 export const DEPTH_FACTOR_RESOURCE = 1.0; // On ground
+
+/**
+ * Depth bias subtracted from seed trees (growing saplings) and fallen/cut tree stages
+ * so they always render behind standing trees, units, and buildings at the same tile.
+ * Must be less than tile row spacing (0.5 world units) to avoid cross-row mis-sorting.
+ */
+export const FLAT_TREE_DEPTH_BIAS = 0.2;
 
 // Selection frame parameters
 export const FRAME_PADDING = 1.3; // Frame size relative to entity scale

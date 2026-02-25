@@ -38,7 +38,7 @@ describe('BuildingIndicatorRenderer', () => {
             maxSlopeDiff: MAX_SLOPE_DIFF,
         };
         renderer = new BuildingIndicatorRenderer(mapSize, groundType, groundHeight, placementChecker);
-        renderer.buildingType = BuildingType.Decoration;
+        renderer.buildingType = BuildingType.Eyecatcher01;
     });
 
     describe('computePlacementStatus', () => {

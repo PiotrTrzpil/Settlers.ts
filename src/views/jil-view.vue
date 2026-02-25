@@ -11,49 +11,61 @@
             />
             <span class="info">{{ jilList.length }} jobs</span>
             <button :class="{ active: viewMode === 'single' }" @click="viewMode = 'single'">Single</button>
-            <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(renderAllGridSprites)">Grid</button>
+            <button :class="{ active: viewMode === 'grid' }" @click="switchToGrid(() => {})">Grid</button>
             <Checkbox v-if="viewMode === 'single'" v-model="doAnimation" label="Animate" />
         </div>
 
-        <!-- Grid View: All job sprites in a grid with multiple directions -->
-        <div v-if="viewMode === 'grid'" class="grid-container">
-            <div
-                v-for="item in jilList"
-                :key="item.index"
-                class="grid-item"
-                :class="{
-                    selected: selectedJil?.index === item.index,
-                    mapped: getBuildingForJob(item.index) !== null || getCarrierJobInfo(item.index)?.isMapped,
-                    'single-dir': getDirectionCount(item.index) === 1,
-                    'multi-dir': getDirectionCount(item.index) > 1,
-                }"
-                @click="selectJobFromGrid(item)"
-            >
-                <div class="direction-grid" :class="'dirs-' + Math.min(getDirectionCount(item.index), 8)">
-                    <div v-for="dir in Math.min(getDirectionCount(item.index), 8)" :key="dir" class="direction-cell">
-                        <canvas
-                            :ref="el => setCanvasRef(el as HTMLCanvasElement, `${item.index}-${dir - 1}`)"
-                            width="200"
-                            height="200"
-                            class="grid-canvas"
-                        />
-                        <span v-if="getDirectionCount(item.index) > 1" class="dir-label">D{{ dir - 1 }}</span>
+        <!-- Grid View: All job sprites in a virtualized grid with multiple directions -->
+        <VirtualGrid
+            v-if="viewMode === 'grid'"
+            :items="jilList"
+            :min-column-width="500"
+            :row-height="320"
+            :gap="8"
+            :padding="10"
+            @visible="onGridVisible"
+        >
+            <template #default="{ item }">
+                <div
+                    class="grid-item"
+                    :class="{
+                        selected: selectedJil?.index === item.index,
+                        mapped: getBuildingForJob(item.index) !== null || getCarrierJobInfo(item.index)?.isMapped,
+                        'single-dir': getDirectionCount(item.index) === 1,
+                        'multi-dir': getDirectionCount(item.index) > 1,
+                    }"
+                    @click="selectJobFromGrid(item)"
+                >
+                    <div class="direction-grid" :class="'dirs-' + Math.min(getDirectionCount(item.index), 8)">
+                        <div
+                            v-for="dir in Math.min(getDirectionCount(item.index), 8)"
+                            :key="dir"
+                            class="direction-cell"
+                        >
+                            <canvas
+                                :ref="el => setCanvasRef(el as HTMLCanvasElement, `${item.index}-${dir - 1}`)"
+                                width="200"
+                                height="200"
+                                class="grid-canvas"
+                            />
+                            <span v-if="getDirectionCount(item.index) > 1" class="dir-label">D{{ dir - 1 }}</span>
+                        </div>
+                    </div>
+                    <div class="grid-label">
+                        <span class="job-index">Job #{{ item.index }}</span>
+                        <span v-if="getBuildingForJob(item.index)" class="building-name">
+                            {{ getBuildingForJob(item.index) }}
+                        </span>
+                        <span
+                            v-else-if="getCarrierJobInfo(item.index)"
+                            :class="getCarrierJobInfo(item.index)?.isMapped ? 'carrier-mapped' : 'carrier-unmapped'"
+                        >
+                            {{ getCarrierJobInfo(item.index)?.material }}
+                        </span>
                     </div>
                 </div>
-                <div class="grid-label">
-                    <span class="job-index">Job #{{ item.index }}</span>
-                    <span v-if="getBuildingForJob(item.index)" class="building-name">
-                        {{ getBuildingForJob(item.index) }}
-                    </span>
-                    <span
-                        v-else-if="getCarrierJobInfo(item.index)"
-                        :class="getCarrierJobInfo(item.index)?.isMapped ? 'carrier-mapped' : 'carrier-unmapped'"
-                    >
-                        {{ getCarrierJobInfo(item.index)?.material }}
-                    </span>
-                </div>
-            </div>
-        </div>
+            </template>
+        </VirtualGrid>
 
         <!-- Single View: Detailed sprite browser -->
         <div v-if="viewMode === 'single'" class="single-view">
@@ -96,7 +108,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, useTemplateRef, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, useTemplateRef } from 'vue';
 import { Path } from '@/utilities/path';
 import { GfxFileReader } from '@/resources/gfx/gfx-file-reader';
 import { GilFileReader } from '@/resources/gfx/gil-file-reader';
@@ -122,6 +134,7 @@ import { useCompositeGridView } from '@/composables/useGridView';
 import FileBrowser from '@/components/file-browser.vue';
 import Checkbox from '@/components/Checkbox.vue';
 import ItemSelector from '@/components/ItemSelector.vue';
+import VirtualGrid from '@/components/VirtualGrid.vue';
 
 const log = new LogHandler('JilView');
 
@@ -132,7 +145,7 @@ const props = defineProps<{
 const ghCav = useTemplateRef<HTMLCanvasElement>('ghCav');
 
 // Use composable for grid view functionality (composite keys: "jobIndex-dirIndex")
-const { viewMode, setCanvasRef, clearRefs, canvasRefs, switchToGrid, watchGridMode } = useCompositeGridView('grid');
+const { viewMode, setCanvasRef, clearRefs, canvasRefs, switchToGrid } = useCompositeGridView('grid');
 
 const doAnimation = ref(true);
 let animationTimer = 0;
@@ -301,12 +314,6 @@ async function doLoad(fileId: string) {
         selectedJil.value = jilList.value[0] ?? null;
         onSelectJil();
     }
-
-    // Render grid if in grid mode
-    if (viewMode.value === 'grid') {
-        await nextTick();
-        renderAllGridSprites();
-    }
 }
 
 function onSelectJil() {
@@ -357,27 +364,32 @@ function onAnimate() {
     onSelectGil();
 }
 
-function renderAllGridSprites() {
+function renderJobSprite(item: IndexFileItem) {
     if (!gfxFileReader.value || !dilFileReader.value || !gilFileReader.value) return;
 
-    for (const item of jilList.value) {
-        const dirItems = dilFileReader.value.getItems(item.offset, item.length);
-        if (dirItems.length === 0) continue;
+    const dirItems = dilFileReader.value.getItems(item.offset, item.length);
+    if (dirItems.length === 0) return;
 
-        // Render only existing directions (up to 8)
-        const maxDirs = Math.min(8, dirItems.length);
-        for (let dirIdx = 0; dirIdx < maxDirs; dirIdx++) {
-            const canvas = canvasRefs.get(`${item.index}-${dirIdx}`);
-            if (!canvas) continue;
+    const maxDirs = Math.min(8, dirItems.length);
+    for (let dirIdx = 0; dirIdx < maxDirs; dirIdx++) {
+        const canvas = canvasRefs.get(`${item.index}-${dirIdx}`);
+        if (!canvas) continue;
 
-            const frameItems = gilFileReader.value.getItems(dirItems[dirIdx]!.offset, dirItems[dirIdx]!.length);
-            if (frameItems.length === 0) continue;
+        const frameItems = gilFileReader.value.getItems(dirItems[dirIdx]!.offset, dirItems[dirIdx]!.length);
+        if (frameItems.length === 0) continue;
 
-            const offset = gilFileReader.value.getImageOffset(frameItems[0]!.index);
-            const gfx = gfxFileReader.value.readImage(offset, item.index);
+        const offset = gilFileReader.value.getImageOffset(frameItems[0]!.index);
+        const gfx = gfxFileReader.value.readImage(offset, item.index);
 
-            renderImageToCanvas(gfx, canvas);
-        }
+        renderImageToCanvas(gfx, canvas);
+    }
+}
+
+function onGridVisible(startIndex: number, endIndex: number) {
+    for (let i = startIndex; i < endIndex; i++) {
+        const item = jilList.value[i];
+        if (!item) continue;
+        renderJobSprite(item);
     }
 }
 
@@ -394,9 +406,6 @@ onMounted(() => {
 onUnmounted(() => {
     window.clearInterval(animationTimer);
 });
-
-// Re-render grid when switching to grid mode
-watchGridMode(renderAllGridSprites, () => jilList.value.length > 0);
 </script>
 
 <style src="@/styles/file-viewer.css"></style>
