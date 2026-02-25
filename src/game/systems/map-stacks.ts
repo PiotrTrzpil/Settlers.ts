@@ -10,7 +10,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import type { MapStackData } from '@/resources/map/map-entity-data';
 import { S4GoodType } from '@/resources/map/s4-types';
 
-const log = new LogHandler('MapStacks');
+const log = new LogHandler('Map:Stacks');
 
 /**
  * Mapping from S4GoodType to internal EMaterialType.

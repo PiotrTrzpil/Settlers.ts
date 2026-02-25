@@ -8,3 +8,5 @@ export { parseBuildings } from './building-parser';
 export { parseSettlers } from './settler-parser';
 export { parseStacks } from './stack-parser';
 export { parseMapObjects } from './object-parser';
+export { parseTeamInformation } from './team-parser';
+export { parseQuestText } from './quest-parser';

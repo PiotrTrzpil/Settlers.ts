@@ -15,7 +15,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import { S4SettlerType } from '../../s4-types';
 import type { MapSettlerData } from '../../map-entity-data';
 
-const log = new LogHandler('SettlerParser');
+const log = new LogHandler('Map:Settlers');
 
 /** Bytes per settler entry in the chunk */
 const ENTRY_SIZE = 12;

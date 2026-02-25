@@ -15,7 +15,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import { S4BuildingType } from '../../s4-types';
 import type { MapBuildingData } from '../../map-entity-data';
 
-const log = new LogHandler('BuildingParser');
+const log = new LogHandler('Map:Buildings');
 
 /** Bytes per building entry in the chunk */
 const ENTRY_SIZE = 20;

@@ -9,11 +9,19 @@ import { createEmptyEntityData } from '../../map-entity-data';
 import { MapChunkType } from '../map-chunk-type';
 import { OriginalLandscape } from '../original-landscape';
 import { OriginalMapFile } from '../original-map-file';
-import { parsePlayerInformation, parseBuildings, parseSettlers, parseStacks, parseMapObjects } from '../chunk-parsers';
+import {
+    parsePlayerInformation,
+    parseBuildings,
+    parseSettlers,
+    parseStacks,
+    parseMapObjects,
+    parseTeamInformation,
+    parseQuestText,
+} from '../chunk-parsers';
 
 /** load a .map or a .edm map */
 export class OriginalMapLoader extends OriginalMapFile implements IMapLoader {
-    private logLoader: LogHandler = new LogHandler('OriginalMapLoader');
+    private logLoader: LogHandler = new LogHandler('Map:Loader');
 
     public general: GeneralMapInformation = new GeneralMapInformation();
     public mapSize: MapSize = new MapSize(0, 0);
@@ -90,7 +98,44 @@ export class OriginalMapLoader extends OriginalMapFile implements IMapLoader {
             this.logLoader.debug(`Parsed ${data.objects.length} map objects (trees)`);
         }
 
+        // Parse team information (chunk type 3)
+        const teamReader = this.getChunkReader(MapChunkType.MapTeamInformation);
+        if (teamReader) {
+            data.teams = parseTeamInformation(teamReader);
+            this.logLoader.debug(`Parsed team data: ${data.teams.teamAssignments.length} slots`);
+        }
+
+        // Parse quest text (chunk type 11)
+        const questTextReader = this.getChunkReader(MapChunkType.MapQuestText);
+        if (questTextReader) {
+            data.quest.questText = parseQuestText(questTextReader);
+        }
+
+        // Parse quest tip (chunk type 12)
+        const questTipReader = this.getChunkReader(MapChunkType.MapQuestTip);
+        if (questTipReader) {
+            data.quest.questTip = parseQuestText(questTipReader);
+        }
+
+        // Log unknown chunks for future analysis
+        this.logUnknownChunk(MapChunkType.MapPreview, 'MapPreview (type 4)');
+        this.logUnknownChunk(MapChunkType.MapUnknown5, 'MapUnknown5 (type 5)');
+        this.logUnknownChunk(MapChunkType.MapUnknown10, 'MapUnknown10 (type 10)');
+
         return data;
+    }
+
+    /** Log size and first bytes of an unparsed chunk for analysis. */
+    private logUnknownChunk(chunkType: MapChunkType, label: string): void {
+        const reader = this.getChunkReader(chunkType);
+        if (!reader) return;
+        const len = reader.length;
+        const preview = Math.min(len, 32);
+        const bytes: string[] = [];
+        for (let i = 0; i < preview; i++) {
+            bytes.push(reader.readByte().toString(16).padStart(2, '0'));
+        }
+        this.logLoader.debug(`${label}: ${len} bytes — [${bytes.join(' ')}]`);
     }
 
     public readGeneralInformation(): boolean {

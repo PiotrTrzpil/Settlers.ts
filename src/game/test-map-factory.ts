@@ -90,6 +90,8 @@ export function createTestMapLoader(): IMapLoader {
         settlers: [],
         stacks: [],
         objects: treeObjects,
+        teams: null,
+        quest: { questText: '', questTip: '' },
     };
 
     return {

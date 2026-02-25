@@ -15,7 +15,7 @@ import { BinaryReader } from '@/resources/file/binary-reader';
 import { LogHandler } from '@/utilities/log-handler';
 import type { MapObjectData } from '../../map-entity-data';
 
-const log = new LogHandler('ObjectParser');
+const log = new LogHandler('Map:Objects');
 
 /**
  * Parse MapObjects chunk data.

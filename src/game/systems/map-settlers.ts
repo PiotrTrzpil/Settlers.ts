@@ -10,7 +10,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import type { MapSettlerData } from '@/resources/map/map-entity-data';
 import { S4SettlerType } from '@/resources/map/s4-types';
 
-const log = new LogHandler('MapSettlers');
+const log = new LogHandler('Map:Settlers');
 
 /**
  * Mapping from S4SettlerType to internal UnitType.

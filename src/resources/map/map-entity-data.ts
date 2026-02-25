@@ -47,6 +47,20 @@ export interface MapObjectData {
     objectType: number;
 }
 
+/** Team alliance data from MapTeamInformation chunk (type 3) */
+export interface MapTeamData {
+    /** Team assignments: teamAssignments[playerIndex] = teamId */
+    teamAssignments: number[];
+}
+
+/** Quest/mission text from MapQuestText (type 11) and MapQuestTip (type 12) */
+export interface MapQuestData {
+    /** Mission description text */
+    questText: string;
+    /** Mission hint/tip text */
+    questTip: string;
+}
+
 /** Aggregated entity data from all entity chunks */
 export interface MapEntityData {
     players: MapPlayerInfo[];
@@ -55,6 +69,10 @@ export interface MapEntityData {
     stacks: MapStackData[];
     /** Map objects (trees, decorations) from MapObjects chunk (type 6) */
     objects: MapObjectData[];
+    /** Team alliance information */
+    teams: MapTeamData | null;
+    /** Quest/mission text and tips */
+    quest: MapQuestData;
 }
 
 /** Create an empty MapEntityData object */
@@ -65,5 +83,7 @@ export function createEmptyEntityData(): MapEntityData {
         settlers: [],
         stacks: [],
         objects: [],
+        teams: null,
+        quest: { questText: '', questTip: '' },
     };
 }

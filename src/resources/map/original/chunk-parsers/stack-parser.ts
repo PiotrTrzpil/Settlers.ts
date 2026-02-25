@@ -8,7 +8,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import { S4GoodType } from '../../s4-types';
 import type { MapStackData } from '../../map-entity-data';
 
-const log = new LogHandler('StackParser');
+const log = new LogHandler('Map:Stacks');
 
 /** Maximum valid coordinate value */
 const MAX_COORDINATE = 10000;

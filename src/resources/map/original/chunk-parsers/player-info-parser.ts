@@ -14,7 +14,7 @@ import { LogHandler } from '@/utilities/log-handler';
 import { S4Tribe } from '../../s4-types';
 import type { MapPlayerInfo } from '../../map-entity-data';
 
-const log = new LogHandler('PlayerInfoParser');
+const log = new LogHandler('Map:Players');
 
 /** Known entry size: 4 (tribe) + 4 (x) + 4 (y) + 33 (name) = 45 bytes */
 const ENTRY_SIZE = 45;
