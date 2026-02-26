@@ -14,11 +14,14 @@ import type { BuildingInventoryManager } from '../inventory';
 import { LogHandler } from '@/utilities/log-handler';
 import type { TaskNode } from './types';
 import { TaskType, type EntityWorkHandler, type PositionWorkHandler } from './types';
+import type { PlantingCapable } from '../growth';
 import type { TreeSystem } from '../trees/tree-system';
 import type { StoneSystem } from '../stones/stone-system';
+import type { CropSystem } from '../crops/crop-system';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { findNearestEntity } from '../../systems/spatial-search';
 import { getWorkerWorkplaces } from '../../unit-types';
+import { getBuildingMaxOccupants } from '../../buildings/types';
 
 // ─────────────────────────────────────────────────────────────
 // Domain helpers (used by handlers and settler-task-system)
@@ -28,7 +31,11 @@ import { getWorkerWorkplaces } from '../../unit-types';
  * Find the nearest workplace building for a settler based on their unit type.
  * Returns the nearest building of the appropriate type owned by the same player.
  */
-export function findNearestWorkplace(gameState: GameState, settler: Entity): Entity | null {
+export function findNearestWorkplace(
+    gameState: GameState,
+    settler: Entity,
+    buildingOccupants?: ReadonlyMap<number, number>
+): Entity | null {
     const unitType = settler.subType as UnitType;
     const workplaceTypes = getWorkerWorkplaces(unitType);
 
@@ -44,7 +51,9 @@ export function findNearestWorkplace(gameState: GameState, settler: Entity): Ent
         entity =>
             entity.type === EntityType.Building &&
             workplaceTypes.has(entity.subType as BuildingType) &&
-            entity.player === settler.player
+            entity.player === settler.player &&
+            (!buildingOccupants ||
+                (buildingOccupants.get(entity.id) ?? 0) < getBuildingMaxOccupants(entity.subType as BuildingType))
     );
 
     return result ? gameState.getEntityOrThrow(result.entityId, 'nearest workplace') : null;
@@ -60,7 +69,8 @@ export function findNearestWorkplace(gameState: GameState, settler: Entity): Ent
  */
 export function createWorkplaceHandler(
     gameState: GameState,
-    inventoryManager: BuildingInventoryManager
+    inventoryManager: BuildingInventoryManager,
+    getAssignedBuilding: (settlerId: number) => Entity | null
 ): EntityWorkHandler {
     return {
         type: 'entity',
@@ -68,9 +78,9 @@ export function createWorkplaceHandler(
 
         findTarget: (_x: number, _y: number, settlerId?: number) => {
             if (settlerId === undefined) return null;
-            const settler = gameState.getEntityOrThrow(settlerId, 'settler for findTarget');
 
-            const workplace = findNearestWorkplace(gameState, settler);
+            // Use pre-assigned building (set by occupancy tracking in SettlerTaskSystem)
+            const workplace = getAssignedBuilding(settlerId);
             if (!workplace) return null;
 
             return { entityId: workplace.id, x: workplace.x, y: workplace.y };
@@ -159,21 +169,30 @@ export function createWoodcuttingHandler(gameState: GameState, treeSystem: TreeS
 const woodcuttingLog = new LogHandler('WoodcuttingHandler');
 
 /**
- * Create a handler for TREE_SEED_POS search type (foresters).
- * Foresters find empty tiles and plant new trees via TreeSystem.
+ * Create a generic planting handler for any GrowableSystem.
+ * Workers find empty tiles and plant entities via the system's command.
+ * Used by foresters (trees), farmers (grain/sunflower/agave), etc.
  */
-export function createForesterHandler(treeSystem: TreeSystem): PositionWorkHandler {
+export function createPlantingHandler(system: PlantingCapable): PositionWorkHandler {
     return {
         type: 'position',
 
         findPosition: (x: number, y: number) => {
-            return treeSystem.findPlantingSpot(x, y);
+            return system.findPlantingSpot(x, y);
         },
 
         onWorkAtPositionComplete: (posX: number, posY: number, settlerId: number) => {
-            treeSystem.plantTree(posX, posY, settlerId);
+            system.plantEntity(posX, posY, settlerId);
         },
     };
+}
+
+/**
+ * Create a handler for TREE_SEED_POS search type (foresters).
+ * Foresters find empty tiles and plant new trees via TreeSystem.
+ */
+export function createForesterHandler(treeSystem: TreeSystem): PositionWorkHandler {
+    return createPlantingHandler(treeSystem);
 }
 
 const STONECUTTER_SEARCH_RADIUS = 30;
@@ -216,6 +235,50 @@ export function createStonecuttingHandler(gameState: GameState, stoneSystem: Sto
 
         onWorkInterrupt: (targetId: number) => {
             stoneSystem.cancelMining(targetId);
+        },
+    };
+}
+
+const CROP_HARVEST_SEARCH_RADIUS = 20;
+const cropLog = new LogHandler('CropHandler');
+
+/**
+ * Create a harvest handler for a specific crop type.
+ * Workers find mature crops, harvest them, and produce material.
+ */
+export function createCropHarvestHandler(
+    gameState: GameState,
+    cropSystem: CropSystem,
+    cropType: MapObjectType
+): EntityWorkHandler {
+    return {
+        type: 'entity',
+
+        findTarget: (x: number, y: number) => {
+            return findNearestEntity(gameState, x, y, CROP_HARVEST_SEARCH_RADIUS, entity => {
+                if (entity.type !== EntityType.MapObject) return false;
+                return entity.subType === cropType && cropSystem.canHarvest(entity.id);
+            });
+        },
+
+        canWork: (targetId: number) => {
+            return cropSystem.canHarvest(targetId) || cropSystem.isHarvesting(targetId);
+        },
+
+        onWorkStart: (targetId: number) => {
+            cropSystem.startHarvesting(targetId);
+        },
+
+        onWorkTick: (targetId: number, progress: number) => {
+            return cropSystem.updateHarvesting(targetId, progress);
+        },
+
+        onWorkComplete: (targetId: number, settlerX: number, settlerY: number) => {
+            cropLog.debug(`Harvested ${MapObjectType[cropType]} ${targetId} at (${settlerX}, ${settlerY})`);
+        },
+
+        onWorkInterrupt: (targetId: number) => {
+            cropSystem.cancelHarvesting(targetId);
         },
     };
 }

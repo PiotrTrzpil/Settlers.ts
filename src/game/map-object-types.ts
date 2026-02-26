@@ -37,4 +37,10 @@ export enum MapObjectType {
     ResourceIron = 102,
     ResourceStone = 103,
     ResourceSulfur = 104,
+
+    // Crops (planted by workers, grow through stages)
+    Grain = 200,
+    Sunflower = 201,
+    Agave = 202,
+    Beehive = 203,
 }

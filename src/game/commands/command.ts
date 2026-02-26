@@ -18,6 +18,7 @@ import type { GameSettings } from '../game-settings';
 import { debugStats } from '../debug-stats';
 import type { SettlerTaskSystem } from '../features/settler-tasks';
 import type { TreeSystem } from '../features/trees';
+import type { CropSystem } from '../features/crops';
 import type { CombatSystem } from '../features/combat';
 import {
     Command,
@@ -35,6 +36,7 @@ import {
     type SpawnVisualResourceCommand,
     type SpawnBuildingUnitsCommand,
     type PlantTreeCommand,
+    type PlantCropCommand,
     type PlantTreesAreaCommand,
     type ScriptAddGoodsCommand,
     type ScriptAddBuildingCommand,
@@ -56,6 +58,8 @@ export interface CommandContext {
     buildingStateManager: BuildingStateManager;
     /** Tree system for planting/registration */
     treeSystem?: TreeSystem;
+    /** Crop system for planting/registration */
+    cropSystem?: CropSystem;
     /** Combat system — used to release units from auto-combat when player issues commands */
     combatSystem?: CombatSystem;
 }
@@ -454,6 +458,23 @@ function executePlantTreesArea(ctx: CommandContext, cmd: PlantTreesAreaCommand):
     return commandSuccess([{ type: 'entity_created', entityId: 0, entityType: `${planted} trees planted` }]);
 }
 
+function executePlantCrop(ctx: CommandContext, cmd: PlantCropCommand): CommandResult {
+    const { state } = ctx;
+
+    // Check tile is still valid — ignore units (the farmer stands on the tile while planting)
+    const existing = state.getEntityAt(cmd.x, cmd.y);
+    if (existing && existing.type !== EntityType.Unit) {
+        return commandFailed(`Tile (${cmd.x}, ${cmd.y}) is occupied, cannot plant crop`);
+    }
+
+    const entity = state.addEntity(EntityType.MapObject, cmd.cropType, cmd.x, cmd.y, 0);
+
+    // Register with crop system for growth tracking (planted=true → Growing stage)
+    ctx.cropSystem!.register(entity.id, cmd.cropType, true);
+
+    return commandSuccess([{ type: 'crop_planted', entityId: entity.id, cropType: cmd.cropType, x: cmd.x, y: cmd.y }]);
+}
+
 // === Script command handlers ===
 
 function executeScriptAddGoods(ctx: CommandContext, cmd: ScriptAddGoodsCommand): CommandResult {
@@ -536,6 +557,7 @@ const COMMAND_HANDLERS: Record<Command['type'], CommandHandler> = {
     spawn_visual_resource: executeSpawnVisualResource,
     spawn_building_units: executeSpawnBuildingUnits,
     plant_tree: executePlantTree,
+    plant_crop: executePlantCrop,
     plant_trees_area: executePlantTreesArea,
     script_add_goods: executeScriptAddGoods,
     script_add_building: executeScriptAddBuilding,

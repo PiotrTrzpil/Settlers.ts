@@ -5,6 +5,64 @@
 
 export const yieldToEventLoop = (): Promise<void> => new Promise(resolve => requestAnimationFrame(() => resolve()));
 
+// =============================================================================
+// Safe GPU-upload batch helper
+// =============================================================================
+//
+// To prevent black boxes during progressive rendering, sprites must only be
+// registered (made visible) AFTER GPU upload. The pattern is:
+//
+//   1. Load sprites (blits to CPU buffer, collects results)
+//   2. GPU upload (atlas.update)
+//   3. Register sprites (now safe to render)
+//
+// The SafeLoadBatch helper enforces this pattern.
+
+import type { EntityTextureAtlas } from './entity-texture-atlas';
+
+/**
+ * Helper for safe progressive sprite loading.
+ * Collects loaded sprites, then uploads to GPU, then registers.
+ * This prevents black boxes from rendering before GPU has pixel data.
+ */
+export class SafeLoadBatch<T> {
+    private items: T[] = [];
+
+    /** Add a loaded item to the batch */
+    add(item: T): void {
+        this.items.push(item);
+    }
+
+    /** Add multiple loaded items */
+    addAll(items: T[]): void {
+        this.items.push(...items);
+    }
+
+    /**
+     * Finalize the batch: upload to GPU, then register all items.
+     * @param atlas - The texture atlas to upload
+     * @param gl - WebGL context for GPU upload
+     * @param register - Function to register each item (called after GPU upload)
+     */
+    finalize(atlas: EntityTextureAtlas, gl: WebGL2RenderingContext, register: (item: T) => void): void {
+        if (this.items.length === 0) return;
+
+        // GPU upload first
+        atlas.update(gl);
+
+        // Now safe to register
+        for (const item of this.items) {
+            register(item);
+        }
+
+        this.items = [];
+    }
+
+    get count(): number {
+        return this.items.length;
+    }
+}
+
 const DEFAULT_BATCH_SIZE = 5;
 
 /**

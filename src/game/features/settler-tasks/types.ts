@@ -47,6 +47,9 @@ export enum SearchType {
     FISH = 'FISH',
     VENISON = 'VENISON',
     GRAIN = 'GRAIN',
+    SUNFLOWER = 'SUNFLOWER',
+    AGAVE = 'AGAVE',
+    BEEHIVE = 'BEEHIVE',
     RESOURCE_POS = 'RESOURCE_POS',
     GOOD = 'GOOD',
     CONSTRUCTION = 'CONSTRUCTION',
@@ -146,8 +149,6 @@ export interface WorkerJobData {
     targetId: number | null;
     /** Target position (for SEARCH_POS/GO_TO_POS tasks) */
     targetPos: { x: number; y: number } | null;
-    /** Home building ID (workplace) */
-    homeId: number | null;
     /** Carried good type (after pickup) */
     carryingGood: EMaterialType | null;
 }

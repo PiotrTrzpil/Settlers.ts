@@ -275,6 +275,7 @@ export class Game {
             settlerTaskSystem: this.services.settlerTaskSystem,
             buildingStateManager: this.services.buildingStateManager,
             treeSystem: this.services.treeSystem,
+            cropSystem: this.services.cropSystem,
             combatSystem: this.services.combatSystem,
         };
     }

@@ -109,6 +109,7 @@ function tryRestoreGameState(game: Game): void {
     log.info('Restoring saved game state...');
     restoreFromSnapshot(game, snapshot);
     game.services.inventoryVisualizer.rebuildFromExistingEntities();
+    game.services.buildingOverlayManager.rebuildFromExistingEntities(game.services.buildingStateManager);
     debugStats.state.mapLoadTimings.stateRestore = Math.round(performance.now() - t0);
 }
 
@@ -195,8 +196,9 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
             // Restore to initial map state (trees, buildings, etc. from map load)
             const restored = gameStatePersistence.restoreToInitialState(g);
             if (restored) {
-                // Rebuild inventory visualizer state from restored entities
+                // Rebuild state from restored entities
                 g.services.inventoryVisualizer.rebuildFromExistingEntities();
+                g.services.buildingOverlayManager.rebuildFromExistingEntities(g.services.buildingStateManager);
                 log.info('Game state reset to initial map state');
             } else {
                 // Fallback: no initial state, use clean reset (keeps environment)

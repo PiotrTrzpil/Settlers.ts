@@ -24,7 +24,8 @@ import { MAP_OBJECT_SPRITES } from './sprite-metadata/gil-indices';
 import { STONE_DEPLETION_STAGES } from '../features/stones/stone-system';
 import { SpriteLoader, type LoadedGfxFileSet } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
-import { yieldToEventLoop } from './batch-loader';
+import { yieldToEventLoop, SafeLoadBatch } from './batch-loader';
+import { loadCropSprites } from './sprite-crop-loader';
 import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
 import { isBuildingAvailableForRace } from '../race-availability';
 import { ANIMATION_DEFAULTS, AnimationData } from '../animation';
@@ -81,60 +82,6 @@ function createTimer() {
 
 // =============================================================================
 // Safe Progressive Loading Pattern
-// =============================================================================
-//
-// To prevent black boxes during progressive rendering, sprites must only be
-// registered (made visible) AFTER GPU upload. The pattern is:
-//
-//   1. Load sprites (blits to CPU buffer, collects results)
-//   2. GPU upload (atlas.update)
-//   3. Register sprites (now safe to render)
-//
-// The SafeLoadBatch helper enforces this pattern.
-
-/**
- * Helper for safe progressive sprite loading.
- * Collects loaded sprites, then uploads to GPU, then registers.
- * This prevents black boxes from rendering before GPU has pixel data.
- */
-class SafeLoadBatch<T> {
-    private items: T[] = [];
-
-    /** Add a loaded item to the batch */
-    add(item: T): void {
-        this.items.push(item);
-    }
-
-    /** Add multiple loaded items */
-    addAll(items: T[]): void {
-        this.items.push(...items);
-    }
-
-    /**
-     * Finalize the batch: upload to GPU, then register all items.
-     * @param atlas - The texture atlas to upload
-     * @param gl - WebGL context for GPU upload
-     * @param register - Function to register each item (called after GPU upload)
-     */
-    finalize(atlas: EntityTextureAtlas, gl: WebGL2RenderingContext, register: (item: T) => void): void {
-        if (this.items.length === 0) return;
-
-        // GPU upload first
-        atlas.update(gl);
-
-        // Now safe to register
-        for (const item of this.items) {
-            register(item);
-        }
-
-        this.items = [];
-    }
-
-    get count(): number {
-        return this.items.length;
-    }
-}
-
 /**
  * Manages sprite loading, atlas packing, and race switching for entity rendering.
  * Extracted from EntityRenderer to separate concerns.
@@ -525,11 +472,19 @@ export class SpriteRenderManager {
         const t = createTimer();
 
         // Phase 1: Uint16Array view + atlas setup
-        const imgData16 = new Uint16Array(
-            cached.imgData.buffer,
-            cached.imgData.byteOffset,
-            cached.imgData.byteLength / 2
-        );
+        let imgData16: Uint16Array;
+        if (cached.imgData.byteOffset % 2 === 0) {
+            imgData16 = new Uint16Array(
+                cached.imgData.buffer,
+                cached.imgData.byteOffset,
+                cached.imgData.byteLength / 2
+            );
+        } else {
+            // byteOffset is not 2-byte aligned — copy into an aligned buffer
+            const aligned = new Uint8Array(cached.imgData.byteLength);
+            aligned.set(cached.imgData);
+            imgData16 = new Uint16Array(aligned.buffer);
+        }
 
         const atlas = EntityTextureAtlas.fromCache(
             imgData16,
@@ -1005,6 +960,7 @@ export class SpriteRenderManager {
         const treeCount = await this.loadTreeSprites(fileSet5, atlas, registry, gl, paletteBase5);
         const stoneCount = await this.loadStoneSprites(fileSet5, atlas, registry, gl, paletteBase5);
         const decoCount = await this.loadDecorationSprites(fileSet5, atlas, registry, gl, paletteBase5);
+        const cropCount = await loadCropSprites(this.spriteLoader, fileSet5, atlas, registry, gl, paletteBase5);
         const flagCount = await this.loadFlagSprites(fileSet5, atlas, registry, gl, paletteBase5);
         const dotCount = await this.loadTerritoryDotSprites(fileSet5, atlas, registry, gl, paletteBase5);
 
@@ -1014,10 +970,10 @@ export class SpriteRenderManager {
             resourceCount = await this.loadResourceMapObjects(fileSet3, atlas, registry, paletteBase3);
         }
 
-        const total = treeCount + stoneCount + decoCount + flagCount + dotCount + resourceCount;
+        const total = treeCount + stoneCount + decoCount + cropCount + flagCount + dotCount + resourceCount;
         SpriteRenderManager.log.debug(
-            `MapObjects: ${treeCount} trees, ${stoneCount} stones, ${decoCount} decorations, ${flagCount} flags, ` +
-                `${dotCount} territory dots, ${resourceCount} resources (${total} total)`
+            `MapObjects: ${treeCount} trees, ${stoneCount} stones, ${decoCount} decorations, ${cropCount} crops, ` +
+                `${flagCount} flags, ${dotCount} territory dots, ${resourceCount} resources (${total} total)`
         );
         return total > 0;
     }

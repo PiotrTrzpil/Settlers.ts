@@ -71,6 +71,8 @@ interface UnitRuntime {
     lastDirection: number;
     /** Idle animation state */
     idleState: IdleAnimationState;
+    /** Building this worker is assigned to (reserved exclusively via occupancy tracking) */
+    assignedBuilding: number | null;
 }
 
 /** Configuration for SettlerTaskSystem dependencies */
@@ -97,6 +99,8 @@ export class SettlerTaskSystem implements TickSystem {
     private entityHandlers = new Map<SearchType, EntityWorkHandler>();
     private positionHandlers = new Map<SearchType, PositionWorkHandler>();
     private runtimes = new Map<number, UnitRuntime>();
+    /** Tracks how many workers are assigned to each building (for occupancy limits). */
+    private buildingOccupants = new Map<number, number>();
     private readonly eventBus: EventBus;
     /** Throttled logger for handler errors (prevents flooding from broken domain systems) */
     private handlerErrorLogger = new ThrottledLogger(log, 2000);
@@ -117,7 +121,14 @@ export class SettlerTaskSystem implements TickSystem {
         this.jobDefinitions = loadJobDefinitions();
 
         // Register built-in WORKPLACE handler for building workers
-        this.registerWorkHandler(SearchType.WORKPLACE, createWorkplaceHandler(this.gameState, this.inventoryManager));
+        this.registerWorkHandler(
+            SearchType.WORKPLACE,
+            createWorkplaceHandler(this.gameState, this.inventoryManager, (settlerId: number) => {
+                const runtime = this.runtimes.get(settlerId);
+                if (!runtime?.assignedBuilding) return null;
+                return this.gameState.getEntity(runtime.assignedBuilding) ?? null;
+            })
+        );
 
         // Register GOOD handler for carriers (they get jobs assigned externally by LogisticsDispatcher)
         this.registerWorkHandler(SearchType.GOOD, createCarrierHandler());
@@ -133,6 +144,9 @@ export class SettlerTaskSystem implements TickSystem {
             carrierManager: this.carrierManager,
             eventBus: this.eventBus,
             handlerErrorLogger: this.handlerErrorLogger,
+            getWorkerHomeBuilding: (settlerId: number) => {
+                return this.runtimes.get(settlerId)?.assignedBuilding ?? null;
+            },
         };
 
         log.debug(`Loaded ${this.settlerConfigs.size} settler configs, ${this.jobDefinitions.size} jobs`);
@@ -182,6 +196,28 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Building occupancy tracking
+    // ─────────────────────────────────────────────────────────────
+
+    /** Assign a building to a worker, incrementing its occupant count. */
+    private claimBuilding(runtime: UnitRuntime, buildingId: number): void {
+        runtime.assignedBuilding = buildingId;
+        this.buildingOccupants.set(buildingId, (this.buildingOccupants.get(buildingId) ?? 0) + 1);
+    }
+
+    /** Release a worker's building assignment, decrementing its occupant count. */
+    private releaseBuilding(runtime: UnitRuntime): void {
+        if (runtime.assignedBuilding === null) return;
+        const count = this.buildingOccupants.get(runtime.assignedBuilding) ?? 1;
+        if (count <= 1) {
+            this.buildingOccupants.delete(runtime.assignedBuilding);
+        } else {
+            this.buildingOccupants.set(runtime.assignedBuilding, count - 1);
+        }
+        runtime.assignedBuilding = null;
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Public API for assigning tasks
     // ─────────────────────────────────────────────────────────────
 
@@ -213,6 +249,9 @@ export class SettlerTaskSystem implements TickSystem {
             }
             runtime.job = null;
         }
+
+        // Player is moving this worker away — release building assignment
+        this.releaseBuilding(runtime);
 
         // Set up move task
         entity.hidden = false;
@@ -297,10 +336,17 @@ export class SettlerTaskSystem implements TickSystem {
 
     /**
      * Called by GameLoop when an entity is removed.
-     * Properly interrupts work in progress so domain systems can clean up.
+     * Handles both settler removal (interrupt jobs, release building) and
+     * building removal (release all workers assigned to it).
      */
     // eslint-disable-next-line sonarjs/cognitive-complexity -- complex cleanup for active tasks
     onEntityRemoved(entityId: number): void {
+        // If a building was destroyed, release all workers assigned to it
+        if (this.buildingOccupants.has(entityId)) {
+            this.onBuildingRemoved(entityId);
+        }
+
+        // Settler removal — interrupt and clean up runtime
         const runtime = this.runtimes.get(entityId);
         if (!runtime) return;
 
@@ -323,7 +369,18 @@ export class SettlerTaskSystem implements TickSystem {
             }
         }
 
+        this.releaseBuilding(runtime);
         this.runtimes.delete(entityId);
+    }
+
+    /** Release all workers assigned to a destroyed building so they can find new workplaces. */
+    private onBuildingRemoved(buildingId: number): void {
+        this.buildingOccupants.delete(buildingId);
+        for (const runtime of this.runtimes.values()) {
+            if (runtime.assignedBuilding === buildingId) {
+                runtime.assignedBuilding = null;
+            }
+        }
     }
 
     /** Reverse-lookup: find the entity work handler for a given jobId like "woodcutter.work" */
@@ -372,6 +429,7 @@ export class SettlerTaskSystem implements TickSystem {
                     idleTime: 0,
                     nextIdleTurnTime: 2 + this.gameState.rng.next() * 4,
                 },
+                assignedBuilding: null,
             };
             this.runtimes.set(entityId, runtime);
         }
@@ -542,16 +600,30 @@ export class SettlerTaskSystem implements TickSystem {
         }
     }
 
-    private buildWorkerJobData(
-        target: { entityId: number; x: number; y: number } | null,
-        homeBuilding: Entity | null
-    ): WorkerJobData {
+    private buildWorkerJobData(target: { entityId: number; x: number; y: number } | null): WorkerJobData {
         return {
             targetId: target?.entityId ?? null,
             targetPos: target ? { x: target.x, y: target.y } : null,
-            homeId: homeBuilding?.id ?? null,
             carryingGood: null,
         };
+    }
+
+    /**
+     * Resolve the home building for a settler: reuse existing assignment or find a new one.
+     * Claims the building immediately so no other worker can take it.
+     */
+    private resolveHomeBuilding(settler: Entity, runtime: UnitRuntime): Entity | null {
+        if (runtime.assignedBuilding !== null) {
+            const existing = this.gameState.getEntity(runtime.assignedBuilding);
+            if (existing) return existing;
+            // Building was destroyed — release stale assignment
+            this.releaseBuilding(runtime);
+        }
+        const building = findNearestWorkplace(this.gameState, settler, this.buildingOccupants);
+        if (building) {
+            this.claimBuilding(runtime, building.id);
+        }
+        return building;
     }
 
     private handleIdle(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
@@ -566,7 +638,7 @@ export class SettlerTaskSystem implements TickSystem {
             return;
         }
 
-        const homeBuilding = findNearestWorkplace(this.gameState, settler);
+        const homeBuilding = this.resolveHomeBuilding(settler, runtime);
 
         // Entity handlers search for a target; position handlers start self-searching jobs directly
         const entityTarget = entityHandler ? this.findEntityTarget(entityHandler, settler) : null;
@@ -587,7 +659,7 @@ export class SettlerTaskSystem implements TickSystem {
             jobId: selected.jobId,
             taskIndex: 0,
             progress: 0,
-            data: this.buildWorkerJobData(entityTarget, homeBuilding),
+            data: this.buildWorkerJobData(entityTarget),
         };
 
         log.debug(
@@ -724,7 +796,6 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     private completeJob(settler: Entity, runtime: UnitRuntime): void {
-        const homeId = runtime.job!.data.homeId;
         log.debug(`Settler ${settler.id} completed job ${runtime.job!.jobId}`);
         runtime.state = SettlerState.IDLE;
         runtime.job = null;
@@ -732,8 +803,8 @@ export class SettlerTaskSystem implements TickSystem {
         runtime.idleState.idleTime = 0;
 
         // Hide settler if they finished at their home building
-        if (homeId) {
-            const home = this.gameState.getEntity(homeId);
+        if (runtime.assignedBuilding) {
+            const home = this.gameState.getEntity(runtime.assignedBuilding);
             if (home && hexDistance(settler.x, settler.y, home.x, home.y) <= 1) {
                 settler.hidden = true;
             }

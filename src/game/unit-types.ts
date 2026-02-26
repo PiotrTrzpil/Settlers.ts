@@ -35,6 +35,8 @@ export enum UnitType {
     Donkey = 26,
     MushroomFarmer = 27,
     Angel = 28,
+    AgaveFarmer = 29,
+    Beekeeper = 30,
 }
 
 /**
@@ -101,6 +103,8 @@ export const UNIT_TYPE_CONFIG: Record<UnitType, UnitTypeConfig> = {
     [UnitType.Donkey]: { name: 'Donkey', category: UnitCategory.Worker, speed: 1.5 },
     [UnitType.MushroomFarmer]: { name: 'Mushroom Farmer', category: UnitCategory.Worker, speed: 2 },
     [UnitType.Angel]: { name: 'Angel', category: UnitCategory.Military, speed: 2 },
+    [UnitType.AgaveFarmer]: { name: 'Agave Farmer', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Beekeeper]: { name: 'Beekeeper', category: UnitCategory.Worker, speed: 2 },
 };
 
 /** Categories that allow player selection */
@@ -169,6 +173,10 @@ export const BUILDING_UNIT_TYPE: Partial<Record<BuildingType, UnitType>> = {
     [BuildingType.ToolSmith]: UnitType.Smith,
     [BuildingType.IronSmelter]: UnitType.Smith,
     [BuildingType.SmeltGold]: UnitType.Smith,
+
+    // Race-specific farming
+    [BuildingType.AgaveFarmerHut]: UnitType.AgaveFarmer,
+    [BuildingType.BeekeeperHut]: UnitType.Beekeeper,
 
     // Dark Tribe
     [BuildingType.MushroomFarm]: UnitType.MushroomFarmer,

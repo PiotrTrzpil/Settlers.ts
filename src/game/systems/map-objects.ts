@@ -12,10 +12,17 @@ import { MAP_OBJECT_SPRITES } from '@/game/renderer/sprite-metadata/gil-indices'
 const log = new LogHandler('MapObjects');
 
 /** Categories of map objects */
-export type ObjectCategory = 'trees' | 'stones' | 'resources' | 'plants' | 'other';
+export type ObjectCategory = 'trees' | 'stones' | 'resources' | 'plants' | 'crops' | 'other';
 
 /** All available categories */
-export const OBJECT_CATEGORIES: readonly ObjectCategory[] = ['trees', 'stones', 'resources', 'plants', 'other'];
+export const OBJECT_CATEGORIES: readonly ObjectCategory[] = [
+    'trees',
+    'stones',
+    'resources',
+    'plants',
+    'crops',
+    'other',
+];
 
 /** Mapping from MapObjectType to its category */
 export const OBJECT_TYPE_CATEGORY: Record<MapObjectType, ObjectCategory> = {
@@ -45,6 +52,11 @@ export const OBJECT_TYPE_CATEGORY: Record<MapObjectType, ObjectCategory> = {
     [MapObjectType.ResourceIron]: 'resources',
     [MapObjectType.ResourceStone]: 'resources',
     [MapObjectType.ResourceSulfur]: 'resources',
+    // Crops
+    [MapObjectType.Grain]: 'crops',
+    [MapObjectType.Sunflower]: 'crops',
+    [MapObjectType.Agave]: 'crops',
+    [MapObjectType.Beehive]: 'crops',
 };
 
 /**

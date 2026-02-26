@@ -66,7 +66,14 @@ export class GfxImage16Bit implements IGfxImage {
         const length = this.getDataSize();
         const pos = this.dataOffset;
 
-        return new Uint16Array(buffer.buffer, pos, length / 2);
+        if (pos % 2 === 0) {
+            return new Uint16Array(buffer.buffer, pos, length / 2);
+        }
+
+        // Offset is not 2-byte aligned — copy into an aligned buffer
+        const aligned = new Uint8Array(length);
+        aligned.set(buffer.subarray(pos, pos + length));
+        return new Uint16Array(aligned.buffer);
     }
 
     constructor(reader: BinaryReader, width: number, rowCount: number) {

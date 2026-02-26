@@ -17,6 +17,8 @@ import {
     createWoodcuttingHandler,
     createStonecuttingHandler,
     createForesterHandler,
+    createCropHarvestHandler,
+    createPlantingHandler,
 } from './features/settler-tasks/work-handlers';
 import { MaterialRequestFeature } from './features/material-requests';
 import type { TerrainData } from './terrain';
@@ -39,11 +41,12 @@ import { ServiceAreaManager, ServiceAreaFeature, type ServiceAreaExports } from 
 import { FeatureRegistry } from './features/feature-registry';
 import { TreeFeature, TreeSystem, type TreeFeatureExports } from './features/trees';
 import { StoneFeature, StoneSystem, type StoneFeatureExports } from './features/stones';
+import { CropFeature, CropSystem, type CropFeatureExports } from './features/crops';
 import { CombatFeature, CombatSystem, type CombatExports } from './features/combat';
 import { TerritoryManager, registerTerritoryEvents } from './features/territory';
 import { BuildingOverlayManager, OverlayRegistry } from './systems/building-overlays';
 import { EventBus, EventSubscriptionManager } from './event-bus';
-import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
+import { EntityType, MapObjectType, UnitType, getUnitTypeSpeed } from './entity';
 import { AnimationService } from './animation/index';
 import type { Command, CommandResult } from './commands';
 
@@ -98,6 +101,9 @@ export class GameServices {
 
     /** Stone mining system — depletion and variant tracking */
     public readonly stoneSystem: StoneSystem;
+
+    /** Crop lifecycle system — growth, harvesting, and decay */
+    public readonly cropSystem: CropSystem;
 
     /** Combat system — enemy detection, pursuit, and melee damage */
     public readonly combatSystem: CombatSystem;
@@ -182,6 +188,7 @@ export class GameServices {
             RequestManagerFeature,
             TreeFeature,
             StoneFeature,
+            CropFeature,
             MaterialRequestFeature,
             CombatFeature,
         ]);
@@ -199,8 +206,11 @@ export class GameServices {
         this.treeSystem = this.featureRegistry.getFeatureExports<TreeFeatureExports>('trees').treeSystem;
         this.treeSystem.setCommandExecutor(executeCommand);
         this.stoneSystem = this.featureRegistry.getFeatureExports<StoneFeatureExports>('stones').stoneSystem;
+        this.cropSystem = this.featureRegistry.getFeatureExports<CropFeatureExports>('crops').cropSystem;
+        this.cropSystem.setCommandExecutor(executeCommand);
         const featureSystemGroups: Record<string, string> = {
             TreeSystem: 'World',
+            CropSystem: 'World',
             MaterialRequestSystem: 'Logistics',
             CombatSystem: 'Units',
         };
@@ -242,6 +252,24 @@ export class GameServices {
             createStonecuttingHandler(gameState, this.stoneSystem)
         );
         this.settlerTaskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, createForesterHandler(this.treeSystem));
+
+        // Crop handlers — each crop type gets entity (harvest) + position (plant) handlers
+        const cropHandlerConfigs: Array<{ search: SearchType; crop: MapObjectType }> = [
+            { search: SearchType.GRAIN, crop: MapObjectType.Grain },
+            { search: SearchType.SUNFLOWER, crop: MapObjectType.Sunflower },
+            { search: SearchType.AGAVE, crop: MapObjectType.Agave },
+            { search: SearchType.BEEHIVE, crop: MapObjectType.Beehive },
+        ];
+        for (const { search, crop } of cropHandlerConfigs) {
+            this.settlerTaskSystem.registerWorkHandler(
+                search,
+                createCropHarvestHandler(gameState, this.cropSystem, crop)
+            );
+            this.settlerTaskSystem.registerWorkHandler(
+                search,
+                createPlantingHandler(this.cropSystem.getCropPlanter(crop))
+            );
+        }
 
         // 10. Inventory visualizer — subscribes to entity:removed for visual cleanup
         this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager, executeCommand);

@@ -111,6 +111,13 @@ export interface PlantTreeCommand {
     y: number;
 }
 
+export interface PlantCropCommand {
+    type: 'plant_crop';
+    cropType: MapObjectType;
+    x: number;
+    y: number;
+}
+
 export interface PlantTreesAreaCommand {
     type: 'plant_trees_area';
     centerX: number;
@@ -195,6 +202,7 @@ export type Command =
     | SpawnVisualResourceCommand
     | SpawnBuildingUnitsCommand
     | PlantTreeCommand
+    | PlantCropCommand
     | PlantTreesAreaCommand
     | ScriptAddGoodsCommand
     | ScriptAddBuildingCommand
@@ -213,7 +221,8 @@ export type CommandEffect =
     | { type: 'selection_changed'; selectedIds: number[] }
     | { type: 'building_placed'; entityId: number; buildingType: BuildingType; x: number; y: number }
     | { type: 'unit_spawned'; entityId: number; unitType: UnitType; x: number; y: number }
-    | { type: 'tree_planted'; entityId: number; treeType: MapObjectType; x: number; y: number };
+    | { type: 'tree_planted'; entityId: number; treeType: MapObjectType; x: number; y: number }
+    | { type: 'crop_planted'; entityId: number; cropType: MapObjectType; x: number; y: number };
 
 /**
  * Result of command execution.

@@ -1,26 +1,24 @@
 /**
  * Tree lifecycle system - manages tree growth, cutting, and planting.
  *
- * Logical stages (game state):
+ * Extends GrowableSystem for shared growth/planting infrastructure.
+ * Adds tree-specific: cutting stages, stump decay, sway animation.
+ *
+ * Logical stages:
  *   Growing -> Normal (planted by forester, progress 0-1)
  *   Normal -> Cutting -> Cut (cut by woodcutter, progress 0-1)
- *
- * Also provides the forester work handler (TREE_SEED_POS) for tree planting.
  *
  * Visual state is controlled by setting entity.variation directly.
  * Normal trees (variation=3) also play 'default' animation for sway.
  */
 
-import type { TickSystem } from '../../tick-system';
+import { GrowableSystem, type GrowableConfig, type GrowableState } from '../growth';
 import type { GameState } from '../../game-state';
-import { EntityType, MapObjectType } from '../../entity';
+import { MapObjectType } from '../../entity';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import type { AnimationService } from '../../animation/index';
-import { findEmptySpot } from '../../systems/spatial-search';
-import type { Command, CommandResult } from '../../commands';
-import { LogHandler } from '@/utilities/log-handler';
-
-const log = new LogHandler('TreeSystem');
+import type { Command } from '../../commands';
+import { TREE_JOB_OFFSET } from '../../renderer/sprite-metadata/gil-indices';
 
 /**
  * Logical tree stage (game state).
@@ -36,31 +34,15 @@ export enum TreeStage {
     Cut = 3,
 }
 
-/**
- * Tree sprite offsets (JIL job indices within tree type block).
- */
-const TREE_OFFSET = {
-    SAPLING: 0,
-    SMALL: 1,
-    MEDIUM: 2,
-    NORMAL: 3,
-    FALLING: 4,
-    CUTTING_1: 5,
-    CUTTING_2: 6,
-    CUTTING_3: 7,
-    CUTTING_4: 8,
-    CUTTING_5: 9,
-    CANOPY_GONE: 10,
-} as const;
+/** Alias for local use — maps tree stages to JIL job offsets */
+const TREE_OFFSET = TREE_JOB_OFFSET;
 
 /**
  * State for a single tree.
  */
-export interface TreeState {
+export interface TreeState extends GrowableState {
     stage: TreeStage;
-    progress: number; // 0-1 within current stage
     stumpTimer: number; // Seconds until stump removal
-    currentOffset: number; // Current sprite offset
 }
 
 // Timing constants
@@ -81,36 +63,41 @@ const PLANTABLE_TREE_TYPES: readonly MapObjectType[] = [
     MapObjectType.TreeBirch,
 ];
 
+const TREE_CONFIG: GrowableConfig = {
+    growthTime: GROWTH_TIME,
+    plantingSearchRadius: PLANTING_SEARCH_RADIUS,
+    minDistanceSq: MIN_TREE_DISTANCE_SQ,
+    objectCategory: 'trees',
+    plantableTypes: PLANTABLE_TREE_TYPES,
+};
+
 /**
  * Manages tree growth, cutting, and stump decay.
  * Uses AnimationService for visual state - no direct entity manipulation.
  */
-export class TreeSystem implements TickSystem {
-    private gameState: GameState;
-    private animationService: AnimationService;
-    private executeCommand!: (cmd: Command) => CommandResult;
-
-    /** Internal state storage: entityId -> TreeState */
-    private readonly states = new Map<number, TreeState>();
-
+export class TreeSystem extends GrowableSystem<TreeState> {
     constructor(gameState: GameState, animationService: AnimationService) {
-        this.gameState = gameState;
-        this.animationService = animationService;
+        super(gameState, animationService, TREE_CONFIG, 'TreeSystem');
     }
 
-    /** Set command executor (called after command system is wired up) */
-    setCommandExecutor(executor: (cmd: Command) => CommandResult): void {
-        this.executeCommand = executor;
+    // ── GrowableSystem implementation ────────────────────────────
+
+    protected shouldRegister(objectType: MapObjectType): boolean {
+        return OBJECT_TYPE_CATEGORY[objectType] === 'trees';
     }
 
-    /**
-     * Get sprite offset for a tree state.
-     */
-    private getSpriteOffset(stage: TreeStage, progress: number): number {
-        switch (stage) {
+    protected createState(planted: boolean, _objectType: MapObjectType): TreeState {
+        const stage = planted ? TreeStage.Growing : TreeStage.Normal;
+        const state: TreeState = { stage, progress: 0, stumpTimer: 0, currentOffset: 0 };
+        state.currentOffset = this.getSpriteOffset(state);
+        return state;
+    }
+
+    protected getSpriteOffset(state: TreeState): number {
+        switch (state.stage) {
         case TreeStage.Growing:
-            if (progress < 0.33) return TREE_OFFSET.SAPLING;
-            if (progress < 0.66) return TREE_OFFSET.SMALL;
+            if (state.progress < 0.33) return TREE_OFFSET.SAPLING;
+            if (state.progress < 0.66) return TREE_OFFSET.SMALL;
             return TREE_OFFSET.MEDIUM;
 
         case TreeStage.Normal:
@@ -118,84 +105,53 @@ export class TreeSystem implements TickSystem {
 
         case TreeStage.Cutting:
             // Phase 1: Tree still standing while being chopped
-            if (progress < 0.3) return TREE_OFFSET.NORMAL;
+            if (state.progress < 0.3) return TREE_OFFSET.NORMAL;
             // Phase 2: Tree falls
-            if (progress < 0.4) return TREE_OFFSET.FALLING;
+            if (state.progress < 0.4) return TREE_OFFSET.FALLING;
             // Phase 3: Cutting the fallen log (5 phases across 0.4-0.9)
-            if (progress < 0.9) {
-                const phase = Math.floor(((progress - 0.4) / 0.5) * 5);
+            if (state.progress < 0.9) {
+                const phase = Math.floor(((state.progress - 0.4) / 0.5) * 5);
                 return TREE_OFFSET.CUTTING_1 + Math.min(4, phase);
             }
             // Phase 4: Log picked up - canopy disappearing
-            return TREE_OFFSET.CANOPY_GONE;
+            return TREE_OFFSET.CANOPY_DISAPPEARING;
 
         case TreeStage.Cut:
-            return TREE_OFFSET.CANOPY_GONE;
+            return TREE_OFFSET.CANOPY_DISAPPEARING;
         }
     }
 
-    /**
-     * Update visual state by setting entity.variation directly.
-     */
-    private updateVisual(entityId: number, state: TreeState): void {
-        const offset = this.getSpriteOffset(state.stage, state.progress);
-
-        if (offset !== state.currentOffset) {
-            state.currentOffset = offset;
-
-            // Set sprite variation directly on entity
-            const entity = this.gameState.getEntity(entityId);
-            if (entity) {
-                entity.variation = offset;
-
-                // Normal trees (offset 3) have sway animation — random start frame to desync
-                if (offset === TREE_OFFSET.NORMAL) {
-                    const startFrame = this.gameState.rng.nextInt(100);
-                    this.animationService.play(entityId, 'default', { loop: true, startFrame });
-                }
-            }
-        }
-    }
-
-    /**
-     * Register a tree entity.
-     * Only registers if the object type is a tree.
-     * @param planted If true, starts as Growing; otherwise Normal
-     */
-    register(entityId: number, objectType: MapObjectType, planted: boolean = false): void {
-        // Only register trees
-        if (OBJECT_TYPE_CATEGORY[objectType] !== 'trees') return;
-
-        // Entity MUST exist - we're being called from entity creation event
-        const entity = this.gameState.getEntityOrThrow(entityId, 'tree for registration');
-
-        const stage = planted ? TreeStage.Growing : TreeStage.Normal;
-        const offset = this.getSpriteOffset(stage, 0);
-
-        const state: TreeState = {
-            stage,
-            progress: 0,
-            stumpTimer: 0,
-            currentOffset: offset,
-        };
-        this.states.set(entityId, state);
-
-        // Set initial sprite variation
-        entity.variation = offset;
-
-        // Normal trees have sway animation — random start frame to desync
+    protected onOffsetChanged(entityId: number, offset: number, _state: TreeState): void {
+        // Normal trees (offset 3) have sway animation — random start frame to desync
         if (offset === TREE_OFFSET.NORMAL) {
             const startFrame = this.gameState.rng.nextInt(100);
             this.animationService.play(entityId, 'default', { loop: true, startFrame });
         }
     }
 
-    /**
-     * Remove tree state when entity is removed.
-     */
-    unregister(entityId: number): void {
-        this.states.delete(entityId);
+    protected tickState(entityId: number, state: TreeState, dt: number): 'keep' | 'remove' {
+        // Growing trees
+        if (state.stage === TreeStage.Growing) {
+            if (this.advanceGrowth(state, dt)) {
+                state.stage = TreeStage.Normal;
+            }
+            this.updateVisual(entityId, state);
+        }
+
+        // Decaying stumps
+        if (state.stage === TreeStage.Cut) {
+            state.stumpTimer -= dt;
+            if (state.stumpTimer <= 0) return 'remove';
+        }
+
+        return 'keep';
     }
+
+    protected buildPlantCommand(treeType: MapObjectType, x: number, y: number): Command {
+        return { type: 'plant_tree', treeType, x, y };
+    }
+
+    // ── Tree-specific: queries ───────────────────────────────────
 
     /**
      * Get tree stage for rendering.
@@ -224,6 +180,8 @@ export class TreeSystem implements TickSystem {
     isCutting(entityId: number): boolean {
         return this.states.get(entityId)?.stage === TreeStage.Cutting;
     }
+
+    // ── Tree-specific: cutting ───────────────────────────────────
 
     /**
      * Start cutting (called by woodcutter).
@@ -274,105 +232,25 @@ export class TreeSystem implements TickSystem {
         }
     }
 
-    /**
-     * TickSystem interface - update growth and decay.
-     */
-    tick(dt: number): void {
-        const toRemove: number[] = [];
-
-        for (const [entityId, state] of this.states) {
-            // Growing trees
-            if (state.stage === TreeStage.Growing) {
-                state.progress += dt / GROWTH_TIME;
-                if (state.progress >= 1) {
-                    state.progress = 0;
-                    state.stage = TreeStage.Normal;
-                }
-                this.updateVisual(entityId, state);
-            }
-
-            // Decaying stumps
-            if (state.stage === TreeStage.Cut) {
-                state.stumpTimer -= dt;
-                if (state.stumpTimer <= 0) {
-                    toRemove.push(entityId);
-                }
-            }
-        }
-
-        // Remove decayed stumps (entity removal triggers unregister via entity:removed event)
-        for (const entityId of toRemove) {
-            this.gameState.removeEntity(entityId);
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // Forester support (used by createForesterHandler in work-handlers)
-    // ─────────────────────────────────────────────────────────────
+    // ── Backward-compatible aliases ──────────────────────────────
 
     plantTree(x: number, y: number, settlerId: number): void {
-        const treeType = this.gameState.rng.pick(PLANTABLE_TREE_TYPES)!;
-
-        const result = this.executeCommand({ type: 'plant_tree', treeType, x, y });
-
-        if (result.success) {
-            log.debug(`Forester ${settlerId} planted ${MapObjectType[treeType]} at (${x}, ${y})`);
-        } else {
-            log.debug(`Forester ${settlerId}: cannot plant at (${x}, ${y}): ${result.error}`);
-        }
+        this.plantEntity(x, y, settlerId);
     }
 
-    findPlantingSpot(cx: number, cy: number, radius?: number): { x: number; y: number } | null {
-        return findEmptySpot(cx, cy, {
-            gameState: this.gameState,
-            searchRadius: radius ?? PLANTING_SEARCH_RADIUS,
-            minDistanceSq: MIN_TREE_DISTANCE_SQ,
-            proximityFilter: entity =>
-                entity.type === EntityType.MapObject &&
-                OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType] === 'trees',
-        });
-    }
-
-    /**
-     * Plant multiple trees near a position, respecting spacing and terrain constraints.
-     * Uses expanding ring search to find valid spots, so trees spread naturally from center.
-     * @returns Number of trees actually planted
-     */
     plantTreesNear(cx: number, cy: number, count: number, radius = PLANTING_SEARCH_RADIUS): number {
-        let planted = 0;
-        for (let i = 0; i < count; i++) {
-            const spot = this.findPlantingSpot(cx, cy, radius);
-            if (!spot) break;
-
-            const treeType = this.gameState.rng.pick(PLANTABLE_TREE_TYPES)!;
-            const result = this.executeCommand({ type: 'plant_tree', treeType, x: spot.x, y: spot.y });
-            if (result.success) planted++;
-        }
-        return planted;
+        return this.plantEntitiesNear(cx, cy, count, radius);
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // Persistence support
-    // ─────────────────────────────────────────────────────────────
-
-    /**
-     * Get all tree states for serialization.
-     */
     *getAllTreeStates(): IterableIterator<[number, TreeState]> {
-        yield* this.states.entries();
+        yield* this.getAllStates();
     }
 
-    /**
-     * Restore a tree state from serialized data.
-     * Also updates the entity's variation to match.
-     */
     restoreTreeState(entityId: number, data: TreeState): void {
-        this.states.set(entityId, data);
-        const entity = this.gameState.getEntity(entityId);
-        if (entity) {
-            entity.variation = data.currentOffset;
-        }
+        this.restoreState(entityId, data);
     }
+
+    // ── Debug ────────────────────────────────────────────────────
 
     /**
      * Get stats for debugging.

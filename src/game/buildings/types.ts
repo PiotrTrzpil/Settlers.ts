@@ -73,6 +73,23 @@ export enum BuildingType {
     ManaCopterHall = 62,
 }
 
+// ── Building occupancy limits ──
+
+/** Override max worker occupants for specific building types. Default is 1. */
+const BUILDING_MAX_OCCUPANTS: Partial<Record<BuildingType, number>> = {
+    // Military buildings can garrison multiple units (future use)
+    // [BuildingType.GuardTowerSmall]: 3,
+    // [BuildingType.GuardTowerBig]: 6,
+    // [BuildingType.Castle]: 10,
+};
+
+const DEFAULT_MAX_OCCUPANTS = 1;
+
+/** Get the maximum number of workers that can be assigned to a building type. */
+export function getBuildingMaxOccupants(buildingType: BuildingType): number {
+    return BUILDING_MAX_OCCUPANTS[buildingType] ?? DEFAULT_MAX_OCCUPANTS;
+}
+
 /** All mine building types — must be placed on mountain/rock terrain. */
 const MINE_BUILDING_TYPES: ReadonlySet<BuildingType> = new Set([
     BuildingType.CoalMine,

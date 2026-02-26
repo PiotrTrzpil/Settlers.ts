@@ -8,20 +8,24 @@ import { isUnitAvailableForRace, isBuildingAvailableForRace } from '../../race-a
 
 // Re-export from canonical locations and new index files
 export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace, loadSavedRace, saveSavedRace } from '../../race';
-export { BUILDING_ICON_INDICES, MAP_OBJECT_SPRITES } from './gil-indices';
+export {
+    BUILDING_ICON_INDICES,
+    MAP_OBJECT_SPRITES,
+    TREE_JOB_OFFSET,
+    TREE_JOBS_PER_TYPE,
+    TREE_JOB_INDICES,
+} from './gil-indices';
 export {
     UNIT_JOB_INDICES,
     WORKER_JOB_INDICES,
     BUILDING_JOB_INDICES,
     RESOURCE_JOB_INDICES,
     CARRIER_MATERIAL_JOB_INDICES,
-    TREE_JOB_OFFSET,
-    TREE_JOBS_PER_TYPE,
-    TREE_JOB_INDICES,
 } from './jil-indices';
 
 // Import for local use by functions in this file
-import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, TREE_JOB_INDICES, UNIT_JOB_INDICES } from './jil-indices';
+import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, UNIT_JOB_INDICES } from './jil-indices';
+import { TREE_JOB_INDICES } from './gil-indices';
 
 /** Conversion factor from sprite pixels to world-space units */
 export const PIXELS_TO_WORLD = 1.0 / 32.0;

@@ -20,6 +20,15 @@ farmer:
   tool: SCYTHE
   jobs: [plant, harvest]
 
+agavefarmer:
+  search: AGAVE
+  tool: SCYTHE
+  jobs: [plant, harvest]
+
+beekeeper:
+  search: BEEHIVE
+  jobs: [plant, harvest]
+
 miner:
   search: RESOURCE_POS
   tool: PICKAXE

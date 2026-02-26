@@ -108,6 +108,82 @@ farmer.harvest:
   - task: DROPOFF
     anim: dropoff
 
+agavefarmer.plant:
+  - task: SEARCH_POS
+    anim: walk
+
+  - task: GO_ADJACENT_POS
+    anim: walk
+
+  - task: FACE_POS
+    anim: idle
+
+  - task: WORK
+    anim: plant
+    duration: 2.0
+
+  - task: GO_HOME
+    anim: walk
+
+agavefarmer.harvest:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WAIT_FOR_WORK
+    anim: idle
+
+  - task: WORK_ON_ENTITY
+    anim: harvest
+    duration: 2.0
+
+  - task: PICKUP
+    anim: pickup
+    good: AGAVE
+
+  - task: GO_HOME
+    anim: carry
+
+  - task: DROPOFF
+    anim: dropoff
+
+beekeeper.plant:
+  - task: SEARCH_POS
+    anim: walk
+
+  - task: GO_ADJACENT_POS
+    anim: walk
+
+  - task: FACE_POS
+    anim: idle
+
+  - task: WORK
+    anim: plant
+    duration: 2.0
+
+  - task: GO_HOME
+    anim: walk
+
+beekeeper.harvest:
+  - task: GO_TO_TARGET
+    anim: walk
+
+  - task: WAIT_FOR_WORK
+    anim: idle
+
+  - task: WORK_ON_ENTITY
+    anim: harvest
+    duration: 2.0
+
+  - task: PICKUP
+    anim: pickup
+    good: HONEY
+
+  - task: GO_HOME
+    anim: carry
+
+  - task: DROPOFF
+    anim: dropoff
+
 miner.work:
   - task: GO_TO_TARGET
     anim: walk

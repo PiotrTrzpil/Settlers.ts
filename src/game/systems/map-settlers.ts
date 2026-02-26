@@ -45,6 +45,10 @@ const S4_TO_UNIT_TYPE: Partial<Record<S4SettlerType, UnitType>> = {
     [S4SettlerType.HEALER]: UnitType.Healer,
     [S4SettlerType.DONKEY]: UnitType.Donkey,
     [S4SettlerType.SAWMILLWORKER]: UnitType.SawmillWorker,
+    // Farming
+    [S4SettlerType.FARMERGRAIN]: UnitType.Farmer,
+    [S4SettlerType.AGAVEFARMER]: UnitType.AgaveFarmer,
+    [S4SettlerType.BEEKEEPER]: UnitType.Beekeeper,
     // Dark Tribe specific
     [S4SettlerType.MUSHROOMFARMER]: UnitType.MushroomFarmer,
     [S4SettlerType.ANGEL_01]: UnitType.Angel,

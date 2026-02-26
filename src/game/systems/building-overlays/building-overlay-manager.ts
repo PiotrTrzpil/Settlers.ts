@@ -21,10 +21,12 @@
  */
 
 import type { TickSystem } from '../../tick-system';
-import type { BuildingType, EntityProvider } from '../../entity';
+import { EntityType, type BuildingType, type EntityProvider } from '../../entity';
 import type { Race } from '../../race';
 import type { EventBus, EventSubscriptionManager as ESM } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
+import { BuildingConstructionPhase } from '../../features/building-construction/types';
+import type { BuildingStateManager } from '../../features/building-construction/building-state-manager';
 import type { OverlayRegistry } from './overlay-registry';
 import { OverlayCondition, type BuildingOverlayInstance, type BuildingOverlayDef } from './types';
 
@@ -201,6 +203,23 @@ export class BuildingOverlayManager implements TickSystem {
     /** Unsubscribe from all events */
     unregisterEvents(): void {
         this.subscriptions.unsubscribeAll();
+    }
+
+    /**
+     * Rebuild overlay state from existing completed buildings.
+     * Call after game restore or HMR to reconnect overlays with existing buildings.
+     */
+    rebuildFromExistingEntities(buildingStateManager: BuildingStateManager): void {
+        this.overlaysByEntity.clear();
+
+        for (const buildingState of buildingStateManager.getAllBuildingStates()) {
+            if (buildingState.phase !== BuildingConstructionPhase.Completed) continue;
+
+            const entity = this.entityProvider.getEntity(buildingState.entityId);
+            if (!entity || entity.type !== EntityType.Building) continue;
+
+            this.addBuilding(buildingState.entityId, buildingState.buildingType, entity.race);
+        }
     }
 
     /** Clean up all state */

@@ -53,7 +53,7 @@ import { PIXELS_TO_WORLD } from '@/game/renderer/sprite-metadata';
 import { EntityType, type BuildingType, getBuildingXmlId } from '@/game/entity';
 import { getOverlayFrame } from '@/game/systems/building-overlays';
 import { getGameDataLoader } from '@/resources/game-data';
-import { RACE_TO_RACE_ID, scaleSprite } from '@/game/renderer/entity-renderer-constants';
+import { ENTITY_SCALE, RACE_TO_RACE_ID, scaleSprite } from '@/game/renderer/entity-renderer-constants';
 
 /** Context object for render callback - avoids excessive callback parameters */
 interface CallbackContext {
@@ -167,7 +167,7 @@ function resolveConstructionOverlay(
     if (!constructionSprite) return;
 
     out.push({
-        sprite: constructionSprite,
+        sprite: scaleSprite(constructionSprite, ENTITY_SCALE),
         worldOffsetX: 0,
         worldOffsetY: 0,
         layer: OverlayRenderLayer.BehindBuilding,

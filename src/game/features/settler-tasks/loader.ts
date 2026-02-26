@@ -65,6 +65,8 @@ const SETTLER_NAME_MAP: Record<string, UnitType> = {
     sawmillworker: UnitType.SawmillWorker,
     miller: UnitType.Miller,
     butcher: UnitType.Butcher,
+    agavefarmer: UnitType.AgaveFarmer,
+    beekeeper: UnitType.Beekeeper,
 };
 
 interface RawSettlerConfig {

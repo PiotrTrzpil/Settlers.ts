@@ -99,14 +99,15 @@ export class EntitySpriteResolver {
     private getMapObject(entity: Entity): SpriteEntry | null {
         if (!this.sprites) return null;
 
-        // When decoration textures are disabled, skip sprites for non-tree objects
-        if (!this.layerVisibility.decorationTextures && entity.subType > 17) return null;
+        // When decoration textures are disabled, skip non-tree/non-crop decorations
+        // Trees: subType 0-18, Resources: 100-104, Crops: 200-203
+        if (!this.layerVisibility.decorationTextures && entity.subType > 18 && entity.subType < 200) return null;
 
         const variation = entity.variation ?? 0;
         const fallback = this.sprites.getMapObject(entity.subType as MapObjectType, variation);
 
-        // Only use animated sprite for normal trees (variation 3), others are static
-        return variation === 3 ? this.getAnimated(entity, fallback) : fallback;
+        // Try animated sprite — getAnimated is O(1) and returns fallback if no animation
+        return this.getAnimated(entity, fallback);
     }
 
     /** Stacked resource sprite based on quantity. */

@@ -96,13 +96,14 @@ export async function loadUnitSpritesForRace(
     const unitCount = await loadBaseUnits(fileSet, race, atlas, registry, gl, paletteBase, ctx);
     const carrierCount = await loadCarrierVariants(fileSet, atlas, registry, gl, paletteBase, race, ctx);
     const workerCount = await loadWorkerAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
+    const workerCarryCount = await loadWorkerCarryAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
     const fightCount = await loadFightAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
     const levelCount = await loadMilitaryLevelAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
 
     if (unitCount > 0 || carrierCount > 0 || workerCount > 0 || fightCount > 0 || levelCount > 0) {
         log.debug(
             `${Race[race]}: ${unitCount} units, ${carrierCount} carriers, ` +
-                `${workerCount} workers, ${fightCount} fight anims, ${levelCount} level anims`
+                `${workerCount} workers (${workerCarryCount} carry), ${fightCount} fight anims, ${levelCount} level anims`
         );
     }
 
@@ -231,6 +232,8 @@ const WORKER_KEY_TO_UNIT_TYPE: Record<string, UnitType> = {
     miner: UnitType.Miner,
     forester: UnitType.Forester,
     farmer: UnitType.Farmer,
+    agavefarmer: UnitType.AgaveFarmer,
+    beekeeper: UnitType.Beekeeper,
     priest: UnitType.Priest,
     geologist: UnitType.Geologist,
     pioneer: UnitType.Pioneer,
@@ -295,6 +298,85 @@ async function loadWorkerAnimations(
             true,
             race
         );
+        loadedCount++;
+    });
+
+    return loadedCount;
+}
+
+/**
+ * Load carry animations for workers that transport materials back to their building.
+ * These use the worker's own carry sprite (e.g., farmer carrying grain, miner carrying stone)
+ * rather than the generic carrier material variants.
+ *
+ * Skips Carrier and Woodcutter since they already have per-material carrier variants
+ * registered by loadCarrierVariants.
+ */
+async function loadWorkerCarryAnimations(
+    fileSet: LoadedGfxFileSet,
+    atlas: EntityTextureAtlas,
+    registry: SpriteMetadataRegistry,
+    gl: WebGL2RenderingContext,
+    paletteBaseOffset: number,
+    race: Race,
+    ctx: UnitLoadContext
+): Promise<number> {
+    type CarryAnimData = { unitType: UnitType; directionFrames: Map<number, SpriteEntry[]> };
+    const batch = new SafeLoadBatch<CarryAnimData>();
+
+    // These unit types already have per-material carry variants from loadCarrierVariants
+    const skipUnitTypes = new Set([UnitType.Carrier, UnitType.Woodcutter]);
+
+    type CarryJob = { unitType: UnitType; jobIndex: number };
+    const carryJobs: CarryJob[] = [];
+    for (const [workerKey, workerData] of Object.entries(WORKER_JOB_INDICES)) {
+        if (!('carry' in workerData)) continue;
+        const unitType = WORKER_KEY_TO_UNIT_TYPE[workerKey];
+        if (unitType === undefined || skipUnitTypes.has(unitType)) continue;
+
+        // carry can be a number or array — use first index
+        const carryValue = workerData.carry as number | readonly number[];
+        const jobIndex = typeof carryValue === 'number' ? carryValue : carryValue[0]!;
+
+        if (ctx.spriteLoader.getDirectionCount(fileSet, jobIndex) > 0) {
+            carryJobs.push({ unitType, jobIndex });
+        }
+    }
+
+    const results = await Promise.all(
+        carryJobs.map(async({ unitType, jobIndex }) => {
+            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas, paletteBaseOffset);
+            return { unitType, loadedDirs };
+        })
+    );
+
+    for (const { unitType, loadedDirs } of results) {
+        if (!loadedDirs) continue;
+        const directionFrames = toEntryMap(loadedDirs);
+        if (directionFrames.size > 0) batch.add({ unitType, directionFrames });
+    }
+
+    // Collect all material types that have carrier variants — these are the materials
+    // that can appear as carry_X sequence keys
+    const materialTypes = Object.keys(CARRIER_MATERIAL_JOB_INDICES)
+        .map(Number)
+        .filter(matId => isMaterialAvailableForRace(matId as EMaterialType, race));
+
+    let loadedCount = 0;
+    batch.finalize(atlas, gl, data => {
+        // Register the same carry animation for all material types.
+        // Workers use a single carry sprite regardless of what they're holding.
+        for (const matId of materialTypes) {
+            registry.registerAnimationSequence(
+                EntityType.Unit,
+                data.unitType,
+                carrySequenceKey(matId),
+                data.directionFrames,
+                ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                true,
+                race
+            );
+        }
         loadedCount++;
     });
 

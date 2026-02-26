@@ -36,6 +36,8 @@ export interface TaskContext {
     carrierManager: CarrierManager;
     eventBus: EventBus;
     handlerErrorLogger: ThrottledLogger;
+    /** Resolve the home building ID for a worker settler (from occupancy tracking). */
+    getWorkerHomeBuilding: (settlerId: number) => number | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -148,8 +150,14 @@ function executeGoToTarget(settler: Entity, job: JobState, ctx: TaskContext): Ta
     return moveToPosition(settler, target.x, target.y, ctx);
 }
 
+/** Resolve home building ID: carriers use job data, workers use occupancy tracking. */
+function resolveHomeId(settler: Entity, job: JobState, ctx: TaskContext): number | null {
+    if (job.type === 'carrier') return job.data.homeId;
+    return ctx.getWorkerHomeBuilding(settler.id);
+}
+
 function executeGoHome(settler: Entity, job: JobState, ctx: TaskContext): TaskResult {
-    const homeId = job.data.homeId;
+    const homeId = resolveHomeId(settler, job, ctx);
     if (!homeId) return TaskResult.FAILED;
     const building = ctx.gameState.getEntityOrThrow(homeId, 'home building');
     return moveToPosition(settler, building.x, building.y, ctx);
@@ -411,9 +419,10 @@ function executePickup(settler: Entity, job: JobState, task: TaskNode): TaskResu
 }
 
 function executeDropoff(settler: Entity, job: JobState, ctx: TaskContext): TaskResult {
-    const { carryingGood, homeId } = job.data;
+    const carryingGood = job.data.carryingGood;
     if (carryingGood == null) return TaskResult.DONE;
 
+    const homeId = resolveHomeId(settler, job, ctx);
     if (!homeId) {
         throw new Error(
             `Settler ${settler.id} (${UnitType[settler.subType]}) has no home building for dropoff. Job started incorrectly.`

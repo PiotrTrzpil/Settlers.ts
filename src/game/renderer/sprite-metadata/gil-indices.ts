@@ -8,7 +8,7 @@
  * @module renderer/sprite-metadata/gil-indices
  */
 
-import { BuildingType } from '../../entity';
+import { BuildingType, MapObjectType } from '../../entity';
 import { Race } from '../../race';
 
 // ============================================================
@@ -401,15 +401,69 @@ export const MAP_OBJECT_SPRITES = {
         SULFUR: { LOW: 1221, MED: 1222, RICH: 1223 },
     },
 
+    // ── Grain growth stages (1224-1243) ───────────────────
+    /** Grain seed — just planted */
+    GRAIN_SEED: 1224,
+    /** Grain growing stages 1-3 */
+    GRAIN_GROWING: { start: 1225, end: 1227, count: 3 },
+    /** Grain fully grown — animated, 7 frames */
+    GRAIN_GROWN: { start: 1228, end: 1234, count: 7 },
+    /** Grain cut/harvested */
+    GRAIN_CUT: 1235,
+    /** Grain fully grown dry variant — 8 frames */
+    GRAIN_GROWN_DRY: { start: 1236, end: 1243, count: 8 },
+
+    // ── Grain visual variant 2 (1244-1263) ──────────────────
+    /** Grain variant 2 seed — just planted */
+    GRAIN_V2_SEED: 1244,
+    /** Grain variant 2 growing stages 1-3 */
+    GRAIN_V2_GROWING: { start: 1245, end: 1247, count: 3 },
+    /** Grain variant 2 fully grown — animated, 7 frames */
+    GRAIN_V2_GROWN: { start: 1248, end: 1254, count: 7 },
+    /** Grain variant 2 cut/harvested */
+    GRAIN_V2_CUT: 1255,
+    /** Grain variant 2 fully grown dry variant — 8 frames */
+    GRAIN_V2_GROWN_DRY: { start: 1256, end: 1263, count: 8 },
+
+    // ── Agave growth stages (1264-1282) ─────────────────────
+    /** Agave seedling */
+    AGAVE_SEEDLING: 1264,
+    /** Agave growing stages 1-2 */
+    AGAVE_GROWING: { start: 1265, end: 1266, count: 2 },
+    /** Agave fully grown — animated, 15 frames */
+    AGAVE_GROWN: { start: 1267, end: 1281, count: 15 },
+    /** Agave cut/harvested */
+    AGAVE_CUT: 1282,
+
     // ── Snow decorations ──────────────────────────────────
     /** Snowman decoration */
     SNOWMAN: 1299,
+
+    // ── Beehive (1361-1375) ─────────────────────────────────
+    /** Beehive active — animated, 12 frames */
+    BEEHIVE_GROWN: { start: 1361, end: 1372, count: 12 },
+    /** Beehive empty/used */
+    BEEHIVE_EMPTY: 1373,
+    /** Beehive destroyed — 2 frames */
+    BEEHIVE_DESTROYED: { start: 1374, end: 1375, count: 2 },
 
     // ── Misc decorations (1521-1522) ──────────────────────
     /** Grave/tombstone variant B */
     GRAVE_B: 1521,
     /** Magic pillar/obelisk */
     MAGIC_PILLAR: 1522,
+
+    // ── Sunflower growth stages (1620-1631) ──────────────────
+    /** Sunflower growth stage 1 — small sprout */
+    SUNFLOWER_STAGE_1: 1620,
+    /** Sunflower growth stage 2 — medium sprout */
+    SUNFLOWER_STAGE_2: 1621,
+    /** Sunflower growth stage 3 — tall sprout */
+    SUNFLOWER_STAGE_3: 1622,
+    /** Sunflower fully grown — animated, 8 frames */
+    SUNFLOWER_GROWN: { start: 1623, end: 1630, count: 8 },
+    /** Sunflower cut/harvested */
+    SUNFLOWER_CUT: 1631,
 
     // ── Sea wave patches (1640-1849) ────────────────────────
     // Groups of 15 animation frames — small wave patches
@@ -524,3 +578,81 @@ export const MAP_OBJECT_SPRITES = {
     /** Small waving flag — white / player 8, 24 anim frames (43x29) */
     FLAG_SMALL_WHITE: { start: 2043, end: 2066, count: 24 },
 } as const;
+
+// ============================================================
+// Tree job indices — file 5.jil
+// ============================================================
+
+/**
+ * Tree job offsets within 5.jil.
+ * Each tree type has 11 consecutive jobs for different states.
+ * Each job has 1 direction (D0) with 1 or more frames.
+ *
+ * Structure per tree type (base job + offset):
+ * - +0: Sapling (smallest) - static
+ * - +1: Small tree - static
+ * - +2: Medium tree - static
+ * - +3: Normal (full grown) - animated or static
+ * - +4: Falling tree - animated
+ * - +5 to +9: Being cut phases (5 phases) - animated
+ * - +10: Canopy disappearing on ground (last frame = trunk only) - animated
+ */
+export const TREE_JOB_OFFSET = {
+    /** Sapling - smallest growth stage */
+    SAPLING: 0,
+    /** Small tree */
+    SMALL: 1,
+    /** Medium tree */
+    MEDIUM: 2,
+    /** Normal full-grown tree */
+    NORMAL: 3,
+    /** Falling tree - animated */
+    FALLING: 4,
+    /** Being cut phase 1 */
+    CUTTING_1: 5,
+    /** Being cut phase 2 */
+    CUTTING_2: 6,
+    /** Being cut phase 3 */
+    CUTTING_3: 7,
+    /** Being cut phase 4 */
+    CUTTING_4: 8,
+    /** Being cut phase 5 */
+    CUTTING_5: 9,
+    /** Canopy disappearing on ground - animated (last frame = trunk only) */
+    CANOPY_DISAPPEARING: 10,
+} as const;
+
+/** Number of jobs per tree type */
+export const TREE_JOBS_PER_TYPE = 11;
+
+/** First tree job index in 5.jil */
+const TREE_BASE_JOB = 1;
+
+/**
+ * Base JIL job indices for each tree type in 5.jil.
+ * Each tree type has TREE_JOBS_PER_TYPE consecutive jobs (see TREE_JOB_OFFSET).
+ * Actual job = baseIndex + TREE_JOB_OFFSET.X
+ *
+ * Example: Oak normal tree = 1 + TREE_JOB_OFFSET.NORMAL = 1 + 3 = job 4
+ */
+export const TREE_JOB_INDICES: Partial<Record<MapObjectType, number>> = {
+    [MapObjectType.TreeOak]: TREE_BASE_JOB + 0 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeBeech]: TREE_BASE_JOB + 1 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeAsh]: TREE_BASE_JOB + 2 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeLinden]: TREE_BASE_JOB + 3 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeBirch]: TREE_BASE_JOB + 4 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreePoplar]: TREE_BASE_JOB + 5 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeChestnut]: TREE_BASE_JOB + 6 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeMaple]: TREE_BASE_JOB + 7 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeFir]: TREE_BASE_JOB + 8 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeSpruce]: TREE_BASE_JOB + 9 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeCoconut]: TREE_BASE_JOB + 10 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeDate]: TREE_BASE_JOB + 11 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeWalnut]: TREE_BASE_JOB + 12 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeCorkOak]: TREE_BASE_JOB + 13 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreePine]: TREE_BASE_JOB + 14 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreePine2]: TREE_BASE_JOB + 15 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeOliveLarge]: TREE_BASE_JOB + 16 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeOliveSmall]: TREE_BASE_JOB + 17 * TREE_JOBS_PER_TYPE,
+    [MapObjectType.TreeDead]: TREE_BASE_JOB + 18 * TREE_JOBS_PER_TYPE,
+};
