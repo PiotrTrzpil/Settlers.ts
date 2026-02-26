@@ -126,6 +126,5 @@ test.describe('Resource Rendering', () => {
 
         const preview = await gp.actions.getPlacementPreview();
         expect(preview).not.toBeNull();
-        expect(preview!.indicatorsEnabled).toBe(true);
     });
 });

@@ -9,6 +9,7 @@ import { watch, onMounted, onUnmounted, ref, type Ref } from 'vue';
 import { Game } from '@/game/game';
 import { LandscapeRenderer } from '@/game/renderer/landscape/landscape-renderer';
 import { EntityRenderer } from '@/game/renderer/entity-renderer';
+import { BuildingIndicatorRenderer } from '@/game/renderer/building-indicator-renderer';
 import { Renderer, type FrameRenderTiming } from '@/game/renderer/renderer';
 import type { ViewPoint } from '@/game/renderer/view-point';
 import { TilePicker } from '@/game/input/tile-picker';
@@ -49,13 +50,16 @@ import {
 } from '@/game/renderer/render-context';
 import { getBuildingVisualState, BuildingConstructionPhase } from '@/game/features/building-construction';
 import { PIXELS_TO_WORLD } from '@/game/renderer/sprite-metadata';
-import { EntityType, type BuildingType } from '@/game/entity';
+import { EntityType, type BuildingType, getBuildingXmlId } from '@/game/entity';
 import { getOverlayFrame } from '@/game/systems/building-overlays';
+import { getGameDataLoader } from '@/resources/game-data';
+import { RACE_TO_RACE_ID, scaleSprite } from '@/game/renderer/entity-renderer-constants';
 
 /** Context object for render callback - avoids excessive callback parameters */
 interface CallbackContext {
     game: Game | null;
     entityRenderer: EntityRenderer | null;
+    indicatorRenderer: BuildingIndicatorRenderer | null;
     landscapeRenderer: LandscapeRenderer | null;
     inputManager: InputManager | null;
     debugGrid: boolean;
@@ -143,6 +147,7 @@ function resolveBuildingOverlays(entityId: number, g: Game, er: EntityRenderer):
     const result: BuildingOverlayRenderData[] = [];
     resolveConstructionOverlay(entityId, g, er, result);
     resolveCustomOverlays(entityId, g, er, result);
+    resolveFlagOverlay(entityId, g, er, result);
     return result.length > 0 ? result : EMPTY_OVERLAY_DATA;
 }
 
@@ -201,6 +206,33 @@ function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, ou
             verticalProgress: 1.0,
         });
     }
+}
+
+const FLAG_ANIM_FPS = 12;
+const FLAG_SCALE = 0.35;
+
+/** Resolve the player flag overlay for a building, if it has a flag offset in game data XML. */
+function resolveFlagOverlay(entityId: number, g: Game, er: EntityRenderer, out: BuildingOverlayRenderData[]): void {
+    const entity = er.spriteManager ? g.state.getEntity(entityId) : null;
+    if (!entity) return;
+    const loader = getGameDataLoader();
+    if (!loader.isLoaded()) return;
+    const xmlId = getBuildingXmlId(entity.subType as BuildingType);
+    const info = xmlId ? loader.getBuilding(RACE_TO_RACE_ID[entity.race], xmlId) : null;
+    if (!info) return;
+    const frameCount = er.spriteManager!.getFlagFrameCount(entity.player);
+    if (frameCount === 0) return;
+    const frame = Math.floor((performance.now() / 1000) * FLAG_ANIM_FPS) % frameCount;
+    const rawSprite = er.spriteManager!.getFlag(entity.player, frame);
+    if (!rawSprite) return;
+    out.push({
+        sprite: scaleSprite(rawSprite, FLAG_SCALE),
+        teamColored: true,
+        verticalProgress: 1.0,
+        worldOffsetX: info.flag.xOffset * PIXELS_TO_WORLD * FLAG_SCALE,
+        worldOffsetY: info.flag.yOffset * PIXELS_TO_WORLD * FLAG_SCALE,
+        layer: OverlayRenderLayer.Flag,
+    });
 }
 
 /** Handle placement mode rendering state using consolidated preview */
@@ -314,13 +346,14 @@ function createRenderCallback(
             const renderState = inputManager?.getRenderState();
             const mode = g.viewState.state.mode;
             const inPlacementMode = mode === 'place_building' || mode === 'place_resource' || mode === 'place_unit';
-            er.buildingIndicatorsEnabled = inPlacementMode;
-
             if (inPlacementMode) {
                 updatePlacementModeState(er, renderState);
             } else {
                 clearPlacementModeState(er);
             }
+
+            // Update building indicator renderer state
+            ctx.indicatorRenderer?.setState(inPlacementMode, g.state.entities, er.placementPreview);
 
             er.tileHighlights = renderState?.highlights ?? [];
         }
@@ -396,17 +429,24 @@ function createBuildingAdjustMode(getGame: () => Game | null): BuildingAdjustMod
 async function initRenderersAsync(
     gl: WebGL2RenderingContext,
     landscapeRenderer: LandscapeRenderer,
-    entityRenderer: EntityRenderer,
-    _game: Game
+    indicatorRenderer: BuildingIndicatorRenderer,
+    entityRenderer: EntityRenderer
 ): Promise<void> {
     // Start IndexedDB cache read in parallel with landscape init
     entityRenderer.spriteManager?.prefetchCache();
+
+    // Yield before landscape — lets prefetch promise microtasks run
+    await Promise.resolve();
 
     const t0 = performance.now();
     await landscapeRenderer.init(gl);
     debugStats.state.loadTimings.landscape = Math.round(performance.now() - t0);
     debugStats.state.gameLoaded = true;
 
+    // Yield after landscape — lets prefetch arrayBuffer() resolve before sprite restore
+    await Promise.resolve();
+
+    await indicatorRenderer.init(gl);
     await entityRenderer.init(gl);
     // Note: entityRenderer.init() returns immediately — sprites load in background.
     // markRendererReady() is called from the onSpritesLoaded callback instead.
@@ -475,6 +515,7 @@ export function useRenderer({
     let renderer: Renderer | null = null;
     let tilePicker: TilePicker | null = null;
     let entityRenderer: EntityRenderer | null = null;
+    let indicatorRenderer: BuildingIndicatorRenderer | null = null;
     let landscapeRenderer: LandscapeRenderer | null = null;
     let inputManager: InputManager | null = null;
     let rendererInitStart = 0;
@@ -586,11 +627,10 @@ export function useRenderer({
         );
         renderer.add(landscapeRenderer);
 
-        entityRenderer = new EntityRenderer(
+        indicatorRenderer = new BuildingIndicatorRenderer(
             game.terrain.mapSize,
-            game.terrain.groundHeight,
-            game.fileManager,
             game.terrain.groundType,
+            game.terrain.groundHeight,
             {
                 isBuildableTerrain: isBuildable,
                 isMineBuildableTerrain: isMineBuildable,
@@ -599,6 +639,9 @@ export function useRenderer({
                 maxSlopeDiff: MAX_SLOPE_DIFF,
             }
         );
+        renderer.add(indicatorRenderer);
+
+        entityRenderer = new EntityRenderer(game.terrain.mapSize, game.terrain.groundHeight, game.fileManager);
         entityRenderer.skipSpriteLoading = game.useProceduralTextures;
         entityRenderer.onSpritesLoaded = () => {
             debugStats.state.mapLoadTimings.rendererInit = Math.round(performance.now() - rendererInitStart);
@@ -612,12 +655,12 @@ export function useRenderer({
      * Initialize GL resources and bind event handlers.
      */
     function initGLAndBindEvents(game: Game): void {
-        if (!renderer || !landscapeRenderer || !entityRenderer) return;
+        if (!renderer || !landscapeRenderer || !indicatorRenderer || !entityRenderer) return;
 
         const gl = renderer.gl;
         if (gl) {
             rendererInitStart = performance.now();
-            void initRenderersAsync(gl, landscapeRenderer, entityRenderer, game);
+            void initRenderersAsync(gl, landscapeRenderer, indicatorRenderer, entityRenderer);
         } else {
             debugStats.state.gameLoaded = true;
             if (game.useProceduralTextures) {
@@ -634,6 +677,7 @@ export function useRenderer({
         const contextGetter = () => ({
             game: getGame(),
             entityRenderer,
+            indicatorRenderer,
             landscapeRenderer,
             inputManager,
             debugGrid: getDebugGrid(),

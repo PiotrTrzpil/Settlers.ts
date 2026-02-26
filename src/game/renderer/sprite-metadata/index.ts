@@ -24,6 +24,8 @@ export {
     RACE_NAMES,
     AVAILABLE_RACES,
     s4TribeToRace,
+    loadSavedRace,
+    saveSavedRace,
 
     // GFX file numbers
     GFX_FILE_NUMBERS,

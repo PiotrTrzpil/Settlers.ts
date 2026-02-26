@@ -19,7 +19,7 @@
             <StatRow v-if="mlt.stateRestore > 0" label="State Restore" :value="`${mlt.stateRestore} ms`" />
             <StatRow label="Renderer Init" :value="`${mlt.rendererInit} ms`" />
             <StatRow label="Landscape" :value="`${slt.landscape} ms`" :depth="1" />
-            <StatRow v-if="slt.cacheWait > 0" label="Cache Wait (IDB)" :value="`${slt.cacheWait} ms`" :depth="1" />
+            <StatRow v-if="slt.cacheWait > 0" label="Cache Wait" :value="`${slt.cacheWait} ms`" :depth="1" />
             <StatRow label="Sprite Load" :value="spriteLoadLabel" :depth="1" />
             <template v-if="slt.cacheHit">
                 <StatRow label="Deserialize" :value="`${slt.deserialize} ms`" :depth="2" />

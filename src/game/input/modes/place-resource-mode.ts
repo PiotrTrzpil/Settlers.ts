@@ -3,8 +3,6 @@ import type { InputContext } from '../input-mode';
 import { EMaterialType } from '../../economy';
 import type { PlacementEntityType } from '../render-state';
 
-type ResourceValidator = (x: number, y: number, materialType: EMaterialType) => boolean;
-
 /**
  * Resource-specific mode data.
  * Extends base placement data with material type and amount.

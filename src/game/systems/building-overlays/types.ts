@@ -22,8 +22,10 @@ export enum OverlayLayer {
     BehindBuilding = 0,
     /** On top of the building but below the flag */
     AboveBuilding = 1,
+    /** Player flag layer — between AboveBuilding and AboveFlag */
+    Flag = 2,
     /** On top of everything including the flag (status icons) */
-    AboveFlag = 2,
+    AboveFlag = 3,
 }
 
 /**

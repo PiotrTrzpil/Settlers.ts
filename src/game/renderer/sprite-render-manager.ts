@@ -42,13 +42,20 @@ import {
     type CachedAtlasData,
 } from './sprite-cache';
 
-// Module-level prefetch: started early (during map load) to overlap IDB read with game construction.
-let earlyPrefetch: Promise<CachedAtlasData | null> | null = null;
+// Eager module-level prefetch: starts the Web Worker cache read the moment this module is imported.
+// The worker handles Cache API I/O + decompression (lz4/gzip) entirely off the main thread.
+// By the time the main thread needs the result (~263ms later), the worker is usually done.
+const PREFETCH_T0 = performance.now();
+let prefetchResolvedAt = 0;
+let earlyPrefetch: Promise<CachedAtlasData | null> | null = isCacheDisabled()
+    ? null
+    : getIndexedDBCache(Race.Roman).then(v => {
+        prefetchResolvedAt = performance.now();
+        return v;
+    });
 
 /**
- * Start prefetching the sprite atlas from IndexedDB as early as possible.
- * Call at the start of map load so the IDB read overlaps with game construction,
- * not just landscape init. The SpriteRenderManager picks this up automatically.
+ * Re-trigger prefetch if the early one was already consumed (e.g., second map load).
  * No-op if a prefetch is already in flight.
  */
 export function prefetchSpriteCache(): void {
@@ -471,10 +478,29 @@ export class SpriteRenderManager {
      * Returns true if cache was hit and sprites restored successfully.
      */
     private async tryRestoreFromIndexedDB(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
-        // Use prefetched result if available (started during landscape init), otherwise fetch now
+        // Grab the module-level prefetch directly (bypasses instance variable transfer).
+        // Falls back to instance prefetch, then to a fresh read.
+        const prefetch = earlyPrefetch ?? this._prefetchedCache;
+        const hadPrefetch = !!prefetch;
+        earlyPrefetch = null;
         const t0 = performance.now();
-        const cached = await (this._prefetchedCache ?? getIndexedDBCache(race));
-        debugStats.state.loadTimings.cacheWait = Math.round(performance.now() - t0);
+        const cached = await (prefetch ?? getIndexedDBCache(race));
+        const now = performance.now();
+        debugStats.state.loadTimings.cacheWait = Math.round(now - t0);
+        const resolvedStatus =
+            prefetchResolvedAt <= t0 ? 'YES' : 'no, late by ' + Math.round(prefetchResolvedAt - t0) + 'ms';
+        const prefetchDetail =
+            prefetchResolvedAt > 0
+                ? ', I/O=' +
+                  Math.round(prefetchResolvedAt - PREFETCH_T0) +
+                  'ms, head start=' +
+                  Math.round(t0 - PREFETCH_T0) +
+                  'ms, already resolved=' +
+                  resolvedStatus
+                : ', prefetch did not resolve (miss or no prefetch)';
+        console.log(
+            '[cache] prefetch=' + hadPrefetch + ', waited=' + Math.round(now - t0) + 'ms at await' + prefetchDetail
+        );
         this._prefetchedCache = null;
         if (!cached) {
             return false;

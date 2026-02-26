@@ -458,6 +458,12 @@ export class SettlerTaskSystem implements TickSystem {
             return;
         }
 
+        // Reset animation if still playing (e.g., walk animation from combat pursuit)
+        const animState = this.animationService.getState(unit.id);
+        if (animState?.playing) {
+            this.setIdleAnimation(unit);
+        }
+
         // Unit is idle - handle idle turning
         this.updateIdleTurning(unit, runtime, dt);
     }

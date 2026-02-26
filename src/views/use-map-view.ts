@@ -75,7 +75,11 @@ async function loadMapFile(
             return { game: null, mapInfo: '' };
         }
 
-        return { game: new Game(fileManager, mapContent), mapInfo: mapContent.toString() };
+        const game = new Game(fileManager, mapContent);
+        // Yield after heavy sync constructor — lets sprite cache prefetch microtasks resolve
+        await Promise.resolve();
+
+        return { game, mapInfo: mapContent.toString() };
     } catch (e) {
         log.error('Failed to load map: ' + file.name, e instanceof Error ? e : new Error(String(e)));
         return { game: null, mapInfo: '' };
@@ -258,7 +262,7 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
             }
         },
 
-        setPlaceUnitMode(unitType: UnitType): void {
+        setPlaceUnitMode(unitType: UnitType, race: Race): void {
             const game = getGame();
             const inputManager = getInputManager();
             if (!game || !inputManager) return;
@@ -266,7 +270,7 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
             if (game.viewState.state.mode === 'place_unit' && game.viewState.state.placeUnitType === unitType) {
                 inputManager.switchMode('select');
             } else {
-                inputManager.switchMode('place_unit', { unitType });
+                inputManager.switchMode('place_unit', { unitType, race });
             }
         },
 
@@ -612,7 +616,7 @@ export function useMapView(
 
     const setPlaceMode = modeToggler.setPlaceMode;
     const setPlaceResourceMode = (rt: EMaterialType) => modeToggler.setPlaceResourceMode(rt, resourceAmount.value);
-    const setPlaceUnitMode = (ut: UnitType) => modeToggler.setPlaceUnitMode(ut);
+    const setPlaceUnitMode = (ut: UnitType) => modeToggler.setPlaceUnitMode(ut, currentPlayerRace.value);
     const setSelectMode = modeToggler.setSelectMode;
     const removeSelected = gameActions.removeSelected;
     const togglePause = gameActions.togglePause;

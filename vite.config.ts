@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import vue from '@vitejs/plugin-vue';
 import glsl from 'vite-plugin-glsl';
+import wasm from 'vite-plugin-wasm';
 import { resolve } from 'path';
 import { computeSourceHash } from './tests/e2e/source-hash';
 import { devWriteFilePlugin } from './vite-plugins/dev-write-file';
@@ -12,7 +13,7 @@ const isFastBuild = process.env['FAST_BUILD'] === '1';
 
 // Load node polyfills plugin only when needed (full build + non-test)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const plugins: any[] = [vue(), glsl(), devWriteFilePlugin(resolve(__dirname))];
+const plugins: any[] = [vue(), glsl(), wasm(), devWriteFilePlugin(resolve(__dirname))];
 if (!isTest && !isFastBuild) {
     const { nodePolyfills } = await import('vite-plugin-node-polyfills');
     plugins.push(

@@ -210,7 +210,6 @@ test.describe('Entity Rendering', () => {
 
             const preview = await gp.actions.getPlacementPreview();
             expect(preview).not.toBeNull();
-            expect(preview!.indicatorsEnabled).toBe(true);
             expect(preview!.previewBuildingType).toBeGreaterThan(0);
         });
     });

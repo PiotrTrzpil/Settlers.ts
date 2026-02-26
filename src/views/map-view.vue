@@ -211,7 +211,7 @@
 import { ref, computed, useTemplateRef, watch } from 'vue';
 import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
-import { Race, RACE_NAMES, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
+import { Race, RACE_NAMES, AVAILABLE_RACES, loadSavedRace, saveSavedRace } from '@/game/renderer/sprite-metadata';
 import { SoundManager } from '@/game/audio/sound-manager';
 
 import FileBrowser from '@/components/file-browser.vue';
@@ -228,7 +228,7 @@ const props = defineProps<{
 const rendererRef = useTemplateRef<InstanceType<typeof RendererViewer>>('rendererRef');
 
 // Race selection — declared before useMapView so it can drive building/unit filtering
-const currentRace = ref<Race>(Race.Roman);
+const currentRace = ref<Race>(loadSavedRace());
 
 const {
     game,
@@ -309,6 +309,7 @@ function onRaceChange() {
     // would re-skin every building on the map. The race selector only
     // controls which buildings appear in the placement menu.
     SoundManager.getInstance().playRandomMusic(currentRace.value);
+    saveSavedRace(currentRace.value);
 }
 
 // Ticks paused indicator — true when game loop renders but logic ticks are not running

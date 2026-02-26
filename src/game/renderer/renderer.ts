@@ -213,13 +213,13 @@ export class Renderer {
         // Draw each layer with error isolation — one layer crashing cannot prevent others.
         const frameStart = performance.now();
         let landscapeTime = 0;
+        let indicatorTime = 0;
         let entityTiming = {
             cullSort: 0,
             entities: 0,
             visibleCount: 0,
             drawCalls: 0,
             spriteCount: 0,
-            indicators: 0,
             textured: 0,
             color: 0,
             selection: 0,
@@ -240,10 +240,9 @@ export class Renderer {
 
             const elapsed = performance.now() - start;
 
-            if (i === 0) {
-                landscapeTime = elapsed;
-            }
-            if (i === 1 && 'getLastFrameTiming' in r) {
+            if (i === 0) landscapeTime = elapsed;
+            if (i === 1) indicatorTime = elapsed;
+            if ('getLastFrameTiming' in r) {
                 entityTiming = (r as EntityRenderer).getLastFrameTiming();
             }
         }
@@ -258,7 +257,7 @@ export class Renderer {
         this.lastRenderTiming.visibleCount = entityTiming.visibleCount;
         this.lastRenderTiming.drawCalls = entityTiming.drawCalls;
         this.lastRenderTiming.spriteCount = entityTiming.spriteCount;
-        this.lastRenderTiming.indicators = entityTiming.indicators;
+        this.lastRenderTiming.indicators = indicatorTime;
         this.lastRenderTiming.textured = entityTiming.textured;
         this.lastRenderTiming.color = entityTiming.color;
         this.lastRenderTiming.selection = entityTiming.selection;

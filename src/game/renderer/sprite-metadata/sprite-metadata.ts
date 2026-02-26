@@ -7,7 +7,7 @@ import { Race } from '../../race';
 import { isUnitAvailableForRace, isBuildingAvailableForRace } from '../../race-availability';
 
 // Re-export from canonical locations and new index files
-export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace } from '../../race';
+export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace, loadSavedRace, saveSavedRace } from '../../race';
 export { BUILDING_ICON_INDICES, MAP_OBJECT_SPRITES } from './gil-indices';
 export {
     UNIT_JOB_INDICES,

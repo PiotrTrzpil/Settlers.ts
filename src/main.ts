@@ -17,9 +17,8 @@ const log = new LogHandler('Global');
 
 // Force full page reload when HMR fails (prevents stale code issues)
 if (import.meta.hot) {
-    import.meta.hot.on('vite:error', () => {
-        log.debug('HMR error detected, reloading page...');
-        window.location.reload();
+    import.meta.hot.on('vite:error', (payload: unknown) => {
+        log.warn('HMR error detected (auto-reload disabled):', payload);
     });
 
     // Force reload for renderer files - instances don't auto-update on HMR

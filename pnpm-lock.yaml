@@ -23,6 +23,9 @@ importers:
       howler:
         specifier: ^2.2.4
         version: 2.2.4
+      lz4-wasm:
+        specifier: ^0.9.2
+        version: 0.9.2
       vue:
         specifier: ^3.5.28
         version: 3.5.28(typescript@5.9.3)
@@ -138,6 +141,9 @@ importers:
       vite-plugin-node-polyfills:
         specifier: ^0.25.0
         version: 0.25.0(rolldown-vite@7.3.1(@types/node@25.3.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))(rollup@4.58.0)
+      vite-plugin-wasm:
+        specifier: ^3.5.0
+        version: 3.5.0(rolldown-vite@7.3.1(@types/node@25.3.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.3.0)(@vitest/ui@4.0.18)(jiti@2.6.1)(jsdom@28.1.0)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)
@@ -2474,6 +2480,9 @@ packages:
     resolution: {integrity: sha512-ESL2CrkS/2wTPfuend7Zhkzo2u0daGJ/A2VucJOgQ/C48S/zB8MMeMHSGKYpXhIjbPxfuezITkaBH1wqv00DDQ==}
     engines: {node: 20 || >=22}
 
+  lz4-wasm@0.9.2:
+    resolution: {integrity: sha512-8Y/OvG/nTQNWR242NhLmjI7VzLMRKFaxg/+Pxi/vkczgFdrS4qiJ8l6n30XyNJyc0TB5C66Ncdjq345Kx5XsvQ==}
+
   madge@8.0.0:
     resolution: {integrity: sha512-9sSsi3TBPhmkTCIpVQF0SPiChj1L7Rq9kU2KDG1o6v2XH9cCw086MopjVCD+vuoL5v8S77DTbVopTO8OUiQpIw==}
     engines: {node: '>=18'}
@@ -3420,6 +3429,11 @@ packages:
     resolution: {integrity: sha512-rHZ324W3LhfGPxWwQb2N048TThB6nVvnipsqBUJEzh3R9xeK9KI3si+GMQxCuAcpPJBVf0LpDtJ+beYzB3/chg==}
     peerDependencies:
       vite: ^2.0.0 || ^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
+
+  vite-plugin-wasm@3.5.0:
+    resolution: {integrity: sha512-X5VWgCnqiQEGb+omhlBVsvTfxikKtoOgAzQ95+BZ8gQ+VfMHIjSHr0wyvXFQCa0eKQ0fKyaL0kWcEnYqBac4lQ==}
+    peerDependencies:
+      vite: ^2 || ^3 || ^4 || ^5 || ^6 || ^7
 
   vite@7.3.1:
     resolution: {integrity: sha512-w+N7Hifpc3gRjZ63vYBXA56dvvRlNWRczTdmCBBa+CotUzAPf5b7YMdMR/8CQoeYE5LX3W4wj6RYTgonm1b9DA==}
@@ -5926,6 +5940,8 @@ snapshots:
 
   lru-cache@11.2.6: {}
 
+  lz4-wasm@0.9.2: {}
+
   madge@8.0.0(typescript@5.9.3):
     dependencies:
       chalk: 4.1.2
@@ -7004,6 +7020,10 @@ snapshots:
       vite: rolldown-vite@7.3.1(@types/node@25.3.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - rollup
+
+  vite-plugin-wasm@3.5.0(rolldown-vite@7.3.1(@types/node@25.3.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)):
+    dependencies:
+      vite: rolldown-vite@7.3.1(@types/node@25.3.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:

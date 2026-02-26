@@ -59,7 +59,6 @@ export interface TerrainInfo {
 }
 
 export interface PlacementPreview {
-    indicatorsEnabled: boolean;
     previewBuildingType: number | null;
     previewMaterialType: number | null;
     placementPreview: { entityType: string; subType: number } | null;
@@ -161,16 +160,13 @@ export async function getPlacementPreview(page: Page): Promise<PlacementPreview 
     return page.evaluate(() => {
         const renderer = window.__settlers__?.entityRenderer;
         if (!renderer) return null;
+        const preview = renderer.placementPreview
+            ? { entityType: renderer.placementPreview.entityType, subType: renderer.placementPreview.subType }
+            : null;
         return {
-            indicatorsEnabled: renderer.buildingIndicatorsEnabled,
-            previewBuildingType: renderer.previewBuildingType ?? null,
-            previewMaterialType: renderer.previewMaterialType ?? null,
-            placementPreview: renderer.placementPreview
-                ? {
-                      entityType: renderer.placementPreview.entityType,
-                      subType: renderer.placementPreview.subType,
-                  }
-                : null,
+            previewBuildingType: preview?.entityType === 'building' ? preview.subType : null,
+            previewMaterialType: preview?.entityType === 'resource' ? preview.subType : null,
+            placementPreview: preview,
         };
     });
 }

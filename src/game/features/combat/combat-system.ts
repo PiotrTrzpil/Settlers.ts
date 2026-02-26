@@ -219,6 +219,13 @@ export class CombatSystem implements TickSystem {
                 other.targetId = null;
                 other.status = CombatStatus.Idle;
                 other.attackTimer = 0;
+                this.pursuitTimers.delete(other.entityId);
+
+                // Stop movement if unit was pursuing the dead target
+                const controller = this.gameState.movement.getController(other.entityId);
+                if (controller && controller.state !== 'idle') {
+                    controller.clearPath();
+                }
             }
         }
 

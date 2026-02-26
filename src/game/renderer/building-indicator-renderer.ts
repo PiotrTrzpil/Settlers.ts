@@ -1,9 +1,11 @@
+import type { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
-import { TileCoord, tileKey, BuildingType, getBuildingFootprint, isMineBuilding } from '../entity';
+import { Entity, EntityType, TileCoord, tileKey, BuildingType, getBuildingFootprint, isMineBuilding } from '../entity';
 import { PlacementStatus } from '../features/placement';
 import { ShaderProgram } from './shader-program';
+import type { PlacementPreviewState } from './render-context';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -92,7 +94,7 @@ export function isBuildableStatus(status: PlacementStatus): boolean {
  * Shows colored dots indicating where buildings can be placed and the
  * relative difficulty (based on slope/terrain).
  */
-export class BuildingIndicatorRenderer {
+export class BuildingIndicatorRenderer implements IRenderer {
     private gl: WebGL2RenderingContext | null = null;
     private shaderProgram: ShaderProgram | null = null;
     private dynamicBuffer: WebGLBuffer | null = null;
@@ -118,13 +120,14 @@ export class BuildingIndicatorRenderer {
     private cacheZoom = 0;
     private cacheBuildingType: BuildingType | null = null;
 
-    // Public state - set by use-renderer
-    public enabled = false;
-    public hoveredTile: TileCoord | null = null;
+    // State set per-frame by the glue layer
+    private enabled = false;
+    private hoveredTile: TileCoord | null = null;
     public buildingType: BuildingType | null = null;
 
-    // External dependencies
+    // Occupancy map — rebuilt when entities change
     public tileOccupancy: Map<string, number> = new Map();
+    private occupancyEntitiesRef: readonly Entity[] | null = null;
 
     constructor(mapSize: MapSize, groundType: Uint8Array, groundHeight: Uint8Array, placement: PlacementChecker) {
         this.mapSize = mapSize;
@@ -134,9 +137,43 @@ export class BuildingIndicatorRenderer {
     }
 
     /**
-     * Initialize WebGL resources.
+     * Update per-frame state from the glue layer.
+     * Call before draw() each frame.
      */
-    public init(gl: WebGL2RenderingContext): void {
+    public setState(
+        indicatorsEnabled: boolean,
+        entities: readonly Entity[],
+        placementPreview: PlacementPreviewState | null
+    ): void {
+        this.enabled = indicatorsEnabled;
+        this.hoveredTile = placementPreview?.tile ?? null;
+        this.buildingType =
+            placementPreview?.entityType === 'building' ? (placementPreview.subType as BuildingType) : null;
+
+        // Rebuild occupancy map only when entities change
+        if (indicatorsEnabled && entities !== this.occupancyEntitiesRef) {
+            this.rebuildOccupancyMap(entities);
+            this.occupancyEntitiesRef = entities;
+        }
+    }
+
+    /** Rebuild the tile occupancy map from current entities. */
+    private rebuildOccupancyMap(entities: readonly Entity[]): void {
+        this.tileOccupancy.clear();
+        for (const e of entities) {
+            if (e.type === EntityType.Building) {
+                const footprint = getBuildingFootprint(e.x, e.y, e.subType as BuildingType);
+                for (const tile of footprint) {
+                    this.tileOccupancy.set(`${tile.x},${tile.y}`, e.id);
+                }
+            } else {
+                this.tileOccupancy.set(`${e.x},${e.y}`, e.id);
+            }
+        }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/require-await -- IRenderer interface requires Promise
+    public async init(gl: WebGL2RenderingContext): Promise<boolean> {
         this.gl = gl;
 
         this.shaderProgram = new ShaderProgram();
@@ -149,6 +186,7 @@ export class BuildingIndicatorRenderer {
         this.aColor = this.shaderProgram.getAttribLocation('a_color');
 
         this.dynamicBuffer = gl.createBuffer();
+        return true;
     }
 
     /**

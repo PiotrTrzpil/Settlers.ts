@@ -10,7 +10,7 @@ import { populateMapBuildings } from './features/building-construction';
 import { populateMapSettlers } from './systems/map-settlers';
 import { populateMapStacks } from './systems/map-stacks';
 import { SoundManager } from './audio';
-import { Race, s4TribeToRace } from './race';
+import { Race, s4TribeToRace, loadSavedRace } from './race';
 import { EventBus } from './event-bus';
 import { EntityType } from './entity';
 import { GameSettingsManager } from './game-settings';
@@ -160,7 +160,8 @@ export class Game {
             .then(() => {
                 if (!this.soundManager.currentMusicId) {
                     console.log('Game: SoundManager initialized, requesting music...');
-                    this.soundManager.playRandomMusic(Race.Roman);
+                    const savedRace = loadSavedRace();
+                    this.soundManager.playRandomMusic(savedRace);
                 }
             })
             .catch((err: unknown) => {

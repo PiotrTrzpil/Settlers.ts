@@ -36,3 +36,28 @@ export function s4TribeToRace(tribe: number): Race {
     const race = tribe + 10;
     return race as Race;
 }
+
+const RACE_STORAGE_KEY = 'settlers_selectedRace';
+
+/** Load saved race from localStorage, falling back to Roman. */
+export function loadSavedRace(): Race {
+    try {
+        const stored = localStorage.getItem(RACE_STORAGE_KEY);
+        if (stored !== null) {
+            const parsed = Number(stored);
+            if (AVAILABLE_RACES.includes(parsed as Race)) return parsed as Race;
+        }
+    } catch {
+        // localStorage not available
+    }
+    return Race.Roman;
+}
+
+/** Persist selected race to localStorage. */
+export function saveSavedRace(race: Race): void {
+    try {
+        localStorage.setItem(RACE_STORAGE_KEY, String(race));
+    } catch {
+        // localStorage not available
+    }
+}
