@@ -18,6 +18,9 @@ export interface GameViewStateData {
     /** Increments every update — use as a reactive dirty flag in Vue computeds */
     tick: number;
 
+    /** True when game ticks are paused (sprites not loaded yet, or game paused) */
+    ticksPaused: boolean;
+
     // Input mode (written by InputManager onModeChange callback)
     mode: string;
     placeBuildingType: number;
@@ -52,6 +55,7 @@ export class GameViewState {
     constructor() {
         this.state = reactive<GameViewStateData>({
             tick: 0,
+            ticksPaused: true,
             mode: 'select',
             placeBuildingType: 0,
             placeResourceType: 0,

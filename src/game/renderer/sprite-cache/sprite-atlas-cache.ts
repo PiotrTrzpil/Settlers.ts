@@ -26,7 +26,7 @@ declare const __BUILD_TIME__: string;
  * Schema version for cache invalidation.
  * Bump this when animation sequence names or sprite data format changes.
  */
-const CACHE_SCHEMA_VERSION = 10; // v10: fix Uint16 overflow — atlas stores value+2, paletteOffset moved to vertex attribute
+const CACHE_SCHEMA_VERSION = 11; // v11: compress blobs with deflate-raw before storing in IDB
 
 /** Current build version for cache invalidation */
 const BUILD_VERSION =
@@ -84,6 +84,7 @@ interface IndexedDBAtlasEntry extends CachedAtlasBase {
     imgData: ArrayBuffer;
     paletteBuffer?: ArrayBuffer;
     version: string;
+    compressed?: boolean;
 }
 
 // =============================================================================
@@ -136,6 +137,20 @@ export function clearAllAtlasCache(): void {
     if (count > 0) {
         log.debug(`Module cache: cleared all (${count} entries)`);
     }
+}
+
+// =============================================================================
+// Compression helpers (native deflate-raw — zero deps, browser C++ zlib)
+// =============================================================================
+
+async function compressBuffer(data: ArrayBuffer): Promise<ArrayBuffer> {
+    const stream = new Blob([data]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+    return new Response(stream).arrayBuffer();
+}
+
+async function decompressBuffer(data: ArrayBuffer): Promise<ArrayBuffer> {
+    const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Response(stream).arrayBuffer();
 }
 
 // =============================================================================
@@ -209,8 +224,14 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
         return null;
     }
 
+    const imgBuffer = entry.compressed ? await decompressBuffer(entry.imgData) : entry.imgData;
+    let paletteBuffer: ArrayBuffer | undefined;
+    if (entry.paletteBuffer) {
+        paletteBuffer = entry.compressed ? await decompressBuffer(entry.paletteBuffer) : entry.paletteBuffer;
+    }
+
     const data: CachedAtlasData = {
-        imgData: new Uint8Array(entry.imgData),
+        imgData: new Uint8Array(imgBuffer),
         layerCount: entry.layerCount,
         maxLayers: entry.maxLayers,
         slots: entry.slots,
@@ -220,35 +241,55 @@ export async function getIndexedDBCache(race: Race): Promise<CachedAtlasData | n
         timestamp: entry.timestamp,
         paletteOffsets: entry.paletteOffsets,
         paletteTotalColors: entry.paletteTotalColors,
-        paletteData: entry.paletteBuffer ? new Uint8Array(entry.paletteBuffer) : undefined,
+        paletteData: paletteBuffer ? new Uint8Array(paletteBuffer) : undefined,
         paletteRows: entry.paletteRows,
     };
 
+    const storedKB = Math.round(entry.imgData.byteLength / 1024);
+    const fullKB = Math.round(imgBuffer.byteLength / 1024);
     const ageMins = Math.round((Date.now() - entry.timestamp) / 60000);
-    log.debug(`IndexedDB: loaded ${Race[race]} (${data.layerCount} layers, age: ${ageMins}m)`);
+    const compressInfo = entry.compressed ? `${storedKB}KB compressed → ${fullKB}KB` : `${fullKB}KB uncompressed`;
+    log.debug(`IndexedDB: loaded ${Race[race]} (${data.layerCount} layers, ${compressInfo}, age: ${ageMins}m)`);
 
     return data;
 }
 
-/** Maximum size for IndexedDB storage (256MB) - larger atlases are skipped */
-const MAX_INDEXEDDB_SIZE = 256 * 1024 * 1024;
-
 /** Save atlas data to IndexedDB, clearing old caches on memory pressure */
 export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Promise<void> {
-    // Skip atlases that are too large for IndexedDB
-    if (data.imgData.length > MAX_INDEXEDDB_SIZE) {
-        const sizeMB = (data.imgData.length / 1024 / 1024).toFixed(0);
-        log.debug(`IndexedDB: skipping ${Race[race]} (${sizeMB}MB > 256MB limit)`);
-        return;
+    const sizeMB = (data.imgData.length / 1024 / 1024).toFixed(1);
+    log.debug(`IndexedDB: saving ${Race[race]} (${data.layerCount} layers, ${sizeMB}MB, version=${BUILD_VERSION})`);
+
+    const rawImg = (data.imgData.buffer as ArrayBuffer).slice(
+        data.imgData.byteOffset,
+        data.imgData.byteOffset + data.imgData.byteLength
+    );
+    const rawPalette = data.paletteData
+        ? (data.paletteData.buffer as ArrayBuffer).slice(
+            data.paletteData.byteOffset,
+            data.paletteData.byteOffset + data.paletteData.byteLength
+        )
+        : undefined;
+
+    const compress = isCacheCompressionEnabled();
+    let storeImg: ArrayBuffer;
+    let storePalette: ArrayBuffer | undefined;
+
+    if (compress) {
+        storeImg = await compressBuffer(rawImg);
+        storePalette = rawPalette ? await compressBuffer(rawPalette) : undefined;
+        const ratio = ((1 - storeImg.byteLength / rawImg.byteLength) * 100).toFixed(0);
+        log.debug(
+            `IndexedDB: compressed ${Race[race]} imgData ${sizeMB}MB → ${(storeImg.byteLength / 1024 / 1024).toFixed(1)}MB (${ratio}% smaller)`
+        );
+    } else {
+        storeImg = rawImg;
+        storePalette = rawPalette;
     }
 
     const entry: IndexedDBAtlasEntry = {
         race,
         version: BUILD_VERSION,
-        imgData: (data.imgData.buffer as ArrayBuffer).slice(
-            data.imgData.byteOffset,
-            data.imgData.byteOffset + data.imgData.byteLength
-        ),
+        imgData: storeImg,
         layerCount: data.layerCount,
         maxLayers: data.maxLayers,
         slots: data.slots,
@@ -257,16 +298,10 @@ export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Prom
         timestamp: data.timestamp,
         paletteOffsets: data.paletteOffsets,
         paletteTotalColors: data.paletteTotalColors,
-        paletteBuffer: data.paletteData
-            ? (data.paletteData.buffer as ArrayBuffer).slice(
-                data.paletteData.byteOffset,
-                data.paletteData.byteOffset + data.paletteData.byteLength
-            )
-            : undefined,
+        paletteBuffer: storePalette,
         paletteRows: data.paletteRows,
+        compressed: compress,
     };
-
-    const sizeMB = (data.imgData.length / 1024 / 1024).toFixed(1);
 
     // Try to save, clearing old caches on memory errors
     const result = await tryPutWithRetry(entry);
@@ -274,7 +309,7 @@ export async function setIndexedDBCache(race: Race, data: CachedAtlasData): Prom
     if (result !== null) {
         log.debug(`IndexedDB: saved ${Race[race]} (${data.layerCount} layers, ${sizeMB}MB)`);
     } else {
-        log.warn(`IndexedDB: failed to save ${Race[race]} (${sizeMB}MB) - cache disabled`);
+        log.warn(`IndexedDB: failed to save ${Race[race]} (${sizeMB}MB)`);
     }
 }
 
@@ -354,6 +389,18 @@ export function isCacheDisabled(): boolean {
         return settings.cacheDisabled === true;
     } catch {
         return false;
+    }
+}
+
+/** Check if cache compression is enabled via settings (default: true) */
+export function isCacheCompressionEnabled(): boolean {
+    try {
+        const stored = localStorage.getItem('settlers_game_settings');
+        if (!stored) return true;
+        const settings = JSON.parse(stored);
+        return settings.cacheCompressionEnabled !== false;
+    } catch {
+        return true;
     }
 }
 

@@ -22,6 +22,7 @@ import { BuildingType } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import { Race } from '../../race';
 import type { TileCoord } from '../../coordinates';
+import { writeDevFile } from '@/utilities/dev-file-writer';
 import stackPositionsYaml from './data/stack-positions.yaml?raw';
 
 /** Relative offset from building anchor position */
@@ -210,22 +211,7 @@ export class StackPositions {
      * Save the current positions directly to the YAML file via the Vite dev server.
      */
     saveToFile(): void {
-        const yaml = this.exportYaml();
-        const filePath = 'src/game/features/inventory/data/stack-positions.yaml';
-
-        fetch('/__api/write-file', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: filePath, content: yaml }),
-        }).then(
-            res => {
-                if (res.ok) console.log('Stack positions saved to', filePath);
-                else console.warn('Failed to save stack positions:', res.statusText);
-            },
-            () => {
-                console.warn('Dev server endpoint unavailable. YAML output:\n' + yaml);
-            }
-        );
+        writeDevFile('src/game/features/inventory/data/stack-positions.yaml', this.exportYaml());
     }
 
     // --- Private ---

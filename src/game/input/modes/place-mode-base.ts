@@ -55,6 +55,16 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
     /** Current player placing entities */
     protected currentPlayer = 0;
 
+    /** Whether to reset to select mode after a successful placement (buildings: true, units/resources: false) */
+    protected readonly resetAfterPlace: boolean = false;
+
+    /** Whether a drag-place is in progress (left button held) */
+    private dragging = false;
+
+    /** Last tile where placement was attempted during drag, to avoid redundant attempts */
+    private lastPlacedTileX = -1;
+    private lastPlacedTileY = -1;
+
     constructor(
         private readonly validatePlacement: (x: number, y: number, subType: TSubType) => boolean,
         private readonly onTileHover?: (x: number, y: number) => void
@@ -160,6 +170,9 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
     }
 
     override onExit(context: InputContext): void {
+        this.dragging = false;
+        this.lastPlacedTileX = -1;
+        this.lastPlacedTileY = -1;
         context.setModeData<PlacementModeData<TSubType> | undefined>(undefined);
     }
 
@@ -177,24 +190,24 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
         }
     }
 
-    override onPointerUp(data: PointerData, context: InputContext): InputResult {
+    override onPointerDown(data: PointerData, context: InputContext): InputResult {
         const modeData = context.getModeData<PlacementModeData<TSubType>>();
         if (!modeData) return UNHANDLED;
 
         if (data.button === MouseButton.Left) {
-            if (modeData.previewValid) {
-                const command = this.createPlacementCommand(modeData.previewX, modeData.previewY, modeData);
-                const result = context.executeCommand(command);
+            this.dragging = true;
+            this.tryPlace(modeData, context);
+            return HANDLED;
+        }
 
-                if (result.success) {
-                    this.logPlacement(modeData, true);
-                    context.switchMode('select');
-                } else {
-                    this.logPlacement(modeData, false, result.error ?? 'Command failed');
-                }
-            } else {
-                this.logPlacement(modeData, false, 'Invalid position');
-            }
+        return UNHANDLED;
+    }
+
+    override onPointerUp(data: PointerData, context: InputContext): InputResult {
+        if (data.button === MouseButton.Left) {
+            this.dragging = false;
+            this.lastPlacedTileX = -1;
+            this.lastPlacedTileY = -1;
             return HANDLED;
         }
 
@@ -221,6 +234,12 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
         modeData.previewValid = this.validatePlacement(anchor.x, anchor.y, modeData.subType);
 
         context.setModeData(modeData);
+
+        // Place on new tile during drag
+        if (this.dragging && (anchor.x !== this.lastPlacedTileX || anchor.y !== this.lastPlacedTileY)) {
+            this.tryPlace(modeData, context);
+        }
+
         return HANDLED;
     }
 
@@ -258,6 +277,33 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
     // ─────────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Attempt to place at the current preview position. Tracks last placed tile to avoid duplicates.
+     */
+    private tryPlace(modeData: PlacementModeData<TSubType>, context: InputContext): void {
+        this.lastPlacedTileX = modeData.previewX;
+        this.lastPlacedTileY = modeData.previewY;
+
+        if (!modeData.previewValid) return;
+
+        const command = this.createPlacementCommand(modeData.previewX, modeData.previewY, modeData);
+        const result = context.executeCommand(command);
+
+        if (result.success) {
+            this.logPlacement(modeData, true);
+            if (this.resetAfterPlace) {
+                this.dragging = false;
+                context.switchMode('select');
+                return;
+            }
+            // Re-validate current tile (now occupied) so preview updates
+            modeData.previewValid = this.validatePlacement(modeData.previewX, modeData.previewY, modeData.subType);
+            context.setModeData(modeData);
+        } else {
+            this.logPlacement(modeData, false, result.error ?? 'Command failed');
+        }
+    }
 
     private logPlacement(data: PlacementModeData<TSubType>, success: boolean, reason?: string): void {
         const typeName = this.getSubTypeName(data.subType);

@@ -38,6 +38,7 @@ export interface GameSettings {
 
     // Performance
     cacheDisabled: boolean;
+    cacheCompressionEnabled: boolean;
 }
 
 /** Default values for all settings */
@@ -73,6 +74,7 @@ const DEFAULT_SETTINGS: GameSettings = {
 
     // Performance
     cacheDisabled: false,
+    cacheCompressionEnabled: true,
 };
 
 /** Load settings from localStorage, merging with defaults */

@@ -7,8 +7,8 @@ import { IndexFile } from './index-file';
  *        jil (job)    --> .dil (direction)--> gil (frames) --> gfx
  * */
 export class DilFileReader extends IndexFile {
-    constructor(resourceReader: BinaryReader) {
-        super(resourceReader);
+    constructor(source: BinaryReader | Int32Array) {
+        super(source);
         Object.seal(this);
     }
 

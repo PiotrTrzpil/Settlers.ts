@@ -18,6 +18,9 @@
  *   # Export specific image indices
  *   npx tsx scripts/gfx-export/cli.ts path/to/file.gfx ./output --indices 0,1,2,10-20
  *
+ *   # Group images into folders by dimensions (e.g., 32x32/, 64x128/)
+ *   npx tsx scripts/gfx-export/cli.ts path/to/file.gfx ./output --group-by-size
+ *
  *   # Include metadata in filenames
  *   npx tsx scripts/gfx-export/cli.ts path/to/file.gfx ./output --metadata
  *
@@ -173,6 +176,7 @@ interface CliOptions {
     metadata: boolean;
     info: boolean;
     verbose: boolean;
+    groupBySize: boolean;
 }
 
 function parseIndices(str: string): number[] {
@@ -200,6 +204,7 @@ function parseArgs(args: string[]): CliOptions {
         metadata: false,
         info: false,
         verbose: false,
+        groupBySize: false,
     };
 
     const positional: string[] = [];
@@ -211,6 +216,8 @@ function parseArgs(args: string[]): CliOptions {
             options.indices = parseIndices(args[++i] || '');
         } else if (arg === '--metadata' || arg === '-m') {
             options.metadata = true;
+        } else if (arg === '--group-by-size' || arg === '-g') {
+            options.groupBySize = true;
         } else if (arg === '--info') {
             options.info = true;
         } else if (arg === '--verbose' || arg === '-v') {
@@ -241,15 +248,19 @@ Arguments:
   output          Output directory (default: ./output)
 
 Options:
-  -i, --indices   Export specific indices (e.g., "0,1,2,10-20")
-  -m, --metadata  Include size/offset info in filenames
-  --info          Show file info without exporting
-  -v, --verbose   Verbose output
-  -h, --help      Show this help message
+  -i, --indices       Export specific indices (e.g., "0,1,2,10-20")
+  -m, --metadata      Include size/offset info in filenames
+  -g, --group-by-size Group images into subdirectories by WxH dimensions
+  --info              Show file info without exporting
+  -v, --verbose       Verbose output
+  -h, --help          Show this help message
 
 Examples:
   # Export a single GFX file
   npx tsx scripts/gfx-export/cli.ts Gfx/1.gfx ./exported
+
+  # Export grouped by image size (for matching)
+  npx tsx scripts/gfx-export/cli.ts Gfx/9.gfx ./exported -g
 
   # Export from a .lib archive
   npx tsx scripts/gfx-export/cli.ts Gfx.lib ./exported
@@ -364,6 +375,9 @@ async function exportGfxFile(
     let exported = 0;
     let failed = 0;
 
+    // Track created directories to avoid redundant mkdir calls
+    const createdDirs = new Set<string>();
+
     for (const index of indices) {
         if (index < 0 || index >= imageCount) continue;
 
@@ -380,7 +394,16 @@ async function exportGfxFile(
             }
             filename += '.png';
 
-            const outputPath = path.join(outDir, filename);
+            let targetDir = outDir;
+            if (options.groupBySize) {
+                targetDir = path.join(outDir, `${image.width}x${image.height}`);
+                if (!createdDirs.has(targetDir)) {
+                    await fs.mkdir(targetDir, { recursive: true });
+                    createdDirs.add(targetDir);
+                }
+            }
+
+            const outputPath = path.join(targetDir, filename);
             await exportImage(image, outputPath);
 
             if (options.verbose) {
@@ -394,6 +417,10 @@ async function exportGfxFile(
                 console.error(`  Failed: ${index} - ${err}`);
             }
         }
+    }
+
+    if (options.groupBySize) {
+        console.log(`  Size groups: ${createdDirs.size}`);
     }
 
     return { exported, failed };
@@ -417,36 +444,56 @@ async function exportGhFile(
     let exported = 0;
     let failed = 0;
 
+    const createdDirs = new Set<string>();
+
     for (const index of indices) {
         if (index < 0 || index >= imageCount) continue;
 
-        try {
-            const image = reader.getImage(index);
-            if (!image || image.width === 0 || image.height === 0) continue;
+        const ok = await exportGhImage(reader, index, outDir, options, createdDirs);
+        if (ok) exported++;
+        else failed++;
+    }
 
-            let filename = index.toString().padStart(3, '0');
-            if (options.metadata) {
-                filename += `_${image.width}x${image.height}`;
-            }
-            filename += '.png';
-
-            const outputPath = path.join(outDir, filename);
-            await exportImage(image, outputPath);
-
-            if (options.verbose) {
-                console.log(`  Exported: ${filename}`);
-            }
-
-            exported++;
-        } catch (err) {
-            failed++;
-            if (options.verbose) {
-                console.error(`  Failed: ${index} - ${err}`);
-            }
-        }
+    if (options.groupBySize) {
+        console.log(`  Size groups: ${createdDirs.size}`);
     }
 
     return { exported, failed };
+}
+
+async function exportGhImage(
+    reader: GhFileReader,
+    index: number,
+    outDir: string,
+    options: CliOptions,
+    createdDirs: Set<string>
+): Promise<boolean> {
+    try {
+        const image = reader.getImage(index);
+        if (!image || image.width === 0 || image.height === 0) return false;
+
+        let filename = index.toString().padStart(3, '0');
+        if (options.metadata) {
+            filename += `_${image.width}x${image.height}`;
+        }
+        filename += '.png';
+
+        let targetDir = outDir;
+        if (options.groupBySize) {
+            targetDir = path.join(outDir, `${image.width}x${image.height}`);
+            if (!createdDirs.has(targetDir)) {
+                await fs.mkdir(targetDir, { recursive: true });
+                createdDirs.add(targetDir);
+            }
+        }
+
+        await exportImage(image, path.join(targetDir, filename));
+        if (options.verbose) console.log(`  Exported: ${filename}`);
+        return true;
+    } catch (err) {
+        if (options.verbose) console.error(`  Failed: ${index} - ${err}`);
+        return false;
+    }
 }
 
 async function showGfxInfo(fileSet: GfxFileSet): Promise<void> {
@@ -564,6 +611,7 @@ async function processLibFile(libPath: string, outputDir: string, options: CliOp
                     } else {
                         const outDir = path.join(outputDir, baseName);
                         await fs.mkdir(outDir, { recursive: true });
+                        const libCreatedDirs = new Set<string>();
 
                         const indices = options.indices ?? Array.from({ length: imageCount }, (_, k) => k);
 
@@ -580,7 +628,16 @@ async function processLibFile(libPath: string, outputDir: string, options: CliOp
                                 }
                                 filename += '.png';
 
-                                await exportImage(image, path.join(outDir, filename));
+                                let targetDir = outDir;
+                                if (options.groupBySize) {
+                                    targetDir = path.join(outDir, `${image.width}x${image.height}`);
+                                    if (!libCreatedDirs.has(targetDir)) {
+                                        await fs.mkdir(targetDir, { recursive: true });
+                                        libCreatedDirs.add(targetDir);
+                                    }
+                                }
+
+                                await exportImage(image, path.join(targetDir, filename));
                                 totalExported++;
 
                                 if (options.verbose) {
@@ -604,6 +661,7 @@ async function processLibFile(libPath: string, outputDir: string, options: CliOp
                 } else {
                     const outDir = path.join(outputDir, baseName);
                     await fs.mkdir(outDir, { recursive: true });
+                    const libGhCreatedDirs = new Set<string>();
 
                     const indices = options.indices ?? Array.from({ length: imageCount }, (_, k) => k);
 
@@ -620,7 +678,16 @@ async function processLibFile(libPath: string, outputDir: string, options: CliOp
                             }
                             filename += '.png';
 
-                            await exportImage(image, path.join(outDir, filename));
+                            let targetDir = outDir;
+                            if (options.groupBySize) {
+                                targetDir = path.join(outDir, `${image.width}x${image.height}`);
+                                if (!libGhCreatedDirs.has(targetDir)) {
+                                    await fs.mkdir(targetDir, { recursive: true });
+                                    libGhCreatedDirs.add(targetDir);
+                                }
+                            }
+
+                            await exportImage(image, path.join(targetDir, filename));
                             totalExported++;
                         } catch {
                             totalFailed++;

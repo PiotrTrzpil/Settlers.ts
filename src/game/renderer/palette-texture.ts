@@ -8,6 +8,7 @@ import {
     FILE_TEAM_COUNT,
     rgb565ToRgba,
 } from '@/resources/gfx/team-colors';
+import { yieldToEventLoop } from './batch-loader';
 
 /**
  * Fixed palette texture width for 2D layout.
@@ -136,10 +137,6 @@ export class PaletteTextureManager {
         // Update rowsPerPlayer immediately so shaders get correct value even before createPlayerPalettes
         this.rowsPerPlayer = Math.ceil(this.totalColors / PALETTE_TEXTURE_WIDTH);
 
-        PaletteTextureManager.log.debug(
-            `Registered palette '${fileId}': ${colorCount} colors at offset ${baseOffset} (total: ${this.totalColors})`
-        );
-
         return baseOffset;
     }
 
@@ -168,7 +165,7 @@ export class PaletteTextureManager {
      *
      * @param numPlayers Number of player teams (up to 8)
      */
-    public createPlayerPalettes(numPlayers: number): void {
+    public async createPlayerPalettes(numPlayers: number): Promise<void> {
         this.numPlayerRows = 1 + numPlayers; // row 0 = neutral, rows 1..N = players
 
         // Calculate 2D layout dimensions
@@ -186,7 +183,7 @@ export class PaletteTextureManager {
         // Build a sorted array of window bases for binary search
         const windowBases = [...this.teamColorSlots].sort((a, b) => a - b);
 
-        // Fill all player rows
+        // Fill all player rows, yielding between each to avoid blocking
         for (let p = 0; p < this.numPlayerRows; p++) {
             const playerBaseRow = p * this.rowsPerPlayer;
             const teamIndex = p - 1; // -1 for neutral row
@@ -201,6 +198,10 @@ export class PaletteTextureManager {
                 } else {
                     this.writeTeamColor(neutralData, windowBases, i, teamIndex, dstOff);
                 }
+            }
+
+            if (p < this.numPlayerRows - 1) {
+                await yieldToEventLoop();
             }
         }
 

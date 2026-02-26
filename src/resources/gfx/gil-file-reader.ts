@@ -18,8 +18,8 @@ export class GilFileReader extends IndexFile {
         return this.offsetTable[index]!;
     }
 
-    constructor(resourceReader: BinaryReader) {
-        super(resourceReader);
+    constructor(source: BinaryReader | Int32Array) {
+        super(source);
         Object.seal(this);
     }
 

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- large renderer class, splitting would hurt cohesion */
 import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
@@ -36,12 +37,15 @@ import { getGameDataLoader } from '@/resources/game-data';
 import type {
     IRenderContext,
     ServiceAreaRenderData,
+    TerritoryDotRenderData,
     PlacementPreviewState,
     PlacementEntityType,
     UnitStateLookup,
     BuildingRenderState,
+    BuildingOverlayRenderData,
     RenderSettings,
 } from './render-context';
+import { OverlayRenderLayer } from './render-context';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -65,6 +69,8 @@ import {
     scaleSprite,
     getSpriteScale,
 } from './entity-renderer-constants';
+
+const EMPTY_OVERLAYS: readonly BuildingOverlayRenderData[] = [];
 
 /**
  * Renders entities (units and buildings) as colored quads or textured sprites.
@@ -109,6 +115,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // Animation state provider (from context)
     private getAnimState: (entityId: number) => AnimationState | null = () => null;
+
+    // Building overlay provider (from context, pre-computed in glue layer)
+    private getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[] = () => EMPTY_OVERLAYS;
 
     // Resource states for stacked resources (quantity tracking)
     public resourceStates: Map<number, StackedResourceState> = new Map();
@@ -214,6 +223,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // Service areas to render for selected hub buildings
     public selectedServiceAreas: readonly ServiceAreaRenderData[] = [];
+
+    // Territory boundary dots to render
+    private territoryDots: readonly TerritoryDotRenderData[] = [];
 
     // Cached attribute/uniform locations for color shader
     private aPosition = -1;
@@ -339,7 +351,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
      * Get the current race being used for building sprites.
      */
     public getRace(): Race {
-        return this.spriteManager?.currentRace ?? Race.Roman;
+        if (!this.spriteManager?.currentRace) {
+            throw new Error('EntityRenderer: no race set — spriteManager must be initialized before calling getRace');
+        }
+        return this.spriteManager.currentRace;
     }
 
     /**
@@ -363,6 +378,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.selectedEntityIds = ctx.selection.ids as Set<number>;
         this.unitStates = ctx.unitStates;
         this.getBuildingRenderState = ctx.getBuildingRenderState;
+        this.getBuildingOverlays = ctx.getBuildingOverlays;
         this.getAnimState = ctx.getAnimationState;
         this.resourceStates = ctx.resourceStates as Map<number, StackedResourceState>;
         this.renderAlpha = ctx.alpha;
@@ -370,6 +386,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.renderSettings = ctx.settings;
         this.placementPreview = ctx.placementPreview;
         this.selectedServiceAreas = ctx.selectedServiceAreas;
+        this.territoryDots = ctx.territoryDots;
     }
 
     /**
@@ -432,6 +449,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (!this.dynamicBuffer) return;
         if (this.entities.length === 0 && !this.previewTile && !this.buildingIndicatorsEnabled) return;
 
+        // Drain pending atlas GPU uploads (budgeted per frame, non-blocking)
+        this.spriteManager?.drainPendingUploads(gl);
+
         const frameStart = performance.now();
         profiler.beginFrame();
 
@@ -485,48 +505,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.sortEntitiesByDepth(viewPoint);
         this.frameCullSortTime = performance.now() - cullSortStart;
 
-        // Draw building footprints BEFORE entities (ground overlay)
-        if (this.renderSettings.showBuildingFootprint) {
-            // Activate color shader for footprints
-            super.drawBase(gl, projection);
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
-            gl.enableVertexAttribArray(this.aPosition);
-            gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
-            gl.disableVertexAttribArray(this.aEntityPos);
-            gl.disableVertexAttribArray(this.aColor);
+        // Draw ground overlays: footprints, service areas
+        this.drawGroundOverlays(gl, projection, selectionCtx);
 
-            this.selectionOverlayRenderer.drawBuildingFootprints(
-                gl,
-                this.dynamicBuffer,
-                this.sortedEntities,
-                this.aPosition,
-                this.aEntityPos,
-                this.aColor,
-                selectionCtx
-            );
-        }
-
-        // Draw service area circles for selected hub buildings
-        if (this.selectedServiceAreas.length > 0) {
-            // Activate color shader for service area circles
-            if (!this.renderSettings.showBuildingFootprint) {
-                super.drawBase(gl, projection);
-                gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
-                gl.enableVertexAttribArray(this.aPosition);
-                gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
-                gl.disableVertexAttribArray(this.aEntityPos);
-                gl.disableVertexAttribArray(this.aColor);
-            }
-
-            this.selectionOverlayRenderer.drawServiceAreaCircles(
-                gl,
-                this.dynamicBuffer,
-                this.selectedServiceAreas,
-                this.aEntityPos,
-                this.aColor,
-                selectionCtx
-            );
-        }
+        // Draw territory boundary dots as sprites (below entities, above ground overlays)
+        this.drawTerritoryDotSprites(gl, projection, viewPoint);
 
         // Draw entities (textured or color fallback)
         const drawStart = performance.now();
@@ -594,6 +577,83 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.lastEntityDrawTime = performance.now() - frameStart;
     }
 
+    /** Draw ground overlays: building footprints and service area circles. */
+    private drawGroundOverlays(
+        gl: WebGL2RenderingContext,
+        projection: Float32Array,
+        ctx: { mapSize: MapSize; groundHeight: Uint8Array; viewPoint: IViewPoint; unitStates: UnitStateLookup }
+    ): void {
+        const hasFootprints = this.renderSettings.showBuildingFootprint;
+        const hasServiceAreas = this.selectedServiceAreas.length > 0;
+        if (!hasFootprints && !hasServiceAreas) return;
+
+        super.drawBase(gl, projection);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
+        gl.enableVertexAttribArray(this.aPosition);
+        gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
+        gl.disableVertexAttribArray(this.aEntityPos);
+        gl.disableVertexAttribArray(this.aColor);
+
+        const buf = this.dynamicBuffer!;
+        if (hasFootprints)
+            this.selectionOverlayRenderer.drawBuildingFootprints(
+                gl,
+                buf,
+                this.sortedEntities,
+                this.aPosition,
+                this.aEntityPos,
+                this.aColor,
+                ctx
+            );
+        if (hasServiceAreas)
+            this.selectionOverlayRenderer.drawServiceAreaCircles(
+                gl,
+                buf,
+                this.selectedServiceAreas,
+                this.aEntityPos,
+                this.aColor,
+                ctx
+            );
+    }
+
+    /** Draw territory boundary dots as sprites using the sprite batch renderer. */
+    private drawTerritoryDotSprites(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
+        if (this.territoryDots.length === 0) return;
+        if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
+
+        this.spriteManager.spriteAtlas!.bindForRendering(gl);
+        this.spriteManager.paletteManager.bind(gl);
+
+        const paletteWidth = PALETTE_TEXTURE_WIDTH;
+        const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
+        this.spriteBatchRenderer.beginSpriteBatch(
+            gl,
+            projection,
+            paletteWidth,
+            rowsPerPlayer,
+            this.renderSettings.antialias
+        );
+
+        for (const dot of this.territoryDots) {
+            const sprite = this.spriteManager.getTerritoryDot(dot.player);
+            if (!sprite) continue;
+
+            const worldPos = TilePicker.tileToWorld(
+                dot.x,
+                dot.y,
+                this.groundHeight,
+                this.mapSize,
+                viewPoint.x,
+                viewPoint.y
+            );
+
+            const scaled = scaleSprite(sprite, 2.25);
+            this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, scaled, 0, 1, 1, 1, 1);
+        }
+
+        this.frameDrawCalls += this.spriteBatchRenderer.endSpriteBatch(gl);
+    }
+
     /** Last frame's entity draw time (ms) - for debug stats collection */
     private lastEntityDrawTime = 0;
 
@@ -658,7 +718,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
     }
 
-    /** Get sprite entry for a building entity */
+    /**
+     * Get sprite entry for a building entity.
+     * Returns only the primary sprite and vertical progress.
+     * Construction background layering is handled by the overlay system.
+     */
     private getBuildingSprite(entity: Entity): { sprite: SpriteEntry | null; progress: number } {
         if (!this.spriteManager) return { sprite: null, progress: 1 };
 
@@ -666,6 +730,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const buildingType = entity.subType as BuildingType;
 
         let sprite: SpriteEntry | null;
+
         if (renderState.useConstructionSprite) {
             sprite =
                 this.spriteManager.getBuildingConstruction(buildingType, entity.race) ??
@@ -714,26 +779,35 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /**
-     * Look up the flag pixel offset from BuildingInfo for a flag decoration entity.
-     * The entity's subType is the BuildingType of the parent building.
+     * Draw a flag sprite on top of a building.
+     * Flags are rendered inline with their parent building — no separate entity needed.
      */
-    private getFlagPixelOffset(entity: Entity): { x: number; y: number } | null {
-        const loader = getGameDataLoader();
-        if (!loader.isLoaded()) return null;
-        const xmlId = getBuildingXmlId(entity.subType as BuildingType);
-        if (!xmlId) return null;
-        const info = loader.getBuilding(RACE_TO_RACE_ID[entity.race], xmlId);
-        if (!info) return null;
-        return { x: info.flag.xOffset, y: info.flag.yOffset };
-    }
-
-    /** Get sprite entry for a flag decoration entity (animated) */
-    private getFlagSprite(entity: Entity): SpriteEntry | null {
-        if (!this.spriteManager) return null;
+    private drawBuildingFlag(
+        gl: WebGL2RenderingContext,
+        entity: Entity,
+        buildingWorldPos: { worldX: number; worldY: number }
+    ): void {
+        if (!this.spriteManager) return;
         const frameCount = this.spriteManager.getFlagFrameCount(entity.player);
-        if (frameCount === 0) return null;
+        if (frameCount === 0) return;
+
+        const loader = getGameDataLoader();
+        if (!loader.isLoaded()) return;
+        const xmlId = getBuildingXmlId(entity.subType as BuildingType);
+        if (!xmlId) return;
+        const info = loader.getBuilding(RACE_TO_RACE_ID[entity.race], xmlId);
+        if (!info) return;
+
         const frame = Math.floor(this.flagAnimTime * FLAG_ANIM_FPS) % frameCount;
-        return this.spriteManager.getFlag(entity.player, frame);
+        const flagEntry = this.spriteManager.getFlag(entity.player, frame);
+        if (!flagEntry) return;
+
+        const flagX = buildingWorldPos.worldX + info.flag.xOffset * PIXELS_TO_WORLD * FLAG_SCALE;
+        const flagY = buildingWorldPos.worldY + info.flag.yOffset * PIXELS_TO_WORLD * FLAG_SCALE;
+        const sprite = scaleSprite(flagEntry, FLAG_SCALE);
+        const playerRow = this.getPlayerRow(entity);
+        this.spriteBatchRenderer.addSprite(gl, flagX, flagY, sprite, playerRow, 1, 1, 1, 1);
+        this.frameSpriteCount++;
     }
 
     /**
@@ -761,7 +835,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const state = this.resourceStates.get(entity.id);
             const quantity = state?.quantity ?? 1;
             const direction = Math.max(0, Math.min(quantity - 1, 7)); // 1->D0 ... 8->D7
-
             return {
                 skip: false,
                 transitioning: false,
@@ -775,9 +848,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 return { skip: false, transitioning: true, sprite: null, progress: 1 };
             }
             return { skip: false, transitioning: false, sprite: result, progress: 1 };
-        }
-        if (entity.type === EntityType.Decoration) {
-            return { skip: false, transitioning: false, sprite: this.getFlagSprite(entity), progress: 1 };
         }
         return { skip: true, transitioning: false, sprite: null, progress: 1 };
     }
@@ -795,7 +865,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     /**
      * Draw entities using the sprite shader and atlas texture (batched).
      */
-    // eslint-disable-next-line sonarjs/cognitive-complexity -- batched sprite draw loop requires multiple branching stages
     private drawTexturedEntities(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
 
@@ -818,11 +887,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.transitioningUnits.length = 0;
 
         for (const entity of this.sortedEntities) {
-            // Handle building construction background
-            if (entity.type === EntityType.Building) {
-                this.renderConstructionBackground(gl, entity, viewPoint);
-            }
-
             const resolved = this.resolveEntitySprite(entity);
             if (resolved.skip) continue;
             if (resolved.transitioning) {
@@ -832,40 +896,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             if (!resolved.sprite) continue;
 
             const worldPos = this.getEntityWorldPos(entity, viewPoint);
-            const playerRow =
-                entity.type === EntityType.Building || entity.type === EntityType.Unit ? this.getPlayerRow(entity) : 0;
-            const isSelected = this.selectedEntityIds.has(entity.id);
-            const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
-
-            const sprite = scaleSprite(resolved.sprite, getSpriteScale(entity));
-
-            if (resolved.progress < 1.0) {
-                this.spriteBatchRenderer.addSpritePartial(
-                    gl,
-                    worldPos.worldX,
-                    worldPos.worldY,
-                    sprite,
-                    playerRow,
-                    tint[0]!,
-                    tint[1]!,
-                    tint[2]!,
-                    tint[3]!,
-                    resolved.progress
-                );
-            } else {
-                this.spriteBatchRenderer.addSprite(
-                    gl,
-                    worldPos.worldX,
-                    worldPos.worldY,
-                    sprite,
-                    playerRow,
-                    tint[0]!,
-                    tint[1]!,
-                    tint[2]!,
-                    tint[3]!
-                );
-            }
-            this.frameSpriteCount++;
+            this.emitEntitySprite(gl, entity, resolved, worldPos);
         }
 
         this.frameDrawCalls += this.spriteBatchRenderer.endSpriteBatch(gl);
@@ -878,6 +909,105 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Disable alpha-to-coverage
         if (useAlphaToCoverage) {
             gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+        }
+    }
+
+    /** Emit sprite batch data for a single entity (and its overlays/flag if it's a building). */
+    private emitEntitySprite(
+        gl: WebGL2RenderingContext,
+        entity: Entity,
+        resolved: { sprite: SpriteEntry | null; progress: number },
+        worldPos: { worldX: number; worldY: number }
+    ): void {
+        const playerRow =
+            entity.type === EntityType.Building || entity.type === EntityType.Unit ? this.getPlayerRow(entity) : 0;
+        const isSelected = this.selectedEntityIds.has(entity.id);
+        const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
+        const scale = getSpriteScale(entity);
+
+        // Building overlays: draw BehindBuilding layer (includes construction background during CompletedRising)
+        const overlays = entity.type === EntityType.Building ? this.getBuildingOverlays(entity.id) : EMPTY_OVERLAYS;
+        if (overlays.length > 0) {
+            this.emitOverlaysForLayer(gl, overlays, worldPos, playerRow, OverlayRenderLayer.BehindBuilding);
+        }
+
+        // Draw the main entity sprite
+        const sprite = scaleSprite(resolved.sprite!, scale);
+
+        if (resolved.progress < 1.0) {
+            this.spriteBatchRenderer.addSpritePartial(
+                gl,
+                worldPos.worldX,
+                worldPos.worldY,
+                sprite,
+                playerRow,
+                tint[0]!,
+                tint[1]!,
+                tint[2]!,
+                tint[3]!,
+                resolved.progress
+            );
+        } else {
+            this.spriteBatchRenderer.addSprite(
+                gl,
+                worldPos.worldX,
+                worldPos.worldY,
+                sprite,
+                playerRow,
+                tint[0]!,
+                tint[1]!,
+                tint[2]!,
+                tint[3]!
+            );
+        }
+        this.frameSpriteCount++;
+
+        // Building overlays: draw AboveBuilding layer after sprite, before flag
+        if (overlays.length > 0) {
+            this.emitOverlaysForLayer(gl, overlays, worldPos, playerRow, OverlayRenderLayer.AboveBuilding);
+        }
+
+        // Draw flag on top of building (flags are part of the building, not separate entities)
+        if (entity.type === EntityType.Building) {
+            this.drawBuildingFlag(gl, entity, worldPos);
+        }
+
+        // Building overlays: draw AboveFlag layer on top of everything
+        if (overlays.length > 0) {
+            this.emitOverlaysForLayer(gl, overlays, worldPos, playerRow, OverlayRenderLayer.AboveFlag);
+        }
+    }
+
+    /** Draw all building overlays matching a given render layer. */
+    private emitOverlaysForLayer(
+        gl: WebGL2RenderingContext,
+        overlays: readonly BuildingOverlayRenderData[],
+        buildingWorldPos: { worldX: number; worldY: number },
+        playerRow: number,
+        layer: OverlayRenderLayer
+    ): void {
+        for (const overlay of overlays) {
+            if (overlay.layer !== layer) continue;
+            const x = buildingWorldPos.worldX + overlay.worldOffsetX;
+            const y = buildingWorldPos.worldY + overlay.worldOffsetY;
+            const row = overlay.teamColored ? playerRow : 0;
+            if (overlay.verticalProgress < 1.0) {
+                this.spriteBatchRenderer.addSpritePartial(
+                    gl,
+                    x,
+                    y,
+                    overlay.sprite,
+                    row,
+                    1,
+                    1,
+                    1,
+                    1,
+                    overlay.verticalProgress
+                );
+            } else {
+                this.spriteBatchRenderer.addSprite(gl, x, y, overlay.sprite, row, 1, 1, 1, 1);
+            }
+            this.frameSpriteCount++;
         }
     }
 
@@ -919,18 +1049,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             worldPos.worldY -= TILE_CENTER_Y * 0.5;
         }
 
-        // Decoration entities (flags): position relative to parent building tile vertex,
-        // plus the flag pixel offset from BuildingInfo.
-        if (entity.type === EntityType.Decoration) {
-            worldPos.worldX -= TILE_CENTER_X;
-            worldPos.worldY -= TILE_CENTER_Y * 0.5;
-            const flagOffset = this.getFlagPixelOffset(entity);
-            if (flagOffset) {
-                worldPos.worldX += flagOffset.x * PIXELS_TO_WORLD * FLAG_SCALE;
-                worldPos.worldY += flagOffset.y * PIXELS_TO_WORLD * FLAG_SCALE;
-            }
-        }
-
         // Add random visual offset for MapObjects (trees, stones) to break up the grid.
         // Applied to all tree variations so the position stays consistent through growth/cutting/stump stages.
         if (entity.type === EntityType.MapObject) {
@@ -942,38 +1060,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
 
         return worldPos;
-    }
-
-    /** Render construction background sprite during CompletedRising phase */
-    private renderConstructionBackground(gl: WebGL2RenderingContext, entity: Entity, viewPoint: IViewPoint): void {
-        if (!this.spriteManager) return;
-
-        const renderState = this.getBuildingRenderState(entity.id);
-        if (!renderState.showConstructionBackground) return;
-
-        const constructionSprite = this.spriteManager.getBuildingConstruction(entity.subType as BuildingType);
-        if (!constructionSprite) return;
-
-        const worldPos = TilePicker.tileToWorld(
-            entity.x,
-            entity.y,
-            this.groundHeight,
-            this.mapSize,
-            viewPoint.x,
-            viewPoint.y
-        );
-        const playerRow = this.getPlayerRow(entity);
-        this.spriteBatchRenderer.addSprite(
-            gl,
-            worldPos.worldX,
-            worldPos.worldY,
-            constructionSprite,
-            playerRow,
-            1,
-            1,
-            1,
-            1
-        );
     }
 
     /**
@@ -1066,7 +1152,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         case EntityType.Unit:
             return !!this.spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
         case EntityType.Decoration:
-            return this.spriteManager.getFlagFrameCount(entity.player) > 0;
         case EntityType.None:
             return false;
         }
@@ -1241,6 +1326,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             viewPoint.y
         );
 
+        // Apply building tile vertex offset (same as getEntityWorldPos for buildings)
+        if (entityType === 'building') {
+            worldPos.worldX -= TILE_CENTER_X;
+            worldPos.worldY -= TILE_CENTER_Y * 0.5;
+        }
+
         const tint = valid ? TINT_PREVIEW_VALID : TINT_PREVIEW_INVALID;
 
         // Try to render with sprite based on entity type
@@ -1336,8 +1427,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         case EntityType.MapObject:
             return isMapObjectVisible(this.layerVisibility, entity.subType as MapObjectType);
         case EntityType.Decoration:
-            // Flags are visible when buildings are visible
-            return this.layerVisibility.buildings;
         case EntityType.StackedResource:
         case EntityType.None:
             return true;

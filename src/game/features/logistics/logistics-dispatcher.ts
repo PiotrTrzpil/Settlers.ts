@@ -19,7 +19,6 @@ import type { CarrierManager } from '../carriers';
 import { CarrierStatus } from '../carriers';
 import type { RequestManager } from './request-manager';
 import type { ServiceAreaManager } from '../service-areas';
-import { getHubsServingBothPositions, getHubsServingPosition } from '../service-areas/service-area-queries';
 import { matchRequestToSupply } from './fulfillment-matcher';
 import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
@@ -27,6 +26,7 @@ import { TransportJob } from './transport-job';
 import { LogHandler } from '@/utilities/log-handler';
 import type { BuildingInventoryManager } from '../inventory';
 import { buildCarrierJob, type SettlerTaskSystem } from '../settler-tasks';
+import type { TerritoryManager } from '../territory';
 
 /** Configuration for LogisticsDispatcher dependencies */
 export interface LogisticsDispatcherConfig {
@@ -68,6 +68,21 @@ export class LogisticsDispatcher implements TickSystem {
     private readonly inventoryManager: BuildingInventoryManager;
     private readonly reservationManager: InventoryReservationManager;
 
+    /**
+     * When true, carriers can deliver anywhere on the map.
+     * When false, deliveries are restricted to within a shared service area (zone-based).
+     */
+    private _globalLogistics = true;
+
+    /**
+     * When true, carriers can only operate within their player's territory.
+     * Works alongside globalLogistics — territory filter is applied on top.
+     */
+    private _territoryEnabled = false;
+
+    /** Territory manager for position checks (set via setTerritoryManager) */
+    private territoryManager: TerritoryManager | null = null;
+
     private eventBus!: EventBus;
 
     /** Active transport jobs indexed by carrier ID */
@@ -94,6 +109,29 @@ export class LogisticsDispatcher implements TickSystem {
 
         // Wire up inventory manager for slot-level reservation enforcement
         this.reservationManager.setInventoryManager(this.inventoryManager);
+    }
+
+    /** Whether carriers can deliver globally (true) or only within shared service areas (false). */
+    get globalLogistics(): boolean {
+        return this._globalLogistics;
+    }
+
+    set globalLogistics(enabled: boolean) {
+        this._globalLogistics = enabled;
+    }
+
+    /** Whether carrier operations are restricted to player territory. */
+    get territoryEnabled(): boolean {
+        return this._territoryEnabled;
+    }
+
+    set territoryEnabled(enabled: boolean) {
+        this._territoryEnabled = enabled;
+    }
+
+    /** Set the territory manager for territory-based filtering. */
+    setTerritoryManager(manager: TerritoryManager): void {
+        this.territoryManager = manager;
     }
 
     /**
@@ -220,7 +258,7 @@ export class LogisticsDispatcher implements TickSystem {
                 this.serviceAreaManager,
                 {
                     playerId,
-                    requireServiceArea: true,
+                    requireServiceArea: !this._globalLogistics,
                     reservationManager: this.reservationManager,
                 }
             );
@@ -230,6 +268,18 @@ export class LogisticsDispatcher implements TickSystem {
                     this.logMatchFailure(request);
                 }
                 continue; // No supply available for this request
+            }
+
+            // Territory filter: both source and destination must be in the player's territory
+            if (this._territoryEnabled && this.territoryManager) {
+                const sourceBuilding = this.gameState.getEntity(match.sourceBuilding);
+                if (
+                    !sourceBuilding ||
+                    !this.territoryManager.isInTerritory(destBuilding.x, destBuilding.y, playerId) ||
+                    !this.territoryManager.isInTerritory(sourceBuilding.x, sourceBuilding.y, playerId)
+                ) {
+                    continue;
+                }
             }
 
             // Find an available carrier from a hub that serves both buildings
@@ -285,18 +335,31 @@ export class LogisticsDispatcher implements TickSystem {
 
     /**
      * Find an available carrier from the given service hubs.
-     * Uses per-hub carrier lookup instead of scanning all carriers.
+     * In global mode, falls back to searching all player hubs if no shared-hub carrier is free.
+     * In zone mode, only searches the shared hubs.
      */
     private findAvailableCarrier(serviceHubs: number[], playerId: number): { entityId: number } | null {
-        if (serviceHubs.length === 0) {
-            return null;
-        }
+        // Try carriers from hubs that cover both source and dest (likely closer)
+        const fromShared = this.findIdleCarrierInHubs(serviceHubs, playerId);
+        if (fromShared || !this._globalLogistics) return fromShared;
 
-        for (const hubId of serviceHubs) {
+        // Global fallback: search all remaining hubs for this player
+        const sharedHubSet = new Set(serviceHubs);
+        const remainingHubs = this.serviceAreaManager
+            .getServiceAreasForPlayer(playerId)
+            .filter(area => !sharedHubSet.has(area.buildingId))
+            .map(area => area.buildingId);
+
+        return this.findIdleCarrierInHubs(remainingHubs, playerId);
+    }
+
+    /**
+     * Find the first idle carrier from the given hub IDs.
+     */
+    private findIdleCarrierInHubs(hubIds: number[], playerId: number): { entityId: number } | null {
+        for (const hubId of hubIds) {
             const hubEntity = this.gameState.getEntity(hubId);
-            if (!hubEntity || hubEntity.player !== playerId) {
-                continue;
-            }
+            if (!hubEntity || hubEntity.player !== playerId) continue;
 
             for (const carrier of this.carrierManager.getCarriersForTavern(hubId)) {
                 if (this.carrierManager.canAssignJobTo(carrier.entityId)) {
@@ -304,7 +367,6 @@ export class LogisticsDispatcher implements TickSystem {
                 }
             }
         }
-
         return null;
     }
 
@@ -315,60 +377,17 @@ export class LogisticsDispatcher implements TickSystem {
         const destBuilding = this.gameState.getEntity(request.buildingId);
         if (!destBuilding) return;
 
-        const playerId = destBuilding.player;
-        const destHubs = getHubsServingPosition(destBuilding.x, destBuilding.y, this.serviceAreaManager, { playerId });
-
-        if (destHubs.length === 0) {
-            LogisticsDispatcher.log.warn(
-                `Request #${request.id} (material=${request.materialType}): ` +
-                    `destination building ${request.buildingId} at (${destBuilding.x},${destBuilding.y}) ` +
-                    `is NOT covered by any hub service area`
-            );
-            return;
-        }
-
         const supplies = this.inventoryManager.getBuildingsWithOutput(request.materialType, 1);
         const otherSupplies = supplies.filter(id => id !== request.buildingId);
         if (otherSupplies.length === 0) {
             LogisticsDispatcher.log.debug(
                 `Request #${request.id} (material=${request.materialType}): no supply available anywhere`
             );
-            return;
-        }
-
-        for (const supplyId of otherSupplies) {
-            const supplyBuilding = this.gameState.getEntity(supplyId);
-            if (!supplyBuilding) continue;
-
-            const supplyHubs = getHubsServingPosition(supplyBuilding.x, supplyBuilding.y, this.serviceAreaManager, {
-                playerId,
-            });
-
-            if (supplyHubs.length === 0) {
-                LogisticsDispatcher.log.warn(
-                    `Request #${request.id} (material=${request.materialType}): ` +
-                        `supply building ${supplyId} at (${supplyBuilding.x},${supplyBuilding.y}) ` +
-                        `is NOT covered by any hub`
-                );
-            } else {
-                const sharedHubs = getHubsServingBothPositions(
-                    supplyBuilding.x,
-                    supplyBuilding.y,
-                    destBuilding.x,
-                    destBuilding.y,
-                    this.serviceAreaManager,
-                    { playerId }
-                );
-                if (sharedHubs.length === 0) {
-                    LogisticsDispatcher.log.warn(
-                        `Request #${request.id} (material=${request.materialType}): ` +
-                            `supply ${supplyId} at (${supplyBuilding.x},${supplyBuilding.y}) ` +
-                            `and dest ${request.buildingId} at (${destBuilding.x},${destBuilding.y}) ` +
-                            `are covered by DIFFERENT hubs (no shared hub). ` +
-                            `Supply hubs: [${supplyHubs.join(',')}], Dest hubs: [${destHubs.join(',')}]`
-                    );
-                }
-            }
+        } else {
+            LogisticsDispatcher.log.debug(
+                `Request #${request.id} (material=${request.materialType}): ` +
+                    `${otherSupplies.length} supply buildings exist but all reserved or insufficient`
+            );
         }
     }
 

@@ -48,6 +48,9 @@ export class CarrierManager implements TickSystem {
     /** Service area manager for auto-registration (set via setServiceAreaManager) */
     private serviceAreaManager: ServiceAreaManager | null = null;
 
+    /** When false, fatigue is not applied and all idle carriers can always accept jobs */
+    private _fatigueEnabled = true;
+
     /** Tracked event subscriptions for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
 
@@ -84,6 +87,15 @@ export class CarrierManager implements TickSystem {
      */
     setServiceAreaManager(manager: ServiceAreaManager): void {
         this.serviceAreaManager = manager;
+    }
+
+    /** Whether the fatigue system is active. When disabled, carriers never accumulate fatigue. */
+    get fatigueEnabled(): boolean {
+        return this._fatigueEnabled;
+    }
+
+    set fatigueEnabled(enabled: boolean) {
+        this._fatigueEnabled = enabled;
     }
 
     /**
@@ -228,7 +240,7 @@ export class CarrierManager implements TickSystem {
     canAssignJobTo(carrierId: number): boolean {
         const state = this.states.get(carrierId);
         if (!state) return false;
-        return state.status === CarrierStatus.Idle && canAcceptNewJob(state.fatigue);
+        return state.status === CarrierStatus.Idle && (this._fatigueEnabled ? canAcceptNewJob(state.fatigue) : true);
     }
 
     /**
@@ -270,6 +282,7 @@ export class CarrierManager implements TickSystem {
      * @throws Error if carrier not found
      */
     addFatigue(carrierId: number, amount: number): void {
+        if (!this._fatigueEnabled) return;
         const state = this.getCarrierOrThrow(carrierId, 'addFatigue');
         this.setFatigue(carrierId, state.fatigue + amount);
     }
@@ -303,6 +316,8 @@ export class CarrierManager implements TickSystem {
 
     /** Called each fixed-timestep tick — recovers fatigue for resting/idle carriers */
     tick(dt: number): void {
+        if (!this._fatigueEnabled) return;
+
         for (const carrier of this.getAllCarriers()) {
             if (carrier.status === CarrierStatus.Resting) {
                 const recovery = FATIGUE_RECOVERY_RATE * dt;

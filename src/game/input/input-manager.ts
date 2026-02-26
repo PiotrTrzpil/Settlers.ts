@@ -150,6 +150,13 @@ export class InputManager {
     }
 
     /**
+     * Get a registered mode by name (whether or not it's active).
+     */
+    getMode(name: string): InputMode | undefined {
+        return this.modes.get(name);
+    }
+
+    /**
      * Switch to a different mode.
      */
     switchMode(name: string, data?: Record<string, unknown>): void {

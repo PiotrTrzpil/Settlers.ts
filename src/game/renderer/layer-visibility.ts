@@ -54,6 +54,8 @@ export interface LayerVisibility {
     showBuildingFootprint: boolean;
     /** Show pathfinding dots for selected units */
     showPathfinding: boolean;
+    /** Show territory boundary dots from towers/castles */
+    showTerritory: boolean;
 }
 
 /** Default layer visibility (all visible) */
@@ -72,6 +74,7 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
     decorationTextures: true,
     showBuildingFootprint: false,
     showPathfinding: true,
+    showTerritory: true,
 };
 
 // ============================================================================

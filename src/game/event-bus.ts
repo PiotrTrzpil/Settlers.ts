@@ -163,6 +163,22 @@ export interface GameEvents {
         newAmount: number;
     };
 
+    // === Combat Events ===
+
+    /** Emitted when a unit takes damage from combat */
+    'combat:unitAttacked': {
+        attackerId: number;
+        targetId: number;
+        damage: number;
+        remainingHealth: number;
+    };
+
+    /** Emitted when a unit is killed in combat */
+    'combat:unitDefeated': {
+        entityId: number;
+        defeatedBy: number;
+    };
+
     // === Entity Lifecycle Events ===
 
     /**

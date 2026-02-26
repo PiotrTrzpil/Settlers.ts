@@ -68,10 +68,15 @@ export class IndexFile extends ResourceFile {
         };
     }
 
-    constructor(resourceReader: BinaryReader) {
+    constructor(source: BinaryReader | Int32Array) {
         super();
 
-        const reader = this.readResource(resourceReader);
+        if (source instanceof Int32Array) {
+            this.offsetTable = source;
+            return;
+        }
+
+        const reader = this.readResource(source);
 
         /// read the object offsets
         const imageCount = reader.length / 4;

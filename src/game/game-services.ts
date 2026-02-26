@@ -39,7 +39,9 @@ import { ServiceAreaManager, ServiceAreaFeature, type ServiceAreaExports } from 
 import { FeatureRegistry } from './features/feature-registry';
 import { TreeFeature, TreeSystem, type TreeFeatureExports } from './features/trees';
 import { StoneFeature, StoneSystem, type StoneFeatureExports } from './features/stones';
-import { FlagFeature } from './features/flags';
+import { CombatFeature, CombatSystem, type CombatExports } from './features/combat';
+import { TerritoryManager, registerTerritoryEvents } from './features/territory';
+import { BuildingOverlayManager, OverlayRegistry } from './systems/building-overlays';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
 import { AnimationService } from './animation/index';
@@ -66,6 +68,15 @@ export class GameServices {
     /** Building state manager — tracks construction state for all buildings */
     public readonly buildingStateManager: BuildingStateManager;
 
+    /** Building overlay manager — tracks layered sprite overlays on buildings */
+    public readonly buildingOverlayManager: BuildingOverlayManager;
+
+    /** Overlay registry — static definitions for building overlays (shared with renderer) */
+    public readonly overlayRegistry: OverlayRegistry;
+
+    /** Territory manager — tracks territory zones from towers/castles (set in setTerrainData) */
+    public territoryManager!: TerritoryManager;
+
     // ===== Systems (tick each frame) =====
     /** Movement system — updates unit positions */
     public readonly movement: MovementSystem;
@@ -88,11 +99,15 @@ export class GameServices {
     /** Stone mining system — depletion and variant tracking */
     public readonly stoneSystem: StoneSystem;
 
+    /** Combat system — enemy detection, pursuit, and melee damage */
+    public readonly combatSystem: CombatSystem;
+
     // ===== Internal =====
     private readonly featureRegistry: FeatureRegistry;
     private readonly subscriptions = new EventSubscriptionManager();
     private readonly eventBus: EventBus;
-    private readonly tickSystems: TickSystem[] = [];
+    private readonly tickSystems: { system: TickSystem; group: string }[] = [];
+    private territoryCleanup: (() => void) | null = null;
 
     constructor(gameState: GameState, eventBus: EventBus, executeCommand: (cmd: Command) => CommandResult) {
         this.eventBus = eventBus;
@@ -110,6 +125,13 @@ export class GameServices {
             eventBus,
         });
 
+        // 2b. Building overlay system — layered sprites on buildings
+        this.overlayRegistry = new OverlayRegistry();
+        this.buildingOverlayManager = new BuildingOverlayManager({
+            overlayRegistry: this.overlayRegistry,
+            entityProvider: gameState,
+        });
+
         // 3. Movement system
         this.movement = new MovementSystem({
             eventBus,
@@ -122,7 +144,7 @@ export class GameServices {
         });
         this.movement.setTileOccupancy(gameState.tileOccupancy);
         gameState.initMovement(this.movement);
-        this.addSystem(this.movement);
+        this.addSystem(this.movement, 'Units');
 
         // 4. Building construction system
         this.constructionSystem = new BuildingConstructionSystem({
@@ -131,13 +153,15 @@ export class GameServices {
             executeCommand,
         });
         this.constructionSystem.registerEvents(eventBus);
-        this.addSystem(this.constructionSystem);
+        this.addSystem(this.constructionSystem, 'Buildings');
 
         // 5. Register early lifecycle events — building state and carriers self-subscribe.
         //    Must happen before feature loading so handlers fire in the right order.
         this.buildingStateManager.registerEvents(eventBus);
+        this.buildingOverlayManager.registerEvents(eventBus);
         this.carrierManager.registerEvents(eventBus);
-        this.addSystem(this.carrierManager);
+        this.addSystem(this.buildingOverlayManager, 'Buildings');
+        this.addSystem(this.carrierManager, 'Logistics');
 
         // 6. Feature registry — load self-registering features.
         //    Features subscribe to entity:created/entity:removed for their own state.
@@ -159,7 +183,7 @@ export class GameServices {
             TreeFeature,
             StoneFeature,
             MaterialRequestFeature,
-            FlagFeature,
+            CombatFeature,
         ]);
 
         // Retrieve managers created by features
@@ -171,11 +195,17 @@ export class GameServices {
         // Wire carrier manager to service areas (now available after feature loading)
         this.carrierManager.setServiceAreaManager(this.serviceAreaManager);
 
+        this.combatSystem = this.featureRegistry.getFeatureExports<CombatExports>('combat').combatSystem;
         this.treeSystem = this.featureRegistry.getFeatureExports<TreeFeatureExports>('trees').treeSystem;
         this.treeSystem.setCommandExecutor(executeCommand);
         this.stoneSystem = this.featureRegistry.getFeatureExports<StoneFeatureExports>('stones').stoneSystem;
+        const featureSystemGroups: Record<string, string> = {
+            TreeSystem: 'World',
+            MaterialRequestSystem: 'Logistics',
+            CombatSystem: 'Units',
+        };
         for (const system of this.featureRegistry.getSystems()) {
-            this.addSystem(system);
+            this.addSystem(system, featureSystemGroups[system.constructor.name] ?? 'Other');
         }
 
         // 7. Settler task system
@@ -187,7 +217,7 @@ export class GameServices {
             eventBus,
             getInventoryVisualizer: () => this.inventoryVisualizer,
         });
-        this.addSystem(this.settlerTaskSystem);
+        this.addSystem(this.settlerTaskSystem, 'Units');
 
         // 8. Logistics dispatcher — registers for carrier events AND entity:removed.
         //    MUST be registered before inventory removal (logistics needs inventory for reservation release).
@@ -200,7 +230,7 @@ export class GameServices {
             inventoryManager: this.inventoryManager,
         });
         this.logisticsDispatcher.registerEvents(eventBus);
-        this.addSystem(this.logisticsDispatcher);
+        this.addSystem(this.logisticsDispatcher, 'Logistics');
 
         // 9. Work handlers
         this.settlerTaskSystem.registerWorkHandler(
@@ -247,28 +277,40 @@ export class GameServices {
             terrain,
             onTerrainModified: () => this.eventBus.emit('terrain:modified', {}),
         });
+
+        // Territory manager needs map dimensions from terrain.
+        // Created here (before populateMapEntities) so events are registered
+        // before buildings are loaded.
+        this.territoryManager = new TerritoryManager(terrain.width, terrain.height);
+        const territorySubscriptions = registerTerritoryEvents(this.eventBus, this.territoryManager);
+        this.territoryCleanup = () => territorySubscriptions.unsubscribeAll();
+
+        // Wire territory manager to logistics dispatcher for territory-based carrier filtering
+        this.logisticsDispatcher.setTerritoryManager(this.territoryManager);
     }
 
-    /** Ordered tick systems for the frame loop */
-    public getTickSystems(): readonly TickSystem[] {
+    /** Ordered tick systems for the frame loop, with group labels */
+    public getTickSystems(): readonly { system: TickSystem; group: string }[] {
         return this.tickSystems;
     }
 
     /** Clean up all event subscriptions and system state */
     public destroy(): void {
-        for (const system of this.tickSystems) {
+        for (const { system } of this.tickSystems) {
             if (system.destroy) {
                 system.destroy();
             }
         }
         this.featureRegistry.destroy();
         this.buildingStateManager.unregisterEvents();
+        this.buildingOverlayManager.unregisterEvents();
         this.carrierManager.unregisterEvents();
         this.inventoryVisualizer.unregisterEvents();
+        this.territoryCleanup?.();
         this.subscriptions.unsubscribeAll();
     }
 
-    private addSystem(system: TickSystem): void {
-        this.tickSystems.push(system);
+    private addSystem(system: TickSystem, group = 'Other'): void {
+        this.tickSystems.push({ system, group });
     }
 }

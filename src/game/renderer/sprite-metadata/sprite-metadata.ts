@@ -349,6 +349,14 @@ export class SpriteMetadataRegistry {
     private unitsByRace: Map<number, Map<UnitType, Map<number, SpriteEntry>>> = new Map();
     /** Flag sprites keyed by playerIndex → frame[] */
     private flags: Map<number, SpriteEntry[]> = new Map();
+    /** Territory dot sprites keyed by playerIndex (0-7) */
+    private territoryDots: Map<number, SpriteEntry> = new Map();
+
+    /**
+     * Overlay sprites keyed by "gfxFile:jobIndex:directionIndex" → frame array.
+     * Used for building overlay animations (smoke, wheels, etc.).
+     */
+    private overlayFrames: Map<string, SpriteEntry[]> = new Map();
 
     /**
      * Animated entities: shared storage for map objects/resources (race-independent).
@@ -473,6 +481,48 @@ export class SpriteMetadataRegistry {
 
     public hasFlagSprites(): boolean {
         return this.flags.size > 0;
+    }
+
+    /** Register a territory dot sprite for a player index (0-7). */
+    public registerTerritoryDot(playerIndex: number, entry: SpriteEntry): void {
+        this.territoryDots.set(playerIndex, entry);
+    }
+
+    /** Get the territory dot sprite for a player index. */
+    public getTerritoryDot(playerIndex: number): SpriteEntry | null {
+        return this.territoryDots.get(playerIndex) ?? null;
+    }
+
+    public hasTerritoryDotSprites(): boolean {
+        return this.territoryDots.size > 0;
+    }
+
+    // ========================================================================
+    // Overlay sprites
+    // ========================================================================
+
+    /**
+     * Register sprite frames for a building overlay.
+     * @param gfxFile GFX file number
+     * @param jobIndex JIL job index
+     * @param directionIndex DIL direction index (usually 0)
+     * @param frames All animation frames for this overlay
+     */
+    public registerOverlayFrames(
+        gfxFile: number,
+        jobIndex: number,
+        directionIndex: number,
+        frames: SpriteEntry[]
+    ): void {
+        this.overlayFrames.set(overlayKey(gfxFile, jobIndex, directionIndex), frames);
+    }
+
+    /**
+     * Get loaded overlay sprite frames.
+     * Returns null if the overlay hasn't been loaded.
+     */
+    public getOverlayFrames(gfxFile: number, jobIndex: number, directionIndex: number): readonly SpriteEntry[] | null {
+        return this.overlayFrames.get(overlayKey(gfxFile, jobIndex, directionIndex)) ?? null;
     }
 
     /**
@@ -984,4 +1034,9 @@ export class SpriteMetadataRegistry {
 
         return registry;
     }
+}
+
+/** Composite key for overlay sprite lookup */
+function overlayKey(gfxFile: number, jobIndex: number, directionIndex: number): string {
+    return `${gfxFile}:${jobIndex}:${directionIndex}`;
 }

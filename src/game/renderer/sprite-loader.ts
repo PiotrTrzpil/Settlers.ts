@@ -12,10 +12,20 @@ import { JilFileReader } from '@/resources/gfx/jil-file-reader';
 import { DilFileReader } from '@/resources/gfx/dil-file-reader';
 import { PilFileReader } from '@/resources/gfx/pil-file-reader';
 import { PaletteCollection } from '@/resources/gfx/palette-collection';
+import { parseIndexFilesInWorker } from '@/resources/gfx/parse-index-files';
 import { GfxImage } from '@/resources/gfx/gfx-image';
 import { EntityTextureAtlas, AtlasRegion } from './entity-texture-atlas';
 import { SpriteEntry, PIXELS_TO_WORLD } from './sprite-metadata';
 import { getDecoderPool } from './sprite-decoder-pool';
+
+/**
+ * Trim configuration for sprite loading.
+ * Specifies how many pixel rows to remove from top and bottom of sprites.
+ */
+interface SpriteTrim {
+    top: number;
+    bottom: number;
+}
 
 /**
  * Loaded GFX file set with all readers initialized.
@@ -116,23 +126,29 @@ export class SpriteLoader {
             return null;
         }
 
-        // Build readers - these parse binary files synchronously on main thread
+        // Parse index files off main thread via worker
         const parseStart = performance.now();
 
-        const gilReader = new GilFileReader(files['gil']);
-        const pilReader = new PilFileReader(files['paletteIndex']);
+        const parsed = await parseIndexFilesInWorker({
+            gil: files['gil'],
+            pil: files['paletteIndex'],
+            jil: files['jil']?.length ? files['jil'] : null,
+            dil: files['dil']?.length ? files['dil'] : null,
+        });
+
+        const gilReader = new GilFileReader(parsed.gil);
+        const pilReader = new PilFileReader(parsed.pil);
         const paletteCollection = new PaletteCollection(files['palette'], pilReader);
 
-        // JIL/DIL are optional (for direct GIL access vs job-based access)
-        const jilReader = files['jil']?.length ? new JilFileReader(files['jil']) : null;
-        const dilReader = files['dil']?.length ? new DilFileReader(files['dil']) : null;
+        const jilReader = parsed.jil ? new JilFileReader(parsed.jil) : null;
+        const dilReader = parsed.dil ? new DilFileReader(parsed.dil) : null;
 
         const gfxReader = new GfxFileReader(files['gfx'], gilReader, jilReader, dilReader, paletteCollection);
 
         const parseTime = performance.now() - parseStart;
         if (parseTime > 50) {
-            console.warn(
-                `[SpriteLoader] parseFileSet(${fileId}) took ${parseTime.toFixed(1)}ms (gil=${gilReader.length} images)`
+            SpriteLoader.log.debug(
+                `parseFileSet(${fileId}) took ${parseTime.toFixed(1)}ms (includes worker round-trip)`
             );
         }
 
@@ -159,12 +175,11 @@ export class SpriteLoader {
         fileSet: LoadedGfxFileSet,
         config: JobSpriteConfig,
         atlas: EntityTextureAtlas,
-        paletteBaseOffset: number,
-        trimBottom?: number
+        paletteBaseOffset: number
     ): Promise<LoadedSprite | null> {
         const gfxImage = this.getJobImage(fileSet, config);
         if (!gfxImage) return null;
-        return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset, trimBottom);
+        return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset);
     }
 
     /**
@@ -268,11 +283,10 @@ export class SpriteLoader {
     private static readonly SLOW_OP_THRESHOLD_MS = 2;
 
     /**
-     * Trim amounts for sprites (removes artifact lines from original game assets).
-     * Top row often has stray pixels, bottom rows contain alignment artifacts.
+     * Default trim for all sprites (removes artifact lines from original game assets).
+     * Top rows often have stray pixels, bottom rows contain alignment artifacts.
      */
-    private static readonly TRIM_TOP = 1;
-    private static readonly TRIM_BOTTOM = 5;
+    private static readonly DEFAULT_TRIM: SpriteTrim = { top: 5, bottom: 3 };
 
     /**
      * Trim palette index rows by skipping top/bottom.
@@ -304,11 +318,10 @@ export class SpriteLoader {
     private packSpriteIntoAtlasFallback(
         gfxImage: GfxImage,
         atlas: EntityTextureAtlas,
-        paletteBaseOffset: number,
-        trimBottomOverride?: number
+        paletteBaseOffset: number
     ): LoadedSprite | null {
-        const trimBottom = trimBottomOverride ?? SpriteLoader.TRIM_BOTTOM;
-        const trimmedHeight = gfxImage.height - SpriteLoader.TRIM_TOP - trimBottom;
+        const trim = SpriteLoader.DEFAULT_TRIM;
+        const trimmedHeight = gfxImage.height - trim.top - trim.bottom;
         if (trimmedHeight <= 0) {
             SpriteLoader.log.debug(`Sprite too small after trimming: ${gfxImage.width}x${gfxImage.height}`);
             return null;
@@ -321,13 +334,7 @@ export class SpriteLoader {
         }
 
         const rawIndices = gfxImage.getIndexData();
-        const trimmedIndices = this.trimIndices(
-            rawIndices,
-            gfxImage.width,
-            gfxImage.height,
-            SpriteLoader.TRIM_TOP,
-            trimBottom
-        );
+        const trimmedIndices = this.trimIndices(rawIndices, gfxImage.width, gfxImage.height, trim.top, trim.bottom);
 
         atlas.blitIndices(region, trimmedIndices);
 
@@ -336,7 +343,7 @@ export class SpriteLoader {
         const entry: SpriteEntry = {
             atlasRegion: region,
             offsetX: -gfxImage.left * PIXELS_TO_WORLD,
-            offsetY: -(gfxImage.top - SpriteLoader.TRIM_TOP) * PIXELS_TO_WORLD,
+            offsetY: -(gfxImage.top - trim.top) * PIXELS_TO_WORLD,
             widthWorld: gfxImage.width * PIXELS_TO_WORLD,
             heightWorld: trimmedHeight * PIXELS_TO_WORLD,
             paletteBaseOffset: paletteBaseOffset + gfxImage.paletteOffset,
@@ -354,20 +361,19 @@ export class SpriteLoader {
     private async packSpriteIntoAtlas(
         gfxImage: GfxImage,
         atlas: EntityTextureAtlas,
-        paletteBaseOffset: number,
-        trimBottomOverride?: number
+        paletteBaseOffset: number
     ): Promise<LoadedSprite | null> {
+        const trim = SpriteLoader.DEFAULT_TRIM;
         const pool = getDecoderPool();
 
         if (!pool.isAvailable) {
-            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset, trimBottomOverride);
+            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset);
         }
 
         const params = gfxImage.getDecodeParams();
-        const trimBottom = trimBottomOverride ?? SpriteLoader.TRIM_BOTTOM;
 
         const trimmedWidth = params.width;
-        const trimmedHeight = params.height - SpriteLoader.TRIM_TOP - trimBottom;
+        const trimmedHeight = params.height - trim.top - trim.bottom;
 
         if (trimmedHeight <= 0) {
             SpriteLoader.log.debug(`Sprite too small after trimming: ${params.width}x${params.height}`);
@@ -390,8 +396,8 @@ export class SpriteLoader {
                 params.imgType,
                 params.paletteOffset,
                 paletteBaseOffset,
-                SpriteLoader.TRIM_TOP,
-                trimBottom
+                trim.top,
+                trim.bottom
             );
 
             atlas.blitIndices(region, indices);
@@ -401,7 +407,7 @@ export class SpriteLoader {
             const entry: SpriteEntry = {
                 atlasRegion: region,
                 offsetX: -gfxImage.left * PIXELS_TO_WORLD,
-                offsetY: -(gfxImage.top - SpriteLoader.TRIM_TOP) * PIXELS_TO_WORLD,
+                offsetY: -(gfxImage.top - trim.top) * PIXELS_TO_WORLD,
                 widthWorld: trimmedWidth * PIXELS_TO_WORLD,
                 heightWorld: trimmedHeight * PIXELS_TO_WORLD,
                 paletteBaseOffset: paletteBaseOffset + params.paletteOffset,
@@ -410,7 +416,7 @@ export class SpriteLoader {
             return { image: gfxImage, region, entry };
         } catch (e) {
             SpriteLoader.log.debug(`Worker decode failed, falling back to sync: ${e}`);
-            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset, trimBottomOverride);
+            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset);
         }
     }
 
@@ -536,10 +542,14 @@ export class SpriteLoader {
         const directionCount = this.getDirectionCount(fileSet, jobIndex);
         if (directionCount === 0) return null;
 
-        const result = new Map<number, LoadedSprite[]>();
+        // Load all directions in parallel — atlas.reserve() is sync and safe to interleave
+        const promises = Array.from({ length: directionCount }, (_, dir) =>
+            this.loadJobAnimation(fileSet, jobIndex, dir, atlas, paletteBaseOffset).then(anim => [dir, anim] as const)
+        );
+        const results = await Promise.all(promises);
 
-        for (let dir = 0; dir < directionCount; dir++) {
-            const animation = await this.loadJobAnimation(fileSet, jobIndex, dir, atlas, paletteBaseOffset);
+        const result = new Map<number, LoadedSprite[]>();
+        for (const [dir, animation] of results) {
             if (animation && animation.frames.length > 0) {
                 result.set(dir, animation.frames);
             }

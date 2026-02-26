@@ -29,9 +29,29 @@ const SYSTEM_CIRCUIT_BREAKER_THRESHOLD = 100;
 /** Per-system error tracking */
 interface SystemErrorState {
     name: string;
+    group: string;
     consecutiveFailures: number;
     disabled: boolean;
     logger: ThrottledLogger;
+}
+
+/** A named boolean toggle that can be displayed in the features panel */
+export interface FeatureToggle {
+    name: string;
+    group?: string;
+    /** Names of other toggles/systems this one requires to be enabled */
+    requires?: string[];
+    get: () => boolean;
+    set: (enabled: boolean) => void;
+}
+
+/** State of a system or feature toggle, as exposed to the UI */
+export interface SystemState {
+    name: string;
+    group: string;
+    enabled: boolean;
+    /** Names of other toggles/systems this one requires to be enabled */
+    requires: string[];
 }
 
 export class GameLoop {
@@ -83,6 +103,9 @@ export class GameLoop {
     /** Registered tick systems */
     private systems: TickSystem[] = [];
 
+    /** Standalone feature toggles (not tick systems, just on/off flags) */
+    private featureToggles: FeatureToggle[] = [];
+
     constructor(
         gameState: GameState,
         animationService: AnimationService,
@@ -110,15 +133,21 @@ export class GameLoop {
     }
 
     /** Register a tick system to be updated each tick */
-    public registerSystem(system: TickSystem): void {
+    public registerSystem(system: TickSystem, group?: string): void {
         this.systems.push(system);
         const name = system.constructor.name || 'Unknown';
         this.systemErrors.set(system, {
             name,
+            group: group ?? 'Other',
             consecutiveFailures: 0,
             disabled: false,
             logger: new ThrottledLogger(GameLoop.log, 1000),
         });
+    }
+
+    /** Register a standalone feature toggle (shown in features panel alongside tick systems) */
+    public registerFeatureToggle(toggle: FeatureToggle): void {
+        this.featureToggles.push(toggle);
     }
 
     /** Enable game ticks (call after sprites are loaded) */
@@ -188,6 +217,40 @@ export class GameLoop {
 
     public get isRunning(): boolean {
         return this.running;
+    }
+
+    /** Get the name, group, and enabled state of every registered tick system and feature toggle */
+    public getSystemStates(): SystemState[] {
+        const systems = [...this.systemErrors.values()].map(s => ({
+            name: s.name,
+            group: s.group,
+            enabled: !s.disabled,
+            requires: [] as string[],
+        }));
+        const toggles = this.featureToggles.map(t => ({
+            name: t.name,
+            group: t.group ?? 'Other',
+            enabled: t.get(),
+            requires: t.requires ?? [],
+        }));
+        return [...systems, ...toggles];
+    }
+
+    /** Enable or disable a tick system or feature toggle by name */
+    public setSystemEnabled(name: string, enabled: boolean): void {
+        for (const state of this.systemErrors.values()) {
+            if (state.name === name) {
+                state.disabled = !enabled;
+                if (enabled) state.consecutiveFailures = 0;
+                return;
+            }
+        }
+        for (const toggle of this.featureToggles) {
+            if (toggle.name === name) {
+                toggle.set(enabled);
+                return;
+            }
+        }
     }
 
     /** Notify all registered tick systems that an entity was removed */
@@ -274,6 +337,9 @@ export class GameLoop {
 
         const shouldTick = !this._ticksPaused && !this.settings.paused;
         const shouldRender = this.pageVisible || now - this.lastRenderTime >= BACKGROUND_FRAME_DURATION;
+
+        // Sync tick-paused state to reactive view state every frame (cheap write)
+        this.viewState.state.ticksPaused = !shouldTick;
 
         // ── LOGIC ── fixed-timestep simulation (isolated from per-frame work)
         const ticksTime = this.runLogicPhase(shouldTick);

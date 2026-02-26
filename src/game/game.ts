@@ -16,6 +16,7 @@ import { EntityType } from './entity';
 import { GameSettingsManager } from './game-settings';
 import { GameViewState } from './game-view-state';
 import type { FrameRenderTiming } from './renderer/renderer';
+import { debugStats } from './debug-stats';
 
 /** Options for resetToCleanState */
 export interface ResetOptions {
@@ -61,6 +62,9 @@ export class Game {
     // Script service is optional - only loaded when Lua is enabled
     private scriptService: IScriptService | null = null;
 
+    /** Callback to sync Territory feature toggle with visual layer visibility */
+    private _onTerritoryToggle: ((enabled: boolean) => void) | null = null;
+
     /** Current interaction mode */
     public mode: string = 'select';
 
@@ -78,6 +82,7 @@ export class Game {
 
     public constructor(fileManager: FileManager, mapLoader: IMapLoader) {
         const start = performance.now();
+        const mlt = debugStats.state.mapLoadTimings;
         this.fileManager = fileManager;
         this.mapLoader = mapLoader;
         this.terrain = new TerrainData(
@@ -85,7 +90,9 @@ export class Game {
             mapLoader.landscape.getGroundHeight(),
             mapLoader.mapSize
         );
+        mlt.terrain = Math.round(performance.now() - start);
 
+        const initStart = performance.now();
         this.eventBus = new EventBus();
         this.state = new GameState(this.eventBus);
         this.settings = new GameSettingsManager();
@@ -98,14 +105,48 @@ export class Game {
 
         // Create frame loop and register tick systems
         this._gameLoop = new GameLoop(this.state, this.services.animationService, this.settings.state, this.viewState);
-        for (const system of this.services.getTickSystems()) {
-            this._gameLoop.registerSystem(system);
+        for (const { system, group } of this.services.getTickSystems()) {
+            this._gameLoop.registerSystem(system, group);
         }
+
+        // Register feature toggles
+        const carrierMgr = this.services.carrierManager;
+        const dispatcher = this.services.logisticsDispatcher;
+        this._gameLoop.registerFeatureToggle({
+            name: 'Global Logistics',
+            group: 'Logistics',
+            requires: ['Territory'],
+            get: () => dispatcher.globalLogistics,
+            set: v => {
+                dispatcher.globalLogistics = v;
+            },
+        });
+        this._gameLoop.registerFeatureToggle({
+            name: 'Carrier Fatigue',
+            group: 'Logistics',
+            get: () => carrierMgr.fatigueEnabled,
+            set: v => {
+                carrierMgr.fatigueEnabled = v;
+            },
+        });
+        this._gameLoop.registerFeatureToggle({
+            name: 'Territory',
+            group: 'World',
+            get: () => dispatcher.territoryEnabled,
+            set: v => {
+                dispatcher.territoryEnabled = v;
+                this._onTerritoryToggle?.(v);
+            },
+        });
+
+        // Restore feature toggles from localStorage (features panel may not mount immediately)
+        this.restoreFeatureToggles();
 
         // Wire entity removal notifications to tick systems
         this.eventBus.on('entity:removed', ({ entityId }) => {
             this._gameLoop.notifyEntityRemoved(entityId);
         });
+        mlt.gameInit = Math.round(performance.now() - initStart);
 
         // Scripting system is initialized lazily when loadScript is called
         // This avoids bundling Lua/wasmoon when scripting is disabled
@@ -133,13 +174,15 @@ export class Game {
             console.log('Audio Context State:', Howler.ctx.state);
         };
 
-        console.log(
-            `Game\tMap loaded: ${this.terrain.width}x${this.terrain.height} in ${Math.round(performance.now() - start)}ms`
-        );
+        mlt.gameConstructor = Math.round(performance.now() - start);
+        mlt.mapSize = `${this.terrain.width}x${this.terrain.height}`;
+        mlt.entityCount = this.state.entities.length;
+        console.log(`Game\tMap loaded: ${this.terrain.width}x${this.terrain.height} in ${mlt.gameConstructor}ms`);
     }
 
     /** Load players, objects, buildings, settlers, and resource stacks from parsed map data. */
     private populateMapEntities(mapLoader: IMapLoader): void {
+        const mlt = debugStats.state.mapLoadTimings;
         const entityData = mapLoader.entityData;
         if (!entityData) return;
 
@@ -150,31 +193,40 @@ export class Game {
 
         // Trees + decorations
         if (entityData.objects.length) {
-            this.populateMapTrees(entityData.objects);
+            const t0 = performance.now();
+            this.populateMapTrees(entityData.objects, mlt);
+            // populateMapTrees records its own timings for trees + expansion
+            mlt.populateTrees += Math.round(performance.now() - t0);
         }
 
         // Buildings
         if (entityData.buildings.length) {
+            const t0 = performance.now();
             const count = populateMapBuildings(this.state, entityData.buildings, {
                 buildingStateManager: this.services.buildingStateManager,
                 eventBus: this.eventBus,
                 terrain: this.terrain,
                 playerRaces: this.playerRaces,
             });
+            mlt.populateBuildings = Math.round(performance.now() - t0);
             if (count > 0) console.log(`Game: Loaded ${count} buildings from map data`);
         }
 
         // Settlers (units)
         if (entityData.settlers.length) {
+            const t0 = performance.now();
             const count = populateMapSettlers(this.state, entityData.settlers, {
                 playerRaces: this.playerRaces,
             });
+            mlt.populateUnits = Math.round(performance.now() - t0);
             if (count > 0) console.log(`Game: Loaded ${count} settlers from map data`);
         }
 
         // Resource stacks
         if (entityData.stacks.length) {
+            const t0 = performance.now();
             const count = populateMapStacks(this.state, entityData.stacks);
+            mlt.populateStacks = Math.round(performance.now() - t0);
             if (count > 0) console.log(`Game: Loaded ${count} resource stacks from map data`);
         }
     }
@@ -184,7 +236,10 @@ export class Game {
     }
 
     /** Load trees/decorations from map objects and optionally expand forests. */
-    private populateMapTrees(objects: import('@/resources/map/map-entity-data').MapObjectData[]): void {
+    private populateMapTrees(
+        objects: import('@/resources/map/map-entity-data').MapObjectData[],
+        mlt: import('./debug-stats').MapLoadTimings
+    ): void {
         const beforeCount = this.state.entities.length;
         const seedCount = populateMapObjectsFromEntityData(this.state, objects, this.terrain);
         const totalAdded = this.state.entities.length - beforeCount;
@@ -194,11 +249,13 @@ export class Game {
         const expandRaw = localStorage.getItem('settlers_treeExpansion');
         const expandEnabled = expandRaw !== 'false';
         if (seedCount > 0 && expandEnabled) {
+            const t0 = performance.now();
             const expandedCount = expandTrees(this.state, this.terrain, {
                 radius: 10,
                 density: 0.04,
                 minSpacing: 1,
             });
+            mlt.treeExpansion = Math.round(performance.now() - t0);
             console.log(`Game: Expanded into ${expandedCount} additional trees (from ${seedCount} seeds)`);
         } else if (!expandEnabled) {
             console.log(
@@ -217,6 +274,7 @@ export class Game {
             settlerTaskSystem: this.services.settlerTaskSystem,
             buildingStateManager: this.services.buildingStateManager,
             treeSystem: this.services.treeSystem,
+            combatSystem: this.services.combatSystem,
         };
     }
 
@@ -320,7 +378,7 @@ export class Game {
                     executeCommand: cmd => this.execute(cmd),
                 });
                 await service.initialize();
-                this._gameLoop.registerSystem(service);
+                this._gameLoop.registerSystem(service, 'Scripting');
                 this.scriptService = service;
             }
 
@@ -361,6 +419,42 @@ export class Game {
     /** Set the per-frame update callback (input, sound, debug stats) */
     public setUpdateCallback(callback: (deltaSec: number) => void): void {
         this._gameLoop.setUpdateCallback(callback);
+    }
+
+    /** Get the name, group, and enabled state of every registered system and feature toggle */
+    public getSystemStates(): import('./game-loop').SystemState[] {
+        return this._gameLoop.getSystemStates();
+    }
+
+    /** Enable or disable a tick system by name */
+    public setSystemEnabled(name: string, enabled: boolean): void {
+        this._gameLoop.setSystemEnabled(name, enabled);
+    }
+
+    /**
+     * Register a callback to sync the Territory feature toggle with visual layer visibility.
+     * Called from the Vue layer so the game can update showTerritory when the toggle changes.
+     */
+    public onTerritoryToggle(callback: (enabled: boolean) => void): void {
+        this._onTerritoryToggle = callback;
+        // Fire immediately with current state so visual matches on connect
+        callback(this.services.logisticsDispatcher.territoryEnabled);
+    }
+
+    private static readonly FEATURE_STORAGE_KEY = 'settlers-feature-toggles';
+
+    /** Restore feature toggle states from localStorage at game init */
+    private restoreFeatureToggles(): void {
+        try {
+            const raw = localStorage.getItem(Game.FEATURE_STORAGE_KEY);
+            if (!raw) return;
+            const saved = JSON.parse(raw) as Record<string, boolean>;
+            for (const [name, enabled] of Object.entries(saved)) {
+                this._gameLoop.setSystemEnabled(name, enabled);
+            }
+        } catch {
+            // localStorage may be unavailable
+        }
     }
 
     /** Destroy the game and clean up all resources */

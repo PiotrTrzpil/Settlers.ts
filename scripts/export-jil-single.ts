@@ -32,19 +32,22 @@ if (typeof globalThis.ImageData === 'undefined') {
 
 const GFX_DIR = 'public/Siedler4/Gfx';
 
-function parseArgs(args: string[]): { baseName: string; outputDir: string; jobFilter: number[] } {
+function parseArgs(args: string[]): { baseName: string; outputDir: string; jobFilter: number[]; direction: number } {
     const baseName = args[0]!;
     let outputDir = 'output/carrier-sprites';
     let jobFilter: number[] = [];
+    let direction = 0;
     for (let i = 1; i < args.length; i++) {
         if (args[i] === '--output' && args[i + 1]) outputDir = args[++i]!;
         else if (args[i] === '--jobs' && args[i + 1]) jobFilter = args[++i]!.split(',').map(Number);
+        else if (args[i] === '--direction' && args[i + 1]) direction = Number(args[++i]);
     }
-    return { baseName, outputDir, jobFilter };
+    return { baseName, outputDir, jobFilter, direction };
 }
 
 async function exportJob(
     jobIndex: number,
+    direction: number,
     jilReader: JilFileReader,
     dilReader: DilFileReader,
     gilReader: GilFileReader,
@@ -55,7 +58,9 @@ async function exportJob(
 ): Promise<void> {
     const jilItem = jilReader.getItem(jobIndex);
     if (!jilItem || jilItem.length <= 0) return;
-    const dilItem = dilReader.getItem(jilItem.offset);
+    const dirIndex = jilItem.offset + direction;
+    if (dirIndex >= jilItem.offset + jilItem.length) return;
+    const dilItem = dilReader.getItem(dirIndex);
     if (!dilItem || dilItem.length <= 0) return;
     const gilIndex = dilItem.offset;
     if (gilIndex < 0 || gilIndex >= gilReader.length) return;
@@ -73,7 +78,7 @@ async function exportJob(
 }
 
 async function main() {
-    const { baseName, outputDir, jobFilter } = parseArgs(process.argv.slice(2));
+    const { baseName, outputDir, jobFilter, direction } = parseArgs(process.argv.slice(2));
     const nodeFs = new NodeFileSystem();
     const resolve = (ext: string) => `${GFX_DIR}/${baseName}.${ext}`;
 
@@ -99,7 +104,7 @@ async function main() {
 
     await nodeFs.mkdir(outputDir);
     for (const jobIndex of jobFilter) {
-        await exportJob(jobIndex, jilReader, dilReader, gilReader, gfxReader, exporter, nodeFs, outputDir);
+        await exportJob(jobIndex, direction, jilReader, dilReader, gilReader, gfxReader, exporter, nodeFs, outputDir);
     }
 }
 

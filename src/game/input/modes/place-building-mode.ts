@@ -4,8 +4,6 @@ import { BuildingType, getBuildingSize } from '../../entity';
 import type { Race } from '../../race';
 import type { PlacementEntityType } from '../render-state';
 
-type BuildingValidator = (x: number, y: number, buildingType: BuildingType) => boolean;
-
 /**
  * Building-specific mode data.
  * Extends base placement data with building type.
@@ -38,6 +36,7 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
     readonly name = 'place_building';
     readonly displayName = 'Place Building';
     readonly entityType: PlacementEntityType = 'building';
+    protected override readonly resetAfterPlace = true;
 
     protected getCommandType(): string {
         return 'place_building';

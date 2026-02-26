@@ -3,7 +3,7 @@
  * Keeps UI responsive during heavy async workloads.
  */
 
-const yieldToEventLoop = (): Promise<void> => new Promise(resolve => requestAnimationFrame(() => resolve()));
+export const yieldToEventLoop = (): Promise<void> => new Promise(resolve => requestAnimationFrame(() => resolve()));
 
 const DEFAULT_BATCH_SIZE = 5;
 

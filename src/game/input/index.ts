@@ -67,6 +67,7 @@ export {
 export { PlaceUnitMode, type PlaceUnitModeData, type PlaceUnitEnterData } from './modes/place-unit-mode';
 export { CameraMode } from './modes/camera-mode';
 export { StackAdjustMode, type StackAdjustDeps } from './modes/stack-adjust-mode';
+export { BuildingAdjustMode, type BuildingAdjustDeps, type ActiveAdjustment } from './modes/building-adjust-mode';
 
 // Input Manager
 export {

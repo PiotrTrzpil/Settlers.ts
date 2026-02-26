@@ -18,6 +18,7 @@ import type { GameSettings } from '../game-settings';
 import { debugStats } from '../debug-stats';
 import type { SettlerTaskSystem } from '../features/settler-tasks';
 import type { TreeSystem } from '../features/trees';
+import type { CombatSystem } from '../features/combat';
 import {
     Command,
     FORMATION_OFFSETS,
@@ -55,6 +56,8 @@ export interface CommandContext {
     buildingStateManager: BuildingStateManager;
     /** Tree system for planting/registration */
     treeSystem?: TreeSystem;
+    /** Combat system — used to release units from auto-combat when player issues commands */
+    combatSystem?: CombatSystem;
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): CommandResult {
@@ -163,6 +166,9 @@ function executeMoveUnit(ctx: CommandContext, cmd: MoveUnitCommand): CommandResu
         return commandFailed(`Entity ${cmd.entityId} not found`);
     }
 
+    // Player command overrides auto-combat — release unit so it obeys
+    ctx.combatSystem?.releaseFromCombat(cmd.entityId);
+
     const fromX = entity.x;
     const fromY = entity.y;
 
@@ -254,6 +260,9 @@ function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCom
         const offset = FORMATION_OFFSETS[Math.min(i, FORMATION_OFFSETS.length - 1)]!;
         const targetX = cmd.targetX + offset[0];
         const targetY = cmd.targetY + offset[1];
+
+        // Player command overrides auto-combat — release unit so it obeys
+        ctx.combatSystem?.releaseFromCombat(unit.id);
 
         const fromX = unit.x;
         const fromY = unit.y;

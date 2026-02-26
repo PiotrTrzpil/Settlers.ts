@@ -19,18 +19,22 @@ export class PilFileReader extends ResourceFile {
         return this.offsetTable.length;
     }
 
-    constructor(resourceReader: BinaryReader) {
+    constructor(source: BinaryReader | Int32Array) {
         super();
 
-        const reader = this.readResource(resourceReader);
+        if (source instanceof Int32Array) {
+            this.offsetTable = source;
+        } else {
+            const reader = this.readResource(source);
 
-        /// read the palette offsets
-        const imageCount = reader.length / 4;
+            /// read the palette offsets
+            const imageCount = reader.length / 4;
 
-        this.offsetTable = new Int32Array(imageCount);
+            this.offsetTable = new Int32Array(imageCount);
 
-        for (let i = 0; i < imageCount; i++) {
-            this.offsetTable[i] = reader.readInt();
+            for (let i = 0; i < imageCount; i++) {
+                this.offsetTable[i] = reader.readInt();
+            }
         }
 
         Object.seal(this);

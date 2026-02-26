@@ -9,7 +9,6 @@ import {
     SpriteEntry,
     Race,
     getBuildingSpriteMap,
-    getUnitSpriteMap,
     GFX_FILE_NUMBERS,
     getMapObjectSpriteMap,
     getResourceSpriteMap,
@@ -18,8 +17,6 @@ import {
     SETTLER_FILE_NUMBERS,
     TREE_JOB_OFFSET,
     TREE_JOB_INDICES,
-    CARRIER_MATERIAL_JOB_INDICES,
-    WORKER_JOB_INDICES,
     AVAILABLE_RACES,
     type BuildingSpriteInfo,
 } from './sprite-metadata';
@@ -27,13 +24,15 @@ import { MAP_OBJECT_SPRITES } from './sprite-metadata/gil-indices';
 import { STONE_DEPLETION_STAGES } from '../features/stones/stone-system';
 import { SpriteLoader, type LoadedGfxFileSet } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
+import { yieldToEventLoop } from './batch-loader';
 import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
-import { isBuildingAvailableForRace, isMaterialAvailableForRace } from '../race-availability';
-import { ANIMATION_DEFAULTS, AnimationData, carrySequenceKey, workSequenceKey } from '../animation';
+import { isBuildingAvailableForRace } from '../race-availability';
+import { ANIMATION_DEFAULTS, AnimationData } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy';
 import { buildDecorationSpriteMap, type DecorationSpriteRef } from '../systems/map-objects';
 import { TEAM_COLOR_PALETTES } from '@/resources/gfx/team-colors';
+import { loadUnitSpritesForRace, type UnitLoadContext } from './sprite-unit-loader';
 import {
     getAtlasCache,
     setAtlasCache,
@@ -42,6 +41,21 @@ import {
     isCacheDisabled,
     type CachedAtlasData,
 } from './sprite-cache';
+
+// Module-level prefetch: started early (during map load) to overlap IDB read with game construction.
+let earlyPrefetch: Promise<CachedAtlasData | null> | null = null;
+
+/**
+ * Start prefetching the sprite atlas from IndexedDB as early as possible.
+ * Call at the start of map load so the IDB read overlaps with game construction,
+ * not just landscape init. The SpriteRenderManager picks this up automatically.
+ * No-op if a prefetch is already in flight.
+ */
+export function prefetchSpriteCache(): void {
+    if (!earlyPrefetch && !isCacheDisabled()) {
+        earlyPrefetch = getIndexedDBCache(Race.Roman);
+    }
+}
 
 /** Simple timer for measuring phases */
 function createTimer() {
@@ -135,6 +149,9 @@ export class SpriteRenderManager {
     /** Combined palette texture for palettized atlas rendering */
     private _paletteManager: PaletteTextureManager;
 
+    /** Prefetched IndexedDB cache promise (started before GL is ready) */
+    private _prefetchedCache: Promise<CachedAtlasData | null> | null = null;
+
     constructor(fileManager: FileManager, textureUnit: number) {
         this.fileManager = fileManager;
         this.textureUnit = textureUnit;
@@ -165,6 +182,33 @@ export class SpriteRenderManager {
     /** Check if sprites are available for rendering */
     get hasSprites(): boolean {
         return this._spriteAtlas !== null && this._spriteRegistry !== null;
+    }
+
+    /**
+     * Drain pending atlas GPU uploads, spreading work across frames.
+     * Call once per frame from the render loop to keep uploads non-blocking.
+     *
+     * @param gl WebGL context
+     * @param maxLayers Maximum dirty layers to upload this frame (default 3)
+     */
+    public drainPendingUploads(gl: WebGL2RenderingContext, maxLayers = 3): void {
+        if (this._spriteAtlas?.hasPendingUploads) {
+            this._spriteAtlas.uploadBudgeted(gl, maxLayers);
+        }
+    }
+
+    /**
+     * Adopt the module-level early prefetch (started during map load), or start
+     * a new IDB read if no early prefetch is available.
+     */
+    public prefetchCache(): void {
+        if (isCacheDisabled()) return;
+        if (earlyPrefetch) {
+            this._prefetchedCache = earlyPrefetch;
+            earlyPrefetch = null;
+        } else {
+            this._prefetchedCache = getIndexedDBCache(this._currentRace);
+        }
     }
 
     /**
@@ -295,14 +339,97 @@ export class SpriteRenderManager {
         return this._spriteRegistry?.getFlagFrameCount(playerIndex) ?? 0;
     }
 
+    /** Get the territory dot sprite for a player index (0-7). */
+    public getTerritoryDot(playerIndex: number): SpriteEntry | null {
+        return this._spriteRegistry?.getTerritoryDot(playerIndex) ?? null;
+    }
+
+    /**
+     * Get loaded overlay sprite frames by GFX file reference.
+     * Returns null if the overlay sprites haven't been loaded yet.
+     */
+    public getOverlayFrames(gfxFile: number, jobIndex: number, directionIndex = 0): readonly SpriteEntry[] | null {
+        return this._spriteRegistry?.getOverlayFrames(gfxFile, jobIndex, directionIndex) ?? null;
+    }
+
     /**
      * Extract a sprite region from the atlas as RGBA ImageData.
      * Handles palette lookup internally — callers don't need to know about palettes.
      */
-    public extractSpriteAsImageData(region: import('./entity-texture-atlas').AtlasRegion): ImageData | null {
+    public extractSpriteAsImageData(
+        region: import('./entity-texture-atlas').AtlasRegion,
+        paletteBaseOffset = 0
+    ): ImageData | null {
         if (!this._spriteAtlas) return null;
         const paletteData = this._paletteManager.getPaletteData() ?? undefined;
-        return this._spriteAtlas.extractRegion(region, paletteData);
+        return this._spriteAtlas.extractRegion(region, paletteData, paletteBaseOffset);
+    }
+
+    /**
+     * Load overlay sprites into the atlas.
+     *
+     * Call after building sprites are loaded (setRace / init). Accepts a manifest
+     * of (gfxFile, jobIndex, directionIndex) tuples — typically produced by
+     * OverlayRegistry.getSpriteManifest().
+     *
+     * @returns Number of overlay sprite sets successfully loaded.
+     */
+    public async loadOverlaySprites(
+        manifest: readonly { gfxFile: number; jobIndex: number; directionIndex?: number }[]
+    ): Promise<number> {
+        const gl = this.glContext;
+        const atlas = this._spriteAtlas;
+        const registry = this._spriteRegistry;
+        if (!gl || !atlas || !registry) return 0;
+
+        // Deduplicate by key
+        const seen = new Set<string>();
+        const unique: { gfxFile: number; jobIndex: number; directionIndex: number }[] = [];
+        for (const entry of manifest) {
+            const dir = entry.directionIndex ?? 0;
+            const key = `${entry.gfxFile}:${entry.jobIndex}:${dir}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            unique.push({ gfxFile: entry.gfxFile, jobIndex: entry.jobIndex, directionIndex: dir });
+        }
+
+        let loaded = 0;
+        for (const entry of unique) {
+            const fileSet = await this.spriteLoader.loadFileSet(String(entry.gfxFile));
+            if (!fileSet) continue;
+
+            const paletteBase = this._paletteManager.getBaseOffset(String(entry.gfxFile));
+            const anim = await this.spriteLoader.loadJobAnimation(
+                fileSet,
+                entry.jobIndex,
+                entry.directionIndex,
+                atlas,
+                paletteBase
+            );
+            if (anim && anim.frames.length > 0) {
+                const frames = anim.frames.map(f => f.entry);
+                registry.registerOverlayFrames(entry.gfxFile, entry.jobIndex, entry.directionIndex, frames);
+                loaded++;
+            } else {
+                // Try single frame
+                const sprite = await this.spriteLoader.loadJobSprite(
+                    fileSet,
+                    { jobIndex: entry.jobIndex, directionIndex: entry.directionIndex },
+                    atlas,
+                    paletteBase
+                );
+                if (sprite) {
+                    registry.registerOverlayFrames(entry.gfxFile, entry.jobIndex, entry.directionIndex, [sprite.entry]);
+                    loaded++;
+                }
+            }
+        }
+
+        if (loaded > 0) {
+            atlas.update(gl);
+        }
+
+        return loaded;
     }
 
     /**
@@ -344,7 +471,11 @@ export class SpriteRenderManager {
      * Returns true if cache was hit and sprites restored successfully.
      */
     private async tryRestoreFromIndexedDB(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
-        const cached = await getIndexedDBCache(race);
+        // Use prefetched result if available (started during landscape init), otherwise fetch now
+        const t0 = performance.now();
+        const cached = await (this._prefetchedCache ?? getIndexedDBCache(race));
+        debugStats.state.loadTimings.cacheWait = Math.round(performance.now() - t0);
+        this._prefetchedCache = null;
         if (!cached) {
             return false;
         }
@@ -365,16 +496,15 @@ export class SpriteRenderManager {
         cached: CachedAtlasData,
         source: 'module' | 'indexeddb'
     ): void {
-        const start = performance.now();
+        const t = createTimer();
 
-        // Convert cached Uint8Array bytes back to Uint16Array for R16UI atlas
+        // Phase 1: Uint16Array view + atlas setup
         const imgData16 = new Uint16Array(
             cached.imgData.buffer,
             cached.imgData.byteOffset,
             cached.imgData.byteLength / 2
         );
 
-        // Restore atlas from cached data (multi-layer)
         const atlas = EntityTextureAtlas.fromCache(
             imgData16,
             cached.layerCount,
@@ -383,13 +513,15 @@ export class SpriteRenderManager {
             cached.textureUnit
         );
 
-        // Restore registry from serialized data
+        // Phase 2: Registry deserialize
         const registry = SpriteMetadataRegistry.deserialize(cached.registryData);
+        const deserialize = t.lap();
 
-        // Upload atlas to GPU
+        // Phase 3: GPU upload — upload ALL layers at once for instant visibility on cache hit
         atlas.update(gl);
+        const gpuUpload = t.lap();
 
-        // Restore palette texture from cache (including player rows if present)
+        // Phase 4: Palette restore
         if (cached.paletteData && cached.paletteOffsets && cached.paletteTotalColors) {
             this._paletteManager.restoreFromCache(
                 cached.paletteData,
@@ -404,7 +536,7 @@ export class SpriteRenderManager {
         this._spriteAtlas = atlas;
         this._spriteRegistry = registry;
 
-        const elapsed = performance.now() - start;
+        const total = t.total();
 
         // Record cache hit in debug stats
         const lt = debugStats.state.loadTimings;
@@ -415,8 +547,9 @@ export class SpriteRenderManager {
             mapObjects: 0,
             resources: 0,
             units: 0,
-            gpuUpload: Math.round(elapsed),
-            totalSprites: Math.round(elapsed),
+            deserialize,
+            gpuUpload,
+            totalSprites: total,
             atlasSize: `${atlas.layerCount}x${atlas.width}x${atlas.height}`,
             spriteCount:
                 registry.getBuildingCount() +
@@ -429,8 +562,8 @@ export class SpriteRenderManager {
 
         const sourceLabel = source === 'module' ? 'module cache (HMR)' : 'IndexedDB (refresh)';
         SpriteRenderManager.log.debug(
-            `Restored sprites from ${sourceLabel} for ${Race[cached.race]} in ${elapsed.toFixed(1)}ms ` +
-                `(${atlas.layerCount} layers, ${registry.getBuildingCount()} buildings)`
+            `Restored from ${sourceLabel} in ${total}ms (deserialize=${deserialize}, gpu=${gpuUpload}, ` +
+                `${atlas.layerCount} layers, ${registry.getBuildingCount()} buildings)`
         );
     }
 
@@ -503,6 +636,7 @@ export class SpriteRenderManager {
             mapObjects: number;
             resources: number;
             units: number;
+            unitsByRace: Record<string, number>;
             gpuUpload: number;
         },
         timer: ReturnType<typeof createTimer>,
@@ -511,6 +645,7 @@ export class SpriteRenderManager {
     ): void {
         Object.assign(debugStats.state.loadTimings, {
             ...timings,
+            deserialize: 0,
             totalSprites: timer.total(),
             atlasSize: `${atlas.layerCount}x${atlas.width}x${atlas.height}`,
             spriteCount:
@@ -560,8 +695,11 @@ export class SpriteRenderManager {
      */
     // eslint-disable-next-line sonarjs/cognitive-complexity, complexity -- multi-race sprite loading requires sequential file I/O
     private async loadSpritesForRace(gl: WebGL2RenderingContext, race: Race): Promise<boolean> {
-        // Skip single-race cache — we now load all races into one atlas.
-        // TODO: implement multi-race cache key
+        // Try cache first — combined atlas keyed by `race` (always Roman on init).
+        // TODO: cache per-race separately to enable prioritized loading (current player race first)
+        if (await this.tryRestoreFromCache(gl, race)) {
+            return true;
+        }
 
         // Full load from files
         const t = createTimer();
@@ -610,7 +748,7 @@ export class SpriteRenderManager {
         this._spriteAtlas = atlas;
         this._spriteRegistry = registry;
 
-        // Load building sprites for every race
+        // Load building sprites for every race, yielding between races
         let loadedAny = false;
         for (const r of racesToLoad) {
             const spriteMap = spriteMapsPerRace.get(r)!;
@@ -619,6 +757,7 @@ export class SpriteRenderManager {
                     loadedAny = true;
                 }
             }
+            await yieldToEventLoop();
         }
         const buildings = t.lap();
 
@@ -628,12 +767,16 @@ export class SpriteRenderManager {
         const resourcesLoaded = await this.loadResourceSprites(atlas, registry, gl);
         const resources = t.lap();
 
-        // Load unit sprites for every race
+        // Load unit sprites for every race, yielding between races
         let unitsLoaded = false;
+        const unitRaceTimings: Record<string, number> = {};
         for (const r of racesToLoad) {
-            if (await this.loadUnitSprites(r, atlas, registry, gl)) {
+            const raceStart = performance.now();
+            if (await loadUnitSpritesForRace(r, atlas, registry, gl, this.unitLoadContext)) {
                 unitsLoaded = true;
             }
+            unitRaceTimings[Race[r]] = Math.round(performance.now() - raceStart);
+            await yieldToEventLoop();
         }
         const units = t.lap();
 
@@ -644,14 +787,23 @@ export class SpriteRenderManager {
         atlas.update(gl);
 
         // Create per-player palette rows with S4 team color substitution, then upload to GPU
-        this._paletteManager.createPlayerPalettes(TEAM_COLOR_PALETTES.length);
+        await this._paletteManager.createPlayerPalettes(TEAM_COLOR_PALETTES.length);
         this._paletteManager.upload(gl);
 
         const gpuUpload = t.lap();
 
         void this.saveToCache(race);
         this.recordLoadTimings(
-            { filePreload, atlasAlloc, buildings, mapObjects, resources, units, gpuUpload },
+            {
+                filePreload,
+                atlasAlloc,
+                buildings,
+                mapObjects,
+                resources,
+                units,
+                unitsByRace: unitRaceTimings,
+                gpuUpload,
+            },
             t,
             atlas,
             registry
@@ -828,6 +980,7 @@ export class SpriteRenderManager {
         const stoneCount = await this.loadStoneSprites(fileSet5, atlas, registry, gl, paletteBase5);
         const decoCount = await this.loadDecorationSprites(fileSet5, atlas, registry, gl, paletteBase5);
         const flagCount = await this.loadFlagSprites(fileSet5, atlas, registry, gl, paletteBase5);
+        const dotCount = await this.loadTerritoryDotSprites(fileSet5, atlas, registry, gl, paletteBase5);
 
         let resourceCount = 0;
         if (fileSet3) {
@@ -835,10 +988,10 @@ export class SpriteRenderManager {
             resourceCount = await this.loadResourceMapObjects(fileSet3, atlas, registry, paletteBase3);
         }
 
-        const total = treeCount + stoneCount + decoCount + flagCount + resourceCount;
+        const total = treeCount + stoneCount + decoCount + flagCount + dotCount + resourceCount;
         SpriteRenderManager.log.debug(
             `MapObjects: ${treeCount} trees, ${stoneCount} stones, ${decoCount} decorations, ${flagCount} flags, ` +
-                `${resourceCount} resources (${total} total)`
+                `${dotCount} territory dots, ${resourceCount} resources (${total} total)`
         );
         return total > 0;
     }
@@ -1071,6 +1224,47 @@ export class SpriteRenderManager {
     }
 
     /**
+     * Load territory dot sprites (8 player colors) from direct GIL indices.
+     */
+    private async loadTerritoryDotSprites(
+        fileSet: LoadedGfxFileSet,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry,
+        gl: WebGL2RenderingContext,
+        paletteBaseOffset: number
+    ): Promise<number> {
+        const DOT_GIL_INDICES = [
+            MAP_OBJECT_SPRITES.TERRITORY_DOT_RED,
+            MAP_OBJECT_SPRITES.TERRITORY_DOT_BLUE,
+            MAP_OBJECT_SPRITES.TERRITORY_DOT_GREEN,
+            MAP_OBJECT_SPRITES.TERRITORY_DOT_YELLOW,
+            MAP_OBJECT_SPRITES.TERRITORY_DOT_PURPLE,
+            MAP_OBJECT_SPRITES.TERRITORY_DOT_ORANGE,
+            MAP_OBJECT_SPRITES.TERRITORY_DOT_TEAL,
+            MAP_OBJECT_SPRITES.TERRITORY_DOT_GRAY,
+        ];
+
+        type DotData = { playerIndex: number; entry: SpriteEntry };
+        const batch = new SafeLoadBatch<DotData>();
+
+        for (let playerIndex = 0; playerIndex < DOT_GIL_INDICES.length; playerIndex++) {
+            const gilIndex = DOT_GIL_INDICES[playerIndex]!;
+            const sprite = await this.spriteLoader.loadDirectSprite(fileSet, gilIndex, null, atlas, paletteBaseOffset);
+            if (sprite) {
+                batch.add({ playerIndex, entry: sprite.entry });
+            }
+        }
+
+        let loaded = 0;
+        batch.finalize(atlas, gl, data => {
+            registry.registerTerritoryDot(data.playerIndex, data.entry);
+            loaded++;
+        });
+
+        return loaded;
+    }
+
+    /**
      * Load resource map objects (coal, iron, gold, stone, sulfur deposits).
      */
     private async loadResourceMapObjects(
@@ -1145,239 +1339,11 @@ export class SpriteRenderManager {
         return batch.count > 0;
     }
 
-    /**
-     * Load unit sprites with all animation frames using SafeLoadBatch pattern.
-     */
-    private async loadUnitSprites(
-        race: Race,
-        atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry,
-        gl: WebGL2RenderingContext
-    ): Promise<boolean> {
-        const fileId = `${SETTLER_FILE_NUMBERS[race]}`;
-        const fileSet = await this.spriteLoader.loadFileSet(fileId);
-        if (!fileSet?.jilReader || !fileSet.dilReader) return false;
-
-        const paletteBase = this.getPaletteBaseOffset(fileId);
-
-        type UnitData = { unitType: UnitType; directionFrames: Map<number, SpriteEntry[]> };
-        const batch = new SafeLoadBatch<UnitData>();
-
-        for (const [typeStr, info] of Object.entries(getUnitSpriteMap(race))) {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial<Record> values may be undefined at runtime
-            if (!info) continue;
-            const unitType = Number(typeStr) as UnitType;
-
-            const loadedDirs = await this.spriteLoader.loadJobAllDirections(fileSet, info.index, atlas, paletteBase);
-            if (!loadedDirs) {
-                SpriteRenderManager.log.debug(`Job ${info.index} not found for unit ${UnitType[unitType]}`);
-                continue;
-            }
-
-            const directionFrames = new Map<number, SpriteEntry[]>();
-            for (const [dir, sprites] of loadedDirs) {
-                directionFrames.set(
-                    dir,
-                    sprites.map(s => s.entry)
-                );
-            }
-
-            if (directionFrames.size > 0) {
-                batch.add({ unitType, directionFrames });
-            }
-        }
-
-        batch.finalize(atlas, gl, data => {
-            registry.registerAnimatedEntity(
-                EntityType.Unit,
-                data.unitType,
-                data.directionFrames,
-                ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                true,
-                race
-            );
-            for (const [dir, frames] of data.directionFrames) {
-                if (frames.length > 0) {
-                    registry.registerUnit(data.unitType, dir, frames[0]!, race);
-                }
-            }
-        });
-
-        // Load carrier variants and worker animations (also need safe pattern)
-        const carrierCount = await this.loadCarrierVariants(fileSet, atlas, registry, gl, paletteBase, race);
-        const workerCount = await this.loadWorkerAnimations(fileSet, atlas, registry, gl, paletteBase, race);
-
-        const unitCount = batch.count;
-        if (unitCount > 0 || carrierCount > 0 || workerCount > 0) {
-            SpriteRenderManager.log.debug(
-                `${Race[race]}: ${unitCount} units, ${carrierCount} carriers, ${workerCount} workers`
-            );
-        }
-
-        return unitCount > 0;
-    }
-
-    /**
-     * Load carrier sprite variants for each material type using SafeLoadBatch.
-     */
-    private async loadCarrierVariants(
-        fileSet: LoadedGfxFileSet,
-        atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry,
-        gl: WebGL2RenderingContext,
-        paletteBaseOffset: number,
-        race: Race
-    ): Promise<number> {
-        type CarrierData = { materialType: EMaterialType; directionFrames: Map<number, SpriteEntry[]> };
-        const batch = new SafeLoadBatch<CarrierData>();
-
-        for (const [typeStr, jobIndex] of Object.entries(CARRIER_MATERIAL_JOB_INDICES)) {
-            const materialType = Number(typeStr) as EMaterialType;
-
-            if (!isMaterialAvailableForRace(materialType, race)) continue;
-
-            const loadedDirs = await this.spriteLoader.loadJobAllDirections(
-                fileSet,
-                jobIndex,
-                atlas,
-                paletteBaseOffset
-            );
-            if (!loadedDirs) {
-                SpriteRenderManager.log.debug(`Carrier job ${jobIndex} not found for ${EMaterialType[materialType]}`);
-                continue;
-            }
-
-            const directionFrames = new Map<number, SpriteEntry[]>();
-            for (const [dir, sprites] of loadedDirs) {
-                directionFrames.set(
-                    dir,
-                    sprites.map(s => s.entry)
-                );
-            }
-
-            if (directionFrames.size > 0) {
-                batch.add({ materialType, directionFrames });
-            }
-        }
-
-        batch.finalize(atlas, gl, data => {
-            // Register carry animations for all unit types that can carry materials
-            const carryingUnitTypes = [UnitType.Carrier, UnitType.Woodcutter];
-            for (const unitType of carryingUnitTypes) {
-                registry.registerAnimationSequence(
-                    EntityType.Unit,
-                    unitType,
-                    carrySequenceKey(data.materialType),
-                    data.directionFrames,
-                    ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                    true,
-                    race
-                );
-            }
-        });
-
-        return batch.count;
-    }
-
-    /**
-     * Mapping from WORKER_JOB_INDICES keys to UnitType.
-     * Used by loadWorkerAnimations to register work sequences.
-     */
-    private static readonly WORKER_KEY_TO_UNIT_TYPE: Record<string, UnitType> = {
-        carrier: UnitType.Carrier,
-        digger: UnitType.Digger,
-        smith: UnitType.Smith,
-        builder: UnitType.Builder,
-        woodcutter: UnitType.Woodcutter,
-        miner: UnitType.Miner,
-        forester: UnitType.Forester,
-        farmer: UnitType.Farmer,
-        priest: UnitType.Priest,
-        geologist: UnitType.Geologist,
-        pioneer: UnitType.Pioneer,
-        swordsman_1: UnitType.Swordsman,
-        swordsman_2: UnitType.Swordsman,
-        swordsman_3: UnitType.Swordsman,
-        bowman_1: UnitType.Bowman,
-        bowman_2: UnitType.Bowman,
-        bowman_3: UnitType.Bowman,
-        sawmillworker: UnitType.SawmillWorker,
-    };
-
-    /**
-     * Load worker-specific animation sequences using SafeLoadBatch.
-     */
-    // eslint-disable-next-line sonarjs/cognitive-complexity -- per-unit, per-direction, per-sequence branching
-    private async loadWorkerAnimations(
-        fileSet: LoadedGfxFileSet,
-        atlas: EntityTextureAtlas,
-        registry: SpriteMetadataRegistry,
-        gl: WebGL2RenderingContext,
-        paletteBaseOffset: number,
-        race: Race
-    ): Promise<number> {
-        type WorkAnimData = {
-            unitType: UnitType;
-            seqKey: string;
-            frames: Map<number, SpriteEntry[]>;
+    /** Unit loading context for the extracted sprite-unit-loader module. */
+    private get unitLoadContext(): UnitLoadContext {
+        return {
+            spriteLoader: this.spriteLoader,
+            getPaletteBaseOffset: (fileId: string) => this.getPaletteBaseOffset(fileId),
         };
-
-        const batch = new SafeLoadBatch<WorkAnimData>();
-
-        for (const [workerKey, workerData] of Object.entries(WORKER_JOB_INDICES)) {
-            if (!('work' in workerData)) continue;
-
-            const unitType = SpriteRenderManager.WORKER_KEY_TO_UNIT_TYPE[workerKey];
-            if (unitType === undefined) continue;
-
-            const workJobIndices = workerData.work as readonly number[];
-
-            for (let workIndex = 0; workIndex < workJobIndices.length; workIndex++) {
-                const jobIndex = workJobIndices[workIndex]!;
-                const dirCount = this.spriteLoader.getDirectionCount(fileSet, jobIndex);
-                if (dirCount === 0) continue;
-
-                const frames = new Map<number, SpriteEntry[]>();
-                for (let dir = 0; dir < dirCount; dir++) {
-                    const anim = await this.spriteLoader.loadJobAnimation(
-                        fileSet,
-                        jobIndex,
-                        dir,
-                        atlas,
-                        paletteBaseOffset
-                    );
-                    if (anim?.frames.length) {
-                        frames.set(
-                            dir,
-                            anim.frames.map(f => f.entry)
-                        );
-                    }
-                }
-
-                if (frames.size > 0) {
-                    batch.add({
-                        unitType,
-                        seqKey: workSequenceKey(workIndex),
-                        frames,
-                    });
-                }
-            }
-        }
-
-        let loadedCount = 0;
-        batch.finalize(atlas, gl, data => {
-            registry.registerAnimationSequence(
-                EntityType.Unit,
-                data.unitType,
-                data.seqKey,
-                data.frames,
-                ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                true,
-                race
-            );
-            loadedCount++;
-        });
-
-        return loadedCount;
     }
 }

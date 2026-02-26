@@ -166,9 +166,8 @@ export function scaleSprite(sprite: SpriteEntry, scale: number = ENTITY_SCALE): 
     };
 }
 
-/** Get sprite scale for an entity: decorations use FLAG_SCALE, trees/stones ENTITY_SCALE, other map objects DECORATION_SCALE. */
+/** Get sprite scale for an entity: trees/stones ENTITY_SCALE, other map objects DECORATION_SCALE. */
 export function getSpriteScale(entity: Entity): number {
-    if (entity.type === EntityType.Decoration) return FLAG_SCALE;
     if (entity.type !== EntityType.MapObject) return ENTITY_SCALE;
     if (entity.subType <= MapObjectType.TreeOliveSmall) return ENTITY_SCALE;
     if (entity.subType === MapObjectType.ResourceStone) return ENTITY_SCALE;

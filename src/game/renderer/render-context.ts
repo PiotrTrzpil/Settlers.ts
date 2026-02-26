@@ -14,6 +14,7 @@ import type { Race } from '../race';
 import type { AnimationState } from '../animation';
 import type { IViewPoint } from './i-view-point';
 import { DEFAULT_LAYER_VISIBILITY, type LayerVisibility } from './layer-visibility';
+import type { SpriteEntry } from './sprite-metadata/sprite-metadata';
 
 // ============================================================================
 // Renderer-local types (no feature module imports)
@@ -73,15 +74,12 @@ export interface BuildingRenderState {
     useConstructionSprite: boolean;
     /** Vertical visibility progress (0.0 = hidden, 1.0 = fully visible) */
     verticalProgress: number;
-    /** Whether to render the construction background (during completed-rising transition) */
-    showConstructionBackground: boolean;
 }
 
 /** Default building render state for completed buildings */
 const DEFAULT_BUILDING_RENDER_STATE: BuildingRenderState = {
     useConstructionSprite: false,
     verticalProgress: 1.0,
-    showConstructionBackground: false,
 };
 
 /**
@@ -91,6 +89,15 @@ export interface RenderSettings {
     showBuildingFootprint: boolean;
     disablePlayerTinting: boolean;
     antialias: boolean;
+}
+
+/**
+ * Territory boundary dot for rendering (avoids importing full TerritoryDot type).
+ */
+export interface TerritoryDotRenderData {
+    readonly x: number;
+    readonly y: number;
+    readonly player: number;
 }
 
 /**
@@ -112,6 +119,51 @@ export interface SelectionState {
     readonly ids: ReadonlySet<number>;
 }
 
+// ============================================================================
+// Building Overlay Render Data
+// ============================================================================
+
+/**
+ * Render layer for a building overlay, relative to the parent building sprite.
+ * Mirrors OverlayLayer from the feature module — renderer-local copy avoids
+ * the renderer depending on feature-layer types.
+ */
+export enum OverlayRenderLayer {
+    /** Behind the building sprite (ground effects, shadows) */
+    BehindBuilding = 0,
+    /** On top of the building but below the flag */
+    AboveBuilding = 1,
+    /** On top of everything including the flag */
+    AboveFlag = 2,
+}
+
+/**
+ * Pre-computed render data for a single building overlay.
+ * Produced by the glue layer (use-renderer.ts) from overlay instance state.
+ * The renderer just draws these — no animation or condition logic needed.
+ *
+ * Supports both custom overlays (smoke, wheels) and construction overlays
+ * (construction background + rising completed sprite) via verticalProgress.
+ */
+export interface BuildingOverlayRenderData {
+    /** The resolved sprite for the current animation frame */
+    readonly sprite: SpriteEntry;
+    /** World-space offset from the building's render anchor */
+    readonly worldOffsetX: number;
+    readonly worldOffsetY: number;
+    /** Render layer relative to the building */
+    readonly layer: OverlayRenderLayer;
+    /** Whether this overlay uses player team coloring */
+    readonly teamColored: boolean;
+    /**
+     * Vertical visibility progress (0.0 = hidden, 1.0 = fully visible).
+     * Used for construction-style rising effects. Default 1.0.
+     */
+    readonly verticalProgress: number;
+}
+
+const EMPTY_OVERLAYS: readonly BuildingOverlayRenderData[] = [];
+
 /**
  * Read-only interface providing all data needed for entity rendering.
  * The renderer should only depend on this interface, not on Game or GameState directly.
@@ -128,6 +180,10 @@ export interface IRenderContext {
     // === Building Visual State ===
     /** Get the pre-computed render state for a building entity */
     getBuildingRenderState(entityId: number): BuildingRenderState;
+
+    // === Building Overlays ===
+    /** Get pre-computed overlay render data for a building (empty array if none) */
+    getBuildingOverlays(entityId: number): readonly BuildingOverlayRenderData[];
 
     // === Animation ===
     /** Get the animation state for an entity (null if no animation) */
@@ -165,6 +221,10 @@ export interface IRenderContext {
     // === Service Areas ===
     /** Service areas to render for selected hub buildings */
     readonly selectedServiceAreas: readonly ServiceAreaRenderData[];
+
+    // === Territory ===
+    /** Territory boundary dots to render */
+    readonly territoryDots: readonly TerritoryDotRenderData[];
 }
 
 /**
@@ -176,6 +236,7 @@ export class RenderContextBuilder {
     private _unitStates: UnitStateLookup = { get: () => undefined };
     private _resourceStates: ReadonlyMap<number, StackedResourceState> = new Map();
     private _buildingRenderStateGetter: (entityId: number) => BuildingRenderState = () => DEFAULT_BUILDING_RENDER_STATE;
+    private _buildingOverlaysGetter: (entityId: number) => readonly BuildingOverlayRenderData[] = () => EMPTY_OVERLAYS;
     private _animationStateGetter: (entityId: number) => AnimationState | null = () => null;
     private _selection: SelectionState = { primaryId: null, ids: new Set() };
     private _placementPreview: PlacementPreviewState | null = null;
@@ -188,6 +249,7 @@ export class RenderContextBuilder {
     private _mapHeight = 0;
     private _viewPoint: IViewPoint | null = null;
     private _selectedServiceAreas: readonly ServiceAreaRenderData[] = [];
+    private _territoryDots: readonly TerritoryDotRenderData[] = [];
 
     entities(entities: readonly Entity[]): this {
         this._entities = entities;
@@ -206,6 +268,11 @@ export class RenderContextBuilder {
 
     buildingRenderStateGetter(getter: (entityId: number) => BuildingRenderState): this {
         this._buildingRenderStateGetter = getter;
+        return this;
+    }
+
+    buildingOverlaysGetter(getter: (entityId: number) => readonly BuildingOverlayRenderData[]): this {
+        this._buildingOverlaysGetter = getter;
         return this;
     }
 
@@ -265,6 +332,11 @@ export class RenderContextBuilder {
         return this;
     }
 
+    territoryDots(dots: readonly TerritoryDotRenderData[]): this {
+        this._territoryDots = dots;
+        return this;
+    }
+
     /**
      * Build the immutable render context.
      * @throws Error if required fields (viewPoint) are not set
@@ -279,6 +351,7 @@ export class RenderContextBuilder {
             unitStates: this._unitStates,
             resourceStates: this._resourceStates,
             getBuildingRenderState: this._buildingRenderStateGetter,
+            getBuildingOverlays: this._buildingOverlaysGetter,
             getAnimationState: this._animationStateGetter,
             selection: this._selection,
             placementPreview: this._placementPreview,
@@ -291,6 +364,7 @@ export class RenderContextBuilder {
             mapHeight: this._mapHeight,
             viewPoint: this._viewPoint,
             selectedServiceAreas: this._selectedServiceAreas,
+            territoryDots: this._territoryDots,
         };
     }
 }

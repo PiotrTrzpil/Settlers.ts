@@ -20,12 +20,18 @@ const SETTINGS_STORAGE_KEY = 'settlers_debug_settings';
 /** Load timing data for each layer */
 export interface LoadTimings {
     landscape: number;
+    /** Time waiting for IndexedDB cache read (overlaps landscape, 0 on module cache or miss) */
+    cacheWait: number;
     filePreload: number;
     atlasAlloc: number;
     buildings: number;
     mapObjects: number;
     resources: number;
     units: number;
+    /** Per-race unit sprite load timing (race name → ms) */
+    unitsByRace: Record<string, number>;
+    /** Time to deserialize registry from cache (0 on cache miss) */
+    deserialize: number;
     gpuUpload: number;
     totalSprites: number;
     atlasSize: string;
@@ -34,6 +40,30 @@ export interface LoadTimings {
     cacheHit: boolean;
     /** Cache source: 'module' (HMR), 'indexeddb' (refresh), or null (miss) */
     cacheSource: 'module' | 'indexeddb' | null;
+}
+
+/** Full map load timing data — measured once per map load, displayed in debug panel */
+export interface MapLoadTimings {
+    // Phase 1: File + Parse
+    fileRead: number;
+    mapParse: number;
+    // Phase 2: Game constructor
+    terrain: number;
+    gameInit: number;
+    populateTrees: number;
+    treeExpansion: number;
+    populateBuildings: number;
+    populateUnits: number;
+    populateStacks: number;
+    gameConstructor: number;
+    // Phase 3: Post-constructor
+    stateRestore: number;
+    // Phase 4: Renderer init (wall-clock from startMapLoad to rendererReady)
+    rendererInit: number;
+    totalLoad: number;
+    // Info
+    mapSize: string;
+    entityCount: number;
 }
 
 /** Per-frame render timing data (averaged over window) */
@@ -87,6 +117,9 @@ export interface DebugStatsState {
     // Load timings
     loadTimings: LoadTimings;
 
+    // Map load timings (full pipeline)
+    mapLoadTimings: MapLoadTimings;
+
     // Performance
     fps: number;
     frameTimeMs: number;
@@ -131,6 +164,12 @@ export interface DebugStatsState {
     // Logistics panel UI state (persisted)
     logisticsPanelOpen: boolean;
 
+    // Tabbed panel: which tab is active (persisted)
+    activeRightTab: string;
+
+    // Tabbed panel: collapsed state (persisted)
+    rightPanelOpen: boolean;
+
     // Debug selection mode - allows selecting normally non-selectable units
     selectAllUnits: boolean;
 
@@ -150,6 +189,8 @@ interface PersistedDebugSettings {
     debugGridEnabled: boolean;
     layerPanelOpen: boolean;
     logisticsPanelOpen: boolean;
+    activeRightTab: string;
+    rightPanelOpen: boolean;
     selectAllUnits: boolean;
 }
 
@@ -164,6 +205,8 @@ const PERSISTED_KEYS: readonly (keyof PersistedDebugSettings)[] = [
     'debugGridEnabled',
     'layerPanelOpen',
     'logisticsPanelOpen',
+    'activeRightTab',
+    'rightPanelOpen',
     'selectAllUnits',
 ];
 
@@ -178,6 +221,8 @@ const DEFAULT_SETTINGS: PersistedDebugSettings = {
     debugGridEnabled: false,
     layerPanelOpen: false,
     logisticsPanelOpen: false,
+    activeRightTab: 'layers',
+    rightPanelOpen: true,
     selectAllUnits: false,
 };
 
@@ -241,6 +286,9 @@ const RENDER_TIMING_UPDATE_INTERVAL = 1000;
 class DebugStats {
     public readonly state: DebugStatsState;
 
+    /** Wall-clock timestamp when startMapLoad() was called (0 = no load in progress) */
+    private mapLoadStartTime = 0;
+
     private frameTimes: number[] = [];
     private lastFrameTime = 0;
     private tickCount = 0;
@@ -281,18 +329,38 @@ class DebugStats {
             frameCount: 0,
             loadTimings: {
                 landscape: 0,
+                cacheWait: 0,
                 filePreload: 0,
                 atlasAlloc: 0,
                 buildings: 0,
                 mapObjects: 0,
                 resources: 0,
                 units: 0,
+                unitsByRace: {},
+                deserialize: 0,
                 gpuUpload: 0,
                 totalSprites: 0,
                 atlasSize: '',
                 spriteCount: 0,
                 cacheHit: false,
                 cacheSource: null,
+            },
+            mapLoadTimings: {
+                fileRead: 0,
+                mapParse: 0,
+                terrain: 0,
+                gameInit: 0,
+                populateTrees: 0,
+                treeExpansion: 0,
+                populateBuildings: 0,
+                populateUnits: 0,
+                populateStacks: 0,
+                gameConstructor: 0,
+                stateRestore: 0,
+                rendererInit: 0,
+                totalLoad: 0,
+                mapSize: '',
+                entityCount: 0,
             },
             fps: 0,
             frameTimeMs: 0,
@@ -322,6 +390,8 @@ class DebugStats {
             debugGridEnabled: savedSettings.debugGridEnabled,
             layerPanelOpen: savedSettings.layerPanelOpen,
             logisticsPanelOpen: savedSettings.logisticsPanelOpen,
+            activeRightTab: savedSettings.activeRightTab,
+            rightPanelOpen: savedSettings.rightPanelOpen,
             selectAllUnits: savedSettings.selectAllUnits,
             renderTimings: {
                 frame: 0,
@@ -397,6 +467,47 @@ class DebugStats {
         this.state.tickCount = 0;
         this.state.gameLoaded = false;
         this.state.rendererReady = false;
+    }
+
+    /** Mark the start of a full map load — resets all map load timing fields. */
+    public startMapLoad(): void {
+        this.mapLoadStartTime = performance.now();
+        const mlt = this.state.mapLoadTimings;
+        mlt.fileRead = 0;
+        mlt.mapParse = 0;
+        mlt.terrain = 0;
+        mlt.gameInit = 0;
+        mlt.populateTrees = 0;
+        mlt.treeExpansion = 0;
+        mlt.populateBuildings = 0;
+        mlt.populateUnits = 0;
+        mlt.populateStacks = 0;
+        mlt.gameConstructor = 0;
+        mlt.stateRestore = 0;
+        mlt.rendererInit = 0;
+        mlt.totalLoad = 0;
+        mlt.mapSize = '';
+        mlt.entityCount = 0;
+    }
+
+    /**
+     * Mark the end of the full load pipeline (all sprites loaded, renderer ready).
+     * Records wall-clock time from startMapLoad() and sets rendererReady flag.
+     */
+    public markRendererReady(): void {
+        this.state.rendererReady = true;
+        if (this.mapLoadStartTime > 0) {
+            const mlt = this.state.mapLoadTimings;
+            mlt.totalLoad = Math.round(performance.now() - this.mapLoadStartTime);
+            this.mapLoadStartTime = 0;
+            const slt = this.state.loadTimings;
+            console.log(
+                `[perf] Map load complete: ${mlt.totalLoad}ms` +
+                    ` (game ${mlt.gameConstructor}ms, landscape ${slt.landscape}ms` +
+                    `, cacheWait ${slt.cacheWait}ms, sprites ${slt.totalSprites}ms` +
+                    `, renderer ${mlt.rendererInit}ms)`
+            );
+        }
     }
 
     /**
