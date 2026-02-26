@@ -39,6 +39,8 @@ export const UNIT_JOB_INDICES: Partial<Record<UnitType, number>> = {
     [UnitType.Pioneer]: 298, // Pioneer idle
     [UnitType.Thief]: -1, // TODO: Not yet identified
     [UnitType.SawmillWorker]: 96, // Sawmill worker idle
+    // Dark Tribe specific (file 23.jil)
+    [UnitType.MushroomFarmer]: 313, // Mushroom farmer
 };
 
 /**
@@ -215,7 +217,7 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
     [BuildingType.AmmunitionMaker]: 28, // S4BuildingType.AMMOMAKERHUT
     // 29 = GUNPOWDERMAKERHUT (no JIL entry in Roman)
     // 30 = LANDSCAPEMAKERHUT — stone building with gate (not in BuildingType)
-    [BuildingType.Shipyard]: 31, // S4BuildingType.SHIPYARD (base index; oriented variants at 58-63, 76-77)
+    [BuildingType.Shipyard]: 58, // S4BuildingType.SHIPYARD (base job 31 is empty; using first oriented variant)
     // 32 = PORT (base index; oriented variants at 52-57, 78-79; not in BuildingType)
     // 33 = MARKETPLACE — circular trading area with goods (not in BuildingType)
     [BuildingType.StorageArea]: 34, // S4BuildingType.STORAGEAREA
@@ -233,7 +235,11 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
     [BuildingType.GuardTowerSmall]: 46, // S4BuildingType.GUARDTOWERSMALL
     [BuildingType.GuardTowerBig]: 47, // S4BuildingType.GUARDTOWERBIG
     [BuildingType.Castle]: 48, // S4BuildingType.CASTLE
-    // 49 = MUSHROOMFARM (DarkTribe), 50 = DARKTEMPLE (DarkTribe), 51 = FORTRESS (DarkTribe)
+    // Dark Tribe unique buildings (file 13.jil reuses slots 40-42; DarkTribe has no residences)
+    [BuildingType.MushroomFarm]: 40, // DarkTribe: slot 40 (RESIDENCESMALL in other races)
+    [BuildingType.Fortress]: 41, // DarkTribe: slot 41 (RESIDENCEMEDIUM in other races)
+    [BuildingType.DarkTemple]: 42, // DarkTribe: slot 42 (RESIDENCEBIG in other races)
+    [BuildingType.ManaCopterHall]: 80, // DarkTribe: S4BuildingType.MANACOPTERHALL
     [BuildingType.Eyecatcher01]: 64, // EYECATCHER01: candelabra/torches
     [BuildingType.Eyecatcher02]: 65, // EYECATCHER02: tall column with statue
     [BuildingType.Eyecatcher03]: 66, // EYECATCHER03: Roman eagle standard / banner pole
@@ -248,7 +254,8 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
     [BuildingType.Eyecatcher12]: 75, // EYECATCHER12: exotic plant on pedestal
     // Trojan-specific (high S4BuildingType indices)
     [BuildingType.SunflowerOilMakerHut]: 81, // S4BuildingType.SUNFLOWEROILMAKERHUT (Trojan)
-    [BuildingType.SunflowerFarmerHut]: 82, // S4BuildingType.SUNFLOWERFARMERHUT (Trojan)
+    // SunflowerFarmerHut is stored in 13.gfx (DarkTribe file) as separate jobs: #109 construction, #110 completed
+    // Handled via constructionIndex override in getBuildingSpriteMap()
 };
 
 // ============================================================
@@ -263,7 +270,7 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
 export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
     // S4GoodType values are the JIL job indices (alphabetically ordered)
     [EMaterialType.AGAVE]: 1, // S4GoodType.AGAVE
-    // AMMO = 2 (not in EMaterialType)
+    [EMaterialType.AMMO]: 2, // S4GoodType.AMMO (crossbow bolts)
     [EMaterialType.ARMOR]: 3, // S4GoodType.ARMOR
     [EMaterialType.AXE]: 4, // S4GoodType.AXE
     [EMaterialType.BATTLEAXE]: 5, // S4GoodType.BATTLEAXE
@@ -278,7 +285,7 @@ export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
     [EMaterialType.GOLDBAR]: 14, // S4GoodType.GOLDBAR
     [EMaterialType.GOLDORE]: 15, // S4GoodType.GOLDORE
     [EMaterialType.GRAIN]: 16, // S4GoodType.GRAIN
-    // GUNPOWDER = 17 (not in EMaterialType)
+    [EMaterialType.GUNPOWDER]: 17, // S4GoodType.GUNPOWDER
     [EMaterialType.HAMMER]: 18, // S4GoodType.HAMMER
     [EMaterialType.HONEY]: 19, // S4GoodType.HONEY
     [EMaterialType.IRONBAR]: 20, // S4GoodType.IRONBAR

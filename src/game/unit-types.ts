@@ -25,6 +25,16 @@ export enum UnitType {
     Miller = 16,
     Butcher = 17,
     Stonecutter = 18,
+    SquadLeader = 19,
+    DarkGardener = 20,
+    Shaman = 21,
+    Medic = 22,
+    Hunter = 23,
+    Healer = 24,
+    Smelter = 25,
+    Donkey = 26,
+    MushroomFarmer = 27,
+    Angel = 28,
 }
 
 /**
@@ -81,6 +91,16 @@ export const UNIT_TYPE_CONFIG: Record<UnitType, UnitTypeConfig> = {
     [UnitType.Miller]: { name: 'Miller', category: UnitCategory.Worker, speed: 2 },
     [UnitType.Butcher]: { name: 'Butcher', category: UnitCategory.Worker, speed: 2 },
     [UnitType.Stonecutter]: { name: 'Stonecutter', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.SquadLeader]: { name: 'Squad Leader', category: UnitCategory.Military, speed: 2 },
+    [UnitType.DarkGardener]: { name: 'Dark Gardener', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Shaman]: { name: 'Shaman', category: UnitCategory.Religious, speed: 1.5 },
+    [UnitType.Medic]: { name: 'Medic', category: UnitCategory.Military, speed: 2 },
+    [UnitType.Hunter]: { name: 'Hunter', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Healer]: { name: 'Healer', category: UnitCategory.Military, speed: 1.5 },
+    [UnitType.Smelter]: { name: 'Smelter', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Donkey]: { name: 'Donkey', category: UnitCategory.Worker, speed: 1.5 },
+    [UnitType.MushroomFarmer]: { name: 'Mushroom Farmer', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Angel]: { name: 'Angel', category: UnitCategory.Military, speed: 2 },
 };
 
 /** Categories that allow player selection */
@@ -149,6 +169,9 @@ export const BUILDING_UNIT_TYPE: Partial<Record<BuildingType, UnitType>> = {
     [BuildingType.ToolSmith]: UnitType.Smith,
     [BuildingType.IronSmelter]: UnitType.Smith,
     [BuildingType.SmeltGold]: UnitType.Smith,
+
+    // Dark Tribe
+    [BuildingType.MushroomFarm]: UnitType.MushroomFarmer,
 };
 
 /**

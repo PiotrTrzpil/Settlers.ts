@@ -52,6 +52,8 @@ export enum EMaterialType {
     TEQUILA = 36, // Mayan drink
     SUNFLOWER = 37, // Trojan crop
     SUNFLOWEROIL = 38, // Trojan drink
+    AMMO = 39, // Ammunition (crossbow bolts)
+    GUNPOWDER = 40, // Gunpowder for cannons
 
     // Special
     NO_MATERIAL = 99,
@@ -121,6 +123,8 @@ export const MATERIAL_CONFIGS: ReadonlyMap<EMaterialType, MaterialTypeConfig> = 
     [EMaterialType.TEQUILA, { droppable: true, defaultPriorityIndex: 35, distributionConfigurable: true }], // Mayan drink
     [EMaterialType.SUNFLOWER, { droppable: true, defaultPriorityIndex: 36, distributionConfigurable: true }], // Trojan crop
     [EMaterialType.SUNFLOWEROIL, { droppable: true, defaultPriorityIndex: 37, distributionConfigurable: true }], // Trojan drink
+    [EMaterialType.AMMO, { droppable: true, defaultPriorityIndex: 26, distributionConfigurable: false }], // Ammunition
+    [EMaterialType.GUNPOWDER, { droppable: true, defaultPriorityIndex: 26, distributionConfigurable: false }], // Gunpowder
 
     // Non-droppable
     [EMaterialType.NO_MATERIAL, { droppable: false, defaultPriorityIndex: -1, distributionConfigurable: false }],

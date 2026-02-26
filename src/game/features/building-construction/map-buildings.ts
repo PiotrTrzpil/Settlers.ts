@@ -69,8 +69,8 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
     [S4BuildingType.GUARDTOWERSMALL]: BuildingType.GuardTowerSmall,
     [S4BuildingType.GUARDTOWERBIG]: BuildingType.GuardTowerBig,
     [S4BuildingType.CASTLE]: BuildingType.Castle,
-    [S4BuildingType.FORTRESS]: BuildingType.Castle, // Approximation
-    [S4BuildingType.MANACOPTERHALL]: BuildingType.SiegeWorkshop, // Approximation
+    [S4BuildingType.FORTRESS]: BuildingType.Fortress,
+    [S4BuildingType.MANACOPTERHALL]: BuildingType.ManaCopterHall,
     // Eyecatchers / monuments
     [S4BuildingType.EYECATCHER01]: BuildingType.Eyecatcher01,
     [S4BuildingType.EYECATCHER02]: BuildingType.Eyecatcher02,
@@ -84,6 +84,9 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
     [S4BuildingType.EYECATCHER10]: BuildingType.Eyecatcher10,
     [S4BuildingType.EYECATCHER11]: BuildingType.Eyecatcher11,
     [S4BuildingType.EYECATCHER12]: BuildingType.Eyecatcher12,
+    // Dark Tribe buildings
+    [S4BuildingType.MUSHROOMFARM]: BuildingType.MushroomFarm,
+    [S4BuildingType.DARKTEMPLE]: BuildingType.DarkTemple,
 };
 
 /**
@@ -119,6 +122,7 @@ export function populateMapBuildings(
     const { player, buildingStateManager, eventBus } = options;
     let count = 0;
     let skipped = 0;
+    const perPlayer = new Map<number, string[]>();
 
     for (const buildingData of buildings) {
         // Filter by player if specified
@@ -153,8 +157,14 @@ export function populateMapBuildings(
             buildingData.player
         );
 
-        // Assign race from the owning player's tribe (default to Roman)
-        entity.race = options.playerRaces?.get(buildingData.player) ?? Race.Roman;
+        // Assign race from the owning player's tribe
+        const race = options.playerRaces?.get(buildingData.player);
+        if (race === undefined) {
+            throw new Error(
+                `No race mapping for player ${buildingData.player} — playerRaces must be populated before spawning buildings`
+            );
+        }
+        entity.race = race;
 
         // Override the building state to be completed (pre-existing building)
         // buildingStateManager is required, getBuildingState returns the state we just created
@@ -178,14 +188,15 @@ export function populateMapBuildings(
             buildingState,
         });
 
-        log.debug(
-            `Created completed building: ${BuildingType[buildingType]} at (${buildingData.x}, ${buildingData.y}) for player ${buildingData.player}`
-        );
+        const entries = perPlayer.get(buildingData.player) ?? [];
+        entries.push(`${BuildingType[buildingType]}@(${buildingData.x},${buildingData.y})`);
+        perPlayer.set(buildingData.player, entries);
         count++;
     }
 
     if (count > 0) {
-        log.debug(`Populated ${count} buildings from map data (${skipped} skipped)`);
+        const parts = [...perPlayer.entries()].map(([p, entries]) => `P${p}: ${entries.join(', ')}`).join(' | ');
+        log.debug(`Populated ${count} buildings (${skipped} skipped) — ${parts}`);
     }
 
     return count;

@@ -4,8 +4,15 @@ import { populateMapBuildings, mapS4BuildingType } from '@/game/features/buildin
 import { S4BuildingType } from '@/resources/map/s4-types';
 import { BuildingType } from '@/game/buildings/types';
 import { EntityType } from '@/game/entity';
+import { Race } from '@/game/race';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
+
+/** Default player→race mapping for tests (all Roman) */
+const TEST_PLAYER_RACES = new Map<number, Race>([
+    [0, Race.Roman],
+    [1, Race.Roman],
+]);
 
 /** Helper to create populate options from test context */
 function createPopulateOptions(ctx: TestContext, player?: number) {
@@ -14,6 +21,7 @@ function createPopulateOptions(ctx: TestContext, player?: number) {
         buildingStateManager: ctx.buildingStateManager,
         eventBus: ctx.eventBus,
         terrain: ctx.map.terrain,
+        playerRaces: TEST_PLAYER_RACES,
     };
 }
 

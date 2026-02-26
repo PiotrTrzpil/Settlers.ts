@@ -191,6 +191,11 @@ export const DECORATION_TYPES: DecorationTypeInfo[] = [
     { raw: 85, label: 'Grass85', category: 'plants', notes: 'On grass' },
     { raw: 87, label: 'GrassRare87', category: 'plants_rare', notes: 'On grass, uncommon (672)' },
 
+    // 90-92: Rare grass decorations
+    { raw: 90, label: 'GrassRare90', category: 'plants_rare', notes: 'On grass, rare' },
+    { raw: 91, label: 'GrassRare91', category: 'plants_rare', notes: 'On grass, rare' },
+    { raw: 92, label: 'GrassRare92', category: 'plants_rare', notes: 'On grass, rare' },
+
     // 107-110, 119: Sea decorations — on water tiles
     { raw: 107, label: 'Sea107', category: 'sea', notes: 'On sea' },
     { raw: 108, label: 'Sea108', category: 'sea', notes: 'On sea' },
@@ -278,6 +283,10 @@ export const DECORATION_TYPES: DecorationTypeInfo[] = [
     // 221-222: Common desert decorations (7.6k-13k)
     { raw: 221, label: 'Desert221', category: 'desert', notes: 'On desert (13k)' },
     { raw: 222, label: 'Desert222', category: 'desert', notes: 'On desert (7.6k)' },
+
+    // 245, 254: Common dark ground decorations
+    { raw: 245, label: 'DarkGround245', category: 'dark_ground', notes: 'On dark/swamp terrain' },
+    { raw: 254, label: 'DarkGround254', category: 'dark_ground', notes: 'On dark/swamp terrain' },
 ];
 
 // ============================================================
@@ -393,6 +402,12 @@ const CATEGORY_SPRITE_POOLS: Record<string, DecorationSpriteRef[]> = {
         staticRef(S.WAGON_WRECK),
         staticRef(S.VINE_GROUND_COVER),
         staticRef(S.AMANITA_MUSHROOM),
+        staticRef(S.RUINED_COLUMN),
+        staticRef(S.ROMAN_PILLAR_SMALL),
+        staticRef(S.ROMAN_PILLAR_MEDIUM_A),
+        staticRef(S.ROMAN_PILLAR_MEDIUM_B),
+        staticRef(S.ROMAN_PILLAR_LARGE_A),
+        staticRef(S.ROMAN_PILLAR_LARGE_B),
         // Reserved for very rare values only: POND, STONE_CROSS_RUIN
     ],
     desert_rare: [staticRef(S.SKELETON_LARGE), staticRef(S.SKELETON_SMALL), staticRef(S.WAGON_WRECK)],
@@ -400,6 +415,30 @@ const CATEGORY_SPRITE_POOLS: Record<string, DecorationSpriteRef[]> = {
     lake: [staticRef(S.LAKE_DECO_A), staticRef(S.LAKE_DECO_B), staticRef(S.LAKE_DECO_C)],
     snow: [staticRef(S.SNOWMAN), staticRef(S.SNOWMAN_B), staticRef(S.DARK_STONE_BLOCK)],
     stone_rare: [staticRef(S.ROCK_CAVE), staticRef(S.ROCK_SPIRE)],
+    // Dark ground — dark tribe vegetation and volcanic rocks on swamp/dark grass terrain
+    dark_ground: [
+        staticRef(S.DARK_TRIBE_TREE_A),
+        staticRef(S.DARK_TRIBE_TREE_B),
+        staticRef(S.DARK_TRIBE_BUSH_A),
+        staticRef(S.DARK_TRIBE_BUSH_B),
+        staticRef(S.DARK_TRIBE_FLOWER),
+        staticRef(S.DARK_TRIBE_DEAD_TREE),
+        staticRef(S.ORE_ROCK_A),
+        staticRef(S.ORE_ROCK_B),
+        staticRef(S.VOLCANIC_ROCK_SMALL),
+        staticRef(S.VOLCANIC_ROCK_MEDIUM),
+        staticRef(S.VINE_GROUND_COVER),
+        staticRef(S.DARK_STONE_BLOCK),
+    ],
+    dark_ground_rare: [
+        staticRef(S.DARK_TRIBE_TREE_C),
+        staticRef(S.VOLCANIC_ROCK_LARGE),
+        staticRef(S.VOLCANIC_ROCK_PILLAR),
+        staticRef(S.LAVA_ROCK_TALL),
+        staticRef(S.LAVA_ROCK_MEDIUM),
+        staticRef(S.LAVA_ROCK_SMALL),
+        staticRef(S.RED_CRYSTAL_A),
+    ],
 };
 
 /**

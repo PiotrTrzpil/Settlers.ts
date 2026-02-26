@@ -25,8 +25,8 @@ export const RACE_NAMES: Record<Race, string> = {
     [Race.Trojan]: 'Trojan',
 };
 
-/** List of all available races for UI (excludes DarkTribe which has different mappings) */
-export const AVAILABLE_RACES: Race[] = [Race.Roman, Race.Viking, Race.Mayan, Race.Trojan];
+/** All playable races including Dark Tribe. */
+export const AVAILABLE_RACES: Race[] = [Race.Roman, Race.Viking, Race.Mayan, Race.Trojan, Race.DarkTribe];
 
 /**
  * Convert S4Tribe index (0-4) to Race enum value (10-14).

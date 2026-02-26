@@ -168,13 +168,18 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
                 `AddBuilding: type ${buildingType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`
             );
 
+            const race = context.playerRaces?.get(player);
+            if (race === undefined) {
+                throw new Error(`No race mapping for player ${player} in AddBuilding`);
+            }
+
             const result = context.executeCommand!({
                 type: 'script_add_building',
                 buildingType: internalType,
                 x,
                 y,
                 player,
-                race: context.playerRaces?.get(player) ?? Race.Roman,
+                race,
             });
 
             if (!result.success || !result.effects?.length) return -1;
@@ -249,13 +254,18 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
                 `AddBuildingEx: type ${buildingType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`
             );
 
+            const race = context.playerRaces?.get(player);
+            if (race === undefined) {
+                throw new Error(`No race mapping for player ${player} in AddBuildingEx`);
+            }
+
             const result = context.executeCommand!({
                 type: 'script_add_building',
                 buildingType: internalType,
                 x,
                 y,
                 player,
-                race: context.playerRaces?.get(player) ?? Race.Roman,
+                race,
             });
 
             if (!result.success || !result.effects?.length) return -1;

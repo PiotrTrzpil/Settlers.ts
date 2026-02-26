@@ -67,28 +67,10 @@ export enum BuildingType {
     MeadMakerHut = 56,
     SunflowerFarmerHut = 57,
     SunflowerOilMakerHut = 58,
-}
-
-/**
- * Buildings that are only available to specific races.
- * If a BuildingType is not listed here, it's available to all races.
- */
-export const BUILDING_RACE_AVAILABILITY: Partial<Record<BuildingType, readonly Race[]>> = {
-    [BuildingType.Vinyard]: [Race.Roman],
-    [BuildingType.BeekeeperHut]: [Race.Viking],
-    [BuildingType.MeadMakerHut]: [Race.Viking],
-    [BuildingType.AgaveFarmerHut]: [Race.Mayan],
-    [BuildingType.TequilaMakerHut]: [Race.Mayan],
-    [BuildingType.SunflowerFarmerHut]: [Race.Trojan],
-    [BuildingType.SunflowerOilMakerHut]: [Race.Trojan],
-    // AmmunitionMaker not available to Vikings in original game
-    [BuildingType.AmmunitionMaker]: [Race.Roman, Race.Mayan, Race.Trojan],
-};
-
-/** Check if a building type is available for a given race. */
-export function isBuildingAvailableForRace(buildingType: BuildingType, race: Race): boolean {
-    const allowedRaces = BUILDING_RACE_AVAILABILITY[buildingType];
-    return !allowedRaces || allowedRaces.includes(race);
+    MushroomFarm = 59,
+    DarkTemple = 60,
+    Fortress = 61,
+    ManaCopterHall = 62,
 }
 
 /** All mine building types — must be placed on mountain/rock terrain. */
@@ -156,6 +138,11 @@ export const BUILDING_TYPE_TO_XML_ID: Partial<Record<BuildingType, string>> = {
     [BuildingType.SunflowerFarmerHut]: 'BUILDING_SUNFLOWERFARMERHUT',
     [BuildingType.SunflowerOilMakerHut]: 'BUILDING_SUNFLOWEROILMAKERHUT',
     [BuildingType.SiegeWorkshop]: 'BUILDING_VEHICLEHALL',
+    // Dark Tribe unique buildings
+    [BuildingType.MushroomFarm]: 'BUILDING_MUSHROOMFARM',
+    [BuildingType.DarkTemple]: 'BUILDING_DARKTEMPLE',
+    [BuildingType.Fortress]: 'BUILDING_FORTRESS',
+    [BuildingType.ManaCopterHall]: 'BUILDING_MANACOPTERHALL',
     // Eyecatchers (decorative monuments, 01-12)
     [BuildingType.Eyecatcher01]: 'BUILDING_EYECATCHER01',
     [BuildingType.Eyecatcher02]: 'BUILDING_EYECATCHER02',
@@ -229,6 +216,7 @@ export const BUILDING_SIZE: Record<number, BuildingSize> = {
     [BuildingType.MeadMakerHut]: { width: 2, height: 2 },
     [BuildingType.SunflowerFarmerHut]: { width: 2, height: 2 },
     [BuildingType.SunflowerOilMakerHut]: { width: 2, height: 2 },
+    [BuildingType.MushroomFarm]: { width: 2, height: 2 },
 
     // Military buildings (2x2)
     [BuildingType.GuardTowerSmall]: { width: 2, height: 2 },
@@ -244,6 +232,10 @@ export const BUILDING_SIZE: Record<number, BuildingSize> = {
     [BuildingType.Shipyard]: { width: 3, height: 3 },
     [BuildingType.SiegeWorkshop]: { width: 3, height: 3 },
     [BuildingType.Eyecatcher02]: { width: 3, height: 3 },
+    // Dark Tribe large buildings
+    [BuildingType.DarkTemple]: { width: 3, height: 3 },
+    [BuildingType.Fortress]: { width: 3, height: 3 },
+    [BuildingType.ManaCopterHall]: { width: 3, height: 3 },
 };
 
 /** Get building size, defaults to 2x2 if not specified */

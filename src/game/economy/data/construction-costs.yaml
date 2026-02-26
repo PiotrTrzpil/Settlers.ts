@@ -257,6 +257,19 @@ SiegeWorkshop:
   Mayan: { stone: 7, boards: 3 }
   Trojan: { stone: 6, boards: 4 }
 
+# Dark Tribe unique buildings (all cost 1 board per original game data)
+MushroomFarm:
+  DarkTribe: { boards: 1 }
+
+DarkTemple:
+  DarkTribe: { boards: 1 }
+
+Fortress:
+  DarkTribe: { boards: 1 }
+
+ManaCopterHall:
+  DarkTribe: { boards: 1 }
+
 Eyecatcher02:
   Roman: { stone: 5, boards: 1, gold: 3 }
   Viking: { boards: 2, gold: 2 }

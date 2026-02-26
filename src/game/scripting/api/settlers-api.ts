@@ -141,6 +141,11 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
                 `AddSettlers: ${amount}x type ${settlerType} (internal: ${internalType}) at (${x}, ${y}) for player ${player}`
             );
 
+            const race = context.playerRaces?.get(player);
+            if (race === undefined) {
+                throw new Error(`No race mapping for player ${player} in AddSettlers`);
+            }
+
             const result = context.executeCommand!({
                 type: 'script_add_settlers',
                 unitType: internalType,
@@ -148,7 +153,7 @@ export function registerSettlersAPI(runtime: LuaRuntime, context: SettlersAPICon
                 y,
                 player,
                 amount,
-                race: context.playerRaces?.get(player) ?? Race.Roman,
+                race,
             });
 
             return result.effects?.length ?? 0;

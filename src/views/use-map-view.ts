@@ -15,6 +15,8 @@ import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
 import { createTestMapLoader } from '@/game/test-map-factory';
 import { Entity, TileCoord, UnitType, BuildingType } from '@/game/entity';
+import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/race-availability';
+import { Race } from '@/game/race';
 import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy';
 import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
@@ -81,8 +83,8 @@ async function loadMapFile(
     }
 }
 
-/** Buildings available in the UI - organized by category */
-const availableBuildings = [
+/** All building definitions for the UI — filtered by race at runtime */
+const ALL_BUILDINGS = [
     // --- Storage ---
     { type: BuildingType.StorageArea, id: 'warehouse', name: 'Warehouse', icon: '📦' },
 
@@ -145,10 +147,16 @@ const availableBuildings = [
     { type: BuildingType.Shipyard, id: 'shipyard', name: 'Shipyard', icon: '⛵' },
     { type: BuildingType.Eyecatcher01, id: 'eyecatcher01', name: 'Eyecatcher 1', icon: '🕯️' },
     { type: BuildingType.Eyecatcher02, id: 'eyecatcher02', name: 'Eyecatcher 2', icon: '🏛️' },
+
+    // --- Dark Tribe ---
+    { type: BuildingType.MushroomFarm, id: 'mushroomfarm', name: 'Mushroom Farm', icon: '🍄' },
+    { type: BuildingType.DarkTemple, id: 'darktemple', name: 'Dark Temple', icon: '🏚️' },
+    { type: BuildingType.Fortress, id: 'fortress', name: 'Fortress', icon: '🏰' },
+    { type: BuildingType.ManaCopterHall, id: 'manacopter', name: 'Mana Copter Hall', icon: '👼' },
 ];
 
-/** Units available in the UI - must include ALL UnitType values */
-const availableUnits: { type: UnitType; id: string; name: string; icon: string }[] = [
+/** All unit definitions for the UI */
+const ALL_UNITS: { type: UnitType; id: string; name: string; icon: string }[] = [
     { type: UnitType.Carrier, id: 'carrier', name: 'Carrier', icon: '🧑' },
     { type: UnitType.Builder, id: 'builder', name: 'Builder', icon: '👷' },
     { type: UnitType.Woodcutter, id: 'woodcutter', name: 'Woodcutter', icon: '🪓' },
@@ -167,16 +175,26 @@ const availableUnits: { type: UnitType; id: string; name: string; icon: string }
     { type: UnitType.Miller, id: 'miller', name: 'Miller', icon: '🌀' },
     { type: UnitType.Butcher, id: 'butcher', name: 'Butcher', icon: '🥩' },
     { type: UnitType.Stonecutter, id: 'stonecutter', name: 'Stonecutter', icon: '🪨' },
+    { type: UnitType.SquadLeader, id: 'squadleader', name: 'Squad Leader', icon: '🎖️' },
+    { type: UnitType.DarkGardener, id: 'darkgardener', name: 'Dark Gardener', icon: '🍄' },
+    { type: UnitType.Shaman, id: 'shaman', name: 'Shaman', icon: '🪄' },
+    { type: UnitType.Medic, id: 'medic', name: 'Medic', icon: '🩺' },
+    { type: UnitType.Hunter, id: 'hunter', name: 'Hunter', icon: '🏹' },
+    { type: UnitType.Healer, id: 'healer', name: 'Healer', icon: '💊' },
+    { type: UnitType.Smelter, id: 'smelter', name: 'Smelter', icon: '🔥' },
+    { type: UnitType.Donkey, id: 'donkey', name: 'Donkey', icon: '🫏' },
+    { type: UnitType.MushroomFarmer, id: 'mushroomfarmer', name: 'Mushroom Farmer', icon: '🍄' },
+    { type: UnitType.Angel, id: 'angel', name: 'Angel', icon: '👼' },
 ];
 
-// Runtime check in development: ensure all UnitType values are in availableUnits
+// Runtime check in development: ensure all UnitType values are in ALL_UNITS
 if (import.meta.env.DEV) {
-    const unitTypesInArray = new Set(availableUnits.map(u => u.type));
+    const unitTypesInArray = new Set(ALL_UNITS.map(u => u.type));
     const allUnitTypes = Object.values(UnitType).filter((v): v is UnitType => typeof v === 'number');
     const missing = allUnitTypes.filter(t => !unitTypesInArray.has(t));
     if (missing.length > 0) {
         console.error(
-            'availableUnits is missing UnitTypes:',
+            'ALL_UNITS is missing UnitTypes:',
             missing.map(t => UnitType[t])
         );
     }
@@ -320,7 +338,11 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
     };
 }
 
-export function useMapView(getFileManager: () => FileManager, getInputManager?: () => InputManager | null) {
+export function useMapView(
+    getFileManager: () => FileManager,
+    getInputManager?: () => InputManager | null,
+    selectedRace?: Ref<Race>
+) {
     const route = useRoute();
     // Check if testMap query param is present - use computed for reactivity
     // in case the route isn't fully resolved when the composable first runs
@@ -467,14 +489,9 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
 
         if (isTestMap.value) {
             void loadMap(null, { isTestMap: true });
-        } else {
-            // Auto-load first available map
-            const fm = getFileManager();
-            const maps = fm.filter('.map');
-            if (maps.length > 0) {
-                void loadMap(maps[0]!);
-            }
         }
+        // For real maps, the file-browser component handles selection
+        // and emits 'select' which calls onFileSelect → loadMap
     }
 
     /**
@@ -523,6 +540,15 @@ export function useMapView(getFileManager: () => FileManager, getInputManager?: 
     );
     const selectionCount = computed(() => game.value?.state.selection.selectedEntityIds.size ?? 0);
     const isPaused = computed(() => (game.value ? !game.value.isRunning : false));
+    const currentPlayerRace = computed(
+        () => selectedRace?.value ?? game.value?.playerRaces.get(game.value.currentPlayer) ?? Race.Roman
+    );
+    const availableBuildings = computed(() =>
+        ALL_BUILDINGS.filter(b => isBuildingAvailableForRace(b.type, currentPlayerRace.value))
+    );
+    const availableUnits = computed(() =>
+        ALL_UNITS.filter(u => isUnitAvailableForRace(u.type, currentPlayerRace.value))
+    );
 
     // Mode state - sourced from the game's view state
     const currentMode = computed(() => game.value?.viewState.state.mode ?? 'select');

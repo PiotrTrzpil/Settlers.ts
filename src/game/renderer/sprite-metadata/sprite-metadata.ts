@@ -4,6 +4,7 @@ import { AtlasRegion } from '../entity-texture-atlas';
 import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS, ANIMATION_SEQUENCES } from '../../animation';
 import { mapToArray, arrayToMap } from './sprite-metadata-helpers';
 import { Race } from '../../race';
+import { isUnitAvailableForRace, isBuildingAvailableForRace } from '../../race-availability';
 
 // Re-export from canonical locations and new index files
 export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace } from '../../race';
@@ -160,8 +161,10 @@ export const BUILDING_SPRITE_FRAMES: Partial<Record<BuildingType, BuildingSprite
 export interface BuildingSpriteInfo {
     /** GFX file number (e.g., 10 for 10.gfx) */
     file: number;
-    /** JIL job index within the GFX file */
+    /** JIL job index within the GFX file (used for completed state, or both states if constructionIndex is absent) */
     index: number;
+    /** Optional separate JIL job index for the construction state (when stored as a separate job entry) */
+    constructionIndex?: number;
 }
 
 /**
@@ -210,9 +213,10 @@ export function getUnitSpriteMap(race: Race): Partial<Record<UnitType, UnitSprit
     const result: Partial<Record<UnitType, UnitSpriteInfo>> = {};
 
     for (const [typeStr, jobIndex] of Object.entries(UNIT_JOB_INDICES)) {
-        // Skip negative indices (not yet identified)
-        if (jobIndex >= 0) {
-            result[Number(typeStr) as UnitType] = {
+        const unitType = Number(typeStr) as UnitType;
+        // Skip negative indices (not yet identified) and units unavailable for this race
+        if (jobIndex >= 0 && isUnitAvailableForRace(unitType, race)) {
+            result[unitType] = {
                 file: fileNum,
                 index: jobIndex,
             };
@@ -231,9 +235,21 @@ export function getBuildingSpriteMap(race: Race): Partial<Record<BuildingType, B
     const result: Partial<Record<BuildingType, BuildingSpriteInfo>> = {};
 
     for (const [typeStr, jobIndex] of Object.entries(BUILDING_JOB_INDICES)) {
-        result[Number(typeStr) as BuildingType] = {
+        const buildingType = Number(typeStr) as BuildingType;
+        if (!isBuildingAvailableForRace(buildingType, race)) continue;
+        result[buildingType] = {
             file: fileNum,
             index: jobIndex,
+        };
+    }
+
+    // SunflowerFarmerHut is stored in 13.gfx (DarkTribe file) as two separate jobs:
+    // JIL #109 = construction state, JIL #110 = completed state
+    if (race === Race.Trojan) {
+        result[BuildingType.SunflowerFarmerHut] = {
+            file: Race.DarkTribe as number,
+            index: 110,
+            constructionIndex: 109,
         };
     }
 

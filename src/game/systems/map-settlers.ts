@@ -32,6 +32,24 @@ const S4_TO_UNIT_TYPE: Partial<Record<S4SettlerType, UnitType>> = {
     [S4SettlerType.PIONEER]: UnitType.Pioneer,
     [S4SettlerType.THIEF]: UnitType.Thief,
     [S4SettlerType.GEOLOGIST]: UnitType.Geologist,
+    [S4SettlerType.SMITH]: UnitType.Smith,
+    [S4SettlerType.SQUADLEADER]: UnitType.SquadLeader,
+    [S4SettlerType.DARKGARDENER]: UnitType.DarkGardener,
+    [S4SettlerType.SHAMAN]: UnitType.Shaman,
+    [S4SettlerType.MEDIC_01]: UnitType.Medic,
+    [S4SettlerType.MEDIC_02]: UnitType.Medic,
+    [S4SettlerType.MEDIC_03]: UnitType.Medic,
+    [S4SettlerType.MINEWORKER]: UnitType.Miner,
+    [S4SettlerType.SMELTER]: UnitType.Smelter,
+    [S4SettlerType.HUNTER]: UnitType.Hunter,
+    [S4SettlerType.HEALER]: UnitType.Healer,
+    [S4SettlerType.DONKEY]: UnitType.Donkey,
+    [S4SettlerType.SAWMILLWORKER]: UnitType.SawmillWorker,
+    // Dark Tribe specific
+    [S4SettlerType.MUSHROOMFARMER]: UnitType.MushroomFarmer,
+    [S4SettlerType.ANGEL_01]: UnitType.Angel,
+    [S4SettlerType.ANGEL_02]: UnitType.Angel,
+    [S4SettlerType.ANGEL_03]: UnitType.Angel,
 };
 
 export interface PopulateMapSettlersOptions {
@@ -70,7 +88,13 @@ export function populateMapSettlers(
         }
 
         const entity = state.addEntity(EntityType.Unit, unitType, settlerData.x, settlerData.y, settlerData.player);
-        entity.race = options.playerRaces?.get(settlerData.player) ?? Race.Roman;
+        const race = options.playerRaces?.get(settlerData.player);
+        if (race === undefined) {
+            throw new Error(
+                `No race mapping for player ${settlerData.player} — playerRaces must be populated before spawning settlers`
+            );
+        }
+        entity.race = race;
 
         created++;
     }

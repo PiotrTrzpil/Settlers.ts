@@ -218,7 +218,13 @@
             <div class="info-bar">
                 <div class="map-selector">
                     <span class="info-label">Map:</span>
-                    <file-browser :fileManager="fileManager" @select="onFileSelect" filter=".map" class="browser" />
+                    <file-browser
+                        :fileManager="fileManager"
+                        @select="onFileSelect"
+                        filter=".map"
+                        storageKey="viewer_map_file"
+                        class="browser"
+                    />
                 </div>
             </div>
             <renderer-viewer
@@ -255,6 +261,9 @@ const props = defineProps<{
 // Template ref for renderer - declared before useMapView so getter works
 const rendererRef = useTemplateRef<InstanceType<typeof RendererViewer>>('rendererRef');
 
+// Race selection — declared before useMapView so it can drive building/unit filtering
+const currentRace = ref<Race>(Race.Roman);
+
 const {
     game,
     showDebug,
@@ -286,7 +295,8 @@ const {
     updateLayerVisibility,
 } = useMapView(
     () => props.fileManager,
-    () => rendererRef.value?.getInputManager?.() ?? null
+    () => rendererRef.value?.getInputManager?.() ?? null,
+    currentRace
 );
 
 /** Blur buttons, selects, and non-text inputs after interaction so keyboard focus returns to the game. */
@@ -303,9 +313,6 @@ function blurNonTextInput(e: Event): void {
         el.blur();
     }
 }
-
-// Race selection
-const currentRace = ref<Race>(Race.Roman);
 
 const availableRaces = AVAILABLE_RACES.map(race => ({
     value: race,
