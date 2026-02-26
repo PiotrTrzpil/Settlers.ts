@@ -38,9 +38,8 @@ export function parseSettlers(reader: BinaryReader): MapSettlerData[] {
     const entryCount = Math.floor(dataLength / ENTRY_SIZE);
     const remainder = dataLength % ENTRY_SIZE;
 
-    log.debug(`Parsing settlers: ${dataLength} bytes, ${entryCount} entries (${ENTRY_SIZE} bytes each)`);
     if (remainder !== 0) {
-        log.debug(`Warning: ${remainder} trailing bytes after entries`);
+        log.debug(`Warning: ${remainder} trailing bytes after ${entryCount} entries`);
     }
 
     for (let i = 0; i < entryCount && !reader.eof(); i++) {
@@ -78,7 +77,6 @@ export function parseSettlers(reader: BinaryReader): MapSettlerData[] {
         });
     }
 
-    log.debug(`Parsed ${settlers.length} settler entries`);
     return settlers;
 }
 

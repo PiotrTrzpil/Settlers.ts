@@ -38,9 +38,8 @@ export function parseBuildings(reader: BinaryReader): MapBuildingData[] {
     const entryCount = Math.floor(dataLength / ENTRY_SIZE);
     const remainder = dataLength % ENTRY_SIZE;
 
-    log.debug(`Parsing buildings: ${dataLength} bytes, ${entryCount} entries (${ENTRY_SIZE} bytes each)`);
     if (remainder !== 0) {
-        log.debug(`Warning: ${remainder} trailing bytes after entries`);
+        log.debug(`Warning: ${remainder} trailing bytes after ${entryCount} entries`);
     }
 
     for (let i = 0; i < entryCount && !reader.eof(); i++) {
@@ -80,7 +79,6 @@ export function parseBuildings(reader: BinaryReader): MapBuildingData[] {
         });
     }
 
-    log.debug(`Parsed ${buildings.length} building entries`);
     return buildings;
 }
 

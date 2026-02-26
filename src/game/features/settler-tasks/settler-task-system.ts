@@ -179,7 +179,6 @@ export class SettlerTaskSystem implements TickSystem {
             }
             this.positionHandlers.set(searchType, handler);
         }
-        log.debug(`Registered ${handler.type} work handler for ${searchType}`);
     }
 
     // ─────────────────────────────────────────────────────────────

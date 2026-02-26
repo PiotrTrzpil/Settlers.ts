@@ -2,7 +2,6 @@
  * Parser for buildingInfo.xml
  */
 
-import { LogHandler } from '@/utilities/log-handler';
 import type {
     RaceId,
     RaceBuildingData,
@@ -13,8 +12,6 @@ import type {
     BoundingRect,
 } from './types';
 import { parseXML, getChildText, getChildNumber, getChildBool, getValueArray } from './xml-utils';
-
-const log = new LogHandler('BuildingInfoParser');
 
 function parsePositionOffset(parent: Element, tagName: string): PositionOffset {
     const el = parent.getElementsByTagName(tagName)[0];
@@ -145,7 +142,6 @@ export function parseBuildingInfo(xmlContent: string): Map<RaceId, RaceBuildingD
         }
 
         result.set(raceId, { buildings });
-        log.debug(`Parsed ${buildings.size} buildings for ${raceId}`);
     }
 
     return result;

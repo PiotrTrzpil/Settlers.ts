@@ -87,8 +87,15 @@ export class GameDataLoader {
         this.data = { buildings, jobs, objects };
 
         const elapsed = Math.round(performance.now() - start);
-        log.debug(`Game data loaded in ${elapsed}ms`);
-        this.logStats();
+
+        let totalBuildings = 0;
+        let totalJobs = 0;
+        for (const [, raceData] of this.data.buildings) totalBuildings += raceData.buildings.size;
+        for (const [, raceData] of this.data.jobs) totalJobs += raceData.jobs.size;
+
+        log.debug(
+            `Game data loaded in ${elapsed}ms: ${totalBuildings} buildings, ${totalJobs} jobs, ${this.data.objects.size} objects`
+        );
 
         return this.data;
     }
@@ -102,25 +109,6 @@ export class GameDataLoader {
             log.warn(`Failed to load ${filename}: ${e}`);
             return null;
         }
-    }
-
-    private logStats(): void {
-        if (!this.data) return;
-
-        let totalBuildings = 0;
-        let totalJobs = 0;
-
-        for (const [raceId, raceData] of this.data.buildings) {
-            log.debug(`  ${raceId}: ${raceData.buildings.size} buildings`);
-            totalBuildings += raceData.buildings.size;
-        }
-
-        for (const [raceId, raceData] of this.data.jobs) {
-            log.debug(`  ${raceId}: ${raceData.jobs.size} jobs`);
-            totalJobs += raceData.jobs.size;
-        }
-
-        log.debug(`  Total: ${totalBuildings} buildings, ${totalJobs} jobs, ${this.data.objects.size} objects`);
     }
 
     // ============ Convenience getters ============

@@ -2,11 +2,8 @@
  * Parser for objectInfo.xml
  */
 
-import { LogHandler } from '@/utilities/log-handler';
 import type { ObjectInfo } from './types';
 import { parseXML, getChildNumber } from './xml-utils';
-
-const log = new LogHandler('ObjectInfoParser');
 
 function parseObject(objectEl: Element): ObjectInfo {
     const id = objectEl.getAttribute('id') ?? '';
@@ -37,6 +34,5 @@ export function parseObjectInfo(xmlContent: string): Map<string, ObjectInfo> {
         result.set(obj.id, obj);
     }
 
-    log.debug(`Parsed ${result.size} objects`);
     return result;
 }

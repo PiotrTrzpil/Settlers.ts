@@ -16,6 +16,7 @@ import { type RequestPriority, RequestStatus } from './features/logistics/resour
 
 const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
+const LAST_MAP_KEY = 'settlers_last_map';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
 const SNAPSHOT_VERSION = 6; // Bumped for race, carrying, hidden, stones
 
@@ -160,9 +161,27 @@ let currentMapId: string = '';
 
 /**
  * Set the current map identifier. Must be called when loading a map.
+ * Also persists to localStorage so the correct map can be loaded on refresh.
  */
 export function setCurrentMapId(mapId: string): void {
     currentMapId = mapId;
+    try {
+        localStorage.setItem(LAST_MAP_KEY, mapId);
+    } catch {
+        // localStorage may be unavailable
+    }
+}
+
+/**
+ * Get the last-loaded map ID from localStorage.
+ * Returns null if no map was previously loaded.
+ */
+export function getLastMapId(): string | null {
+    try {
+        return localStorage.getItem(LAST_MAP_KEY);
+    } catch {
+        return null;
+    }
 }
 
 // === Base64 encoding for typed arrays ===

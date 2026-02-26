@@ -150,8 +150,7 @@ export class TreeSystem implements TickSystem {
 
                 // Normal trees (offset 3) have sway animation — random start frame to desync
                 if (offset === TREE_OFFSET.NORMAL) {
-                    // eslint-disable-next-line sonarjs/pseudo-random -- intentional visual variation
-                    const startFrame = Math.floor(Math.random() * 100);
+                    const startFrame = this.gameState.rng.nextInt(100);
                     this.animationService.play(entityId, 'default', { loop: true, startFrame });
                 }
             }
@@ -186,8 +185,7 @@ export class TreeSystem implements TickSystem {
 
         // Normal trees have sway animation — random start frame to desync
         if (offset === TREE_OFFSET.NORMAL) {
-            // eslint-disable-next-line sonarjs/pseudo-random -- intentional visual variation
-            const startFrame = Math.floor(Math.random() * 100);
+            const startFrame = this.gameState.rng.nextInt(100);
             this.animationService.play(entityId, 'default', { loop: true, startFrame });
         }
     }
@@ -313,8 +311,7 @@ export class TreeSystem implements TickSystem {
     // ─────────────────────────────────────────────────────────────
 
     plantTree(x: number, y: number, settlerId: number): void {
-        // eslint-disable-next-line sonarjs/pseudo-random -- intentional game randomness for tree planting
-        const treeType = PLANTABLE_TREE_TYPES[Math.floor(Math.random() * PLANTABLE_TREE_TYPES.length)]!;
+        const treeType = this.gameState.rng.pick(PLANTABLE_TREE_TYPES)!;
 
         const result = this.executeCommand({ type: 'plant_tree', treeType, x, y });
 
@@ -347,8 +344,7 @@ export class TreeSystem implements TickSystem {
             const spot = this.findPlantingSpot(cx, cy, radius);
             if (!spot) break;
 
-            // eslint-disable-next-line sonarjs/pseudo-random -- intentional game randomness for tree planting
-            const treeType = PLANTABLE_TREE_TYPES[Math.floor(Math.random() * PLANTABLE_TREE_TYPES.length)]!;
+            const treeType = this.gameState.rng.pick(PLANTABLE_TREE_TYPES)!;
             const result = this.executeCommand({ type: 'plant_tree', treeType, x: spot.x, y: spot.y });
             if (result.success) planted++;
         }

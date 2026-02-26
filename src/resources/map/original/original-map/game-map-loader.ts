@@ -62,80 +62,36 @@ export class OriginalMapLoader extends OriginalMapFile implements IMapLoader {
     private parseEntityData(): MapEntityData {
         const data = createEmptyEntityData();
 
-        // Parse player information (chunk type 2)
         const playerReader = this.getChunkReader(MapChunkType.MapPlayerInformation);
-        if (playerReader) {
-            data.players = parsePlayerInformation(playerReader);
-            this.logLoader.debug(`Parsed ${data.players.length} players`);
-        }
+        if (playerReader) data.players = parsePlayerInformation(playerReader);
 
-        // Parse buildings (chunk type 8)
         const buildingReader = this.getChunkReader(MapChunkType.MapBuildings);
-        if (buildingReader) {
-            data.buildings = parseBuildings(buildingReader);
-            this.logLoader.debug(`Parsed ${data.buildings.length} buildings`);
-        }
+        if (buildingReader) data.buildings = parseBuildings(buildingReader);
 
-        // Parse settlers (chunk type 7)
         const settlerReader = this.getChunkReader(MapChunkType.MapSettlers);
-        if (settlerReader) {
-            data.settlers = parseSettlers(settlerReader);
-            this.logLoader.debug(`Parsed ${data.settlers.length} settlers`);
-        }
+        if (settlerReader) data.settlers = parseSettlers(settlerReader);
 
-        // Parse stacks (chunk type 9)
         const stackReader = this.getChunkReader(MapChunkType.MapStacks);
-        if (stackReader) {
-            data.stacks = parseStacks(stackReader);
-            this.logLoader.debug(`Parsed ${data.stacks.length} stacks`);
-        }
+        if (stackReader) data.stacks = parseStacks(stackReader);
 
-        // Parse map objects - trees, decorations (chunk type 6)
-        // This is tile-based data, need to pass map dimensions
         const objectReader = this.getChunkReader(MapChunkType.MapObjects);
-        if (objectReader) {
-            data.objects = parseMapObjects(objectReader, this.mapSize.width, this.mapSize.height);
-            this.logLoader.debug(`Parsed ${data.objects.length} map objects (trees)`);
-        }
+        if (objectReader) data.objects = parseMapObjects(objectReader, this.mapSize.width, this.mapSize.height);
 
-        // Parse team information (chunk type 3)
         const teamReader = this.getChunkReader(MapChunkType.MapTeamInformation);
-        if (teamReader) {
-            data.teams = parseTeamInformation(teamReader);
-            this.logLoader.debug(`Parsed team data: ${data.teams.teamAssignments.length} slots`);
-        }
+        if (teamReader) data.teams = parseTeamInformation(teamReader);
 
-        // Parse quest text (chunk type 11)
         const questTextReader = this.getChunkReader(MapChunkType.MapQuestText);
-        if (questTextReader) {
-            data.quest.questText = parseQuestText(questTextReader);
-        }
+        if (questTextReader) data.quest.questText = parseQuestText(questTextReader);
 
-        // Parse quest tip (chunk type 12)
         const questTipReader = this.getChunkReader(MapChunkType.MapQuestTip);
-        if (questTipReader) {
-            data.quest.questTip = parseQuestText(questTipReader);
-        }
+        if (questTipReader) data.quest.questTip = parseQuestText(questTipReader);
 
-        // Log unknown chunks for future analysis
-        this.logUnknownChunk(MapChunkType.MapPreview, 'MapPreview (type 4)');
-        this.logUnknownChunk(MapChunkType.MapUnknown5, 'MapUnknown5 (type 5)');
-        this.logUnknownChunk(MapChunkType.MapUnknown10, 'MapUnknown10 (type 10)');
+        this.logLoader.debug(
+            `Parsed: ${data.players.length} players, ${data.buildings.length} buildings, ` +
+                `${data.settlers.length} settlers, ${data.stacks.length} stacks, ${data.objects.length} objects`
+        );
 
         return data;
-    }
-
-    /** Log size and first bytes of an unparsed chunk for analysis. */
-    private logUnknownChunk(chunkType: MapChunkType, label: string): void {
-        const reader = this.getChunkReader(chunkType);
-        if (!reader) return;
-        const len = reader.length;
-        const preview = Math.min(len, 32);
-        const bytes: string[] = [];
-        for (let i = 0; i < preview; i++) {
-            bytes.push(reader.readByte().toString(16).padStart(2, '0'));
-        }
-        this.logLoader.debug(`${label}: ${len} bytes — [${bytes.join(' ')}]`);
     }
 
     public readGeneralInformation(): boolean {

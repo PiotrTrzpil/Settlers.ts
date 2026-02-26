@@ -60,17 +60,12 @@ export class BuildingInventoryManager {
     private changeListeners: Set<InventoryChangeCallback> = new Set();
     private _debugId = ++_instanceCounter;
 
-    constructor() {
-        log.debug(`Created instance #${this._debugId}`);
-    }
-
     /**
      * Register a callback for inventory changes.
      * @param callback Function to call when inventory changes
      */
     onChange(callback: InventoryChangeCallback): void {
         this.changeListeners.add(callback);
-        log.debug(`#${this._debugId} Registered change listener, total: ${this.changeListeners.size}`);
     }
 
     /**

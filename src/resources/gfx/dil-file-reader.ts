@@ -1,4 +1,3 @@
-import { LogHandler } from '@/utilities/log-handler';
 import { BinaryReader } from '../file/binary-reader';
 import { IndexFile } from './index-file';
 
@@ -8,31 +7,6 @@ import { IndexFile } from './index-file';
  *        jil (job)    --> .dil (direction)--> gil (frames) --> gfx
  * */
 export class DilFileReader extends IndexFile {
-    private static log: LogHandler = new LogHandler('DilFileReader');
-
-    /** find the index matching a given gil offset */
-    public reverseLookupOffset(gilIndex: number): number {
-        const offsetTable = this.offsetTable;
-
-        const offset = gilIndex * 4 + 20;
-
-        let lastGood = 0;
-
-        for (let i = 0; i < offsetTable.length; i++) {
-            if (offsetTable[i]! === 0) {
-                continue;
-            }
-
-            if (offsetTable[i]! > offset) {
-                return lastGood;
-            }
-            lastGood = i;
-        }
-
-        DilFileReader.log.error('Unable to find offset gilIndex:' + gilIndex);
-        return lastGood;
-    }
-
     constructor(resourceReader: BinaryReader) {
         super(resourceReader);
         Object.seal(this);

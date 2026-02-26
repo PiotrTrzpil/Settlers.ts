@@ -87,8 +87,7 @@ export class StoneSystem {
 
         const entity = this.gameState.getEntityOrThrow(entityId, 'stone for registration');
 
-        // eslint-disable-next-line sonarjs/pseudo-random -- intentional visual variation
-        const variant = Math.random() < 0.5 ? 0 : 1;
+        const variant = this.gameState.rng.nextInt(STONE_VARIANTS);
 
         const state: StoneState = {
             stage: StoneStage.Normal,

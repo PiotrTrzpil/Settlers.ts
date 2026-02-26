@@ -80,8 +80,6 @@ export function parseStacks(reader: BinaryReader): MapStackData[] {
     const entrySize = determineEntrySize(dataLength);
     const entryCount = Math.floor(dataLength / entrySize);
 
-    log.debug(`Parsing stacks: ${dataLength} bytes, ${entryCount} entries (${entrySize} bytes each)`);
-
     for (let i = 0; i < entryCount && !reader.eof(); i++) {
         const startPos = reader.getOffset();
 
@@ -106,6 +104,5 @@ export function parseStacks(reader: BinaryReader): MapStackData[] {
         }
     }
 
-    log.debug(`Parsed ${stacks.length} stack entries`);
     return stacks;
 }

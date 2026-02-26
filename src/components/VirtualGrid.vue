@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts" generic="T">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useVirtualizer } from '@tanstack/vue-virtual';
 
 const props = withDefaults(
@@ -124,19 +124,9 @@ onUnmounted(() => {
     resizeObserver?.disconnect();
 });
 
-// Emit visible range on mount and when items change
-watch(
-    () => props.items.length,
-    async() => {
-        await nextTick();
-        emitVisible();
-    }
-);
-
-onMounted(async() => {
-    await nextTick();
-    emitVisible();
-});
+// Emit visible range whenever the virtualizer's visible rows change.
+// flush: 'post' ensures the DOM (slot canvases) is updated before parents render into them.
+watch(virtualRows, () => emitVisible(), { flush: 'post' });
 
 defineExpose({
     scrollToIndex(itemIndex: number) {

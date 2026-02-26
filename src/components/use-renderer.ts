@@ -606,7 +606,10 @@ export function useRenderer({
     }
 
     function getRace(): Race {
-        return entityRenderer?.getRace() ?? Race.Roman;
+        if (!entityRenderer) {
+            throw new Error('getRace called before entityRenderer is initialized');
+        }
+        return entityRenderer.getRace();
     }
 
     /**

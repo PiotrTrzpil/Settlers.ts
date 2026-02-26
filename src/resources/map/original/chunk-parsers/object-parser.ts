@@ -34,8 +34,6 @@ export function parseMapObjects(reader: BinaryReader, mapWidth: number, mapHeigh
     const data = reader.getBuffer();
     const bytesPerTile = dataLength / tileCount;
 
-    log.debug(`MapObjects: ${dataLength} bytes, ${mapWidth}x${mapHeight} map, ${bytesPerTile} bytes/tile`);
-
     if (bytesPerTile === 4) {
         // 4 bytes per tile (interleaved format)
         for (let i = 0; i < tileCount; i++) {
@@ -64,6 +62,5 @@ export function parseMapObjects(reader: BinaryReader, mapWidth: number, mapHeigh
         log.debug(`Unknown format: ${bytesPerTile} bytes/tile`);
     }
 
-    log.debug(`Parsed ${objects.length} map objects (all types)`);
     return objects;
 }

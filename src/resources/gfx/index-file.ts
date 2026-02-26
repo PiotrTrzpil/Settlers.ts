@@ -9,6 +9,28 @@ export class IndexFile extends ResourceFile {
         return this.offsetTable.length;
     }
 
+    /** Given a child-level index, find which entry in this index file owns it.
+     *  Used by JIL (child = DIL direction) and DIL (child = GIL frame). */
+    public reverseLookupIndex(childIndex: number): number {
+        const offsetTable = this.offsetTable;
+        const offset = childIndex * 4 + 20;
+
+        let lastGood = 0;
+
+        for (let i = 0; i < offsetTable.length; i++) {
+            if (offsetTable[i]! === 0) {
+                continue;
+            }
+
+            if (offsetTable[i]! > offset) {
+                return lastGood;
+            }
+            lastGood = i;
+        }
+
+        return lastGood;
+    }
+
     public getItems(start: number, length?: number): IndexFileItem[] {
         const end = length == null ? this.length : start + length;
         const list: IndexFileItem[] = [];

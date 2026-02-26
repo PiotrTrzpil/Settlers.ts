@@ -39,8 +39,8 @@ export class GfxFileReader extends ResourceFile {
         let jobIndex = index;
         /// if we use a jil file or not?
         if (this.dilFileReader && this.jilFileReader) {
-            const dirOffset = this.dilFileReader.reverseLookupOffset(index);
-            jobIndex = this.jilFileReader.reverseLookupOffset(dirOffset);
+            const dirOffset = this.dilFileReader.reverseLookupIndex(index);
+            jobIndex = this.jilFileReader.reverseLookupIndex(dirOffset);
 
             if (jobIndex === -1) {
                 jobIndex = this.lastGoodJobIndex;

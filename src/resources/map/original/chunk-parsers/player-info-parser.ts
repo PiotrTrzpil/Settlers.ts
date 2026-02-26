@@ -71,6 +71,5 @@ export function parsePlayerInformation(reader: BinaryReader): MapPlayerInfo[] {
         log.debug(`Player ${playerIndex}: tribe=${S4Tribe[tribe]}, pos=(${startX}, ${startY})${nameStr}`);
     }
 
-    log.debug(`Parsed ${players.length} player entries`);
     return players;
 }

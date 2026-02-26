@@ -2,11 +2,8 @@
  * Parser for jobInfo.xml
  */
 
-import { LogHandler } from '@/utilities/log-handler';
 import type { RaceId, RaceJobData, JobInfo, JobNode } from './types';
 import { parseXML, getChildText, getChildNumber } from './xml-utils';
-
-const log = new LogHandler('JobInfoParser');
 
 function parseJobNode(nodeEl: Element): JobNode {
     return {
@@ -56,7 +53,6 @@ export function parseJobInfo(xmlContent: string): Map<RaceId, RaceJobData> {
         }
 
         result.set(raceId, { jobs });
-        log.debug(`Parsed ${jobs.size} jobs for ${raceId}`);
     }
 
     return result;

@@ -9,11 +9,6 @@ import { IndexFile } from './index-file';
 export class GilFileReader extends IndexFile {
     private static log: LogHandler = new LogHandler('GilFileReader');
 
-    /** return the number of images stored in the gfx file */
-    public getImageCount(): number {
-        return this.offsetTable.length;
-    }
-
     /** return the file offset of a gfx image */
     public getImageOffset(index: number): number {
         if (index < 0 || index >= this.offsetTable.length) {

@@ -41,6 +41,9 @@ export class FeatureRegistry {
     /** All systems from loaded features */
     private readonly allSystems: TickSystem[] = [];
 
+    /** Track loaded feature IDs for summary logging */
+    private readonly loadedIds: string[] = [];
+
     constructor(config: FeatureRegistryConfig) {
         this.config = config;
     }
@@ -56,7 +59,7 @@ export class FeatureRegistry {
         }
         this.instances.set(featureId, { exports });
         this.exports.set(featureId, exports);
-        log.debug(`Registered external exports for '${featureId}'`);
+        this.loadedIds.push(featureId);
     }
 
     /**
@@ -96,7 +99,7 @@ export class FeatureRegistry {
             this.allSystems.push(...instance.systems);
         }
 
-        log.debug(`Loaded feature '${definition.id}'`);
+        this.loadedIds.push(definition.id);
     }
 
     /**
@@ -104,9 +107,14 @@ export class FeatureRegistry {
      * Automatically sorts features so dependencies are loaded first.
      */
     loadAll(definitions: FeatureDefinition[]): void {
+        const countBefore = this.loadedIds.length;
         const sorted = this.topologicalSort(definitions);
         for (const def of sorted) {
             this.load(def);
+        }
+        const loaded = this.loadedIds.slice(countBefore);
+        if (loaded.length > 0) {
+            log.debug(`Loaded ${loaded.length} features: ${loaded.join(', ')}`);
         }
     }
 
