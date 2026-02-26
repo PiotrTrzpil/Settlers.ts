@@ -74,6 +74,12 @@
                 :count="props.counts?.resources"
                 @update:modelValue="saveAndEmit()"
             />
+            <LayerCheckbox
+                v-model="visibility.showTerritory"
+                label="Territory"
+                emoji="🏰"
+                @update:modelValue="saveAndEmit()"
+            />
         </CollapseSection>
 
         <CollapseSection>

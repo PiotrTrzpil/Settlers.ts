@@ -1,6 +1,6 @@
 <template>
-    <label class="control-row">
-        <input type="checkbox" :checked="modelValue" tabindex="-1" @change="onChange" />
+    <label class="control-row" :class="{ disabled }">
+        <input type="checkbox" :checked="modelValue" :disabled="disabled" tabindex="-1" @change="onChange" />
         <span class="control-label">{{ label }}<slot /></span>
     </label>
 </template>
@@ -9,6 +9,7 @@
 defineProps<{
     label: string;
     modelValue: boolean;
+    disabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -45,5 +46,10 @@ function onChange(e: Event) {
 .control-row input[type='checkbox'] {
     accent-color: var(--text-accent);
     cursor: pointer;
+}
+
+.control-row.disabled {
+    opacity: 0.4;
+    pointer-events: none;
 }
 </style>

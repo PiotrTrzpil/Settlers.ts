@@ -32,16 +32,25 @@ import {
     PlaceBuildingMode,
     PlaceResourceMode,
     PlaceUnitMode,
-    StackAdjustMode,
+    BuildingAdjustMode,
     getDefaultInputConfig,
 } from '@/game/input';
 import { StackPositions } from '@/game/features/inventory/stack-positions';
+import { EntranceAdjustHandler, SpriteLayerAdjustHandler, StackAdjustHandler } from '@/game/features/building-adjust';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
 // eslint-disable-next-line sonarjs/deprecation -- legacy preview types kept for backward compat branch
 import type { SelectionBox, BuildingPreview, ResourcePreview, ModeRenderState } from '@/game/input/render-state';
-import { createRenderContext, type ServiceAreaRenderData } from '@/game/renderer/render-context';
+import {
+    createRenderContext,
+    OverlayRenderLayer,
+    type BuildingOverlayRenderData,
+    type ServiceAreaRenderData,
+    type TerritoryDotRenderData,
+} from '@/game/renderer/render-context';
 import { getBuildingVisualState, BuildingConstructionPhase } from '@/game/features/building-construction';
-import { EntityType } from '@/game/entity';
+import { PIXELS_TO_WORLD } from '@/game/renderer/sprite-metadata';
+import { EntityType, type BuildingType } from '@/game/entity';
+import { getOverlayFrame } from '@/game/systems/building-overlays';
 
 /** Context object for render callback - avoids excessive callback parameters */
 interface CallbackContext {
@@ -74,6 +83,11 @@ function syncEntityRendererState(
         }
     }
 
+    // Collect territory boundary dots (only when territory display is enabled)
+    const territoryDots: readonly TerritoryDotRenderData[] = ctx.layerVisibility.showTerritory
+        ? g.services.territoryManager.getBoundaryDots()
+        : [];
+
     // Feature-specific computation happens here (glue layer), not in the renderer.
     // The renderer receives pre-computed BuildingRenderState via the context.
     const bsm = g.services.buildingStateManager;
@@ -89,8 +103,10 @@ function syncEntityRendererState(
             return {
                 useConstructionSprite: vs.useConstructionSprite,
                 verticalProgress: vs.verticalProgress,
-                showConstructionBackground: vs.phase === BuildingConstructionPhase.CompletedRising,
             };
+        })
+        .buildingOverlaysGetter(entityId => {
+            return resolveBuildingOverlays(entityId, g, er);
         })
         .animationStateGetter(entityId => animService.getState(entityId))
         .selection({
@@ -98,6 +114,7 @@ function syncEntityRendererState(
             ids: g.state.selection.selectedEntityIds,
         })
         .selectedServiceAreas(serviceAreas)
+        .territoryDots(territoryDots)
         .alpha(alpha)
         .layerVisibility(ctx.layerVisibility)
         .settings({
@@ -113,6 +130,77 @@ function syncEntityRendererState(
 
     // Use the new setContext method
     er.setContext(renderContext);
+}
+
+const EMPTY_OVERLAY_DATA: readonly BuildingOverlayRenderData[] = [];
+
+/**
+ * Resolve all overlay render data for a building entity.
+ * Produces both construction overlays (background sprite during CompletedRising)
+ * and custom overlays from the BuildingOverlayManager.
+ */
+function resolveBuildingOverlays(entityId: number, g: Game, er: EntityRenderer): readonly BuildingOverlayRenderData[] {
+    const result: BuildingOverlayRenderData[] = [];
+    resolveConstructionOverlay(entityId, g, er, result);
+    resolveCustomOverlays(entityId, g, er, result);
+    return result.length > 0 ? result : EMPTY_OVERLAY_DATA;
+}
+
+/** During CompletedRising, emit the construction sprite behind the rising completed building. */
+function resolveConstructionOverlay(
+    entityId: number,
+    g: Game,
+    er: EntityRenderer,
+    out: BuildingOverlayRenderData[]
+): void {
+    const buildingState = g.services.buildingStateManager.getBuildingState(entityId);
+    const vs = getBuildingVisualState(buildingState);
+    if (vs.phase !== BuildingConstructionPhase.CompletedRising || !er.spriteManager) return;
+
+    const entity = g.state.getEntity(entityId);
+    if (!entity) return;
+
+    const constructionSprite = er.spriteManager.getBuildingConstruction(entity.subType as BuildingType, entity.race);
+    if (!constructionSprite) return;
+
+    out.push({
+        sprite: constructionSprite,
+        worldOffsetX: 0,
+        worldOffsetY: 0,
+        layer: OverlayRenderLayer.BehindBuilding,
+        teamColored: true,
+        verticalProgress: 1.0,
+    });
+}
+
+/** Resolve custom overlays (smoke, wheels, etc.) from the BuildingOverlayManager. */
+function resolveCustomOverlays(entityId: number, g: Game, er: EntityRenderer, out: BuildingOverlayRenderData[]): void {
+    const instances = g.services.buildingOverlayManager.getOverlays(entityId);
+    if (!instances) return;
+
+    for (const inst of instances) {
+        if (!inst.active) continue;
+
+        const spriteRef = inst.def.spriteRef;
+        const frames = er.spriteManager?.getOverlayFrames(
+            spriteRef.gfxFile,
+            spriteRef.jobIndex,
+            spriteRef.directionIndex ?? 0
+        );
+        if (!frames || frames.length === 0) continue;
+
+        const frameIndex = getOverlayFrame(inst);
+        const sprite = frames[Math.min(frameIndex, frames.length - 1)]!;
+
+        out.push({
+            sprite,
+            worldOffsetX: inst.def.pixelOffsetX * PIXELS_TO_WORLD,
+            worldOffsetY: inst.def.pixelOffsetY * PIXELS_TO_WORLD,
+            layer: inst.def.layer as number as OverlayRenderLayer,
+            teamColored: inst.def.teamColored ?? false,
+            verticalProgress: 1.0,
+        });
+    }
 }
 
 /** Handle placement mode rendering state using consolidated preview */
@@ -270,24 +358,34 @@ function updateTileDebugStats(
 }
 
 /**
- * Create StackAdjustMode with lazy game dependency resolution.
- * Dependencies are resolved on each use via the getDeps callback.
+ * Create BuildingAdjustMode with lazy game dependency resolution.
+ * Registers all three adjust handlers: entrance, sprite layers, and stacks.
  */
-function createStackAdjustMode(getGame: () => Game | null): StackAdjustMode {
+function createBuildingAdjustMode(getGame: () => Game | null): BuildingAdjustMode {
     const stackPositions = new StackPositions();
+    let handlers: readonly import('@/game/features/building-adjust/types').BuildingAdjustHandler[] | null = null;
     let connected = false;
 
-    return new StackAdjustMode(() => {
+    return new BuildingAdjustMode(() => {
         const game = getGame();
         if (!game) return null;
+
         if (!connected) {
             game.services.inventoryVisualizer.setStackPositions(stackPositions);
             connected = true;
         }
+
+        if (!handlers) {
+            handlers = [
+                new EntranceAdjustHandler(),
+                new SpriteLayerAdjustHandler(game.services.overlayRegistry),
+                new StackAdjustHandler(stackPositions, game.services.inventoryVisualizer),
+            ];
+        }
+
         return {
             gameState: game.state,
-            inventoryVisualizer: game.services.inventoryVisualizer,
-            stackPositions,
+            handlers,
         };
     });
 }
@@ -301,13 +399,17 @@ async function initRenderersAsync(
     entityRenderer: EntityRenderer,
     _game: Game
 ): Promise<void> {
+    // Start IndexedDB cache read in parallel with landscape init
+    entityRenderer.spriteManager?.prefetchCache();
+
     const t0 = performance.now();
     await landscapeRenderer.init(gl);
     debugStats.state.loadTimings.landscape = Math.round(performance.now() - t0);
     debugStats.state.gameLoaded = true;
 
     await entityRenderer.init(gl);
-    debugStats.state.rendererReady = true;
+    // Note: entityRenderer.init() returns immediately — sprites load in background.
+    // markRendererReady() is called from the onSpritesLoaded callback instead.
 }
 
 /** Expose objects for e2e tests */
@@ -375,6 +477,7 @@ export function useRenderer({
     let entityRenderer: EntityRenderer | null = null;
     let landscapeRenderer: LandscapeRenderer | null = null;
     let inputManager: InputManager | null = null;
+    let rendererInitStart = 0;
 
     // Selection box state for rendering drag selection overlay
     const selectionBox = ref<SelectionBox | null>(null);
@@ -458,7 +561,7 @@ export function useRenderer({
                 return game ? canPlaceUnit(game.terrain, game.state.tileOccupancy, x, y) : false;
             }, tileHover)
         );
-        inputManager.registerMode(createStackAdjustMode(getGame));
+        inputManager.registerMode(createBuildingAdjustMode(getGame));
         inputManager.attach();
 
         // Connect camera mode to the ViewPoint
@@ -497,7 +600,11 @@ export function useRenderer({
             }
         );
         entityRenderer.skipSpriteLoading = game.useProceduralTextures;
-        entityRenderer.onSpritesLoaded = () => game.enableTicks();
+        entityRenderer.onSpritesLoaded = () => {
+            debugStats.state.mapLoadTimings.rendererInit = Math.round(performance.now() - rendererInitStart);
+            debugStats.markRendererReady();
+            game.enableTicks();
+        };
         renderer.add(entityRenderer);
     }
 
@@ -509,6 +616,7 @@ export function useRenderer({
 
         const gl = renderer.gl;
         if (gl) {
+            rendererInitStart = performance.now();
             void initRenderersAsync(gl, landscapeRenderer, entityRenderer, game);
         } else {
             debugStats.state.gameLoaded = true;

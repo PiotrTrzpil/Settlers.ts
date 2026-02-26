@@ -1,5 +1,6 @@
 <template>
     <div
+        v-if="!embedded"
         class="overlay-panel"
         :class="{ collapsed: !open }"
         :style="minWidth !== '200px' ? { '--panel-min-width': minWidth } : {}"
@@ -12,9 +13,14 @@
             <slot />
         </div>
     </div>
+    <!-- Embedded mode: no chrome, always show content -->
+    <div v-else class="panel-sections">
+        <slot />
+    </div>
 </template>
 
 <script setup lang="ts">
+import { inject } from 'vue';
 import PanelToggleButton from './PanelToggleButton.vue';
 
 withDefaults(
@@ -27,6 +33,7 @@ withDefaults(
 );
 
 const open = defineModel<boolean>('open', { required: true });
+const embedded = inject<boolean>('overlay-panel-embedded', false);
 </script>
 
 <style scoped>

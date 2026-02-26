@@ -27,7 +27,7 @@
                         :class="{ active: activeTab === 'buildings' }"
                         @click="activeTab = 'buildings'"
                     >
-                        Buildings
+                        Build
                     </button>
                     <button class="tab-btn" :class="{ active: activeTab === 'units' }" @click="activeTab = 'units'">
                         Units
@@ -37,7 +37,7 @@
                         :class="{ active: activeTab === 'resources' }"
                         @click="activeTab = 'resources'"
                     >
-                        Resources
+                        Goods
                     </button>
                 </div>
 
@@ -55,15 +55,14 @@
                     >
                         <span class="btn-icon">
                             <img
-                                v-if="getIconUrl(b.type)"
-                                :src="
-                                    getIconUrl(
-                                        b.type,
-                                        currentMode === 'place_building' && placeBuildingType === b.type
-                                    )!
-                                "
+                                v-if="buildingIcons[b.type]"
+                                :src="buildingIcons[b.type]!.url"
                                 :alt="b.name"
                                 class="building-icon-img"
+                                :style="{
+                                    width: buildingIcons[b.type]!.size + 'px',
+                                    height: buildingIcons[b.type]!.size + 'px',
+                                }"
                             />
                             <span v-else>{{ b.icon }}</span>
                         </span>
@@ -107,34 +106,6 @@
                         <span class="btn-label">{{ r.name }}</span>
                     </button>
                 </div>
-
-                <!-- Mode controls at bottom -->
-                <div class="sidebar-footer">
-                    <button
-                        class="sidebar-btn mode-btn"
-                        data-testid="btn-select-mode"
-                        :class="{ active: currentMode === 'select' }"
-                        @click="setSelectMode()"
-                    >
-                        Select
-                    </button>
-                    <button
-                        class="sidebar-btn mode-btn"
-                        data-testid="btn-remove-entity"
-                        :disabled="!selectedEntity"
-                        @click="removeSelected()"
-                    >
-                        Delete
-                    </button>
-                    <button
-                        class="sidebar-btn mode-btn"
-                        data-testid="btn-pause"
-                        :class="{ active: isPaused }"
-                        @click="togglePause()"
-                    >
-                        {{ isPaused ? 'Resume' : 'Pause' }}
-                    </button>
-                </div>
             </aside>
 
             <!-- RIGHT: Canvas area + info bar -->
@@ -153,9 +124,6 @@
                     </div>
                     <div class="mode-indicator" data-testid="mode-indicator" :data-mode="currentMode">
                         Mode: <strong>{{ currentMode }}</strong>
-                    </div>
-                    <div class="entity-count" data-testid="entity-count" :data-count="game.state.entities.length">
-                        Entities: {{ game.state.entities.length }}
                     </div>
                     <div
                         class="tile-info"
@@ -192,20 +160,22 @@
                     class="game-canvas"
                 />
 
+                <!-- "Ticks paused" overlay — visible when game loop runs but ticks don't -->
+                <div v-if="ticksPaused" class="ticks-paused-overlay">TICKS PAUSED</div>
+
                 <!-- Left panel container (selection info) -->
                 <div class="left-panels">
                     <selection-panel :game="game" />
                 </div>
 
-                <!-- Right panel container (layers + settings + debug) -->
+                <!-- Right panel container (tabbed: layers, settings, logistics, debug) -->
                 <div class="right-panels">
-                    <layer-panel :counts="layerCounts" @update:visibility="updateLayerVisibility" />
-                    <settings-panel :game="game" />
-                    <logistics-debug-panel :game="game" />
-                    <debug-panel
+                    <tabbed-panel
                         :game="game"
                         :paused="isPaused"
                         :currentRace="currentRace"
+                        :counts="layerCounts"
+                        @update:visibility="updateLayerVisibility"
                         @togglePause="togglePause()"
                         @resetGameState="resetGameState()"
                     />
@@ -241,17 +211,13 @@
 import { ref, computed, useTemplateRef, watch } from 'vue';
 import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
-import { useBuildingIcons } from '@/composables/useBuildingIcons';
 import { Race, RACE_NAMES, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
 import { SoundManager } from '@/game/audio/sound-manager';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
-import DebugPanel from '@/components/debug-panel.vue';
-import LayerPanel from '@/components/layer-panel.vue';
-import SettingsPanel from '@/components/settings-panel.vue';
 import SelectionPanel from '@/components/selection-panel.vue';
-import LogisticsDebugPanel from '@/components/logistics-debug-panel.vue';
+import TabbedPanel from '@/components/TabbedPanel.vue';
 import Checkbox from '@/components/Checkbox.vue';
 
 const props = defineProps<{
@@ -288,11 +254,10 @@ const {
     setPlaceMode: setPlaceModeBase,
     setPlaceResourceMode,
     setPlaceUnitMode,
-    setSelectMode,
-    removeSelected,
     togglePause,
     resetGameState,
     updateLayerVisibility,
+    buildingIcons,
 } = useMapView(
     () => props.fileManager,
     () => rendererRef.value?.getInputManager?.() ?? null,
@@ -318,10 +283,6 @@ const availableRaces = AVAILABLE_RACES.map(race => ({
     value: race,
     name: RACE_NAMES[race],
 }));
-
-// Building icons
-const fileManagerRef = computed(() => props.fileManager);
-const { getIconUrl } = useBuildingIcons(fileManagerRef, currentRace);
 
 // Building placement options
 const placeBuildingsCompleted = computed({
@@ -349,6 +310,9 @@ function onRaceChange() {
     // controls which buildings appear in the placement menu.
     SoundManager.getInstance().playRandomMusic(currentRace.value);
 }
+
+// Ticks paused indicator — true when game loop renders but logic ticks are not running
+const ticksPaused = computed(() => game.value?.viewState.state.ticksPaused ?? false);
 
 // Key to force renderer recreation when graphics settings change
 const rendererKey = ref(0);
@@ -404,7 +368,7 @@ watch(
 
 .tab-btn {
     flex: 1;
-    padding: 10px 4px;
+    padding: 6px 4px;
     background: #1a1209;
     color: #8a7040;
     border: none;
@@ -434,8 +398,8 @@ watch(
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 6px;
+    gap: 0;
+    padding: 2px 6px;
     overflow-y: auto;
 }
 
@@ -486,7 +450,7 @@ watch(
     align-items: center;
     gap: 4px;
     width: 100%;
-    padding: 2px 6px;
+    padding: 0 6px;
     background: #2c1e0e;
     color: #c8a96e;
     border: 1px solid #4a3218;
@@ -518,50 +482,38 @@ watch(
 
 .btn-icon {
     font-size: 14px;
-    width: 32px;
-    height: 32px;
+    width: 56px;
+    height: 56px;
     text-align: center;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    background: radial-gradient(circle, rgba(212, 160, 48, 0.35) 0%, rgba(212, 160, 48, 0.08) 60%, transparent 100%);
+    border-radius: 3px;
 }
 
 .building-icon-img {
-    max-width: 32px;
-    max-height: 32px;
     object-fit: contain;
-    image-rendering: pixelated;
+}
+
+.sidebar-btn.active .btn-icon {
+    background: radial-gradient(circle, rgba(212, 160, 48, 0.3) 0%, transparent 70%);
+}
+
+.sidebar-btn.active .building-icon-img {
+    filter: brightness(1.3) drop-shadow(0 0 3px #ffd700);
 }
 
 .resource-icon {
-    width: 24px;
-    height: 24px;
+    max-width: 52px;
+    max-height: 52px;
     object-fit: contain;
-    image-rendering: pixelated;
     filter: drop-shadow(1px 1px 0 rgba(0, 0, 0, 0.5));
 }
 
 .btn-label {
     flex: 1;
-}
-
-/* ===== SIDEBAR FOOTER (mode controls) ===== */
-.sidebar-footer {
-    margin-top: auto;
-    border-top: 2px solid #5c3d1a;
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.mode-btn {
-    justify-content: center;
-    font-weight: bold;
-    text-transform: uppercase;
-    font-size: 12px;
-    letter-spacing: 0.5px;
 }
 
 /* ===== CANVAS AREA ===== */
@@ -626,20 +578,11 @@ watch(
     font-size: 12px;
 }
 
-.entity-count {
-    padding: 3px 8px;
-    background: #2a1a1a;
-    border: 1px solid #4a2a2a;
-    border-radius: 3px;
-    color: #d09060;
-    font-size: 12px;
-}
-
 .race-selector-sidebar {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 2px 8px;
     background: #1a1209;
     border-bottom: 2px solid #5c3d1a;
     color: #c8a96e;
@@ -657,7 +600,7 @@ watch(
     color: #c8a96e;
     border: 1px solid #4a3218;
     border-radius: 4px;
-    padding: 6px 8px;
+    padding: 2px 6px;
     font-size: 13px;
     cursor: pointer;
 }
@@ -673,17 +616,17 @@ watch(
     min-height: 0;
 }
 
-/* Left panels container (selection info) */
+/* Left panels container (selection info) — positioned below the info bar */
 .left-panels {
     position: absolute;
-    top: 8px;
+    top: 44px;
     left: 8px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
     z-index: 100;
-    max-height: calc(100% - 16px);
+    max-height: calc(100% - 52px);
     pointer-events: none;
 }
 
@@ -706,6 +649,35 @@ watch(
     display: block;
     margin: 0;
     border: none;
+}
+
+/* Ticks-paused warning overlay */
+.ticks-paused-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: 6px;
+    color: rgba(255, 60, 60, 0.7);
+    text-shadow:
+        0 0 20px rgba(0, 0, 0, 0.8),
+        0 2px 4px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    z-index: 200;
+    user-select: none;
+    animation: pulse-pause 2s ease-in-out infinite;
+}
+
+@keyframes pulse-pause {
+    0%,
+    100% {
+        opacity: 0.7;
+    }
+    50% {
+        opacity: 0.3;
+    }
 }
 
 /* ===== SCROLLBAR ===== */

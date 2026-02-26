@@ -1,18 +1,6 @@
 <template>
-    <div class="selection-panel">
-        <!-- Empty state when nothing selected -->
-        <template v-if="!selectedEntity">
-            <div class="panel-header">
-                <span class="header-icon">👆</span>
-                <span class="header-title">Selection</span>
-            </div>
-            <div class="panel-body">
-                <div class="empty-state">Click to select a unit or building</div>
-            </div>
-        </template>
-
-        <!-- Selected entity info -->
-        <template v-else>
+    <div v-if="selectedEntity" class="selection-panel">
+        <template>
             <div class="panel-header">
                 <span class="header-icon">{{ entityIcon }}</span>
                 <span class="header-title">{{ entityTypeName }}</span>
@@ -40,6 +28,36 @@
                     <StatRow v-if="buildingStatus" label="Status">
                         <span class="status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
                     </StatRow>
+                </template>
+
+                <!-- Building Adjustments (only for buildings, only when debug panel is open) -->
+                <template v-if="isBuilding && showDebugInfo && adjustGroups.length > 0">
+                    <div class="info-section adjust-section">
+                        <div class="section-label adjust-label" @click="adjustExpanded = !adjustExpanded">
+                            <span class="caret">{{ adjustExpanded ? '▼' : '▶' }}</span>
+                            Adjustments
+                        </div>
+                        <template v-if="adjustExpanded">
+                            <div v-for="group in adjustGroups" :key="group.category" class="adjust-group">
+                                <div class="adjust-group-header">{{ group.categoryLabel }}</div>
+                                <div
+                                    v-for="item in group.items"
+                                    :key="item.key"
+                                    class="adjust-item"
+                                    :class="{ active: activeAdjustKey === item.key }"
+                                    @click="toggleAdjustItem(group.handler, item)"
+                                >
+                                    <span class="adjust-item-label">{{ item.label }}</span>
+                                    <span class="adjust-item-offset">{{
+                                        getItemOffsetLabel(group.handler, item)
+                                    }}</span>
+                                    <span class="adjust-item-precision">{{
+                                        item.precision === 'pixel' ? 'px' : 'tile'
+                                    }}</span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
                 </template>
 
                 <!-- Debug Info Section (only when debug panel is open) -->
@@ -154,6 +172,9 @@ import {
     FATIGUE_LEVEL_CLASSES,
 } from '@/composables/useLogisticsDebug';
 import type { Game } from '@/game/game';
+import { getBridge } from '@/game/debug-bridge';
+import type { BuildingAdjustHandler, AdjustableItem } from '@/game/features/building-adjust/types';
+import { BuildingAdjustMode } from '@/game/input/modes/building-adjust-mode';
 
 const props = defineProps<{
     game: Game | null;
@@ -283,6 +304,108 @@ const debugExpanded = ref(true);
 
 // Show debug info only when debug panel is open
 const showDebugInfo = computed(() => debugStats.state.debugPanelOpen);
+
+// ============================================================================
+// Building Adjustments
+// ============================================================================
+
+const adjustExpanded = ref(false);
+
+/** Get the BuildingAdjustMode if currently registered. */
+function getAdjustMode(): BuildingAdjustMode | null {
+    const input = getBridge().input;
+    if (!input) return null;
+    const mode = input.getMode('building-adjust');
+    return mode instanceof BuildingAdjustMode ? mode : null;
+}
+
+/** Item groups for the current building. */
+interface AdjustGroup {
+    category: string;
+    categoryLabel: string;
+    handler: BuildingAdjustHandler;
+    items: readonly AdjustableItem[];
+}
+
+const adjustGroups = computed<AdjustGroup[]>(() => {
+    const entity = selectedEntity.value;
+    if (!entity || entity.type !== EntityType.Building) return [];
+
+    const mode = getAdjustMode();
+    if (!mode) return [];
+
+    const buildingType = entity.subType as BuildingType;
+    const race = entity.race;
+    const groups: AdjustGroup[] = [];
+
+    for (const handler of mode.getHandlers()) {
+        const items = handler.getItems(buildingType, race);
+        if (items.length > 0) {
+            groups.push({
+                category: handler.category,
+                categoryLabel: handler.categoryLabel,
+                handler,
+                items,
+            });
+        }
+    }
+
+    return groups;
+});
+
+/** Currently active adjust item key (if any). */
+const activeAdjustKey = computed<string | null>(() => {
+    const mode = getAdjustMode();
+    if (!mode) return null;
+    const active = mode.getActiveAdjustment();
+    return active?.item.key ?? null;
+});
+
+/** Toggle an adjust item: click to activate, click again to deactivate. */
+function toggleAdjustItem(handler: BuildingAdjustHandler, item: AdjustableItem): void {
+    const input = getBridge().input;
+    if (!input) return;
+
+    const entity = selectedEntity.value;
+    if (!entity) return;
+
+    const mode = getAdjustMode();
+    if (!mode) return;
+
+    // If clicking the already-active item, deactivate
+    const currentActive = mode.getActiveAdjustment();
+    if (currentActive?.item.key === item.key) {
+        mode.clearActiveItem();
+        if (input.getModeName() === 'building-adjust') {
+            input.switchMode('select');
+        }
+        return;
+    }
+
+    // Switch to building-adjust mode if not already in it
+    if (input.getModeName() !== 'building-adjust') {
+        input.switchMode('building-adjust');
+    }
+
+    mode.setActiveItem(entity.id, item, handler);
+}
+
+/** Get a display label for the current offset value. */
+function getItemOffsetLabel(handler: BuildingAdjustHandler, item: AdjustableItem): string {
+    const entity = selectedEntity.value;
+    if (!entity) return '';
+
+    const offset = handler.getOffset(entity.subType as BuildingType, entity.race, item.key);
+    if (!offset) return '—';
+
+    if ('dx' in offset) {
+        return `${offset.dx},${offset.dy}`;
+    }
+    if ('px' in offset) {
+        return `${offset.px},${offset.py}`;
+    }
+    return '—';
+}
 
 // Carrier debug info
 interface CarrierDebugInfo {
@@ -668,5 +791,75 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
 .reserved {
     color: var(--text-muted);
     font-size: 8px;
+}
+
+/* Adjust Section */
+.adjust-section {
+    border-top-color: var(--border-soft);
+}
+
+.adjust-label {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.adjust-label:hover {
+    color: var(--text-secondary);
+}
+
+.adjust-group {
+    margin-top: 2px;
+}
+
+.adjust-group-header {
+    font-size: 8px;
+    text-transform: uppercase;
+    color: #5a4a30;
+    letter-spacing: 0.5px;
+    padding: 2px 0 1px;
+}
+
+.adjust-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    cursor: pointer;
+    border-radius: 2px;
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.adjust-item:hover {
+    background: rgba(60, 40, 16, 0.4);
+    color: var(--text);
+}
+
+.adjust-item.active {
+    background: rgba(80, 120, 200, 0.25);
+    color: var(--text-bright);
+}
+
+.adjust-item-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.adjust-item-offset {
+    font-size: 9px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+}
+
+.adjust-item-precision {
+    font-size: 7px;
+    text-transform: uppercase;
+    color: #4a3a2a;
+    min-width: 16px;
+    text-align: right;
 }
 </style>

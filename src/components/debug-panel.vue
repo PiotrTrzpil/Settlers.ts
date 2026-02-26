@@ -1,60 +1,8 @@
 <template>
     <OverlayPanel v-model:open="open" label="Debug" title="Debug Panel">
-        <!-- Performance -->
-        <CollapseSection title="Performance">
-            <StatRow label="FPS"
-                ><span :class="fpsClass">{{ stats.fps }}</span></StatRow
-            >
-            <StatRow label="Frame (avg)" :value="`${stats.frameTimeMs} ms`" />
-            <StatRow label="Frame (min/max)" :value="`${stats.frameTimeMin} / ${stats.frameTimeMax} ms`" />
-            <StatRow label="Ticks/sec" :value="stats.ticksPerSec" />
-        </CollapseSection>
-
-        <!-- Render Timings -->
-        <CollapseSection title="Frame Timings" :default-open="false">
-            <StatRow label="Frame" :value="`${stats.renderTimings.frame} ms`" total />
-            <StatRow label="Ticks" :value="`${stats.renderTimings.ticks} ms`" />
-            <StatRow
-                v-for="(ms, name) in stats.renderTimings.tickSystems"
-                :key="name"
-                :label="name"
-                :value="`${ms} ms`"
-                :depth="1"
-            />
-            <StatRow label="Animations" :value="`${stats.renderTimings.animations} ms`" />
-            <StatRow label="Update" :value="`${stats.renderTimings.update} ms`" />
-            <StatRow label="Callback" :value="`${stats.renderTimings.callback} ms`" />
-            <StatRow label="Idle" :value="`${stats.renderTimings.idle} ms`" />
-            <StatRow label="Render" :value="`${stats.renderTimings.render} ms`" />
-            <StatRow label="Landscape" :value="`${stats.renderTimings.landscape} ms`" :depth="1" />
-            <StatRow label="Cull/Sort" :value="`${stats.renderTimings.cullSort} ms`" :depth="1" />
-            <StatRow label="Entities" :value="`${stats.renderTimings.entities} ms`" :depth="1" />
-            <StatRow label="Indicators" :value="`${stats.renderTimings.indicators} ms`" :depth="2" />
-            <StatRow label="Textured" :value="`${stats.renderTimings.textured} ms`" :depth="2" />
-            <StatRow label="Color" :value="`${stats.renderTimings.color} ms`" :depth="2" />
-            <StatRow label="Selection" :value="`${stats.renderTimings.selection} ms`" :depth="2" />
-            <StatRow label="Visible" :value="stats.renderTimings.visibleCount" :depth="1" />
-            <StatRow label="Sprites" :value="stats.renderTimings.spriteCount" :depth="1" />
-            <StatRow label="Draw calls" :value="stats.renderTimings.drawCalls" :depth="1" />
-        </CollapseSection>
-
-        <!-- Load Timings -->
-        <CollapseSection title="Load Timings" :default-open="false">
-            <StatRow label="Landscape" :value="`${stats.loadTimings.landscape} ms`" />
-            <StatRow label="File preload" :value="`${stats.loadTimings.filePreload} ms`" />
-            <StatRow label="Atlas alloc" :value="`${stats.loadTimings.atlasAlloc} ms`" />
-            <StatRow label="Buildings" :value="`${stats.loadTimings.buildings} ms`" />
-            <StatRow label="Map objects" :value="`${stats.loadTimings.mapObjects} ms`" />
-            <StatRow label="Resources" :value="`${stats.loadTimings.resources} ms`" />
-            <StatRow label="Units" :value="`${stats.loadTimings.units} ms`" />
-            <StatRow label="GPU upload" :value="`${stats.loadTimings.gpuUpload} ms`" />
-            <StatRow label="Total sprites" :value="`${stats.loadTimings.totalSprites} ms`" total />
-            <StatRow label="Atlas size" :value="stats.loadTimings.atlasSize || '-'" />
-            <StatRow label="Sprite count" :value="stats.loadTimings.spriteCount" />
-            <StatRow label="Cache"
-                ><span :class="cacheClass">{{ cacheLabel }}</span></StatRow
-            >
-        </CollapseSection>
+        <DebugPerformanceSection />
+        <DebugFrameTimings />
+        <DebugMapLoadTimings />
 
         <!-- Entities -->
         <CollapseSection title="Entities">
@@ -90,11 +38,31 @@
                 </button>
                 <button class="ctrl-btn danger" @click="$emit('resetGameState')">Reset State</button>
             </div>
-            <div class="control-buttons" style="margin-top: 4px">
-                <button class="ctrl-btn" :class="{ active: isStackAdjustMode }" @click="toggleStackAdjust">
-                    {{ isStackAdjustMode ? 'Exit Stacks' : 'Adjust Stacks' }}
+        </CollapseSection>
+
+        <!-- Stack Defaults -->
+        <CollapseSection title="Stack Defaults" :default-open="false">
+            <p class="section-hint">
+                Auto-generate default stack positions for all races. To adjust individual building properties, select a
+                building and use the Adjustments section in the selection panel.
+            </p>
+            <div class="control-buttons">
+                <button
+                    class="ctrl-btn danger"
+                    title="Auto-generate default stack positions for all races and save to stack-positions.yaml"
+                    @click="onDefaultsClick"
+                >
+                    Generate Defaults
                 </button>
-                <button class="ctrl-btn" @click="generateStackDefaults">Defaults</button>
+            </div>
+            <div v-if="showDefaultsWarning" class="defaults-warning">
+                <p class="warning-text">
+                    stack-positions.yaml already has data. Generating defaults will overwrite it.
+                </p>
+                <div class="control-buttons">
+                    <button class="ctrl-btn danger" @click="confirmGenerateDefaults">Overwrite</button>
+                    <button class="ctrl-btn" @click="showDefaultsWarning = false">Cancel</button>
+                </div>
             </div>
         </CollapseSection>
 
@@ -143,11 +111,16 @@ import type { Game } from '@/game/game';
 import { clearSavedTreeState } from '@/game/game-state-persistence';
 import { AVAILABLE_RACES } from '@/game/race';
 import { useDebugMapObjects } from './use-debug-map-objects';
-import type { StackAdjustMode } from '@/game/input/modes/stack-adjust-mode';
+import { BuildingAdjustMode } from '@/game/input/modes/building-adjust-mode';
+import { StackAdjustHandler } from '@/game/features/building-adjust';
+import stackPositionsYaml from '@/game/features/inventory/data/stack-positions.yaml?raw';
 import Checkbox from './Checkbox.vue';
 import CollapseSection from './CollapseSection.vue';
 import StatRow from './StatRow.vue';
 import OverlayPanel from './OverlayPanel.vue';
+import DebugPerformanceSection from './DebugPerformanceSection.vue';
+import DebugFrameTimings from './DebugFrameTimings.vue';
+import DebugMapLoadTimings from './DebugMapLoadTimings.vue';
 
 const props = defineProps<{
     paused: boolean;
@@ -182,59 +155,73 @@ const getGame = (): Game | null => props.game;
 const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clearAllMapObjects } =
     useDebugMapObjects(getGame);
 
-// Stack adjust mode
-const isStackAdjustMode = computed(() => getBridge().input?.getModeName() === 'stack-adjust');
-
-function toggleStackAdjust(): void {
-    const input = getBridge().input;
-    if (!input) return;
-    if (input.getModeName() === 'stack-adjust') {
-        input.switchMode('select');
-    } else {
-        input.switchMode('stack-adjust');
-    }
-}
-
-function getStackAdjustMode(): StackAdjustMode | null {
+// Stack defaults generation
+function getStackHandler(): StackAdjustHandler | null {
     const input = getBridge().input;
     if (!input) return null;
-    const mode = input.getCurrentMode();
-    return mode?.name === 'stack-adjust' ? (mode as StackAdjustMode) : null;
+    const mode = input.getMode('building-adjust');
+    if (!(mode instanceof BuildingAdjustMode)) return null;
+    for (const handler of mode.getHandlers()) {
+        if (handler instanceof StackAdjustHandler) return handler;
+    }
+    return null;
 }
 
-function generateStackDefaults(): void {
-    const mode = getStackAdjustMode();
-    const positions = mode?.getStackPositions();
-    if (!positions) {
-        console.log('Enter stack-adjust mode first');
+const showDefaultsWarning = ref(false);
+
+function onDefaultsClick(): void {
+    const handler = getStackHandler();
+    if (!handler) {
+        console.warn('BuildingAdjustMode not available');
         return;
     }
-    props.game.services.inventoryVisualizer.generateDefaultPositions(positions, AVAILABLE_RACES);
-    console.log('Generated default stack positions. Saved to stack-positions.yaml.');
+    if (stackPositionsYaml.trim().length > 0) {
+        showDefaultsWarning.value = true;
+        return;
+    }
+    executeGenerateDefaults();
 }
 
-const fpsClass = computed(() => {
-    if (stats.fps >= 55) return 'fps-good';
-    if (stats.fps >= 30) return 'fps-ok';
-    return 'fps-bad';
-});
+function confirmGenerateDefaults(): void {
+    showDefaultsWarning.value = false;
+    executeGenerateDefaults();
+}
 
-const cacheLabel = computed(() => {
-    if (!stats.loadTimings.cacheHit) return 'MISS';
-    if (stats.loadTimings.cacheSource === 'module') return 'HIT (HMR)';
-    if (stats.loadTimings.cacheSource === 'indexeddb') return 'HIT (IDB)';
-    return 'HIT';
-});
-
-const cacheClass = computed(() => {
-    if (!stats.loadTimings.cacheHit) return 'cache-miss';
-    if (stats.loadTimings.cacheSource === 'module') return 'cache-hit-hmr';
-    if (stats.loadTimings.cacheSource === 'indexeddb') return 'cache-hit-idb';
-    return 'cache-hit-hmr';
-});
+function executeGenerateDefaults(): void {
+    const handler = getStackHandler()!;
+    const positions = handler.getStackPositions();
+    const visualizer = handler.getInventoryVisualizer();
+    visualizer.generateDefaultPositions(positions, AVAILABLE_RACES);
+    console.log('Generated default stack positions. Saved to stack-positions.yaml.');
+}
 </script>
 
 <style scoped>
+/* Section hint text */
+.section-hint {
+    color: var(--text-faint);
+    font-size: 9px;
+    line-height: 1.4;
+    margin: 0 0 6px;
+    padding: 0;
+}
+
+/* Defaults overwrite warning */
+.defaults-warning {
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: #3a2a10;
+    border: 1px solid #6a4a20;
+    border-radius: 3px;
+}
+
+.warning-text {
+    color: var(--status-alert, #d0a040);
+    font-size: 10px;
+    line-height: 1.4;
+    margin: 0 0 6px;
+}
+
 /* Stat label/value used directly in map-obj and river sections */
 .stat-label {
     color: var(--text-muted);
@@ -243,29 +230,6 @@ const cacheClass = computed(() => {
 .stat-value {
     color: var(--text-bright);
     text-align: right;
-}
-
-/* Status colors */
-.fps-good {
-    color: var(--status-good);
-}
-.fps-ok {
-    color: var(--text-accent);
-}
-.fps-bad {
-    color: var(--status-bad);
-}
-
-.cache-hit-hmr {
-    color: var(--status-good);
-    font-weight: bold;
-}
-.cache-hit-idb {
-    color: #80b0c0;
-    font-weight: bold;
-}
-.cache-miss {
-    color: var(--text-muted);
 }
 
 /* Controls section */

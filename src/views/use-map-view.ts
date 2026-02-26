@@ -1,15 +1,4 @@
-import {
-    ref,
-    shallowRef,
-    triggerRef,
-    computed,
-    watch,
-    onMounted,
-    onUnmounted,
-    reactive,
-    type Ref,
-    type ShallowRef,
-} from 'vue';
+import { ref, shallowRef, triggerRef, computed, watch, onMounted, reactive, type Ref, type ShallowRef } from 'vue';
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
@@ -22,7 +11,9 @@ import { FileManager, IFileSource } from '@/utilities/file-manager';
 import { LogHandler } from '@/utilities/log-handler';
 import { LayerVisibility, loadLayerVisibility, saveLayerVisibility } from '@/game/renderer/layer-visibility';
 import type { InputManager } from '@/game/input';
-import { getBridge } from '@/game/debug-bridge';
+import { loadBuildingIcons, loadResourceIcons, type IconEntry } from './sprite-icon-loader';
+import { debugStats } from '@/game/debug-stats';
+import { prefetchSpriteCache } from '@/game/renderer/sprite-render-manager';
 import {
     gameStatePersistence,
     loadSnapshot,
@@ -69,8 +60,16 @@ async function loadMapFile(
     fileManager: FileManager
 ): Promise<{ game: Game | null; mapInfo: string }> {
     try {
+        const mlt = debugStats.state.mapLoadTimings;
+
+        const t0 = performance.now();
         const fileData = await file.readBinary();
+        mlt.fileRead = Math.round(performance.now() - t0);
+
+        const t1 = performance.now();
         const mapContent = MapLoader.getLoader(fileData);
+        mlt.mapParse = Math.round(performance.now() - t1);
+
         if (!mapContent) {
             log.error('Unsupported map format: ' + file.name);
             return { game: null, mapInfo: '' };
@@ -211,34 +210,15 @@ const availableResources = DROPPABLE_MATERIALS.map(type => {
     };
 });
 
-/** Update resource icons from the sprite manager */
-function updateResourceIconsFromManager(_game: Game | null, resourceIcons: Ref<Record<number, string>>): void {
-    const renderer = getBridge().entityRenderer;
-    if (!renderer?.spriteManager?.hasSprites) return;
-
-    const manager = renderer.spriteManager;
-    if (!manager.spriteAtlas) return;
-
-    let changed = false;
-    for (const r of availableResources) {
-        if (resourceIcons.value[r.type]) continue;
-        const entry = manager.getResource(r.type, 0);
-        if (!entry) continue;
-
-        const imageData = manager.extractSpriteAsImageData(entry.atlasRegion);
-        if (!imageData) continue;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = imageData.width;
-        canvas.height = imageData.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-            ctx.putImageData(imageData, 0, 0);
-            resourceIcons.value[r.type] = canvas.toDataURL();
-            changed = true;
-        }
-    }
-    if (changed) triggerRef(resourceIcons);
+/** Try to restore saved game state, recording timing in mapLoadTimings. */
+function tryRestoreGameState(game: Game): void {
+    const snapshot = loadSnapshot();
+    if (!snapshot) return;
+    const t0 = performance.now();
+    log.info('Restoring saved game state...');
+    restoreFromSnapshot(game, snapshot);
+    game.services.inventoryVisualizer.rebuildFromExistingEntities();
+    debugStats.state.mapLoadTimings.stateRestore = Math.round(performance.now() - t0);
 }
 
 /** Create mode toggle handler */
@@ -343,6 +323,10 @@ export function useMapView(
     getInputManager?: () => InputManager | null,
     selectedRace?: Ref<Race>
 ) {
+    // Start IDB sprite cache read immediately — overlaps with everything that follows
+    // (route resolution, file read, game constructor, landscape init)
+    prefetchSpriteCache();
+
     const route = useRoute();
     // Check if testMap query param is present - use computed for reactivity
     // in case the route isn't fully resolved when the composable first runs
@@ -387,6 +371,9 @@ export function useMapView(
         }
 
         mapLoadState.isLoading = true;
+        debugStats.startMapLoad();
+        // Re-trigger prefetch for subsequent loads (first load uses the setup-time prefetch)
+        prefetchSpriteCache();
 
         try {
             // Destroy old game first to prevent multiple game loops
@@ -410,18 +397,12 @@ export function useMapView(
                 setCurrentMapId('__test_map__');
 
                 game.value = createTestGame(fm);
+                wireFeatureToggles(game.value);
 
                 // Save initial state BEFORE checking for saved game state
                 saveInitialState(game.value);
 
-                // Try to restore saved game state for test map too
-                const snapshot = loadSnapshot();
-                if (snapshot) {
-                    log.info('Restoring saved game state...');
-                    restoreFromSnapshot(game.value, snapshot);
-                    // Rebuild inventory visualizer state from restored entities
-                    game.value.services.inventoryVisualizer.rebuildFromExistingEntities();
-                }
+                tryRestoreGameState(game.value);
 
                 // Start auto-saving (won't save initial state again since we already did)
                 gameStatePersistence.start(game.value);
@@ -444,6 +425,7 @@ export function useMapView(
             mapLoadState.currentFile = file.name;
             mapInfo.value = result.mapInfo;
             game.value = result.game;
+            wireFeatureToggles(result.game);
 
             // Set map ID for persistence BEFORE loading snapshot
             setCurrentMapId(file.name);
@@ -451,14 +433,7 @@ export function useMapView(
             // Save initial state BEFORE checking for saved game state
             saveInitialState(result.game);
 
-            // Try to restore saved game state (only restores if same map)
-            const snapshot = loadSnapshot();
-            if (snapshot) {
-                log.info('Restoring saved game state...');
-                restoreFromSnapshot(result.game, snapshot);
-                // Rebuild inventory visualizer state from restored entities
-                result.game.services.inventoryVisualizer.rebuildFromExistingEntities();
-            }
+            tryRestoreGameState(result.game);
 
             // Start auto-saving (won't save initial state again since we already did)
             gameStatePersistence.start(result.game);
@@ -515,11 +490,16 @@ export function useMapView(
         },
     });
 
-    const activeTab = ref<'buildings' | 'units' | 'resources'>('buildings');
+    const VALID_TABS = new Set(['buildings', 'units', 'resources']);
+    const savedTab = localStorage.getItem('sidebar_active_tab');
+    const activeTab = ref<'buildings' | 'units' | 'resources'>(
+        savedTab && VALID_TABS.has(savedTab) ? (savedTab as 'buildings' | 'units' | 'resources') : 'buildings'
+    );
+    watch(activeTab, tab => localStorage.setItem('sidebar_active_tab', tab));
     const resourceAmount = ref(1);
     const hoveredTile = ref<TileCoord | null>(null);
     const resourceIcons = ref<Record<number, string>>({});
-    let iconUpdateInterval: number | null = null;
+    const buildingIcons = ref<Record<number, IconEntry>>({});
 
     // Layer visibility state (loaded from localStorage)
     const layerVisibility = reactive<LayerVisibility>(loadLayerVisibility());
@@ -527,6 +507,14 @@ export function useMapView(
     function updateLayerVisibility(newVisibility: LayerVisibility): void {
         Object.assign(layerVisibility, newVisibility);
         saveLayerVisibility(layerVisibility);
+    }
+
+    /** Wire the Territory feature toggle to sync with layer visibility's showTerritory */
+    function wireFeatureToggles(g: Game): void {
+        g.onTerritoryToggle(enabled => {
+            layerVisibility.showTerritory = enabled;
+            saveLayerVisibility(layerVisibility);
+        });
     }
 
     // =========================================================================
@@ -588,11 +576,6 @@ export function useMapView(
 
     onMounted(() => {
         initializeMap();
-        iconUpdateInterval = window.setInterval(updateResourceIcons, 1000);
-    });
-
-    onUnmounted(() => {
-        if (iconUpdateInterval) clearInterval(iconUpdateInterval);
     });
 
     // Re-initialize if FileManager changes (e.g., user selects new game directory)
@@ -635,9 +618,26 @@ export function useMapView(
     const togglePause = gameActions.togglePause;
     const resetGameState = gameActions.resetGameState;
 
-    function updateResourceIcons() {
-        updateResourceIconsFromManager(game.value, resourceIcons);
-    }
+    // Load icons from GFX files when game becomes available
+    watch(game, g => {
+        if (g) {
+            void loadResourceIcons(getFileManager(), availableResources).then(icons => {
+                resourceIcons.value = icons;
+            });
+            void loadBuildingIcons(getFileManager(), currentPlayerRace.value, ALL_BUILDINGS).then(icons => {
+                buildingIcons.value = icons;
+            });
+        }
+    });
+
+    // Reload building icons when race changes (different GFX file per race)
+    watch(currentPlayerRace, race => {
+        if (game.value) {
+            void loadBuildingIcons(getFileManager(), race, ALL_BUILDINGS).then(icons => {
+                buildingIcons.value = icons;
+            });
+        }
+    });
 
     return {
         fileName,
@@ -647,6 +647,7 @@ export function useMapView(
         activeTab,
         resourceAmount,
         resourceIcons,
+        buildingIcons,
         hoveredTile,
         selectedEntity,
         selectionCount,

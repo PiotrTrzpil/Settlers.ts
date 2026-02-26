@@ -20,6 +20,14 @@
                         <span class="hint-inline">(slower loading)</span>
                     </Checkbox>
 
+                    <Checkbox
+                        v-model="homeSettings.state.cacheCompressionEnabled"
+                        label="Compress sprite cache"
+                        :disabled="homeSettings.state.cacheDisabled"
+                    >
+                        <span class="hint-inline">(smaller &amp; faster reads)</span>
+                    </Checkbox>
+
                     <div class="cache-controls">
                         <button class="secondary-btn" @click="handleClearCache" :disabled="isClearing">
                             {{ isClearing ? 'Clearing...' : 'Clear Cache' }}
@@ -110,6 +118,14 @@ async function handleClearCache(): Promise<void> {
         isClearing.value = false;
     }
 }
+
+// Invalidate cache when toggling compression or disabling cache — stored format changes
+watch(
+    () => [homeSettings.state.cacheCompressionEnabled, homeSettings.state.cacheDisabled],
+    () => {
+        void clearAllCaches();
+    }
+);
 
 function checkIsValidSettlers() {
     // Classic editions have game.lib; History Edition has unpacked files

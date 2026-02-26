@@ -6,7 +6,7 @@
             <file-browser
                 :fileManager="fileManager"
                 @select="onFileSelect"
-                filter=".exe|.map|.edm"
+                filter=".map"
                 storageKey="viewer_mapfile_file"
                 class="file-selector"
             />
@@ -298,7 +298,7 @@
         <div v-else class="empty-state">
             <div class="empty-icon">🗺️</div>
             <h2>Select a Map File</h2>
-            <p>Choose a .map, .edm, or save game (.exe) file to analyze its structure</p>
+            <p>Choose a .map file to analyze its structure</p>
         </div>
     </div>
 </template>

@@ -108,7 +108,8 @@ describe('PlaceBuildingMode', () => {
             modeData!.previewX = 15;
             modeData!.previewY = 20;
 
-            mode.onPointerUp(createPointerData({ tileX: 15, tileY: 20 }), mockContext);
+            // Placement now fires on pointerDown (supports drag-to-place for resources/units)
+            mode.onPointerDown(createPointerData({ tileX: 15, tileY: 20 }), mockContext);
 
             expect(executedCommands).toHaveLength(1);
             expect(executedCommands[0]).toMatchObject({
@@ -124,14 +125,14 @@ describe('PlaceBuildingMode', () => {
         it('should NOT place or exit when preview is invalid or command fails', () => {
             // Invalid preview
             modeData!.previewValid = false;
-            mode.onPointerUp(createPointerData(), mockContext);
+            mode.onPointerDown(createPointerData(), mockContext);
             expect(executedCommands).toHaveLength(0);
             expect(switchedToMode).toBeNull();
 
             // Command failure
             modeData!.previewValid = true;
             mockContext.executeCommand = () => commandFailed('test failure');
-            mode.onPointerUp(createPointerData(), mockContext);
+            mode.onPointerDown(createPointerData(), mockContext);
             expect(switchedToMode).toBeNull();
         });
     });
