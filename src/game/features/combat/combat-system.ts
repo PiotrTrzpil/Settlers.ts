@@ -14,8 +14,9 @@ import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { Entity } from '../../entity';
 import { EntityType, isUnitTypeMilitary, UnitType } from '../../entity';
-import { hexDistance } from '../../systems/hex-directions';
+import { hexDistance, getApproxDirection } from '../../systems/hex-directions';
 import { CombatState, CombatStatus, createCombatState, getCombatStats } from './combat-state';
+import { resolveTaskAnimation, type AnimationService } from '../../animation/index';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('CombatSystem');
@@ -42,6 +43,7 @@ export class CombatSystem implements TickSystem {
     private readonly states = new Map<number, CombatState>();
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
+    private readonly animationService: AnimationService;
 
     /** Accumulated time for periodic enemy scanning */
     private scanTimer = 0;
@@ -49,16 +51,17 @@ export class CombatSystem implements TickSystem {
     /** Per-unit timers for pursuit re-pathing */
     private pursuitTimers = new Map<number, number>();
 
-    constructor(gameState: GameState, eventBus: EventBus) {
+    constructor(gameState: GameState, eventBus: EventBus, animationService: AnimationService) {
         this.gameState = gameState;
         this.eventBus = eventBus;
+        this.animationService = animationService;
     }
 
     // ── Registration ──────────────────────────────────────────────────────
 
-    register(entityId: number, player: number, unitType: UnitType): void {
+    register(entityId: number, player: number, unitType: UnitType, level: number = 1): void {
         if (this.states.has(entityId)) return;
-        this.states.set(entityId, createCombatState(entityId, player, unitType));
+        this.states.set(entityId, createCombatState(entityId, player, unitType, level));
     }
 
     unregister(entityId: number): void {
@@ -82,10 +85,12 @@ export class CombatSystem implements TickSystem {
     releaseFromCombat(entityId: number): void {
         const state = this.states.get(entityId);
         if (!state) return;
+        const wasFighting = state.status === CombatStatus.Fighting;
         state.status = CombatStatus.Idle;
         state.targetId = null;
         state.attackTimer = 0;
         this.pursuitTimers.delete(entityId);
+        if (wasFighting) this.applyIdleAnimation(entityId);
     }
 
     // ── Tick ──────────────────────────────────────────────────────────────
@@ -135,7 +140,7 @@ export class CombatSystem implements TickSystem {
 
     private handlePursuing(state: CombatState, entity: Entity, _dt: number): void {
         // Validate target still exists and is alive
-        const target = this.validateTarget(state);
+        const target = this.validateTarget(state, entity);
         if (!target) return;
 
         const dist = hexDistance(entity.x, entity.y, target.x, target.y);
@@ -151,6 +156,9 @@ export class CombatSystem implements TickSystem {
                 controller.clearPath();
             }
 
+            // Play fight animation facing the target
+            this.applyFightAnimation(entity, target);
+
             log.debug(`Unit ${state.entityId} engaging enemy ${target.id}`);
             return;
         }
@@ -164,7 +172,7 @@ export class CombatSystem implements TickSystem {
     }
 
     private handleFighting(state: CombatState, entity: Entity, dt: number): void {
-        const target = this.validateTarget(state);
+        const target = this.validateTarget(state, entity);
         if (!target) return;
 
         // Check if target moved out of range
@@ -216,6 +224,7 @@ export class CombatSystem implements TickSystem {
         // Clear any combatants targeting the dead unit
         for (const other of this.states.values()) {
             if (other.targetId === state.entityId) {
+                const wasFighting = other.status === CombatStatus.Fighting;
                 other.targetId = null;
                 other.status = CombatStatus.Idle;
                 other.attackTimer = 0;
@@ -226,6 +235,9 @@ export class CombatSystem implements TickSystem {
                 if (controller && controller.state !== 'idle') {
                     controller.clearPath();
                 }
+
+                // Restore idle animation if unit was fighting
+                if (wasFighting) this.applyIdleAnimation(other.entityId);
             }
         }
 
@@ -263,29 +275,54 @@ export class CombatSystem implements TickSystem {
     /**
      * Validate that the current target still exists and is alive.
      * If invalid, reset unit to idle and return null.
+     * @param entity The attacking entity (used to restore idle animation when leaving fight)
      */
-    private validateTarget(state: CombatState): Entity | null {
+    private validateTarget(state: CombatState, entity?: Entity): Entity | null {
         if (state.targetId === null) {
-            state.status = CombatStatus.Idle;
+            this.transitionToIdle(state, entity);
             return null;
         }
 
         const target = this.gameState.getEntity(state.targetId);
         if (!target) {
             state.targetId = null;
-            state.status = CombatStatus.Idle;
-            state.attackTimer = 0;
+            this.transitionToIdle(state, entity);
             return null;
         }
 
         const targetState = this.states.get(state.targetId);
         if (!targetState || targetState.health <= 0) {
             state.targetId = null;
-            state.status = CombatStatus.Idle;
-            state.attackTimer = 0;
+            this.transitionToIdle(state, entity);
             return null;
         }
 
         return target;
+    }
+
+    /** Reset to idle and restore idle animation if unit was fighting. */
+    private transitionToIdle(state: CombatState, _entity?: Entity): void {
+        const wasFighting = state.status === CombatStatus.Fighting;
+        state.status = CombatStatus.Idle;
+        state.attackTimer = 0;
+        if (wasFighting) this.applyIdleAnimation(state.entityId);
+    }
+
+    // ── Animation helpers ─────────────────────────────────────────────────
+
+    /** Play fight animation and face the target. */
+    private applyFightAnimation(entity: Entity, target: Entity): void {
+        const direction = getApproxDirection(entity.x, entity.y, target.x, target.y);
+        const intent = resolveTaskAnimation('fight', entity);
+        this.animationService.applyIntent(entity.id, intent);
+        this.animationService.setDirection(entity.id, direction);
+    }
+
+    /** Restore idle animation (stopped on level-appropriate idle pose). */
+    private applyIdleAnimation(entityId: number): void {
+        const entity = this.gameState.getEntity(entityId);
+        if (!entity) return;
+        const intent = resolveTaskAnimation('idle', entity);
+        this.animationService.applyIntent(entityId, intent);
     }
 }

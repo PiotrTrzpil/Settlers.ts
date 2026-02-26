@@ -84,6 +84,12 @@ export const WORKER_JOB_INDICES = {
         carry: 55, // carrying log
         work: [56, 57], // [chopping standing tree, cutting fallen log]
     },
+    sawmillworker: {
+        idle: 96,
+        carry: [97, 98], // carrying, carrying2
+        work: [99], // working
+        pickup: [100, 101], // picking up, picking up2
+    },
     // Miner
     miner: {
         idle: 58,
@@ -118,39 +124,37 @@ export const WORKER_JOB_INDICES = {
         idle: 298,
         work: [299, 300], // [working phase 1, working phase 2]
     },
-    // Swordsman levels (2 variants per level, appear identical)
+    // Swordsman levels: 2 indices each — base (idle frame 0 + walk frames 1+) and fight
     swordsman_1: {
         idle: 227,
-        walk: 228, // may be idle variant
+        walk: 227, // walk = frames 1+ of base index (same as idle)
+        fight: [228],
     },
     swordsman_2: {
         idle: 230,
-        walk: 231,
+        walk: 230,
+        fight: [231],
     },
     swordsman_3: {
         idle: 233,
-        walk: 234,
+        walk: 233,
+        fight: [234],
     },
-    // Bowman levels (first is idle, rest are shooting animations)
+    // Bowman levels (first is idle, rest are shooting animations; fight reuses shooting)
     bowman_1: {
         idle: 236,
         work: [237, 238, 239, 240], // shooting variants
+        fight: [237], // shooting = fighting
     },
     bowman_2: {
         idle: 242,
         work: [243, 244, 245, 246],
+        fight: [243],
     },
     bowman_3: {
         idle: 248,
         work: [249, 250, 251, 252],
-    },
-    // TODO: Add pikeman_1/2/3 when identified
-    // Sawmill worker
-    sawmillworker: {
-        idle: 96,
-        carry: [97, 98], // carrying, carrying2
-        work: [99], // working
-        pickup: [100, 101], // picking up, picking up2
+        fight: [249],
     },
 } as const;
 

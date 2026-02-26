@@ -458,9 +458,10 @@ export class SettlerTaskSystem implements TickSystem {
             return;
         }
 
-        // Reset animation if still playing (e.g., walk animation from combat pursuit)
+        // Ensure idle animation state exists (units that never moved won't have one),
+        // and reset walk animations — but don't override fight animations (managed by combat system)
         const animState = this.animationService.getState(unit.id);
-        if (animState?.playing) {
+        if (!animState || (animState.playing && !animState.sequenceKey.startsWith(ANIMATION_SEQUENCES.FIGHT_PREFIX))) {
             this.setIdleAnimation(unit);
         }
 
@@ -507,6 +508,10 @@ export class SettlerTaskSystem implements TickSystem {
             // Also handle idle turning when not working (handleIdle may change state to WORKING)
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- handleIdle mutates runtime.state
             if (runtime.state === SettlerState.IDLE) {
+                // Ensure idle animation state exists (units that never worked won't have one)
+                if (!this.animationService.getState(settler.id)) {
+                    this.setIdleAnimation(settler);
+                }
                 this.updateIdleTurning(settler, runtime, dt);
             }
             break;
@@ -788,7 +793,7 @@ export class SettlerTaskSystem implements TickSystem {
      * Set idle animation (stopped, default pose).
      */
     private setIdleAnimation(settler: Entity): void {
-        this.animationService.play(settler.id, ANIMATION_SEQUENCES.DEFAULT, { loop: false });
-        this.animationService.stop(settler.id);
+        const intent = resolveTaskAnimation('idle', settler);
+        this.animationService.applyIntent(settler.id, intent);
     }
 }

@@ -6,7 +6,14 @@
  * calling play/stop at scattered points.
  */
 
-import { ANIMATION_SEQUENCES, carrySequenceKey, workSequenceKey } from '../animation';
+import {
+    ANIMATION_SEQUENCES,
+    carrySequenceKey,
+    fightSequenceKey,
+    levelIdleSequenceKey,
+    levelWalkSequenceKey,
+    workSequenceKey,
+} from '../animation';
 import { UnitType, type Entity } from '../entity';
 import type { AnimationType } from '../features/settler-tasks/types';
 
@@ -20,7 +27,7 @@ export interface AnimationIntent {
     stopped: boolean;
 }
 
-const IDLE_INTENT: AnimationIntent = { sequence: ANIMATION_SEQUENCES.DEFAULT, loop: false, stopped: true };
+const IDLE_INTENT_L1: AnimationIntent = { sequence: ANIMATION_SEQUENCES.DEFAULT, loop: false, stopped: true };
 
 /**
  * Resolve a task's semantic animation type to a concrete AnimationIntent.
@@ -42,6 +49,9 @@ export function resolveTaskAnimation(anim: AnimationType, entity: Entity): Anima
         }
         return { sequence: carrySequenceKey(entity.carrying.material), loop: true, stopped: false };
 
+    case 'fight':
+        return resolveFightIntent(entity);
+
     case 'chop':
     case 'harvest':
     case 'mine':
@@ -57,16 +67,28 @@ export function resolveTaskAnimation(anim: AnimationType, entity: Entity): Anima
 
     case 'idle':
     default:
-        return IDLE_INTENT;
+        return resolveIdleIntent(entity);
     }
 }
 
-/**
- * Resolve walk intent — carriers with material use carry animation.
- */
+/** Resolve idle intent — higher-level military units use level-specific idle animations. */
+function resolveIdleIntent(entity: Entity): AnimationIntent {
+    const level = entity.level ?? 1;
+    if (level <= 1) return IDLE_INTENT_L1;
+    return { sequence: levelIdleSequenceKey(level), loop: false, stopped: true };
+}
+
+/** Resolve fight intent — use level-specific fight animation. */
+function resolveFightIntent(entity: Entity): AnimationIntent {
+    const level = entity.level ?? 1;
+    return { sequence: fightSequenceKey(level - 1), loop: true, stopped: false };
+}
+
+/** Resolve walk intent — carriers with material use carry animation. */
 function resolveWalkIntent(entity: Entity): AnimationIntent {
     if (entity.carrying) {
         return { sequence: carrySequenceKey(entity.carrying.material), loop: true, stopped: false };
     }
-    return { sequence: ANIMATION_SEQUENCES.WALK, loop: true, stopped: false };
+    const level = entity.level ?? 1;
+    return { sequence: levelWalkSequenceKey(level), loop: true, stopped: false };
 }

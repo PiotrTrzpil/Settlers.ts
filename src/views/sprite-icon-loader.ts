@@ -5,9 +5,16 @@
  */
 
 import { SpriteLoader, type LoadedGfxFileSet } from '@/game/renderer/sprite-loader';
-import { GFX_FILE_NUMBERS, BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES } from '@/game/renderer/sprite-metadata';
+import {
+    GFX_FILE_NUMBERS,
+    BUILDING_JOB_INDICES,
+    RESOURCE_JOB_INDICES,
+    UNIT_JOB_INDICES,
+    WORKER_JOB_INDICES,
+    SETTLER_FILE_NUMBERS,
+} from '@/game/renderer/sprite-metadata';
 import { Race } from '@/game/race';
-import { BuildingType } from '@/game/entity';
+import { BuildingType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { FileManager } from '@/utilities/file-manager';
 
@@ -77,6 +84,25 @@ function scaleImageData(src: ImageData, targetW: number, targetH: number): strin
 // Sprite extraction helpers
 // ============================================================
 
+/**
+ * Rows trimmed from every sprite to match the GPU renderer pipeline
+ * (removes artifact lines from original game assets).
+ */
+const SPRITE_TRIM_TOP = 5;
+const SPRITE_TRIM_BOTTOM = 3;
+
+/** Crop fixed pixel rows from top and bottom of an ImageData. */
+function cropRows(src: ImageData, top: number, bottom: number): ImageData {
+    const newH = src.height - top - bottom;
+    if (newH <= 0 || newH === src.height) return src;
+    const out = new ImageData(src.width, newH);
+    for (let y = 0; y < newH; y++) {
+        const srcOff = (y + top) * src.width * 4;
+        out.data.set(src.data.subarray(srcOff, srcOff + src.width * 4), y * src.width * 4);
+    }
+    return out;
+}
+
 /** Extract a sprite by JIL job (direction + frame 0) as trimmed ImageData. */
 function extractJobSprite(fileSet: LoadedGfxFileSet, jobIndex: number, direction: number): ImageData | null {
     const jobItem = fileSet.jilReader!.getItem(jobIndex);
@@ -87,7 +113,7 @@ function extractJobSprite(fileSet: LoadedGfxFileSet, jobIndex: number, direction
     if (frameItems.length === 0) return null;
     const image = fileSet.gfxReader.getImage(frameItems[0]!.index);
     if (!image || image.width === 0 || image.height === 0) return null;
-    return trimTransparent(image.getImageData());
+    return trimTransparent(cropRows(image.getImageData(), SPRITE_TRIM_TOP, SPRITE_TRIM_BOTTOM));
 }
 
 // ============================================================
@@ -140,6 +166,54 @@ export async function loadBuildingIcons(
         const scale = (displaySize * RENDER_SCALE) / dim;
         const url = scaleImageData(data, Math.round(data.width * scale), Math.round(data.height * scale));
         if (url) icons[type] = { url, size: displaySize };
+    }
+    return icons;
+}
+
+/** Resolve the JIL job index for a unit, accounting for military levels. */
+function getUnitJobIndex(unitType: UnitType, level: number): number | undefined {
+    if (level > 1) {
+        const typeName = UnitType[unitType].toLowerCase();
+        const key = `${typeName}_${level}` as keyof typeof WORKER_JOB_INDICES;
+        const entry = WORKER_JOB_INDICES[key];
+        if ('idle' in entry && typeof entry.idle === 'number' && entry.idle >= 0) return entry.idle;
+    }
+    return UNIT_JOB_INDICES[unitType];
+}
+
+/** Load unit icons from settler sprite files (direction 0, frame 0). */
+export async function loadUnitIcons(
+    fileManager: FileManager,
+    race: Race,
+    units: { id: string; type: UnitType; level?: number }[]
+): Promise<Record<string, IconEntry>> {
+    const loader = new SpriteLoader(fileManager);
+    const fileSet = await loader.loadFileSet(String(SETTLER_FILE_NUMBERS[race]));
+    if (!fileSet?.jilReader || !fileSet.dilReader) return {};
+
+    const sprites: { id: string; data: ImageData; dim: number }[] = [];
+    let minDim = Infinity,
+        maxDim = 0;
+    for (const u of units) {
+        const jobIndex = getUnitJobIndex(u.type, u.level ?? 1);
+        if (jobIndex === undefined || jobIndex < 0) continue;
+        const data = extractJobSprite(fileSet, jobIndex, 0);
+        if (!data) continue;
+        const dim = Math.max(data.width, data.height);
+        if (dim > maxDim) maxDim = dim;
+        if (dim < minDim) minDim = dim;
+        sprites.push({ id: u.id, data, dim });
+    }
+    if (maxDim === 0) return {};
+
+    const dimRange = maxDim - minDim || 1;
+    const icons: Record<string, IconEntry> = {};
+    for (const { id, data, dim } of sprites) {
+        const t = (dim - minDim) / dimRange;
+        const displaySize = Math.round(ICON_MIN_PX + t * (ICON_MAX_PX - ICON_MIN_PX));
+        const scale = (displaySize * RENDER_SCALE) / dim;
+        const url = scaleImageData(data, Math.round(data.width * scale), Math.round(data.height * scale));
+        if (url) icons[id] = { url, size: displaySize };
     }
     return icons;
 }

@@ -974,7 +974,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const preview = this.placementPreview;
         if (!preview) return;
 
-        const { tile, valid, entityType, subType, race, variation } = preview;
+        const { tile, valid, entityType, subType, race, variation, level } = preview;
 
         const worldPos = TilePicker.tileToWorld(
             tile.x,
@@ -995,7 +995,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         // Try to render with sprite based on entity type
         if (this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
-            const rawSprite = this.spriteResolver!.getPreviewSprite(entityType, subType, variation, race);
+            const rawSprite = this.spriteResolver!.getPreviewSprite(entityType, subType, variation, race, level);
             if (rawSprite) {
                 const spriteEntry = scaleSprite(rawSprite);
                 const paletteWidth = PALETTE_TEXTURE_WIDTH;

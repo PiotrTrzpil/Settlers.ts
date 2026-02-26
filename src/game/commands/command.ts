@@ -131,6 +131,7 @@ function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): CommandRe
 
     const entity = state.addEntity(EntityType.Unit, cmd.unitType, spawnX, spawnY, cmd.player);
     entity.race = cmd.race;
+    entity.level = cmd.level ?? 1;
 
     ctx.eventBus.emit('unit:spawned', {
         entityId: entity.id,

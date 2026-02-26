@@ -109,9 +109,7 @@ function syncEntityRendererState(
                 verticalProgress: vs.verticalProgress,
             };
         })
-        .buildingOverlaysGetter(entityId => {
-            return resolveBuildingOverlays(entityId, g, er);
-        })
+        .buildingOverlaysGetter(entityId => resolveBuildingOverlays(entityId, g, er))
         .animationStateGetter(entityId => animService.getState(entityId))
         .selection({
             primaryId: g.state.selection.selectedEntityId,
@@ -251,6 +249,7 @@ function updatePlacementModeState(er: EntityRenderer, renderState: ModeRenderSta
             subType: preview.subType,
             race: preview.race,
             variation,
+            level: preview.extra?.['level'] as number | undefined,
         };
     } else if (preview?.type === 'building') {
         // Handle legacy BuildingPreview for backward compatibility
@@ -494,9 +493,10 @@ function handleModeChange(
         vs.placeResourceType =
             newMode === 'place_resource' && data?.['resourceType'] !== undefined ? (data['resourceType'] as number) : 0;
 
-        // Update unit type
-        vs.placeUnitType =
-            newMode === 'place_unit' && data?.['unitType'] !== undefined ? (data['unitType'] as number) : 0;
+        // Update unit type and level
+        const isUnitMode = newMode === 'place_unit';
+        vs.placeUnitType = isUnitMode && data?.['unitType'] !== undefined ? (data['unitType'] as number) : 0;
+        vs.placeUnitLevel = isUnitMode && data?.['level'] !== undefined ? (data['level'] as number) : 1;
 
         // Sync with game for backward compatibility
         game.mode = newMode;

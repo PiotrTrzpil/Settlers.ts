@@ -200,7 +200,8 @@ export class EntitySpriteResolver {
         entityType: PlacementEntityType,
         subType: number,
         variation?: number,
-        race?: number
+        race?: number,
+        level?: number
     ): SpriteEntry | null {
         if (!this.sprites) return null;
 
@@ -210,11 +211,24 @@ export class EntitySpriteResolver {
         case 'resource':
             return this.sprites.getResource(subType as EMaterialType, variation ?? 0);
         case 'unit':
-            return this.sprites.getUnit(subType as UnitType, 0, race);
+            return this.getUnitPreviewSprite(subType as UnitType, race, level ?? 1);
         default: {
             const _exhaustive: never = entityType;
             return _exhaustive;
         }
         }
+    }
+
+    /** Get unit preview sprite, using level-specific idle frame for military units. */
+    private getUnitPreviewSprite(unitType: UnitType, race?: number, level: number = 1): SpriteEntry | null {
+        if (!this.sprites) return null;
+        if (level > 1) {
+            const animated = this.sprites.getAnimatedEntity(EntityType.Unit, unitType, race);
+            const seqKey = `default.${level}`;
+            const dirMap = animated?.animationData.sequences.get(seqKey);
+            const seq = dirMap?.get(0);
+            if (seq?.frames[0]) return seq.frames[0];
+        }
+        return this.sprites.getUnit(unitType, 0, race);
     }
 }

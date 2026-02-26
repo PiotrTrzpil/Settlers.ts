@@ -90,6 +90,7 @@ export type AnimationType =
     | 'mine'
     | 'hammer'
     | 'dig'
+    | 'fight'
     | 'work'; // Generic work (sawmill worker, etc.)
 
 /** A single task node in a job sequence */

@@ -36,7 +36,7 @@ export interface CombatStats {
     attackCooldown: number;
 }
 
-/** Combat stats per military unit type */
+/** Base combat stats per military unit type (level 1) */
 const COMBAT_STATS: Partial<Record<UnitType, CombatStats>> = {
     [UnitType.Swordsman]: { maxHealth: 100, attackPower: 15, attackCooldown: 1.5 },
     [UnitType.Bowman]: { maxHealth: 80, attackPower: 12, attackCooldown: 2.0 },
@@ -46,17 +46,32 @@ const COMBAT_STATS: Partial<Record<UnitType, CombatStats>> = {
     [UnitType.Angel]: { maxHealth: 150, attackPower: 20, attackCooldown: 1.2 },
 };
 
+/** Level multipliers for combat stats: [L1, L2, L3] */
+const LEVEL_MULTIPLIERS: readonly [number, number, number] = [1.0, 1.5, 2.0];
+
 /** Default stats for military units not explicitly configured */
 const DEFAULT_COMBAT_STATS: CombatStats = { maxHealth: 80, attackPower: 10, attackCooldown: 2.0 };
 
-/** Get combat stats for a unit type. Returns default stats for unconfigured military types. */
-export function getCombatStats(unitType: UnitType): CombatStats {
-    return COMBAT_STATS[unitType] ?? DEFAULT_COMBAT_STATS;
+/** Get combat stats for a unit type at a given level (1-3). */
+export function getCombatStats(unitType: UnitType, level: number = 1): CombatStats {
+    const base = COMBAT_STATS[unitType] ?? DEFAULT_COMBAT_STATS;
+    const mult = LEVEL_MULTIPLIERS[Math.min(level, 3) - 1] ?? 1;
+    if (mult === 1) return base;
+    return {
+        maxHealth: Math.round(base.maxHealth * mult),
+        attackPower: Math.round(base.attackPower * mult),
+        attackCooldown: base.attackCooldown,
+    };
 }
 
 /** Create initial combat state for a newly registered military unit */
-export function createCombatState(entityId: number, player: number, unitType: UnitType): CombatState {
-    const stats = getCombatStats(unitType);
+export function createCombatState(
+    entityId: number,
+    player: number,
+    unitType: UnitType,
+    level: number = 1
+): CombatState {
+    const stats = getCombatStats(unitType, level);
     return {
         entityId,
         player,

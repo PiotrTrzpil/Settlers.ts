@@ -427,7 +427,8 @@ export class CarrierManager implements TickSystem {
     }): void {
         const entity = this.entityProvider.getEntity(data.entityId);
         if (!entity) {
-            throw new Error(`Cannot restore carrier: entity ${data.entityId} not found`);
+            console.warn(`Cannot restore carrier: entity ${data.entityId} not found, skipping`);
+            return;
         }
 
         this.states.set(data.entityId, {

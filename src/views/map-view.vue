@@ -74,13 +74,30 @@
                 <div v-if="activeTab === 'units'" class="tab-content" data-testid="unit-controls">
                     <button
                         v-for="u in availableUnits"
-                        :key="u.type"
+                        :key="u.id"
                         class="sidebar-btn"
                         :data-testid="'btn-spawn-' + u.id"
-                        :class="{ active: currentMode === 'place_unit' && placeUnitType === u.type }"
-                        @click="setPlaceUnitMode(u.type)"
+                        :class="{
+                            active:
+                                currentMode === 'place_unit' &&
+                                placeUnitType === u.type &&
+                                placeUnitLevel === (u.level ?? 1),
+                        }"
+                        @click="setPlaceUnitMode(u.type, u.level)"
                     >
-                        <span class="btn-icon">{{ u.icon }}</span>
+                        <span class="btn-icon">
+                            <img
+                                v-if="unitIcons[u.id]"
+                                :src="unitIcons[u.id]!.url"
+                                :alt="u.name"
+                                class="building-icon-img"
+                                :style="{
+                                    width: unitIcons[u.id]!.size + 'px',
+                                    height: unitIcons[u.id]!.size + 'px',
+                                }"
+                            />
+                            <span v-else>{{ u.icon }}</span>
+                        </span>
                         <span class="btn-label">{{ u.name }}</span>
                     </button>
                 </div>
@@ -244,6 +261,7 @@ const {
     placeBuildingType,
     placeResourceType,
     placeUnitType,
+    placeUnitLevel,
     availableBuildings,
     availableUnits,
     availableResources,
@@ -258,6 +276,7 @@ const {
     resetGameState,
     updateLayerVisibility,
     buildingIcons,
+    unitIcons,
 } = useMapView(
     () => props.fileManager,
     () => rendererRef.value?.getInputManager?.() ?? null,

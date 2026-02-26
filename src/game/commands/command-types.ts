@@ -69,6 +69,8 @@ export interface SpawnUnitCommand {
     player: number;
     /** Race for the unit sprite (Race enum value) */
     race: Race;
+    /** Military unit level (1-3). Defaults to 1. */
+    level?: number;
 }
 
 export interface MoveUnitCommand {

@@ -185,7 +185,8 @@ export class BuildingStateManager {
         terrainModified: boolean;
     }): void {
         if (!this.entityProvider.getEntity(data.entityId)) {
-            throw new Error(`Cannot restore building state: entity ${data.entityId} not found`);
+            console.warn(`Cannot restore building state: entity ${data.entityId} not found, skipping`);
+            return;
         }
 
         this.states.set(data.entityId, {

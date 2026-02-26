@@ -42,6 +42,8 @@ export interface PlacementPreviewState {
     race?: Race;
     /** Variation/direction for sprite rendering (0-7 for resources) */
     variation?: number;
+    /** Military unit level (1-3) for level-specific preview sprites */
+    level?: number;
 }
 
 /**

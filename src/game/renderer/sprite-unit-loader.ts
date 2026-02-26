@@ -17,8 +17,15 @@ import {
 import { SpriteLoader, type LoadedGfxFileSet, type LoadedSprite } from './sprite-loader';
 import { UnitType, EntityType } from '../entity';
 import { EMaterialType } from '../economy';
-import { ANIMATION_DEFAULTS, carrySequenceKey, workSequenceKey } from '../animation';
-import { isMaterialAvailableForRace } from '../race-availability';
+import {
+    ANIMATION_DEFAULTS,
+    carrySequenceKey,
+    fightSequenceKey,
+    levelIdleSequenceKey,
+    levelWalkSequenceKey,
+    workSequenceKey,
+} from '../animation';
+import { isMaterialAvailableForRace, isUnitAvailableForRace } from '../race-availability';
 
 const log = new LogHandler('SpriteUnitLoader');
 
@@ -89,9 +96,14 @@ export async function loadUnitSpritesForRace(
     const unitCount = await loadBaseUnits(fileSet, race, atlas, registry, gl, paletteBase, ctx);
     const carrierCount = await loadCarrierVariants(fileSet, atlas, registry, gl, paletteBase, race, ctx);
     const workerCount = await loadWorkerAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
+    const fightCount = await loadFightAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
+    const levelCount = await loadMilitaryLevelAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
 
-    if (unitCount > 0 || carrierCount > 0 || workerCount > 0) {
-        log.debug(`${Race[race]}: ${unitCount} units, ${carrierCount} carriers, ${workerCount} workers`);
+    if (unitCount > 0 || carrierCount > 0 || workerCount > 0 || fightCount > 0 || levelCount > 0) {
+        log.debug(
+            `${Race[race]}: ${unitCount} units, ${carrierCount} carriers, ` +
+                `${workerCount} workers, ${fightCount} fight anims, ${levelCount} level anims`
+        );
     }
 
     return unitCount > 0;
@@ -200,6 +212,15 @@ async function loadCarrierVariants(
     return batch.count;
 }
 
+/**
+ * Extract military level (1-3) from a WORKER_JOB_INDICES key like 'swordsman_2'.
+ * Returns 0 for non-military/non-levelled keys.
+ */
+function getMilitaryLevel(workerKey: string): number {
+    const match = /_(\d+)$/.exec(workerKey);
+    return match ? parseInt(match[1]!, 10) : 0;
+}
+
 /** Mapping from WORKER_JOB_INDICES keys to UnitType. */
 const WORKER_KEY_TO_UNIT_TYPE: Record<string, UnitType> = {
     carrier: UnitType.Carrier,
@@ -278,4 +299,193 @@ async function loadWorkerAnimations(
     });
 
     return loadedCount;
+}
+
+type FightJob = { unitType: UnitType; fightIndex: number; jobIndex: number };
+
+/** Collect fight animation jobs from WORKER_JOB_INDICES, using military level for fight index offset. */
+function collectFightJobs(fileSet: LoadedGfxFileSet, race: Race, ctx: UnitLoadContext): FightJob[] {
+    const fileId = SETTLER_FILE_NUMBERS[race];
+    const jobs: FightJob[] = [];
+    for (const [workerKey, workerData] of Object.entries(WORKER_JOB_INDICES)) {
+        if (!('fight' in workerData)) continue;
+        const unitType = WORKER_KEY_TO_UNIT_TYPE[workerKey];
+        if (unitType === undefined) continue;
+        if (!isUnitAvailableForRace(unitType, race)) continue;
+
+        const fightJobIndices = (workerData as { fight: readonly number[] }).fight;
+        const level = getMilitaryLevel(workerKey);
+        const baseFightIndex = level > 0 ? level - 1 : 0;
+
+        for (let i = 0; i < fightJobIndices.length; i++) {
+            const jobIndex = fightJobIndices[i]!;
+            const dirCount = ctx.spriteLoader.getDirectionCount(fileSet, jobIndex);
+            if (dirCount > 0) {
+                jobs.push({ unitType, fightIndex: baseFightIndex + i, jobIndex });
+            } else {
+                log.error(
+                    `Fight animation missing: ${workerKey} JIL index ${jobIndex} has 0 directions ` +
+                        `in file ${fileId}.jil (${Race[race]}) — fix the index in jil-indices.ts`
+                );
+            }
+        }
+    }
+    return jobs;
+}
+
+async function loadFightAnimations(
+    fileSet: LoadedGfxFileSet,
+    atlas: EntityTextureAtlas,
+    registry: SpriteMetadataRegistry,
+    gl: WebGL2RenderingContext,
+    paletteBaseOffset: number,
+    race: Race,
+    ctx: UnitLoadContext
+): Promise<number> {
+    type FightAnimData = { unitType: UnitType; seqKey: string; frames: Map<number, SpriteEntry[]> };
+    const batch = new SafeLoadBatch<FightAnimData>();
+
+    const fightJobs = collectFightJobs(fileSet, race, ctx);
+
+    const fightResults = await Promise.all(
+        fightJobs.map(async({ unitType, fightIndex, jobIndex }) => {
+            try {
+                const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(
+                    fileSet,
+                    jobIndex,
+                    atlas,
+                    paletteBaseOffset
+                );
+                return { unitType, fightIndex, loadedDirs };
+            } catch (e) {
+                const fileId = SETTLER_FILE_NUMBERS[race];
+                log.error(
+                    `Fight animation load crashed: JIL index ${jobIndex} for ${UnitType[unitType]} ` +
+                        `(fight.${fightIndex}) in file ${fileId}.jil (${Race[race]}) — ` +
+                        `index likely points to invalid data. ` +
+                        `Fix the index in jil-indices.ts. Error: ${e}`
+                );
+                return { unitType, fightIndex, loadedDirs: null };
+            }
+        })
+    );
+
+    for (const { unitType, fightIndex, loadedDirs } of fightResults) {
+        if (!loadedDirs) continue;
+        const frames = toEntryMap(loadedDirs);
+        if (frames.size > 0) batch.add({ unitType, seqKey: fightSequenceKey(fightIndex), frames });
+    }
+
+    let fightLoadedCount = 0;
+    batch.finalize(atlas, gl, data => {
+        registry.registerAnimationSequence(
+            EntityType.Unit,
+            data.unitType,
+            data.seqKey,
+            data.frames,
+            ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+            true,
+            race
+        );
+        fightLoadedCount++;
+    });
+
+    return fightLoadedCount;
+}
+
+/** Extract frame[0] per direction (idle pose). */
+function extractIdleFrames(directionFrames: Map<number, SpriteEntry[]>): Map<number, SpriteEntry[]> {
+    const result = new Map<number, SpriteEntry[]>();
+    for (const [dir, frames] of directionFrames) {
+        if (frames.length > 0) result.set(dir, [frames[0]!]);
+    }
+    return result;
+}
+
+/** Extract frames[1+] per direction (walk cycle, skipping idle frame). */
+function extractWalkFrames(directionFrames: Map<number, SpriteEntry[]>): Map<number, SpriteEntry[]> {
+    const result = new Map<number, SpriteEntry[]>();
+    for (const [dir, frames] of directionFrames) {
+        if (frames.length > 1) result.set(dir, frames.slice(1));
+        else if (frames.length === 1) result.set(dir, frames);
+    }
+    return result;
+}
+
+/** Collect military level > 1 idle jobs from WORKER_JOB_INDICES. */
+function collectMilitaryLevelJobs(
+    fileSet: LoadedGfxFileSet,
+    ctx: UnitLoadContext
+): { unitType: UnitType; level: number; jobIndex: number }[] {
+    const jobs: { unitType: UnitType; level: number; jobIndex: number }[] = [];
+    for (const [workerKey, workerData] of Object.entries(WORKER_JOB_INDICES)) {
+        const level = getMilitaryLevel(workerKey);
+        if (level <= 1) continue;
+        const unitType = WORKER_KEY_TO_UNIT_TYPE[workerKey];
+        if (unitType === undefined) continue;
+        if (!('idle' in workerData) || typeof workerData.idle !== 'number') continue;
+        const jobIndex = workerData.idle as number;
+        if (jobIndex >= 0 && ctx.spriteLoader.getDirectionCount(fileSet, jobIndex) > 0) {
+            jobs.push({ unitType, level, jobIndex });
+        }
+    }
+    return jobs;
+}
+
+/**
+ * Load level 2/3 idle and walk animations for military units.
+ * Level 1 idle/walk is already loaded by loadBaseUnits from UNIT_JOB_INDICES.
+ * This registers level-specific sequences (e.g., 'default.2', 'walk.2') on the same entity.
+ */
+async function loadMilitaryLevelAnimations(
+    fileSet: LoadedGfxFileSet,
+    atlas: EntityTextureAtlas,
+    registry: SpriteMetadataRegistry,
+    gl: WebGL2RenderingContext,
+    paletteBaseOffset: number,
+    race: Race,
+    ctx: UnitLoadContext
+): Promise<number> {
+    type LevelAnimData = { unitType: UnitType; seqKey: string; frames: Map<number, SpriteEntry[]> };
+    const batch = new SafeLoadBatch<LevelAnimData>();
+
+    const idleJobs = collectMilitaryLevelJobs(fileSet, ctx);
+
+    const results = await Promise.all(
+        idleJobs.map(async({ unitType, level, jobIndex }) => {
+            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas, paletteBaseOffset);
+            return { unitType, level, loadedDirs };
+        })
+    );
+
+    for (const { unitType, level, loadedDirs } of results) {
+        if (!loadedDirs) continue;
+        const directionFrames = toEntryMap(loadedDirs);
+        if (directionFrames.size === 0) continue;
+
+        const idleFrames = extractIdleFrames(directionFrames);
+        if (idleFrames.size > 0) {
+            batch.add({ unitType, seqKey: levelIdleSequenceKey(level), frames: idleFrames });
+        }
+        const walkFrames = extractWalkFrames(directionFrames);
+        if (walkFrames.size > 0) {
+            batch.add({ unitType, seqKey: levelWalkSequenceKey(level), frames: walkFrames });
+        }
+    }
+
+    let levelLoadedCount = 0;
+    batch.finalize(atlas, gl, data => {
+        registry.registerAnimationSequence(
+            EntityType.Unit,
+            data.unitType,
+            data.seqKey,
+            data.frames,
+            ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+            true,
+            race
+        );
+        levelLoadedCount++;
+    });
+
+    return levelLoadedCount;
 }

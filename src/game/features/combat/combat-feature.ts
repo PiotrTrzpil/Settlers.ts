@@ -20,19 +20,21 @@ export const CombatFeature: FeatureDefinition = {
 
     create(ctx) {
         const subscriptions = new EventSubscriptionManager();
-        const combatSystem = new CombatSystem(ctx.gameState, ctx.eventBus);
+        const combatSystem = new CombatSystem(ctx.gameState, ctx.eventBus, ctx.animationService);
 
         // Auto-register military units when they spawn
         subscriptions.subscribe(ctx.eventBus, 'unit:spawned', ({ entityId, unitType, player }) => {
             if (isUnitTypeMilitary(unitType)) {
-                combatSystem.register(entityId, player, unitType);
+                const entity = ctx.gameState.getEntity(entityId);
+                combatSystem.register(entityId, player, unitType, entity?.level ?? 1);
             }
         });
 
         // Also catch units created via entity:created (e.g., map loading)
         subscriptions.subscribe(ctx.eventBus, 'entity:created', ({ entityId, type, subType, player }) => {
             if (type === EntityType.Unit && isUnitTypeMilitary(subType as UnitType)) {
-                combatSystem.register(entityId, player, subType as UnitType);
+                const entity = ctx.gameState.getEntity(entityId);
+                combatSystem.register(entityId, player, subType as UnitType, entity?.level ?? 1);
             }
         });
 

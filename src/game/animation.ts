@@ -23,6 +23,8 @@ export const ANIMATION_SEQUENCES = {
     CARRY_PREFIX: 'carry_',
     /** Prefix for work animations, suffixed with index (e.g., 'work.0', 'work.1') */
     WORK_PREFIX: 'work.',
+    /** Prefix for fight animations, suffixed with index (e.g., 'fight.0') */
+    FIGHT_PREFIX: 'fight.',
 } as const;
 
 /**
@@ -39,6 +41,30 @@ export function carrySequenceKey(materialType: number): string {
  */
 export function workSequenceKey(index: number): string {
     return `${ANIMATION_SEQUENCES.WORK_PREFIX}${index}`;
+}
+
+/**
+ * Get the animation sequence key for a fight animation variant.
+ * Returns a key like 'fight.0'.
+ */
+export function fightSequenceKey(index: number): string {
+    return `${ANIMATION_SEQUENCES.FIGHT_PREFIX}${index}`;
+}
+
+/**
+ * Get the level-specific idle sequence key.
+ * Level 1 uses 'default' (the base idle); levels 2-3 use 'default.2', 'default.3'.
+ */
+export function levelIdleSequenceKey(level: number): string {
+    return level <= 1 ? ANIMATION_SEQUENCES.DEFAULT : `${ANIMATION_SEQUENCES.DEFAULT}.${level}`;
+}
+
+/**
+ * Get the level-specific walk sequence key.
+ * Level 1 uses 'walk' (the base walk); levels 2-3 use 'walk.2', 'walk.3'.
+ */
+export function levelWalkSequenceKey(level: number): string {
+    return level <= 1 ? ANIMATION_SEQUENCES.WALK : `${ANIMATION_SEQUENCES.WALK}.${level}`;
 }
 
 /**

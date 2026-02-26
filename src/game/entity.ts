@@ -93,6 +93,12 @@ export interface Entity {
     carrying?: CarryingState;
 
     /**
+     * Military unit level (1-3). Defaults to 1.
+     * Affects combat stats, idle/walk sprites, and fight animations.
+     */
+    level?: number;
+
+    /**
      * When true, the entity is not rendered (e.g., a settler inside a building).
      */
     hidden?: boolean;
