@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SettlerTaskSystem, type SettlerTaskSystemConfig } from '@/game/features/settler-tasks/settler-task-system';
 import { SearchType, type EntityWorkHandler, type PositionWorkHandler } from '@/game/features/settler-tasks/types';
-import { AnimationService } from '@/game/animation/animation-service';
+import { EntityVisualService } from '@/game/animation/entity-visual-service';
 import { EntityType } from '@/game/entity';
 import { UnitType } from '@/game/unit-types';
 import { createTestContext, addUnit, type TestContext } from './helpers/test-game';
@@ -17,14 +17,18 @@ import { CarrierManager } from '@/game/features/carriers';
 
 /** Helper: create a SettlerTaskSystem wired to a TestContext */
 function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
-    const animationService = new AnimationService();
+    const visualService = new EntityVisualService();
+    // Mirror production wiring: init visual state for all entities
+    ctx.eventBus.on('entity:created', ({ entityId, variation }) => {
+        visualService.init(entityId, variation);
+    });
     const carrierManager = new CarrierManager({
         entityProvider: ctx.state,
         eventBus: ctx.eventBus,
     });
     const config: SettlerTaskSystemConfig = {
         gameState: ctx.state,
-        animationService,
+        visualService,
         inventoryManager: ctx.inventoryManager,
         eventBus: ctx.eventBus,
         carrierManager,

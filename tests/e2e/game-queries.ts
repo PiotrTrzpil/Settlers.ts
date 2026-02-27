@@ -68,23 +68,23 @@ export async function getUnitState(page: Page, unitId: number): Promise<UnitStat
 }
 
 /**
- * Get animation state for a unit from AnimationService.
+ * Get animation state for a unit from EntityVisualService.
  */
 export async function getAnimationState(page: Page, unitId: number): Promise<AnimationState | null> {
     return page.evaluate(
         ({ id }) => {
             const game = window.__settlers__?.game;
-            const animService = game?.services?.animationService;
-            if (!animService) return null;
-            const state = animService.getState(id);
-            if (!state) return null;
+            const visualService = game?.services?.visualService;
+            if (!visualService) return null;
+            const vs = visualService.getState(id);
+            if (!vs?.animation) return null;
             return {
-                sequenceKey: state.sequenceKey,
-                currentFrame: state.currentFrame,
-                direction: state.direction,
-                playing: state.playing,
-                loop: (state as { loop?: boolean }).loop ?? false,
-                elapsedMs: state.elapsedMs,
+                sequenceKey: vs.animation.sequenceKey,
+                currentFrame: vs.animation.currentFrame,
+                direction: vs.animation.direction,
+                playing: vs.animation.playing,
+                loop: vs.animation.loop,
+                elapsedMs: vs.animation.elapsedMs,
             };
         },
         { id: unitId }
@@ -130,11 +130,11 @@ export async function sampleAnimationStates(
                 let count = 0;
                 function sample() {
                     const game = window.__settlers__?.game;
-                    const animService = game?.services?.animationService;
-                    if (animService) {
-                        const state = animService.getState(id);
-                        if (state) {
-                            samples.push({ playing: state.playing, sequenceKey: state.sequenceKey });
+                    const visualService = game?.services?.visualService;
+                    if (visualService) {
+                        const vs = visualService.getState(id);
+                        if (vs?.animation) {
+                            samples.push({ playing: vs.animation.playing, sequenceKey: vs.animation.sequenceKey });
                         }
                     }
                     count++;

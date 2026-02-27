@@ -1,271 +1,665 @@
-# Design: Unified Entity Visual State
+# Design: Entity Visual System
 
 ## Problem
 
-Entity visual appearance is controlled by two independent systems that don't know about each other:
+Entity appearance is controlled by three independent mechanisms with no coordination:
 
-1. **`entity.variation`** — a numeric index selecting a static sprite (set by domain systems like TreeSystem, StoneSystem, CropSystem)
-2. **`AnimationService`** — holds per-entity animation state (sequence key, frame, direction, playing flag)
+| Mechanism | Owner | What it controls |
+|-----------|-------|-----------------|
+| `entity.variation` | Domain systems (TreeSystem, StoneSystem, CropSystem) | Static sprite selection (growth stage, depletion level) |
+| `AnimationService` state | Task system, domain systems, combat | Animated sprite (walk cycle, sway, work animation) |
+| `BuildingOverlayManager` | Building system | Additional sprite layers (smoke, wheels, flags) |
 
-The renderer's `getAnimated()` method silently prioritises animation state over variation. When an animation exists (even stopped), `getAnimatedSprite()` returns the animation frame using `animatedEntry.staticSprite` as fallback — the variation-specific sprite is ignored entirely. This caused the tree-cutting bug: sway animation kept overriding cutting-stage sprites.
+The renderer silently prioritises animation over variation. When an `AnimationState` exists (even stopped/stale), `getAnimatedSprite()` returns the animation frame and uses `animatedEntry.staticSprite` as fallback — the variation-specific sprite is discarded. This caused the tree-cutting bug: sway animation kept overriding cutting-stage sprites because nobody cleared it.
 
-The root cause is **dual ownership with implicit priority** — no single source of truth for "what should this entity look like right now."
+The root cause is **dual ownership with implicit priority** — two systems write, one reads, and the reader picks a winner the writers don't know about.
 
-## Goal
+## Goals
 
-Replace the split `entity.variation` + `AnimationService` state with a single **`EntityVisualState`** per entity that the renderer reads. Domain systems set visual intents; the renderer resolves sprites from those intents. No implicit overrides, no animation-vs-variation races.
+1. **Single source of truth** per entity for "what should this look like"
+2. **Atomic visual transitions** — changing stage + clearing animation is one call, not two
+3. **Correct fallback** — animation that can't resolve falls through to variation, not to a hardcoded static sprite
+4. **Cover all entity types** — units, map objects, buildings (with overlay layers), resources
+5. **Easy API** — domain systems express intent, not rendering mechanics
+
+## All entity visual behaviours
+
+Before designing, inventory every visual pattern in the game:
+
+### Units (settlers, military)
+```
+Visual = animation(sequenceKey, direction, frame) with static fallback(unitType, direction, race)
+
+Dimensions:
+  - sequenceKey: 'default', 'walk', 'carry_N', 'work.0', 'fight.N', level variants ('default.2', 'walk.3')
+  - direction: 0-5 (hex directions)
+  - race: Roman/Viking/Mayan/DarkTribe/Trojan (determines sprite file)
+  - level: 1-3 (military only — selects sequence variant)
+  - carrying: material type (selects carry_N sequence)
+  - directionTransition: blend old→new direction sprites during turns
+
+Always animated. Animation drives appearance. Static sprite is a fallback only.
+```
+
+### Trees
+```
+Visual = variation(variant × 11 + stageOffset)
+         + optional animation('default', direction=variant) when Normal
+
+Stages: Growing(3 sprites) → Normal(1 sprite + sway anim) → Cutting(7 sprites) → Cut(stump) → removed
+Variants: 0-N per tree type (random on creation)
+
+Mostly static. Animation only during Normal stage (looping sway).
+Key transition: Normal→Cutting must atomically stop sway and switch to cutting sprite.
+```
+
+### Crops (grain, sunflower, agave, beehive)
+```
+Visual = variation(stageOffset)
+         + optional animation('default') when Mature
+
+Stages: Growing(N sprites) → Mature(1 sprite + bloom anim) → Harvesting → Harvested(1 sprite) → removed
+
+Same pattern as trees: static with optional animation at one stage.
+```
+
+### Stones
+```
+Visual = variation(variant × 13 + depletionLevel)
+
+Always static. No animation. 2 variants × 13 depletion levels.
+```
+
+### Buildings
+```
+Main sprite: construction sprite OR completed sprite (boolean flag)
+  + verticalProgress (0-1, controls sprite clipping during rise)
+  + optional animation ('default' sequence for windmills etc.)
+
+Overlay layers (0-N per building, each independent):
+  - Layer position: BehindBuilding / AboveBuilding / Flag / AboveFlag
+  - Condition: always / working / idle
+  - Independent animation timing (own elapsedMs, frameDuration, loop flag)
+  - Pixel offset from building origin
+  - Optional team coloring
+
+Special: flags computed from performance.now() at 12fps, not managed by overlay timer.
+```
+
+### Stacked resources
+```
+Visual = getResource(materialType, direction=quantity-1)
+
+Static. Quantity (1-8) maps to direction index. No animation, no variation.
+```
+
+### Flags / Territory dots
+```
+Flags: animated (24 frames × 8 player colors), managed by DecorationSpriteCategory
+Territory dots: static (1 sprite × 8 player colors)
+
+Not managed by entity visual system — rendered by dedicated passes.
+```
+
+---
 
 ## Design
 
-### New type: `EntityVisualState`
+### Core type: `EntityVisualState`
+
+One struct per entity. Owns both the static sprite selection and the optional animation overlay.
 
 ```typescript
 interface EntityVisualState {
-  /** Static sprite variation index (trees: variant*11+stage, stones: variant*13+level) */
+  /** Static sprite index. Always set. Renderer uses this when animation is null or can't resolve. */
   variation: number;
-  /** Animation sequence key, or null for static sprite */
-  sequenceKey: string | null;
-  /** Whether animation loops */
-  loop: boolean;
-  /** Current frame index */
-  currentFrame: number;
-  /** Elapsed ms within current frame */
-  elapsedMs: number;
-  /** Direction index (0-5 for units, variant index for trees) */
+
+  /** Active animation, or null for static-only entities. */
+  animation: AnimationPlayback | null;
+}
+
+interface AnimationPlayback {
+  sequenceKey: string;
   direction: number;
-  /** Whether animation is actively advancing */
+  currentFrame: number;
+  elapsedMs: number;
+  loop: boolean;
   playing: boolean;
-  /** Direction transition fields (units only) */
-  previousDirection?: number;
-  directionTransitionProgress?: number;
+}
+
+/** Unit-only: smooth direction change. Stored separately because most entities never use it. */
+interface DirectionTransition {
+  previousDirection: number;
+  progress: number;   // 0.0 = old direction, 1.0 = new direction
 }
 ```
 
-Key difference from current design: `variation` and animation fields live in the **same struct**. The renderer reads one object and decides: if `sequenceKey !== null` and animation data exists, use animation frame; otherwise use `variation` for static sprite lookup. No implicit fallback chain — the intent is explicit.
+**Why `animation: ... | null` instead of a flag?**
+- `null` means "no animation state exists" — renderer skips animation lookup entirely
+- No stale state can leak through: clearing animation removes it, not just pauses it
+- Type system enforces that you check for null before reading animation fields
 
-### New service: `EntityVisualService`
+### Service: `EntityVisualService`
 
-Replaces `AnimationService`. Owns the `Map<number, EntityVisualState>`.
+Replaces `AnimationService`. Single owner of all `EntityVisualState` instances.
 
 ```typescript
 class EntityVisualService {
   private states = new Map<number, EntityVisualState>();
+  private transitions = new Map<number, DirectionTransition>();  // sparse, units only
 
-  // ── Variation (static sprites) ──────────────────────────
+  // ── Lifecycle ────────────────────────────────────────────────
+
+  /** Create visual state for a new entity. */
+  init(entityId: number, variation?: number): void;
+
+  /** Remove all visual state for a destroyed entity. */
+  remove(entityId: number): void;
+
+  // ── Static sprite (variation) ────────────────────────────────
+
+  /** Change static sprite selection. Does NOT touch animation. */
   setVariation(entityId: number, variation: number): void;
-  getVariation(entityId: number): number;
 
-  // ── Animation ───────────────────────────────────────────
-  playAnimation(entityId: number, sequenceKey: string, opts?: PlayOptions): void;
-  stopAnimation(entityId: number): void;   // sets sequenceKey = null
+  // ── Animation ────────────────────────────────────────────────
+
+  /** Start or update an animation. Does NOT touch variation. */
+  play(entityId: number, sequenceKey: string, opts?: {
+    loop?: boolean;
+    direction?: number;
+    startFrame?: number;
+  }): void;
+
+  /** Clear animation entirely — renderer falls back to variation. */
+  clearAnimation(entityId: number): void;
+
+  /** Update animation direction without changing sequence. */
   setDirection(entityId: number, direction: number): void;
 
-  // ── Combined (for domain systems that change both) ──────
-  setVariationAndStopAnimation(entityId: number, variation: number): void;
-  setVariationAndPlayAnimation(entityId: number, variation: number, seq: string, opts?: PlayOptions): void;
+  // ── Atomic combined operations ───────────────────────────────
+  // These prevent the bug class where variation and animation are
+  // changed in separate calls with a render frame in between.
 
-  // ── Intent API (for settler task animations) ────────────
+  /** Set variation AND clear animation. One call. No stale animation possible.
+   *  Use when: tree enters cutting, crop enters harvested, any static stage. */
+  setStatic(entityId: number, variation: number): void;
+
+  /** Set variation AND start animation. One call.
+   *  Use when: tree enters Normal (sway), crop enters Mature (bloom). */
+  setAnimated(entityId: number, variation: number, sequenceKey: string, opts?: PlayOptions): void;
+
+  // ── Intent API (task system) ─────────────────────────────────
+
+  /** Apply a resolved animation intent (from AnimationResolver).
+   *  Used by IdleAnimationController, combat system, etc. */
   applyIntent(entityId: number, intent: AnimationIntent): void;
 
-  // ── Renderer reads ──────────────────────────────────────
+  // ── Direction transitions (units only) ───────────────────────
+
+  startDirectionTransition(entityId: number, from: number, to: number): void;
+  updateDirectionTransition(entityId: number, progress: number): void;
+  clearDirectionTransition(entityId: number): void;
+  getDirectionTransition(entityId: number): DirectionTransition | null;
+
+  // ── Query ────────────────────────────────────────────────────
+
   getState(entityId: number): EntityVisualState | null;
 
-  // ── Lifecycle ───────────────────────────────────────────
-  remove(entityId: number): void;
-  update(deltaMs: number): void;  // advance playing animations
+  // ── Frame tick ───────────────────────────────────────────────
+
+  /** Advance all playing animations by deltaMs. Called once per frame. */
+  update(deltaMs: number): void;
 }
 ```
 
-**Rules enforced by the API:**
-- `setVariation()` does NOT touch animation fields → static sprite changes don't break running animations (units walking)
-- `stopAnimation()` nulls `sequenceKey` → renderer falls back to `variation` automatically
-- `setVariationAndStopAnimation()` is the atomic operation for "change visual stage and clear animation" (trees entering cutting, crops entering harvested)
-- `playAnimation()` does NOT touch `variation` → animation overlays don't corrupt the variation index
-
-### Renderer changes
-
-`EntitySpriteResolver.getAnimated()` becomes:
+### API usage by entity type
 
 ```typescript
-private resolveSprite(entity: Entity, visualState: EntityVisualState | null): SpriteEntry | null {
-    if (!visualState || !this.sprites) return null;
+// ─── Trees ──────────────────────────────────────────────────────
+// Normal stage: animated sway
+visualService.setAnimated(treeId, normalVariation, 'default', {
+  loop: true, direction: variant
+});
 
-    // 1. Try animation path
-    if (visualState.sequenceKey !== null) {
-        const animatedEntry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
-        if (animatedEntry) {
-            const dirMap = animatedEntry.animationData.sequences.get(visualState.sequenceKey);
-            const seq = dirMap?.get(visualState.direction);
-            if (seq?.frames.length) {
-                const idx = seq.loop
-                    ? visualState.currentFrame % seq.frames.length
-                    : Math.min(visualState.currentFrame, seq.frames.length - 1);
-                return seq.frames[idx] ?? null;
-            }
-        }
-        // Animation requested but sequence not found → fall through to static
+// Start cutting: atomic switch to static cutting sprite
+visualService.setStatic(treeId, cuttingVariation);
+
+// Cutting progress updates: just change variation (no animation involved)
+visualService.setVariation(treeId, fallingVariation);
+visualService.setVariation(treeId, cutting1Variation);
+// ...
+
+// Cancel cutting: back to animated sway
+visualService.setAnimated(treeId, normalVariation, 'default', {
+  loop: true, direction: variant
+});
+
+
+// ─── Crops ──────────────────────────────────────────────────────
+// Same pattern as trees
+visualService.setAnimated(cropId, matureVariation, 'default', { loop: true });
+visualService.setStatic(cropId, harvestedVariation);
+
+
+// ─── Stones ─────────────────────────────────────────────────────
+// Always static — just variation changes
+visualService.setVariation(stoneId, newDepletionVariation);
+
+
+// ─── Units ──────────────────────────────────────────────────────
+// Walk
+visualService.play(settlerId, 'walk', { loop: true, direction: dir });
+
+// Idle
+visualService.applyIntent(settlerId, resolveIdleIntent(entity));
+
+// Carry material
+visualService.play(settlerId, carrySequenceKey(material), { loop: true, direction: dir });
+
+// Change direction while walking
+visualService.setDirection(settlerId, newDir);
+
+// Direction transition (smooth blend)
+visualService.startDirectionTransition(settlerId, oldDir, newDir);
+// ... each tick:
+visualService.updateDirectionTransition(settlerId, progress);
+// ... when done:
+visualService.clearDirectionTransition(settlerId);
+
+
+// ─── Buildings ──────────────────────────────────────────────────
+// Completed building with animation (e.g. windmill)
+visualService.play(buildingId, 'default', { loop: true });
+
+// Static completed building — no visual service call needed
+// (BuildingRenderState handles construction sprite selection separately)
+```
+
+### `entity.variation` removal
+
+The `variation` field is removed from the `Entity` type. All reads and writes migrate to `EntityVisualService`.
+
+Domain systems that currently write `entity.variation = X` call `visualService.setVariation(id, X)` or one of the atomic methods.
+
+The renderer reads variation from `visualService.getState(id)` instead of `entity.variation`. When `getState()` returns null (e.g. decorations), the entity is skipped or rendered with a default — this is nullable-by-design at the render boundary.
+
+### Renderer resolution
+
+`EntitySpriteResolver` receives `getVisualState: (id) => EntityVisualState | null` instead of `getAnimState`.
+
+New resolution logic for map objects:
+
+```typescript
+private resolveMapObject(entity: Entity): SpriteEntry | null {
+  const vs = this.getVisualState(entity.id);
+  if (!vs) return null;  // legitimate: entity type not tracked by visual service
+
+  const staticSprite = this.sprites!.getMapObject(entity.subType as MapObjectType, vs.variation);
+
+  if (vs.animation) {
+    const entry = this.sprites!.getAnimatedEntity(entity.type, entity.subType, entity.race);
+    if (entry) {
+      const frame = resolveAnimationFrame(vs.animation, entry.animationData);
+      if (frame) return frame;
     }
+  }
 
-    // 2. Static sprite from variation
-    return this.getStaticSprite(entity, visualState.variation);
+  return staticSprite;
 }
 ```
 
-No implicit `staticSprite` fallback from the animated entry — if animation can't resolve, it falls through to `variation`-based lookup. This is the key behavioral change.
+Key difference from current code: the fallback is always the **variation-aware static sprite**, never `animatedEntry.staticSprite`. If animation can't resolve (missing sequence, cleared animation), you get the correct variation sprite.
 
-### `entity.variation` field
+Unit resolution:
 
-Removed from `Entity`. All reads go through `EntityVisualService.getState()`. This eliminates the dual-source problem at the type level.
+```typescript
+private resolveUnit(entity: Entity): SpriteResolveResult {
+  const vs = this.getVisualState(entity.id);
+  if (!vs) return { skip: false, transitioning: false, sprite: null, progress: 1 };
+
+  const transition = this.getDirectionTransition(entity.id);
+  if (transition) {
+    return { skip: false, transitioning: true, sprite: null, progress: 1 };
+  }
+
+  const direction = vs.animation?.direction ?? 0;  // direction defaults to 0 when no animation — OK, this IS a nullable-by-design field
+  const staticSprite = this.sprites!.getUnit(entity.subType as UnitType, direction, entity.race);
+
+  if (vs.animation) {
+    const entry = this.sprites!.getAnimatedEntity(entity.type, entity.subType, entity.race);
+    if (entry) {
+      const frame = resolveAnimationFrame(vs.animation, entry.animationData);
+      if (frame) return { skip: false, transitioning: false, sprite: frame, progress: 1 };
+    }
+  }
+
+  return { skip: false, transitioning: false, sprite: staticSprite, progress: 1 };
+}
+```
+
+### Building overlays — no change
+
+Building overlays stay as-is. They are a **separate rendering concern**: additional sprites drawn at offsets relative to the building, each with independent animation timing and working/idle conditions.
+
+The overlay system is already well-separated:
+- `OverlayRegistry` — static definitions from XML
+- `BuildingOverlayManager` — runtime state (per-overlay `elapsedMs`, `active` flag)
+- `overlay-resolution.ts` — glue layer resolving instances to render data
+- `EntitySpritePass` — emits overlay sprites at correct layers
+
+This architecture is sound. Overlays don't interact with `entity.variation` or `AnimationService`, so the visual service refactor doesn't affect them.
+
+The one improvement worth noting: overlay animation uses raw `elapsedMs / frameDurationMs` math while the main animation uses `AnimationPlayback`. These could share the `AnimationPlayback` type for consistency, but it's cosmetic — no bug risk.
+
+### BuildingRenderState — no change
+
+Building construction state (`useConstructionSprite`, `verticalProgress`) stays as a separate pull-model query. It controls which sprite atlas entry to use and how much to clip — fundamentally different from variation-based sprite selection.
+
+Buildings that animate when completed (windmills, etc.) use `visualService.play()` for the main sprite animation. This coexists cleanly with `BuildingRenderState`: the render state selects construction-vs-completed, and the animation state selects the frame within the completed sprite's animation.
 
 ---
 
-## Subsystems & migration plan
+## Subsystems & parallel implementation plan
 
-### Subsystem 1: EntityVisualService
+### Dependency graph
+
+```
+S1: EntityVisualService (new file)
+ │
+ ├─► S2: Remove entity.variation from Entity type
+ ├─► S3: Migrate domain systems (trees, crops, stones, growable base)
+ ├─► S4: Migrate animation callers (idle controller, unit state machine, combat)
+ └─► S5: Migrate renderer (sprite resolver, render context, blend pass)
+      │
+      ▼
+S6: Delete AnimationService + clean up exports
+      │
+      ▼
+S7: Lint + test
+```
+
+S2-S5 are fully parallel (no file overlap).
+
+### S1: EntityVisualService (sequential — foundation)
 
 **Create** `src/game/animation/entity-visual-service.ts`
 
-- Move state map from `AnimationService`
-- Add `variation` field to state
-- Add combined methods (`setVariationAndStopAnimation`, etc.)
-- Keep `update(deltaMs)` frame-advance logic unchanged
-- Keep `applyIntent()` for settler task animations
+- `EntityVisualState` and `AnimationPlayback` types
+- `DirectionTransition` type
+- `EntityVisualService` class with full API
+- `update(deltaMs)` frame-advance loop (moved from AnimationService)
+- ~180 lines
 
-**Estimated scope:** ~150 lines, 1 new file.
+This subsystem has zero dependencies on existing code except the `AnimationIntent` type (kept).
 
-### Subsystem 2: Remove `entity.variation` from Entity
+### S2: Remove `entity.variation` (parallel)
 
-**Edit** `src/game/entity.ts`
+**Files:** `entity.ts`, `raw-object-registry.ts`
 
-- Remove `variation` property from `Entity` interface/class
-- Compilation errors will surface every callsite that needs migration
+| File | Change |
+|------|--------|
+| `entity.ts` | Remove `variation` property from Entity |
+| `raw-object-registry.ts` | Replace `entity.variation = X` with `visualService.setVariation(id, X)` |
 
-**Edit** every file that reads/writes `entity.variation`:
+### S3: Migrate domain systems (parallel)
 
-| File | Current usage | Migration |
-|------|--------------|-----------|
-| `growable-system.ts` (lines 115, 138, 231) | `entity.variation = offset` | `visualService.setVariation(entityId, offset)` |
-| `growable-system.ts` `onOffsetChanged` | hook after variation set | Subclass calls `visualService.setVariationAndPlayAnimation` or `setVariationAndStopAnimation` |
-| `stone-system.ts` (lines 75, 100) | `entity.variation = getVariation(state)` | `visualService.setVariation(entityId, variation)` |
-| `entity-sprite-resolver.ts` (line 118) | `entity.variation ?? 0` | `visualService.getState(entityId)?.variation ?? 0` |
-| `entity-sprite-resolver.ts` `hasTexturedSpriteMap` (line 203) | reads variation implicitly | Use variation=0 for existence check (unchanged) |
-| `raw-object-registry.ts` | sets initial variation on map load | Call `visualService.setVariation()` after entity creation |
-| `inventory-visualizer.ts` | stacked resources use quantity not variation | No change needed (StackedResource uses direction, not variation) |
+**Files:** `growable-system.ts`, `tree-system.ts`, `crop-system.ts`, `stone-system.ts`, `tree-feature.ts`, `crop-feature.ts`, `stone-feature.ts`
 
-### Subsystem 3: Migrate domain systems
+| System | Change |
+|--------|--------|
+| `GrowableSystem` | Constructor takes `EntityVisualService`. `updateVisual()` calls `visualService.setVariation()` instead of `entity.variation = offset`. Remove `animationService` field. |
+| `TreeSystem` | `onOffsetChanged()`: NORMAL → `setAnimated()`, other → `setStatic()`. Remove manual `animationService.remove()` in `startCutting()`. |
+| `CropSystem` | Same pattern as TreeSystem. Mature → `setAnimated()`, other stages → `setStatic()`. |
+| `StoneSystem` | Replace `entity.variation = X` with `visualService.setVariation(id, X)`. No animation involvement. |
+| Feature files | Pass `EntityVisualService` instead of `AnimationService` to system constructors. |
 
-#### TreeSystem (`tree-system.ts`)
+### S4: Migrate animation callers (parallel)
 
-- Constructor: accept `EntityVisualService` instead of `AnimationService`
-- `onOffsetChanged()`:
-  - NORMAL → `visualService.setVariationAndPlayAnimation(id, offset, 'default', { loop: true, direction: variant })`
-  - Other → `visualService.setVariationAndStopAnimation(id, offset)`
-- `startCutting()`: remove manual `animationService.remove()` — `setVariationAndStopAnimation` handles it atomically
-- `GrowableSystem.updateVisual()`: call `visualService.setVariation()` instead of `entity.variation = offset`
+**Files:** `idle-animation-controller.ts`, `unit-state-machine.ts`, `combat-system.ts`, `game-services.ts`, `game-loop.ts`
 
-#### CropSystem (`crop-system.ts`)
+Mechanical renames — these callers only use animation (not variation):
 
-- Same pattern as TreeSystem
-- `onOffsetChanged()`:
-  - Mature offset → `setVariationAndPlayAnimation(id, offset, 'default', { loop: true })`
-  - Other → `setVariationAndStopAnimation(id, offset)`
+| Caller | Change |
+|--------|--------|
+| `IdleAnimationController` | `animationService.play/stop/setDirection/applyIntent/getState` → `visualService.play/clearAnimation/setDirection/applyIntent/getState` |
+| `UnitStateMachine` | Same renames |
+| `CombatSystem` | Same renames |
+| `GameServices` | `animationService.remove()` → `visualService.remove()` in cleanup |
+| `GameLoop` | `animationService.update(dt)` → `visualService.update(dt)` |
 
-#### StoneSystem (`stone-system.ts`)
+**Note:** `animationService.stop()` (freeze on frame) becomes `clearAnimation()` (remove animation). The old `stop()` left stale state that could override variation — the new API eliminates that by design.
 
-- No animation involvement — just replace `entity.variation = x` with `visualService.setVariation(id, x)`
+### S5: Migrate renderer (parallel)
 
-#### GrowableSystem base class (`growable-system.ts`)
+**Files:** `entity-sprite-resolver.ts`, `render-context.ts`, `transition-blend-pass.ts`, `render-passes/types.ts`, `animation-helpers.ts`
 
-- Constructor: accept `EntityVisualService` instead of `AnimationService`
-- `updateVisual()`: call `visualService.setVariation()` and then `onOffsetChanged()` — or combine into a single `onVisualChanged()` hook that subclasses implement
-- Remove `animationService` field, replace with `visualService`
+| File | Change |
+|------|--------|
+| `render-context.ts` | `getAnimationState` → `getVisualState: (id) => EntityVisualState \| null` |
+| `render-passes/types.ts` | `PassContext.getAnimState` → `getVisualState`. Add `getDirectionTransition`. |
+| `entity-sprite-resolver.ts` | Constructor takes `getVisualState`. Rewrite `getMapObject()`, `resolveUnit()`, `getAnimated()` per resolution logic above. Read `variation` from visual state, not entity. |
+| `animation-helpers.ts` | `getAnimatedSprite` takes `AnimationPlayback` instead of `AnimationState`. Remove `staticSprite` fallback parameter — caller provides fallback. |
+| `transition-blend-pass.ts` | Read `DirectionTransition` from `getDirectionTransition()` instead of `AnimationState` fields. |
 
-### Subsystem 4: Migrate settler animation callers
+### S6: Delete AnimationService (sequential — after S2-S5)
 
-These only use animation (not variation), so migration is mechanical rename:
-
-| Caller | File | Change |
-|--------|------|--------|
-| `IdleAnimationController` | `idle-animation-controller.ts` | `animationService.play/stop/setDirection/applyIntent/getState` → `visualService.*` |
-| `UnitStateMachine` | `unit-state-machine.ts` | Same renames |
-| `CombatSystem` | `combat/combat-system.ts` | Same renames |
-| `GameServices` cleanup | `game-services.ts` | `animationService.remove()` → `visualService.remove()` |
-| `GameLoop` | `game-loop.ts` | `animationService.update()` → `visualService.update()` |
-
-### Subsystem 5: Migrate renderer
-
-**`entity-sprite-resolver.ts`:**
-- Constructor: accept `getVisualState: (id: number) => EntityVisualState | null` instead of `getAnimState`
-- `getMapObject()`: read `visualState.variation` instead of `entity.variation`
-- `getAnimated()` → replace with `resolveSprite()` (see design above)
-- `resolveUnit()`: read direction transition fields from `EntityVisualState`
-- `getUnitSpriteForDirection()`: accept `EntityVisualState` instead of `AnimationState`
-
-**`render-context.ts`:**
-- `IRenderContext.getAnimationState` → `getVisualState: (id: number) => EntityVisualState | null`
-
-**`render-passes/transition-blend-pass.ts`:**
-- Read `previousDirection` / `directionTransitionProgress` from `EntityVisualState`
-
-**`render-passes/entity-sprite-pass.ts`:**
-- No structural change — still calls `spriteResolver.resolve(entity)`
-
-**`render-passes/types.ts`:**
-- `PassContext.getAnimState` → `getVisualState`
-
-### Subsystem 6: Delete AnimationService
-
-- Remove `src/game/animation/animation-service.ts`
+- Delete `src/game/animation/animation-service.ts`
+- Remove `AnimationState` interface from `src/game/animation.ts` (replaced by `EntityVisualState`)
 - Update `src/game/animation/index.ts` exports
-- Remove `AnimationState` interface (replaced by `EntityVisualState`)
-- Keep `AnimationIntent` and `AnimationResolver` — they produce intents consumed by `EntityVisualService.applyIntent()`
+- Keep `AnimationIntent`, `AnimationResolver`, `AnimationData`, `AnimationSequence` — these are consumed by `EntityVisualService.applyIntent()` and the sprite metadata system
+
+### S7: Validate (sequential)
+
+```sh
+pnpm lint    # Type-check + ESLint
+pnpm test:unit
+```
 
 ---
 
-## Parallelisation plan
+## Contracts, error handling, and edge cases
 
-Dependencies between subsystems:
+### API contracts
 
+Every method follows optimistic programming: required state must exist, violations throw with context.
+
+```typescript
+// ── Lifecycle ────────────────────────────────────────────────
+
+init(entityId: number, variation = 0): void {
+  if (this.states.has(entityId)) {
+    throw new Error(
+      `EntityVisualService.init: entity ${entityId} already initialized. ` +
+      `Call remove() before re-initializing.`
+    );
+  }
+  this.states.set(entityId, { variation, animation: null });
+}
+
+remove(entityId: number): void {
+  // Cleanup path — safe to call on non-existent entities (destroy order is not guaranteed)
+  this.states.delete(entityId);
+  this.transitions.delete(entityId);
+}
+
+// ── State access ─────────────────────────────────────────────
+
+/** For domain systems that own the entity — entity MUST have visual state. */
+getStateOrThrow(entityId: number, caller: string): EntityVisualState {
+  const state = this.states.get(entityId);
+  if (!state) {
+    throw new Error(
+      `EntityVisualService.getStateOrThrow: entity ${entityId} has no visual state ` +
+      `(caller: ${caller}). Was init() called? Total tracked: ${this.states.size}`
+    );
+  }
+  return state;
+}
+
+/** For renderer — returns null for entities without visual state (decorations, etc.). */
+getState(entityId: number): EntityVisualState | null {
+  return this.states.get(entityId) ?? null;
+}
 ```
-S1 (EntityVisualService)
-  ├── S2 (remove entity.variation) ─── depends on S1
-  ├── S3 (domain systems) ──────────── depends on S1
-  ├── S4 (settler animation callers) ─ depends on S1
-  └── S5 (renderer) ───────────────── depends on S1
-S6 (delete AnimationService) ───────── depends on S2+S3+S4+S5
+
+**Two access patterns, explicit intent:**
+
+| Method | Use when | Returns |
+|--------|----------|---------|
+| `getStateOrThrow(id, 'TreeSystem')` | Domain systems modifying their entities — state **must** exist | `EntityVisualState` (throws if missing) |
+| `getState(id)` | Renderer resolving any entity — some legitimately have no visual state | `EntityVisualState \| null` |
+
+### Mutation methods — all throw on missing state
+
+```typescript
+setVariation(entityId: number, variation: number): void {
+  this.getStateOrThrow(entityId, 'setVariation').variation = variation;
+}
+
+play(entityId: number, sequenceKey: string, opts?: PlayOptions): void {
+  const state = this.getStateOrThrow(entityId, 'play');
+  state.animation = {
+    sequenceKey,
+    direction: opts?.direction ?? 0,
+    currentFrame: opts?.startFrame ?? 0,
+    elapsedMs: 0,
+    loop: opts?.loop ?? false,
+    playing: true,
+  };
+}
+
+clearAnimation(entityId: number): void {
+  this.getStateOrThrow(entityId, 'clearAnimation').animation = null;
+}
+
+setStatic(entityId: number, variation: number): void {
+  const state = this.getStateOrThrow(entityId, 'setStatic');
+  state.variation = variation;
+  state.animation = null;
+}
+
+setAnimated(entityId: number, variation: number, sequenceKey: string, opts?: PlayOptions): void {
+  const state = this.getStateOrThrow(entityId, 'setAnimated');
+  state.variation = variation;
+  state.animation = {
+    sequenceKey,
+    direction: opts?.direction ?? 0,
+    currentFrame: opts?.startFrame ?? 0,
+    elapsedMs: 0,
+    loop: opts?.loop ?? false,
+    playing: true,
+  };
+}
+
+setDirection(entityId: number, direction: number): void {
+  const state = this.getStateOrThrow(entityId, 'setDirection');
+  if (!state.animation) {
+    throw new Error(
+      `EntityVisualService.setDirection: entity ${entityId} has no active animation. ` +
+      `Call play() first or use setVariation() for static entities.`
+    );
+  }
+  state.animation.direction = direction;
+}
 ```
 
-**Phase 1** (sequential): Implement S1 — the new `EntityVisualService`. This is the foundation.
+### Renderer resolution — optimistic with correct fallback
 
-**Phase 2** (parallel — 4 agents): S2, S3, S4, S5 can all run simultaneously once S1 exists. Each touches different files:
+```typescript
+// Renderer uses getState() (nullable) — entities like decorations may not have visual state.
+// But when visual state exists, reads are direct (no ?? fallbacks on guaranteed fields).
 
-| Agent | Subsystem | Files touched |
-|-------|-----------|---------------|
-| A | S2: Entity.variation removal | `entity.ts`, `raw-object-registry.ts` |
-| B | S3: Domain systems | `growable-system.ts`, `tree-system.ts`, `crop-system.ts`, `stone-system.ts`, `tree-feature.ts`, `crop-feature.ts`, `stone-feature.ts` |
-| C | S4: Settler animation | `idle-animation-controller.ts`, `unit-state-machine.ts`, `combat-system.ts`, `game-services.ts`, `game-loop.ts` |
-| D | S5: Renderer | `entity-sprite-resolver.ts`, `render-context.ts`, `animation-helpers.ts`, `transition-blend-pass.ts`, `types.ts` |
+private resolveMapObject(entity: Entity): SpriteEntry | null {
+  const vs = this.getVisualState(entity.id);
+  if (!vs) return null;  // legitimate: entity type not tracked by visual service
 
-**Phase 3** (sequential): S6 — delete `AnimationService`, clean up exports.
+  const staticSprite = this.sprites!.getMapObject(entity.subType as MapObjectType, vs.variation);
 
-**Phase 4** (sequential): Run `pnpm lint` and `pnpm test:unit` to catch integration issues.
+  if (vs.animation) {
+    const entry = this.sprites!.getAnimatedEntity(entity.type, entity.subType, entity.race);
+    if (entry) {
+      const frame = resolveAnimationFrame(vs.animation, entry.animationData);
+      if (frame) return frame;
+      // Animation sequence missing or exhausted — fall through to static sprite.
+      // This is expected (e.g. sequence not in sprite data), not an error.
+    }
+  }
+
+  return staticSprite;
+}
+```
+
+### Edge cases
+
+| Scenario | Handling | Rationale |
+|----------|----------|-----------|
+| `init()` called twice for same entity | Throws with entity ID and instruction to call `remove()` first | Prevents silent state overwrite — indicates lifecycle bug |
+| `setVariation()` / `play()` / etc. on uninitialized entity | Throws via `getStateOrThrow()` with caller name and entity ID | Fail fast — domain system has a registration bug |
+| `remove()` on non-existent entity | No-op (no throw) | Cleanup path — destroy order between systems is not guaranteed |
+| `setDirection()` on entity with no animation | Throws with entity ID and guidance to use `play()` first | Prevents silent direction writes that would be ignored |
+| `update()` advances animation past last frame (non-looping) | Set `playing = false`, clamp to last frame | Natural completion — entity stays on final frame until explicitly cleared |
+| `clearAnimation()` during direction transition | Clears animation; transition stays (units may be mid-turn) | Transition is orthogonal — cleared independently by movement system |
+| `startDirectionTransition()` on non-unit entity | Works (no type restriction) — but practically only called by movement | No artificial guard; contract enforced by callers, not service |
+| Renderer encounters `animation.sequenceKey` not in sprite data | Returns `null` from `resolveAnimationFrame()`, falls back to static sprite | Expected for partial sprite data; not an error worth throwing for |
+| Renderer encounters entity with `getState()` returning null | Returns `null` or skip result depending on entity type | Legitimate — decorations, None type entities have no visual state |
+
+### What NOT to guard against (trust the contract)
+
+These are internal invariants — defensive checks would hide bugs:
+
+- `variation` being negative (domain systems compute valid offsets)
+- `direction` being out of range (movement system produces valid hex directions)
+- `sequenceKey` being empty string (callers always pass known constants)
+- `AnimationPlayback` fields being NaN (arithmetic is well-defined)
 
 ---
 
-## Risk assessment
+## What this design makes impossible
 
-| Risk | Mitigation |
-|------|-----------|
-| Direction transition fields on non-unit entities | `EntityVisualState` includes optional transition fields; only units set them. Renderer checks before using. |
-| Performance: extra map lookup per entity per frame | Same as current — one `Map.get()` per entity. Variation was on entity before (O(1) field access) but the map lookup is already paid for animation state. Net zero. |
-| Stacked resources use `entity.subType` + direction, not variation | StackedResource rendering reads quantity→direction, not variation. No change needed. |
-| Building render state (construction progress) | Buildings use `BuildingRenderState` from a separate callback — orthogonal to this change. No impact. |
-| Test breakage | Unit tests that create entities with `entity.variation` need to use `visualService.setVariation()` instead. `test-game.ts` helper needs updating. |
+| Bug class | Why it can't happen |
+|-----------|-------------------|
+| Stale animation overriding variation | `setStatic()` atomically clears animation. No intermediate state between render frames. |
+| Forgotten animation cleanup | `animation: null` means no animation. Renderer skips animation lookup entirely — can't accidentally resolve to a stale frame. |
+| Wrong fallback sprite | Renderer always falls back to `variation`-based lookup, never to `animatedEntry.staticSprite`. |
+| Variation/animation out of sync | `setAnimated()` sets both atomically. No window where variation says "cutting" but animation says "sway". |
+| Direction transition on non-units | `DirectionTransition` is a separate sparse map. Only units that explicitly start a transition have one. |
 
-## Files created/deleted
+## What this design preserves
 
-| Action | File |
-|--------|------|
-| **Create** | `src/game/animation/entity-visual-service.ts` |
-| **Delete** | `src/game/animation/animation-service.ts` |
-| **Edit** | ~20 files (see subsystem tables above) |
+| Concern | Status |
+|---------|--------|
+| Building overlays (multi-layer, independent animation) | Unchanged — orthogonal system |
+| Building construction (construction sprite, vertical progress) | Unchanged — `BuildingRenderState` pull model |
+| Animation data registration (sprite metadata, sequences, directions) | Unchanged — `SpriteMetadataRegistry` |
+| Animation resolver (semantic intent → sequence key) | Unchanged — `AnimationIntent` consumed by `applyIntent()` |
+| Flag/territory dot rendering | Unchanged — dedicated render passes |
+| Stacked resource rendering | Unchanged — uses quantity→direction, not variation |
+
+## Files summary
+
+| Action | File | Lines (est.) |
+|--------|------|-------------|
+| Create | `src/game/animation/entity-visual-service.ts` | ~180 |
+| Delete | `src/game/animation/animation-service.ts` | ~160 |
+| Edit | `src/game/animation.ts` | Remove `AnimationState`, add `EntityVisualState` exports |
+| Edit | `src/game/animation/index.ts` | Update exports |
+| Edit | `src/game/entity.ts` | Remove `variation` field |
+| Edit | `src/game/features/growth/growable-system.ts` | ~10 lines changed |
+| Edit | `src/game/features/trees/tree-system.ts` | ~15 lines changed |
+| Edit | `src/game/features/crops/crop-system.ts` | ~15 lines changed |
+| Edit | `src/game/features/stones/stone-system.ts` | ~5 lines changed |
+| Edit | `src/game/features/trees/tree-feature.ts` | Constructor arg |
+| Edit | `src/game/features/crops/crop-feature.ts` | Constructor arg |
+| Edit | `src/game/features/stones/stone-feature.ts` | Constructor arg |
+| Edit | `src/game/features/settler-tasks/idle-animation-controller.ts` | Renames |
+| Edit | `src/game/features/settler-tasks/unit-state-machine.ts` | Renames |
+| Edit | `src/game/features/combat/combat-system.ts` | Renames |
+| Edit | `src/game/game-services.ts` | Wire new service |
+| Edit | `src/game/game-loop.ts` | `update()` call |
+| Edit | `src/game/renderer/entity-sprite-resolver.ts` | Rewrite resolution |
+| Edit | `src/game/renderer/render-context.ts` | Type change |
+| Edit | `src/game/renderer/render-passes/types.ts` | Type change |
+| Edit | `src/game/renderer/render-passes/transition-blend-pass.ts` | Read from new type |
+| Edit | `src/game/renderer/animation-helpers.ts` | Simplify fallback |
+| Edit | `src/resources/map/raw-object-registry.ts` | Use service |
+| Edit | `tests/unit/helpers/test-game.ts` | Wire service |

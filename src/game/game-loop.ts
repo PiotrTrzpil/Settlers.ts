@@ -13,7 +13,7 @@ import type { GameSettings } from './game-settings';
 import type { GameViewState } from './game-view-state';
 import type { TickSystem } from './tick-system';
 import type { FrameRenderTiming } from './renderer/renderer';
-import { AnimationService } from './animation/index';
+import { EntityVisualService } from './animation/entity-visual-service';
 import { toastError, toastClearThrottle } from './toast-notifications';
 
 const TICK_RATE = 30;
@@ -87,7 +87,7 @@ export class GameLoop {
     private boundFrame: (time: number) => void;
 
     private readonly gameState: GameState;
-    private readonly animationService: AnimationService;
+    private readonly visualService: EntityVisualService;
     private readonly settings: GameSettings;
     private readonly viewState: GameViewState;
 
@@ -108,12 +108,12 @@ export class GameLoop {
 
     constructor(
         gameState: GameState,
-        animationService: AnimationService,
+        visualService: EntityVisualService,
         settings: GameSettings,
         viewState: GameViewState
     ) {
         this.gameState = gameState;
-        this.animationService = animationService;
+        this.visualService = visualService;
         this.settings = settings;
         this.viewState = viewState;
 
@@ -384,7 +384,7 @@ export class GameLoop {
         try {
             if (shouldTick) {
                 const scaledDeltaMs = deltaSec * 1000 * this.settings.gameSpeed;
-                this.animationService.update(scaledDeltaMs);
+                this.visualService.update(scaledDeltaMs);
             }
         } catch (e) {
             const err = e instanceof Error ? e : new Error(String(e));

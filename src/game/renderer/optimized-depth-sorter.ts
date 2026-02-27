@@ -45,6 +45,7 @@ const INITIAL_CAPACITY = 4096;
 export interface OptimizedSortContext {
     spriteManager: SpriteRenderManager | null;
     getWorldPos: (entity: Entity) => WorldPos | undefined;
+    getVariation: (entityId: number) => number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -91,7 +92,7 @@ export class OptimizedDepthSorter {
             // Visible entities MUST have cached world positions
             const worldPos = ctx.getWorldPos(entity)!;
             const spriteEntry = this.getSpriteEntry(entity, ctx.spriteManager);
-            this.floatDepthKeys[i] = this.computeFloatDepthKey(entity, worldPos, spriteEntry);
+            this.floatDepthKeys[i] = this.computeFloatDepthKey(entity, worldPos, spriteEntry, ctx);
             this.sortedIndices[i] = i;
         }
 
@@ -123,7 +124,12 @@ export class OptimizedDepthSorter {
     /**
      * Compute float depth key for an entity (preserves precision).
      */
-    private computeFloatDepthKey(entity: Entity, worldPos: WorldPos, spriteEntry: SpriteEntry | null): number {
+    private computeFloatDepthKey(
+        entity: Entity,
+        worldPos: WorldPos,
+        spriteEntry: SpriteEntry | null,
+        ctx: OptimizedSortContext
+    ): number {
         let depth = worldPos.worldY;
 
         if (spriteEntry) {
@@ -133,7 +139,7 @@ export class OptimizedDepthSorter {
         }
 
         // Fallen/cut tree stages (variation 4-10) render behind standing trees, units, buildings
-        if (entity.type === EntityType.MapObject && entity.variation! >= 4) {
+        if (entity.type === EntityType.MapObject && ctx.getVariation(entity.id) >= 4) {
             depth -= FLAT_TREE_DEPTH_BIAS;
         }
 

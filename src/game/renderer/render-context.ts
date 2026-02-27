@@ -11,7 +11,7 @@
 
 import type { Entity, StackedResourceState, TileCoord } from '../entity';
 import type { Race } from '../race';
-import type { AnimationState } from '../animation';
+import type { EntityVisualState, DirectionTransition } from '../animation/entity-visual-service';
 import type { IViewPoint } from './i-view-point';
 import { DEFAULT_LAYER_VISIBILITY, type LayerVisibility } from './layer-visibility';
 import type { SpriteEntry } from './sprite-metadata/sprite-metadata';
@@ -203,8 +203,10 @@ export interface IRenderContext {
     getBuildingOverlays(entityId: number): readonly BuildingOverlayRenderData[];
 
     // === Animation ===
-    /** Get the animation state for an entity (null if no animation) */
-    getAnimationState(entityId: number): AnimationState | null;
+    /** Get the visual state for an entity (null if not tracked) */
+    getVisualState(entityId: number): EntityVisualState | null;
+    /** Get direction transition for a unit (null if not transitioning) */
+    getDirectionTransition(entityId: number): DirectionTransition | null;
 
     // === Selection ===
     /** Current selection state */
@@ -264,7 +266,8 @@ export class RenderContextBuilder {
     private _resourceStates: ReadonlyMap<number, StackedResourceState> = new Map();
     private _buildingRenderStateGetter: (entityId: number) => BuildingRenderState = () => DEFAULT_BUILDING_RENDER_STATE;
     private _buildingOverlaysGetter: (entityId: number) => readonly BuildingOverlayRenderData[] = () => EMPTY_OVERLAYS;
-    private _animationStateGetter: (entityId: number) => AnimationState | null = () => null;
+    private _visualStateGetter: (entityId: number) => EntityVisualState | null = () => null;
+    private _directionTransitionGetter: (entityId: number) => DirectionTransition | null = () => null;
     private _selection: SelectionState = { primaryId: null, ids: new Set() };
     private _placementPreview: PlacementPreviewState | null = null;
     private _alpha = 0;
@@ -306,8 +309,13 @@ export class RenderContextBuilder {
         return this;
     }
 
-    animationStateGetter(getter: (entityId: number) => AnimationState | null): this {
-        this._animationStateGetter = getter;
+    visualStateGetter(getter: (entityId: number) => EntityVisualState | null): this {
+        this._visualStateGetter = getter;
+        return this;
+    }
+
+    directionTransitionGetter(getter: (entityId: number) => DirectionTransition | null): this {
+        this._directionTransitionGetter = getter;
         return this;
     }
 
@@ -397,7 +405,8 @@ export class RenderContextBuilder {
             resourceStates: this._resourceStates,
             getBuildingRenderState: this._buildingRenderStateGetter,
             getBuildingOverlays: this._buildingOverlaysGetter,
-            getAnimationState: this._animationStateGetter,
+            getVisualState: this._visualStateGetter,
+            getDirectionTransition: this._directionTransitionGetter,
             selection: this._selection,
             placementPreview: this._placementPreview,
             alpha: this._alpha,

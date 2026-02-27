@@ -106,7 +106,7 @@ export class Game {
         this.services.setTerrainData(this.terrain);
 
         // Create frame loop and register tick systems
-        this._gameLoop = new GameLoop(this.state, this.services.animationService, this.settings.state, this.viewState);
+        this._gameLoop = new GameLoop(this.state, this.services.visualService, this.settings.state, this.viewState);
         for (const { system, group } of this.services.getTickSystems()) {
             this._gameLoop.registerSystem(system, group);
         }
@@ -160,11 +160,8 @@ export class Game {
         this.soundManager
             .init(this.fileManager)
             .then(() => {
-                if (!this.soundManager.currentMusicId) {
-                    console.log('Game: SoundManager initialized, requesting music...');
-                    const savedRace = loadSavedRace();
-                    this.soundManager.playRandomMusic(savedRace);
-                }
+                const playerRace = this.playerRaces.get(this.currentPlayer);
+                this.soundManager.playRandomMusic(playerRace ?? loadSavedRace());
             })
             .catch((err: unknown) => {
                 console.warn('Game: SoundManager initialization failed:', err);
@@ -192,6 +189,11 @@ export class Game {
         // Build per-player race mapping
         for (const p of entityData.players) {
             this.playerRaces.set(p.playerIndex, s4TribeToRace(p.tribe));
+        }
+
+        // Default to first player from map data
+        if (entityData.players.length > 0) {
+            this.currentPlayer = entityData.players[0]!.playerIndex;
         }
 
         // Trees + decorations

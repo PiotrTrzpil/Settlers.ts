@@ -193,6 +193,8 @@ export interface GameEvents {
         x: number;
         y: number;
         player: number;
+        /** Initial visual variation (sprite offset from map data). 0 for most entities. */
+        variation: number;
     };
 
     /**

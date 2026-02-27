@@ -16,7 +16,8 @@ import type { Entity } from '../../entity';
 import { EntityType, isUnitTypeMilitary, UnitType } from '../../entity';
 import { hexDistance, getApproxDirection } from '../../systems/hex-directions';
 import { CombatState, CombatStatus, createCombatState, getCombatStats } from './combat-state';
-import { resolveTaskAnimation, type AnimationService } from '../../animation/index';
+import { resolveTaskAnimation } from '../../animation/index';
+import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('CombatSystem');
@@ -43,7 +44,7 @@ export class CombatSystem implements TickSystem {
     private readonly states = new Map<number, CombatState>();
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
-    private readonly animationService: AnimationService;
+    private readonly visualService: EntityVisualService;
 
     /** Accumulated time for periodic enemy scanning */
     private scanTimer = 0;
@@ -51,10 +52,10 @@ export class CombatSystem implements TickSystem {
     /** Per-unit timers for pursuit re-pathing */
     private pursuitTimers = new Map<number, number>();
 
-    constructor(gameState: GameState, eventBus: EventBus, animationService: AnimationService) {
+    constructor(gameState: GameState, eventBus: EventBus, visualService: EntityVisualService) {
         this.gameState = gameState;
         this.eventBus = eventBus;
-        this.animationService = animationService;
+        this.visualService = visualService;
     }
 
     // ── Registration ──────────────────────────────────────────────────────
@@ -314,8 +315,8 @@ export class CombatSystem implements TickSystem {
     private applyFightAnimation(entity: Entity, target: Entity): void {
         const direction = getApproxDirection(entity.x, entity.y, target.x, target.y);
         const intent = resolveTaskAnimation('fight', entity);
-        this.animationService.applyIntent(entity.id, intent);
-        this.animationService.setDirection(entity.id, direction);
+        this.visualService.applyIntent(entity.id, intent);
+        this.visualService.setDirection(entity.id, direction);
     }
 
     /** Restore idle animation (stopped on level-appropriate idle pose). */
@@ -323,6 +324,6 @@ export class CombatSystem implements TickSystem {
         const entity = this.gameState.getEntity(entityId);
         if (!entity) return;
         const intent = resolveTaskAnimation('idle', entity);
-        this.animationService.applyIntent(entityId, intent);
+        this.visualService.applyIntent(entityId, intent);
     }
 }

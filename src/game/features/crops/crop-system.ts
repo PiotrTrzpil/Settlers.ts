@@ -19,7 +19,7 @@ import { GrowableSystem, type GrowableConfig, type GrowableState, type PlantingC
 import type { GameState } from '../../game-state';
 import { EntityType } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
-import type { AnimationService } from '../../animation/index';
+import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { Command } from '../../commands';
 import { findEmptySpot } from '../../systems/spatial-search';
 
@@ -86,11 +86,11 @@ const CROP_CONFIG: GrowableConfig = {
 
 /**
  * Manages crop growth, harvesting, and decay for all crop types.
- * Uses AnimationService for visual state - no direct entity manipulation.
+ * Uses EntityVisualService for visual state - no direct entity manipulation.
  */
 export class CropSystem extends GrowableSystem<CropState> {
-    constructor(gameState: GameState, animationService: AnimationService) {
-        super(gameState, animationService, CROP_CONFIG, 'CropSystem');
+    constructor(gameState: GameState, visualService: EntityVisualService) {
+        super(gameState, visualService, CROP_CONFIG, 'CropSystem');
     }
 
     // ── GrowableSystem implementation ────────────────────────────
@@ -127,7 +127,10 @@ export class CropSystem extends GrowableSystem<CropState> {
         // Mature variation gets looping animation (sway/bloom)
         if (offset === config.growingCount) {
             const startFrame = this.gameState.rng.nextInt(100);
-            this.animationService.play(entityId, 'default', { loop: true, startFrame });
+            this.visualService.play(entityId, 'default', { loop: true, startFrame });
+        } else {
+            // Clear animation when leaving the mature stage (prevents stale animation)
+            this.visualService.clearAnimation(entityId);
         }
     }
 

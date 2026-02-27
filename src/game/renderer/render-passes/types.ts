@@ -17,7 +17,7 @@ import type {
     StackGhostRenderData,
     PlacementPreviewState,
 } from '../render-context';
-import type { AnimationState } from '@/game/animation';
+import type { EntityVisualState, DirectionTransition } from '@/game/animation/entity-visual-service';
 import type { LayerVisibility } from '../layer-visibility';
 import type { TileHighlight } from '@/game/input/render-state';
 import type { EntitySpriteResolver } from '../entity-sprite-resolver';
@@ -64,7 +64,8 @@ export interface PassContext {
     // Building state providers
     readonly getBuildingRenderState: (entityId: number) => BuildingRenderState;
     readonly getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[];
-    readonly getAnimState: (entityId: number) => AnimationState | null;
+    readonly getVisualState: (entityId: number) => EntityVisualState | null;
+    readonly getDirectionTransition: (entityId: number) => DirectionTransition | null;
 
     // Render parameters
     readonly renderSettings: RenderSettings;

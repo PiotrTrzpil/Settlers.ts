@@ -34,15 +34,13 @@ export const StoneFeature: FeatureDefinition = {
     create(ctx: FeatureContext) {
         const subscriptions = new EventSubscriptionManager();
 
-        const stoneSystem = new StoneSystem(ctx.gameState);
+        const stoneSystem = new StoneSystem(ctx.gameState, ctx.visualService);
 
         // Register for map object creation events to auto-register stones.
-        // If entity.variation is pre-set (1-12 from map data), use it as initial depletion level.
-        subscriptions.subscribe(ctx.eventBus, 'entity:created', ({ entityId, type, subType }) => {
+        // The variation from map data encodes the initial depletion level (1-12).
+        subscriptions.subscribe(ctx.eventBus, 'entity:created', ({ entityId, type, subType, variation }) => {
             if (type === EntityType.MapObject) {
-                const variation = ctx.gameState.getEntity(entityId)?.variation;
-                const initialLevel = variation && variation > 0 && variation <= 12 ? variation : undefined;
-                stoneSystem.register(entityId, subType as MapObjectType, initialLevel);
+                stoneSystem.register(entityId, subType as MapObjectType, variation || undefined);
             }
         });
 

@@ -65,11 +65,6 @@ export interface Entity {
     subType: number;
     /** Whether this entity can be selected by the player. Defaults to true if not specified. */
     selectable?: boolean;
-    /**
-     * Optional variation index for entities that support visual variants (e.g. trees).
-     * Default is 0.
-     */
-    variation?: number;
 
     /**
      * Race/civilization this entity belongs to (matches Race enum values: 10=Roman, 11=Viking, etc.).

@@ -24,7 +24,7 @@ import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../inventory';
 import type { CarrierManager } from '../carriers';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
-import type { AnimationService } from '../../animation/index';
+import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { WorkHandlerRegistry } from './work-handler-registry';
 import { IdleAnimationController } from './idle-animation-controller';
 import { WorkerTaskExecutor } from './worker-task-executor';
@@ -39,7 +39,7 @@ const ORPHAN_CHECK_INTERVAL = 60;
 /** Configuration for SettlerTaskSystem dependencies */
 export interface SettlerTaskSystemConfig {
     gameState: GameState;
-    animationService: AnimationService;
+    visualService: EntityVisualService;
     inventoryManager: BuildingInventoryManager;
     carrierManager: CarrierManager;
     eventBus: EventBus;
@@ -95,7 +95,7 @@ export class SettlerTaskSystem implements TickSystem {
 
         this.handlerRegistry = new WorkHandlerRegistry();
 
-        this.animController = new IdleAnimationController(config.animationService, this.gameState.rng);
+        this.animController = new IdleAnimationController(config.visualService, this.gameState.rng);
 
         this.workerExecutor = new WorkerTaskExecutor(
             this.gameState,
@@ -111,7 +111,7 @@ export class SettlerTaskSystem implements TickSystem {
 
         this.stateMachine = new UnitStateMachine(
             this.gameState,
-            config.animationService,
+            config.visualService,
             this.settlerConfigs,
             this.animController,
             this.workerExecutor,

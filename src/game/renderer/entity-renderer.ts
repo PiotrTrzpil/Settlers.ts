@@ -10,7 +10,7 @@ import { Race } from './sprite-metadata';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { SpriteBatchRenderer } from './sprite-batch-renderer';
 import { SelectionOverlayRenderer } from './selection-overlay-renderer';
-import type { AnimationState } from '../animation';
+import type { EntityVisualState, DirectionTransition } from '../animation/entity-visual-service';
 import { EntitySpriteResolver } from './entity-sprite-resolver';
 import { FrameContext, type IFrameContext } from './frame-context';
 import { OptimizedDepthSorter, type OptimizedSortContext } from './optimized-depth-sorter';
@@ -96,8 +96,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         verticalProgress: 1.0,
     });
 
-    // Animation state provider (from context)
-    private getAnimState: (entityId: number) => AnimationState | null = () => null;
+    // Visual state providers (from context)
+    private getVisualState: (entityId: number) => EntityVisualState | null = () => null;
+    private getDirectionTransition: (entityId: number) => DirectionTransition | null = () => null;
 
     // Building overlay provider (from context, pre-computed in glue layer)
     private getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[] = () => EMPTY_OVERLAYS;
@@ -291,7 +292,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.unitStates = ctx.unitStates;
         this.getBuildingRenderState = ctx.getBuildingRenderState;
         this.getBuildingOverlays = ctx.getBuildingOverlays;
-        this.getAnimState = ctx.getAnimationState;
+        this.getVisualState = ctx.getVisualState;
+        this.getDirectionTransition = ctx.getDirectionTransition;
         this.resourceStates = ctx.resourceStates as Map<number, StackedResourceState>;
         this.renderAlpha = ctx.alpha;
         this.layerVisibility = ctx.layerVisibility;
@@ -306,7 +308,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Rebuild sprite resolver with current frame's state providers
         this.spriteResolver = new EntitySpriteResolver(
             this.spriteManager,
-            ctx.getAnimationState,
+            ctx.getVisualState,
+            ctx.getDirectionTransition,
             ctx.getBuildingRenderState,
             ctx.resourceStates,
             ctx.layerVisibility
@@ -471,7 +474,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             resourceStates: this.resourceStates,
             getBuildingRenderState: this.getBuildingRenderState,
             getBuildingOverlays: this.getBuildingOverlays,
-            getAnimState: this.getAnimState,
+            getVisualState: this.getVisualState,
+            getDirectionTransition: this.getDirectionTransition,
             renderSettings: this.renderSettings,
             layerVisibility: this.layerVisibility,
             renderAlpha: this.renderAlpha,
@@ -547,6 +551,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const sortCtx: OptimizedSortContext = {
             spriteManager: this.spriteManager,
             getWorldPos: entity => this.frameContext!.getWorldPos(entity),
+            getVariation: entityId => this.getVisualState(entityId)?.variation ?? 0,
         };
         this.depthSorter.sortByDepth(this.sortedEntities, sortCtx);
         profiler.endPhase('sort');

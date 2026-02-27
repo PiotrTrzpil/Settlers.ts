@@ -9,7 +9,7 @@
  * - Growth progression helper (advanceGrowth)
  * - Planting spot search (findPlantingSpot via findEmptySpot)
  * - Entity planting via commands (plantEntity, plantEntitiesNear)
- * - Visual updates with change detection (entity.variation)
+ * - Visual updates with change detection (via EntityVisualService)
  * - Persistence helpers (getAllStates, restoreState)
  */
 
@@ -17,7 +17,7 @@ import type { TickSystem } from '../../tick-system';
 import type { GameState } from '../../game-state';
 import { EntityType } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
-import type { AnimationService } from '../../animation/index';
+import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { Command, CommandResult } from '../../commands';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
@@ -61,14 +61,14 @@ export interface PlantingCapable {
 export abstract class GrowableSystem<TState extends GrowableState = GrowableState> implements TickSystem, PlantingCapable {
     protected readonly states = new Map<number, TState>();
     protected readonly gameState: GameState;
-    protected readonly animationService: AnimationService;
+    protected readonly visualService: EntityVisualService;
     protected readonly config: GrowableConfig;
     protected readonly log: LogHandler;
     protected _executeCommand!: (cmd: Command) => CommandResult;
 
-    constructor(gameState: GameState, animationService: AnimationService, config: GrowableConfig, logName: string) {
+    constructor(gameState: GameState, visualService: EntityVisualService, config: GrowableConfig, logName: string) {
         this.gameState = gameState;
-        this.animationService = animationService;
+        this.visualService = visualService;
         this.config = config;
         this.log = new LogHandler(logName);
     }
@@ -108,11 +108,11 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
     register(entityId: number, objectType: MapObjectType, planted: boolean = false): void {
         if (!this.shouldRegister(objectType)) return;
 
-        const entity = this.gameState.getEntityOrThrow(entityId, `${this.config.objectCategory} for registration`);
+        this.gameState.getEntityOrThrow(entityId, `${this.config.objectCategory} for registration`);
         const state = this.createState(planted, objectType);
         this.states.set(entityId, state);
 
-        entity.variation = state.currentOffset;
+        this.visualService.setVariation(entityId, state.currentOffset);
         this.onOffsetChanged(entityId, state.currentOffset, state);
     }
 
@@ -128,16 +128,13 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
 
     // ── Visual update ────────────────────────────────────────────
 
-    /** Update entity.variation if the sprite offset changed. */
+    /** Update visual variation if the sprite offset changed. */
     protected updateVisual(entityId: number, state: TState): void {
         const offset = this.getSpriteOffset(state);
         if (offset !== state.currentOffset) {
             state.currentOffset = offset;
-            const entity = this.gameState.getEntity(entityId);
-            if (entity) {
-                entity.variation = offset;
-                this.onOffsetChanged(entityId, offset, state);
-            }
+            this.visualService.setVariation(entityId, offset);
+            this.onOffsetChanged(entityId, offset, state);
         }
     }
 
@@ -223,13 +220,10 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
         yield* this.states.entries();
     }
 
-    /** Restore a state from serialized data. Updates entity variation. */
+    /** Restore a state from serialized data. Updates entity visual variation. */
     restoreState(entityId: number, data: TState): void {
         this.states.set(entityId, data);
-        const entity = this.gameState.getEntity(entityId);
-        if (entity) {
-            entity.variation = data.currentOffset;
-        }
+        this.visualService.setVariation(entityId, data.currentOffset);
     }
 
     /** Number of entities tracked */

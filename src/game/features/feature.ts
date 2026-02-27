@@ -15,7 +15,7 @@
  *     id: 'trees',
  *     dependencies: [],
  *     create(ctx) {
- *         const treeSystem = new TreeSystem(ctx.gameState, ctx.animationService);
+ *         const treeSystem = new TreeSystem(ctx.gameState, ctx.visualService);
  *         return {
  *             systems: [treeSystem],
  *             exports: { treeSystem },
@@ -28,7 +28,7 @@
 import type { TickSystem } from '../tick-system';
 import type { GameState } from '../game-state';
 import type { EventBus } from '../event-bus';
-import type { AnimationService } from '../animation/index';
+import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
 
 /**
@@ -42,8 +42,8 @@ export interface FeatureContext {
     /** Event bus for inter-feature communication */
     eventBus: EventBus;
 
-    /** Animation service for entity animations */
-    animationService: AnimationService;
+    /** Visual service for entity visual state (variation + animation) */
+    visualService: EntityVisualService;
 
     /**
      * Central registry for entity:removed cleanup.

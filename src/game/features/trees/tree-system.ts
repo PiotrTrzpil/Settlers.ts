@@ -8,15 +8,15 @@
  *   Growing -> Normal (planted by forester, progress 0-1)
  *   Normal -> Cutting -> Cut (cut by woodcutter, progress 0-1)
  *
- * Visual state is controlled by setting entity.variation directly.
- * Normal trees (variation=3) also play 'default' animation for sway.
+ * Visual state is controlled via EntityVisualService.
+ * Normal trees also play 'default' animation for sway.
  */
 
 import { GrowableSystem, type GrowableConfig, type GrowableState } from '../growth';
 import type { GameState } from '../../game-state';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
-import type { AnimationService } from '../../animation/index';
+import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { Command } from '../../commands';
 import { TREE_JOB_OFFSET, TREE_JOBS_PER_TYPE, TREE_JOB_INDICES } from '../../renderer/sprite-metadata/jil-indices';
 
@@ -76,11 +76,11 @@ const TREE_CONFIG: GrowableConfig = {
 
 /**
  * Manages tree growth, cutting, and stump decay.
- * Uses AnimationService for visual state - no direct entity manipulation.
+ * Uses EntityVisualService for visual state - no direct entity manipulation.
  */
 export class TreeSystem extends GrowableSystem<TreeState> {
-    constructor(gameState: GameState, animationService: AnimationService) {
-        super(gameState, animationService, TREE_CONFIG, 'TreeSystem');
+    constructor(gameState: GameState, visualService: EntityVisualService) {
+        super(gameState, visualService, TREE_CONFIG, 'TreeSystem');
     }
 
     // ── GrowableSystem implementation ────────────────────────────
@@ -133,15 +133,15 @@ export class TreeSystem extends GrowableSystem<TreeState> {
         const baseOffset = offset - state.variant * TREE_JOBS_PER_TYPE;
         if (baseOffset === TREE_OFFSET.NORMAL) {
             const startFrame = this.gameState.rng.nextInt(100);
-            this.animationService.play(entityId, 'default', {
+            this.visualService.play(entityId, 'default', {
                 loop: true,
                 startFrame,
                 direction: state.variant,
             });
         } else {
-            // Remove animation state entirely so the renderer falls back to the
+            // Clear animation so the renderer falls back to the
             // variation-specific static sprite (cutting stages, stump, etc.)
-            this.animationService.remove(entityId);
+            this.visualService.clearAnimation(entityId);
         }
     }
 
@@ -208,9 +208,9 @@ export class TreeSystem extends GrowableSystem<TreeState> {
 
         state.stage = TreeStage.Cutting;
         state.progress = 0;
-        // Remove sway animation immediately — the initial cutting sprite offset equals
+        // Clear sway animation immediately — the initial cutting sprite offset equals
         // NORMAL, so updateVisual won't detect a change or call onOffsetChanged.
-        this.animationService.remove(entityId);
+        this.visualService.clearAnimation(entityId);
         this.updateVisual(entityId, state);
         return true;
     }

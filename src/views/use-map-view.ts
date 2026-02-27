@@ -159,7 +159,7 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
             if (vs.mode === 'place_unit' && vs.placeUnitType === unitType && vs.placeUnitLevel === level) {
                 inputManager.switchMode('select');
             } else {
-                inputManager.switchMode('place_unit', { unitType, race, level });
+                inputManager.switchMode('place_unit', { unitType, race, level, player: game.currentPlayer });
             }
         },
 

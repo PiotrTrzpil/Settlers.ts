@@ -75,7 +75,7 @@ function syncEntityRendererState(
     // Feature-specific computation happens here (glue layer), not in the renderer.
     // The renderer receives pre-computed BuildingRenderState via the context.
     const bsm = g.services.buildingStateManager;
-    const animService = g.services.animationService;
+    const visualService = g.services.visualService;
 
     const renderContext = createRenderContext()
         .entities(g.state.entities)
@@ -90,7 +90,8 @@ function syncEntityRendererState(
             };
         })
         .buildingOverlaysGetter(entityId => resolveBuildingOverlays(entityId, g, er))
-        .animationStateGetter(entityId => animService.getState(entityId))
+        .visualStateGetter(entityId => visualService.getState(entityId))
+        .directionTransitionGetter(entityId => visualService.getDirectionTransition(entityId))
         .selection({
             primaryId: g.state.selection.selectedEntityId,
             ids: g.state.selection.selectedEntityIds,

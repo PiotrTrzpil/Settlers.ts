@@ -217,7 +217,6 @@ export class GameState {
             subType,
             race: Race.Roman,
             selectable: resolvedSelectable,
-            variation: variation ?? 0,
         };
 
         this.entities.push(entity);
@@ -245,6 +244,7 @@ export class GameState {
             x,
             y,
             player,
+            variation: variation ?? 0,
         });
 
         return entity;

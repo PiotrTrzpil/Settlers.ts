@@ -17,6 +17,7 @@ import { getEntityWorldPos, type WorldPositionContext } from './world-position';
  */
 export interface DepthSortContext extends WorldPositionContext {
     spriteManager: SpriteRenderManager | null;
+    getVariation: (entityId: number) => number;
 }
 
 /**
@@ -51,7 +52,7 @@ export class EntityDepthSorter {
             const entity = entities[i]!;
             const worldPos = getEntityWorldPos(entity, ctx);
             const spriteEntry = this.getSpriteEntry(entity, ctx.spriteManager);
-            this.depthKeys[i] = this.computeDepthKey(entity, worldPos.worldY, spriteEntry);
+            this.depthKeys[i] = this.computeDepthKey(entity, worldPos.worldY, spriteEntry, ctx);
             this.sortIndices[i] = i;
         }
 
@@ -94,7 +95,12 @@ export class EntityDepthSorter {
      * Compute the depth key for an entity for painter's algorithm sorting.
      * Larger depth = drawn later = appears in front.
      */
-    private computeDepthKey(entity: Entity, worldY: number, spriteEntry: SpriteEntry | null): number {
+    private computeDepthKey(
+        entity: Entity,
+        worldY: number,
+        spriteEntry: SpriteEntry | null,
+        ctx: DepthSortContext
+    ): number {
         // Base depth is the world Y coordinate (larger = lower on screen = in front)
         let depth = worldY;
 
@@ -129,7 +135,7 @@ export class EntityDepthSorter {
         }
 
         // Fallen/cut tree stages (variation 4-10) render behind standing trees, units, buildings
-        if (entity.type === EntityType.MapObject && entity.variation! >= 4) {
+        if (entity.type === EntityType.MapObject && ctx.getVariation(entity.id) >= 4) {
             depth -= FLAT_TREE_DEPTH_BIAS;
         }
 

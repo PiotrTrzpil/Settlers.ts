@@ -11,7 +11,7 @@
 import type { TickSystem } from '../tick-system';
 import type { GameState } from '../game-state';
 import type { EventBus } from '../event-bus';
-import type { AnimationService } from '../animation/index';
+import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
 import type { FeatureDefinition, FeatureInstance, FeatureContext } from './feature';
 import { LogHandler } from '@/utilities/log-handler';
@@ -24,7 +24,7 @@ const log = new LogHandler('FeatureRegistry');
 export interface FeatureRegistryConfig {
     gameState: GameState;
     eventBus: EventBus;
-    animationService: AnimationService;
+    visualService: EntityVisualService;
     cleanupRegistry: EntityCleanupRegistry;
 }
 
@@ -166,7 +166,7 @@ export class FeatureRegistry {
         return {
             gameState: this.config.gameState,
             eventBus: this.config.eventBus,
-            animationService: this.config.animationService,
+            visualService: this.config.visualService,
             cleanupRegistry: this.config.cleanupRegistry,
 
             getFeature: <T>(featureId: string): T => {

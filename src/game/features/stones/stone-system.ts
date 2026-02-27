@@ -5,10 +5,11 @@
  * variants (A/B) randomly assigned on creation.
  *
  * Each stonecutter work session depletes one level. When depleted past 0,
- * the entity is removed. Visual state is controlled by setting entity.variation.
+ * the entity is removed. Visual state is controlled via EntityVisualService.
  */
 
 import type { GameState } from '../../game-state';
+import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { LogHandler } from '@/utilities/log-handler';
@@ -50,12 +51,14 @@ export interface StoneState {
  */
 export class StoneSystem {
     private gameState: GameState;
+    private readonly visualService: EntityVisualService;
 
     /** Internal state storage: entityId -> StoneState */
     private readonly states = new Map<number, StoneState>();
 
-    constructor(gameState: GameState) {
+    constructor(gameState: GameState, visualService: EntityVisualService) {
         this.gameState = gameState;
+        this.visualService = visualService;
     }
 
     /**
@@ -68,12 +71,9 @@ export class StoneSystem {
         return state.variant * STONE_DEPLETION_STAGES + state.level;
     }
 
-    /** Update entity.variation to reflect current state. */
+    /** Update visual variation to reflect current state. */
     private updateVisual(entityId: number, state: StoneState): void {
-        const entity = this.gameState.getEntity(entityId);
-        if (entity) {
-            entity.variation = this.getVariation(state);
-        }
+        this.visualService.setVariation(entityId, this.getVariation(state));
     }
 
     /**
@@ -86,7 +86,7 @@ export class StoneSystem {
         if (OBJECT_TYPE_CATEGORY[objectType] !== MapObjectCategory.Goods || objectType !== MapObjectType.ResourceStone)
             return;
 
-        const entity = this.gameState.getEntityOrThrow(entityId, 'stone for registration');
+        this.gameState.getEntityOrThrow(entityId, 'stone for registration');
 
         const variant = this.gameState.rng.nextInt(STONE_VARIANTS);
 
@@ -97,7 +97,7 @@ export class StoneSystem {
         };
         this.states.set(entityId, state);
 
-        entity.variation = this.getVariation(state);
+        this.visualService.setVariation(entityId, this.getVariation(state));
     }
 
     /**
@@ -111,7 +111,8 @@ export class StoneSystem {
             level: data.level,
         };
         this.states.set(entityId, state);
-        this.updateVisual(entityId, state);
+        // State may already be initialized from register(); just update the variation
+        this.visualService.setVariation(entityId, this.getVariation(state));
     }
 
     /** Remove stone state when entity is removed. */

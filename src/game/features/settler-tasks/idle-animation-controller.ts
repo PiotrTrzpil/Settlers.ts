@@ -8,7 +8,8 @@
 
 import type { Entity } from '../../entity';
 import { ANIMATION_SEQUENCES } from '../../animation';
-import { resolveTaskAnimation, type AnimationService } from '../../animation/index';
+import { resolveTaskAnimation } from '../../animation/index';
+import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { TaskNode } from './types';
 
 /** Number of sprite directions (matches hex grid) */
@@ -28,7 +29,7 @@ export interface RngSource {
 
 export class IdleAnimationController {
     constructor(
-        private readonly animationService: AnimationService,
+        private readonly visualService: EntityVisualService,
         private readonly rng: RngSource
     ) {}
 
@@ -55,8 +56,8 @@ export class IdleAnimationController {
     ): void {
         // If unit is moving (e.g., pushed), play walk animation
         if (movementState === 'moving') {
-            const animState = this.animationService.getState(unit.id);
-            if (!animState?.playing || animState.sequenceKey !== ANIMATION_SEQUENCES.WALK) {
+            const vs = this.visualService.getState(unit.id);
+            if (!vs?.animation?.playing || vs.animation.sequenceKey !== ANIMATION_SEQUENCES.WALK) {
                 this.startWalkAnimation(unit, movementDirection);
             }
             idleState.idleTime = 0;
@@ -65,8 +66,11 @@ export class IdleAnimationController {
 
         // Ensure idle animation state exists (units that never moved won't have one),
         // and reset walk animations — but don't override fight animations (managed by combat system)
-        const animState = this.animationService.getState(unit.id);
-        if (!animState || (animState.playing && !animState.sequenceKey.startsWith(ANIMATION_SEQUENCES.FIGHT_PREFIX))) {
+        const vs = this.visualService.getState(unit.id);
+        if (
+            !vs?.animation ||
+            (vs.animation.playing && !vs.animation.sequenceKey.startsWith(ANIMATION_SEQUENCES.FIGHT_PREFIX))
+        ) {
             this.setIdleAnimation(unit);
         }
 
@@ -81,10 +85,10 @@ export class IdleAnimationController {
 
         if (idleState.idleTime >= idleState.nextIdleTurnTime) {
             // Animation state may be missing during cleanup
-            const animState = this.animationService.getState(unit.id);
-            if (!animState) return;
-            const newDirection = this.getAdjacentDirection(animState.direction);
-            this.animationService.setDirection(unit.id, newDirection);
+            const vs = this.visualService.getState(unit.id);
+            if (!vs?.animation) return;
+            const newDirection = this.getAdjacentDirection(vs.animation.direction);
+            this.visualService.setDirection(unit.id, newDirection);
 
             idleState.idleTime = 0;
             idleState.nextIdleTurnTime = 2 + this.rng.next() * 4;
@@ -97,7 +101,7 @@ export class IdleAnimationController {
      */
     applyTaskAnimation(settler: Entity, task: TaskNode): void {
         const intent = resolveTaskAnimation(task.anim, settler);
-        this.animationService.applyIntent(settler.id, intent);
+        this.visualService.applyIntent(settler.id, intent);
     }
 
     /**
@@ -105,8 +109,8 @@ export class IdleAnimationController {
      */
     startWalkAnimation(unit: Entity, direction: number): void {
         const intent = resolveTaskAnimation('walk', unit);
-        this.animationService.applyIntent(unit.id, intent);
-        this.animationService.setDirection(unit.id, direction);
+        this.visualService.applyIntent(unit.id, intent);
+        this.visualService.setDirection(unit.id, direction);
     }
 
     /**
@@ -114,7 +118,7 @@ export class IdleAnimationController {
      */
     setIdleAnimation(settler: Entity): void {
         const intent = resolveTaskAnimation('idle', settler);
-        this.animationService.applyIntent(settler.id, intent);
+        this.visualService.applyIntent(settler.id, intent);
     }
 
     /** Get an adjacent direction for idle turning. */

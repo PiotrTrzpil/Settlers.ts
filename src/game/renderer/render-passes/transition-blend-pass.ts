@@ -34,16 +34,17 @@ export class TransitionBlendPass implements IRenderPass {
         ctx.spriteBatchRenderer.beginBlendBatch(gl, projection, paletteWidth, rowsPerPlayer);
 
         for (const entity of this.transitioningUnits) {
-            const animState = ctx.getAnimState(entity.id);
-            if (!animState?.previousDirection || animState.directionTransitionProgress === undefined) continue;
+            const vs = ctx.getVisualState(entity.id);
+            const transition = ctx.getDirectionTransition(entity.id);
+            if (!vs?.animation || !transition) continue;
 
-            const oldDir = animState.previousDirection;
-            const newDir = animState.direction;
-            const blendFactor = animState.directionTransitionProgress;
+            const oldDir = transition.previousDirection;
+            const newDir = vs.animation.direction;
+            const blendFactor = transition.progress;
             const unitType = entity.subType as UnitType;
 
-            const oldSprite = ctx.spriteResolver.getUnitSpriteForDirection(unitType, animState, oldDir, entity.race);
-            const newSprite = ctx.spriteResolver.getUnitSpriteForDirection(unitType, animState, newDir, entity.race);
+            const oldSprite = ctx.spriteResolver.getUnitSpriteForDirection(unitType, vs.animation, oldDir, entity.race);
+            const newSprite = ctx.spriteResolver.getUnitSpriteForDirection(unitType, vs.animation, newDir, entity.race);
 
             if (!oldSprite || !newSprite) continue;
 

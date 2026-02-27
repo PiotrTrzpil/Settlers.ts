@@ -320,7 +320,7 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         x: e.x,
         y: e.y,
         player: e.player,
-        variation: e.variation,
+        variation: game.services.visualService.getState(e.id)?.variation ?? 0,
         race: e.race,
         carrying: e.carrying,
         hidden: e.hidden || undefined,

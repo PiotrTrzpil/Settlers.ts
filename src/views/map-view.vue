@@ -235,7 +235,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useTemplateRef, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, useTemplateRef, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
 import { Race, RACE_NAMES, AVAILABLE_RACES, loadSavedRace, saveSavedRace } from '@/game/renderer/sprite-metadata';
@@ -297,18 +297,21 @@ const {
     currentRace
 );
 
-/** Blur buttons, selects, and non-text inputs after interaction so keyboard focus returns to the game. */
+/** Blur non-text inputs after interaction so keyboard focus returns to the game. */
 function blurNonTextInput(e: Event): void {
-    const el = document.activeElement as HTMLElement | null;
-    if (!el) return;
-    const tag = el.tagName;
-    // SELECT elements must only blur on 'change' — blurring on mouseup kills the dropdown before the user can pick.
-    if (tag === 'SELECT') {
-        if (e.type === 'change') el.blur();
-        return;
-    }
-    if (tag === 'BUTTON' || (tag === 'INPUT' && (el as HTMLInputElement).type === 'checkbox')) {
-        el.blur();
+    const active = document.activeElement as HTMLElement | null;
+    if (!active) return;
+    const tag = active.tagName;
+    const isNonTextInput =
+        tag === 'SELECT' || tag === 'BUTTON' || (tag === 'INPUT' && (active as HTMLInputElement).type === 'checkbox');
+    if (!isNonTextInput) return;
+
+    if (e.type === 'change') {
+        // SELECT changed value — blur after Vue re-renders
+        void nextTick(() => active.blur());
+    } else if (e.type === 'mouseup' && e.target !== active) {
+        // User clicked away from focused input — blur immediately
+        active.blur();
     }
 }
 
@@ -321,23 +324,15 @@ const availableRaces = AVAILABLE_RACES.map(race => ({
 const availablePlayers = ref([{ index: 0, label: 'P0' }]);
 
 function buildPlayerList(g: Game): { index: number; label: string }[] {
+    if (g.playerRaces.size === 0) {
+        throw new Error('No player data in loaded map — playerRaces is empty');
+    }
     const players: { index: number; label: string }[] = [];
-    if (g.playerRaces.size > 0) {
-        for (const [idx, race] of g.playerRaces) {
-            players.push({ index: idx, label: `P${idx} ${RACE_NAMES[race]}` });
-        }
-    } else {
-        // Derive from entities when playerRaces is empty (e.g. test map)
-        const seen = new Set<number>();
-        for (const e of g.state.entities) {
-            if (!seen.has(e.player)) {
-                seen.add(e.player);
-                players.push({ index: e.player, label: `P${e.player}` });
-            }
-        }
+    for (const [idx, race] of g.playerRaces) {
+        players.push({ index: idx, label: `P${idx} ${RACE_NAMES[race]}` });
     }
     players.sort((a, b) => a.index - b.index);
-    return players.length > 0 ? players : [{ index: 0, label: 'P0' }];
+    return players;
 }
 
 function onPlayerChange() {
@@ -347,11 +342,15 @@ function onPlayerChange() {
 }
 
 // Sync currentPlayer + player list when a new map loads
-watch(game, g => {
-    if (!g) return;
-    currentPlayer.value = g.currentPlayer;
-    availablePlayers.value = buildPlayerList(g);
-});
+watch(
+    game,
+    g => {
+        if (!g) return;
+        currentPlayer.value = g.currentPlayer;
+        availablePlayers.value = buildPlayerList(g);
+    },
+    { immediate: true }
+);
 
 // Building placement options
 const placeBuildingsCompleted = computed({

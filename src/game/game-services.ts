@@ -50,13 +50,13 @@ import { EntityCleanupRegistry, CLEANUP_PRIORITY } from './systems/entity-cleanu
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
 import { MapObjectType } from '@/game/types/map-object-types';
-import { AnimationService } from './animation/index';
+import { EntityVisualService } from './animation/entity-visual-service';
 import type { Command, CommandResult } from './commands';
 
 export class GameServices {
     // ===== Animation =====
-    /** Animation service — manages entity animations */
-    public readonly animationService: AnimationService;
+    /** Visual service — manages entity visual state (variation + animation) */
+    public readonly visualService: EntityVisualService;
 
     // ===== Managers (own state, no tick) =====
     /** Carrier manager — tracks carrier state and assignments */
@@ -125,8 +125,12 @@ export class GameServices {
     constructor(gameState: GameState, eventBus: EventBus, executeCommand: (cmd: Command) => CommandResult) {
         this.eventBus = eventBus;
 
-        // 1. Animation service — other systems depend on it
-        this.animationService = new AnimationService();
+        // 1. Visual service — other systems depend on it.
+        //    Init handler MUST fire before any feature handler (order matters).
+        this.visualService = new EntityVisualService();
+        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, variation }) => {
+            this.visualService.init(entityId, variation);
+        });
 
         // 2. Manually-created managers (complex wiring that isn't yet feature-based)
         this.carrierManager = new CarrierManager({
@@ -185,7 +189,7 @@ export class GameServices {
         this.featureRegistry = new FeatureRegistry({
             gameState,
             eventBus,
-            animationService: this.animationService,
+            visualService: this.visualService,
             cleanupRegistry: this.cleanupRegistry,
         });
 
@@ -233,7 +237,7 @@ export class GameServices {
         // 7. Settler task system
         this.settlerTaskSystem = new SettlerTaskSystem({
             gameState,
-            animationService: this.animationService,
+            visualService: this.visualService,
             inventoryManager: this.inventoryManager,
             carrierManager: this.carrierManager,
             eventBus,
@@ -299,7 +303,7 @@ export class GameServices {
         });
         this.cleanupRegistry.onEntityRemoved(entityId => {
             this.movement.removeController(entityId);
-            this.animationService.remove(entityId);
+            this.visualService.remove(entityId);
             gameState.resources.removeState(entityId);
             this.workAreaStore.removeInstance(entityId);
         });

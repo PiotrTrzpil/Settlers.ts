@@ -21,7 +21,7 @@ import type { IdleAnimationController, IdleAnimationState } from './idle-animati
 import type { WorkerTaskExecutor, WorkerRuntimeState, OccupancyMap } from './worker-task-executor';
 import type { CarrierTaskExecutor, CarrierRuntimeState } from './carrier-task-executor';
 import type { GameState } from '../../game-state';
-import type { AnimationService } from '../../animation/index';
+import type { EntityVisualService } from '../../animation/entity-visual-service';
 
 const log = new LogHandler('UnitStateMachine');
 
@@ -50,7 +50,7 @@ export interface UnitRuntime {
 export class UnitStateMachine {
     constructor(
         private readonly gameState: GameState,
-        private readonly animationService: AnimationService,
+        private readonly visualService: EntityVisualService,
         private readonly settlerConfigs: SettlerConfigs,
         private readonly animController: IdleAnimationController,
         private readonly workerExecutor: WorkerTaskExecutor,
@@ -99,7 +99,11 @@ export class UnitStateMachine {
 
         const currentDirection = controller.direction;
         if (currentDirection !== runtime.lastDirection) {
-            this.animationService.setDirection(unit.id, currentDirection);
+            // Only set direction if entity has an active animation
+            const vs = this.visualService.getState(unit.id);
+            if (vs?.animation) {
+                this.visualService.setDirection(unit.id, currentDirection);
+            }
             runtime.lastDirection = currentDirection;
         }
     }
@@ -144,7 +148,7 @@ export class UnitStateMachine {
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- handleIdle mutates runtime.state
             if (runtime.state === SettlerState.IDLE) {
                 // Ensure idle animation state exists (units that never worked won't have one)
-                if (!this.animationService.getState(settler.id)) {
+                if (!this.visualService.getState(settler.id)?.animation) {
                     this.animController.setIdleAnimation(settler);
                 }
                 this.animController.updateIdleTurning(settler, runtime.idleState, dt);

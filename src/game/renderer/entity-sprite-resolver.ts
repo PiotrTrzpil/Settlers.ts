@@ -11,11 +11,10 @@ import { MapObjectType } from '@/game/types/map-object-types';
 import { EMaterialType } from '../economy';
 import type { SpriteEntry } from './sprite-metadata/sprite-metadata';
 import type { SpriteRenderManager } from './sprite-render-manager';
-import type { AnimationState } from '../animation';
+import type { EntityVisualState, AnimationPlayback, DirectionTransition } from '../animation/entity-visual-service';
 import type { BuildingRenderState, PlacementEntityType } from './render-context';
 import type { LayerVisibility } from './layer-visibility';
-import { getAnimatedSprite, getAnimatedSpriteForDirection } from './animation-helpers';
-import { LogHandler } from '@/utilities/log-handler';
+import { resolveAnimationFrame, getAnimatedSpriteForDirection } from './animation-helpers';
 
 // ============================================================================
 // Result types (replaces sentinel string 'transitioning')
@@ -38,11 +37,10 @@ export interface SpriteResolveResult {
 // ============================================================================
 
 export class EntitySpriteResolver {
-    private static log = new LogHandler('SpriteResolver');
-
     constructor(
         private readonly sprites: SpriteRenderManager | null,
-        private readonly getAnimState: (entityId: number) => AnimationState | null,
+        private readonly getVisualState: (entityId: number) => EntityVisualState | null,
+        private readonly getDirectionTransition: (entityId: number) => DirectionTransition | null,
         private readonly getBuildingRenderState: (entityId: number) => BuildingRenderState,
         private readonly resourceStates: ReadonlyMap<number, StackedResourceState>,
         private readonly layerVisibility: LayerVisibility
@@ -102,7 +100,22 @@ export class EntitySpriteResolver {
                 this.sprites.getBuilding(buildingType, entity.race);
         } else {
             const fallback = this.sprites.getBuilding(buildingType, entity.race);
-            sprite = this.getAnimated(entity, fallback);
+            const vs = this.getVisualState(entity.id);
+            if (vs?.animation) {
+                const animEntry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
+                if (animEntry) {
+                    const frame = resolveAnimationFrame(vs.animation, animEntry.animationData);
+                    if (frame) {
+                        sprite = frame;
+                    } else {
+                        sprite = fallback;
+                    }
+                } else {
+                    sprite = fallback;
+                }
+            } else {
+                sprite = fallback;
+            }
         }
 
         return { sprite, progress: renderState.verticalProgress };
@@ -115,11 +128,19 @@ export class EntitySpriteResolver {
         // When decoration textures are disabled, skip all environment sprites (trees, stones, plants, crops, etc.)
         if (!this.layerVisibility.decorationTextures) return null;
 
-        const variation = entity.variation ?? 0;
-        const fallback = this.sprites.getMapObject(entity.subType as MapObjectType, variation);
+        const vs = this.getVisualState(entity.id);
+        const variation = vs?.variation ?? 0;
+        const staticSprite = this.sprites.getMapObject(entity.subType as MapObjectType, variation);
 
-        // Try animated sprite — getAnimated is O(1) and returns fallback if no animation
-        return this.getAnimated(entity, fallback);
+        if (vs?.animation) {
+            const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
+            if (entry) {
+                const frame = resolveAnimationFrame(vs.animation, entry.animationData);
+                if (frame) return frame;
+            }
+        }
+
+        return staticSprite;
     }
 
     /** Stacked resource sprite based on quantity. */
@@ -135,50 +156,33 @@ export class EntitySpriteResolver {
     private resolveUnit(entity: Entity): SpriteResolveResult {
         if (!this.sprites) return { skip: false, transitioning: false, sprite: null, progress: 1 };
 
-        const animState = this.getAnimState(entity.id);
+        const vs = this.getVisualState(entity.id);
+        if (!vs) return { skip: false, transitioning: false, sprite: null, progress: 1 };
 
         // Detect direction transition (needs blend shader)
-        if (animState?.directionTransitionProgress !== undefined && animState.previousDirection !== undefined) {
+        const transition = this.getDirectionTransition(entity.id);
+        if (transition) {
             return { skip: false, transitioning: true, sprite: null, progress: 1 };
         }
 
-        const direction = animState?.direction ?? 0;
-        const fallback = this.sprites.getUnit(entity.subType as UnitType, direction, entity.race);
-        const sprite = this.getAnimated(entity, fallback);
-        return { skip: false, transitioning: false, sprite, progress: 1 };
-    }
+        const direction = vs.animation?.direction ?? 0;
+        const staticSprite = this.sprites.getUnit(entity.subType as UnitType, direction, entity.race);
 
-    // ── Animation helpers ───────────────────────────────────────
-
-    /** Get the current animation frame for an entity, or fall back to static sprite. */
-    private getAnimated(entity: Entity, fallbackSprite: SpriteEntry | null): SpriteEntry | null {
-        if (!this.sprites) return fallbackSprite;
-
-        const animState = this.getAnimState(entity.id);
-        if (!animState) return fallbackSprite;
-
-        const animatedEntry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
-        if (!animatedEntry) return fallbackSprite;
-
-        try {
-            return getAnimatedSprite(animState, animatedEntry.animationData, animatedEntry.staticSprite);
-        } catch (e) {
-            const typeName =
-                entity.type === EntityType.Unit
-                    ? UnitType[entity.subType]
-                    : `${EntityType[entity.type]}:${entity.subType}`;
-            EntitySpriteResolver.log.error(
-                `Animation error for ${typeName} (id=${entity.id}): seq='${animState.sequenceKey}', ` +
-                    `available=[${[...animatedEntry.animationData.sequences.keys()].join(', ')}]`
-            );
-            throw e;
+        if (vs.animation) {
+            const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
+            if (entry) {
+                const frame = resolveAnimationFrame(vs.animation, entry.animationData);
+                if (frame) return { skip: false, transitioning: false, sprite: frame, progress: 1 };
+            }
         }
+
+        return { skip: false, transitioning: false, sprite: staticSprite, progress: 1 };
     }
 
     /** Get animated sprite for a specific direction (used for direction transitions). */
     getUnitSpriteForDirection(
         unitType: UnitType,
-        animState: AnimationState,
+        playback: AnimationPlayback,
         direction: number,
         race?: number
     ): SpriteEntry | null {
@@ -188,7 +192,7 @@ export class EntitySpriteResolver {
         const animatedEntry = this.sprites.getAnimatedEntity(EntityType.Unit, unitType, race);
         if (!animatedEntry) return fallback;
 
-        return getAnimatedSpriteForDirection(animState, animatedEntry.animationData, direction, fallback);
+        return getAnimatedSpriteForDirection(playback, animatedEntry.animationData, direction, fallback);
     }
 
     // ── Query helpers ───────────────────────────────────────────
