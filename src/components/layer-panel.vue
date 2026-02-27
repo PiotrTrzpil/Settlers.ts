@@ -90,6 +90,13 @@
             </template>
 
             <LayerCheckbox
+                v-model="visibility.decorationTextures"
+                label="Textures"
+                emoji="🖼️"
+                @update:modelValue="saveAndEmit()"
+            />
+
+            <LayerCheckbox
                 v-model="visibility.environment"
                 label="All Environment"
                 emoji="🌍"
@@ -137,15 +144,6 @@
                     @update:modelValue="saveAndEmit()"
                 />
                 <div class="other-options" :class="{ disabled: !otherEnabled }">
-                    <LayerCheckbox
-                        v-model="visibility.decorationTextures"
-                        label="Textures"
-                        emoji="🖼️"
-                        :disabled="!otherEnabled"
-                        sub
-                        @update:modelValue="saveAndEmit()"
-                    />
-
                     <!-- Object type filter -->
                     <div class="obj-filter">
                         <label class="filter-row">

@@ -100,9 +100,8 @@ export class EntitySpriteResolver {
     private getMapObject(entity: Entity): SpriteEntry | null {
         if (!this.sprites) return null;
 
-        // When decoration textures are disabled, skip non-tree/non-crop decorations
-        // Trees: subType 0-18, Resources: 100-104, Crops: 200-203
-        if (!this.layerVisibility.decorationTextures && entity.subType > 18 && entity.subType < 200) return null;
+        // When decoration textures are disabled, skip all environment sprites (trees, stones, plants, crops, etc.)
+        if (!this.layerVisibility.decorationTextures) return null;
 
         const variation = entity.variation ?? 0;
         const fallback = this.sprites.getMapObject(entity.subType as MapObjectType, variation);
@@ -165,11 +164,16 @@ export class EntitySpriteResolver {
     }
 
     /** Get animated sprite for a specific direction (used for direction transitions). */
-    getUnitSpriteForDirection(unitType: UnitType, animState: AnimationState, direction: number): SpriteEntry | null {
+    getUnitSpriteForDirection(
+        unitType: UnitType,
+        animState: AnimationState,
+        direction: number,
+        race?: number
+    ): SpriteEntry | null {
         if (!this.sprites) return null;
 
-        const fallback = this.sprites.getUnit(unitType, direction);
-        const animatedEntry = this.sprites.getAnimatedEntity(EntityType.Unit, unitType);
+        const fallback = this.sprites.getUnit(unitType, direction, race);
+        const animatedEntry = this.sprites.getAnimatedEntity(EntityType.Unit, unitType, race);
         if (!animatedEntry) return fallback;
 
         return getAnimatedSpriteForDirection(animState, animatedEntry.animationData, direction, fallback);
@@ -185,7 +189,7 @@ export class EntitySpriteResolver {
         case EntityType.Building:
             return !!this.sprites.getBuilding(entity.subType as BuildingType, entity.race);
         case EntityType.MapObject:
-            if (!this.layerVisibility.decorationTextures && entity.subType > 17) return false;
+            if (!this.layerVisibility.decorationTextures) return false;
             return !!this.sprites.getMapObject(entity.subType as MapObjectType);
         case EntityType.StackedResource:
             return !!this.sprites.getResource(entity.subType as EMaterialType);

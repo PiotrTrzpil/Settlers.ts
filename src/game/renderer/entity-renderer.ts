@@ -3,6 +3,7 @@ import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
 import { Entity, EntityType, StackedResourceState, UnitType } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
+import { subTypeToRawByte } from '@/resources/map/raw-object-registry';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
@@ -802,8 +803,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             const unitType = entity.subType as UnitType;
 
             // Get animated sprites for both directions at current frame
-            const oldSprite = this.spriteResolver!.getUnitSpriteForDirection(unitType, animState, oldDir);
-            const newSprite = this.spriteResolver!.getUnitSpriteForDirection(unitType, animState, newDir);
+            const oldSprite = this.spriteResolver!.getUnitSpriteForDirection(unitType, animState, oldDir, entity.race);
+            const newSprite = this.spriteResolver!.getUnitSpriteForDirection(unitType, animState, newDir, entity.race);
 
             if (!oldSprite || !newSprite) continue;
 
@@ -886,10 +887,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
     }
 
-    /** Check if an entity should be skipped in color rendering (already handled by sprite batch or is a tree). */
+    /** Check if an entity should be skipped in color rendering (already handled by sprite batch). */
     private shouldSkipColorEntity(entity: Entity, texturedBuildingsHandled: boolean): boolean {
-        // Map objects with sprites (trees, subType <= 17) are rendered via sprite batch
-        if (entity.type === EntityType.MapObject && entity.subType <= 17) return true;
         // Skip entities already rendered by the textured sprite pass
         return texturedBuildingsHandled && this.spriteResolver!.hasTexturedSprite(entity);
     }
@@ -901,7 +900,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         isDecoration: boolean;
     } {
         const isSelected = this.selectedEntityIds.has(entity.id);
-        const isDecoration = entity.type === EntityType.MapObject && entity.subType > 17;
+        const isDecoration = entity.type === EntityType.MapObject;
         if (isSelected)
             return {
                 color: [1.0, 1.0, 0.0, 1.0],
@@ -925,10 +924,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     ): void {
         const clipX = projection[0]! * worldPos.worldX + projection[12]!;
         const clipY = projection[5]! * worldPos.worldY + projection[13]!;
+        const rawByte = subTypeToRawByte(entity.subType);
         this.debugDecoLabels.push({
             screenX: (clipX * 0.5 + 0.5) * canvasW,
             screenY: (-clipY * 0.5 + 0.5) * canvasH,
-            type: entity.subType,
+            type: rawByte,
             hue: decoTypeToHue(entity.subType),
         });
     }

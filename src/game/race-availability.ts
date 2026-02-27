@@ -16,8 +16,8 @@ import { EMaterialType } from './economy';
 // They have no standard economy — instead relying on mushrooms, shamans,
 // captured settlers (via temples), and mana copters.
 
-/** The only units Dark Tribe can train. */
-export const DARK_TRIBE_UNITS: ReadonlySet<UnitType> = new Set([
+/** Units exclusive to Dark Tribe — no other race can use these. */
+export const DARK_TRIBE_EXCLUSIVE_UNITS: ReadonlySet<UnitType> = new Set([
     UnitType.DarkGardener,
     UnitType.Shaman,
     UnitType.MushroomFarmer,
@@ -79,10 +79,11 @@ export function isMaterialAvailableForRace(materialType: EMaterialType, race: Ra
 
 /** Check if a unit type is available for a given race. */
 export function isUnitAvailableForRace(unitType: UnitType, race: Race): boolean {
-    if (race === Race.DarkTribe) {
-        return DARK_TRIBE_UNITS.has(unitType);
-    }
-    return !DARK_TRIBE_UNITS.has(unitType);
+    // DarkTribe uses the same job indices as standard races (23.jil has DarkTribe-specific
+    // sprites at identical offsets), so all unit types are valid for sprite loading.
+    if (race === Race.DarkTribe) return true;
+    // Other races cannot use DarkTribe-exclusive units.
+    return !DARK_TRIBE_EXCLUSIVE_UNITS.has(unitType);
 }
 
 /** Check if a building type is available for a given race. */

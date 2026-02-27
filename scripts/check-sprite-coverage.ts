@@ -141,7 +141,7 @@ console.log(
     `${pad('────────', 22)} ${rpad('─────', 6)} ${rpad('─────', 6)} ${rpad('───────', 8)} ${rpad('───────', 8)} ${rpad('─────', 8)} ─────`
 );
 
-for (const [cat, info] of [...poolByCategory.entries()].sort((a, b) => b.rawCount - a.rawCount)) {
+for (const [cat, info] of [...poolByCategory.entries()].sort((a, b) => b[1].rawCount - a[1].rawCount)) {
     const uniqueSprites = categoryPoolSizes.get(cat)?.size ?? 0;
     const ratio = uniqueSprites > 0 ? `${(info.rawCount / uniqueSprites).toFixed(1)}:1` : 'N/A';
     let note = '';

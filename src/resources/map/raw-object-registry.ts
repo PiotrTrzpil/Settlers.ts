@@ -1217,3 +1217,21 @@ const RAW_OBJECT_MAP: ReadonlyMap<number, RawObjectEntry> = new Map(RAW_OBJECT_R
 export function lookupRawObject(raw: number): RawObjectEntry | undefined {
     return RAW_OBJECT_MAP.get(raw);
 }
+
+/**
+ * Reverse lookup: MapObjectType → raw byte value.
+ * For typed entities stored with entry.type, this recovers the original map byte.
+ * Returns the first matching raw value, or the subType itself if no typed entry matches
+ * (untyped decorations already store the raw byte as subType).
+ */
+const TYPE_TO_RAW: ReadonlyMap<number, number> = (() => {
+    const m = new Map<number, number>();
+    for (const e of RAW_OBJECT_REGISTRY) {
+        if (e.type != null && !m.has(e.type)) m.set(e.type, e.raw);
+    }
+    return m;
+})();
+
+export function subTypeToRawByte(subType: number): number {
+    return TYPE_TO_RAW.get(subType) ?? subType;
+}

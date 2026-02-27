@@ -181,12 +181,14 @@ export function buildDecorationSpriteMap(): Map<number, DecorationSpriteRef> {
         MapObjectCategory.HarvestableStone,
     ]);
 
-    // Group raw values by category, skipping only categories handled by dedicated loaders
+    // Group entity keys by category, skipping only categories handled by dedicated loaders.
+    // For typed entries, use the MapObjectType enum value (matches entity.subType at runtime).
+    // For untyped entries, use the raw byte value (also matches entity.subType).
     const byCategory = new Map<MapObjectCategory, number[]>();
     for (const entry of RAW_OBJECT_REGISTRY) {
         if (LOADER_CATEGORIES.has(entry.category)) continue;
         const list = byCategory.get(entry.category) ?? [];
-        list.push(entry.raw);
+        list.push(entry.type ?? entry.raw);
         byCategory.set(entry.category, list);
     }
 
