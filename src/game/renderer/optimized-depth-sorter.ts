@@ -60,6 +60,7 @@ export class OptimizedDepthSorter {
     private floatDepthKeys: Float64Array;
     private sortedIndices: Uint32Array;
     private tempEntities: Entity[];
+    private indexArray: number[] = new Array(INITIAL_CAPACITY);
 
     // Last sort state for incremental optimization
     private lastEntityCount = 0;
@@ -101,8 +102,8 @@ export class OptimizedDepthSorter {
         const keys = this.floatDepthKeys;
         const indices = this.sortedIndices;
 
-        // Convert to regular array for sort (TypedArray.sort doesn't take comparator)
-        const indexArray: number[] = [];
+        // Reuse pre-allocated index array for sort (TypedArray.sort doesn't take comparator)
+        const indexArray = this.indexArray;
         for (let i = 0; i < count; i++) {
             indexArray[i] = indices[i]!;
         }

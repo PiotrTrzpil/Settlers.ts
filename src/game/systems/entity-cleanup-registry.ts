@@ -107,4 +107,13 @@ export class EntityCleanupRegistry {
     unregisterEvents(): void {
         this.subscriptions.unsubscribeAll();
     }
+
+    /**
+     * Unsubscribe from the event bus and clear all registered handlers.
+     * Call on game destruction to prevent handler accumulation across game restarts.
+     */
+    destroy(): void {
+        this.subscriptions.unsubscribeAll();
+        this.handlers.length = 0;
+    }
 }

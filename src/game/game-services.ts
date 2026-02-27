@@ -361,7 +361,7 @@ export class GameServices {
         this.carrierManager.unregisterEvents();
         this.inventoryVisualizer.unregisterEvents();
         this.territoryCleanup?.();
-        this.cleanupRegistry.unregisterEvents();
+        this.cleanupRegistry.destroy();
         this.subscriptions.unsubscribeAll();
     }
 

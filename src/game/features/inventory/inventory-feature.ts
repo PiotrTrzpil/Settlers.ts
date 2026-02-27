@@ -11,7 +11,7 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { EventSubscriptionManager } from '../../event-bus';
 import { EntityType, BuildingType } from '../../entity';
-import { BuildingInventoryManager } from './building-inventory';
+import { BuildingInventoryManager, type InventoryChangeCallback } from './building-inventory';
 import { hasInventory, isProductionBuilding } from './inventory-configs';
 
 export interface InventoryExports {
@@ -37,7 +37,13 @@ export const InventoryFeature: FeatureDefinition = {
         });
 
         // Bridge inventory changes to EventBus for consumers (debug panel, UI)
-        inventoryManager.onChange((buildingId, materialType, slotType, previousAmount, newAmount) => {
+        const onInventoryChanged: InventoryChangeCallback = (
+            buildingId,
+            materialType,
+            slotType,
+            previousAmount,
+            newAmount
+        ) => {
             ctx.eventBus.emit('inventory:changed', {
                 buildingId,
                 materialType,
@@ -45,11 +51,13 @@ export const InventoryFeature: FeatureDefinition = {
                 previousAmount,
                 newAmount,
             });
-        });
+        };
+        inventoryManager.onChange(onInventoryChanged);
 
         return {
             exports: { inventoryManager } satisfies InventoryExports,
             destroy: () => {
+                inventoryManager.offChange(onInventoryChanged);
                 subscriptions.unsubscribeAll();
             },
         };

@@ -118,6 +118,40 @@ interface MutableWorldPos {
     worldY: number;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FRAME-LOCAL POOLS (reused every frame to avoid GC pressure)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Pooled visible entity list — reused across frames */
+const _pooledVisibleEntities: Entity[] = [];
+
+/** Pooled position cache — reused across frames */
+const _pooledPositionCache = new Map<number, WorldPos>();
+
+/** Pool of WorldPos objects to avoid per-entity allocation each frame */
+const _worldPosPool: MutableWorldPos[] = [];
+let _worldPosPoolIndex = 0;
+
+function acquireWorldPos(worldX: number, worldY: number): WorldPos {
+    if (_worldPosPoolIndex < _worldPosPool.length) {
+        const pos = _worldPosPool[_worldPosPoolIndex]!;
+        pos.worldX = worldX;
+        pos.worldY = worldY;
+        _worldPosPoolIndex++;
+        return pos;
+    }
+    const pos: MutableWorldPos = { worldX, worldY };
+    _worldPosPool.push(pos);
+    _worldPosPoolIndex++;
+    return pos;
+}
+
+function resetPools(): void {
+    _pooledVisibleEntities.length = 0;
+    _pooledPositionCache.clear();
+    _worldPosPoolIndex = 0;
+}
+
 /**
  * Parameters for creating a frame context.
  */
@@ -188,8 +222,10 @@ export class FrameContext implements IFrameContext {
         const tileBounds = computeTileBounds(worldBounds, viewPoint);
 
         // Step 2: Filter visible entities and cache their world positions
-        const visibleEntities: Entity[] = [];
-        const positionCache = new Map<number, WorldPos>();
+        // Reuse pooled collections to avoid per-frame allocations
+        resetPools();
+        const visibleEntities = _pooledVisibleEntities;
+        const positionCache = _pooledPositionCache;
         let culledCount = 0;
 
         // Reusable position object for computation
@@ -224,8 +260,8 @@ export class FrameContext implements IFrameContext {
                 continue;
             }
 
-            // Entity is visible - cache position and add to list
-            positionCache.set(entity.id, { worldX: tempPos.worldX, worldY: tempPos.worldY });
+            // Entity is visible - cache position and add to list (reuse pooled WorldPos objects)
+            positionCache.set(entity.id, acquireWorldPos(tempPos.worldX, tempPos.worldY));
             visibleEntities.push(entity);
         }
 

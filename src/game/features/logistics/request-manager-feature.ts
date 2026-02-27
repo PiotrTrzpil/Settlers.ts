@@ -7,7 +7,7 @@
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
-import { RequestManager } from './request-manager';
+import { RequestManager, type RequestEventListener } from './request-manager';
 
 export interface RequestManagerExports {
     requestManager: RequestManager;
@@ -21,7 +21,7 @@ export const RequestManagerFeature: FeatureDefinition = {
         const requestManager = new RequestManager();
 
         // Bridge request creation to EventBus for consumers (debug panel, UI)
-        requestManager.on('requestAdded', ({ request }) => {
+        const onRequestAdded: RequestEventListener<'requestAdded'> = ({ request }) => {
             ctx.eventBus.emit('request:created', {
                 requestId: request.id,
                 buildingId: request.buildingId,
@@ -29,10 +29,14 @@ export const RequestManagerFeature: FeatureDefinition = {
                 amount: request.amount,
                 priority: request.priority,
             });
-        });
+        };
+        requestManager.on('requestAdded', onRequestAdded);
 
         return {
             exports: { requestManager } satisfies RequestManagerExports,
+            destroy: () => {
+                requestManager.off('requestAdded', onRequestAdded);
+            },
         };
     },
 };
