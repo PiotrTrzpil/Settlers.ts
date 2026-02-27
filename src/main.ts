@@ -21,12 +21,20 @@ if (import.meta.hot) {
         log.warn(`HMR error detected (auto-reload disabled): ${payload}`);
     });
 
-    // Force reload for game engine files — instances hold GPU resources, event
-    // subscriptions, and game-loop registrations that don't survive HMR cleanly.
+    // Force reload for renderer/engine files — these hold GPU resources and
+    // stateful registrations that don't survive module hot-replacement.
     import.meta.hot.on('vite:beforeUpdate', payload => {
-        const needsReload = payload.updates.some((update: { path: string }) => update.path.includes('/src/game/'));
+        const reloadPaths = [
+            '/src/game/renderer/',
+            '/src/game/game-loop.ts',
+            '/src/game/game-services.ts',
+            '/src/game/game.ts',
+        ];
+        const needsReload = payload.updates.some((update: { path: string }) =>
+            reloadPaths.some(p => update.path.includes(p))
+        );
         if (needsReload) {
-            log.debug('Game file changed, forcing full reload...');
+            log.debug('Game engine file changed, forcing full reload...');
             window.location.reload();
         }
     });
