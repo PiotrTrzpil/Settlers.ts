@@ -25,7 +25,7 @@
                         label="Compress sprite cache"
                         :disabled="homeSettings.state.cacheDisabled"
                     >
-                        <span class="hint-inline">(smaller &amp; faster reads)</span>
+                        <span class="hint-inline">(experimental — may be slower, but uses less memory)</span>
                     </Checkbox>
 
                     <div class="cache-controls">
