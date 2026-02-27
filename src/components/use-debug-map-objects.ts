@@ -3,16 +3,17 @@
  */
 import { ref, onMounted, onUnmounted } from 'vue';
 import type { Game } from '@/game/game';
+import { MapObjectCategory } from '@/game/types/map-object-types';
 import {
     populateMapObjectsFromEntityData,
     clearMapObjects,
     spawnTestObjects,
     countMapObjectsByCategory,
-    type ObjectCategory,
+    TYPED_OBJECT_CATEGORIES,
 } from '@/game/systems/map-objects';
 
 export function useDebugMapObjects(getGame: () => Game | null) {
-    const mapObjectCounts = ref({ trees: 0, stones: 0, resources: 0, plants: 0, other: 0 });
+    const mapObjectCounts = ref({ trees: 0, goods: 0, crops: 0 });
     const hasObjectTypeData = ref(false);
 
     function updateMapObjectCounts() {
@@ -23,20 +24,16 @@ export function useDebugMapObjects(getGame: () => Game | null) {
         hasObjectTypeData.value = (game.mapLoader.entityData?.objects.length ?? 0) > 0;
         const counts = countMapObjectsByCategory(game.state);
         mapObjectCounts.value = {
-            trees: counts.get('trees') ?? 0,
-            stones: counts.get('stones') ?? 0,
-            resources: counts.get('resources') ?? 0,
-            plants: counts.get('plants') ?? 0,
-            other: counts.get('other') ?? 0,
+            trees: counts.get(MapObjectCategory.Trees) ?? 0,
+            goods: counts.get(MapObjectCategory.Goods) ?? 0,
+            crops: counts.get(MapObjectCategory.Crops) ?? 0,
         };
     }
 
-    function spawnCategory(category: ObjectCategory) {
+    function spawnCategory(category: MapObjectCategory) {
         const game = getGame();
         if (!game) return;
 
-        // For now, only spawn test objects since category-based spawning from entity data
-        // would require filtering. Trees are loaded automatically on game start.
         spawnTestObjects(game.state, game.terrain, category, 50);
         updateMapObjectCounts();
     }
@@ -49,7 +46,7 @@ export function useDebugMapObjects(getGame: () => Game | null) {
         if (entityObjects && entityObjects.length > 0) {
             populateMapObjectsFromEntityData(game.state, entityObjects, game.terrain);
         } else {
-            for (const cat of ['trees', 'stones', 'resources', 'plants'] as ObjectCategory[]) {
+            for (const cat of TYPED_OBJECT_CATEGORIES) {
                 spawnTestObjects(game.state, game.terrain, cat, 30);
             }
         }

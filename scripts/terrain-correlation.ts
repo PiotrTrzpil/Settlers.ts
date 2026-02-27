@@ -4,105 +4,35 @@
  *
  * Run: npx tsx scripts/terrain-correlation.ts <map-file>
  */
-import * as fs from 'fs';
-import * as path from 'path';
-import { BinaryReader } from '../src/resources/file/binary-reader';
-import { OriginalMapFile } from '../src/resources/map/original/original-map-file';
-import { MapChunkType } from '../src/resources/map/original/map-chunk-type';
-import { DECORATION_TYPES } from '../src/game/systems/map-objects';
-import { S4GroundType } from '../src/resources/map/s4-types';
+import { RAW_OBJECT_REGISTRY } from '../src/resources/map/raw-object-registry';
+import { loadMapData, getMapPathFromArgs, getGroundTypeName, DARK_GROUND_TYPES } from './map-analysis';
 
-const GROUND_TYPE_NAMES: Partial<Record<number, string>> = {
-    [S4GroundType.WATER1]: 'Water1',
-    [S4GroundType.GRASS]: 'Grass',
-    [S4GroundType.GRASS_ROCK]: 'Grass/Rock',
-    [S4GroundType.GRASS_DESERT]: 'Grass/Desert',
-    [S4GroundType.GRASS_SWAMP]: 'Grass/Swamp',
-    [S4GroundType.GRASS_MUD]: 'Grass/Mud',
-    [S4GroundType.DARKGRASS]: 'DarkGrass',
-    [S4GroundType.DARKGRASS_GRASS]: 'DarkGrass/Grass',
-    [S4GroundType.ROCK]: 'Rock',
-    [S4GroundType.ROCK_GRASS]: 'Rock/Grass',
-    [S4GroundType.BEACH]: 'Beach',
-    [S4GroundType.DESERT]: 'Desert',
-    [S4GroundType.DESERT_GRASS]: 'Desert/Grass',
-    [S4GroundType.SWAMP]: 'Swamp',
-    [S4GroundType.SWAMP_GRASS]: 'Swamp/Grass',
-    [S4GroundType.RIVER1]: 'River1',
-    [S4GroundType.RIVER2]: 'River2',
-    [S4GroundType.RIVER3]: 'River3',
-    [S4GroundType.RIVER4]: 'River4',
-    [S4GroundType.SNOW]: 'Snow',
-    [S4GroundType.MUD]: 'Mud',
-    [S4GroundType.MUD_GRASS]: 'Mud/Grass',
-};
+const mapFilePath = getMapPathFromArgs('terrain-correlation.ts');
+const data = loadMapData(mapFilePath);
 
-const mapFile = process.argv[2];
-if (!mapFile) {
-    console.error('Usage: npx tsx scripts/terrain-correlation.ts <map-file>');
-    process.exit(1);
-}
-
-const mappedRawValues = new Set(DECORATION_TYPES.map(d => d.raw));
-
-const buf = fs.readFileSync(mapFile);
-const reader = new BinaryReader(new Uint8Array(buf).buffer);
-reader.filename = path.basename(mapFile);
-const file = new OriginalMapFile(reader);
-
-// Get map dimensions from landscape chunk
-const landscapeChunk = file.getChunkByType(MapChunkType.MapLandscape);
-if (!landscapeChunk) {
-    console.error('No landscape chunk');
-    process.exit(1);
-}
-const landscapeData = landscapeChunk.getReader().getBuffer();
-const tileCount = landscapeData.length / 4;
-const mapWidth = Math.sqrt(tileCount);
-
-// Extract ground types (byte 1 of each 4-byte tile)
-const groundTypes = new Uint8Array(tileCount);
-for (let i = 0; i < tileCount; i++) {
-    groundTypes[i] = landscapeData[i * 4 + 1]!;
-}
-
-// Get objects chunk
-const objectsChunk = file.getChunkByType(MapChunkType.MapObjects);
-if (!objectsChunk) {
-    console.error('No objects chunk');
-    process.exit(1);
-}
-const objectData = objectsChunk.getReader().getBuffer();
+const knownRawValues = new Set(RAW_OBJECT_REGISTRY.map(e => e.raw));
 
 // Build per-raw-value terrain histogram (only unmapped decoration values)
 const terrainByRaw = new Map<number, Map<number, number>>();
 const totalByRaw = new Map<number, number>();
 
-for (let i = 0; i < tileCount; i++) {
-    const rawVal = objectData[i * 4]!;
+for (let i = 0; i < data.tileCount; i++) {
+    const rawVal = data.objectBytes[i]!;
     if (rawVal <= 18 || rawVal === 0) continue; // skip trees and empty
     if (rawVal >= 124 && rawVal <= 135) continue; // skip resource stone
-    if (mappedRawValues.has(rawVal)) continue; // skip already mapped
+    if (knownRawValues.has(rawVal)) continue; // skip already mapped
 
-    const groundType = groundTypes[i]!;
+    const groundType = data.groundTypes[i]!;
     if (!terrainByRaw.has(rawVal)) terrainByRaw.set(rawVal, new Map());
     const terrainHist = terrainByRaw.get(rawVal)!;
     terrainHist.set(groundType, (terrainHist.get(groundType) ?? 0) + 1);
     totalByRaw.set(rawVal, (totalByRaw.get(rawVal) ?? 0) + 1);
 }
 
-const DARK_GROUND_TYPES = new Set([
-    S4GroundType.DARKGRASS,
-    S4GroundType.DARKGRASS_GRASS,
-    S4GroundType.SWAMP,
-    S4GroundType.SWAMP_GRASS,
-    S4GroundType.GRASS_SWAMP,
-]);
-
 // Sort by count descending
 const sorted = [...totalByRaw.entries()].sort((a, b) => b[1] - a[1]);
 
-console.log(`Map: ${path.basename(mapFile)} (${mapWidth}x${mapWidth})`);
+console.log(`Map: ${data.filename} (${data.mapWidth}x${data.mapWidth})`);
 console.log(`Unmapped decoration types: ${sorted.length}\n`);
 
 console.log('Raw\tCount\tDark%\tTop terrains');
@@ -120,7 +50,7 @@ for (const [raw, total] of sorted) {
 
     const topTerrains = terrainSorted
         .slice(0, 3)
-        .map(([gt, c]) => `${GROUND_TYPE_NAMES[gt as S4GroundType] ?? `Unknown(${gt})`}:${c}`)
+        .map(([gt, c]) => `${getGroundTypeName(gt)}:${c}`)
         .join(', ');
 
     console.log(`${raw}\t${total}\t${darkPct}%\t${topTerrains}`);

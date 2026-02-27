@@ -3,7 +3,8 @@
  * Extracted from SpriteRenderManager to keep file size under the max-lines limit.
  */
 
-import { EntityType, MapObjectType } from '../entity';
+import { EntityType } from '../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import { ANIMATION_DEFAULTS } from '../animation';
 import { CROP_SPRITE_CONFIGS } from '../features/crops/crop-system';
 import { SafeLoadBatch } from './batch-loader';

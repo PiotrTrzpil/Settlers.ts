@@ -68,6 +68,7 @@
 
         <!-- Map Objects -->
         <CollapseSection title="Map Objects" :default-open="false">
+            <Checkbox v-model="settings.darkLandDilation" label="Dark land gap filling" />
             <Checkbox
                 v-model="treeExpansionEnabled"
                 label="Tree expansion (reload)"
@@ -76,22 +77,17 @@
             <div class="map-obj-row">
                 <span class="stat-label">Trees</span>
                 <span class="stat-value">{{ mapObjectCounts.trees }}</span>
-                <button class="spawn-btn" @click="spawnCategory('trees')">+</button>
+                <button class="spawn-btn" @click="spawnCategory(MapObjectCategory.Trees)">+</button>
             </div>
             <div class="map-obj-row">
-                <span class="stat-label">Stones</span>
-                <span class="stat-value">{{ mapObjectCounts.stones }}</span>
-                <button class="spawn-btn" @click="spawnCategory('stones')">+</button>
+                <span class="stat-label">Goods</span>
+                <span class="stat-value">{{ mapObjectCounts.goods }}</span>
+                <button class="spawn-btn" @click="spawnCategory(MapObjectCategory.Goods)">+</button>
             </div>
             <div class="map-obj-row">
-                <span class="stat-label">Resources</span>
-                <span class="stat-value">{{ mapObjectCounts.resources }}</span>
-                <button class="spawn-btn" @click="spawnCategory('resources')">+</button>
-            </div>
-            <div class="map-obj-row">
-                <span class="stat-label">Plants</span>
-                <span class="stat-value">{{ mapObjectCounts.plants }}</span>
-                <button class="spawn-btn" @click="spawnCategory('plants')">+</button>
+                <span class="stat-label">Crops</span>
+                <span class="stat-value">{{ mapObjectCounts.crops }}</span>
+                <button class="spawn-btn" @click="spawnCategory(MapObjectCategory.Crops)">+</button>
             </div>
             <div class="map-obj-actions">
                 <button class="ctrl-btn" @click="spawnAllFromMap()">From Map</button>
@@ -110,6 +106,7 @@ import { getBridge } from '@/game/debug-bridge';
 import type { Game } from '@/game/game';
 import { clearSavedTreeState } from '@/game/game-state-persistence';
 import { AVAILABLE_RACES } from '@/game/race';
+import { MapObjectCategory } from '@/game/types/map-object-types';
 import { useDebugMapObjects } from './use-debug-map-objects';
 import { BuildingAdjustMode } from '@/game/input/modes/building-adjust-mode';
 import { StackAdjustHandler } from '@/game/features/building-adjust';
@@ -133,6 +130,7 @@ defineEmits<{
 }>();
 
 const stats = debugStats.state;
+const settings = props.game.settings.state;
 const view = props.game.viewState.state;
 // Use the persisted open state from debug stats
 const open = computed({

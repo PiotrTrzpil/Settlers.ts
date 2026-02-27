@@ -1,13 +1,12 @@
 /**
  * Game Data module - parses and provides access to game configuration XML files.
  *
+ * This is a pure data layer keyed by XML string identifiers (RaceId, building XML IDs).
+ * For domain-typed access (Race, BuildingType enums), use '@/game/game-data-access'.
+ *
  * Usage:
  *   import { getGameDataLoader } from '@/resources/game-data';
- *
- *   // Load data (call once at startup)
  *   await getGameDataLoader().load();
- *
- *   // Access data
  *   const building = getGameDataLoader().getBuilding('RACE_ROMAN', 'BUILDING_SAWMILL');
  */
 
@@ -18,7 +17,11 @@ export type {
     RaceIndex,
     RaceBuildingData,
     RaceJobData,
+    RaceBuildingTriggerData,
     BuildingInfo,
+    BuildingPatch,
+    PatchSound,
+    BuildingSettlerPos,
     BuildingPileInfo,
     BuilderInfo,
     PositionOffset,
@@ -26,6 +29,10 @@ export type {
     JobInfo,
     JobNode,
     ObjectInfo,
+    BuildingTrigger,
+    TriggerEffect,
+    TriggerPatch,
+    TriggerSound,
 } from './types';
 export { raceIdToIndex } from './types';
 

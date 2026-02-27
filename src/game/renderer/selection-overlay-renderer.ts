@@ -484,18 +484,14 @@ export class SelectionOverlayRenderer {
         serviceAreas: readonly ServiceAreaRenderData[],
         aEntityPos: number,
         aColor: number,
-        ctx: SelectionRenderContext
+        ctx: SelectionRenderContext,
+        color?: readonly number[]
     ): void {
         if (serviceAreas.length === 0) return;
 
+        const c = color ?? SERVICE_AREA_CIRCLE_COLOR;
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.vertexAttrib4f(
-            aColor,
-            SERVICE_AREA_CIRCLE_COLOR[0]!,
-            SERVICE_AREA_CIRCLE_COLOR[1]!,
-            SERVICE_AREA_CIRCLE_COLOR[2]!,
-            SERVICE_AREA_CIRCLE_COLOR[3]!
-        );
+        gl.vertexAttrib4f(aColor, c[0]!, c[1]!, c[2]!, c[3]!);
 
         const segments = SERVICE_AREA_CIRCLE_SEGMENTS;
         const lineWidth = 0.3; // Width of circle outline in tile units

@@ -6,7 +6,8 @@
  * SpriteRenderManager and state providers.
  */
 
-import { Entity, EntityType, BuildingType, UnitType, MapObjectType, type StackedResourceState } from '../entity';
+import { Entity, EntityType, BuildingType, UnitType, type StackedResourceState } from '../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import { EMaterialType } from '../economy';
 import type { SpriteEntry } from './sprite-metadata/sprite-metadata';
 import type { SpriteRenderManager } from './sprite-render-manager';

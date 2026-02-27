@@ -17,7 +17,8 @@
 
 import { GrowableSystem, type GrowableConfig, type GrowableState, type PlantingCapable } from '../growth';
 import type { GameState } from '../../game-state';
-import { EntityType, MapObjectType } from '../../entity';
+import { EntityType } from '../../entity';
+import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { AnimationService } from '../../animation/index';
 import type { Command } from '../../commands';
 import { findEmptySpot } from '../../systems/spatial-search';
@@ -77,7 +78,7 @@ const CROP_CONFIG: GrowableConfig = {
     growthTime: 45,
     plantingSearchRadius: PLANTING_SEARCH_RADIUS,
     minDistanceSq: MIN_CROP_DISTANCE_SQ,
-    objectCategory: 'crops',
+    objectCategory: MapObjectCategory.Crops,
     plantableTypes: ALL_CROP_TYPES,
 };
 

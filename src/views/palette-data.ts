@@ -111,6 +111,8 @@ export const ALL_UNITS: { type: UnitType; id: string; name: string; icon: string
     { type: UnitType.Smelter, id: 'smelter', name: 'Smelter', icon: '🔥' },
     { type: UnitType.Donkey, id: 'donkey', name: 'Donkey', icon: '🫏' },
     { type: UnitType.MushroomFarmer, id: 'mushroomfarmer', name: 'Mushroom Farmer', icon: '🍄' },
+    { type: UnitType.AgaveFarmer, id: 'agavefarmer', name: 'Agave Farmer', icon: '🌵' },
+    { type: UnitType.Beekeeper, id: 'beekeeper', name: 'Beekeeper', icon: '🐝' },
     { type: UnitType.Angel, id: 'angel', name: 'Angel', icon: '👼' },
 ];
 

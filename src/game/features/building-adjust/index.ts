@@ -29,8 +29,9 @@ export type {
 
 // Handlers
 export { EntranceAdjustHandler } from './entrance-handler';
-export { SpriteLayerAdjustHandler } from './sprite-layer-handler';
+export { SpriteLayerAdjustHandler, getSpriteOffset } from './sprite-layer-handler';
 export { StackAdjustHandler } from './stack-handler';
+export { WorkAreaAdjustHandler } from './work-area-handler';
 
 // Persistence
 export { YamlStore } from './yaml-store';

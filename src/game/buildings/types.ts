@@ -5,73 +5,11 @@
 
 import type { TileCoord } from '../coordinates';
 import { Race } from '../race';
-import { getGameDataLoader, getBuildingFootprintAt, type RaceId } from '@/resources/game-data';
+import { getBuildingFootprintAt } from '@/resources/game-data';
+import { getBuildingInfo } from '../game-data-access';
+import { BuildingType } from './building-type';
 
-export enum BuildingType {
-    WoodcutterHut = 1,
-    StorageArea = 2,
-    Sawmill = 3,
-    StonecutterHut = 4,
-    GrainFarm = 5,
-    Mill = 6,
-    Bakery = 7,
-    FisherHut = 8,
-    AnimalRanch = 9,
-    Slaughterhouse = 10,
-    WaterworkHut = 11,
-    CoalMine = 12,
-    IronMine = 13,
-    GoldMine = 14,
-    IronSmelter = 15,
-    SmeltGold = 16,
-    WeaponSmith = 17,
-    ToolSmith = 18,
-    Barrack = 19,
-    ForesterHut = 20,
-    LivingHouse = 21,
-    GuardTowerSmall = 22,
-    HunterHut = 24,
-    DonkeyRanch = 25,
-    StoneMine = 26,
-    SulfurMine = 27,
-    HealerHut = 28,
-    ResidenceSmall = 29,
-    ResidenceMedium = 30,
-    ResidenceBig = 31,
-    GuardTowerBig = 32,
-    Castle = 33,
-    AmmunitionMaker = 34,
-    SmallTemple = 35,
-    LargeTemple = 36,
-    LookoutTower = 37,
-    Shipyard = 38,
-    Eyecatcher01 = 39,
-    Vinyard = 40,
-    SiegeWorkshop = 41,
-    Eyecatcher02 = 42,
-    // Eyecatchers 03-12: race-specific decorative monuments
-    Eyecatcher03 = 43,
-    Eyecatcher04 = 44,
-    Eyecatcher05 = 45,
-    Eyecatcher06 = 46,
-    Eyecatcher07 = 47,
-    Eyecatcher08 = 48,
-    Eyecatcher09 = 49,
-    Eyecatcher10 = 50,
-    Eyecatcher11 = 51,
-    Eyecatcher12 = 52,
-    // Race-specific drink production buildings
-    AgaveFarmerHut = 53,
-    TequilaMakerHut = 54,
-    BeekeeperHut = 55,
-    MeadMakerHut = 56,
-    SunflowerFarmerHut = 57,
-    SunflowerOilMakerHut = 58,
-    MushroomFarm = 59,
-    DarkTemple = 60,
-    Fortress = 61,
-    ManaCopterHall = 62,
-}
+export { BuildingType } from './building-type';
 
 // ── Building occupancy limits ──
 
@@ -102,85 +40,6 @@ const MINE_BUILDING_TYPES: ReadonlySet<BuildingType> = new Set([
 /** Check if a building type is a mine (requires mountain terrain). */
 export function isMineBuilding(buildingType: BuildingType): boolean {
     return MINE_BUILDING_TYPES.has(buildingType);
-}
-
-/**
- * Map BuildingType enum values to XML building IDs.
- * Note: Some buildings have race-specific variants in XML (SHIPYARDA-H, PORTA-H)
- * but we use a single BuildingType for them.
- */
-export const BUILDING_TYPE_TO_XML_ID: Partial<Record<BuildingType, string>> = {
-    [BuildingType.WoodcutterHut]: 'BUILDING_WOODCUTTERHUT',
-    [BuildingType.StorageArea]: 'BUILDING_STORAGEAREA',
-    [BuildingType.Sawmill]: 'BUILDING_SAWMILL',
-    [BuildingType.StonecutterHut]: 'BUILDING_STONECUTTERHUT',
-    [BuildingType.GrainFarm]: 'BUILDING_GRAINFARM',
-    [BuildingType.Mill]: 'BUILDING_MILL',
-    [BuildingType.Bakery]: 'BUILDING_BAKERY',
-    [BuildingType.FisherHut]: 'BUILDING_FISHERHUT',
-    [BuildingType.AnimalRanch]: 'BUILDING_ANIMALRANCH',
-    [BuildingType.Slaughterhouse]: 'BUILDING_SLAUGHTERHOUSE',
-    [BuildingType.WaterworkHut]: 'BUILDING_WATERWORKHUT',
-    [BuildingType.CoalMine]: 'BUILDING_COALMINE',
-    [BuildingType.IronMine]: 'BUILDING_IRONMINE',
-    [BuildingType.GoldMine]: 'BUILDING_GOLDMINE',
-    [BuildingType.IronSmelter]: 'BUILDING_SMELTIRON',
-    [BuildingType.SmeltGold]: 'BUILDING_SMELTGOLD',
-    [BuildingType.WeaponSmith]: 'BUILDING_WEAPONSMITH',
-    [BuildingType.ToolSmith]: 'BUILDING_TOOLSMITH',
-    [BuildingType.Barrack]: 'BUILDING_BARRACKS',
-    [BuildingType.ForesterHut]: 'BUILDING_FORESTERHUT',
-    [BuildingType.LivingHouse]: 'BUILDING_RESIDENCESMALL',
-    [BuildingType.GuardTowerSmall]: 'BUILDING_GUARDTOWERSMALL',
-    [BuildingType.HunterHut]: 'BUILDING_HUNTERHUT',
-    [BuildingType.DonkeyRanch]: 'BUILDING_DONKEYRANCH',
-    [BuildingType.StoneMine]: 'BUILDING_STONEMINE',
-    [BuildingType.SulfurMine]: 'BUILDING_SULFURMINE',
-    [BuildingType.HealerHut]: 'BUILDING_HEALERHUT',
-    [BuildingType.ResidenceSmall]: 'BUILDING_RESIDENCESMALL',
-    [BuildingType.ResidenceMedium]: 'BUILDING_RESIDENCEMEDIUM',
-    [BuildingType.ResidenceBig]: 'BUILDING_RESIDENCEBIG',
-    [BuildingType.GuardTowerBig]: 'BUILDING_GUARDTOWERBIG',
-    [BuildingType.Castle]: 'BUILDING_CASTLE',
-    [BuildingType.AmmunitionMaker]: 'BUILDING_AMMOMAKERHUT',
-    [BuildingType.SmallTemple]: 'BUILDING_SMALLTEMPLE',
-    [BuildingType.LargeTemple]: 'BUILDING_BIGTEMPLE',
-    [BuildingType.LookoutTower]: 'BUILDING_LOOKOUTTOWER',
-    [BuildingType.Shipyard]: 'BUILDING_SHIPYARDA',
-    [BuildingType.Vinyard]: 'BUILDING_VINYARD',
-    [BuildingType.AgaveFarmerHut]: 'BUILDING_AGAVEFARMERHUT',
-    [BuildingType.TequilaMakerHut]: 'BUILDING_TEQUILAMAKERHUT',
-    [BuildingType.BeekeeperHut]: 'BUILDING_BEEKEEPERHUT',
-    [BuildingType.MeadMakerHut]: 'BUILDING_MEADMAKERHUT',
-    [BuildingType.SunflowerFarmerHut]: 'BUILDING_SUNFLOWERFARMERHUT',
-    [BuildingType.SunflowerOilMakerHut]: 'BUILDING_SUNFLOWEROILMAKERHUT',
-    [BuildingType.SiegeWorkshop]: 'BUILDING_VEHICLEHALL',
-    // Dark Tribe unique buildings
-    [BuildingType.MushroomFarm]: 'BUILDING_MUSHROOMFARM',
-    [BuildingType.DarkTemple]: 'BUILDING_DARKTEMPLE',
-    [BuildingType.Fortress]: 'BUILDING_FORTRESS',
-    [BuildingType.ManaCopterHall]: 'BUILDING_MANACOPTERHALL',
-    // Eyecatchers (decorative monuments, 01-12)
-    [BuildingType.Eyecatcher01]: 'BUILDING_EYECATCHER01',
-    [BuildingType.Eyecatcher02]: 'BUILDING_EYECATCHER02',
-    [BuildingType.Eyecatcher03]: 'BUILDING_EYECATCHER03',
-    [BuildingType.Eyecatcher04]: 'BUILDING_EYECATCHER04',
-    [BuildingType.Eyecatcher05]: 'BUILDING_EYECATCHER05',
-    [BuildingType.Eyecatcher06]: 'BUILDING_EYECATCHER06',
-    [BuildingType.Eyecatcher07]: 'BUILDING_EYECATCHER07',
-    [BuildingType.Eyecatcher08]: 'BUILDING_EYECATCHER08',
-    [BuildingType.Eyecatcher09]: 'BUILDING_EYECATCHER09',
-    [BuildingType.Eyecatcher10]: 'BUILDING_EYECATCHER10',
-    [BuildingType.Eyecatcher11]: 'BUILDING_EYECATCHER11',
-    [BuildingType.Eyecatcher12]: 'BUILDING_EYECATCHER12',
-};
-
-/**
- * Get the XML building ID for a BuildingType.
- * Returns undefined for types without XML mapping (e.g., decorations).
- */
-export function getBuildingXmlId(buildingType: BuildingType): string | undefined {
-    return BUILDING_TYPE_TO_XML_ID[buildingType];
 }
 
 /**
@@ -268,25 +127,19 @@ export function getBuildingSize(buildingType: BuildingType): BuildingSize {
  * to the building's anchor/placement point.
  *
  * @param buildingType Type of building
- * @param raceId Optional race ID (defaults to RACE_ROMAN)
+ * @param race Optional race (defaults to Roman)
  * @returns Hotspot offset {x, y} in tile units, or null if not available
  */
 export function getBuildingHotspot(
     buildingType: BuildingType,
-    raceId: RaceId = 'RACE_ROMAN'
+    race: Race = Race.Roman
 ): { x: number; y: number } | null {
-    const loader = getGameDataLoader();
-    if (!loader.isLoaded()) return null;
-
-    const xmlId = getBuildingXmlId(buildingType);
-    if (!xmlId) return null;
-
-    const buildingInfo = loader.getBuilding(raceId, xmlId);
-    if (!buildingInfo) return null;
+    const info = getBuildingInfo(race, buildingType);
+    if (!info) return null;
 
     return {
-        x: buildingInfo.hotSpotX,
-        y: buildingInfo.hotSpotY,
+        x: info.hotSpotX,
+        y: info.hotSpotY,
     };
 }
 
@@ -300,24 +153,18 @@ export function getBuildingHotspot(
  * @param x Building placement X coordinate
  * @param y Building placement Y coordinate
  * @param buildingType Type of building
- * @param raceId Optional race ID for race-specific buildings (defaults to RACE_ROMAN)
+ * @param race Optional race for race-specific buildings (defaults to Roman)
  */
 export function getBuildingFootprint(
     x: number,
     y: number,
     buildingType: BuildingType,
-    raceId: RaceId = 'RACE_ROMAN'
+    race: Race = Race.Roman
 ): TileCoord[] {
     // Try to get real footprint from game data
-    const loader = getGameDataLoader();
-    if (loader.isLoaded()) {
-        const xmlId = getBuildingXmlId(buildingType);
-        if (xmlId) {
-            const buildingInfo = loader.getBuilding(raceId, xmlId);
-            if (buildingInfo && buildingInfo.buildingPosLines.length > 0) {
-                return getBuildingFootprintAt(buildingInfo, x, y);
-            }
-        }
+    const info = getBuildingInfo(race, buildingType);
+    if (info && info.buildingPosLines.length > 0) {
+        return getBuildingFootprintAt(info, x, y);
     }
 
     // Fallback to simple rectangular footprint

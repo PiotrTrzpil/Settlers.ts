@@ -1,0 +1,2576 @@
+# Map Object Profile Analysis
+# Generated: 2026-02-27T10:44:50.747Z
+
+map:
+  filename: CM_Seven_Cities_maya.map
+  size: 960x960
+  total_tiles: 921600
+  object_tiles: 73022
+  coverage_pct: 8
+  unique_raw_values: 111
+  mapped_types: 108
+  unmapped_types: 3
+
+terrain_groups:
+  - group: Grass
+    objects: 33956
+    pct_of_total: 47
+    unique_types: 100
+  - group: DarkGrass
+    objects: 6196
+    pct_of_total: 8
+    unique_types: 82
+  - group: Rock
+    objects: 6994
+    pct_of_total: 10
+    unique_types: 80
+  - group: Desert
+    objects: 2552
+    pct_of_total: 3
+    unique_types: 39
+  - group: Beach
+    objects: 12022
+    pct_of_total: 16
+    unique_types: 10
+  - group: Water
+    objects: 11302
+    pct_of_total: 15
+    unique_types: 11
+
+categories:
+  - category: river
+    count: 21389
+    unique_types: 11
+    avg_height: 34
+    primary_terrain: Grass
+    primary_terrain_pct: 44
+  - category: plants
+    count: 14983
+    unique_types: 17
+    avg_height: 53
+    primary_terrain: Grass
+    primary_terrain_pct: 74
+  - category: trees
+    count: 12764
+    unique_types: 18
+    avg_height: 52
+    primary_terrain: Grass
+    primary_terrain_pct: 65
+  - category: beach
+    count: 8627
+    unique_types: 6
+    avg_height: 28
+    primary_terrain: Beach
+    primary_terrain_pct: 61
+  - category: stone
+    count: 5038
+    unique_types: 22
+    avg_height: 41
+    primary_terrain: Grass
+    primary_terrain_pct: 63
+  - category: lake
+    count: 4944
+    unique_types: 3
+    avg_height: 2
+    primary_terrain: Water
+    primary_terrain_pct: 49
+  - category: sea
+    count: 4222
+    unique_types: 5
+    avg_height: 0
+    primary_terrain: Water
+    primary_terrain_pct: 100
+  - category: desert
+    count: 934
+    unique_types: 9
+    avg_height: 55
+    primary_terrain: Desert
+    primary_terrain_pct: 87
+  - category: harvestable_stone
+    count: 81
+    unique_types: 11
+    avg_height: 33
+    primary_terrain: Grass
+    primary_terrain_pct: 63
+  - category: ???
+    count: 17
+    unique_types: 3
+    avg_height: 37
+    primary_terrain: Grass
+    primary_terrain_pct: 88
+  - category: plants_rare
+    count: 17
+    unique_types: 5
+    avg_height: 118
+    primary_terrain: Rock
+    primary_terrain_pct: 71
+  - category: desert_rare
+    count: 6
+    unique_types: 1
+    avg_height: 47
+    primary_terrain: DarkGrass
+    primary_terrain_pct: 67
+
+objects:
+  - raw: 163
+    label: River163
+    category: river
+    mapped: true
+    count: 4968
+    primary_group: Water
+    height:
+      min: 0
+      max: 62
+      avg: 1
+      median: 0
+    dark_land_pct: 0
+    pond_pct: 3
+    terrain_groups:
+      - { group: Water, count: 2668, pct: 54 }
+      - { group: Beach, count: 2205, pct: 44 }
+      - { group: Grass, count: 91, pct: 2 }
+      - { group: Desert, count: 3, pct: 0 }
+      - { group: Rock, count: 1, pct: 0 }
+    terrain_types:
+      - { type: Beach, ground_type: 48, count: 2205, pct: 44 }
+      - { type: Water1, ground_type: 0, count: 1705, pct: 34 }
+      - { type: Water2, ground_type: 1, count: 685, pct: 14 }
+      - { type: Water3, ground_type: 2, count: 214, pct: 4 }
+      - { type: Grass, ground_type: 16, count: 88, pct: 2 }
+  - raw: 164
+    label: WaterLily1
+    category: lake
+    mapped: true
+    count: 4389
+    primary_group: Water
+    height:
+      min: 0
+      max: 61
+      avg: 2
+      median: 0
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Water, count: 2166, pct: 49 }
+      - { group: Beach, count: 2126, pct: 48 }
+      - { group: Grass, count: 97, pct: 2 }
+    terrain_types:
+      - { type: Beach, ground_type: 48, count: 2126, pct: 48 }
+      - { type: Water1, ground_type: 0, count: 1373, pct: 31 }
+      - { type: Water2, ground_type: 1, count: 559, pct: 13 }
+      - { type: Water3, ground_type: 2, count: 168, pct: 4 }
+      - { type: Grass, ground_type: 16, count: 93, pct: 2 }
+  - raw: 165
+    label: River165
+    category: river
+    mapped: true
+    count: 3500
+    primary_group: Water
+    height:
+      min: 0
+      max: 55
+      avg: 2
+      median: 0
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Water, count: 1847, pct: 53 }
+      - { group: Beach, count: 1565, pct: 45 }
+      - { group: Grass, count: 85, pct: 2 }
+      - { group: Desert, count: 3, pct: 0 }
+    terrain_types:
+      - { type: Beach, ground_type: 48, count: 1565, pct: 45 }
+      - { type: Water1, ground_type: 0, count: 1048, pct: 30 }
+      - { type: Water2, ground_type: 1, count: 582, pct: 17 }
+      - { type: Water3, ground_type: 2, count: 158, pct: 5 }
+      - { type: Grass, ground_type: 16, count: 83, pct: 2 }
+  - raw: 170
+    label: Mussel2
+    category: beach
+    mapped: true
+    count: 3092
+    primary_group: Beach
+    height:
+      min: 0
+      max: 55
+      avg: 7
+      median: 5
+    dark_land_pct: 0
+    pond_pct: 3
+    terrain_groups:
+      - { group: Beach, count: 2911, pct: 94 }
+      - { group: Grass, count: 173, pct: 6 }
+      - { group: Desert, count: 6, pct: 0 }
+      - { group: DarkGrass, count: 1, pct: 0 }
+      - { group: Rock, count: 1, pct: 0 }
+    terrain_types:
+      - { type: Beach, ground_type: 48, count: 2911, pct: 94 }
+      - { type: Grass, ground_type: 16, count: 171, pct: 6 }
+      - { type: Desert/Grass, ground_type: 65, count: 4, pct: 0 }
+      - { type: Desert, ground_type: 64, count: 2, pct: 0 }
+      - { type: Grass/Rock, ground_type: 17, count: 1, pct: 0 }
+  - raw: 80
+    label: Grass80
+    category: plants
+    mapped: true
+    count: 2707
+    primary_group: Grass
+    height:
+      min: 1
+      max: 209
+      avg: 53
+      median: 41
+    dark_land_pct: 12
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 1969, pct: 73 }
+      - { group: Rock, count: 418, pct: 15 }
+      - { group: DarkGrass, count: 320, pct: 12 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1767, pct: 65 }
+      - { type: Rock, ground_type: 32, count: 244, pct: 9 }
+      - { type: DarkGrass, ground_type: 24, count: 220, pct: 8 }
+      - { type: Grass/Rock, ground_type: 17, count: 188, pct: 7 }
+      - { type: Rock/Grass, ground_type: 33, count: 174, pct: 6 }
+  - raw: 78
+    label: Reed3
+    category: river
+    mapped: true
+    count: 2658
+    primary_group: Grass
+    height:
+      min: 1
+      max: 217
+      avg: 54
+      median: 42
+    dark_land_pct: 13
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 1892, pct: 71 }
+      - { group: Rock, count: 409, pct: 15 }
+      - { group: DarkGrass, count: 357, pct: 13 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1703, pct: 64 }
+      - { type: DarkGrass, ground_type: 24, count: 255, pct: 10 }
+      - { type: Rock, ground_type: 32, count: 232, pct: 9 }
+      - { type: Rock/Grass, ground_type: 33, count: 177, pct: 7 }
+      - { type: Grass/Rock, ground_type: 17, count: 170, pct: 6 }
+  - raw: 77
+    label: Reed2
+    category: river
+    mapped: true
+    count: 2634
+    primary_group: Grass
+    height:
+      min: 1
+      max: 219
+      avg: 54
+      median: 43
+    dark_land_pct: 14
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 1829, pct: 69 }
+      - { group: Rock, count: 435, pct: 17 }
+      - { group: DarkGrass, count: 370, pct: 14 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1657, pct: 63 }
+      - { type: DarkGrass, ground_type: 24, count: 261, pct: 10 }
+      - { type: Rock, ground_type: 32, count: 258, pct: 10 }
+      - { type: Rock/Grass, ground_type: 33, count: 177, pct: 7 }
+      - { type: Grass/Rock, ground_type: 17, count: 156, pct: 6 }
+  - raw: 76
+    label: Grass7
+    category: plants
+    mapped: true
+    count: 2583
+    primary_group: Grass
+    height:
+      min: 1
+      max: 217
+      avg: 54
+      median: 42
+    dark_land_pct: 14
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 1808, pct: 70 }
+      - { group: Rock, count: 426, pct: 16 }
+      - { group: DarkGrass, count: 349, pct: 14 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1618, pct: 63 }
+      - { type: Rock, ground_type: 32, count: 259, pct: 10 }
+      - { type: DarkGrass, ground_type: 24, count: 235, pct: 9 }
+      - { type: Grass/Rock, ground_type: 17, count: 174, pct: 7 }
+      - { type: Rock/Grass, ground_type: 33, count: 167, pct: 6 }
+  - raw: 79
+    label: Grass79
+    category: plants
+    mapped: true
+    count: 2579
+    primary_group: Grass
+    height:
+      min: 1
+      max: 211
+      avg: 52
+      median: 41
+    dark_land_pct: 12
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 1867, pct: 72 }
+      - { group: Rock, count: 406, pct: 16 }
+      - { group: DarkGrass, count: 306, pct: 12 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1695, pct: 66 }
+      - { type: Rock, ground_type: 32, count: 259, pct: 10 }
+      - { type: DarkGrass, ground_type: 24, count: 208, pct: 8 }
+      - { type: Grass/Rock, ground_type: 17, count: 155, pct: 6 }
+      - { type: Rock/Grass, ground_type: 33, count: 147, pct: 6 }
+  - raw: 169
+    label: Mussel1
+    category: beach
+    mapped: true
+    count: 2527
+    primary_group: Beach
+    height:
+      min: 0
+      max: 59
+      avg: 8
+      median: 5
+    dark_land_pct: 0
+    pond_pct: 7
+    terrain_groups:
+      - { group: Beach, count: 2351, pct: 93 }
+      - { group: Grass, count: 175, pct: 7 }
+      - { group: Desert, count: 1, pct: 0 }
+    terrain_types:
+      - { type: Beach, ground_type: 48, count: 2351, pct: 93 }
+      - { type: Grass, ground_type: 16, count: 168, pct: 7 }
+      - { type: Grass/Desert, ground_type: 20, count: 7, pct: 0 }
+      - { type: Desert/Grass, ground_type: 65, count: 1, pct: 0 }
+  - raw: 188
+    label: River188
+    category: river
+    mapped: true
+    count: 1910
+    primary_group: Grass
+    height:
+      min: 1
+      max: 222
+      avg: 63
+      median: 39
+    dark_land_pct: 12
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 1431, pct: 75 }
+      - { group: Rock, count: 244, pct: 13 }
+      - { group: DarkGrass, count: 235, pct: 12 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1322, pct: 69 }
+      - { type: DarkGrass, ground_type: 24, count: 175, pct: 9 }
+      - { type: Rock, ground_type: 32, count: 144, pct: 8 }
+      - { type: Rock/Grass, ground_type: 33, count: 100, pct: 5 }
+      - { type: Grass/Rock, ground_type: 17, count: 90, pct: 5 }
+  - raw: 185
+    label: River185
+    category: river
+    mapped: true
+    count: 1885
+    primary_group: Grass
+    height:
+      min: 1
+      max: 224
+      avg: 63
+      median: 39
+    dark_land_pct: 13
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 1392, pct: 74 }
+      - { group: DarkGrass, count: 248, pct: 13 }
+      - { group: Rock, count: 245, pct: 13 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1287, pct: 68 }
+      - { type: DarkGrass, ground_type: 24, count: 180, pct: 10 }
+      - { type: Rock, ground_type: 32, count: 153, pct: 8 }
+      - { type: Rock/Grass, ground_type: 33, count: 92, pct: 5 }
+      - { type: Grass/Rock, ground_type: 17, count: 85, pct: 5 }
+  - raw: 186
+    label: Grass186
+    category: plants
+    mapped: true
+    count: 1864
+    primary_group: Grass
+    height:
+      min: 1
+      max: 222
+      avg: 63
+      median: 40
+    dark_land_pct: 14
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 1390, pct: 75 }
+      - { group: DarkGrass, count: 254, pct: 14 }
+      - { group: Rock, count: 220, pct: 12 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1284, pct: 69 }
+      - { type: DarkGrass, ground_type: 24, count: 185, pct: 10 }
+      - { type: Rock, ground_type: 32, count: 136, pct: 7 }
+      - { type: Grass/Rock, ground_type: 17, count: 94, pct: 5 }
+      - { type: Rock/Grass, ground_type: 33, count: 84, pct: 5 }
+  - raw: 184
+    label: River184
+    category: river
+    mapped: true
+    count: 1858
+    primary_group: Grass
+    height:
+      min: 1
+      max: 222
+      avg: 61
+      median: 38
+    dark_land_pct: 15
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 1377, pct: 74 }
+      - { group: DarkGrass, count: 270, pct: 15 }
+      - { group: Rock, count: 211, pct: 11 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1272, pct: 68 }
+      - { type: DarkGrass, ground_type: 24, count: 195, pct: 10 }
+      - { type: Rock, ground_type: 32, count: 122, pct: 7 }
+      - { type: Rock/Grass, ground_type: 33, count: 89, pct: 5 }
+      - { type: Grass/Rock, ground_type: 17, count: 88, pct: 5 }
+  - raw: 187
+    label: Grass187
+    category: plants
+    mapped: true
+    count: 1854
+    primary_group: Grass
+    height:
+      min: 1
+      max: 224
+      avg: 61
+      median: 40
+    dark_land_pct: 13
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 1422, pct: 77 }
+      - { group: DarkGrass, count: 235, pct: 13 }
+      - { group: Rock, count: 197, pct: 11 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1296, pct: 70 }
+      - { type: DarkGrass, ground_type: 24, count: 179, pct: 10 }
+      - { type: Rock, ground_type: 32, count: 131, pct: 7 }
+      - { type: Grass/Rock, ground_type: 17, count: 100, pct: 5 }
+      - { type: Rock/Grass, ground_type: 33, count: 66, pct: 4 }
+  - raw: 15
+    label: Pine
+    category: trees
+    mapped: true
+    count: 1545
+    primary_group: Grass
+    height:
+      min: 1
+      max: 211
+      avg: 51
+      median: 40
+    dark_land_pct: 15
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 1038, pct: 67 }
+      - { group: Rock, count: 274, pct: 18 }
+      - { group: DarkGrass, count: 233, pct: 15 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 943, pct: 61 }
+      - { type: Rock, ground_type: 32, count: 175, pct: 11 }
+      - { type: DarkGrass, ground_type: 24, count: 147, pct: 10 }
+      - { type: Rock/Grass, ground_type: 33, count: 99, pct: 6 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 86, pct: 6 }
+  - raw: 16
+    label: Pine2
+    category: trees
+    mapped: true
+    count: 1529
+    primary_group: Grass
+    height:
+      min: 1
+      max: 213
+      avg: 53
+      median: 44
+    dark_land_pct: 14
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 998, pct: 65 }
+      - { group: Rock, count: 310, pct: 20 }
+      - { group: DarkGrass, count: 221, pct: 14 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 910, pct: 60 }
+      - { type: Rock, ground_type: 32, count: 230, pct: 15 }
+      - { type: DarkGrass, ground_type: 24, count: 155, pct: 10 }
+      - { type: Rock/Grass, ground_type: 33, count: 80, pct: 5 }
+      - { type: Grass/Rock, ground_type: 17, count: 76, pct: 5 }
+  - raw: 110
+    label: Wave
+    category: sea
+    mapped: true
+    count: 1451
+    primary_group: Water
+    height:
+      min: 0
+      max: 0
+      avg: 0
+      median: 0
+    dark_land_pct: 0
+    pond_pct: 4
+    terrain_groups:
+      - { group: Water, count: 1451, pct: 100 }
+    terrain_types:
+      - { type: Water1, ground_type: 0, count: 882, pct: 61 }
+      - { type: Water2, ground_type: 1, count: 454, pct: 31 }
+      - { type: Water3, ground_type: 2, count: 97, pct: 7 }
+      - { type: Water4, ground_type: 3, count: 15, pct: 1 }
+      - { type: Water5, ground_type: 4, count: 3, pct: 0 }
+  - raw: 108
+    label: Seaweed2
+    category: sea
+    mapped: true
+    count: 1414
+    primary_group: Water
+    height:
+      min: 0
+      max: 0
+      avg: 0
+      median: 0
+    dark_land_pct: 0
+    pond_pct: 3
+    terrain_groups:
+      - { group: Water, count: 1414, pct: 100 }
+    terrain_types:
+      - { type: Water1, ground_type: 0, count: 887, pct: 63 }
+      - { type: Water2, ground_type: 1, count: 420, pct: 30 }
+      - { type: Water3, ground_type: 2, count: 89, pct: 6 }
+      - { type: Water4, ground_type: 3, count: 13, pct: 1 }
+      - { type: Water5, ground_type: 4, count: 4, pct: 0 }
+  - raw: 64
+    label: MountainEdge64
+    category: stone
+    mapped: true
+    count: 1103
+    primary_group: Grass
+    height:
+      min: 1
+      max: 221
+      avg: 43
+      median: 34
+    dark_land_pct: 7
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 708, pct: 64 }
+      - { group: Desert, count: 170, pct: 15 }
+      - { group: Rock, count: 151, pct: 14 }
+      - { group: DarkGrass, count: 74, pct: 7 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 602, pct: 55 }
+      - { type: Desert, ground_type: 64, count: 115, pct: 10 }
+      - { type: Rock, ground_type: 32, count: 95, pct: 9 }
+      - { type: Rock/Grass, ground_type: 33, count: 56, pct: 5 }
+      - { type: Desert/Grass, ground_type: 65, count: 55, pct: 5 }
+  - raw: 81
+    label: Grass8
+    category: plants
+    mapped: true
+    count: 822
+    primary_group: Grass
+    height:
+      min: 1
+      max: 211
+      avg: 47
+      median: 38
+    dark_land_pct: 12
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 656, pct: 80 }
+      - { group: DarkGrass, count: 96, pct: 12 }
+      - { group: Rock, count: 70, pct: 9 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 601, pct: 73 }
+      - { type: DarkGrass, ground_type: 24, count: 64, pct: 8 }
+      - { type: Grass/Rock, ground_type: 17, count: 48, pct: 6 }
+      - { type: Rock, ground_type: 32, count: 38, pct: 5 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 32, pct: 4 }
+  - raw: 84
+    label: River84
+    category: river
+    mapped: true
+    count: 815
+    primary_group: Grass
+    height:
+      min: 1
+      max: 210
+      avg: 45
+      median: 37
+    dark_land_pct: 12
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 671, pct: 82 }
+      - { group: DarkGrass, count: 94, pct: 12 }
+      - { group: Rock, count: 50, pct: 6 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 611, pct: 75 }
+      - { type: DarkGrass, ground_type: 24, count: 65, pct: 8 }
+      - { type: Grass/Rock, ground_type: 17, count: 42, pct: 5 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 29, pct: 4 }
+      - { type: Rock, ground_type: 32, count: 25, pct: 3 }
+  - raw: 17
+    label: OliveLarge
+    category: trees
+    mapped: true
+    count: 810
+    primary_group: Grass
+    height:
+      min: 1
+      max: 185
+      avg: 45
+      median: 36
+    dark_land_pct: 12
+    pond_pct: 2
+    terrain_groups:
+      - { group: Grass, count: 572, pct: 71 }
+      - { group: Rock, count: 137, pct: 17 }
+      - { group: DarkGrass, count: 101, pct: 12 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 513, pct: 63 }
+      - { type: Rock, ground_type: 32, count: 96, pct: 12 }
+      - { type: DarkGrass, ground_type: 24, count: 61, pct: 8 }
+      - { type: Grass/Rock, ground_type: 17, count: 48, pct: 6 }
+      - { type: Rock/Grass, ground_type: 33, count: 41, pct: 5 }
+  - raw: 174
+    label: Beach174
+    category: beach
+    mapped: true
+    count: 782
+    primary_group: Grass
+    height:
+      min: 14
+      max: 216
+      avg: 67
+      median: 50
+    dark_land_pct: 18
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 321, pct: 41 }
+      - { group: Rock, count: 167, pct: 21 }
+      - { group: Desert, count: 157, pct: 20 }
+      - { group: DarkGrass, count: 137, pct: 18 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 234, pct: 30 }
+      - { type: DarkGrass, ground_type: 24, count: 124, pct: 16 }
+      - { type: Desert, ground_type: 64, count: 123, pct: 16 }
+      - { type: Rock, ground_type: 32, count: 101, pct: 13 }
+      - { type: Rock/Grass, ground_type: 33, count: 66, pct: 8 }
+  - raw: 85
+    label: Grass10
+    category: plants
+    mapped: true
+    count: 779
+    primary_group: Grass
+    height:
+      min: 1
+      max: 206
+      avg: 45
+      median: 38
+    dark_land_pct: 12
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 636, pct: 82 }
+      - { group: DarkGrass, count: 92, pct: 12 }
+      - { group: Rock, count: 51, pct: 7 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 584, pct: 75 }
+      - { type: DarkGrass, ground_type: 24, count: 65, pct: 8 }
+      - { type: Grass/Rock, ground_type: 17, count: 49, pct: 6 }
+      - { type: Rock/Grass, ground_type: 33, count: 27, pct: 3 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 27, pct: 3 }
+  - raw: 6
+    label: Poplar
+    category: trees
+    mapped: true
+    count: 765
+    primary_group: Grass
+    height:
+      min: 1
+      max: 214
+      avg: 56
+      median: 43
+    dark_land_pct: 13
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 510, pct: 67 }
+      - { group: Rock, count: 155, pct: 20 }
+      - { group: DarkGrass, count: 100, pct: 13 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 465, pct: 61 }
+      - { type: Rock, ground_type: 32, count: 94, pct: 12 }
+      - { type: DarkGrass, ground_type: 24, count: 73, pct: 10 }
+      - { type: Rock/Grass, ground_type: 33, count: 61, pct: 8 }
+      - { type: Grass/Rock, ground_type: 17, count: 43, pct: 6 }
+  - raw: 18
+    label: OliveSmall
+    category: trees
+    mapped: true
+    count: 760
+    primary_group: Grass
+    height:
+      min: 1
+      max: 138
+      avg: 40
+      median: 35
+    dark_land_pct: 18
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 503, pct: 66 }
+      - { group: DarkGrass, count: 133, pct: 18 }
+      - { group: Rock, count: 124, pct: 16 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 465, pct: 61 }
+      - { type: DarkGrass, ground_type: 24, count: 93, pct: 12 }
+      - { type: Rock, ground_type: 32, count: 76, pct: 10 }
+      - { type: Rock/Grass, ground_type: 33, count: 48, pct: 6 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 40, pct: 5 }
+  - raw: 177
+    label: Beach177
+    category: beach
+    mapped: true
+    count: 759
+    primary_group: Grass
+    height:
+      min: 4
+      max: 218
+      avg: 69
+      median: 53
+    dark_land_pct: 17
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 312, pct: 41 }
+      - { group: Desert, count: 186, pct: 25 }
+      - { group: Rock, count: 134, pct: 18 }
+      - { group: DarkGrass, count: 127, pct: 17 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 231, pct: 30 }
+      - { type: Desert, ground_type: 64, count: 163, pct: 21 }
+      - { type: DarkGrass, ground_type: 24, count: 117, pct: 15 }
+      - { type: Rock, ground_type: 32, count: 87, pct: 11 }
+      - { type: Grass/Rock, ground_type: 17, count: 64, pct: 8 }
+  - raw: 176
+    label: Beach176
+    category: beach
+    mapped: true
+    count: 758
+    primary_group: Grass
+    height:
+      min: 6
+      max: 222
+      avg: 65
+      median: 50
+    dark_land_pct: 18
+    pond_pct: 2
+    terrain_groups:
+      - { group: Grass, count: 332, pct: 44 }
+      - { group: Desert, count: 168, pct: 22 }
+      - { group: DarkGrass, count: 134, pct: 18 }
+      - { group: Rock, count: 124, pct: 16 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 242, pct: 32 }
+      - { type: Desert, ground_type: 64, count: 138, pct: 18 }
+      - { type: DarkGrass, ground_type: 24, count: 120, pct: 16 }
+      - { type: Rock, ground_type: 32, count: 78, pct: 10 }
+      - { type: Grass/Rock, ground_type: 17, count: 62, pct: 8 }
+  - raw: 83
+    label: River83
+    category: river
+    mapped: true
+    count: 756
+    primary_group: Grass
+    height:
+      min: 1
+      max: 208
+      avg: 45
+      median: 37
+    dark_land_pct: 13
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 588, pct: 78 }
+      - { group: DarkGrass, count: 95, pct: 13 }
+      - { group: Rock, count: 73, pct: 10 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 540, pct: 71 }
+      - { type: DarkGrass, ground_type: 24, count: 58, pct: 8 }
+      - { type: Grass/Rock, ground_type: 17, count: 44, pct: 6 }
+      - { type: Rock, ground_type: 32, count: 39, pct: 5 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 37, pct: 5 }
+  - raw: 8
+    label: Maple
+    category: trees
+    mapped: true
+    count: 752
+    primary_group: Grass
+    height:
+      min: 1
+      max: 221
+      avg: 58
+      median: 44
+    dark_land_pct: 12
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 522, pct: 69 }
+      - { group: Rock, count: 137, pct: 18 }
+      - { group: DarkGrass, count: 93, pct: 12 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 467, pct: 62 }
+      - { type: Rock, ground_type: 32, count: 96, pct: 13 }
+      - { type: DarkGrass, ground_type: 24, count: 67, pct: 9 }
+      - { type: Grass/Rock, ground_type: 17, count: 50, pct: 7 }
+      - { type: Rock/Grass, ground_type: 33, count: 41, pct: 5 }
+  - raw: 4
+    label: Linden
+    category: trees
+    mapped: true
+    count: 748
+    primary_group: Grass
+    height:
+      min: 1
+      max: 212
+      avg: 57
+      median: 45
+    dark_land_pct: 15
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 485, pct: 65 }
+      - { group: Rock, count: 151, pct: 20 }
+      - { group: DarkGrass, count: 112, pct: 15 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 417, pct: 56 }
+      - { type: Rock, ground_type: 32, count: 101, pct: 14 }
+      - { type: DarkGrass, ground_type: 24, count: 82, pct: 11 }
+      - { type: Grass/Rock, ground_type: 17, count: 63, pct: 8 }
+      - { type: Rock/Grass, ground_type: 33, count: 50, pct: 7 }
+  - raw: 82
+    label: Grass9
+    category: plants
+    mapped: true
+    count: 741
+    primary_group: Grass
+    height:
+      min: 1
+      max: 211
+      avg: 45
+      median: 38
+    dark_land_pct: 12
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 583, pct: 79 }
+      - { group: DarkGrass, count: 91, pct: 12 }
+      - { group: Rock, count: 67, pct: 9 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 539, pct: 73 }
+      - { type: DarkGrass, ground_type: 24, count: 63, pct: 9 }
+      - { type: Rock/Grass, ground_type: 33, count: 41, pct: 6 }
+      - { type: Grass/Rock, ground_type: 17, count: 39, pct: 5 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 28, pct: 4 }
+  - raw: 1
+    label: Oak
+    category: trees
+    mapped: true
+    count: 733
+    primary_group: Grass
+    height:
+      min: 1
+      max: 217
+      avg: 57
+      median: 43
+    dark_land_pct: 15
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 494, pct: 67 }
+      - { group: Rock, count: 131, pct: 18 }
+      - { group: DarkGrass, count: 108, pct: 15 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 439, pct: 60 }
+      - { type: Rock, ground_type: 32, count: 86, pct: 12 }
+      - { type: DarkGrass, ground_type: 24, count: 76, pct: 10 }
+      - { type: Grass/Rock, ground_type: 17, count: 46, pct: 6 }
+      - { type: Rock/Grass, ground_type: 33, count: 45, pct: 6 }
+  - raw: 2
+    label: Beech
+    category: trees
+    mapped: true
+    count: 726
+    primary_group: Grass
+    height:
+      min: 1
+      max: 214
+      avg: 58
+      median: 45
+    dark_land_pct: 14
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 502, pct: 69 }
+      - { group: Rock, count: 125, pct: 17 }
+      - { group: DarkGrass, count: 99, pct: 14 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 448, pct: 62 }
+      - { type: Rock, ground_type: 32, count: 80, pct: 11 }
+      - { type: DarkGrass, ground_type: 24, count: 66, pct: 9 }
+      - { type: Grass/Rock, ground_type: 17, count: 49, pct: 7 }
+      - { type: Rock/Grass, ground_type: 33, count: 45, pct: 6 }
+  - raw: 9
+    label: Fir
+    category: trees
+    mapped: true
+    count: 724
+    primary_group: Grass
+    height:
+      min: 1
+      max: 211
+      avg: 54
+      median: 40
+    dark_land_pct: 15
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 507, pct: 70 }
+      - { group: DarkGrass, count: 109, pct: 15 }
+      - { group: Rock, count: 108, pct: 15 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 460, pct: 64 }
+      - { type: DarkGrass, ground_type: 24, count: 84, pct: 12 }
+      - { type: Rock, ground_type: 32, count: 72, pct: 10 }
+      - { type: Grass/Rock, ground_type: 17, count: 44, pct: 6 }
+      - { type: Rock/Grass, ground_type: 33, count: 36, pct: 5 }
+  - raw: 3
+    label: Ash
+    category: trees
+    mapped: true
+    count: 719
+    primary_group: Grass
+    height:
+      min: 1
+      max: 225
+      avg: 58
+      median: 45
+    dark_land_pct: 13
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 499, pct: 69 }
+      - { group: Rock, count: 130, pct: 18 }
+      - { group: DarkGrass, count: 90, pct: 13 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 449, pct: 62 }
+      - { type: Rock, ground_type: 32, count: 83, pct: 12 }
+      - { type: DarkGrass, ground_type: 24, count: 66, pct: 9 }
+      - { type: Grass/Rock, ground_type: 17, count: 47, pct: 7 }
+      - { type: Rock/Grass, ground_type: 33, count: 47, pct: 7 }
+  - raw: 10
+    label: Spruce
+    category: trees
+    mapped: true
+    count: 710
+    primary_group: Grass
+    height:
+      min: 1
+      max: 213
+      avg: 57
+      median: 42
+    dark_land_pct: 13
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 488, pct: 69 }
+      - { group: Rock, count: 130, pct: 18 }
+      - { group: DarkGrass, count: 92, pct: 13 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 426, pct: 60 }
+      - { type: Rock, ground_type: 32, count: 83, pct: 12 }
+      - { type: DarkGrass, ground_type: 24, count: 69, pct: 10 }
+      - { type: Grass/Rock, ground_type: 17, count: 53, pct: 7 }
+      - { type: Rock/Grass, ground_type: 33, count: 47, pct: 7 }
+  - raw: 5
+    label: Birch
+    category: trees
+    mapped: true
+    count: 710
+    primary_group: Grass
+    height:
+      min: 1
+      max: 225
+      avg: 56
+      median: 46
+    dark_land_pct: 12
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 490, pct: 69 }
+      - { group: Rock, count: 136, pct: 19 }
+      - { group: DarkGrass, count: 84, pct: 12 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 439, pct: 62 }
+      - { type: Rock, ground_type: 32, count: 83, pct: 12 }
+      - { type: DarkGrass, ground_type: 24, count: 66, pct: 9 }
+      - { type: Rock/Grass, ground_type: 33, count: 53, pct: 7 }
+      - { type: Grass/Rock, ground_type: 17, count: 44, pct: 6 }
+  - raw: 175
+    label: Beach175
+    category: beach
+    mapped: true
+    count: 709
+    primary_group: Grass
+    height:
+      min: 10
+      max: 219
+      avg: 66
+      median: 53
+    dark_land_pct: 16
+    pond_pct: 2
+    terrain_groups:
+      - { group: Grass, count: 340, pct: 48 }
+      - { group: Rock, count: 154, pct: 22 }
+      - { group: DarkGrass, count: 111, pct: 16 }
+      - { group: Desert, count: 104, pct: 15 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 250, pct: 35 }
+      - { type: DarkGrass, ground_type: 24, count: 99, pct: 14 }
+      - { type: Rock, ground_type: 32, count: 95, pct: 13 }
+      - { type: Desert, ground_type: 64, count: 88, pct: 12 }
+      - { type: Grass/Rock, ground_type: 17, count: 60, pct: 8 }
+  - raw: 109
+    label: Seaweed3
+    category: sea
+    mapped: true
+    count: 678
+    primary_group: Water
+    height:
+      min: 0
+      max: 0
+      avg: 0
+      median: 0
+    dark_land_pct: 0
+    pond_pct: 5
+    terrain_groups:
+      - { group: Water, count: 678, pct: 100 }
+    terrain_types:
+      - { type: Water1, ground_type: 0, count: 448, pct: 66 }
+      - { type: Water2, ground_type: 1, count: 176, pct: 26 }
+      - { type: Water3, ground_type: 2, count: 46, pct: 7 }
+      - { type: Water4, ground_type: 3, count: 8, pct: 1 }
+  - raw: 107
+    label: Seaweed1
+    category: sea
+    mapped: true
+    count: 663
+    primary_group: Water
+    height:
+      min: 0
+      max: 0
+      avg: 0
+      median: 0
+    dark_land_pct: 0
+    pond_pct: 3
+    terrain_groups:
+      - { group: Water, count: 663, pct: 100 }
+    terrain_types:
+      - { type: Water1, ground_type: 0, count: 415, pct: 63 }
+      - { type: Water2, ground_type: 1, count: 195, pct: 29 }
+      - { type: Water3, ground_type: 2, count: 37, pct: 6 }
+      - { type: Water4, ground_type: 3, count: 15, pct: 2 }
+      - { type: Water5, ground_type: 4, count: 1, pct: 0 }
+  - raw: 7
+    label: Chestnut
+    category: trees
+    mapped: true
+    count: 662
+    primary_group: Grass
+    height:
+      min: 1
+      max: 209
+      avg: 59
+      median: 44
+    dark_land_pct: 14
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 440, pct: 66 }
+      - { group: Rock, count: 130, pct: 20 }
+      - { group: DarkGrass, count: 92, pct: 14 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 401, pct: 61 }
+      - { type: Rock, ground_type: 32, count: 92, pct: 14 }
+      - { type: DarkGrass, ground_type: 24, count: 67, pct: 10 }
+      - { type: Rock/Grass, ground_type: 33, count: 38, pct: 6 }
+      - { type: Grass/Rock, ground_type: 17, count: 37, pct: 6 }
+  - raw: 11
+    label: Coconut
+    category: trees
+    mapped: true
+    count: 498
+    primary_group: Beach
+    height:
+      min: 1
+      max: 176
+      avg: 31
+      median: 20
+    dark_land_pct: 3
+    pond_pct: 19
+    terrain_groups:
+      - { group: Beach, count: 275, pct: 55 }
+      - { group: Grass, count: 130, pct: 26 }
+      - { group: Desert, count: 62, pct: 12 }
+      - { group: DarkGrass, count: 17, pct: 3 }
+      - { group: Rock, count: 14, pct: 3 }
+    terrain_types:
+      - { type: Beach, ground_type: 48, count: 275, pct: 55 }
+      - { type: Grass, ground_type: 16, count: 104, pct: 21 }
+      - { type: Desert, ground_type: 64, count: 51, pct: 10 }
+      - { type: Grass/Desert, ground_type: 20, count: 20, pct: 4 }
+      - { type: Desert/Grass, ground_type: 65, count: 11, pct: 2 }
+  - raw: 71
+    label: MountainEdge71
+    category: stone
+    mapped: true
+    count: 413
+    primary_group: Grass
+    height:
+      min: 1
+      max: 222
+      avg: 38
+      median: 31
+    dark_land_pct: 5
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 258, pct: 62 }
+      - { group: Desert, count: 83, pct: 20 }
+      - { group: Rock, count: 52, pct: 13 }
+      - { group: DarkGrass, count: 20, pct: 5 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 218, pct: 53 }
+      - { type: Desert, ground_type: 64, count: 59, pct: 14 }
+      - { type: Rock, ground_type: 32, count: 30, pct: 7 }
+      - { type: Desert/Grass, ground_type: 65, count: 24, pct: 6 }
+      - { type: Grass/Desert, ground_type: 20, count: 22, pct: 5 }
+  - raw: 74
+    label: MountainEdge74
+    category: stone
+    mapped: true
+    count: 407
+    primary_group: Grass
+    height:
+      min: 1
+      max: 216
+      avg: 45
+      median: 35
+    dark_land_pct: 8
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 245, pct: 60 }
+      - { group: Desert, count: 68, pct: 17 }
+      - { group: Rock, count: 60, pct: 15 }
+      - { group: DarkGrass, count: 34, pct: 8 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 205, pct: 50 }
+      - { type: Desert, ground_type: 64, count: 42, pct: 10 }
+      - { type: Rock, ground_type: 32, count: 39, pct: 10 }
+      - { type: Desert/Grass, ground_type: 65, count: 26, pct: 6 }
+      - { type: Rock/Grass, ground_type: 33, count: 21, pct: 5 }
+  - raw: 67
+    label: MountainEdge67
+    category: stone
+    mapped: true
+    count: 381
+    primary_group: Grass
+    height:
+      min: 1
+      max: 190
+      avg: 39
+      median: 32
+    dark_land_pct: 4
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 245, pct: 64 }
+      - { group: Desert, count: 73, pct: 19 }
+      - { group: Rock, count: 46, pct: 12 }
+      - { group: DarkGrass, count: 17, pct: 4 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 207, pct: 54 }
+      - { type: Desert, ground_type: 64, count: 55, pct: 14 }
+      - { type: Rock, ground_type: 32, count: 31, pct: 8 }
+      - { type: Grass/Rock, ground_type: 17, count: 23, pct: 6 }
+      - { type: Desert/Grass, ground_type: 65, count: 18, pct: 5 }
+  - raw: 62
+    label: MountainEdge62
+    category: stone
+    mapped: true
+    count: 362
+    primary_group: Grass
+    height:
+      min: 1
+      max: 217
+      avg: 42
+      median: 35
+    dark_land_pct: 6
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 220, pct: 61 }
+      - { group: Desert, count: 84, pct: 23 }
+      - { group: Rock, count: 35, pct: 10 }
+      - { group: DarkGrass, count: 23, pct: 6 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 192, pct: 53 }
+      - { type: Desert, ground_type: 64, count: 55, pct: 15 }
+      - { type: Rock, ground_type: 32, count: 30, pct: 8 }
+      - { type: Desert/Grass, ground_type: 65, count: 29, pct: 8 }
+      - { type: DarkGrass, ground_type: 24, count: 16, pct: 4 }
+  - raw: 70
+    label: MountainEdge70
+    category: stone
+    mapped: true
+    count: 356
+    primary_group: Grass
+    height:
+      min: 1
+      max: 218
+      avg: 44
+      median: 32
+    dark_land_pct: 8
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 208, pct: 58 }
+      - { group: Desert, count: 78, pct: 22 }
+      - { group: Rock, count: 41, pct: 12 }
+      - { group: DarkGrass, count: 29, pct: 8 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 174, pct: 49 }
+      - { type: Desert, ground_type: 64, count: 56, pct: 16 }
+      - { type: DarkGrass, ground_type: 24, count: 25, pct: 7 }
+      - { type: Rock, ground_type: 32, count: 22, pct: 6 }
+      - { type: Desert/Grass, ground_type: 65, count: 22, pct: 6 }
+  - raw: 69
+    label: MountainEdge69
+    category: stone
+    mapped: true
+    count: 349
+    primary_group: Grass
+    height:
+      min: 1
+      max: 216
+      avg: 38
+      median: 31
+    dark_land_pct: 6
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 237, pct: 68 }
+      - { group: Desert, count: 59, pct: 17 }
+      - { group: Rock, count: 32, pct: 9 }
+      - { group: DarkGrass, count: 21, pct: 6 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 192, pct: 55 }
+      - { type: Desert, ground_type: 64, count: 42, pct: 12 }
+      - { type: Grass/Rock, ground_type: 17, count: 26, pct: 7 }
+      - { type: Rock, ground_type: 32, count: 21, pct: 6 }
+      - { type: Desert/Grass, ground_type: 65, count: 17, pct: 5 }
+  - raw: 60
+    label: MountainEdge60
+    category: stone
+    mapped: true
+    count: 343
+    primary_group: Grass
+    height:
+      min: 1
+      max: 211
+      avg: 38
+      median: 29
+    dark_land_pct: 5
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 228, pct: 66 }
+      - { group: Desert, count: 73, pct: 21 }
+      - { group: Rock, count: 25, pct: 7 }
+      - { group: DarkGrass, count: 17, pct: 5 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 187, pct: 55 }
+      - { type: Desert, ground_type: 64, count: 51, pct: 15 }
+      - { type: Grass/Desert, ground_type: 20, count: 24, pct: 7 }
+      - { type: Desert/Grass, ground_type: 65, count: 22, pct: 6 }
+      - { type: Grass/Rock, ground_type: 17, count: 15, pct: 4 }
+  - raw: 180
+    label: Desert180
+    category: desert
+    mapped: true
+    count: 341
+    primary_group: Desert
+    height:
+      min: 1
+      max: 174
+      avg: 59
+      median: 50
+    dark_land_pct: 1
+    pond_pct: 5
+    terrain_groups:
+      - { group: Desert, count: 288, pct: 84 }
+      - { group: Grass, count: 43, pct: 13 }
+      - { group: Rock, count: 6, pct: 2 }
+      - { group: DarkGrass, count: 4, pct: 1 }
+    terrain_types:
+      - { type: Desert, ground_type: 64, count: 250, pct: 73 }
+      - { type: Desert/Grass, ground_type: 65, count: 38, pct: 11 }
+      - { type: Grass/Desert, ground_type: 20, count: 20, pct: 6 }
+      - { type: Grass, ground_type: 16, count: 15, pct: 4 }
+      - { type: Grass/Rock, ground_type: 17, count: 7, pct: 2 }
+  - raw: 12
+    label: Date
+    category: trees
+    mapped: true
+    count: 339
+    primary_group: Beach
+    height:
+      min: 1
+      max: 163
+      avg: 26
+      median: 20
+    dark_land_pct: 2
+    pond_pct: 19
+    terrain_groups:
+      - { group: Beach, count: 183, pct: 54 }
+      - { group: Grass, count: 110, pct: 32 }
+      - { group: Desert, count: 22, pct: 6 }
+      - { group: Rock, count: 16, pct: 5 }
+      - { group: DarkGrass, count: 8, pct: 2 }
+    terrain_types:
+      - { type: Beach, ground_type: 48, count: 183, pct: 54 }
+      - { type: Grass, ground_type: 16, count: 87, pct: 26 }
+      - { type: Grass/Desert, ground_type: 20, count: 14, pct: 4 }
+      - { type: Desert, ground_type: 64, count: 13, pct: 4 }
+      - { type: Rock, ground_type: 32, count: 10, pct: 3 }
+  - raw: 178
+    label: MountainEdge178
+    category: stone
+    mapped: true
+    count: 322
+    primary_group: Desert
+    height:
+      min: 2
+      max: 182
+      avg: 47
+      median: 33
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Desert, count: 289, pct: 90 }
+      - { group: Grass, count: 30, pct: 9 }
+      - { group: Rock, count: 3, pct: 1 }
+    terrain_types:
+      - { type: Desert, ground_type: 64, count: 236, pct: 73 }
+      - { type: Desert/Grass, ground_type: 65, count: 53, pct: 16 }
+      - { type: Grass/Desert, ground_type: 20, count: 15, pct: 5 }
+      - { type: Grass, ground_type: 16, count: 12, pct: 4 }
+      - { type: Rock, ground_type: 32, count: 3, pct: 1 }
+  - raw: 167
+    label: WaterLily2
+    category: lake
+    mapped: true
+    count: 296
+    primary_group: Beach
+    height:
+      min: 0
+      max: 47
+      avg: 2
+      median: 0
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Beach, count: 146, pct: 49 }
+      - { group: Water, count: 146, pct: 49 }
+      - { group: Grass, count: 4, pct: 1 }
+    terrain_types:
+      - { type: Beach, ground_type: 48, count: 146, pct: 49 }
+      - { type: Water1, ground_type: 0, count: 111, pct: 38 }
+      - { type: Water2, ground_type: 1, count: 28, pct: 9 }
+      - { type: Water3, ground_type: 2, count: 6, pct: 2 }
+      - { type: Grass, ground_type: 16, count: 4, pct: 1 }
+  - raw: 166
+    label: River166
+    category: river
+    mapped: true
+    count: 272
+    primary_group: Water
+    height:
+      min: 0
+      max: 33
+      avg: 2
+      median: 0
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Water, count: 136, pct: 50 }
+      - { group: Beach, count: 128, pct: 47 }
+      - { group: Grass, count: 8, pct: 3 }
+    terrain_types:
+      - { type: Beach, ground_type: 48, count: 128, pct: 47 }
+      - { type: Water1, ground_type: 0, count: 98, pct: 36 }
+      - { type: Water2, ground_type: 1, count: 33, pct: 12 }
+      - { type: Grass, ground_type: 16, count: 8, pct: 3 }
+      - { type: Water3, ground_type: 2, count: 2, pct: 1 }
+  - raw: 168
+    label: WaterLily3
+    category: lake
+    mapped: true
+    count: 259
+    primary_group: Beach
+    height:
+      min: 0
+      max: 45
+      avg: 2
+      median: 0
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Beach, count: 132, pct: 51 }
+      - { group: Water, count: 117, pct: 45 }
+      - { group: Grass, count: 10, pct: 4 }
+    terrain_types:
+      - { type: Beach, ground_type: 48, count: 132, pct: 51 }
+      - { type: Water1, ground_type: 0, count: 75, pct: 29 }
+      - { type: Water2, ground_type: 1, count: 30, pct: 12 }
+      - { type: Water3, ground_type: 2, count: 11, pct: 4 }
+      - { type: Grass, ground_type: 16, count: 10, pct: 4 }
+  - raw: 179
+    label: Desert179
+    category: desert
+    mapped: true
+    count: 214
+    primary_group: Desert
+    height:
+      min: 2
+      max: 180
+      avg: 62
+      median: 38
+    dark_land_pct: 1
+    pond_pct: 0
+    terrain_groups:
+      - { group: Desert, count: 169, pct: 79 }
+      - { group: Grass, count: 37, pct: 17 }
+      - { group: Rock, count: 5, pct: 2 }
+      - { group: DarkGrass, count: 3, pct: 1 }
+    terrain_types:
+      - { type: Desert, ground_type: 64, count: 138, pct: 64 }
+      - { type: Desert/Grass, ground_type: 65, count: 31, pct: 14 }
+      - { type: Grass, ground_type: 16, count: 17, pct: 8 }
+      - { type: Grass/Desert, ground_type: 20, count: 13, pct: 6 }
+      - { type: Grass/Rock, ground_type: 17, count: 7, pct: 3 }
+  - raw: 49
+    label: Grass6
+    category: plants
+    mapped: true
+    count: 137
+    primary_group: Grass
+    height:
+      min: 1
+      max: 186
+      avg: 42
+      median: 38
+    dark_land_pct: 19
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 94, pct: 69 }
+      - { group: DarkGrass, count: 26, pct: 19 }
+      - { group: Rock, count: 17, pct: 12 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 81, pct: 59 }
+      - { type: DarkGrass, ground_type: 24, count: 17, pct: 12 }
+      - { type: Grass/Rock, ground_type: 17, count: 13, pct: 9 }
+      - { type: Rock/Grass, ground_type: 33, count: 10, pct: 7 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 9, pct: 7 }
+  - raw: 46
+    label: Grass3
+    category: plants
+    mapped: true
+    count: 135
+    primary_group: Grass
+    height:
+      min: 1
+      max: 182
+      avg: 45
+      median: 40
+    dark_land_pct: 24
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 87, pct: 64 }
+      - { group: DarkGrass, count: 32, pct: 24 }
+      - { group: Rock, count: 16, pct: 12 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 77, pct: 57 }
+      - { type: DarkGrass, ground_type: 24, count: 21, pct: 16 }
+      - { type: Rock/Grass, ground_type: 33, count: 14, pct: 10 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 11, pct: 8 }
+      - { type: Grass/Rock, ground_type: 17, count: 10, pct: 7 }
+  - raw: 45
+    label: Grass2
+    category: plants
+    mapped: true
+    count: 134
+    primary_group: Grass
+    height:
+      min: 1
+      max: 182
+      avg: 46
+      median: 41
+    dark_land_pct: 18
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 98, pct: 73 }
+      - { group: DarkGrass, count: 24, pct: 18 }
+      - { group: Rock, count: 12, pct: 9 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 82, pct: 61 }
+      - { type: DarkGrass, ground_type: 24, count: 19, pct: 14 }
+      - { type: Grass/Rock, ground_type: 17, count: 16, pct: 12 }
+      - { type: Rock/Grass, ground_type: 33, count: 7, pct: 5 }
+      - { type: Rock, ground_type: 32, count: 5, pct: 4 }
+  - raw: 43
+    label: Reed1
+    category: river
+    mapped: true
+    count: 133
+    primary_group: Grass
+    height:
+      min: 2
+      max: 134
+      avg: 43
+      median: 39
+    dark_land_pct: 34
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 72, pct: 54 }
+      - { group: DarkGrass, count: 45, pct: 34 }
+      - { group: Rock, count: 16, pct: 12 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 62, pct: 47 }
+      - { type: DarkGrass, ground_type: 24, count: 37, pct: 28 }
+      - { type: Rock/Grass, ground_type: 33, count: 14, pct: 11 }
+      - { type: Grass/Rock, ground_type: 17, count: 10, pct: 8 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 8, pct: 6 }
+  - raw: 48
+    label: Grass5
+    category: plants
+    mapped: true
+    count: 128
+    primary_group: Grass
+    height:
+      min: 1
+      max: 168
+      avg: 48
+      median: 40
+    dark_land_pct: 20
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 86, pct: 67 }
+      - { group: DarkGrass, count: 26, pct: 20 }
+      - { group: Rock, count: 16, pct: 13 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 70, pct: 55 }
+      - { type: DarkGrass, ground_type: 24, count: 18, pct: 14 }
+      - { type: Grass/Rock, ground_type: 17, count: 16, pct: 13 }
+      - { type: Rock/Grass, ground_type: 33, count: 10, pct: 8 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 8, pct: 6 }
+  - raw: 47
+    label: Grass4
+    category: plants
+    mapped: true
+    count: 125
+    primary_group: Grass
+    height:
+      min: 1
+      max: 188
+      avg: 41
+      median: 37
+    dark_land_pct: 23
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 87, pct: 70 }
+      - { group: DarkGrass, count: 29, pct: 23 }
+      - { group: Rock, count: 9, pct: 7 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 76, pct: 61 }
+      - { type: DarkGrass, ground_type: 24, count: 23, pct: 18 }
+      - { type: Grass/Rock, ground_type: 17, count: 11, pct: 9 }
+      - { type: Rock/Grass, ground_type: 33, count: 7, pct: 6 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 6, pct: 5 }
+  - raw: 44
+    label: Grass1
+    category: plants
+    mapped: true
+    count: 116
+    primary_group: Grass
+    height:
+      min: 1
+      max: 143
+      avg: 41
+      median: 37
+    dark_land_pct: 28
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 76, pct: 66 }
+      - { group: DarkGrass, count: 33, pct: 28 }
+      - { group: Rock, count: 7, pct: 6 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 66, pct: 57 }
+      - { type: DarkGrass, ground_type: 24, count: 24, pct: 21 }
+      - { type: Grass/Rock, ground_type: 17, count: 10, pct: 9 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 9, pct: 8 }
+      - { type: Rock/Grass, ground_type: 33, count: 5, pct: 4 }
+  - raw: 72
+    label: MountainEdge72
+    category: stone
+    mapped: true
+    count: 110
+    primary_group: Grass
+    height:
+      min: 1
+      max: 135
+      avg: 30
+      median: 22
+    dark_land_pct: 10
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 86, pct: 78 }
+      - { group: DarkGrass, count: 11, pct: 10 }
+      - { group: Desert, count: 9, pct: 8 }
+      - { group: Rock, count: 4, pct: 4 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 77, pct: 70 }
+      - { type: DarkGrass, ground_type: 24, count: 8, pct: 7 }
+      - { type: Desert, ground_type: 64, count: 6, pct: 5 }
+      - { type: Grass/Desert, ground_type: 20, count: 4, pct: 4 }
+      - { type: Desert/Grass, ground_type: 65, count: 3, pct: 3 }
+  - raw: 181
+    label: Grass181
+    category: plants
+    mapped: true
+    count: 106
+    primary_group: Grass
+    height:
+      min: 1
+      max: 83
+      avg: 24
+      median: 22
+    dark_land_pct: 10
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 91, pct: 86 }
+      - { group: DarkGrass, count: 11, pct: 10 }
+      - { group: Rock, count: 4, pct: 4 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 89, pct: 84 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 6, pct: 6 }
+      - { type: DarkGrass, ground_type: 24, count: 5, pct: 5 }
+      - { type: Rock/Grass, ground_type: 33, count: 4, pct: 4 }
+      - { type: Grass/Rock, ground_type: 17, count: 2, pct: 2 }
+  - raw: 73
+    label: MountainEdge73
+    category: stone
+    mapped: true
+    count: 104
+    primary_group: Grass
+    height:
+      min: 1
+      max: 159
+      avg: 33
+      median: 22
+    dark_land_pct: 5
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 90, pct: 87 }
+      - { group: DarkGrass, count: 5, pct: 5 }
+      - { group: Desert, count: 5, pct: 5 }
+      - { group: Rock, count: 4, pct: 4 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 82, pct: 79 }
+      - { type: Desert, ground_type: 64, count: 5, pct: 5 }
+      - { type: Grass/Rock, ground_type: 17, count: 4, pct: 4 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 4, pct: 4 }
+      - { type: Rock, ground_type: 32, count: 3, pct: 3 }
+  - raw: 68
+    label: MountainEdge68
+    category: stone
+    mapped: true
+    count: 103
+    primary_group: Grass
+    height:
+      min: 2
+      max: 190
+      avg: 47
+      median: 30
+    dark_land_pct: 2
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 78, pct: 76 }
+      - { group: Rock, count: 20, pct: 19 }
+      - { group: Desert, count: 3, pct: 3 }
+      - { group: DarkGrass, count: 2, pct: 2 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 71, pct: 69 }
+      - { type: Rock, ground_type: 32, count: 11, pct: 11 }
+      - { type: Rock/Grass, ground_type: 33, count: 9, pct: 9 }
+      - { type: Grass/Rock, ground_type: 17, count: 4, pct: 4 }
+      - { type: Desert/Grass, ground_type: 65, count: 2, pct: 2 }
+  - raw: 53
+    label: Cactus1
+    category: desert
+    mapped: true
+    count: 102
+    primary_group: Desert
+    height:
+      min: 3
+      max: 177
+      avg: 51
+      median: 43
+    dark_land_pct: 0
+    pond_pct: 2
+    terrain_groups:
+      - { group: Desert, count: 99, pct: 97 }
+      - { group: Grass, count: 3, pct: 3 }
+    terrain_types:
+      - { type: Desert, ground_type: 64, count: 85, pct: 83 }
+      - { type: Desert/Grass, ground_type: 65, count: 14, pct: 14 }
+      - { type: Grass/Desert, ground_type: 20, count: 3, pct: 3 }
+  - raw: 19
+    label: Bush1
+    category: plants
+    mapped: true
+    count: 100
+    primary_group: Grass
+    height:
+      min: 2
+      max: 172
+      avg: 54
+      median: 22
+    dark_land_pct: 13
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 75, pct: 75 }
+      - { group: DarkGrass, count: 13, pct: 13 }
+      - { group: Rock, count: 12, pct: 12 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 69, pct: 69 }
+      - { type: DarkGrass, ground_type: 24, count: 11, pct: 11 }
+      - { type: Rock, ground_type: 32, count: 8, pct: 8 }
+      - { type: Grass/Rock, ground_type: 17, count: 6, pct: 6 }
+      - { type: Rock/Grass, ground_type: 33, count: 4, pct: 4 }
+  - raw: 63
+    label: MountainEdge63
+    category: stone
+    mapped: true
+    count: 100
+    primary_group: Grass
+    height:
+      min: 2
+      max: 219
+      avg: 38
+      median: 27
+    dark_land_pct: 4
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 84, pct: 84 }
+      - { group: Rock, count: 7, pct: 7 }
+      - { group: Desert, count: 5, pct: 5 }
+      - { group: DarkGrass, count: 4, pct: 4 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 78, pct: 78 }
+      - { type: Rock/Grass, ground_type: 33, count: 5, pct: 5 }
+      - { type: Grass/Rock, ground_type: 17, count: 4, pct: 4 }
+      - { type: Desert, ground_type: 64, count: 4, pct: 4 }
+      - { type: Grass/Desert, ground_type: 20, count: 2, pct: 2 }
+  - raw: 56
+    label: MountainEdge56
+    category: stone
+    mapped: true
+    count: 99
+    primary_group: Grass
+    height:
+      min: 1
+      max: 148
+      avg: 33
+      median: 25
+    dark_land_pct: 4
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 83, pct: 84 }
+      - { group: Rock, count: 7, pct: 7 }
+      - { group: Desert, count: 5, pct: 5 }
+      - { group: DarkGrass, count: 4, pct: 4 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 79, pct: 80 }
+      - { type: Rock, ground_type: 32, count: 5, pct: 5 }
+      - { type: Desert, ground_type: 64, count: 4, pct: 4 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 3, pct: 3 }
+      - { type: Rock/Grass, ground_type: 33, count: 2, pct: 2 }
+  - raw: 59
+    label: MountainEdge59
+    category: stone
+    mapped: true
+    count: 98
+    primary_group: Grass
+    height:
+      min: 2
+      max: 164
+      avg: 39
+      median: 28
+    dark_land_pct: 6
+    pond_pct: 1
+    terrain_groups:
+      - { group: Grass, count: 78, pct: 80 }
+      - { group: Rock, count: 7, pct: 7 }
+      - { group: Desert, count: 7, pct: 7 }
+      - { group: DarkGrass, count: 6, pct: 6 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 73, pct: 74 }
+      - { type: Rock, ground_type: 32, count: 6, pct: 6 }
+      - { type: Desert, ground_type: 64, count: 5, pct: 5 }
+      - { type: Grass/Rock, ground_type: 17, count: 4, pct: 4 }
+      - { type: DarkGrass, ground_type: 24, count: 4, pct: 4 }
+  - raw: 58
+    label: Mountain58
+    category: stone
+    mapped: true
+    count: 97
+    primary_group: Grass
+    height:
+      min: 3
+      max: 173
+      avg: 36
+      median: 31
+    dark_land_pct: 2
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 80, pct: 82 }
+      - { group: Rock, count: 8, pct: 8 }
+      - { group: Desert, count: 7, pct: 7 }
+      - { group: DarkGrass, count: 2, pct: 2 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 76, pct: 78 }
+      - { type: Rock, ground_type: 32, count: 5, pct: 5 }
+      - { type: Desert, ground_type: 64, count: 4, pct: 4 }
+      - { type: Grass/Desert, ground_type: 20, count: 3, pct: 3 }
+      - { type: Rock/Grass, ground_type: 33, count: 3, pct: 3 }
+  - raw: 57
+    label: Mountain57
+    category: stone
+    mapped: true
+    count: 94
+    primary_group: Grass
+    height:
+      min: 2
+      max: 217
+      avg: 38
+      median: 28
+    dark_land_pct: 6
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 76, pct: 81 }
+      - { group: Rock, count: 8, pct: 9 }
+      - { group: DarkGrass, count: 6, pct: 6 }
+      - { group: Desert, count: 4, pct: 4 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 67, pct: 71 }
+      - { type: Grass/Rock, ground_type: 17, count: 5, pct: 5 }
+      - { type: Rock, ground_type: 32, count: 5, pct: 5 }
+      - { type: DarkGrass, ground_type: 24, count: 4, pct: 4 }
+      - { type: Desert, ground_type: 64, count: 3, pct: 3 }
+  - raw: 75
+    label: MountainEdge75
+    category: stone
+    mapped: true
+    count: 78
+    primary_group: Grass
+    height:
+      min: 3
+      max: 146
+      avg: 35
+      median: 29
+    dark_land_pct: 6
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 65, pct: 83 }
+      - { group: Rock, count: 6, pct: 8 }
+      - { group: DarkGrass, count: 5, pct: 6 }
+      - { group: Desert, count: 2, pct: 3 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 55, pct: 71 }
+      - { type: Grass/Rock, ground_type: 17, count: 5, pct: 6 }
+      - { type: Rock, ground_type: 32, count: 5, pct: 6 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 4, pct: 5 }
+      - { type: Grass/Desert, ground_type: 20, count: 3, pct: 4 }
+  - raw: 20
+    label: Bush2
+    category: plants
+    mapped: true
+    count: 73
+    primary_group: Grass
+    height:
+      min: 1
+      max: 168
+      avg: 67
+      median: 36
+    dark_land_pct: 23
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 42, pct: 58 }
+      - { group: DarkGrass, count: 17, pct: 23 }
+      - { group: Rock, count: 14, pct: 19 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 37, pct: 51 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 11, pct: 15 }
+      - { type: Rock, ground_type: 32, count: 9, pct: 12 }
+      - { type: DarkGrass, ground_type: 24, count: 6, pct: 8 }
+      - { type: Rock/Grass, ground_type: 33, count: 5, pct: 7 }
+  - raw: 65
+    label: MountainEdge65
+    category: stone
+    mapped: true
+    count: 72
+    primary_group: Grass
+    height:
+      min: 7
+      max: 138
+      avg: 37
+      median: 30
+    dark_land_pct: 3
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 60, pct: 83 }
+      - { group: Rock, count: 7, pct: 10 }
+      - { group: Desert, count: 3, pct: 4 }
+      - { group: DarkGrass, count: 2, pct: 3 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 58, pct: 81 }
+      - { type: Rock, ground_type: 32, count: 5, pct: 7 }
+      - { type: Desert, ground_type: 64, count: 3, pct: 4 }
+      - { type: Rock/Grass, ground_type: 33, count: 2, pct: 3 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 1, pct: 1 }
+  - raw: 121
+    label: Cactus3
+    category: desert
+    mapped: true
+    count: 71
+    primary_group: Desert
+    height:
+      min: 7
+      max: 177
+      avg: 49
+      median: 39
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Desert, count: 64, pct: 90 }
+      - { group: Grass, count: 7, pct: 10 }
+    terrain_types:
+      - { type: Desert, ground_type: 64, count: 54, pct: 76 }
+      - { type: Desert/Grass, ground_type: 65, count: 10, pct: 14 }
+      - { type: Grass/Desert, ground_type: 20, count: 7, pct: 10 }
+  - raw: 120
+    label: Cactus2
+    category: desert
+    mapped: true
+    count: 68
+    primary_group: Desert
+    height:
+      min: 4
+      max: 146
+      avg: 41
+      median: 34
+    dark_land_pct: 1
+    pond_pct: 0
+    terrain_groups:
+      - { group: Desert, count: 63, pct: 93 }
+      - { group: Grass, count: 4, pct: 6 }
+      - { group: DarkGrass, count: 1, pct: 1 }
+    terrain_types:
+      - { type: Desert, ground_type: 64, count: 54, pct: 79 }
+      - { type: Desert/Grass, ground_type: 65, count: 9, pct: 13 }
+      - { type: Grass/Desert, ground_type: 20, count: 2, pct: 3 }
+      - { type: Grass/Rock, ground_type: 17, count: 1, pct: 1 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 1, pct: 1 }
+  - raw: 50
+    label: DesertBush1
+    category: desert
+    mapped: true
+    count: 61
+    primary_group: Desert
+    height:
+      min: 3
+      max: 165
+      avg: 44
+      median: 36
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Desert, count: 59, pct: 97 }
+      - { group: Grass, count: 2, pct: 3 }
+    terrain_types:
+      - { type: Desert, ground_type: 64, count: 53, pct: 87 }
+      - { type: Desert/Grass, ground_type: 65, count: 6, pct: 10 }
+      - { type: Grass/Desert, ground_type: 20, count: 2, pct: 3 }
+  - raw: 122
+    label: Cactus4
+    category: desert
+    mapped: true
+    count: 43
+    primary_group: Desert
+    height:
+      min: 19
+      max: 74
+      avg: 44
+      median: 39
+    dark_land_pct: 0
+    pond_pct: 5
+    terrain_groups:
+      - { group: Desert, count: 42, pct: 98 }
+      - { group: Grass, count: 1, pct: 2 }
+    terrain_types:
+      - { type: Desert, ground_type: 64, count: 33, pct: 77 }
+      - { type: Desert/Grass, ground_type: 65, count: 9, pct: 21 }
+      - { type: Grass/Desert, ground_type: 20, count: 1, pct: 2 }
+  - raw: 52
+    label: DesertBush3
+    category: desert
+    mapped: true
+    count: 26
+    primary_group: Desert
+    height:
+      min: 21
+      max: 76
+      avg: 50
+      median: 51
+    dark_land_pct: 0
+    pond_pct: 4
+    terrain_groups:
+      - { group: Desert, count: 26, pct: 100 }
+    terrain_types:
+      - { type: Desert, ground_type: 64, count: 26, pct: 100 }
+  - raw: 13
+    label: Walnut
+    category: trees
+    mapped: true
+    count: 20
+    primary_group: Grass
+    height:
+      min: 14
+      max: 173
+      avg: 88
+      median: 84
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 18, pct: 90 }
+      - { group: Rock, count: 2, pct: 10 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 14, pct: 70 }
+      - { type: Grass/Isle, ground_type: 18, count: 3, pct: 15 }
+      - { type: Rock, ground_type: 32, count: 2, pct: 10 }
+      - { type: Grass/Rock, ground_type: 17, count: 1, pct: 5 }
+  - raw: 66
+    label: MountainEdge66
+    category: stone
+    mapped: true
+    count: 19
+    primary_group: Grass
+    height:
+      min: 7
+      max: 84
+      avg: 35
+      median: 30
+    dark_land_pct: 5
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 17, pct: 89 }
+      - { group: DarkGrass, count: 1, pct: 5 }
+      - { group: Rock, count: 1, pct: 5 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 15, pct: 79 }
+      - { type: Grass/Desert, ground_type: 20, count: 2, pct: 11 }
+      - { type: DarkGrass, ground_type: 24, count: 1, pct: 5 }
+      - { type: Rock, ground_type: 32, count: 1, pct: 5 }
+  - raw: 126
+    label: HarvestableStone
+    category: harvestable_stone
+    mapped: true
+    count: 18
+    primary_group: Grass
+    height:
+      min: 1
+      max: 103
+      avg: 41
+      median: 31
+    dark_land_pct: 11
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 12, pct: 67 }
+      - { group: Rock, count: 4, pct: 22 }
+      - { group: DarkGrass, count: 2, pct: 11 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 12, pct: 67 }
+      - { type: Rock, ground_type: 32, count: 4, pct: 22 }
+      - { type: DarkGrass, ground_type: 24, count: 2, pct: 11 }
+  - raw: 55
+    label: Shore55
+    category: sea
+    mapped: true
+    count: 16
+    primary_group: Water
+    height:
+      min: 0
+      max: 0
+      avg: 0
+      median: 0
+    dark_land_pct: 0
+    pond_pct: 19
+    terrain_groups:
+      - { group: Water, count: 16, pct: 100 }
+    terrain_types:
+      - { type: Water1, ground_type: 0, count: 9, pct: 56 }
+      - { type: Water2, ground_type: 1, count: 4, pct: 25 }
+      - { type: Water3, ground_type: 2, count: 2, pct: 13 }
+      - { type: Water4, ground_type: 3, count: 1, pct: 6 }
+  - raw: 61
+    label: MountainEdge61
+    category: stone
+    mapped: true
+    count: 16
+    primary_group: Grass
+    height:
+      min: 3
+      max: 57
+      avg: 34
+      median: 36
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 13, pct: 81 }
+      - { group: Desert, count: 2, pct: 13 }
+      - { group: Rock, count: 1, pct: 6 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 13, pct: 81 }
+      - { type: Desert/Grass, ground_type: 65, count: 1, pct: 6 }
+      - { type: Desert, ground_type: 64, count: 1, pct: 6 }
+      - { type: Rock/Grass, ground_type: 33, count: 1, pct: 6 }
+  - raw: 14
+    label: CorkOak
+    category: trees
+    mapped: true
+    count: 14
+    primary_group: Grass
+    height:
+      min: 20
+      max: 171
+      avg: 95
+      median: 78
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 12, pct: 86 }
+      - { group: Rock, count: 2, pct: 14 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 10, pct: 71 }
+      - { type: Grass/Rock, ground_type: 17, count: 1, pct: 7 }
+      - { type: Rock/Grass, ground_type: 33, count: 1, pct: 7 }
+      - { type: Grass/Isle, ground_type: 18, count: 1, pct: 7 }
+      - { type: Rock, ground_type: 32, count: 1, pct: 7 }
+  - raw: 125
+    label: HarvestableStone
+    category: harvestable_stone
+    mapped: true
+    count: 13
+    primary_group: Grass
+    height:
+      min: 19
+      max: 52
+      avg: 34
+      median: 36
+    dark_land_pct: 15
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 11, pct: 85 }
+      - { group: DarkGrass, count: 2, pct: 15 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 11, pct: 85 }
+      - { type: DarkGrass, ground_type: 24, count: 2, pct: 15 }
+  - raw: 190
+    label: "???"
+    category: ???
+    mapped: false
+    count: 13
+    primary_group: Grass
+    height:
+      min: 3
+      max: 54
+      avg: 20
+      median: 18
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 13, pct: 100 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 13, pct: 100 }
+  - raw: 136
+    label: StoneEdge136
+    category: stone
+    mapped: true
+    count: 12
+    primary_group: Grass
+    height:
+      min: 19
+      max: 48
+      avg: 32
+      median: 30
+    dark_land_pct: 33
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 8, pct: 67 }
+      - { group: DarkGrass, count: 4, pct: 33 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 8, pct: 67 }
+      - { type: DarkGrass, ground_type: 24, count: 3, pct: 25 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 1, pct: 8 }
+  - raw: 127
+    label: HarvestableStone
+    category: harvestable_stone
+    mapped: true
+    count: 11
+    primary_group: Grass
+    height:
+      min: 12
+      max: 54
+      avg: 33
+      median: 32
+    dark_land_pct: 36
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 7, pct: 64 }
+      - { group: DarkGrass, count: 4, pct: 36 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 7, pct: 64 }
+      - { type: DarkGrass, ground_type: 24, count: 3, pct: 27 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 1, pct: 9 }
+  - raw: 130
+    label: HarvestableStone
+    category: harvestable_stone
+    mapped: true
+    count: 8
+    primary_group: DarkGrass
+    height:
+      min: 15
+      max: 41
+      avg: 26
+      median: 26
+    dark_land_pct: 63
+    pond_pct: 0
+    terrain_groups:
+      - { group: DarkGrass, count: 5, pct: 63 }
+      - { group: Grass, count: 3, pct: 38 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 3, pct: 38 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 3, pct: 38 }
+      - { type: DarkGrass, ground_type: 24, count: 2, pct: 25 }
+  - raw: 51
+    label: DesertBush2
+    category: desert
+    mapped: true
+    count: 8
+    primary_group: Grass
+    height:
+      min: 9
+      max: 177
+      avg: 68
+      median: 52
+    dark_land_pct: 13
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 5, pct: 63 }
+      - { group: Rock, count: 2, pct: 25 }
+      - { group: DarkGrass, count: 1, pct: 13 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 5, pct: 63 }
+      - { type: Rock, ground_type: 32, count: 1, pct: 13 }
+      - { type: DarkGrass, ground_type: 24, count: 1, pct: 13 }
+      - { type: Rock/Grass, ground_type: 33, count: 1, pct: 13 }
+  - raw: 132
+    label: HarvestableStone
+    category: harvestable_stone
+    mapped: true
+    count: 7
+    primary_group: Grass
+    height:
+      min: 19
+      max: 55
+      avg: 33
+      median: 26
+    dark_land_pct: 14
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 6, pct: 86 }
+      - { group: DarkGrass, count: 1, pct: 14 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 6, pct: 86 }
+      - { type: DarkGrass, ground_type: 24, count: 1, pct: 14 }
+  - raw: 128
+    label: HarvestableStone
+    category: harvestable_stone
+    mapped: true
+    count: 7
+    primary_group: Grass
+    height:
+      min: 18
+      max: 47
+      avg: 29
+      median: 22
+    dark_land_pct: 29
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 5, pct: 71 }
+      - { group: DarkGrass, count: 2, pct: 29 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 5, pct: 71 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 1, pct: 14 }
+      - { type: DarkGrass, ground_type: 24, count: 1, pct: 14 }
+  - raw: 135
+    label: HarvestableStone
+    category: harvestable_stone
+    mapped: true
+    count: 7
+    primary_group: DarkGrass
+    height:
+      min: 18
+      max: 58
+      avg: 30
+      median: 26
+    dark_land_pct: 57
+    pond_pct: 0
+    terrain_groups:
+      - { group: DarkGrass, count: 4, pct: 57 }
+      - { group: Grass, count: 3, pct: 43 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 3, pct: 43 }
+      - { type: DarkGrass, ground_type: 24, count: 3, pct: 43 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 1, pct: 14 }
+  - raw: 90
+    label: Scarecrow
+    category: plants_rare
+    mapped: true
+    count: 6
+    primary_group: Rock
+    height:
+      min: 26
+      max: 124
+      avg: 85
+      median: 91
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Rock, count: 6, pct: 100 }
+    terrain_types:
+      - { type: Rock, ground_type: 32, count: 4, pct: 67 }
+      - { type: Rock/Grass, ground_type: 33, count: 2, pct: 33 }
+  - raw: 54
+    label: SkeletonDesert1
+    category: desert_rare
+    mapped: true
+    count: 6
+    primary_group: DarkGrass
+    height:
+      min: 21
+      max: 61
+      avg: 47
+      median: 51
+    dark_land_pct: 67
+    pond_pct: 0
+    terrain_groups:
+      - { group: DarkGrass, count: 4, pct: 67 }
+      - { group: Grass, count: 1, pct: 17 }
+      - { group: Desert, count: 1, pct: 17 }
+    terrain_types:
+      - { type: DarkGrass, ground_type: 24, count: 3, pct: 50 }
+      - { type: DarkGrass/Grass, ground_type: 25, count: 1, pct: 17 }
+      - { type: Desert, ground_type: 64, count: 1, pct: 17 }
+      - { type: Grass, ground_type: 16, count: 1, pct: 17 }
+  - raw: 159
+    label: Mushroom1
+    category: plants_rare
+    mapped: true
+    count: 6
+    primary_group: Grass
+    height:
+      min: 74
+      max: 195
+      avg: 154
+      median: 178
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 4, pct: 67 }
+      - { group: Rock, count: 2, pct: 33 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 4, pct: 67 }
+      - { type: Rock, ground_type: 32, count: 2, pct: 33 }
+  - raw: 129
+    label: HarvestableStone
+    category: harvestable_stone
+    mapped: true
+    count: 4
+    primary_group: DarkGrass
+    height:
+      min: 19
+      max: 32
+      avg: 25
+      median: 24
+    dark_land_pct: 75
+    pond_pct: 0
+    terrain_groups:
+      - { group: DarkGrass, count: 3, pct: 75 }
+      - { group: Grass, count: 1, pct: 25 }
+    terrain_types:
+      - { type: DarkGrass, ground_type: 24, count: 3, pct: 75 }
+      - { type: Grass, ground_type: 16, count: 1, pct: 25 }
+  - raw: 134
+    label: HarvestableStone
+    category: harvestable_stone
+    mapped: true
+    count: 3
+    primary_group: Grass
+    height:
+      min: 33
+      max: 59
+      avg: 42
+      median: 35
+    dark_land_pct: 33
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 2, pct: 67 }
+      - { group: DarkGrass, count: 1, pct: 33 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 2, pct: 67 }
+      - { type: DarkGrass, ground_type: 24, count: 1, pct: 33 }
+  - raw: 133
+    label: HarvestableStone
+    category: harvestable_stone
+    mapped: true
+    count: 2
+    primary_group: Grass
+    height:
+      min: 20
+      max: 39
+      avg: 30
+      median: 30
+    dark_land_pct: 50
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 1, pct: 50 }
+      - { group: DarkGrass, count: 1, pct: 50 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1, pct: 50 }
+      - { type: DarkGrass, ground_type: 24, count: 1, pct: 50 }
+  - raw: 189
+    label: "???"
+    category: ???
+    mapped: false
+    count: 2
+    primary_group: Grass
+    height:
+      min: 45
+      max: 47
+      avg: 46
+      median: 46
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 2, pct: 100 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 2, pct: 100 }
+  - raw: 158
+    label: PalmPlant
+    category: plants_rare
+    mapped: true
+    count: 2
+    primary_group: Rock
+    height:
+      min: 94
+      max: 126
+      avg: 110
+      median: 110
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Rock, count: 2, pct: 100 }
+    terrain_types:
+      - { type: Rock, ground_type: 32, count: 2, pct: 100 }
+  - raw: 116
+    label: CelticCross
+    category: plants_rare
+    mapped: true
+    count: 2
+    primary_group: Grass
+    height:
+      min: 95
+      max: 183
+      avg: 139
+      median: 139
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Grass, count: 1, pct: 50 }
+      - { group: Rock, count: 1, pct: 50 }
+    terrain_types:
+      - { type: Grass, ground_type: 16, count: 1, pct: 50 }
+      - { type: Rock, ground_type: 32, count: 1, pct: 50 }
+  - raw: 192
+    label: "???"
+    category: ???
+    mapped: false
+    count: 2
+    primary_group: Rock
+    height:
+      min: 133
+      max: 148
+      avg: 141
+      median: 141
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Rock, count: 2, pct: 100 }
+    terrain_types:
+      - { type: Rock, ground_type: 32, count: 2, pct: 100 }
+  - raw: 131
+    label: HarvestableStone
+    category: harvestable_stone
+    mapped: true
+    count: 1
+    primary_group: DarkGrass
+    height:
+      min: 12
+      max: 12
+      avg: 12
+      median: 12
+    dark_land_pct: 100
+    pond_pct: 0
+    terrain_groups:
+      - { group: DarkGrass, count: 1, pct: 100 }
+    terrain_types:
+      - { type: DarkGrass/Grass, ground_type: 25, count: 1, pct: 100 }
+  - raw: 156
+    label: Grave1
+    category: plants_rare
+    mapped: true
+    count: 1
+    primary_group: Rock
+    height:
+      min: 73
+      max: 73
+      avg: 73
+      median: 73
+    dark_land_pct: 0
+    pond_pct: 0
+    terrain_groups:
+      - { group: Rock, count: 1, pct: 100 }
+    terrain_types:
+      - { type: Rock, ground_type: 32, count: 1, pct: 100 }

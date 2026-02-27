@@ -8,6 +8,9 @@ import type {
     BuildingInfo,
     BuildingPileInfo,
     BuilderInfo,
+    BuildingPatch,
+    BuildingSettlerPos,
+    PatchSound,
     PositionOffset,
     BoundingRect,
 } from './types';
@@ -56,6 +59,35 @@ function parseBuilderInfo(builderEl: Element): BuilderInfo {
     };
 }
 
+function parsePatchSound(patchEl: Element): PatchSound | null {
+    const soundEl = patchEl.getElementsByTagName('sound')[0];
+    if (!soundEl) return null;
+    return {
+        def: getChildText(soundEl, 'def'),
+        frame: getChildNumber(soundEl, 'frame'),
+        random: getChildNumber(soundEl, 'random'),
+    };
+}
+
+function parsePatch(patchEl: Element): BuildingPatch {
+    return {
+        slot: getChildNumber(patchEl, 'slot'),
+        ticks: getChildNumber(patchEl, 'ticks'),
+        job: getChildText(patchEl, 'job'),
+        type: getChildText(patchEl, 'type'),
+        sound: parsePatchSound(patchEl),
+    };
+}
+
+function parseSettlerPos(settlerEl: Element): BuildingSettlerPos {
+    return {
+        xOffset: getChildNumber(settlerEl, 'xOffset'),
+        yOffset: getChildNumber(settlerEl, 'yOffset'),
+        direction: getChildNumber(settlerEl, 'direction'),
+        top: getChildBool(settlerEl, 'top'),
+    };
+}
+
 function parseBuilding(buildingEl: Element): BuildingInfo {
     const id = buildingEl.getAttribute('id') ?? '';
 
@@ -71,6 +103,26 @@ function parseBuilding(buildingEl: Element): BuildingInfo {
     const builderInfoElements = buildingEl.getElementsByTagName('builderInfo');
     for (let i = 0; i < builderInfoElements.length; i++) {
         builderInfos.push(parseBuilderInfo(builderInfoElements[i]!));
+    }
+
+    // Parse patches (animation overlays: smoke, fire, animals, etc.)
+    const patches: BuildingPatch[] = [];
+    const patchesContainer = buildingEl.getElementsByTagName('patches')[0];
+    if (patchesContainer) {
+        // Only get direct <patch> children of <patches>, not nested ones
+        for (let i = 0; i < patchesContainer.children.length; i++) {
+            const child = patchesContainer.children[i]!;
+            if (child.tagName === 'patch') {
+                patches.push(parsePatch(child));
+            }
+        }
+    }
+
+    // Parse settler positions (garrison positions for military buildings)
+    const settlers: BuildingSettlerPos[] = [];
+    const settlerElements = buildingEl.getElementsByTagName('settler');
+    for (let i = 0; i < settlerElements.length; i++) {
+        settlers.push(parseSettlerPos(settlerElements[i]!));
     }
 
     // Parse animLists
@@ -98,6 +150,8 @@ function parseBuilding(buildingEl: Element): BuildingInfo {
         repealingPosLines: getValueArray(buildingEl, 'repealingPosLines'),
         blockPosLines: getValueArray(buildingEl, 'blockPosLines'),
         waterPosLines: getValueArray(buildingEl, 'waterPosLines'),
+        waterFreePosLines: getValueArray(buildingEl, 'waterFreePosLines'),
+        waterBlockPosLines: getValueArray(buildingEl, 'waterBlockPosLines'),
         boundingRect: parseBoundingRect(buildingEl),
         builderNumber: getChildNumber(buildingEl, 'builderNumber'),
         flag: parsePositionOffset(buildingEl, 'flag'),
@@ -113,9 +167,21 @@ function parseBuilding(buildingEl: Element): BuildingInfo {
         explorerRadius: getChildNumber(buildingEl, 'explorerRadius'),
         workingAreaRadius: getChildNumber(buildingEl, 'workingAreaRadius'),
         calcProd: getChildBool(buildingEl, 'calcProd'),
+        settlerNumber: getChildNumber(buildingEl, 'settlerNumber'),
+        hitpoints: getChildNumber(buildingEl, 'Hitpoints'),
+        armor: getChildNumber(buildingEl, 'Armor'),
+        patchSettlerSlot: getChildNumber(buildingEl, 'patchSettlerSlot'),
+        patches,
+        settlers,
         animLists,
         piles,
         builderInfos,
+        dummyValue: getChildNumber(buildingEl, 'dummyValue'),
+        gridChangedForExport: getChildNumber(buildingEl, 'gridChangedForExport'),
+        gridVersion: getChildNumber(buildingEl, 'gridVersion'),
+        helperFile: getChildText(buildingEl, 'helperFile'),
+        helperX: getChildNumber(buildingEl, 'helperX'),
+        helperY: getChildNumber(buildingEl, 'helperY'),
     };
 }
 

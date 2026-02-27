@@ -44,9 +44,11 @@ import { StoneFeature, StoneSystem, type StoneFeatureExports } from './features/
 import { CropFeature, CropSystem, type CropFeatureExports } from './features/crops';
 import { CombatFeature, CombatSystem, type CombatExports } from './features/combat';
 import { TerritoryManager, registerTerritoryEvents } from './features/territory';
-import { BuildingOverlayManager, OverlayRegistry } from './systems/building-overlays';
+import { WorkAreaStore } from './features/work-areas';
+import { BuildingOverlayManager, OverlayRegistry, populateOverlayRegistry } from './systems/building-overlays';
 import { EventBus, EventSubscriptionManager } from './event-bus';
-import { EntityType, MapObjectType, UnitType, getUnitTypeSpeed } from './entity';
+import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import { AnimationService } from './animation/index';
 import type { Command, CommandResult } from './commands';
 
@@ -79,6 +81,9 @@ export class GameServices {
 
     /** Territory manager — tracks territory zones from towers/castles (set in setTerrainData) */
     public territoryManager!: TerritoryManager;
+
+    /** Work area store — per-building work area offsets (shared between UI and gameplay) */
+    public readonly workAreaStore: WorkAreaStore;
 
     // ===== Systems (tick each frame) =====
     /** Movement system — updates unit positions */
@@ -133,10 +138,14 @@ export class GameServices {
 
         // 2b. Building overlay system — layered sprites on buildings
         this.overlayRegistry = new OverlayRegistry();
+        populateOverlayRegistry(this.overlayRegistry);
         this.buildingOverlayManager = new BuildingOverlayManager({
             overlayRegistry: this.overlayRegistry,
             entityProvider: gameState,
         });
+
+        // 2c. Work area store — per-building work area offsets
+        this.workAreaStore = new WorkAreaStore();
 
         // 3. Movement system
         this.movement = new MovementSystem({
@@ -287,7 +296,9 @@ export class GameServices {
         });
         this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
             this.movement.removeController(entityId);
+            this.animationService.remove(entityId);
             gameState.resources.removeState(entityId);
+            this.workAreaStore.removeInstance(entityId);
         });
 
         // 12. Late inventory removal — MUST happen after logistics cleanup (step 8).

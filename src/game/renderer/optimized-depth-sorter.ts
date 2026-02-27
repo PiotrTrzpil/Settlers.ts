@@ -11,7 +11,8 @@
  *   Larger depth = drawn later = appears in front
  */
 
-import { Entity, EntityType, BuildingType, UnitType, MapObjectType } from '../entity';
+import { Entity, EntityType, BuildingType, UnitType } from '../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import { EMaterialType } from '../economy';
 import { SpriteEntry } from './sprite-metadata';
 import { SpriteRenderManager } from './sprite-render-manager';

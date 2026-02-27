@@ -9,7 +9,8 @@
  */
 
 import type { GameState } from '../../game-state';
-import { EntityType, MapObjectType, UnitType, BuildingType, type Entity } from '../../entity';
+import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
+import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { BuildingInventoryManager } from '../inventory';
 import { LogHandler } from '@/utilities/log-handler';
 import type { TaskNode } from './types';
@@ -140,7 +141,7 @@ export function createWoodcuttingHandler(gameState: GameState, treeSystem: TreeS
             return findNearestEntity(gameState, x, y, WOODCUTTER_SEARCH_RADIUS, entity => {
                 if (entity.type !== EntityType.MapObject) return false;
                 const category = OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType];
-                return category === 'trees' && treeSystem.canCut(entity.id);
+                return category === MapObjectCategory.Trees && treeSystem.canCut(entity.id);
             });
         },
 

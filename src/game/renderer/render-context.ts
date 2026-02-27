@@ -112,6 +112,19 @@ export interface ServiceAreaRenderData {
 }
 
 /**
+ * Ghost resource stack for rendering semi-transparent resource sprites at a tile.
+ * Used by the stack-adjust mode to preview where input/output resources will appear.
+ */
+export interface StackGhostRenderData {
+    readonly x: number;
+    readonly y: number;
+    /** EMaterialType numeric value */
+    readonly materialType: number;
+    /** Number of resource sprites to draw (1-8) */
+    readonly count: number;
+}
+
+/**
  * Selection state for rendering.
  */
 export interface SelectionState {
@@ -229,6 +242,16 @@ export interface IRenderContext {
     // === Territory ===
     /** Territory boundary dots to render */
     readonly territoryDots: readonly TerritoryDotRenderData[];
+
+    // === Work Areas ===
+    /** Work area circles to render as line overlays (debug adjustment mode) */
+    readonly workAreaCircles: readonly ServiceAreaRenderData[];
+    /** Work area boundary dots to render as sprites (gameplay adjustment mode) */
+    readonly workAreaDots: readonly TerritoryDotRenderData[];
+
+    // === Stack Ghosts ===
+    /** Ghost resource stacks to render during stack-adjust mode */
+    readonly stackGhosts: readonly StackGhostRenderData[];
 }
 
 /**
@@ -254,6 +277,9 @@ export class RenderContextBuilder {
     private _viewPoint: IViewPoint | null = null;
     private _selectedServiceAreas: readonly ServiceAreaRenderData[] = [];
     private _territoryDots: readonly TerritoryDotRenderData[] = [];
+    private _workAreaCircles: readonly ServiceAreaRenderData[] = [];
+    private _workAreaDots: readonly TerritoryDotRenderData[] = [];
+    private _stackGhosts: readonly StackGhostRenderData[] = [];
 
     entities(entities: readonly Entity[]): this {
         this._entities = entities;
@@ -341,6 +367,21 @@ export class RenderContextBuilder {
         return this;
     }
 
+    workAreaCircles(circles: readonly ServiceAreaRenderData[]): this {
+        this._workAreaCircles = circles;
+        return this;
+    }
+
+    workAreaDots(dots: readonly TerritoryDotRenderData[]): this {
+        this._workAreaDots = dots;
+        return this;
+    }
+
+    stackGhosts(ghosts: readonly StackGhostRenderData[]): this {
+        this._stackGhosts = ghosts;
+        return this;
+    }
+
     /**
      * Build the immutable render context.
      * @throws Error if required fields (viewPoint) are not set
@@ -369,6 +410,9 @@ export class RenderContextBuilder {
             viewPoint: this._viewPoint,
             selectedServiceAreas: this._selectedServiceAreas,
             territoryDots: this._territoryDots,
+            workAreaCircles: this._workAreaCircles,
+            workAreaDots: this._workAreaDots,
+            stackGhosts: this._stackGhosts,
         };
     }
 }

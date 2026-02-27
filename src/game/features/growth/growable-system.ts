@@ -15,11 +15,11 @@
 
 import type { TickSystem } from '../../tick-system';
 import type { GameState } from '../../game-state';
-import { EntityType, MapObjectType } from '../../entity';
+import { EntityType } from '../../entity';
+import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { AnimationService } from '../../animation/index';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { Command, CommandResult } from '../../commands';
-import type { ObjectCategory } from '../../systems/map-objects';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { LogHandler } from '@/utilities/log-handler';
 
@@ -40,9 +40,11 @@ export interface GrowableConfig {
     /** Min squared distance between same-category entities. 0 to skip proximity check. */
     minDistanceSq: number;
     /** Object category for proximity filtering in findPlantingSpot */
-    objectCategory: ObjectCategory;
+    objectCategory: MapObjectCategory;
     /** Object types that can be randomly selected when planting */
     plantableTypes: readonly MapObjectType[];
+    /** If true, all 4 cardinal neighbors must also be free when planting */
+    requireFreeNeighbors?: boolean;
 }
 
 /** Interface for systems that support finding spots and planting entities */
@@ -178,6 +180,7 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
             gameState: this.gameState,
             searchRadius: radius ?? this.config.plantingSearchRadius,
             minDistanceSq: this.config.minDistanceSq,
+            requireFreeNeighbors: this.config.requireFreeNeighbors,
             proximityFilter: entity =>
                 entity.type === EntityType.MapObject &&
                 OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType] === this.config.objectCategory,

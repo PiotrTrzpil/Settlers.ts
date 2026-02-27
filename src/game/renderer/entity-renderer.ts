@@ -1,7 +1,8 @@
 import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
-import { Entity, EntityType, StackedResourceState, UnitType, MapObjectType } from '../entity';
+import { Entity, EntityType, StackedResourceState, UnitType } from '../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
@@ -24,6 +25,7 @@ import type {
     IRenderContext,
     ServiceAreaRenderData,
     TerritoryDotRenderData,
+    StackGhostRenderData,
     PlacementPreviewState,
     UnitStateLookup,
     BuildingRenderState,
@@ -46,6 +48,7 @@ import {
     RESOURCE_SCALE,
     PREVIEW_VALID_COLOR,
     PREVIEW_INVALID_COLOR,
+    WORK_AREA_CIRCLE_COLOR,
     decoHueToRgb,
     decoTypeToHue,
     scaleSprite,
@@ -133,6 +136,15 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // Territory boundary dots to render
     private territoryDots: readonly TerritoryDotRenderData[] = [];
+
+    // Work area circles to render during work-area editing (debug mode: line circles)
+    private workAreaCircles: readonly ServiceAreaRenderData[] = [];
+
+    // Work area boundary dots to render as sprites (gameplay mode: dot sprites)
+    private workAreaDots: readonly TerritoryDotRenderData[] = [];
+
+    // Ghost resource stacks to render during stack-adjust mode
+    private stackGhosts: readonly StackGhostRenderData[] = [];
 
     // Cached attribute/uniform locations for color shader
     private aPosition = -1;
@@ -268,6 +280,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.placementPreview = ctx.placementPreview;
         this.selectedServiceAreas = ctx.selectedServiceAreas;
         this.territoryDots = ctx.territoryDots;
+        this.workAreaCircles = ctx.workAreaCircles;
+        this.workAreaDots = ctx.workAreaDots;
+        this.stackGhosts = ctx.stackGhosts;
 
         // Rebuild sprite resolver with current frame's state providers
         this.spriteResolver = new EntitySpriteResolver(
@@ -338,7 +353,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         // Pass 3: Selection overlays (frames, dots, highlights)
         this.frameSelectionTime = this.timedPass(() => this.drawSelectionPass(gl, selectionCtx));
 
-        // Pass 4: Placement preview ghost
+        // Pass 4: Stack ghost sprites (semi-transparent resource previews during adjust)
+        this.drawStackGhosts(gl, projection, viewPoint);
+
+        // Pass 5: Placement preview ghost
         this.drawPlacementPreview(gl, projection, viewPoint);
 
         gl.disable(gl.BLEND);
@@ -429,7 +447,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         }
     }
 
-    /** Draw ground overlays: building footprints and service area circles. */
+    /** Draw ground overlays: building footprints, service area circles, and work area circles. */
     private drawGroundOverlays(
         gl: WebGL2RenderingContext,
         projection: Float32Array,
@@ -437,7 +455,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     ): void {
         const hasFootprints = this.renderSettings.showBuildingFootprint;
         const hasServiceAreas = this.selectedServiceAreas.length > 0;
-        if (!hasFootprints && !hasServiceAreas) return;
+        const hasWorkAreas = this.workAreaCircles.length > 0;
+        if (!hasFootprints && !hasServiceAreas && !hasWorkAreas) return;
 
         super.drawBase(gl, projection);
         gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
@@ -466,11 +485,21 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 this.aColor,
                 ctx
             );
+        if (hasWorkAreas)
+            this.selectionOverlayRenderer.drawServiceAreaCircles(
+                gl,
+                buf,
+                this.workAreaCircles,
+                this.aEntityPos,
+                this.aColor,
+                ctx,
+                WORK_AREA_CIRCLE_COLOR
+            );
     }
 
-    /** Draw territory boundary dots as sprites using the sprite batch renderer. */
+    /** Draw territory boundary dots and work area dots as sprites using the sprite batch renderer. */
     private drawTerritoryDotSprites(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        if (this.territoryDots.length === 0) return;
+        if (this.territoryDots.length === 0 && this.workAreaDots.length === 0) return;
         if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
 
         this.spriteManager.spriteAtlas!.bindForRendering(gl);
@@ -487,6 +516,23 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         );
 
         for (const dot of this.territoryDots) {
+            const sprite = this.spriteManager.getTerritoryDot(dot.player);
+            if (!sprite) continue;
+
+            const worldPos = TilePicker.tileToWorld(
+                dot.x,
+                dot.y,
+                this.groundHeight,
+                this.mapSize,
+                viewPoint.x,
+                viewPoint.y
+            );
+
+            const scaled = scaleSprite(sprite, 2.25);
+            this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, scaled, 0, 1, 1, 1, 1);
+        }
+
+        for (const dot of this.workAreaDots) {
             const sprite = this.spriteManager.getTerritoryDot(dot.player);
             if (!sprite) continue;
 
@@ -964,6 +1010,46 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         };
         this.depthSorter.sortByDepth(this.sortedEntities, sortCtx);
         profiler.endPhase('sort');
+    }
+
+    /** Draw semi-transparent resource sprite ghosts during stack-adjust mode. */
+    private drawStackGhosts(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
+        if (this.stackGhosts.length === 0) return;
+        if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
+
+        this.spriteManager.spriteAtlas!.bindForRendering(gl);
+        this.spriteManager.paletteManager.bind(gl);
+
+        const paletteWidth = PALETTE_TEXTURE_WIDTH;
+        const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
+        this.spriteBatchRenderer.beginSpriteBatch(
+            gl,
+            projection,
+            paletteWidth,
+            rowsPerPlayer,
+            this.renderSettings.antialias
+        );
+
+        for (const ghost of this.stackGhosts) {
+            const worldPos = TilePicker.tileToWorld(
+                ghost.x,
+                ghost.y,
+                this.groundHeight,
+                this.mapSize,
+                viewPoint.x,
+                viewPoint.y
+            );
+
+            for (let v = 0; v < ghost.count; v++) {
+                const rawSprite = this.spriteResolver!.getPreviewSprite('resource', ghost.materialType, v);
+                if (!rawSprite) continue;
+
+                const sprite = scaleSprite(rawSprite);
+                this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, sprite, 0, 1, 1, 1, 0.5);
+            }
+        }
+
+        this.frameDrawCalls += this.spriteBatchRenderer.endSpriteBatch(gl);
     }
 
     /**

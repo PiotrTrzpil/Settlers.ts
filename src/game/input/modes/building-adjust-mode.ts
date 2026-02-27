@@ -143,7 +143,7 @@ export class BuildingAdjustMode extends BaseInputMode {
             dy: data.tileY - buildingY,
         };
 
-        handler.setOffset(this.active!.buildingType, this.active!.race, item.key, offset);
+        handler.setOffset(this.active!.buildingType, this.active!.race, item.key, offset, this.active!.buildingId);
         return HANDLED;
     }
 

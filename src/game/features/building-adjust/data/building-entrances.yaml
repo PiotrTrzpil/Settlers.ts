@@ -1,3 +1,5 @@
-# Building entrance (door) positions per BuildingType + Race.
-# Format: BuildingName → RaceName → door → { dx, dy }
-# dx/dy are tile offsets from the building anchor.
+WoodcutterHut:
+  Mayan:
+    door:
+      dx: -1
+      dy: 2

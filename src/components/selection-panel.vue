@@ -1,155 +1,158 @@
 <template>
     <div v-if="selectedEntity" class="selection-panel">
-        <template>
-            <div class="panel-header">
-                <span class="header-icon">{{ entityIcon }}</span>
-                <span class="header-title">{{ entityTypeName }}</span>
-                <Badge v-if="selectionCount > 1" color="count" :round="true">+{{ selectionCount - 1 }}</Badge>
-            </div>
+        <div class="panel-header">
+            <span class="header-icon">{{ entityIcon }}</span>
+            <span class="header-title">{{ entityTypeName }}</span>
+            <Badge v-if="selectionCount > 1" color="count" :round="true">+{{ selectionCount - 1 }}</Badge>
+        </div>
 
-            <div class="panel-body">
-                <!-- Player info (always shown) -->
-                <StatRow label="Player">
-                    <span class="player-badge" :style="{ background: playerColor }">
-                        {{ selectedEntity.player }}
-                    </span>
+        <div class="panel-body">
+            <!-- Player info (always shown) -->
+            <StatRow label="Player">
+                <span class="player-badge" :style="{ background: playerColor }">
+                    {{ selectedEntity.player }}
+                </span>
+            </StatRow>
+
+            <!-- Unit-specific info -->
+            <template v-if="isUnit">
+                <StatRow label="Category">
+                    <span class="category-badge" :class="unitCategory">{{ unitCategory }}</span>
+                </StatRow>
+                <StatRow v-if="carriedMaterial" label="Carrying" :value="carriedMaterial" />
+            </template>
+
+            <!-- Building-specific info -->
+            <template v-if="isBuilding">
+                <StatRow v-if="buildingStatus" label="Status">
+                    <span class="status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
                 </StatRow>
 
-                <!-- Unit-specific info -->
-                <template v-if="isUnit">
-                    <StatRow label="Category">
-                        <span class="category-badge" :class="unitCategory">{{ unitCategory }}</span>
-                    </StatRow>
-                    <StatRow v-if="carriedMaterial" label="Carrying" :value="carriedMaterial" />
-                </template>
+                <!-- Work Area button (for buildings with outdoor workers) -->
+                <div v-if="hasWorkArea" class="work-area-row">
+                    <button class="work-area-btn" :class="{ active: isWorkAreaActive }" @click="toggleWorkArea">
+                        Set Work Area
+                    </button>
+                </div>
+            </template>
 
-                <!-- Building-specific info -->
-                <template v-if="isBuilding">
-                    <StatRow v-if="buildingStatus" label="Status">
-                        <span class="status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
-                    </StatRow>
-                </template>
-
-                <!-- Building Adjustments (only for buildings, only when debug panel is open) -->
-                <template v-if="isBuilding && showDebugInfo && adjustGroups.length > 0">
-                    <div class="info-section adjust-section">
-                        <div class="section-label adjust-label" @click="adjustExpanded = !adjustExpanded">
-                            <span class="caret">{{ adjustExpanded ? '▼' : '▶' }}</span>
-                            Adjustments
-                        </div>
-                        <template v-if="adjustExpanded">
-                            <div v-for="group in adjustGroups" :key="group.category" class="adjust-group">
-                                <div class="adjust-group-header">{{ group.categoryLabel }}</div>
-                                <div
-                                    v-for="item in group.items"
-                                    :key="item.key"
-                                    class="adjust-item"
-                                    :class="{ active: activeAdjustKey === item.key }"
-                                    @click="toggleAdjustItem(group.handler, item)"
-                                >
-                                    <span class="adjust-item-label">{{ item.label }}</span>
-                                    <span class="adjust-item-offset">{{
-                                        getItemOffsetLabel(group.handler, item)
-                                    }}</span>
-                                    <span class="adjust-item-precision">{{
-                                        item.precision === 'pixel' ? 'px' : 'tile'
-                                    }}</span>
-                                </div>
-                            </div>
-                        </template>
+            <!-- Building Adjustments (only for buildings, only when debug panel is open) -->
+            <template v-if="isBuilding && showDebugInfo && adjustGroups.length > 0">
+                <div class="info-section adjust-section">
+                    <div class="section-label adjust-label" @click="adjustExpanded = !adjustExpanded">
+                        <span class="caret">{{ adjustExpanded ? '▼' : '▶' }}</span>
+                        Adjustments
                     </div>
-                </template>
-
-                <!-- Debug Info Section (only when debug panel is open) -->
-                <template v-if="showDebugInfo">
-                    <div class="info-section debug-section">
-                        <div class="section-label debug-label" @click="debugExpanded = !debugExpanded">
-                            <span class="caret">{{ debugExpanded ? '▼' : '▶' }}</span>
-                            Debug Info
+                    <template v-if="adjustExpanded">
+                        <div v-for="group in adjustGroups" :key="group.category" class="adjust-group">
+                            <div class="adjust-group-header">{{ group.categoryLabel }}</div>
+                            <div
+                                v-for="item in group.items"
+                                :key="item.key"
+                                class="adjust-item"
+                                :class="{ active: activeAdjustKey === item.key }"
+                                @click="toggleAdjustItem(group.handler, item)"
+                            >
+                                <span class="adjust-item-label">{{ item.label }}</span>
+                                <span class="adjust-item-offset">{{ getItemOffsetLabel(group.handler, item) }}</span>
+                                <span class="adjust-item-precision">{{
+                                    item.precision === 'pixel' ? 'px' : 'tile'
+                                }}</span>
+                            </div>
                         </div>
-                        <template v-if="debugExpanded">
-                            <!-- Common debug info -->
-                            <StatRow label="ID" :value="'#' + selectedEntity.id" />
-                            <StatRow label="Position" :value="`(${selectedEntity.x}, ${selectedEntity.y})`" />
-                            <StatRow v-if="isBuilding" label="Size" :value="buildingSize" />
+                    </template>
+                </div>
+            </template>
 
-                            <!-- Carrier Debug Info -->
-                            <template v-if="isUnit && carrierDebug">
-                                <StatRow label="Status">
-                                    <span :class="'carrier-status-' + carrierDebug.statusClass">
-                                        {{ carrierDebug.status }}
-                                    </span>
-                                </StatRow>
-                                <StatRow label="Fatigue">
-                                    <span :class="'fatigue-' + carrierDebug.fatigueClass">
-                                        {{ carrierDebug.fatigue }}% ({{ carrierDebug.fatigueLevel }})
-                                    </span>
-                                </StatRow>
-                                <StatRow label="Home" :value="'#' + carrierDebug.homeBuilding" />
+            <!-- Debug Info Section (only when debug panel is open) -->
+            <template v-if="showDebugInfo">
+                <div class="info-section debug-section">
+                    <div class="section-label debug-label" @click="debugExpanded = !debugExpanded">
+                        <span class="caret">{{ debugExpanded ? '▼' : '▶' }}</span>
+                        Debug Info
+                    </div>
+                    <template v-if="debugExpanded">
+                        <!-- Common debug info -->
+                        <StatRow label="ID" :value="'#' + selectedEntity.id" />
+                        <StatRow label="Position" :value="`(${selectedEntity.x}, ${selectedEntity.y})`" />
+                        <StatRow v-if="isBuilding" label="Size" :value="buildingSize" />
+
+                        <!-- Carrier Debug Info -->
+                        <template v-if="isUnit && carrierDebug">
+                            <StatRow label="Status">
+                                <span :class="'carrier-status-' + carrierDebug.statusClass">
+                                    {{ carrierDebug.status }}
+                                </span>
+                            </StatRow>
+                            <StatRow label="Fatigue">
+                                <span :class="'fatigue-' + carrierDebug.fatigueClass">
+                                    {{ carrierDebug.fatigue }}% ({{ carrierDebug.fatigueLevel }})
+                                </span>
+                            </StatRow>
+                            <StatRow label="Home" :value="'#' + carrierDebug.homeBuilding" />
+                            <StatRow
+                                v-if="carrierDebug.pathLength > 0"
+                                label="Path"
+                                :value="`${carrierDebug.pathProgress}/${carrierDebug.pathLength}`"
+                            />
+                        </template>
+
+                        <!-- Building Debug Info -->
+                        <template v-if="isBuilding && buildingDebug">
+                            <!-- Construction -->
+                            <template v-if="buildingDebug.isConstructing">
+                                <div class="debug-subsection">Construction</div>
+                                <StatRow label="Phase" :value="buildingDebug.constructionPhase" :depth="1" />
                                 <StatRow
-                                    v-if="carrierDebug.pathLength > 0"
-                                    label="Path"
-                                    :value="`${carrierDebug.pathProgress}/${carrierDebug.pathLength}`"
+                                    label="Progress"
+                                    :value="buildingDebug.constructionProgress + '%'"
+                                    :depth="1"
                                 />
                             </template>
 
-                            <!-- Building Debug Info -->
-                            <template v-if="isBuilding && buildingDebug">
-                                <!-- Construction -->
-                                <template v-if="buildingDebug.isConstructing">
-                                    <div class="debug-subsection">Construction</div>
-                                    <StatRow label="Phase" :value="buildingDebug.constructionPhase" :depth="1" />
-                                    <StatRow
-                                        label="Progress"
-                                        :value="buildingDebug.constructionProgress + '%'"
-                                        :depth="1"
-                                    />
-                                </template>
+                            <!-- Production -->
+                            <template v-if="buildingDebug.hasProduction">
+                                <div class="debug-subsection">Material Requests</div>
+                                <StatRow
+                                    v-if="buildingDebug.pendingInputs.length > 0"
+                                    label="Pending"
+                                    :value="buildingDebug.pendingInputs.join(', ')"
+                                    :depth="1"
+                                />
+                            </template>
 
-                                <!-- Production -->
-                                <template v-if="buildingDebug.hasProduction">
-                                    <div class="debug-subsection">Material Requests</div>
-                                    <StatRow
-                                        v-if="buildingDebug.pendingInputs.length > 0"
-                                        label="Pending"
-                                        :value="buildingDebug.pendingInputs.join(', ')"
-                                        :depth="1"
-                                    />
-                                </template>
+                            <!-- Inventory -->
+                            <template v-if="buildingDebug.hasInventory">
+                                <div class="debug-subsection">Inventory</div>
+                                <StatRow
+                                    v-for="slot in buildingDebug.inventorySlots"
+                                    :key="slot.material"
+                                    :label="slot.type"
+                                    :depth="1"
+                                >
+                                    {{ slot.material }} {{ slot.amount }}
+                                    <span v-if="slot.reserved > 0" class="reserved">({{ slot.reserved }} res)</span>
+                                </StatRow>
+                            </template>
 
-                                <!-- Inventory -->
-                                <template v-if="buildingDebug.hasInventory">
-                                    <div class="debug-subsection">Inventory</div>
-                                    <StatRow
-                                        v-for="slot in buildingDebug.inventorySlots"
-                                        :key="slot.material"
-                                        :label="slot.type"
-                                        :depth="1"
-                                    >
-                                        {{ slot.material }} {{ slot.amount }}
-                                        <span v-if="slot.reserved > 0" class="reserved">({{ slot.reserved }} res)</span>
-                                    </StatRow>
-                                </template>
-
-                                <!-- Requests -->
-                                <template v-if="buildingDebug.requestCount > 0">
-                                    <div class="debug-subsection">Requests ({{ buildingDebug.requestCount }})</div>
-                                    <StatRow
-                                        v-for="req in buildingDebug.requests"
-                                        :key="req.id"
-                                        :label="'#' + req.id"
-                                        :depth="1"
-                                    >
-                                        {{ req.material }}
-                                        <span :class="'req-status-' + req.status">{{ req.statusLabel }}</span>
-                                    </StatRow>
-                                </template>
+                            <!-- Requests -->
+                            <template v-if="buildingDebug.requestCount > 0">
+                                <div class="debug-subsection">Requests ({{ buildingDebug.requestCount }})</div>
+                                <StatRow
+                                    v-for="req in buildingDebug.requests"
+                                    :key="req.id"
+                                    :label="'#' + req.id"
+                                    :depth="1"
+                                >
+                                    {{ req.material }}
+                                    <span :class="'req-status-' + req.status">{{ req.statusLabel }}</span>
+                                </StatRow>
                             </template>
                         </template>
-                    </div>
-                </template>
-            </div>
-        </template>
+                    </template>
+                </div>
+            </template>
+        </div>
     </div>
 </template>
 
@@ -175,6 +178,7 @@ import type { Game } from '@/game/game';
 import { getBridge } from '@/game/debug-bridge';
 import type { BuildingAdjustHandler, AdjustableItem } from '@/game/features/building-adjust/types';
 import { BuildingAdjustMode } from '@/game/input/modes/building-adjust-mode';
+import { WORK_AREA_BUILDINGS } from '@/game/features/work-areas';
 
 const props = defineProps<{
     game: Game | null;
@@ -208,6 +212,56 @@ const PLAYER_COLORS = [
 
 const isUnit = computed(() => selectedEntity.value?.type === EntityType.Unit);
 const isBuilding = computed(() => selectedEntity.value?.type === EntityType.Building);
+
+/** Whether the selected building has a work area (outdoor worker building) */
+const hasWorkArea = computed(() => {
+    const entity = selectedEntity.value;
+    if (!entity || entity.type !== EntityType.Building) return false;
+    return WORK_AREA_BUILDINGS.has(entity.subType as BuildingType);
+});
+
+/** Whether work-area adjust mode is currently active for this building */
+const isWorkAreaActive = computed(() => {
+    const mode = getAdjustMode();
+    if (!mode) return false;
+    const active = mode.getActiveAdjustment();
+    return active?.item.category === 'work-area' && active.buildingId === selectedEntity.value?.id;
+});
+
+/** Toggle work area edit mode on/off */
+function toggleWorkArea(): void {
+    const input = getBridge().input;
+    if (!input) return;
+
+    const entity = selectedEntity.value;
+    if (!entity) return;
+
+    const mode = getAdjustMode();
+    if (!mode) return;
+
+    // If already active, deactivate
+    if (isWorkAreaActive.value) {
+        mode.clearActiveItem();
+        if (input.getModeName() === 'building-adjust') {
+            input.switchMode('select');
+        }
+        return;
+    }
+
+    // Find the work-area handler and use the per-instance item
+    const handlers = mode.getHandlers();
+    for (const handler of handlers) {
+        if (handler.category !== 'work-area') continue;
+        if (!('getInstanceItem' in handler)) continue;
+        const waHandler = handler as import('@/game/features/building-adjust/work-area-handler').WorkAreaAdjustHandler;
+
+        if (input.getModeName() !== 'building-adjust') {
+            input.switchMode('building-adjust');
+        }
+        mode.setActiveItem(entity.id, waHandler.getInstanceItem(), waHandler);
+        return;
+    }
+}
 
 // Get human-readable name for the entity subtype
 const entityTypeName = computed(() => {
@@ -861,5 +915,35 @@ const buildingDebug = computed<BuildingDebugInfo | null>(() => {
     color: #4a3a2a;
     min-width: 16px;
     text-align: right;
+}
+
+/* Work Area */
+.work-area-row {
+    padding: 4px 6px;
+}
+
+.work-area-btn {
+    width: 100%;
+    padding: 3px 8px;
+    font-size: 10px;
+    border: 1px solid rgba(180, 140, 80, 0.4);
+    border-radius: 3px;
+    background: rgba(60, 40, 16, 0.3);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+
+.work-area-btn:hover {
+    background: rgba(80, 60, 20, 0.5);
+    color: var(--text);
+}
+
+.work-area-btn.active {
+    background: rgba(200, 140, 40, 0.3);
+    border-color: rgba(220, 160, 60, 0.6);
+    color: var(--text-bright);
 }
 </style>

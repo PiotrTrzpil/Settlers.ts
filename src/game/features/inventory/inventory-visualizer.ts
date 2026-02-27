@@ -22,18 +22,8 @@ import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { LogHandler } from '@/utilities/log-handler';
 import type { StackPositions } from './stack-positions';
 import { INVENTORY_CONFIGS } from './inventory-configs';
-import type { RaceId } from '@/resources/game-data';
 
 const log = new LogHandler('InventoryVisualizer');
-
-/** Map Race enum to the RaceId string used by getBuildingFootprint */
-const RACE_TO_RACE_ID: Record<Race, RaceId> = {
-    [Race.Roman]: 'RACE_ROMAN',
-    [Race.Viking]: 'RACE_VIKING',
-    [Race.Mayan]: 'RACE_MAYA',
-    [Race.DarkTribe]: 'RACE_DARK',
-    [Race.Trojan]: 'RACE_TROJAN',
-};
 
 /** Slot position info for the debug stack-adjust tool. */
 export interface DebugSlotInfo {
@@ -260,7 +250,7 @@ export class InventoryVisualizer {
         race: Race = Race.Roman
     ): { outputPositions: TileCoord[]; inputPositions: TileCoord[] } {
         const size = getBuildingSize(buildingType);
-        const footprint = getBuildingFootprint(buildingX, buildingY, buildingType, RACE_TO_RACE_ID[race]);
+        const footprint = getBuildingFootprint(buildingX, buildingY, buildingType, race);
         const footprintSet = new Set(footprint.map(t => tileKey(t.x, t.y)));
 
         // Find all tiles adjacent to the footprint but not part of it

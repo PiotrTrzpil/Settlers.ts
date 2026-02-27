@@ -32,19 +32,14 @@ export enum EntityType {
 
 // === Re-exports from specialized modules ===
 
-// Map object types
-export { MapObjectType } from './map-object-types';
-
 // Building types and sizes
 export type { BuildingSize } from './buildings';
 export {
     BuildingType,
     BUILDING_SIZE,
-    BUILDING_TYPE_TO_XML_ID,
     getBuildingSize,
     getBuildingFootprint,
     getBuildingHotspot,
-    getBuildingXmlId,
     isMineBuilding,
 } from './buildings';
 

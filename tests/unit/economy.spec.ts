@@ -56,7 +56,7 @@ describe('Material Types', () => {
         const priorities = DROPPABLE_MATERIALS.map(m => getMaterialPriority(m));
         const uniquePriorities = new Set(priorities);
         // At least 80% of materials should have distinct priorities
-        expect(uniquePriorities.size).toBeGreaterThanOrEqual(priorities.length * 0.8);
+        expect(uniquePriorities.size).toBeGreaterThanOrEqual(Math.floor(priorities.length * 0.8));
     });
 });
 

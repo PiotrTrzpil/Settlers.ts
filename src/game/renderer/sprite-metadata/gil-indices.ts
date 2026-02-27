@@ -8,7 +8,8 @@
  * @module renderer/sprite-metadata/gil-indices
  */
 
-import { BuildingType, MapObjectType } from '../../entity';
+import { BuildingType } from '../../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import { Race } from '../../race';
 
 // ============================================================

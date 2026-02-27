@@ -14,7 +14,7 @@
 
 import { GrowableSystem, type GrowableConfig, type GrowableState } from '../growth';
 import type { GameState } from '../../game-state';
-import { MapObjectType } from '../../entity';
+import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import type { AnimationService } from '../../animation/index';
 import type { Command } from '../../commands';
@@ -67,8 +67,9 @@ const TREE_CONFIG: GrowableConfig = {
     growthTime: GROWTH_TIME,
     plantingSearchRadius: PLANTING_SEARCH_RADIUS,
     minDistanceSq: MIN_TREE_DISTANCE_SQ,
-    objectCategory: 'trees',
+    objectCategory: MapObjectCategory.Trees,
     plantableTypes: PLANTABLE_TREE_TYPES,
+    requireFreeNeighbors: true,
 };
 
 /**
@@ -83,7 +84,7 @@ export class TreeSystem extends GrowableSystem<TreeState> {
     // ── GrowableSystem implementation ────────────────────────────
 
     protected shouldRegister(objectType: MapObjectType): boolean {
-        return OBJECT_TYPE_CATEGORY[objectType] === 'trees';
+        return OBJECT_TYPE_CATEGORY[objectType] === MapObjectCategory.Trees;
     }
 
     protected createState(planted: boolean, _objectType: MapObjectType): TreeState {

@@ -1,4 +1,5 @@
-import { Entity, EntityType, BuildingType, UnitType, MapObjectType } from '../entity';
+import { Entity, EntityType, BuildingType, UnitType } from '../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import { SpriteEntry } from './sprite-metadata';
 import { SpriteRenderManager } from './sprite-render-manager';
 import { EMaterialType } from '../economy';

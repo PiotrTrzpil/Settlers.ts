@@ -3,7 +3,7 @@
  */
 
 import type { RaceId, RaceJobData, JobInfo, JobNode } from './types';
-import { parseXML, getChildText, getChildNumber } from './xml-utils';
+import { parseXML, getChildText, getChildNumber, getChildBool } from './xml-utils';
 
 function parseJobNode(nodeEl: Element): JobNode {
     return {
@@ -15,6 +15,9 @@ function parseJobNode(nodeEl: Element): JobNode {
         dir: getChildNumber(nodeEl, 'dir', -1),
         forward: getChildNumber(nodeEl, 'forward', 1),
         visible: getChildNumber(nodeEl, 'visible', 1),
+        useWork: getChildBool(nodeEl, 'useWork', true),
+        entity: getChildText(nodeEl, 'entity'),
+        trigger: getChildText(nodeEl, 'trigger'),
     };
 }
 

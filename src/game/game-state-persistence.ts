@@ -172,6 +172,11 @@ export function setCurrentMapId(mapId: string): void {
     }
 }
 
+/** Get the current in-memory map ID (set when a map is loaded). */
+export function getCurrentMapId(): string {
+    return currentMapId;
+}
+
 /**
  * Get the last-loaded map ID from localStorage.
  * Returns null if no map was previously loaded.

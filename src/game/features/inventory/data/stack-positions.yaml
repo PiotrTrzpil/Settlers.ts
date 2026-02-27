@@ -13,7 +13,7 @@ WoodcutterHut:
     output:
       LOG:
         dx: 4
-        dy: 0
+        dy: -1
   Trojan:
     output:
       LOG:

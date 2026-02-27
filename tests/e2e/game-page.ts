@@ -160,7 +160,7 @@ export class GamePage {
     }
 
     async selectMode(): Promise<void> {
-        await this.page.locator('[data-testid="btn-select-mode"]').click({ force: true });
+        await this.page.keyboard.press('Escape');
     }
 
     // ── Composite actions (multi-step) ──────────────────────

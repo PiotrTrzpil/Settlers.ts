@@ -19,7 +19,7 @@ import type { TileHighlight } from '../../input/render-state';
 // ============================================================================
 
 /** Category of adjustable property. */
-export type AdjustCategory = 'entrance' | 'sprite-layer' | 'stack';
+export type AdjustCategory = 'entrance' | 'sprite-layer' | 'stack' | 'work-area';
 
 /** Precision mode for placement. */
 export type AdjustPrecision = 'tile' | 'pixel';
@@ -98,17 +98,32 @@ export interface BuildingAdjustHandler {
     /**
      * Get the current position offset for an item.
      * Returns null if no position is configured (will use default).
+     *
+     * @param buildingId Optional entity ID for per-instance handlers (e.g. work-area).
      */
-    getOffset(buildingType: BuildingType, race: Race, itemKey: string): TileOffset | PixelOffset | null;
+    getOffset(
+        buildingType: BuildingType,
+        race: Race,
+        itemKey: string,
+        buildingId?: number
+    ): TileOffset | PixelOffset | null;
 
     /**
      * Set the position for an item relative to building anchor.
-     * Persists to the backing YAML file.
+     * Persists to the backing YAML file (or per-instance store).
      *
      * For tile-precision items: dx/dy are tile offsets.
      * For pixel-precision items: px/py are pixel offsets from building sprite anchor.
+     *
+     * @param buildingId Optional entity ID for per-instance handlers (e.g. work-area).
      */
-    setOffset(buildingType: BuildingType, race: Race, itemKey: string, offset: TileOffset | PixelOffset): void;
+    setOffset(
+        buildingType: BuildingType,
+        race: Race,
+        itemKey: string,
+        offset: TileOffset | PixelOffset,
+        buildingId?: number
+    ): void;
 
     /**
      * Build tile highlights for all items of this category on a specific building.

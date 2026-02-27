@@ -1,4 +1,5 @@
-import { BuildingType, MapObjectType, UnitType, EntityType } from '../../entity';
+import { BuildingType, UnitType, EntityType } from '../../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import { EMaterialType } from '../../economy';
 import { AtlasRegion } from '../entity-texture-atlas';
 import { AnimationSequence, AnimationData, ANIMATION_DEFAULTS, ANIMATION_SEQUENCES } from '../../animation';

@@ -28,6 +28,12 @@ out float v_shader_color;
 // output texture coordinate of the background
 out vec2 v_texcoord;
 
+#ifdef HAS_DARKNESS
+// Per-vertex darkness values: x = dark land, y = fog of war (interpolated across tile)
+out vec2 v_darkness;
+uniform sampler2D u_darknessBuffer;
+#endif
+
 vec2 mapSize = vec2(MAP_WIDTH, MAP_HEIGHT);
 
 // the position the camera is focused at
@@ -53,6 +59,10 @@ uniform sampler2D u_landTypeBuffer;
 uniform sampler2D u_landHeightBuffer;
 
 void main() {
+  #ifdef HAS_DARKNESS
+  v_darkness = vec2(0.0);
+  #endif
+
   // ///////////
   // set base vertex properties
   // define base map shape as a parallelogram
@@ -167,6 +177,12 @@ void main() {
   else {
     real_text_pos = round(type.zw * 255.0) * vec2(0.5, 1.0);
   }
+
+  #ifdef HAS_DARKNESS
+  // Sample at vertex map position for smooth cross-tile interpolation
+  v_darkness = texelFetch(u_darknessBuffer, ivec2(mapPointCord), 0).rg;
+  #endif
+
   // Apply fractional viewPoint offset to vertex position for smooth sub-tile scrolling.
   // The parallelogram transform maps tile offset (fx, fy) to screen offset (fx - fy*0.5, fy*0.5).
   gl_Position = projection *

@@ -344,7 +344,7 @@ async function readChunks(race: Race): Promise<ChunkReadResult> {
             return {
                 buffer: assembled.buffer,
                 rawSize,
-                compressionType: responses[0].compressionType,
+                compressionType: responses[0]!.compressionType,
                 chunkTimings: responses.map(r => r.timings),
                 assemblyMs: Math.round(performance.now() - tAssembly),
             };
@@ -381,12 +381,12 @@ function logCacheDiagnostics(
         const maxTotal = Math.max(...chunkTimings.map(t => t.total));
         const maxRead = Math.max(...chunkTimings.map(t => t.cacheRead));
         const maxDecomp = Math.max(...chunkTimings.map(t => t.decompress));
-        const startup = chunkTimings[0].workerStartup;
+        const startup = chunkTimings[0]!.workerStartup;
         console.log(
             `[cache] loaded ${Race[race]}: ${CHUNK_COUNT} chunks, ${compressionType} ${rawMB}MB→${sizeMB}MB, age: ${ageMins}m`
         );
         for (let i = 0; i < chunkTimings.length; i++) {
-            const t = chunkTimings[i];
+            const t = chunkTimings[i]!;
             console.log(
                 `[cache]   chunk${i}: read=${t.cacheRead} wasm=${t.wasmInit} decomp=${t.decompress} total=${t.total}ms`
             );
@@ -395,7 +395,7 @@ function logCacheDiagnostics(
             `[cache]   wall-clock: startup=${startup} maxRead=${maxRead} maxDecomp=${maxDecomp} maxTotal=${maxTotal} assembly=${assemblyMs}ms`
         );
     } else if (chunkTimings.length === 1) {
-        const t = chunkTimings[0];
+        const t = chunkTimings[0]!;
         console.log(
             `[cache] loaded ${Race[race]}: ${compressionType} ${rawMB}MB→${sizeMB}MB | read=${t.cacheRead} total=${t.total}ms, age: ${ageMins}m [main-thread fallback]`
         );

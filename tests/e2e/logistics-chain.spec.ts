@@ -86,7 +86,7 @@ test.describe('Logistics Chain', { tag: '@slow' }, () => {
 
         await test.step('woodcutter produces log', async () => {
             // Woodcutter: find tree → walk → chop (10s) → pickup LOG → walk home → dropoff
-            // At 4x speed this takes ~5-8 real seconds
+            // At 4x speed this takes ~15-18 real seconds (worker needs warm-up ticks)
             await gp.wait.waitForBuildingOutput(woodcutterId, LOG, 1, 25_000);
         });
 

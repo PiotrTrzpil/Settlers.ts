@@ -5,7 +5,8 @@ import { GameLoop } from './game-loop';
 import { GameServices } from './game-services';
 import { Command, executeCommand, type CommandResult, type CommandContext } from './commands';
 import { TerrainData } from './terrain';
-import { populateMapObjectsFromEntityData, expandTrees } from './systems/map-objects';
+import { populateMapObjectsFromEntityData } from './systems/map-objects';
+import { expandTrees } from './features/trees/tree-expansion';
 import { populateMapBuildings } from './features/building-construction';
 import { populateMapSettlers } from './systems/map-settlers';
 import { populateMapStacks } from './systems/map-stacks';
@@ -13,6 +14,7 @@ import { SoundManager } from './audio';
 import { Race, s4TribeToRace, loadSavedRace } from './race';
 import { EventBus } from './event-bus';
 import { EntityType } from './entity';
+import { BuildingType } from './buildings/types';
 import { GameSettingsManager } from './game-settings';
 import { GameViewState } from './game-view-state';
 import type { FrameRenderTiming } from './renderer/renderer';
@@ -283,6 +285,20 @@ export class Game {
     /** Execute a command against the game state */
     public execute(cmd: Command): CommandResult {
         return executeCommand(this.commandContext, cmd);
+    }
+
+    /** Find the starting position for the current player (their Castle), falling back to findLandTile */
+    public findPlayerStartPosition(): { x: number; y: number } | null {
+        for (const entity of this.state.entities) {
+            if (
+                entity.type === EntityType.Building &&
+                entity.subType === BuildingType.Castle &&
+                entity.player === this.currentPlayer
+            ) {
+                return { x: entity.x, y: entity.y };
+            }
+        }
+        return this.findLandTile();
     }
 
     /** Find the first buildable land tile, spiraling out from map center */

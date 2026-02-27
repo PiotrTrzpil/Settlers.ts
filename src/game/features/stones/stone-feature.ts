@@ -12,7 +12,8 @@
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { EventSubscriptionManager } from '../../event-bus';
 import { StoneSystem } from './stone-system';
-import { EntityType, MapObjectType } from '../../entity';
+import { EntityType } from '../../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 
 /**
  * Exports provided by StoneFeature.

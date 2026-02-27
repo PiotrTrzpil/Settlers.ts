@@ -4,10 +4,9 @@
  */
 
 import type { Entity } from '../entity';
-import { EntityType, MapObjectType } from '../entity';
+import { EntityType } from '../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import type { SpriteEntry } from './sprite-metadata';
-import { Race } from './sprite-metadata';
-import type { RaceId } from '@/resources/game-data';
 
 // Color shader constants (for non-textured rendering)
 export const SELECTED_COLOR = [1.0, 1.0, 1.0, 1.0]; // White highlight
@@ -79,6 +78,9 @@ export const FOOTPRINT_TILE_COLOR = [0.2, 0.8, 1.0, 0.4]; // Semi-transparent cy
 export const SERVICE_AREA_CIRCLE_COLOR = [0.3, 0.7, 1.0, 0.6]; // Blue circle outline
 export const SERVICE_AREA_CIRCLE_SEGMENTS = 64; // Number of segments for circle approximation
 
+// Work area overlay
+export const WORK_AREA_CIRCLE_COLOR = [0.9, 0.6, 0.2, 0.6]; // Orange circle outline
+
 /**
  * Vertex scale factor applied by entity-vert.glsl shader.
  * The shader does: pos = a_position * SHADER_VERTEX_SCALE + a_entityPos
@@ -145,15 +147,6 @@ export function decoHueToRgb(subType: number): number[] {
     }
     return [r + m, g + m, b + m, 1.0];
 }
-
-/** Race enum → RaceId string for BuildingInfo lookup */
-export const RACE_TO_RACE_ID: Record<Race, RaceId> = {
-    [Race.Roman]: 'RACE_ROMAN',
-    [Race.Viking]: 'RACE_VIKING',
-    [Race.Mayan]: 'RACE_MAYA',
-    [Race.DarkTribe]: 'RACE_DARK',
-    [Race.Trojan]: 'RACE_TROJAN',
-};
 
 /** Apply a scale factor to a sprite's world dimensions and offsets. */
 export function scaleSprite(sprite: SpriteEntry, scale: number = ENTITY_SCALE): SpriteEntry {

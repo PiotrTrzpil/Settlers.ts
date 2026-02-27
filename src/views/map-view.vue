@@ -194,7 +194,7 @@
                         :counts="layerCounts"
                         @update:visibility="updateLayerVisibility"
                         @togglePause="togglePause()"
-                        @resetGameState="resetGameState()"
+                        @resetGameState="onResetGameState()"
                     />
                 </div>
             </div>
@@ -225,11 +225,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useTemplateRef, watch } from 'vue';
+import { ref, computed, useTemplateRef, watch, onMounted, onBeforeUnmount } from 'vue';
 import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
 import { Race, RACE_NAMES, AVAILABLE_RACES, loadSavedRace, saveSavedRace } from '@/game/renderer/sprite-metadata';
 import { SoundManager } from '@/game/audio/sound-manager';
+import { saveCameraState, loadCameraState, clearCameraState } from '@/game/renderer/camera-persistence';
+import { getCurrentMapId } from '@/game/game-state-persistence';
 
 import FileBrowser from '@/components/file-browser.vue';
 import RendererViewer from '@/components/renderer-viewer.vue';
@@ -331,6 +333,12 @@ function onRaceChange() {
     saveSavedRace(currentRace.value);
 }
 
+function onResetGameState() {
+    resetGameState();
+    clearCameraState(getCurrentMapId());
+    rendererRef.value?.centerOnPlayerStart?.();
+}
+
 // Ticks paused indicator — true when game loop renders but logic ticks are not running
 const ticksPaused = computed(() => game.value?.viewState.state.ticksPaused ?? false);
 
@@ -338,19 +346,39 @@ const ticksPaused = computed(() => game.value?.viewState.state.ticksPaused ?? fa
 const rendererKey = ref(0);
 const savedCamera = ref<{ x: number; y: number; zoom: number } | null>(null);
 
+// When a new map loads, restore the saved camera for that map
+watch(game, newGame => {
+    savedCamera.value = newGame ? loadCameraState(getCurrentMapId()) : null;
+});
+
+// Save current camera to localStorage (used on unload and antialias recreation)
+function persistCamera(): void {
+    const mapId = getCurrentMapId();
+    const cam = rendererRef.value?.getCamera?.();
+    if (cam && mapId) saveCameraState(mapId, cam);
+}
+
 // Watch for graphics settings changes that require context recreation
 watch(
     () => game.value?.settings.state.antialias,
     () => {
-        // Save camera position before recreation
+        // Save camera position before recreation (to prop AND localStorage)
         const renderer = rendererRef.value;
         if (renderer && typeof renderer.getCamera === 'function') {
             savedCamera.value = renderer.getCamera();
+            persistCamera();
         }
         // Force component recreation by changing key
         rendererKey.value++;
     }
 );
+
+// Save camera on page close / SPA navigation away
+onMounted(() => window.addEventListener('beforeunload', persistCamera));
+onBeforeUnmount(() => {
+    persistCamera();
+    window.removeEventListener('beforeunload', persistCamera);
+});
 </script>
 
 <style scoped>

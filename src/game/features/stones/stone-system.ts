@@ -9,7 +9,7 @@
  */
 
 import type { GameState } from '../../game-state';
-import { MapObjectType } from '../../entity';
+import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { LogHandler } from '@/utilities/log-handler';
 
@@ -83,7 +83,8 @@ export class StoneSystem {
      * Uses initialLevel if provided (from map data), otherwise full level.
      */
     register(entityId: number, objectType: MapObjectType, initialLevel?: number): void {
-        if (OBJECT_TYPE_CATEGORY[objectType] !== 'resources' || objectType !== MapObjectType.ResourceStone) return;
+        if (OBJECT_TYPE_CATEGORY[objectType] !== MapObjectCategory.Goods || objectType !== MapObjectType.ResourceStone)
+            return;
 
         const entity = this.gameState.getEntityOrThrow(entityId, 'stone for registration');
 

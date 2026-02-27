@@ -1,4 +1,5 @@
-import { BuildingType, MapObjectType, UnitType } from '../entity';
+import { BuildingType, UnitType } from '../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import type { Race } from '../race';
 import type { EMaterialType } from '../economy/material-type';
 

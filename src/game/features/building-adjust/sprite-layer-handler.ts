@@ -14,14 +14,34 @@ import type { Race } from '../../race';
 import type { TileHighlight } from '../../input/render-state';
 import type { BuildingAdjustHandler, AdjustableItem, PixelOffset } from './types';
 import type { OverlayRegistry } from '../../systems/building-overlays';
-import { YamlStore } from './yaml-store';
+import { YamlStore, type OffsetRecord } from './yaml-store';
 import spriteOffsetsYaml from './data/building-sprite-offsets.yaml?raw';
 
 const FILE_PATH = 'src/game/features/building-adjust/data/building-sprite-offsets.yaml';
 
+// Shared singleton for sprite offset YAML store.
+// Allows overlay resolution to read flag offsets without coupling to the handler.
+let sharedStore: YamlStore | null = null;
+
+function getSharedStore(): YamlStore {
+    if (!sharedStore) {
+        sharedStore = new YamlStore(spriteOffsetsYaml, FILE_PATH);
+    }
+    return sharedStore;
+}
+
+/**
+ * Read a pixel offset from the sprite-offsets YAML for any layer key.
+ * Used by overlay-resolution.ts to apply YAML overrides to flag positions.
+ */
+export function getSpriteOffset(buildingType: BuildingType, race: Race, itemKey: string): OffsetRecord | null {
+    return getSharedStore().get(buildingType, race, itemKey);
+}
+
 /** Colors for different overlay layers. */
 const LAYER_COLORS: Record<string, string> = {
     base: '#e0a040',
+    flag: '#e04040',
     default: '#a060e0',
 };
 
@@ -32,7 +52,7 @@ export class SpriteLayerAdjustHandler implements BuildingAdjustHandler {
     private readonly overlayRegistry: OverlayRegistry;
 
     constructor(overlayRegistry: OverlayRegistry) {
-        this.store = new YamlStore(spriteOffsetsYaml, FILE_PATH);
+        this.store = getSharedStore();
         this.overlayRegistry = overlayRegistry;
     }
 
@@ -41,6 +61,12 @@ export class SpriteLayerAdjustHandler implements BuildingAdjustHandler {
             {
                 key: 'base',
                 label: 'Base Sprite',
+                category: 'sprite-layer',
+                precision: 'pixel',
+            },
+            {
+                key: 'flag',
+                label: 'Flag',
                 category: 'sprite-layer',
                 precision: 'pixel',
             },

@@ -84,22 +84,19 @@ export {
 // Map Objects
 // ============================================================================
 export {
-    type ObjectCategory,
-    OBJECT_CATEGORIES,
+    TYPED_OBJECT_CATEGORIES,
     OBJECT_TYPE_CATEGORY,
-    RAW_TO_OBJECT_TYPE,
-    s4TreeTypeToMapObjectType,
     getTypesForCategory,
-    type PopulateOptions,
-    analyzeObjectTypes,
-    populateMapObjects,
     populateMapObjectsFromEntityData,
     spawnTestObjects,
     clearMapObjects,
     countMapObjectsByCategory,
-    type ExpandTreesOptions,
-    expandTrees,
 } from './map-objects';
+
+// ============================================================================
+// Tree Expansion
+// ============================================================================
+export { type ExpandTreesOptions, expandTrees } from '../features/trees/tree-expansion';
 
 // ============================================================================
 // Map Resources

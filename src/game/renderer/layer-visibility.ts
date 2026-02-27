@@ -4,7 +4,7 @@
  * Persists settings to localStorage.
  */
 
-import { MapObjectType } from '../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 
 // ============================================================================
 // Layer Types

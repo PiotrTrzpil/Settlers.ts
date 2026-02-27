@@ -19,9 +19,7 @@ test.describe('JIL View Sprite Browser', () => {
             await expect(page.locator('.file-viewer')).toBeVisible({ timeout: 10000 });
             await expect(page.locator('.controls')).toBeVisible();
 
-            const criticalErrors = errors.filter(e =>
-                !e.includes('GFX file') && !e.includes('not available')
-            );
+            const criticalErrors = errors.filter(e => !e.includes('GFX file') && !e.includes('not available'));
             expect(criticalErrors.length).toBe(0);
         });
 
@@ -32,7 +30,7 @@ test.describe('JIL View Sprite Browser', () => {
             await expect(singleBtn).toBeVisible();
             await expect(gridBtn).toBeVisible();
             await expect(gridBtn).toHaveClass(/active/);
-            await expect(page.locator('.grid-container')).toBeVisible({ timeout: 5000 });
+            await expect(page.locator('.virtual-grid-scroll')).toBeVisible({ timeout: 5000 });
 
             // Switch to single view
             await singleBtn.click();
@@ -45,7 +43,7 @@ test.describe('JIL View Sprite Browser', () => {
 
             // Switch back to grid to verify toggle works both ways
             await page.locator('button:has-text("Grid")').click();
-            await expect(page.locator('.grid-container')).toBeVisible({ timeout: 5000 });
+            await expect(page.locator('.virtual-grid-scroll')).toBeVisible({ timeout: 5000 });
         });
     });
 });

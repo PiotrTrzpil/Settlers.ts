@@ -37,3 +37,6 @@ export { OverlayRegistry } from './overlay-registry';
 
 // Manager
 export { BuildingOverlayManager, type BuildingOverlayManagerConfig } from './building-overlay-manager';
+
+// Data loader
+export { populateOverlayRegistry } from './overlay-data-loader';

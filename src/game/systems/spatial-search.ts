@@ -80,6 +80,8 @@ export interface FindEmptySpotConfig {
     minDistanceSq: number;
     /** Filter for entities that count as "too close". Only checked when minDistanceSq > 0. */
     proximityFilter: (entity: Entity) => boolean;
+    /** If true, all 4 cardinal neighbors must also be free (no entity occupying them). */
+    requireFreeNeighbors?: boolean;
 }
 
 /**
@@ -88,25 +90,29 @@ export interface FindEmptySpotConfig {
  *
  * The search expands outward ring-by-ring so nearer spots are preferred.
  */
+/** Check whether a tile is a valid empty spot given the config constraints. */
+function isValidSpot(tile: { x: number; y: number }, config: FindEmptySpotConfig): boolean {
+    if (tile.x < 0 || tile.y < 0) return false;
+    if (config.gameState.getEntityAt(tile.x, tile.y)) return false;
+    if (config.requireFreeNeighbors && !hasFreNeighbors(config.gameState, tile.x, tile.y)) return false;
+    if (
+        config.minDistanceSq > 0 &&
+        isTooClose(config.gameState, tile.x, tile.y, config.minDistanceSq, config.proximityFilter)
+    )
+        return false;
+    return true;
+}
+
 export function findEmptySpot(
     cx: number,
     cy: number,
     config: FindEmptySpotConfig
 ): { entityId: null; x: number; y: number } | null {
-    const { gameState, searchRadius, minDistanceSq, proximityFilter } = config;
     const minRadius = config.minRadius ?? 2;
 
-    for (let radius = minRadius; radius <= searchRadius; radius++) {
+    for (let radius = minRadius; radius <= config.searchRadius; radius++) {
         for (const tile of ringTiles(cx, cy, radius)) {
-            if (tile.x < 0 || tile.y < 0) continue;
-
-            // Tile must be empty
-            if (gameState.getEntityAt(tile.x, tile.y)) continue;
-
-            // Must not be too close to similar entities
-            if (minDistanceSq > 0 && isTooClose(gameState, tile.x, tile.y, minDistanceSq, proximityFilter)) continue;
-
-            return { entityId: null, x: tile.x, y: tile.y };
+            if (isValidSpot(tile, config)) return { entityId: null, x: tile.x, y: tile.y };
         }
     }
     return null;
@@ -127,4 +133,18 @@ function isTooClose(
         if (dx * dx + dy * dy < minDistanceSq) return true;
     }
     return false;
+}
+
+const CARDINAL_OFFSETS = [
+    { dx: 1, dy: 0 },
+    { dx: -1, dy: 0 },
+    { dx: 0, dy: 1 },
+    { dx: 0, dy: -1 },
+];
+
+function hasFreNeighbors(gameState: GameState, x: number, y: number): boolean {
+    for (const { dx, dy } of CARDINAL_OFFSETS) {
+        if (gameState.getEntityAt(x + dx, y + dy)) return false;
+    }
+    return true;
 }

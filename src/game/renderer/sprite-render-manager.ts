@@ -26,12 +26,13 @@ import { SpriteLoader, type LoadedGfxFileSet } from './sprite-loader';
 import { destroyDecoderPool, getDecoderPool, warmUpDecoderPool } from './sprite-decoder-pool';
 import { yieldToEventLoop, SafeLoadBatch } from './batch-loader';
 import { loadCropSprites } from './sprite-crop-loader';
-import { BuildingType, MapObjectType, UnitType, EntityType } from '../entity';
+import { BuildingType, UnitType, EntityType } from '../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import { isBuildingAvailableForRace } from '../race-availability';
 import { ANIMATION_DEFAULTS, AnimationData } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy';
-import { buildDecorationSpriteMap, type DecorationSpriteRef } from '../systems/map-objects';
+import { buildDecorationSpriteMap, type DecorationSpriteRef } from './decoration-sprite-map';
 import { TEAM_COLOR_PALETTES } from '@/resources/gfx/team-colors';
 import { loadUnitSpritesForRace, type UnitLoadContext } from './sprite-unit-loader';
 import {

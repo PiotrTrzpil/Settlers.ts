@@ -224,8 +224,8 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             await gp.resetGameState();
 
             // Reset UI to known state for tests that interact with sidebar
-            await testMapPage.locator('[data-testid="btn-select-mode"]').click({ force: true });
-            await testMapPage.locator('.tab-btn', { hasText: 'Buildings' }).click({ force: true });
+            await testMapPage.keyboard.press('Escape');
+            await testMapPage.locator('.tab-btn', { hasText: 'Build' }).click({ force: true });
 
             await use(gp);
         },

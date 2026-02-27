@@ -96,6 +96,8 @@ export interface BuildingOverlayDef {
     readonly condition: OverlayCondition;
     /** Whether the sprite uses player team coloring. Default: false */
     readonly teamColored?: boolean;
+    /** Original XML job name (e.g. BUILDING_BAKERY_FIRE) for deferred sprite resolution */
+    readonly jobName?: string;
 }
 
 // ============================================================================

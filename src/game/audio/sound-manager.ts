@@ -430,15 +430,17 @@ export class SoundManager implements IAudioManager {
             }
         }
 
-        // Allow playing by direct index (override)
+        // Allow playing by direct index (override) — one-shot, unload after playback
         if (index !== undefined && this.sndReader) {
             const blobUrl = this.sndReader.getSound(index);
             if (blobUrl) {
-                sound = new Howl({
+                const oneShot = new Howl({
                     src: [blobUrl],
                     format: ['wav'],
                     volume: 1.0, // Neutral, we set volume below
+                    onend: () => oneShot.unload(),
                 });
+                sound = oneShot;
             }
         }
 

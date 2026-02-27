@@ -7,10 +7,11 @@
 
 import { LogHandler } from '@/utilities/log-handler';
 import { RemoteFile } from '@/utilities/remote-file';
-import type { GameData, RaceId, BuildingInfo, JobInfo, ObjectInfo } from './types';
+import type { GameData, RaceId, BuildingInfo, JobInfo, ObjectInfo, BuildingTrigger } from './types';
 import { parseBuildingInfo } from './building-info-parser';
 import { parseJobInfo } from './job-info-parser';
 import { parseObjectInfo } from './object-info-parser';
+import { parseBuildingTriggers } from './building-trigger-parser';
 
 const log = new LogHandler('GameDataLoader');
 
@@ -73,28 +74,33 @@ export class GameDataLoader {
         log.debug('Loading game data XML files...');
 
         // Load all XML files in parallel
-        const [buildingXml, jobXml, objectXml] = await Promise.all([
+        const [buildingXml, jobXml, objectXml, triggerXml] = await Promise.all([
             this.loadXmlFile(remoteFile, 'buildingInfo.xml'),
             this.loadXmlFile(remoteFile, 'jobInfo.xml'),
             this.loadXmlFile(remoteFile, 'objectInfo.xml'),
+            this.loadXmlFile(remoteFile, 'BuildingTrigger.xml'),
         ]);
 
         // Parse all files
         const buildings = buildingXml ? parseBuildingInfo(buildingXml) : new Map();
         const jobs = jobXml ? parseJobInfo(jobXml) : new Map();
         const objects = objectXml ? parseObjectInfo(objectXml) : new Map();
+        const buildingTriggers = triggerXml ? parseBuildingTriggers(triggerXml) : new Map();
 
-        this.data = { buildings, jobs, objects };
+        this.data = { buildings, jobs, objects, buildingTriggers };
 
         const elapsed = Math.round(performance.now() - start);
 
         let totalBuildings = 0;
         let totalJobs = 0;
+        let totalTriggers = 0;
         for (const [, raceData] of this.data.buildings) totalBuildings += raceData.buildings.size;
         for (const [, raceData] of this.data.jobs) totalJobs += raceData.jobs.size;
+        for (const [, raceData] of this.data.buildingTriggers) totalTriggers += raceData.triggers.size;
 
         log.debug(
-            `Game data loaded in ${elapsed}ms: ${totalBuildings} buildings, ${totalJobs} jobs, ${this.data.objects.size} objects`
+            `Game data loaded in ${elapsed}ms: ${totalBuildings} buildings, ${totalJobs} jobs, ` +
+                `${this.data.objects.size} objects, ${totalTriggers} triggers`
         );
 
         return this.data;
@@ -141,6 +147,16 @@ export class GameDataLoader {
     /** Get all objects */
     public getAllObjects(): Map<string, ObjectInfo> | undefined {
         return this.data?.objects;
+    }
+
+    /** Get a building trigger for a specific race and trigger ID */
+    public getBuildingTrigger(raceId: RaceId, triggerId: string): BuildingTrigger | undefined {
+        return this.data?.buildingTriggers.get(raceId)?.triggers.get(triggerId);
+    }
+
+    /** Get all building triggers for a race */
+    public getBuildingTriggersForRace(raceId: RaceId): Map<string, BuildingTrigger> | undefined {
+        return this.data?.buildingTriggers.get(raceId)?.triggers;
     }
 }
 

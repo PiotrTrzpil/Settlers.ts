@@ -67,7 +67,11 @@ export class YamlStore {
 
     constructor(yamlContent: string, filePath: string) {
         this.filePath = filePath;
-        this.loadFromYaml(yamlContent);
+        const cached =
+            typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function'
+                ? localStorage.getItem(`yamlStore:${filePath}`)
+                : null;
+        this.loadFromYaml(cached ?? yamlContent);
     }
 
     /** Get the offset for a specific item. */
@@ -88,9 +92,12 @@ export class YamlStore {
         items.set(itemKey, offset);
     }
 
-    /** Save to disk via the Vite dev server (HMR-safe). */
+    /** Save to disk via the Vite dev server (HMR-safe) and cache in localStorage. */
     save(): void {
-        writeDevFile(this.filePath, this.exportYaml());
+        const yaml = this.exportYaml();
+        writeDevFile(this.filePath, yaml);
+        if (typeof localStorage !== 'undefined' && typeof localStorage.setItem === 'function')
+            localStorage.setItem(`yamlStore:${this.filePath}`, yaml);
     }
 
     // --- Private ---

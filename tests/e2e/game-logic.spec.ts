@@ -46,10 +46,9 @@ test.describe('Map View Page', { tag: '@smoke' }, () => {
         });
 
         await test.step('settings panel expands and checkbox toggles', async () => {
-            const settingsToggle = page.locator('.settings-toggle-btn');
-            await expect(settingsToggle).toBeVisible();
-            await settingsToggle.click();
-            await expect(page.locator('.settings-sections')).toBeVisible();
+            const settingsBtn = page.locator('button:has-text("Settings")');
+            await expect(settingsBtn).toBeVisible();
+            await settingsBtn.click();
 
             const checkbox = page.locator('label:has-text("Debug grid") input[type="checkbox"]');
             await expect(checkbox).toBeVisible({ timeout: 5000 });

@@ -14,7 +14,7 @@ import { test, expect } from './fixtures';
 test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
     test('clicking resource button activates place_resource mode', async ({ gpWithUI: gp }) => {
         const page = gp.page;
-        await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
+        await page.locator('.tab-btn', { hasText: 'Goods' }).click({ force: true });
 
         const btn = page.locator('[data-testid="btn-resource-board"]');
         await expect(btn).toBeVisible();
@@ -45,7 +45,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
 
     test('different resource types can be selected', async ({ gpWithUI: gp }) => {
         const page = gp.page;
-        await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
+        await page.locator('.tab-btn', { hasText: 'Goods' }).click({ force: true });
 
         // Click first resource button
         const btn0 = page.locator('[data-testid="btn-resource-board"]');
@@ -106,7 +106,7 @@ test.describe('Resource Rendering', () => {
 
     test('resource placement preview renders during placement mode', async ({ gpWithUI: gp }) => {
         const page = gp.page;
-        await page.locator('.tab-btn', { hasText: 'Resources' }).click({ force: true });
+        await page.locator('.tab-btn', { hasText: 'Goods' }).click({ force: true });
 
         const btn = page.locator('[data-testid="btn-resource-board"]');
         await expect(btn).toBeVisible();

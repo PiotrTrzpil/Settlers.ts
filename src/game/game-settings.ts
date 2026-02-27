@@ -25,6 +25,7 @@ export interface GameSettings {
     showDebugGrid: boolean;
     disablePlayerTinting: boolean;
     showBuildingFootprint: boolean;
+    darkLandDilation: boolean;
 
     // Graphics
     antialias: boolean;
@@ -61,6 +62,7 @@ const DEFAULT_SETTINGS: GameSettings = {
     showDebugGrid: false,
     disablePlayerTinting: false,
     showBuildingFootprint: false,
+    darkLandDilation: true,
 
     // Graphics
     antialias: true,
