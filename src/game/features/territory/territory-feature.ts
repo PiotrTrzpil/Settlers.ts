@@ -14,6 +14,7 @@ import { EventSubscriptionManager, type EventBus } from '../../event-bus';
 import { EntityType } from '../../entity';
 import type { TerritoryManager } from './territory-manager';
 import { TERRITORY_BUILDINGS } from './territory-types';
+import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
 
 export interface TerritoryExports {
     territoryManager: TerritoryManager;
@@ -27,7 +28,8 @@ export interface TerritoryExports {
  */
 export function registerTerritoryEvents(
     eventBus: EventBus,
-    territoryManager: TerritoryManager
+    territoryManager: TerritoryManager,
+    cleanupRegistry: EntityCleanupRegistry
 ): { unsubscribeAll: () => void } {
     const subscriptions = new EventSubscriptionManager();
 
@@ -39,9 +41,7 @@ export function registerTerritoryEvents(
     });
 
     // Remove territory when buildings are destroyed
-    subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
-        territoryManager.removeBuilding(entityId);
-    });
+    cleanupRegistry.onEntityRemoved(entityId => territoryManager.removeBuilding(entityId));
 
     return subscriptions;
 }

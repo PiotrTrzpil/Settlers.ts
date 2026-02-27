@@ -74,7 +74,7 @@ describe('SettlerTaskSystem job selection', () => {
             const system = createTaskSystem(ctx);
             const tree = ctx.state.addEntity(EntityType.MapObject, 0, 15, 15, 0);
             const handler = createTargetHandler({ entityId: tree.id, x: 15, y: 15 });
-            (system as any).entityHandlers.set(SearchType.TREE, handler);
+            (system as any).handlerRegistry.entityHandlers.set(SearchType.TREE, handler);
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
 
@@ -85,7 +85,7 @@ describe('SettlerTaskSystem job selection', () => {
 
         it('woodcutter stays idle when no target exists', () => {
             const system = createTaskSystem(ctx);
-            (system as any).entityHandlers.set(SearchType.TREE, createNoTargetHandler());
+            (system as any).handlerRegistry.entityHandlers.set(SearchType.TREE, createNoTargetHandler());
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
 
@@ -99,7 +99,7 @@ describe('SettlerTaskSystem job selection', () => {
         it('farmer selects harvest job when harvestable grain target exists', () => {
             const system = createTaskSystem(ctx);
             const grain = ctx.state.addEntity(EntityType.MapObject, 0, 15, 15, 0);
-            (system as any).entityHandlers.set(
+            (system as any).handlerRegistry.entityHandlers.set(
                 SearchType.GRAIN,
                 createTargetHandler({ entityId: grain.id, x: 15, y: 15 })
             );
@@ -115,8 +115,8 @@ describe('SettlerTaskSystem job selection', () => {
 
         it('farmer selects plant job when no harvestable target exists', () => {
             const system = createTaskSystem(ctx);
-            (system as any).entityHandlers.set(SearchType.GRAIN, createNoTargetHandler());
-            (system as any).positionHandlers.set(SearchType.GRAIN, createPositionHandler(null));
+            (system as any).handlerRegistry.entityHandlers.set(SearchType.GRAIN, createNoTargetHandler());
+            (system as any).handlerRegistry.positionHandlers.set(SearchType.GRAIN, createPositionHandler(null));
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
@@ -134,8 +134,11 @@ describe('SettlerTaskSystem job selection', () => {
 
         it('farmer selects plant when entity handler returns no target', () => {
             const system = createTaskSystem(ctx);
-            (system as any).entityHandlers.set(SearchType.GRAIN, createNoTargetHandler());
-            (system as any).positionHandlers.set(SearchType.GRAIN, createPositionHandler({ x: 20, y: 20 }));
+            (system as any).handlerRegistry.entityHandlers.set(SearchType.GRAIN, createNoTargetHandler());
+            (system as any).handlerRegistry.positionHandlers.set(
+                SearchType.GRAIN,
+                createPositionHandler({ x: 20, y: 20 })
+            );
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
@@ -149,11 +152,14 @@ describe('SettlerTaskSystem job selection', () => {
         it('farmer prefers harvest over plant when entity target exists', () => {
             const system = createTaskSystem(ctx);
             const grain = ctx.state.addEntity(EntityType.MapObject, 0, 12, 12, 0);
-            (system as any).entityHandlers.set(
+            (system as any).handlerRegistry.entityHandlers.set(
                 SearchType.GRAIN,
                 createTargetHandler({ entityId: grain.id, x: 12, y: 12 })
             );
-            (system as any).positionHandlers.set(SearchType.GRAIN, createPositionHandler({ x: 20, y: 20 }));
+            (system as any).handlerRegistry.positionHandlers.set(
+                SearchType.GRAIN,
+                createPositionHandler({ x: 20, y: 20 })
+            );
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
@@ -167,7 +173,10 @@ describe('SettlerTaskSystem job selection', () => {
     describe('forester (single self-searching job)', () => {
         it('forester selects plant job when position handler returns a position', () => {
             const system = createTaskSystem(ctx);
-            (system as any).positionHandlers.set(SearchType.TREE_SEED_POS, createPositionHandler({ x: 20, y: 20 }));
+            (system as any).handlerRegistry.positionHandlers.set(
+                SearchType.TREE_SEED_POS,
+                createPositionHandler({ x: 20, y: 20 })
+            );
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Forester });
 
@@ -180,7 +189,7 @@ describe('SettlerTaskSystem job selection', () => {
 
         it('forester selects plant job when findPosition returns null', () => {
             const system = createTaskSystem(ctx);
-            (system as any).positionHandlers.set(SearchType.TREE_SEED_POS, createPositionHandler(null));
+            (system as any).handlerRegistry.positionHandlers.set(SearchType.TREE_SEED_POS, createPositionHandler(null));
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Forester });
 
@@ -210,8 +219,11 @@ describe('SettlerTaskSystem job selection', () => {
                 onWorkTick: (_targetId, progress) => progress >= 1.0,
                 onWorkComplete: () => {},
             };
-            (system as any).entityHandlers.set(SearchType.GRAIN, entityHandler);
-            (system as any).positionHandlers.set(SearchType.GRAIN, createPositionHandler({ x: 20, y: 20 }));
+            (system as any).handlerRegistry.entityHandlers.set(SearchType.GRAIN, entityHandler);
+            (system as any).handlerRegistry.positionHandlers.set(
+                SearchType.GRAIN,
+                createPositionHandler({ x: 20, y: 20 })
+            );
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
@@ -253,7 +265,7 @@ describe('SettlerTaskSystem job selection', () => {
                 canWork: () => false,
                 onWorkTick: () => false,
             };
-            (system as any).entityHandlers.set(SearchType.TREE, handler);
+            (system as any).handlerRegistry.entityHandlers.set(SearchType.TREE, handler);
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
 

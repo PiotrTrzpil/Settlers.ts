@@ -46,6 +46,7 @@ import { CombatFeature, CombatSystem, type CombatExports } from './features/comb
 import { TerritoryManager, registerTerritoryEvents } from './features/territory';
 import { WorkAreaStore } from './features/work-areas';
 import { BuildingOverlayManager, OverlayRegistry, populateOverlayRegistry } from './systems/building-overlays';
+import { EntityCleanupRegistry, CLEANUP_PRIORITY } from './systems/entity-cleanup-registry';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
 import { MapObjectType } from '@/game/types/map-object-types';
@@ -116,6 +117,7 @@ export class GameServices {
     // ===== Internal =====
     private readonly featureRegistry: FeatureRegistry;
     private readonly subscriptions = new EventSubscriptionManager();
+    private readonly cleanupRegistry = new EntityCleanupRegistry();
     private readonly eventBus: EventBus;
     private readonly tickSystems: { system: TickSystem; group: string }[] = [];
     private territoryCleanup: (() => void) | null = null;
@@ -172,18 +174,19 @@ export class GameServices {
 
         // 5. Register early lifecycle events — building state and carriers self-subscribe.
         //    Must happen before feature loading so handlers fire in the right order.
-        this.buildingStateManager.registerEvents(eventBus);
-        this.buildingOverlayManager.registerEvents(eventBus);
-        this.carrierManager.registerEvents(eventBus);
+        this.buildingStateManager.registerEvents(eventBus, this.cleanupRegistry);
+        this.buildingOverlayManager.registerEvents(eventBus, this.cleanupRegistry);
+        this.carrierManager.registerEvents(eventBus, this.cleanupRegistry);
         this.addSystem(this.buildingOverlayManager, 'Buildings');
         this.addSystem(this.carrierManager, 'Logistics');
 
         // 6. Feature registry — load self-registering features.
-        //    Features subscribe to entity:created/entity:removed for their own state.
+        //    Features register with cleanupRegistry for entity:removed cleanup.
         this.featureRegistry = new FeatureRegistry({
             gameState,
             eventBus,
             animationService: this.animationService,
+            cleanupRegistry: this.cleanupRegistry,
         });
 
         // Bridge manually-created managers so registry features can access them
@@ -248,7 +251,7 @@ export class GameServices {
             serviceAreaManager: this.serviceAreaManager,
             inventoryManager: this.inventoryManager,
         });
-        this.logisticsDispatcher.registerEvents(eventBus);
+        this.logisticsDispatcher.registerEvents(eventBus, this.cleanupRegistry);
         this.addSystem(this.logisticsDispatcher, 'Logistics');
 
         // 9. Work handlers
@@ -280,9 +283,9 @@ export class GameServices {
             );
         }
 
-        // 10. Inventory visualizer — subscribes to entity:removed for visual cleanup
+        // 10. Inventory visualizer — registers for entity:removed cleanup
         this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager, executeCommand);
-        this.inventoryVisualizer.registerEvents(eventBus);
+        this.inventoryVisualizer.registerEvents(eventBus, this.cleanupRegistry);
 
         // 11. Core entity lifecycle — movement controllers and resource state.
         //     These are not feature-specific, so they stay in the composition root.
@@ -294,7 +297,7 @@ export class GameServices {
                 gameState.resources.createState(entityId);
             }
         });
-        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
+        this.cleanupRegistry.onEntityRemoved(entityId => {
             this.movement.removeController(entityId);
             this.animationService.remove(entityId);
             gameState.resources.removeState(entityId);
@@ -302,11 +305,15 @@ export class GameServices {
         });
 
         // 12. Late inventory removal — MUST happen after logistics cleanup (step 8).
-        //     Logistics releases inventory reservations during entity:removed, so
-        //     inventory data must still exist when that handler fires.
-        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
-            this.inventoryManager.removeInventory(entityId);
-        });
+        //     Uses CLEANUP_PRIORITY.LATE to ensure inventory data still exists when
+        //     LogisticsDispatcher releases inventory reservations (LOGISTICS priority).
+        this.cleanupRegistry.onEntityRemoved(
+            entityId => this.inventoryManager.removeInventory(entityId),
+            CLEANUP_PRIORITY.LATE
+        );
+
+        // Wire the registry to the event bus — single subscription drives all cleanup handlers.
+        this.cleanupRegistry.registerEvents(eventBus);
     }
 
     /** Provide terrain data to movement and construction systems */
@@ -321,7 +328,11 @@ export class GameServices {
         // Created here (before populateMapEntities) so events are registered
         // before buildings are loaded.
         this.territoryManager = new TerritoryManager(terrain.width, terrain.height);
-        const territorySubscriptions = registerTerritoryEvents(this.eventBus, this.territoryManager);
+        const territorySubscriptions = registerTerritoryEvents(
+            this.eventBus,
+            this.territoryManager,
+            this.cleanupRegistry
+        );
         this.territoryCleanup = () => territorySubscriptions.unsubscribeAll();
 
         // Wire territory manager to logistics dispatcher for territory-based carrier filtering
@@ -346,6 +357,7 @@ export class GameServices {
         this.carrierManager.unregisterEvents();
         this.inventoryVisualizer.unregisterEvents();
         this.territoryCleanup?.();
+        this.cleanupRegistry.unregisterEvents();
         this.subscriptions.unsubscribeAll();
     }
 

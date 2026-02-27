@@ -66,7 +66,7 @@ export class PlaceUnitMode extends BasePlacementMode<UnitType> {
             unitType: data.subType,
             x,
             y,
-            player: 0, // TODO: Get from current player context
+            player: this.currentPlayer,
             race: data.race!,
             level: unitData.level,
         };

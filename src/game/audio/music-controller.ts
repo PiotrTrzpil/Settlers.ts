@@ -200,7 +200,8 @@ export class MusicController {
         }
 
         // Check for suspended audio context (autoplay policy)
-        if (typeof Howler !== 'undefined' && Howler.ctx.state === 'suspended') {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Howler.ctx is null in headless/test environments
+        if (typeof Howler !== 'undefined' && Howler.ctx?.state === 'suspended') {
             this.pendingMusicId = soundId;
             this.pendingFadeDuration = fadeDuration;
             MusicController.log.debug(`AudioContext suspended, queuing music: ${soundId}`);

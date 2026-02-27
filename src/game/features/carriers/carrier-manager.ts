@@ -5,6 +5,7 @@
  */
 
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
+import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
 import { EMaterialType } from '../../economy';
 import { UnitType, type EntityProvider } from '../../entity';
 import { CarrierStatus, type CarrierState, createCarrierState, canAcceptNewJob } from './carrier-state';
@@ -63,14 +64,14 @@ export class CarrierManager implements TickSystem {
      * Subscribe to entity lifecycle events.
      * Auto-registers spawned carriers and removes carrier state on entity removal.
      */
-    registerEvents(eventBus: EventBus): void {
+    registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
         this.subscriptions.subscribe(eventBus, 'unit:spawned', payload => {
             if (payload.unitType === UnitType.Carrier) {
                 this.autoRegisterCarrier(payload.entityId, payload.x, payload.y, payload.player);
             }
         });
 
-        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
+        cleanupRegistry.onEntityRemoved(entityId => {
             if (this.hasCarrier(entityId)) {
                 this.removeCarrier(entityId);
             }

@@ -50,10 +50,12 @@ export class EntitySpriteResolver {
 
     // ── Unified resolve ─────────────────────────────────────────
 
-    /** Resolve an entity's sprite for rendering. */
-    resolve(entity: Entity): SpriteResolveResult {
-        switch (entity.type) {
-        case EntityType.Building: {
+    /**
+     * Strategy map from EntityType to resolve function.
+     * Each entry returns a SpriteResolveResult for the given entity.
+     */
+    private readonly resolveMap: Record<EntityType, (entity: Entity) => SpriteResolveResult> = {
+        [EntityType.Building]: entity => {
             const result = this.getBuilding(entity);
             return {
                 skip: result.progress <= 0,
@@ -61,17 +63,27 @@ export class EntitySpriteResolver {
                 sprite: result.sprite,
                 progress: result.progress,
             };
-        }
-        case EntityType.MapObject:
-            return { skip: false, transitioning: false, sprite: this.getMapObject(entity), progress: 1 };
-        case EntityType.StackedResource:
-            return { skip: false, transitioning: false, sprite: this.getResource(entity), progress: 1 };
-        case EntityType.Unit:
-            return this.resolveUnit(entity);
-        case EntityType.Decoration:
-        case EntityType.None:
-            return { skip: true, transitioning: false, sprite: null, progress: 1 };
-        }
+        },
+        [EntityType.MapObject]: entity => ({
+            skip: false,
+            transitioning: false,
+            sprite: this.getMapObject(entity),
+            progress: 1,
+        }),
+        [EntityType.StackedResource]: entity => ({
+            skip: false,
+            transitioning: false,
+            sprite: this.getResource(entity),
+            progress: 1,
+        }),
+        [EntityType.Unit]: entity => this.resolveUnit(entity),
+        [EntityType.Decoration]: () => ({ skip: true, transitioning: false, sprite: null, progress: 1 }),
+        [EntityType.None]: () => ({ skip: true, transitioning: false, sprite: null, progress: 1 }),
+    };
+
+    /** Resolve an entity's sprite for rendering. */
+    resolve(entity: Entity): SpriteResolveResult {
+        return this.resolveMap[entity.type](entity);
     }
 
     // ── Per-type resolution ─────────────────────────────────────
@@ -181,24 +193,25 @@ export class EntitySpriteResolver {
 
     // ── Query helpers ───────────────────────────────────────────
 
+    /**
+     * Strategy map from EntityType to hasTexturedSprite check function.
+     */
+    private readonly hasTexturedSpriteMap: Record<EntityType, (entity: Entity) => boolean> = {
+        [EntityType.Building]: entity => !!this.sprites?.getBuilding(entity.subType as BuildingType, entity.race),
+        [EntityType.MapObject]: entity => {
+            if (!this.layerVisibility.decorationTextures) return false;
+            return !!this.sprites?.getMapObject(entity.subType as MapObjectType);
+        },
+        [EntityType.StackedResource]: entity => !!this.sprites?.getResource(entity.subType as EMaterialType),
+        [EntityType.Unit]: entity => !!this.sprites?.getUnit(entity.subType as UnitType, 0, entity.race),
+        [EntityType.Decoration]: () => false,
+        [EntityType.None]: () => false,
+    };
+
     /** Check if entity has a sprite available (for color fallback decisions). */
     hasTexturedSprite(entity: Entity): boolean {
         if (!this.sprites) return false;
-
-        switch (entity.type) {
-        case EntityType.Building:
-            return !!this.sprites.getBuilding(entity.subType as BuildingType, entity.race);
-        case EntityType.MapObject:
-            if (!this.layerVisibility.decorationTextures) return false;
-            return !!this.sprites.getMapObject(entity.subType as MapObjectType);
-        case EntityType.StackedResource:
-            return !!this.sprites.getResource(entity.subType as EMaterialType);
-        case EntityType.Unit:
-            return !!this.sprites.getUnit(entity.subType as UnitType, 0, entity.race);
-        case EntityType.Decoration:
-        case EntityType.None:
-            return false;
-        }
+        return this.hasTexturedSpriteMap[entity.type](entity);
     }
 
     /** Get sprite for placement preview by entity type. Exhaustive switch ensures compile-time safety. */

@@ -22,6 +22,7 @@ import { BuildingInventoryManager } from '@/game/features/inventory';
 import { ServiceAreaManager } from '@/game/features/service-areas';
 import { RequestManager } from '@/game/features/logistics';
 import { GameSettingsManager, type GameSettings } from '@/game/game-settings';
+import { EntityCleanupRegistry } from '@/game/systems';
 import { installTestGameData } from './test-game-data';
 
 // ─── GameState factory ──────────────────────────────────────────────
@@ -167,7 +168,9 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
 
     // Wire entity lifecycle events (movement controllers, resource state, building state)
     wireEntityLifecycleEvents(eventBus, movement, state);
-    buildingStateManager.registerEvents(eventBus);
+    const cleanupRegistry = new EntityCleanupRegistry();
+    cleanupRegistry.registerEvents(eventBus);
+    buildingStateManager.registerEvents(eventBus, cleanupRegistry);
 
     context = {
         state,

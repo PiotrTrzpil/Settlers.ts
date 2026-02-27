@@ -1,32 +1,39 @@
 /**
- * LogisticsDispatcher - Coordinates resource requests and carrier assignments.
+ * LogisticsDispatcher - Orchestrates resource requests and carrier assignments.
  *
  * This is the integration layer between the logistics system and the carrier system.
  * Each tick, it:
  * 1. Finds pending resource requests
- * 2. Matches them to available supplies using FulfillmentMatcher
+ * 2. Matches them to available supplies (via RequestMatcher)
  * 3. Creates a TransportJob (which reserves inventory + marks request InProgress)
- * 4. Assigns idle carriers to fulfill the job
+ * 4. Assigns idle carriers to fulfill the job (via CarrierAssigner)
  *
  * TransportJob owns the full lifecycle: reservation, request status, and cleanup.
- * The dispatcher just creates jobs and cancels them when carriers fail or buildings are destroyed.
+ * The dispatcher's role is limited to: coordinating the sub-systems, creating jobs,
+ * and cancelling jobs when external events require it (carrier removed, building destroyed).
  */
 
 import type { TickSystem } from '../../tick-system';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
+import { CLEANUP_PRIORITY } from '../../systems/entity-cleanup-registry';
+import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
 import type { GameState } from '../../game-state';
 import type { CarrierManager } from '../carriers';
-import { CarrierStatus } from '../carriers';
 import type { RequestManager } from './request-manager';
 import type { ServiceAreaManager } from '../service-areas';
-import { matchRequestToSupply } from './fulfillment-matcher';
-import { RequestStatus, type ResourceRequest } from './resource-request';
+import { RequestStatus } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
-import { TransportJob } from './transport-job';
-import { LogHandler } from '@/utilities/log-handler';
+import type { TransportJob } from './transport-job';
 import type { BuildingInventoryManager } from '../inventory';
-import { buildCarrierJob, type SettlerTaskSystem } from '../settler-tasks';
+import type { SettlerTaskSystem } from '../settler-tasks';
 import type { TerritoryManager } from '../territory';
+import { RequestMatcher } from './request-matcher';
+import { CarrierAssigner } from './carrier-assigner';
+import { StallDetector } from './stall-detector';
+import { MatchDiagnostics } from './match-diagnostics';
+
+/** Maximum number of job assignments per tick (to avoid frame drops) */
+const MAX_ASSIGNMENTS_PER_TICK = 5;
 
 /** Configuration for LogisticsDispatcher dependencies */
 export interface LogisticsDispatcherConfig {
@@ -38,108 +45,97 @@ export interface LogisticsDispatcherConfig {
     inventoryManager: BuildingInventoryManager;
 }
 
-/** Maximum number of job assignments per tick (to avoid frame drops) */
-const MAX_ASSIGNMENTS_PER_TICK = 5;
-
-/** Request timeout in milliseconds - requests older than this are considered stalled */
-const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
-
-/** How often to check for stalled requests (in milliseconds) */
-const STALL_CHECK_INTERVAL_MS = 5_000; // Check every 5 seconds
-
-/** How often to log match failure diagnostics (in milliseconds) */
-const MATCH_DIAGNOSTIC_INTERVAL_MS = 10_000;
-
 /**
- * System that coordinates resource requests with carrier assignments.
+ * Orchestrates resource requests, supply matching, and carrier assignments.
  *
- * Creates TransportJob instances that own the reservation + request lifecycle.
- * The dispatcher's role is limited to: matching supply, creating jobs, and
- * cancelling jobs when external events require it (carrier removed, building destroyed).
+ * Composes RequestMatcher, CarrierAssigner, StallDetector, and MatchDiagnostics
+ * to coordinate the full logistics dispatch loop each tick.
  */
 export class LogisticsDispatcher implements TickSystem {
-    private static log = new LogHandler('LogisticsDispatcher');
-
-    private readonly gameState: GameState;
-    private readonly carrierManager: CarrierManager;
-    private readonly settlerTaskSystem: SettlerTaskSystem;
     private readonly requestManager: RequestManager;
-    private readonly serviceAreaManager: ServiceAreaManager;
-    private readonly inventoryManager: BuildingInventoryManager;
     private readonly reservationManager: InventoryReservationManager;
 
-    /**
-     * When true, carriers can deliver anywhere on the map.
-     * When false, deliveries are restricted to within a shared service area (zone-based).
-     */
-    private _globalLogistics = true;
-
-    /**
-     * When true, carriers can only operate within their player's territory.
-     * Works alongside globalLogistics — territory filter is applied on top.
-     */
-    private _territoryEnabled = false;
-
-    /** Territory manager for position checks (set via setTerritoryManager) */
-    private territoryManager: TerritoryManager | null = null;
+    private readonly requestMatcher: RequestMatcher;
+    private readonly carrierAssigner: CarrierAssigner;
+    private readonly stallDetector: StallDetector;
+    private readonly matchDiagnostics: MatchDiagnostics;
 
     private eventBus!: EventBus;
 
     /** Active transport jobs indexed by carrier ID */
     private readonly activeJobs: Map<number, TransportJob> = new Map();
 
-    /** Accumulated time since last stall check (in ms) */
-    private timeSinceStallCheck: number = 0;
-
-    /** Accumulated time since last match diagnostic log (in ms) */
-    private timeSinceMatchDiagnostic: number = 0;
-    private matchDiagnosticDue = false;
-
     /** Event subscription manager for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
 
     constructor(config: LogisticsDispatcherConfig) {
-        this.gameState = config.gameState;
-        this.carrierManager = config.carrierManager;
-        this.settlerTaskSystem = config.settlerTaskSystem;
         this.requestManager = config.requestManager;
-        this.serviceAreaManager = config.serviceAreaManager;
-        this.inventoryManager = config.inventoryManager;
         this.reservationManager = new InventoryReservationManager();
 
         // Wire up inventory manager for slot-level reservation enforcement
-        this.reservationManager.setInventoryManager(this.inventoryManager);
+        this.reservationManager.setInventoryManager(config.inventoryManager);
+
+        this.requestMatcher = new RequestMatcher({
+            gameState: config.gameState,
+            inventoryManager: config.inventoryManager,
+            serviceAreaManager: config.serviceAreaManager,
+            reservationManager: this.reservationManager,
+        });
+
+        this.carrierAssigner = new CarrierAssigner({
+            gameState: config.gameState,
+            carrierManager: config.carrierManager,
+            settlerTaskSystem: config.settlerTaskSystem,
+            serviceAreaManager: config.serviceAreaManager,
+            reservationManager: this.reservationManager,
+            requestManager: config.requestManager,
+            inventoryManager: config.inventoryManager,
+        });
+
+        this.stallDetector = new StallDetector({
+            requestManager: config.requestManager,
+            reservationManager: this.reservationManager,
+        });
+
+        this.matchDiagnostics = new MatchDiagnostics({
+            gameState: config.gameState,
+            inventoryManager: config.inventoryManager,
+        });
     }
 
     /** Whether carriers can deliver globally (true) or only within shared service areas (false). */
     get globalLogistics(): boolean {
-        return this._globalLogistics;
+        return this.requestMatcher.globalLogistics;
     }
 
     set globalLogistics(enabled: boolean) {
-        this._globalLogistics = enabled;
+        this.requestMatcher.globalLogistics = enabled;
+        this.carrierAssigner.globalLogistics = enabled;
     }
 
     /** Whether carrier operations are restricted to player territory. */
     get territoryEnabled(): boolean {
-        return this._territoryEnabled;
+        return this.requestMatcher.territoryEnabled;
     }
 
     set territoryEnabled(enabled: boolean) {
-        this._territoryEnabled = enabled;
+        this.requestMatcher.territoryEnabled = enabled;
     }
 
     /** Set the territory manager for territory-based filtering. */
     setTerritoryManager(manager: TerritoryManager): void {
-        this.territoryManager = manager;
+        this.requestMatcher.setTerritoryManager(manager);
     }
 
     /**
-     * Register for carrier events.
+     * Register for carrier and entity events.
      * deliveryComplete and pickupFailed are handled by TransportJob internally,
      * but we still listen to clean up our activeJobs map.
+     *
+     * Uses CLEANUP_PRIORITY.LOGISTICS to ensure building destruction handling fires
+     * before inventory removal (inventory data must exist when releasing reservations).
      */
-    registerEvents(eventBus: EventBus): void {
+    registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
         this.eventBus = eventBus;
 
         this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', payload => {
@@ -154,84 +150,35 @@ export class LogisticsDispatcher implements TickSystem {
             this.handleCarrierRemoved(payload.entityId);
         });
 
-        // Clean up logistics state when buildings are destroyed
-        // Must be registered before inventory cleanup (inventory needed for reservation release)
-        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
-            this.handleBuildingDestroyed(entityId);
-        });
+        // Clean up logistics state when buildings are destroyed.
+        // LOGISTICS priority ensures this runs before inventory removal (LATE priority).
+        cleanupRegistry.onEntityRemoved(entityId => this.handleBuildingDestroyed(entityId), CLEANUP_PRIORITY.LOGISTICS);
     }
 
-    /**
-     * Unregister event handlers.
-     */
+    /** Unregister event handlers. */
     unregisterEvents(): void {
         this.subscriptions.unsubscribeAll();
     }
 
-    /**
-     * Cleanup for HMR and game exit.
-     */
+    /** Cleanup for HMR and game exit. */
     destroy(): void {
         this.unregisterEvents();
     }
 
     /**
-     * Main tick - assign pending requests to available carriers and check for stalls.
+     * Main tick — assign pending requests to available carriers and check for stalls.
      */
     tick(dt: number): void {
-        // Enable match diagnostics periodically
-        this.timeSinceMatchDiagnostic += dt * 1000;
-        if (this.timeSinceMatchDiagnostic >= MATCH_DIAGNOSTIC_INTERVAL_MS) {
-            this.timeSinceMatchDiagnostic = 0;
-            this.matchDiagnosticDue = true;
-        }
-
+        this.matchDiagnostics.tick(dt);
         this.assignPendingRequests();
-        this.matchDiagnosticDue = false;
-
-        // Periodically check for stalled requests
-        this.timeSinceStallCheck += dt * 1000;
-        if (this.timeSinceStallCheck >= STALL_CHECK_INTERVAL_MS) {
-            this.timeSinceStallCheck = 0;
-            this.checkForStalledRequests();
-        }
-    }
-
-    /**
-     * Check for requests that have been in-progress too long (stalled).
-     * Cancel the TransportJob, which releases reservation and resets request.
-     */
-    private checkForStalledRequests(): void {
-        const stalledRequests = this.requestManager.getStalledRequests(REQUEST_TIMEOUT_MS);
-
-        for (const request of stalledRequests) {
-            LogisticsDispatcher.log.warn(
-                `Request #${request.id} stalled after ${REQUEST_TIMEOUT_MS / 1000}s: ` +
-                    `material=${request.materialType}, building=${request.buildingId}, carrier=${request.assignedCarrier}. ` +
-                    'Cancelling transport job.'
-            );
-
-            // Find and cancel the TransportJob for this carrier
-            if (request.assignedCarrier !== null) {
-                const job = this.activeJobs.get(request.assignedCarrier);
-                if (job) {
-                    job.cancel('timeout');
-                    this.activeJobs.delete(request.assignedCarrier);
-                    continue;
-                }
-            }
-
-            // Fallback: no active job found, clean up manually
-            this.reservationManager.releaseReservationForRequest(request.id);
-            this.requestManager.resetRequest(request.id, 'timeout');
-        }
+        this.matchDiagnostics.markConsumed();
+        this.stallDetector.tick(dt, this.activeJobs);
     }
 
     /**
      * Assign pending requests to available carriers.
      * Limits assignments per tick to prevent frame drops.
      */
-    // eslint-disable-next-line sonarjs/cognitive-complexity -- complex carrier dispatch algorithm
     private assignPendingRequests(): void {
         const pendingRequests = this.requestManager.getPendingRequests();
         let assignmentCount = 0;
@@ -246,148 +193,19 @@ export class LogisticsDispatcher implements TickSystem {
                 continue;
             }
 
-            // Look up destination building once for both matching and carrier search
-            const destBuilding = this.gameState.getEntityOrThrow(request.buildingId, 'requesting building');
-            const playerId = destBuilding.player;
-
-            // Try to match this request to a supply (accounting for already-reserved inventory)
-            const match = matchRequestToSupply(
-                request,
-                this.gameState,
-                this.inventoryManager,
-                this.serviceAreaManager,
-                {
-                    playerId,
-                    requireServiceArea: !this._globalLogistics,
-                    reservationManager: this.reservationManager,
-                }
-            );
-
+            const match = this.requestMatcher.matchRequest(request);
             if (!match) {
-                if (this.matchDiagnosticDue) {
-                    this.logMatchFailure(request);
+                if (this.matchDiagnostics.isDue()) {
+                    this.matchDiagnostics.logFailure(request);
                 }
                 continue; // No supply available for this request
             }
 
-            // Territory filter: both source and destination must be in the player's territory
-            if (this._territoryEnabled && this.territoryManager) {
-                const sourceBuilding = this.gameState.getEntity(match.sourceBuilding);
-                if (
-                    !sourceBuilding ||
-                    !this.territoryManager.isInTerritory(destBuilding.x, destBuilding.y, playerId) ||
-                    !this.territoryManager.isInTerritory(sourceBuilding.x, sourceBuilding.y, playerId)
-                ) {
-                    continue;
-                }
-            }
-
-            // Find an available carrier from a hub that serves both buildings
-            const carrier = this.findAvailableCarrier(match.serviceHubs, playerId);
-            if (!carrier) {
-                if (this.matchDiagnosticDue) {
-                    LogisticsDispatcher.log.warn(
-                        `Request #${request.id}: matched source=${match.sourceBuilding} but no carrier available ` +
-                            `(${match.serviceHubs.length} valid hubs: [${match.serviceHubs.join(', ')}])`
-                    );
-                }
-                continue; // No carrier available
-            }
-
-            // Create TransportJob — reserves inventory + marks request InProgress
-            const carrierState = this.carrierManager.getCarrierOrThrow(carrier.entityId, 'for delivery assignment');
-            const transportJob = TransportJob.create(
-                request.id,
-                match.sourceBuilding,
-                request.buildingId,
-                request.materialType,
-                match.amount,
-                carrierState.homeBuilding,
-                carrier.entityId,
-                {
-                    reservationManager: this.reservationManager,
-                    requestManager: this.requestManager,
-                    inventoryManager: this.inventoryManager,
-                }
-            );
-
-            if (!transportJob) {
-                continue; // Reservation failed
-            }
-
-            // Build carrier job (references the TransportJob) and assign
-            const sourceBuilding = this.gameState.getEntityOrThrow(match.sourceBuilding, 'source building for carrier');
-            const job = buildCarrierJob(transportJob);
-            const success = this.settlerTaskSystem.assignJob(carrier.entityId, job, {
-                x: sourceBuilding.x,
-                y: sourceBuilding.y,
-            });
-
-            if (success) {
-                this.carrierManager.setStatus(carrier.entityId, CarrierStatus.Walking);
-                this.activeJobs.set(carrier.entityId, transportJob);
+            const assignment = this.carrierAssigner.tryAssign(request, match);
+            if (assignment) {
+                this.activeJobs.set(assignment.carrierId, assignment.transportJob);
                 assignmentCount++;
-            } else {
-                transportJob.cancel('assignment_failed');
             }
-        }
-    }
-
-    /**
-     * Find an available carrier from the given service hubs.
-     * In global mode, falls back to searching all player hubs if no shared-hub carrier is free.
-     * In zone mode, only searches the shared hubs.
-     */
-    private findAvailableCarrier(serviceHubs: number[], playerId: number): { entityId: number } | null {
-        // Try carriers from hubs that cover both source and dest (likely closer)
-        const fromShared = this.findIdleCarrierInHubs(serviceHubs, playerId);
-        if (fromShared || !this._globalLogistics) return fromShared;
-
-        // Global fallback: search all remaining hubs for this player
-        const sharedHubSet = new Set(serviceHubs);
-        const remainingHubs = this.serviceAreaManager
-            .getServiceAreasForPlayer(playerId)
-            .filter(area => !sharedHubSet.has(area.buildingId))
-            .map(area => area.buildingId);
-
-        return this.findIdleCarrierInHubs(remainingHubs, playerId);
-    }
-
-    /**
-     * Find the first idle carrier from the given hub IDs.
-     */
-    private findIdleCarrierInHubs(hubIds: number[], playerId: number): { entityId: number } | null {
-        for (const hubId of hubIds) {
-            const hubEntity = this.gameState.getEntity(hubId);
-            if (!hubEntity || hubEntity.player !== playerId) continue;
-
-            for (const carrier of this.carrierManager.getCarriersForTavern(hubId)) {
-                if (this.carrierManager.canAssignJobTo(carrier.entityId)) {
-                    return { entityId: carrier.entityId };
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Log diagnostic info when a request cannot be matched to any supply.
-     */
-    private logMatchFailure(request: ResourceRequest): void {
-        const destBuilding = this.gameState.getEntity(request.buildingId);
-        if (!destBuilding) return;
-
-        const supplies = this.inventoryManager.getBuildingsWithOutput(request.materialType, 1);
-        const otherSupplies = supplies.filter(id => id !== request.buildingId);
-        if (otherSupplies.length === 0) {
-            LogisticsDispatcher.log.debug(
-                `Request #${request.id} (material=${request.materialType}): no supply available anywhere`
-            );
-        } else {
-            LogisticsDispatcher.log.debug(
-                `Request #${request.id} (material=${request.materialType}): ` +
-                    `${otherSupplies.length} supply buildings exist but all reserved or insufficient`
-            );
         }
     }
 

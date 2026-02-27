@@ -40,9 +40,7 @@ export const ServiceAreaFeature: FeatureDefinition = {
         });
 
         // Clean up service areas when buildings are removed
-        subscriptions.subscribe(ctx.eventBus, 'entity:removed', ({ entityId }) => {
-            serviceAreaManager.removeServiceArea(entityId);
-        });
+        ctx.cleanupRegistry.onEntityRemoved(entityId => serviceAreaManager.removeServiceArea(entityId));
 
         return {
             exports: { serviceAreaManager } satisfies ServiceAreaExports,

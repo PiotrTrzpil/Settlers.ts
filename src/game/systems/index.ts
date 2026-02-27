@@ -107,3 +107,8 @@ export { analyzeResourceTypes } from './map-resources';
 // Spatial Search
 // ============================================================================
 export { findNearestEntity, findEmptySpot, ringTiles, type FindEmptySpotConfig } from './spatial-search';
+
+// ============================================================================
+// Entity Cleanup Registry
+// ============================================================================
+export { EntityCleanupRegistry, CLEANUP_PRIORITY, type CleanupPriority } from './entity-cleanup-registry';

@@ -39,9 +39,7 @@ export const CropFeature: FeatureDefinition = {
         });
 
         // Clean up crop state on entity removal
-        subscriptions.subscribe(ctx.eventBus, 'entity:removed', ({ entityId }) => {
-            cropSystem.unregister(entityId);
-        });
+        ctx.cleanupRegistry.onEntityRemoved(entityId => cropSystem.unregister(entityId));
 
         return {
             systems: [cropSystem],

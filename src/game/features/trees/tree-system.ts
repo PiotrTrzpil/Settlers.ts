@@ -138,6 +138,10 @@ export class TreeSystem extends GrowableSystem<TreeState> {
                 startFrame,
                 direction: state.variant,
             });
+        } else {
+            // Remove animation state entirely so the renderer falls back to the
+            // variation-specific static sprite (cutting stages, stump, etc.)
+            this.animationService.remove(entityId);
         }
     }
 
@@ -204,6 +208,9 @@ export class TreeSystem extends GrowableSystem<TreeState> {
 
         state.stage = TreeStage.Cutting;
         state.progress = 0;
+        // Remove sway animation immediately — the initial cutting sprite offset equals
+        // NORMAL, so updateVisual won't detect a change or call onOffsetChanged.
+        this.animationService.remove(entityId);
         this.updateVisual(entityId, state);
         return true;
     }

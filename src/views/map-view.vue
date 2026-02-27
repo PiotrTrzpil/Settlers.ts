@@ -10,8 +10,18 @@
         >
             <!-- LEFT SIDEBAR -->
             <aside class="sidebar">
-                <!-- Race selector at top of sidebar -->
-                <div class="race-selector-sidebar">
+                <!-- Player selector -->
+                <div class="sidebar-selector">
+                    <label>Player:</label>
+                    <select v-model="currentPlayer" @change="onPlayerChange" data-testid="player-select">
+                        <option v-for="p in availablePlayers" :key="p.index" :value="p.index">
+                            {{ p.label }}
+                        </option>
+                    </select>
+                </div>
+
+                <!-- Race selector -->
+                <div class="sidebar-selector">
                     <label>Race:</label>
                     <select v-model="currentRace" @change="onRaceChange" data-testid="race-select">
                         <option v-for="race in availableRaces" :key="race.value" :value="race.value">
@@ -229,6 +239,7 @@ import { ref, computed, useTemplateRef, watch, onMounted, onBeforeUnmount } from
 import { FileManager } from '@/utilities/file-manager';
 import { useMapView } from './use-map-view';
 import { Race, RACE_NAMES, AVAILABLE_RACES, loadSavedRace, saveSavedRace } from '@/game/renderer/sprite-metadata';
+import type { Game } from '@/game/game';
 import { SoundManager } from '@/game/audio/sound-manager';
 import { saveCameraState, loadCameraState, clearCameraState } from '@/game/renderer/camera-persistence';
 import { getCurrentMapId } from '@/game/game-state-persistence';
@@ -246,7 +257,8 @@ const props = defineProps<{
 // Template ref for renderer - declared before useMapView so getter works
 const rendererRef = useTemplateRef<InstanceType<typeof RendererViewer>>('rendererRef');
 
-// Race selection — declared before useMapView so it can drive building/unit filtering
+// Player & race selection — declared before useMapView so they can drive building/unit filtering
+const currentPlayer = ref(0);
 const currentRace = ref<Race>(loadSavedRace());
 
 const {
@@ -304,6 +316,42 @@ const availableRaces = AVAILABLE_RACES.map(race => ({
     value: race,
     name: RACE_NAMES[race],
 }));
+
+// Player list from the loaded map (ref, populated in watch to avoid shallowRef reactivity issues)
+const availablePlayers = ref([{ index: 0, label: 'P0' }]);
+
+function buildPlayerList(g: Game): { index: number; label: string }[] {
+    const players: { index: number; label: string }[] = [];
+    if (g.playerRaces.size > 0) {
+        for (const [idx, race] of g.playerRaces) {
+            players.push({ index: idx, label: `P${idx} ${RACE_NAMES[race]}` });
+        }
+    } else {
+        // Derive from entities when playerRaces is empty (e.g. test map)
+        const seen = new Set<number>();
+        for (const e of g.state.entities) {
+            if (!seen.has(e.player)) {
+                seen.add(e.player);
+                players.push({ index: e.player, label: `P${e.player}` });
+            }
+        }
+    }
+    players.sort((a, b) => a.index - b.index);
+    return players.length > 0 ? players : [{ index: 0, label: 'P0' }];
+}
+
+function onPlayerChange() {
+    const g = game.value;
+    if (!g) return;
+    g.currentPlayer = currentPlayer.value;
+}
+
+// Sync currentPlayer + player list when a new map loads
+watch(game, g => {
+    if (!g) return;
+    currentPlayer.value = g.currentPlayer;
+    availablePlayers.value = buildPlayerList(g);
+});
 
 // Building placement options
 const placeBuildingsCompleted = computed({
@@ -626,24 +674,31 @@ onBeforeUnmount(() => {
     font-size: 12px;
 }
 
-.race-selector-sidebar {
+.sidebar-selector {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 2px 8px;
     background: #1a1209;
-    border-bottom: 2px solid #5c3d1a;
+    border-bottom: 1px solid #3a2810;
     color: #c8a96e;
     font-size: 13px;
 }
 
-.race-selector-sidebar label {
-    font-weight: bold;
-    color: #d4b27a;
+.sidebar-selector + .sidebar-tabs {
+    border-top: 1px solid #5c3d1a;
 }
 
-.race-selector-sidebar select {
+.sidebar-selector label {
+    font-weight: bold;
+    color: #d4b27a;
+    width: 46px;
+    flex-shrink: 0;
+}
+
+.sidebar-selector select {
     flex: 1;
+    min-width: 0;
     background: #2c1e0e;
     color: #c8a96e;
     border: 1px solid #4a3218;
@@ -653,7 +708,7 @@ onBeforeUnmount(() => {
     cursor: pointer;
 }
 
-.race-selector-sidebar select:hover {
+.sidebar-selector select:hover {
     border-color: #6a4a20;
     background: #3a2810;
 }

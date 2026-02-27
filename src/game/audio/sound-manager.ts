@@ -190,7 +190,8 @@ export class SoundManager implements IAudioManager {
                 return;
             }
 
-            if (Howler.ctx.state === 'suspended') {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Howler.ctx is null in headless/test environments
+            if (Howler.ctx?.state === 'suspended') {
                 unlocking = true;
 
                 // Remove listeners IMMEDIATELY to prevent duplicate calls
@@ -315,7 +316,8 @@ export class SoundManager implements IAudioManager {
             onplayerror: (_id, err) => {
                 SoundManager.log.error(`Failed to play sound ${config.id}: ${err}`);
                 // Unlock audio context if needed
-                if (Howler.ctx.state === 'suspended') {
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Howler.ctx is null in headless/test environments
+                if (Howler.ctx?.state === 'suspended') {
                     void Howler.ctx
                         .resume()
                         .then(() => {

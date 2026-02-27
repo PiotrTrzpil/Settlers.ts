@@ -47,3 +47,10 @@ export {
     executePush,
 } from './push-utils';
 export type { TileOccupancyAccessor, TerrainAccessor } from './push-utils';
+
+// Extracted sub-modules
+export type { IPathfinder, PathfindingTerrain } from './pathfinding-service';
+export { PathfindingService } from './pathfinding-service';
+export type { ICollisionResolver, CollisionResolverConfig } from './collision-resolver';
+export { CollisionResolver } from './collision-resolver';
+export { BlockedStateHandler } from './blocked-state-handler';

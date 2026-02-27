@@ -46,6 +46,11 @@ export {
 
 // Inventory visualization
 export { InventoryVisualizer } from './inventory-visualizer';
+export type { DebugSlotInfo } from './inventory-visualizer';
+export { MaterialStackState } from './material-stack-state';
+export type { BuildingVisualState as InventoryVisualState } from './material-stack-state';
+export { InventoryLayout } from './inventory-layout';
+export type { BuildingLayoutPositions } from './inventory-layout';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { InventoryFeature, type InventoryExports } from './inventory-feature';

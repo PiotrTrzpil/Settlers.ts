@@ -39,9 +39,7 @@ export const CombatFeature: FeatureDefinition = {
         });
 
         // Clean up on removal
-        subscriptions.subscribe(ctx.eventBus, 'entity:removed', ({ entityId }) => {
-            combatSystem.unregister(entityId);
-        });
+        ctx.cleanupRegistry.onEntityRemoved(entityId => combatSystem.unregister(entityId));
 
         return {
             systems: [combatSystem],

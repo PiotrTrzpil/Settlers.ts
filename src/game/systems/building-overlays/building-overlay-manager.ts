@@ -25,6 +25,7 @@ import { EntityType, type BuildingType, type EntityProvider } from '../../entity
 import type { Race } from '../../race';
 import type { EventBus, EventSubscriptionManager as ESM } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
+import type { EntityCleanupRegistry } from '../entity-cleanup-registry';
 import { BuildingConstructionPhase } from '../../features/building-construction/types';
 import type { BuildingStateManager } from '../../features/building-construction/building-state-manager';
 import type { OverlayRegistry } from './overlay-registry';
@@ -187,17 +188,15 @@ export class BuildingOverlayManager implements TickSystem {
     /**
      * Subscribe to building lifecycle events.
      * - `building:completed` → addBuilding
-     * - `entity:removed` → removeBuilding
+     * - `entity:removed` → removeBuilding (via cleanupRegistry)
      */
-    registerEvents(eventBus: EventBus): void {
+    registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
         this.subscriptions.subscribe(eventBus, 'building:completed', ({ entityId, buildingState }) => {
             const entity = this.entityProvider.getEntity(entityId);
             if (!entity) return;
             this.addBuilding(entityId, buildingState.buildingType, entity.race);
         });
-        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
-            this.removeBuilding(entityId);
-        });
+        cleanupRegistry.onEntityRemoved(entityId => this.removeBuilding(entityId));
     }
 
     /** Unsubscribe from all events */

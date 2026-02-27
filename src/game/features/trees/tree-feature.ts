@@ -45,9 +45,7 @@ export const TreeFeature: FeatureDefinition = {
         });
 
         // Clean up tree state when entities are removed
-        subscriptions.subscribe(ctx.eventBus, 'entity:removed', ({ entityId }) => {
-            treeSystem.unregister(entityId);
-        });
+        ctx.cleanupRegistry.onEntityRemoved(entityId => treeSystem.unregister(entityId));
 
         return {
             systems: [treeSystem],

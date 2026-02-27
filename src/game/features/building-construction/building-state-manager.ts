@@ -8,6 +8,7 @@
  */
 
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
+import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
 import { BuildingType } from '../../buildings/types';
 import { BuildingConstructionPhase, type BuildingState } from './types';
 import { EntityType, type EntityProvider } from '../../entity';
@@ -49,16 +50,14 @@ export class BuildingStateManager {
      * Subscribe to entity lifecycle events.
      * Creates building states for new buildings and removes them on entity removal.
      */
-    registerEvents(eventBus: EventBus): void {
+    registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, type, subType, x, y }) => {
             if (type === EntityType.Building) {
                 this.createBuildingState(entityId, subType as BuildingType, x, y);
             }
         });
 
-        this.subscriptions.subscribe(eventBus, 'entity:removed', ({ entityId }) => {
-            this.removeBuildingState(entityId);
-        });
+        cleanupRegistry.onEntityRemoved(entityId => this.removeBuildingState(entityId));
     }
 
     /** Unsubscribe from all tracked events. */

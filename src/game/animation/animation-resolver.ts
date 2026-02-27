@@ -29,48 +29,6 @@ export interface AnimationIntent {
 
 const IDLE_INTENT_L1: AnimationIntent = { sequence: ANIMATION_SEQUENCES.DEFAULT, loop: false, stopped: true };
 
-/**
- * Resolve a task's semantic animation type to a concrete AnimationIntent.
- *
- * This replaces the scattered resolveSequenceKey() + shouldLoop() + special-case
- * logic that was spread across settler-task-system and task-executors.
- */
-export function resolveTaskAnimation(anim: AnimationType, entity: Entity): AnimationIntent {
-    switch (anim) {
-    case 'walk':
-        return resolveWalkIntent(entity);
-
-    case 'carry':
-        if (!entity.carrying) {
-            throw new Error(
-                `Cannot play 'carry' animation for entity ${entity.id} (${UnitType[entity.subType]}): ` +
-                        `no material being carried. Check PICKUP task runs before GO_HOME with carry anim.`
-            );
-        }
-        return { sequence: carrySequenceKey(entity.carrying.material), loop: true, stopped: false };
-
-    case 'fight':
-        return resolveFightIntent(entity);
-
-    case 'chop':
-    case 'harvest':
-    case 'mine':
-    case 'hammer':
-    case 'dig':
-    case 'plant':
-    case 'work':
-        return { sequence: workSequenceKey(0), loop: true, stopped: false };
-
-    case 'pickup':
-    case 'dropoff':
-        return { sequence: workSequenceKey(0), loop: false, stopped: false };
-
-    case 'idle':
-    default:
-        return resolveIdleIntent(entity);
-    }
-}
-
 /** Resolve idle intent — higher-level military units use level-specific idle animations. */
 function resolveIdleIntent(entity: Entity): AnimationIntent {
     const level = entity.level ?? 1;
@@ -91,4 +49,56 @@ function resolveWalkIntent(entity: Entity): AnimationIntent {
     }
     const level = entity.level ?? 1;
     return { sequence: levelWalkSequenceKey(level), loop: true, stopped: false };
+}
+
+/** Resolve carry intent — entity must be carrying a material. */
+function resolveCarryIntent(entity: Entity): AnimationIntent {
+    if (!entity.carrying) {
+        throw new Error(
+            `Cannot play 'carry' animation for entity ${entity.id} (${UnitType[entity.subType]}): ` +
+                `no material being carried. Check PICKUP task runs before GO_HOME with carry anim.`
+        );
+    }
+    return { sequence: carrySequenceKey(entity.carrying.material), loop: true, stopped: false };
+}
+
+/** Generic work animation (looping) — used for chop, harvest, mine, hammer, dig, plant, work. */
+function resolveWorkIntent(_entity: Entity): AnimationIntent {
+    return { sequence: workSequenceKey(0), loop: true, stopped: false };
+}
+
+/** Short work animation (non-looping) — used for pickup and dropoff. */
+function resolveShortWorkIntent(_entity: Entity): AnimationIntent {
+    return { sequence: workSequenceKey(0), loop: false, stopped: false };
+}
+
+/**
+ * Strategy map from AnimationType to resolver function.
+ * Each entry resolves a semantic animation type to a concrete AnimationIntent.
+ * TypeScript enforces exhaustive coverage of all AnimationType values.
+ */
+const animationResolvers: Record<AnimationType, (entity: Entity) => AnimationIntent> = {
+    walk: resolveWalkIntent,
+    idle: resolveIdleIntent,
+    carry: resolveCarryIntent,
+    pickup: resolveShortWorkIntent,
+    dropoff: resolveShortWorkIntent,
+    chop: resolveWorkIntent,
+    harvest: resolveWorkIntent,
+    plant: resolveWorkIntent,
+    mine: resolveWorkIntent,
+    hammer: resolveWorkIntent,
+    dig: resolveWorkIntent,
+    fight: resolveFightIntent,
+    work: resolveWorkIntent,
+};
+
+/**
+ * Resolve a task's semantic animation type to a concrete AnimationIntent.
+ *
+ * This replaces the scattered resolveSequenceKey() + shouldLoop() + special-case
+ * logic that was spread across settler-task-system and task-executors.
+ */
+export function resolveTaskAnimation(anim: AnimationType, entity: Entity): AnimationIntent {
+    return animationResolvers[anim](entity);
 }

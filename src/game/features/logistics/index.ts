@@ -81,6 +81,18 @@ export {
 // Transport job (owns reservation + request lifecycle for a single delivery)
 export { TransportJob, type TransportJobDeps, type TransportJobStatus } from './transport-job';
 
+// Request matcher (supply matching with territory filtering)
+export { RequestMatcher, type RequestMatcherConfig, type RequestMatchResult } from './request-matcher';
+
+// Carrier assigner (finds idle carriers and creates transport jobs)
+export { CarrierAssigner, type CarrierAssignerConfig, type AssignmentSuccess } from './carrier-assigner';
+
+// Stall detector (cancels timed-out in-progress requests)
+export { StallDetector, type StallDetectorConfig } from './stall-detector';
+
+// Match diagnostics (throttled logging of unmatched requests)
+export { MatchDiagnostics, type MatchDiagnosticsConfig } from './match-diagnostics';
+
 // Logistics dispatcher (connects requests to carriers)
 export { LogisticsDispatcher, type LogisticsDispatcherConfig } from './logistics-dispatcher';
 

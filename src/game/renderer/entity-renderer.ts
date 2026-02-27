@@ -1,18 +1,13 @@
 import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
-import { Entity, EntityType, StackedResourceState, UnitType } from '../entity';
+import { Entity, EntityType, StackedResourceState } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
-import { subTypeToRawByte } from '@/resources/map/raw-object-registry';
 import { MapSize } from '@/utilities/map-size';
-import { TilePicker } from '../input/tile-picker';
-import { TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
 import { LogHandler } from '@/utilities/log-handler';
 import { FileManager } from '@/utilities/file-manager';
-import { SpriteEntry, Race } from './sprite-metadata';
-import { PLAYER_COLORS, TINT_NEUTRAL, TINT_SELECTED, TINT_PREVIEW_VALID, TINT_PREVIEW_INVALID } from './tint-utils';
+import { Race } from './sprite-metadata';
 import { SpriteRenderManager } from './sprite-render-manager';
-import { PALETTE_TEXTURE_WIDTH } from './palette-texture';
 import { SpriteBatchRenderer } from './sprite-batch-renderer';
 import { SelectionOverlayRenderer } from './selection-overlay-renderer';
 import type { AnimationState } from '../animation';
@@ -33,7 +28,6 @@ import type {
     BuildingOverlayRenderData,
     RenderSettings,
 } from './render-context';
-import { OverlayRenderLayer } from './render-context';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -41,26 +35,27 @@ import fragCode from './shaders/entity-frag.glsl';
 // Re-export PlacementPreviewState from its canonical location
 export type { PlacementPreviewState } from './render-context';
 
-import {
-    TEXTURE_UNIT_SPRITE_ATLAS,
-    BASE_QUAD,
-    BUILDING_SCALE,
-    UNIT_SCALE,
-    RESOURCE_SCALE,
-    PREVIEW_VALID_COLOR,
-    PREVIEW_INVALID_COLOR,
-    WORK_AREA_CIRCLE_COLOR,
-    decoHueToRgb,
-    decoTypeToHue,
-    scaleSprite,
-    getSpriteScale,
-} from './entity-renderer-constants';
+import { TEXTURE_UNIT_SPRITE_ATLAS } from './entity-renderer-constants';
+
+import type { PassContext } from './render-passes/types';
+import { PathIndicatorPass } from './render-passes/path-indicator-pass';
+import { GroundOverlayPass } from './render-passes/ground-overlay-pass';
+import { TerritoryDotPass } from './render-passes/territory-dot-pass';
+import { EntitySpritePass } from './render-passes/entity-sprite-pass';
+import { TransitionBlendPass } from './render-passes/transition-blend-pass';
+import { ColorEntityPass } from './render-passes/color-entity-pass';
+import { SelectionPass } from './render-passes/selection-pass';
+import { StackGhostPass } from './render-passes/stack-ghost-pass';
+import { PlacementPreviewPass } from './render-passes/placement-preview-pass';
 
 const EMPTY_OVERLAYS: readonly BuildingOverlayRenderData[] = [];
 
 /**
  * Renders entities (units and buildings) as colored quads or textured sprites.
- * Supports smooth unit interpolation, path visualization, and placement preview.
+ *
+ * Acts as a pass coordinator: each rendering concern is handled by a dedicated
+ * pass class. EntityRenderer manages initialization, context propagation,
+ * depth sorting, and the draw call sequence.
  */
 export class EntityRenderer extends RendererBase implements IRenderer {
     private static log = new LogHandler('EntityRenderer');
@@ -120,7 +115,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Consolidated placement preview state
     public placementPreview: PlacementPreviewState | null = null;
 
-    /** Debug: decoration labels collected during drawColorEntities (screen-space) */
+    /** Debug: decoration labels collected during ColorEntityPass (screen-space) */
     public debugDecoLabels: Array<{ screenX: number; screenY: number; type: number; hue: number }> = [];
 
     /** Tile highlight rings from input modes (e.g., stack-adjust tool). */
@@ -152,13 +147,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private aEntityPos = -1;
     private aColor = -1;
 
-    // Reusable vertex buffer to avoid per-frame allocations
-    private vertexData = new Float32Array(6 * 2);
-
     // Reusable array for depth-sorted entities
     private sortedEntities: Entity[] = [];
-    // Reusable array for units with direction transitions
-    private transitioningUnits: Entity[] = [];
 
     // Per-frame timing (for debugStats reporting)
     private frameCullSortTime = 0;
@@ -171,8 +161,25 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private frameColorTime = 0;
     private frameSelectionTime = 0;
 
+    /** Last frame's entity draw time (ms) - for debug stats collection */
+    private lastEntityDrawTime = 0;
+
     /** Skip sprite loading (for testMap or procedural textures mode) */
     public skipSpriteLoading = false;
+
+    // =========================================================================
+    // Render passes
+    // =========================================================================
+
+    private passTransitionBlend: TransitionBlendPass;
+    private passPathIndicator: PathIndicatorPass;
+    private passGroundOverlay: GroundOverlayPass;
+    private passTerritoryDot: TerritoryDotPass;
+    private passEntitySprite: EntitySpritePass;
+    private passColorEntity: ColorEntityPass;
+    private passSelection: SelectionPass;
+    private passStackGhost: StackGhostPass;
+    private passPlacementPreview: PlacementPreviewPass;
 
     constructor(mapSize: MapSize, groundHeight: Uint8Array, fileManager?: FileManager) {
         super();
@@ -185,6 +192,17 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         if (fileManager) {
             this.spriteManager = new SpriteRenderManager(fileManager, TEXTURE_UNIT_SPRITE_ATLAS);
         }
+
+        // Build pass instances (blend pass first — sprite pass holds a reference to it)
+        this.passTransitionBlend = new TransitionBlendPass();
+        this.passPathIndicator = new PathIndicatorPass(this.selectionOverlayRenderer);
+        this.passGroundOverlay = new GroundOverlayPass(this.selectionOverlayRenderer);
+        this.passTerritoryDot = new TerritoryDotPass();
+        this.passEntitySprite = new EntitySpritePass(this.passTransitionBlend);
+        this.passColorEntity = new ColorEntityPass();
+        this.passSelection = new SelectionPass(this.selectionOverlayRenderer);
+        this.passStackGhost = new StackGhostPass();
+        this.passPlacementPreview = new PlacementPreviewPass();
     }
 
     // eslint-disable-next-line @typescript-eslint/require-await -- sprite loading is fire-and-forget
@@ -334,227 +352,86 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-        const selectionCtx = {
-            mapSize: this.mapSize,
-            groundHeight: this.groundHeight,
-            viewPoint,
-            unitStates: this.unitStates,
-        };
+        // Build the shared pass context for this frame
+        const passCtx = this.buildPassContext();
 
-        // Pass 1: Path indicators + depth sort + ground overlays
+        // --- Execute passes in order ---
+
+        // Pass 1: Path indicators (color shader) — uses unitStates only, no frameContext needed
+        this.passPathIndicator.prepare(passCtx);
         this.setupColorShader(gl, projection);
-        this.drawPathIndicators(gl, selectionCtx);
+        this.passPathIndicator.draw(gl, projection, viewPoint);
+
+        // Depth sort — populates this.frameContext and this.sortedEntities
         this.frameCullSortTime = this.timedPass(() => this.sortEntitiesByDepth(viewPoint));
-        this.drawGroundOverlays(gl, projection, selectionCtx);
-        this.drawTerritoryDotSprites(gl, projection, viewPoint);
 
-        // Pass 2: Entity rendering (textured sprites + color fallback)
-        this.frameDrawTime = this.timedPass(() => this.drawEntityPass(gl, projection, viewPoint));
+        // Re-build passCtx now that frameContext is populated (sortedEntities is same array, already updated)
+        passCtx.frameContext = this.frameContext;
 
-        // Pass 3: Selection overlays (frames, dots, highlights)
-        this.frameSelectionTime = this.timedPass(() => this.drawSelectionPass(gl, selectionCtx));
+        // --- Prepare remaining passes (after depth sort so frameContext is valid) ---
+        this.passGroundOverlay.prepare(passCtx);
+        this.passTerritoryDot.prepare(passCtx);
+        this.passEntitySprite.prepare(passCtx);
+        this.passTransitionBlend.prepare(passCtx);
+        this.passColorEntity.prepare(passCtx);
+        this.passSelection.prepare(passCtx);
+        this.passStackGhost.prepare(passCtx);
+        this.passPlacementPreview.prepare(passCtx);
 
-        // Pass 4: Stack ghost sprites (semi-transparent resource previews during adjust)
-        this.drawStackGhosts(gl, projection, viewPoint);
+        // Pass 2: Ground overlays (footprints, service/work area circles)
+        this.setupColorShader(gl, projection);
+        this.passGroundOverlay.draw(gl, projection, viewPoint);
 
-        // Pass 5: Placement preview ghost
-        this.drawPlacementPreview(gl, projection, viewPoint);
+        // Pass 3: Territory/work area dot sprites
+        this.passTerritoryDot.draw(gl, projection, viewPoint);
+        this.frameDrawCalls += this.passTerritoryDot.lastDrawCalls;
+
+        // Pass 4: Entity rendering (textured sprites + blend + color fallback)
+        this.frameDrawTime = this.timedPass(() => {
+            const hasSprites = this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized;
+            profiler.beginPhase('draw');
+            if (hasSprites) {
+                this.frameTexturedTime = this.timedPass(() => this.passEntitySprite.draw(gl, projection, viewPoint));
+                // Re-setup color shader before color pass
+                this.setupColorShader(gl, projection);
+                this.frameColorTime = this.timedPass(() => {
+                    this.passColorEntity.texturedBuildingsHandled = true;
+                    this.passColorEntity.draw(gl, projection, viewPoint);
+                });
+            } else {
+                this.frameTexturedTime = 0;
+                this.setupColorShader(gl, projection);
+                this.frameColorTime = this.timedPass(() => {
+                    this.passColorEntity.texturedBuildingsHandled = false;
+                    this.passColorEntity.draw(gl, projection, viewPoint);
+                });
+            }
+            profiler.endPhase('draw');
+        });
+
+        // Accumulate debug deco labels from color pass
+        this.debugDecoLabels = passCtx.debugDecoLabels;
+
+        // Pass 5: Selection overlays (frames, dots, tile highlights)
+        this.setupColorShader(gl, projection);
+        this.frameSelectionTime = this.timedPass(() => this.passSelection.draw(gl, projection, viewPoint));
+
+        // Pass 6: Stack ghost sprites
+        this.passStackGhost.draw(gl, projection, viewPoint);
+        this.frameDrawCalls += this.passStackGhost.lastDrawCalls;
+
+        // Pass 7: Placement preview ghost (setupColorShader needed for color fallback path)
+        this.setupColorShader(gl, projection);
+        this.passPlacementPreview.draw(gl, projection, viewPoint);
+
+        // Accumulate draw-call and sprite counts from sprite pass
+        this.frameDrawCalls += this.passEntitySprite.lastDrawCalls;
+        this.frameSpriteCount += this.passEntitySprite.lastSpriteCount;
 
         gl.disable(gl.BLEND);
         profiler.endFrame();
         this.lastEntityDrawTime = performance.now() - frameStart;
     }
-
-    /** Run a callback and return elapsed time in ms. */
-    private timedPass(fn: () => void): number {
-        const start = performance.now();
-        fn();
-        return performance.now() - start;
-    }
-
-    /** Setup color shader and bind the reusable dynamic buffer. */
-    private setupColorShader(gl: WebGL2RenderingContext, projection: Float32Array): void {
-        super.drawBase(gl, projection);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
-        gl.enableVertexAttribArray(this.aPosition);
-        gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
-        gl.disableVertexAttribArray(this.aEntityPos);
-        gl.disableVertexAttribArray(this.aColor);
-    }
-
-    /** Draw path indicators for selected units. */
-    private drawPathIndicators(
-        gl: WebGL2RenderingContext,
-        selectionCtx: { mapSize: MapSize; groundHeight: Uint8Array; viewPoint: IViewPoint; unitStates: UnitStateLookup }
-    ): void {
-        if (!this.layerVisibility.showPathfinding) return;
-        this.selectionOverlayRenderer.drawSelectedUnitPath(
-            gl,
-            this.dynamicBuffer!,
-            this.selectedEntityIds,
-            this.aEntityPos,
-            this.aColor,
-            selectionCtx
-        );
-    }
-
-    /** Draw entities using textured sprites and color fallback. */
-    private drawEntityPass(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        profiler.beginPhase('draw');
-        const hasSprites = this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized;
-        if (hasSprites) {
-            this.frameTexturedTime = this.timedPass(() => this.drawTexturedEntities(gl, projection, viewPoint));
-            this.frameColorTime = this.timedPass(() => this.drawColorEntities(gl, projection, viewPoint, true));
-        } else {
-            this.frameTexturedTime = 0;
-            this.frameColorTime = this.timedPass(() => this.drawColorEntities(gl, projection, viewPoint, false));
-        }
-        profiler.endPhase('draw');
-    }
-
-    /** Draw selection frames, dots, and tile highlights. */
-    private drawSelectionPass(
-        gl: WebGL2RenderingContext,
-        selectionCtx: { mapSize: MapSize; groundHeight: Uint8Array; viewPoint: IViewPoint; unitStates: UnitStateLookup }
-    ): void {
-        const buf = this.dynamicBuffer!;
-        this.selectionOverlayRenderer.drawSelectionFrames(
-            gl,
-            buf,
-            this.sortedEntities,
-            this.selectedEntityIds,
-            this.aEntityPos,
-            this.aColor,
-            selectionCtx
-        );
-        this.selectionOverlayRenderer.drawSelectionDots(
-            gl,
-            buf,
-            this.sortedEntities,
-            this.selectedEntityIds,
-            this.aEntityPos,
-            this.aColor,
-            selectionCtx
-        );
-        if (this.tileHighlights.length > 0) {
-            this.selectionOverlayRenderer.drawTileHighlights(
-                gl,
-                buf,
-                this.tileHighlights,
-                this.aEntityPos,
-                this.aColor,
-                selectionCtx
-            );
-        }
-    }
-
-    /** Draw ground overlays: building footprints, service area circles, and work area circles. */
-    private drawGroundOverlays(
-        gl: WebGL2RenderingContext,
-        projection: Float32Array,
-        ctx: { mapSize: MapSize; groundHeight: Uint8Array; viewPoint: IViewPoint; unitStates: UnitStateLookup }
-    ): void {
-        const hasFootprints = this.renderSettings.showBuildingFootprint;
-        const hasServiceAreas = this.selectedServiceAreas.length > 0;
-        const hasWorkAreas = this.workAreaCircles.length > 0;
-        if (!hasFootprints && !hasServiceAreas && !hasWorkAreas) return;
-
-        super.drawBase(gl, projection);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
-        gl.enableVertexAttribArray(this.aPosition);
-        gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
-        gl.disableVertexAttribArray(this.aEntityPos);
-        gl.disableVertexAttribArray(this.aColor);
-
-        const buf = this.dynamicBuffer!;
-        if (hasFootprints)
-            this.selectionOverlayRenderer.drawBuildingFootprints(
-                gl,
-                buf,
-                this.sortedEntities,
-                this.aPosition,
-                this.aEntityPos,
-                this.aColor,
-                ctx
-            );
-        if (hasServiceAreas)
-            this.selectionOverlayRenderer.drawServiceAreaCircles(
-                gl,
-                buf,
-                this.selectedServiceAreas,
-                this.aEntityPos,
-                this.aColor,
-                ctx
-            );
-        if (hasWorkAreas)
-            this.selectionOverlayRenderer.drawServiceAreaCircles(
-                gl,
-                buf,
-                this.workAreaCircles,
-                this.aEntityPos,
-                this.aColor,
-                ctx,
-                WORK_AREA_CIRCLE_COLOR
-            );
-    }
-
-    /** Draw territory boundary dots and work area dots as sprites using the sprite batch renderer. */
-    private drawTerritoryDotSprites(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        if (this.territoryDots.length === 0 && this.workAreaDots.length === 0) return;
-        if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
-
-        this.spriteManager.spriteAtlas!.bindForRendering(gl);
-        this.spriteManager.paletteManager.bind(gl);
-
-        const paletteWidth = PALETTE_TEXTURE_WIDTH;
-        const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
-        this.spriteBatchRenderer.beginSpriteBatch(
-            gl,
-            projection,
-            paletteWidth,
-            rowsPerPlayer,
-            this.renderSettings.antialias
-        );
-
-        for (const dot of this.territoryDots) {
-            const sprite = this.spriteManager.getTerritoryDot(dot.player);
-            if (!sprite) continue;
-
-            const worldPos = TilePicker.tileToWorld(
-                dot.x,
-                dot.y,
-                this.groundHeight,
-                this.mapSize,
-                viewPoint.x,
-                viewPoint.y
-            );
-
-            const scaled = scaleSprite(sprite, 2.25);
-            this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, scaled, 0, 1, 1, 1, 1);
-        }
-
-        for (const dot of this.workAreaDots) {
-            const sprite = this.spriteManager.getTerritoryDot(dot.player);
-            if (!sprite) continue;
-
-            const worldPos = TilePicker.tileToWorld(
-                dot.x,
-                dot.y,
-                this.groundHeight,
-                this.mapSize,
-                viewPoint.x,
-                viewPoint.y
-            );
-
-            const scaled = scaleSprite(sprite, 2.25);
-            this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, scaled, 0, 1, 1, 1, 1);
-        }
-
-        this.frameDrawCalls += this.spriteBatchRenderer.endSpriteBatch(gl);
-    }
-
-    /** Last frame's entity draw time (ms) - for debug stats collection */
-    private lastEntityDrawTime = 0;
 
     /** Get timing data from the last frame for debug stats */
     public getLastFrameTiming(): {
@@ -581,397 +458,60 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         };
     }
 
-    /** Enable alpha-to-coverage if MSAA is active, return whether it was enabled */
-    private enableAlphaToCoverageIfMSAA(gl: WebGL2RenderingContext): boolean {
-        const samples = gl.getParameter(gl.SAMPLES) as number;
-        if (samples > 1) {
-            gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE);
-            return true;
-        }
-        return false;
+    // =========================================================================
+    // Private helpers
+    // =========================================================================
+
+    /** Build the PassContext for the current frame. */
+    private buildPassContext(): PassContext {
+        return {
+            entities: this.entities,
+            selectedEntityIds: this.selectedEntityIds,
+            unitStates: this.unitStates,
+            resourceStates: this.resourceStates,
+            getBuildingRenderState: this.getBuildingRenderState,
+            getBuildingOverlays: this.getBuildingOverlays,
+            getAnimState: this.getAnimState,
+            renderSettings: this.renderSettings,
+            layerVisibility: this.layerVisibility,
+            renderAlpha: this.renderAlpha,
+            mapSize: this.mapSize,
+            groundHeight: this.groundHeight,
+            selectedServiceAreas: this.selectedServiceAreas,
+            territoryDots: this.territoryDots,
+            workAreaCircles: this.workAreaCircles,
+            workAreaDots: this.workAreaDots,
+            stackGhosts: this.stackGhosts,
+            placementPreview: this.placementPreview,
+            tileHighlights: this.tileHighlights,
+            spriteManager: this.spriteManager,
+            spriteBatchRenderer: this.spriteBatchRenderer,
+            spriteResolver: this.spriteResolver!,
+            frameContext: this.frameContext,
+            sortedEntities: this.sortedEntities,
+            aPosition: this.aPosition,
+            aEntityPos: this.aEntityPos,
+            aColor: this.aColor,
+            dynamicBuffer: this.dynamicBuffer!,
+            debugDecoLabels: this.debugDecoLabels,
+        };
     }
 
-    /**
-     * Draw entities using the sprite shader and atlas texture (batched).
-     */
-    private drawTexturedEntities(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
-
-        // Enable alpha-to-coverage for smooth sprite edges when MSAA is active
-        const useAlphaToCoverage = this.enableAlphaToCoverageIfMSAA(gl);
-
-        // Bind atlas and palette textures so shaders can sample them
-        this.spriteManager.spriteAtlas!.bindForRendering(gl);
-        this.spriteManager.paletteManager.bind(gl);
-
-        const paletteWidth = PALETTE_TEXTURE_WIDTH;
-        const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
-        this.spriteBatchRenderer.beginSpriteBatch(
-            gl,
-            projection,
-            paletteWidth,
-            rowsPerPlayer,
-            this.renderSettings.antialias
-        );
-        this.transitioningUnits.length = 0;
-
-        for (const entity of this.sortedEntities) {
-            const resolved = this.spriteResolver!.resolve(entity);
-            if (resolved.skip) continue;
-            if (resolved.transitioning) {
-                this.transitioningUnits.push(entity);
-                continue;
-            }
-            if (!resolved.sprite) continue;
-
-            const worldPos = this.getEntityWorldPos(entity, viewPoint);
-            this.emitEntitySprite(gl, entity, resolved, worldPos);
-        }
-
-        this.frameDrawCalls += this.spriteBatchRenderer.endSpriteBatch(gl);
-
-        // Draw transitioning units with blend shader
-        if (this.transitioningUnits.length > 0) {
-            this.drawTransitioningUnits(gl, projection, viewPoint);
-        }
-
-        // Disable alpha-to-coverage
-        if (useAlphaToCoverage) {
-            gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE);
-        }
+    /** Run a callback and return elapsed time in ms. */
+    private timedPass(fn: () => void): number {
+        const start = performance.now();
+        fn();
+        return performance.now() - start;
     }
 
-    /** Emit sprite batch data for a single entity (and its overlays if it's a building). */
-    private emitEntitySprite(
-        gl: WebGL2RenderingContext,
-        entity: Entity,
-        resolved: { sprite: SpriteEntry | null; progress: number },
-        worldPos: { worldX: number; worldY: number }
-    ): void {
-        const playerRow =
-            entity.type === EntityType.Building || entity.type === EntityType.Unit ? this.getPlayerRow(entity) : 0;
-        const isSelected = this.selectedEntityIds.has(entity.id);
-        const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
-        const scale = getSpriteScale(entity);
-
-        // Building overlays: draw BehindBuilding layer (includes construction background during CompletedRising)
-        const overlays = entity.type === EntityType.Building ? this.getBuildingOverlays(entity.id) : EMPTY_OVERLAYS;
-        if (overlays.length > 0) {
-            this.emitOverlaysForLayer(gl, overlays, worldPos, playerRow, OverlayRenderLayer.BehindBuilding);
-        }
-
-        // Draw the main entity sprite
-        const sprite = scaleSprite(resolved.sprite!, scale);
-
-        if (resolved.progress < 1.0) {
-            this.spriteBatchRenderer.addSpritePartial(
-                gl,
-                worldPos.worldX,
-                worldPos.worldY,
-                sprite,
-                playerRow,
-                tint[0]!,
-                tint[1]!,
-                tint[2]!,
-                tint[3]!,
-                resolved.progress
-            );
-        } else {
-            this.spriteBatchRenderer.addSprite(
-                gl,
-                worldPos.worldX,
-                worldPos.worldY,
-                sprite,
-                playerRow,
-                tint[0]!,
-                tint[1]!,
-                tint[2]!,
-                tint[3]!
-            );
-        }
-        this.frameSpriteCount++;
-
-        // Building overlays: draw remaining layers (AboveBuilding, Flag, AboveFlag)
-        if (overlays.length > 0) {
-            this.emitOverlaysForLayer(gl, overlays, worldPos, playerRow, OverlayRenderLayer.AboveBuilding);
-            this.emitOverlaysForLayer(gl, overlays, worldPos, playerRow, OverlayRenderLayer.Flag);
-            this.emitOverlaysForLayer(gl, overlays, worldPos, playerRow, OverlayRenderLayer.AboveFlag);
-        }
-    }
-
-    /** Draw all building overlays matching a given render layer. */
-    private emitOverlaysForLayer(
-        gl: WebGL2RenderingContext,
-        overlays: readonly BuildingOverlayRenderData[],
-        buildingWorldPos: { worldX: number; worldY: number },
-        playerRow: number,
-        layer: OverlayRenderLayer
-    ): void {
-        for (const overlay of overlays) {
-            if (overlay.layer !== layer) continue;
-            const x = buildingWorldPos.worldX + overlay.worldOffsetX;
-            const y = buildingWorldPos.worldY + overlay.worldOffsetY;
-            const row = overlay.teamColored ? playerRow : 0;
-            if (overlay.verticalProgress < 1.0) {
-                this.spriteBatchRenderer.addSpritePartial(
-                    gl,
-                    x,
-                    y,
-                    overlay.sprite,
-                    row,
-                    1,
-                    1,
-                    1,
-                    1,
-                    overlay.verticalProgress
-                );
-            } else {
-                this.spriteBatchRenderer.addSprite(gl, x, y, overlay.sprite, row, 1, 1, 1, 1);
-            }
-            this.frameSpriteCount++;
-        }
-    }
-
-    /**
-     * Get the palette row for player tinting.
-     * Returns 0 (neutral) if player tinting is disabled, otherwise player + 1.
-     */
-    private getPlayerRow(entity: Entity): number {
-        if (this.renderSettings.disablePlayerTinting) {
-            return 0;
-        }
-        return entity.player + 1;
-    }
-
-    /** Compute world position for an entity, with MapObject jitter for visual variety. */
-    private getEntityWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {
-        const cachedPos = this.frameContext?.getWorldPos(entity);
-        let worldPos: { worldX: number; worldY: number };
-        if (cachedPos) {
-            worldPos = { worldX: cachedPos.worldX, worldY: cachedPos.worldY };
-        } else if (entity.type === EntityType.Unit) {
-            worldPos = this.getInterpolatedWorldPos(entity, viewPoint);
-        } else {
-            worldPos = TilePicker.tileToWorld(
-                entity.x,
-                entity.y,
-                this.groundHeight,
-                this.mapSize,
-                viewPoint.x,
-                viewPoint.y
-            );
-        }
-
-        // Buildings: render at tile top vertex instead of parallelogram center.
-        // GFX sprite offsets (left/top) are authored relative to the tile vertex,
-        // not the center, so undo the TILE_CENTER shift.
-        if (entity.type === EntityType.Building) {
-            worldPos.worldX -= TILE_CENTER_X;
-            worldPos.worldY -= TILE_CENTER_Y * 0.5;
-        }
-
-        // Add random visual offset for MapObjects (trees, stones) to break up the grid.
-        // Applied to all tree variations so the position stays consistent through growth/cutting/stump stages.
-        if (entity.type === EntityType.MapObject) {
-            const seed = entity.x * 12.9898 + entity.y * 78.233;
-            const offsetX = ((Math.sin(seed) * 43758.5453) % 1) * 0.3 - 0.15;
-            const offsetY = ((Math.cos(seed) * 43758.5453) % 1) * 0.3 - 0.15;
-            worldPos.worldX += offsetX;
-            worldPos.worldY += offsetY;
-        }
-
-        return worldPos;
-    }
-
-    /**
-     * Draw units that are transitioning between directions using the blend shader.
-     */
-    private drawTransitioningUnits(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        if (!this.spriteManager) return;
-
-        const paletteWidth = PALETTE_TEXTURE_WIDTH;
-        const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
-        this.spriteBatchRenderer.beginBlendBatch(gl, projection, paletteWidth, rowsPerPlayer);
-
-        for (const entity of this.transitioningUnits) {
-            const animState = this.getAnimState(entity.id);
-            if (!animState?.previousDirection || animState.directionTransitionProgress === undefined) continue;
-
-            const oldDir = animState.previousDirection;
-            const newDir = animState.direction;
-            const blendFactor = animState.directionTransitionProgress;
-            const unitType = entity.subType as UnitType;
-
-            // Get animated sprites for both directions at current frame
-            const oldSprite = this.spriteResolver!.getUnitSpriteForDirection(unitType, animState, oldDir, entity.race);
-            const newSprite = this.spriteResolver!.getUnitSpriteForDirection(unitType, animState, newDir, entity.race);
-
-            if (!oldSprite || !newSprite) continue;
-
-            const scaledOld = scaleSprite(oldSprite);
-            const scaledNew = scaleSprite(newSprite);
-
-            // Use cached world position from frame context
-            const cachedPos = this.frameContext?.getWorldPos(entity);
-            const worldPos = cachedPos ?? this.getInterpolatedWorldPos(entity, viewPoint);
-            const playerRow = this.getPlayerRow(entity);
-            const isSelected = this.selectedEntityIds.has(entity.id);
-            const tint = isSelected ? TINT_SELECTED : TINT_NEUTRAL;
-            this.spriteBatchRenderer.addBlendSprite(
-                gl,
-                worldPos.worldX,
-                worldPos.worldY,
-                scaledOld,
-                scaledNew,
-                blendFactor,
-                playerRow,
-                tint[0]!,
-                tint[1]!,
-                tint[2]!,
-                tint[3]!
-            );
-        }
-
-        this.spriteBatchRenderer.endBlendBatch(gl);
-    }
-
-    /** Get scale for entity type */
-    private getEntityScale(entityType: EntityType): number {
-        if (entityType === EntityType.Building) return BUILDING_SCALE;
-        if (entityType === EntityType.StackedResource) return RESOURCE_SCALE;
-        return UNIT_SCALE;
-    }
-
-    /**
-     * Draw entities using the color shader (solid quads).
-     */
-    private drawColorEntities(
-        gl: WebGL2RenderingContext,
-        projection: Float32Array,
-        viewPoint: IViewPoint,
-        texturedBuildingsHandled: boolean
-    ): void {
+    /** Setup color shader and bind the reusable dynamic buffer. */
+    private setupColorShader(gl: WebGL2RenderingContext, projection: Float32Array): void {
         super.drawBase(gl, projection);
-
         gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
         gl.enableVertexAttribArray(this.aPosition);
         gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
         gl.disableVertexAttribArray(this.aEntityPos);
         gl.disableVertexAttribArray(this.aColor);
-
-        const canvasW = gl.canvas.width;
-        const canvasH = gl.canvas.height;
-        this.debugDecoLabels.length = 0;
-
-        for (const entity of this.sortedEntities) {
-            if (this.shouldSkipColorEntity(entity, texturedBuildingsHandled)) continue;
-
-            const appearance = this.getColorEntityAppearance(entity);
-            const worldPos = this.getEntityWorldPos(entity, viewPoint);
-
-            gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
-            this.fillQuadVertices(0, 0, appearance.scale);
-            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-            gl.vertexAttrib4f(
-                this.aColor,
-                appearance.color[0]!,
-                appearance.color[1]!,
-                appearance.color[2]!,
-                appearance.color[3]!
-            );
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-            if (appearance.isDecoration) {
-                this.collectDecoDebugLabel(entity, worldPos, projection, canvasW, canvasH);
-            }
-        }
-    }
-
-    /** Check if an entity should be skipped in color rendering (already handled by sprite batch). */
-    private shouldSkipColorEntity(entity: Entity, texturedBuildingsHandled: boolean): boolean {
-        // Skip entities already rendered by the textured sprite pass
-        return texturedBuildingsHandled && this.spriteResolver!.hasTexturedSprite(entity);
-    }
-
-    /** Determine color and scale for an entity in the color fallback pass. */
-    private getColorEntityAppearance(entity: Entity): {
-        color: readonly number[];
-        scale: number;
-        isDecoration: boolean;
-    } {
-        const isSelected = this.selectedEntityIds.has(entity.id);
-        const isDecoration = entity.type === EntityType.MapObject;
-        if (isSelected)
-            return {
-                color: [1.0, 1.0, 0.0, 1.0],
-                scale: isDecoration ? 0.8 : this.getEntityScale(entity.type),
-                isDecoration,
-            };
-        const baseColor = isDecoration
-            ? decoHueToRgb(entity.subType)
-            : PLAYER_COLORS[entity.player % PLAYER_COLORS.length]!;
-        const scale = isDecoration ? 0.8 : this.getEntityScale(entity.type);
-        return { color: baseColor, scale, isDecoration };
-    }
-
-    /** Collect a debug label for a decoration entity (screen-space position + type info). */
-    private collectDecoDebugLabel(
-        entity: Entity,
-        worldPos: { worldX: number; worldY: number },
-        projection: Float32Array,
-        canvasW: number,
-        canvasH: number
-    ): void {
-        const clipX = projection[0]! * worldPos.worldX + projection[12]!;
-        const clipY = projection[5]! * worldPos.worldY + projection[13]!;
-        const rawByte = subTypeToRawByte(entity.subType);
-        this.debugDecoLabels.push({
-            screenX: (clipX * 0.5 + 0.5) * canvasW,
-            screenY: (-clipY * 0.5 + 0.5) * canvasH,
-            type: rawByte,
-            hue: decoTypeToHue(entity.subType),
-        });
-    }
-
-    /** Get the interpolated world position for a unit */
-    private getInterpolatedWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {
-        const unitState = this.unitStates.get(entity.id);
-
-        const isStationary = !unitState || (unitState.prevX === entity.x && unitState.prevY === entity.y);
-
-        if (isStationary) {
-            return TilePicker.tileToWorld(
-                entity.x,
-                entity.y,
-                this.groundHeight,
-                this.mapSize,
-                viewPoint.x,
-                viewPoint.y
-            );
-        }
-
-        const prevPos = TilePicker.tileToWorld(
-            unitState.prevX,
-            unitState.prevY,
-            this.groundHeight,
-            this.mapSize,
-            viewPoint.x,
-            viewPoint.y
-        );
-        const currPos = TilePicker.tileToWorld(
-            entity.x,
-            entity.y,
-            this.groundHeight,
-            this.mapSize,
-            viewPoint.x,
-            viewPoint.y
-        );
-
-        const t = Math.max(0, Math.min(unitState.moveProgress, 1));
-        return {
-            worldX: prevPos.worldX + (currPos.worldX - prevPos.worldX) * t,
-            worldY: prevPos.worldY + (currPos.worldY - prevPos.worldY) * t,
-        };
     }
 
     /** Sort entities by depth for correct painter's algorithm rendering. */
@@ -1010,123 +550,6 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         };
         this.depthSorter.sortByDepth(this.sortedEntities, sortCtx);
         profiler.endPhase('sort');
-    }
-
-    /** Draw semi-transparent resource sprite ghosts during stack-adjust mode. */
-    private drawStackGhosts(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        if (this.stackGhosts.length === 0) return;
-        if (!this.spriteManager?.hasSprites || !this.spriteBatchRenderer.isInitialized) return;
-
-        this.spriteManager.spriteAtlas!.bindForRendering(gl);
-        this.spriteManager.paletteManager.bind(gl);
-
-        const paletteWidth = PALETTE_TEXTURE_WIDTH;
-        const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
-        this.spriteBatchRenderer.beginSpriteBatch(
-            gl,
-            projection,
-            paletteWidth,
-            rowsPerPlayer,
-            this.renderSettings.antialias
-        );
-
-        for (const ghost of this.stackGhosts) {
-            const worldPos = TilePicker.tileToWorld(
-                ghost.x,
-                ghost.y,
-                this.groundHeight,
-                this.mapSize,
-                viewPoint.x,
-                viewPoint.y
-            );
-
-            for (let v = 0; v < ghost.count; v++) {
-                const rawSprite = this.spriteResolver!.getPreviewSprite('resource', ghost.materialType, v);
-                if (!rawSprite) continue;
-
-                const sprite = scaleSprite(rawSprite);
-                this.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, sprite, 0, 1, 1, 1, 0.5);
-            }
-        }
-
-        this.frameDrawCalls += this.spriteBatchRenderer.endSpriteBatch(gl);
-    }
-
-    /**
-     * Draw a ghost entity at the preview tile when in placement mode.
-     * Supports buildings, resources, and can be extended for other entity types.
-     */
-    private drawPlacementPreview(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        const preview = this.placementPreview;
-        if (!preview) return;
-
-        const { tile, valid, entityType, subType, race, variation, level } = preview;
-
-        const worldPos = TilePicker.tileToWorld(
-            tile.x,
-            tile.y,
-            this.groundHeight,
-            this.mapSize,
-            viewPoint.x,
-            viewPoint.y
-        );
-
-        // Apply building tile vertex offset (same as getEntityWorldPos for buildings)
-        if (entityType === 'building') {
-            worldPos.worldX -= TILE_CENTER_X;
-            worldPos.worldY -= TILE_CENTER_Y * 0.5;
-        }
-
-        const tint = valid ? TINT_PREVIEW_VALID : TINT_PREVIEW_INVALID;
-
-        // Try to render with sprite based on entity type
-        if (this.spriteManager?.hasSprites && this.spriteBatchRenderer.isInitialized) {
-            const rawSprite = this.spriteResolver!.getPreviewSprite(entityType, subType, variation, race, level);
-            if (rawSprite) {
-                const spriteEntry = scaleSprite(rawSprite);
-                const paletteWidth = PALETTE_TEXTURE_WIDTH;
-                const rowsPerPlayer = this.spriteManager.paletteManager.textureRowsPerPlayer;
-                this.spriteBatchRenderer.beginSpriteBatch(
-                    gl,
-                    projection,
-                    paletteWidth,
-                    rowsPerPlayer,
-                    this.renderSettings.antialias
-                );
-                this.spriteBatchRenderer.addSprite(
-                    gl,
-                    worldPos.worldX,
-                    worldPos.worldY,
-                    spriteEntry,
-                    0,
-                    tint[0]!,
-                    tint[1]!,
-                    tint[2]!,
-                    tint[3]!
-                );
-                this.spriteBatchRenderer.endSpriteBatch(gl);
-                return;
-            }
-        }
-
-        // Fallback to color preview
-        this.shaderProgram.use();
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
-
-        const color = valid ? PREVIEW_VALID_COLOR : PREVIEW_INVALID_COLOR;
-        gl.vertexAttrib2f(this.aEntityPos, worldPos.worldX, worldPos.worldY);
-        this.fillQuadVertices(0, 0, BUILDING_SCALE);
-        gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-        gl.vertexAttrib4f(this.aColor, color[0]!, color[1]!, color[2]!, color[3]!);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-    }
-
-    private fillQuadVertices(worldX: number, worldY: number, scale: number): void {
-        const verts = this.vertexData;
-        for (let i = 0; i < 6; i++) {
-            verts[i * 2] = BASE_QUAD[i * 2]! * scale + worldX;
-            verts[i * 2 + 1] = BASE_QUAD[i * 2 + 1]! * scale + worldY;
-        }
     }
 
     /**

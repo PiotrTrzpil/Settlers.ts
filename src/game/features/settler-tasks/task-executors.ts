@@ -41,13 +41,63 @@ export interface TaskContext {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Strategy map types
+// ─────────────────────────────────────────────────────────────
+
+/** Full parameter set passed to every task executor in the strategy map. */
+type TaskExecutorParams = {
+    settler: Entity;
+    job: JobState;
+    task: TaskNode;
+    dt: number;
+    ctx: TaskContext;
+    entityHandler?: EntityWorkHandler;
+    positionHandler?: PositionWorkHandler;
+};
+
+type TaskExecutorFn = (params: TaskExecutorParams) => TaskResult;
+
+// ─────────────────────────────────────────────────────────────
 // Dispatcher
 // ─────────────────────────────────────────────────────────────
 
 /**
+ * Strategy map from TaskType to executor function.
+ * TypeScript enforces exhaustive coverage of all TaskType values.
+ */
+const taskExecutors: Record<TaskType, TaskExecutorFn> = {
+    [TaskType.GO_TO_TARGET]: ({ settler, job, ctx }) => executeGoToTarget(settler, job, ctx),
+    [TaskType.WAIT_FOR_WORK]: ({ settler, job, ctx, entityHandler }) =>
+        executeWaitForWork(settler, job, ctx, entityHandler),
+    [TaskType.WORK_ON_ENTITY]: ({ settler, job, task, dt, ctx, entityHandler }) =>
+        executeWorkOnEntity(settler, job, task, dt, ctx, entityHandler),
+    [TaskType.PICKUP]: ({ settler, job, task }) => executePickup(settler, job, task),
+    [TaskType.GO_HOME]: ({ settler, job, ctx }) => executeGoHome(settler, job, ctx),
+    [TaskType.STAY]: () => TaskResult.CONTINUE,
+    [TaskType.DROPOFF]: ({ settler, job, ctx }) => executeDropoff(settler, job, ctx),
+    [TaskType.WORK]: ({ settler, job, task, dt, ctx, positionHandler }) =>
+        executeWork(settler, job, task, dt, ctx, positionHandler),
+    [TaskType.SEARCH_POS]: ({ settler, job, ctx, positionHandler }) =>
+        executeSearchPos(settler, job, ctx, positionHandler),
+    [TaskType.GO_TO_POS]: ({ settler, job, ctx }) => executeGoToPos(settler, job, ctx),
+    [TaskType.GO_ADJACENT_POS]: ({ settler, job, ctx }) => executeGoAdjacentPos(settler, job, ctx),
+    [TaskType.FACE_POS]: ({ settler, job, ctx }) => executeFacePos(settler, job, ctx),
+    [TaskType.WAIT]: ({ job, task, dt }) => executeWait(job, task, dt),
+    [TaskType.GO_TO_SOURCE]: ({ settler, job }) => {
+        throw new Error(
+            `Task ${TaskType.GO_TO_SOURCE} is carrier-only but job type is '${job.type}' (settler ${settler.id}).`
+        );
+    },
+    [TaskType.GO_TO_DEST]: ({ settler, job }) => {
+        throw new Error(
+            `Task ${TaskType.GO_TO_DEST} is carrier-only but job type is '${job.type}' (settler ${settler.id}).`
+        );
+    },
+};
+
+/**
  * Dispatch a task to the appropriate executor function.
  */
-// eslint-disable-next-line complexity -- switch dispatcher over all task types
 export function executeTask(
     settler: Entity,
     job: JobState,
@@ -64,56 +114,7 @@ export function executeTask(
         // Fall through to generic tasks (GO_HOME, WAIT, STAY, etc.)
     }
 
-    switch (task.task) {
-    case TaskType.GO_TO_TARGET:
-        return executeGoToTarget(settler, job, ctx);
-
-    case TaskType.WAIT_FOR_WORK:
-        return executeWaitForWork(settler, job, ctx, entityHandler);
-
-    case TaskType.WORK_ON_ENTITY:
-        return executeWorkOnEntity(settler, job, task, dt, ctx, entityHandler);
-
-    case TaskType.PICKUP:
-        return executePickup(settler, job, task);
-
-    case TaskType.GO_HOME:
-        return executeGoHome(settler, job, ctx);
-
-    case TaskType.STAY:
-        return TaskResult.CONTINUE;
-
-    case TaskType.DROPOFF:
-        return executeDropoff(settler, job, ctx);
-
-    case TaskType.WORK:
-        return executeWork(settler, job, task, dt, ctx, positionHandler);
-
-    case TaskType.SEARCH_POS:
-        return executeSearchPos(settler, job, ctx, positionHandler);
-
-    case TaskType.GO_TO_POS:
-        return executeGoToPos(settler, job, ctx);
-
-    case TaskType.GO_ADJACENT_POS:
-        return executeGoAdjacentPos(settler, job, ctx);
-
-    case TaskType.FACE_POS:
-        return executeFacePos(settler, job, ctx);
-
-    case TaskType.WAIT:
-        return executeWait(job, task, dt);
-
-    case TaskType.GO_TO_SOURCE:
-    case TaskType.GO_TO_DEST:
-        throw new Error(`Task ${task.task} is carrier-only but job type is '${job.type}' (settler ${settler.id}).`);
-
-    default:
-        throw new Error(
-            `Unhandled task type: ${task.task} in job ${job.jobId} (settler ${settler.id}). ` +
-                    `Add implementation in executeTask() or remove from jobs.yaml.`
-        );
-    }
+    return taskExecutors[task.task]({ settler, job, task, dt, ctx, entityHandler, positionHandler });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -283,7 +284,7 @@ function executeWaitForWork(settler: Entity, job: JobState, ctx: TaskContext, ha
  * Work on target entity. Always starts immediately — canWork() gating
  * is handled by the preceding WAIT_FOR_WORK task.
  */
-// eslint-disable-next-line complexity, sonarjs/cognitive-complexity -- handler boundary requires per-call guards
+// eslint-disable-next-line sonarjs/cognitive-complexity, complexity -- handler boundary requires per-call guards
 function executeWorkOnEntity(
     settler: Entity,
     job: JobState,

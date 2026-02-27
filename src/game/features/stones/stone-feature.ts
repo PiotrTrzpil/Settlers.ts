@@ -47,9 +47,7 @@ export const StoneFeature: FeatureDefinition = {
         });
 
         // Clean up stone state when entities are removed
-        subscriptions.subscribe(ctx.eventBus, 'entity:removed', ({ entityId }) => {
-            stoneSystem.unregister(entityId);
-        });
+        ctx.cleanupRegistry.onEntityRemoved(entityId => stoneSystem.unregister(entityId));
 
         return {
             systems: [],

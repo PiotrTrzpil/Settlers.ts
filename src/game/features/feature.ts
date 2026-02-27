@@ -29,6 +29,7 @@ import type { TickSystem } from '../tick-system';
 import type { GameState } from '../game-state';
 import type { EventBus } from '../event-bus';
 import type { AnimationService } from '../animation/index';
+import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
 
 /**
  * Context provided to features during creation.
@@ -43,6 +44,15 @@ export interface FeatureContext {
 
     /** Animation service for entity animations */
     animationService: AnimationService;
+
+    /**
+     * Central registry for entity:removed cleanup.
+     * Register handlers here instead of subscribing to entity:removed directly.
+     *
+     * @example
+     * ctx.cleanupRegistry.onEntityRemoved(entityId => myMap.delete(entityId));
+     */
+    cleanupRegistry: EntityCleanupRegistry;
 
     /**
      * Get exports from another feature.
