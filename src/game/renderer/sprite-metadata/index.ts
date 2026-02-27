@@ -10,7 +10,7 @@
  * - Building sprites: BUILDING_ICON_INDICES, BUILDING_SPRITE_FRAMES, getBuildingSpriteMap, etc.
  * - Unit sprites: UNIT_JOB_INDICES, getUnitSpriteMap, etc.
  * - Resource sprites: RESOURCE_JOB_INDICES, getResourceSpriteMap, etc.
- * - Map object sprites: TREE_JOB_INDICES, getMapObjectSpriteMap, etc.
+ * - Map object sprites: MAP_OBJECT_SPRITES (GIL), TREE_JOB_INDICES (JIL), getMapObjectSpriteMap, etc.
  * - Registry: SpriteMetadataRegistry
  *
  * @module renderer/sprite-metadata

@@ -17,6 +17,7 @@ import {
     SETTLER_FILE_NUMBERS,
     TREE_JOB_OFFSET,
     TREE_JOB_INDICES,
+    TREE_JOBS_PER_TYPE,
     AVAILABLE_RACES,
     type BuildingSpriteInfo,
 } from './sprite-metadata';
@@ -1001,60 +1002,97 @@ export class SpriteRenderManager {
             return 0;
         }
 
-        type TreeStageData = {
-            treeType: MapObjectType;
-            offset: number;
-            firstFrame: SpriteEntry;
-            allFrames: SpriteEntry[] | null;
-        };
-
         let totalLoaded = 0;
 
-        // Process each tree type progressively (using SafeLoadBatch)
-        for (const [typeStr, baseJobIndex] of Object.entries(TREE_JOB_INDICES)) {
+        // Process each tree type and all its variants
+        for (const [typeStr, variantBases] of Object.entries(TREE_JOB_INDICES)) {
+            if (!Array.isArray(variantBases)) continue;
             const treeType = Number(typeStr) as MapObjectType;
 
-            const batch = new SafeLoadBatch<TreeStageData>();
-
-            // Load all 11 stages for this tree type
-            for (let offset = 0; offset <= 10; offset++) {
-                const anim = await this.spriteLoader.loadJobAnimation(
-                    fileSet,
-                    baseJobIndex + offset,
-                    0,
-                    atlas,
-                    paletteBaseOffset
-                );
-                if (anim?.frames.length) {
-                    batch.add({
-                        treeType,
-                        offset,
-                        firstFrame: anim.frames[0]!.entry,
-                        allFrames: offset === TREE_JOB_OFFSET.NORMAL ? anim.frames.map(f => f.entry) : null,
-                    });
-                }
-            }
-
-            // GPU upload → register this tree type
-            batch.finalize(atlas, gl, data => {
-                registry.registerMapObject(data.treeType, data.firstFrame, data.offset);
-                if (data.allFrames) {
-                    registry.registerAnimatedEntity(
-                        EntityType.MapObject,
-                        data.treeType,
-                        new Map([[0, data.allFrames]]),
-                        ANIMATION_DEFAULTS.FRAME_DURATION_MS,
-                        true
-                    );
-                }
-                totalLoaded++;
-            });
+            totalLoaded += await this.loadTreeTypeSprites(
+                fileSet,
+                atlas,
+                registry,
+                gl,
+                paletteBaseOffset,
+                treeType,
+                variantBases
+            );
 
             // Yield to allow rendering before next tree type
             await new Promise(r => setTimeout(r, 0));
         }
 
         return totalLoaded;
+    }
+
+    /** Load all variant sprites for a single tree type. */
+    private async loadTreeTypeSprites(
+        fileSet: LoadedGfxFileSet,
+        atlas: EntityTextureAtlas,
+        registry: SpriteMetadataRegistry,
+        gl: WebGL2RenderingContext,
+        paletteBaseOffset: number,
+        treeType: MapObjectType,
+        variantBases: number[]
+    ): Promise<number> {
+        type TreeStageData = {
+            treeType: MapObjectType;
+            variation: number;
+            variantIndex: number;
+            firstFrame: SpriteEntry;
+            allFrames: SpriteEntry[] | null;
+        };
+
+        let loaded = 0;
+        const swayFrames = new Map<number, SpriteEntry[]>();
+        const batch = new SafeLoadBatch<TreeStageData>();
+
+        for (let v = 0; v < variantBases.length; v++) {
+            const baseJob = variantBases[v]!;
+
+            for (let offset = 0; offset <= 10; offset++) {
+                const anim = await this.spriteLoader.loadJobAnimation(
+                    fileSet,
+                    baseJob + offset,
+                    0,
+                    atlas,
+                    paletteBaseOffset
+                );
+                if (anim?.frames.length) {
+                    const isNormal = offset === TREE_JOB_OFFSET.NORMAL;
+                    batch.add({
+                        treeType,
+                        variation: v * TREE_JOBS_PER_TYPE + offset,
+                        variantIndex: v,
+                        firstFrame: anim.frames[0]!.entry,
+                        allFrames: isNormal ? anim.frames.map(f => f.entry) : null,
+                    });
+                }
+            }
+        }
+
+        // GPU upload → register all variants for this tree type
+        batch.finalize(atlas, gl, data => {
+            registry.registerMapObject(data.treeType, data.firstFrame, data.variation);
+            if (data.allFrames) {
+                swayFrames.set(data.variantIndex, data.allFrames);
+            }
+            loaded++;
+        });
+
+        // Register single animation entry — variant encoded as direction
+        if (swayFrames.size > 0) {
+            registry.registerAnimatedEntity(
+                EntityType.MapObject,
+                treeType,
+                swayFrames,
+                ANIMATION_DEFAULTS.FRAME_DURATION_MS,
+                true
+            );
+        }
+
+        return loaded;
     }
 
     /**
@@ -1103,7 +1141,7 @@ export class SpriteRenderManager {
     /**
      * Load decoration sprites (non-tree map objects) using direct GIL indices.
      * Deduplicates by GIL index so each unique sprite is loaded once,
-     * then registered for all raw byte values that share it.
+     * then registered for all entity keys that share it.
      */
     private async loadDecorationSprites(
         fileSet: LoadedGfxFileSet,
@@ -1114,29 +1152,29 @@ export class SpriteRenderManager {
     ): Promise<number> {
         const decoMap = buildDecorationSpriteMap();
 
-        // Deduplicate: group raw values by gilIndex to avoid loading the same sprite multiple times
-        const byGilIndex = new Map<number, { ref: DecorationSpriteRef; rawValues: number[] }>();
-        for (const [raw, ref] of decoMap) {
+        // Deduplicate: group entity keys by gilIndex to avoid loading the same sprite multiple times
+        const byGilIndex = new Map<number, { ref: DecorationSpriteRef; entityKeys: number[] }>();
+        for (const [entityKey, ref] of decoMap) {
             const existing = byGilIndex.get(ref.gilIndex);
             if (existing) {
-                existing.rawValues.push(raw);
+                existing.entityKeys.push(entityKey);
             } else {
-                byGilIndex.set(ref.gilIndex, { ref, rawValues: [raw] });
+                byGilIndex.set(ref.gilIndex, { ref, entityKeys: [entityKey] });
             }
         }
 
-        type DecoData = { rawValues: number[]; firstFrame: SpriteEntry; allFrames: SpriteEntry[] | null };
+        type DecoData = { entityKeys: number[]; firstFrame: SpriteEntry; allFrames: SpriteEntry[] | null };
         const batch = new SafeLoadBatch<DecoData>();
 
-        for (const { ref, rawValues } of byGilIndex.values()) {
+        for (const { ref, entityKeys } of byGilIndex.values()) {
             const loaded = await this.loadDecoEntry(fileSet, ref, atlas, paletteBaseOffset);
-            if (loaded) batch.add({ rawValues, ...loaded });
+            if (loaded) batch.add({ entityKeys, ...loaded });
         }
 
         let totalRegistered = 0;
         batch.finalize(atlas, gl, data => {
-            for (const raw of data.rawValues) {
-                registry.registerMapObject(raw as MapObjectType, data.firstFrame);
+            for (const key of data.entityKeys) {
+                registry.registerMapObject(key as MapObjectType, data.firstFrame);
                 totalRegistered++;
             }
         });

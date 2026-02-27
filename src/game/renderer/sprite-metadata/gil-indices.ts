@@ -5,11 +5,13 @@
  * they reference specific pre-rendered sprites without going through
  * the JIL→DIL→GIL pipeline that animated entities use.
  *
+ * For JIL-based indices (trees, buildings, units, resources),
+ * see {@link ./jil-indices}.
+ *
  * @module renderer/sprite-metadata/gil-indices
  */
 
 import { BuildingType } from '../../entity';
-import { MapObjectType } from '@/game/types/map-object-types';
 import { Race } from '../../race';
 
 // ============================================================
@@ -579,81 +581,3 @@ export const MAP_OBJECT_SPRITES = {
     /** Small waving flag — white / player 8, 24 anim frames (43x29) */
     FLAG_SMALL_WHITE: { start: 2043, end: 2066, count: 24 },
 } as const;
-
-// ============================================================
-// Tree job indices — file 5.jil
-// ============================================================
-
-/**
- * Tree job offsets within 5.jil.
- * Each tree type has 11 consecutive jobs for different states.
- * Each job has 1 direction (D0) with 1 or more frames.
- *
- * Structure per tree type (base job + offset):
- * - +0: Sapling (smallest) - static
- * - +1: Small tree - static
- * - +2: Medium tree - static
- * - +3: Normal (full grown) - animated or static
- * - +4: Falling tree - animated
- * - +5 to +9: Being cut phases (5 phases) - animated
- * - +10: Canopy disappearing on ground (last frame = trunk only) - animated
- */
-export const TREE_JOB_OFFSET = {
-    /** Sapling - smallest growth stage */
-    SAPLING: 0,
-    /** Small tree */
-    SMALL: 1,
-    /** Medium tree */
-    MEDIUM: 2,
-    /** Normal full-grown tree */
-    NORMAL: 3,
-    /** Falling tree - animated */
-    FALLING: 4,
-    /** Being cut phase 1 */
-    CUTTING_1: 5,
-    /** Being cut phase 2 */
-    CUTTING_2: 6,
-    /** Being cut phase 3 */
-    CUTTING_3: 7,
-    /** Being cut phase 4 */
-    CUTTING_4: 8,
-    /** Being cut phase 5 */
-    CUTTING_5: 9,
-    /** Canopy disappearing on ground - animated (last frame = trunk only) */
-    CANOPY_DISAPPEARING: 10,
-} as const;
-
-/** Number of jobs per tree type */
-export const TREE_JOBS_PER_TYPE = 11;
-
-/** First tree job index in 5.jil */
-const TREE_BASE_JOB = 1;
-
-/**
- * Base JIL job indices for each tree type in 5.jil.
- * Each tree type has TREE_JOBS_PER_TYPE consecutive jobs (see TREE_JOB_OFFSET).
- * Actual job = baseIndex + TREE_JOB_OFFSET.X
- *
- * Example: Oak normal tree = 1 + TREE_JOB_OFFSET.NORMAL = 1 + 3 = job 4
- */
-export const TREE_JOB_INDICES: Partial<Record<MapObjectType, number>> = {
-    [MapObjectType.TreeOak]: TREE_BASE_JOB + 0 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeBeech]: TREE_BASE_JOB + 1 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeAsh]: TREE_BASE_JOB + 2 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeLinden]: TREE_BASE_JOB + 3 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeBirch]: TREE_BASE_JOB + 4 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreePoplar]: TREE_BASE_JOB + 5 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeChestnut]: TREE_BASE_JOB + 6 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeMaple]: TREE_BASE_JOB + 7 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeFir]: TREE_BASE_JOB + 8 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeSpruce]: TREE_BASE_JOB + 9 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeCoconut]: TREE_BASE_JOB + 10 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeDate]: TREE_BASE_JOB + 11 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeWalnut]: TREE_BASE_JOB + 12 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeCorkOak]: TREE_BASE_JOB + 13 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreePine]: TREE_BASE_JOB + 14 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreePine2]: TREE_BASE_JOB + 15 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeOliveLarge]: TREE_BASE_JOB + 16 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeOliveSmall]: TREE_BASE_JOB + 17 * TREE_JOBS_PER_TYPE,
-    [MapObjectType.TreeDead]: TREE_BASE_JOB + 18 * TREE_JOBS_PER_TYPE,
-};

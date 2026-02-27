@@ -9,6 +9,7 @@
  */
 
 import { BuildingType, UnitType } from '../../entity';
+import { MapObjectType } from '@/game/types/map-object-types';
 import { EMaterialType } from '../../economy';
 
 // ============================================================
@@ -340,3 +341,91 @@ export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
 export const CARRIER_MATERIAL_JOB_INDICES: Partial<Record<EMaterialType, number>> = Object.fromEntries(
     Object.entries(RESOURCE_JOB_INDICES).map(([type, idx]) => [Number(type), idx + 1])
 ) as Partial<Record<EMaterialType, number>>;
+
+// ============================================================
+// Tree job indices — file 5.jil
+// ============================================================
+
+/**
+ * Tree job offsets within 5.jil.
+ * Each tree type has 11 consecutive jobs for different states.
+ * Each job has 1 direction (D0) with 1 or more frames.
+ *
+ * Structure per tree type (base job + offset):
+ * - +0: Sapling (smallest) - static
+ * - +1: Small tree - static
+ * - +2: Medium tree - static
+ * - +3: Normal (full grown) - animated or static
+ * - +4: Falling tree - animated
+ * - +5 to +9: Being cut phases (5 phases) - animated
+ * - +10: Canopy disappearing on ground (last frame = trunk only) - animated
+ */
+export const TREE_JOB_OFFSET = {
+    /** Sapling - smallest growth stage */
+    SAPLING: 0,
+    /** Small tree */
+    SMALL: 1,
+    /** Medium tree */
+    MEDIUM: 2,
+    /** Normal full-grown tree */
+    NORMAL: 3,
+    /** Falling tree - animated */
+    FALLING: 4,
+    /** Being cut phase 1 */
+    CUTTING_1: 5,
+    /** Being cut phase 2 */
+    CUTTING_2: 6,
+    /** Being cut phase 3 */
+    CUTTING_3: 7,
+    /** Being cut phase 4 */
+    CUTTING_4: 8,
+    /** Being cut phase 5 */
+    CUTTING_5: 9,
+    /** Canopy disappearing on ground - animated (last frame = trunk only) */
+    CANOPY_DISAPPEARING: 10,
+} as const;
+
+/** Number of jobs per tree type */
+export const TREE_JOBS_PER_TYPE = 11;
+
+/** First tree job index in 5.jil */
+const TREE_BASE_JOB = 1;
+
+/**
+ * Base JIL job indices for each tree type in 5.jil.
+ * Each entry is an array of variant base jobs — most trees have 1 variant,
+ * some have multiple visual variants picked at random on creation.
+ *
+ * Each variant occupies TREE_JOBS_PER_TYPE consecutive jobs (see TREE_JOB_OFFSET).
+ * Compound variation: variantIndex * TREE_JOBS_PER_TYPE + stageOffset.
+ *
+ * Example: Oak normal tree = [0] variant, offset NORMAL → 0 * 11 + 3 = variation 3
+ */
+export const TREE_JOB_INDICES: Partial<Record<MapObjectType, number[]>> = {
+    [MapObjectType.TreeOak]: [TREE_BASE_JOB + 0 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeBeech]: [TREE_BASE_JOB + 1 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeAsh]: [TREE_BASE_JOB + 2 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeLinden]: [TREE_BASE_JOB + 3 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeBirch]: [TREE_BASE_JOB + 4 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreePoplar]: [TREE_BASE_JOB + 5 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeChestnut]: [TREE_BASE_JOB + 6 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeMaple]: [TREE_BASE_JOB + 7 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeFir]: [TREE_BASE_JOB + 8 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeSpruce]: [TREE_BASE_JOB + 9 * TREE_JOBS_PER_TYPE], // TODO: add 3 more variant jobs
+    // [MapObjectType.TreeCoconut]: [TREE_BASE_JOB + 10 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeDate]: [TREE_BASE_JOB + 11 * TREE_JOBS_PER_TYPE, 111],
+    [MapObjectType.TreeWalnut]: [TREE_BASE_JOB + 12 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeCorkOak]: [TREE_BASE_JOB + 13 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreePine]: [TREE_BASE_JOB + 14 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreePine2]: [TREE_BASE_JOB + 15 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeOliveLarge]: [TREE_BASE_JOB + 16 * TREE_JOBS_PER_TYPE],
+    [MapObjectType.TreeOliveSmall]: [TREE_BASE_JOB + 17 * TREE_JOBS_PER_TYPE],
+
+    [MapObjectType.TreeCoconut]: [
+        TREE_BASE_JOB + 18 * TREE_JOBS_PER_TYPE,
+        TREE_BASE_JOB + 19 * TREE_JOBS_PER_TYPE,
+        TREE_BASE_JOB + 20 * TREE_JOBS_PER_TYPE,
+        TREE_BASE_JOB + 21 * TREE_JOBS_PER_TYPE,
+        //TREE_BASE_JOB + 22 * TREE_JOBS_PER_TYPE,
+    ],
+};

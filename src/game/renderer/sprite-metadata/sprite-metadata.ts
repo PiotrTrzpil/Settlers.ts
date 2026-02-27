@@ -9,24 +9,20 @@ import { isUnitAvailableForRace, isBuildingAvailableForRace } from '../../race-a
 
 // Re-export from canonical locations and new index files
 export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace, loadSavedRace, saveSavedRace } from '../../race';
-export {
-    BUILDING_ICON_INDICES,
-    MAP_OBJECT_SPRITES,
-    TREE_JOB_OFFSET,
-    TREE_JOBS_PER_TYPE,
-    TREE_JOB_INDICES,
-} from './gil-indices';
+export { BUILDING_ICON_INDICES, MAP_OBJECT_SPRITES } from './gil-indices';
 export {
     UNIT_JOB_INDICES,
     WORKER_JOB_INDICES,
     BUILDING_JOB_INDICES,
     RESOURCE_JOB_INDICES,
     CARRIER_MATERIAL_JOB_INDICES,
+    TREE_JOB_OFFSET,
+    TREE_JOBS_PER_TYPE,
+    TREE_JOB_INDICES,
 } from './jil-indices';
 
 // Import for local use by functions in this file
-import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, UNIT_JOB_INDICES } from './jil-indices';
-import { TREE_JOB_INDICES } from './gil-indices';
+import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, UNIT_JOB_INDICES, TREE_JOB_INDICES } from './jil-indices';
 
 /** Conversion factor from sprite pixels to world-space units */
 export const PIXELS_TO_WORLD = 1.0 / 32.0;
@@ -296,11 +292,11 @@ export function getMapObjectSpriteMap(): Partial<Record<MapObjectType, MapObject
     const result: Partial<Record<MapObjectType, MapObjectSpriteInfo>> = {};
 
     // Standard map objects (Trees, etc.) from file 5
-    for (const [typeStr, jobIndex] of Object.entries(TREE_JOB_INDICES)) {
-        if (typeof jobIndex === 'number') {
+    for (const [typeStr, variants] of Object.entries(TREE_JOB_INDICES)) {
+        if (Array.isArray(variants) && variants.length > 0) {
             result[Number(typeStr) as MapObjectType] = {
                 file: GFX_FILE_NUMBERS.MAP_OBJECTS,
-                index: jobIndex,
+                index: variants[0]!,
             };
         }
     }
@@ -577,19 +573,30 @@ export class SpriteMetadataRegistry {
      * @param direction 0=RIGHT, 1=RIGHT_BOTTOM, 2=LEFT_BOTTOM, 3=LEFT (defaults to 0)
      */
     public getUnit(type: UnitType, direction: number = 0, race?: number): SpriteEntry | null {
-        const dirMap =
-            (race !== undefined ? this.unitsByRace.get(race)?.get(type) : undefined) ?? this.getUnitFallback(type);
-        if (!dirMap) return null;
+        let dirMap: Map<number, SpriteEntry> | undefined;
+        if (race !== undefined) {
+            dirMap = this.unitsByRace.get(race)?.get(type);
+            if (!dirMap) {
+                this.warnMissingUnit(type, race);
+                return null;
+            }
+        } else {
+            // No race specified — find in any loaded race (legacy callers only)
+            for (const raceMap of this.unitsByRace.values()) {
+                dirMap = raceMap.get(type);
+                if (dirMap) break;
+            }
+            if (!dirMap) return null;
+        }
         return dirMap.get(direction) ?? dirMap.get(0) ?? null;
     }
 
-    /** Fallback: find unit in any loaded race */
-    private getUnitFallback(type: UnitType): Map<number, SpriteEntry> | undefined {
-        for (const raceMap of this.unitsByRace.values()) {
-            const dirMap = raceMap.get(type);
-            if (dirMap) return dirMap;
-        }
-        return undefined;
+    private readonly _warnedUnits = new Set<string>();
+    private warnMissingUnit(type: UnitType, race: number): void {
+        const key = `${race}:${type}`;
+        if (this._warnedUnits.has(key)) return;
+        this._warnedUnits.add(key);
+        console.warn(`[SpriteRegistry] No sprite for unit ${UnitType[type]} (race=${Race[race]})`);
     }
 
     // ========== Unified Animation API ==========
@@ -756,11 +763,7 @@ export class SpriteMetadataRegistry {
         if (race !== undefined) {
             const raceEntry = this.animatedByRace.get(race)?.get(entityType)?.get(subType);
             if (raceEntry) return raceEntry;
-            // Fallback: try any loaded race
-            for (const raceMap of this.animatedByRace.values()) {
-                const entry = raceMap.get(entityType)?.get(subType);
-                if (entry) return entry;
-            }
+            // No cross-race fallback — return null so caller uses correct race or nothing
         }
         return this.animatedEntities.get(entityType)?.get(subType) ?? null;
     }

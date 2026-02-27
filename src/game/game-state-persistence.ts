@@ -73,6 +73,7 @@ export interface SerializedTree {
     progress: number;
     stumpTimer: number;
     currentOffset: number;
+    variant?: number;
 }
 
 /**
@@ -264,6 +265,7 @@ function serializeTrees(game: Game): SerializedTree[] {
             progress: state.progress,
             stumpTimer: state.stumpTimer,
             currentOffset: state.currentOffset,
+            variant: state.variant,
         });
     }
     return trees;
@@ -513,6 +515,7 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
                     progress: savedTree.progress,
                     stumpTimer: savedTree.stumpTimer,
                     currentOffset: savedTree.currentOffset,
+                    variant: savedTree.variant ?? 0,
                 });
             }
             const savedStone = savedStoneStates.get(e.id);

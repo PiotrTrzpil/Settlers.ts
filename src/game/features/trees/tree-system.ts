@@ -18,7 +18,7 @@ import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types'
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import type { AnimationService } from '../../animation/index';
 import type { Command } from '../../commands';
-import { TREE_JOB_OFFSET } from '../../renderer/sprite-metadata/gil-indices';
+import { TREE_JOB_OFFSET, TREE_JOBS_PER_TYPE, TREE_JOB_INDICES } from '../../renderer/sprite-metadata/jil-indices';
 
 /**
  * Logical tree stage (game state).
@@ -43,6 +43,8 @@ const TREE_OFFSET = TREE_JOB_OFFSET;
 export interface TreeState extends GrowableState {
     stage: TreeStage;
     stumpTimer: number; // Seconds until stump removal
+    /** Visual variant index (0 = A, 1 = B). Used for compound variation. */
+    variant: number;
 }
 
 // Timing constants
@@ -87,46 +89,55 @@ export class TreeSystem extends GrowableSystem<TreeState> {
         return OBJECT_TYPE_CATEGORY[objectType] === MapObjectCategory.Trees;
     }
 
-    protected createState(planted: boolean, _objectType: MapObjectType): TreeState {
+    protected createState(planted: boolean, objectType: MapObjectType): TreeState {
         const stage = planted ? TreeStage.Growing : TreeStage.Normal;
-        const state: TreeState = { stage, progress: 0, stumpTimer: 0, currentOffset: 0 };
+        const variantCount = TREE_JOB_INDICES[objectType]?.length ?? 1;
+        const variant = this.gameState.rng.nextInt(variantCount);
+        const state: TreeState = { stage, progress: 0, stumpTimer: 0, currentOffset: 0, variant };
         state.currentOffset = this.getSpriteOffset(state);
         return state;
     }
 
     protected getSpriteOffset(state: TreeState): number {
+        const base = state.variant * TREE_JOBS_PER_TYPE;
         switch (state.stage) {
         case TreeStage.Growing:
-            if (state.progress < 0.33) return TREE_OFFSET.SAPLING;
-            if (state.progress < 0.66) return TREE_OFFSET.SMALL;
-            return TREE_OFFSET.MEDIUM;
+            if (state.progress < 0.33) return base + TREE_OFFSET.SAPLING;
+            if (state.progress < 0.66) return base + TREE_OFFSET.SMALL;
+            return base + TREE_OFFSET.MEDIUM;
 
         case TreeStage.Normal:
-            return TREE_OFFSET.NORMAL;
+            return base + TREE_OFFSET.NORMAL;
 
         case TreeStage.Cutting:
             // Phase 1: Tree still standing while being chopped
-            if (state.progress < 0.3) return TREE_OFFSET.NORMAL;
+            if (state.progress < 0.3) return base + TREE_OFFSET.NORMAL;
             // Phase 2: Tree falls
-            if (state.progress < 0.4) return TREE_OFFSET.FALLING;
+            if (state.progress < 0.4) return base + TREE_OFFSET.FALLING;
             // Phase 3: Cutting the fallen log (5 phases across 0.4-0.9)
             if (state.progress < 0.9) {
                 const phase = Math.floor(((state.progress - 0.4) / 0.5) * 5);
-                return TREE_OFFSET.CUTTING_1 + Math.min(4, phase);
+                return base + TREE_OFFSET.CUTTING_1 + Math.min(4, phase);
             }
             // Phase 4: Log picked up - canopy disappearing
-            return TREE_OFFSET.CANOPY_DISAPPEARING;
+            return base + TREE_OFFSET.CANOPY_DISAPPEARING;
 
         case TreeStage.Cut:
-            return TREE_OFFSET.CANOPY_DISAPPEARING;
+            return base + TREE_OFFSET.CANOPY_DISAPPEARING;
         }
     }
 
-    protected onOffsetChanged(entityId: number, offset: number, _state: TreeState): void {
-        // Normal trees (offset 3) have sway animation — random start frame to desync
-        if (offset === TREE_OFFSET.NORMAL) {
+    protected onOffsetChanged(entityId: number, offset: number, state: TreeState): void {
+        // Normal trees have sway animation — random start frame to desync.
+        // Variant index is encoded as direction in the animation entry.
+        const baseOffset = offset - state.variant * TREE_JOBS_PER_TYPE;
+        if (baseOffset === TREE_OFFSET.NORMAL) {
             const startFrame = this.gameState.rng.nextInt(100);
-            this.animationService.play(entityId, 'default', { loop: true, startFrame });
+            this.animationService.play(entityId, 'default', {
+                loop: true,
+                startFrame,
+                direction: state.variant,
+            });
         }
     }
 
