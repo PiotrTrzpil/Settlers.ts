@@ -14,8 +14,8 @@ A browser-based remake of **The Settlers 4** (Die Siedler 4) built with TypeScri
 - All five races render with their own building and unit sprite sets: Roman, Viking, Mayan, Dark Tribe, Trojan
 
 ### Economy and Logistics
-- Full **production chain** simulation: woodcutting, sawmills, stone quarries, farms, mills, bakeries, fisheries, animal ranches, mines, smelters, smithies, and race-specific goods (wine, mead, tequila, sunflower oil)
-- **Worker AI** driven by YAML job definitions — woodcutters, stonecutters, foresters, farmers, miners, carriers, builders, diggers, smiths, millers, butchers
+- Part of **production chain**: woodcutting, sawmills, farms
+- **Worker Tasks** driven by YAML job definitions — woodcutters, stonecutters, foresters, farmers, miners, carriers, builders, diggers, smiths, millers, butchers
 - **Logistics dispatcher** matches resource requests to available supplies, assigns idle carriers, and tracks delivery status with stall detection
 - **Building inventory** system with input/output slots and reservations
 - **Territory** computed from castles and guard towers via BFS flood-fill; logistics respects territory boundaries
