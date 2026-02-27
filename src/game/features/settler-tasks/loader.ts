@@ -71,7 +71,6 @@ const SETTLER_NAME_MAP: Record<string, UnitType> = {
 
 interface RawSettlerConfig {
     search: string;
-    tool?: string;
     jobs: string[];
 }
 
@@ -96,7 +95,6 @@ export function loadSettlerConfigs(): SettlerConfigs {
 
         configs.set(unitType, {
             search: parseEnum<SearchType>(rawConfig.search, SEARCH_TYPES, 'search type'),
-            tool: parseMaterialType(rawConfig.tool),
             jobs: rawConfig.jobs,
         });
     }

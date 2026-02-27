@@ -21,7 +21,7 @@ import type { StoneSystem } from '../stones/stone-system';
 import type { CropSystem } from '../crops/crop-system';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { findNearestEntity } from '../../systems/spatial-search';
-import { getWorkerWorkplaces } from '../../unit-types';
+import { getWorkerBuildingTypes } from '../../game-data-access';
 import { getBuildingMaxOccupants } from '../../buildings/types';
 
 // ─────────────────────────────────────────────────────────────
@@ -30,6 +30,7 @@ import { getBuildingMaxOccupants } from '../../buildings/types';
 
 /**
  * Find the nearest workplace building for a settler based on their unit type.
+ * Building-to-worker mapping is derived from buildingInfo.xml (inhabitant field).
  * Returns the nearest building of the appropriate type owned by the same player.
  */
 export function findNearestWorkplace(
@@ -38,7 +39,7 @@ export function findNearestWorkplace(
     buildingOccupants?: ReadonlyMap<number, number>
 ): Entity | null {
     const unitType = settler.subType as UnitType;
-    const workplaceTypes = getWorkerWorkplaces(unitType);
+    const workplaceTypes = getWorkerBuildingTypes(settler.race, unitType);
 
     if (!workplaceTypes) {
         return null;

@@ -115,7 +115,6 @@ export interface JobDefinition {
 /** Settler type configuration from YAML */
 export interface SettlerConfig {
     search: SearchType;
-    tool?: EMaterialType;
     jobs: string[];
 }
 

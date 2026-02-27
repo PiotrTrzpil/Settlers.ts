@@ -33,6 +33,16 @@ export class GameDataLoader {
         return GameDataLoader.instance;
     }
 
+    /** Reset singleton for testing. Clears all loaded data. */
+    public static resetInstance(): void {
+        GameDataLoader.instance = null;
+    }
+
+    /** Inject pre-built GameData directly (for unit tests). */
+    public setData(data: GameData): void {
+        this.data = data;
+    }
+
     /** Check if data is loaded */
     public isLoaded(): boolean {
         return this.data !== null;

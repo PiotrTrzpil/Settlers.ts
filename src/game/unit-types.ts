@@ -3,8 +3,6 @@
  * Centralized unit-related types, enums, and configuration.
  */
 
-import { BuildingType } from './buildings';
-
 export enum UnitType {
     Carrier = 0,
     Builder = 1,
@@ -140,70 +138,4 @@ export function getUnitTypesInCategory(category: UnitCategory): UnitType[] {
     return Object.entries(UNIT_TYPE_CONFIG)
         .filter(([, config]) => config.category === category)
         .map(([type]) => Number(type) as UnitType);
-}
-
-/**
- * Mapping from building types to their dedicated worker types.
- * Used to spawn workers when "place with worker" option is enabled.
- * Only production buildings that have a specific worker type are included.
- */
-export const BUILDING_UNIT_TYPE: Partial<Record<BuildingType, UnitType>> = {
-    // Wood/Forest production
-    [BuildingType.WoodcutterHut]: UnitType.Woodcutter,
-    [BuildingType.ForesterHut]: UnitType.Forester,
-    [BuildingType.Sawmill]: UnitType.SawmillWorker,
-
-    // Stone
-    [BuildingType.StonecutterHut]: UnitType.Stonecutter,
-
-    // Farming / Food
-    [BuildingType.GrainFarm]: UnitType.Farmer,
-    [BuildingType.Mill]: UnitType.Miller,
-    [BuildingType.Slaughterhouse]: UnitType.Butcher,
-
-    // Mining
-    [BuildingType.CoalMine]: UnitType.Miner,
-    [BuildingType.IronMine]: UnitType.Miner,
-    [BuildingType.GoldMine]: UnitType.Miner,
-    [BuildingType.SulfurMine]: UnitType.Miner,
-    [BuildingType.StoneMine]: UnitType.Miner,
-
-    // Smithing / Smelting
-    [BuildingType.WeaponSmith]: UnitType.Smith,
-    [BuildingType.ToolSmith]: UnitType.Smith,
-    [BuildingType.IronSmelter]: UnitType.Smith,
-    [BuildingType.SmeltGold]: UnitType.Smith,
-
-    // Race-specific farming
-    [BuildingType.AgaveFarmerHut]: UnitType.AgaveFarmer,
-    [BuildingType.BeekeeperHut]: UnitType.Beekeeper,
-
-    // Dark Tribe
-    [BuildingType.MushroomFarm]: UnitType.MushroomFarmer,
-};
-
-/**
- * Derived reverse lookup: for each unit type, all building types it can work at.
- * Computed once from BUILDING_UNIT_TYPE (single source of truth).
- */
-const WORKER_WORKPLACES: ReadonlyMap<UnitType, ReadonlySet<BuildingType>> = (() => {
-    const map = new Map<UnitType, Set<BuildingType>>();
-    for (const [buildingStr, unitType] of Object.entries(BUILDING_UNIT_TYPE)) {
-        const building = Number(buildingStr) as BuildingType;
-        let set = map.get(unitType);
-        if (!set) {
-            set = new Set();
-            map.set(unitType, set);
-        }
-        set.add(building);
-    }
-    return map;
-})();
-
-/**
- * Get all building types where a worker unit type can work.
- * Returns undefined if the unit type has no workplace.
- */
-export function getWorkerWorkplaces(unitType: UnitType): ReadonlySet<BuildingType> | undefined {
-    return WORKER_WORKPLACES.get(unitType);
 }

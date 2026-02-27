@@ -1,14 +1,13 @@
 # Settler type definitions
-# Each settler has a search type, optional tool, and list of jobs
+# Each settler has a search type and list of jobs
+# Tool requirements are derived from buildingInfo.xml (tool field)
 
 woodcutter:
   search: TREE
-  tool: AXE
   jobs: [work]
 
 stonecutter:
   search: STONE
-  tool: PICKAXE
   jobs: [work]
 
 forester:
@@ -17,12 +16,10 @@ forester:
 
 farmer:
   search: GRAIN
-  tool: SCYTHE
   jobs: [plant, harvest]
 
 agavefarmer:
   search: AGAVE
-  tool: SCYTHE
   jobs: [plant, harvest]
 
 beekeeper:
@@ -31,7 +28,6 @@ beekeeper:
 
 miner:
   search: RESOURCE_POS
-  tool: PICKAXE
   jobs: [work]
 
 carrier:
@@ -40,18 +36,15 @@ carrier:
 
 builder:
   search: CONSTRUCTION
-  tool: HAMMER
   jobs: [build]
 
 digger:
   search: TERRAIN
-  tool: SHOVEL
   jobs: [dig]
 
 # Building workers - go to workplace, wait for materials, produce
 smith:
   search: WORKPLACE
-  tool: HAMMER
   jobs: [station]
 
 sawmillworker:

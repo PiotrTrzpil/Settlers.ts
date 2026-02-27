@@ -54,7 +54,6 @@ export {
     isUnitTypeMilitary,
     getUnitTypeSpeed,
     getUnitTypesInCategory,
-    BUILDING_UNIT_TYPE,
 } from './unit-types';
 
 export interface Entity {

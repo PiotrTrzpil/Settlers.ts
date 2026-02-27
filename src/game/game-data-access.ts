@@ -9,8 +9,11 @@
  */
 
 import { getGameDataLoader, type RaceId, type BuildingInfo, type ObjectInfo } from '@/resources/game-data';
+import { S4SettlerType, S4GoodType } from '@/resources/map/s4-types';
 import { Race } from './race';
 import { BuildingType } from './buildings/building-type';
+import { UnitType } from './unit-types';
+import { EMaterialType } from './economy/material-type';
 import { MapObjectType } from './types/map-object-types';
 
 // ============ Race translation ============
@@ -150,6 +153,193 @@ export function getBuildingInfo(race: Race, buildingType: BuildingType): Buildin
  */
 export function getBuildingTypesByXmlId(xmlId: string): readonly BuildingType[] | undefined {
     return ensureXmlIdMap().get(xmlId);
+}
+
+// ============ S4 type mappings ============
+// Shared translation tables from S4 binary types to game domain types.
+// Used by map loaders (settlers, stacks) and XML data lookups.
+
+/**
+ * S4SettlerType → internal UnitType.
+ * Only includes types that are implemented in the engine.
+ */
+export const S4_TO_UNIT_TYPE: Partial<Record<S4SettlerType, UnitType>> = {
+    [S4SettlerType.CARRIER]: UnitType.Carrier,
+    [S4SettlerType.BUILDER]: UnitType.Builder,
+    [S4SettlerType.WOODCUTTER]: UnitType.Woodcutter,
+    [S4SettlerType.STONECUTTER]: UnitType.Stonecutter,
+    [S4SettlerType.FORESTER]: UnitType.Forester,
+    [S4SettlerType.SWORDSMAN_01]: UnitType.Swordsman,
+    [S4SettlerType.SWORDSMAN_02]: UnitType.Swordsman,
+    [S4SettlerType.SWORDSMAN_03]: UnitType.Swordsman,
+    [S4SettlerType.BOWMAN_01]: UnitType.Bowman,
+    [S4SettlerType.BOWMAN_02]: UnitType.Bowman,
+    [S4SettlerType.BOWMAN_03]: UnitType.Bowman,
+    [S4SettlerType.PRIEST]: UnitType.Priest,
+    [S4SettlerType.PIONEER]: UnitType.Pioneer,
+    [S4SettlerType.THIEF]: UnitType.Thief,
+    [S4SettlerType.GEOLOGIST]: UnitType.Geologist,
+    [S4SettlerType.SMITH]: UnitType.Smith,
+    [S4SettlerType.SQUADLEADER]: UnitType.SquadLeader,
+    [S4SettlerType.DARKGARDENER]: UnitType.DarkGardener,
+    [S4SettlerType.SHAMAN]: UnitType.Shaman,
+    [S4SettlerType.MEDIC_01]: UnitType.Medic,
+    [S4SettlerType.MEDIC_02]: UnitType.Medic,
+    [S4SettlerType.MEDIC_03]: UnitType.Medic,
+    [S4SettlerType.MINEWORKER]: UnitType.Miner,
+    [S4SettlerType.SMELTER]: UnitType.Smelter,
+    [S4SettlerType.HUNTER]: UnitType.Hunter,
+    [S4SettlerType.HEALER]: UnitType.Healer,
+    [S4SettlerType.DONKEY]: UnitType.Donkey,
+    [S4SettlerType.SAWMILLWORKER]: UnitType.SawmillWorker,
+    [S4SettlerType.FARMERGRAIN]: UnitType.Farmer,
+    [S4SettlerType.AGAVEFARMER]: UnitType.AgaveFarmer,
+    [S4SettlerType.BEEKEEPER]: UnitType.Beekeeper,
+    [S4SettlerType.MUSHROOMFARMER]: UnitType.MushroomFarmer,
+    [S4SettlerType.ANGEL_01]: UnitType.Angel,
+    [S4SettlerType.ANGEL_02]: UnitType.Angel,
+    [S4SettlerType.ANGEL_03]: UnitType.Angel,
+    [S4SettlerType.MILLER]: UnitType.Miller,
+    [S4SettlerType.BUTCHER]: UnitType.Butcher,
+    [S4SettlerType.FISHER]: UnitType.Hunter, // Fisher uses Hunter unit type
+    [S4SettlerType.BAKER]: UnitType.Smith, // Baker uses Smith unit type (station worker)
+    [S4SettlerType.FARMERANIMALS]: UnitType.Farmer, // Animal farmer uses Farmer unit type
+    [S4SettlerType.WATERWORKER]: UnitType.Carrier, // Water worker uses Carrier unit type
+    [S4SettlerType.CHARCOALMAKER]: UnitType.Smith, // Charcoal maker uses Smith unit type
+    [S4SettlerType.AMMOMAKER]: UnitType.Smith, // Ammo maker uses Smith unit type
+    [S4SettlerType.VEHICLEMAKER]: UnitType.Smith, // Vehicle maker uses Smith unit type
+    [S4SettlerType.VINTNER]: UnitType.Smith, // Vintner uses Smith unit type
+    [S4SettlerType.MEADMAKER]: UnitType.Smith, // Mead maker uses Smith unit type
+    [S4SettlerType.TEQUILAMAKER]: UnitType.Smith, // Tequila maker uses Smith unit type
+    [S4SettlerType.SUNFLOWERFARMER]: UnitType.Farmer, // Sunflower farmer uses Farmer unit type
+    [S4SettlerType.SUNFLOWEROILMAKER]: UnitType.Smith, // Oil maker uses Smith unit type
+    [S4SettlerType.SHIPYARDWORKER]: UnitType.Smith, // Shipyard worker uses Smith unit type
+    [S4SettlerType.TEMPLE_SERVANT]: UnitType.Priest, // Temple servant uses Priest unit type
+};
+
+/**
+ * S4GoodType → internal EMaterialType.
+ * Only includes types that are implemented in the engine.
+ */
+export const S4_TO_MATERIAL_TYPE: Partial<Record<S4GoodType, EMaterialType>> = {
+    [S4GoodType.LOG]: EMaterialType.LOG,
+    [S4GoodType.STONE]: EMaterialType.STONE,
+    [S4GoodType.COAL]: EMaterialType.COAL,
+    [S4GoodType.IRONORE]: EMaterialType.IRONORE,
+    [S4GoodType.GOLDORE]: EMaterialType.GOLDORE,
+    [S4GoodType.GRAIN]: EMaterialType.GRAIN,
+    [S4GoodType.PIG]: EMaterialType.PIG,
+    [S4GoodType.WATER]: EMaterialType.WATER,
+    [S4GoodType.FISH]: EMaterialType.FISH,
+    [S4GoodType.BOARD]: EMaterialType.BOARD,
+    [S4GoodType.IRONBAR]: EMaterialType.IRONBAR,
+    [S4GoodType.GOLDBAR]: EMaterialType.GOLDBAR,
+    [S4GoodType.FLOUR]: EMaterialType.FLOUR,
+    [S4GoodType.BREAD]: EMaterialType.BREAD,
+    [S4GoodType.MEAT]: EMaterialType.MEAT,
+    [S4GoodType.WINE]: EMaterialType.WINE,
+    [S4GoodType.AXE]: EMaterialType.AXE,
+    [S4GoodType.PICKAXE]: EMaterialType.PICKAXE,
+    [S4GoodType.SAW]: EMaterialType.SAW,
+    [S4GoodType.HAMMER]: EMaterialType.HAMMER,
+    [S4GoodType.SCYTHE]: EMaterialType.SCYTHE,
+    [S4GoodType.ROD]: EMaterialType.ROD,
+    [S4GoodType.SWORD]: EMaterialType.SWORD,
+    [S4GoodType.BOW]: EMaterialType.BOW,
+    [S4GoodType.SULFUR]: EMaterialType.SULFUR,
+    [S4GoodType.ARMOR]: EMaterialType.ARMOR,
+    [S4GoodType.BATTLEAXE]: EMaterialType.BATTLEAXE,
+    [S4GoodType.AGAVE]: EMaterialType.AGAVE,
+    [S4GoodType.BLOWGUN]: EMaterialType.BLOWGUN,
+    [S4GoodType.GOAT]: EMaterialType.GOAT,
+    [S4GoodType.MEAD]: EMaterialType.MEAD,
+    [S4GoodType.HONEY]: EMaterialType.HONEY,
+    [S4GoodType.SHEEP]: EMaterialType.SHEEP,
+    [S4GoodType.SHOVEL]: EMaterialType.SHOVEL,
+    [S4GoodType.BACKPACKCATAPULT]: EMaterialType.CATAPULT,
+    [S4GoodType.GOOSE]: EMaterialType.GOOSE,
+    [S4GoodType.TEQUILA]: EMaterialType.TEQUILA,
+    [S4GoodType.SUNFLOWER]: EMaterialType.SUNFLOWER,
+    [S4GoodType.SUNFLOWEROIL]: EMaterialType.SUNFLOWEROIL,
+};
+
+// ============ XML string → domain type helpers ============
+
+/** Convert XML settler string (e.g. "SETTLER_WOODCUTTER") to UnitType. */
+function xmlSettlerToUnitType(xmlSettler: string): UnitType | undefined {
+    if (!xmlSettler) return undefined;
+    const name = xmlSettler.replace('SETTLER_', '');
+    if (!(name in S4SettlerType)) return undefined;
+    return S4_TO_UNIT_TYPE[S4SettlerType[name as keyof typeof S4SettlerType]];
+}
+
+/** Convert XML good string (e.g. "GOOD_PICKAXE") to EMaterialType. */
+function xmlGoodToMaterialType(xmlGood: string): EMaterialType | undefined {
+    if (!xmlGood || xmlGood === 'GOOD_NO_GOOD') return undefined;
+    const name = xmlGood.replace('GOOD_', '');
+    if (!(name in S4GoodType)) return undefined;
+    return S4_TO_MATERIAL_TYPE[S4GoodType[name as keyof typeof S4GoodType]];
+}
+
+// ============ Building worker info (from XML) ============
+
+export interface BuildingWorkerInfo {
+    /** The unit type that works in this building (derived from XML inhabitant field) */
+    unitType: UnitType;
+    /** The tool/good required before the worker can start (derived from XML tool field) */
+    tool: EMaterialType | undefined;
+}
+
+/**
+ * Get the worker UnitType and required tool for a building, derived from buildingInfo.xml.
+ * Returns undefined if data not loaded, no XML mapping exists, or building has no worker.
+ */
+export function getBuildingWorkerInfo(race: Race, buildingType: BuildingType): BuildingWorkerInfo | undefined {
+    const info = getBuildingInfo(race, buildingType);
+    if (!info || !info.inhabitant) return undefined;
+
+    const unitType = xmlSettlerToUnitType(info.inhabitant);
+    if (unitType === undefined) return undefined;
+
+    const tool = xmlGoodToMaterialType(info.tool);
+    return { unitType, tool };
+}
+
+/**
+ * Get all building types where a worker unit type can work, derived from XML.
+ * This is the reverse lookup of getBuildingWorkerInfo: given a UnitType, find matching buildings.
+ * Returns undefined if data not loaded or unit type has no workplace.
+ */
+export function getWorkerBuildingTypes(race: Race, unitType: UnitType): ReadonlySet<BuildingType> | undefined {
+    const loader = getGameDataLoader();
+    if (!loader.isLoaded()) return undefined;
+
+    let raceMap = workerBuildingCache.get(race);
+    if (!raceMap) {
+        raceMap = new Map<UnitType, Set<BuildingType>>();
+        for (const btStr of Object.keys(BUILDING_TYPE_TO_XML_ID)) {
+            const bt = Number(btStr) as BuildingType;
+            const workerInfo = getBuildingWorkerInfo(race, bt);
+            if (workerInfo) {
+                let set = raceMap.get(workerInfo.unitType);
+                if (!set) {
+                    set = new Set();
+                    raceMap.set(workerInfo.unitType, set);
+                }
+                set.add(bt);
+            }
+        }
+        workerBuildingCache.set(race, raceMap);
+    }
+    return raceMap.get(unitType);
+}
+
+/** Cached reverse map: race → (unitType → Set<BuildingType>). Built lazily from XML data. */
+const workerBuildingCache = new Map<Race, Map<UnitType, Set<BuildingType>>>();
+
+/** Clear cached worker-building lookups (call when game data changes, e.g. in tests). */
+export function clearWorkerBuildingCache(): void {
+    workerBuildingCache.clear();
 }
 
 // ============ Map object type translation ============

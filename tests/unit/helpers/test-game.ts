@@ -22,6 +22,7 @@ import { BuildingInventoryManager } from '@/game/features/inventory';
 import { ServiceAreaManager } from '@/game/features/service-areas';
 import { RequestManager } from '@/game/features/logistics';
 import { GameSettingsManager, type GameSettings } from '@/game/game-settings';
+import { installTestGameData } from './test-game-data';
 
 // ─── GameState factory ──────────────────────────────────────────────
 
@@ -110,6 +111,9 @@ export interface TestContext {
  * @param mapHeight - Map height (default: 64)
  */
 export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
+    // Ensure game data is available for XML-derived lookups (getBuildingWorkerInfo, etc.)
+    installTestGameData();
+
     const map = createTestMap(mapWidth, mapHeight);
     const eventBus = new EventBus();
     const state = new GameState(eventBus);

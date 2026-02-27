@@ -7,7 +7,7 @@ import {
     applyTerrainLeveling,
 } from '../features/building-construction';
 import { BUILDING_SPAWN_ON_COMPLETE } from '../features/building-construction/spawn-units';
-import { BUILDING_UNIT_TYPE } from '../unit-types';
+import { getBuildingWorkerInfo } from '../game-data-access';
 import { BuildingType } from '../buildings/types';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint } from '../features/placement';
@@ -409,10 +409,11 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
     }
 
     // Spawn dedicated worker if placeBuildingsWithWorker is enabled
-    if (ctx.settings.placeBuildingsWithWorker) {
-        const workerType = BUILDING_UNIT_TYPE[buildingState.buildingType];
-        if (workerType !== undefined) {
-            const workerEntity = state.addEntity(EntityType.Unit, workerType, bx, by, entity.player);
+    // Skip buildings that already spawn units via BUILDING_SPAWN_ON_COMPLETE (residences, barracks)
+    if (ctx.settings.placeBuildingsWithWorker && !spawnDef) {
+        const workerInfo = getBuildingWorkerInfo(entity.race, buildingState.buildingType);
+        if (workerInfo) {
+            const workerEntity = state.addEntity(EntityType.Unit, workerInfo.unitType, bx, by, entity.player);
             workerEntity.race = entity.race;
 
             // Restore building's tile occupancy — workers "work inside" buildings
@@ -420,13 +421,19 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
 
             eventBus.emit('unit:spawned', {
                 entityId: workerEntity.id,
-                unitType: workerType,
+                unitType: workerInfo.unitType,
                 x: bx,
                 y: by,
                 player: entity.player,
             });
 
-            effects.push({ type: 'unit_spawned', entityId: workerEntity.id, unitType: workerType, x: bx, y: by });
+            effects.push({
+                type: 'unit_spawned',
+                entityId: workerEntity.id,
+                unitType: workerInfo.unitType,
+                x: bx,
+                y: by,
+            });
         }
     }
 
