@@ -9,8 +9,26 @@ import type { ViewPoint } from '@/game/renderer/view-point';
 import type { InputManager } from '@/game/input';
 import { debugStats } from '@/game/debug-stats';
 
+/** Abort controller for the current init — cancelled when a new init starts or renderer is destroyed. */
+let activeInitAbort: AbortController | null = null;
+
+/**
+ * Cancel any in-progress renderer initialization.
+ * Call before starting a new init or on unmount to prevent stale async work.
+ */
+export function cancelRendererInit(): void {
+    activeInitAbort?.abort();
+    activeInitAbort = null;
+}
+
+/** Check if the init was cancelled (signal may be aborted by another call during await). */
+function isCancelled(signal: AbortSignal): boolean {
+    return signal.aborted;
+}
+
 /**
  * Initialize renderers asynchronously (landscape first for camera, then sprites).
+ * Automatically cancels any previously running init to prevent stale work.
  */
 export async function initRenderersAsync(
     gl: WebGL2RenderingContext,
@@ -18,21 +36,31 @@ export async function initRenderersAsync(
     indicatorRenderer: BuildingIndicatorRenderer,
     entityRenderer: EntityRenderer
 ): Promise<void> {
+    // Cancel any previous in-progress init
+    cancelRendererInit();
+    const abort = new AbortController();
+    activeInitAbort = abort;
+    const { signal } = abort;
+
     // Start IndexedDB cache read in parallel with landscape init
     entityRenderer.spriteManager?.prefetchCache();
 
     // Yield before landscape — lets prefetch promise microtasks run
     await Promise.resolve();
+    if (isCancelled(signal)) return;
 
     const t0 = performance.now();
     await landscapeRenderer.init(gl);
+    if (isCancelled(signal)) return;
     debugStats.state.loadTimings.landscape = Math.round(performance.now() - t0);
     debugStats.state.gameLoaded = true;
 
     // Yield after landscape — lets prefetch arrayBuffer() resolve before sprite restore
     await Promise.resolve();
+    if (isCancelled(signal)) return;
 
     await indicatorRenderer.init(gl);
+    if (isCancelled(signal)) return;
     await entityRenderer.init(gl);
     // Note: entityRenderer.init() returns immediately — sprites load in background.
     // markRendererReady() is called from the onSpritesLoaded callback instead.

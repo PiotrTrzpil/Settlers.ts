@@ -318,22 +318,27 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     /**
      * Clean up all GPU resources.
+     * Always cleans up SpriteRenderManager (created in constructor) even if
+     * init() hasn't been called yet — prevents 1+ GB leak on early teardown.
      */
     public destroy(): void {
         const gl = this.glContext;
-        if (!gl) return;
 
-        // Clean up color shader resources
-        if (this.dynamicBuffer) {
-            gl.deleteBuffer(this.dynamicBuffer);
-            this.dynamicBuffer = null;
+        if (gl) {
+            // Clean up color shader resources
+            if (this.dynamicBuffer) {
+                gl.deleteBuffer(this.dynamicBuffer);
+                this.dynamicBuffer = null;
+            }
+
+            // Clean up sprite batch renderer (GPU resources only exist after init)
+            this.spriteBatchRenderer.destroy(gl);
         }
 
-        // Clean up sprite batch renderer
-        this.spriteBatchRenderer.destroy(gl);
-
-        // Clean up sprite manager
+        // Clean up sprite manager — created in constructor, must always be freed
         this.spriteManager?.destroy();
+        this.spriteManager = null;
+        this.glContext = null;
 
         EntityRenderer.log.debug('EntityRenderer resources cleaned up');
     }

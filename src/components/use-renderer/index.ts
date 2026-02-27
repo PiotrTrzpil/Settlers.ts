@@ -38,7 +38,7 @@ import type { SelectionBox } from '@/game/input/render-state';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
 import { loadCameraState } from '@/game/renderer/camera-persistence';
 import { getCurrentMapId } from '@/game/game-state-persistence';
-import { initRenderersAsync, exposeForE2E } from './renderer-init';
+import { initRenderersAsync, cancelRendererInit, exposeForE2E } from './renderer-init';
 import { createUpdateCallback, createRenderCallback } from './frame-callbacks';
 import { updateTileDebugStats, createBuildingAdjustMode, handleModeChange } from './input-setup';
 
@@ -251,6 +251,7 @@ export function useRenderer({
 
         debugStats.reset();
         game.viewState.reset();
+        cancelRendererInit();
         renderer.clear();
 
         // Inject game settings into ViewPoint and InputManager
@@ -289,6 +290,8 @@ export function useRenderer({
     });
 
     onUnmounted(() => {
+        cancelRendererInit();
+
         const game = getGame();
         if (game) game.destroy();
 
