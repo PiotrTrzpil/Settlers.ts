@@ -2,7 +2,7 @@
  * Unit state machine for settler task processing.
  *
  * Coordinates the IDLE → WORKING → INTERRUPTED state transitions for settler
- * units with YAML-defined job configs. Delegates to WorkerTaskExecutor or
+ * units with XML choreography job configs. Delegates to WorkerTaskExecutor or
  * CarrierTaskExecutor based on the active job type.
  *
  * Handles:
@@ -15,13 +15,15 @@
 import type { Entity } from '../../entity';
 import { UnitType } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
-import { SettlerState, type SettlerConfig, type JobState } from './types';
-import type { SettlerConfigs } from './loader';
+import { JobType, SettlerState, type SettlerConfig, type JobState } from './types';
 import type { IdleAnimationController, IdleAnimationState } from './idle-animation-controller';
 import type { WorkerTaskExecutor, WorkerRuntimeState, OccupancyMap } from './worker-task-executor';
 import type { CarrierTaskExecutor, CarrierRuntimeState } from './carrier-task-executor';
 import type { GameState } from '../../game-state';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
+
+/** Settler configs keyed by UnitType (from settler-data-access.ts). */
+type SettlerConfigs = Map<UnitType, SettlerConfig>;
 
 const log = new LogHandler('UnitStateMachine');
 
@@ -75,7 +77,7 @@ export class UnitStateMachine {
             return;
         }
 
-        // Handle YAML-based jobs for configured settlers
+        // Handle choreography-based jobs for configured settlers
         if (config) {
             this.updateSettler(unit, config, runtime, dt);
             return;
@@ -137,7 +139,7 @@ export class UnitStateMachine {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // YAML settler state dispatch
+    // Settler state dispatch
     // ─────────────────────────────────────────────────────────────
 
     private updateSettler(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
@@ -181,7 +183,7 @@ export class UnitStateMachine {
     private handleWorking(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
         const job = runtime.job!;
 
-        if (job.type === 'carrier') {
+        if (job.type === JobType.CARRIER) {
             this.carrierExecutor.handleWorking(settler, runtime as CarrierRuntimeState, dt);
         } else {
             this.workerExecutor.handleWorking(settler, config, runtime as WorkerRuntimeState, dt);

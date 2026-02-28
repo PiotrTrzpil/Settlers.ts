@@ -1,20 +1,35 @@
 /**
- * Carrier job executor (high-level).
+ * Carrier job executor (high-level, self-contained).
  *
  * Handles job execution, completion, and interruption for carrier units
  * running externally-assigned CarrierJobState (transport jobs).
- * Low-level carrier task dispatch is handled by carrier-task-executors.ts.
+ *
+ * The transport phase sequence is implemented inline — no YAML job definitions needed.
+ * Phases: GO_TO_SOURCE → PICKUP → GO_TO_DEST → DROPOFF → GO_HOME
  */
 
-import type { Entity } from '../../entity';
-import { clearCarrying } from '../../entity';
+import { type Entity, setCarrying, clearCarrying, BuildingType } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
-import { TaskResult, SettlerState, type CarrierJobState, type JobState } from './types';
-import { executeTask, type TaskContext } from './task-executors';
-import type { JobDefinitions } from './loader';
+import { CarrierStatus } from '../carriers';
+import { TaskResult, SettlerState, CarrierPhase, type CarrierJobState, type JobState } from './types';
+import type { ChoreoContext } from './choreo-types';
 import type { IdleAnimationController } from './idle-animation-controller';
+import { hexDistance } from '../../systems/hex-directions';
+import { getBuildingDoorOffset } from '../../game-data-access';
 
 const log = new LogHandler('CarrierTaskExecutor');
+
+/** Fatigue added per delivery cycle */
+const FATIGUE_PER_DELIVERY = 5;
+
+/** Carrier phase sequence (indexed by taskIndex). */
+const CARRIER_PHASES: readonly CarrierPhase[] = [
+    CarrierPhase.GO_TO_SOURCE,
+    CarrierPhase.PICKUP,
+    CarrierPhase.GO_TO_DEST,
+    CarrierPhase.DROPOFF,
+    CarrierPhase.GO_HOME,
+];
 
 /** Per-unit state needed by the carrier executor (subset of UnitRuntime). */
 export interface CarrierRuntimeState {
@@ -24,41 +39,34 @@ export interface CarrierRuntimeState {
 
 export class CarrierTaskExecutor {
     constructor(
-        private readonly jobDefinitions: JobDefinitions,
         private readonly animController: IdleAnimationController,
-        private readonly taskContext: TaskContext
+        private readonly choreoContext: ChoreoContext
     ) {}
 
     /**
-     * Handle a carrier in WORKING state: advance the current transport task.
+     * Handle a carrier in WORKING state: advance the current transport phase.
      */
-    handleWorking(settler: Entity, runtime: CarrierRuntimeState, dt: number): void {
+    handleWorking(settler: Entity, runtime: CarrierRuntimeState, _dt: number): void {
         // Job MUST exist when state is WORKING — crash if invariant violated
         const job = runtime.job! as CarrierJobState;
+        const phase = CARRIER_PHASES[job.taskIndex] as CarrierPhase | undefined; // undefined when past last phase
 
-        const tasks = this.jobDefinitions.get(job.jobId);
-        if (!tasks || job.taskIndex >= tasks.length) {
+        if (!phase) {
             this.completeJob(settler, runtime);
             return;
         }
 
-        const task = tasks[job.taskIndex]!;
-
-        // Apply animation for current task (on first tick of task)
+        // Apply animation on first tick of each phase
         if (job.progress === 0) {
-            this.animController.applyTaskAnimation(settler, task);
+            this.applyPhaseAnimation(settler, phase);
         }
 
-        const result = executeTask(settler, job, task, dt, this.taskContext);
+        const result = this.executePhase(settler, job, phase);
 
         switch (result) {
         case TaskResult.DONE:
             job.taskIndex++;
             job.progress = 0;
-            // Apply animation for next task if there is one
-            if (job.taskIndex < tasks.length) {
-                this.animController.applyTaskAnimation(settler, tasks[job.taskIndex]!);
-            }
             break;
 
         case TaskResult.FAILED:
@@ -97,5 +105,177 @@ export class CarrierTaskExecutor {
         log.debug(`Carrier ${settler.id} interrupted job ${job.jobId}`);
         runtime.state = SettlerState.INTERRUPTED;
         this.animController.setIdleAnimation(settler);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Phase dispatch
+    // ─────────────────────────────────────────────────────────────
+
+    private executePhase(settler: Entity, job: CarrierJobState, phase: CarrierPhase): TaskResult {
+        switch (phase) {
+        case CarrierPhase.GO_TO_SOURCE:
+            return this.goToSource(settler, job);
+        case CarrierPhase.PICKUP:
+            return this.pickup(settler, job);
+        case CarrierPhase.GO_TO_DEST:
+            return this.goToDest(settler, job);
+        case CarrierPhase.DROPOFF:
+            return this.dropoff(settler, job);
+        case CarrierPhase.GO_HOME:
+            return this.goHome(settler, job);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Animation
+    // ─────────────────────────────────────────────────────────────
+
+    private applyPhaseAnimation(settler: Entity, phase: CarrierPhase): void {
+        switch (phase) {
+        case CarrierPhase.GO_TO_SOURCE:
+        case CarrierPhase.GO_TO_DEST:
+        case CarrierPhase.GO_HOME:
+            // startWalkAnimation internally calls resolveTaskAnimation('walk', unit),
+            // which checks entity.carrying and returns carry animation when carrying.
+            this.animController.startWalkAnimation(settler, 0);
+            break;
+        case CarrierPhase.PICKUP:
+        case CarrierPhase.DROPOFF:
+            // Instant phases — no animation change needed
+            break;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Movement
+    // ─────────────────────────────────────────────────────────────
+
+    private moveToPosition(settler: Entity, targetX: number, targetY: number): TaskResult {
+        const { gameState } = this.choreoContext;
+        const controller = gameState.movement.getController(settler.id);
+        if (!controller) return TaskResult.FAILED;
+
+        const dist = hexDistance(settler.x, settler.y, targetX, targetY);
+
+        if (dist <= 1 && controller.state === 'idle') {
+            return TaskResult.DONE;
+        }
+
+        if (controller.state === 'idle') {
+            const moved = gameState.movement.moveUnit(settler.id, targetX, targetY);
+            if (!moved) return TaskResult.FAILED;
+        }
+
+        return TaskResult.CONTINUE;
+    }
+
+    private goToSource(settler: Entity, job: CarrierJobState): TaskResult {
+        const { sourceBuildingId, material } = job.data;
+        const building = this.choreoContext.gameState.getEntityOrThrow(sourceBuildingId, 'source building');
+        // Navigate to the output stack position if it exists, otherwise fall back to building center
+        const stackPos = this.choreoContext.inventoryVisualizer.getStackPosition(sourceBuildingId, material, 'output');
+        return this.moveToPosition(settler, stackPos?.x ?? building.x, stackPos?.y ?? building.y);
+    }
+
+    private goToDest(settler: Entity, job: CarrierJobState): TaskResult {
+        const { destBuildingId, material } = job.data;
+        // Navigate to the input stack position if it exists, otherwise fall back to building center
+        const stackPos = this.choreoContext.inventoryVisualizer.getStackPosition(destBuildingId, material, 'input');
+        const building = this.choreoContext.gameState.getEntityOrThrow(destBuildingId, 'destination building');
+        return this.moveToPosition(settler, stackPos?.x ?? building.x, stackPos?.y ?? building.y);
+    }
+
+    private goHome(settler: Entity, job: CarrierJobState): TaskResult {
+        const homeId = job.data.homeId;
+        const building = this.choreoContext.gameState.getEntityOrThrow(homeId, 'carrier home building');
+        const door = getBuildingDoorOffset(building.race, building.subType as BuildingType);
+        const targetX = door ? building.x + door.dx : building.x;
+        const targetY = door ? building.y + door.dy : building.y;
+        return this.moveToPosition(settler, targetX, targetY);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Pickup / Dropoff — delegated to TransportJob
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Pick up material from source building.
+     * TransportJob handles the reservation → withdrawal atomically.
+     */
+    private pickup(settler: Entity, job: CarrierJobState): TaskResult {
+        const { transportJob, material, sourceBuildingId, amount: requestedAmount } = job.data;
+
+        const withdrawn = transportJob.pickup();
+
+        if (withdrawn === 0) {
+            log.warn(`Carrier ${settler.id}: pickup failed at building ${sourceBuildingId}`);
+
+            this.choreoContext.eventBus.emit('carrier:pickupFailed', {
+                entityId: settler.id,
+                material,
+                fromBuilding: sourceBuildingId,
+                requestedAmount,
+            });
+
+            return TaskResult.FAILED;
+        }
+
+        setCarrying(settler, material, withdrawn);
+        job.data.carryingGood = material;
+        job.data.amount = withdrawn;
+
+        if (withdrawn < requestedAmount) {
+            log.debug(`Carrier ${settler.id} picked up ${withdrawn}/${requestedAmount} of ${material} (partial)`);
+        } else {
+            log.debug(`Carrier ${settler.id} picked up ${withdrawn} of ${material} from building ${sourceBuildingId}`);
+        }
+
+        this.choreoContext.eventBus.emit('carrier:pickupComplete', {
+            entityId: settler.id,
+            material,
+            amount: withdrawn,
+            fromBuilding: sourceBuildingId,
+        });
+
+        return TaskResult.DONE;
+    }
+
+    /**
+     * Deposit material to destination building.
+     * TransportJob handles the deposit + request fulfillment.
+     */
+    private dropoff(settler: Entity, job: CarrierJobState): TaskResult {
+        const { transportJob, destBuildingId, material } = job.data;
+
+        if (!settler.carrying) {
+            throw new Error(
+                `Carrier ${settler.id}: dropoff called but settler is not carrying anything (job: material=${material})`
+            );
+        }
+        const amount = settler.carrying.amount;
+        const deposited = transportJob.complete(amount);
+
+        const overflow = amount - deposited;
+        if (overflow > 0) {
+            log.warn(`Carrier ${settler.id}: ${overflow} of ${material} overflow at building ${destBuildingId}`);
+        }
+
+        clearCarrying(settler);
+        job.data.carryingGood = null;
+
+        log.debug(`Carrier ${settler.id} delivered ${deposited} of ${material} to building ${destBuildingId}`);
+
+        this.choreoContext.carrierManager.addFatigue(settler.id, FATIGUE_PER_DELIVERY);
+        this.choreoContext.carrierManager.setStatus(settler.id, CarrierStatus.Idle);
+
+        this.choreoContext.eventBus.emit('carrier:deliveryComplete', {
+            entityId: settler.id,
+            material,
+            amount: deposited,
+            toBuilding: destBuildingId,
+            overflow,
+        });
+
+        return TaskResult.DONE;
     }
 }

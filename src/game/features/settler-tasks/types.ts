@@ -4,40 +4,7 @@
 
 import type { EMaterialType } from '../../economy';
 import type { TransportJob } from '../logistics/transport-job';
-
-/** Task types - atomic actions a settler can perform */
-export enum TaskType {
-    /** Move to target entity */
-    GO_TO_TARGET = 'GO_TO_TARGET',
-    /** Move to specific position */
-    GO_TO_POS = 'GO_TO_POS',
-    /** Move to source pile (for carriers) */
-    GO_TO_SOURCE = 'GO_TO_SOURCE',
-    /** Move to destination pile (for carriers) */
-    GO_TO_DEST = 'GO_TO_DEST',
-    /** Return to home building */
-    GO_HOME = 'GO_HOME',
-    /** Move to a tile adjacent to a target position (not onto it) */
-    GO_ADJACENT_POS = 'GO_ADJACENT_POS',
-    /** Face toward the target position (set direction without moving) */
-    FACE_POS = 'FACE_POS',
-    /** Search for a position (e.g., where to plant) */
-    SEARCH_POS = 'SEARCH_POS',
-    /** Wait until target entity is ready to be worked on (canWork check) */
-    WAIT_FOR_WORK = 'WAIT_FOR_WORK',
-    /** Work on target entity (tree, stone, etc.) - always starts immediately */
-    WORK_ON_ENTITY = 'WORK_ON_ENTITY',
-    /** Stay at current position indefinitely (for building workers) */
-    STAY = 'STAY',
-    /** Generic work at current position */
-    WORK = 'WORK',
-    /** Wait for duration */
-    WAIT = 'WAIT',
-    /** Pick up resource */
-    PICKUP = 'PICKUP',
-    /** Drop off resource */
-    DROPOFF = 'DROPOFF',
-}
+import type { ChoreoJobState } from './choreo-types';
 
 /** Search types - what a settler looks for */
 export enum SearchType {
@@ -60,62 +27,10 @@ export enum SearchType {
     WORKPLACE = 'WORKPLACE',
 }
 
-/**
- * Animation action names used in job YAML files.
- * These are semantic actions that get resolved to full animation names
- * via settlerAnim(unitType, action).
- *
- * Universal actions (all settlers):
- *   - walk: walking without cargo
- *   - idle: standing idle
- *   - carry: walking with cargo (resolved with material type)
- *   - pickup: picking up resource
- *   - dropoff: dropping off resource
- *
- * Settler-specific work actions:
- *   - chop: woodcutter chopping tree
- *   - harvest: farmer harvesting grain
- *   - plant: forester/farmer planting
- *   - mine: miner mining
- *   - hammer: builder/smith working
- *   - dig: digger landscaping
- */
-export type AnimationType =
-    // Universal actions
-    | 'walk'
-    | 'idle'
-    | 'carry'
-    | 'pickup'
-    | 'dropoff'
-    // Settler-specific work actions
-    | 'chop'
-    | 'harvest'
-    | 'plant'
-    | 'mine'
-    | 'hammer'
-    | 'dig'
-    | 'fight'
-    | 'work'; // Generic work (sawmill worker, etc.)
-
-/** A single task node in a job sequence */
-export interface TaskNode {
-    task: TaskType;
-    anim: AnimationType;
-    /** Duration in seconds (for WORK tasks) */
-    duration?: number;
-    /** Good type to pick up/drop off */
-    good?: EMaterialType;
-}
-
-/** A job is a named sequence of tasks */
-export interface JobDefinition {
-    id: string;
-    tasks: TaskNode[];
-}
-
-/** Settler type configuration from YAML */
+/** Settler type configuration from SettlerValues.xml */
 export interface SettlerConfig {
     search: SearchType;
+    /** Work job IDs from jobInfo.xml (filtered from animLists, excludes CHECKIN/IDLE). */
     jobs: string[];
 }
 
@@ -130,28 +45,8 @@ export enum TaskResult {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Job State - Uses composition pattern (not inheritance)
+// Carrier Job State
 // ─────────────────────────────────────────────────────────────
-
-/** Common fields shared by all job types */
-export interface CommonJobFields {
-    /** Current job ID (e.g., 'woodcutter.work', 'carrier.transport') */
-    jobId: string;
-    /** Current task index in the job sequence */
-    taskIndex: number;
-    /** Progress within current task (0-1) */
-    progress: number;
-}
-
-/** Worker-specific job data (woodcutter, builder, etc.) */
-export interface WorkerJobData {
-    /** Target entity ID (tree, stone, building, etc.) */
-    targetId: number | null;
-    /** Target position (for SEARCH_POS/GO_TO_POS tasks) */
-    targetPos: { x: number; y: number } | null;
-    /** Carried good type (after pickup) */
-    carryingGood: EMaterialType | null;
-}
 
 /** Carrier-specific job data (transport jobs) */
 export interface CarrierJobData {
@@ -171,22 +66,29 @@ export interface CarrierJobData {
     transportJob: TransportJob;
 }
 
-/** Worker job state - for settlers with YAML-defined jobs */
-export interface WorkerJobState extends CommonJobFields {
-    type: 'worker';
-    data: WorkerJobData;
-    /** Whether onWorkStart was called for WORK_ON_ENTITY (for proper cleanup on interrupt) */
-    workStarted?: boolean;
+/** Job ID for carrier transport (not XML-defined — carrier phases are inline). */
+export const CARRIER_TRANSPORT_JOB_ID = 'CARRIER_TRANSPORT';
+
+/** Carrier transport phase names (indexed by CarrierJobState.taskIndex). */
+export enum CarrierPhase {
+    GO_TO_SOURCE = 'GO_TO_SOURCE',
+    PICKUP = 'PICKUP',
+    GO_TO_DEST = 'GO_TO_DEST',
+    DROPOFF = 'DROPOFF',
+    GO_HOME = 'GO_HOME',
 }
 
 /** Carrier job state - for transport jobs */
-export interface CarrierJobState extends CommonJobFields {
-    type: 'carrier';
+export interface CarrierJobState {
+    type: JobType.CARRIER;
+    jobId: string;
+    taskIndex: number;
+    progress: number;
     data: CarrierJobData;
 }
 
 /** Discriminated union of all job state types */
-export type JobState = WorkerJobState | CarrierJobState;
+export type JobState = ChoreoJobState | CarrierJobState;
 
 /**
  * Build a CarrierJobState for a transport delivery.
@@ -194,8 +96,8 @@ export type JobState = WorkerJobState | CarrierJobState;
  */
 export function buildCarrierJob(transportJob: TransportJob): CarrierJobState {
     return {
-        type: 'carrier',
-        jobId: 'carrier.transport',
+        type: JobType.CARRIER,
+        jobId: CARRIER_TRANSPORT_JOB_ID,
         taskIndex: 0,
         progress: 0,
         data: {
@@ -210,6 +112,18 @@ export function buildCarrierJob(transportJob: TransportJob): CarrierJobState {
     };
 }
 
+/** Discriminator for JobState union. */
+export enum JobType {
+    CARRIER = 'carrier',
+    CHOREO = 'choreo',
+}
+
+/** Discriminator for WorkHandler union. */
+export enum WorkHandlerType {
+    ENTITY = 'entity',
+    POSITION = 'position',
+}
+
 /** High-level settler state */
 export enum SettlerState {
     /** Waiting for work */
@@ -220,9 +134,9 @@ export enum SettlerState {
     INTERRUPTED = 'INTERRUPTED',
 }
 
-/** Handler for entity-targeted work: GO_TO_TARGET → WAIT_FOR_WORK → WORK_ON_ENTITY */
+/** Handler for entity-targeted work: SEARCH → GO_TO_TARGET → WORK_ON_ENTITY */
 export interface EntityWorkHandler {
-    type: 'entity';
+    type: WorkHandlerType.ENTITY;
     /** Find a target entity for this settler */
     findTarget(x: number, y: number, settlerId?: number): { entityId: number; x: number; y: number } | null;
     /** Check if target is still valid / has materials to work with */
@@ -239,9 +153,9 @@ export interface EntityWorkHandler {
     onWorkInterrupt?(targetId: number): void;
 }
 
-/** Handler for position-based work: SEARCH_POS → GO_TO_POS → WORK */
+/** Handler for position-based work: SEARCH → GO_TO_POS → WORK */
 export interface PositionWorkHandler {
-    type: 'position';
+    type: WorkHandlerType.POSITION;
     /** Find a position to work at */
     findPosition(x: number, y: number, settlerId?: number): { x: number; y: number } | null;
     /** If true, worker waits (idles) when no position is found instead of failing */

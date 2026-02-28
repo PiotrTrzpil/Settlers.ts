@@ -6,9 +6,15 @@
  * A search type can have one entity handler and one position handler.
  */
 
-import { UnitType } from '../../entity';
 import type { SettlerConfig } from './types';
-import { SearchType, type EntityWorkHandler, type PositionWorkHandler, type WorkHandler } from './types';
+import {
+    SearchType,
+    WorkHandlerType,
+    type EntityWorkHandler,
+    type PositionWorkHandler,
+    type WorkHandler,
+} from './types';
+import type { UnitType } from '../../entity';
 
 /** Map of UnitType to settler configuration (for reverse-lookup by job ID). */
 export type SettlerConfigMap = ReadonlyMap<UnitType, SettlerConfig>;
@@ -23,7 +29,7 @@ export class WorkHandlerRegistry {
      * A search type can have one entity handler and one position handler.
      */
     register(searchType: SearchType, handler: WorkHandler): void {
-        if (handler.type === 'entity') {
+        if (handler.type === WorkHandlerType.ENTITY) {
             if (this.entityHandlers.has(searchType)) {
                 throw new Error(`Entity work handler already registered for ${searchType}.`);
             }
@@ -49,16 +55,13 @@ export class WorkHandlerRegistry {
     }
 
     /**
-     * Reverse-lookup: find the entity work handler for a given jobId like "woodcutter.work".
+     * Reverse-lookup: find the entity work handler for a given XML job ID (e.g. 'JOB_WOODCUTTER_WORK').
      * Used during cleanup to call onWorkInterrupt when a settler entity is removed.
      */
     findEntityHandlerForJob(jobId: string, settlerConfigs: SettlerConfigMap): EntityWorkHandler | undefined {
-        for (const [unitType, config] of settlerConfigs) {
-            const prefix = UnitType[unitType].toLowerCase();
-            for (const jobName of config.jobs) {
-                if (`${prefix}.${jobName}` === jobId) {
-                    return this.entityHandlers.get(config.search);
-                }
+        for (const [, config] of settlerConfigs) {
+            if (config.jobs.includes(jobId)) {
+                return this.entityHandlers.get(config.search);
             }
         }
         return undefined;

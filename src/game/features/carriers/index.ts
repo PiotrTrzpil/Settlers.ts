@@ -11,7 +11,7 @@
  * - Constants: FATIGUE_THRESHOLDS
  *
  * Note: Task execution (movement, animation, pickup, dropoff) is handled by
- * SettlerTaskSystem using the YAML-defined carrier.transport job sequence.
+ * CarrierTaskExecutor with inline phase-based dispatch.
  */
 
 // Types and helpers from carrier-state

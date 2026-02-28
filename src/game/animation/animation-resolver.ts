@@ -10,9 +10,20 @@
  * sequence keys needed.
  */
 
-import { ANIMATION_SEQUENCES, carrySequenceKey, fightSequenceKey, workSequenceKey } from '../animation';
+import {
+    ANIMATION_SEQUENCES,
+    carrySequenceKey,
+    fightSequenceKey,
+    pickupSequenceKey,
+    workSequenceKey,
+} from '../animation';
 import { UnitType, type Entity } from '../entity';
-import type { AnimationType } from '../features/settler-tasks/types';
+
+/**
+ * Animation categories — matches JIL field name prefixes in jil-indices.ts.
+ * Each value corresponds to a real animation category loaded from settler GFX files.
+ */
+type AnimationType = 'walk' | 'idle' | 'carry' | 'pickup' | 'work' | 'fight';
 
 /** What animation should play on an entity */
 export interface AnimationIntent {
@@ -57,35 +68,28 @@ function resolveCarryIntent(entity: Entity): AnimationIntent {
     return { sequence: carrySequenceKey(entity.carrying.material), loop: true, stopped: false };
 }
 
-/** Generic work animation (looping) — used for chop, harvest, mine, hammer, dig, plant, work. */
+/** Generic work animation (looping). */
 function resolveWorkIntent(_entity: Entity): AnimationIntent {
     return { sequence: workSequenceKey(0), loop: true, stopped: false };
 }
 
-/** Short work animation (non-looping) — used for pickup and dropoff. */
-function resolveShortWorkIntent(_entity: Entity): AnimationIntent {
-    return { sequence: workSequenceKey(0), loop: false, stopped: false };
+/** Pickup animation (non-looping one-shot). Falls back to work.0 if no pickup sequence loaded. */
+function resolvePickupIntent(_entity: Entity): AnimationIntent {
+    return { sequence: pickupSequenceKey(0), loop: false, stopped: false };
 }
 
 /**
  * Strategy map from AnimationType to resolver function.
- * Each entry resolves a semantic animation type to a concrete AnimationIntent.
+ * Each entry matches a JIL field name prefix from jil-indices.ts.
  * TypeScript enforces exhaustive coverage of all AnimationType values.
  */
 const animationResolvers: Record<AnimationType, (entity: Entity) => AnimationIntent> = {
     walk: resolveWalkIntent,
     idle: resolveIdleIntent,
     carry: resolveCarryIntent,
-    pickup: resolveShortWorkIntent,
-    dropoff: resolveShortWorkIntent,
-    chop: resolveWorkIntent,
-    harvest: resolveWorkIntent,
-    plant: resolveWorkIntent,
-    mine: resolveWorkIntent,
-    hammer: resolveWorkIntent,
-    dig: resolveWorkIntent,
-    fight: resolveFightIntent,
+    pickup: resolvePickupIntent,
     work: resolveWorkIntent,
+    fight: resolveFightIntent,
 };
 
 /**

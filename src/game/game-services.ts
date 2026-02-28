@@ -242,6 +242,8 @@ export class GameServices {
             carrierManager: this.carrierManager,
             eventBus,
             getInventoryVisualizer: () => this.inventoryVisualizer,
+            workAreaStore: this.workAreaStore,
+            buildingOverlayManager: this.buildingOverlayManager,
         });
         this.addSystem(this.settlerTaskSystem, 'Units');
 

@@ -23,6 +23,8 @@ export const ANIMATION_SEQUENCES = {
     CARRY_PREFIX: 'carry_',
     /** Prefix for work animations, suffixed with index (e.g., 'work.0', 'work.1') */
     WORK_PREFIX: 'work.',
+    /** Prefix for pickup animations, suffixed with index (e.g., 'pickup.0') */
+    PICKUP_PREFIX: 'pickup.',
     /** Prefix for fight animations, suffixed with index (e.g., 'fight.0') */
     FIGHT_PREFIX: 'fight.',
 } as const;
@@ -41,6 +43,16 @@ export function carrySequenceKey(materialType: number): string {
  */
 export function workSequenceKey(index: number): string {
     return `${ANIMATION_SEQUENCES.WORK_PREFIX}${index}`;
+}
+
+/**
+ * Get the animation sequence key for a pickup animation variant.
+ *
+ * Material-specific: `pickupSequenceKey('coal')` → `'pickup.coal'`
+ * Generic fallback:  `pickupSequenceKey(0)` → `'pickup.0'`
+ */
+export function pickupSequenceKey(variant: string | number): string {
+    return `${ANIMATION_SEQUENCES.PICKUP_PREFIX}${variant}`;
 }
 
 /**

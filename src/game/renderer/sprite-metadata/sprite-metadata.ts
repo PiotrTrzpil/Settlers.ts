@@ -21,6 +21,9 @@ export {
     TREE_JOB_INDICES,
     type SettlerAnimData,
     collectFieldsByPrefix,
+    collectFieldsWithSuffix,
+    type SuffixedField,
+    parseMaterialSuffix,
     getFirstFieldByPrefix,
 } from './jil-indices';
 

@@ -4,7 +4,7 @@
  * Coordinator that wires together sub-systems:
  * - WorkHandlerRegistry: domain handler registration and lookup
  * - UnitStateMachine: per-unit IDLE/WORKING/INTERRUPTED state transitions
- * - WorkerTaskExecutor: YAML worker job execution
+ * - WorkerTaskExecutor: choreography-driven worker job execution
  * - CarrierTaskExecutor: carrier transport job execution
  * - IdleAnimationController: idle turning and animation helpers
  *
@@ -17,9 +17,7 @@ import type { TickSystem } from '../../tick-system';
 import { EntityType, UnitType, type Entity } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
-import { SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
-import type { TaskContext } from './task-executors';
-import { loadJobDefinitions, type SettlerConfigs, type JobDefinitions } from './loader';
+import { JobType, SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
 import { buildAllSettlerConfigs } from '../../settler-data-access';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../inventory';
@@ -31,11 +29,22 @@ import { IdleAnimationController } from './idle-animation-controller';
 import { WorkerTaskExecutor } from './worker-task-executor';
 import { CarrierTaskExecutor } from './carrier-task-executor';
 import { UnitStateMachine, type UnitRuntime } from './unit-state-machine';
+import { JobChoreographyStore } from './job-choreography-store';
+import { BuildingPositionResolverImpl } from './building-position-resolver';
+import { JobPartResolverImpl } from './job-part-resolver';
+import { TriggerSystemImpl } from '../../systems/building-overlays/trigger-system';
+import { getGameDataLoader } from '@/resources/game-data';
+import type { ChoreoContext } from './choreo-types';
+import type { WorkAreaStore } from '../work-areas/work-area-store';
+import type { BuildingOverlayManager } from '../../systems/building-overlays/building-overlay-manager';
 
 const log = new LogHandler('SettlerTaskSystem');
 
 /** How often to run the orphan-runtime safety net (in ticks) */
 const ORPHAN_CHECK_INTERVAL = 60;
+
+/** Local alias — Map from UnitType to settler config. */
+type SettlerConfigs = Map<UnitType, SettlerConfig>;
 
 /** Configuration for SettlerTaskSystem dependencies */
 export interface SettlerTaskSystemConfig {
@@ -46,6 +55,10 @@ export interface SettlerTaskSystemConfig {
     eventBus: EventBus;
     /** Lazy getter — resolved on first use (breaks circular init dependency). */
     getInventoryVisualizer: () => InventoryVisualizer;
+    /** Work area store for resolving building work-center positions. */
+    workAreaStore: WorkAreaStore;
+    /** Building overlay manager for trigger-driven overlay animations. */
+    buildingOverlayManager: BuildingOverlayManager;
 }
 
 /**
@@ -55,7 +68,7 @@ export class SettlerTaskSystem implements TickSystem {
     private readonly gameState: GameState;
     private readonly inventoryManager: BuildingInventoryManager;
     private readonly settlerConfigs: SettlerConfigs;
-    private readonly jobDefinitions: JobDefinitions;
+    private readonly choreographyStore: JobChoreographyStore;
     private readonly handlerRegistry: WorkHandlerRegistry;
     private readonly animController: IdleAnimationController;
     private readonly workerExecutor: WorkerTaskExecutor;
@@ -72,15 +85,22 @@ export class SettlerTaskSystem implements TickSystem {
         this.inventoryManager = config.inventoryManager;
 
         this.settlerConfigs = buildAllSettlerConfigs();
-        this.jobDefinitions = loadJobDefinitions();
+        this.choreographyStore = new JobChoreographyStore();
 
         // Throttled loggers shared across sub-systems
         const handlerErrorLogger = new ThrottledLogger(log, 2000);
         const missingHandlerLogger = new ThrottledLogger(log, 5000);
 
-        // Build task context — inventoryVisualizer is resolved lazily
+        // Build choreo context — inventoryVisualizer is resolved lazily
         const getViz = config.getInventoryVisualizer;
-        const taskContext: TaskContext = {
+        const jobPartResolver = new JobPartResolverImpl();
+        const triggerSystem = new TriggerSystemImpl({
+            overlayManager: config.buildingOverlayManager,
+            gameState: this.gameState,
+            dataLoader: getGameDataLoader(),
+        });
+
+        const choreoContext: ChoreoContext = {
             gameState: this.gameState,
             inventoryManager: this.inventoryManager,
             get inventoryVisualizer() {
@@ -89,6 +109,15 @@ export class SettlerTaskSystem implements TickSystem {
             carrierManager: config.carrierManager,
             eventBus: config.eventBus,
             handlerErrorLogger,
+            jobPartResolver,
+            buildingPositionResolver: new BuildingPositionResolverImpl({
+                gameState: this.gameState,
+                get inventoryVisualizer() {
+                    return getViz();
+                },
+                workAreaStore: config.workAreaStore,
+            }),
+            triggerSystem,
             getWorkerHomeBuilding: (settlerId: number) => {
                 return this.runtimes.get(settlerId)?.assignedBuilding ?? null;
             },
@@ -100,15 +129,15 @@ export class SettlerTaskSystem implements TickSystem {
 
         this.workerExecutor = new WorkerTaskExecutor(
             this.gameState,
-            this.jobDefinitions,
+            this.choreographyStore,
             this.handlerRegistry,
             this.animController,
-            taskContext,
+            choreoContext,
             handlerErrorLogger,
             missingHandlerLogger
         );
 
-        this.carrierExecutor = new CarrierTaskExecutor(this.jobDefinitions, this.animController, taskContext);
+        this.carrierExecutor = new CarrierTaskExecutor(this.animController, choreoContext);
 
         this.stateMachine = new UnitStateMachine(
             this.gameState,
@@ -135,7 +164,9 @@ export class SettlerTaskSystem implements TickSystem {
         // Register GOOD handler for carriers (they get jobs assigned externally by LogisticsDispatcher)
         this.handlerRegistry.register(SearchType.GOOD, createCarrierHandler());
 
-        log.debug(`Loaded ${this.settlerConfigs.size} settler configs, ${this.jobDefinitions.size} jobs`);
+        log.debug(
+            `Loaded ${this.settlerConfigs.size} settler configs, ${this.choreographyStore.cacheSize} cached jobs`
+        );
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -183,21 +214,50 @@ export class SettlerTaskSystem implements TickSystem {
     }> {
         const result = [];
         for (const [entityId, runtime] of this.runtimes) {
-            const job = runtime.job;
-            const carryingGood = job?.data.carryingGood ?? null;
-            result.push({
-                entityId,
-                state: runtime.state,
-                jobId: job?.jobId ?? null,
-                jobType: job?.type ?? null,
-                taskIndex: job?.taskIndex ?? null,
-                progress: job?.progress ?? null,
-                targetId: job?.type === 'worker' ? (job.data.targetId ?? null) : null,
-                carryingGood,
-                assignedBuilding: runtime.assignedBuilding,
-            });
+            result.push(this.buildDebugEntry(entityId, runtime));
         }
         return result;
+    }
+
+    private buildDebugEntry(entityId: number, runtime: UnitRuntime) {
+        const job = runtime.job;
+        if (!job) {
+            return {
+                entityId,
+                state: runtime.state,
+                jobId: null,
+                jobType: null,
+                taskIndex: null,
+                progress: null,
+                targetId: null,
+                carryingGood: null,
+                assignedBuilding: runtime.assignedBuilding,
+            };
+        }
+        if (job.type === JobType.CARRIER) {
+            return {
+                entityId,
+                state: runtime.state,
+                jobId: job.jobId,
+                jobType: JobType.CARRIER,
+                taskIndex: job.taskIndex,
+                progress: job.progress,
+                targetId: null,
+                carryingGood: job.data.carryingGood,
+                assignedBuilding: runtime.assignedBuilding,
+            };
+        }
+        return {
+            entityId,
+            state: runtime.state,
+            jobId: job.jobId,
+            jobType: JobType.CHOREO,
+            taskIndex: job.nodeIndex,
+            progress: job.progress,
+            targetId: job.targetId,
+            carryingGood: job.carryingGood,
+            assignedBuilding: runtime.assignedBuilding,
+        };
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -367,12 +427,12 @@ export class SettlerTaskSystem implements TickSystem {
             if (config && runtime.job) {
                 this.interruptJobForCleanup(entity, config, runtime);
             }
-        } else if (runtime.job?.type === 'worker' && runtime.job.data.targetId && runtime.job.workStarted) {
+        } else if (runtime.job?.type === JobType.CHOREO && runtime.job.targetId && runtime.job.workStarted) {
             // Entity already gone — call onWorkInterrupt directly
             const entityHandler = this.handlerRegistry.findEntityHandlerForJob(runtime.job.jobId, this.settlerConfigs);
             if (entityHandler) {
                 try {
-                    entityHandler.onWorkInterrupt?.(runtime.job.data.targetId);
+                    entityHandler.onWorkInterrupt?.(runtime.job.targetId);
                 } catch (e) {
                     const err = e instanceof Error ? e : new Error(String(e));
                     log.error(`onWorkInterrupt failed for entity ${entityId}`, err);
@@ -448,7 +508,7 @@ export class SettlerTaskSystem implements TickSystem {
      * Delegates to the appropriate executor based on job type.
      */
     private interruptJobForCleanup(entity: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
-        if (runtime.job!.type === 'carrier') {
+        if (runtime.job!.type === JobType.CARRIER) {
             this.carrierExecutor.interruptJob(entity, runtime);
         } else {
             this.workerExecutor.interruptJob(entity, config, runtime);

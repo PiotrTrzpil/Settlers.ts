@@ -7,7 +7,7 @@ import { parseXML, getChildText, getChildNumber, getChildBool } from './xml-util
 
 function parseJobNode(nodeEl: Element): JobNode {
     return {
-        task: getChildText(nodeEl, 'task'),
+        task: getChildText(nodeEl, 'task').replace('CEntityTask::', ''),
         jobPart: getChildText(nodeEl, 'jobPart'),
         x: getChildNumber(nodeEl, 'x'),
         y: getChildNumber(nodeEl, 'y'),

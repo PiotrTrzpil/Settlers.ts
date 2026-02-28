@@ -30,13 +30,13 @@ import { EMaterialType } from '../../economy';
  */
 export const SETTLER_JOB_INDICES = {
     carrier: {
+        walk: 1,
         idle_1: 44,
         idle_2: 45,
         idle_3: 46,
         idle_4: 47,
-        idle_5: 48,
-        walk: 1,
-        work_strike: 49, // striking/protesting
+        work_strike: 48,
+        work_strik_walk: 49,
     },
     digger: {
         walk: 50,
@@ -72,6 +72,30 @@ export const SETTLER_JOB_INDICES = {
         work_scythe: 69,
         pickup: 70,
     },
+    donkey_herder: {
+        walk: 72,
+        carry_water: 73,
+        carry_grain: 74,
+        pickup_water: 75,
+        pickup_grain: 76,
+        carry_empty: 78,
+        work: 79,
+    },
+    fisher: {
+        walk: 80,
+        carry_fish: 81,
+        work_1: 82,
+        work_2: 83,
+        work_3: 84,
+        work_4: 85,
+    },
+    water_worker: {
+        walk: 86,
+        carry_empty: 87,
+        carry_water: 88,
+        pickup_water: 89,
+        work: 90,
+    },
     hunter: {
         walk: 91,
         carry: 92,
@@ -90,14 +114,14 @@ export const SETTLER_JOB_INDICES = {
     smelter: {
         walk: 102,
         work_iron: 103,
-        carry_gold: 104,
+        carry_goldbar: 104,
         work_gold: 105,
-        carry_iron: 106,
+        carry_ironbar: 106,
         work_silver: 107,
         work_put_iron: 108,
-        pickup_gold: 109,
+        pickup_goldbar: 109,
         work_put_gold: 110,
-        pickup_iron: 111,
+        pickup_ironbar: 111,
         work_not_sure: 112,
         pickup_silver: 113,
     },
@@ -105,13 +129,13 @@ export const SETTLER_JOB_INDICES = {
         walk: 114,
         work: 115,
         carry_coal: 120,
-        carry_iron: 121,
-        carry_gold: 122,
+        carry_ironore: 121,
+        carry_goldore: 122,
         carry_stone: 123,
         carry_sulfur: 124,
         pickup_coal: 125,
-        pickup_iron: 126,
-        pickup_gold: 127,
+        pickup_ironore: 126,
+        pickup_goldore: 127,
         pickup_stone: 128,
         pickup_sulfur: 129,
     },
@@ -127,6 +151,65 @@ export const SETTLER_JOB_INDICES = {
         pickup_1: 137,
         pickup_2: 138,
         pickup_3: 139,
+    },
+    miller: {
+        walk: 140,
+        carry_grain: 141,
+        carry_flour: 142,
+        pickup_grain: 143,
+        pickup_flour: 144,
+    },
+    baker: {
+        walk: 145,
+        carry_flour: 146,
+        carry_bread: 147,
+        carry_empty: 148,
+        carry_unbaked_bread: 149,
+        carry_water: 150,
+        work_bread: 151,
+        work_unbaked_bread: 152,
+        work_empty: 153,
+        pickup_water: 154,
+        pickup_flour: 155,
+    },
+    butcher: {
+        walk: 156,
+        carry_meat: 157,
+        carry_animal: 158,
+        pickup_meat: 159,
+        pickup_animal: 160,
+    },
+    unknown_worker: {
+        walk: 161,
+        carry_board: 162,
+        carry_stone: 163,
+        pickup_board: 164,
+        pickup_stone: 165,
+        work: 166,
+    },
+    healer: {
+        walk: 167,
+        work: 168,
+    },
+    ammunition_maker: {
+        walk: 174,
+        carry_coal: 175,
+        carry_sulfur: 176,
+        carry_ammo: 178,
+        pickup_coal: 179,
+        pickup_sulfur: 180,
+        pickup_ammo: 182,
+        work: 166,
+    },
+    shipyard_worker: {
+        walk: 183,
+        carry_stone: 184,
+        carry_stone2: 185,
+        carry_board: 186,
+        work: 187,
+        pickup_stone: 188,
+        pickup_stone2: 190,
+        pickup_board: 189,
     },
     wine_maker: {
         walk: 191,
@@ -323,6 +406,25 @@ export const SETTLER_JOB_INDICES = {
         fight: 340,
     },
 
+    // trojan only
+    sunflower_farmer: {
+        walk: 350,
+        carry_sunflower: 351,
+        carry_plant: 352,
+        carry_waterer: 353,
+
+        work_plant: 354,
+        work_sunflower: 355,
+        work_water: 356,
+        pickup_sunflower: 357,
+    },
+    oil_maker: {
+        walk: 358,
+        carry_sunfloweroil: 359,
+        carry_sunflower: 360,
+        pickup_sunflower: 361,
+    },
+
     // Mushroom farmer (Dark Tribe specific, file 23.jil)
     mushroom_farmer: {
         walk: 313,
@@ -440,6 +542,72 @@ export function collectFieldsByPrefix(data: SettlerAnimData, prefix: string): nu
         }
     }
     return results;
+}
+
+/** A JIL field with its parsed suffix and job index. */
+export interface SuffixedField {
+    /** Material/variant suffix: 'coal', 'iron', '0' (generic), '1' (numbered). */
+    suffix: string;
+    /** JIL job index. */
+    jobIndex: number;
+}
+
+/**
+ * Collect all JIL fields matching a prefix, preserving the suffix for material-aware keying.
+ *
+ * Field name → suffix:
+ *   'pickup'       → '0'       (generic — no material distinction)
+ *   'pickup_coal'  → 'coal'    (material-specific)
+ *   'pickup_1'     → '0','1'   (numbered — sequential index, not a material name)
+ *   'carry_iron'   → 'iron'
+ */
+export function collectFieldsWithSuffix(data: SettlerAnimData, prefix: string): SuffixedField[] {
+    const results: SuffixedField[] = [];
+    let numberedCount = 0;
+    for (const [key, value] of Object.entries(data)) {
+        if (key === prefix) {
+            results.push({ suffix: '0', jobIndex: value });
+        } else if (key.startsWith(`${prefix}_`)) {
+            const raw = key.slice(prefix.length + 1);
+            // Numbered fields (pickup_1, carry_2) → sequential index
+            const suffix = /^\d+$/.test(raw) ? String(numberedCount++) : raw;
+            results.push({ suffix, jobIndex: value });
+        }
+    }
+    return results;
+}
+
+/** Non-material carry/pickup suffixes — visual states, not transportable goods. */
+const NON_MATERIAL_SUFFIXES: ReadonlySet<string> = new Set([
+    'empty',
+    'unbaked_bread',
+    'plant',
+    'waterer', // Visual carry states (no material being transported)
+    'silver', // Smelter animation (no SILVER in EMaterialType)
+    'animal', // Hunter pickup / butcher carry (race-dependent animal, not a single material)
+    'stone2', // Shipyard stone variant (second stone carry animation)
+]);
+
+/**
+ * Parse a JIL field suffix as an EMaterialType.
+ *
+ * Suffixes must match EMaterialType names exactly (lowercased):
+ *   'coal' → EMaterialType.COAL, 'ironore' → EMaterialType.IRONORE, etc.
+ *
+ * Returns null for numbered variants ('0', '1') and known non-material suffixes.
+ * Throws for unrecognised suffixes — catches naming errors in jil-indices.ts.
+ */
+export function parseMaterialSuffix(suffix: string): EMaterialType | null {
+    if (/^\d+$/.test(suffix)) return null;
+    if (NON_MATERIAL_SUFFIXES.has(suffix)) return null;
+    const value = EMaterialType[suffix.toUpperCase() as keyof typeof EMaterialType] as EMaterialType | undefined;
+    if (value === undefined) {
+        throw new Error(
+            `JIL field suffix '${suffix}' does not match any EMaterialType. ` +
+                `Rename the field in jil-indices.ts to use the exact EMaterialType name (lowercased).`
+        );
+    }
+    return value;
 }
 
 /**

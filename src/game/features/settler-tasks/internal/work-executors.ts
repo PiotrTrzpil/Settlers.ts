@@ -1,0 +1,263 @@
+/**
+ * Work executor functions for choreography task nodes.
+ *
+ * Implements all work-related ChoreoTaskType handlers:
+ *   - Phase 2C: WORK, WORK_ON_ENTITY, PLANT (visible, positional/entity work)
+ *   - Phase 2D: WORK_VIRTUAL, WORK_ON_ENTITY_VIRTUAL, PRODUCE_VIRTUAL (settler invisible)
+ *
+ * All executors conform to ChoreoExecutorFn and must not throw — handler
+ * errors are caught and reported via ctx.handlerErrorLogger.
+ */
+
+import { LogHandler } from '@/utilities/log-handler';
+import { TaskResult } from '../types';
+import { framesToSeconds, type ChoreoContext, type ChoreoJobState, type ChoreoNode } from '../choreo-types';
+import type { Entity } from '../../../entity';
+import type { EntityWorkHandler } from '../types';
+
+const log = new LogHandler('WorkExecutors');
+
+// ─────────────────────────────────────────────────────
+// Internal helpers
+// ─────────────────────────────────────────────────────
+
+/** Compute effective duration in seconds. Returns Infinity when duration === -1. */
+function resolveDurationSeconds(node: ChoreoNode): number {
+    return node.duration === -1 ? Infinity : framesToSeconds(node.duration);
+}
+
+/** Apply direction constraint on first tick (progress === 0). No-op when dir === -1. */
+function applyDirectionConstraint(settler: Entity, node: ChoreoNode, job: ChoreoJobState, ctx: ChoreoContext): void {
+    if (node.dir !== -1 && job.progress === 0) {
+        const controller = ctx.gameState.movement.getController(settler.id);
+        controller?.setDirection(node.dir);
+    }
+}
+
+/** Fire the node trigger once (guarded by !workStarted). */
+function fireTriggerOnStart(settler: Entity, node: ChoreoNode, job: ChoreoJobState, ctx: ChoreoContext): void {
+    if (node.trigger && !job.workStarted) {
+        const buildingId = ctx.getWorkerHomeBuilding(settler.id);
+        if (buildingId !== null) {
+            ctx.triggerSystem.fireTrigger(buildingId, node.trigger);
+        } else {
+            log.warn(`fireTrigger: settler ${settler.id} has no home — '${node.trigger}' skipped`);
+        }
+    }
+}
+
+/** Call positionHandler.onWorkAtPositionComplete with error handling. */
+function callPositionComplete(settler: Entity, job: ChoreoJobState, ctx: ChoreoContext, label: string): void {
+    if (!ctx.positionHandler || !job.targetPos) return;
+    try {
+        ctx.positionHandler.onWorkAtPositionComplete(job.targetPos.x, job.targetPos.y, settler.id);
+    } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        ctx.handlerErrorLogger.error(`${label} failed for settler ${settler.id}`, err);
+    }
+}
+
+/** Run entity work handler onWorkTick + handle completion. Returns DONE/CONTINUE/FAILED. */
+function tickEntityWork(
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number,
+    handler: EntityWorkHandler,
+    ctx: ChoreoContext,
+    label: string
+): TaskResult {
+    const durationSeconds = resolveDurationSeconds(node);
+    if (durationSeconds !== Infinity) {
+        job.progress += dt / durationSeconds;
+    }
+
+    let domainDone: boolean;
+    try {
+        domainDone = handler.onWorkTick(job.targetId!, job.progress);
+    } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        ctx.handlerErrorLogger.error(`onWorkTick ${label} failed for target ${job.targetId}`, err);
+        return TaskResult.FAILED;
+    }
+
+    if (domainDone || job.progress >= 1) {
+        try {
+            handler.onWorkComplete?.(job.targetId!, settler.x, settler.y);
+        } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            ctx.handlerErrorLogger.error(`onWorkComplete ${label} failed for target ${job.targetId}`, err);
+        }
+        return TaskResult.DONE;
+    }
+    return TaskResult.CONTINUE;
+}
+
+/** Start entity work on first tick. Returns FAILED on error. */
+function startEntityWork(job: ChoreoJobState, handler: EntityWorkHandler, ctx: ChoreoContext, label: string): boolean {
+    if (job.workStarted) return true;
+    try {
+        handler.onWorkStart?.(job.targetId!);
+    } catch (e) {
+        const err = e instanceof Error ? e : new Error(String(e));
+        ctx.handlerErrorLogger.error(`onWorkStart ${label} failed for target ${job.targetId}`, err);
+        return false;
+    }
+    job.workStarted = true;
+    return true;
+}
+
+/** Duration-based progress tick. Returns DONE when complete, CONTINUE otherwise. */
+function tickDurationProgress(job: ChoreoJobState, node: ChoreoNode, dt: number): TaskResult {
+    const durationSeconds = resolveDurationSeconds(node);
+    if (durationSeconds === Infinity) return TaskResult.DONE;
+    job.progress += dt / durationSeconds;
+    return job.progress >= 1 ? TaskResult.DONE : TaskResult.CONTINUE;
+}
+
+// ─────────────────────────────────────────────────────
+// Phase 2C — Regular (visible) work executors
+// ─────────────────────────────────────────────────────
+
+/**
+ * WORK — position-based work at the settler's current location.
+ *
+ * Duration from node.duration (frames→seconds). Direction locked on first tick.
+ * Building overlay trigger fired once at start.
+ */
+export function executeWork(
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number,
+    ctx: ChoreoContext
+): TaskResult {
+    applyDirectionConstraint(settler, node, job, ctx);
+    fireTriggerOnStart(settler, node, job, ctx);
+    if (!job.workStarted) job.workStarted = true;
+
+    const result = tickDurationProgress(job, node, dt);
+    if (result === TaskResult.DONE) {
+        callPositionComplete(settler, job, ctx, 'onWorkAtPositionComplete');
+    }
+    return result;
+}
+
+/**
+ * WORK_ON_ENTITY — entity-targeted work (tree, stone, crop, …).
+ *
+ * Lifecycle: onWorkStart → onWorkTick each tick → onWorkComplete on finish.
+ */
+export function executeWorkOnEntity(
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number,
+    ctx: ChoreoContext
+): TaskResult {
+    if (!ctx.entityHandler) {
+        log.warn(`executeWorkOnEntity: no entityHandler for settler ${settler.id}`);
+        return TaskResult.FAILED;
+    }
+    if (job.targetId === null) {
+        log.warn(`executeWorkOnEntity: settler ${settler.id} has no targetId`);
+        return TaskResult.FAILED;
+    }
+
+    applyDirectionConstraint(settler, node, job, ctx);
+    fireTriggerOnStart(settler, node, job, ctx);
+
+    if (!startEntityWork(job, ctx.entityHandler, ctx, '')) return TaskResult.FAILED;
+    return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '');
+}
+
+/**
+ * PLANT — planting operation. Same mechanics as WORK, distinct for animation routing.
+ */
+export function executePlant(
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number,
+    ctx: ChoreoContext
+): TaskResult {
+    return executeWork(settler, job, node, dt, ctx);
+}
+
+// ─────────────────────────────────────────────────────
+// Phase 2D — Virtual (invisible) work executors
+// ─────────────────────────────────────────────────────
+
+/**
+ * WORK_VIRTUAL — interior work; settler hidden inside the building.
+ *
+ * Same progress/trigger mechanics as WORK, settler invisible from first tick.
+ */
+export function executeWorkVirtual(
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number,
+    ctx: ChoreoContext
+): TaskResult {
+    if (!job.workStarted) job.visible = false;
+
+    applyDirectionConstraint(settler, node, job, ctx);
+    fireTriggerOnStart(settler, node, job, ctx);
+    if (!job.workStarted) job.workStarted = true;
+
+    const result = tickDurationProgress(job, node, dt);
+    if (result === TaskResult.DONE) {
+        callPositionComplete(settler, job, ctx, 'onWorkAtPositionComplete (virtual)');
+    }
+    return result;
+}
+
+/**
+ * WORK_ON_ENTITY_VIRTUAL — entity-targeted interior work; settler invisible.
+ */
+export function executeWorkOnEntityVirtual(
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number,
+    ctx: ChoreoContext
+): TaskResult {
+    if (!ctx.entityHandler) {
+        log.warn(`executeWorkOnEntityVirtual: no entityHandler for settler ${settler.id}`);
+        return TaskResult.FAILED;
+    }
+    if (job.targetId === null) {
+        log.warn(`executeWorkOnEntityVirtual: settler ${settler.id} has no targetId`);
+        return TaskResult.FAILED;
+    }
+
+    if (!job.workStarted) job.visible = false;
+
+    applyDirectionConstraint(settler, node, job, ctx);
+    fireTriggerOnStart(settler, node, job, ctx);
+
+    if (!startEntityWork(job, ctx.entityHandler, ctx, '(virtual)')) return TaskResult.FAILED;
+    return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '(virtual)');
+}
+
+/**
+ * PRODUCE_VIRTUAL — virtual production cycle; settler invisible.
+ *
+ * Pure duration timer for internal building production. Inventory changes
+ * handled by adjacent GET_GOOD_VIRTUAL / PUT_GOOD_VIRTUAL nodes.
+ */
+export function executeProduceVirtual(
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number,
+    ctx: ChoreoContext
+): TaskResult {
+    if (!job.workStarted) {
+        job.visible = false;
+        fireTriggerOnStart(settler, node, job, ctx);
+        job.workStarted = true;
+    }
+    return tickDurationProgress(job, node, dt);
+}

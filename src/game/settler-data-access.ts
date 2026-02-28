@@ -2,7 +2,6 @@
  * Settler Data Access — derives settler task configs from SettlerValues.xml.
  *
  * Maps XML settler role + searchType → our SearchType + jobs for the task system.
- * Replaces the old settlers.yaml loader.
  */
 
 import { getGameDataLoader, type RaceId, type SettlerValueInfo } from '@/resources/game-data';
@@ -39,12 +38,12 @@ const UNIT_TYPE_TO_XML_SETTLER: Partial<Record<UnitType, string>> = {
 const ALL_RACE_IDS: RaceId[] = ['RACE_ROMAN', 'RACE_VIKING', 'RACE_MAYA', 'RACE_DARK', 'RACE_TROJAN'];
 
 /**
- * Overrides for settlers whose XML role/searchType doesn't match our task system config.
+ * Search type overrides for settlers whose XML role/searchType doesn't match our task system.
  * The miner is HOUSE_WORKER_ROLE in XML (search type stored in the building), but our
- * task system treats it as a RESOURCE_POS worker.
+ * task system treats it as a RESOURCE_POS worker. Jobs are still derived from animLists.
  */
-const SETTLER_CONFIG_OVERRIDES: Partial<Record<string, SettlerConfig>> = {
-    SETTLER_MINEWORKER: { search: SearchType.RESOURCE_POS, jobs: ['work'] },
+const SEARCH_TYPE_OVERRIDES: Partial<Record<string, SearchType>> = {
+    SETTLER_MINEWORKER: SearchType.RESOURCE_POS,
 };
 
 /** Map from XML SEARCH_* value (prefix stripped) to our SearchType enum. */
@@ -63,25 +62,32 @@ const XML_SEARCH_TO_SEARCH_TYPE: Record<string, SearchType> = {
     VINE: SearchType.VINE,
 };
 
-/**
- * Derive a SettlerConfig from raw XML settler data.
- * Maps XML role + searchType → our SearchType + jobs.
- */
-function deriveSettlerConfig(info: SettlerValueInfo): SettlerConfig | null {
-    // Check overrides first
-    const override = SETTLER_CONFIG_OVERRIDES[info.id];
-    if (override) return override;
+/** Job ID patterns that are NOT work jobs (idle behaviors, check-in routines). */
+const NON_WORK_JOB_PATTERNS = ['CHECKIN', 'IDLE', 'STRIKE'];
 
-    // Role-based fixed configs
+/** Filter animLists to work jobs only, excluding check-in, idle, and strike variants. */
+function filterWorkJobs(animLists: string[]): string[] {
+    return animLists.filter(jobId => {
+        const upper = jobId.toUpperCase();
+        return !NON_WORK_JOB_PATTERNS.some(pattern => upper.includes(pattern));
+    });
+}
+
+/**
+ * Derive the SearchType for a settler from its XML role and searchTypes.
+ * Returns null if the settler has no actionable search type.
+ */
+function deriveSearchType(info: SettlerValueInfo): SearchType | null {
+    // Role-based fixed search types
     switch (info.role) {
     case 'CARRIER_ROLE':
-        return { search: SearchType.GOOD, jobs: ['transport'] };
+        return SearchType.GOOD;
     case 'BUILDER_ROLE':
-        return { search: SearchType.CONSTRUCTION, jobs: ['build'] };
+        return SearchType.CONSTRUCTION;
     case 'DIGGER_ROLE':
-        return { search: SearchType.TERRAIN, jobs: ['dig'] };
+        return SearchType.TERRAIN;
     case 'HOUSE_WORKER_ROLE':
-        return { search: SearchType.WORKPLACE, jobs: ['station'] };
+        return SearchType.WORKPLACE;
     }
 
     // Free workers — derive from XML search types
@@ -89,25 +95,23 @@ function deriveSettlerConfig(info: SettlerValueInfo): SettlerConfig | null {
     if (searchTypes.length === 0) return null;
 
     const nonSeed = searchTypes.find(s => !s.endsWith('_SEED_POS'));
-    const seed = searchTypes.find(s => s.endsWith('_SEED_POS'));
-
-    // Primary search: prefer non-seed, fall back to seed
-    const primaryXml = nonSeed ?? seed!;
+    const primaryXml = nonSeed ?? searchTypes[0]!;
     const searchKey = primaryXml.replace('SEARCH_', '');
-    const search = XML_SEARCH_TO_SEARCH_TYPE[searchKey];
-    if (!search) return null;
+    return XML_SEARCH_TO_SEARCH_TYPE[searchKey] ?? null;
+}
 
-    // Jobs: both seed and non-seed → [plant, harvest]; only seed → [plant]; otherwise → [work]
-    let jobs: string[];
-    if (nonSeed && seed) {
-        jobs = ['plant', 'harvest'];
-    } else if (seed) {
-        jobs = ['plant'];
-    } else {
-        jobs = ['work'];
-    }
+/**
+ * Derive a SettlerConfig from raw XML settler data.
+ * Maps XML role + searchType → our SearchType; derives jobs from animLists.
+ */
+function deriveSettlerConfig(info: SettlerValueInfo): SettlerConfig | null {
+    // Apply search type override if present, otherwise derive from role/searchTypes
+    const searchOverride = SEARCH_TYPE_OVERRIDES[info.id];
+    const search = searchOverride ?? deriveSearchType(info);
+    if (search === null) return null;
 
-    return { search, jobs };
+    const workJobs = filterWorkJobs(info.animLists);
+    return { search, jobs: workJobs };
 }
 
 /** Find settler info across all races (race-specific settlers only exist in their race). */
@@ -141,7 +145,6 @@ export function getSettlerConfig(race: Race, unitType: UnitType): SettlerConfig 
 
 /**
  * Build a Map of all managed settler configs (across all races).
- * Replaces loadSettlerConfigs() from the YAML loader.
  */
 export function buildAllSettlerConfigs(): Map<UnitType, SettlerConfig> {
     const configs = new Map<UnitType, SettlerConfig>();

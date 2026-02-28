@@ -2,31 +2,26 @@
  * Worker task executor.
  *
  * Handles job selection, execution, completion, and interruption for
- * workers (woodcutter, builder, etc.) that use YAML-defined job sequences.
+ * workers (woodcutter, builder, etc.) that use XML choreography job sequences.
  * Distinct from carrier jobs which use externally-assigned CarrierJobState.
  */
 
 import type { Entity } from '../../entity';
 import { UnitType, clearCarrying } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
-import { ThrottledLogger } from '@/utilities/throttled-logger';
+import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import { hexDistance } from '../../systems/hex-directions';
-import {
-    TaskType,
-    TaskResult,
-    SettlerState,
-    type SettlerConfig,
-    type TaskNode,
-    type WorkerJobData,
-    type JobState,
-    type EntityWorkHandler,
-} from './types';
-import { executeTask, type TaskContext } from './task-executors';
-import type { JobDefinitions } from './loader';
-import { isOutputFull, findNearestWorkplace } from './work-handlers';
+import { JobType, TaskResult, SettlerState, type SettlerConfig, type JobState, type EntityWorkHandler } from './types';
+import type { ChoreoContext, ChoreoJobState, ChoreoNode, ChoreoJob, JobPartResolution } from './choreo-types';
+import { ChoreoTaskType, createChoreoJobState } from './choreo-types';
+import { CHOREO_EXECUTOR_MAP } from './choreo-executors';
+import type { JobChoreographyStore } from './job-choreography-store';
 import type { WorkHandlerRegistry } from './work-handler-registry';
 import type { IdleAnimationController } from './idle-animation-controller';
 import type { GameState } from '../../game-state';
+import { EMaterialType } from '../../economy';
+import { raceToRaceId } from '../../game-data-access';
+import { findNearestWorkplace } from './work-handlers';
 
 const log = new LogHandler('WorkerTaskExecutor');
 
@@ -43,10 +38,10 @@ export type OccupancyMap = ReadonlyMap<number, number>;
 export class WorkerTaskExecutor {
     constructor(
         private readonly gameState: GameState,
-        private readonly jobDefinitions: JobDefinitions,
+        private readonly choreographyStore: JobChoreographyStore,
         private readonly handlerRegistry: WorkHandlerRegistry,
         private readonly animController: IdleAnimationController,
-        private readonly taskContext: TaskContext,
+        private readonly choreoContext: ChoreoContext,
         private readonly handlerErrorLogger: ThrottledLogger,
         private readonly missingHandlerLogger: ThrottledLogger
     ) {}
@@ -88,57 +83,83 @@ export class WorkerTaskExecutor {
         const selected = this.selectJob(settler, config, entityTarget);
         if (!selected) return;
 
-        if (homeBuilding && isOutputFull(homeBuilding, selected.tasks, this.taskContext.inventoryManager)) {
+        // Output full check — look for PUT_GOOD or RESOURCE_GATHERING nodes in the job
+        if (homeBuilding && this.isOutputFull(homeBuilding, selected)) {
             this.returnHomeAndWait(settler, homeBuilding);
             return;
         }
 
         settler.hidden = false;
         runtime.state = SettlerState.WORKING;
-        runtime.job = {
-            type: 'worker',
-            jobId: selected.jobId,
-            taskIndex: 0,
-            progress: 0,
-            data: this.buildWorkerJobData(entityTarget),
-        };
+
+        const jobState = createChoreoJobState(selected.id);
+        if (entityTarget) {
+            jobState.targetId = entityTarget.entityId;
+            jobState.targetPos = { x: entityTarget.x, y: entityTarget.y };
+        }
+        runtime.job = jobState;
 
         log.debug(
-            `Settler ${settler.id} starting job ${selected.jobId}, target ${entityTarget?.entityId ?? 'none'}, home ${homeBuilding?.id ?? 'none'}`
+            `Settler ${settler.id} starting choreo job ${selected.id}, ` +
+                `target ${entityTarget?.entityId ?? 'none'}, home ${homeBuilding?.id ?? 'none'}`
         );
     }
 
     /**
-     * Handle a worker in WORKING state: advance the current task.
+     * Handle a worker in WORKING state: advance the current choreography node.
      */
     handleWorking(settler: Entity, config: SettlerConfig, runtime: WorkerRuntimeState, dt: number): void {
         // Job MUST exist when state is WORKING — crash if invariant violated
-        const job = runtime.job!;
+        const job = runtime.job as ChoreoJobState;
 
-        const tasks = this.jobDefinitions.get(job.jobId);
-        if (!tasks || job.taskIndex >= tasks.length) {
+        const raceId = raceToRaceId(settler.race);
+        const choreoJob = this.choreographyStore.getJob(raceId, job.jobId);
+        if (!choreoJob || job.nodeIndex >= choreoJob.nodes.length) {
             this.completeJob(settler, runtime);
             return;
         }
 
-        const task = tasks[job.taskIndex]!;
+        const node = choreoJob.nodes[job.nodeIndex]!;
 
-        // Apply animation for current task (on first tick of task)
+        // Apply animation for current node (on first tick)
         if (job.progress === 0) {
-            this.animController.applyTaskAnimation(settler, task);
+            this.applyChoreoAnimation(settler, node);
         }
 
+        // Set visibility from node
+        settler.hidden = !node.visible;
+
+        // Build per-tick context with work handlers
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
         const positionHandler = this.handlerRegistry.getPositionHandler(config.search);
-        const result = executeTask(settler, job, task, dt, this.taskContext, entityHandler, positionHandler);
+        const ctx: ChoreoContext = {
+            ...this.choreoContext,
+            entityHandler,
+            positionHandler,
+        };
+
+        // Execute via choreo executor map
+        const executor = CHOREO_EXECUTOR_MAP[node.task];
+        const result = executor(settler, job, node, dt, ctx);
 
         switch (result) {
         case TaskResult.DONE:
-            job.taskIndex++;
+            // Stop active trigger when leaving a node
+            if (job.activeTrigger) {
+                this.choreoContext.triggerSystem.stopTrigger(
+                    this.choreoContext.getWorkerHomeBuilding(settler.id) ?? 0,
+                    job.activeTrigger
+                );
+                job.activeTrigger = '';
+            }
+            job.nodeIndex++;
             job.progress = 0;
-            // Apply animation for next task if there is one
-            if (job.taskIndex < tasks.length) {
-                this.animController.applyTaskAnimation(settler, tasks[job.taskIndex]!);
+            job.workStarted = false;
+            // Reset targetPos for next node (it may need fresh resolution)
+            job.targetPos = null;
+            // Apply animation for next node if there is one
+            if (job.nodeIndex < choreoJob.nodes.length) {
+                this.applyChoreoAnimation(settler, choreoJob.nodes[job.nodeIndex]!);
             }
             break;
 
@@ -156,9 +177,20 @@ export class WorkerTaskExecutor {
      * Complete a job and return to idle state.
      */
     completeJob(settler: Entity, runtime: WorkerRuntimeState): void {
-        log.debug(`Settler ${settler.id} completed job ${runtime.job!.jobId}`);
+        const job = runtime.job!;
+
+        // Stop any active trigger
+        if (job.type === JobType.CHOREO && job.activeTrigger) {
+            const homeId = this.choreoContext.getWorkerHomeBuilding(settler.id);
+            if (homeId !== null) {
+                this.choreoContext.triggerSystem.stopTrigger(homeId, job.activeTrigger);
+            }
+        }
+
+        log.debug(`Settler ${settler.id} completed job ${job.jobId}`);
         runtime.state = SettlerState.IDLE;
         runtime.job = null;
+        settler.hidden = false;
         this.animController.setIdleAnimation(settler);
 
         // Hide settler if they finished at their home building
@@ -179,12 +211,20 @@ export class WorkerTaskExecutor {
         const job = runtime.job!;
 
         // Only call onWorkInterrupt on entity handlers when work actually started
-        if (entityHandler && job.type === 'worker' && job.data.targetId && job.workStarted) {
+        if (entityHandler && job.type === JobType.CHOREO && job.targetId && job.workStarted) {
             try {
-                entityHandler.onWorkInterrupt?.(job.data.targetId);
+                entityHandler.onWorkInterrupt?.(job.targetId);
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));
-                this.handlerErrorLogger.error(`onWorkInterrupt failed for target ${job.data.targetId}`, err);
+                this.handlerErrorLogger.error(`onWorkInterrupt failed for target ${job.targetId}`, err);
+            }
+        }
+
+        // Stop any active trigger
+        if (job.type === JobType.CHOREO && job.activeTrigger) {
+            const homeId = this.choreoContext.getWorkerHomeBuilding(settler.id);
+            if (homeId !== null) {
+                this.choreoContext.triggerSystem.stopTrigger(homeId, job.activeTrigger);
             }
         }
 
@@ -192,6 +232,9 @@ export class WorkerTaskExecutor {
         if (settler.carrying) {
             clearCarrying(settler);
         }
+
+        // Restore visibility
+        settler.hidden = false;
 
         log.debug(`Settler ${settler.id} interrupted job ${job.jobId}`);
         runtime.state = SettlerState.INTERRUPTED;
@@ -218,14 +261,6 @@ export class WorkerTaskExecutor {
     // Private helpers
     // ─────────────────────────────────────────────────────────────
 
-    private buildWorkerJobData(target: { entityId: number; x: number; y: number } | null): WorkerJobData {
-        return {
-            targetId: target?.entityId ?? null,
-            targetPos: target ? { x: target.x, y: target.y } : null,
-            carryingGood: null,
-        };
-    }
-
     /**
      * Resolve the home building for a settler: reuse existing assignment or find a new one.
      * Claims the building immediately so no other worker can take it.
@@ -251,59 +286,87 @@ export class WorkerTaskExecutor {
     }
 
     /**
-     * Select the best job for a settler based on target availability.
+     * Select the best choreo job for a settler based on target availability.
      *
-     * Priority: entity-target jobs first (harvest, chop, etc.) since they have
-     * concrete work to do, then self-searching jobs (plant) as fallback.
+     * Iterates config.jobs (XML job IDs like 'JOB_WOODCUTTER_WORK') and picks
+     * the first job whose first node matches the available target type:
+     * - Entity-target jobs (GO_TO_TARGET, etc.) need an external entity target.
+     * - Self-searching jobs (SEARCH) can start without one.
      */
     private selectJob(
         settler: Entity,
         config: SettlerConfig,
         target: { entityId: number; x: number; y: number } | null
-    ): { jobId: string; tasks: TaskNode[] } | null {
-        const prefix = UnitType[settler.subType]!.toLowerCase();
+    ): ChoreoJob | null {
+        const raceId = raceToRaceId(settler.race);
 
-        // Phase 1: If a target entity was found, try jobs that need one
-        if (target) {
-            for (const jobName of config.jobs) {
-                const jobId = `${prefix}.${jobName}`;
-                const tasks = this.jobDefinitions.get(jobId);
-                if (!tasks?.length) continue;
-                if (this.jobNeedsEntityTarget(tasks[0]!)) {
-                    return { jobId, tasks };
-                }
+        for (const jobId of config.jobs) {
+            const job = this.choreographyStore.getJob(raceId, jobId);
+            if (!job?.nodes.length) continue;
+
+            const firstNode = job.nodes[0]!;
+
+            // Entity-target jobs need a target
+            if (target && this.jobNeedsEntityTarget(firstNode)) {
+                return job;
             }
-        }
 
-        // Phase 2: Try self-searching jobs (SEARCH_POS) that don't need an initial target
-        for (const jobName of config.jobs) {
-            const jobId = `${prefix}.${jobName}`;
-            const tasks = this.jobDefinitions.get(jobId);
-            if (!tasks?.length) continue;
-            if (this.jobIsSelfSearching(tasks[0]!)) {
-                return { jobId, tasks };
+            // Self-searching jobs (SEARCH node first) don't need external target
+            if (firstNode.task === ChoreoTaskType.SEARCH) {
+                return job;
             }
         }
 
         return null;
     }
 
-    /** Check if a job's first task requires an entity target from findTarget. */
-    private jobNeedsEntityTarget(firstTask: TaskNode): boolean {
+    /** Check if a job's first node requires an entity target from findTarget. */
+    private jobNeedsEntityTarget(firstNode: ChoreoNode): boolean {
         return (
-            firstTask.task === TaskType.GO_TO_TARGET ||
-            firstTask.task === TaskType.GO_ADJACENT_POS ||
-            firstTask.task === TaskType.WORK_ON_ENTITY
+            firstNode.task === ChoreoTaskType.GO_TO_TARGET ||
+            firstNode.task === ChoreoTaskType.GO_TO_TARGET_ROUGHLY ||
+            firstNode.task === ChoreoTaskType.WORK_ON_ENTITY
         );
     }
 
+    /** Apply choreography animation for a node via the JobPartResolver. */
+    private applyChoreoAnimation(settler: Entity, node: ChoreoNode): void {
+        if (!node.jobPart) return;
+        const resolution: JobPartResolution = this.choreoContext.jobPartResolver.resolve(node.jobPart, settler);
+        this.animController.applyChoreoAnimation(settler, resolution);
+    }
+
     /**
-     * Check if a job is self-searching (starts with SEARCH_POS).
-     * Only these jobs can be started without an external target.
-     * Jobs like carrier.transport (GO_TO_SOURCE) need external assignment via assignJob().
+     * Check if a building's output is full for the goods produced by this choreo job.
+     * Looks for PUT_GOOD or RESOURCE_GATHERING nodes that declare an output good.
      */
-    private jobIsSelfSearching(firstTask: TaskNode): boolean {
-        return firstTask.task === TaskType.SEARCH_POS;
+    private isOutputFull(homeBuilding: Entity, job: ChoreoJob): boolean {
+        const outputNode = job.nodes.find(
+            n => n.task === ChoreoTaskType.PUT_GOOD || n.task === ChoreoTaskType.RESOURCE_GATHERING
+        );
+        if (!outputNode || !outputNode.entity) return false;
+
+        const material = this.parseMaterial(outputNode.entity);
+        if (material === null) return false;
+
+        const id = homeBuilding.id;
+        const inv = this.choreoContext.inventoryManager;
+        if (inv.canAcceptInput(id, material, 1)) return false;
+        if (inv.getInputSpace(id, material) > 0) return false;
+
+        const inventory = inv.getInventory(id);
+        if (!inventory) return false;
+        const outputSlot = inventory.outputSlots.find(s => s.materialType === material);
+        if (outputSlot && outputSlot.currentAmount < outputSlot.maxCapacity) return false;
+
+        return true;
+    }
+
+    /** Parse a material string (e.g. 'GOOD_LOG' or 'LOG') to EMaterialType, or null. */
+    private parseMaterial(entity: string): EMaterialType | null {
+        const key = entity.replace(/^GOOD_/, '');
+        const value = EMaterialType[key as keyof typeof EMaterialType] as EMaterialType | undefined;
+        return value ?? null;
     }
 
     /**

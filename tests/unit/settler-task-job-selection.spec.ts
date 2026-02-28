@@ -8,7 +8,12 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SettlerTaskSystem, type SettlerTaskSystemConfig } from '@/game/features/settler-tasks/settler-task-system';
-import { SearchType, type EntityWorkHandler, type PositionWorkHandler } from '@/game/features/settler-tasks/types';
+import {
+    SearchType,
+    WorkHandlerType,
+    type EntityWorkHandler,
+    type PositionWorkHandler,
+} from '@/game/features/settler-tasks/types';
 import { EntityVisualService } from '@/game/animation/entity-visual-service';
 import { EntityType } from '@/game/entity';
 import { UnitType } from '@/game/unit-types';
@@ -33,6 +38,8 @@ function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
         eventBus: ctx.eventBus,
         carrierManager,
         getInventoryVisualizer: () => null as any,
+        workAreaStore: {} as any,
+        buildingOverlayManager: {} as any,
     };
     return new SettlerTaskSystem(config);
 }
@@ -40,7 +47,7 @@ function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
 /** Stub entity handler that always returns a target entity */
 function createTargetHandler(target: { entityId: number; x: number; y: number }): EntityWorkHandler {
     return {
-        type: 'entity',
+        type: WorkHandlerType.ENTITY,
         findTarget: () => target,
         canWork: () => true,
         onWorkTick: () => false,
@@ -50,7 +57,7 @@ function createTargetHandler(target: { entityId: number; x: number; y: number })
 /** Stub entity handler that never finds a target */
 function createNoTargetHandler(): EntityWorkHandler {
     return {
-        type: 'entity',
+        type: WorkHandlerType.ENTITY,
         findTarget: () => null,
         canWork: () => false,
         onWorkTick: () => false,
@@ -60,7 +67,7 @@ function createNoTargetHandler(): EntityWorkHandler {
 /** Stub position handler */
 function createPositionHandler(position: { x: number; y: number } | null): PositionWorkHandler {
     return {
-        type: 'position',
+        type: WorkHandlerType.POSITION,
         findPosition: () => position,
         onWorkAtPositionComplete: () => {},
     };
@@ -114,7 +121,7 @@ describe('SettlerTaskSystem job selection', () => {
 
             expect(system.isWorking(entity.id)).toBe(true);
             const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job.jobId).toBe('farmer.harvest');
+            expect(runtime.job.jobId).toBe('JOB_FARMERGRAIN_HARVEST');
         });
 
         it('farmer selects plant job when no harvestable target exists', () => {
@@ -127,7 +134,7 @@ describe('SettlerTaskSystem job selection', () => {
             // Tick 1: handleIdle selects plant job → state=WORKING
             system.tick(0.016);
             const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job!.jobId).toBe('farmer.plant');
+            expect(runtime.job!.jobId).toBe('JOB_FARMERGRAIN_PLANT');
 
             // Tick 2: SEARCH_POS runs, findPosition returns null, no shouldWaitForWork → FAILED → INTERRUPTED
             system.tick(0.016);
@@ -150,7 +157,7 @@ describe('SettlerTaskSystem job selection', () => {
 
             expect(system.isWorking(entity.id)).toBe(true);
             const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job.jobId).toBe('farmer.plant');
+            expect(runtime.job.jobId).toBe('JOB_FARMERGRAIN_PLANT');
         });
 
         it('farmer prefers harvest over plant when entity target exists', () => {
@@ -170,7 +177,7 @@ describe('SettlerTaskSystem job selection', () => {
             system.tick(0.016);
 
             const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job.jobId).toBe('farmer.harvest');
+            expect(runtime.job.jobId).toBe('JOB_FARMERGRAIN_HARVEST');
         });
     });
 
@@ -188,7 +195,7 @@ describe('SettlerTaskSystem job selection', () => {
 
             expect(system.isWorking(entity.id)).toBe(true);
             const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job.jobId).toBe('forester.plant');
+            expect(runtime.job.jobId).toBe('JOB_FORESTER_PLANT');
         });
 
         it('forester selects plant job when findPosition returns null', () => {
@@ -200,7 +207,7 @@ describe('SettlerTaskSystem job selection', () => {
             // Tick 1: handleIdle selects plant job → state=WORKING
             system.tick(0.016);
             const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job!.jobId).toBe('forester.plant');
+            expect(runtime.job!.jobId).toBe('JOB_FORESTER_PLANT');
 
             // Tick 2: SEARCH_POS fails (null position, no shouldWaitForWork) → INTERRUPTED
             system.tick(0.016);
@@ -217,7 +224,7 @@ describe('SettlerTaskSystem job selection', () => {
             let hasTarget = true;
             const grain = ctx.state.addEntity(EntityType.MapObject, 0, 11, 10, 0);
             const entityHandler: EntityWorkHandler = {
-                type: 'entity',
+                type: WorkHandlerType.ENTITY,
                 findTarget: () => (hasTarget ? { entityId: grain.id, x: 11, y: 10 } : null),
                 canWork: () => true,
                 onWorkTick: (_targetId, progress) => progress >= 1.0,
@@ -234,7 +241,7 @@ describe('SettlerTaskSystem job selection', () => {
             // First cycle: target exists → harvest
             system.tick(0.016);
             let runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job.jobId).toBe('farmer.harvest');
+            expect(runtime.job.jobId).toBe('JOB_FARMERGRAIN_HARVEST');
 
             // Simulate job completion by resetting state
             runtime.state = 'IDLE';
@@ -244,7 +251,7 @@ describe('SettlerTaskSystem job selection', () => {
             hasTarget = false;
             system.tick(0.016);
             runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job!.jobId).toBe('farmer.plant');
+            expect(runtime.job!.jobId).toBe('JOB_FARMERGRAIN_PLANT');
         });
     });
 
@@ -262,7 +269,7 @@ describe('SettlerTaskSystem job selection', () => {
         it('settler with handler that throws stays idle', () => {
             const system = createTaskSystem(ctx);
             const handler: EntityWorkHandler = {
-                type: 'entity',
+                type: WorkHandlerType.ENTITY,
                 findTarget: () => {
                     throw new Error('domain error');
                 },

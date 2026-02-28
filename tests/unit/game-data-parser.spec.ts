@@ -154,7 +154,7 @@ describe('Game Data XML Parsers', () => {
             expect(job!.nodes).toHaveLength(2);
 
             const firstNode = job!.nodes[0]!;
-            expect(firstNode.task).toBe('CEntityTask::WORK');
+            expect(firstNode.task).toBe('WORK');
             expect(firstNode.jobPart).toBe('C_IDLE1');
             expect(firstNode.duration).toBe(0);
             expect(firstNode.dir).toBe(-1);
@@ -162,7 +162,7 @@ describe('Game Data XML Parsers', () => {
             expect(firstNode.visible).toBe(1);
 
             const secondNode = job!.nodes[1]!;
-            expect(secondNode.task).toBe('CEntityTask::WAIT');
+            expect(secondNode.task).toBe('WAIT');
             expect(secondNode.jobPart).toBe('C_WALK');
         });
 

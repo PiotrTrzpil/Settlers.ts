@@ -195,7 +195,7 @@ export interface BuildingInfo {
 // ============ Job Info Types ============
 
 export interface JobNode {
-    /** Task type (e.g., CEntityTask::WORK, CEntityTask::GO_TO_POS) */
+    /** Task type (e.g., WORK, GO_TO_POS) — CEntityTask:: prefix stripped at parse time */
     task: string;
     /** Animation/sprite part reference (e.g., BA_WALK, BML01_SHOOT) */
     jobPart: string;

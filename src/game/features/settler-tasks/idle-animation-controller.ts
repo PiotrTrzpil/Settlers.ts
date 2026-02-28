@@ -7,10 +7,9 @@
  */
 
 import type { Entity } from '../../entity';
-import { ANIMATION_SEQUENCES } from '../../animation';
-import { resolveTaskAnimation } from '../../animation/index';
+import { ANIMATION_SEQUENCES, carrySequenceKey } from '../../animation';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
-import type { TaskNode } from './types';
+import type { JobPartResolution } from './choreo-types';
 
 /** Number of sprite directions (matches hex grid) */
 const NUM_DIRECTIONS = 6;
@@ -96,20 +95,23 @@ export class IdleAnimationController {
     }
 
     /**
-     * Apply animation for the current task. Resolves semantic animation type
-     * to a concrete sequence key via AnimationResolver, then applies it.
+     * Apply animation from a choreography node's resolved job part.
+     * Called by WorkerTaskExecutor/CarrierTaskExecutor when advancing to a new node.
      */
-    applyTaskAnimation(settler: Entity, task: TaskNode): void {
-        const intent = resolveTaskAnimation(task.anim, settler);
-        this.visualService.applyIntent(settler.id, intent);
+    applyChoreoAnimation(settler: Entity, resolution: JobPartResolution): void {
+        this.visualService.applyIntent(settler.id, {
+            sequence: resolution.sequenceKey,
+            loop: resolution.loop,
+            stopped: resolution.stopped,
+        });
     }
 
     /**
      * Start walk animation for a unit (used for move tasks and external movement).
      */
     startWalkAnimation(unit: Entity, direction: number): void {
-        const intent = resolveTaskAnimation('walk', unit);
-        this.visualService.applyIntent(unit.id, intent);
+        const sequence = unit.carrying ? carrySequenceKey(unit.carrying.material) : ANIMATION_SEQUENCES.WALK;
+        this.visualService.applyIntent(unit.id, { sequence, loop: true, stopped: false });
         this.visualService.setDirection(unit.id, direction);
     }
 
@@ -117,8 +119,11 @@ export class IdleAnimationController {
      * Set idle animation (stopped, default pose).
      */
     setIdleAnimation(settler: Entity): void {
-        const intent = resolveTaskAnimation('idle', settler);
-        this.visualService.applyIntent(settler.id, intent);
+        this.visualService.applyIntent(settler.id, {
+            sequence: ANIMATION_SEQUENCES.DEFAULT,
+            loop: false,
+            stopped: true,
+        });
     }
 
     /** Get an adjacent direction for idle turning. */

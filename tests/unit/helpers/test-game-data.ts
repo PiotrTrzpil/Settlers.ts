@@ -12,6 +12,9 @@ import type {
     RaceId,
     SettlerValueInfo,
     RaceSettlerValueData,
+    JobInfo,
+    JobNode,
+    RaceJobData,
 } from '@/resources/game-data/types';
 import { clearWorkerBuildingCache } from '@/game/game-data-access';
 
@@ -145,8 +148,8 @@ function buildRaceBuildingMap(): Map<string, BuildingInfo> {
 }
 
 /** Minimal SettlerValueInfo with only the fields needed for config derivation. */
-function settlerValue(id: string, role: string, searchTypes: string[]): SettlerValueInfo {
-    return { id, role, searchTypes, tool: '', animLists: [] };
+function settlerValue(id: string, role: string, searchTypes: string[], animLists: string[] = []): SettlerValueInfo {
+    return { id, role, searchTypes, tool: '', animLists };
 }
 
 /**
@@ -155,10 +158,30 @@ function settlerValue(id: string, role: string, searchTypes: string[]): SettlerV
  * Roman race has most settlers; race-specific ones go in their own race.
  */
 const ROMAN_SETTLERS: SettlerValueInfo[] = [
-    settlerValue('SETTLER_WOODCUTTER', 'FREE_WORKER_ROLE', ['SEARCH_TREE']),
-    settlerValue('SETTLER_STONECUTTER', 'FREE_WORKER_ROLE', ['SEARCH_STONE']),
-    settlerValue('SETTLER_FORESTER', 'FREE_WORKER_ROLE', ['SEARCH_NO_SEARCH', 'SEARCH_TREE_SEED_POS']),
-    settlerValue('SETTLER_FARMERGRAIN', 'FREE_WORKER_ROLE', ['SEARCH_GRAIN', 'SEARCH_GRAIN_SEED_POS']),
+    settlerValue(
+        'SETTLER_WOODCUTTER',
+        'FREE_WORKER_ROLE',
+        ['SEARCH_TREE'],
+        ['JOB_WOODCUTTER_CHECKIN', 'JOB_WOODCUTTER_WORK']
+    ),
+    settlerValue(
+        'SETTLER_STONECUTTER',
+        'FREE_WORKER_ROLE',
+        ['SEARCH_STONE'],
+        ['JOB_STONECUTTER_CHECKIN', 'JOB_STONECUTTER_WORK']
+    ),
+    settlerValue(
+        'SETTLER_FORESTER',
+        'FREE_WORKER_ROLE',
+        ['SEARCH_NO_SEARCH', 'SEARCH_TREE_SEED_POS'],
+        ['JOB_FORESTER_CHECKIN', 'JOB_FORESTER_PLANT']
+    ),
+    settlerValue(
+        'SETTLER_FARMERGRAIN',
+        'FREE_WORKER_ROLE',
+        ['SEARCH_GRAIN', 'SEARCH_GRAIN_SEED_POS'],
+        ['JOB_FARMERGRAIN_CHECKIN', 'JOB_FARMERGRAIN_HARVEST', 'JOB_FARMERGRAIN_PLANT']
+    ),
     settlerValue('SETTLER_MINEWORKER', 'HOUSE_WORKER_ROLE', []),
     settlerValue('SETTLER_CARRIER', 'CARRIER_ROLE', ['SEARCH_NO_SEARCH']),
     settlerValue('SETTLER_BUILDER', 'BUILDER_ROLE', ['SEARCH_NO_SEARCH']),
@@ -188,6 +211,53 @@ function buildSettlerValueMap(settlers: SettlerValueInfo[]): RaceSettlerValueDat
     return { settlers: map };
 }
 
+// ─────────────────────────────────────────────────────────────
+// Minimal job definitions (jobInfo.xml stubs)
+// ─────────────────────────────────────────────────────────────
+
+/** Create a minimal JobNode stub with sensible defaults. */
+function jobNode(task: string): JobNode {
+    return {
+        task,
+        jobPart: '',
+        x: 0,
+        y: 0,
+        duration: 100,
+        dir: -1,
+        forward: 1,
+        visible: 1,
+        useWork: false,
+        entity: '',
+        trigger: '',
+    };
+}
+
+/**
+ * Minimal job entries matching jobInfo.xml structure.
+ * Only includes jobs referenced by settler animLists above.
+ * First node task type determines how selectJob() classifies the job:
+ *   - GO_TO_TARGET → entity-target job (harvest, woodcutting, stonecutting)
+ *   - SEARCH → self-searching job (planting)
+ */
+const TEST_JOBS: JobInfo[] = [
+    { id: 'JOB_WOODCUTTER_CHECKIN', nodes: [jobNode('GO_TO_POS')] },
+    { id: 'JOB_WOODCUTTER_WORK', nodes: [jobNode('GO_TO_TARGET'), jobNode('WORK_ON_ENTITY')] },
+    { id: 'JOB_STONECUTTER_CHECKIN', nodes: [jobNode('GO_TO_POS')] },
+    { id: 'JOB_STONECUTTER_WORK', nodes: [jobNode('GO_TO_TARGET'), jobNode('WORK_ON_ENTITY')] },
+    { id: 'JOB_FORESTER_CHECKIN', nodes: [jobNode('GO_TO_POS')] },
+    { id: 'JOB_FORESTER_PLANT', nodes: [jobNode('SEARCH'), jobNode('GO_TO_POS')] },
+    { id: 'JOB_FARMERGRAIN_CHECKIN', nodes: [jobNode('GO_TO_POS')] },
+    { id: 'JOB_FARMERGRAIN_HARVEST', nodes: [jobNode('GO_TO_TARGET'), jobNode('WORK_ON_ENTITY')] },
+    { id: 'JOB_FARMERGRAIN_PLANT', nodes: [jobNode('SEARCH'), jobNode('GO_TO_POS')] },
+];
+
+/** Build a race job map from the test job definitions. */
+function buildRaceJobMap(): RaceJobData {
+    const map = new Map<string, JobInfo>();
+    for (const j of TEST_JOBS) map.set(j.id, j);
+    return { jobs: map };
+}
+
 /**
  * Install minimal test game data into the GameDataLoader singleton.
  * Called automatically by createTestContext().
@@ -207,9 +277,15 @@ export function installTestGameData(): void {
     settlers.set('RACE_VIKING', buildSettlerValueMap(VIKING_SETTLERS));
     settlers.set('RACE_MAYA', buildSettlerValueMap(MAYA_SETTLERS));
 
+    const raceJobData = buildRaceJobMap();
+    const jobs = new Map<RaceId, RaceJobData>();
+    for (const raceId of races) {
+        jobs.set(raceId, raceJobData);
+    }
+
     const data: GameData = {
         buildings,
-        jobs: new Map(),
+        jobs,
         objects: new Map(),
         buildingTriggers: new Map(),
         settlers,

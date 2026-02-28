@@ -13,8 +13,7 @@ import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { BuildingInventoryManager } from '../inventory';
 import { LogHandler } from '@/utilities/log-handler';
-import type { TaskNode } from './types';
-import { TaskType, type EntityWorkHandler, type PositionWorkHandler } from './types';
+import { WorkHandlerType, type EntityWorkHandler, type PositionWorkHandler } from './types';
 import type { PlantingCapable } from '../growth';
 import type { TreeSystem } from '../trees/tree-system';
 import type { StoneSystem } from '../stones/stone-system';
@@ -75,7 +74,7 @@ export function createWorkplaceHandler(
     getAssignedBuilding: (settlerId: number) => Entity | null
 ): EntityWorkHandler {
     return {
-        type: 'entity',
+        type: WorkHandlerType.ENTITY,
         shouldWaitForWork: true,
 
         findTarget: (_x: number, _y: number, settlerId?: number) => {
@@ -115,7 +114,7 @@ export function createWorkplaceHandler(
  */
 export function createCarrierHandler(): EntityWorkHandler {
     return {
-        type: 'entity',
+        type: WorkHandlerType.ENTITY,
         shouldWaitForWork: true,
 
         findTarget: () => null,
@@ -136,7 +135,7 @@ const WOODCUTTER_SEARCH_RADIUS = 30;
  */
 export function createWoodcuttingHandler(gameState: GameState, treeSystem: TreeSystem): EntityWorkHandler {
     return {
-        type: 'entity',
+        type: WorkHandlerType.ENTITY,
 
         findTarget: (x: number, y: number) => {
             return findNearestEntity(gameState, x, y, WOODCUTTER_SEARCH_RADIUS, entity => {
@@ -177,7 +176,7 @@ const woodcuttingLog = new LogHandler('WoodcuttingHandler');
  */
 export function createPlantingHandler(system: PlantingCapable): PositionWorkHandler {
     return {
-        type: 'position',
+        type: WorkHandlerType.POSITION,
 
         findPosition: (x: number, y: number) => {
             return system.findPlantingSpot(x, y);
@@ -207,7 +206,7 @@ const stonecuttingLog = new LogHandler('StonecuttingHandler');
  */
 export function createStonecuttingHandler(gameState: GameState, stoneSystem: StoneSystem): EntityWorkHandler {
     return {
-        type: 'entity',
+        type: WorkHandlerType.ENTITY,
 
         findTarget: (x: number, y: number) => {
             return findNearestEntity(gameState, x, y, STONECUTTER_SEARCH_RADIUS, entity => {
@@ -254,7 +253,7 @@ export function createCropHarvestHandler(
     cropType: MapObjectType
 ): EntityWorkHandler {
     return {
-        type: 'entity',
+        type: WorkHandlerType.ENTITY,
 
         findTarget: (x: number, y: number) => {
             return findNearestEntity(gameState, x, y, CROP_HARVEST_SEARCH_RADIUS, entity => {
@@ -311,7 +310,7 @@ export function createSimpleHarvestHandler(config: SimpleHarvestConfig): EntityW
     const { gameState, log, workerLabel, searchRadius, targetFilter } = config;
 
     return {
-        type: 'entity',
+        type: WorkHandlerType.ENTITY,
 
         findTarget: (x: number, y: number) => {
             return findNearestEntity(
@@ -339,32 +338,4 @@ export function createSimpleHarvestHandler(config: SimpleHarvestConfig): EntityW
                 gameState.removeEntity(targetId);
             }),
     };
-}
-
-// ─────────────────────────────────────────────────────────────
-// Inventory helpers
-// ─────────────────────────────────────────────────────────────
-
-export function isOutputFull(
-    homeBuilding: Entity,
-    tasks: TaskNode[],
-    inventoryManager: BuildingInventoryManager
-): boolean {
-    const pickupTask = tasks.find(t => t.task === TaskType.PICKUP && t.good !== undefined);
-    if (!pickupTask) return false;
-
-    const material = pickupTask.good!;
-    const id = homeBuilding.id;
-
-    // Check all possible storage: input slots, input space, and output slots
-    if (inventoryManager.canAcceptInput(id, material, 1)) return false;
-    if (inventoryManager.getInputSpace(id, material) > 0) return false;
-
-    // Check output slot capacity directly
-    const inventory = inventoryManager.getInventory(id);
-    if (!inventory) return false;
-    const outputSlot = inventory.outputSlots.find(s => s.materialType === material);
-    if (outputSlot && outputSlot.currentAmount < outputSlot.maxCapacity) return false;
-
-    return true;
 }
