@@ -10,8 +10,10 @@ import {
     BUILDING_JOB_INDICES,
     RESOURCE_JOB_INDICES,
     UNIT_BASE_JOB_INDICES,
-    WORKER_JOB_INDICES,
+    SETTLER_JOB_INDICES,
     SETTLER_FILE_NUMBERS,
+    type SettlerAnimData,
+    getFirstFieldByPrefix,
 } from '@/game/renderer/sprite-metadata';
 import { Race } from '@/game/race';
 import { BuildingType, UnitType } from '@/game/entity';
@@ -174,9 +176,12 @@ export async function loadBuildingIcons(
 function getUnitJobIndex(unitType: UnitType, level: number): number | undefined {
     if (level > 1) {
         const typeName = UnitType[unitType].toLowerCase();
-        const key = `${typeName}_${level}` as keyof typeof WORKER_JOB_INDICES;
-        const entry = WORKER_JOB_INDICES[key];
-        if ('idle' in entry && typeof entry.idle === 'number' && entry.idle >= 0) return entry.idle;
+        const key = `${typeName}_${level}` as keyof typeof SETTLER_JOB_INDICES;
+        const entry = SETTLER_JOB_INDICES[key] as SettlerAnimData | undefined;
+        if (entry) {
+            const idle = getFirstFieldByPrefix(entry, 'idle');
+            if (idle !== undefined && idle >= 0) return idle;
+        }
     }
     return UNIT_BASE_JOB_INDICES[unitType];
 }

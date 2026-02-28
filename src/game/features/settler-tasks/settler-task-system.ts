@@ -19,7 +19,8 @@ import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
 import type { TaskContext } from './task-executors';
-import { loadSettlerConfigs, loadJobDefinitions, type SettlerConfigs, type JobDefinitions } from './loader';
+import { loadJobDefinitions, type SettlerConfigs, type JobDefinitions } from './loader';
+import { buildAllSettlerConfigs } from '../../settler-data-access';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../inventory';
 import type { CarrierManager } from '../carriers';
@@ -70,7 +71,7 @@ export class SettlerTaskSystem implements TickSystem {
         this.gameState = config.gameState;
         this.inventoryManager = config.inventoryManager;
 
-        this.settlerConfigs = loadSettlerConfigs();
+        this.settlerConfigs = buildAllSettlerConfigs();
         this.jobDefinitions = loadJobDefinitions();
 
         // Throttled loggers shared across sub-systems

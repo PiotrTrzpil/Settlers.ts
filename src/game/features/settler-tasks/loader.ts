@@ -1,11 +1,10 @@
 import { parse as parseYaml } from 'yaml';
 import type { SettlerConfig, TaskNode, AnimationType } from './types';
-import { SearchType, TaskType } from './types';
+import { TaskType } from './types';
 import { UnitType } from '../../entity';
 import { EMaterialType } from '../../economy';
 
 // Import YAML as raw text (Vite handles this)
-import settlersYaml from './data/settlers.yaml?raw';
 import jobsYaml from './data/jobs.yaml?raw';
 
 /** Validate that a string is a member of the given set, with a contextual error message. */
@@ -16,7 +15,6 @@ function parseEnum<T extends string>(name: string, validValues: ReadonlySet<stri
     return name as T;
 }
 
-const SEARCH_TYPES = new Set(Object.values(SearchType));
 const TASK_TYPES = new Set(Object.values(TaskType));
 const ANIMATION_TYPES: ReadonlySet<string> = new Set<AnimationType>([
     'walk',
@@ -52,59 +50,11 @@ export type SettlerConfigs = Map<UnitType, SettlerConfig>;
 /** Parsed job definitions keyed by job ID */
 export type JobDefinitions = Map<string, TaskNode[]>;
 
-const SETTLER_NAME_MAP: Record<string, UnitType> = {
-    woodcutter: UnitType.Woodcutter,
-    stonecutter: UnitType.Stonecutter,
-    forester: UnitType.Forester,
-    farmer: UnitType.Farmer,
-    miner: UnitType.Miner,
-    carrier: UnitType.Carrier,
-    builder: UnitType.Builder,
-    digger: UnitType.Digger,
-    smith: UnitType.Smith,
-    sawmillworker: UnitType.SawmillWorker,
-    miller: UnitType.Miller,
-    butcher: UnitType.Butcher,
-    agavefarmer: UnitType.AgaveFarmer,
-    beekeeper: UnitType.Beekeeper,
-    winemaker: UnitType.Winemaker,
-    meadmaker: UnitType.Meadmaker,
-    tequilamaker: UnitType.Tequilamaker,
-    smelter: UnitType.Smelter,
-    templeservant: UnitType.TempleServant,
-};
-
-interface RawSettlerConfig {
-    search: string;
-    jobs: string[];
-}
-
 interface RawTaskNode {
     task: string;
     anim: string;
     duration?: number;
     good?: string;
-}
-
-export function loadSettlerConfigs(): SettlerConfigs {
-    const raw = parseYaml(settlersYaml) as Record<string, RawSettlerConfig>;
-    const configs = new Map<UnitType, SettlerConfig>();
-
-    for (const [name, rawConfig] of Object.entries(raw)) {
-        const unitType = SETTLER_NAME_MAP[name];
-        if (unitType === undefined) {
-            throw new Error(
-                `Unknown settler type in YAML: "${name}". Valid: ${Object.keys(SETTLER_NAME_MAP).join(', ')}`
-            );
-        }
-
-        configs.set(unitType, {
-            search: parseEnum<SearchType>(rawConfig.search, SEARCH_TYPES, 'search type'),
-            jobs: rawConfig.jobs,
-        });
-    }
-
-    return configs;
 }
 
 export function loadJobDefinitions(): JobDefinitions {

@@ -157,8 +157,8 @@ import {
     RESOURCE_JOB_INDICES,
     GFX_FILE_NUMBERS,
     CARRIER_MATERIAL_JOB_INDICES,
-    WORKER_JOB_INDICES,
-    WORKER_KEY_TO_UNIT_TYPE,
+    SETTLER_JOB_INDICES,
+    SETTLER_KEY_TO_UNIT_TYPE,
     SETTLER_FILE_NUMBERS,
 } from '@/game/renderer/sprite-metadata';
 import { BuildingType, UnitType } from '@/game/entity';
@@ -330,7 +330,7 @@ for (const [typeStr, jobIndex] of Object.entries(CARRIER_MATERIAL_JOB_INDICES)) 
 const jobToWorkerLabels = new Map<number, string[]>();
 
 function formatWorkerName(key: string): string {
-    const unitType = WORKER_KEY_TO_UNIT_TYPE[key];
+    const unitType = SETTLER_KEY_TO_UNIT_TYPE[key];
     if (unitType !== undefined) {
         const levelMatch = /^.+_(\d+)$/.exec(key);
         const name = UnitType[unitType];
@@ -347,16 +347,10 @@ function addWorkerLabel(jobIndex: number, workerName: string, state: string): vo
     else jobToWorkerLabels.set(jobIndex, [label]);
 }
 
-for (const [workerKey, workerData] of Object.entries(WORKER_JOB_INDICES)) {
+for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
     const name = formatWorkerName(workerKey);
-    for (const [field, value] of Object.entries(workerData as Record<string, number | readonly number[]>)) {
-        if (typeof value === 'number') {
-            addWorkerLabel(value, name, field);
-        } else if (Array.isArray(value)) {
-            for (let i = 0; i < value.length; i++) {
-                addWorkerLabel(value[i], name, value.length === 1 ? field : `${field}.${i}`);
-            }
-        }
+    for (const [field, value] of Object.entries(workerData as Record<string, number>)) {
+        addWorkerLabel(value, name, field);
     }
 }
 

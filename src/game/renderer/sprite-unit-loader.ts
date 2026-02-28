@@ -12,8 +12,11 @@ import {
     getUnitSpriteMap,
     SETTLER_FILE_NUMBERS,
     CARRIER_MATERIAL_JOB_INDICES,
-    WORKER_JOB_INDICES,
-    WORKER_KEY_TO_UNIT_TYPE,
+    SETTLER_JOB_INDICES,
+    SETTLER_KEY_TO_UNIT_TYPE,
+    type SettlerAnimData,
+    collectFieldsByPrefix,
+    getFirstFieldByPrefix,
 } from './sprite-metadata';
 import { SpriteLoader, type LoadedGfxFileSet, type LoadedSprite } from './sprite-loader';
 import { UnitType, EntityType } from '../entity';
@@ -215,7 +218,7 @@ async function loadCarrierVariants(
 }
 
 /**
- * Extract military level (1-3) from a WORKER_JOB_INDICES key like 'swordsman_2'.
+ * Extract military level (1-3) from a SETTLER_JOB_INDICES key like 'swordsman_2'.
  * Returns 0 for non-military/non-levelled keys.
  */
 function getMilitaryLevel(workerKey: string): number {
@@ -238,11 +241,10 @@ async function loadWorkerAnimations(
     // Collect all work animation jobs to load in parallel
     type WorkJob = { unitType: UnitType; workIndex: number; jobIndex: number };
     const workJobs: WorkJob[] = [];
-    for (const [workerKey, workerData] of Object.entries(WORKER_JOB_INDICES)) {
-        if (!('work' in workerData)) continue;
-        const unitType = WORKER_KEY_TO_UNIT_TYPE[workerKey];
+    for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
+        const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
         if (unitType === undefined) continue;
-        const workJobIndices = workerData.work as readonly number[];
+        const workJobIndices = collectFieldsByPrefix(workerData as SettlerAnimData, 'work');
         for (let workIndex = 0; workIndex < workJobIndices.length; workIndex++) {
             const jobIndex = workJobIndices[workIndex]!;
             if (ctx.spriteLoader.getDirectionCount(fileSet, jobIndex) > 0) {
@@ -306,14 +308,12 @@ async function loadWorkerCarryAnimations(
 
     type CarryJob = { unitType: UnitType; jobIndex: number };
     const carryJobs: CarryJob[] = [];
-    for (const [workerKey, workerData] of Object.entries(WORKER_JOB_INDICES)) {
-        if (!('carry' in workerData)) continue;
-        const unitType = WORKER_KEY_TO_UNIT_TYPE[workerKey];
+    for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
+        const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
         if (unitType === undefined || skipUnitTypes.has(unitType)) continue;
 
-        // carry can be a number or array — use first index
-        const carryValue = workerData.carry as number | readonly number[];
-        const jobIndex = typeof carryValue === 'number' ? carryValue : carryValue[0]!;
+        const jobIndex = getFirstFieldByPrefix(workerData as SettlerAnimData, 'carry');
+        if (jobIndex === undefined) continue;
 
         if (ctx.spriteLoader.getDirectionCount(fileSet, jobIndex) > 0) {
             carryJobs.push({ unitType, jobIndex });
@@ -362,17 +362,18 @@ async function loadWorkerCarryAnimations(
 
 type FightJob = { unitType: UnitType; fightIndex: number; jobIndex: number };
 
-/** Collect fight animation jobs from WORKER_JOB_INDICES, using military level for fight index offset. */
+/** Collect fight animation jobs from SETTLER_JOB_INDICES, using military level for fight index offset. */
 function collectFightJobs(fileSet: LoadedGfxFileSet, race: Race, ctx: UnitLoadContext): FightJob[] {
     const fileId = SETTLER_FILE_NUMBERS[race];
     const jobs: FightJob[] = [];
-    for (const [workerKey, workerData] of Object.entries(WORKER_JOB_INDICES)) {
-        if (!('fight' in workerData)) continue;
-        const unitType = WORKER_KEY_TO_UNIT_TYPE[workerKey];
+    for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
+        const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
         if (unitType === undefined) continue;
         if (!isUnitAvailableForRace(unitType, race)) continue;
 
-        const fightJobIndices = (workerData as { fight: readonly number[] }).fight;
+        const fightJobIndices = collectFieldsByPrefix(workerData as SettlerAnimData, 'fight');
+        if (fightJobIndices.length === 0) continue;
+
         const level = getMilitaryLevel(workerKey);
         const baseFightIndex = level > 0 ? level - 1 : 0;
 
@@ -471,19 +472,19 @@ function extractWalkFrames(directionFrames: Map<number, SpriteEntry[]>): Map<num
     return result;
 }
 
-/** Collect military level > 1 idle jobs from WORKER_JOB_INDICES. */
+/** Collect military level > 1 idle jobs from SETTLER_JOB_INDICES. */
 function collectMilitaryLevelJobs(
     fileSet: LoadedGfxFileSet,
     ctx: UnitLoadContext
 ): { unitType: UnitType; level: number; jobIndex: number }[] {
     const jobs: { unitType: UnitType; level: number; jobIndex: number }[] = [];
-    for (const [workerKey, workerData] of Object.entries(WORKER_JOB_INDICES)) {
+    for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
         const level = getMilitaryLevel(workerKey);
         if (level <= 1) continue;
-        const unitType = WORKER_KEY_TO_UNIT_TYPE[workerKey];
+        const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
         if (unitType === undefined) continue;
-        if (!('idle' in workerData) || typeof workerData.idle !== 'number') continue;
-        const jobIndex = workerData.idle as number;
+        const jobIndex = getFirstFieldByPrefix(workerData as SettlerAnimData, 'idle');
+        if (jobIndex === undefined) continue;
         if (jobIndex >= 0 && ctx.spriteLoader.getDirectionCount(fileSet, jobIndex) > 0) {
             jobs.push({ unitType, level, jobIndex });
         }

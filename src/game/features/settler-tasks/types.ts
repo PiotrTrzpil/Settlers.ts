@@ -50,6 +50,7 @@ export enum SearchType {
     SUNFLOWER = 'SUNFLOWER',
     AGAVE = 'AGAVE',
     BEEHIVE = 'BEEHIVE',
+    VINE = 'VINE',
     RESOURCE_POS = 'RESOURCE_POS',
     GOOD = 'GOOD',
     CONSTRUCTION = 'CONSTRUCTION',

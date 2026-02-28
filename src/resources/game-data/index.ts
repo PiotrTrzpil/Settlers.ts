@@ -18,6 +18,7 @@ export type {
     RaceBuildingData,
     RaceJobData,
     RaceBuildingTriggerData,
+    RaceSettlerValueData,
     BuildingInfo,
     BuildingPatch,
     PatchSound,
@@ -33,6 +34,7 @@ export type {
     TriggerEffect,
     TriggerPatch,
     TriggerSound,
+    SettlerValueInfo,
 } from './types';
 export { raceIdToIndex } from './types';
 

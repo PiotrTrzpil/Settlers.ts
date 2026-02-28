@@ -296,6 +296,20 @@ export interface RaceBuildingTriggerData {
     triggers: Map<string, BuildingTrigger>;
 }
 
+// ============ Settler Value Types ============
+
+export interface SettlerValueInfo {
+    id: string;
+    role: string;
+    searchTypes: string[];
+    tool: string;
+    animLists: string[];
+}
+
+export interface RaceSettlerValueData {
+    settlers: Map<string, SettlerValueInfo>;
+}
+
 // ============ Aggregated Game Data ============
 
 export interface RaceBuildingData {
@@ -315,4 +329,6 @@ export interface GameData {
     objects: Map<string, ObjectInfo>;
     /** Building triggers per race */
     buildingTriggers: Map<RaceId, RaceBuildingTriggerData>;
+    /** Settler values per race */
+    settlers: Map<RaceId, RaceSettlerValueData>;
 }

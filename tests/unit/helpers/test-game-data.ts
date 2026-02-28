@@ -6,7 +6,13 @@
  */
 
 import { GameDataLoader } from '@/resources/game-data/game-data-loader';
-import type { GameData, BuildingInfo, RaceId } from '@/resources/game-data/types';
+import type {
+    GameData,
+    BuildingInfo,
+    RaceId,
+    SettlerValueInfo,
+    RaceSettlerValueData,
+} from '@/resources/game-data/types';
 import { clearWorkerBuildingCache } from '@/game/game-data-access';
 
 /** Minimal BuildingInfo with only the fields needed for worker resolution. */
@@ -138,6 +144,50 @@ function buildRaceBuildingMap(): Map<string, BuildingInfo> {
     return map;
 }
 
+/** Minimal SettlerValueInfo with only the fields needed for config derivation. */
+function settlerValue(id: string, role: string, searchTypes: string[]): SettlerValueInfo {
+    return { id, role, searchTypes, tool: '', animLists: [] };
+}
+
+/**
+ * Settler value entries matching SettlerValues.xml.
+ * Only includes settlers managed by the task system.
+ * Roman race has most settlers; race-specific ones go in their own race.
+ */
+const ROMAN_SETTLERS: SettlerValueInfo[] = [
+    settlerValue('SETTLER_WOODCUTTER', 'FREE_WORKER_ROLE', ['SEARCH_TREE']),
+    settlerValue('SETTLER_STONECUTTER', 'FREE_WORKER_ROLE', ['SEARCH_STONE']),
+    settlerValue('SETTLER_FORESTER', 'FREE_WORKER_ROLE', ['SEARCH_NO_SEARCH', 'SEARCH_TREE_SEED_POS']),
+    settlerValue('SETTLER_FARMERGRAIN', 'FREE_WORKER_ROLE', ['SEARCH_GRAIN', 'SEARCH_GRAIN_SEED_POS']),
+    settlerValue('SETTLER_MINEWORKER', 'HOUSE_WORKER_ROLE', []),
+    settlerValue('SETTLER_CARRIER', 'CARRIER_ROLE', ['SEARCH_NO_SEARCH']),
+    settlerValue('SETTLER_BUILDER', 'BUILDER_ROLE', ['SEARCH_NO_SEARCH']),
+    settlerValue('SETTLER_DIGGER', 'DIGGER_ROLE', ['SEARCH_NO_SEARCH']),
+    settlerValue('SETTLER_SMITH', 'HOUSE_WORKER_ROLE', ['SEARCH_NO_SEARCH']),
+    settlerValue('SETTLER_SAWMILLWORKER', 'HOUSE_WORKER_ROLE', ['SEARCH_NO_SEARCH']),
+    settlerValue('SETTLER_MILLER', 'HOUSE_WORKER_ROLE', ['SEARCH_NO_SEARCH']),
+    settlerValue('SETTLER_BUTCHER', 'HOUSE_WORKER_ROLE', ['SEARCH_NO_SEARCH']),
+    settlerValue('SETTLER_VINTNER', 'FREE_WORKER_ROLE', ['SEARCH_VINE', 'SEARCH_VINE_SEED_POS']),
+    settlerValue('SETTLER_SMELTER', 'HOUSE_WORKER_ROLE', ['SEARCH_NO_SEARCH']),
+    settlerValue('SETTLER_TEMPLE_SERVANT', 'HOUSE_WORKER_ROLE', ['SEARCH_NO_SEARCH']),
+];
+
+const VIKING_SETTLERS: SettlerValueInfo[] = [
+    settlerValue('SETTLER_BEEKEEPER', 'FREE_WORKER_ROLE', ['SEARCH_BEEHIVE', 'SEARCH_BEEHIVE_SEED_POS']),
+    settlerValue('SETTLER_MEADMAKER', 'HOUSE_WORKER_ROLE', ['SEARCH_NO_SEARCH']),
+];
+
+const MAYA_SETTLERS: SettlerValueInfo[] = [
+    settlerValue('SETTLER_AGAVEFARMER', 'FREE_WORKER_ROLE', ['SEARCH_AGAVE', 'SEARCH_AGAVE_SEED_POS']),
+    settlerValue('SETTLER_TEQUILAMAKER', 'HOUSE_WORKER_ROLE', ['SEARCH_NO_SEARCH']),
+];
+
+function buildSettlerValueMap(settlers: SettlerValueInfo[]): RaceSettlerValueData {
+    const map = new Map<string, SettlerValueInfo>();
+    for (const s of settlers) map.set(s.id, s);
+    return { settlers: map };
+}
+
 /**
  * Install minimal test game data into the GameDataLoader singleton.
  * Called automatically by createTestContext().
@@ -152,11 +202,17 @@ export function installTestGameData(): void {
         buildings.set(raceId, { buildings: raceBuildingMap });
     }
 
+    const settlers = new Map<RaceId, RaceSettlerValueData>();
+    settlers.set('RACE_ROMAN', buildSettlerValueMap(ROMAN_SETTLERS));
+    settlers.set('RACE_VIKING', buildSettlerValueMap(VIKING_SETTLERS));
+    settlers.set('RACE_MAYA', buildSettlerValueMap(MAYA_SETTLERS));
+
     const data: GameData = {
         buildings,
         jobs: new Map(),
         objects: new Map(),
         buildingTriggers: new Map(),
+        settlers,
     };
 
     const loader = GameDataLoader.getInstance();

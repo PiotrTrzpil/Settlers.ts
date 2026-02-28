@@ -9,8 +9,8 @@ import { isUnitAvailableForRace, isBuildingAvailableForRace } from '../../race-a
 export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace, loadSavedRace, saveSavedRace } from '../../race';
 export { BUILDING_ICON_INDICES, MAP_OBJECT_SPRITES } from './gil-indices';
 export {
-    WORKER_JOB_INDICES,
-    WORKER_KEY_TO_UNIT_TYPE,
+    SETTLER_JOB_INDICES,
+    SETTLER_KEY_TO_UNIT_TYPE,
     UNIT_BASE_JOB_INDICES,
     BUILDING_JOB_INDICES,
     BUILDING_OVERLAY_JIL_INDICES,
@@ -19,6 +19,9 @@ export {
     TREE_JOB_OFFSET,
     TREE_JOBS_PER_TYPE,
     TREE_JOB_INDICES,
+    type SettlerAnimData,
+    collectFieldsByPrefix,
+    getFirstFieldByPrefix,
 } from './jil-indices';
 
 // Import for local use by functions in this file

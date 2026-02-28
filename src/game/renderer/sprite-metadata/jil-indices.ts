@@ -17,25 +17,30 @@ import { EMaterialType } from '../../economy';
 // ============================================================
 
 /**
- * Worker job indices for various professions and their animation states.
+ * Settler job indices for various professions and their animation states.
  * These are in settler files (20-24.jil).
  *
- * Generic keys:
- * - idle: standing still (number or array for variants)
- * - walk: walking animation
- * - carry: walking while carrying something
- * - work: array of work animation job indices (maps to work.0, work.1, etc.)
+ * All values are plain numbers (JIL job indices). Field naming uses balanced specificity:
+ * - Single value → generic name (walk, carry, work, fight, pickup, idle)
+ * - Multiple values of same type → numbered (work_1, work_2, carry_1, carry_2)
+ * - Semantically distinct actions → named (work_chop, work_cut, work_shoot_1)
  *
+ * Consumers use prefix matching to collect related fields:
+ * e.g. all fields starting with "work" are work animations.
  */
-export const WORKER_JOB_INDICES = {
+export const SETTLER_JOB_INDICES = {
     carrier: {
-        idle: [44, 45, 46, 47, 48], // idle animation variants
+        idle_1: 44,
+        idle_2: 45,
+        idle_3: 46,
+        idle_4: 47,
+        idle_5: 48,
         walk: 1,
-        work: [49], // striking/protesting
+        work_strike: 49, // striking/protesting
     },
     digger: {
         walk: 50,
-        work: [51],
+        work: 51,
     },
     builder: {
         walk: 52, // Walk cycle (same animation also at job 53)
@@ -44,145 +49,212 @@ export const WORKER_JOB_INDICES = {
     woodcutter: {
         walk: 54,
         carry: 55, // carrying log
-        work: [56, 57], // [chopping standing tree, cutting fallen log]
+        work_chop: 56, // chopping standing tree
+        work_cut: 57, // cutting fallen log
     },
     stonecutter: {
         walk: 58,
-        work: [59],
-        pickup: [60],
-        carry: [61],
+        work: 59,
+        pickup: 60,
+        carry: 61,
     },
     forester: {
         walk: 62,
         carry: 63,
-        work: [64],
+        work: 64,
     },
     // Farmer (grain, agave farmer, beekeeper share same sprites)
     farmer: {
         walk: 65,
         carry: 66,
-        work: [67, 68, 69], // [seeding phase 1, phase 2, phase 3]
+        work_walk_with_seed: 67,
+        work_seed: 68,
+        work_scythe: 69,
         pickup: 70,
     },
     hunter: {
         walk: 91,
         carry: 92,
-        pickup: [93, 94],
-        work: [95],
+        pickup_meat: 93,
+        pickup_animal: 94,
+        work: 95,
     },
     sawmill_worker: {
         walk: 96,
-        carry: [97, 98],
-        work: [99],
-        pickup: [100, 101],
+        carry_log: 97,
+        carry_board: 98,
+        work: 99,
+        pickup_log: 100,
+        pickup_board: 101,
+    },
+    smelter: {
+        walk: 102,
+        work_iron: 103,
+        carry_gold: 104,
+        work_gold: 105,
+        carry_iron: 106,
+        work_silver: 107,
+        work_put_iron: 108,
+        pickup_gold: 109,
+        work_put_gold: 110,
+        pickup_iron: 111,
+        work_not_sure: 112,
+        pickup_silver: 113,
     },
     miner: {
         walk: 114,
-        work: [115, /* different resources in between */ 129],
+        work: 115,
+        carry_coal: 120,
+        carry_iron: 121,
+        carry_gold: 122,
+        carry_stone: 123,
+        carry_sulfur: 124,
+        pickup_coal: 125,
+        pickup_iron: 126,
+        pickup_gold: 127,
+        pickup_stone: 128,
+        pickup_sulfur: 129,
     },
     smith: {
         walk: 130,
-        work: [130, 131, 132, 133, 134, 135, 136],
-        pickup: [137, 138, 139],
+        work_1: 130,
+        work_2: 131,
+        work_3: 132,
+        work_4: 133,
+        work_5: 134,
+        work_6: 135,
+        work_7: 136,
+        pickup_1: 137,
+        pickup_2: 138,
+        pickup_3: 139,
     },
     wine_maker: {
         walk: 191,
-        carry: [192, 193, 194, 195],
-        work: [196, 197],
+        carry_1: 192,
+        carry_2: 193,
+        carry_3: 194,
+        carry_4: 195,
+        work_1: 196,
+        work_2: 197,
         pickup: 198,
     },
     beekeeper: {
         walk: 199,
-        carry: [200, 201],
-        work: [202, 203, 204, 205],
+        carry_1: 200,
+        carry_2: 201,
+        work_1: 202,
+        work_2: 203,
+        work_3: 204,
+        work_4: 205,
     },
     mead_maker: {
         walk: 206,
-        carry: [207, 208, 209],
-        pickup: [210, 211, 212],
+        carry_1: 207,
+        carry_2: 208,
+        carry_3: 209,
+        pickup_1: 210,
+        pickup_2: 211,
+        pickup_3: 212,
     },
     agave_farmer: {
         walk: 213,
-        carry: [214],
-        work: [215, 216, 217, 218, 219],
+        carry: 214,
+        work_1: 215,
+        work_2: 216,
+        work_3: 217,
+        work_4: 218,
+        work_5: 219,
     },
     tequila_maker: {
         walk: 220,
-        carry: [221, 222, 223],
-        pickup: [224, 225, 226],
+        carry_1: 221,
+        carry_2: 222,
+        carry_3: 223,
+        pickup_1: 224,
+        pickup_2: 225,
+        pickup_3: 226,
     },
     swordsman_1: {
         walk: 227,
-        fight: [228],
+        fight: 228,
     },
     swordsman_2: {
         walk: 230,
-        fight: [231],
+        fight: 231,
     },
     swordsman_3: {
         walk: 233,
-        fight: [234],
+        fight: 234,
     },
     // Bowman levels (work entries are shooting animations; fight reuses shooting)
     bowman_1: {
         walk: 236,
-        work: [237, 238, 239, 240], // shooting variants
-        fight: [237], // shooting = fighting
+        work_shoot_1: 237,
+        work_shoot_2: 238,
+        work_shoot_3: 239,
+        work_shoot_4: 240,
+        fight: 237, // shooting = fighting
     },
     bowman_2: {
         walk: 242,
-        work: [243, 244, 245, 246],
-        fight: [243],
+        work_shoot_1: 243,
+        work_shoot_2: 244,
+        work_shoot_3: 245,
+        work_shoot_4: 246,
+        fight: 243,
     },
     bowman_3: {
         walk: 248,
-        work: [249, 250, 251, 252],
-        fight: [249],
+        work_shoot_1: 249,
+        work_shoot_2: 250,
+        work_shoot_3: 251,
+        work_shoot_4: 252,
+        fight: 249,
     },
-    // specialists for romans and vikings
+    // Specialists for romans and vikings
     // NOTE: mayans and trojans have their specialist under separate indices
     specialist_1: {
         walk: 254,
-        work: [255],
-        fight: [256],
+        work: 255,
+        fight: 256,
     },
     specialist_2: {
         walk: 258,
-        work: [259],
-        fight: [260],
+        work: 259,
+        fight: 260,
     },
     specialist_3: {
         walk: 262,
-        work: [263],
-        fight: [264],
+        work: 263,
+        fight: 264,
     },
 
-    // mayan specialist
+    // Mayan specialist
     blowgun_warrior_1: {
         walk: 275,
-        fight: [276],
+        fight: 276,
     },
     blowgun_warrior_2: {
         walk: 278,
-        fight: [279],
+        fight: 279,
     },
     blowgun_warrior_3: {
         walk: 281,
-        fight: [282],
+        fight: 282,
     },
 
-    // trojan specialist
+    // Trojan specialist
     catapultist_1: {
         walk: 341,
-        fight: [342],
+        fight: 342,
     },
     catapultist_2: {
         walk: 344,
-        fight: [345],
+        fight: 345,
     },
     catapultist_3: {
         walk: 346,
-        fight: [347],
+        fight: 347,
     },
 
     squad_leader: {
@@ -196,24 +268,34 @@ export const WORKER_JOB_INDICES = {
 
     saboteur: {
         walk: 290,
-        work: [291, 292, 293, 294, 295, 296, 297],
+        work_1: 291,
+        work_2: 292,
+        work_3: 293,
+        work_4: 294,
+        work_5: 295,
+        work_6: 296,
+        work_7: 297,
     },
     pioneer: {
         walk: 298,
-        work: [299, 300],
+        work_1: 299,
+        work_2: 300,
     },
     thief: {
         walk: 301,
-        work: [303, 304],
         carry: 302,
+        work_1: 303,
+        work_2: 304,
     },
     geologist: {
         walk: 305,
-        work: [306, 307],
+        work_1: 306,
+        work_2: 307,
     },
     gardener: {
         walk: 308,
-        work: [309, 310],
+        work_1: 309,
+        work_2: 310,
     },
     temple_servant: {
         walk: 328,
@@ -231,12 +313,13 @@ export const WORKER_JOB_INDICES = {
         idle: 335,
     },
 
-    // all races have the same donkey (duplicates).
-    // but file 24 has additional donkey fight animation
+    // All races have the same donkey (duplicates).
+    // But file 24 has additional donkey fight animation
     donkey: {
         walk: 336,
         idle: 337,
-        carry: [338, 339],
+        carry_1: 338,
+        carry_2: 339,
         fight: 340,
     },
 
@@ -248,31 +331,37 @@ export const WORKER_JOB_INDICES = {
     dark_carrier: {
         walk: 315,
         carry: 316,
-        work: [317, 318, 319, 320, 321, 322],
+        work_1: 317,
+        work_2: 318,
+        work_3: 319,
+        work_4: 320,
+        work_5: 321,
+        work_6: 322,
     },
     shaman: {
         walk: 323,
-        work: [324],
+        work: 324,
     },
     slaved_settler: {
         walk: 325,
-        work: [326, 327],
+        work_1: 326,
+        work_2: 327,
     },
     manacopter_master: {
         walk: 363,
         fight: 364,
-        work: [365],
+        work: 365,
     },
 } as const;
 
 /**
- * Mapping from WORKER_JOB_INDICES keys to UnitType.
+ * Mapping from SETTLER_JOB_INDICES keys to UnitType.
  * Each level maps to a distinct UnitType (e.g. swordsman_2 → UnitType.Swordsman2).
  * specialist_1/2/3 map to Medic (Roman) and are reused for AxeWarrior (Viking) via
  * UNIT_BASE_JOB_INDICES. Other race specialists have their own keys:
  * blowgun_warrior_* (Mayan), catapultist_* (Trojan).
  */
-export const WORKER_KEY_TO_UNIT_TYPE: Readonly<Record<string, UnitType>> = {
+export const SETTLER_KEY_TO_UNIT_TYPE: Readonly<Record<string, UnitType>> = {
     carrier: UnitType.Carrier,
     digger: UnitType.Digger,
     smith: UnitType.Smith,
@@ -310,6 +399,7 @@ export const WORKER_KEY_TO_UNIT_TYPE: Readonly<Record<string, UnitType>> = {
     gardener: UnitType.DarkGardener,
     hunter: UnitType.Hunter,
     stonecutter: UnitType.Stonecutter,
+    smelter: UnitType.Smelter,
     donkey: UnitType.Donkey,
     blowgun_warrior_1: UnitType.BlowgunWarrior,
     blowgun_warrior_2: UnitType.BlowgunWarrior2,
@@ -323,30 +413,59 @@ export const WORKER_KEY_TO_UNIT_TYPE: Readonly<Record<string, UnitType>> = {
     slaved_settler: UnitType.SlavedSettler,
 };
 
-/** Extract the first numeric index from a walk or idle field. */
-function extractBaseIndex(
-    workerData: (typeof WORKER_JOB_INDICES)[keyof typeof WORKER_JOB_INDICES]
-): number | undefined {
-    if ('walk' in workerData && typeof workerData.walk === 'number') return workerData.walk;
-    if (!('idle' in workerData)) return undefined;
-    const idle = workerData.idle;
-    if (typeof idle === 'number') return idle;
-    if (Array.isArray(idle)) return idle[0];
+/** Type alias for a settler's animation data — all fields are plain numbers. */
+export type SettlerAnimData = Readonly<Record<string, number>>;
+
+/** Extract the first numeric index from a walk or idle/idle_* field. */
+function extractBaseIndex(data: SettlerAnimData): number | undefined {
+    if ('walk' in data) return data['walk'];
+    if ('idle' in data) return data['idle'];
+    // Check for prefixed idle fields (e.g. idle_1)
+    for (const [key, value] of Object.entries(data)) {
+        if (key.startsWith('idle_')) return value;
+    }
     return undefined;
 }
 
 /**
- * Derive the base JIL job index per UnitType from WORKER_JOB_INDICES.
+ * Collect all JIL job indices from fields matching a prefix.
+ * Matches exact name (e.g. "work") and underscore-suffixed variants (e.g. "work_chop", "work_1").
+ * Returns values in Object.entries() order (insertion order).
+ */
+export function collectFieldsByPrefix(data: SettlerAnimData, prefix: string): number[] {
+    const results: number[] = [];
+    for (const [key, value] of Object.entries(data)) {
+        if (key === prefix || key.startsWith(`${prefix}_`)) {
+            results.push(value);
+        }
+    }
+    return results;
+}
+
+/**
+ * Get the first value matching a prefix, or undefined if no match.
+ * Useful for fields like carry that may be "carry" or "carry_1".
+ */
+export function getFirstFieldByPrefix(data: SettlerAnimData, prefix: string): number | undefined {
+    if (prefix in data) return data[prefix];
+    for (const [key, value] of Object.entries(data)) {
+        if (key.startsWith(`${prefix}_`)) return value;
+    }
+    return undefined;
+}
+
+/**
+ * Derive the base JIL job index per UnitType from SETTLER_JOB_INDICES.
  * Prefers walk over idle-only. Each level variant gets its own entry.
  */
 function computeUnitBaseJobIndices(): Partial<Record<UnitType, number>> {
     const result: Partial<Record<UnitType, number>> = {};
-    for (const [workerKey, workerData] of Object.entries(WORKER_JOB_INDICES)) {
-        const unitType = WORKER_KEY_TO_UNIT_TYPE[workerKey];
+    for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
+        const unitType = SETTLER_KEY_TO_UNIT_TYPE[workerKey];
         if (unitType === undefined) continue;
         if (result[unitType] !== undefined) continue;
 
-        const baseIdx = extractBaseIndex(workerData);
+        const baseIdx = extractBaseIndex(workerData as Record<string, number>);
         if (baseIdx !== undefined && baseIdx >= 0) {
             result[unitType] = baseIdx;
         }
@@ -355,7 +474,7 @@ function computeUnitBaseJobIndices(): Partial<Record<UnitType, number>> {
 }
 
 /**
- * Base JIL job index per UnitType, derived from WORKER_JOB_INDICES.
+ * Base JIL job index per UnitType, derived from SETTLER_JOB_INDICES.
  * Used by getUnitSpriteMap() and icon loading to find the default sprite for each unit.
  *
  * AxeWarrior (Viking) shares specialist_1/2/3 JIL indices with Medic —
@@ -535,7 +654,7 @@ export const RESOURCE_JOB_INDICES: Partial<Record<EMaterialType, number>> = {
  * JIL job indices for carriers carrying specific materials, in settler files (20-24.jil).
  * Each material a carrier can carry has its own set of 6-direction walk frames.
  *
- * Job 1 is the empty carrier (walk index in WORKER_JOB_INDICES.carrier).
+ * Job 1 is the empty carrier (walk index in SETTLER_JOB_INDICES.carrier).
  * Carrier job indices follow the same pattern as resource JIL indices (3.jil) but +1.
  * E.g., AGAVE resource is job #1, carrier with AGAVE is job #2.
  */
