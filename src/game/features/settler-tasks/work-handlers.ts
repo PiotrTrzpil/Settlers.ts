@@ -12,6 +12,9 @@ import type { GameState } from '../../game-state';
 import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { BuildingInventoryManager } from '../inventory';
+import type { OreVeinData } from '../ore-veins';
+import { MINE_ORE_TYPE, MINE_SEARCH_RADIUS } from '../ore-veins/ore-type';
+import { isMineBuilding } from '../../buildings/types';
 import { LogHandler } from '@/utilities/log-handler';
 import { WorkHandlerType, type EntityWorkHandler, type PositionWorkHandler } from './types';
 import type { PlantingCapable } from '../growth';
@@ -22,6 +25,9 @@ import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { findNearestEntity } from '../../systems/spatial-search';
 import { getWorkerBuildingTypes } from '../../game-data-access';
 import { getBuildingMaxOccupants } from '../../buildings/types';
+import { spiralSearch } from '../../utils/spiral-search';
+import type { TerrainData } from '../../terrain';
+import type { ResourceSignSystem } from '../ore-veins/resource-sign-system';
 
 // ─────────────────────────────────────────────────────────────
 // Domain helpers (used by handlers and settler-task-system)
@@ -67,11 +73,16 @@ export function findNearestWorkplace(
 /**
  * Create a handler for WORKPLACE search type.
  * Building workers find their workplace, wait for materials, then produce.
+ *
+ * When getOreVeinData returns data, mine buildings additionally check
+ * that ore is available within {@link MINE_SEARCH_RADIUS} before
+ * starting work and consume one ore level on completion.
  */
 export function createWorkplaceHandler(
     gameState: GameState,
     inventoryManager: BuildingInventoryManager,
-    getAssignedBuilding: (settlerId: number) => Entity | null
+    getAssignedBuilding: (settlerId: number) => Entity | null,
+    getOreVeinData?: () => OreVeinData | undefined
 ): EntityWorkHandler {
     return {
         type: WorkHandlerType.ENTITY,
@@ -88,7 +99,21 @@ export function createWorkplaceHandler(
         },
 
         canWork: (targetId: number) => {
-            return inventoryManager.canStartProduction(targetId) && inventoryManager.canStoreOutput(targetId);
+            if (!inventoryManager.canStartProduction(targetId) || !inventoryManager.canStoreOutput(targetId)) {
+                return false;
+            }
+            // Mine buildings require ore in the surrounding mountain tiles
+            const oreDataForCanWork = getOreVeinData?.();
+            if (oreDataForCanWork) {
+                const building = gameState.getEntityOrThrow(targetId, 'mine ore check');
+                const bt = building.subType as BuildingType;
+                if (isMineBuilding(bt)) {
+                    const oreType = MINE_ORE_TYPE.get(bt);
+                    if (!oreType) return false;
+                    return oreDataForCanWork.hasOreInRadius(building.x, building.y, MINE_SEARCH_RADIUS, oreType);
+                }
+            }
+            return true;
         },
 
         onWorkStart: (targetId: number) => {
@@ -100,6 +125,20 @@ export function createWorkplaceHandler(
         },
 
         onWorkComplete: (targetId: number) => {
+            // Mine buildings consume one ore level from a nearby tile
+            const oreDataForConsume = getOreVeinData?.();
+            if (oreDataForConsume) {
+                const building = gameState.getEntityOrThrow(targetId, 'mine ore consume');
+                const bt = building.subType as BuildingType;
+                if (isMineBuilding(bt)) {
+                    const oreType = MINE_ORE_TYPE.get(bt);
+                    if (oreType) {
+                        oreDataForConsume.consumeOreInRadius(building.x, building.y, MINE_SEARCH_RADIUS, oreType, n =>
+                            gameState.rng.nextInt(n)
+                        );
+                    }
+                }
+            }
             inventoryManager.produceOutput(targetId);
         },
     };
@@ -337,5 +376,88 @@ export function createSimpleHarvestHandler(config: SimpleHarvestConfig): EntityW
                 log.debug(`${workerLabel} harvested resource ${targetId} at (${settlerX}, ${settlerY})`);
                 gameState.removeEntity(targetId);
             }),
+    };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Water handler (waterworker — draws water from river tiles)
+// ─────────────────────────────────────────────────────────────
+
+const WATER_SEARCH_RADIUS = 20;
+/** River ground types (S4GroundType.RIVER1–RIVER4) */
+const RIVER_TYPE_MIN = 96;
+const RIVER_TYPE_MAX = 99;
+const waterLog = new LogHandler('WaterHandler');
+
+function isRiverTile(groundType: number): boolean {
+    return groundType >= RIVER_TYPE_MIN && groundType <= RIVER_TYPE_MAX;
+}
+
+/**
+ * Create a position handler for WATER search type (waterworkers).
+ * Worker walks to a nearby river tile within the work area, draws water,
+ * and deposits WATER output at their assigned building.
+ */
+export function createWaterHandler(
+    terrain: TerrainData,
+    inventoryManager: BuildingInventoryManager,
+    getAssignedBuilding: (settlerId: number) => number | null
+): PositionWorkHandler {
+    return {
+        type: WorkHandlerType.POSITION,
+
+        findPosition: (x: number, y: number) => {
+            return spiralSearch(x, y, terrain.width, terrain.height, (tx, ty) => {
+                if (Math.abs(tx - x) > WATER_SEARCH_RADIUS || Math.abs(ty - y) > WATER_SEARCH_RADIUS) return false;
+                return isRiverTile(terrain.groundType[terrain.toIndex(tx, ty)]!);
+            });
+        },
+
+        onWorkAtPositionComplete: (_x: number, _y: number, settlerId: number) => {
+            const buildingId = getAssignedBuilding(settlerId);
+            if (buildingId === null) {
+                waterLog.debug(`Waterworker ${settlerId} has no assigned building, skipping output`);
+                return;
+            }
+            if (inventoryManager.canStoreOutput(buildingId)) {
+                inventoryManager.produceOutput(buildingId);
+                waterLog.debug(`Waterworker ${settlerId} deposited WATER at building ${buildingId}`);
+            }
+        },
+    };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Geologist handler (prospects mountain tiles for ore signs)
+// ─────────────────────────────────────────────────────────────
+
+const GEOLOGIST_SEARCH_RADIUS = 20;
+
+/**
+ * Create a position handler for RESOURCE_POS search type (geologists).
+ * Worker walks to an unprospected rock tile, performs work animation,
+ * then marks the tile as prospected and places a resource sign.
+ */
+export function createGeologistHandler(
+    oreVeinData: OreVeinData,
+    terrain: TerrainData,
+    signSystem: ResourceSignSystem
+): PositionWorkHandler {
+    return {
+        type: WorkHandlerType.POSITION,
+
+        findPosition: (x: number, y: number) => {
+            return spiralSearch(x, y, terrain.width, terrain.height, (tx, ty) => {
+                if (Math.abs(tx - x) > GEOLOGIST_SEARCH_RADIUS || Math.abs(ty - y) > GEOLOGIST_SEARCH_RADIUS) {
+                    return false;
+                }
+                return terrain.isRock(tx, ty) && !oreVeinData.isProspected(tx, ty);
+            });
+        },
+
+        onWorkAtPositionComplete: (posX: number, posY: number, _settlerId: number) => {
+            oreVeinData.setProspected(posX, posY);
+            signSystem.placeSign(posX, posY);
+        },
     };
 }

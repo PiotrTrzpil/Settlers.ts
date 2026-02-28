@@ -11,6 +11,10 @@ export enum SearchType {
     TREE = 'TREE',
     TREE_SEED_POS = 'TREE_SEED_POS',
     GRAIN_SEED_POS = 'GRAIN_SEED_POS',
+    SUNFLOWER_SEED_POS = 'SUNFLOWER_SEED_POS',
+    AGAVE_SEED_POS = 'AGAVE_SEED_POS',
+    BEEHIVE_SEED_POS = 'BEEHIVE_SEED_POS',
+    VINE_SEED_POS = 'VINE_SEED_POS',
     STONE = 'STONE',
     FISH = 'FISH',
     VENISON = 'VENISON',
@@ -19,6 +23,8 @@ export enum SearchType {
     AGAVE = 'AGAVE',
     BEEHIVE = 'BEEHIVE',
     VINE = 'VINE',
+    /** Waterworker finds a river tile within work area to draw water */
+    WATER = 'WATER',
     RESOURCE_POS = 'RESOURCE_POS',
     GOOD = 'GOOD',
     CONSTRUCTION = 'CONSTRUCTION',
@@ -39,6 +45,13 @@ export interface SettlerConfig {
     plantSearch?: SearchType;
     /** Work job IDs from jobInfo.xml (filtered from animLists, excludes CHECKIN/IDLE). */
     jobs: string[];
+    /**
+     * Per-building job lists for settlers whose jobs come from building XML
+     * (e.g. SETTLER_MINEWORKER — one settler type serving multiple mine buildings).
+     * When set, selectJob filters `jobs` to only those matching the assigned building.
+     * Key is BuildingType enum value.
+     */
+    buildingJobs?: Map<number, string[]>;
 }
 
 /** Result of executing a task */

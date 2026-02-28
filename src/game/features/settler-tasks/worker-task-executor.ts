@@ -92,7 +92,7 @@ export class WorkerTaskExecutor {
             !entityTarget && positionHandler ? this.findPositionTarget(positionHandler, settler) : null;
         if (positionTarget === undefined) return; // error already logged
 
-        const selected = this.selectJob(settler, config, entityTarget, homeBuilding !== null, positionTarget);
+        const selected = this.selectJob(settler, config, entityTarget, homeBuilding, positionTarget);
         if (!selected) return;
 
         if (this.shouldWaitBeforeStarting(settler, homeBuilding, selected, entityHandler, entityTarget)) return;
@@ -368,15 +368,20 @@ export class WorkerTaskExecutor {
         settler: Entity,
         config: SettlerConfig,
         target: { entityId: number; x: number; y: number } | null,
-        hasHome: boolean,
+        homeBuilding: Entity | null,
         positionTarget?: { x: number; y: number } | null
     ): ChoreoJob | null {
         const raceId = raceToRaceId(settler.race);
 
-        for (const jobId of config.jobs) {
+        // For settlers with building-sourced jobs (e.g. miners), filter to the assigned building's jobs
+        const jobs = (homeBuilding && config.buildingJobs?.get(homeBuilding.subType)) ?? config.jobs;
+
+        for (const jobId of jobs) {
             const job = this.choreographyStore.getJob(raceId, jobId);
             if (!job?.nodes.length) continue;
-            if (this.isJobSelectable(job.nodes[0]!, job, target, hasHome, positionTarget ?? null)) return job;
+            if (this.isJobSelectable(job.nodes[0]!, job, target, homeBuilding !== null, positionTarget ?? null)) {
+                return job;
+            }
         }
 
         return null;

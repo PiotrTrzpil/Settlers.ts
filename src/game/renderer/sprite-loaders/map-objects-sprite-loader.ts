@@ -387,6 +387,70 @@ async function loadResourceMapObjects(
 }
 
 // =============================================================================
+// Resource sign sprites (geologist prospecting signs)
+// =============================================================================
+
+/**
+ * Load resource sign sprites from direct GIL indices in file 5.
+ * Signs show ore type and richness: empty (1 sprite), then 3 variations per ore type.
+ *
+ * ResEmpty: variation 0 → GIL 1208
+ * ResCoal:  variations 0/1/2 → GIL 1209/1210/1211
+ * ResGold:  variations 0/1/2 → GIL 1212/1213/1214
+ * ResIron:  variations 0/1/2 → GIL 1215/1216/1217
+ * ResStone: variations 0/1/2 → GIL 1218/1219/1220
+ * ResSulfur: variations 0/1/2 → GIL 1221/1222/1223
+ */
+async function loadResourceSignSprites(
+    spriteLoader: SpriteLoader,
+    fileSet: LoadedGfxFileSet,
+    atlas: EntityTextureAtlas,
+    registry: SpriteMetadataRegistry,
+    gl: WebGL2RenderingContext,
+    paletteBase: number
+): Promise<number> {
+    const S = MAP_OBJECT_SPRITES.RESOURCE_SIGNS;
+
+    // (MapObjectType, variation, gilIndex) triples
+    const entries: Array<{ type: MapObjectType; variation: number; gilIndex: number }> = [
+        { type: MapObjectType.ResEmpty, variation: 0, gilIndex: S.EMPTY },
+        { type: MapObjectType.ResCoal, variation: 0, gilIndex: S.COAL.LOW },
+        { type: MapObjectType.ResCoal, variation: 1, gilIndex: S.COAL.MED },
+        { type: MapObjectType.ResCoal, variation: 2, gilIndex: S.COAL.RICH },
+        { type: MapObjectType.ResGold, variation: 0, gilIndex: S.GOLD.LOW },
+        { type: MapObjectType.ResGold, variation: 1, gilIndex: S.GOLD.MED },
+        { type: MapObjectType.ResGold, variation: 2, gilIndex: S.GOLD.RICH },
+        { type: MapObjectType.ResIron, variation: 0, gilIndex: S.IRON.LOW },
+        { type: MapObjectType.ResIron, variation: 1, gilIndex: S.IRON.MED },
+        { type: MapObjectType.ResIron, variation: 2, gilIndex: S.IRON.RICH },
+        { type: MapObjectType.ResStone, variation: 0, gilIndex: S.STONE.LOW },
+        { type: MapObjectType.ResStone, variation: 1, gilIndex: S.STONE.MED },
+        { type: MapObjectType.ResStone, variation: 2, gilIndex: S.STONE.RICH },
+        { type: MapObjectType.ResSulfur, variation: 0, gilIndex: S.SULFUR.LOW },
+        { type: MapObjectType.ResSulfur, variation: 1, gilIndex: S.SULFUR.MED },
+        { type: MapObjectType.ResSulfur, variation: 2, gilIndex: S.SULFUR.RICH },
+    ];
+
+    type SignData = { type: MapObjectType; variation: number; entry: SpriteEntry };
+    const batch = new SafeLoadBatch<SignData>();
+
+    for (const { type, variation, gilIndex } of entries) {
+        const sprite = await spriteLoader.loadDirectSprite(fileSet, gilIndex, null, atlas, paletteBase);
+        if (sprite) {
+            batch.add({ type, variation, entry: sprite.entry });
+        }
+    }
+
+    let loaded = 0;
+    batch.finalize(atlas, gl, data => {
+        registry.registerMapObject(data.type, data.entry, data.variation);
+        loaded++;
+    });
+
+    return loaded;
+}
+
+// =============================================================================
 // Public API
 // =============================================================================
 
@@ -415,6 +479,7 @@ export async function loadMapObjectSprites(
     const cropCount = await loadCropSprites(ctx.spriteLoader, fileSet5, atlas, registry, gl, paletteBase5);
     const flagCount = await loadFlagSprites(ctx.spriteLoader, fileSet5, atlas, registry, gl, paletteBase5);
     const dotCount = await loadTerritoryDotSprites(ctx.spriteLoader, fileSet5, atlas, registry, gl, paletteBase5);
+    const signCount = await loadResourceSignSprites(ctx.spriteLoader, fileSet5, atlas, registry, gl, paletteBase5);
 
     let resourceCount = 0;
     if (fileSet3) {
@@ -422,10 +487,10 @@ export async function loadMapObjectSprites(
         resourceCount = await loadResourceMapObjects(ctx.spriteLoader, fileSet3, atlas, registry, paletteBase3);
     }
 
-    const total = treeCount + stoneCount + decoCount + cropCount + flagCount + dotCount + resourceCount;
+    const total = treeCount + stoneCount + decoCount + cropCount + flagCount + dotCount + signCount + resourceCount;
     log.debug(
         `MapObjects: ${treeCount} trees, ${stoneCount} stones, ${decoCount} decorations, ${cropCount} crops, ` +
-            `${flagCount} flags, ${dotCount} territory dots, ${resourceCount} resources (${total} total)`
+            `${flagCount} flags, ${dotCount} territory dots, ${signCount} signs, ${resourceCount} resources (${total} total)`
     );
     return total > 0;
 }

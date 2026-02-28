@@ -133,6 +133,16 @@ export interface GameEvents {
         homeBuilding: number;
     };
 
+    /** Emitted when carrier assignment fails (no carrier, reservation failed, or movement failed) */
+    'carrier:assignmentFailed': {
+        requestId: number;
+        reason: 'no_carrier' | 'reservation_failed' | 'movement_failed';
+        sourceBuilding: number;
+        destBuilding: number;
+        material: EMaterialType;
+        carrierId?: number;
+    };
+
     // === Logistics Events ===
 
     /** Emitted when logistics cleanup completes after a building is destroyed */

@@ -134,6 +134,11 @@ function ensureXmlIdMap(): Map<string, BuildingType[]> {
     return xmlIdToBuildingTypeMap;
 }
 
+/** Resolve XML building ID → BuildingType(s). Used by settler-data-access for building-sourced jobs. */
+export function xmlIdToBuildingTypes(xmlId: string): BuildingType[] {
+    return ensureXmlIdMap().get(xmlId) ?? [];
+}
+
 // ============ Typed game data lookups ============
 
 /**
@@ -218,16 +223,16 @@ export const S4_TO_UNIT_TYPE: Partial<Record<S4SettlerType, UnitType>> = {
     [S4SettlerType.MILLER]: UnitType.Miller,
     [S4SettlerType.BUTCHER]: UnitType.Butcher,
     [S4SettlerType.FISHER]: UnitType.Hunter, // Fisher uses Hunter unit type
-    [S4SettlerType.BAKER]: UnitType.Smith, // Baker uses Smith unit type (station worker)
-    [S4SettlerType.FARMERANIMALS]: UnitType.Farmer, // Animal farmer uses Farmer unit type
-    [S4SettlerType.WATERWORKER]: UnitType.Carrier, // Water worker uses Carrier unit type
+    [S4SettlerType.BAKER]: UnitType.Baker,
+    [S4SettlerType.FARMERANIMALS]: UnitType.AnimalFarmer,
+    [S4SettlerType.WATERWORKER]: UnitType.Waterworker,
     [S4SettlerType.CHARCOALMAKER]: UnitType.Smith, // Charcoal maker uses Smith unit type
     [S4SettlerType.AMMOMAKER]: UnitType.Smith, // Ammo maker uses Smith unit type
     [S4SettlerType.VEHICLEMAKER]: UnitType.Smith, // Vehicle maker uses Smith unit type
     [S4SettlerType.VINTNER]: UnitType.Winemaker,
     [S4SettlerType.MEADMAKER]: UnitType.Meadmaker,
     [S4SettlerType.TEQUILAMAKER]: UnitType.Tequilamaker,
-    [S4SettlerType.SUNFLOWERFARMER]: UnitType.Farmer, // Sunflower farmer uses Farmer unit type
+    [S4SettlerType.SUNFLOWERFARMER]: UnitType.SunflowerFarmer,
     [S4SettlerType.SUNFLOWEROILMAKER]: UnitType.Smith, // Oil maker uses Smith unit type
     [S4SettlerType.SHIPYARDWORKER]: UnitType.Smith, // Shipyard worker uses Smith unit type
     [S4SettlerType.TEMPLE_SERVANT]: UnitType.TempleServant,

@@ -103,7 +103,7 @@ export class Game {
         // Create all game managers and domain systems
         // Use arrow fn so commandContext is resolved lazily (after services is assigned)
         this.services = new GameServices(this.state, this.eventBus, cmd => this.execute(cmd));
-        this.services.setTerrainData(this.terrain);
+        this.services.setTerrainData(this.terrain, mapLoader.landscape.getResourceData?.());
 
         // Create frame loop and register tick systems
         this._gameLoop = new GameLoop(this.state, this.services.visualService, this.settings.state, this.viewState);

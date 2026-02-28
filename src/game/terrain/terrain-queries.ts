@@ -13,9 +13,9 @@
 export function isPassable(groundTypeValue: number): boolean {
     // Water: 0-8
     if (groundTypeValue <= 8) return false;
-    // Rock: 32
-    if (groundTypeValue === 32) return false;
-    // Everything else is passable
+    // Snow: 128, 129 - not passable
+    if (groundTypeValue === 128 || groundTypeValue === 129) return false;
+    // Everything else (including rock) is passable
     return true;
 }
 
@@ -32,6 +32,8 @@ export function isRock(groundTypeValue: number): boolean {
  */
 export function isBuildable(groundTypeValue: number): boolean {
     if (!isPassable(groundTypeValue)) return false;
+    // Rock: 32 - only mines can build here (see isMineBuildable)
+    if (groundTypeValue === 32) return false;
     // Beach: 48 - not buildable
     if (groundTypeValue === 48) return false;
     // Swamp: 80, 81 - not buildable

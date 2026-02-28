@@ -9,9 +9,11 @@ export class OriginalLandscape implements IMapLandscape {
     private static log: LogHandler = new LogHandler('OriginalLandscape');
     private data: Uint8Array;
     private mapSize: MapSize;
+    private mapFile: OriginalMapFile;
 
     public constructor(mapFile: OriginalMapFile, mapSize: MapSize, mapChunkType: MapChunkType) {
         this.mapSize = mapSize;
+        this.mapFile = mapFile;
 
         const reader = mapFile.getChunkReader(mapChunkType);
         if (!reader) {
@@ -62,5 +64,31 @@ export class OriginalLandscape implements IMapLandscape {
      */
     public getGameplayAttributes(): Uint8Array {
         return this.getSlice(3);
+    }
+
+    /**
+     * Returns per-tile resource data from MapObjects chunk byte 3.
+     * Each value encodes ore type + amount via S4ResourceType ranges:
+     * 17-32 = Coal, 33-48 = Iron, 49-64 = Gold, 65-80 = Sulphur, 81-96 = Stone Mine.
+     */
+    public getResourceData(): Uint8Array {
+        const objectReader = this.mapFile.getChunkReader(MapChunkType.MapObjects);
+        if (!objectReader) {
+            return new Uint8Array(this.mapSize.width * this.mapSize.height);
+        }
+
+        const objData = objectReader.getBuffer();
+        const tileCount = this.mapSize.width * this.mapSize.height;
+
+        if (objData.length === tileCount * 4) {
+            // 4 bytes per tile — byte 3 is resource data
+            const result = new Uint8Array(tileCount);
+            for (let i = 0; i < tileCount; i++) {
+                result[i] = objData[i * 4 + 3]!;
+            }
+            return result;
+        }
+
+        return new Uint8Array(tileCount);
     }
 }

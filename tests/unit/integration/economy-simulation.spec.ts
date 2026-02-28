@@ -2,6 +2,86 @@
  * Headless economy simulation — runs the full production pipeline
  * without a browser using real XML game data. Asserts on observable
  * outcomes only: inventory counts, entity existence, material flow.
+ *
+ * ═══════════════════════════════════════════════════════════════════
+ *  ECONOMY RULES & INVARIANTS
+ * ═══════════════════════════════════════════════════════════════════
+ *
+ * BUILDING CATEGORIES
+ * ───────────────────
+ * Buildings fall into three economic roles:
+ *
+ *   Producers — gather raw resources directly from the map.
+ *     • Simple gatherers (have work areas):
+ *       WoodcutterHut (LOG from trees), StonecutterHut (STONE from rocks),
+ *       FisherHut (FISH), HunterHut (MEAT), WaterworkHut (WATER)
+ *     • Farmer/planters — dual-role workers that both plant and harvest
+ *       within their work area (plant when nothing to harvest, harvest
+ *       when crops are mature):
+ *       GrainFarm (GRAIN), AgaveFarmerHut (AGAVE),
+ *       SunflowerFarmerHut (SUNFLOWER), BeekeeperHut (HONEY),
+ *       Vinyard (WINE)
+ *     • Pure planter — ForesterHut plants trees but produces no material
+ *       output; woodcutters harvest the trees instead.
+ *     • Mines — require food input (BREAD, MEAT, or FISH) to produce
+ *       ore/minerals: CoalMine, IronMine, GoldMine, StoneMine, SulfurMine
+ *       (unique: only buildings that consume input yet still "produce from map")
+ *
+ *   Transformers — consume input materials and produce output materials.
+ *     • Single-input:  Sawmill (LOG→BOARD), Mill (GRAIN→FLOUR),
+ *       Slaughterhouse (PIG→MEAT), AnimalRanch (GRAIN→PIG),
+ *       MeadMakerHut (HONEY→MEAD), TequilaMakerHut (AGAVE→TEQUILA),
+ *       SunflowerOilMakerHut (SUNFLOWER→SUNFLOWEROIL)
+ *     • Dual-input:  Bakery (FLOUR+WATER→BREAD),
+ *       IronSmelter (IRONORE+COAL→IRONBAR), SmeltGold (GOLDORE+COAL→GOLDBAR),
+ *       WeaponSmith (IRONBAR+COAL→SWORD), ToolSmith (IRONBAR+COAL→AXE)
+ *     • Consumers (no material output):
+ *       Barrack (SWORD → spawns soldiers),
+ *       SmallTemple (consumes mana/resources for spells)
+ *
+ *   Non-production — residences, towers, storage areas, temples, etc.
+ *     StorageArea is special: accepts/provides any material dynamically.
+ *
+ * WORK AREAS
+ * ──────────
+ * Only ~9 building types have circular work areas that limit where their
+ * worker searches for resources (radius 20–30 tiles, adjustable per instance):
+ *   WoodcutterHut, StonecutterHut, GrainFarm, FisherHut, HunterHut,
+ *   ForesterHut, AgaveFarmerHut, BeekeeperHut, SunflowerFarmerHut
+ *
+ * Resources outside the work area radius are invisible to the worker.
+ * The work area center defaults to dy:4 from the building anchor but can
+ * be repositioned by the player. Building footprint (2×2 or 3×3) and
+ * work area are independent systems.
+ *
+ * PRODUCTION & MATERIAL FLOW
+ * ──────────────────────────
+ * Production is atomic: 1 input set → 1 output unit, no partial cycles.
+ * Each building has separate input and output slots. Carriers move
+ * materials between buildings:
+ *
+ *   Producer → [output slot] → Carrier → [input slot] → Transformer
+ *
+ * If output is full, the worker waits — production never fails silently.
+ *
+ * KEY INVARIANTS
+ * ──────────────
+ * • Workers default to 1 per building (configurable per type).
+ * • Mines are the only "producers" that also require input (any food).
+ * • ForesterHut is the only pure planter — no material output.
+ * • Farmer-type buildings alternate: plant when idle, harvest when ripe.
+ * • Work area limits are strict: resources outside the radius are ignored.
+ *
+ * SIMULATION HELPERS (used in these tests)
+ * ────────────────────────────────────────
+ * • placeBuilding() — auto-positions on a grid, instantly completed,
+ *   auto-spawns workers and carriers as configured
+ * • plantTreesNear/Far(), placeStonesNear/Far() — place resources
+ *   inside or outside a building's work area radius
+ * • runUntil(pred, {maxTicks}) — tick until condition or timeout
+ * • runTicks(n) — advance simulation by n ticks
+ * • getOutput/getInput(buildingId, material) — query inventory counts
+ * • countEntities(type) — count spawned entities
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -10,6 +90,7 @@ import { installRealGameData } from '../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
+import { OreType } from '@/game/features/ore-veins/ore-type';
 
 const hasRealData = installRealGameData();
 
@@ -69,6 +150,54 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', () => {
         expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(5);
     });
 
+    it('full chain: farm → grain → mill → flour + waterwork → water → bakery → bread', () => {
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        sim.placeBuilding(BuildingType.GrainFarm);
+        const waterworkId = sim.placeBuilding(BuildingType.WaterworkHut);
+        sim.placeBuilding(BuildingType.Mill);
+        const bakeryId = sim.placeBuilding(BuildingType.Bakery);
+
+        // Waterworker needs river tiles within work area
+        sim.placeRiverNear(waterworkId, 3);
+
+        // Farmer plants & harvests grain autonomously, waterworker draws from river.
+        // Carriers deliver grain → mill (→ flour) and flour + water → bakery (→ bread).
+        // Long timeout: grain grows ~110s, then multiple transport + processing steps.
+        sim.runUntil(() => sim.getOutput(bakeryId, EMaterialType.BREAD) >= 1, { maxTicks: 3000 * 30 });
+        expect(sim.getOutput(bakeryId, EMaterialType.BREAD)).toBeGreaterThanOrEqual(1);
+    });
+
+    it('mine chain: coal mine + iron mine → iron smelter → iron bars (with injected bread)', () => {
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+
+        // Monitor assignment failures for diagnostics
+        const failures: string[] = [];
+        sim.eventBus.on('carrier:assignmentFailed', e => {
+            failures.push(
+                `${e.reason} req=${e.requestId} src=${e.sourceBuilding} dst=${e.destBuilding} mat=${EMaterialType[e.material]}`
+            );
+        });
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const coalMineId = sim.placeMineBuilding(BuildingType.CoalMine, OreType.Coal);
+        const ironMineId = sim.placeMineBuilding(BuildingType.IronMine, OreType.Iron);
+        const smelterId = sim.placeBuilding(BuildingType.IronSmelter);
+
+        // Mines require BREAD as input — inject directly to avoid full bread chain
+        sim.injectInput(coalMineId, EMaterialType.BREAD, 8);
+        sim.injectInput(ironMineId, EMaterialType.BREAD, 8);
+
+        // Mines consume bread + ore → produce COAL / IRONORE.
+        // Carriers deliver COAL + IRONORE → smelter → IRONBAR.
+        sim.runUntil(() => sim.getOutput(smelterId, EMaterialType.IRONBAR) >= 1, { maxTicks: 300 * 30 });
+        if (sim.getOutput(smelterId, EMaterialType.IRONBAR) === 0 && failures.length > 0) {
+            console.log('ASSIGNMENT FAILURES (first 10):', failures.slice(0, 10));
+        }
+        expect(sim.getOutput(smelterId, EMaterialType.IRONBAR)).toBeGreaterThanOrEqual(1);
+    });
+
     it('stonecutter mines only nearby rocks, ignores far ones', () => {
         sim = createSimulation();
 
@@ -80,12 +209,28 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', () => {
         sim.placeStonesNear(stonecutterId, 2);
         sim.placeStonesFar(stonecutterId, 3);
 
-        // Wait for production to stabilize, then run extra idle ticks
-        sim.runUntil(() => sim.getOutput(stonecutterId, EMaterialType.STONE) >= 2, { maxTicks: 200 * 30 });
-        const stonesAfterNearby = sim.getOutput(stonecutterId, EMaterialType.STONE);
-        sim.runTicks(60 * 30);
+        // Wait for all nearby rocks to be fully depleted (each rock has ~4 depletion stages).
+        // Use stabilization: run until output stops increasing for a sustained period.
+        let lastCount = 0;
+        let stableTicks = 0;
+        sim.runUntil(
+            () => {
+                const count = sim.getOutput(stonecutterId, EMaterialType.STONE);
+                if (count > lastCount) {
+                    lastCount = count;
+                    stableTicks = 0;
+                } else {
+                    stableTicks++;
+                }
+                return stableTicks >= 60 * 30; // stable for ~60s means all nearby rocks depleted
+            },
+            { maxTicks: 500 * 30 }
+        );
+        const stonesFromNearby = sim.getOutput(stonecutterId, EMaterialType.STONE);
+        expect(stonesFromNearby).toBeGreaterThan(0);
 
-        // Should not have produced more (far rocks are out of range)
-        expect(sim.getOutput(stonecutterId, EMaterialType.STONE)).toBe(stonesAfterNearby);
+        // Run more idle ticks — should not produce more (far rocks are out of range)
+        sim.runTicks(60 * 30);
+        expect(sim.getOutput(stonecutterId, EMaterialType.STONE)).toBe(stonesFromNearby);
     });
 });

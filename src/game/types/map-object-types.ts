@@ -276,6 +276,7 @@ export enum MapObjectType {
     ResIron = 553,
     ResStone = 554,
     ResSulfur = 555,
+    ResEmpty = 556,
 
     // ---- Mine decorations (entrance props) ----
     MineSet1 = 560,

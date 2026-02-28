@@ -37,6 +37,7 @@ import { getGameDataLoader } from '@/resources/game-data';
 import type { ChoreoContext } from './choreo-types';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import type { BuildingOverlayManager } from '../../systems/building-overlays/building-overlay-manager';
+import type { OreVeinData } from '../ore-veins/ore-vein-data';
 
 const log = new LogHandler('SettlerTaskSystem');
 
@@ -77,6 +78,8 @@ export class SettlerTaskSystem implements TickSystem {
     private readonly runtimes = new Map<number, UnitRuntime>();
     /** Tracks how many workers are assigned to each building (for occupancy limits). */
     private readonly buildingOccupants = new Map<number, number>();
+    /** Per-tile ore data — set after terrain is loaded via setOreVeinData(). */
+    private oreVeinData: OreVeinData | undefined;
     /** Tick counter for throttling the orphan-runtime safety net */
     private ticksSinceOrphanCheck = 0;
 
@@ -152,11 +155,16 @@ export class SettlerTaskSystem implements TickSystem {
         // Register built-in WORKPLACE handler for building workers
         this.handlerRegistry.register(
             SearchType.WORKPLACE,
-            createWorkplaceHandler(this.gameState, this.inventoryManager, (settlerId: number) => {
-                const runtime = this.runtimes.get(settlerId);
-                if (!runtime?.assignedBuilding) return null;
-                return this.gameState.getEntity(runtime.assignedBuilding) ?? null;
-            })
+            createWorkplaceHandler(
+                this.gameState,
+                this.inventoryManager,
+                (settlerId: number) => {
+                    const runtime = this.runtimes.get(settlerId);
+                    if (!runtime?.assignedBuilding) return null;
+                    return this.gameState.getEntity(runtime.assignedBuilding) ?? null;
+                },
+                () => this.oreVeinData
+            )
         );
 
         // Register GOOD handler for carriers (they get jobs assigned externally by LogisticsDispatcher)
@@ -269,6 +277,16 @@ export class SettlerTaskSystem implements TickSystem {
      */
     registerWorkHandler(searchType: SearchType, handler: WorkHandler): void {
         this.handlerRegistry.register(searchType, handler);
+    }
+
+    /** Get the assigned building ID for a settler, or null if unassigned. */
+    getAssignedBuilding(settlerId: number): number | null {
+        return this.runtimes.get(settlerId)?.assignedBuilding ?? null;
+    }
+
+    /** Provide ore vein data for mine production checks (called from GameServices.setTerrainData). */
+    setOreVeinData(data: OreVeinData): void {
+        this.oreVeinData = data;
     }
 
     // ─────────────────────────────────────────────────────────────

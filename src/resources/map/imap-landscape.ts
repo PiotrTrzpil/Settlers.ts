@@ -16,4 +16,10 @@ export interface IMapLandscape {
      * Optional - test maps may not have this.
      */
     getGameplayAttributes?(): Uint8Array;
+    /**
+     * Returns per-tile resource data (byte 3 of MapObjects chunk).
+     * Encodes ore type + amount in a single byte via S4ResourceType ranges.
+     * Optional - test maps generate ore veins procedurally.
+     */
+    getResourceData?(): Uint8Array;
 }

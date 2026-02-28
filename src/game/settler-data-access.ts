@@ -8,7 +8,7 @@ import { getGameDataLoader, type RaceId, type SettlerValueInfo } from '@/resourc
 import { Race } from './race';
 import { UnitType } from './unit-types';
 import { SearchType, type SettlerConfig } from './features/settler-tasks/types';
-import { raceToRaceId } from './game-data-access';
+import { raceToRaceId, xmlIdToBuildingTypes } from './game-data-access';
 
 /**
  * UnitType → XML settler ID for worker settlers managed by the task system.
@@ -32,6 +32,10 @@ const UNIT_TYPE_TO_XML_SETTLER: Partial<Record<UnitType, string>> = {
     [UnitType.Meadmaker]: 'SETTLER_MEADMAKER',
     [UnitType.Tequilamaker]: 'SETTLER_TEQUILAMAKER',
     [UnitType.Smelter]: 'SETTLER_SMELTER',
+    [UnitType.Waterworker]: 'SETTLER_WATERWORKER',
+    [UnitType.Baker]: 'SETTLER_BAKER',
+    [UnitType.AnimalFarmer]: 'SETTLER_FARMERANIMALS',
+    [UnitType.SunflowerFarmer]: 'SETTLER_SUNFLOWERFARMER',
     [UnitType.TempleServant]: 'SETTLER_TEMPLE_SERVANT',
 };
 
@@ -42,6 +46,10 @@ const XML_SEARCH_TO_SEARCH_TYPE: Record<string, SearchType> = {
     TREE: SearchType.TREE,
     TREE_SEED_POS: SearchType.TREE_SEED_POS,
     GRAIN_SEED_POS: SearchType.GRAIN_SEED_POS,
+    SUNFLOWER_SEED_POS: SearchType.SUNFLOWER_SEED_POS,
+    AGAVE_SEED_POS: SearchType.AGAVE_SEED_POS,
+    BEEHIVE_SEED_POS: SearchType.BEEHIVE_SEED_POS,
+    VINE_SEED_POS: SearchType.VINE_SEED_POS,
     STONE: SearchType.STONE,
     FISH: SearchType.FISH,
     VENISON: SearchType.VENISON,
@@ -52,6 +60,7 @@ const XML_SEARCH_TO_SEARCH_TYPE: Record<string, SearchType> = {
     RESOURCE_POS: SearchType.RESOURCE_POS,
     GOOD: SearchType.GOOD,
     VINE: SearchType.VINE,
+    WATER: SearchType.WATER,
 };
 
 /** Job ID patterns that are NOT work jobs (idle behaviors, check-in routines). */
@@ -95,12 +104,24 @@ function deriveSearchType(info: SettlerValueInfo): SearchType | null {
 /**
  * Derive a SettlerConfig from raw XML settler data.
  * Maps XML role + searchType → our SearchType; derives jobs from animLists.
+ *
+ * Some settlers (e.g. SETTLER_MINEWORKER) have no work animLists in their own XML —
+ * the S4 game stores their jobs in the building XML instead. For these, we fall back
+ * to collecting animLists from buildings that employ this settler.
  */
-function deriveSettlerConfig(info: SettlerValueInfo): SettlerConfig | null {
+function deriveSettlerConfig(info: SettlerValueInfo, settlerXmlId: string): SettlerConfig | null {
     const search = deriveSearchType(info);
     if (search === null) return null;
 
-    const workJobs = filterWorkJobs(info.animLists);
+    let workJobs = filterWorkJobs(info.animLists);
+    let buildingJobsMap: Map<number, string[]> | undefined;
+
+    // Settlers with no own work jobs: pull from building XML (e.g. miners)
+    if (workJobs.length === 0) {
+        const { allJobs, buildingJobs } = collectBuildingAnimLists(settlerXmlId);
+        workJobs = allJobs;
+        if (buildingJobs.size > 1) buildingJobsMap = buildingJobs;
+    }
 
     // Derive plant/seed search type for dual-mode settlers (farmer, forester)
     const seedXml = info.searchTypes.find(s => s.endsWith('_SEED_POS'));
@@ -110,7 +131,7 @@ function deriveSettlerConfig(info: SettlerValueInfo): SettlerConfig | null {
         plantSearch = XML_SEARCH_TO_SEARCH_TYPE[key];
     }
 
-    return { search, jobs: workJobs, plantSearch };
+    return { search, jobs: workJobs, plantSearch, buildingJobs: buildingJobsMap };
 }
 
 /** Find settler info across all races (race-specific settlers only exist in their race). */
@@ -121,6 +142,44 @@ function findSettlerInfoAnyRace(xmlId: string): SettlerValueInfo | undefined {
         if (info) return info;
     }
     return undefined;
+}
+
+/**
+ * Collect work animLists from buildings that employ a given settler XML ID.
+ * Used for settlers like SETTLER_MINEWORKER whose jobs are stored in building XML,
+ * not in the settler's own XML entry.
+ *
+ * Returns both a flat job list and a per-BuildingType map so selectJob can
+ * filter to only the jobs relevant to the settler's assigned building.
+ */
+/** Scan one race's buildings for settler jobs; returns true when any were found. */
+function collectBuildingJobsForRace(
+    raceId: RaceId,
+    settlerXmlId: string,
+    allJobs: string[],
+    buildingJobs: Map<number, string[]>
+): boolean {
+    const buildings = getGameDataLoader().getBuildingsForRace(raceId);
+    if (!buildings) return false;
+    for (const buildingInfo of buildings.values()) {
+        if (buildingInfo.inhabitant !== settlerXmlId || buildingInfo.animLists.length === 0) continue;
+        const workJobs = filterWorkJobs(buildingInfo.animLists);
+        if (workJobs.length === 0) continue;
+        allJobs.push(...workJobs);
+        for (const bt of xmlIdToBuildingTypes(buildingInfo.id)) {
+            buildingJobs.set(bt, workJobs);
+        }
+    }
+    return allJobs.length > 0;
+}
+
+function collectBuildingAnimLists(settlerXmlId: string): { allJobs: string[]; buildingJobs: Map<number, string[]> } {
+    const allJobs: string[] = [];
+    const buildingJobs = new Map<number, string[]>();
+    for (const raceId of ALL_RACE_IDS) {
+        if (collectBuildingJobsForRace(raceId, settlerXmlId, allJobs, buildingJobs)) break;
+    }
+    return { allJobs, buildingJobs };
 }
 
 /**
@@ -139,7 +198,7 @@ export function getSettlerConfig(race: Race, unitType: UnitType): SettlerConfig 
     const info = loader.getSettler(raceId, xmlId) ?? findSettlerInfoAnyRace(xmlId);
     if (!info) return undefined;
 
-    return deriveSettlerConfig(info) ?? undefined;
+    return deriveSettlerConfig(info, xmlId) ?? undefined;
 }
 
 /**
@@ -154,7 +213,7 @@ export function buildAllSettlerConfigs(): Map<UnitType, SettlerConfig> {
         const info = findSettlerInfoAnyRace(xmlId);
         if (!info) continue;
 
-        const config = deriveSettlerConfig(info);
+        const config = deriveSettlerConfig(info, xmlId);
         if (config) configs.set(unitType, config);
     }
 

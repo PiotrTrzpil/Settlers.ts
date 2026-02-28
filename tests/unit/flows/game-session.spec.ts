@@ -152,11 +152,11 @@ describe('Game Session: multi-system integration sweep', () => {
         const terrainTypes = [
             { type: TERRAIN.WATER, passable: false, buildable: false },
             { type: TERRAIN.GRASS, passable: true, buildable: true },
-            { type: TERRAIN.ROCK, passable: false, buildable: false },
+            { type: TERRAIN.ROCK, passable: true, buildable: false },
             { type: TERRAIN.BEACH, passable: true, buildable: false },
             { type: TERRAIN.DESERT, passable: true, buildable: true },
             { type: TERRAIN.SWAMP, passable: true, buildable: false },
-            { type: TERRAIN.SNOW, passable: true, buildable: false },
+            { type: TERRAIN.SNOW, passable: false, buildable: false },
         ];
 
         for (const { type, passable, buildable } of terrainTypes) {

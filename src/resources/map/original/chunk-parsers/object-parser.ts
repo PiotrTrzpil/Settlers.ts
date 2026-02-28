@@ -6,7 +6,8 @@
  * - Byte 0: Object type (tree type 1-18, or decoration type >18)
  * - Byte 1: Zone/biome ID (not used for trees)
  * - Byte 2: Flags (1=empty, 64/65=has object)
- * - Byte 3: Unknown
+ * - Byte 3: Resource data — ore type + amount encoded via S4ResourceType ranges
+ *   (17-32=Coal, 33-48=Iron, 49-64=Gold, 65-80=Sulphur, 81-96=StoneMine)
  *
  * Confirmed via CLI analysis: INTRLV_B0 gives correct trees with 0% on water.
  */

@@ -79,9 +79,9 @@ describe('Pathfinding (A*)', () => {
         expect(validPath[validPath.length - 1]).toEqual({ x: 20, y: 5 });
     });
 
-    it('should not pass through rock tiles', () => {
-        blockColumn(map, 15, TERRAIN.ROCK);
-        blockColumn(map, 14, TERRAIN.ROCK);
+    it('should not pass through water tiles', () => {
+        blockColumn(map, 15, TERRAIN.WATER);
+        blockColumn(map, 14, TERRAIN.WATER);
         const path = findPath(10, 5, 20, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
         expect(path).toBe(null);
     });

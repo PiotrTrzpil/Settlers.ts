@@ -10,7 +10,7 @@
  */
 
 import { installTestGameData, installRealGameData, resetTestGameData } from './test-game-data';
-import { createTestMap, type TestMap } from './test-map';
+import { createTestMap, TERRAIN, type TestMap } from './test-map';
 import { EventBus } from '@/game/event-bus';
 import { GameState } from '@/game/game-state';
 import { GameServices } from '@/game/game-services';
@@ -22,6 +22,8 @@ import { MapObjectType } from '@/game/types/map-object-types';
 import { GameSettingsManager } from '@/game/game-settings';
 import { Race } from '@/game/race';
 import { spiralSearch } from '@/game/utils/spiral-search';
+import { OreType } from '@/game/features/ore-veins/ore-type';
+import { isMineBuilding } from '@/game/buildings/types';
 
 // ─── Public interface ───────────────────────────────────────────────
 
@@ -40,11 +42,24 @@ export interface Simulation {
     /** Plant N mature trees far from a building (outside working area radius). */
     plantTreesFar(buildingId: number, count: number): void;
 
+    /** Place N river tiles near a building (within worker search radius). */
+    placeRiverNear(buildingId: number, count: number): void;
+
     /** Place N stone resources near a building (within worker search radius). */
     placeStonesNear(buildingId: number, count: number): void;
 
     /** Place N stone resources far from a building (outside working area radius). */
     placeStonesFar(buildingId: number, count: number): void;
+
+    /**
+     * Place a mine building on mountain terrain. Automatically sets the footprint
+     * tiles to ROCK and places ore veins of the specified type nearby.
+     * Returns entity ID.
+     */
+    placeMineBuilding(buildingType: BuildingType, oreType: OreType, oreLevel?: number): number;
+
+    /** Deposit materials directly into a building's input inventory (for testing). */
+    injectInput(buildingId: number, material: EMaterialType, amount: number): void;
 
     /** Tick all systems once with the given delta-time (seconds). */
     tick(dt: number): void;
@@ -77,12 +92,12 @@ export interface Simulation {
  */
 class BuildingPlacer {
     private nextSlot = 0;
-    private readonly SPACING = 10;
     private readonly COLS = 4;
 
     constructor(
         private readonly originX: number,
-        private readonly originY: number
+        private readonly originY: number,
+        private readonly spacing = 10
     ) {}
 
     next(): { x: number; y: number } {
@@ -90,8 +105,8 @@ class BuildingPlacer {
         const col = slot % this.COLS;
         const row = Math.floor(slot / this.COLS);
         return {
-            x: this.originX + col * this.SPACING,
-            y: this.originY + row * this.SPACING,
+            x: this.originX + col * this.spacing,
+            y: this.originY + row * this.spacing,
         };
     }
 }
@@ -99,6 +114,8 @@ class BuildingPlacer {
 export interface SimulationOptions {
     mapWidth?: number;
     mapHeight?: number;
+    /** Grid spacing between auto-placed buildings (default 10). Increase for large footprints. */
+    buildingSpacing?: number;
     /** When true, uses minimal stub data instead of real XML. Defaults to false (real data). */
     useStubData?: boolean;
 }
@@ -106,7 +123,7 @@ export interface SimulationOptions {
 // ─── Factory ────────────────────────────────────────────────────────
 
 export function createSimulation(opts: SimulationOptions = {}): Simulation {
-    const { mapWidth = 128, mapHeight = 128, useStubData = false } = opts;
+    const { mapWidth = 128, mapHeight = 128, buildingSpacing, useStubData = false } = opts;
 
     if (useStubData) {
         installTestGameData();
@@ -149,13 +166,16 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
     services = new GameServices(state, eventBus, cmd => executeCommand(cmdContext(), cmd));
     services.setTerrainData(map.terrain);
 
+    // Enable global logistics — skip service area checks so carriers deliver everywhere
+    services.logisticsDispatcher.globalLogistics = true;
+
     // Wire entity:removed to settler task system (mirrors Game constructor)
     eventBus.on('entity:removed', ({ entityId }) => {
         services.settlerTaskSystem.onEntityRemoved(entityId);
     });
 
     const tickSystems = services.getTickSystems();
-    const placer = new BuildingPlacer(30, 30);
+    const placer = new BuildingPlacer(30, 30, buildingSpacing);
 
     function tick(dt: number) {
         for (const { system } of tickSystems) {
@@ -232,6 +252,13 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         }
     }
 
+    function placeRiverNear(buildingId: number, count: number) {
+        const b = state.getEntityOrThrow(buildingId, 'placeRiverNear');
+        for (const pos of findEmptyTiles(b.x, b.y, count, 3)) {
+            map.groundType[map.mapSize.toIndex(pos.x, pos.y)] = TERRAIN.RIVER_MIN;
+        }
+    }
+
     function placeStonesNear(buildingId: number, count: number) {
         const b = state.getEntityOrThrow(buildingId, 'placeStonesNear');
         for (const pos of findEmptyTiles(b.x, b.y, count, 3)) {
@@ -246,6 +273,64 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
             const stone = state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone, pos.x, pos.y, 0);
             services.stoneSystem.register(stone.id, MapObjectType.ResourceStone);
         }
+    }
+
+    function fillRockSquare(cx: number, cy: number, radius: number): void {
+        for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                const tx = cx + dx;
+                const ty = cy + dy;
+                if (tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight) {
+                    map.groundType[map.mapSize.toIndex(tx, ty)] = TERRAIN.ROCK;
+                }
+            }
+        }
+    }
+
+    function fillOreSquare(cx: number, cy: number, radius: number, oreType: OreType, oreLevel: number): void {
+        for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                const tx = cx + dx;
+                const ty = cy + dy;
+                if (tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight) {
+                    services.oreVeinData.setOre(tx, ty, oreType, oreLevel);
+                }
+            }
+        }
+    }
+
+    /**
+     * Place a mine building: sets a region to ROCK terrain, places the building,
+     * then sets ore veins of the given type around the building (within MINE_SEARCH_RADIUS=4).
+     */
+    function placeMineBuilding(buildingType: BuildingType, oreType: OreType, oreLevel = 3): number {
+        if (!isMineBuilding(buildingType)) {
+            throw new Error(`${BuildingType[buildingType]} is not a mine building`);
+        }
+        const pos = placer.next();
+        fillRockSquare(pos.x, pos.y, 6); // radius 6 covers footprint + ore search radius
+
+        const result = execute({
+            type: 'place_building',
+            buildingType,
+            x: pos.x,
+            y: pos.y,
+            player: 0,
+            race: Race.Roman,
+        });
+        if (!result.success) {
+            throw new Error(
+                `Failed to place mine ${BuildingType[buildingType]} at (${pos.x}, ${pos.y}): ${result.error}`
+            );
+        }
+        const entityId = result.effects![0]!.entityId;
+
+        fillOreSquare(pos.x, pos.y, 4, oreType, oreLevel); // radius 4 = MINE_SEARCH_RADIUS
+        return entityId;
+    }
+
+    function injectInput(buildingId: number, material: EMaterialType, amount: number) {
+        services.inventoryManager.depositInput(buildingId, material, amount);
     }
 
     function getOutput(buildingId: number, material: EMaterialType): number {
@@ -272,8 +357,11 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         placeBuilding,
         plantTreesNear,
         plantTreesFar,
+        placeRiverNear,
         placeStonesNear,
         placeStonesFar,
+        placeMineBuilding,
+        injectInput,
         tick,
         runTicks,
         runUntil,

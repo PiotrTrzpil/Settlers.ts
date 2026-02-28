@@ -27,4 +27,5 @@ export const WORK_AREA_BUILDINGS: ReadonlySet<BuildingType> = new Set([
     BuildingType.AgaveFarmerHut,
     BuildingType.BeekeeperHut,
     BuildingType.SunflowerFarmerHut,
+    BuildingType.WaterworkHut,
 ]);

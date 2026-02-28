@@ -9,12 +9,12 @@
  */
 
 import type { GameState } from '../../game-state';
+import type { EventBus } from '../../event-bus';
 import type { CarrierManager } from '../carriers';
 import { CarrierStatus } from '../carriers';
 import type { ServiceAreaManager } from '../service-areas';
 import type { SettlerTaskSystem } from '../settler-tasks';
 import { buildCarrierJob } from '../settler-tasks';
-import { LogHandler } from '@/utilities/log-handler';
 import { TransportJob } from './transport-job';
 import type { InventoryReservationManager } from './inventory-reservation';
 import type { RequestManager } from './request-manager';
@@ -22,10 +22,9 @@ import type { BuildingInventoryManager } from '../inventory';
 import type { RequestMatchResult } from './request-matcher';
 import type { ResourceRequest } from './resource-request';
 
-const log = new LogHandler('CarrierAssigner');
-
 export interface CarrierAssignerConfig {
     gameState: GameState;
+    eventBus: EventBus;
     carrierManager: CarrierManager;
     settlerTaskSystem: SettlerTaskSystem;
     serviceAreaManager: ServiceAreaManager;
@@ -50,6 +49,7 @@ export interface AssignmentSuccess {
  */
 export class CarrierAssigner {
     private readonly gameState: GameState;
+    private readonly eventBus: EventBus;
     private readonly carrierManager: CarrierManager;
     private readonly settlerTaskSystem: SettlerTaskSystem;
     private readonly serviceAreaManager: ServiceAreaManager;
@@ -62,6 +62,7 @@ export class CarrierAssigner {
 
     constructor(config: CarrierAssignerConfig) {
         this.gameState = config.gameState;
+        this.eventBus = config.eventBus;
         this.carrierManager = config.carrierManager;
         this.settlerTaskSystem = config.settlerTaskSystem;
         this.serviceAreaManager = config.serviceAreaManager;
@@ -78,10 +79,13 @@ export class CarrierAssigner {
     tryAssign(request: ResourceRequest, match: RequestMatchResult): AssignmentSuccess | null {
         const carrier = this.findAvailableCarrier(match.serviceHubs, match.playerId);
         if (!carrier) {
-            log.warn(
-                `Request #${request.id}: matched source=${match.sourceBuilding} but no carrier available ` +
-                    `(${match.serviceHubs.length} valid hubs: [${match.serviceHubs.join(', ')}])`
-            );
+            this.eventBus.emit('carrier:assignmentFailed', {
+                requestId: request.id,
+                reason: 'no_carrier',
+                sourceBuilding: match.sourceBuilding,
+                destBuilding: request.buildingId,
+                material: request.materialType,
+            });
             return null;
         }
 
@@ -102,7 +106,15 @@ export class CarrierAssigner {
         );
 
         if (!transportJob) {
-            return null; // Reservation failed
+            this.eventBus.emit('carrier:assignmentFailed', {
+                requestId: request.id,
+                reason: 'reservation_failed',
+                sourceBuilding: match.sourceBuilding,
+                destBuilding: request.buildingId,
+                material: request.materialType,
+                carrierId: carrier.entityId,
+            });
+            return null;
         }
 
         const sourceBuilding = this.gameState.getEntityOrThrow(match.sourceBuilding, 'source building for carrier');
@@ -117,6 +129,14 @@ export class CarrierAssigner {
             return { transportJob, carrierId: carrier.entityId };
         }
 
+        this.eventBus.emit('carrier:assignmentFailed', {
+            requestId: request.id,
+            reason: 'movement_failed',
+            sourceBuilding: match.sourceBuilding,
+            destBuilding: request.buildingId,
+            material: request.materialType,
+            carrierId: carrier.entityId,
+        });
         transportJob.cancel('assignment_failed');
         return null;
     }

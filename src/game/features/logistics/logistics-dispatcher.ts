@@ -38,6 +38,7 @@ const MAX_ASSIGNMENTS_PER_TICK = 5;
 /** Configuration for LogisticsDispatcher dependencies */
 export interface LogisticsDispatcherConfig {
     gameState: GameState;
+    eventBus: EventBus;
     carrierManager: CarrierManager;
     settlerTaskSystem: SettlerTaskSystem;
     requestManager: RequestManager;
@@ -69,6 +70,7 @@ export class LogisticsDispatcher implements TickSystem {
     private readonly subscriptions = new EventSubscriptionManager();
 
     constructor(config: LogisticsDispatcherConfig) {
+        this.eventBus = config.eventBus;
         this.requestManager = config.requestManager;
         this.reservationManager = new InventoryReservationManager();
 
@@ -84,6 +86,7 @@ export class LogisticsDispatcher implements TickSystem {
 
         this.carrierAssigner = new CarrierAssigner({
             gameState: config.gameState,
+            eventBus: config.eventBus,
             carrierManager: config.carrierManager,
             settlerTaskSystem: config.settlerTaskSystem,
             serviceAreaManager: config.serviceAreaManager,

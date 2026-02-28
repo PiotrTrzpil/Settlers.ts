@@ -19,6 +19,8 @@ import {
     createForesterHandler,
     createCropHarvestHandler,
     createPlantingHandler,
+    createWaterHandler,
+    createGeologistHandler,
 } from './features/settler-tasks/work-handlers';
 import { MaterialRequestFeature } from './features/material-requests';
 import type { TerrainData } from './terrain';
@@ -54,6 +56,14 @@ import { EntityType, UnitType, getUnitTypeSpeed } from './entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { EntityVisualService } from './animation/entity-visual-service';
 import type { Command, CommandResult } from './commands';
+import {
+    OreVeinData,
+    populateOreVeins,
+    loadOreVeinsFromResourceData,
+    OreSignFeature,
+    ResourceSignSystem,
+    type OreSignExports,
+} from './features/ore-veins';
 
 export class GameServices {
     // ===== Animation =====
@@ -115,6 +125,12 @@ export class GameServices {
 
     /** Combat system — enemy detection, pursuit, and melee damage */
     public readonly combatSystem: CombatSystem;
+
+    /** Per-tile ore vein data on mountain terrain — consumed by mine buildings */
+    public oreVeinData!: OreVeinData;
+
+    /** Resource sign system — places geologist signs on prospected tiles */
+    public readonly signSystem!: ResourceSignSystem;
 
     // ===== Internal =====
     private readonly featureRegistry: FeatureRegistry;
@@ -209,6 +225,7 @@ export class GameServices {
             CropFeature,
             MaterialRequestFeature,
             CombatFeature,
+            OreSignFeature,
         ]);
 
         // Retrieve managers created by features
@@ -226,11 +243,13 @@ export class GameServices {
         this.stoneSystem = this.featureRegistry.getFeatureExports<StoneFeatureExports>('stones').stoneSystem;
         this.cropSystem = this.featureRegistry.getFeatureExports<CropFeatureExports>('crops').cropSystem;
         this.cropSystem.setCommandExecutor(executeCommand);
+        this.signSystem = this.featureRegistry.getFeatureExports<OreSignExports>('ore-signs').signSystem;
         const featureSystemGroups: Record<string, string> = {
             TreeSystem: 'World',
             CropSystem: 'World',
             MaterialRequestSystem: 'Logistics',
             CombatSystem: 'Units',
+            ResourceSignSystem: 'World',
         };
         for (const system of this.featureRegistry.getSystems()) {
             this.addSystem(system, featureSystemGroups[system.constructor.name] ?? 'Other');
@@ -253,6 +272,7 @@ export class GameServices {
         //    MUST be registered before inventory removal (logistics needs inventory for reservation release).
         this.logisticsDispatcher = new LogisticsDispatcher({
             gameState,
+            eventBus,
             carrierManager: this.carrierManager,
             settlerTaskSystem: this.settlerTaskSystem,
             requestManager: this.requestManager,
@@ -273,20 +293,21 @@ export class GameServices {
         );
         this.settlerTaskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, createForesterHandler(this.treeSystem));
 
-        // Crop handlers — each crop type gets entity (harvest) + position (plant) handlers
-        const cropHandlerConfigs: Array<{ search: SearchType; crop: MapObjectType }> = [
-            { search: SearchType.GRAIN, crop: MapObjectType.Grain },
-            { search: SearchType.SUNFLOWER, crop: MapObjectType.Sunflower },
-            { search: SearchType.AGAVE, crop: MapObjectType.Agave },
-            { search: SearchType.BEEHIVE, crop: MapObjectType.Beehive },
+        // Crop handlers — entity handler (harvest) under main search type,
+        // position handler (plant) under the _SEED_POS type that matches plantSearch in XML config.
+        const cropHandlerConfigs: Array<{ search: SearchType; plantSearch: SearchType; crop: MapObjectType }> = [
+            { search: SearchType.GRAIN, plantSearch: SearchType.GRAIN_SEED_POS, crop: MapObjectType.Grain },
+            { search: SearchType.SUNFLOWER, plantSearch: SearchType.SUNFLOWER_SEED_POS, crop: MapObjectType.Sunflower },
+            { search: SearchType.AGAVE, plantSearch: SearchType.AGAVE_SEED_POS, crop: MapObjectType.Agave },
+            { search: SearchType.BEEHIVE, plantSearch: SearchType.BEEHIVE_SEED_POS, crop: MapObjectType.Beehive },
         ];
-        for (const { search, crop } of cropHandlerConfigs) {
+        for (const { search, plantSearch, crop } of cropHandlerConfigs) {
             this.settlerTaskSystem.registerWorkHandler(
                 search,
                 createCropHarvestHandler(gameState, this.cropSystem, crop)
             );
             this.settlerTaskSystem.registerWorkHandler(
-                search,
+                plantSearch,
                 createPlantingHandler(this.cropSystem.getCropPlanter(crop))
             );
         }
@@ -330,13 +351,40 @@ export class GameServices {
         this.cleanupRegistry.registerEvents(eventBus);
     }
 
-    /** Provide terrain data to movement and construction systems */
-    public setTerrainData(terrain: TerrainData): void {
+    /** Provide terrain data to movement and construction systems.
+     *  Optional resourceData is the per-tile S4 resource layer (MapObjects byte 3).
+     *  When absent, ore veins are populated randomly (test maps). */
+    public setTerrainData(terrain: TerrainData, resourceData?: Uint8Array): void {
         this.movement.setTerrainData(terrain.groundType, terrain.groundHeight, terrain.width, terrain.height);
         this.constructionSystem.setTerrainContext({
             terrain,
             onTerrainModified: () => this.eventBus.emit('terrain:modified', {}),
         });
+
+        // Water handler — needs terrain to find river tiles
+        this.settlerTaskSystem.registerWorkHandler(
+            SearchType.WATER,
+            createWaterHandler(terrain, this.inventoryManager, (settlerId: number) => {
+                return this.settlerTaskSystem.getAssignedBuilding(settlerId);
+            })
+        );
+
+        // Ore vein data — per-tile ore type + level on rock tiles.
+        // Created here (from terrain) so mine workers can check/consume ore.
+        this.oreVeinData = new OreVeinData(terrain.width, terrain.height);
+        if (resourceData) {
+            loadOreVeinsFromResourceData(this.oreVeinData, resourceData);
+        } else {
+            populateOreVeins(this.oreVeinData, terrain);
+        }
+        this.settlerTaskSystem.setOreVeinData(this.oreVeinData);
+
+        // Geologist handler — walks to unprospected rock tiles, places resource signs
+        this.signSystem.setOreVeinData(this.oreVeinData);
+        this.settlerTaskSystem.registerWorkHandler(
+            SearchType.RESOURCE_POS,
+            createGeologistHandler(this.oreVeinData, terrain, this.signSystem)
+        );
 
         // Territory manager needs map dimensions from terrain.
         // Created here (before populateMapEntities) so events are registered
