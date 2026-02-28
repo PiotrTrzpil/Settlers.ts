@@ -127,47 +127,33 @@ export function getBuildingSize(buildingType: BuildingType): BuildingSize {
  * to the building's anchor/placement point.
  *
  * @param buildingType Type of building
- * @param race Optional race (defaults to Roman)
- * @returns Hotspot offset {x, y} in tile units, or null if not available
+ * @param race Race of the owning player (required — throws for wrong race/building combo)
+ * @returns Hotspot offset {x, y} in tile units
  */
-export function getBuildingHotspot(
-    buildingType: BuildingType,
-    race: Race = Race.Roman
-): { x: number; y: number } | null {
+export function getBuildingHotspot(buildingType: BuildingType, race: Race): { x: number; y: number } {
     const info = getBuildingInfo(race, buildingType);
-    if (!info) return null;
-
-    return {
-        x: info.hotSpotX,
-        y: info.hotSpotY,
-    };
+    if (!info) throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
+    return { x: info.hotSpotX, y: info.hotSpotY };
 }
 
 /**
  * Get all tile coordinates that a building occupies.
  * The input (x, y) is the building's placement/anchor position.
- *
- * If game data is loaded and the building has XML footprint data, uses the
- * actual bitmask footprint. Otherwise falls back to simple rectangular footprint.
+ * Uses the XML bitmask footprint when available, otherwise falls back to simple rectangular.
  *
  * @param x Building placement X coordinate
  * @param y Building placement Y coordinate
  * @param buildingType Type of building
- * @param race Optional race for race-specific buildings (defaults to Roman)
+ * @param race Race of the owning player (required — throws for wrong race/building combo)
  */
-export function getBuildingFootprint(
-    x: number,
-    y: number,
-    buildingType: BuildingType,
-    race: Race = Race.Roman
-): TileCoord[] {
-    // Try to get real footprint from game data
+export function getBuildingFootprint(x: number, y: number, buildingType: BuildingType, race: Race): TileCoord[] {
     const info = getBuildingInfo(race, buildingType);
-    if (info && info.buildingPosLines.length > 0) {
+    if (!info) throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
+    if (info.buildingPosLines.length > 0) {
         return getBuildingFootprintAt(info, x, y);
     }
 
-    // Fallback to simple rectangular footprint
+    // Fallback to simple rectangular footprint for buildings with no bitmask data
     const size = getBuildingSize(buildingType);
     const tiles: TileCoord[] = [];
     for (let dy = 0; dy < size.height; dy++) {

@@ -9,9 +9,11 @@ import { isUnitAvailableForRace, isBuildingAvailableForRace } from '../../race-a
 export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace, loadSavedRace, saveSavedRace } from '../../race';
 export { BUILDING_ICON_INDICES, MAP_OBJECT_SPRITES } from './gil-indices';
 export {
-    UNIT_JOB_INDICES,
     WORKER_JOB_INDICES,
+    WORKER_KEY_TO_UNIT_TYPE,
+    UNIT_BASE_JOB_INDICES,
     BUILDING_JOB_INDICES,
+    BUILDING_OVERLAY_JIL_INDICES,
     RESOURCE_JOB_INDICES,
     CARRIER_MATERIAL_JOB_INDICES,
     TREE_JOB_OFFSET,
@@ -20,7 +22,7 @@ export {
 } from './jil-indices';
 
 // Import for local use by functions in this file
-import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, UNIT_JOB_INDICES, TREE_JOB_INDICES } from './jil-indices';
+import { BUILDING_JOB_INDICES, RESOURCE_JOB_INDICES, UNIT_BASE_JOB_INDICES, TREE_JOB_INDICES } from './jil-indices';
 
 // Re-export category types and entries
 export type { SpriteEntry, AnimatedSpriteEntry } from './types';
@@ -193,10 +195,9 @@ export function getUnitSpriteMap(race: Race): Partial<Record<UnitType, UnitSprit
     const fileNum = SETTLER_FILE_NUMBERS[race];
     const result: Partial<Record<UnitType, UnitSpriteInfo>> = {};
 
-    for (const [typeStr, jobIndex] of Object.entries(UNIT_JOB_INDICES)) {
+    for (const [typeStr, jobIndex] of Object.entries(UNIT_BASE_JOB_INDICES)) {
         const unitType = Number(typeStr) as UnitType;
-        // Skip negative indices (not yet identified) and units unavailable for this race
-        if (jobIndex >= 0 && isUnitAvailableForRace(unitType, race)) {
+        if (isUnitAvailableForRace(unitType, race)) {
             result[unitType] = {
                 file: fileNum,
                 index: jobIndex,
@@ -642,6 +643,7 @@ export class SpriteMetadataRegistry {
         registry.mapObjectsCategory.setEntries(result.mapObjects.getEntries());
         registry.resourcesCategory.setEntries(result.resources.getEntries());
         registry.decoration.setFlagsMap(result.decoration.getFlagsMap());
+        registry.decoration.setTerritoryDotsMap(result.decoration.getTerritoryDotsMap());
         for (const [entityType, subTypeMap] of result.animated.getSharedEntities()) {
             registry.animated.setSharedEntry(entityType, subTypeMap);
         }

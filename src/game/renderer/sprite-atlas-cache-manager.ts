@@ -48,6 +48,14 @@ export function prefetchSpriteCache(): void {
     }
 }
 
+/**
+ * Invalidate any in-flight or resolved prefetch.
+ * Called by clearAllCaches() so a stale prefetch doesn't resurrect cleared data.
+ */
+export function invalidatePrefetch(): void {
+    earlyPrefetch = null;
+}
+
 // =============================================================================
 // Restore result
 // =============================================================================

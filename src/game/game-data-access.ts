@@ -15,6 +15,7 @@ import { BuildingType } from './buildings/building-type';
 import { UnitType } from './unit-types';
 import { EMaterialType } from './economy/material-type';
 import { MapObjectType } from './types/map-object-types';
+import { isBuildingAvailableForRace } from './race-availability';
 
 // ============ Race translation ============
 
@@ -137,14 +138,29 @@ function ensureXmlIdMap(): Map<string, BuildingType[]> {
 
 /**
  * Look up BuildingInfo from game data by domain types.
- * Returns undefined if data not loaded or no XML mapping exists.
+ * Throws if game data is not yet loaded or the building type has no XML ID mapping.
+ * Returns undefined if the XML entry is absent for this race (e.g. decorative eyecatchers).
  */
 export function getBuildingInfo(race: Race, buildingType: BuildingType): BuildingInfo | undefined {
     const loader = getGameDataLoader();
-    if (!loader.isLoaded()) return undefined;
+    if (!loader.isLoaded()) throw new Error('getBuildingInfo called before game data is loaded');
     const xmlId = BUILDING_TYPE_TO_XML_ID[buildingType];
-    if (!xmlId) return undefined;
-    return loader.getBuilding(RACE_TO_RACE_ID[race], xmlId);
+    if (!xmlId) throw new Error(`No XML mapping for BuildingType ${BuildingType[buildingType]}`);
+    return loader.getBuilding(RACE_TO_RACE_ID[race], xmlId) ?? undefined;
+}
+
+/**
+ * Get the door tile offset for a building type + race from XML data.
+ * Returns the tile offset settlers should walk to when entering the building.
+ * Returns null if the building has a zero door offset (building anchor is the door).
+ * Throws if game data is not yet loaded or the building type has no XML mapping.
+ */
+export function getBuildingDoorOffset(race: Race, buildingType: BuildingType): { dx: number; dy: number } | null {
+    const info = getBuildingInfo(race, buildingType);
+    if (!info) throw new Error(`No BuildingInfo found for ${BuildingType[buildingType]} / race ${Race[race]}`);
+    const { xOffset, yOffset } = info.door;
+    if (xOffset === 0 && yOffset === 0) return null;
+    return { dx: xOffset, dy: yOffset };
 }
 
 /**
@@ -170,11 +186,11 @@ export const S4_TO_UNIT_TYPE: Partial<Record<S4SettlerType, UnitType>> = {
     [S4SettlerType.STONECUTTER]: UnitType.Stonecutter,
     [S4SettlerType.FORESTER]: UnitType.Forester,
     [S4SettlerType.SWORDSMAN_01]: UnitType.Swordsman,
-    [S4SettlerType.SWORDSMAN_02]: UnitType.Swordsman,
-    [S4SettlerType.SWORDSMAN_03]: UnitType.Swordsman,
+    [S4SettlerType.SWORDSMAN_02]: UnitType.Swordsman2,
+    [S4SettlerType.SWORDSMAN_03]: UnitType.Swordsman3,
     [S4SettlerType.BOWMAN_01]: UnitType.Bowman,
-    [S4SettlerType.BOWMAN_02]: UnitType.Bowman,
-    [S4SettlerType.BOWMAN_03]: UnitType.Bowman,
+    [S4SettlerType.BOWMAN_02]: UnitType.Bowman2,
+    [S4SettlerType.BOWMAN_03]: UnitType.Bowman3,
     [S4SettlerType.PRIEST]: UnitType.Priest,
     [S4SettlerType.PIONEER]: UnitType.Pioneer,
     [S4SettlerType.THIEF]: UnitType.Thief,
@@ -184,8 +200,8 @@ export const S4_TO_UNIT_TYPE: Partial<Record<S4SettlerType, UnitType>> = {
     [S4SettlerType.DARKGARDENER]: UnitType.DarkGardener,
     [S4SettlerType.SHAMAN]: UnitType.Shaman,
     [S4SettlerType.MEDIC_01]: UnitType.Medic,
-    [S4SettlerType.MEDIC_02]: UnitType.Medic,
-    [S4SettlerType.MEDIC_03]: UnitType.Medic,
+    [S4SettlerType.MEDIC_02]: UnitType.Medic2,
+    [S4SettlerType.MEDIC_03]: UnitType.Medic3,
     [S4SettlerType.MINEWORKER]: UnitType.Miner,
     [S4SettlerType.SMELTER]: UnitType.Smelter,
     [S4SettlerType.HUNTER]: UnitType.Hunter,
@@ -197,8 +213,8 @@ export const S4_TO_UNIT_TYPE: Partial<Record<S4SettlerType, UnitType>> = {
     [S4SettlerType.BEEKEEPER]: UnitType.Beekeeper,
     [S4SettlerType.MUSHROOMFARMER]: UnitType.MushroomFarmer,
     [S4SettlerType.ANGEL_01]: UnitType.Angel,
-    [S4SettlerType.ANGEL_02]: UnitType.Angel,
-    [S4SettlerType.ANGEL_03]: UnitType.Angel,
+    [S4SettlerType.ANGEL_02]: UnitType.Angel2,
+    [S4SettlerType.ANGEL_03]: UnitType.Angel3,
     [S4SettlerType.MILLER]: UnitType.Miller,
     [S4SettlerType.BUTCHER]: UnitType.Butcher,
     [S4SettlerType.FISHER]: UnitType.Hunter, // Fisher uses Hunter unit type
@@ -208,13 +224,25 @@ export const S4_TO_UNIT_TYPE: Partial<Record<S4SettlerType, UnitType>> = {
     [S4SettlerType.CHARCOALMAKER]: UnitType.Smith, // Charcoal maker uses Smith unit type
     [S4SettlerType.AMMOMAKER]: UnitType.Smith, // Ammo maker uses Smith unit type
     [S4SettlerType.VEHICLEMAKER]: UnitType.Smith, // Vehicle maker uses Smith unit type
-    [S4SettlerType.VINTNER]: UnitType.Smith, // Vintner uses Smith unit type
-    [S4SettlerType.MEADMAKER]: UnitType.Smith, // Mead maker uses Smith unit type
-    [S4SettlerType.TEQUILAMAKER]: UnitType.Smith, // Tequila maker uses Smith unit type
+    [S4SettlerType.VINTNER]: UnitType.Winemaker,
+    [S4SettlerType.MEADMAKER]: UnitType.Meadmaker,
+    [S4SettlerType.TEQUILAMAKER]: UnitType.Tequilamaker,
     [S4SettlerType.SUNFLOWERFARMER]: UnitType.Farmer, // Sunflower farmer uses Farmer unit type
     [S4SettlerType.SUNFLOWEROILMAKER]: UnitType.Smith, // Oil maker uses Smith unit type
     [S4SettlerType.SHIPYARDWORKER]: UnitType.Smith, // Shipyard worker uses Smith unit type
-    [S4SettlerType.TEMPLE_SERVANT]: UnitType.Priest, // Temple servant uses Priest unit type
+    [S4SettlerType.TEMPLE_SERVANT]: UnitType.TempleServant,
+    [S4SettlerType.AXEWARRIOR_01]: UnitType.AxeWarrior,
+    [S4SettlerType.AXEWARRIOR_02]: UnitType.AxeWarrior2,
+    [S4SettlerType.AXEWARRIOR_03]: UnitType.AxeWarrior3,
+    [S4SettlerType.BLOWGUNWARRIOR_01]: UnitType.BlowgunWarrior,
+    [S4SettlerType.BLOWGUNWARRIOR_02]: UnitType.BlowgunWarrior2,
+    [S4SettlerType.BLOWGUNWARRIOR_03]: UnitType.BlowgunWarrior3,
+    [S4SettlerType.BACKPACKCATAPULTIST_01]: UnitType.BackpackCatapultist,
+    [S4SettlerType.BACKPACKCATAPULTIST_02]: UnitType.BackpackCatapultist2,
+    [S4SettlerType.BACKPACKCATAPULTIST_03]: UnitType.BackpackCatapultist3,
+    [S4SettlerType.SABOTEUR]: UnitType.Saboteur,
+    [S4SettlerType.SLAVED_SETTLER]: UnitType.SlavedSettler,
+    [S4SettlerType.MANACOPTERMASTER]: UnitType.ManacopterMaster,
 };
 
 /**
@@ -292,11 +320,12 @@ export interface BuildingWorkerInfo {
 
 /**
  * Get the worker UnitType and required tool for a building, derived from buildingInfo.xml.
- * Returns undefined if data not loaded, no XML mapping exists, or building has no worker.
+ * Returns undefined if data not loaded, no XML mapping exists, building has no XML entry for
+ * this race (e.g. decorative eyecatchers), or building has no worker inhabitant.
  */
 export function getBuildingWorkerInfo(race: Race, buildingType: BuildingType): BuildingWorkerInfo | undefined {
     const info = getBuildingInfo(race, buildingType);
-    if (!info || !info.inhabitant) return undefined;
+    if (!info?.inhabitant) return undefined;
 
     const unitType = xmlSettlerToUnitType(info.inhabitant);
     if (unitType === undefined) return undefined;
@@ -308,7 +337,7 @@ export function getBuildingWorkerInfo(race: Race, buildingType: BuildingType): B
 /**
  * Get all building types where a worker unit type can work, derived from XML.
  * This is the reverse lookup of getBuildingWorkerInfo: given a UnitType, find matching buildings.
- * Returns undefined if data not loaded or unit type has no workplace.
+ * Returns undefined if unit type has no workplace or if game data is not yet loaded.
  */
 export function getWorkerBuildingTypes(race: Race, unitType: UnitType): ReadonlySet<BuildingType> | undefined {
     const loader = getGameDataLoader();
@@ -319,6 +348,7 @@ export function getWorkerBuildingTypes(race: Race, unitType: UnitType): Readonly
         raceMap = new Map<UnitType, Set<BuildingType>>();
         for (const btStr of Object.keys(BUILDING_TYPE_TO_XML_ID)) {
             const bt = Number(btStr) as BuildingType;
+            if (!isBuildingAvailableForRace(bt, race)) continue;
             const workerInfo = getBuildingWorkerInfo(race, bt);
             if (workerInfo) {
                 let set = raceMap.get(workerInfo.unitType);
@@ -618,14 +648,16 @@ const MAP_OBJECT_TYPE_TO_XML_ID: Partial<Record<MapObjectType, string>> = {
 
 /**
  * Look up ObjectInfo from objectInfo.xml by MapObjectType.
- * Returns undefined if data not loaded or no XML mapping exists.
+ * Throws if game data is not yet loaded or the type has no XML mapping.
  */
-export function getMapObjectInfo(type: MapObjectType): ObjectInfo | undefined {
+export function getMapObjectInfo(type: MapObjectType): ObjectInfo {
     const loader = getGameDataLoader();
-    if (!loader.isLoaded()) return undefined;
+    if (!loader.isLoaded()) throw new Error('getMapObjectInfo called before game data is loaded');
     const xmlId = MAP_OBJECT_TYPE_TO_XML_ID[type];
-    if (!xmlId) return undefined;
-    return loader.getObject(xmlId);
+    if (!xmlId) throw new Error(`No XML mapping for MapObjectType ${MapObjectType[type]}`);
+    const info = loader.getObject(xmlId);
+    if (!info) throw new Error(`No ObjectInfo found for ${xmlId}`);
+    return info;
 }
 
 /** Get the XML object ID for a MapObjectType, or undefined if unmapped. */

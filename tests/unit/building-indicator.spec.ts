@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
     BuildingIndicatorRenderer,
     PlacementStatus,
@@ -7,6 +7,7 @@ import {
 } from '@/game/renderer/building-indicator-renderer';
 import { MapSize } from '@/utilities/map-size';
 import { BuildingType } from '@/game/entity';
+import { Race } from '@/game/race';
 import {
     isBuildable,
     isMineBuildable,
@@ -15,8 +16,16 @@ import {
     MAX_SLOPE_DIFF,
 } from '@/game/features/placement';
 import { TERRAIN } from './helpers/test-map';
+import { installTestGameData, resetTestGameData } from './helpers/test-game-data';
 
 describe('BuildingIndicatorRenderer', () => {
+    afterEach(() => {
+        resetTestGameData();
+    });
+    beforeEach(() => {
+        installTestGameData();
+    });
+
     let mapSize: MapSize;
     let groundType: Uint8Array;
     let groundHeight: Uint8Array;
@@ -39,6 +48,7 @@ describe('BuildingIndicatorRenderer', () => {
         };
         renderer = new BuildingIndicatorRenderer(mapSize, groundType, groundHeight, placementChecker);
         renderer.buildingType = BuildingType.Eyecatcher01;
+        renderer.placementRace = Race.Roman;
     });
 
     describe('computePlacementStatus', () => {

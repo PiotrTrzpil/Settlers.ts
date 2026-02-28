@@ -83,4 +83,19 @@ export class DecorationSpriteCategory {
         this.flags.clear();
         for (const [k, v] of flags) this.flags.set(k, v);
     }
+
+    /**
+     * Expose the internal territory dots map for serialization.
+     */
+    getTerritoryDotsMap(): Map<number, SpriteEntry> {
+        return this.territoryDots;
+    }
+
+    /**
+     * Replace the entire territory dots map (used during deserialization).
+     */
+    setTerritoryDotsMap(dots: Map<number, SpriteEntry>): void {
+        this.territoryDots.clear();
+        for (const [k, v] of dots) this.territoryDots.set(k, v);
+    }
 }

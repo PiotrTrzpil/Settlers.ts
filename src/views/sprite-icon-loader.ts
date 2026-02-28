@@ -9,7 +9,7 @@ import {
     GFX_FILE_NUMBERS,
     BUILDING_JOB_INDICES,
     RESOURCE_JOB_INDICES,
-    UNIT_JOB_INDICES,
+    UNIT_BASE_JOB_INDICES,
     WORKER_JOB_INDICES,
     SETTLER_FILE_NUMBERS,
 } from '@/game/renderer/sprite-metadata';
@@ -178,7 +178,7 @@ function getUnitJobIndex(unitType: UnitType, level: number): number | undefined 
         const entry = WORKER_JOB_INDICES[key];
         if ('idle' in entry && typeof entry.idle === 'number' && entry.idle >= 0) return entry.idle;
     }
-    return UNIT_JOB_INDICES[unitType];
+    return UNIT_BASE_JOB_INDICES[unitType];
 }
 
 /** Load unit icons from settler sprite files (direction 0, frame 0). */

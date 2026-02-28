@@ -241,8 +241,8 @@ function parallelWorkerRead(race: Race): Promise<CacheReadResponse[]> {
 // Main-thread fallback for reads (used if Workers unavailable)
 // =============================================================================
 
-/** Pre-open the cache handle at module level */
-const cacheHandlePromise: Promise<Cache> =
+/** Pre-open the cache handle at module level (re-opened after clearAllCaches) */
+let cacheHandlePromise: Promise<Cache> =
     typeof caches !== 'undefined' ? caches.open(CACHE_NAME) : Promise.reject(new Error('Cache API not available'));
 
 /** Main-thread fallback: read all chunks sequentially, decompress, assemble */
@@ -617,10 +617,19 @@ export function isCacheCompressionDisabled(): boolean {
     }
 }
 
-/** Clear all caches (both module and Cache API) */
+/** Clear all caches (both module and Cache API) and invalidate prefetches */
 export async function clearAllCaches(): Promise<void> {
     clearAllAtlasCache();
     await clearAllIndexedDBCache();
+    // Re-open the cache handle so subsequent saves go to the new (empty) store
+    // instead of the orphaned handle from the deleted cache.
+    if (typeof caches !== 'undefined') {
+        cacheHandlePromise = caches.open(CACHE_NAME);
+    }
+    // Invalidate any in-flight or already-resolved prefetch so stale data
+    // doesn't resurrect the cache on the next tryRestore() call.
+    const { invalidatePrefetch } = await import('../sprite-atlas-cache-manager');
+    invalidatePrefetch();
     log.info('All caches cleared');
 }
 

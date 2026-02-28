@@ -13,6 +13,7 @@ import {
     SETTLER_FILE_NUMBERS,
     CARRIER_MATERIAL_JOB_INDICES,
     WORKER_JOB_INDICES,
+    WORKER_KEY_TO_UNIT_TYPE,
 } from './sprite-metadata';
 import { SpriteLoader, type LoadedGfxFileSet, type LoadedSprite } from './sprite-loader';
 import { UnitType, EntityType } from '../entity';
@@ -221,30 +222,6 @@ function getMilitaryLevel(workerKey: string): number {
     const match = /_(\d+)$/.exec(workerKey);
     return match ? parseInt(match[1]!, 10) : 0;
 }
-
-/** Mapping from WORKER_JOB_INDICES keys to UnitType. */
-const WORKER_KEY_TO_UNIT_TYPE: Record<string, UnitType> = {
-    carrier: UnitType.Carrier,
-    digger: UnitType.Digger,
-    smith: UnitType.Smith,
-    builder: UnitType.Builder,
-    woodcutter: UnitType.Woodcutter,
-    miner: UnitType.Miner,
-    forester: UnitType.Forester,
-    farmer: UnitType.Farmer,
-    agavefarmer: UnitType.AgaveFarmer,
-    beekeeper: UnitType.Beekeeper,
-    priest: UnitType.Priest,
-    geologist: UnitType.Geologist,
-    pioneer: UnitType.Pioneer,
-    swordsman_1: UnitType.Swordsman,
-    swordsman_2: UnitType.Swordsman,
-    swordsman_3: UnitType.Swordsman,
-    bowman_1: UnitType.Bowman,
-    bowman_2: UnitType.Bowman,
-    bowman_3: UnitType.Bowman,
-    sawmillworker: UnitType.SawmillWorker,
-};
 
 async function loadWorkerAnimations(
     fileSet: LoadedGfxFileSet,
@@ -516,7 +493,7 @@ function collectMilitaryLevelJobs(
 
 /**
  * Load level 2/3 idle and walk animations for military units.
- * Level 1 idle/walk is already loaded by loadBaseUnits from UNIT_JOB_INDICES.
+ * Level 1 idle/walk is already loaded by loadBaseUnits from UNIT_BASE_JOB_INDICES.
  * This registers level-specific sequences (e.g., 'default.2', 'walk.2') on the same entity.
  */
 async function loadMilitaryLevelAnimations(

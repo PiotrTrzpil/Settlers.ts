@@ -327,6 +327,8 @@ async function loadTerritoryDotSprites(
         const sprite = await spriteLoader.loadDirectSprite(fileSet, gilIndex, null, atlas, paletteBase);
         if (sprite) {
             batch.add({ playerIndex, entry: sprite.entry });
+        } else {
+            console.warn(`[loadTerritoryDotSprites] GIL ${gilIndex} (player ${playerIndex}) returned null`);
         }
     }
 
@@ -335,6 +337,10 @@ async function loadTerritoryDotSprites(
         registry.registerTerritoryDot(data.playerIndex, data.entry);
         loaded++;
     });
+
+    if (loaded === 0) {
+        console.warn('[loadTerritoryDotSprites] No territory dot sprites loaded from GIL 1850-1857');
+    }
 
     return loaded;
 }

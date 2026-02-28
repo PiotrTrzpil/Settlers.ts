@@ -118,6 +118,7 @@ export class SpriteMetadataSerializer {
             resources: mapToArray(resources.getEntries()).map(([k, v]) => [k, mapToArray(v)]),
             unitsByRace: serializedUnits,
             flags: mapToArray(decoration.getFlagsMap()),
+            territoryDots: mapToArray(decoration.getTerritoryDotsMap()),
             animatedEntities: serializedAnimatedEntities,
             animatedByRace: serializedAnimatedByRace,
             loadedRaces: [...loadedRaces],
@@ -213,6 +214,7 @@ export class SpriteMetadataSerializer {
 
     private static deserializeDecoration(data: any, decoration: DecorationSpriteCategory): void {
         if (data.flags) decoration.setFlagsMap(arrayToMap(data.flags));
+        if (data.territoryDots) decoration.setTerritoryDotsMap(arrayToMap(data.territoryDots));
     }
 
     // eslint-disable-next-line sonarjs/cognitive-complexity -- legacy format compat requires branching

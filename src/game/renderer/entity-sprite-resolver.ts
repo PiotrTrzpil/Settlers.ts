@@ -242,16 +242,9 @@ export class EntitySpriteResolver {
         }
     }
 
-    /** Get unit preview sprite, using level-specific idle frame for military units. */
-    private getUnitPreviewSprite(unitType: UnitType, race?: number, level: number = 1): SpriteEntry | null {
+    /** Get unit preview sprite — each leveled UnitType has its own registered sprites. */
+    private getUnitPreviewSprite(unitType: UnitType, race?: number, _level?: number): SpriteEntry | null {
         if (!this.sprites) return null;
-        if (level > 1) {
-            const animated = this.sprites.getAnimatedEntity(EntityType.Unit, unitType, race);
-            const seqKey = `default.${level}`;
-            const dirMap = animated?.animationData.sequences.get(seqKey);
-            const seq = dirMap?.get(0);
-            if (seq?.frames[0]) return seq.frames[0];
-        }
         return this.sprites.getUnit(unitType, 0, race);
     }
 }

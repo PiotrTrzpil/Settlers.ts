@@ -108,6 +108,21 @@ class UnitStateMap implements UnitStateLookup {
     }
 }
 
+/** Determine entity selectability from type + subtype (no explicit override). */
+function resolveEntitySelectable(type: EntityType, subType: number): boolean | undefined {
+    switch (type) {
+    case EntityType.Unit:
+        return isUnitTypeSelectable(subType as UnitType);
+    case EntityType.Building:
+        return true;
+    case EntityType.MapObject:
+    case EntityType.StackedResource:
+    case EntityType.Decoration:
+    case EntityType.None:
+        return false;
+    }
+}
+
 /**
  * Core entity store and spatial index.
  *
@@ -181,32 +196,16 @@ export class GameState {
         y: number,
         player: number,
         selectable?: boolean,
-        variation?: number
+        variation?: number,
+        race?: Race
     ): Entity {
-        // Determine selectability: explicit override > type-based rules
-        let resolvedSelectable: boolean | undefined;
-        if (selectable !== undefined) {
-            resolvedSelectable = selectable;
-        } else {
-            switch (type) {
-            case EntityType.Unit:
-                resolvedSelectable = isUnitTypeSelectable(subType as UnitType);
-                break;
-            case EntityType.Building:
-                // Buildings are always selectable
-                resolvedSelectable = true;
-                break;
-            case EntityType.MapObject:
-            case EntityType.StackedResource:
-            case EntityType.Decoration:
-                // Map objects, resources, and decorations are never selectable
-                resolvedSelectable = false;
-                break;
-            case EntityType.None:
-                resolvedSelectable = false;
-                break;
-            }
+        if (type === EntityType.Building && race === undefined) {
+            throw new Error(
+                `addEntity: race is required for buildings (BuildingType ${BuildingType[subType as BuildingType]})`
+            );
         }
+        const entityRace: Race = race !== undefined ? race : Race.Roman;
+        const resolvedSelectable = selectable !== undefined ? selectable : resolveEntitySelectable(type, subType);
 
         const entity: Entity = {
             id: this.nextId++,
@@ -215,7 +214,7 @@ export class GameState {
             y,
             player,
             subType,
-            race: Race.Roman,
+            race: entityRace,
             selectable: resolvedSelectable,
         };
 
@@ -227,7 +226,7 @@ export class GameState {
         if (type === EntityType.Decoration) {
             // no-op: decorations don't occupy tiles
         } else if (type === EntityType.Building) {
-            const footprint = getBuildingFootprint(x, y, subType as BuildingType);
+            const footprint = getBuildingFootprint(x, y, subType as BuildingType, entity.race);
             for (const tile of footprint) {
                 this.tileOccupancy.set(tileKey(tile.x, tile.y), entity.id);
             }
@@ -263,7 +262,7 @@ export class GameState {
 
         // Remove occupancy for all tiles in the entity's footprint
         if (entity.type === EntityType.Building) {
-            const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType);
+            const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
             for (const tile of footprint) {
                 this.tileOccupancy.delete(tileKey(tile.x, tile.y));
             }

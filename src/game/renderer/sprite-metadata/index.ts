@@ -8,7 +8,7 @@
  * - Constants: PIXELS_TO_WORLD, GFX_FILE_NUMBERS, SETTLER_FILE_NUMBERS
  * - Race: Race enum, RACE_NAMES, AVAILABLE_RACES
  * - Building sprites: BUILDING_ICON_INDICES, BUILDING_SPRITE_FRAMES, getBuildingSpriteMap, etc.
- * - Unit sprites: UNIT_JOB_INDICES, getUnitSpriteMap, etc.
+ * - Unit sprites: WORKER_JOB_INDICES, UNIT_BASE_JOB_INDICES, getUnitSpriteMap, etc.
  * - Resource sprites: RESOURCE_JOB_INDICES, getResourceSpriteMap, etc.
  * - Map object sprites: MAP_OBJECT_SPRITES (GIL), TREE_JOB_INDICES (JIL), getMapObjectSpriteMap, etc.
  * - Registry: SpriteMetadataRegistry
@@ -38,6 +38,7 @@ export {
     BUILDING_SPRITE_FRAMES,
     type BuildingSpriteInfo,
     BUILDING_JOB_INDICES,
+    BUILDING_OVERLAY_JIL_INDICES,
     BUILDING_SPRITE_MAP,
     type BuildingSpriteEntries,
     getBuildingSpriteMap,
@@ -46,8 +47,9 @@ export {
     SETTLER_FILE_NUMBERS,
     UNIT_DIRECTION,
     NUM_UNIT_DIRECTIONS,
-    UNIT_JOB_INDICES,
     WORKER_JOB_INDICES,
+    WORKER_KEY_TO_UNIT_TYPE,
+    UNIT_BASE_JOB_INDICES,
     type UnitSpriteInfo,
     getUnitSpriteMap,
 

@@ -197,7 +197,7 @@ export async function loadBuildingSprites(
 
     let loadedAny = false;
     for (const r of racesToLoad) {
-        const spriteMap = spriteMapsPerRace.get(r)!;
+        const spriteMap = spriteMapsPerRace.get(r)!; // OK: all racesToLoad entries were set() in the loop above
         for (const fileNum of buildingFiles) {
             if (await loadBuildingSpritesForFile(fileNum, atlas, registry, spriteMap, gl, r, ctx)) {
                 loadedAny = true;
