@@ -133,6 +133,12 @@ defineExpose({
         const rowIndex = Math.floor(itemIndex / columns.value);
         virtualizer.value.scrollToIndex(rowIndex, { align: 'start' });
     },
+    getScrollOffset(): number {
+        return scrollEl.value?.scrollTop ?? 0;
+    },
+    setScrollOffset(offset: number) {
+        if (scrollEl.value) scrollEl.value.scrollTop = offset;
+    },
 });
 </script>
 

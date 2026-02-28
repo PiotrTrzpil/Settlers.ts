@@ -365,7 +365,8 @@ export class CarrierManager implements TickSystem {
      * Only returns hubs that have capacity for more carriers.
      */
     private findNearestHub(x: number, y: number, playerId: number): number | null {
-        const serviceAreas = this.serviceAreaManager!.getServiceAreasForPlayer(playerId);
+        if (!this.serviceAreaManager) throw new Error(`CarrierManager.findNearestHub: serviceAreaManager not set`);
+        const serviceAreas = this.serviceAreaManager.getServiceAreasForPlayer(playerId);
         if (serviceAreas.length === 0) {
             return null;
         }

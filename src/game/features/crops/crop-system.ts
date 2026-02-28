@@ -62,6 +62,12 @@ const CROP_TYPE_CONFIGS: ReadonlyMap<MapObjectType, CropTypeConfig> = new Map([
     [MapObjectType.Beehive, { growthTime: 100, harvestDecayTime: 15, growingCount: 1 }],
 ]);
 
+function getCropConfig(cropType: MapObjectType): CropTypeConfig {
+    const config = CROP_TYPE_CONFIGS.get(cropType);
+    if (!config) throw new Error(`No config for crop type ${MapObjectType[cropType]} in CropSystem`);
+    return config;
+}
+
 // ── GrowableSystem config ─────────────────────────────────────
 
 const PLANTING_SEARCH_RADIUS = 12;
@@ -107,7 +113,7 @@ export class CropSystem extends GrowableSystem<CropState> {
     }
 
     protected getSpriteOffset(state: CropState): number {
-        const config = CROP_TYPE_CONFIGS.get(state.cropType)!;
+        const config = getCropConfig(state.cropType);
 
         switch (state.stage) {
         case CropStage.Growing: {
@@ -123,7 +129,7 @@ export class CropSystem extends GrowableSystem<CropState> {
     }
 
     protected onOffsetChanged(entityId: number, offset: number, state: CropState): void {
-        const config = CROP_TYPE_CONFIGS.get(state.cropType)!;
+        const config = getCropConfig(state.cropType);
         // Mature variation gets looping animation (sway/bloom)
         if (offset === config.growingCount) {
             const startFrame = this.gameState.rng.nextInt(100);
@@ -136,7 +142,7 @@ export class CropSystem extends GrowableSystem<CropState> {
 
     protected tickState(entityId: number, state: CropState, dt: number): 'keep' | 'remove' {
         if (state.stage === CropStage.Growing) {
-            const config = CROP_TYPE_CONFIGS.get(state.cropType)!;
+            const config = getCropConfig(state.cropType);
             state.progress += dt / config.growthTime;
             if (state.progress >= 1) {
                 state.stage = CropStage.Mature;
@@ -198,7 +204,7 @@ export class CropSystem extends GrowableSystem<CropState> {
         state.progress = Math.min(1, progress);
 
         if (state.progress >= 1) {
-            const config = CROP_TYPE_CONFIGS.get(state.cropType)!;
+            const config = getCropConfig(state.cropType);
             state.stage = CropStage.Harvested;
             state.decayTimer = config.harvestDecayTime;
             state.progress = 0;

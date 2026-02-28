@@ -67,6 +67,11 @@ const SETTLER_NAME_MAP: Record<string, UnitType> = {
     butcher: UnitType.Butcher,
     agavefarmer: UnitType.AgaveFarmer,
     beekeeper: UnitType.Beekeeper,
+    winemaker: UnitType.Winemaker,
+    meadmaker: UnitType.Meadmaker,
+    tequilamaker: UnitType.Tequilamaker,
+    smelter: UnitType.Smelter,
+    templeservant: UnitType.TempleServant,
 };
 
 interface RawSettlerConfig {

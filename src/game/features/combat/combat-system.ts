@@ -60,9 +60,9 @@ export class CombatSystem implements TickSystem {
 
     // ── Registration ──────────────────────────────────────────────────────
 
-    register(entityId: number, player: number, unitType: UnitType, level: number = 1): void {
+    register(entityId: number, player: number, unitType: UnitType): void {
         if (this.states.has(entityId)) return;
-        this.states.set(entityId, createCombatState(entityId, player, unitType, level));
+        this.states.set(entityId, createCombatState(entityId, player, unitType));
     }
 
     unregister(entityId: number): void {

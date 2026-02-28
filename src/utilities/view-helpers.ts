@@ -16,6 +16,7 @@ export function pad(value: string | number, size: number): string {
 
 /** Render an IGfxImage to a canvas element */
 export function renderImageToCanvas(img: IGfxImage, canvas: HTMLCanvasElement): void {
+    canvas.width = img.width;
     canvas.height = img.height;
     const context = canvas.getContext('2d');
 

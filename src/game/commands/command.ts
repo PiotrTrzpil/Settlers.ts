@@ -1,4 +1,4 @@
-import { EntityType, EXTENDED_OFFSETS, tileKey } from '../entity';
+import { EntityType, EXTENDED_OFFSETS, tileKey, getUnitLevel } from '../entity';
 import {
     BuildingConstructionPhase,
     type BuildingStateManager,
@@ -67,17 +67,27 @@ export interface CommandContext {
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): CommandResult {
     const { state, terrain } = ctx;
 
-    if (!canPlaceBuildingFootprint(terrain, state.tileOccupancy, cmd.x, cmd.y, cmd.buildingType)) {
+    if (!canPlaceBuildingFootprint(terrain, state.tileOccupancy, cmd.x, cmd.y, cmd.buildingType, cmd.race)) {
         return commandFailed(`Cannot place building at (${cmd.x}, ${cmd.y}): invalid placement`);
     }
 
-    const entity = state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
-    entity.race = cmd.race;
+    const entity = state.addEntity(
+        EntityType.Building,
+        cmd.buildingType,
+        cmd.x,
+        cmd.y,
+        cmd.player,
+        undefined,
+        undefined,
+        cmd.race
+    );
 
     // Immediately capture terrain and change ground to raw earth under the building.
     // This makes the ground visually change right when the building is placed,
     // before the gradual height leveling begins during the TerrainLeveling phase.
-    const buildingState = ctx.buildingStateManager.getBuildingState(entity.id)!;
+    const buildingState = ctx.buildingStateManager.getBuildingState(entity.id);
+    if (!buildingState)
+        throw new Error(`No building state for entity ${entity.id} after placement (${cmd.buildingType})`);
     const { groundType, groundHeight, mapSize } = terrain;
     buildingState.originalTerrain = captureOriginalTerrain(buildingState, groundType, groundHeight, mapSize);
     setConstructionSiteGroundType(buildingState, groundType, mapSize);
@@ -135,7 +145,7 @@ function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): CommandRe
 
     const entity = state.addEntity(EntityType.Unit, cmd.unitType, spawnX, spawnY, cmd.player);
     entity.race = cmd.race;
-    entity.level = cmd.level ?? 1;
+    entity.level = getUnitLevel(cmd.unitType);
 
     ctx.eventBus.emit('unit:spawned', {
         entityId: entity.id,
@@ -363,7 +373,9 @@ function executeSpawnVisualResource(ctx: CommandContext, cmd: SpawnVisualResourc
 function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsCommand): CommandResult {
     const { state, terrain, eventBus } = ctx;
     const entity = state.getEntityOrThrow(cmd.buildingEntityId, 'completed building for unit spawning');
-    const buildingState = ctx.buildingStateManager.getBuildingState(cmd.buildingEntityId)!;
+    const buildingState = ctx.buildingStateManager.getBuildingState(cmd.buildingEntityId);
+    if (!buildingState)
+        throw new Error(`No building state for completed building ${cmd.buildingEntityId} (executeSpawnBuildingUnits)`);
     const { tileX: bx, tileY: by } = buildingState;
     const effects: { type: 'unit_spawned'; entityId: number; unitType: number; x: number; y: number }[] = [];
 
@@ -452,13 +464,15 @@ function executePlantTree(ctx: CommandContext, cmd: PlantTreeCommand): CommandRe
     const entity = state.addEntity(EntityType.MapObject, cmd.treeType, cmd.x, cmd.y, 0);
 
     // Register with tree system for growth tracking
-    ctx.treeSystem!.register(entity.id, cmd.treeType, true);
+    if (!ctx.treeSystem) throw new Error(`plant_tree command requires treeSystem in CommandContext`);
+    ctx.treeSystem.register(entity.id, cmd.treeType, true);
 
     return commandSuccess([{ type: 'tree_planted', entityId: entity.id, treeType: cmd.treeType, x: cmd.x, y: cmd.y }]);
 }
 
 function executePlantTreesArea(ctx: CommandContext, cmd: PlantTreesAreaCommand): CommandResult {
-    const planted = ctx.treeSystem!.plantTreesNear(cmd.centerX, cmd.centerY, cmd.count, cmd.radius);
+    if (!ctx.treeSystem) throw new Error(`plant_trees_area command requires treeSystem in CommandContext`);
+    const planted = ctx.treeSystem.plantTreesNear(cmd.centerX, cmd.centerY, cmd.count, cmd.radius);
     if (planted === 0) {
         return commandFailed(`Could not plant any trees near (${cmd.centerX}, ${cmd.centerY})`);
     }
@@ -477,7 +491,8 @@ function executePlantCrop(ctx: CommandContext, cmd: PlantCropCommand): CommandRe
     const entity = state.addEntity(EntityType.MapObject, cmd.cropType, cmd.x, cmd.y, 0);
 
     // Register with crop system for growth tracking (planted=true → Growing stage)
-    ctx.cropSystem!.register(entity.id, cmd.cropType, true);
+    if (!ctx.cropSystem) throw new Error(`plant_crop command requires cropSystem in CommandContext`);
+    ctx.cropSystem.register(entity.id, cmd.cropType, true);
 
     return commandSuccess([{ type: 'crop_planted', entityId: entity.id, cropType: cmd.cropType, x: cmd.x, y: cmd.y }]);
 }
@@ -499,8 +514,16 @@ function executeScriptAddGoods(ctx: CommandContext, cmd: ScriptAddGoodsCommand):
 function executeScriptAddBuilding(ctx: CommandContext, cmd: ScriptAddBuildingCommand): CommandResult {
     const { state } = ctx;
 
-    const entity = state.addEntity(EntityType.Building, cmd.buildingType, cmd.x, cmd.y, cmd.player);
-    entity.race = cmd.race;
+    const entity = state.addEntity(
+        EntityType.Building,
+        cmd.buildingType,
+        cmd.x,
+        cmd.y,
+        cmd.player,
+        undefined,
+        undefined,
+        cmd.race
+    );
 
     return commandSuccess([
         {

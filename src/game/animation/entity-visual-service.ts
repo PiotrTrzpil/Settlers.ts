@@ -283,9 +283,8 @@ export class EntityVisualService {
      * Begin a smooth direction transition for a unit.
      */
     startDirectionTransition(entityId: number, from: number, to: number): void {
-        this.getStateOrThrow(entityId, 'startDirectionTransition');
+        const state = this.getStateOrThrow(entityId, 'startDirectionTransition');
         this.transitions.set(entityId, { previousDirection: from, progress: 0 });
-        const state = this.states.get(entityId)!;
         if (state.animation) {
             state.animation.direction = to;
         }

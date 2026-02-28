@@ -58,3 +58,23 @@ miller:
 butcher:
   search: WORKPLACE
   jobs: [station]
+
+winemaker:
+  search: WORKPLACE
+  jobs: [station]
+
+meadmaker:
+  search: WORKPLACE
+  jobs: [station]
+
+tequilamaker:
+  search: WORKPLACE
+  jobs: [station]
+
+smelter:
+  search: WORKPLACE
+  jobs: [station]
+
+templeservant:
+  search: WORKPLACE
+  jobs: [station]

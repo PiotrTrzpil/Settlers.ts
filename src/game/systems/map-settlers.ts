@@ -3,7 +3,7 @@
  * Maps S4SettlerType to internal UnitType and creates unit entities with correct race.
  */
 
-import { EntityType } from '../entity';
+import { EntityType, getUnitLevel } from '../entity';
 import { Race } from '../race';
 import { GameState } from '../game-state';
 import { S4_TO_UNIT_TYPE } from '../game-data-access';
@@ -56,6 +56,7 @@ export function populateMapSettlers(
             );
         }
         entity.race = race;
+        entity.level = getUnitLevel(unitType);
 
         created++;
     }

@@ -4,6 +4,7 @@ import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { Entity, EntityType, TileCoord, tileKey, BuildingType, getBuildingFootprint, isMineBuilding } from '../entity';
 import { PlacementStatus } from '../features/placement';
+import type { Race } from '../race';
 import { ShaderProgram } from './shader-program';
 import type { PlacementPreviewState } from './render-context';
 
@@ -119,11 +120,13 @@ export class BuildingIndicatorRenderer implements IRenderer {
     private cacheViewY = 0;
     private cacheZoom = 0;
     private cacheBuildingType: BuildingType | null = null;
+    private cachePlacementRace: Race | null = null;
 
     // State set per-frame by the glue layer
     private enabled = false;
     private hoveredTile: TileCoord | null = null;
     public buildingType: BuildingType | null = null;
+    public placementRace: Race | null = null;
 
     // Occupancy map — rebuilt when entities change
     public tileOccupancy: Map<string, number> = new Map();
@@ -149,6 +152,7 @@ export class BuildingIndicatorRenderer implements IRenderer {
         this.hoveredTile = placementPreview?.tile ?? null;
         this.buildingType =
             placementPreview?.entityType === 'building' ? (placementPreview.subType as BuildingType) : null;
+        this.placementRace = placementPreview?.entityType === 'building' ? (placementPreview.race ?? null) : null;
 
         // Rebuild occupancy map only when entities change
         if (indicatorsEnabled && entities !== this.occupancyEntitiesRef) {
@@ -162,7 +166,7 @@ export class BuildingIndicatorRenderer implements IRenderer {
         this.tileOccupancy.clear();
         for (const e of entities) {
             if (e.type === EntityType.Building) {
-                const footprint = getBuildingFootprint(e.x, e.y, e.subType as BuildingType);
+                const footprint = getBuildingFootprint(e.x, e.y, e.subType as BuildingType, e.race);
                 for (const tile of footprint) {
                     this.tileOccupancy.set(`${tile.x},${tile.y}`, e.id);
                 }
@@ -231,9 +235,9 @@ export class BuildingIndicatorRenderer implements IRenderer {
      * Checks the entire building footprint.
      */
     public computePlacementStatus(x: number, y: number): PlacementStatus {
-        if (this.buildingType === null) return PlacementStatus.InvalidTerrain;
+        if (this.buildingType === null || this.placementRace === null) return PlacementStatus.InvalidTerrain;
 
-        const footprint = getBuildingFootprint(x, y, this.buildingType);
+        const footprint = getBuildingFootprint(x, y, this.buildingType, this.placementRace);
         const isMine = isMineBuilding(this.buildingType);
 
         if (!this.isFootprintInBounds(footprint)) return PlacementStatus.InvalidTerrain;
@@ -253,7 +257,12 @@ export class BuildingIndicatorRenderer implements IRenderer {
         const viewDist = Math.abs(viewPoint.x - this.cacheViewX) + Math.abs(viewPoint.y - this.cacheViewY);
         const zoomDiff = Math.abs(viewPoint.zoom - this.cacheZoom);
 
-        return viewDist < 5 && zoomDiff < 0.01 && this.buildingType === this.cacheBuildingType;
+        return (
+            viewDist < 5 &&
+            zoomDiff < 0.01 &&
+            this.buildingType === this.cacheBuildingType &&
+            this.placementRace === this.cachePlacementRace
+        );
     }
 
     /**
@@ -295,7 +304,9 @@ export class BuildingIndicatorRenderer implements IRenderer {
                 if (isBuildableStatus(status)) {
                     // Compute height range for gradient color
                     const footprint =
-                        this.buildingType !== null ? getBuildingFootprint(x, y, this.buildingType) : [{ x, y }];
+                        this.buildingType !== null && this.placementRace !== null
+                            ? getBuildingFootprint(x, y, this.buildingType, this.placementRace)
+                            : [{ x, y }];
                     const heightRange = this.placement.computeHeightRange(footprint, this.groundHeight, this.mapSize);
                     this.indicatorCache.push({ x, y, status, heightRange });
                 }
@@ -307,6 +318,7 @@ export class BuildingIndicatorRenderer implements IRenderer {
         this.cacheViewY = viewPoint.y;
         this.cacheZoom = viewPoint.zoom;
         this.cacheBuildingType = this.buildingType;
+        this.cachePlacementRace = this.placementRace;
     }
 
     /**

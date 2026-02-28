@@ -135,15 +135,16 @@ export class BuildingAdjustMode extends BaseInputMode {
     }
 
     private handleTilePlacement(data: PointerData, _deps: BuildingAdjustDeps): InputResult {
+        if (!this.active) throw new Error('BuildingAdjustMode: handleTilePlacement called without active adjustment');
         if (data.tileX === undefined || data.tileY === undefined) return UNHANDLED;
 
-        const { buildingX, buildingY, item, handler } = this.active!;
+        const { buildingX, buildingY, item, handler, buildingType, race, buildingId } = this.active;
         const offset: TileOffset = {
             dx: data.tileX - buildingX,
             dy: data.tileY - buildingY,
         };
 
-        handler.setOffset(this.active!.buildingType, this.active!.race, item.key, offset, this.active!.buildingId);
+        handler.setOffset(buildingType, race, item.key, offset, buildingId);
         return HANDLED;
     }
 
@@ -159,7 +160,8 @@ export class BuildingAdjustMode extends BaseInputMode {
 
         // Store screen coordinates in the mode data so the glue layer can
         // resolve them to pixel offsets using the coordinate system.
-        const { item, handler, buildingType, race } = this.active!;
+        if (!this.active) throw new Error('BuildingAdjustMode: handlePixelPlacement called without active adjustment');
+        const { item, handler, buildingType, race } = this.active;
 
         // For pixel items, we expect the glue layer to call resolvePixelPlacement()
         // with proper coordinate conversion. The PointerData gives us screenX/screenY.

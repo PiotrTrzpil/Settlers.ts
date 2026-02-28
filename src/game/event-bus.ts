@@ -231,7 +231,7 @@ export class EventBus {
         if (!this.handlers.has(event as string)) {
             this.handlers.set(event as string, new Set());
         }
-        this.handlers.get(event as string)!.add(handler);
+        this.handlers.get(event as string)!.add(handler); // OK: set() above guarantees entry exists
     }
 
     /** Remove an event handler */

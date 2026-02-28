@@ -4,6 +4,7 @@
  */
 
 import { BuildingType } from '../../buildings/types';
+import { Race } from '../../race';
 import { UnitType } from '../../unit-types';
 
 /**
@@ -57,6 +58,8 @@ export interface BuildingState {
     entityId: number;
     /** Building type, used to determine footprint for terrain modification */
     buildingType: BuildingType;
+    /** Race of the owning player — required for race-specific footprint/data lookups */
+    race: Race;
     /** Current construction phase */
     phase: BuildingConstructionPhase;
     /** Progress within current phase (0.0 to 1.0) */

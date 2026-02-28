@@ -597,6 +597,31 @@ export async function findBuildableTileNear(
     );
 }
 
+// ── Stone placement ──────────────────────────────────────────────
+
+/**
+ * Spawn multiple ResourceStone map objects near a center position.
+ * Delegates to stoneSystem.spawnStonesNear() which uses findEmptySpot
+ * for proper spacing — mirrors the plantTreesNear pattern.
+ * @returns Number of stones successfully spawned.
+ */
+export async function plantStonesNear(
+    page: Page,
+    centerX: number,
+    centerY: number,
+    count: number,
+    radius = 15
+): Promise<number> {
+    return page.evaluate(
+        ({ cx, cy, n, r }) => {
+            const game = window.__settlers__?.game;
+            if (!game?.services?.stoneSystem) return 0;
+            return game.services.stoneSystem.spawnStonesNear(cx, cy, n, r);
+        },
+        { cx: centerX, cy: centerY, n: count, r: radius }
+    );
+}
+
 // ── Camera ──────────────────────────────────────────────────────
 
 /**

@@ -147,28 +147,33 @@ export function populateMapBuildings(
             continue;
         }
 
-        // Create the building entity
-        // Note: addEntity handles tile occupancy and creates a default building state
-        const entity = state.addEntity(
-            EntityType.Building,
-            buildingType,
-            buildingData.x,
-            buildingData.y,
-            buildingData.player
-        );
-
-        // Assign race from the owning player's tribe
+        // Resolve race before creating the entity — needed for race-specific footprint lookup
         const race = options.playerRaces?.get(buildingData.player);
         if (race === undefined) {
             throw new Error(
                 `No race mapping for player ${buildingData.player} — playerRaces must be populated before spawning buildings`
             );
         }
-        entity.race = race;
+
+        // Create the building entity with the correct race so footprint lookup uses the right data
+        const entity = state.addEntity(
+            EntityType.Building,
+            buildingType,
+            buildingData.x,
+            buildingData.y,
+            buildingData.player,
+            undefined,
+            undefined,
+            race
+        );
 
         // Override the building state to be completed (pre-existing building)
-        // buildingStateManager is required, getBuildingState returns the state we just created
-        const buildingState = buildingStateManager.getBuildingState(entity.id)!;
+        const buildingState = buildingStateManager.getBuildingState(entity.id);
+        if (!buildingState) {
+            throw new Error(
+                `No building state for newly created entity ${entity.id} (${BuildingType[buildingType]}) — entity:created event may not have fired`
+            );
+        }
 
         // Apply instant terrain modification: raw ground + leveled heights
         const { groundType, groundHeight, mapSize } = options.terrain;

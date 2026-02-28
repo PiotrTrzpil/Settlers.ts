@@ -4,16 +4,13 @@
  * Pure function that maps (task, movement, carrying) to an animation intent.
  * The settler-task-system calls this once per tick instead of imperatively
  * calling play/stop at scattered points.
+ *
+ * Since military unit levels are encoded in UnitType (e.g. Swordsman2, Swordsman3),
+ * each level variant has its own registered 'default'/'walk' sequences. No level-specific
+ * sequence keys needed.
  */
 
-import {
-    ANIMATION_SEQUENCES,
-    carrySequenceKey,
-    fightSequenceKey,
-    levelIdleSequenceKey,
-    levelWalkSequenceKey,
-    workSequenceKey,
-} from '../animation';
+import { ANIMATION_SEQUENCES, carrySequenceKey, fightSequenceKey, workSequenceKey } from '../animation';
 import { UnitType, type Entity } from '../entity';
 import type { AnimationType } from '../features/settler-tasks/types';
 
@@ -27,13 +24,12 @@ export interface AnimationIntent {
     stopped: boolean;
 }
 
-const IDLE_INTENT_L1: AnimationIntent = { sequence: ANIMATION_SEQUENCES.DEFAULT, loop: false, stopped: true };
+const IDLE_INTENT: AnimationIntent = { sequence: ANIMATION_SEQUENCES.DEFAULT, loop: false, stopped: true };
+const WALK_INTENT: AnimationIntent = { sequence: ANIMATION_SEQUENCES.WALK, loop: true, stopped: false };
 
-/** Resolve idle intent — higher-level military units use level-specific idle animations. */
-function resolveIdleIntent(entity: Entity): AnimationIntent {
-    const level = entity.level ?? 1;
-    if (level <= 1) return IDLE_INTENT_L1;
-    return { sequence: levelIdleSequenceKey(level), loop: false, stopped: true };
+/** Resolve idle intent — all levels use 'default' since each level has its own UnitType. */
+function resolveIdleIntent(_entity: Entity): AnimationIntent {
+    return IDLE_INTENT;
 }
 
 /** Resolve fight intent — use level-specific fight animation. */
@@ -47,8 +43,7 @@ function resolveWalkIntent(entity: Entity): AnimationIntent {
     if (entity.carrying) {
         return { sequence: carrySequenceKey(entity.carrying.material), loop: true, stopped: false };
     }
-    const level = entity.level ?? 1;
-    return { sequence: levelWalkSequenceKey(level), loop: true, stopped: false };
+    return WALK_INTENT;
 }
 
 /** Resolve carry intent — entity must be carrying a material. */

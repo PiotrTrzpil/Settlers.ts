@@ -73,7 +73,7 @@ export class LuaEventDispatcher {
         if (!this.handlers.has(event)) {
             this.handlers.set(event, []);
         }
-        this.handlers.get(event)!.push({ ref: luaFuncRef });
+        this.handlers.get(event)!.push({ ref: luaFuncRef }); // OK: set() above guarantees entry exists
         log.debug(`Registered handler for ${event}`);
     }
 

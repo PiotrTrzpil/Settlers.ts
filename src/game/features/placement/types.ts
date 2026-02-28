@@ -4,6 +4,7 @@
  */
 
 import type { MapSize } from '@/utilities/map-size';
+import type { Race } from '../../race';
 
 /**
  * Placement status indicating why/how placement can or cannot occur.
@@ -37,6 +38,12 @@ export interface PlacementContext {
     groundHeight: Uint8Array;
     mapSize: MapSize;
     tileOccupancy: Map<string, number>;
+    /**
+     * Race of the player placing the building.
+     * Required for building placement — validateBuildingPlacement throws if absent.
+     * Optional for resource/unit validators which don't use race.
+     */
+    race?: Race;
 }
 
 /**

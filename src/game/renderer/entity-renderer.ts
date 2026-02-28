@@ -233,7 +233,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 .then(loaded => {
                     if (loaded) {
                         EntityRenderer.log.debug(
-                            `Sprite loading complete: ${this.spriteManager!.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${Race[this.spriteManager!.currentRace]}`
+                            `Sprite loading complete: ${this.spriteManager?.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${Race[this.spriteManager?.currentRace ?? 0]}`
                         );
                     }
                     // Notify when sprites are loaded (even if loading failed, animations are ready)
@@ -553,9 +553,10 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         // Sort by depth using optimized sorter
         profiler.beginPhase('sort');
+        const frameCtx = this.frameContext;
         const sortCtx: OptimizedSortContext = {
             spriteManager: this.spriteManager,
-            getWorldPos: entity => this.frameContext!.getWorldPos(entity),
+            getWorldPos: entity => frameCtx.getWorldPos(entity),
             getVariation: entityId => this.getVisualState(entityId)?.variation ?? 0,
         };
         this.depthSorter.sortByDepth(this.sortedEntities, sortCtx);

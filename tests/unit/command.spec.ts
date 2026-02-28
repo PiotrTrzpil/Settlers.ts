@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { EntityType } from '@/game/entity';
+import { EntityType, BuildingType } from '@/game/entity';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import { executeCommand } from '@/game/commands';
 import {
@@ -73,7 +73,7 @@ describe('Command System – edge cases', () => {
 
     describe('select_area', () => {
         it('should prefer units over buildings in area', () => {
-            addBuilding(ctx.state, 10, 10, 0);
+            addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut);
             addUnit(ctx.state, 11, 10, { subType: 2 }); // Swordsman (selectable - Military category)
 
             executeCommand(toCommandContext(ctx), {

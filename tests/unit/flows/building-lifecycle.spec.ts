@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { TERRAIN, setTerrainAt, setHeightAt, type TestMap } from '../helpers/test-map';
 import { createTestContext, addBuilding, placeBuilding, removeEntity, type TestContext } from '../helpers/test-game';
 import { EntityType, BuildingType, getBuildingFootprint } from '@/game/entity';
+import { Race } from '@/game/race';
 import {
     BuildingConstructionPhase,
     captureOriginalTerrain,
@@ -73,7 +74,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         ctx.buildingConstructionSystem.tick(0.5);
 
         // Footprint tiles should have construction ground type
-        const footprint = getBuildingFootprint(20, 20, BuildingType.WoodcutterHut);
+        const footprint = getBuildingFootprint(20, 20, BuildingType.WoodcutterHut, Race.Roman);
         for (const tile of footprint) {
             expect(map.groundType[map.mapSize.toIndex(tile.x, tile.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
         }
@@ -159,7 +160,7 @@ describe('Building Lifecycle: place → construct → remove', () => {
         applyTerrainLeveling(bs, map.groundType, map.groundHeight, map.mapSize, 1.0);
 
         // Footprint tiles should be leveled
-        const footprint = getBuildingFootprint(10, 10, BuildingType.WoodcutterHut);
+        const footprint = getBuildingFootprint(10, 10, BuildingType.WoodcutterHut, Race.Roman);
         const targetHeight = bs.originalTerrain!.targetHeight;
         for (const tile of footprint) {
             expect(map.groundHeight[map.mapSize.toIndex(tile.x, tile.y)]).toBe(targetHeight);

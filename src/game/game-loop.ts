@@ -265,7 +265,9 @@ export class GameLoop {
      * consecutive failures, and disables the system via circuit breaker.
      */
     private handleSystemError(system: TickSystem, error: unknown): void {
-        const state = this.systemErrors.get(system)!;
+        const state = this.systemErrors.get(system);
+        if (!state)
+            throw new Error(`GameLoop: no error state for system (handleSystemError) — system may not be registered`);
         state.consecutiveFailures++;
         const err = error instanceof Error ? error : new Error(String(error));
 
@@ -430,7 +432,9 @@ export class GameLoop {
         // Run each registered tick system with individual error isolation.
         // A failure in one system does not prevent others from running.
         for (const system of this.systems) {
-            const errorState = this.systemErrors.get(system)!;
+            const errorState = this.systemErrors.get(system);
+            if (!errorState)
+                throw new Error(`GameLoop: no error state for system in tick loop — system may not be registered`);
 
             if (errorState.disabled) continue;
 

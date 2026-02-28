@@ -254,7 +254,11 @@ export class RequestManager {
         let count = 0;
 
         for (const requestId of this.sortedRequestIds()) {
-            const request = this.requests.get(requestId)!;
+            const request = this.requests.get(requestId);
+            if (!request)
+                throw new Error(
+                    `RequestManager: request ${requestId} missing from internal map (resetRequestsForCarrier)`
+                );
             if (request.assignedCarrier === carrierId && request.status === RequestStatus.InProgress) {
                 this.resetToPending(request, 'carrier_removed');
                 count++;
@@ -276,7 +280,11 @@ export class RequestManager {
         let count = 0;
 
         for (const requestId of this.sortedRequestIds()) {
-            const request = this.requests.get(requestId)!;
+            const request = this.requests.get(requestId);
+            if (!request)
+                throw new Error(
+                    `RequestManager: request ${requestId} missing from internal map (resetRequestsFromSource)`
+                );
             if (request.sourceBuilding === buildingId && request.status === RequestStatus.InProgress) {
                 this.resetToPending(request, 'source_unavailable');
                 count++;

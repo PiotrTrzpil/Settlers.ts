@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { GameState } from '@/game/game-state';
-import { EntityType, UnitType, getUnitTypeSpeed } from '@/game/entity';
+import { EntityType, UnitType, getUnitTypeSpeed, BuildingType } from '@/game/entity';
+import { Race } from '@/game/race';
+import { installTestGameData, resetTestGameData } from './helpers/test-game-data';
 import { executeCommand, type CommandContext } from '@/game/commands';
 import { MapSize } from '@/utilities/map-size';
 import { EventBus } from '@/game/event-bus';
@@ -18,7 +20,12 @@ describe('Unit Placement, Selection & Movement', () => {
     let state: GameState;
     let ctx: CommandContext;
 
+    afterEach(() => {
+        resetTestGameData();
+    });
+
     beforeEach(() => {
+        installTestGameData();
         const mapSize = new MapSize(64, 64);
         const groundType = new Uint8Array(64 * 64);
         const groundHeight = new Uint8Array(64 * 64);
@@ -354,7 +361,16 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should select building at tile', () => {
-            const building = state.addEntity(EntityType.Building, 1, 10, 10, 0);
+            const building = state.addEntity(
+                EntityType.Building,
+                BuildingType.WoodcutterHut,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
 
             executeCommand(ctx, {
                 type: 'select_at_tile',
@@ -480,7 +496,16 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should ignore non-unit entities in selection', () => {
-            const building = state.addEntity(EntityType.Building, 1, 10, 10, 0);
+            const building = state.addEntity(
+                EntityType.Building,
+                BuildingType.WoodcutterHut,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             state.selection.selectedEntityIds.add(building.id);
             state.selection.selectedEntityId = building.id;
 
@@ -506,7 +531,16 @@ describe('Unit Placement, Selection & Movement', () => {
 
         it('should move only units when selection includes buildings', () => {
             const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
-            const building = state.addEntity(EntityType.Building, 1, 10, 10, 0);
+            const building = state.addEntity(
+                EntityType.Building,
+                BuildingType.WoodcutterHut,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             state.selection.selectedEntityIds.add(unit.id);
             state.selection.selectedEntityIds.add(building.id);
             state.selection.selectedEntityId = unit.id;
@@ -789,7 +823,16 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should prefer units over buildings in area', () => {
-            state.addEntity(EntityType.Building, 1, 10, 10, 0);
+            state.addEntity(
+                EntityType.Building,
+                BuildingType.WoodcutterHut,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             state.addEntity(EntityType.Unit, UnitType.Swordsman, 11, 10, 0);
 
             executeCommand(ctx, {

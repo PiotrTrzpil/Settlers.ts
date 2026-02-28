@@ -36,7 +36,12 @@ export function captureOriginalTerrain(
     const captured = new Set<number>();
 
     // Get all tiles in the building footprint
-    const footprint = getBuildingFootprint(buildingState.tileX, buildingState.tileY, buildingState.buildingType);
+    const footprint = getBuildingFootprint(
+        buildingState.tileX,
+        buildingState.tileY,
+        buildingState.buildingType,
+        buildingState.race
+    );
 
     // Capture all footprint tiles
     for (const tile of footprint) {

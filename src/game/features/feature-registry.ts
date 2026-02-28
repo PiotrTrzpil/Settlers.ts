@@ -147,7 +147,8 @@ export class FeatureRegistry {
         // Destroy in reverse order (dependents before dependencies)
         const ids = [...this.instances.keys()].reverse();
         for (const id of ids) {
-            const instance = this.instances.get(id)!;
+            const instance = this.instances.get(id);
+            if (!instance) throw new Error(`FeatureRegistry: instance ${id} missing from internal map (destroy)`);
             if (instance.destroy) {
                 instance.destroy();
             }

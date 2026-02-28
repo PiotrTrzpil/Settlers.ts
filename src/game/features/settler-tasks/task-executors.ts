@@ -5,7 +5,8 @@
  * The main system passes a TaskContext to provide access to services.
  */
 
-import { UnitType, type Entity, setCarrying, clearCarrying } from '../../entity';
+import { UnitType, EntityType, BuildingType, type Entity, setCarrying, clearCarrying } from '../../entity';
+import { getBuildingDoorOffset } from '../../game-data-access';
 import { LogHandler } from '@/utilities/log-handler';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import { hexDistance, getAllNeighbors, getApproxDirection } from '../../systems/hex-directions';
@@ -148,6 +149,10 @@ function executeGoToTarget(settler: Entity, job: JobState, ctx: TaskContext): Ta
     if (!job.data.targetId) return TaskResult.FAILED;
     const target = ctx.gameState.getEntity(job.data.targetId);
     if (!target) return TaskResult.FAILED;
+    if (target.type === EntityType.Building) {
+        const door = getBuildingDoorOffset(target.race, target.subType as BuildingType);
+        if (door) return moveToPosition(settler, target.x + door.dx, target.y + door.dy, ctx);
+    }
     return moveToPosition(settler, target.x, target.y, ctx);
 }
 
@@ -161,7 +166,10 @@ function executeGoHome(settler: Entity, job: JobState, ctx: TaskContext): TaskRe
     const homeId = resolveHomeId(settler, job, ctx);
     if (!homeId) return TaskResult.FAILED;
     const building = ctx.gameState.getEntityOrThrow(homeId, 'home building');
-    return moveToPosition(settler, building.x, building.y, ctx);
+    const door = getBuildingDoorOffset(building.race, building.subType as BuildingType);
+    const targetX = door ? building.x + door.dx : building.x;
+    const targetY = door ? building.y + door.dy : building.y;
+    return moveToPosition(settler, targetX, targetY, ctx);
 }
 
 function executeGoToPos(settler: Entity, job: JobState, ctx: TaskContext): TaskResult {

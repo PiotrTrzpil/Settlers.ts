@@ -13,7 +13,7 @@ import { BuildingIndicatorRenderer } from '@/game/renderer/building-indicator-re
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { type TileCoord } from '@/game/entity';
-import { Race } from '@/game/renderer/sprite-metadata';
+import { Race, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
 import {
     canPlaceBuildingFootprint,
     canPlaceResource,
@@ -41,6 +41,42 @@ import { getCurrentMapId } from '@/game/game-state-persistence';
 import { initRenderersAsync, exposeForE2E } from './renderer-init';
 import { createUpdateCallback, createRenderCallback } from './frame-callbacks';
 import { updateTileDebugStats, createBuildingAdjustMode, handleModeChange } from './input-setup';
+
+/**
+ * After building sprites finish loading, load overlay sprites for all races
+ * and update the BuildingOverlayManager with the resolved frame counts.
+ */
+async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer, game: Game): Promise<void> {
+    const spriteManager = er.spriteManager;
+    if (!spriteManager) return;
+
+    // Collect sprite refs for all races (overlays live in each race's GFX file)
+    const manifest: { gfxFile: number; jobIndex: number; directionIndex?: number }[] = [];
+    for (const race of AVAILABLE_RACES) {
+        for (const def of game.services.overlayRegistry.getSpriteManifest(race)) {
+            manifest.push(def.spriteRef);
+        }
+    }
+    if (manifest.length === 0) return;
+
+    await spriteManager.loadOverlaySprites(manifest);
+
+    // Update frame counts on all existing overlay instances
+    for (const race of AVAILABLE_RACES) {
+        for (const def of game.services.overlayRegistry.getSpriteManifest(race)) {
+            const { gfxFile, jobIndex, directionIndex = 0 } = def.spriteRef;
+            const frames = spriteManager.getOverlayFrames(gfxFile, jobIndex, directionIndex);
+            if (frames && frames.length > 0) {
+                game.services.buildingOverlayManager.setFrameCountForDef(
+                    gfxFile,
+                    jobIndex,
+                    directionIndex,
+                    frames.length
+                );
+            }
+        }
+    }
+}
 
 interface UseRendererOptions {
     canvas: Ref<HTMLCanvasElement | null>;
@@ -132,9 +168,10 @@ export function useRenderer({
         inputManager.registerMode(
             new PlaceBuildingMode((x, y, buildingType) => {
                 const game = getGame();
-                return game
-                    ? canPlaceBuildingFootprint(game.terrain, game.state.tileOccupancy, x, y, buildingType)
-                    : false;
+                if (!game) return false;
+                const race = game.playerRaces.get(game.currentPlayer);
+                if (race === undefined) throw new Error(`No race for player ${game.currentPlayer}`);
+                return canPlaceBuildingFootprint(game.terrain, game.state.tileOccupancy, x, y, buildingType, race);
             }, tileHover)
         );
         inputManager.registerMode(
@@ -196,6 +233,7 @@ export function useRenderer({
             debugStats.state.mapLoadTimings.rendererInit = Math.round(performance.now() - rendererInitStart);
             debugStats.markRendererReady();
             game.enableTicks();
+            void loadOverlaySpritesAndUpdateFrameCounts(entityRenderer!, game);
         };
         renderer.add(entityRenderer);
     }

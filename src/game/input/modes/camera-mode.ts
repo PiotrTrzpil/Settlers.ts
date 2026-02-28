@@ -189,12 +189,14 @@ export class CameraMode extends BaseInputMode {
     }
 
     private updateDragCamera(): void {
+        // OK: only called from onUpdate() after `if (!this.viewPoint) return`
+        const viewPoint = this.viewPoint!;
         const dpx = this.currentScreenX - this.dragStartScreenX;
         const dpy = this.currentScreenY - this.dragStartScreenY;
 
         // Scale factor converts pixel movement to viewPoint units
-        const height = this.viewPoint!.canvasHeight;
-        const scale = (20 * this.viewPoint!.zoomValue) / height;
+        const height = viewPoint.canvasHeight;
+        const scale = (20 * viewPoint.zoomValue) / height;
         const invertFactor = this.config.invertPan ? -1 : 1;
 
         // For isometric projection: moving vertically in screen space
@@ -203,11 +205,13 @@ export class CameraMode extends BaseInputMode {
         const deltaY = -scale * 2 * dpy * invertFactor;
 
         // Set position directly - computed fresh each frame from mouse position
-        this.viewPoint!.setRawPosition(this.dragStartCameraX + deltaX, this.dragStartCameraY + deltaY);
+        viewPoint.setRawPosition(this.dragStartCameraX + deltaX, this.dragStartCameraY + deltaY);
     }
 
     private updateKeyboardPan(deltaTime: number, context: InputContext): void {
-        const speed = (this._settings?.panSpeed ?? DEFAULT_PAN_SPEED) * this.viewPoint!.zoomValue * deltaTime;
+        // OK: only called from onUpdate() after `if (!this.viewPoint) return`
+        const viewPoint = this.viewPoint!;
+        const speed = (this._settings?.panSpeed ?? DEFAULT_PAN_SPEED) * viewPoint.zoomValue * deltaTime;
 
         let dx = 0;
         let dy = 0;
@@ -229,7 +233,7 @@ export class CameraMode extends BaseInputMode {
 
         if (dx !== 0 || dy !== 0) {
             const factor = this.config.invertPan ? -1 : 1;
-            this.viewPoint!.moveTarget(dx * factor, dy * factor);
+            viewPoint.moveTarget(dx * factor, dy * factor);
         }
     }
 

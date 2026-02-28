@@ -16,6 +16,9 @@ export class TerritoryDotPass implements IRenderPass {
     /** Draw calls emitted by this pass (updated each frame). */
     public lastDrawCalls = 0;
 
+    /** One-shot diagnostic flag — warns once per lifetime when sprites are missing. */
+    private warnedMissingSprite = false;
+
     public prepare(ctx: PassContext): void {
         this.ctx = ctx;
     }
@@ -40,7 +43,15 @@ export class TerritoryDotPass implements IRenderPass {
 
         for (const dot of ctx.territoryDots) {
             const sprite = ctx.spriteManager.getTerritoryDot(dot.player);
-            if (!sprite) continue;
+            if (!sprite) {
+                if (!this.warnedMissingSprite) {
+                    console.warn(
+                        `[TerritoryDotPass] getTerritoryDot(${dot.player}) returned null — sprite not loaded for this player index`
+                    );
+                    this.warnedMissingSprite = true;
+                }
+                continue;
+            }
             const worldPos = TilePicker.tileToWorld(
                 dot.x,
                 dot.y,
@@ -55,7 +66,13 @@ export class TerritoryDotPass implements IRenderPass {
 
         for (const dot of ctx.workAreaDots) {
             const sprite = ctx.spriteManager.getTerritoryDot(dot.player);
-            if (!sprite) continue;
+            if (!sprite) {
+                if (!this.warnedMissingSprite) {
+                    console.warn(`[TerritoryDotPass] work area dot: getTerritoryDot(${dot.player}) returned null`);
+                    this.warnedMissingSprite = true;
+                }
+                continue;
+            }
             const worldPos = TilePicker.tileToWorld(
                 dot.x,
                 dot.y,

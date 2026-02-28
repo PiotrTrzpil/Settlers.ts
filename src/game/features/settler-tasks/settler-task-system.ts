@@ -165,6 +165,40 @@ export class SettlerTaskSystem implements TickSystem {
         return runtime !== undefined && runtime.moveTask !== null;
     }
 
+    /**
+     * Return debug info for all managed unit runtimes (for e2e diagnostics).
+     * Safe to call at any time — returns plain serializable objects.
+     */
+    getDebugInfo(): Array<{
+        entityId: number;
+        state: string;
+        jobId: string | null;
+        jobType: string | null;
+        taskIndex: number | null;
+        progress: number | null;
+        targetId: number | null;
+        carryingGood: number | null;
+        assignedBuilding: number | null;
+    }> {
+        const result = [];
+        for (const [entityId, runtime] of this.runtimes) {
+            const job = runtime.job;
+            const carryingGood = job?.data.carryingGood ?? null;
+            result.push({
+                entityId,
+                state: runtime.state,
+                jobId: job?.jobId ?? null,
+                jobType: job?.type ?? null,
+                taskIndex: job?.taskIndex ?? null,
+                progress: job?.progress ?? null,
+                targetId: job?.type === 'worker' ? (job.data.targetId ?? null) : null,
+                carryingGood,
+                assignedBuilding: runtime.assignedBuilding,
+            });
+        }
+        return result;
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Work handler registration (delegated to registry)
     // ─────────────────────────────────────────────────────────────

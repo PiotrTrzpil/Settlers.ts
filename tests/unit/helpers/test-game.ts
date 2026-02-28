@@ -7,6 +7,7 @@
 
 import { GameState, UnitStateView } from '@/game/game-state';
 import { EntityType, BuildingType, UnitType, getUnitTypeSpeed, type Entity } from '@/game/entity';
+import { Race } from '@/game/race';
 import { createTestMap, type TestMap } from './test-map';
 import { EventBus } from '@/game/event-bus';
 import { spiralSearch } from '@/game/utils/spiral-search';
@@ -28,6 +29,7 @@ import { installTestGameData } from './test-game-data';
 // ─── GameState factory ──────────────────────────────────────────────
 
 export function createGameState(): GameState {
+    installTestGameData();
     const eventBus = new EventBus();
     const state = new GameState(eventBus);
     const movement = new MovementSystem({
@@ -208,9 +210,10 @@ export function addBuilding(
     x: number,
     y: number,
     buildingType: BuildingType | number = BuildingType.WoodcutterHut,
-    player = 0
+    player = 0,
+    race = Race.Roman
 ): Entity {
-    return state.addEntity(EntityType.Building, buildingType, x, y, player);
+    return state.addEntity(EntityType.Building, buildingType, x, y, player, undefined, undefined, race);
 }
 
 /**
@@ -222,9 +225,10 @@ export function addBuildingWithInventory(
     x: number,
     y: number,
     buildingType: BuildingType | number = BuildingType.WoodcutterHut,
-    player = 0
+    player = 0,
+    race = Race.Roman
 ): Entity {
-    const building = ctx.state.addEntity(EntityType.Building, buildingType, x, y, player);
+    const building = ctx.state.addEntity(EntityType.Building, buildingType, x, y, player, undefined, undefined, race);
     ctx.inventoryManager.createInventory(building.id, buildingType as BuildingType);
     return building;
 }
@@ -262,6 +266,7 @@ export function makeBuildingState(
     return {
         entityId: 1,
         buildingType,
+        race: Race.Roman,
         phase: BuildingConstructionPhase.TerrainLeveling,
         phaseProgress: 0,
         totalDuration: 30,

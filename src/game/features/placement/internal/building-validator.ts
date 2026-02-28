@@ -3,7 +3,8 @@
  * Validates building footprints including terrain, occupancy, and slope.
  */
 
-import { tileKey, getBuildingFootprint, type BuildingType, isMineBuilding } from '../../../entity';
+import { tileKey, getBuildingFootprint, BuildingType, isMineBuilding } from '../../../entity';
+import type { Race } from '../../../race';
 import type { PlacementContext, PlacementResult } from '../types';
 import { PlacementStatus } from '../types';
 import { isBuildable, isMineBuildable } from './terrain';
@@ -49,7 +50,12 @@ export function validateBuildingPlacement(
     buildingType: BuildingType,
     ctx: PlacementContext
 ): PlacementResult {
-    const footprint = getBuildingFootprint(x, y, buildingType);
+    if (ctx.race === undefined) {
+        throw new Error(
+            `validateBuildingPlacement: ctx.race is required for building placement (${BuildingType[buildingType]})`
+        );
+    }
+    const footprint = getBuildingFootprint(x, y, buildingType, ctx.race);
     const isMine = isMineBuilding(buildingType);
 
     // Check bounds
@@ -83,13 +89,15 @@ export function canPlaceBuildingFootprint(
     tileOccupancy: Map<string, number>,
     x: number,
     y: number,
-    buildingType: BuildingType
+    buildingType: BuildingType,
+    race: Race
 ): boolean {
     const ctx: PlacementContext = {
         groundType: terrain.groundType,
         groundHeight: terrain.groundHeight,
         mapSize: terrain.mapSize,
         tileOccupancy,
+        race,
     };
     return validateBuildingPlacement(x, y, buildingType, ctx).canPlace;
 }

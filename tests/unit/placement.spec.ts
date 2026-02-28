@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
     canPlaceBuilding,
     canPlaceBuildingFootprint,
@@ -6,7 +6,9 @@ import {
     PlacementStatus,
 } from '@/game/features/placement';
 import { BuildingType } from '@/game/entity';
+import { Race } from '@/game/race';
 import { createTestMap, TERRAIN, setTerrainAt, setHeightAt, type TestMap } from './helpers/test-map';
+import { installTestGameData, resetTestGameData } from './helpers/test-game-data';
 
 // Note: isPassable and isBuildable terrain-type tests are covered by the
 // game-session flow test which validates all terrain types against both functions.
@@ -61,12 +63,18 @@ describe('canPlaceBuilding – edge cases', () => {
 describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
     let map: TestMap;
 
+    afterEach(() => {
+        resetTestGameData();
+    });
     beforeEach(() => {
+        installTestGameData();
         map = createTestMap();
     });
 
     it('should allow 2x2 building on flat terrain', () => {
-        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut)).toBe(true);
+        expect(
+            canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut, Race.Roman)
+        ).toBe(true);
     });
 
     it('should allow 2x2 building with gradual slope across footprint', () => {
@@ -75,7 +83,9 @@ describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
         setHeightAt(map, 11, 10, 12);
         setHeightAt(map, 10, 11, 12);
         setHeightAt(map, 11, 11, 14);
-        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut)).toBe(true);
+        expect(
+            canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut, Race.Roman)
+        ).toBe(true);
     });
 
     it('should allow 3x3 building with large total height range but per-tile gradients within limit', () => {
@@ -89,7 +99,9 @@ describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
         setHeightAt(map, 10, 12, 8);
         setHeightAt(map, 11, 12, 8);
         setHeightAt(map, 12, 12, 8);
-        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.StorageArea)).toBe(true);
+        expect(
+            canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.StorageArea, Race.Roman)
+        ).toBe(true);
     });
 
     it('should reject building when adjacent tiles in footprint have steep slope', () => {
@@ -98,19 +110,27 @@ describe('canPlaceBuildingFootprint – per-tile gradient slope check', () => {
         setHeightAt(map, 11, 10, 20); // diff = 10 from (10,10)
         setHeightAt(map, 10, 11, 10);
         setHeightAt(map, 11, 11, 10);
-        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
+        expect(
+            canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut, Race.Roman)
+        ).toBe(false);
     });
 });
 
 describe('mine terrain restrictions', () => {
     let map: TestMap;
 
+    afterEach(() => {
+        resetTestGameData();
+    });
     beforeEach(() => {
+        installTestGameData();
         map = createTestMap();
     });
 
     it('should reject mine on grass terrain', () => {
-        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.CoalMine)).toBe(false);
+        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.CoalMine, Race.Roman)).toBe(
+            false
+        );
     });
 
     it('should allow mine on rock terrain', () => {
@@ -119,7 +139,9 @@ describe('mine terrain restrictions', () => {
         setTerrainAt(map, 11, 10, TERRAIN.ROCK);
         setTerrainAt(map, 10, 11, TERRAIN.ROCK);
         setTerrainAt(map, 11, 11, TERRAIN.ROCK);
-        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.CoalMine)).toBe(true);
+        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.CoalMine, Race.Roman)).toBe(
+            true
+        );
     });
 
     it('should reject mine when only some tiles are rock', () => {
@@ -127,7 +149,9 @@ describe('mine terrain restrictions', () => {
         // (11,10) remains grass
         setTerrainAt(map, 10, 11, TERRAIN.ROCK);
         setTerrainAt(map, 11, 11, TERRAIN.ROCK);
-        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.CoalMine)).toBe(false);
+        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.CoalMine, Race.Roman)).toBe(
+            false
+        );
     });
 
     it('should reject non-mine building on rock terrain', () => {
@@ -135,7 +159,9 @@ describe('mine terrain restrictions', () => {
         setTerrainAt(map, 11, 10, TERRAIN.ROCK);
         setTerrainAt(map, 10, 11, TERRAIN.ROCK);
         setTerrainAt(map, 11, 11, TERRAIN.ROCK);
-        expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut)).toBe(false);
+        expect(
+            canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, BuildingType.WoodcutterHut, Race.Roman)
+        ).toBe(false);
     });
 
     it('should apply restriction to all mine types', () => {
@@ -152,7 +178,7 @@ describe('mine terrain restrictions', () => {
             BuildingType.StoneMine,
             BuildingType.SulfurMine,
         ]) {
-            expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, mineType)).toBe(true);
+            expect(canPlaceBuildingFootprint(map.terrain, map.occupancy, 10, 10, mineType, Race.Roman)).toBe(true);
         }
     });
 });

@@ -5,8 +5,9 @@
  * consolidated into coordinates.spec.ts where they logically belong.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BuildingType, getBuildingFootprint, EntityType } from '@/game/entity';
+import { Race } from '@/game/race';
 import { UnitType } from '@/game/unit-types';
 import {
     BuildingConstructionPhase,
@@ -19,12 +20,20 @@ import {
 } from '@/game/features/building-construction';
 import { createTestMap, TERRAIN } from './helpers/test-map';
 import { createTestContext, makeBuildingState, completeConstruction, type TestContext } from './helpers/test-game';
+import { installTestGameData, resetTestGameData } from './helpers/test-game-data';
 
 // ---------------------------------------------------------------------------
 // Terrain Leveling
 // ---------------------------------------------------------------------------
 
 describe('Terrain Leveling', () => {
+    beforeEach(() => {
+        installTestGameData();
+    });
+    afterEach(() => {
+        resetTestGameData();
+    });
+
     describe('captureOriginalTerrain', () => {
         it('should capture all 4 footprint tiles for a 2x2 building', () => {
             const map = createTestMap();
@@ -182,7 +191,7 @@ describe('Terrain Leveling', () => {
 
             applyTerrainLeveling(bs, map.groundType, map.groundHeight, map.mapSize, 1.0);
 
-            for (const tile of getBuildingFootprint(10, 10, BuildingType.WoodcutterHut)) {
+            for (const tile of getBuildingFootprint(10, 10, BuildingType.WoodcutterHut, Race.Roman)) {
                 expect(map.groundHeight[map.mapSize.toIndex(tile.x, tile.y)]).toBe(target);
             }
         });
@@ -194,7 +203,7 @@ describe('Terrain Leveling', () => {
 
             applyTerrainLeveling(bs, map.groundType, map.groundHeight, map.mapSize, 1.0);
 
-            const footprint = getBuildingFootprint(10, 10, BuildingType.StorageArea);
+            const footprint = getBuildingFootprint(10, 10, BuildingType.StorageArea, Race.Roman);
             expect(footprint).toHaveLength(9);
             for (const tile of footprint) {
                 expect(map.groundType[map.mapSize.toIndex(tile.x, tile.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
@@ -305,7 +314,16 @@ describe('Building Construction Phases', () => {
                 },
             });
 
-            ctx.state.addEntity(EntityType.Building, BuildingType.WoodcutterHut, 10, 10, 0);
+            ctx.state.addEntity(
+                EntityType.Building,
+                BuildingType.WoodcutterHut,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             const bs = ctx.buildingStateManager.buildingStates.values().next().value as BuildingState;
             bs.totalDuration = 10; // 10 seconds total
 
@@ -316,7 +334,7 @@ describe('Building Construction Phases', () => {
             expect(terrainNotified).toBe(true);
 
             // All footprint tiles should have construction ground type
-            const footprint = getBuildingFootprint(10, 10, BuildingType.WoodcutterHut);
+            const footprint = getBuildingFootprint(10, 10, BuildingType.WoodcutterHut, Race.Roman);
             for (const tile of footprint) {
                 expect(ctx.map.groundType[ctx.map.mapSize.toIndex(tile.x, tile.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
             }
@@ -348,7 +366,16 @@ describe('Unit spawning on construction complete', () => {
     });
 
     it('should spawn swordsmen when barrack construction completes', () => {
-        const barrack = ctx.state.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
+        const barrack = ctx.state.addEntity(
+            EntityType.Building,
+            BuildingType.Barrack,
+            10,
+            10,
+            0,
+            undefined,
+            undefined,
+            Race.Roman
+        );
 
         expect(ctx.state.entities.filter(e => e.type === EntityType.Unit)).toHaveLength(0);
 
@@ -365,7 +392,16 @@ describe('Unit spawning on construction complete', () => {
     });
 
     it('should spawn units adjacent to the building', () => {
-        const barrack = ctx.state.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
+        const barrack = ctx.state.addEntity(
+            EntityType.Building,
+            BuildingType.Barrack,
+            10,
+            10,
+            0,
+            undefined,
+            undefined,
+            Race.Roman
+        );
 
         completeConstruction(ctx, barrack.id);
 
@@ -377,7 +413,16 @@ describe('Unit spawning on construction complete', () => {
     });
 
     it('should spawn dedicated worker for production buildings', () => {
-        const lj = ctx.state.addEntity(EntityType.Building, BuildingType.WoodcutterHut, 10, 10, 0);
+        const lj = ctx.state.addEntity(
+            EntityType.Building,
+            BuildingType.WoodcutterHut,
+            10,
+            10,
+            0,
+            undefined,
+            undefined,
+            Race.Roman
+        );
 
         completeConstruction(ctx, lj.id);
 
@@ -388,7 +433,16 @@ describe('Unit spawning on construction complete', () => {
     });
 
     it('should handle limited space around the building gracefully', () => {
-        const barrack = ctx.state.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
+        const barrack = ctx.state.addEntity(
+            EntityType.Building,
+            BuildingType.Barrack,
+            10,
+            10,
+            0,
+            undefined,
+            undefined,
+            Race.Roman
+        );
 
         // Block tiles in expanding rings with water, leave only 2 free
         for (let y = 6; y <= 15; y++) {
@@ -408,7 +462,16 @@ describe('Unit spawning on construction complete', () => {
     });
 
     it('should not spawn units on water tiles', () => {
-        const barrack = ctx.state.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
+        const barrack = ctx.state.addEntity(
+            EntityType.Building,
+            BuildingType.Barrack,
+            10,
+            10,
+            0,
+            undefined,
+            undefined,
+            Race.Roman
+        );
 
         // Surround the building with water in a wide area
         for (let y = 6; y <= 15; y++) {
@@ -425,7 +488,16 @@ describe('Unit spawning on construction complete', () => {
     });
 
     it('should spawn unselectable carriers from SmallHouse', () => {
-        const house = ctx.state.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 10, 10, 0);
+        const house = ctx.state.addEntity(
+            EntityType.Building,
+            BuildingType.ResidenceSmall,
+            10,
+            10,
+            0,
+            undefined,
+            undefined,
+            Race.Roman
+        );
         completeConstruction(ctx, house.id);
 
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
@@ -436,7 +508,16 @@ describe('Unit spawning on construction complete', () => {
     });
 
     it('should spawn unselectable carriers from MediumHouse', () => {
-        const house = ctx.state.addEntity(EntityType.Building, BuildingType.ResidenceMedium, 10, 10, 0);
+        const house = ctx.state.addEntity(
+            EntityType.Building,
+            BuildingType.ResidenceMedium,
+            10,
+            10,
+            0,
+            undefined,
+            undefined,
+            Race.Roman
+        );
         completeConstruction(ctx, house.id);
 
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
@@ -447,7 +528,16 @@ describe('Unit spawning on construction complete', () => {
     });
 
     it('should spawn unselectable carriers from LargeHouse', () => {
-        const house = ctx.state.addEntity(EntityType.Building, BuildingType.ResidenceBig, 10, 10, 0);
+        const house = ctx.state.addEntity(
+            EntityType.Building,
+            BuildingType.ResidenceBig,
+            10,
+            10,
+            0,
+            undefined,
+            undefined,
+            Race.Roman
+        );
         completeConstruction(ctx, house.id);
 
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
@@ -458,7 +548,16 @@ describe('Unit spawning on construction complete', () => {
     });
 
     it('should spawn selectable swordsmen from Barrack', () => {
-        const barrack = ctx.state.addEntity(EntityType.Building, BuildingType.Barrack, 10, 10, 0);
+        const barrack = ctx.state.addEntity(
+            EntityType.Building,
+            BuildingType.Barrack,
+            10,
+            10,
+            0,
+            undefined,
+            undefined,
+            Race.Roman
+        );
         completeConstruction(ctx, barrack.id);
 
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);

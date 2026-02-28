@@ -281,7 +281,7 @@ export class SoundManager implements IAudioManager {
         // Don't cache music - it's managed by MusicController with fading/unloading
         // Caching caused overlapping audio when the same track was requested while fading out
         if (config.type !== SoundType.Music && this.sounds.has(config.id)) {
-            return this.sounds.get(config.id)!;
+            return this.sounds.get(config.id)!; // OK: has() check above guarantees entry exists
         }
 
         let src: string | string[] = [config.path];

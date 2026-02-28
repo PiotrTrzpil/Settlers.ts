@@ -18,7 +18,7 @@ const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
 const LAST_MAP_KEY = 'settlers_last_map';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
-const SNAPSHOT_VERSION = 6; // Bumped for race, carrying, hidden, stones
+const SNAPSHOT_VERSION = 8; // Bumped for work area instance offsets
 
 /**
  * Serialized building construction state.
@@ -155,6 +155,8 @@ export interface GameStateSnapshot {
     terrainGroundType?: string;
     /** Modified terrain ground heights (base64-encoded Uint8Array) */
     terrainGroundHeight?: string;
+    /** Per-building work area center overrides (entityId → tile offset) */
+    workAreaOffsets?: Array<{ entityId: number; dx: number; dy: number }>;
 }
 
 /** Current map identifier for save/load matching */
@@ -243,14 +245,14 @@ function serializeInventories(game: Game): SerializedBuildingInventory[] {
 function serializeCarriers(game: Game): SerializedCarrier[] {
     const result: SerializedCarrier[] = [];
     for (const carrier of game.services.carrierManager.getAllCarriers()) {
-        const entity = game.state.getEntity(carrier.entityId);
+        const entity = game.state.getEntityOrThrow(carrier.entityId, 'carrier serialization');
         result.push({
             entityId: carrier.entityId,
             homeBuilding: carrier.homeBuilding,
             status: carrier.status,
             fatigue: carrier.fatigue,
-            carryingMaterial: entity?.carrying?.material ?? null,
-            carryingAmount: entity?.carrying?.amount ?? 0,
+            carryingMaterial: entity.carrying?.material ?? null,
+            carryingAmount: entity.carrying?.amount ?? 0,
         });
     }
     return result;
@@ -359,6 +361,7 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         requests: serializeRequests(game),
         terrainGroundType: uint8ArrayToBase64(game.terrain.groundType),
         terrainGroundHeight: uint8ArrayToBase64(game.terrain.groundHeight),
+        workAreaOffsets: game.services.workAreaStore.serializeInstanceOffsets(),
     };
 }
 
@@ -482,7 +485,7 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
         const savedNextId = state.nextId;
         state.nextId = e.id;
 
-        const entity = state.addEntity(e.type, e.subType, e.x, e.y, e.player, undefined, e.variation);
+        const entity = state.addEntity(e.type, e.subType, e.x, e.y, e.player, undefined, e.variation, e.race);
         state.nextId = Math.max(savedNextId, e.id + 1);
 
         // Restore per-entity properties not covered by addEntity
@@ -492,9 +495,13 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
         if (e.type === EntityType.Building) {
             const saved = savedBuildingStates.get(e.id);
             if (saved) {
+                if (e.race === undefined) {
+                    throw new Error(`Building entity ${e.id} in snapshot is missing race — snapshot is incompatible`);
+                }
                 buildingStateManager.restoreBuildingState({
                     entityId: e.id,
                     buildingType: e.subType,
+                    race: e.race,
                     tileX: e.x,
                     tileY: e.y,
                     phase: saved.phase,
@@ -628,6 +635,9 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
     restoreInventories(game, snapshot);
     restoreCarriers(game, snapshot);
     restoreRequests(game, snapshot);
+    if (snapshot.workAreaOffsets) {
+        game.services.workAreaStore.restoreInstanceOffsets(snapshot.workAreaOffsets);
+    }
 
     console.log(`GameState: Restored ${snapshot.entities.length} entities from snapshot`);
 }

@@ -13,6 +13,8 @@ import type { EntityVisualService } from '../../animation/entity-visual-service'
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { LogHandler } from '@/utilities/log-handler';
+import { EntityType } from '../../entity';
+import { findEmptySpot } from '../../systems/spatial-search';
 
 const log = new LogHandler('StoneSystem');
 
@@ -172,6 +174,28 @@ export class StoneSystem {
     /** Get stone state by entity ID. */
     getStoneState(entityId: number): StoneState | undefined {
         return this.states.get(entityId);
+    }
+
+    /**
+     * Spawn multiple ResourceStone entities near a position.
+     * Uses findEmptySpot to place each stone on an unoccupied tile — mirrors
+     * the treeSystem.plantTreesNear pattern for use in tests and scripts.
+     * @returns Number of stones successfully spawned.
+     */
+    spawnStonesNear(cx: number, cy: number, count: number, radius = 15): number {
+        let placed = 0;
+        for (let i = 0; i < count; i++) {
+            const spot = findEmptySpot(cx, cy, {
+                gameState: this.gameState,
+                searchRadius: radius,
+                minDistanceSq: 0,
+                proximityFilter: () => false,
+            });
+            if (!spot) break;
+            this.gameState.addEntity(EntityType.MapObject, MapObjectType.ResourceStone, spot.x, spot.y, 0);
+            placed++;
+        }
+        return placed;
     }
 
     /** Get stats for debugging. */

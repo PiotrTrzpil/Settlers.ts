@@ -98,6 +98,12 @@ export interface BuildingOverlayDef {
     readonly teamColored?: boolean;
     /** Original XML job name (e.g. BUILDING_BAKERY_FIRE) for deferred sprite resolution */
     readonly jobName?: string;
+    /**
+     * When true, this overlay renders the player's team flag instead of a JIL sprite.
+     * Sprite is resolved at render time via spriteManager.getFlag(player, frame).
+     * The spriteRef field is unused for flag overlays.
+     */
+    readonly isFlag?: boolean;
 }
 
 // ============================================================================

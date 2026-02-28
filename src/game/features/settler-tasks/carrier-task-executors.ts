@@ -134,7 +134,12 @@ function pickup(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskRe
 function dropoff(settler: Entity, job: CarrierJobState, ctx: TaskContext): TaskResult {
     const { transportJob, destBuildingId, material } = job.data;
 
-    const amount = settler.carrying?.amount ?? 0;
+    if (!settler.carrying) {
+        throw new Error(
+            `Carrier ${settler.id}: dropoff called but settler is not carrying anything (job: material=${material})`
+        );
+    }
+    const amount = settler.carrying.amount;
     const deposited = transportJob.complete(amount);
 
     const overflow = amount - deposited;

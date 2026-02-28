@@ -114,6 +114,19 @@ const TEST_BUILDINGS: BuildingInfo[] = [
     buildingInfo('BUILDING_DARKTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD'),
     buildingInfo('BUILDING_MANACOPTERHALL', 'SETTLER_MANACOPTERMASTER', 'GOOD_NO_GOOD'),
     buildingInfo('BUILDING_SHIPYARDA', 'SETTLER_SHIPYARDWORKER', 'GOOD_HAMMER'),
+    // Eyecatchers (decorative monuments — no workers)
+    buildingInfo('BUILDING_EYECATCHER01', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER02', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER03', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER04', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER05', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER06', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER07', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER08', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER09', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER10', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER11', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER12', '', 'GOOD_NO_GOOD'),
 ];
 
 /** Build a race building map from the test building definitions. */

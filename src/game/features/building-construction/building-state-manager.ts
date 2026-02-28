@@ -10,6 +10,7 @@
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
 import { BuildingType } from '../../buildings/types';
+import { Race } from '../../race';
 import { BuildingConstructionPhase, type BuildingState } from './types';
 import { EntityType, type EntityProvider } from '../../entity';
 
@@ -53,7 +54,9 @@ export class BuildingStateManager {
     registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, type, subType, x, y }) => {
             if (type === EntityType.Building) {
-                this.createBuildingState(entityId, subType as BuildingType, x, y);
+                const entity = this.entityProvider.getEntity(entityId);
+                if (!entity) throw new Error(`BuildingStateManager: entity ${entityId} not found after entity:created`);
+                this.createBuildingState(entityId, subType as BuildingType, x, y, entity.race);
             }
         });
 
@@ -79,6 +82,7 @@ export class BuildingStateManager {
         buildingType: BuildingType,
         x: number,
         y: number,
+        race: Race,
         totalDuration: number = DEFAULT_CONSTRUCTION_DURATION
     ): BuildingState {
         if (!this.entityProvider.getEntity(entityId)) {
@@ -88,6 +92,7 @@ export class BuildingStateManager {
         const state: BuildingState = {
             entityId,
             buildingType,
+            race,
             phase: BuildingConstructionPhase.TerrainLeveling,
             phaseProgress: 0,
             totalDuration,
@@ -175,6 +180,7 @@ export class BuildingStateManager {
     restoreBuildingState(data: {
         entityId: number;
         buildingType: BuildingType;
+        race: Race;
         tileX: number;
         tileY: number;
         phase: BuildingConstructionPhase;
@@ -191,6 +197,7 @@ export class BuildingStateManager {
         this.states.set(data.entityId, {
             entityId: data.entityId,
             buildingType: data.buildingType,
+            race: data.race,
             phase: data.phase,
             phaseProgress: data.phaseProgress,
             totalDuration: data.totalDuration,

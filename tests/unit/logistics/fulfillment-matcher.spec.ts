@@ -15,6 +15,7 @@ import {
 } from '@/game/features/logistics';
 import { EMaterialType } from '@/game/economy/material-type';
 import { EntityType, BuildingType } from '@/game/entity';
+import { Race } from '@/game/race';
 import { ServiceAreaManager } from '@/game/features/service-areas';
 import { addBuildingWithInventory, createTestContext, type TestContext } from '../helpers/test-game';
 
@@ -308,7 +309,16 @@ describe('Resource Supply System', () => {
             const serviceAreaManager = new ServiceAreaManager();
 
             // Create hub with service area
-            const hub = ctx.state.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 10, 10, 0);
+            const hub = ctx.state.addEntity(
+                EntityType.Building,
+                BuildingType.ResidenceSmall,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             serviceAreaManager.createServiceArea(hub.id, 0, 10, 10, TEST_HUB_TYPE, 15);
 
             // Create building inside service area
@@ -374,7 +384,16 @@ describe('Fulfillment Matcher', () => {
     describe('matchRequestToSupply', () => {
         it('should match request to nearest supply within service area', () => {
             // Create hub at center with service area
-            const hub = ctx.state.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 20, 20, 0);
+            const hub = ctx.state.addEntity(
+                EntityType.Building,
+                BuildingType.ResidenceSmall,
+                20,
+                20,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             serviceAreaManager.createServiceArea(hub.id, 0, 20, 20, TEST_HUB_TYPE, 30);
 
             // Create destination (sawmill needing logs)
@@ -399,7 +418,16 @@ describe('Fulfillment Matcher', () => {
         });
 
         it('should return null when no supply exists', () => {
-            const hub = ctx.state.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 20, 20, 0);
+            const hub = ctx.state.addEntity(
+                EntityType.Building,
+                BuildingType.ResidenceSmall,
+                20,
+                20,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             serviceAreaManager.createServiceArea(hub.id, 0, 20, 20, TEST_HUB_TYPE, 30);
 
             const sawmill = addBuildingWithInventory(ctx, 15, 20, BuildingType.Sawmill, 0);
@@ -411,7 +439,16 @@ describe('Fulfillment Matcher', () => {
         });
 
         it('should return null when supply is outside service area', () => {
-            const hub = ctx.state.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 20, 20, 0);
+            const hub = ctx.state.addEntity(
+                EntityType.Building,
+                BuildingType.ResidenceSmall,
+                20,
+                20,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             serviceAreaManager.createServiceArea(hub.id, 0, 20, 20, TEST_HUB_TYPE, 5); // Small radius
 
             const sawmill = addBuildingWithInventory(ctx, 22, 20, BuildingType.Sawmill, 0);
@@ -427,7 +464,16 @@ describe('Fulfillment Matcher', () => {
         });
 
         it('should not match source to itself', () => {
-            const hub = ctx.state.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 20, 20, 0);
+            const hub = ctx.state.addEntity(
+                EntityType.Building,
+                BuildingType.ResidenceSmall,
+                20,
+                20,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             serviceAreaManager.createServiceArea(hub.id, 0, 20, 20, TEST_HUB_TYPE, 30);
 
             // Building has material in its own output - use WoodcutterHut which outputs LOG
@@ -459,7 +505,16 @@ describe('Fulfillment Matcher', () => {
 
     describe('findAllMatches', () => {
         it('should return all valid matches sorted by distance', () => {
-            const hub = ctx.state.addEntity(EntityType.Building, BuildingType.ResidenceSmall, 20, 20, 0);
+            const hub = ctx.state.addEntity(
+                EntityType.Building,
+                BuildingType.ResidenceSmall,
+                20,
+                20,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             serviceAreaManager.createServiceArea(hub.id, 0, 20, 20, TEST_HUB_TYPE, 30);
 
             const sawmill = addBuildingWithInventory(ctx, 20, 20, BuildingType.Sawmill, 0);

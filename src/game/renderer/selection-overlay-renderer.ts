@@ -72,7 +72,7 @@ export class SelectionOverlayRenderer {
 
             if (entity.type === EntityType.Building) {
                 // Get footprint tiles and calculate bounding box in world coordinates
-                const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType);
+                const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
                 if (footprint.length > 0) {
                     const bounds = this.calculateFootprintBounds(footprint, ctx);
                     minX = bounds.minX;
@@ -427,7 +427,7 @@ export class SelectionOverlayRenderer {
         const diamondVerts = new Float32Array(12);
 
         for (const entity of buildings) {
-            const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType);
+            const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
 
             // Build a set of footprint vertex positions for face-inclusion checks.
             // Footprint positions are vertices; a terrain face at (x,y) is only fully

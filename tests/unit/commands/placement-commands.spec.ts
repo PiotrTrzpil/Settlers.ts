@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { EntityType } from '@/game/entity';
 import { BuildingType, getBuildingFootprint } from '@/game/buildings';
+import { Race } from '@/game/race';
 import { UnitType } from '@/game/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingConstructionPhase, CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
@@ -285,7 +286,7 @@ describe('Building Placement Terrain Modification', () => {
         expect(tile).not.toBeNull();
 
         // Verify ground is grass before placement
-        const footprint = getBuildingFootprint(tile!.x, tile!.y, BuildingType.WoodcutterHut);
+        const footprint = getBuildingFootprint(tile!.x, tile!.y, BuildingType.WoodcutterHut, Race.Roman);
         for (const ft of footprint) {
             expect(ctx.map.groundType[ctx.map.mapSize.toIndex(ft.x, ft.y)]).toBe(TERRAIN.GRASS);
         }
@@ -328,7 +329,7 @@ describe('Building Placement Terrain Modification', () => {
         expect(result.success).toBe(true);
 
         // Ground type should be raw
-        const footprint = getBuildingFootprint(tile!.x, tile!.y, BuildingType.WoodcutterHut);
+        const footprint = getBuildingFootprint(tile!.x, tile!.y, BuildingType.WoodcutterHut, Race.Roman);
         for (const ft of footprint) {
             expect(ctx.map.groundType[ctx.map.mapSize.toIndex(ft.x, ft.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
         }

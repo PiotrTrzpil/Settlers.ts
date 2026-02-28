@@ -255,7 +255,11 @@ export class InventoryVisualizer {
             const building = this.gameState.getEntity(buildingId);
             if (!building || (building.subType as BuildingType) !== buildingType) continue;
 
-            const state = this.stackState.get(buildingId)!;
+            const state = this.stackState.get(buildingId);
+            if (!state)
+                throw new Error(
+                    `InventoryVisualizer: no stack state for building ${buildingId} (removeVisualsForType)`
+                );
             for (const entityId of state.outputStacks.values()) this.gameState.removeEntity(entityId);
             for (const entityId of state.inputStacks.values()) this.gameState.removeEntity(entityId);
             this.stackState.remove(buildingId);
