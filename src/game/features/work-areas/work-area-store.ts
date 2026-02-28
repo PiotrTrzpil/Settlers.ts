@@ -5,52 +5,36 @@
  * Lives in GameServices so both the UI layer (adjust handler) and
  * gameplay systems (settler tasks, worker search) can access it.
  *
- * Falls back to per-type+race defaults from YAML, then to a hard-coded offset.
+ * Falls back to DEFAULT_WORK_AREA_CENTER for buildings with no instance override.
  */
 
 import type { BuildingType } from '../../buildings/types';
 import type { Race } from '../../race';
 import type { TileOffset } from '../building-adjust/types';
-import { YamlStore } from '../building-adjust/yaml-store';
-import { DEFAULT_WORK_AREA_OFFSET_Y, WORK_AREA_BUILDINGS } from './types';
-import workAreasYaml from '../building-adjust/data/building-work-areas.yaml?raw';
+import { WORK_AREA_BUILDINGS } from './types';
+import { getBuildingInfo } from '../../game-data-access';
 
-const ITEM_KEY = 'work-area';
-const FILE_PATH = 'src/game/features/building-adjust/data/building-work-areas.yaml';
+/** Default work area center offset from the building tile anchor (tiles). Easy to change. */
+export const DEFAULT_WORK_AREA_CENTER: TileOffset = { dx: 0, dy: 4 };
 
 export class WorkAreaStore {
-    /** Per-type+race defaults from YAML */
-    private readonly defaults: YamlStore;
-
-    /** Per-instance overrides (runtime only) */
+    /** Per-instance overrides (entityId → offset) */
     private readonly instanceOffsets = new Map<number, TileOffset>();
 
-    constructor() {
-        this.defaults = new YamlStore(workAreasYaml, FILE_PATH);
-    }
-
-    /** Get the tile offset for a building (instance override → YAML default → hard-coded fallback) */
+    /** Get the tile offset for a building (instance override → hardcoded default) */
     getOffset(buildingType: BuildingType, race: Race, buildingId?: number): TileOffset {
-        // Per-instance override
         if (buildingId !== undefined) {
             const inst = this.instanceOffsets.get(buildingId);
             if (inst) return inst;
         }
-
-        // Per-type+race YAML default
-        const raw = this.defaults.get(buildingType, race, ITEM_KEY);
-        if (raw && raw['dx'] !== undefined && raw['dy'] !== undefined) {
-            return { dx: raw['dx'], dy: raw['dy'] };
-        }
-
-        // Hard-coded fallback
-        return { dx: 0, dy: DEFAULT_WORK_AREA_OFFSET_Y };
+        return DEFAULT_WORK_AREA_CENTER;
     }
 
-    /** Set the per-type+race default (persisted to YAML) */
-    setDefault(buildingType: BuildingType, race: Race, offset: TileOffset): void {
-        this.defaults.set(buildingType, race, ITEM_KEY, { dx: offset.dx, dy: offset.dy });
-        this.defaults.save();
+    /** Get the work area radius (in tiles) for a building type+race from XML data. */
+    getRadius(buildingType: BuildingType, race: Race): number {
+        const info = getBuildingInfo(race, buildingType);
+        if (!info) throw new Error(`No BuildingInfo for ${buildingType} / race ${race}`);
+        return info.workingAreaRadius;
     }
 
     /** Set a per-instance override */
@@ -80,8 +64,20 @@ export class WorkAreaStore {
         return { x: buildingX + offset.dx, y: buildingY + offset.dy };
     }
 
-    /** Save YAML defaults to disk */
-    saveDefaults(): void {
-        this.defaults.save();
+    /** Serialize instance offsets for game state persistence. */
+    serializeInstanceOffsets(): Array<{ entityId: number; dx: number; dy: number }> {
+        const result: Array<{ entityId: number; dx: number; dy: number }> = [];
+        for (const [entityId, offset] of this.instanceOffsets) {
+            result.push({ entityId, dx: offset.dx, dy: offset.dy });
+        }
+        return result;
+    }
+
+    /** Restore instance offsets from saved game state. */
+    restoreInstanceOffsets(data: Array<{ entityId: number; dx: number; dy: number }>): void {
+        this.instanceOffsets.clear();
+        for (const entry of data) {
+            this.instanceOffsets.set(entry.entityId, { dx: entry.dx, dy: entry.dy });
+        }
     }
 }

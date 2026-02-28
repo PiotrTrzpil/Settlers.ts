@@ -5,9 +5,7 @@
  * Delegates all state to the shared WorkAreaStore (owned by GameServices),
  * so gameplay systems can also query work area positions.
  *
- * Two item keys:
- * - 'work-area' — adjusts the per-type+race default (debug panel, saved to YAML)
- * - 'work-area-instance' — adjusts this specific building only (gameplay button, runtime only)
+ * Per-instance override ('work-area-instance') — adjusts this specific building only.
  */
 
 import type { BuildingType } from '../../entity';
@@ -17,16 +15,7 @@ import type { BuildingAdjustHandler, AdjustableItem, TileOffset } from './types'
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import { WORK_AREA_BUILDINGS } from '../work-areas/types';
 
-const DEFAULT_KEY = 'work-area';
 const INSTANCE_KEY = 'work-area-instance';
-
-/** Item shown in the debug adjustments panel — edits per-type+race YAML defaults */
-const WORK_AREA_DEFAULT_ITEM: AdjustableItem = {
-    key: DEFAULT_KEY,
-    label: 'Work Area',
-    category: 'work-area',
-    precision: 'tile',
-};
 
 /** Item used by the gameplay "Set Work Area" button — edits per-instance */
 const WORK_AREA_INSTANCE_ITEM: AdjustableItem = {
@@ -42,10 +31,9 @@ export class WorkAreaAdjustHandler implements BuildingAdjustHandler {
 
     constructor(private readonly store: WorkAreaStore) {}
 
-    /** Returns the default item for the debug adjustments panel */
     getItems(buildingType: BuildingType, _race: Race): readonly AdjustableItem[] {
         if (!WORK_AREA_BUILDINGS.has(buildingType)) return [];
-        return [WORK_AREA_DEFAULT_ITEM];
+        return [WORK_AREA_INSTANCE_ITEM];
     }
 
     /** Get the instance item for the gameplay "Set Work Area" button */
@@ -60,9 +48,12 @@ export class WorkAreaAdjustHandler implements BuildingAdjustHandler {
     setOffset(buildingType: BuildingType, race: Race, itemKey: string, offset: TileOffset, buildingId?: number): void {
         if (itemKey === INSTANCE_KEY && buildingId !== undefined) {
             this.store.setInstanceOffset(buildingId, offset);
-        } else {
-            this.store.setDefault(buildingType, race, offset);
         }
+    }
+
+    /** Get the work area radius (in tiles) for a building type+race from XML data. */
+    getRadius(buildingType: BuildingType, race: Race): number {
+        return this.store.getRadius(buildingType, race);
     }
 
     /** Get the resolved work area center in absolute tile coordinates */
@@ -74,6 +65,10 @@ export class WorkAreaAdjustHandler implements BuildingAdjustHandler {
         race: Race
     ): { x: number; y: number } {
         return this.store.getAbsoluteCenter(buildingId, buildingX, buildingY, buildingType, race);
+    }
+
+    save(): void {
+        // No-op: work area instance offsets are saved with game state, not to disk
     }
 
     getHighlights(
@@ -89,7 +84,7 @@ export class WorkAreaAdjustHandler implements BuildingAdjustHandler {
         const offset = this.store.getOffset(buildingType, race, buildingId);
         const x = buildingX + offset.dx;
         const y = buildingY + offset.dy;
-        const isActive = activeItemKey === DEFAULT_KEY || activeItemKey === INSTANCE_KEY;
+        const isActive = activeItemKey === INSTANCE_KEY;
 
         return [
             {
@@ -100,9 +95,5 @@ export class WorkAreaAdjustHandler implements BuildingAdjustHandler {
                 style: isActive ? 'solid' : 'outline',
             },
         ];
-    }
-
-    save(): void {
-        this.store.saveDefaults();
     }
 }

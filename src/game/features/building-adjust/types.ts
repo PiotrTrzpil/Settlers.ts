@@ -19,7 +19,7 @@ import type { TileHighlight } from '../../input/render-state';
 // ============================================================================
 
 /** Category of adjustable property. */
-export type AdjustCategory = 'entrance' | 'sprite-layer' | 'stack' | 'work-area';
+export type AdjustCategory = 'sprite-layer' | 'stack' | 'work-area';
 
 /** Precision mode for placement. */
 export type AdjustPrecision = 'tile' | 'pixel';

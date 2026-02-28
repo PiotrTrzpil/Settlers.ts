@@ -1,4 +1,0 @@
-# Building sprite layer pixel offsets per BuildingType + Race.
-# Format: BuildingName → RaceName → layerKey → { px, py }
-# px/py are pixel offsets from the building sprite anchor.
-# layerKey is 'base' for the main building sprite, or the overlay key (e.g. 'smoke', 'wheel').

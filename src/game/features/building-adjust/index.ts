@@ -5,15 +5,13 @@
  * Operates per (BuildingType, Race), edits from the selected building
  * apply to all buildings of that type + race.
  *
- * Three categories of adjustable properties:
- * - Entrance — door tile offset
- * - Sprite Layers — pixel offsets for base sprite and overlays
+ * Two categories of adjustable properties:
  * - Resource Stacks — input/output material tile positions
+ * - Work Areas — center positions for worker search areas
  *
  * Public API:
  * - Types: BuildingAdjustHandler, AdjustableItem, AdjustCategory, etc.
- * - Handlers: EntranceAdjustHandler, SpriteLayerAdjustHandler, StackAdjustHandler
- * - Persistence: YamlStore
+ * - Handlers: StackAdjustHandler, WorkAreaAdjustHandler
  */
 
 // Types
@@ -28,10 +26,5 @@ export type {
 } from './types';
 
 // Handlers
-export { EntranceAdjustHandler } from './entrance-handler';
-export { SpriteLayerAdjustHandler, getSpriteOffset } from './sprite-layer-handler';
 export { StackAdjustHandler } from './stack-handler';
 export { WorkAreaAdjustHandler } from './work-area-handler';
-
-// Persistence
-export { YamlStore } from './yaml-store';

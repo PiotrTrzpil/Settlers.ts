@@ -67,7 +67,7 @@ export function useWorkAreaAdjustment(selectedEntity: Ref<Entity | undefined>): 
         for (const handler of handlers) {
             if (handler.category !== 'work-area') continue;
             if (!('getInstanceItem' in handler)) continue;
-            const waHandler = handler as WorkAreaAdjustHandler;
+            const waHandler = handler as unknown as WorkAreaAdjustHandler;
 
             if (input.getModeName() !== 'building-adjust') {
                 input.switchMode('building-adjust');
