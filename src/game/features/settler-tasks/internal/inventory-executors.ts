@@ -123,8 +123,9 @@ export const executePutGood: ChoreoExecutorFn = (
     _dt: number,
     ctx: ChoreoContext
 ): TaskResult => {
-    // Prefer the material tracked in job state; fall back to parsing the node entity.
-    const material = job.carryingGood ?? requireMaterial(node, settler.id);
+    // Prefer the node's explicit material (handles transformations like LOG→BOARD);
+    // fall back to job carrying state when node has no entity.
+    const material = parseMaterial(node.entity) ?? job.carryingGood ?? requireMaterial(node, settler.id);
     const buildingId = requireHomeBuilding(settler, ctx);
 
     const deposited = ctx.inventoryManager.depositOutput(buildingId, material, 1);

@@ -99,7 +99,7 @@ describe('BuildingPositionResolverImpl', () => {
 
         resolver = new BuildingPositionResolverImpl({
             gameState: mockGameState as never,
-            inventoryVisualizer: mockInventoryVisualizer as never,
+            getInventoryVisualizer: () => mockInventoryVisualizer as never,
             workAreaStore: mockWorkAreaStore as never,
         });
     });
@@ -175,7 +175,7 @@ describe('BuildingPositionResolverImpl', () => {
 
             const localResolver = new BuildingPositionResolverImpl({
                 gameState: localState as never,
-                inventoryVisualizer: mockInventoryVisualizer as never,
+                getInventoryVisualizer: () => mockInventoryVisualizer as never,
                 workAreaStore: mockWorkAreaStore as never,
             });
 

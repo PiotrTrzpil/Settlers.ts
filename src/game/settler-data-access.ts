@@ -41,6 +41,7 @@ const ALL_RACE_IDS: RaceId[] = ['RACE_ROMAN', 'RACE_VIKING', 'RACE_MAYA', 'RACE_
 const XML_SEARCH_TO_SEARCH_TYPE: Record<string, SearchType> = {
     TREE: SearchType.TREE,
     TREE_SEED_POS: SearchType.TREE_SEED_POS,
+    GRAIN_SEED_POS: SearchType.GRAIN_SEED_POS,
     STONE: SearchType.STONE,
     FISH: SearchType.FISH,
     VENISON: SearchType.VENISON,
@@ -100,7 +101,16 @@ function deriveSettlerConfig(info: SettlerValueInfo): SettlerConfig | null {
     if (search === null) return null;
 
     const workJobs = filterWorkJobs(info.animLists);
-    return { search, jobs: workJobs };
+
+    // Derive plant/seed search type for dual-mode settlers (farmer, forester)
+    const seedXml = info.searchTypes.find(s => s.endsWith('_SEED_POS'));
+    let plantSearch: SearchType | undefined;
+    if (seedXml) {
+        const key = seedXml.replace('SEARCH_', '');
+        plantSearch = XML_SEARCH_TO_SEARCH_TYPE[key];
+    }
+
+    return { search, jobs: workJobs, plantSearch };
 }
 
 /** Find settler info across all races (race-specific settlers only exist in their race). */

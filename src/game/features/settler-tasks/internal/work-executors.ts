@@ -48,9 +48,13 @@ function fireTriggerOnStart(settler: Entity, node: ChoreoNode, job: ChoreoJobSta
 
 /** Call positionHandler.onWorkAtPositionComplete with error handling. */
 function callPositionComplete(settler: Entity, job: ChoreoJobState, ctx: ChoreoContext, label: string): void {
-    if (!ctx.positionHandler || !job.targetPos) return;
+    if (!ctx.positionHandler) return;
+    // Use targetPos if available; fall back to settler's current position
+    // (targetPos may have been cleared between nodes, but the settler is already at the target)
+    const x = job.targetPos?.x ?? settler.x;
+    const y = job.targetPos?.y ?? settler.y;
     try {
-        ctx.positionHandler.onWorkAtPositionComplete(job.targetPos.x, job.targetPos.y, settler.id);
+        ctx.positionHandler.onWorkAtPositionComplete(x, y, settler.id);
     } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e));
         ctx.handlerErrorLogger.error(`${label} failed for settler ${settler.id}`, err);

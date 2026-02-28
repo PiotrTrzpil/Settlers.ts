@@ -58,13 +58,13 @@ test.describe('Logistics Chain', { tag: '@slow' }, () => {
             await expect(gp).toHaveBuildingCount(3);
         });
 
-        await test.step('plant trees near woodcutter', async () => {
-            // The woodcutter searches for trees within 30 tiles. Plant several
-            // near the woodcutter hut so it has work to do.
+        await test.step('spawn mature trees near woodcutter', async () => {
+            // The woodcutter searches for trees within 30 tiles. Spawn several
+            // mature (immediately cuttable) trees near the hut.
             const entities = await gp.actions.getEntities({ type: 2, subType: WOODCUTTER_HUT });
             const wc = entities[0]!;
-            const planted = await gp.actions.plantTreesNear(wc.x, wc.y, 6, 10);
-            expect(planted).toBeGreaterThanOrEqual(3);
+            const spawned = await gp.actions.spawnMatureTreesNear(wc.x, wc.y, 6, 10);
+            expect(spawned).toBeGreaterThanOrEqual(3);
         });
 
         await test.step('verify workers spawned', async () => {

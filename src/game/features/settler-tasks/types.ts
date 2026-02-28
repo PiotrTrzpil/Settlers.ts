@@ -10,6 +10,7 @@ import type { ChoreoJobState } from './choreo-types';
 export enum SearchType {
     TREE = 'TREE',
     TREE_SEED_POS = 'TREE_SEED_POS',
+    GRAIN_SEED_POS = 'GRAIN_SEED_POS',
     STONE = 'STONE',
     FISH = 'FISH',
     VENISON = 'VENISON',
@@ -30,6 +31,12 @@ export enum SearchType {
 /** Settler type configuration from SettlerValues.xml */
 export interface SettlerConfig {
     search: SearchType;
+    /**
+     * Secondary search type for planting/seeding (e.g. GRAIN_SEED_POS for farmer).
+     * When set, the position handler is looked up via this search type instead of `search`.
+     * This enables dual-mode settlers: harvest via entity handler + plant via position handler.
+     */
+    plantSearch?: SearchType;
     /** Work job IDs from jobInfo.xml (filtered from animLists, excludes CHECKIN/IDLE). */
     jobs: string[];
 }

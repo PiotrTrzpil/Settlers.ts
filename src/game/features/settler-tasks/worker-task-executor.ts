@@ -11,7 +11,15 @@ import { UnitType, clearCarrying } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import { hexDistance } from '../../systems/hex-directions';
-import { JobType, TaskResult, SettlerState, type SettlerConfig, type JobState, type EntityWorkHandler } from './types';
+import {
+    JobType,
+    TaskResult,
+    SettlerState,
+    type SettlerConfig,
+    type JobState,
+    type EntityWorkHandler,
+    type PositionWorkHandler,
+} from './types';
 import type { ChoreoContext, ChoreoJobState, ChoreoNode, ChoreoJob, JobPartResolution } from './choreo-types';
 import { ChoreoTaskType, createChoreoJobState } from './choreo-types';
 import { CHOREO_EXECUTOR_MAP } from './choreo-executors';
@@ -58,7 +66,8 @@ export class WorkerTaskExecutor {
         releaseBuilding: (runtime: WorkerRuntimeState) => void
     ): void {
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
-        const positionHandler = this.handlerRegistry.getPositionHandler(config.search);
+        // Position handler may be registered under a separate plantSearch type (e.g. GRAIN_SEED_POS)
+        const positionHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
 
         if (!entityHandler && !positionHandler) {
             this.missingHandlerLogger.warn(
@@ -75,20 +84,50 @@ export class WorkerTaskExecutor {
             claimBuilding,
             releaseBuilding
         );
-
-        // Entity handlers search for a target; position handlers start self-searching jobs directly
         const entityTarget = entityHandler ? this.findEntityTarget(entityHandler, settler) : null;
         if (entityTarget === undefined) return; // error already logged
 
-        const selected = this.selectJob(settler, config, entityTarget);
+        // When no entity target, try position handler for plant/seed-based jobs
+        const positionTarget =
+            !entityTarget && positionHandler ? this.findPositionTarget(positionHandler, settler) : null;
+        if (positionTarget === undefined) return; // error already logged
+
+        const selected = this.selectJob(settler, config, entityTarget, homeBuilding !== null, positionTarget);
         if (!selected) return;
 
-        // Output full check — look for PUT_GOOD or RESOURCE_GATHERING nodes in the job
-        if (homeBuilding && this.isOutputFull(homeBuilding, selected)) {
-            this.returnHomeAndWait(settler, homeBuilding);
-            return;
-        }
+        if (this.shouldWaitBeforeStarting(settler, homeBuilding, selected, entityHandler, entityTarget)) return;
 
+        this.startJob(settler, runtime, selected, entityTarget, homeBuilding, positionTarget);
+    }
+
+    /** Check if the settler should wait (output full or input unavailable) instead of starting. */
+    private shouldWaitBeforeStarting(
+        settler: Entity,
+        homeBuilding: Entity | null,
+        job: ChoreoJob,
+        entityHandler: EntityWorkHandler | undefined,
+        entityTarget: { entityId: number; x: number; y: number } | null
+    ): boolean {
+        if (homeBuilding && this.isOutputFull(homeBuilding, job)) {
+            this.returnHomeAndWait(settler, homeBuilding);
+            return true;
+        }
+        if (entityHandler?.canWork && entityTarget && !entityHandler.canWork(entityTarget.entityId)) {
+            if (homeBuilding) this.returnHomeAndWait(settler, homeBuilding);
+            return true;
+        }
+        return false;
+    }
+
+    /** Start a choreo job for a settler. */
+    private startJob(
+        settler: Entity,
+        runtime: WorkerRuntimeState,
+        selected: ChoreoJob,
+        entityTarget: { entityId: number; x: number; y: number } | null,
+        homeBuilding: Entity | null,
+        positionTarget?: { x: number; y: number } | null
+    ): void {
         settler.hidden = false;
         runtime.state = SettlerState.WORKING;
 
@@ -96,12 +135,17 @@ export class WorkerTaskExecutor {
         if (entityTarget) {
             jobState.targetId = entityTarget.entityId;
             jobState.targetPos = { x: entityTarget.x, y: entityTarget.y };
+        } else if (positionTarget) {
+            // Position-only target (e.g. forester planting spot) — no entity ID
+            jobState.targetPos = { x: positionTarget.x, y: positionTarget.y };
         }
         runtime.job = jobState;
 
+        const posStr = positionTarget ? `(${positionTarget.x},${positionTarget.y})` : 'none';
         log.debug(
             `Settler ${settler.id} starting choreo job ${selected.id}, ` +
-                `target ${entityTarget?.entityId ?? 'none'}, home ${homeBuilding?.id ?? 'none'}`
+                `target ${entityTarget?.entityId ?? 'none'}, pos ${posStr}, ` +
+                `home ${homeBuilding?.id ?? 'none'}`
         );
     }
 
@@ -130,8 +174,9 @@ export class WorkerTaskExecutor {
         settler.hidden = !node.visible;
 
         // Build per-tick context with work handlers
+        // Position handler may be under a separate plantSearch type (e.g. GRAIN_SEED_POS for farmer)
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
-        const positionHandler = this.handlerRegistry.getPositionHandler(config.search);
+        const positionHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
         const ctx: ChoreoContext = {
             ...this.choreoContext,
             entityHandler,
@@ -140,7 +185,16 @@ export class WorkerTaskExecutor {
 
         // Execute via choreo executor map
         const executor = CHOREO_EXECUTOR_MAP[node.task];
-        const result = executor(settler, job, node, dt, ctx);
+        let result: TaskResult;
+        try {
+            result = executor(settler, job, node, dt, ctx);
+        } catch (e) {
+            this.handlerErrorLogger.error(
+                `Executor crash: settler=${settler.id} job=${job.jobId} nodeIdx=${job.nodeIndex} task=${node.task}`,
+                e instanceof Error ? e : new Error(String(e))
+            );
+            result = TaskResult.FAILED;
+        }
 
         switch (result) {
         case TaskResult.DONE:
@@ -257,6 +311,23 @@ export class WorkerTaskExecutor {
         }
     }
 
+    /**
+     * Find a position work handler's target, catching errors at the system boundary.
+     * Used for plant/seed jobs when no entity target is available.
+     */
+    private findPositionTarget(
+        handler: PositionWorkHandler,
+        settler: Entity
+    ): { x: number; y: number } | null | undefined {
+        try {
+            return handler.findPosition(settler.x, settler.y, settler.id);
+        } catch (e) {
+            const err = e instanceof Error ? e : new Error(String(e));
+            this.handlerErrorLogger.error(`findPosition failed for settler ${settler.id}`, err);
+            return undefined;
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Private helpers
     // ─────────────────────────────────────────────────────────────
@@ -290,34 +361,45 @@ export class WorkerTaskExecutor {
      *
      * Iterates config.jobs (XML job IDs like 'JOB_WOODCUTTER_WORK') and picks
      * the first job whose first node matches the available target type:
-     * - Entity-target jobs (GO_TO_TARGET, etc.) need an external entity target.
+     * - Entity-target jobs (GO_TO_TARGET, etc.) need an external entity or position target.
      * - Self-searching jobs (SEARCH) can start without one.
      */
     private selectJob(
         settler: Entity,
         config: SettlerConfig,
-        target: { entityId: number; x: number; y: number } | null
+        target: { entityId: number; x: number; y: number } | null,
+        hasHome: boolean,
+        positionTarget?: { x: number; y: number } | null
     ): ChoreoJob | null {
         const raceId = raceToRaceId(settler.race);
 
         for (const jobId of config.jobs) {
             const job = this.choreographyStore.getJob(raceId, jobId);
             if (!job?.nodes.length) continue;
-
-            const firstNode = job.nodes[0]!;
-
-            // Entity-target jobs need a target
-            if (target && this.jobNeedsEntityTarget(firstNode)) {
-                return job;
-            }
-
-            // Self-searching jobs (SEARCH node first) don't need external target
-            if (firstNode.task === ChoreoTaskType.SEARCH) {
-                return job;
-            }
+            if (this.isJobSelectable(job.nodes[0]!, job, target, hasHome, positionTarget ?? null)) return job;
         }
 
         return null;
+    }
+
+    /** Return true if this job can be started given the current target state. */
+    private isJobSelectable(
+        firstNode: ChoreoNode,
+        job: ChoreoJob,
+        target: { entityId: number; x: number; y: number } | null,
+        hasHome: boolean,
+        positionTarget: { x: number; y: number } | null
+    ): boolean {
+        if (this.jobNeedsEntityTarget(firstNode)) {
+            if (target) return true;
+            // Position-only target: only pick jobs without WORK_ON_ENTITY nodes
+            // (e.g. forester PLANT job, not farmer HARVEST which needs an entity to work on)
+            return positionTarget !== null && !this.jobHasEntityWork(job);
+        }
+        // Self-searching jobs (SEARCH node first) don't need external target
+        if (firstNode.task === ChoreoTaskType.SEARCH) return true;
+        // Building-internal jobs (GO_VIRTUAL, GO_HOME, etc.) require a home for position resolution
+        return hasHome && this.isBuildingInternalStart(firstNode);
     }
 
     /** Check if a job's first node requires an entity target from findTarget. */
@@ -326,6 +408,27 @@ export class WorkerTaskExecutor {
             firstNode.task === ChoreoTaskType.GO_TO_TARGET ||
             firstNode.task === ChoreoTaskType.GO_TO_TARGET_ROUGHLY ||
             firstNode.task === ChoreoTaskType.WORK_ON_ENTITY
+        );
+    }
+
+    /** Check if any node in the job requires entity work (WORK_ON_ENTITY / WORK_ON_ENTITY_VIRTUAL). */
+    private jobHasEntityWork(job: ChoreoJob): boolean {
+        return job.nodes.some(
+            n => n.task === ChoreoTaskType.WORK_ON_ENTITY || n.task === ChoreoTaskType.WORK_ON_ENTITY_VIRTUAL
+        );
+    }
+
+    /** Check if a job's first node is a building-internal task that can start without an entity target. */
+    private isBuildingInternalStart(firstNode: ChoreoNode): boolean {
+        return (
+            firstNode.task === ChoreoTaskType.GO_VIRTUAL ||
+            firstNode.task === ChoreoTaskType.GO_HOME ||
+            firstNode.task === ChoreoTaskType.CHECKIN ||
+            firstNode.task === ChoreoTaskType.WAIT ||
+            firstNode.task === ChoreoTaskType.WAIT_VIRTUAL ||
+            firstNode.task === ChoreoTaskType.WORK_VIRTUAL ||
+            firstNode.task === ChoreoTaskType.GET_GOOD ||
+            firstNode.task === ChoreoTaskType.GET_GOOD_VIRTUAL
         );
     }
 

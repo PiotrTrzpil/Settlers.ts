@@ -41,7 +41,8 @@ function parseMaterialString(material: string): EMaterialType | null {
 /** Constructor dependencies for BuildingPositionResolverImpl. */
 export interface BuildingPositionResolverConfig {
     gameState: GameState;
-    inventoryVisualizer: InventoryVisualizer;
+    /** Lazy getter — the visualizer may not be available at construction time. */
+    getInventoryVisualizer: () => InventoryVisualizer;
     workAreaStore: WorkAreaStore;
 }
 
@@ -67,12 +68,12 @@ export interface BuildingPositionResolverConfig {
  */
 export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     private readonly gameState: GameState;
-    private readonly inventoryVisualizer: InventoryVisualizer;
+    private readonly getInventoryVisualizer: () => InventoryVisualizer;
     private readonly workAreaStore: WorkAreaStore;
 
     constructor(config: BuildingPositionResolverConfig) {
         this.gameState = config.gameState;
-        this.inventoryVisualizer = config.inventoryVisualizer;
+        this.getInventoryVisualizer = config.getInventoryVisualizer;
         this.workAreaStore = config.workAreaStore;
     }
 
@@ -120,7 +121,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         const materialType = parseMaterialString(material);
         if (materialType === null) return null;
 
-        return this.inventoryVisualizer.getStackPosition(buildingId, materialType, 'input');
+        return this.getInventoryVisualizer().getStackPosition(buildingId, materialType, 'input');
     }
 
     /**
@@ -138,7 +139,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         const materialType = parseMaterialString(material);
         if (materialType === null) return null;
 
-        return this.inventoryVisualizer.getStackPosition(buildingId, materialType, 'output');
+        return this.getInventoryVisualizer().getStackPosition(buildingId, materialType, 'output');
     }
 }
 

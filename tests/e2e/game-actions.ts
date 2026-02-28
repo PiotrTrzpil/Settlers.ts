@@ -554,6 +554,38 @@ export async function plantTreesNear(
     );
 }
 
+/**
+ * Spawn multiple mature (immediately cuttable) trees near a position.
+ * Unlike plantTreesNear, trees start in Normal stage rather than Growing.
+ * @returns Number of trees actually spawned
+ */
+export async function spawnMatureTreesNear(
+    page: Page,
+    centerX: number,
+    centerY: number,
+    count: number,
+    radius = 15
+): Promise<number> {
+    return page.evaluate(
+        ({ cx, cy, n, r }) => {
+            const game = window.__settlers__?.game;
+            if (!game?.services?.treeSystem) return 0;
+            const ts = game.services.treeSystem;
+            // Plant trees (creates entities + registers as Growing)
+            const planted = ts.plantTreesNear(cx, cy, n, r);
+            // Force all Growing trees to Normal so they're immediately cuttable
+            for (const [, state] of ts.getAllTreeStates()) {
+                if (state.stage === 0 /* TreeStage.Growing */) {
+                    state.stage = 1; /* TreeStage.Normal */
+                    state.progress = 0;
+                }
+            }
+            return planted;
+        },
+        { cx: centerX, cy: centerY, n: count, r: radius }
+    );
+}
+
 // ── Tile search near position ────────────────────────────────────
 
 /**

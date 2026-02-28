@@ -17,6 +17,9 @@ import type {
     RaceJobData,
 } from '@/resources/game-data/types';
 import { clearWorkerBuildingCache } from '@/game/game-data-access';
+import { loadGameDataFromFiles } from '@/resources/game-data/load-game-data-from-files';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
 
 /** Minimal BuildingInfo with only the fields needed for worker resolution. */
 function buildingInfo(id: string, inhabitant: string, tool: string): BuildingInfo {
@@ -293,6 +296,22 @@ export function installTestGameData(): void {
 
     const loader = GameDataLoader.getInstance();
     loader.setData(data);
+}
+
+/**
+ * Attempt to load real XML game data from disk.
+ * Returns true if real data was loaded, false if XML files are not present.
+ * Use with describe.skipIf(!hasRealData) for tests that need real game data.
+ */
+export function installRealGameData(): boolean {
+    // Check if the XML directory exists with core files
+    const gameDataDir = resolve(process.cwd(), 'public/Siedler4/GameData');
+    if (!existsSync(resolve(gameDataDir, 'buildingInfo.xml'))) return false;
+
+    clearWorkerBuildingCache();
+    const data = loadGameDataFromFiles(gameDataDir);
+    GameDataLoader.getInstance().setData(data);
+    return true;
 }
 
 /**

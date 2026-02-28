@@ -10,6 +10,7 @@
  */
 
 import { EntityType, BuildingType, type Entity } from '../../../entity';
+import { EMaterialType } from '../../../economy';
 import { getBuildingDoorOffset } from '../../../game-data-access';
 import { hexDistance, getApproxDirection } from '../../../systems/hex-directions';
 import { LogHandler } from '@/utilities/log-handler';
@@ -98,51 +99,81 @@ function resolveAssignedBuildingId(settler: Entity, ctx: ChoreoContext): number 
 }
 
 // ─────────────────────────────────────────────────────────────
+// Helper: resolve material string for pile executors
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Resolve the material string for GO_TO_SOURCE_PILE / GO_TO_DESTINATION_PILE.
+ *
+ * Many XML nodes (e.g. woodcutter's GO_TO_DESTINATION_PILE) omit the <entity>
+ * field — the material is only declared on the subsequent PUT_GOOD node.
+ * In that case we fall back to the material the settler is currently carrying
+ * (set by RESOURCE_GATHERING / GET_GOOD earlier in the choreography).
+ */
+function resolvePileMaterial(node: ChoreoNode, job: ChoreoJobState): string {
+    if (node.entity) return node.entity;
+    if (job.carryingGood !== null) return EMaterialType[job.carryingGood];
+    return '';
+}
+
+// ─────────────────────────────────────────────────────────────
 // Phase 2A — Regular movement executors
 // ─────────────────────────────────────────────────────────────
 
 /**
  * GO_TO_TARGET — move to the target entity's position (from job.targetId).
  * If the target is a building, navigate to its door tile.
+ * Falls back to job.targetPos when no entity target exists (position-only jobs like planting).
  * DONE when hexDistance ≤ 1 and controller idle.
  */
 export const executeGoToTarget: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
-    if (job.targetId === null) {
-        log.debug(`executeGoToTarget: settler ${settler.id} has no targetId`);
-        return TaskResult.FAILED;
-    }
+    // Entity target: walk to entity position
+    if (job.targetId !== null) {
+        const target = ctx.gameState.getEntityOrThrow(job.targetId, 'GO_TO_TARGET target');
 
-    const target = ctx.gameState.getEntityOrThrow(job.targetId, 'GO_TO_TARGET target');
-
-    if (target.type === EntityType.Building) {
-        const door = getBuildingDoorOffset(target.race, target.subType as BuildingType);
-        if (door) {
-            return moveToPosition(settler, target.x + door.dx, target.y + door.dy, node, ctx, ARRIVAL_DIST);
+        if (target.type === EntityType.Building) {
+            const door = getBuildingDoorOffset(target.race, target.subType as BuildingType);
+            if (door) {
+                return moveToPosition(settler, target.x + door.dx, target.y + door.dy, node, ctx, ARRIVAL_DIST);
+            }
         }
+
+        return moveToPosition(settler, target.x, target.y, node, ctx, ARRIVAL_DIST);
     }
 
-    return moveToPosition(settler, target.x, target.y, node, ctx, ARRIVAL_DIST);
+    // Position-only target (e.g. forester/farmer planting spot from position handler)
+    if (job.targetPos) {
+        return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST);
+    }
+
+    log.debug(`executeGoToTarget: settler ${settler.id} has no target`);
+    return TaskResult.FAILED;
 };
 
 /**
  * GO_TO_TARGET_ROUGHLY — same as GO_TO_TARGET but with a larger arrival threshold (≤ 2).
+ * Falls back to job.targetPos when no entity target exists.
  */
 export const executeGoToTargetRoughly: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
-    if (job.targetId === null) {
-        log.debug(`executeGoToTargetRoughly: settler ${settler.id} has no targetId`);
-        return TaskResult.FAILED;
-    }
+    if (job.targetId !== null) {
+        const target = ctx.gameState.getEntityOrThrow(job.targetId, 'GO_TO_TARGET_ROUGHLY target');
 
-    const target = ctx.gameState.getEntityOrThrow(job.targetId, 'GO_TO_TARGET_ROUGHLY target');
-
-    if (target.type === EntityType.Building) {
-        const door = getBuildingDoorOffset(target.race, target.subType as BuildingType);
-        if (door) {
-            return moveToPosition(settler, target.x + door.dx, target.y + door.dy, node, ctx, ARRIVAL_DIST_ROUGH);
+        if (target.type === EntityType.Building) {
+            const door = getBuildingDoorOffset(target.race, target.subType as BuildingType);
+            if (door) {
+                return moveToPosition(settler, target.x + door.dx, target.y + door.dy, node, ctx, ARRIVAL_DIST_ROUGH);
+            }
         }
+
+        return moveToPosition(settler, target.x, target.y, node, ctx, ARRIVAL_DIST_ROUGH);
     }
 
-    return moveToPosition(settler, target.x, target.y, node, ctx, ARRIVAL_DIST_ROUGH);
+    if (job.targetPos) {
+        return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST_ROUGH);
+    }
+
+    log.debug(`executeGoToTargetRoughly: settler ${settler.id} has no target`);
+    return TaskResult.FAILED;
 };
 
 /**
@@ -199,18 +230,16 @@ export const executeGoHome: ChoreoExecutorFn = (settler, job, node, _dt, ctx) =>
  * GO_TO_SOURCE_PILE — move to the source (input) pile of the settler's assigned building.
  *
  * The source pile position is resolved via ctx.buildingPositionResolver.getSourcePilePosition
- * using node.entity as the material identifier.
+ * using node.entity (or job.carryingGood fallback) as the material identifier.
+ * When no visual stack exists yet, falls back to the node's building-relative (x, y) offset.
  * Caches position in job.targetPos on first call.
  */
 export const executeGoToSourcePile: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
     if (!job.targetPos) {
         const buildingId = resolveAssignedBuildingId(settler, ctx);
-        const pos = ctx.buildingPositionResolver.getSourcePilePosition(buildingId, node.entity);
-        if (!pos) {
-            log.debug(`executeGoToSourcePile: no source pile for building ${buildingId}, material '${node.entity}'`);
-            return TaskResult.FAILED;
-        }
-        job.targetPos = pos;
+        const material = resolvePileMaterial(node, job);
+        const pos = material ? ctx.buildingPositionResolver.getSourcePilePosition(buildingId, material) : null;
+        job.targetPos = pos ?? ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork);
     }
 
     return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST);
@@ -219,20 +248,17 @@ export const executeGoToSourcePile: ChoreoExecutorFn = (settler, job, node, _dt,
 /**
  * GO_TO_DESTINATION_PILE — move to the destination (output) pile of the settler's assigned building.
  *
- * Resolved via ctx.buildingPositionResolver.getDestinationPilePosition using node.entity as
- * the material identifier. Caches position in job.targetPos on first call.
+ * Resolved via ctx.buildingPositionResolver.getDestinationPilePosition using node.entity
+ * (or job.carryingGood fallback) as the material identifier.
+ * When no visual stack exists yet, falls back to the node's building-relative (x, y) offset.
+ * Caches position in job.targetPos on first call.
  */
 export const executeGoToDestinationPile: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
     if (!job.targetPos) {
         const buildingId = resolveAssignedBuildingId(settler, ctx);
-        const pos = ctx.buildingPositionResolver.getDestinationPilePosition(buildingId, node.entity);
-        if (!pos) {
-            log.debug(
-                `executeGoToDestinationPile: no destination pile for building ${buildingId}, material '${node.entity}'`
-            );
-            return TaskResult.FAILED;
-        }
-        job.targetPos = pos;
+        const material = resolvePileMaterial(node, job);
+        const pos = material ? ctx.buildingPositionResolver.getDestinationPilePosition(buildingId, material) : null;
+        job.targetPos = pos ?? ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork);
     }
 
     return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST);

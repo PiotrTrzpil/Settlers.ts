@@ -112,9 +112,7 @@ export class SettlerTaskSystem implements TickSystem {
             jobPartResolver,
             buildingPositionResolver: new BuildingPositionResolverImpl({
                 gameState: this.gameState,
-                get inventoryVisualizer() {
-                    return getViz();
-                },
+                getInventoryVisualizer: getViz,
                 workAreaStore: config.workAreaStore,
             }),
             triggerSystem,
