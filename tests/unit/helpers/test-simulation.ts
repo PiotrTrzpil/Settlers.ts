@@ -43,6 +43,9 @@ export interface Simulation {
     /** Place N stone resources near a building (within worker search radius). */
     placeStonesNear(buildingId: number, count: number): void;
 
+    /** Place N stone resources far from a building (outside working area radius). */
+    placeStonesFar(buildingId: number, count: number): void;
+
     /** Tick all systems once with the given delta-time (seconds). */
     tick(dt: number): void;
 
@@ -237,6 +240,14 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         }
     }
 
+    function placeStonesFar(buildingId: number, count: number) {
+        const b = state.getEntityOrThrow(buildingId, 'placeStonesFar');
+        for (const pos of findEmptyTiles(b.x, b.y, count, 25)) {
+            const stone = state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone, pos.x, pos.y, 0);
+            services.stoneSystem.register(stone.id, MapObjectType.ResourceStone);
+        }
+    }
+
     function getOutput(buildingId: number, material: EMaterialType): number {
         return services.inventoryManager.getOutputAmount(buildingId, material);
     }
@@ -262,6 +273,7 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         plantTreesNear,
         plantTreesFar,
         placeStonesNear,
+        placeStonesFar,
         tick,
         runTicks,
         runUntil,

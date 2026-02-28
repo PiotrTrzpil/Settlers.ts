@@ -373,6 +373,52 @@ state.entities.filter(e => e.type === 2);
 - **Test contracts, not implementation** — return values and observable behavior, not private fields
 - **Use TDD for bug fixes** — write a failing test first
 
+### Writing Meaningful Simulation Assertions
+
+When using `runUntil` or `runTicks`, think carefully about what the assertion actually proves:
+
+**Don't assert what `runUntil` already guarantees:**
+```typescript
+// BAD — tautological: runUntil stopped at >= 1, so the expect always passes
+sim.runUntil(() => sim.getOutput(id, EMaterialType.LOG) >= 1);
+expect(sim.getOutput(id, EMaterialType.LOG)).toBeGreaterThanOrEqual(1);
+
+// GOOD — run extra ticks AFTER the condition, then assert a bound
+sim.runUntil(() => sim.getOutput(id, EMaterialType.LOG) >= 3, { maxTicks: 300 * 30 });
+sim.runTicks(60 * 30); // extra idle time
+expect(sim.getOutput(id, EMaterialType.LOG)).toBe(3); // proves no more were produced
+```
+
+**Use `runTicks` instead of `runUntil` when checking upper bounds:**
+```typescript
+// BAD — can't check upper bounds because runUntil stops at the threshold
+sim.runUntil(() => output >= 3);
+expect(output).toBeLessThanOrEqual(5); // vacuous — it's always exactly 3
+
+// GOOD — run for a fixed duration, then check both bounds
+sim.runTicks(300 * 30);
+expect(sim.getOutput(id, EMaterialType.LOG)).toBeGreaterThanOrEqual(3);
+expect(sim.getOutput(id, EMaterialType.LOG)).toBeLessThanOrEqual(5);
+```
+
+**Account for material consumption in multi-building chains:**
+```typescript
+// BAD — sawmill may have already consumed logs, so input shows 0
+expect(sim.getInput(sawmillId, EMaterialType.LOG)).toBeGreaterThanOrEqual(1);
+
+// GOOD — boards at the end of the chain prove the entire pipeline worked
+expect(sim.getOutput(sawmillId, EMaterialType.BOARD)).toBeGreaterThanOrEqual(1);
+```
+
+**Test boundaries, not just happy paths:**
+```typescript
+// Plant 3 reachable trees + 5 unreachable (beyond working area radius)
+sim.plantTreesNear(woodcutterId, 3);
+sim.plantTreesFar(woodcutterId, 5);
+sim.runTicks(300 * 30);
+expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(3); // only nearby trees cut
+```
+
 ### Anti-Patterns to Avoid
 
 1. **Duplicating helpers** — check `test-game.ts` and `test-map.ts` first
@@ -380,6 +426,7 @@ state.entities.filter(e => e.type === 2);
 3. **Magic numbers** — use `EntityType`, `BuildingType`, `UnitType`, `EMaterialType`, `TERRAIN`
 4. **Testing implementation details** — test behavior through public APIs
 5. **Test interdependency** — each test must be independent and repeatable
+6. **Tautological assertions** — don't assert what `runUntil` already guarantees (see above)
 
 ---
 

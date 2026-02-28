@@ -21,84 +21,71 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', () => {
         cleanupSimulation();
     });
 
-    it('woodcutter produces exactly as many logs as nearby trees', () => {
+    it('woodcutter cuts only nearby trees, ignores far ones', () => {
         sim = createSimulation();
 
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
 
-        // 3 nearby trees (within working radius) + 5 far trees (outside working radius)
+        // 3 reachable trees + 5 unreachable (beyond working area radius)
         sim.plantTreesNear(woodcutterId, 3);
         sim.plantTreesFar(woodcutterId, 5);
 
-        // Wait for all 3 nearby trees to be cut, then run extra ticks to confirm no more appear
+        // Wait for all 3 nearby trees, then keep running to confirm no 4th log appears
         sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 3, { maxTicks: 300 * 30 });
-        sim.runTicks(60 * 30); // idle for ~60 more seconds — should NOT produce a 4th log
+        sim.runTicks(60 * 30);
         expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(3);
     });
 
-    it('carrier delivers logs from woodcutter to sawmill', () => {
+    it('full production chain: trees → woodcutter → carrier → sawmill → boards', () => {
         sim = createSimulation();
 
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
         const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
 
-        sim.plantTreesNear(woodcutterId, 5);
-
-        // Wait for at least one log to arrive at the sawmill input
-        sim.runUntil(() => sim.getInput(sawmillId, EMaterialType.LOG) >= 1, { maxTicks: 120 * 30 });
-
-        expect(sim.getInput(sawmillId, EMaterialType.LOG)).toBeGreaterThanOrEqual(1);
-        // Sawmill should also be consuming logs to produce boards
-        const totalLogs = sim.getOutput(woodcutterId, EMaterialType.LOG) + sim.getInput(sawmillId, EMaterialType.LOG);
-        expect(totalLogs).toBeGreaterThanOrEqual(1);
-    });
-
-    it('woodcutter → sawmill chain produces boards', () => {
-        sim = createSimulation();
-
-        sim.placeBuilding(BuildingType.ResidenceSmall);
-        const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
-        const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
-
-        // Verify units were auto-spawned (carriers + workers)
+        // Auto-spawned units: woodcutter worker, sawmill worker, carriers
         expect(sim.countEntities(EntityType.Unit)).toBeGreaterThanOrEqual(3);
 
         sim.plantTreesNear(woodcutterId, 5);
 
-        sim.runUntil(() => sim.getOutput(sawmillId, EMaterialType.BOARD) >= 1, { maxTicks: 180 * 30 });
-
-        // Full chain validated: tree → log → carrier delivery → board
-        expect(sim.getOutput(sawmillId, EMaterialType.BOARD)).toBeGreaterThanOrEqual(1);
+        // Wait for all 5 trees to become boards (1 tree → 1 log → 1 board), then idle
+        sim.runUntil(() => sim.getOutput(sawmillId, EMaterialType.BOARD) >= 5, { maxTicks: 500 * 30 });
+        sim.runTicks(60 * 30);
+        expect(sim.getOutput(sawmillId, EMaterialType.BOARD)).toBe(5);
     });
 
-    it('multiple production cycles accumulate output', () => {
+    it('worker loops back to cut all nearby trees', () => {
         sim = createSimulation();
 
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
 
-        sim.plantTreesNear(woodcutterId, 10);
+        sim.plantTreesNear(woodcutterId, 5);
 
-        sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 3, { maxTicks: 300 * 30 });
-
-        // Worker should loop: cut tree → deposit → find next tree → repeat
-        const logs = sim.getOutput(woodcutterId, EMaterialType.LOG);
-        expect(logs).toBeGreaterThanOrEqual(3);
-        expect(logs).toBeLessThanOrEqual(10); // can't exceed total tree count
+        // Wait for all 5, then extra idle to confirm no phantom production
+        sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 5, { maxTicks: 500 * 30 });
+        sim.runTicks(60 * 30);
+        expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(5);
     });
 
-    it('stonecutter mines stone from nearby rocks', () => {
+    it('stonecutter mines only nearby rocks, ignores far ones', () => {
         sim = createSimulation();
 
         sim.placeBuilding(BuildingType.ResidenceSmall);
         const stonecutterId = sim.placeBuilding(BuildingType.StonecutterHut);
 
-        sim.placeStonesNear(stonecutterId, 3);
+        // 2 reachable rocks + 3 unreachable (beyond working area radius)
+        // Each rock has multiple depletion stages, yielding several stones
+        sim.placeStonesNear(stonecutterId, 2);
+        sim.placeStonesFar(stonecutterId, 3);
 
-        sim.runUntil(() => sim.getOutput(stonecutterId, EMaterialType.STONE) >= 1, { maxTicks: 120 * 30 });
+        // Wait for production to stabilize, then run extra idle ticks
+        sim.runUntil(() => sim.getOutput(stonecutterId, EMaterialType.STONE) >= 2, { maxTicks: 200 * 30 });
+        const stonesAfterNearby = sim.getOutput(stonecutterId, EMaterialType.STONE);
+        sim.runTicks(60 * 30);
 
-        expect(sim.getOutput(stonecutterId, EMaterialType.STONE)).toBeGreaterThanOrEqual(1);
+        // Should not have produced more (far rocks are out of range)
+        expect(sim.getOutput(stonecutterId, EMaterialType.STONE)).toBe(stonesAfterNearby);
     });
 });
