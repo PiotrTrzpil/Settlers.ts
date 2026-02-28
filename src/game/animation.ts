@@ -9,6 +9,7 @@
  */
 
 import type { SpriteEntry } from './renderer/sprite-metadata';
+import { EMaterialType } from './economy';
 
 /**
  * Well-known animation sequence keys.
@@ -19,8 +20,8 @@ export const ANIMATION_SEQUENCES = {
     DEFAULT: 'default',
     /** Walking/movement animation */
     WALK: 'walk',
-    /** Prefix for carry-walk animations, suffixed with material type number */
-    CARRY_PREFIX: 'carry_',
+    /** Prefix for carry-walk animations, suffixed with material name (e.g., 'carry.coal') */
+    CARRY_PREFIX: 'carry.',
     /** Prefix for work animations, suffixed with index (e.g., 'work.0', 'work.1') */
     WORK_PREFIX: 'work.',
     /** Prefix for pickup animations, suffixed with index (e.g., 'pickup.0') */
@@ -31,10 +32,17 @@ export const ANIMATION_SEQUENCES = {
 
 /**
  * Get the animation sequence key for a carrier carrying a specific material.
- * Returns a key like 'carry_0' (trunk), 'carry_9' (plank), etc.
+ *
+ * From EMaterialType:  `carrySequenceKey(EMaterialType.COAL)` → `'carry.coal'`
+ * From suffix string:  `carrySequenceKey('coal')` → `'carry.coal'`
  */
-export function carrySequenceKey(materialType: number): string {
-    return `${ANIMATION_SEQUENCES.CARRY_PREFIX}${materialType}`;
+export function carrySequenceKey(material: number | string): string {
+    if (typeof material === 'string') {
+        return `${ANIMATION_SEQUENCES.CARRY_PREFIX}${material}`;
+    }
+    const name = EMaterialType[material];
+    if (!name) throw new Error(`Unknown EMaterialType: ${material}`);
+    return `${ANIMATION_SEQUENCES.CARRY_PREFIX}${name.toLowerCase()}`;
 }
 
 /**

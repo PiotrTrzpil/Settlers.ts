@@ -8,7 +8,7 @@
  *
  * Resolution rules (applied in order):
  *   1. Exact override for exceptions (H_SHOOT, G_SEARCH, etc.)
- *   2. Suffix *_WALK or *_WALK_* → walk (with carry upgrade when carrying)
+ *   2. Suffix *_WALK → walk (carry upgrade if entity is carrying); *_WALK_X → carry.x
  *   3. Suffix *_PICKUP* or *_DROP* → short work (one-shot)
  *   4. Suffix *_IDLE* → idle (stopped)
  *   5. Suffix *_FIGHT / *_SHOOT / *_THROW_STONE / *_HEAL → fight
@@ -163,8 +163,12 @@ export class JobPartResolverImpl implements JobPartResolver {
         // 3. Suffix heuristics
 
         if (isWalkSuffix(action)) {
-            // Walk-with-cargo suffix (e.g., WALK_LOG, WALK_BREAD): upgrade when carrying
-            if (action !== 'WALK' && settler.carrying) {
+            if (action !== 'WALK') {
+                // Walk-with-cargo suffix (e.g., WALK_COAL, WALK_LOG): use suffix as carry variant
+                return this.carryResolution(action.slice('WALK_'.length).toLowerCase());
+            }
+            // Plain WALK: upgrade to carry if entity is carrying, otherwise normal walk
+            if (settler.carrying) {
                 return this.carryResolution(settler.carrying.material);
             }
             return WALK_RESOLUTION;
@@ -188,7 +192,7 @@ export class JobPartResolverImpl implements JobPartResolver {
 
     // ── Private helpers ─────────────────────────────────────────────────────
 
-    private carryResolution(material: number): JobPartResolution {
+    private carryResolution(material: number | string): JobPartResolution {
         return {
             sequenceKey: carrySequenceKey(material),
             loop: true,

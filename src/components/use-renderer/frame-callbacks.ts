@@ -17,11 +17,10 @@ import {
     type StackGhostRenderData,
 } from '@/game/renderer/render-context';
 import { EntityType } from '@/game/entity';
-import { EMaterialType } from '@/game/economy/material-type';
 import { getBuildingVisualState } from '@/game/features/building-construction';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { IViewPoint } from '@/game/renderer/i-view-point';
-import { WorkAreaAdjustHandler, StackAdjustHandler } from '@/game/features/building-adjust';
+import { WorkAreaAdjustHandler } from '@/game/features/building-adjust';
 import { computeWorkAreaBoundaryDots } from '@/game/features/work-areas/work-area-boundary';
 import type { BuildingType } from '@/game/entity';
 import { debugStats } from '@/game/debug-stats';
@@ -76,8 +75,8 @@ function syncEntityRendererState(
         workAreaVis = EMPTY_WORK_AREA_VIS;
     }
 
-    // Collect ghost resource stacks for active stack adjustments
-    const stackGhosts = collectStackGhosts(ctx.inputManager);
+    // Stack positions now come from XML data; no ghost rendering is needed.
+    const stackGhosts: readonly StackGhostRenderData[] = [];
 
     // Feature-specific computation happens here (glue layer), not in the renderer.
     // The renderer receives pre-computed BuildingRenderState via the context.
@@ -191,43 +190,6 @@ function collectWorkAreaVisualization(
         game.terrain.height
     );
     return { circles: [], dots };
-}
-
-/** Max resource sprites per ghost stack */
-const GHOST_STACK_COUNT = 8;
-
-/**
- * Collect ghost resource stack data when a stack-adjust item is active.
- * Returns ghost render data for all stack items (active item shown as ghost sprite,
- * inactive items still handled via tile highlights).
- */
-function collectStackGhosts(inputManager: InputManager | null): readonly StackGhostRenderData[] {
-    if (!inputManager) return [];
-    const mode = inputManager.getMode('building-adjust');
-    if (!(mode instanceof BuildingAdjustMode)) return [];
-
-    const active = mode.getActiveAdjustment();
-    if (!active || active.item.category !== 'stack') return [];
-    if (!(active.handler instanceof StackAdjustHandler)) return [];
-
-    const materialType = parseMaterialFromStackKey(active.item.key);
-    if (materialType === null) return [];
-
-    const offset = active.handler.getOffset(active.buildingType, active.race, active.item.key);
-    if (!offset) return [];
-
-    return [
-        { x: active.buildingX + offset.dx, y: active.buildingY + offset.dy, materialType, count: GHOST_STACK_COUNT },
-    ];
-}
-
-/** Parse material type from a stack key like "output:LOG" → EMaterialType.LOG */
-function parseMaterialFromStackKey(key: string): number | null {
-    const colonIdx = key.indexOf(':');
-    if (colonIdx < 0) return null;
-    const materialName = key.slice(colonIdx + 1);
-    const value = (EMaterialType as unknown as Record<string, number>)[materialName];
-    return value !== undefined ? value : null;
 }
 
 /**

@@ -91,10 +91,10 @@ describe('JobPartResolverImpl', () => {
             });
         });
 
-        it('WC_WALK_LOG without carrying resolves to walk', () => {
+        it('WC_WALK_LOG resolves to carry.log (suffix drives carry variant)', () => {
             const result = resolver.resolve('WC_WALK_LOG', makeSettler());
             expect(result).toMatchObject<JobPartResolution>({
-                sequenceKey: ANIMATION_SEQUENCES.WALK,
+                sequenceKey: carrySequenceKey('log'),
                 loop: true,
                 stopped: false,
             });
@@ -165,9 +165,9 @@ describe('JobPartResolverImpl', () => {
             expect(result.sequenceKey).toBe(ANIMATION_SEQUENCES.WALK);
         });
 
-        it('FG_WALK_SEED resolves to walk', () => {
+        it('FG_WALK_SEED resolves to carry.seed (suffix drives carry variant)', () => {
             const result = resolver.resolve('FG_WALK_SEED', makeSettler({ subType: UnitType.Farmer }));
-            expect(result.sequenceKey).toBe(ANIMATION_SEQUENCES.WALK);
+            expect(result.sequenceKey).toBe(carrySequenceKey('seed'));
             expect(result.loop).toBe(true);
         });
 
@@ -300,12 +300,9 @@ describe('JobPartResolverImpl', () => {
             expect(result.loop).toBe(true);
         });
 
-        it('any *_WALK_* suffix without carry resolves to walk', () => {
+        it('any *_WALK_* suffix resolves to carry variant from suffix', () => {
             const result = resolver.resolve('SM_WALK_FOO', makeSettler());
-            // Unknown prefix but suffix is WALK_FOO so heuristic fires
-            // Actually SM is not a known prefix — falls through to unknown warning,
-            // but suffix check happens BEFORE the knownPrefix check in the code.
-            expect(result.sequenceKey).toBe(ANIMATION_SEQUENCES.WALK);
+            expect(result.sequenceKey).toBe(carrySequenceKey('foo'));
         });
 
         it('M_WALK (Miner walk) resolves to walk via suffix', () => {
@@ -338,13 +335,10 @@ describe('JobPartResolverImpl', () => {
     // ── Carry-upgrade logic ───────────────────────────────────────────────────
 
     describe('carry-upgrade logic', () => {
-        it('WALK_* suffix upgrades to carry sequence when entity is carrying', () => {
+        it('plain WALK upgrades to carry sequence when entity is carrying', () => {
             const settler = makeCarryingSettler(EMaterialType.BOARD, UnitType.Carrier);
-            // Use a generic WALK suffix that should be caught by isWalkSuffix
             const result = resolver.resolve('C_WALK', settler);
-            // C_WALK is plain WALK (action === 'WALK') → no cargo upgrade (carrying irrelevant for C_WALK)
-            // because action === 'WALK' is the plain variant and cargo-upgrade only triggers for action !== 'WALK'
-            expect(result.sequenceKey).toBe(ANIMATION_SEQUENCES.WALK);
+            expect(result.sequenceKey).toBe(carrySequenceKey(EMaterialType.BOARD));
         });
 
         it('WALK_BOARD suffix upgrades to carry_BOARD when carrying BOARD', () => {

@@ -113,31 +113,35 @@ export const SETTLER_JOB_INDICES = {
     },
     smelter: {
         walk: 102,
-        work_iron: 103,
+        carry_coal: 103,
         carry_goldbar: 104,
-        work_gold: 105,
+        carry_goldore: 105,
         carry_ironbar: 106,
-        work_silver: 107,
-        work_put_iron: 108,
+        carry_ironore: 107,
+        work_iron: 108,
         pickup_goldbar: 109,
-        work_put_gold: 110,
+        work_gold: 110,
         pickup_ironbar: 111,
-        work_not_sure: 112,
-        pickup_silver: 113,
+        pickup_coal: 112,
+        pickup_ironore: 113,
     },
     miner: {
-        walk: 114,
-        work: 115,
-        carry_coal: 120,
-        carry_ironore: 121,
-        carry_goldore: 122,
-        carry_stone: 123,
-        carry_sulfur: 124,
-        pickup_coal: 125,
-        pickup_ironore: 126,
-        pickup_goldore: 127,
-        pickup_stone: 128,
-        pickup_sulfur: 129,
+        walk: 114, // M_WALK
+        walk_1: 115, // M_PUSHIN — empty cart back (coal)
+        walk_2: 116, // M_PUSHIN — empty cart back (ironore)
+        walk_3: 117, // M_PUSHIN — empty cart back (goldore)
+        walk_4: 118, // M_PUSHIN — empty cart back (stone)
+        walk_5: 119, // M_PUSHIN — empty cart back (sulfur)
+        carry_coal: 120, // M_PUSHOUT_COAL — full cart out
+        carry_ironore: 121, // M_PUSHOUT_IRONORE
+        carry_goldore: 122, // M_PUSHOUT_GOLDORE
+        carry_stone: 123, // M_PUSHOUT_STONE
+        carry_sulfur: 124, // M_PUSHOUT_SULFUR
+        work_coal: 125, // M_TIP_COAL — dump cart
+        work_ironore: 126, // M_TIP_IRONORE
+        work_goldore: 127, // M_TIP_GOLDORE
+        work_stone: 128, // M_TIP_STONE
+        work_sulfur: 129, // M_TIP_SULFUR
     },
     smith: {
         walk: 130,
@@ -583,7 +587,6 @@ const NON_MATERIAL_SUFFIXES: ReadonlySet<string> = new Set([
     'unbaked_bread',
     'plant',
     'waterer', // Visual carry states (no material being transported)
-    'silver', // Smelter animation (no SILVER in EMaterialType)
     'animal', // Hunter pickup / butcher carry (race-dependent animal, not a single material)
     'stone2', // Shipyard stone variant (second stone carry animation)
 ]);

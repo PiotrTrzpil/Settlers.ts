@@ -27,7 +27,7 @@ type AnimationType = 'walk' | 'idle' | 'carry' | 'pickup' | 'work' | 'fight';
 
 /** What animation should play on an entity */
 export interface AnimationIntent {
-    /** Sequence key (e.g., 'walk', 'default', 'work.0', 'carry_5') */
+    /** Sequence key (e.g., 'walk', 'default', 'work.0', 'carry.coal') */
     sequence: string;
     /** Whether the animation should loop */
     loop: boolean;

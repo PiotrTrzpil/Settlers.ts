@@ -4,8 +4,7 @@
 
 import type { Game } from '@/game/game';
 import { BuildingAdjustMode } from '@/game/input';
-import { StackPositions } from '@/game/features/inventory/stack-positions';
-import { StackAdjustHandler, WorkAreaAdjustHandler } from '@/game/features/building-adjust';
+import { WorkAreaAdjustHandler } from '@/game/features/building-adjust';
 import { debugStats } from '@/game/debug-stats';
 
 /**
@@ -33,27 +32,17 @@ export function updateTileDebugStats(
 
 /**
  * Create BuildingAdjustMode with lazy game dependency resolution.
- * Registers all adjust handlers: sprite layers, stacks, and work areas.
+ * Registers all adjust handlers: work areas.
  */
 export function createBuildingAdjustMode(getGame: () => Game | null): BuildingAdjustMode {
-    const stackPositions = new StackPositions();
     let handlers: readonly import('@/game/features/building-adjust/types').BuildingAdjustHandler[] | null = null;
-    let connected = false;
 
     return new BuildingAdjustMode(() => {
         const game = getGame();
         if (!game) return null;
 
-        if (!connected) {
-            game.services.inventoryVisualizer.setStackPositions(stackPositions);
-            connected = true;
-        }
-
         if (!handlers) {
-            handlers = [
-                new StackAdjustHandler(stackPositions, game.services.inventoryVisualizer),
-                new WorkAreaAdjustHandler(game.services.workAreaStore),
-            ];
+            handlers = [new WorkAreaAdjustHandler(game.services.workAreaStore)];
         }
 
         return {

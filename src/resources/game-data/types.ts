@@ -35,13 +35,20 @@ export function raceIdToIndex(raceId: RaceId): RaceIndex {
 
 // ============ Building Info Types ============
 
+/** Pile type from buildingInfo.xml <pile><type> field */
+export enum PileSlotType {
+    Output = 0,
+    Input = 1,
+    Storage = 4,
+}
+
 export interface BuildingPileInfo {
     xPixelOffset: number;
     yPixelOffset: number;
     xOffset: number;
     yOffset: number;
     good: string;
-    type: number;
+    type: PileSlotType;
     patch: number;
     appearance: number;
 }

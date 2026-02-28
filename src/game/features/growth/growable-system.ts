@@ -187,7 +187,7 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
     /** Plant a random entity type at (x, y) via the command system */
     plantEntity(x: number, y: number, settlerId: number): void {
         const objectType = this.gameState.rng.pick(this.config.plantableTypes);
-        if (!objectType) throw new Error(`GrowableSystem.plantEntity: plantableTypes is empty (${this.constructor.name})`);
+        if (objectType === undefined) throw new Error(`GrowableSystem.plantEntity: plantableTypes is empty (${this.constructor.name})`);
         const result = this._executeCommand(this.buildPlantCommand(objectType, x, y));
 
         if (result.success) {
@@ -207,7 +207,7 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
             if (!spot) break;
 
             const objectType = this.gameState.rng.pick(this.config.plantableTypes);
-            if (!objectType) throw new Error(`GrowableSystem.plantEntitiesNear: plantableTypes is empty (${this.constructor.name})`);
+            if (objectType === undefined) throw new Error(`GrowableSystem.plantEntitiesNear: plantableTypes is empty (${this.constructor.name})`);
             const result = this._executeCommand(this.buildPlantCommand(objectType, spot.x, spot.y));
             if (result.success) planted++;
         }

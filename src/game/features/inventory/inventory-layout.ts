@@ -4,8 +4,8 @@
  * Handles all visual positioning and layout logic for building inventory stacks.
  * Calculates which tiles are adjacent to a building footprint, categorises them
  * into output (upper/right) vs. input (lower/left) positions, and resolves the
- * final tile coordinate for each material slot using the YAML-configured offsets
- * with an auto-calculated fallback.
+ * final tile coordinate for each material slot using the XML-derived BuildingPileRegistry
+ * with an auto-calculated fallback for buildings missing from the XML.
  */
 
 import { BuildingType, tileKey, getBuildingSize, type TileCoord } from '../../entity';
@@ -13,7 +13,7 @@ import { getBuildingFootprint } from '../../buildings/types';
 import { EMaterialType } from '../../economy/material-type';
 import { Race } from '../../race';
 import type { GameState } from '../../game-state';
-import type { StackPositions } from './stack-positions';
+import type { BuildingPileRegistry } from './building-pile-registry';
 import type { BuildingVisualState } from './material-stack-state';
 
 /**
@@ -36,15 +36,15 @@ export class InventoryLayout {
     private cachedPositions: Map<number, BuildingLayoutPositions> = new Map();
 
     private gameState: GameState;
-    private stackPositions: StackPositions | null = null;
+    private pileRegistry: BuildingPileRegistry | null = null;
 
     constructor(gameState: GameState) {
         this.gameState = gameState;
     }
 
-    /** Set stack positions config (loaded from YAML, editable via debug tool). */
-    setStackPositions(positions: StackPositions): void {
-        this.stackPositions = positions;
+    /** Set the pile registry (derived from XML game data). */
+    setPileRegistry(registry: BuildingPileRegistry): void {
+        this.pileRegistry = registry;
     }
 
     /**
@@ -91,7 +91,8 @@ export class InventoryLayout {
 
     /**
      * Resolve the tile coordinate where a new visual stack should be placed.
-     * Checks the YAML-configured position first; falls back to the auto-calculated pool.
+     * Checks the BuildingPileRegistry (XML-derived) first; falls back to the auto-calculated pool
+     * for buildings not covered by the XML.
      */
     resolveStackPosition(
         buildingId: number,
@@ -102,10 +103,10 @@ export class InventoryLayout {
         const layout = this.getLayoutPositions(buildingId);
         const fallbackPositions = slotType === 'output' ? layout.outputPositions : layout.inputPositions;
 
-        if (this.stackPositions) {
+        if (this.pileRegistry) {
             const building = this.gameState.getEntity(buildingId);
             if (building) {
-                const pos = this.stackPositions.getPositionForSlot(
+                const pos = this.pileRegistry.getPilePositionForSlot(
                     building.subType as BuildingType,
                     building.race,
                     slotType,
@@ -118,37 +119,6 @@ export class InventoryLayout {
         }
 
         return this.findAvailablePosition(visualState, fallbackPositions);
-    }
-
-    /**
-     * Resolve a slot position for debug display: YAML config first, then auto-calc pool.
-     * The `usedKeys` set is updated so sequential calls don't return the same tile.
-     */
-    resolveDebugSlotPosition(
-        building: { subType: number; race: Race; x: number; y: number },
-        materialType: EMaterialType,
-        slotType: 'input' | 'output',
-        fallbackPositions: TileCoord[],
-        usedKeys: Set<string>
-    ): TileCoord | null {
-        if (this.stackPositions) {
-            const pos = this.stackPositions.getPositionForSlot(
-                building.subType as BuildingType,
-                building.race,
-                slotType,
-                materialType,
-                building.x,
-                building.y
-            );
-            if (pos) return pos;
-        }
-        for (const pos of fallbackPositions) {
-            const key = tileKey(pos.x, pos.y);
-            if (usedKeys.has(key)) continue;
-            usedKeys.add(key);
-            return pos;
-        }
-        return null;
     }
 
     /**

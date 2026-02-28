@@ -302,7 +302,7 @@ function xmlSettlerToUnitType(xmlSettler: string): UnitType | undefined {
 }
 
 /** Convert XML good string (e.g. "GOOD_PICKAXE") to EMaterialType. */
-function xmlGoodToMaterialType(xmlGood: string): EMaterialType | undefined {
+export function xmlGoodToMaterialType(xmlGood: string): EMaterialType | undefined {
     if (!xmlGood || xmlGood === 'GOOD_NO_GOOD') return undefined;
     const name = xmlGood.replace('GOOD_', '');
     if (!(name in S4GoodType)) return undefined;

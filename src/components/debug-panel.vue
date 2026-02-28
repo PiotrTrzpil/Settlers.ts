@@ -40,32 +40,6 @@
             </div>
         </CollapseSection>
 
-        <!-- Stack Defaults -->
-        <CollapseSection title="Stack Defaults" :default-open="false">
-            <p class="section-hint">
-                Auto-generate default stack positions for all races. To adjust individual building properties, select a
-                building and use the Adjustments section in the selection panel.
-            </p>
-            <div class="control-buttons">
-                <button
-                    class="ctrl-btn danger"
-                    title="Auto-generate default stack positions for all races and save to stack-positions.yaml"
-                    @click="onDefaultsClick"
-                >
-                    Generate Defaults
-                </button>
-            </div>
-            <div v-if="showDefaultsWarning" class="defaults-warning">
-                <p class="warning-text">
-                    stack-positions.yaml already has data. Generating defaults will overwrite it.
-                </p>
-                <div class="control-buttons">
-                    <button class="ctrl-btn danger" @click="confirmGenerateDefaults">Overwrite</button>
-                    <button class="ctrl-btn" @click="showDefaultsWarning = false">Cancel</button>
-                </div>
-            </div>
-        </CollapseSection>
-
         <!-- Map Objects -->
         <CollapseSection title="Map Objects" :default-open="false">
             <Checkbox v-model="settings.darkLandDilation" label="Dark land gap filling" />
@@ -101,16 +75,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { debugStats } from '@/game/debug-stats';
-import { getBridge } from '@/game/debug-bridge';
 
 import type { Game } from '@/game/game';
 import { clearSavedTreeState } from '@/game/game-state-persistence';
-import { AVAILABLE_RACES } from '@/game/race';
 import { MapObjectCategory } from '@/game/types/map-object-types';
 import { useDebugMapObjects } from './use-debug-map-objects';
-import { BuildingAdjustMode } from '@/game/input/modes/building-adjust-mode';
-import { StackAdjustHandler } from '@/game/features/building-adjust';
-import stackPositionsYaml from '@/game/features/inventory/data/stack-positions.yaml?raw';
 import Checkbox from './Checkbox.vue';
 import CollapseSection from './CollapseSection.vue';
 import StatRow from './StatRow.vue';
@@ -152,74 +121,9 @@ function onTreeExpansionChange(val: boolean): void {
 const getGame = (): Game | null => props.game;
 const { mapObjectCounts, hasObjectTypeData, spawnCategory, spawnAllFromMap, clearAllMapObjects } =
     useDebugMapObjects(getGame);
-
-// Stack defaults generation
-function getStackHandler(): StackAdjustHandler | null {
-    const input = getBridge().input;
-    if (!input) return null;
-    const mode = input.getMode('building-adjust');
-    if (!(mode instanceof BuildingAdjustMode)) return null;
-    for (const handler of mode.getHandlers()) {
-        if (handler instanceof StackAdjustHandler) return handler;
-    }
-    return null;
-}
-
-const showDefaultsWarning = ref(false);
-
-function onDefaultsClick(): void {
-    const handler = getStackHandler();
-    if (!handler) {
-        console.warn('BuildingAdjustMode not available');
-        return;
-    }
-    if (stackPositionsYaml.trim().length > 0) {
-        showDefaultsWarning.value = true;
-        return;
-    }
-    executeGenerateDefaults();
-}
-
-function confirmGenerateDefaults(): void {
-    showDefaultsWarning.value = false;
-    executeGenerateDefaults();
-}
-
-function executeGenerateDefaults(): void {
-    const handler = getStackHandler()!;
-    const positions = handler.getStackPositions();
-    const visualizer = handler.getInventoryVisualizer();
-    visualizer.generateDefaultPositions(positions, AVAILABLE_RACES);
-    console.log('Generated default stack positions. Saved to stack-positions.yaml.');
-}
 </script>
 
 <style scoped>
-/* Section hint text */
-.section-hint {
-    color: var(--text-faint);
-    font-size: 9px;
-    line-height: 1.4;
-    margin: 0 0 6px;
-    padding: 0;
-}
-
-/* Defaults overwrite warning */
-.defaults-warning {
-    margin-top: 6px;
-    padding: 6px 8px;
-    background: #3a2a10;
-    border: 1px solid #6a4a20;
-    border-radius: 3px;
-}
-
-.warning-text {
-    color: var(--status-alert, #d0a040);
-    font-size: 10px;
-    line-height: 1.4;
-    margin: 0 0 6px;
-}
-
 /* Stat label/value used directly in map-obj and river sections */
 .stat-label {
     color: var(--text-muted);

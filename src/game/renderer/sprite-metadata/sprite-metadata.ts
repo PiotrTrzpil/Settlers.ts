@@ -522,7 +522,7 @@ export class SpriteMetadataRegistry {
     /**
      * Register an additional animation sequence on an already-registered animated entity.
      * Used to add carry-walk variants for carriers: each material type gets its own
-     * sequence key (e.g. 'carry_0' for trunk) with its own set of direction frames.
+     * sequence key (e.g. 'carry.log' for logs) with its own set of direction frames.
      *
      * The entity must already be registered via registerAnimatedEntity.
      */

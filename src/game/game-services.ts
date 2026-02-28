@@ -28,9 +28,11 @@ import { CarrierManager } from './features/carriers';
 import {
     InventoryVisualizer,
     BuildingInventoryManager,
+    BuildingPileRegistry,
     InventoryFeature,
     type InventoryExports,
 } from './features/inventory';
+import { getGameDataLoader } from '@/resources/game-data';
 import {
     LogisticsDispatcher,
     RequestManager,
@@ -292,6 +294,12 @@ export class GameServices {
         // 10. Inventory visualizer — registers for entity:removed cleanup
         this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager, executeCommand);
         this.inventoryVisualizer.registerEvents(eventBus, this.cleanupRegistry);
+
+        // Wire XML-derived pile positions (replaces the old YAML stack positions)
+        const dataLoader = getGameDataLoader();
+        if (dataLoader.isLoaded()) {
+            this.inventoryVisualizer.setPileRegistry(new BuildingPileRegistry(dataLoader.getData()));
+        }
 
         // 11. Core entity lifecycle — movement controllers and resource state.
         //     These are not feature-specific, so they stay in the composition root.

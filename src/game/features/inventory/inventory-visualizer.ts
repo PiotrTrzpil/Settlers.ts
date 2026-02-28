@@ -14,27 +14,15 @@ import type { GameState } from '../../game-state';
 import type { BuildingInventoryManager } from './building-inventory';
 import { BuildingType, MAX_RESOURCE_STACK_SIZE, type TileCoord } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
-import { Race } from '../../race';
 import type { Command, CommandResult } from '../../commands';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { LogHandler } from '@/utilities/log-handler';
-import type { StackPositions } from './stack-positions';
-import { INVENTORY_CONFIGS } from './inventory-configs';
+import type { BuildingPileRegistry } from './building-pile-registry';
 import { MaterialStackState } from './material-stack-state';
 import { InventoryLayout } from './inventory-layout';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
 
 const log = new LogHandler('InventoryVisualizer');
-
-/** Slot position info for the debug stack-adjust tool. */
-export interface DebugSlotInfo {
-    buildingId: number;
-    x: number;
-    y: number;
-    slotType: 'input' | 'output';
-    material: EMaterialType;
-    hasEntity: boolean;
-}
 
 /**
  * Manages visual representation of building inventories.
@@ -48,9 +36,6 @@ export class InventoryVisualizer {
     private stackState: MaterialStackState;
     private layout: InventoryLayout;
 
-    /** Debug preview entity IDs (created in stack-adjust mode, cleaned up on exit) */
-    private previewEntityIds = new Set<number>();
-
     /** Bound handler for inventory changes */
     private changeHandler: (
         buildingId: number,
@@ -62,9 +47,6 @@ export class InventoryVisualizer {
 
     /** Tracked event subscriptions for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
-
-    /** Large depth bias so preview sprites render on top of everything. */
-    private static readonly PREVIEW_DEPTH_BIAS = 1000;
 
     constructor(
         gameState: GameState,
@@ -82,9 +64,9 @@ export class InventoryVisualizer {
         this.inventoryManager.onChange(this.changeHandler);
     }
 
-    /** Set stack positions config (loaded from YAML, editable via debug tool). */
-    setStackPositions(positions: StackPositions): void {
-        this.layout.setStackPositions(positions);
+    /** Set the pile registry (derived from XML game data). */
+    setPileRegistry(registry: BuildingPileRegistry): void {
+        this.layout.setPileRegistry(registry);
     }
 
     /**
@@ -102,7 +84,6 @@ export class InventoryVisualizer {
 
     /** Clean up event listeners and internal state. */
     dispose(): void {
-        this.removeSlotPreviews();
         this.unregisterEvents();
         this.inventoryManager.offChange(this.changeHandler);
         this.stackState.clear();
@@ -205,36 +186,6 @@ export class InventoryVisualizer {
 
         this.stackState.remove(buildingId);
         this.layout.invalidateCache(buildingId);
-    }
-
-    /**
-     * Reverse-look up which building and slot own a given visual stack entity.
-     * Used by the debug adjust tool.
-     */
-    identifyStack(entityId: number): {
-        buildingId: number;
-        buildingType: BuildingType;
-        buildingRace: Race;
-        buildingX: number;
-        buildingY: number;
-        slotType: 'input' | 'output';
-        material: EMaterialType;
-    } | null {
-        const match = this.stackState.identifyEntity(entityId);
-        if (!match) return null;
-
-        const building = this.gameState.getEntity(match.buildingId);
-        if (!building) return null;
-
-        return {
-            buildingId: match.buildingId,
-            buildingType: building.subType as BuildingType,
-            buildingRace: building.race,
-            buildingX: building.x,
-            buildingY: building.y,
-            slotType: match.slotType,
-            material: match.material,
-        };
     }
 
     // --- Refresh / bulk rebuild ---
@@ -340,161 +291,6 @@ export class InventoryVisualizer {
             result.push({ entityId, slotType: 'input' });
         }
         return result;
-    }
-
-    /**
-     * Get all configured slot positions across all buildings with inventory.
-     * Returns positions for every material in every building's config, resolved
-     * from YAML first with auto-calc fallback. Used by the debug adjust tool
-     * to show clickable highlights even for empty slots.
-     */
-    getAllSlotPositions(): DebugSlotInfo[] {
-        const result: DebugSlotInfo[] = [];
-
-        for (const buildingId of this.inventoryManager.getAllBuildingIds()) {
-            const building = this.gameState.getEntity(buildingId);
-            if (!building) continue;
-
-            const buildingType = building.subType as BuildingType;
-            const config = INVENTORY_CONFIGS.get(buildingType);
-            if (!config) continue;
-
-            const visualState = this.stackState.get(buildingId);
-            const layoutPositions = this.layout.calculateAutoStackPositions(
-                building.x,
-                building.y,
-                buildingType,
-                building.race
-            );
-            const usedKeys = new Set<string>();
-
-            this.collectSlotPositions(
-                result,
-                building,
-                buildingId,
-                config.outputSlots,
-                'output',
-                layoutPositions.outputPositions,
-                usedKeys,
-                visualState?.outputStacks
-            );
-            this.collectSlotPositions(
-                result,
-                building,
-                buildingId,
-                config.inputSlots,
-                'input',
-                layoutPositions.inputPositions,
-                usedKeys,
-                visualState?.inputStacks
-            );
-        }
-
-        return result;
-    }
-
-    /** Resolve and collect slot positions for one side (input or output) of a building. */
-    private collectSlotPositions(
-        result: DebugSlotInfo[],
-        building: { subType: number; race: Race; x: number; y: number },
-        buildingId: number,
-        slots: readonly { materialType: EMaterialType }[],
-        slotType: 'input' | 'output',
-        fallbackPositions: TileCoord[],
-        usedKeys: Set<string>,
-        entityMap?: Map<EMaterialType, number>
-    ): void {
-        for (const slot of slots) {
-            const pos = this.layout.resolveDebugSlotPosition(
-                building,
-                slot.materialType,
-                slotType,
-                fallbackPositions,
-                usedKeys
-            );
-            if (!pos) continue;
-
-            result.push({
-                buildingId,
-                x: pos.x,
-                y: pos.y,
-                slotType,
-                material: slot.materialType,
-                hasEntity: entityMap?.has(slot.materialType) ?? false,
-            });
-        }
-    }
-
-    /**
-     * Generate default positions for all building types that have inventory,
-     * for all available races. Uses the auto-calculation algorithm at a
-     * reference point and stores them in the StackPositions config.
-     */
-    generateDefaultPositions(stackPositions: StackPositions, races: Race[]): void {
-        const REF_X = 100;
-        const REF_Y = 100;
-
-        for (const [buildingType, config] of INVENTORY_CONFIGS) {
-            if (!config.outputSlots.length && !config.inputSlots.length) continue;
-
-            for (const race of races) {
-                const { outputPositions, inputPositions } = this.layout.calculateAutoStackPositions(
-                    REF_X,
-                    REF_Y,
-                    buildingType,
-                    race
-                );
-
-                if (config.outputSlots.length > 0 && outputPositions.length > 0) {
-                    stackPositions.setMaterialPositions(
-                        buildingType,
-                        race,
-                        'output',
-                        config.outputSlots.map(s => s.materialType),
-                        REF_X,
-                        REF_Y,
-                        outputPositions
-                    );
-                }
-                if (config.inputSlots.length > 0 && inputPositions.length > 0) {
-                    stackPositions.setMaterialPositions(
-                        buildingType,
-                        race,
-                        'input',
-                        config.inputSlots.map(s => s.materialType),
-                        REF_X,
-                        REF_Y,
-                        inputPositions
-                    );
-                }
-            }
-        }
-        stackPositions.saveToFile();
-    }
-
-    /**
-     * Create preview stack entities (qty MAX) at every configured slot that doesn't
-     * already have a real stack. Used by the stack-adjust debug tool.
-     */
-    createSlotPreviews(): void {
-        this.removeSlotPreviews();
-        for (const slot of this.getAllSlotPositions()) {
-            if (slot.hasEntity) continue;
-            const created = this.createVisualStack(slot.buildingId, slot.material, slot, MAX_RESOURCE_STACK_SIZE, true);
-            if (created) {
-                const entity = this.gameState.getEntity(created.id);
-                if (entity) entity.depthBias = InventoryVisualizer.PREVIEW_DEPTH_BIAS;
-                this.previewEntityIds.add(created.id);
-            }
-        }
-    }
-
-    /** Remove all preview stack entities created by createSlotPreviews. */
-    removeSlotPreviews(): void {
-        for (const entityId of this.previewEntityIds) {
-            this.gameState.removeEntity(entityId);
-        }
-        this.previewEntityIds.clear();
     }
 
     // --- Entity creation ---

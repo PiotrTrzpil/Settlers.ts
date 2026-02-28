@@ -37,15 +37,6 @@ const UNIT_TYPE_TO_XML_SETTLER: Partial<Record<UnitType, string>> = {
 
 const ALL_RACE_IDS: RaceId[] = ['RACE_ROMAN', 'RACE_VIKING', 'RACE_MAYA', 'RACE_DARK', 'RACE_TROJAN'];
 
-/**
- * Search type overrides for settlers whose XML role/searchType doesn't match our task system.
- * The miner is HOUSE_WORKER_ROLE in XML (search type stored in the building), but our
- * task system treats it as a RESOURCE_POS worker. Jobs are still derived from animLists.
- */
-const SEARCH_TYPE_OVERRIDES: Partial<Record<string, SearchType>> = {
-    SETTLER_MINEWORKER: SearchType.RESOURCE_POS,
-};
-
 /** Map from XML SEARCH_* value (prefix stripped) to our SearchType enum. */
 const XML_SEARCH_TO_SEARCH_TYPE: Record<string, SearchType> = {
     TREE: SearchType.TREE,
@@ -105,9 +96,7 @@ function deriveSearchType(info: SettlerValueInfo): SearchType | null {
  * Maps XML role + searchType → our SearchType; derives jobs from animLists.
  */
 function deriveSettlerConfig(info: SettlerValueInfo): SettlerConfig | null {
-    // Apply search type override if present, otherwise derive from role/searchTypes
-    const searchOverride = SEARCH_TYPE_OVERRIDES[info.id];
-    const search = searchOverride ?? deriveSearchType(info);
+    const search = deriveSearchType(info);
     if (search === null) return null;
 
     const workJobs = filterWorkJobs(info.animLists);

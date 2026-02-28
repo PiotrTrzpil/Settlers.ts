@@ -36,7 +36,7 @@ export type {
     TriggerSound,
     SettlerValueInfo,
 } from './types';
-export { raceIdToIndex } from './types';
+export { raceIdToIndex, PileSlotType } from './types';
 
 // Footprint decoder
 export {

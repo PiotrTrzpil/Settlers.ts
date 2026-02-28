@@ -175,6 +175,17 @@ describe('Game Data XML Parsers', () => {
             expect(quitStrike).toBeDefined();
             expect(goIntoStrike!.nodes[0]!.jobPart).toBe('C_STRIKE1');
         });
+
+        it('should fix SME_PICKUP_GOLDORE → SME_PICKUP_IRONORE in JOB_SMELTERIRON_WORK', () => {
+            const roman = parsed.get('RACE_ROMAN');
+            const ironJob = roman?.jobs.get('JOB_SMELTERIRON_WORK');
+            expect(ironJob).toBeDefined();
+
+            // The XML has SME_PICKUP_GOLDORE + entity GOOD_IRONORE — parser should fix the mismatch
+            const ironorePickup = ironJob!.nodes.find(n => n.entity === 'GOOD_IRONORE' && n.jobPart.includes('PICKUP'));
+            expect(ironorePickup).toBeDefined();
+            expect(ironorePickup!.jobPart).toBe('SME_PICKUP_IRONORE');
+        });
     });
 
     describeWithData('objectInfo.xml parser', () => {

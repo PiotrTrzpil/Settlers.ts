@@ -46,11 +46,14 @@ export {
 
 // Inventory visualization
 export { InventoryVisualizer } from './inventory-visualizer';
-export type { DebugSlotInfo } from './inventory-visualizer';
 export { MaterialStackState } from './material-stack-state';
 export type { BuildingVisualState as InventoryVisualState } from './material-stack-state';
 export { InventoryLayout } from './inventory-layout';
 export type { BuildingLayoutPositions } from './inventory-layout';
+
+// Building pile registry (XML-derived pile positions)
+export { BuildingPileRegistry } from './building-pile-registry';
+export type { PileSlot } from './building-pile-registry';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { InventoryFeature, type InventoryExports } from './inventory-feature';
