@@ -4,8 +4,7 @@
  * Coordinator that wires together sub-systems:
  * - WorkHandlerRegistry: domain handler registration and lookup
  * - UnitStateMachine: per-unit IDLE/WORKING/INTERRUPTED state transitions
- * - WorkerTaskExecutor: choreography-driven worker job execution
- * - CarrierTaskExecutor: carrier transport job execution
+ * - WorkerTaskExecutor: choreography-driven job execution (XML + inline transport)
  * - IdleAnimationController: idle turning and animation helpers
  *
  * Domain systems (WoodcuttingSystem, etc.) register work handlers
@@ -17,7 +16,7 @@ import type { TickSystem } from '../../tick-system';
 import { EntityType, UnitType, type Entity } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
-import { JobType, SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
+import { SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
 import { buildAllSettlerConfigs } from '../../settler-data-access';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer, BuildingPileRegistry } from '../inventory';
@@ -27,7 +26,6 @@ import type { EntityVisualService } from '../../animation/entity-visual-service'
 import { WorkHandlerRegistry } from './work-handler-registry';
 import { IdleAnimationController } from './idle-animation-controller';
 import { WorkerTaskExecutor } from './worker-task-executor';
-import { CarrierTaskExecutor } from './carrier-task-executor';
 import { UnitStateMachine, type UnitRuntime } from './unit-state-machine';
 import { JobChoreographyStore } from './job-choreography-store';
 import { BuildingPositionResolverImpl } from './building-position-resolver';
@@ -35,6 +33,11 @@ import { JobPartResolverImpl } from './job-part-resolver';
 import { TriggerSystemImpl } from '../../systems/building-overlays/trigger-system';
 import { getGameDataLoader } from '@/resources/game-data';
 import type { ChoreoContext } from './choreo-types';
+import { buildTransportChoreoJob } from './choreo-types';
+import type { TransportJob } from '../logistics/transport-job';
+import { getBuildingDoorPos } from '../../game-data-access';
+import { BuildingType } from '../../buildings/building-type';
+import { EMaterialType } from '../../economy';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import type { BuildingOverlayManager } from '../../systems/building-overlays/building-overlay-manager';
 import type { OreVeinData } from '../ore-veins/ore-vein-data';
@@ -74,8 +77,8 @@ export class SettlerTaskSystem implements TickSystem {
     private readonly choreographyStore: JobChoreographyStore;
     private readonly handlerRegistry: WorkHandlerRegistry;
     private readonly animController: IdleAnimationController;
+    private readonly choreoContext: ChoreoContext;
     private readonly workerExecutor: WorkerTaskExecutor;
-    private readonly carrierExecutor: CarrierTaskExecutor;
     private readonly stateMachine: UnitStateMachine;
     private readonly runtimes = new Map<number, UnitRuntime>();
     /** Tracks how many workers are assigned to each building (for occupancy limits). */
@@ -127,6 +130,7 @@ export class SettlerTaskSystem implements TickSystem {
             },
         };
 
+        this.choreoContext = choreoContext;
         this.handlerRegistry = new WorkHandlerRegistry();
 
         this.animController = new IdleAnimationController(config.visualService, this.gameState.rng);
@@ -141,15 +145,12 @@ export class SettlerTaskSystem implements TickSystem {
             missingHandlerLogger
         );
 
-        this.carrierExecutor = new CarrierTaskExecutor(this.animController, choreoContext);
-
         this.stateMachine = new UnitStateMachine(
             this.gameState,
             config.visualService,
             this.settlerConfigs,
             this.animController,
             this.workerExecutor,
-            this.carrierExecutor,
             this.buildingOccupants,
             (runtime, buildingId) => this.claimBuilding(runtime, buildingId),
             runtime => this.releaseBuilding(runtime)
@@ -243,24 +244,11 @@ export class SettlerTaskSystem implements TickSystem {
                 assignedBuilding: runtime.assignedBuilding,
             };
         }
-        if (job.type === JobType.CARRIER) {
-            return {
-                entityId,
-                state: runtime.state,
-                jobId: job.jobId,
-                jobType: JobType.CARRIER,
-                taskIndex: job.taskIndex,
-                progress: job.progress,
-                targetId: null,
-                carryingGood: job.data.carryingGood,
-                assignedBuilding: runtime.assignedBuilding,
-            };
-        }
         return {
             entityId,
             state: runtime.state,
             jobId: job.jobId,
-            jobType: JobType.CHOREO,
+            jobType: job.type,
             taskIndex: job.nodeIndex,
             progress: job.progress,
             targetId: job.targetId,
@@ -373,6 +361,19 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     /**
+     * Build a ChoreoJobState for a carrier transport delivery.
+     * Resolves pile positions (output pile at source, input pile at dest) via the
+     * building position resolver, falling back to building door.
+     */
+    buildTransportJob(transportJob: TransportJob): JobState {
+        const sourcePos = this.resolveTransportPos(transportJob.sourceBuilding, transportJob.material, 'output');
+        const destPos = this.resolveTransportPos(transportJob.destBuilding, transportJob.material, 'input');
+        const home = this.gameState.getEntityOrThrow(transportJob.homeBuilding, 'carrier home building');
+        const homePos = getBuildingDoorPos(home.x, home.y, home.race, home.subType as BuildingType);
+        return buildTransportChoreoJob(transportJob, sourcePos, destPos, homePos);
+    }
+
+    /**
      * Assign an externally-constructed job to a unit.
      * Used by LogisticsDispatcher for carrier transport jobs and potentially
      * for future external job assignments (military orders, etc.).
@@ -446,7 +447,7 @@ export class SettlerTaskSystem implements TickSystem {
             if (config && runtime.job) {
                 this.interruptJobForCleanup(entity, config, runtime);
             }
-        } else if (runtime.job?.type === JobType.CHOREO && runtime.job.targetId && runtime.job.workStarted) {
+        } else if (runtime.job?.targetId && runtime.job.workStarted) {
             // Entity already gone — call onWorkInterrupt directly
             const entityHandler = this.handlerRegistry.findEntityHandlerForJob(runtime.job.jobId, this.settlerConfigs);
             if (entityHandler) {
@@ -541,13 +542,29 @@ export class SettlerTaskSystem implements TickSystem {
 
     /**
      * Interrupt a job for cleanup purposes (entity removal or task reassignment).
-     * Delegates to the appropriate executor based on job type.
      */
     private interruptJobForCleanup(entity: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
-        if (runtime.job!.type === JobType.CARRIER) {
-            this.carrierExecutor.interruptJob(entity, runtime);
-        } else {
-            this.workerExecutor.interruptJob(entity, config, runtime);
-        }
+        this.workerExecutor.interruptJob(entity, config, runtime);
+    }
+
+    /**
+     * Resolve a pile position for a carrier transport (output pile for pickup, input pile for delivery).
+     * Falls back to building door when no pile is defined in the building config.
+     */
+    private resolveTransportPos(
+        buildingId: number,
+        material: EMaterialType,
+        slotType: 'input' | 'output'
+    ): { x: number; y: number } {
+        const resolver = this.choreoContext.buildingPositionResolver;
+        const materialName = EMaterialType[material];
+        // getSourcePilePosition = input pile, getDestinationPilePosition = output pile
+        const pile =
+            slotType === 'input'
+                ? resolver.getSourcePilePosition(buildingId, materialName)
+                : resolver.getDestinationPilePosition(buildingId, materialName);
+        if (pile) return pile;
+        const building = this.gameState.getEntityOrThrow(buildingId, 'transport building');
+        return getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
     }
 }

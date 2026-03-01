@@ -45,6 +45,9 @@ import {
     executeResourceGatheringVirtual,
 } from './internal/inventory-executors';
 
+// Transport (carrier jobs)
+import { executeTransportPickup, executeTransportDropoff } from './internal/transport-executors';
+
 // Wait + Control
 import {
     executeWait,
@@ -106,4 +109,8 @@ export const CHOREO_EXECUTOR_MAP: Record<ChoreoTaskType, ChoreoExecutorFn> = {
     [ChoreoTaskType.CHANGE_TYPE_AT_BARRACKS]: executeChangeTypeAtBarracks,
     [ChoreoTaskType.HEAL_ENTITY]: executeHealEntity,
     [ChoreoTaskType.ATTACK_REACTION]: executeAttackReaction,
+
+    // Transport (carrier jobs)
+    [ChoreoTaskType.TRANSPORT_PICKUP]: executeTransportPickup,
+    [ChoreoTaskType.TRANSPORT_DROPOFF]: executeTransportDropoff,
 };

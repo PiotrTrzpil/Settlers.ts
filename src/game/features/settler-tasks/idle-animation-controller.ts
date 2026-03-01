@@ -96,7 +96,7 @@ export class IdleAnimationController {
 
     /**
      * Apply animation from a choreography node's resolved job part.
-     * Called by WorkerTaskExecutor/CarrierTaskExecutor when advancing to a new node.
+     * Called by WorkerTaskExecutor when advancing to a new node.
      */
     applyChoreoAnimation(settler: Entity, resolution: JobPartResolution): void {
         this.visualService.applyIntent(settler.id, {

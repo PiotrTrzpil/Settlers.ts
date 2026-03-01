@@ -38,6 +38,7 @@ function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
         eventBus: ctx.eventBus,
         carrierManager,
         getInventoryVisualizer: () => null as any,
+        getPileRegistry: () => null,
         workAreaStore: {} as any,
         buildingOverlayManager: {} as any,
     };

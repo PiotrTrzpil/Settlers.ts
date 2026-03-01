@@ -2,8 +2,8 @@
  * Unit state machine for settler task processing.
  *
  * Coordinates the IDLE → WORKING → INTERRUPTED state transitions for settler
- * units with XML choreography job configs. Delegates to WorkerTaskExecutor or
- * CarrierTaskExecutor based on the active job type.
+ * units with choreography job configs. Delegates all job execution to
+ * WorkerTaskExecutor (both XML-defined and inline transport jobs).
  *
  * Handles:
  * - Per-tick state dispatch (idle/working/interrupted)
@@ -15,10 +15,9 @@
 import type { Entity } from '../../entity';
 import { UnitType } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
-import { JobType, SettlerState, type SettlerConfig, type JobState } from './types';
+import { SettlerState, type SettlerConfig, type JobState } from './types';
 import type { IdleAnimationController, IdleAnimationState } from './idle-animation-controller';
 import type { WorkerTaskExecutor, WorkerRuntimeState, OccupancyMap } from './worker-task-executor';
-import type { CarrierTaskExecutor, CarrierRuntimeState } from './carrier-task-executor';
 import type { GameState } from '../../game-state';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 
@@ -56,7 +55,6 @@ export class UnitStateMachine {
         private readonly settlerConfigs: SettlerConfigs,
         private readonly animController: IdleAnimationController,
         private readonly workerExecutor: WorkerTaskExecutor,
-        private readonly carrierExecutor: CarrierTaskExecutor,
         private readonly buildingOccupants: Map<number, number>,
         private readonly claimBuilding: (runtime: UnitRuntime, buildingId: number) => void,
         private readonly releaseBuilding: (runtime: UnitRuntime) => void
@@ -181,13 +179,7 @@ export class UnitStateMachine {
     }
 
     private handleWorking(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
-        const job = runtime.job!;
-
-        if (job.type === JobType.CARRIER) {
-            this.carrierExecutor.handleWorking(settler, runtime as CarrierRuntimeState, dt);
-        } else {
-            this.workerExecutor.handleWorking(settler, config, runtime as WorkerRuntimeState, dt);
-        }
+        this.workerExecutor.handleWorking(settler, config, runtime as WorkerRuntimeState, dt);
 
         // Sync direction immediately after task execution (FACE_POS sets it mid-tick, avoid one-frame lag)
         this.updateDirectionTracking(settler, runtime);

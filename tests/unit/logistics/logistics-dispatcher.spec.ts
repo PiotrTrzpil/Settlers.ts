@@ -30,9 +30,12 @@ describe('LogisticsDispatcher', () => {
         installTestGameData();
         ctx = createTestContext(64, 64);
 
-        // Create a mock settler task system — we only need assignJob
+        // Create a mock settler task system — we need assignJob and buildTransportJob
         assignJobSpy = vi.fn().mockReturnValue(true);
-        const mockSettlerTaskSystem = { assignJob: assignJobSpy } as unknown as SettlerTaskSystem;
+        const mockSettlerTaskSystem = {
+            assignJob: assignJobSpy,
+            buildTransportJob: vi.fn().mockReturnValue({ targetPos: { x: 0, y: 0 } }),
+        } as unknown as SettlerTaskSystem;
 
         dispatcher = new LogisticsDispatcher({
             gameState: ctx.state,

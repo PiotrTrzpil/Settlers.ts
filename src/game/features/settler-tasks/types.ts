@@ -2,8 +2,6 @@
  * Types for the settler task system.
  */
 
-import type { EMaterialType } from '../../economy';
-import type { TransportJob } from '../logistics/transport-job';
 import type { ChoreoJobState } from './choreo-types';
 
 /** Search types - what a settler looks for */
@@ -64,77 +62,14 @@ export enum TaskResult {
     FAILED = 'FAILED',
 }
 
-// ─────────────────────────────────────────────────────────────
-// Carrier Job State
-// ─────────────────────────────────────────────────────────────
-
-/** Carrier-specific job data (transport jobs) */
-export interface CarrierJobData {
-    /** Source building for pickup */
-    sourceBuildingId: number;
-    /** Destination building for delivery */
-    destBuildingId: number;
-    /** Material type being transported */
-    material: EMaterialType;
-    /** Amount to transport */
-    amount: number;
-    /** Home building ID (tavern) */
-    homeId: number;
-    /** Carried good type (after pickup) */
-    carryingGood: EMaterialType | null;
-    /** The TransportJob that owns this delivery's reservation and request lifecycle */
-    transportJob: TransportJob;
-}
-
-/** Job ID for carrier transport (not XML-defined — carrier phases are inline). */
+/** Job ID for carrier transport (not XML-defined — inline choreography built programmatically). */
 export const CARRIER_TRANSPORT_JOB_ID = 'CARRIER_TRANSPORT';
 
-/** Carrier transport phase names (indexed by CarrierJobState.taskIndex). */
-export enum CarrierPhase {
-    GO_TO_SOURCE = 'GO_TO_SOURCE',
-    PICKUP = 'PICKUP',
-    GO_TO_DEST = 'GO_TO_DEST',
-    DROPOFF = 'DROPOFF',
-    GO_HOME = 'GO_HOME',
-}
+/** Job state for an active settler job. */
+export type JobState = ChoreoJobState;
 
-/** Carrier job state - for transport jobs */
-export interface CarrierJobState {
-    type: JobType.CARRIER;
-    jobId: string;
-    taskIndex: number;
-    progress: number;
-    data: CarrierJobData;
-}
-
-/** Discriminated union of all job state types */
-export type JobState = ChoreoJobState | CarrierJobState;
-
-/**
- * Build a CarrierJobState for a transport delivery.
- * The TransportJob owns the reservation and request lifecycle.
- */
-export function buildCarrierJob(transportJob: TransportJob): CarrierJobState {
-    return {
-        type: JobType.CARRIER,
-        jobId: CARRIER_TRANSPORT_JOB_ID,
-        taskIndex: 0,
-        progress: 0,
-        data: {
-            sourceBuildingId: transportJob.sourceBuilding,
-            destBuildingId: transportJob.destBuilding,
-            material: transportJob.material,
-            amount: transportJob.amount,
-            homeId: transportJob.homeBuilding,
-            carryingGood: null,
-            transportJob,
-        },
-    };
-}
-
-/** Discriminator for JobState union. */
+/** Job type discriminator (single variant — kept for structural consistency). */
 export enum JobType {
-    CARRIER = 'carrier',
     CHOREO = 'choreo',
 }
 

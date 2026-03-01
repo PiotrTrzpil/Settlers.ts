@@ -11,7 +11,7 @@
  * - Constants: FATIGUE_THRESHOLDS
  *
  * Note: Task execution (movement, animation, pickup, dropoff) is handled by
- * CarrierTaskExecutor with inline phase-based dispatch.
+ * WorkerTaskExecutor via inline transport choreography.
  */
 
 // Types and helpers from carrier-state

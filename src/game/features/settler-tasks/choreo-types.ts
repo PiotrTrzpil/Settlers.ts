@@ -6,13 +6,20 @@
  */
 
 import type { Entity } from '../../entity';
-import type { EMaterialType } from '../../economy';
+import { EMaterialType } from '../../economy';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, InventoryVisualizer } from '../inventory';
 import type { CarrierManager } from '../carriers';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
-import { JobType, type EntityWorkHandler, type PositionWorkHandler, type TaskResult } from './types';
+import {
+    JobType,
+    CARRIER_TRANSPORT_JOB_ID,
+    type EntityWorkHandler,
+    type PositionWorkHandler,
+    type TaskResult,
+} from './types';
+import type { TransportJob } from '../logistics/transport-job';
 
 // ─────────────────────────────────────────────────────────────
 // CEntityTask types — 1:1 mapping from jobInfo.xml
@@ -61,6 +68,10 @@ export enum ChoreoTaskType {
     CHANGE_TYPE_AT_BARRACKS,
     HEAL_ENTITY,
     ATTACK_REACTION,
+
+    // Transport (carrier jobs — programmatically built, not from XML)
+    TRANSPORT_PICKUP,
+    TRANSPORT_DROPOFF,
 }
 
 /** Map task string (prefix-stripped at parse time) → ChoreoTaskType enum. */
@@ -135,11 +146,34 @@ export interface ChoreoJob {
 // Choreography job runtime state
 // ─────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────
+// Transport data — for carrier transport jobs via choreography
+// ─────────────────────────────────────────────────────────────
+
+/** Carrier transport data stored on ChoreoJobState for TRANSPORT_* task types. */
+export interface TransportData {
+    /** The TransportJob that owns reservation and request lifecycle. */
+    transportJob: TransportJob;
+    /** Source building entity ID (pickup location). */
+    sourceBuildingId: number;
+    /** Destination building entity ID (delivery location). */
+    destBuildingId: number;
+    /** Carrier's home building (tavern) entity ID. */
+    homeId: number;
+    /** Material being transported. */
+    material: EMaterialType;
+    /** Amount to transport. */
+    amount: number;
+    /** Pre-resolved destination position (input pile / door). */
+    destPos: { x: number; y: number };
+    /** Pre-resolved home position (tavern door). */
+    homePos: { x: number; y: number };
+}
+
 /** Runtime state for an active choreography job. */
 export interface ChoreoJobState {
-    /** Discriminator for JobState union (ChoreoJobState | CarrierJobState). */
     type: JobType.CHOREO;
-    /** Job definition ID (e.g., 'JOB_WOODCUTTER_WORK') */
+    /** Job definition ID (e.g., 'JOB_WOODCUTTER_WORK' or 'CARRIER_TRANSPORT') */
     jobId: string;
     /** Current node index in the choreography sequence */
     nodeIndex: number;
@@ -157,6 +191,10 @@ export interface ChoreoJobState {
     carryingGood: EMaterialType | null;
     /** Whether work was started for current node (for cleanup tracking) */
     workStarted: boolean;
+    /** Inline nodes for programmatically-built jobs (carrier transport). When set, used instead of store lookup. */
+    inlineNodes?: ChoreoNode[];
+    /** Transport data for carrier jobs (TRANSPORT_PICKUP / TRANSPORT_DROPOFF). */
+    transportData?: TransportData;
 }
 
 /** Create a fresh ChoreoJobState for starting a job. */
@@ -173,6 +211,75 @@ export function createChoreoJobState(jobId: string): ChoreoJobState {
         carryingGood: null,
         workStarted: false,
     };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Carrier transport job builder
+// ─────────────────────────────────────────────────────────────
+
+/** Default ChoreoNode values for programmatically-built nodes. */
+const NODE_DEFAULTS: Omit<ChoreoNode, 'task' | 'jobPart'> = {
+    x: 0,
+    y: 0,
+    duration: -1,
+    dir: -1,
+    forward: true,
+    visible: true,
+    useWork: false,
+    entity: '',
+    trigger: '',
+};
+
+/** Build a ChoreoNode with defaults. */
+function makeNode(task: ChoreoTaskType, jobPart: string, overrides?: Partial<ChoreoNode>): ChoreoNode {
+    return { ...NODE_DEFAULTS, task, jobPart, ...overrides };
+}
+
+/**
+ * Build a ChoreoJobState for a carrier transport delivery.
+ *
+ * Constructs an inline choreography sequence:
+ *   GO_TO_TARGET (source) → TRANSPORT_PICKUP → GO_TO_TARGET (dest) → TRANSPORT_DROPOFF → GO_TO_TARGET (home)
+ *
+ * Movement uses GO_TO_TARGET with targetPos pre-set per node via the transport executors.
+ */
+export function buildTransportChoreoJob(
+    transportJob: TransportJob,
+    sourcePos: { x: number; y: number },
+    destPos: { x: number; y: number },
+    homePos: { x: number; y: number }
+): ChoreoJobState {
+    const materialName = `GOOD_${EMaterialType[transportJob.material]}`;
+
+    const nodes: ChoreoNode[] = [
+        // 1. Walk to source building (output pile / door)
+        makeNode(ChoreoTaskType.GO_TO_TARGET, 'C_WALK'),
+        // 2. Pick up material via TransportJob
+        makeNode(ChoreoTaskType.TRANSPORT_PICKUP, 'C_WALK', { entity: materialName }),
+        // 3. Walk to destination building (input pile / door)
+        makeNode(ChoreoTaskType.GO_TO_TARGET, 'C_WALK'),
+        // 4. Drop off material via TransportJob
+        makeNode(ChoreoTaskType.TRANSPORT_DROPOFF, 'C_WALK', { entity: materialName }),
+        // 5. Walk home
+        makeNode(ChoreoTaskType.GO_TO_TARGET, 'C_WALK'),
+    ];
+
+    const job = createChoreoJobState(CARRIER_TRANSPORT_JOB_ID);
+    job.inlineNodes = nodes;
+    // Pre-set targetPos for the first movement node (source building)
+    job.targetPos = { x: sourcePos.x, y: sourcePos.y };
+    job.transportData = {
+        transportJob,
+        sourceBuildingId: transportJob.sourceBuilding,
+        destBuildingId: transportJob.destBuilding,
+        homeId: transportJob.homeBuilding,
+        material: transportJob.material,
+        amount: transportJob.amount,
+        destPos,
+        homePos,
+    };
+
+    return job;
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -124,6 +124,7 @@ function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
         eventBus: ctx.eventBus,
         carrierManager,
         getInventoryVisualizer: () => mockInventoryVisualizer as any,
+        getPileRegistry: () => null,
         workAreaStore: mockWorkAreaStore as any,
         buildingOverlayManager: mockOverlayManager as any,
     };

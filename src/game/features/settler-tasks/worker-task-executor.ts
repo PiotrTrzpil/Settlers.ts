@@ -1,9 +1,9 @@
 /**
  * Worker task executor.
  *
- * Handles job selection, execution, completion, and interruption for
- * workers (woodcutter, builder, etc.) that use XML choreography job sequences.
- * Distinct from carrier jobs which use externally-assigned CarrierJobState.
+ * Handles job selection, execution, completion, and interruption for all
+ * settlers that use choreography job sequences — both XML-defined (workers)
+ * and inline (carrier transport jobs).
  */
 
 import type { Entity } from '../../entity';
@@ -12,7 +12,6 @@ import { LogHandler } from '@/utilities/log-handler';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import { hexDistance } from '../../systems/hex-directions';
 import {
-    JobType,
     TaskResult,
     SettlerState,
     type SettlerConfig,
@@ -157,14 +156,14 @@ export class WorkerTaskExecutor {
         // Job MUST exist when state is WORKING — crash if invariant violated
         const job = runtime.job as ChoreoJobState;
 
-        const raceId = raceToRaceId(settler.race);
-        const choreoJob = this.choreographyStore.getJob(raceId, job.jobId);
-        if (!choreoJob || job.nodeIndex >= choreoJob.nodes.length) {
+        // Resolve nodes: inline (transport) or from choreo store
+        const nodes = job.inlineNodes ?? this.choreographyStore.getJob(raceToRaceId(settler.race), job.jobId)?.nodes;
+        if (!nodes || job.nodeIndex >= nodes.length) {
             this.completeJob(settler, runtime);
             return;
         }
 
-        const node = choreoJob.nodes[job.nodeIndex]!;
+        const node = nodes[job.nodeIndex]!;
 
         // Apply animation for current node (on first tick)
         if (job.progress === 0) {
@@ -199,23 +198,7 @@ export class WorkerTaskExecutor {
 
         switch (result) {
         case TaskResult.DONE:
-            // Stop active trigger when leaving a node
-            if (job.activeTrigger) {
-                this.choreoContext.triggerSystem.stopTrigger(
-                    this.choreoContext.getWorkerHomeBuilding(settler.id) ?? 0,
-                    job.activeTrigger
-                );
-                job.activeTrigger = '';
-            }
-            job.nodeIndex++;
-            job.progress = 0;
-            job.workStarted = false;
-            // Reset targetPos for next node (it may need fresh resolution)
-            job.targetPos = null;
-            // Apply animation for next node if there is one
-            if (job.nodeIndex < choreoJob.nodes.length) {
-                this.applyChoreoAnimation(settler, choreoJob.nodes[job.nodeIndex]!);
-            }
+            this.advanceToNextNode(settler, job, nodes);
             break;
 
         case TaskResult.FAILED:
@@ -228,6 +211,30 @@ export class WorkerTaskExecutor {
         }
     }
 
+    /** Advance to the next choreography node after the current one completes. */
+    private advanceToNextNode(settler: Entity, job: ChoreoJobState, nodes: readonly ChoreoNode[]): void {
+        // Stop active trigger when leaving a node
+        if (job.activeTrigger) {
+            this.choreoContext.triggerSystem.stopTrigger(
+                this.choreoContext.getWorkerHomeBuilding(settler.id) ?? 0,
+                job.activeTrigger
+            );
+            job.activeTrigger = '';
+        }
+        job.nodeIndex++;
+        job.progress = 0;
+        job.workStarted = false;
+        // Reset targetPos for XML jobs (each node resolves its own position).
+        // Inline jobs (transport) manage targetPos via their executors — don't wipe.
+        if (!job.inlineNodes) {
+            job.targetPos = null;
+        }
+        // Apply animation for next node if there is one
+        if (job.nodeIndex < nodes.length) {
+            this.applyChoreoAnimation(settler, nodes[job.nodeIndex]!);
+        }
+    }
+
     /**
      * Complete a job and return to idle state.
      */
@@ -235,7 +242,7 @@ export class WorkerTaskExecutor {
         const job = runtime.job!;
 
         // Stop any active trigger
-        if (job.type === JobType.CHOREO && job.activeTrigger) {
+        if (job.activeTrigger) {
             const homeId = this.choreoContext.getWorkerHomeBuilding(settler.id);
             if (homeId !== null) {
                 this.choreoContext.triggerSystem.stopTrigger(homeId, job.activeTrigger);
@@ -266,7 +273,7 @@ export class WorkerTaskExecutor {
         const job = runtime.job!;
 
         // Only call onWorkInterrupt on entity handlers when work actually started
-        if (entityHandler && job.type === JobType.CHOREO && job.targetId && job.workStarted) {
+        if (entityHandler && job.targetId && job.workStarted) {
             try {
                 entityHandler.onWorkInterrupt?.(job.targetId);
             } catch (e) {
@@ -275,8 +282,13 @@ export class WorkerTaskExecutor {
             }
         }
 
+        // Cancel transport job if active (releases reservation + resets request)
+        if (job.transportData) {
+            job.transportData.transportJob.cancel();
+        }
+
         // Stop any active trigger
-        if (job.type === JobType.CHOREO && job.activeTrigger) {
+        if (job.activeTrigger) {
             const homeId = this.choreoContext.getWorkerHomeBuilding(settler.id);
             if (homeId !== null) {
                 this.choreoContext.triggerSystem.stopTrigger(homeId, job.activeTrigger);
