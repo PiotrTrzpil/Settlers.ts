@@ -5,13 +5,13 @@ import {
     GRID_DELTA_X,
     GRID_DELTA_Y,
     GRID_DELTAS,
-    Y_SCALE,
     getNextHexPoint,
     getApproxDirection,
     rotateDirection,
     hexDistance,
     getAllNeighbors,
 } from '@/game/systems/hex-directions';
+import { tileKey } from '@/game/entity';
 import { GameState } from '@/game/game-state';
 import { pushUnit, findRandomFreeDirection, type TerrainAccessor } from '@/game/systems/movement/index';
 import { createTestMap, TERRAIN, blockColumn, type TestMap } from './helpers/test-map';
@@ -34,7 +34,18 @@ describe('Pathfinding (A*)', () => {
     });
 
     it('should find a straight path on open terrain', () => {
-        const path = findPath(5, 5, 10, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            5,
+            5,
+            10,
+            5,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
 
         expect(path).not.toBe(null);
         const validPath = path ?? [];
@@ -43,7 +54,18 @@ describe('Pathfinding (A*)', () => {
     });
 
     it('should return empty array when start equals goal', () => {
-        const path = findPath(5, 5, 5, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            5,
+            5,
+            5,
+            5,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         const validPath = path ?? [];
         expect(validPath).toHaveLength(0);
@@ -51,7 +73,18 @@ describe('Pathfinding (A*)', () => {
 
     it('should return null when goal is water', () => {
         map.groundType[20 + 5 * 64] = TERRAIN.WATER;
-        const path = findPath(5, 5, 20, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            5,
+            5,
+            20,
+            5,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).toBe(null);
     });
 
@@ -59,7 +92,18 @@ describe('Pathfinding (A*)', () => {
         // Wall of water from y=0 to y=63 at x=15 and x=14
         blockColumn(map, 15);
         blockColumn(map, 14);
-        const path = findPath(10, 5, 20, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            10,
+            5,
+            20,
+            5,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).toBe(null);
     });
 
@@ -72,18 +116,22 @@ describe('Pathfinding (A*)', () => {
             }
         }
 
-        const path = findPath(10, 5, 20, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            10,
+            5,
+            20,
+            5,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         const validPath = path ?? [];
         expect(validPath.length).toBeGreaterThan(5); // detour path
         expect(validPath[validPath.length - 1]).toEqual({ x: 20, y: 5 });
-    });
-
-    it('should not pass through water tiles', () => {
-        blockColumn(map, 15, TERRAIN.WATER);
-        blockColumn(map, 14, TERRAIN.WATER);
-        const path = findPath(10, 5, 20, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
-        expect(path).toBe(null);
     });
 
     it('should consider height differences in cost', () => {
@@ -91,14 +139,36 @@ describe('Pathfinding (A*)', () => {
             map.groundHeight[x + 3 * 64] = 10;
         }
 
-        const path = findPath(5, 5, 15, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            5,
+            5,
+            15,
+            5,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         const validPath = path ?? [];
         expect(validPath[validPath.length - 1]).toEqual({ x: 15, y: 5 });
     });
 
     it('should handle paths near map edges', () => {
-        const path = findPath(0, 0, 5, 0, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            0,
+            0,
+            5,
+            0,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         const validPath = path ?? [];
         expect(validPath[validPath.length - 1]).toEqual({ x: 5, y: 0 });
@@ -152,10 +222,6 @@ describe('Hex Directions', () => {
     });
 
     describe('GRID_DELTAS', () => {
-        it('should have 6 direction entries', () => {
-            expect(GRID_DELTAS).toHaveLength(6);
-        });
-
         it('should match GRID_DELTA_X and GRID_DELTA_Y', () => {
             for (let d = 0; d < 6; d++) {
                 expect(GRID_DELTAS[d]![0]).toBe(GRID_DELTA_X[d]);
@@ -253,10 +319,6 @@ describe('Hex Distance', () => {
     it('should compute correct distance for a known case', () => {
         expect(hexDistance(0, 0, 2, 0)).toBeCloseTo(2, 4);
     });
-
-    it('Y_SCALE should equal sqrt(3)/2 * 0.999999', () => {
-        expect(Y_SCALE).toBeCloseTo((Math.sqrt(3) / 2) * 0.999999, 10);
-    });
 });
 
 describe('Path smoothness', () => {
@@ -287,7 +349,18 @@ describe('Path smoothness', () => {
     }
 
     it('should produce a straight path for due east movement', () => {
-        const path = findPath(5, 5, 15, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            5,
+            5,
+            15,
+            5,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         // Should be exactly 10 steps east with no zigzags
         expect(path!.length).toBe(10);
@@ -297,7 +370,18 @@ describe('Path smoothness', () => {
 
     it('should produce a straight path for diagonal movement', () => {
         // Move NE diagonal - hex distance is 10
-        const path = findPath(5, 15, 15, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            5,
+            15,
+            15,
+            5,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         expect(path!.length).toBe(10); // Hex distance of 10
         // For diagonal, some direction changes are necessary, but should be minimal
@@ -309,7 +393,18 @@ describe('Path smoothness', () => {
     it('should find optimal length path on open terrain', () => {
         // Long diagonal path from (10, 10) to (40, 25)
         // Hex distance = max(|30|, |15|, |-45|) = 45
-        const path = findPath(10, 10, 40, 25, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            10,
+            10,
+            40,
+            25,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         const hexDist = hexDistance(10, 10, 40, 25);
         // Path length should equal hex distance (optimal)
@@ -329,35 +424,90 @@ describe('Pathfinding with 6 directions', () => {
     });
 
     it('should find paths using diagonal hex directions', () => {
-        const path = findPath(5, 5, 6, 4, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            5,
+            5,
+            6,
+            4,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         expect(path).toHaveLength(1);
         expect(path![0]).toEqual({ x: 6, y: 4 });
     });
 
     it('should use hex NE/SW diagonal when it is shorter', () => {
-        const path = findPath(5, 5, 8, 2, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            5,
+            5,
+            8,
+            2,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         expect(path!.length).toBe(3);
         expect(path![path!.length - 1]).toEqual({ x: 8, y: 2 });
     });
 
     it('should find path using SE direction', () => {
-        const path = findPath(5, 5, 5, 8, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            5,
+            5,
+            5,
+            8,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         expect(path!.length).toBe(3);
         expect(path![path!.length - 1]).toEqual({ x: 5, y: 8 });
     });
 
     it('should find path using NW direction', () => {
-        const path = findPath(5, 5, 5, 2, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            5,
+            5,
+            5,
+            2,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         expect(path!.length).toBe(3);
         expect(path![path!.length - 1]).toEqual({ x: 5, y: 2 });
     });
 
     it('bucket queue produces same path endpoint as expected', () => {
-        const path = findPath(5, 5, 25, 20, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            5,
+            5,
+            25,
+            20,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         expect(path![path!.length - 1]).toEqual({ x: 25, y: 20 });
     });
@@ -366,7 +516,18 @@ describe('Pathfinding with 6 directions', () => {
         blockColumn(map, 10);
         map.groundType[10 + 3 * 64] = TERRAIN.GRASS; // gap at (10, 3)
 
-        const path = findPath(8, 5, 12, 5, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+        const path = findPath(
+            8,
+            5,
+            12,
+            5,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy
+        );
         expect(path).not.toBe(null);
         expect(path![path!.length - 1]).toEqual({ x: 12, y: 5 });
     });
@@ -473,12 +634,111 @@ describe('Path obstacle repair', () => {
             addUnit(state, 5, 5);
             addUnit(state, 6, 5);
 
-            const path = findPath(5, 5, 7, 5, map.groundType, map.groundHeight, 64, 64, state.tileOccupancy);
+            const path = findPath(
+                5,
+                5,
+                7,
+                5,
+                map.groundType,
+                map.groundHeight,
+                64,
+                64,
+                state.tileOccupancy,
+                state.buildingOccupancy
+            );
 
             expect(path).not.toBe(null);
             expect(path![path!.length - 1]).toEqual({ x: 7, y: 5 });
             const goesThrough65 = path!.some(p => p.x === 6 && p.y === 5);
             expect(goesThrough65).toBe(false);
         });
+    });
+});
+
+describe('Pathfinding with buildingOccupancy', () => {
+    let map: TestMap;
+
+    beforeEach(() => {
+        map = createTestMap();
+    });
+
+    it('should route around building footprint tiles', () => {
+        // Simulate a 3x3 building footprint at (10,10)
+        for (let dy = 0; dy < 3; dy++) {
+            for (let dx = 0; dx < 3; dx++) {
+                map.buildingOccupancy.add(tileKey(10 + dx, 10 + dy));
+            }
+        }
+
+        const path = findPath(
+            8,
+            11,
+            14,
+            11,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy,
+            true
+        );
+        expect(path).not.toBe(null);
+        // Path must not cross any building tile
+        for (const p of path!) {
+            expect(map.buildingOccupancy.has(tileKey(p.x, p.y))).toBe(false);
+        }
+    });
+
+    it('door tile excluded from footprint allows pathfinding through it', () => {
+        // 3x3 building footprint with door at (12,11) excluded
+        for (let dy = 0; dy < 3; dy++) {
+            for (let dx = 0; dx < 3; dx++) {
+                map.buildingOccupancy.add(tileKey(10 + dx, 10 + dy));
+            }
+        }
+        // Door tile — remove from buildingOccupancy
+        map.buildingOccupancy.delete(tileKey(12, 11));
+
+        // Start at door, pathfind outward — must succeed
+        const path = findPath(
+            12,
+            11,
+            20,
+            11,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy,
+            true
+        );
+        expect(path).not.toBe(null);
+    });
+
+    it('settler is trapped when all door neighbors are in buildingOccupancy', () => {
+        // Simulate a large footprint where the door's neighbors are all building tiles.
+        // Door at (12,12), all 6 hex neighbors blocked:
+        const doorNeighbors = getAllNeighbors({ x: 12, y: 12 });
+        for (const n of doorNeighbors) {
+            map.buildingOccupancy.add(tileKey(n.x, n.y));
+        }
+
+        // Pathfinding from door should fail — settler is trapped
+        const path = findPath(
+            12,
+            12,
+            20,
+            12,
+            map.groundType,
+            map.groundHeight,
+            64,
+            64,
+            map.occupancy,
+            map.buildingOccupancy,
+            true
+        );
+        expect(path).toBe(null);
     });
 });

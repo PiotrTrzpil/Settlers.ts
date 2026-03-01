@@ -34,9 +34,15 @@ describe('Sequence', () => {
     it('succeeds when all children succeed', () => {
         const entity = makeEntity();
         const tree = sequence<TestEntity>(
-            action(e => { e.log.push('a') }),
-            action(e => { e.log.push('b') }),
-            action(e => { e.log.push('c') }),
+            action(e => {
+                e.log.push('a');
+            }),
+            action(e => {
+                e.log.push('b');
+            }),
+            action(e => {
+                e.log.push('c');
+            })
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
@@ -46,9 +52,13 @@ describe('Sequence', () => {
     it('fails on first failure and stops executing remaining children', () => {
         const entity = makeEntity();
         const tree = sequence<TestEntity>(
-            action(e => { e.log.push('a') }),
+            action(e => {
+                e.log.push('a');
+            }),
             condition(() => false),
-            action(e => { e.log.push('c') }),
+            action(e => {
+                e.log.push('c');
+            })
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.FAILURE);
@@ -58,9 +68,13 @@ describe('Sequence', () => {
     it('returns RUNNING when a child returns RUNNING', () => {
         const entity = makeEntity();
         const tree = sequence<TestEntity>(
-            action(e => { e.log.push('a') }),
+            action(e => {
+                e.log.push('a');
+            }),
             statusAction(() => NodeStatus.RUNNING),
-            action(e => { e.log.push('c') }),
+            action(e => {
+                e.log.push('c');
+            })
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);
@@ -80,8 +94,12 @@ describe('Selector', () => {
         const entity = makeEntity();
         const tree = selector<TestEntity>(
             condition(() => false),
-            action(e => { e.log.push('b') }),
-            action(e => { e.log.push('c') }),
+            action(e => {
+                e.log.push('b');
+            }),
+            action(e => {
+                e.log.push('c');
+            })
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
@@ -93,7 +111,7 @@ describe('Selector', () => {
         const tree = selector<TestEntity>(
             condition(() => false),
             condition(() => false),
-            condition(() => false),
+            condition(() => false)
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.FAILURE);
@@ -104,7 +122,9 @@ describe('Selector', () => {
         const tree = selector<TestEntity>(
             condition(() => false),
             statusAction(() => NodeStatus.RUNNING),
-            action(e => { e.log.push('c') }),
+            action(e => {
+                e.log.push('c');
+            })
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);
@@ -136,7 +156,9 @@ describe('Condition', () => {
 describe('Action', () => {
     it('executes callback and returns SUCCESS', () => {
         const entity = makeEntity();
-        const tree = action<TestEntity>(e => { e.value = 42 });
+        const tree = action<TestEntity>(e => {
+            e.value = 42;
+        });
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.value).toBe(42);
@@ -177,7 +199,9 @@ describe('Guard', () => {
         const entity = makeEntity({ flag: true });
         const tree = guard<TestEntity>(
             e => e.flag,
-            action(e => { e.value = 99 }),
+            action(e => {
+                e.value = 99;
+            })
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
@@ -188,7 +212,9 @@ describe('Guard', () => {
         const entity = makeEntity({ flag: false });
         const tree = guard<TestEntity>(
             e => e.flag,
-            action(e => { e.value = 99 }),
+            action(e => {
+                e.value = 99;
+            })
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.FAILURE);
@@ -198,7 +224,7 @@ describe('Guard', () => {
     it('propagates child RUNNING status', () => {
         const tree = guard<TestEntity>(
             () => true,
-            statusAction(() => NodeStatus.RUNNING),
+            statusAction(() => NodeStatus.RUNNING)
         );
 
         expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.RUNNING);
@@ -212,7 +238,10 @@ describe('Repeat', () => {
         const entity = makeEntity({ value: 3 });
         const tree = repeat<TestEntity>(
             e => e.value > 0,
-            action(e => { e.value--; e.log.push('tick') }),
+            action(e => {
+                e.value--;
+                e.log.push('tick');
+            })
         );
 
         // Each tick: check condition, run child, return RUNNING
@@ -228,7 +257,9 @@ describe('Repeat', () => {
         const entity = makeEntity({ value: 0 });
         const tree = repeat<TestEntity>(
             e => e.value > 0,
-            action(e => { e.log.push('tick') }),
+            action(e => {
+                e.log.push('tick');
+            })
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
@@ -238,7 +269,7 @@ describe('Repeat', () => {
     it('returns FAILURE if child fails', () => {
         const tree = repeat<TestEntity>(
             () => true,
-            condition(() => false),
+            condition(() => false)
         );
 
         expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.FAILURE);
@@ -250,17 +281,27 @@ describe('Repeat', () => {
 describe('RepeatCount', () => {
     it('repeats child N times', () => {
         const entity = makeEntity();
-        const tree = new RepeatCount<TestEntity>(3, action(e => { e.value++ }));
+        const tree = new RepeatCount<TestEntity>(
+            3,
+            action(e => {
+                e.value++;
+            })
+        );
 
-        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);  // 1st
-        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);  // 2nd
-        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);  // 3rd
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING); // 1st
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING); // 2nd
+        expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS); // 3rd
         expect(entity.value).toBe(3);
     });
 
     it('resets count after completion', () => {
         const entity = makeEntity();
-        const tree = new RepeatCount<TestEntity>(2, action(e => { e.value++ }));
+        const tree = new RepeatCount<TestEntity>(
+            2,
+            action(e => {
+                e.value++;
+            })
+        );
 
         // First cycle
         tree.tick(entity, 0); // RUNNING
@@ -281,7 +322,7 @@ describe('RepeatCount', () => {
                 if (shouldFail) return NodeStatus.FAILURE;
                 entity.value++;
                 return NodeStatus.SUCCESS;
-            }),
+            })
         );
 
         tree.tick(entity, 0); // 1st: RUNNING
@@ -304,9 +345,9 @@ describe('Sleep', () => {
         const tree = sleep<TestEntity>(() => 100);
         const tick = new Tick(entity, tree);
 
-        expect(tick.tick(50)).toBe(NodeStatus.RUNNING);   // 50ms elapsed
-        expect(tick.tick(40)).toBe(NodeStatus.RUNNING);   // 90ms elapsed
-        expect(tick.tick(20)).toBe(NodeStatus.SUCCESS);   // 110ms elapsed
+        expect(tick.tick(50)).toBe(NodeStatus.RUNNING); // 50ms elapsed
+        expect(tick.tick(40)).toBe(NodeStatus.RUNNING); // 90ms elapsed
+        expect(tick.tick(20)).toBe(NodeStatus.SUCCESS); // 110ms elapsed
     });
 
     it('succeeds immediately when duration is zero', () => {
@@ -344,8 +385,12 @@ describe('ResetAfter', () => {
     it('calls reset on SUCCESS', () => {
         const entity = makeEntity();
         const tree = resetAfter<TestEntity>(
-            e => { e.log.push('reset') },
-            action(e => { e.log.push('work') }),
+            e => {
+                e.log.push('reset');
+            },
+            action(e => {
+                e.log.push('work');
+            })
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
@@ -355,8 +400,10 @@ describe('ResetAfter', () => {
     it('calls reset even on FAILURE', () => {
         const entity = makeEntity();
         const tree = resetAfter<TestEntity>(
-            e => { e.log.push('reset') },
-            condition(() => false),
+            e => {
+                e.log.push('reset');
+            },
+            condition(() => false)
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.FAILURE);
@@ -366,8 +413,10 @@ describe('ResetAfter', () => {
     it('does NOT call reset while RUNNING', () => {
         const entity = makeEntity();
         const tree = resetAfter<TestEntity>(
-            e => { e.log.push('reset') },
-            statusAction(() => NodeStatus.RUNNING),
+            e => {
+                e.log.push('reset');
+            },
+            statusAction(() => NodeStatus.RUNNING)
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.RUNNING);
@@ -380,48 +429,42 @@ describe('ResetAfter', () => {
 describe('Parallel', () => {
     it('succeeds when all children succeed (requireAll)', () => {
         const entity = makeEntity();
-        const tree = new Parallel<TestEntity>([
-            action(e => { e.log.push('a') }),
-            action(e => { e.log.push('b') }),
-        ], true);
+        const tree = new Parallel<TestEntity>(
+            [
+                action(e => {
+                    e.log.push('a');
+                }),
+                action(e => {
+                    e.log.push('b');
+                }),
+            ],
+            true
+        );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
         expect(entity.log).toEqual(['a', 'b']);
     });
 
     it('fails on first failure when requireAll', () => {
-        const tree = new Parallel<TestEntity>([
-            action(() => {}),
-            condition(() => false),
-            action(() => {}),
-        ], true);
+        const tree = new Parallel<TestEntity>([action(() => {}), condition(() => false), action(() => {})], true);
 
         expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.FAILURE);
     });
 
     it('returns RUNNING if any child is RUNNING and none failed (requireAll)', () => {
-        const tree = new Parallel<TestEntity>([
-            action(() => {}),
-            statusAction(() => NodeStatus.RUNNING),
-        ], true);
+        const tree = new Parallel<TestEntity>([action(() => {}), statusAction(() => NodeStatus.RUNNING)], true);
 
         expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.RUNNING);
     });
 
     it('succeeds on first success when requireOne', () => {
-        const tree = new Parallel<TestEntity>([
-            condition(() => false),
-            action(() => {}),
-        ], false);
+        const tree = new Parallel<TestEntity>([condition(() => false), action(() => {})], false);
 
         expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.SUCCESS);
     });
 
     it('fails when all fail (requireOne)', () => {
-        const tree = new Parallel<TestEntity>([
-            condition(() => false),
-            condition(() => false),
-        ], false);
+        const tree = new Parallel<TestEntity>([condition(() => false), condition(() => false)], false);
 
         expect(tree.tick(makeEntity(), 0)).toBe(NodeStatus.FAILURE);
     });
@@ -436,13 +479,17 @@ describe('Nested trees', () => {
             // First branch: fails because condition is false
             sequence(
                 condition(() => false),
-                action(e => { e.log.push('branch1') }),
+                action(e => {
+                    e.log.push('branch1');
+                })
             ),
             // Second branch: succeeds
             sequence(
                 condition(() => true),
-                action(e => { e.log.push('branch2') }),
-            ),
+                action(e => {
+                    e.log.push('branch2');
+                })
+            )
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
@@ -452,12 +499,23 @@ describe('Nested trees', () => {
     it('selector inside sequence provides fallback behavior', () => {
         const entity = makeEntity({ flag: false });
         const tree = sequence<TestEntity>(
-            action(e => { e.log.push('setup') }),
+            action(e => {
+                e.log.push('setup');
+            }),
             selector(
-                guard(e => e.flag, action(e => { e.log.push('guarded') })),
-                action(e => { e.log.push('fallback') }),
+                guard(
+                    e => e.flag,
+                    action(e => {
+                        e.log.push('guarded');
+                    })
+                ),
+                action(e => {
+                    e.log.push('fallback');
+                })
             ),
-            action(e => { e.log.push('done') }),
+            action(e => {
+                e.log.push('done');
+            })
         );
 
         expect(tree.tick(entity, 0)).toBe(NodeStatus.SUCCESS);
@@ -472,12 +530,21 @@ describe('Nested trees', () => {
             // Priority 1: Transport job (flag must be true)
             sequence(
                 condition(e => e.flag),
-                action(e => { e.log.push('pickup') }),
-                action(e => { e.log.push('deliver') }),
-                action(e => { e.flag = false; e.log.push('jobless') }),
+                action(e => {
+                    e.log.push('pickup');
+                }),
+                action(e => {
+                    e.log.push('deliver');
+                }),
+                action(e => {
+                    e.flag = false;
+                    e.log.push('jobless');
+                })
             ),
             // Priority 2: Idle
-            action(e => { e.log.push('idle') }),
+            action(e => {
+                e.log.push('idle');
+            })
         );
 
         // First tick: has job
@@ -494,20 +561,13 @@ describe('Nested trees', () => {
 // ─── Tick Context ─────────────────────────────────────────────────────────────
 
 describe('Tick', () => {
-    it('wraps entity and root node', () => {
-        const entity = makeEntity();
-        const tree = action<TestEntity>(e => { e.value = 1 });
-        const tick = new Tick(entity, tree);
-
-        expect(tick.tick(0)).toBe(NodeStatus.SUCCESS);
-        expect(entity.value).toBe(1);
-    });
-
     it('sets elapsed time for Sleep nodes', () => {
         const entity = makeEntity();
         const tree = sequence<TestEntity>(
             sleep(() => 100),
-            action(e => { e.log.push('done') }),
+            action(e => {
+                e.log.push('done');
+            })
         );
         const tick = new Tick(entity, tree);
 

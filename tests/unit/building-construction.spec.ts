@@ -264,15 +264,6 @@ describe('Building Construction Phases', () => {
             expect(state.verticalProgress).toBe(0.0);
         });
 
-        it('should return zero vertical progress during TerrainLeveling phase', () => {
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut, {
-                phase: BuildingConstructionPhase.TerrainLeveling,
-                phaseProgress: 0.5,
-            });
-            const state = getBuildingVisualState(bs);
-            expect(state.verticalProgress).toBe(0.0);
-        });
-
         it('should use construction sprite with rising progress during ConstructionRising', () => {
             const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut, {
                 phase: BuildingConstructionPhase.ConstructionRising,

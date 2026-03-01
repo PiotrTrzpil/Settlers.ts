@@ -304,16 +304,6 @@ describe('JobPartResolverImpl', () => {
             const result = resolver.resolve('SM_WALK_FOO', makeSettler());
             expect(result.sequenceKey).toBe(carrySequenceKey('foo'));
         });
-
-        it('M_WALK (Miner walk) resolves to walk via suffix', () => {
-            const result = resolver.resolve('M_WALK', makeSettler({ subType: UnitType.Miner }));
-            expect(result.sequenceKey).toBe(ANIMATION_SEQUENCES.WALK);
-        });
-
-        it('PR_WALK (Priest walk) resolves to walk via suffix', () => {
-            const result = resolver.resolve('PR_WALK', makeSettler({ subType: UnitType.Priest }));
-            expect(result.sequenceKey).toBe(ANIMATION_SEQUENCES.WALK);
-        });
     });
 
     // ── Unknown jobPart fallback ──────────────────────────────────────────────

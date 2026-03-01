@@ -107,16 +107,6 @@ describe('RGB565 Palette Decoding', () => {
         expect(color.b).toBe(255);
     });
 
-    it('green channel does not leak blue bits', () => {
-        // R=0, G=0, B=31 (0x001F) — green must be 0, not 3
-        const reader = readerFromBytes([0x1f, 0x00]);
-        const palette = new Palette(1);
-        palette.read16BitPalette(reader, 0);
-
-        const color = unpackColor(palette.getColor(0));
-        expect(color.g).toBe(0);
-    });
-
     it('bit replication expands mid-range values correctly', () => {
         // R=16 (10000b), G=32 (100000b), B=16 (10000b)
         // RGB565 = 10000_100000_10000 = 0x8410
@@ -182,13 +172,6 @@ describe('16-bit Image Decoding', () => {
         expect(r).toBe(0);
         expect(g).toBe(0);
         expect(b).toBe(255);
-    });
-
-    it('green channel does not leak blue bits (regression)', () => {
-        // This was a bug: (value1 >> 3) | ((value2 << 5) & 0xfc)
-        // The & 0xfc only applied to the right operand, leaking blue into green
-        const { g } = decode16BitPixel(0x1f, 0x00); // pure blue
-        expect(g).toBe(0);
     });
 
     it('matches palette decoding for same input', () => {

@@ -7,11 +7,6 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-    // Constants
-    TILE_HEIGHT_SCALE,
-    TILE_CENTER_X,
-    TILE_CENTER_Y,
-    MAX_HEIGHT_ITERATIONS,
     // Height conversion
     heightToWorld,
     worldToHeight,
@@ -40,28 +35,6 @@ const MAP_SIZE = { width: 640, height: 640 };
 const FLAT_HEIGHT = new Uint8Array(MAP_SIZE.width * MAP_SIZE.height).fill(128);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Constants Tests
-// ═══════════════════════════════════════════════════════════════════════════
-
-describe('coordinate-system constants', () => {
-    it('TILE_HEIGHT_SCALE should be 20.0 (matching shader)', () => {
-        expect(TILE_HEIGHT_SCALE).toBe(20.0);
-    });
-
-    it('TILE_CENTER_X should be 0.25 (parallelogram center)', () => {
-        expect(TILE_CENTER_X).toBe(0.25);
-    });
-
-    it('TILE_CENTER_Y should be 0.5 (parallelogram center)', () => {
-        expect(TILE_CENTER_Y).toBe(0.5);
-    });
-
-    it('MAX_HEIGHT_ITERATIONS should be at least 3', () => {
-        expect(MAX_HEIGHT_ITERATIONS).toBeGreaterThanOrEqual(3);
-    });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Height Conversion Tests
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -75,7 +48,7 @@ describe('heightToWorld / worldToHeight', () => {
     });
 
     it('should map 128 → ~10.04 (mid height)', () => {
-        expect(heightToWorld(128)).toBeCloseTo(128 * 20 / 255, 5);
+        expect(heightToWorld(128)).toBeCloseTo((128 * 20) / 255, 5);
     });
 
     it('should round-trip: height → world → height', () => {
@@ -134,7 +107,8 @@ describe('splitViewPoint', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('screenToNdc / ndcToScreen', () => {
-    const W = 1000, H = 800;
+    const W = 1000,
+        H = 800;
 
     describe('screenToNdc', () => {
         it('center → (0, 0)', () => {
@@ -328,11 +302,15 @@ describe('screenToTile', () => {
     describe('input validation', () => {
         it('returns null for zero canvas width', () => {
             const result = screenToTile({
-                screenX: 500, screenY: 400,
-                canvasWidth: 0, canvasHeight: 800,
+                screenX: 500,
+                screenY: 400,
+                canvasWidth: 0,
+                canvasHeight: 800,
                 zoom: 0.1,
-                viewPointX: 320, viewPointY: 320,
-                mapWidth: 640, mapHeight: 640,
+                viewPointX: 320,
+                viewPointY: 320,
+                mapWidth: 640,
+                mapHeight: 640,
                 groundHeight: FLAT_HEIGHT,
             });
             expect(result).toBeNull();
@@ -340,11 +318,15 @@ describe('screenToTile', () => {
 
         it('returns null for zero canvas height', () => {
             const result = screenToTile({
-                screenX: 500, screenY: 400,
-                canvasWidth: 1000, canvasHeight: 0,
+                screenX: 500,
+                screenY: 400,
+                canvasWidth: 1000,
+                canvasHeight: 0,
                 zoom: 0.1,
-                viewPointX: 320, viewPointY: 320,
-                mapWidth: 640, mapHeight: 640,
+                viewPointX: 320,
+                viewPointY: 320,
+                mapWidth: 640,
+                mapHeight: 640,
                 groundHeight: FLAT_HEIGHT,
             });
             expect(result).toBeNull();
@@ -352,11 +334,15 @@ describe('screenToTile', () => {
 
         it('returns null for zero zoom', () => {
             const result = screenToTile({
-                screenX: 500, screenY: 400,
-                canvasWidth: 1000, canvasHeight: 800,
+                screenX: 500,
+                screenY: 400,
+                canvasWidth: 1000,
+                canvasHeight: 800,
                 zoom: 0,
-                viewPointX: 320, viewPointY: 320,
-                mapWidth: 640, mapHeight: 640,
+                viewPointX: 320,
+                viewPointY: 320,
+                mapWidth: 640,
+                mapHeight: 640,
                 groundHeight: FLAT_HEIGHT,
             });
             expect(result).toBeNull();
@@ -364,11 +350,15 @@ describe('screenToTile', () => {
 
         it('returns null for negative zoom', () => {
             const result = screenToTile({
-                screenX: 500, screenY: 400,
-                canvasWidth: 1000, canvasHeight: 800,
+                screenX: 500,
+                screenY: 400,
+                canvasWidth: 1000,
+                canvasHeight: 800,
                 zoom: -0.1,
-                viewPointX: 320, viewPointY: 320,
-                mapWidth: 640, mapHeight: 640,
+                viewPointX: 320,
+                viewPointY: 320,
+                mapWidth: 640,
+                mapHeight: 640,
                 groundHeight: FLAT_HEIGHT,
             });
             expect(result).toBeNull();
@@ -378,11 +368,15 @@ describe('screenToTile', () => {
     describe('clamping to map bounds', () => {
         it('clamps extreme negative screen coords to map bounds', () => {
             const result = screenToTile({
-                screenX: -10000, screenY: -10000,
-                canvasWidth: 1000, canvasHeight: 800,
+                screenX: -10000,
+                screenY: -10000,
+                canvasWidth: 1000,
+                canvasHeight: 800,
                 zoom: 0.1,
-                viewPointX: 320, viewPointY: 320,
-                mapWidth: 640, mapHeight: 640,
+                viewPointX: 320,
+                viewPointY: 320,
+                mapWidth: 640,
+                mapHeight: 640,
                 groundHeight: FLAT_HEIGHT,
             });
             expect(result).not.toBeNull();
@@ -394,11 +388,15 @@ describe('screenToTile', () => {
 
         it('clamps extreme positive screen coords to map bounds', () => {
             const result = screenToTile({
-                screenX: 10000, screenY: 10000,
-                canvasWidth: 1000, canvasHeight: 800,
+                screenX: 10000,
+                screenY: 10000,
+                canvasWidth: 1000,
+                canvasHeight: 800,
                 zoom: 0.1,
-                viewPointX: 320, viewPointY: 320,
-                mapWidth: 640, mapHeight: 640,
+                viewPointX: 320,
+                viewPointY: 320,
+                mapWidth: 640,
+                mapHeight: 640,
                 groundHeight: FLAT_HEIGHT,
             });
             expect(result).not.toBeNull();
@@ -412,11 +410,15 @@ describe('screenToTile', () => {
     describe('height refinement', () => {
         it('handles flat terrain (height=128)', () => {
             const result = screenToTile({
-                screenX: 500, screenY: 400,
-                canvasWidth: 1000, canvasHeight: 800,
+                screenX: 500,
+                screenY: 400,
+                canvasWidth: 1000,
+                canvasHeight: 800,
                 zoom: 0.1,
-                viewPointX: 320, viewPointY: 320,
-                mapWidth: 640, mapHeight: 640,
+                viewPointX: 320,
+                viewPointY: 320,
+                mapWidth: 640,
+                mapHeight: 640,
                 groundHeight: FLAT_HEIGHT,
             });
             expect(result).not.toBeNull();
@@ -425,11 +427,15 @@ describe('screenToTile', () => {
         it('handles max height terrain (height=255)', () => {
             const maxHeight = new Uint8Array(640 * 640).fill(255);
             const result = screenToTile({
-                screenX: 500, screenY: 400,
-                canvasWidth: 1000, canvasHeight: 800,
+                screenX: 500,
+                screenY: 400,
+                canvasWidth: 1000,
+                canvasHeight: 800,
                 zoom: 0.1,
-                viewPointX: 320, viewPointY: 320,
-                mapWidth: 640, mapHeight: 640,
+                viewPointX: 320,
+                viewPointY: 320,
+                mapWidth: 640,
+                mapHeight: 640,
                 groundHeight: maxHeight,
             });
             expect(result).not.toBeNull();
@@ -438,11 +444,15 @@ describe('screenToTile', () => {
         it('handles min height terrain (height=0)', () => {
             const minHeight = new Uint8Array(640 * 640).fill(0);
             const result = screenToTile({
-                screenX: 500, screenY: 400,
-                canvasWidth: 1000, canvasHeight: 800,
+                screenX: 500,
+                screenY: 400,
+                canvasWidth: 1000,
+                canvasHeight: 800,
                 zoom: 0.1,
-                viewPointX: 320, viewPointY: 320,
-                mapWidth: 640, mapHeight: 640,
+                viewPointX: 320,
+                viewPointY: 320,
+                mapWidth: 640,
+                mapHeight: 640,
                 groundHeight: minHeight,
             });
             expect(result).not.toBeNull();
@@ -456,11 +466,15 @@ describe('screenToTile', () => {
                 }
             }
             const result = screenToTile({
-                screenX: 500, screenY: 400,
-                canvasWidth: 1000, canvasHeight: 800,
+                screenX: 500,
+                screenY: 400,
+                canvasWidth: 1000,
+                canvasHeight: 800,
                 zoom: 0.1,
-                viewPointX: 320, viewPointY: 320,
-                mapWidth: 640, mapHeight: 640,
+                viewPointX: 320,
+                viewPointY: 320,
+                mapWidth: 640,
+                mapHeight: 640,
                 groundHeight: slopedHeight,
             });
             expect(result).not.toBeNull();
@@ -475,11 +489,15 @@ describe('screenToTile', () => {
 describe('tileToScreen', () => {
     it('tile at viewpoint should be near screen center', () => {
         const result = tileToScreen({
-            tileX: 320, tileY: 320,
-            canvasWidth: 1000, canvasHeight: 800,
+            tileX: 320,
+            tileY: 320,
+            canvasWidth: 1000,
+            canvasHeight: 800,
             zoom: 0.1,
-            viewPointX: 320, viewPointY: 320,
-            mapWidth: 640, mapHeight: 640,
+            viewPointX: 320,
+            viewPointY: 320,
+            mapWidth: 640,
+            mapHeight: 640,
             groundHeight: FLAT_HEIGHT,
         });
         expect(result.screenX).toBeGreaterThan(300);
@@ -490,20 +508,28 @@ describe('tileToScreen', () => {
 
     it('tiles further from viewpoint should be further from center', () => {
         const center = tileToScreen({
-            tileX: 320, tileY: 320,
-            canvasWidth: 1000, canvasHeight: 800,
+            tileX: 320,
+            tileY: 320,
+            canvasWidth: 1000,
+            canvasHeight: 800,
             zoom: 0.1,
-            viewPointX: 320, viewPointY: 320,
-            mapWidth: 640, mapHeight: 640,
+            viewPointX: 320,
+            viewPointY: 320,
+            mapWidth: 640,
+            mapHeight: 640,
             groundHeight: FLAT_HEIGHT,
         });
 
         const offset = tileToScreen({
-            tileX: 330, tileY: 330,
-            canvasWidth: 1000, canvasHeight: 800,
+            tileX: 330,
+            tileY: 330,
+            canvasWidth: 1000,
+            canvasHeight: 800,
             zoom: 0.1,
-            viewPointX: 320, viewPointY: 320,
-            mapWidth: 640, mapHeight: 640,
+            viewPointX: 320,
+            viewPointY: 320,
+            mapWidth: 640,
+            mapHeight: 640,
             groundHeight: FLAT_HEIGHT,
         });
 

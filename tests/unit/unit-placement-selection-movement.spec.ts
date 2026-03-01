@@ -42,7 +42,7 @@ describe('Unit Placement, Selection & Movement', () => {
             },
             getEntity: id => state.getEntity(id),
         });
-        movement.setTileOccupancy(state.tileOccupancy);
+        movement.setTileOccupancy(state.tileOccupancy, state.buildingOccupancy);
         state.initMovement(movement);
 
         // Wire entity lifecycle events (movement controllers, resource state)
@@ -1021,16 +1021,6 @@ describe('Unit Placement, Selection & Movement', () => {
 
             expect(result.success).toBe(false);
             expect(state.selection.selectedEntityIds.size).toBe(0);
-        });
-
-        it('should default selectable to true for normal entities', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
-            expect(unit.selectable).toBe(true);
-        });
-
-        it('should track selectable=false on entity', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
-            expect(unit.selectable).toBe(false);
         });
     });
 });

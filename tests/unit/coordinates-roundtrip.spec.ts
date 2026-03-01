@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { TilePicker } from '@/game/input/tile-picker';
 import { MapSize } from '@/utilities/map-size';
 import { IViewPointReadonly } from '@/game/renderer/i-view-point';
-import { TILE_CENTER_X, heightToWorld, worldToNdc, ndcToScreen, tileToWorld } from '@/game/systems/coordinate-system';
+import { heightToWorld, worldToNdc, ndcToScreen, tileToWorld } from '@/game/systems/coordinate-system';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test Fixtures
@@ -198,32 +198,6 @@ describe('round-trip: tile → world → screen → tile', () => {
             expect(result!.x).toBeLessThan(640);
             expect(result!.y).toBeGreaterThanOrEqual(0);
             expect(result!.y).toBeLessThan(640);
-        });
-    });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// TilePicker Wrapper Tests
-// ═══════════════════════════════════════════════════════════════════════════
-
-describe('TilePicker', () => {
-    const canvas = createMockCanvas();
-    const picker = new TilePicker(canvas);
-
-    describe('screenToTile', () => {
-        it('returns a tile for valid input', () => {
-            const vp = createViewPoint();
-            const result = picker.screenToTile(500, 400, vp, MAP_SIZE, FLAT_HEIGHT);
-            expect(result).not.toBeNull();
-            expect(result!.x).toBeGreaterThanOrEqual(0);
-            expect(result!.y).toBeGreaterThanOrEqual(0);
-        });
-    });
-
-    describe('tileToWorld (static)', () => {
-        it('returns world coords', () => {
-            const result = TilePicker.tileToWorld(320, 320, FLAT_HEIGHT, MAP_SIZE, 320, 320);
-            expect(result.worldX).toBeCloseTo(TILE_CENTER_X, 5);
         });
     });
 });

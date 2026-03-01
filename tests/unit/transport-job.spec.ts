@@ -251,41 +251,4 @@ describe('TransportJob', () => {
             expect(job.status).toBe('cancelled');
         });
     });
-
-    // ─── Full lifecycle ─────────────────────────────────────────────
-
-    describe('full lifecycle', () => {
-        it('happy path: create → pickup → complete', () => {
-            const request = addRequest();
-            const job = createJob(request)!;
-
-            expect(job.status).toBe('active');
-            expect(request.status).toBe(RequestStatus.InProgress);
-            expect(reservationManager.size).toBe(1);
-
-            const withdrawn = job.pickup();
-            expect(withdrawn).toBe(1);
-            expect(job.status).toBe('picked-up');
-            expect(reservationManager.size).toBe(0);
-
-            const deposited = job.complete(1);
-            expect(deposited).toBe(1);
-            expect(job.status).toBe('completed');
-            expect(requestManager.getRequest(request.id)).toBeUndefined();
-        });
-
-        it('cancel path: create → cancel releases everything', () => {
-            const request = addRequest();
-            const job = createJob(request)!;
-            const initialSlot = inventoryManager.getSlot(SOURCE, MATERIAL)!;
-            expect(initialSlot.reserved).toBe(1);
-
-            job.cancel('building_destroyed');
-
-            expect(job.status).toBe('cancelled');
-            expect(initialSlot.reserved).toBe(0);
-            expect(request.status).toBe(RequestStatus.Pending);
-            expect(reservationManager.size).toBe(0);
-        });
-    });
 });

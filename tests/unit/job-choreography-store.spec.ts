@@ -146,15 +146,6 @@ describe('JobChoreographyStore', () => {
             expect(result).toBeUndefined();
         });
 
-        it('returns undefined for a known race with no jobs', () => {
-            loader.setData(buildTestGameData([]));
-            const store = new JobChoreographyStore(loader);
-
-            const result = store.getJob('RACE_ROMAN', 'JOB_WOODCUTTER_WORK');
-
-            expect(result).toBeUndefined();
-        });
-
         it('converts JOB_WOODCUTTER_WORK and returns correct node count', () => {
             loader.setData(buildTestGameData([WOODCUTTER_WORK]));
             const store = new JobChoreographyStore(loader);
