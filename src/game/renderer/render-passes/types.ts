@@ -66,6 +66,7 @@ export interface PassContext {
     readonly getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[];
     readonly getVisualState: (entityId: number) => EntityVisualState | null;
     readonly getDirectionTransition: (entityId: number) => DirectionTransition | null;
+    readonly getHealthRatio: (entityId: number) => number | null;
 
     // Render parameters
     readonly renderSettings: RenderSettings;

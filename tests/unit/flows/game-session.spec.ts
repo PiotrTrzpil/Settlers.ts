@@ -177,7 +177,18 @@ describe('Game Session: multi-system integration sweep', () => {
                 // Set goal to this terrain type → pathfinding should fail
                 const pathMap = createTestMap();
                 setTerrainAt(pathMap, 20, 5, type);
-                const path = findPath(5, 5, 20, 5, pathMap.groundType, pathMap.groundHeight, 64, 64, pathMap.occupancy);
+                const path = findPath(
+                    5,
+                    5,
+                    20,
+                    5,
+                    pathMap.groundType,
+                    pathMap.groundHeight,
+                    64,
+                    64,
+                    pathMap.occupancy,
+                    pathMap.buildingOccupancy
+                );
                 expect(path).toBeNull();
             }
         }

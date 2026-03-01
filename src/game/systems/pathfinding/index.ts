@@ -56,6 +56,7 @@ export function findPath(
     mapWidth: number,
     mapHeight: number,
     tileOccupancy: Map<string, number>,
+    buildingOccupancy: Set<string>,
     ignoreOccupancy: boolean = false
 ): TileCoord[] | null {
     const terrain: PathfindingTerrain = {
@@ -65,5 +66,5 @@ export function findPath(
         mapHeight,
     };
 
-    return findPathAStar(startX, startY, goalX, goalY, terrain, tileOccupancy, ignoreOccupancy);
+    return findPathAStar(startX, startY, goalX, goalY, terrain, tileOccupancy, buildingOccupancy, ignoreOccupancy);
 }

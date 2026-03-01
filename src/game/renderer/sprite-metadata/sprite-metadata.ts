@@ -8,6 +8,7 @@ import { isUnitAvailableForRace, isBuildingAvailableForRace } from '../../race-a
 // Re-export from canonical locations and new index files
 export { Race, RACE_NAMES, AVAILABLE_RACES, s4TribeToRace, loadSavedRace, saveSavedRace } from '../../race';
 export { BUILDING_ICON_INDICES, MAP_OBJECT_SPRITES } from './gil-indices';
+export { GilSpriteManifest } from './gil-sprite-manifest';
 export {
     SETTLER_JOB_INDICES,
     SETTLER_KEY_TO_UNIT_TYPE,

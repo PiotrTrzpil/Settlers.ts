@@ -21,6 +21,8 @@ import type { RequestManager } from './request-manager';
 import type { BuildingInventoryManager } from '../inventory';
 import type { RequestMatchResult } from './request-matcher';
 import type { ResourceRequest } from './resource-request';
+import { getBuildingDoorPos } from '../../game-data-access';
+import { BuildingType } from '../../buildings/building-type';
 
 export interface CarrierAssignerConfig {
     gameState: GameState;
@@ -118,11 +120,14 @@ export class CarrierAssigner {
         }
 
         const sourceBuilding = this.gameState.getEntityOrThrow(match.sourceBuilding, 'source building for carrier');
+        const door = getBuildingDoorPos(
+            sourceBuilding.x,
+            sourceBuilding.y,
+            sourceBuilding.race,
+            sourceBuilding.subType as BuildingType
+        );
         const job = buildCarrierJob(transportJob);
-        const success = this.settlerTaskSystem.assignJob(carrier.entityId, job, {
-            x: sourceBuilding.x,
-            y: sourceBuilding.y,
-        });
+        const success = this.settlerTaskSystem.assignJob(carrier.entityId, job, door);
 
         if (success) {
             this.carrierManager.setStatus(carrier.entityId, CarrierStatus.Walking);

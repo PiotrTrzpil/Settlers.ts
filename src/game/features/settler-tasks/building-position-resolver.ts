@@ -17,6 +17,7 @@
 import type { BuildingPositionResolver } from './choreo-types';
 import type { GameState } from '../../game-state';
 import type { InventoryVisualizer } from '../inventory';
+import type { BuildingPileRegistry } from '../inventory/building-pile-registry';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import { EntityType, BuildingType, type Entity } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
@@ -43,6 +44,8 @@ export interface BuildingPositionResolverConfig {
     gameState: GameState;
     /** Lazy getter — the visualizer may not be available at construction time. */
     getInventoryVisualizer: () => InventoryVisualizer;
+    /** Lazy getter — the pile registry may not be available at construction time. */
+    getPileRegistry: () => BuildingPileRegistry | null;
     workAreaStore: WorkAreaStore;
 }
 
@@ -69,11 +72,13 @@ export interface BuildingPositionResolverConfig {
 export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     private readonly gameState: GameState;
     private readonly getInventoryVisualizer: () => InventoryVisualizer;
+    private readonly getPileRegistry: () => BuildingPileRegistry | null;
     private readonly workAreaStore: WorkAreaStore;
 
     constructor(config: BuildingPositionResolverConfig) {
         this.gameState = config.gameState;
         this.getInventoryVisualizer = config.getInventoryVisualizer;
+        this.getPileRegistry = config.getPileRegistry;
         this.workAreaStore = config.workAreaStore;
     }
 
@@ -108,38 +113,66 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     /**
      * Get the source pile (input stack) tile position for the given material at a building.
      *
-     * The "source pile" is where carriers drop off input materials — i.e. the building's
-     * input inventory stack for that material.
-     *
-     * Returns null if no visual stack exists yet (inventory empty, or building not yet
-     * registered with the visualizer).
-     *
-     * @param buildingId  Entity ID of the building
-     * @param material    Material string (e.g. 'GOOD_LOG', 'LOG', or enum name 'LOG')
+     * Uses the BuildingPileRegistry (XML data) as the canonical source for pile positions.
+     * Falls back to visual stack entity position only when the registry is unavailable
+     * (pre-data-load). Throws if the material has no pile definition for this building.
      */
     getSourcePilePosition(buildingId: number, material: string): { x: number; y: number } | null {
         const materialType = parseMaterialString(material);
         if (materialType === null) return null;
 
-        return this.getInventoryVisualizer().getStackPosition(buildingId, materialType, 'input');
+        return this.resolvePileFromRegistry(buildingId, materialType, 'input');
     }
 
     /**
      * Get the destination pile (output stack) tile position for the given material at a building.
      *
-     * The "destination pile" is where carriers pick up output materials — i.e. the building's
-     * output inventory stack for that material.
-     *
-     * Returns null if no visual stack exists yet (output empty).
-     *
-     * @param buildingId  Entity ID of the building
-     * @param material    Material string (e.g. 'GOOD_LOG', 'LOG', or enum name 'LOG')
+     * Uses the BuildingPileRegistry (XML data) as the canonical source for pile positions.
+     * Falls back to visual stack entity position only when the registry is unavailable
+     * (pre-data-load). Throws if the material has no pile definition for this building.
      */
     getDestinationPilePosition(buildingId: number, material: string): { x: number; y: number } | null {
         const materialType = parseMaterialString(material);
         if (materialType === null) return null;
 
-        return this.getInventoryVisualizer().getStackPosition(buildingId, materialType, 'output');
+        return this.resolvePileFromRegistry(buildingId, materialType, 'output');
+    }
+
+    /**
+     * Resolve pile position from the BuildingPileRegistry (XML data).
+     * Throws if the registry has no pile entry for the given building type + material + slot.
+     */
+    private resolvePileFromRegistry(
+        buildingId: number,
+        material: EMaterialType,
+        slotType: 'input' | 'output'
+    ): { x: number; y: number } {
+        const building = this.gameState.getEntityOrThrow(buildingId, 'resolvePileFromRegistry');
+        assertIsBuilding(building, buildingId);
+
+        const registry = this.getPileRegistry();
+        if (!registry) {
+            throw new Error(
+                `BuildingPileRegistry not available when resolving ${slotType} pile ` +
+                    `for ${EMaterialType[material]} at building ${buildingId} (${BuildingType[building.subType]})`
+            );
+        }
+
+        const pos = registry.getPilePositionForSlot(
+            building.subType as BuildingType,
+            building.race,
+            slotType,
+            material,
+            building.x,
+            building.y
+        );
+        if (!pos) {
+            throw new Error(
+                `No ${slotType} pile position in XML for ${EMaterialType[material]} ` +
+                    `at ${BuildingType[building.subType]} (race=${building.race}, building=${buildingId})`
+            );
+        }
+        return pos;
     }
 }
 

@@ -581,3 +581,107 @@ export const MAP_OBJECT_SPRITES = {
     /** Small waving flag — white / player 8, 24 anim frames (43x29) */
     FLAG_SMALL_WHITE: { start: 2043, end: 2066, count: 24 },
 } as const;
+
+// ============================================================
+// HUD Overlay Sprites — GIL indices in file 7.gfx
+// ============================================================
+
+/**
+ * File 7.gfx (HUD_OVERLAY) — sprite index assignments.
+ *
+ * Selection markers, cursors, health/mana indicators, combat icons,
+ * and other in-game overlay elements drawn above units and buildings.
+ */
+export const HUD_OVERLAY_SPRITES = {
+    // ── Selection markers & cursors ────────────────────────────
+    /** Large selection X / crosshair marker (100x98) */
+    SELECTION_CROSS: 0,
+    /** Horizontal selection bracket bar (40x10) */
+    SELECTION_BAR: 1,
+    /** Small crosshair cursor (20x20) */
+    CROSSHAIR_SMALL: 26,
+    /** Selection bracket — wide, gray (280x23) */
+    SELECTION_BRACKET_WIDE: 27,
+    /** Selection bracket — medium, blue tint (172x23) */
+    SELECTION_BRACKET_MEDIUM: 28,
+    /** Selection frame — small white rectangle (34x34) */
+    SELECTION_FRAME_SMALL: 29,
+    /** Selection bracket — compact (58x21) */
+    SELECTION_BRACKET_COMPACT: 73,
+    /** Selection bracket — extra-large, blue (286x38) */
+    SELECTION_BRACKET_XLARGE: 89,
+    /** Selection bracket — small, blue (57x25) */
+    SELECTION_BRACKET_SMALL_BLUE: 90,
+    /** Selection bracket — square, blue (51x54) */
+    SELECTION_BRACKET_SQUARE: 91,
+
+    // ── Military selection brackets ─────────────────────────────
+    /** Military selection bracket — level 2 (70x68) */
+    MILITARY_BRACKET_LVL2: 92,
+    /** Military selection bracket — level 3 (40x23) */
+    MILITARY_BRACKET_LVL3: 93,
+    /** Military selection bracket — leader (40x29) */
+    MILITARY_BRACKET_LEADER: 94,
+    /** Military selection bracket — level 1 (40x23) */
+    MILITARY_BRACKET_LVL1: 95,
+
+    // ── Move cursors ───────────────────────────────────────────
+    /** Four-way arrow cursor — large (64x64) */
+    CURSOR_MOVE_LARGE: 30,
+    /** Four-way arrow cursor — small (54x54) */
+    CURSOR_MOVE_SMALL: 31,
+
+    // ── Health dots — small (10x11) ────────────────────────────
+    // 8 levels: index 0 = green (healthy) → index 7 = red (critical)
+    /** Small health indicator dots, 8 levels green→red (10x11) */
+    HEALTH_DOT_SMALL: { start: 2, end: 9, count: 8 },
+
+    // ── Health dots — medium (14x14) ───────────────────────────
+    // Two variants: dark (normal view) and bright (selected/highlighted)
+    /** Medium health dots — dark/dim variant, 8 levels green→red (14x14) */
+    HEALTH_DOT_DARK: { start: 10, end: 17, count: 8 },
+    /** Medium health dots — bright/selected variant, 8 levels green→red (14x14) */
+    HEALTH_DOT_BRIGHT: { start: 18, end: 25, count: 8 },
+
+    // ── Health ovals — upper position (16x12, offset y≈117) ───
+    // 8 levels: green (healthy) → red (critical)
+    /** Health oval indicator — upper position, 8 levels green→red (16x12) */
+    HEALTH_OVAL_UPPER: { start: 65, end: 72, count: 8 },
+
+    // ── Health ovals — lower position (16x12, offset y≈142) ───
+    /** Health oval indicator — lower position, 8 levels green→red (16x12) */
+    HEALTH_OVAL_LOWER: { start: 81, end: 88, count: 8 },
+
+    // ── Vertical progress bar (7x20) ──────────────────────────
+    // 16 fill levels: index 0 = nearly empty → index 15 = nearly full
+    /** Vertical progress bar, 16 levels empty→full (7x20) */
+    VERTICAL_PROGRESS_BAR: { start: 36, end: 51, count: 16 },
+
+    // ── Combat & military icons ────────────────────────────────
+    /** Combat/attack marker — red burst (25x25) */
+    COMBAT_MARKER: 32,
+    /** Military icon — melee/gold sphere (23x23) */
+    ICON_MELEE: 33,
+    /** Frozen indicator — blue ice crystal (23x23) */
+    ICON_FROZEN: 34,
+    /** Shield icon (23x23) */
+    ICON_SHIELD: 35,
+
+    // ── Level digit glyphs (5–7x9) ────────────────────────────
+    /** Small level/number glyphs, 8 characters (5–7x9) */
+    LEVEL_DIGIT: { start: 52, end: 59, count: 8 },
+
+    // ── Ammo indicators — upper position (28x25, offset y≈113) ─
+    // 5 fill levels: index 0 = full → index 4 = depleted
+    /** Ammo indicator — upper position, 5 fill levels (28x25) */
+    AMMO_INDICATOR_UPPER: { start: 60, end: 64, count: 5 },
+    // ── Ammo indicators — lower position (28x25, offset y≈138) ─
+    /** Ammo indicator — lower position, 5 fill levels (28x25) */
+    AMMO_INDICATOR_LOWER: { start: 76, end: 80, count: 5 },
+
+    // ── Status dots — small (9x9) ─────────────────────────────
+    /** Small status dot — dark green (9x9) */
+    STATUS_DOT_DARK: 74,
+    /** Small status dot — bright green (9x9) */
+    STATUS_DOT_BRIGHT: 75,
+} as const;

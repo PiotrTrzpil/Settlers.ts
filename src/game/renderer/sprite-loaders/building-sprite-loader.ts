@@ -4,9 +4,7 @@
  */
 
 import { LogHandler } from '@/utilities/log-handler';
-import { EntityTextureAtlas } from '../entity-texture-atlas';
 import {
-    SpriteMetadataRegistry,
     SpriteEntry,
     Race,
     getBuildingSpriteMap,
@@ -16,25 +14,20 @@ import {
     type BuildingSpriteInfo,
 } from '../sprite-metadata';
 import { ANIMATION_DEFAULTS } from '@/game/animation';
-import { SpriteLoader, type LoadedGfxFileSet } from '../sprite-loader';
+import type { LoadedGfxFileSet } from '../sprite-loader';
 import { SafeLoadBatch, yieldToEventLoop } from '../batch-loader';
 import { BuildingType, EntityType } from '@/game/entity';
 import { isBuildingAvailableForRace } from '@/game/race-availability';
+import { type SpriteLoadContext, getPaletteBase } from '../sprite-load-context';
 
 const log = new LogHandler('BuildingSpriteLoader');
 
-export interface BuildingLoadContext {
-    spriteLoader: SpriteLoader;
-    getPaletteBaseOffset: (fileId: string) => number;
-}
-
 /** Load sprites for a single building. Returns null if no sprite data is found. */
 async function loadOneBuildingSprites(
-    spriteLoader: SpriteLoader,
+    ctx: SpriteLoadContext,
     fileSet: LoadedGfxFileSet,
     buildingType: BuildingType,
     info: BuildingSpriteInfo,
-    atlas: EntityTextureAtlas,
     paletteBase: number,
     race: Race
 ): Promise<{
@@ -49,7 +42,7 @@ async function loadOneBuildingSprites(
     const constructionDirIndex = hasSplitJobs ? 0 : BUILDING_DIRECTION.CONSTRUCTION;
     const completedDirIndex = hasSplitJobs ? 0 : BUILDING_DIRECTION.COMPLETED;
 
-    const dirCount = spriteLoader.getDirectionCount(fileSet, constructionJobIndex);
+    const dirCount = ctx.spriteLoader.getDirectionCount(fileSet, constructionJobIndex);
     if (dirCount === 0) {
         log.warn(
             `No sprite directions for ${BuildingType[buildingType]} (job ${constructionJobIndex}) in ${Race[race]} file`
@@ -57,28 +50,34 @@ async function loadOneBuildingSprites(
         return null;
     }
 
-    const constructionSprite = await spriteLoader.loadJobSprite(
+    const constructionSprite = await ctx.spriteLoader.loadJobSprite(
         fileSet,
         { jobIndex: constructionJobIndex, directionIndex: constructionDirIndex },
-        atlas,
+        ctx.atlas,
         paletteBase
     );
 
-    const frameCount = spriteLoader.getFrameCount(fileSet, info.index, completedDirIndex);
+    const frameCount = ctx.spriteLoader.getFrameCount(fileSet, info.index, completedDirIndex);
     let completedSprite = null;
     let animationFrames: SpriteEntry[] | null = null;
 
     if (frameCount > 1) {
-        const anim = await spriteLoader.loadJobAnimation(fileSet, info.index, completedDirIndex, atlas, paletteBase);
+        const anim = await ctx.spriteLoader.loadJobAnimation(
+            fileSet,
+            info.index,
+            completedDirIndex,
+            ctx.atlas,
+            paletteBase
+        );
         if (anim?.frames.length) {
             animationFrames = anim.frames.map(f => f.entry);
             completedSprite = anim.frames[0];
         }
     } else {
-        completedSprite = await spriteLoader.loadJobSprite(
+        completedSprite = await ctx.spriteLoader.loadJobSprite(
             fileSet,
             { jobIndex: info.index, directionIndex: completedDirIndex },
-            atlas,
+            ctx.atlas,
             paletteBase
         );
     }
@@ -96,12 +95,9 @@ async function loadOneBuildingSprites(
  */
 async function loadBuildingSpritesForFile(
     fileNum: number,
-    atlas: EntityTextureAtlas,
-    registry: SpriteMetadataRegistry,
     spriteMap: Partial<Record<BuildingType, BuildingSpriteInfo>>,
-    gl: WebGL2RenderingContext,
     race: Race,
-    ctx: BuildingLoadContext
+    ctx: SpriteLoadContext
 ): Promise<boolean> {
     const fileId = `${fileNum}`;
     const fileSet = await ctx.spriteLoader.loadFileSet(fileId);
@@ -110,7 +106,7 @@ async function loadBuildingSpritesForFile(
         return false;
     }
 
-    const paletteBase = ctx.getPaletteBaseOffset(fileId);
+    const paletteBase = getPaletteBase(ctx, fileId);
 
     try {
         type BuildingData = {
@@ -129,25 +125,17 @@ async function loadBuildingSpritesForFile(
             const buildingType = Number(typeStr) as BuildingType;
             if (!isBuildingAvailableForRace(buildingType, race)) continue;
 
-            const sprites = await loadOneBuildingSprites(
-                ctx.spriteLoader,
-                fileSet,
-                buildingType,
-                info,
-                atlas,
-                paletteBase,
-                race
-            );
+            const sprites = await loadOneBuildingSprites(ctx, fileSet, buildingType, info, paletteBase, race);
             if (sprites) batch.add({ buildingType, ...sprites });
         }
 
         // Finalize: GPU upload → register
-        batch.finalize(atlas, gl, data => {
+        batch.finalize(ctx.atlas, ctx.gl, data => {
             if (!data.constructionEntry && !data.completedEntry) return;
 
             if (data.animationFrames) {
                 const frames = new Map([[BUILDING_DIRECTION.COMPLETED, data.animationFrames]]);
-                registry.registerAnimatedEntity(
+                ctx.registry.registerAnimatedEntity(
                     EntityType.Building,
                     data.buildingType,
                     frames,
@@ -156,7 +144,7 @@ async function loadBuildingSpritesForFile(
                     race
                 );
             }
-            registry.registerBuilding(data.buildingType, data.constructionEntry, data.completedEntry, race);
+            ctx.registry.registerBuilding(data.buildingType, data.constructionEntry, data.completedEntry, race);
         });
 
         return batch.count > 0;
@@ -171,10 +159,7 @@ async function loadBuildingSpritesForFile(
  * Returns true if any building sprites were loaded.
  */
 export async function loadBuildingSprites(
-    atlas: EntityTextureAtlas,
-    registry: SpriteMetadataRegistry,
-    gl: WebGL2RenderingContext,
-    ctx: BuildingLoadContext
+    ctx: SpriteLoadContext
 ): Promise<{ loaded: boolean; buildingFiles: Set<number> }> {
     const racesToLoad = AVAILABLE_RACES;
 
@@ -199,7 +184,7 @@ export async function loadBuildingSprites(
     for (const r of racesToLoad) {
         const spriteMap = spriteMapsPerRace.get(r)!; // OK: all racesToLoad entries were set() in the loop above
         for (const fileNum of buildingFiles) {
-            if (await loadBuildingSpritesForFile(fileNum, atlas, registry, spriteMap, gl, r, ctx)) {
+            if (await loadBuildingSpritesForFile(fileNum, spriteMap, r, ctx)) {
                 loadedAny = true;
             }
         }

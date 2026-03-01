@@ -15,7 +15,7 @@ import { TaskResult, SettlerState, CarrierPhase, type CarrierJobState, type JobS
 import type { ChoreoContext } from './choreo-types';
 import type { IdleAnimationController } from './idle-animation-controller';
 import { hexDistance } from '../../systems/hex-directions';
-import { getBuildingDoorOffset } from '../../game-data-access';
+import { getBuildingDoorPos } from '../../game-data-access';
 
 const log = new LogHandler('CarrierTaskExecutor');
 
@@ -172,26 +172,26 @@ export class CarrierTaskExecutor {
     private goToSource(settler: Entity, job: CarrierJobState): TaskResult {
         const { sourceBuildingId, material } = job.data;
         const building = this.choreoContext.gameState.getEntityOrThrow(sourceBuildingId, 'source building');
-        // Navigate to the output stack position if it exists, otherwise fall back to building center
+        // Navigate to the output stack position if it exists, otherwise fall back to building door
         const stackPos = this.choreoContext.inventoryVisualizer.getStackPosition(sourceBuildingId, material, 'output');
-        return this.moveToPosition(settler, stackPos?.x ?? building.x, stackPos?.y ?? building.y);
+        const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+        return this.moveToPosition(settler, stackPos?.x ?? door.x, stackPos?.y ?? door.y);
     }
 
     private goToDest(settler: Entity, job: CarrierJobState): TaskResult {
         const { destBuildingId, material } = job.data;
-        // Navigate to the input stack position if it exists, otherwise fall back to building center
+        // Navigate to the input stack position if it exists, otherwise fall back to building door
         const stackPos = this.choreoContext.inventoryVisualizer.getStackPosition(destBuildingId, material, 'input');
         const building = this.choreoContext.gameState.getEntityOrThrow(destBuildingId, 'destination building');
-        return this.moveToPosition(settler, stackPos?.x ?? building.x, stackPos?.y ?? building.y);
+        const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+        return this.moveToPosition(settler, stackPos?.x ?? door.x, stackPos?.y ?? door.y);
     }
 
     private goHome(settler: Entity, job: CarrierJobState): TaskResult {
         const homeId = job.data.homeId;
         const building = this.choreoContext.gameState.getEntityOrThrow(homeId, 'carrier home building');
-        const door = getBuildingDoorOffset(building.race, building.subType as BuildingType);
-        const targetX = door ? building.x + door.dx : building.x;
-        const targetY = door ? building.y + door.dy : building.y;
-        return this.moveToPosition(settler, targetX, targetY);
+        const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+        return this.moveToPosition(settler, door.x, door.y);
     }
 
     // ─────────────────────────────────────────────────────────────

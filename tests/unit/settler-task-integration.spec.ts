@@ -348,12 +348,12 @@ describeWithData('Settler Task System Integration (real XML data)', () => {
 
         it('sets carrying state after RESOURCE_GATHERING_VIRTUAL node', () => {
             const system = createTaskSystem(ctx);
-            const tree = ctx.state.addEntity(EntityType.MapObject, 0, 10, 10, 0);
-            const handler = createTargetHandler({ entityId: tree.id, x: 10, y: 10 });
+            const tree = ctx.state.addEntity(EntityType.MapObject, 0, 14, 10, 0);
+            const handler = createTargetHandler({ entityId: tree.id, x: 14, y: 10 });
             system.registerWorkHandler(SearchType.TREE, handler);
 
             addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut, 0, Race.Roman);
-            const { entity: settler } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
+            const { entity: settler } = addUnit(ctx.state, 14, 10, { subType: UnitType.Woodcutter });
 
             const job = getRealJob('RACE_ROMAN', 'JOB_WOODCUTTER_WORK');
             const resNodeIdx = job.nodes.findIndex(n => n.task === 'RESOURCE_GATHERING_VIRTUAL');
@@ -679,12 +679,12 @@ describeWithData('Settler Task System Integration (real XML data)', () => {
     describe('job interruption', () => {
         it('interrupts mid-job and calls onWorkInterrupt when work started', () => {
             const system = createTaskSystem(ctx);
-            const tree = ctx.state.addEntity(EntityType.MapObject, 0, 10, 10, 0);
-            const handler = createTargetHandler({ entityId: tree.id, x: 10, y: 10 });
+            const tree = ctx.state.addEntity(EntityType.MapObject, 0, 14, 10, 0);
+            const handler = createTargetHandler({ entityId: tree.id, x: 14, y: 10 });
             system.registerWorkHandler(SearchType.TREE, handler);
 
             addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut, 0, Race.Roman);
-            const { entity: settler } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
+            const { entity: settler } = addUnit(ctx.state, 14, 10, { subType: UnitType.Woodcutter });
 
             system.tick(0.016); // selects job
             system.tick(0.016); // GO_TO_TARGET completes

@@ -23,6 +23,7 @@ import { OverlayRenderLayer } from '../render-context';
 import type { BuildingOverlayRenderData } from '../render-context';
 import type { SpriteEntry } from '../sprite-metadata';
 import { profiler } from '../debug/render-profiler';
+import { resolveSelectionIndicator, resolveHealthDot } from '../selection-indicator';
 
 const EMPTY_OVERLAYS: readonly BuildingOverlayRenderData[] = [];
 
@@ -80,6 +81,11 @@ export class EntitySpritePass implements IRenderPass {
 
             const worldPos = this.getEntityWorldPos(entity, viewPoint);
             this.emitEntitySprite(gl, entity, resolved, worldPos);
+        }
+
+        // Emit selection indicator sprites on top of all entities
+        if (ctx.selectedEntityIds.size > 0) {
+            this.emitSelectionIndicators(gl, viewPoint);
         }
 
         this.lastDrawCalls = ctx.spriteBatchRenderer.endSpriteBatch(gl);
@@ -178,6 +184,61 @@ export class EntitySpritePass implements IRenderPass {
                 ctx.spriteBatchRenderer.addSprite(gl, x, y, overlay.sprite, row, 1, 1, 1, 1);
             }
             this.lastSpriteCount++;
+        }
+    }
+
+    /**
+     * Emit selection indicator sprites for all selected units.
+     * Drawn after all entity sprites so they appear on top.
+     * Positioned at the top of the unit sprite (above the head).
+     * Sprites are zoom-compensated to stay at a constant screen size.
+     *
+     * Also emits a health dot centered in the bracket for military units.
+     */
+    private emitSelectionIndicators(gl: WebGL2RenderingContext, viewPoint: IViewPoint): void {
+        const { ctx } = this;
+        const zoom = viewPoint.zoom;
+
+        for (const entity of ctx.sortedEntities) {
+            if (!ctx.selectedEntityIds.has(entity.id)) continue;
+            if (entity.type !== EntityType.Unit) continue;
+
+            const indicator = resolveSelectionIndicator(entity, ctx.spriteManager!, zoom);
+            if (!indicator) continue;
+
+            // Resolve the unit's own sprite to find where its top edge is
+            const resolved = ctx.spriteResolver.resolve(entity);
+            if (!resolved.sprite) continue;
+            const unitSprite = scaleSprite(resolved.sprite, getSpriteScale(entity));
+
+            const worldPos = this.getEntityWorldPos(entity, viewPoint);
+
+            // Place indicator at the top of the unit sprite (offsetY is negative → moves up)
+            const spriteTopY = worldPos.worldY + unitSprite.offsetY;
+            ctx.spriteBatchRenderer.addSprite(
+                gl,
+                worldPos.worldX,
+                spriteTopY,
+                indicator,
+                0, // No player tinting for selection indicators
+                1,
+                1,
+                1,
+                1
+            );
+            this.lastSpriteCount++;
+
+            // Health dot — centered in the bracket (for military units with health tracking)
+            const healthRatio = ctx.getHealthRatio(entity.id);
+            if (healthRatio !== null) {
+                const dot = resolveHealthDot(healthRatio, ctx.spriteManager!, zoom);
+                if (dot) {
+                    // Center of bracket = spriteTopY + indicator.offsetY + indicator.heightWorld/2
+                    const bracketCenterY = spriteTopY + indicator.offsetY + indicator.heightWorld / 2;
+                    ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, bracketCenterY, dot, 0, 1, 1, 1, 1);
+                    this.lastSpriteCount++;
+                }
+            }
         }
     }
 

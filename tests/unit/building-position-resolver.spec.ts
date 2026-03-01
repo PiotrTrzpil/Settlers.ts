@@ -100,6 +100,7 @@ describe('BuildingPositionResolverImpl', () => {
         resolver = new BuildingPositionResolverImpl({
             gameState: mockGameState as never,
             getInventoryVisualizer: () => mockInventoryVisualizer as never,
+            getPileRegistry: () => null,
             workAreaStore: mockWorkAreaStore as never,
         });
     });
@@ -176,6 +177,7 @@ describe('BuildingPositionResolverImpl', () => {
             const localResolver = new BuildingPositionResolverImpl({
                 gameState: localState as never,
                 getInventoryVisualizer: () => mockInventoryVisualizer as never,
+                getPileRegistry: () => null,
                 workAreaStore: mockWorkAreaStore as never,
             });
 
@@ -183,105 +185,85 @@ describe('BuildingPositionResolverImpl', () => {
         });
     });
 
-    // ─── getSourcePilePosition ──────────────────────────────
+    // ─── getSourcePilePosition (via BuildingPileRegistry) ───────
 
     describe('getSourcePilePosition', () => {
-        it('returns null when no visual stack exists', () => {
-            const pos = resolver.getSourcePilePosition(BUILDING_ID, 'LOG');
-            expect(pos).toBeNull();
-        });
-
-        it('returns stack position when visualizer has one', () => {
-            const stackPos = { x: 11, y: 21 };
-            mockInventoryVisualizer.getStackPosition.mockReturnValue(stackPos);
-
-            const pos = resolver.getSourcePilePosition(BUILDING_ID, 'LOG');
-            expect(pos).toEqual(stackPos);
-            expect(mockInventoryVisualizer.getStackPosition).toHaveBeenCalledWith(
-                BUILDING_ID,
-                EMaterialType.LOG,
-                'input'
-            );
-        });
-
-        it('accepts GOOD_LOG prefix format', () => {
-            resolver.getSourcePilePosition(BUILDING_ID, 'GOOD_LOG');
-            expect(mockInventoryVisualizer.getStackPosition).toHaveBeenCalledWith(
-                BUILDING_ID,
-                EMaterialType.LOG,
-                'input'
-            );
-        });
-
         it('returns null for unknown material string', () => {
             const pos = resolver.getSourcePilePosition(BUILDING_ID, 'GOOD_UNKNOWN_MATERIAL');
             expect(pos).toBeNull();
         });
 
-        it('resolves BOARD correctly', () => {
-            resolver.getSourcePilePosition(BUILDING_ID, 'BOARD');
-            expect(mockInventoryVisualizer.getStackPosition).toHaveBeenCalledWith(
-                BUILDING_ID,
-                EMaterialType.BOARD,
-                'input'
+        it('throws when registry is not available', () => {
+            expect(() => resolver.getSourcePilePosition(BUILDING_ID, 'LOG')).toThrow(
+                'BuildingPileRegistry not available'
             );
+        });
+
+        it('returns pile position from registry', () => {
+            const pilePos = { x: 13, y: 22 };
+            const mockRegistry = {
+                getPilePositionForSlot: vi.fn().mockReturnValue(pilePos),
+            };
+            const localResolver = new BuildingPositionResolverImpl({
+                gameState: mockGameState as never,
+                getInventoryVisualizer: () => mockInventoryVisualizer as never,
+                getPileRegistry: () => mockRegistry as never,
+                workAreaStore: mockWorkAreaStore as never,
+            });
+            const pos = localResolver.getSourcePilePosition(BUILDING_ID, 'LOG');
+            expect(pos).toEqual(pilePos);
+            expect(mockRegistry.getPilePositionForSlot).toHaveBeenCalledWith(
+                BuildingType.WoodcutterHut,
+                Race.Roman,
+                'input',
+                EMaterialType.LOG,
+                BUILDING_X,
+                BUILDING_Y
+            );
+        });
+
+        it('throws when registry has no pile entry', () => {
+            const mockRegistry = {
+                getPilePositionForSlot: vi.fn().mockReturnValue(null),
+            };
+            const localResolver = new BuildingPositionResolverImpl({
+                gameState: mockGameState as never,
+                getInventoryVisualizer: () => mockInventoryVisualizer as never,
+                getPileRegistry: () => mockRegistry as never,
+                workAreaStore: mockWorkAreaStore as never,
+            });
+            expect(() => localResolver.getSourcePilePosition(BUILDING_ID, 'LOG')).toThrow('No input pile position');
         });
     });
 
-    // ─── getDestinationPilePosition ─────────────────────────────
+    // ─── getDestinationPilePosition (via BuildingPileRegistry) ────
 
     describe('getDestinationPilePosition', () => {
-        it('returns null when no visual stack exists', () => {
-            const pos = resolver.getDestinationPilePosition(BUILDING_ID, 'LOG');
-            expect(pos).toBeNull();
-        });
-
-        it('returns stack position when visualizer has one', () => {
-            const stackPos = { x: 12, y: 22 };
-            mockInventoryVisualizer.getStackPosition.mockReturnValue(stackPos);
-
-            const pos = resolver.getDestinationPilePosition(BUILDING_ID, 'LOG');
-            expect(pos).toEqual(stackPos);
-            expect(mockInventoryVisualizer.getStackPosition).toHaveBeenCalledWith(
-                BUILDING_ID,
-                EMaterialType.LOG,
-                'output'
-            );
-        });
-
-        it('accepts GOOD_BOARD prefix format', () => {
-            resolver.getDestinationPilePosition(BUILDING_ID, 'GOOD_BOARD');
-            expect(mockInventoryVisualizer.getStackPosition).toHaveBeenCalledWith(
-                BUILDING_ID,
-                EMaterialType.BOARD,
-                'output'
-            );
-        });
-
         it('returns null for unknown material string', () => {
             const pos = resolver.getDestinationPilePosition(BUILDING_ID, 'COMPLETELY_BOGUS');
             expect(pos).toBeNull();
         });
-    });
 
-    // ─── source vs destination routing ──────────────────────────────
-
-    describe('source vs destination pile routing', () => {
-        it('routes source pile to "input" slot type', () => {
-            resolver.getSourcePilePosition(BUILDING_ID, 'STONE');
-            expect(mockInventoryVisualizer.getStackPosition).toHaveBeenCalledWith(
-                BUILDING_ID,
-                EMaterialType.STONE,
-                'input'
-            );
-        });
-
-        it('routes destination pile to "output" slot type', () => {
-            resolver.getDestinationPilePosition(BUILDING_ID, 'STONE');
-            expect(mockInventoryVisualizer.getStackPosition).toHaveBeenCalledWith(
-                BUILDING_ID,
-                EMaterialType.STONE,
-                'output'
+        it('returns pile position from registry', () => {
+            const pilePos = { x: 12, y: 22 };
+            const mockRegistry = {
+                getPilePositionForSlot: vi.fn().mockReturnValue(pilePos),
+            };
+            const localResolver = new BuildingPositionResolverImpl({
+                gameState: mockGameState as never,
+                getInventoryVisualizer: () => mockInventoryVisualizer as never,
+                getPileRegistry: () => mockRegistry as never,
+                workAreaStore: mockWorkAreaStore as never,
+            });
+            const pos = localResolver.getDestinationPilePosition(BUILDING_ID, 'LOG');
+            expect(pos).toEqual(pilePos);
+            expect(mockRegistry.getPilePositionForSlot).toHaveBeenCalledWith(
+                BuildingType.WoodcutterHut,
+                Race.Roman,
+                'output',
+                EMaterialType.LOG,
+                BUILDING_X,
+                BUILDING_Y
             );
         });
     });

@@ -19,6 +19,13 @@ import { toastError, toastClearThrottle } from './toast-notifications';
 const TICK_RATE = 30;
 const TICK_DURATION = 1 / TICK_RATE;
 
+/**
+ * Base speed multiplier applied on top of the user's gameSpeed setting.
+ * The original Settlers 4 runs ~1.5× real-time at "normal" speed;
+ * without this factor, speed 1× feels noticeably sluggish.
+ */
+const BASE_SPEED = 1.5;
+
 /** Target FPS when page is in background (to save CPU/battery) */
 const BACKGROUND_FPS = 10;
 const BACKGROUND_FRAME_DURATION = 1000 / BACKGROUND_FPS;
@@ -364,7 +371,7 @@ export class GameLoop {
     private runLogicPhase(shouldTick: boolean): number {
         const start = performance.now();
         try {
-            const scaledDt = TICK_DURATION * this.settings.gameSpeed;
+            const scaledDt = TICK_DURATION * BASE_SPEED * this.settings.gameSpeed;
             if (shouldTick) {
                 while (this.accumulator >= TICK_DURATION) {
                     this.tick(scaledDt);
@@ -385,7 +392,7 @@ export class GameLoop {
         const start = performance.now();
         try {
             if (shouldTick) {
-                const scaledDeltaMs = deltaSec * 1000 * this.settings.gameSpeed;
+                const scaledDeltaMs = deltaSec * 1000 * BASE_SPEED * this.settings.gameSpeed;
                 this.visualService.update(scaledDeltaMs);
             }
         } catch (e) {

@@ -298,7 +298,8 @@ export function useRenderer({
         setupRenderers(game);
         initGLAndBindEvents(game);
 
-        // Restore camera: prefer explicit prop, then per-map localStorage, then player start position
+        // Restore camera: prefer explicit prop (settings recreation), then per-map localStorage (HMR),
+        // then center on player start (fresh map load / reset)
         const camera = getInitialCamera?.() ?? loadCameraState(getCurrentMapId());
         if (camera) {
             renderer.viewPoint.setRawPosition(camera.x, camera.y);
@@ -369,13 +370,16 @@ export function useRenderer({
         };
     }
 
-    /** Center camera on the current player's start position (Castle), or first land tile. */
+    /** Center camera on the current player's start position (Castle), or first land tile, with standard zoom. */
     function centerOnPlayerStart(): void {
         if (!renderer) return;
         const game = getGame();
         if (!game) return;
         const pos = game.findPlayerStartPosition();
-        if (pos) renderer.viewPoint.setPosition(pos.x, pos.y);
+        if (pos) {
+            renderer.viewPoint.setPosition(pos.x, pos.y);
+            renderer.viewPoint.zoomValue = 2;
+        }
     }
 
     function getDecoLabels(): Array<{ screenX: number; screenY: number; type: number; hue: number }> {

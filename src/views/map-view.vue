@@ -241,7 +241,7 @@ import { useMapView } from './use-map-view';
 import { Race, RACE_NAMES, AVAILABLE_RACES, loadSavedRace, saveSavedRace } from '@/game/renderer/sprite-metadata';
 import type { Game } from '@/game/game';
 import { SoundManager } from '@/game/audio/sound-manager';
-import { saveCameraState, loadCameraState, clearCameraState } from '@/game/renderer/camera-persistence';
+import { saveCameraState, clearCameraState } from '@/game/renderer/camera-persistence';
 import { getCurrentMapId } from '@/game/game-state-persistence';
 
 import FileBrowser from '@/components/file-browser.vue';
@@ -393,9 +393,12 @@ const ticksPaused = computed(() => game.value?.viewState.state.ticksPaused ?? fa
 const rendererKey = ref(0);
 const savedCamera = ref<{ x: number; y: number; zoom: number } | null>(null);
 
-// When a new map loads, restore the saved camera for that map
+// On new map load, clear saved camera so the renderer centers on player start.
+// savedCamera is only set during settings recreation (antialias toggle) to preserve position.
+// Clearing localStorage ensures loadCameraState also returns null (HMR saves survive otherwise).
 watch(game, newGame => {
-    savedCamera.value = newGame ? loadCameraState(getCurrentMapId()) : null;
+    savedCamera.value = null;
+    if (newGame) clearCameraState(getCurrentMapId());
 });
 
 // Save current camera to localStorage (used on unload and antialias recreation)

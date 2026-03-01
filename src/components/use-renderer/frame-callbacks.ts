@@ -21,8 +21,7 @@ import { getBuildingVisualState } from '@/game/features/building-construction';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { IViewPoint } from '@/game/renderer/i-view-point';
 import { WorkAreaAdjustHandler } from '@/game/features/building-adjust';
-import { computeWorkAreaBoundaryDots } from '@/game/features/work-areas/work-area-boundary';
-import type { BuildingType } from '@/game/entity';
+import { computeWorkAreaColoredRings } from '@/game/features/work-areas/work-area-boundary';
 import { debugStats } from '@/game/debug-stats';
 import { resolveBuildingOverlays } from './overlay-resolution';
 import { updatePlacementModeState, clearPlacementModeState } from './placement-state';
@@ -98,6 +97,11 @@ function syncEntityRendererState(
         .buildingOverlaysGetter(entityId => resolveBuildingOverlays(entityId, g, er))
         .visualStateGetter(entityId => visualService.getState(entityId))
         .directionTransitionGetter(entityId => visualService.getDirectionTransition(entityId))
+        .healthRatioGetter(entityId => {
+            const cs = g.services.combatSystem.getState(entityId);
+            if (!cs) return null;
+            return cs.maxHealth > 0 ? cs.health / cs.maxHealth : 1;
+        })
         .selection({
             primaryId: g.state.selection.selectedEntityId,
             ids: g.state.selection.selectedEntityIds,
@@ -130,65 +134,33 @@ const EMPTY_WORK_AREA_VIS = { circles: [] as ServiceAreaRenderData[], dots: [] a
 /**
  * Collect work area visualization data.
  *
- * Priority:
- *  1. Active work-area adjustment (shows live-dragged center position).
- *  2. Selected building that has a work area (always visible, like territory).
+ * Only shown when the user is actively in "Set Work Area" mode (building-adjust).
+ * Renders 3 concentric rings: inner (green), mid (yellow), outer (red).
  */
 function collectWorkAreaVisualization(
     inputManager: InputManager | null,
     game: Game
 ): { circles: readonly ServiceAreaRenderData[]; dots: readonly TerritoryDotRenderData[] } {
-    // --- Priority 1: active adjustment (live position while dragging) ---
-    if (inputManager) {
-        const mode = inputManager.getMode('building-adjust');
-        if (mode instanceof BuildingAdjustMode) {
-            const active = mode.getActiveAdjustment();
-            if (active?.item.category === 'work-area' && active.handler instanceof WorkAreaAdjustHandler) {
-                const waHandler = active.handler;
-                const center = waHandler.getAbsoluteCenter(
-                    active.buildingId,
-                    active.buildingX,
-                    active.buildingY,
-                    active.buildingType,
-                    active.race
-                );
-                const entity = game.state.getEntity(active.buildingId);
-                const player = entity ? entity.player : 0;
-                const radius = waHandler.getRadius(active.buildingType, active.race);
-                const dots = computeWorkAreaBoundaryDots(
-                    center.x,
-                    center.y,
-                    radius,
-                    player,
-                    game.terrain.width,
-                    game.terrain.height
-                );
-                return { circles: [], dots };
-            }
-        }
+    if (!inputManager) return EMPTY_WORK_AREA_VIS;
+
+    const mode = inputManager.getMode('building-adjust');
+    if (!(mode instanceof BuildingAdjustMode)) return EMPTY_WORK_AREA_VIS;
+
+    const active = mode.getActiveAdjustment();
+    if (!active || active.item.category !== 'work-area' || !(active.handler instanceof WorkAreaAdjustHandler)) {
+        return EMPTY_WORK_AREA_VIS;
     }
 
-    // --- Priority 2: selected building (always visible when a work-area building is selected) ---
-    const selectedId = game.state.selection.selectedEntityId;
-    if (selectedId === null) return EMPTY_WORK_AREA_VIS;
-
-    const entity = game.state.getEntity(selectedId);
-    if (!entity || entity.type !== EntityType.Building) return EMPTY_WORK_AREA_VIS;
-
-    const buildingType = entity.subType as BuildingType;
-    const store = game.services.workAreaStore;
-    if (!store.hasWorkArea(buildingType)) return EMPTY_WORK_AREA_VIS;
-
-    const center = store.getAbsoluteCenter(selectedId, entity.x, entity.y, buildingType, entity.race);
-    const radius = store.getRadius(buildingType, entity.race);
-    const dots = computeWorkAreaBoundaryDots(
-        center.x,
-        center.y,
-        radius,
-        entity.player,
-        game.terrain.width,
-        game.terrain.height
+    const waHandler = active.handler;
+    const center = waHandler.getAbsoluteCenter(
+        active.buildingId,
+        active.buildingX,
+        active.buildingY,
+        active.buildingType,
+        active.race
     );
+    const radius = waHandler.getRadius(active.buildingType, active.race);
+    const dots = computeWorkAreaColoredRings(center.x, center.y, radius, game.terrain.width, game.terrain.height);
     return { circles: [], dots };
 }
 

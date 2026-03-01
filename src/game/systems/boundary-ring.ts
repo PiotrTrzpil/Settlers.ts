@@ -1,16 +1,18 @@
 /**
- * Isometric Boundary Ring Computation
+ * Isometric Boundary Ring — Even-Spacing Algorithm
  *
- * Shared algorithm for computing the boundary dot ring of an isometric circle.
+ * Shared algorithm for thinning raw boundary tiles into evenly-spaced dot rings.
  * Used by both territory rendering and work area visualization.
  *
  * Algorithm:
- *   1. Project tiles into screen space using the isometric transform with 0.7 vertical squash.
- *   2. Collect tiles inside the ellipse that have at least one hex neighbor outside it.
- *   3. Thin the raw boundary so dots form a single visual line (spatial hash dedup).
+ *   1. Project tiles to screen space (isometric transform, 0.7 vertical squash).
+ *   2. Group by player, then angular-bin each group from its centroid —
+ *      divides 360° into equal slices and keeps one dot per slice.
+ *   3. Distance prune across all players to clean up inter-player overlaps.
+ *
+ * The angular binning approach guarantees uniform spacing around the boundary
+ * regardless of how the hex grid aligns with the isometric ellipse.
  */
-
-import { GRID_DELTA_X, GRID_DELTA_Y, NUMBER_OF_DIRECTIONS } from './hex-directions';
 
 // ── Isometric projection ──────────────────────────────────────────────
 
@@ -24,35 +26,7 @@ export function isInsideIsoEllipse(dx: number, dy: number, rSq: number): boolean
     return sx * sx + sy * sy <= rSq;
 }
 
-// ── Screen-space thinning ─────────────────────────────────────────────
-
-const MIN_DIST_SQ = 1.05;
-const CELL_SIZE = 1.0;
-
-function spatialCellKey(cx: number, cy: number): number {
-    return cx * 100003 + cy;
-}
-
-function isTooClose(
-    sx: number,
-    sy: number,
-    cx: number,
-    cy: number,
-    grid: Map<number, { sx: number; sy: number }[]>
-): boolean {
-    for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-            const bucket = grid.get(spatialCellKey(cx + dx, cy + dy));
-            if (!bucket) continue;
-            for (const p of bucket) {
-                const dsx = sx - p.sx;
-                const dsy = sy - p.sy;
-                if (dsx * dsx + dsy * dsy < MIN_DIST_SQ) return true;
-            }
-        }
-    }
-    return false;
-}
+// ── Types ─────────────────────────────────────────────────────────────
 
 /** Minimum dot type — both TerritoryDot and WorkAreaDot satisfy this. */
 export interface BoundaryDot {
@@ -61,94 +35,148 @@ export interface BoundaryDot {
     readonly player: number;
 }
 
+interface ScreenDot<T> {
+    readonly dot: T;
+    readonly sx: number;
+    readonly sy: number;
+}
+
+// ── Angular binning ──────────────────────────────────────────────────
+
+const DEFAULT_MIN_SPACING = 1.2;
+
 /**
- * Thin boundary dots in screen space so they form a single visual line.
- * Works on any dot type that has x/y coordinates.
- *
- * Tile (x,y) → screen (x − y*0.5, y*0.5). Uses a spatial hash to skip
- * dots that are too close to an already-accepted dot.
+ * Angular bin: divide 360° around the group centroid into equal slices
+ * and keep only the best candidate per slice (closest to average boundary distance).
  */
-export function thinDotsInScreenSpace<T extends BoundaryDot>(raw: T[]): T[] {
+function angularBin<T>(items: ScreenDot<T>[], minSpacing: number): ScreenDot<T>[] {
+    if (items.length <= 1) return items;
+
+    // Centroid
+    let cx = 0;
+    let cy = 0;
+    for (const p of items) {
+        cx += p.sx;
+        cy += p.sy;
+    }
+    cx /= items.length;
+    cy /= items.length;
+
+    // Angle + distance from centroid
+    let totalDist = 0;
+    const withMeta = items.map(p => {
+        const angle = Math.atan2(p.sy - cy, p.sx - cx);
+        const dist = Math.hypot(p.sx - cx, p.sy - cy);
+        totalDist += dist;
+        return { sd: p, angle, dist };
+    });
+
+    // Estimate perimeter → number of angular bins
+    const avgDist = totalDist / withMeta.length;
+    const perimeter = 2 * Math.PI * avgDist;
+    const numBins = Math.max(8, Math.round(perimeter / minSpacing));
+    const binSize = (2 * Math.PI) / numBins;
+
+    // Keep the dot closest to average distance in each angular bin
+    const bins = new Map<number, (typeof withMeta)[0]>();
+    for (const p of withMeta) {
+        const idx = Math.floor((p.angle + Math.PI) / binSize);
+        const existing = bins.get(idx);
+        if (!existing || Math.abs(p.dist - avgDist) < Math.abs(existing.dist - avgDist)) {
+            bins.set(idx, p);
+        }
+    }
+
+    return Array.from(bins.values()).map(b => b.sd);
+}
+
+// ── Distance pruning ─────────────────────────────────────────────────
+
+function hashKey(cx: number, cy: number): number {
+    return cx * 100003 + cy;
+}
+
+/** Check if a screen-space point is too close to any already-accepted dot. */
+function hasNearby<T>(sd: ScreenDot<T>, hash: Map<number, ScreenDot<T>[]>, minDistSq: number): boolean {
+    const hx = Math.floor(sd.sx);
+    const hy = Math.floor(sd.sy);
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            const bucket = hash.get(hashKey(hx + dx, hy + dy));
+            if (!bucket) continue;
+            for (const p of bucket) {
+                const dsx = sd.sx - p.sx;
+                const dsy = sd.sy - p.sy;
+                if (dsx * dsx + dsy * dsy < minDistSq) return true;
+            }
+        }
+    }
+    return false;
+}
+
+/** Remove dots that are too close to an already-accepted neighbor. */
+function distancePrune<T>(candidates: ScreenDot<T>[], minDistSq: number): T[] {
     const accepted: T[] = [];
-    const grid = new Map<number, { sx: number; sy: number }[]>();
+    const hash = new Map<number, ScreenDot<T>[]>();
 
-    for (const dot of raw) {
-        const sx = dot.x - dot.y * 0.5;
-        const sy = dot.y * 0.5;
-        const cx = Math.floor(sx / CELL_SIZE);
-        const cy = Math.floor(sy / CELL_SIZE);
+    for (const sd of candidates) {
+        if (hasNearby(sd, hash, minDistSq)) continue;
 
-        if (isTooClose(sx, sy, cx, cy, grid)) continue;
-
-        accepted.push(dot);
-        const key = spatialCellKey(cx, cy);
-        let bucket = grid.get(key);
+        accepted.push(sd.dot);
+        const hKey = hashKey(Math.floor(sd.sx), Math.floor(sd.sy));
+        let bucket = hash.get(hKey);
         if (!bucket) {
             bucket = [];
-            grid.set(key, bucket);
+            hash.set(hKey, bucket);
         }
-        bucket.push({ sx, sy });
+        bucket.push(sd);
     }
 
     return accepted;
 }
 
+// ── Public API ────────────────────────────────────────────────────────
+
 /**
- * Compute boundary dot positions for a single isometric circle.
+ * Thin boundary dots to evenly-spaced positions.
  *
- * @param cx - Circle center X (tiles)
- * @param cy - Circle center Y (tiles)
- * @param radius - Radius in tiles
- * @param player - Player index for coloring
- * @param mapWidth - Map width for bounds clamping
- * @param mapHeight - Map height for bounds clamping
+ * Two-phase approach:
+ *   1. **Angular binning** — group dots by player, compute centroid per group,
+ *      divide 360° into equal angular slices, keep one dot per slice (the one
+ *      closest to the average boundary distance). Guarantees uniform angular
+ *      spacing around the boundary.
+ *   2. **Distance prune** — reject any dot too close to an already-accepted dot
+ *      (handles inter-player boundary overlaps).
+ *
+ * @param minSpacing - Desired screen-space distance between dots.
  */
-export function computeCircleBoundaryDots(
-    cx: number,
-    cy: number,
-    radius: number,
-    player: number,
-    mapWidth: number,
-    mapHeight: number
-): BoundaryDot[] {
-    const screenR = radius * 0.5;
-    const rSq = screenR * screenR;
-    const raw: BoundaryDot[] = [];
+export function thinDotsInScreenSpace<T extends BoundaryDot>(raw: T[], minSpacing = DEFAULT_MIN_SPACING): T[] {
+    if (raw.length <= 1) return [...raw];
 
-    const minY = Math.max(0, cy - radius);
-    const maxY = Math.min(mapHeight - 1, cy + radius);
-    const minX = Math.max(0, cx - radius);
-    const maxX = Math.min(mapWidth - 1, cx + radius);
+    // Project to screen space
+    const projected: ScreenDot<T>[] = raw.map(dot => ({
+        dot,
+        sx: dot.x - dot.y * 0.5,
+        sy: dot.y * 0.5,
+    }));
 
-    for (let y = minY; y <= maxY; y++) {
-        const dy = y - cy;
-        for (let x = minX; x <= maxX; x++) {
-            const dx = x - cx;
-            if (!isInsideIsoEllipse(dx, dy, rSq)) continue;
-            if (hasBoundaryNeighbor(x, y, cx, cy, rSq, mapWidth, mapHeight)) {
-                raw.push({ x, y, player });
-            }
+    // Group by player for independent angular binning
+    const byPlayer = new Map<number, ScreenDot<T>[]>();
+    for (const sd of projected) {
+        let group = byPlayer.get(sd.dot.player);
+        if (!group) {
+            group = [];
+            byPlayer.set(sd.dot.player, group);
         }
+        group.push(sd);
     }
 
-    return thinDotsInScreenSpace(raw);
-}
-
-/** Returns true if the tile has at least one hex neighbor outside the ellipse (or at map edge). */
-function hasBoundaryNeighbor(
-    x: number,
-    y: number,
-    cx: number,
-    cy: number,
-    rSq: number,
-    mapWidth: number,
-    mapHeight: number
-): boolean {
-    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-        const nx = x + GRID_DELTA_X[d]!;
-        const ny = y + GRID_DELTA_Y[d]!;
-        if (nx < 0 || ny < 0 || nx >= mapWidth || ny >= mapHeight) return true;
-        if (!isInsideIsoEllipse(nx - cx, ny - cy, rSq)) return true;
+    const binned: ScreenDot<T>[] = [];
+    for (const group of byPlayer.values()) {
+        binned.push(...angularBin(group, minSpacing));
     }
-    return false;
+
+    // Final distance prune for inter-player overlap
+    const minDistSq = minSpacing * minSpacing;
+    return distancePrune(binned, minDistSq);
 }

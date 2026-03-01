@@ -113,8 +113,10 @@ export class BuildingPileRegistry {
             const material = xmlGoodToMaterialType(pile.good);
             if (material === undefined) continue;
 
-            const dx = pile.xOffset - info.hotSpotX;
-            const dy = pile.yOffset - info.hotSpotY;
+            // Pile xOffset/yOffset are already anchor-relative (like door offsets),
+            // NOT in bitmask coordinates — no hotspot subtraction needed.
+            const dx = pile.xOffset;
+            const dy = pile.yOffset;
 
             result.push({ material, slotType, dx, dy });
         }

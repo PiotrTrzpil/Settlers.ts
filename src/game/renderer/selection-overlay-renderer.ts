@@ -2,7 +2,7 @@ import { Entity, EntityType, BuildingType, getBuildingFootprint } from '../entit
 import type { TileHighlight } from '../input/render-state';
 import { TilePicker } from '../input/tile-picker';
 import { tileToWorld, heightToWorld, TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
-import { getEntityWorldPos, getInterpolatedWorldPos, type WorldPositionContext } from './world-position';
+import { getEntityWorldPos, type WorldPositionContext } from './world-position';
 import type { ServiceAreaRenderData } from './render-context';
 import {
     FRAME_COLOR,
@@ -18,9 +18,7 @@ import {
     FRAME_THICKNESS,
     FRAME_CORNER_LENGTH,
     BASE_QUAD,
-    SELECTION_DOT_SCALE,
     SELECTION_ORIGIN_DOT_SCALE,
-    SELECTION_DOT_COLOR,
     SELECTION_ORIGIN_DOT_COLOR,
     FOOTPRINT_TILE_COLOR,
     SERVICE_AREA_CIRCLE_COLOR,
@@ -337,8 +335,9 @@ export class SelectionOverlayRenderer {
     }
 
     /**
-     * Draw selection indicator dots on selected units.
-     * Shows a larger dot on the unit sprite and a smaller dot at the logical origin.
+     * Draw selection origin dots for selected units.
+     * Shows a small dot at the logical tile origin (current position).
+     * The main selection bracket is drawn as a sprite in EntitySpritePass.
      */
     public drawSelectionDots(
         gl: WebGL2RenderingContext,
@@ -357,25 +356,7 @@ export class SelectionOverlayRenderer {
             if (!selectedEntityIds.has(entity.id)) continue;
             if (entity.type !== EntityType.Unit) continue;
 
-            // Get interpolated world position (where sprite is rendered)
-            const worldPos = getInterpolatedWorldPos(entity, ctx);
-
-            // Draw larger dot on the unit sprite (offset upward to appear above sprite)
-            // Note: negative Y offset moves up in world coordinates
-            const spriteTopOffset = 0.7;
-            gl.vertexAttrib2f(aEntityPos, worldPos.worldX, worldPos.worldY - spriteTopOffset);
-            gl.vertexAttrib4f(
-                aColor,
-                SELECTION_DOT_COLOR[0]!,
-                SELECTION_DOT_COLOR[1]!,
-                SELECTION_DOT_COLOR[2]!,
-                SELECTION_DOT_COLOR[3]!
-            );
-            this.fillQuadVertices(0, 0, SELECTION_DOT_SCALE);
-            gl.bufferData(gl.ARRAY_BUFFER, this.vertexData, gl.DYNAMIC_DRAW);
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-            // Draw smaller dot at logical origin (current tile position)
+            // Draw small dot at logical origin (current tile position)
             const originPos = TilePicker.tileToWorld(
                 entity.x,
                 entity.y,

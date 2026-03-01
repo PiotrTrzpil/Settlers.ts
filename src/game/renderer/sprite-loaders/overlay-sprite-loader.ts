@@ -3,18 +3,7 @@
  * Extracted from SpriteRenderManager to keep file size under the max-lines limit.
  */
 
-import { EntityTextureAtlas } from '../entity-texture-atlas';
-import { SpriteMetadataRegistry } from '../sprite-metadata';
-import { SpriteLoader } from '../sprite-loader';
-import { PaletteTextureManager } from '../palette-texture';
-
-export interface OverlayLoadContext {
-    spriteLoader: SpriteLoader;
-    atlas: EntityTextureAtlas;
-    registry: SpriteMetadataRegistry;
-    gl: WebGL2RenderingContext;
-    paletteManager: PaletteTextureManager;
-}
+import type { SpriteLoadContext } from '../sprite-load-context';
 
 /**
  * Load overlay sprites into the atlas.
@@ -27,7 +16,7 @@ export interface OverlayLoadContext {
  */
 export async function loadOverlaySprites(
     manifest: readonly { gfxFile: number; jobIndex: number; directionIndex?: number }[],
-    ctx: OverlayLoadContext
+    ctx: SpriteLoadContext
 ): Promise<number> {
     // Deduplicate by key
     const seen = new Set<string>();

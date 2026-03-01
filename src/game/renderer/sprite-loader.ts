@@ -22,7 +22,7 @@ import { getDecoderPool } from './sprite-decoder-pool';
  * Trim configuration for sprite loading.
  * Specifies how many pixel rows to remove from top and bottom of sprites.
  */
-interface SpriteTrim {
+export interface SpriteTrim {
     top: number;
     bottom: number;
 }
@@ -249,7 +249,8 @@ export class SpriteLoader {
         gilIndex: number,
         paletteIndex: number | null,
         atlas: EntityTextureAtlas,
-        paletteBaseOffset: number
+        paletteBaseOffset: number,
+        trimOverride?: SpriteTrim
     ): Promise<LoadedSprite | null> {
         let gfxImage: GfxImage | null;
 
@@ -260,7 +261,7 @@ export class SpriteLoader {
         }
 
         if (!gfxImage) return null;
-        return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset);
+        return this.packSpriteIntoAtlas(gfxImage, atlas, paletteBaseOffset, trimOverride);
     }
 
     /**
@@ -318,9 +319,10 @@ export class SpriteLoader {
     private packSpriteIntoAtlasFallback(
         gfxImage: GfxImage,
         atlas: EntityTextureAtlas,
-        paletteBaseOffset: number
+        paletteBaseOffset: number,
+        trimOverride?: SpriteTrim
     ): LoadedSprite | null {
-        const trim = SpriteLoader.DEFAULT_TRIM;
+        const trim = trimOverride ?? SpriteLoader.DEFAULT_TRIM;
         const trimmedHeight = gfxImage.height - trim.top - trim.bottom;
         if (trimmedHeight <= 0) {
             SpriteLoader.log.debug(`Sprite too small after trimming: ${gfxImage.width}x${gfxImage.height}`);
@@ -361,13 +363,14 @@ export class SpriteLoader {
     private async packSpriteIntoAtlas(
         gfxImage: GfxImage,
         atlas: EntityTextureAtlas,
-        paletteBaseOffset: number
+        paletteBaseOffset: number,
+        trimOverride?: SpriteTrim
     ): Promise<LoadedSprite | null> {
-        const trim = SpriteLoader.DEFAULT_TRIM;
+        const trim = trimOverride ?? SpriteLoader.DEFAULT_TRIM;
         const pool = getDecoderPool();
 
         if (!pool.isAvailable) {
-            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset);
+            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset, trimOverride);
         }
 
         const params = gfxImage.getDecodeParams();
@@ -416,7 +419,7 @@ export class SpriteLoader {
             return { image: gfxImage, region, entry };
         } catch (e) {
             SpriteLoader.log.debug(`Worker decode failed, falling back to sync: ${e}`);
-            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset);
+            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset, trimOverride);
         }
     }
 

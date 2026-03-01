@@ -20,7 +20,7 @@ import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { JobType, SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
 import { buildAllSettlerConfigs } from '../../settler-data-access';
 import type { EventBus } from '../../event-bus';
-import type { BuildingInventoryManager, InventoryVisualizer } from '../inventory';
+import type { BuildingInventoryManager, InventoryVisualizer, BuildingPileRegistry } from '../inventory';
 import type { CarrierManager } from '../carriers';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
@@ -56,6 +56,8 @@ export interface SettlerTaskSystemConfig {
     eventBus: EventBus;
     /** Lazy getter — resolved on first use (breaks circular init dependency). */
     getInventoryVisualizer: () => InventoryVisualizer;
+    /** Lazy getter — pile registry may be set after construction (game data load). */
+    getPileRegistry: () => BuildingPileRegistry | null;
     /** Work area store for resolving building work-center positions. */
     workAreaStore: WorkAreaStore;
     /** Building overlay manager for trigger-driven overlay animations. */
@@ -116,6 +118,7 @@ export class SettlerTaskSystem implements TickSystem {
             buildingPositionResolver: new BuildingPositionResolverImpl({
                 gameState: this.gameState,
                 getInventoryVisualizer: getViz,
+                getPileRegistry: config.getPileRegistry,
                 workAreaStore: config.workAreaStore,
             }),
             triggerSystem,
@@ -460,12 +463,29 @@ export class SettlerTaskSystem implements TickSystem {
         this.runtimes.delete(entityId);
     }
 
-    /** Release all workers assigned to a destroyed building so they can find new workplaces. */
+    /** Release and interrupt all workers assigned to a destroyed building so they return to idle. */
     private onBuildingRemoved(buildingId: number): void {
         this.buildingOccupants.delete(buildingId);
-        for (const runtime of this.runtimes.values()) {
-            if (runtime.assignedBuilding === buildingId) {
-                runtime.assignedBuilding = null;
+        for (const [settlerId, runtime] of this.runtimes) {
+            if (runtime.assignedBuilding !== buildingId) continue;
+
+            runtime.assignedBuilding = null;
+
+            // Interrupt active job so the worker stops immediately
+            if (runtime.job) {
+                const entity = this.gameState.getEntity(settlerId);
+                if (entity) {
+                    const config = this.settlerConfigs.get(entity.subType as UnitType);
+                    if (config) {
+                        this.interruptJobForCleanup(entity, config, runtime);
+                    }
+                }
+                runtime.job = null;
+            }
+
+            // Cancel any in-progress move toward the building
+            if (runtime.moveTask) {
+                runtime.moveTask = null;
             }
         }
     }

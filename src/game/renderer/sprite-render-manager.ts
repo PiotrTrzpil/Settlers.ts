@@ -29,9 +29,17 @@ import { AnimationData } from '../animation';
 import { AnimationDataProvider } from '../systems/animation';
 import { EMaterialType } from '../economy';
 import { TEAM_COLOR_PALETTES } from '@/resources/gfx/team-colors';
-import { loadUnitSpritesForRace, type UnitLoadContext } from './sprite-unit-loader';
+import { loadUnitSpritesForRace } from './sprite-unit-loader';
 import { SpriteAtlasCacheManager, prefetchSpriteCache } from './sprite-atlas-cache-manager';
-import { loadBuildingSprites, loadMapObjectSprites, loadResourceSprites, loadOverlaySprites } from './sprite-loaders';
+import {
+    loadGilManifest,
+    loadBuildingSprites,
+    loadMapObjectSprites,
+    loadResourceSprites,
+    loadOverlaySprites,
+} from './sprite-loaders';
+import { type SpriteLoadContext } from './sprite-load-context';
+import { SELECTION_INDICATOR_MANIFEST } from './selection-indicator';
 
 export { prefetchSpriteCache };
 
@@ -341,11 +349,25 @@ export class SpriteRenderManager {
         if (cached) {
             this._spriteAtlas = cached.atlas;
             this._spriteRegistry = cached.registry;
+            // Load selection indicators on top of cached atlas (not included in cache)
+            const ctx: SpriteLoadContext = {
+                spriteLoader: this.spriteLoader,
+                atlas: cached.atlas,
+                registry: cached.registry,
+                gl,
+                paletteManager: this._paletteManager,
+            };
+            await this.loadSelectionIndicators(ctx);
             return true;
         }
 
         // Full load from files
         return this.loadSpritesFromFiles(gl, race);
+    }
+
+    /** Load selection indicator sprites from GFX file 7 into the current atlas. */
+    private async loadSelectionIndicators(ctx: SpriteLoadContext): Promise<void> {
+        await loadGilManifest(SELECTION_INDICATOR_MANIFEST, ctx);
     }
 
     /**
@@ -379,31 +401,37 @@ export class SpriteRenderManager {
         this._spriteAtlas = atlas;
         this._spriteRegistry = registry;
 
-        const loadCtx = {
+        const ctx: SpriteLoadContext = {
             spriteLoader: this.spriteLoader,
-            getPaletteBaseOffset: (fileId: string) => this.getPaletteBaseOffset(fileId),
+            atlas,
+            registry,
+            gl,
+            paletteManager: this._paletteManager,
         };
 
-        const { loaded: buildingsLoaded } = await loadBuildingSprites(atlas, registry, gl, loadCtx);
+        const { loaded: buildingsLoaded } = await loadBuildingSprites(ctx);
         const buildings = t.lap();
 
-        const mapObjectsLoaded = await loadMapObjectSprites(atlas, registry, gl, loadCtx);
+        const mapObjectsLoaded = await loadMapObjectSprites(ctx);
         const mapObjects = t.lap();
 
-        const resourcesLoaded = await loadResourceSprites(atlas, registry, gl, loadCtx);
+        const resourcesLoaded = await loadResourceSprites(ctx);
         const resources = t.lap();
 
         let unitsLoaded = false;
         const unitRaceTimings: Record<string, number> = {};
         for (const r of racesToLoad) {
             const raceStart = performance.now();
-            if (await loadUnitSpritesForRace(r, atlas, registry, gl, this.unitLoadContext)) {
+            if (await loadUnitSpritesForRace(r, ctx)) {
                 unitsLoaded = true;
             }
             unitRaceTimings[Race[r]] = Math.round(performance.now() - raceStart);
             await yieldToEventLoop();
         }
         const units = t.lap();
+
+        // Load selection indicator sprites from GFX file 7 (HUD overlays)
+        await this.loadSelectionIndicators(ctx);
 
         if (!buildingsLoaded && !mapObjectsLoaded && !resourcesLoaded && !unitsLoaded) {
             return false;
@@ -475,12 +503,6 @@ export class SpriteRenderManager {
         }
     }
 
-    /** Get the palette base offset for a file, defaulting to 0 if unregistered. */
-    private getPaletteBaseOffset(fileId: string): number {
-        const offset = this._paletteManager.getBaseOffset(fileId);
-        return offset >= 0 ? offset : 0;
-    }
-
     /**
      * Record sprite loading timings to debug stats.
      */
@@ -518,13 +540,5 @@ export class SpriteRenderManager {
                 `mapObj=${timings.mapObjects}, resources=${timings.resources}, units=${timings.units}, ` +
                 `gpu=${timings.gpuUpload}, TOTAL=${timer.total()}, workers=${getDecoderPool().getDecodeCount()}`
         );
-    }
-
-    /** Unit loading context for the extracted sprite-unit-loader module. */
-    private get unitLoadContext(): UnitLoadContext {
-        return {
-            spriteLoader: this.spriteLoader,
-            getPaletteBaseOffset: (fileId: string) => this.getPaletteBaseOffset(fileId),
-        };
     }
 }

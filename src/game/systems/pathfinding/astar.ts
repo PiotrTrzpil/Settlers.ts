@@ -24,8 +24,9 @@ import { smoothPath } from './path-smoothing';
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Maximum nodes to search before giving up (prevents runaway on large maps) */
-const MAX_SEARCH_NODES = 2000;
+/** Maximum nodes to search before giving up (prevents runaway on large maps).
+ *  Needs to be high enough to route around building footprints in dense settlements. */
+const MAX_SEARCH_NODES = 10_000;
 
 /** Cost multiplier for integer arithmetic (10 = 0.1 precision) */
 const COST_SCALE = 10;
@@ -60,6 +61,7 @@ interface SearchContext {
     goalX: number;
     goalY: number;
     tileOccupancy: Map<string, number>;
+    buildingOccupancy: Set<string>;
     ignoreOccupancy: boolean;
     gCost: Float32Array;
     parent: Int32Array;
@@ -81,9 +83,14 @@ function canEnterTile(nx: number, ny: number, nIdx: number, ctx: SearchContext):
     // Impassable terrain?
     if (!isPassable(ctx.terrain.groundType[nIdx]!)) return false;
 
-    // Occupied by another unit? (allow goal tile even if occupied)
+    const key = tileKey(nx, ny);
     const isGoal = nx === ctx.goalX && ny === ctx.goalY;
-    if (!ctx.ignoreOccupancy && !isGoal && ctx.tileOccupancy.has(tileKey(nx, ny))) {
+
+    // Building footprints always block (goal tile allowed for building interaction)
+    if (!isGoal && ctx.buildingOccupancy.has(key)) return false;
+
+    // Occupied by another unit? (allow goal tile even if occupied)
+    if (!ctx.ignoreOccupancy && !isGoal && ctx.tileOccupancy.has(key)) {
         return false;
     }
 
@@ -203,6 +210,7 @@ export function findPathAStar(
     goalY: number,
     terrain: PathfindingTerrain,
     tileOccupancy: Map<string, number>,
+    buildingOccupancy: Set<string>,
     ignoreOccupancy: boolean = false
 ): TileCoord[] | null {
     // Trivial case: already at goal
@@ -233,6 +241,7 @@ export function findPathAStar(
         goalX,
         goalY,
         tileOccupancy,
+        buildingOccupancy,
         ignoreOccupancy,
         gCost,
         parent,
@@ -271,6 +280,7 @@ export function findPathAStar(
                 mapWidth,
                 mapHeight,
                 tileOccupancy,
+                buildingOccupancy,
                 ignoreOccupancy,
             });
         }
@@ -281,6 +291,20 @@ export function findPathAStar(
         }
     }
 
-    // No path found
+    // No path found — log diagnostic info
+    const startKey = tileKey(startX, startY);
+    const goalKey = tileKey(goalX, goalY);
+    const startInBuilding = buildingOccupancy.has(startKey);
+    const goalInBuilding = buildingOccupancy.has(goalKey);
+    const startPassable = isPassable(groundType[startIdx]!);
+    const goalPassable = isPassable(groundType[goalIdx]!);
+    const exhausted = nodesSearched >= MAX_SEARCH_NODES;
+    console.warn(
+        `[A*] No path (${startX},${startY})->(${goalX},${goalY}): ` +
+            `searched=${nodesSearched}/${MAX_SEARCH_NODES} ${exhausted ? 'EXHAUSTED' : 'EMPTY_QUEUE'} ` +
+            `start[passable=${startPassable}, inBuilding=${startInBuilding}] ` +
+            `goal[passable=${goalPassable}, inBuilding=${goalInBuilding}] ` +
+            `ignoreOccupancy=${ignoreOccupancy}`
+    );
     return null;
 }

@@ -83,12 +83,12 @@ export class ViewPoint implements IViewPoint {
 
     /** Center the camera on a tile coordinate */
     public setPosition(tileX: number, tileY: number): void {
-        // The shader maps tile (x, y) to instancePos (x + floor(y/2), y),
-        // then offsets by (-posX, -posY).  The projection puts screen-center
-        // at world (aspect, 1) which corresponds to pixelCoord (aspect+1, 2).
-        // So to center tile (tileX, tileY) we need:
+        // The instance grid already applies the row stagger (floor(iy/2)) in
+        // getInstancePosArray, so posX must NOT include it — only the base offset.
+        // Center pixelCoord = ceil(aspect) + 1 + floor(posX), solve for posX:
+        //   posX = tileX - aspect - 1   (floor(-aspect) = -ceil(aspect))
         const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
-        const newX = tileX + Math.floor(tileY / 2) - aspect - 1;
+        const newX = tileX - aspect - 1;
         const newY = tileY - 2;
         this.posX = newX;
         this.posY = newY;

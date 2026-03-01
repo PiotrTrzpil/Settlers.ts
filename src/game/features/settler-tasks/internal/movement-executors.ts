@@ -11,7 +11,7 @@
 
 import { EntityType, BuildingType, type Entity } from '../../../entity';
 import { EMaterialType } from '../../../economy';
-import { getBuildingDoorOffset } from '../../../game-data-access';
+import { getBuildingDoorPos } from '../../../game-data-access';
 import { hexDistance, getApproxDirection } from '../../../systems/hex-directions';
 import { LogHandler } from '@/utilities/log-handler';
 import { TaskResult } from '../types';
@@ -127,15 +127,13 @@ function resolvePileMaterial(node: ChoreoNode, job: ChoreoJobState): string {
  * DONE when hexDistance ≤ 1 and controller idle.
  */
 export const executeGoToTarget: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
-    // Entity target: walk to entity position
+    // Entity target: walk to entity position (building door for buildings)
     if (job.targetId !== null) {
         const target = ctx.gameState.getEntityOrThrow(job.targetId, 'GO_TO_TARGET target');
 
         if (target.type === EntityType.Building) {
-            const door = getBuildingDoorOffset(target.race, target.subType as BuildingType);
-            if (door) {
-                return moveToPosition(settler, target.x + door.dx, target.y + door.dy, node, ctx, ARRIVAL_DIST);
-            }
+            const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
+            return moveToPosition(settler, door.x, door.y, node, ctx, ARRIVAL_DIST);
         }
 
         return moveToPosition(settler, target.x, target.y, node, ctx, ARRIVAL_DIST);
@@ -159,10 +157,8 @@ export const executeGoToTargetRoughly: ChoreoExecutorFn = (settler, job, node, _
         const target = ctx.gameState.getEntityOrThrow(job.targetId, 'GO_TO_TARGET_ROUGHLY target');
 
         if (target.type === EntityType.Building) {
-            const door = getBuildingDoorOffset(target.race, target.subType as BuildingType);
-            if (door) {
-                return moveToPosition(settler, target.x + door.dx, target.y + door.dy, node, ctx, ARRIVAL_DIST_ROUGH);
-            }
+            const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
+            return moveToPosition(settler, door.x, door.y, node, ctx, ARRIVAL_DIST_ROUGH);
         }
 
         return moveToPosition(settler, target.x, target.y, node, ctx, ARRIVAL_DIST_ROUGH);
@@ -219,11 +215,9 @@ export const executeGoHome: ChoreoExecutorFn = (settler, job, node, _dt, ctx) =>
     }
 
     const building = ctx.gameState.getEntityOrThrow(homeId, 'GO_HOME home building');
-    const door = getBuildingDoorOffset(building.race, building.subType as BuildingType);
-    const targetX = door ? building.x + door.dx : building.x;
-    const targetY = door ? building.y + door.dy : building.y;
+    const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
 
-    return moveToPosition(settler, targetX, targetY, node, ctx, ARRIVAL_DIST);
+    return moveToPosition(settler, door.x, door.y, node, ctx, ARRIVAL_DIST);
 };
 
 /**
@@ -348,6 +342,21 @@ export const executeSearch: ChoreoExecutorFn = (settler, job, _node, _dt, ctx) =
  */
 export const executeGoVirtual: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
     const buildingId = resolveAssignedBuildingId(settler, ctx);
+
+    // When working on a target entity with useWork offsets, resolve positions
+    // relative to the target (e.g. woodcutter cutting around a tree) rather than
+    // the building work area, so the settler stays near the work site.
+    // Walk visibly instead of teleporting so movement between cutting positions
+    // looks natural.
+    const target = job.targetId !== null && node.useWork ? ctx.gameState.getEntity(job.targetId) : null;
+    if (target) {
+        if (!job.targetPos) {
+            job.targetPos = { x: target.x + node.x, y: target.y + node.y };
+        }
+        return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST);
+    }
+
+    // No target entity — interior/building teleport (original behavior)
     const pos = ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork);
 
     // Hide the settler inside the building

@@ -41,7 +41,7 @@ export function createGameState(): GameState {
         },
         getEntity: id => state.getEntity(id),
     });
-    movement.setTileOccupancy(state.tileOccupancy);
+    movement.setTileOccupancy(state.tileOccupancy, state.buildingOccupancy);
     state.initMovement(movement);
 
     // Wire entity lifecycle events (mirrors GameServices subscriptions)
@@ -133,7 +133,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         },
         getEntity: id => state.getEntity(id),
     });
-    movement.setTileOccupancy(state.tileOccupancy);
+    movement.setTileOccupancy(state.tileOccupancy, state.buildingOccupancy);
     state.initMovement(movement);
 
     // Create managers with required dependencies via constructor

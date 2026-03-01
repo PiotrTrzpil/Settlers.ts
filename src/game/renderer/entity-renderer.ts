@@ -103,6 +103,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Building overlay provider (from context, pre-computed in glue layer)
     private getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[] = () => EMPTY_OVERLAYS;
 
+    // Health ratio provider (from context, backed by CombatSystem)
+    private getHealthRatio: (entityId: number) => number | null = () => null;
+
     // Resource states for stacked resources (quantity tracking)
     public resourceStates: Map<number, StackedResourceState> = new Map();
 
@@ -294,6 +297,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.getBuildingOverlays = ctx.getBuildingOverlays;
         this.getVisualState = ctx.getVisualState;
         this.getDirectionTransition = ctx.getDirectionTransition;
+        this.getHealthRatio = ctx.getHealthRatio;
         this.resourceStates = ctx.resourceStates as Map<number, StackedResourceState>;
         this.renderAlpha = ctx.alpha;
         this.layerVisibility = ctx.layerVisibility;
@@ -481,6 +485,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             getBuildingOverlays: this.getBuildingOverlays,
             getVisualState: this.getVisualState,
             getDirectionTransition: this.getDirectionTransition,
+            getHealthRatio: this.getHealthRatio,
             renderSettings: this.renderSettings,
             layerVisibility: this.layerVisibility,
             renderAlpha: this.renderAlpha,

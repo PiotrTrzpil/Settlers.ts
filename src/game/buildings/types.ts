@@ -3,10 +3,11 @@
  * Centralized building-related types, enums, and size configurations.
  */
 
-import type { TileCoord } from '../coordinates';
+import { type TileCoord, tileKey } from '../coordinates';
 import { Race } from '../race';
 import { getBuildingFootprintAt } from '@/resources/game-data';
 import { getBuildingInfo } from '../game-data-access';
+import { getAllNeighbors, hexDistance } from '../systems/hex-directions';
 import { BuildingType } from './building-type';
 
 export { BuildingType } from './building-type';
@@ -149,19 +150,114 @@ export function getBuildingHotspot(buildingType: BuildingType, race: Race): { x:
 export function getBuildingFootprint(x: number, y: number, buildingType: BuildingType, race: Race): TileCoord[] {
     const info = getBuildingInfo(race, buildingType);
     if (!info) throw new Error(`No BuildingInfo for ${BuildingType[buildingType]} / race ${Race[race]}`);
-    if (info.buildingPosLines.length > 0) {
-        return getBuildingFootprintAt(info, x, y);
+    if (info.buildingPosLines.length === 0) {
+        throw new Error(
+            `No footprint bitmask data for ${BuildingType[buildingType]} / race ${Race[race]}. ` +
+                `All buildings must have buildingPosLines in their XML definition.`
+        );
     }
+    return getBuildingFootprintAt(info, x, y);
+}
 
-    // Fallback to simple rectangular footprint for buildings with no bitmask data
-    const size = getBuildingSize(buildingType);
-    const tiles: TileCoord[] = [];
-    for (let dy = 0; dy < size.height; dy++) {
-        for (let dx = 0; dx < size.width; dx++) {
-            tiles.push({ x: x + dx, y: y + dy });
+/**
+ * Compute the set of footprint tiles that must remain passable for pathfinding.
+ *
+ * Building footprints in Settlers 4 are large bitmask areas (30–200+ tiles) that
+ * include exclusion zones around the visible structure. The door tile and resource
+ * pile tiles are inside this footprint but must be reachable by settlers.
+ *
+ * For each functional tile (door, input piles, output piles) that falls inside the
+ * footprint, we "carve" a corridor of passable tiles leading outward from the tile
+ * to the footprint boundary. This ensures pathfinding can reach every functional
+ * tile without opening up the entire footprint.
+ *
+ * Both door and pile offsets in the XML are **anchor-relative** — they represent
+ * tile offsets from the building's anchor (hotspot) position.
+ *
+ * Returns an empty set when game data is not loaded (e.g. lightweight tests).
+ */
+export function getBuildingDoorCorridor(
+    x: number,
+    y: number,
+    buildingType: BuildingType,
+    race: Race,
+    footprint: TileCoord[]
+): Set<string> {
+    const passable = new Set<string>();
+    let info: ReturnType<typeof getBuildingInfo>;
+    try {
+        info = getBuildingInfo(race, buildingType);
+    } catch {
+        return passable; // game data not loaded
+    }
+    if (!info) return passable;
+
+    const footprintKeys = new Set(footprint.map(t => tileKey(t.x, t.y)));
+
+    // Door: anchor-relative offset from XML <door><xOffset>/<yOffset>
+    const door = resolveAnchorRelativePos(x, y, info.door.xOffset, info.door.yOffset);
+    carvePassableCorridor(door, x, y, footprintKeys, passable);
+
+    // Piles: anchor-relative offsets from XML <pile><xOffset>/<yOffset>
+    // Only carve corridors for piles that actually land inside the footprint.
+    for (const pile of info.piles) {
+        const pilePos = resolveAnchorRelativePos(x, y, pile.xOffset, pile.yOffset);
+        if (footprintKeys.has(tileKey(pilePos.x, pilePos.y))) {
+            carvePassableCorridor(pilePos, x, y, footprintKeys, passable);
         }
     }
-    return tiles;
+
+    return passable;
+}
+
+/**
+ * Convert an anchor-relative offset to a world tile position.
+ *
+ * In buildingInfo.xml, door offsets and pile offsets are both stored as
+ * tile deltas from the building anchor (the hotspot). This helper applies
+ * the offset to the building's world position.
+ */
+function resolveAnchorRelativePos(anchorX: number, anchorY: number, dx: number, dy: number): { x: number; y: number } {
+    return { x: anchorX + dx, y: anchorY + dy };
+}
+
+/**
+ * Carve a passable corridor from `start` outward through the footprint.
+ *
+ * Starting from `start`, walks one tile at a time in the direction away from the
+ * building anchor. Each step picks the neighbor that maximizes hex distance from
+ * the anchor. Stops when reaching a tile outside the footprint (the edge).
+ *
+ * All tiles along the path (including `start`) are added to `passable`.
+ * Maximum 20 steps — more than enough for any building footprint radius.
+ */
+function carvePassableCorridor(
+    start: { x: number; y: number },
+    anchorX: number,
+    anchorY: number,
+    footprintKeys: Set<string>,
+    passable: Set<string>
+): void {
+    passable.add(tileKey(start.x, start.y));
+
+    let current = start;
+    for (let step = 0; step < 20; step++) {
+        const neighbors = getAllNeighbors(current);
+        let bestDist = -1;
+        let bestNeighbor: { x: number; y: number } | null = null;
+        for (const n of neighbors) {
+            const dist = hexDistance(n.x, n.y, anchorX, anchorY);
+            if (dist > bestDist) {
+                bestDist = dist;
+                bestNeighbor = n;
+            }
+        }
+        if (!bestNeighbor) break;
+        const key = tileKey(bestNeighbor.x, bestNeighbor.y);
+        if (!footprintKeys.has(key)) break; // reached outside the footprint
+        passable.add(key);
+        current = bestNeighbor;
+    }
 }
 
 // ── Race-specific display names for buildings with different visuals per race ──

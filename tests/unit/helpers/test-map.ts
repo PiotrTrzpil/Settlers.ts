@@ -43,6 +43,7 @@ export interface TestMap {
     groundType: Uint8Array;
     groundHeight: Uint8Array;
     occupancy: Map<string, number>;
+    buildingOccupancy: Set<string>;
 }
 
 /**
@@ -61,8 +62,9 @@ export function createTestMap(
     const groundType = new Uint8Array(width * height).fill(options.terrain ?? TERRAIN.GRASS);
     const groundHeight = new Uint8Array(width * height).fill(options.flatHeight ?? 0);
     const occupancy = new Map<string, number>();
+    const buildingOccupancy = new Set<string>();
     const terrain = new TerrainData(groundType, groundHeight, mapSize);
-    return { terrain, mapSize, groundType, groundHeight, occupancy };
+    return { terrain, mapSize, groundType, groundHeight, occupancy, buildingOccupancy };
 }
 
 // ─── Terrain manipulation helpers ───────────────────────────────────

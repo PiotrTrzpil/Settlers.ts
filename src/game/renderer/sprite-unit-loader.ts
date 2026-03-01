@@ -20,7 +20,7 @@ import {
     parseMaterialSuffix,
     getFirstFieldByPrefix,
 } from './sprite-metadata';
-import { SpriteLoader, type LoadedGfxFileSet, type LoadedSprite } from './sprite-loader';
+import type { LoadedGfxFileSet, LoadedSprite } from './sprite-loader';
 import { UnitType, EntityType } from '../entity';
 import { EMaterialType } from '../economy';
 import {
@@ -33,6 +33,7 @@ import {
     workSequenceKey,
 } from '../animation';
 import { isMaterialAvailableForRace, isUnitAvailableForRace } from '../race-availability';
+import { type SpriteLoadContext, getPaletteBase } from './sprite-load-context';
 
 const log = new LogHandler('SpriteUnitLoader');
 
@@ -71,12 +72,14 @@ class SafeLoadBatch<T> {
 }
 
 // =============================================================================
-// Context passed from SpriteRenderManager
+// Context types
 // =============================================================================
 
-export interface UnitLoadContext {
-    spriteLoader: SpriteLoader;
-    getPaletteBaseOffset: (fileId: string) => number;
+/** Pre-resolved context for internal functions operating on a single settler file. */
+interface UnitFileCtx extends SpriteLoadContext {
+    fileSet: LoadedGfxFileSet;
+    paletteBase: number;
+    race: Race;
 }
 
 // =============================================================================
@@ -87,26 +90,20 @@ export interface UnitLoadContext {
  * Load all unit sprites for a race: base units, carrier material variants, and worker animations.
  * Returns true if any unit sprites were loaded.
  */
-export async function loadUnitSpritesForRace(
-    race: Race,
-    atlas: EntityTextureAtlas,
-    registry: SpriteMetadataRegistry,
-    gl: WebGL2RenderingContext,
-    ctx: UnitLoadContext
-): Promise<boolean> {
+export async function loadUnitSpritesForRace(race: Race, ctx: SpriteLoadContext): Promise<boolean> {
     const fileId = `${SETTLER_FILE_NUMBERS[race]}`;
     const fileSet = await ctx.spriteLoader.loadFileSet(fileId);
     if (!fileSet?.jilReader || !fileSet.dilReader) return false;
 
-    const paletteBase = ctx.getPaletteBaseOffset(fileId);
+    const fc: UnitFileCtx = { ...ctx, fileSet, paletteBase: getPaletteBase(ctx, fileId), race };
 
-    const unitCount = await loadBaseUnits(fileSet, race, atlas, registry, gl, paletteBase, ctx);
-    const carrierCount = await loadCarrierVariants(fileSet, atlas, registry, gl, paletteBase, race, ctx);
-    const workerCount = await loadWorkerAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
-    const workerCarryCount = await loadWorkerCarryAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
-    const pickupCount = await loadPickupAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
-    const fightCount = await loadFightAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
-    const levelCount = await loadMilitaryLevelAnimations(fileSet, atlas, registry, gl, paletteBase, race, ctx);
+    const unitCount = await loadBaseUnits(fc);
+    const carrierCount = await loadCarrierVariants(fc);
+    const workerCount = await loadWorkerAnimations(fc);
+    const workerCarryCount = await loadWorkerCarryAnimations(fc);
+    const pickupCount = await loadPickupAnimations(fc);
+    const fightCount = await loadFightAnimations(fc);
+    const levelCount = await loadMilitaryLevelAnimations(fc);
 
     if (unitCount > 0 || carrierCount > 0 || workerCount > 0 || fightCount > 0 || levelCount > 0) {
         log.debug(
@@ -123,15 +120,8 @@ export async function loadUnitSpritesForRace(
 // Internals
 // =============================================================================
 
-async function loadBaseUnits(
-    fileSet: LoadedGfxFileSet,
-    race: Race,
-    atlas: EntityTextureAtlas,
-    registry: SpriteMetadataRegistry,
-    gl: WebGL2RenderingContext,
-    paletteBase: number,
-    ctx: UnitLoadContext
-): Promise<number> {
+async function loadBaseUnits(ctx: UnitFileCtx): Promise<number> {
+    const { fileSet, race, paletteBase } = ctx;
     type UnitData = { unitType: UnitType; directionFrames: Map<number, SpriteEntry[]> };
     const batch = new SafeLoadBatch<UnitData>();
 
@@ -144,7 +134,7 @@ async function loadBaseUnits(
     const unitResults = await Promise.all(
         unitEntries.map(async([typeStr, info]) => {
             const unitType = Number(typeStr) as UnitType;
-            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, info.index, atlas, paletteBase);
+            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, info.index, ctx.atlas, paletteBase);
             return { unitType, loadedDirs };
         })
     );
@@ -155,8 +145,8 @@ async function loadBaseUnits(
         if (directionFrames.size > 0) batch.add({ unitType, directionFrames });
     }
 
-    batch.finalize(atlas, gl, data => {
-        registry.registerAnimatedEntity(
+    batch.finalize(ctx.atlas, ctx.gl, data => {
+        ctx.registry.registerAnimatedEntity(
             EntityType.Unit,
             data.unitType,
             data.directionFrames,
@@ -166,7 +156,7 @@ async function loadBaseUnits(
         );
         for (const [dir, frames] of data.directionFrames) {
             if (frames.length > 0) {
-                registry.registerUnit(data.unitType, dir, frames[0]!, race);
+                ctx.registry.registerUnit(data.unitType, dir, frames[0]!, race);
             }
         }
     });
@@ -174,15 +164,8 @@ async function loadBaseUnits(
     return batch.count;
 }
 
-async function loadCarrierVariants(
-    fileSet: LoadedGfxFileSet,
-    atlas: EntityTextureAtlas,
-    registry: SpriteMetadataRegistry,
-    gl: WebGL2RenderingContext,
-    paletteBaseOffset: number,
-    race: Race,
-    ctx: UnitLoadContext
-): Promise<number> {
+async function loadCarrierVariants(ctx: UnitFileCtx): Promise<number> {
+    const { fileSet, race, paletteBase } = ctx;
     type CarrierData = { materialType: EMaterialType; directionFrames: Map<number, SpriteEntry[]> };
     const batch = new SafeLoadBatch<CarrierData>();
 
@@ -193,7 +176,7 @@ async function loadCarrierVariants(
     const carrierResults = await Promise.all(
         carrierEntries.map(async([typeStr, jobIndex]) => {
             const materialType = Number(typeStr) as EMaterialType;
-            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas, paletteBaseOffset);
+            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, ctx.atlas, paletteBase);
             return { materialType, loadedDirs };
         })
     );
@@ -204,10 +187,10 @@ async function loadCarrierVariants(
         if (directionFrames.size > 0) batch.add({ materialType, directionFrames });
     }
 
-    batch.finalize(atlas, gl, data => {
+    batch.finalize(ctx.atlas, ctx.gl, data => {
         const carryingUnitTypes = [UnitType.Carrier, UnitType.Woodcutter];
         for (const unitType of carryingUnitTypes) {
-            registry.registerAnimationSequence(
+            ctx.registry.registerAnimationSequence(
                 EntityType.Unit,
                 unitType,
                 carrySequenceKey(data.materialType),
@@ -231,15 +214,8 @@ function getMilitaryLevel(workerKey: string): number {
     return match ? parseInt(match[1]!, 10) : 0;
 }
 
-async function loadWorkerAnimations(
-    fileSet: LoadedGfxFileSet,
-    atlas: EntityTextureAtlas,
-    registry: SpriteMetadataRegistry,
-    gl: WebGL2RenderingContext,
-    paletteBaseOffset: number,
-    race: Race,
-    ctx: UnitLoadContext
-): Promise<number> {
+async function loadWorkerAnimations(ctx: UnitFileCtx): Promise<number> {
+    const { fileSet, race, paletteBase } = ctx;
     type WorkAnimData = { unitType: UnitType; seqKey: string; frames: Map<number, SpriteEntry[]> };
     const batch = new SafeLoadBatch<WorkAnimData>();
 
@@ -260,7 +236,7 @@ async function loadWorkerAnimations(
 
     const workerResults = await Promise.all(
         workJobs.map(async({ unitType, workIndex, jobIndex }) => {
-            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas, paletteBaseOffset);
+            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, ctx.atlas, paletteBase);
             return { unitType, workIndex, loadedDirs };
         })
     );
@@ -272,8 +248,8 @@ async function loadWorkerAnimations(
     }
 
     let loadedCount = 0;
-    batch.finalize(atlas, gl, data => {
-        registry.registerAnimationSequence(
+    batch.finalize(ctx.atlas, ctx.gl, data => {
+        ctx.registry.registerAnimationSequence(
             EntityType.Unit,
             data.unitType,
             data.seqKey,
@@ -300,15 +276,8 @@ async function loadWorkerAnimations(
  * The job-part-resolver maps jobPart strings (e.g., M_PICKUP_COAL → 'pickup.coal')
  * to look up the correct animation at runtime.
  */
-async function loadPickupAnimations(
-    fileSet: LoadedGfxFileSet,
-    atlas: EntityTextureAtlas,
-    registry: SpriteMetadataRegistry,
-    gl: WebGL2RenderingContext,
-    paletteBaseOffset: number,
-    race: Race,
-    ctx: UnitLoadContext
-): Promise<number> {
+async function loadPickupAnimations(ctx: UnitFileCtx): Promise<number> {
+    const { fileSet, race, paletteBase } = ctx;
     type PickupAnimData = { unitType: UnitType; seqKey: string; frames: Map<number, SpriteEntry[]> };
     const batch = new SafeLoadBatch<PickupAnimData>();
 
@@ -326,7 +295,7 @@ async function loadPickupAnimations(
 
     const pickupResults = await Promise.all(
         pickupJobs.map(async({ unitType, variant, jobIndex }) => {
-            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas, paletteBaseOffset);
+            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, ctx.atlas, paletteBase);
             return { unitType, variant, loadedDirs };
         })
     );
@@ -338,8 +307,8 @@ async function loadPickupAnimations(
     }
 
     let loadedCount = 0;
-    batch.finalize(atlas, gl, data => {
-        registry.registerAnimationSequence(
+    batch.finalize(ctx.atlas, ctx.gl, data => {
+        ctx.registry.registerAnimationSequence(
             EntityType.Unit,
             data.unitType,
             data.seqKey,
@@ -417,15 +386,8 @@ function registerCarryVariants(
  * Skips Carrier and Woodcutter since they already have per-material carrier variants
  * registered by loadCarrierVariants.
  */
-async function loadWorkerCarryAnimations(
-    fileSet: LoadedGfxFileSet,
-    atlas: EntityTextureAtlas,
-    registry: SpriteMetadataRegistry,
-    gl: WebGL2RenderingContext,
-    paletteBaseOffset: number,
-    race: Race,
-    ctx: UnitLoadContext
-): Promise<number> {
+async function loadWorkerCarryAnimations(ctx: UnitFileCtx): Promise<number> {
+    const { fileSet, race, paletteBase } = ctx;
     const batch = new SafeLoadBatch<CarryAnimData>();
 
     // These unit types already have per-material carry variants from loadCarrierVariants
@@ -446,7 +408,7 @@ async function loadWorkerCarryAnimations(
 
     const results = await Promise.all(
         carryJobs.map(async({ unitType, suffix, jobIndex }) => {
-            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas, paletteBaseOffset);
+            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, ctx.atlas, paletteBase);
             return { unitType, suffix, loadedDirs };
         })
     );
@@ -465,7 +427,7 @@ async function loadWorkerCarryAnimations(
     let loadedCount = 0;
     // Group by unitType so we can track which materials are covered per worker
     const byUnit = new Map<UnitType, CarryAnimData[]>();
-    batch.finalize(atlas, gl, data => {
+    batch.finalize(ctx.atlas, ctx.gl, data => {
         let list = byUnit.get(data.unitType);
         if (!list) {
             list = [];
@@ -475,7 +437,7 @@ async function loadWorkerCarryAnimations(
     });
 
     for (const [unitType, variants] of byUnit) {
-        loadedCount += registerCarryVariants(unitType, variants, allMaterialTypes, race, registry);
+        loadedCount += registerCarryVariants(unitType, variants, allMaterialTypes, race, ctx.registry);
     }
 
     return loadedCount;
@@ -484,7 +446,8 @@ async function loadWorkerCarryAnimations(
 type FightJob = { unitType: UnitType; fightIndex: number; jobIndex: number };
 
 /** Collect fight animation jobs from SETTLER_JOB_INDICES, using military level for fight index offset. */
-function collectFightJobs(fileSet: LoadedGfxFileSet, race: Race, ctx: UnitLoadContext): FightJob[] {
+function collectFightJobs(ctx: UnitFileCtx): FightJob[] {
+    const { fileSet, race } = ctx;
     const fileId = SETTLER_FILE_NUMBERS[race];
     const jobs: FightJob[] = [];
     for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
@@ -514,19 +477,12 @@ function collectFightJobs(fileSet: LoadedGfxFileSet, race: Race, ctx: UnitLoadCo
     return jobs;
 }
 
-async function loadFightAnimations(
-    fileSet: LoadedGfxFileSet,
-    atlas: EntityTextureAtlas,
-    registry: SpriteMetadataRegistry,
-    gl: WebGL2RenderingContext,
-    paletteBaseOffset: number,
-    race: Race,
-    ctx: UnitLoadContext
-): Promise<number> {
+async function loadFightAnimations(ctx: UnitFileCtx): Promise<number> {
+    const { fileSet, race, paletteBase } = ctx;
     type FightAnimData = { unitType: UnitType; seqKey: string; frames: Map<number, SpriteEntry[]> };
     const batch = new SafeLoadBatch<FightAnimData>();
 
-    const fightJobs = collectFightJobs(fileSet, race, ctx);
+    const fightJobs = collectFightJobs(ctx);
 
     const fightResults = await Promise.all(
         fightJobs.map(async({ unitType, fightIndex, jobIndex }) => {
@@ -534,8 +490,8 @@ async function loadFightAnimations(
                 const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(
                     fileSet,
                     jobIndex,
-                    atlas,
-                    paletteBaseOffset
+                    ctx.atlas,
+                    paletteBase
                 );
                 return { unitType, fightIndex, loadedDirs };
             } catch (e) {
@@ -558,8 +514,8 @@ async function loadFightAnimations(
     }
 
     let fightLoadedCount = 0;
-    batch.finalize(atlas, gl, data => {
-        registry.registerAnimationSequence(
+    batch.finalize(ctx.atlas, ctx.gl, data => {
+        ctx.registry.registerAnimationSequence(
             EntityType.Unit,
             data.unitType,
             data.seqKey,
@@ -594,10 +550,8 @@ function extractWalkFrames(directionFrames: Map<number, SpriteEntry[]>): Map<num
 }
 
 /** Collect military level > 1 idle jobs from SETTLER_JOB_INDICES. */
-function collectMilitaryLevelJobs(
-    fileSet: LoadedGfxFileSet,
-    ctx: UnitLoadContext
-): { unitType: UnitType; level: number; jobIndex: number }[] {
+function collectMilitaryLevelJobs(ctx: UnitFileCtx): { unitType: UnitType; level: number; jobIndex: number }[] {
+    const { fileSet } = ctx;
     const jobs: { unitType: UnitType; level: number; jobIndex: number }[] = [];
     for (const [workerKey, workerData] of Object.entries(SETTLER_JOB_INDICES)) {
         const level = getMilitaryLevel(workerKey);
@@ -618,23 +572,16 @@ function collectMilitaryLevelJobs(
  * Level 1 idle/walk is already loaded by loadBaseUnits from UNIT_BASE_JOB_INDICES.
  * This registers level-specific sequences (e.g., 'default.2', 'walk.2') on the same entity.
  */
-async function loadMilitaryLevelAnimations(
-    fileSet: LoadedGfxFileSet,
-    atlas: EntityTextureAtlas,
-    registry: SpriteMetadataRegistry,
-    gl: WebGL2RenderingContext,
-    paletteBaseOffset: number,
-    race: Race,
-    ctx: UnitLoadContext
-): Promise<number> {
+async function loadMilitaryLevelAnimations(ctx: UnitFileCtx): Promise<number> {
+    const { fileSet, race, paletteBase } = ctx;
     type LevelAnimData = { unitType: UnitType; seqKey: string; frames: Map<number, SpriteEntry[]> };
     const batch = new SafeLoadBatch<LevelAnimData>();
 
-    const idleJobs = collectMilitaryLevelJobs(fileSet, ctx);
+    const idleJobs = collectMilitaryLevelJobs(ctx);
 
     const results = await Promise.all(
         idleJobs.map(async({ unitType, level, jobIndex }) => {
-            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, atlas, paletteBaseOffset);
+            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, ctx.atlas, paletteBase);
             return { unitType, level, loadedDirs };
         })
     );
@@ -655,8 +602,8 @@ async function loadMilitaryLevelAnimations(
     }
 
     let levelLoadedCount = 0;
-    batch.finalize(atlas, gl, data => {
-        registry.registerAnimationSequence(
+    batch.finalize(ctx.atlas, ctx.gl, data => {
+        ctx.registry.registerAnimationSequence(
             EntityType.Unit,
             data.unitType,
             data.seqKey,

@@ -3,32 +3,21 @@
  * Extracted from SpriteRenderManager to keep file size under the max-lines limit.
  */
 
-import { EntityTextureAtlas } from '../entity-texture-atlas';
-import { SpriteMetadataRegistry, SpriteEntry, GFX_FILE_NUMBERS, getResourceSpriteMap } from '../sprite-metadata';
-import { SpriteLoader } from '../sprite-loader';
+import { SpriteEntry, GFX_FILE_NUMBERS, getResourceSpriteMap } from '../sprite-metadata';
 import { SafeLoadBatch } from '../batch-loader';
 import { EMaterialType } from '@/game/economy';
-
-export interface ResourceLoadContext {
-    spriteLoader: SpriteLoader;
-    getPaletteBaseOffset: (fileId: string) => number;
-}
+import { type SpriteLoadContext, getPaletteBase } from '../sprite-load-context';
 
 /**
  * Load resource sprites (carried materials) using SafeLoadBatch pattern.
  * Returns true if any resource sprites were loaded.
  */
-export async function loadResourceSprites(
-    atlas: EntityTextureAtlas,
-    registry: SpriteMetadataRegistry,
-    gl: WebGL2RenderingContext,
-    ctx: ResourceLoadContext
-): Promise<boolean> {
+export async function loadResourceSprites(ctx: SpriteLoadContext): Promise<boolean> {
     const fileId = `${GFX_FILE_NUMBERS.RESOURCES}`;
     const fileSet = await ctx.spriteLoader.loadFileSet(fileId);
     if (!fileSet?.jilReader || !fileSet.dilReader) return false;
 
-    const paletteBase = ctx.getPaletteBaseOffset(fileId);
+    const paletteBase = getPaletteBase(ctx, fileId);
 
     type ResourceData = { type: EMaterialType; dir: number; entry: SpriteEntry };
     const batch = new SafeLoadBatch<ResourceData>();
@@ -38,7 +27,7 @@ export async function loadResourceSprites(
         if (!info) continue;
         const type = Number(typeStr) as EMaterialType;
 
-        const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, info.index, atlas, paletteBase);
+        const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, info.index, ctx.atlas, paletteBase);
         if (!loadedDirs) continue;
 
         for (const [dir, sprites] of loadedDirs) {
@@ -48,8 +37,8 @@ export async function loadResourceSprites(
         }
     }
 
-    batch.finalize(atlas, gl, data => {
-        registry.registerResource(data.type, data.dir, data.entry);
+    batch.finalize(ctx.atlas, ctx.gl, data => {
+        ctx.registry.registerResource(data.type, data.dir, data.entry);
     });
 
     return batch.count > 0;

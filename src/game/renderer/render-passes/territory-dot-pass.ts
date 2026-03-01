@@ -81,7 +81,7 @@ export class TerritoryDotPass implements IRenderPass {
                 viewPoint.x,
                 viewPoint.y
             );
-            const scaled = scaleSprite(sprite, 2.25);
+            const scaled = scaleSprite(sprite, 1.5);
             ctx.spriteBatchRenderer.addSprite(gl, worldPos.worldX, worldPos.worldY, scaled, 0, 1, 1, 1, 1);
         }
 

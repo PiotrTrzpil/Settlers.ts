@@ -43,6 +43,7 @@ export interface IPathfinder {
 export class PathfindingService implements IPathfinder {
     private terrain: PathfindingTerrain | undefined;
     private occupancy: Map<string, number> | undefined;
+    private buildingOccupancy: Set<string> = new Set();
 
     /**
      * Set the terrain data used for all subsequent pathfinding calls.
@@ -58,6 +59,13 @@ export class PathfindingService implements IPathfinder {
         this.occupancy = occupancy;
     }
 
+    /**
+     * Set the building occupancy set — these tiles always block pathfinding.
+     */
+    setBuildingOccupancy(buildingOccupancy: Set<string>): void {
+        this.buildingOccupancy = buildingOccupancy;
+    }
+
     /** Returns true if terrain data has been loaded. */
     hasTerrainData(): boolean {
         return this.terrain !== undefined;
@@ -70,7 +78,7 @@ export class PathfindingService implements IPathfinder {
      * @param startY Starting Y coordinate
      * @param goalX Goal X coordinate
      * @param goalY Goal Y coordinate
-     * @param ignoreOccupancy When true, treats all passable terrain as walkable regardless of occupancy
+     * @param ignoreOccupancy When true, ignores unit occupancy (buildings always block)
      * @returns Array of waypoints (not including start), or null if unreachable
      */
     findPath(
@@ -92,6 +100,7 @@ export class PathfindingService implements IPathfinder {
             this.terrain.mapWidth,
             this.terrain.mapHeight,
             this.occupancy,
+            this.buildingOccupancy,
             ignoreOccupancy
         );
     }

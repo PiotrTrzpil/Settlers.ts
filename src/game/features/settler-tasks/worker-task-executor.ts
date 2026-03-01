@@ -28,7 +28,8 @@ import type { WorkHandlerRegistry } from './work-handler-registry';
 import type { IdleAnimationController } from './idle-animation-controller';
 import type { GameState } from '../../game-state';
 import { EMaterialType } from '../../economy';
-import { raceToRaceId } from '../../game-data-access';
+import { raceToRaceId, getBuildingDoorPos } from '../../game-data-access';
+import { BuildingType } from '../../buildings/building-type';
 import { findNearestWorkplace } from './work-handlers';
 
 const log = new LogHandler('WorkerTaskExecutor');
@@ -487,7 +488,13 @@ export class WorkerTaskExecutor {
             throw new Error(`Settler ${settler.id} (${UnitType[settler.subType]}) has no movement controller`);
         }
 
-        const dist = hexDistance(settler.x, settler.y, homeBuilding.x, homeBuilding.y);
+        const door = getBuildingDoorPos(
+            homeBuilding.x,
+            homeBuilding.y,
+            homeBuilding.race,
+            homeBuilding.subType as BuildingType
+        );
+        const dist = hexDistance(settler.x, settler.y, door.x, door.y);
 
         // If already at home, hide inside building
         if (dist <= 1) {
@@ -498,7 +505,7 @@ export class WorkerTaskExecutor {
 
         // If not moving, start moving home
         if (controller.state === 'idle') {
-            this.gameState.movement.moveUnit(settler.id, homeBuilding.x, homeBuilding.y);
+            this.gameState.movement.moveUnit(settler.id, door.x, door.y);
             this.animController.startWalkAnimation(settler, controller.direction);
         }
     }

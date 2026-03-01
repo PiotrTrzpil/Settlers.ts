@@ -45,6 +45,7 @@ export class MovementSystem implements TickSystem {
 
     // Terrain and occupancy references (also forwarded to sub-services)
     private tileOccupancy?: Map<string, number>;
+    private buildingOccupancy?: Set<string>;
 
     // Event bus for notifying other systems of movement changes
     private readonly eventBus: EventBus;
@@ -88,9 +89,11 @@ export class MovementSystem implements TickSystem {
      * Set the tile occupancy map for collision detection.
      * Must be called before any movement updates occur.
      */
-    setTileOccupancy(occupancy: Map<string, number>): void {
+    setTileOccupancy(occupancy: Map<string, number>, buildingOccupancy: Set<string>): void {
         this.tileOccupancy = occupancy;
+        this.buildingOccupancy = buildingOccupancy;
         this.pathfinder.setOccupancy(occupancy);
+        this.pathfinder.setBuildingOccupancy(buildingOccupancy);
         this.rebuildSubServices();
     }
 
@@ -252,12 +255,19 @@ export class MovementSystem implements TickSystem {
     private handleBlockedWaypoint(controller: MovementController, wp: TileCoord, deltaSec: number): boolean {
         if (!this.tileOccupancy) return false;
 
-        const blockingEntityId = this.tileOccupancy.get(tileKey(wp.x, wp.y));
+        const key = tileKey(wp.x, wp.y);
+        const blockingEntityId = this.tileOccupancy.get(key);
         if (blockingEntityId === undefined || blockingEntityId === controller.entityId) {
             return false; // tile is free
         }
 
-        // Only apply unit-vs-unit collision logic; non-unit occupants are ignored
+        // Building footprint tiles are impassable (door tiles are excluded from buildingOccupancy)
+        if (this.buildingOccupancy?.has(key)) {
+            controller.setBlocked(deltaSec);
+            return true;
+        }
+
+        // Non-unit, non-building occupants (e.g. door tiles owned by building) — allow passage
         const blockingEntity = this.getEntityFn(blockingEntityId);
         if (!blockingEntity || blockingEntity.type !== EntityType.Unit) {
             return false;

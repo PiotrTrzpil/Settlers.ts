@@ -106,7 +106,8 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
             map.groundHeight,
             map.mapSize.width,
             map.mapSize.height,
-            map.occupancy
+            map.occupancy,
+            map.buildingOccupancy
         );
 
         expect(path).not.toBeNull();
@@ -226,7 +227,8 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
             map.groundHeight,
             map.mapSize.width,
             map.mapSize.height,
-            map.occupancy
+            map.occupancy,
+            map.buildingOccupancy
         );
 
         expect(path).toBeNull();
@@ -246,7 +248,18 @@ describe('Unit Lifecycle: spawn → pathfind → move → interact', () => {
         const map = createTestMap();
         for (const n of neighbors) {
             if (n.x >= 0 && n.x < 64 && n.y >= 0 && n.y < 64) {
-                const path = findPath(10, 10, n.x, n.y, map.groundType, map.groundHeight, 64, 64, map.occupancy);
+                const path = findPath(
+                    10,
+                    10,
+                    n.x,
+                    n.y,
+                    map.groundType,
+                    map.groundHeight,
+                    64,
+                    64,
+                    map.occupancy,
+                    map.buildingOccupancy
+                );
                 expect(path).not.toBeNull();
                 expect(path).toHaveLength(1);
             }

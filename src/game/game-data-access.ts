@@ -169,6 +169,21 @@ export function getBuildingDoorOffset(race: Race, buildingType: BuildingType): {
 }
 
 /**
+ * Get the absolute door tile position for a building.
+ * Combines building position with door offset. When the offset is zero,
+ * the building anchor itself is the door.
+ */
+export function getBuildingDoorPos(
+    bx: number,
+    by: number,
+    race: Race,
+    buildingType: BuildingType
+): { x: number; y: number } {
+    const door = getBuildingDoorOffset(race, buildingType);
+    return door ? { x: bx + door.dx, y: by + door.dy } : { x: bx, y: by };
+}
+
+/**
  * Get BuildingType(s) for an XML building ID.
  * Used when iterating raw game data (e.g., overlay registration at init).
  */

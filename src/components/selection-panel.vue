@@ -34,6 +34,22 @@
                         Set Work Area
                     </button>
                 </div>
+
+                <!-- Destroy button -->
+                <div class="destroy-row">
+                    <button v-if="!confirmingDestroy" class="destroy-btn" @click="confirmingDestroy = true">
+                        Destroy
+                    </button>
+                    <template v-else>
+                        <span class="destroy-confirm-label">Destroy building?</span>
+                        <div class="destroy-confirm-actions">
+                            <button class="destroy-btn destroy-confirm" @click="destroyBuilding">Confirm</button>
+                            <button class="destroy-btn destroy-cancel" @click="confirmingDestroy = false">
+                                Cancel
+                            </button>
+                        </div>
+                    </template>
+                </div>
             </template>
 
             <!-- Building Adjustments (only for buildings, only when debug panel is open) -->
@@ -157,7 +173,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Badge from './Badge.vue';
 import StatRow from './StatRow.vue';
 import { debugStats } from '@/game/debug-stats';
@@ -197,6 +213,18 @@ const { hasWorkArea, isWorkAreaActive, toggleWorkArea } = useWorkAreaAdjustment(
 
 // Debug section state
 const debugExpanded = ref(true);
+
+// Destroy building
+const confirmingDestroy = ref(false);
+const selectedEntityId = computed(() => selectedEntity.value?.id ?? null);
+watch(selectedEntityId, () => (confirmingDestroy.value = false));
+
+function destroyBuilding(): void {
+    const entity = selectedEntity.value;
+    if (!entity || !props.game) return;
+    props.game.execute({ type: 'remove_entity', entityId: entity.id });
+    confirmingDestroy.value = false;
+}
 
 // Show debug info only when debug panel is open
 const showDebugInfo = computed(() => debugStats.state.debugPanelOpen);
@@ -526,5 +554,69 @@ const showDebugInfo = computed(() => debugStats.state.debugPanelOpen);
     background: rgba(200, 140, 40, 0.3);
     border-color: rgba(220, 160, 60, 0.6);
     color: var(--text-bright);
+}
+
+/* Destroy Building */
+.destroy-row {
+    padding: 6px 6px 2px;
+}
+
+.destroy-btn {
+    width: 100%;
+    padding: 3px 8px;
+    font-size: 10px;
+    border: 1px solid rgba(180, 60, 60, 0.5);
+    border-radius: 3px;
+    background: rgba(100, 20, 20, 0.35);
+    color: #d08080;
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+
+.destroy-btn:hover {
+    background: rgba(140, 30, 30, 0.5);
+    color: #ffa0a0;
+}
+
+.destroy-confirm-label {
+    display: block;
+    font-size: 10px;
+    color: #e08080;
+    margin-bottom: 4px;
+    text-align: center;
+}
+
+.destroy-confirm-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.destroy-confirm-actions .destroy-btn {
+    width: auto;
+    flex: 1;
+}
+
+.destroy-confirm {
+    background: rgba(160, 30, 30, 0.5);
+    border-color: rgba(200, 60, 60, 0.6);
+    color: #ff9090;
+}
+
+.destroy-confirm:hover {
+    background: rgba(180, 40, 40, 0.65);
+    color: #ffb0b0;
+}
+
+.destroy-cancel {
+    background: rgba(60, 50, 40, 0.3);
+    border-color: rgba(120, 100, 80, 0.4);
+    color: var(--text-secondary);
+}
+
+.destroy-cancel:hover {
+    background: rgba(80, 60, 40, 0.4);
+    color: var(--text);
 }
 </style>

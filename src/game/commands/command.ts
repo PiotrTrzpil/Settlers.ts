@@ -7,7 +7,7 @@ import {
     applyTerrainLeveling,
 } from '../features/building-construction';
 import { BUILDING_SPAWN_ON_COMPLETE } from '../features/building-construction/spawn-units';
-import { getBuildingWorkerInfo } from '../game-data-access';
+import { getBuildingWorkerInfo, getBuildingDoorPos } from '../game-data-access';
 import { BuildingType } from '../buildings/types';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint } from '../features/placement';
@@ -425,17 +425,25 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
     if (ctx.settings.placeBuildingsWithWorker && !spawnDef) {
         const workerInfo = getBuildingWorkerInfo(entity.race, buildingState.buildingType);
         if (workerInfo) {
-            const workerEntity = state.addEntity(EntityType.Unit, workerInfo.unitType, bx, by, entity.player);
+            const door = getBuildingDoorPos(bx, by, entity.race, buildingState.buildingType);
+            // Remember who owned the door tile before spawning (building owns footprint tiles)
+            const doorKey = tileKey(door.x, door.y);
+            const previousOwner = state.tileOccupancy.get(doorKey);
+
+            const workerEntity = state.addEntity(EntityType.Unit, workerInfo.unitType, door.x, door.y, entity.player);
             workerEntity.race = entity.race;
 
-            // Restore building's tile occupancy — workers "work inside" buildings
-            state.tileOccupancy.set(tileKey(bx, by), buildingState.entityId);
+            // If the door tile was on the building footprint, restore building ownership
+            // (the worker exists "inside" the building, not claiming the tile)
+            if (previousOwner === buildingState.entityId) {
+                state.tileOccupancy.set(doorKey, buildingState.entityId);
+            }
 
             eventBus.emit('unit:spawned', {
                 entityId: workerEntity.id,
                 unitType: workerInfo.unitType,
-                x: bx,
-                y: by,
+                x: door.x,
+                y: door.y,
                 player: entity.player,
             });
 
@@ -443,8 +451,8 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
                 type: 'unit_spawned',
                 entityId: workerEntity.id,
                 unitType: workerInfo.unitType,
-                x: bx,
-                y: by,
+                x: door.x,
+                y: door.y,
             });
         }
     }

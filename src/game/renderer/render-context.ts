@@ -208,6 +208,10 @@ export interface IRenderContext {
     /** Get direction transition for a unit (null if not transitioning) */
     getDirectionTransition(entityId: number): DirectionTransition | null;
 
+    // === Combat ===
+    /** Get health ratio (0-1) for a unit. Returns null if no health tracking (civilian units). */
+    getHealthRatio(entityId: number): number | null;
+
     // === Selection ===
     /** Current selection state */
     readonly selection: SelectionState;
@@ -268,6 +272,7 @@ export class RenderContextBuilder {
     private _buildingOverlaysGetter: (entityId: number) => readonly BuildingOverlayRenderData[] = () => EMPTY_OVERLAYS;
     private _visualStateGetter: (entityId: number) => EntityVisualState | null = () => null;
     private _directionTransitionGetter: (entityId: number) => DirectionTransition | null = () => null;
+    private _healthRatioGetter: (entityId: number) => number | null = () => null;
     private _selection: SelectionState = { primaryId: null, ids: new Set() };
     private _placementPreview: PlacementPreviewState | null = null;
     private _alpha = 0;
@@ -316,6 +321,11 @@ export class RenderContextBuilder {
 
     directionTransitionGetter(getter: (entityId: number) => DirectionTransition | null): this {
         this._directionTransitionGetter = getter;
+        return this;
+    }
+
+    healthRatioGetter(getter: (entityId: number) => number | null): this {
+        this._healthRatioGetter = getter;
         return this;
     }
 
@@ -407,6 +417,7 @@ export class RenderContextBuilder {
             getBuildingOverlays: this._buildingOverlaysGetter,
             getVisualState: this._visualStateGetter,
             getDirectionTransition: this._directionTransitionGetter,
+            getHealthRatio: this._healthRatioGetter,
             selection: this._selection,
             placementPreview: this._placementPreview,
             alpha: this._alpha,

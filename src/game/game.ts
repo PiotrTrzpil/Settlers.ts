@@ -14,7 +14,6 @@ import { SoundManager } from './audio';
 import { Race, s4TribeToRace, loadSavedRace } from './race';
 import { EventBus } from './event-bus';
 import { EntityType } from './entity';
-import { BuildingType } from './buildings/types';
 import { GameSettingsManager } from './game-settings';
 import { GameViewState } from './game-view-state';
 import type { FrameRenderTiming } from './renderer/renderer';
@@ -289,18 +288,13 @@ export class Game {
         return executeCommand(this.commandContext, cmd);
     }
 
-    /** Find the starting position for the current player (their Castle), falling back to findLandTile */
+    /** Find the starting position for the current player from map data */
     public findPlayerStartPosition(): { x: number; y: number } | null {
-        for (const entity of this.state.entities) {
-            if (
-                entity.type === EntityType.Building &&
-                entity.subType === BuildingType.Castle &&
-                entity.player === this.currentPlayer
-            ) {
-                return { x: entity.x, y: entity.y };
-            }
+        const playerInfo = this.mapLoader.entityData?.players.find(p => p.playerIndex === this.currentPlayer);
+        if (playerInfo?.startX != null && playerInfo.startY != null) {
+            return { x: playerInfo.startX, y: playerInfo.startY };
         }
-        return this.findLandTile();
+        return null;
     }
 
     /** Find the first buildable land tile, spiraling out from map center */

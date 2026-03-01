@@ -114,6 +114,9 @@ export class GameServices {
     /** Inventory visualizer — syncs building outputs to visual stacked resources */
     public readonly inventoryVisualizer: InventoryVisualizer;
 
+    /** XML-derived pile positions for building inventory stacks */
+    private pileRegistry: BuildingPileRegistry | null = null;
+
     /** Tree lifecycle system — growth and cutting states */
     public readonly treeSystem: TreeSystem;
 
@@ -181,7 +184,7 @@ export class GameServices {
             },
             getEntity: id => gameState.getEntity(id),
         });
-        this.movement.setTileOccupancy(gameState.tileOccupancy);
+        this.movement.setTileOccupancy(gameState.tileOccupancy, gameState.buildingOccupancy);
         gameState.initMovement(this.movement);
         this.addSystem(this.movement, 'Units');
 
@@ -263,6 +266,7 @@ export class GameServices {
             carrierManager: this.carrierManager,
             eventBus,
             getInventoryVisualizer: () => this.inventoryVisualizer,
+            getPileRegistry: () => this.pileRegistry,
             workAreaStore: this.workAreaStore,
             buildingOverlayManager: this.buildingOverlayManager,
         });
@@ -319,7 +323,8 @@ export class GameServices {
         // Wire XML-derived pile positions (replaces the old YAML stack positions)
         const dataLoader = getGameDataLoader();
         if (dataLoader.isLoaded()) {
-            this.inventoryVisualizer.setPileRegistry(new BuildingPileRegistry(dataLoader.getData()));
+            this.pileRegistry = new BuildingPileRegistry(dataLoader.getData());
+            this.inventoryVisualizer.setPileRegistry(this.pileRegistry);
         }
 
         // 11. Core entity lifecycle — movement controllers and resource state.

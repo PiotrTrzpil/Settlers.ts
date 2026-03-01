@@ -8,6 +8,7 @@ import {
     isUnitTypeSelectable,
 } from './entity';
 import { Race } from './race';
+import { getBuildingDoorCorridor } from './buildings/types';
 import type { MovementSystem, MovementController } from './systems/movement/index';
 import { SeededRng, createGameRng } from './rng';
 import { EventBus } from './event-bus';
@@ -161,6 +162,9 @@ export class GameState {
     /** Spatial lookup: "x,y" -> entityId */
     public tileOccupancy: Map<string, number> = new Map();
 
+    /** Building footprint tiles — always blocks pathfinding regardless of ignoreOccupancy */
+    public buildingOccupancy: Set<string> = new Set();
+
     /** Event bus for entity lifecycle events */
     private readonly eventBus: EventBus;
 
@@ -227,8 +231,13 @@ export class GameState {
             // no-op: decorations don't occupy tiles
         } else if (type === EntityType.Building) {
             const footprint = getBuildingFootprint(x, y, subType as BuildingType, entity.race);
+            const passableKeys = getBuildingDoorCorridor(x, y, subType as BuildingType, entity.race, footprint);
             for (const tile of footprint) {
-                this.tileOccupancy.set(tileKey(tile.x, tile.y), entity.id);
+                const key = tileKey(tile.x, tile.y);
+                this.tileOccupancy.set(key, entity.id);
+                if (!passableKeys.has(key)) {
+                    this.buildingOccupancy.add(key);
+                }
             }
         } else {
             this.tileOccupancy.set(tileKey(x, y), entity.id);
@@ -265,6 +274,7 @@ export class GameState {
             const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
             for (const tile of footprint) {
                 this.tileOccupancy.delete(tileKey(tile.x, tile.y));
+                this.buildingOccupancy.delete(tileKey(tile.x, tile.y));
             }
         } else {
             this.tileOccupancy.delete(tileKey(entity.x, entity.y));

@@ -21,8 +21,19 @@ import { loadGameDataFromFiles } from '@/resources/game-data/load-game-data-from
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 
+/**
+ * Generate a bitmask row with `width` contiguous bits starting at bit 31 (leftmost).
+ * E.g. width=2 → bits 31,30 set → 0xC0000000 → -1073741824 (signed 32-bit)
+ */
+function bitmaskRow(width: number): number {
+    let bits = 0;
+    for (let i = 0; i < width; i++) bits |= 1 << (31 - i);
+    return bits;
+}
+
 /** Minimal BuildingInfo with only the fields needed for worker resolution. */
-function buildingInfo(id: string, inhabitant: string, tool: string): BuildingInfo {
+function buildingInfo(id: string, inhabitant: string, tool: string, size: 1 | 2 | 3 = 2): BuildingInfo {
+    const row = bitmaskRow(size);
     return {
         id,
         inhabitant,
@@ -34,7 +45,7 @@ function buildingInfo(id: string, inhabitant: string, tool: string): BuildingInf
         boards: 0,
         gold: 0,
         lines: 0,
-        buildingPosLines: [],
+        buildingPosLines: Array.from({ length: size }, () => row),
         digPosLines: [],
         repealingPosLines: [],
         blockPosLines: [],
@@ -111,24 +122,24 @@ const TEST_BUILDINGS: BuildingInfo[] = [
     buildingInfo('BUILDING_SUNFLOWEROILMAKERHUT', 'SETTLER_SUNFLOWEROILMAKER', 'GOOD_NO_GOOD'),
     buildingInfo('BUILDING_MUSHROOMFARM', 'SETTLER_MUSHROOMFARMER', 'GOOD_NO_GOOD'),
     // Military / residential buildings (inhabitant = CARRIER, no tool)
-    buildingInfo('BUILDING_STORAGEAREA', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_STORAGEAREA', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3),
     buildingInfo('BUILDING_RESIDENCESMALL', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
     buildingInfo('BUILDING_RESIDENCEMEDIUM', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_RESIDENCEBIG', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_RESIDENCEBIG', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3),
     buildingInfo('BUILDING_BARRACKS', '', 'GOOD_NO_GOOD'),
     buildingInfo('BUILDING_SMALLTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_BIGTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_CASTLE', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_BIGTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD', 3),
+    buildingInfo('BUILDING_CASTLE', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3),
     buildingInfo('BUILDING_GUARDTOWERSMALL', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_GUARDTOWERBIG', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_FORTRESS', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_GUARDTOWERBIG', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3),
+    buildingInfo('BUILDING_FORTRESS', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3),
     buildingInfo('BUILDING_LOOKOUTTOWER', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_DARKTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_MANACOPTERHALL', 'SETTLER_MANACOPTERMASTER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_SHIPYARDA', 'SETTLER_SHIPYARDWORKER', 'GOOD_HAMMER'),
+    buildingInfo('BUILDING_DARKTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD', 3),
+    buildingInfo('BUILDING_MANACOPTERHALL', 'SETTLER_MANACOPTERMASTER', 'GOOD_NO_GOOD', 3),
+    buildingInfo('BUILDING_SHIPYARDA', 'SETTLER_SHIPYARDWORKER', 'GOOD_HAMMER', 3),
     // Eyecatchers (decorative monuments — no workers)
-    buildingInfo('BUILDING_EYECATCHER01', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_EYECATCHER02', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_EYECATCHER01', '', 'GOOD_NO_GOOD', 1),
+    buildingInfo('BUILDING_EYECATCHER02', '', 'GOOD_NO_GOOD', 3),
     buildingInfo('BUILDING_EYECATCHER03', '', 'GOOD_NO_GOOD'),
     buildingInfo('BUILDING_EYECATCHER04', '', 'GOOD_NO_GOOD'),
     buildingInfo('BUILDING_EYECATCHER05', '', 'GOOD_NO_GOOD'),
