@@ -26,7 +26,7 @@ import { smoothPath } from './path-smoothing';
 
 /** Maximum nodes to search before giving up (prevents runaway on large maps).
  *  Needs to be high enough to route around building footprints in dense settlements. */
-const MAX_SEARCH_NODES = 10_000;
+const MAX_SEARCH_NODES = 50_000;
 
 /** Cost multiplier for integer arithmetic (10 = 0.1 precision) */
 const COST_SCALE = 10;
@@ -120,18 +120,15 @@ function computePriority(
     // Heuristic: hex distance scaled to match movement cost
     const h = hexDistance(nx, ny, ctx.goalX, ctx.goalY) * COST_SCALE;
 
-    // Tie-breaker 1: A* epsilon - slightly inflate h to prefer shorter paths
-    const epsilon = 0.001;
-    const epsilonTieBreaker = h * epsilon;
-
-    // Tie-breaker 2: Prefer moves aligned with goal direction
-    // Compare move direction with ideal direction FROM CURRENT POSITION to goal
+    // Tie-breaker: Prefer moves aligned with goal direction.
+    // Must be >= 1 to affect bucket priority queue assignment (integer floors).
+    // Range 0-6 vs MOVE_COST=10 gives meaningful guidance without bad paths.
     const targetDir = getApproxDirection(cx, cy, ctx.goalX, ctx.goalY);
     let dirDiff = Math.abs(direction - targetDir);
     if (dirDiff > 3) dirDiff = 6 - dirDiff;
-    const directionPenalty = dirDiff * 0.1;
+    const directionPenalty = dirDiff * 2;
 
-    return gCost + h + epsilonTieBreaker + directionPenalty;
+    return gCost + h + directionPenalty;
 }
 
 /**

@@ -35,8 +35,7 @@ async function loadOneBuildingSprites(
     completedEntry: SpriteEntry | null;
     animationFrames: SpriteEntry[] | null;
 } | null> {
-    // Some buildings store construction/completed as separate JIL jobs
-    // (e.g., SunflowerFarmerHut uses JIL #109 for construction, #110 for completed)
+    // Some buildings store construction/completed as separate JIL jobs (constructionIndex override)
     const hasSplitJobs = info.constructionIndex !== undefined;
     const constructionJobIndex = info.constructionIndex ?? info.index;
     const constructionDirIndex = hasSplitJobs ? 0 : BUILDING_DIRECTION.CONSTRUCTION;

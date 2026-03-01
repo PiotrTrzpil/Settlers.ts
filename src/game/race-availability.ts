@@ -29,6 +29,14 @@ const DARK_TRIBE_EXCLUSIVE_BASE: ReadonlySet<UnitType> = new Set([
 /** Standard military base types that Dark Tribe does NOT have. */
 const STANDARD_ONLY_BASE: ReadonlySet<UnitType> = new Set([UnitType.SquadLeader]);
 
+/** Exact (non-base) unit types that Dark Tribe does not have — L2/L3 military missing from 23.jil. */
+const DARK_TRIBE_EXCLUDED_EXACT: ReadonlySet<UnitType> = new Set([
+    UnitType.Swordsman2,
+    UnitType.Swordsman3,
+    UnitType.Bowman2,
+    UnitType.Bowman3,
+]);
+
 /**
  * Race-specific specialist units — each race has one specialist type that uses the
  * same JIL indices (254/258/262) but with different art in each race's GFX file.
@@ -100,7 +108,9 @@ export function isUnitAvailableForRace(unitType: UnitType, race: Race): boolean 
     if (race === Race.DarkTribe) {
         // DarkTribe uses the same job indices as standard races (23.jil has DarkTribe-specific
         // sprites at identical offsets), but some standard units don't exist for Dark Tribe.
-        return !STANDARD_ONLY_BASE.has(base) && !SPECIALIST_UNIT_RACE.has(base);
+        return (
+            !STANDARD_ONLY_BASE.has(base) && !SPECIALIST_UNIT_RACE.has(base) && !DARK_TRIBE_EXCLUDED_EXACT.has(unitType)
+        );
     }
     // Dark Tribe exclusive units not available to other races.
     if (DARK_TRIBE_EXCLUSIVE_BASE.has(base)) return false;

@@ -95,6 +95,8 @@ export class TextureMap16Bit extends ShaderTexture {
      * the value of slotPosX is the position in x
      */
     private slots: Slot[] = [];
+    /** Tracks all reserved block regions for per-block transparency patching */
+    private reservedBlocks: { x: number; y: number; w: number; h: number }[] = [];
 
     constructor(widthHeight: number, textureIndex: number) {
         super(textureIndex);
@@ -127,6 +129,7 @@ export class TextureMap16Bit extends ShaderTexture {
         }
 
         const newImg = new TextureMapImage(this.imgData, this.imgWidthHeight, slot.x, slot.y, width, height);
+        this.reservedBlocks.push({ x: slot.x, y: slot.y, w: width, h: height });
 
         slot.increase(width);
 
@@ -146,6 +149,126 @@ export class TextureMap16Bit extends ShaderTexture {
                 const by = Math.floor(y / 256);
                 const idx = (bx + by * Math.ceil(size / 256)) % PROCEDURAL_PALETTE.length;
                 this.imgData[y * size + x] = PROCEDURAL_PALETTE[idx]!;
+            }
+        }
+    }
+
+    /**
+     * Replace magenta transparency-key pixels (0xF81F) via per-block iterative
+     * dilation. The original Settlers 4 texture uses magenta as a color key in
+     * hexagonal transition blocks; the original engine composites these over
+     * the base terrain. Our single-pass renderer patches them by spreading
+     * non-magenta pixels inward within each atlas block, preventing color
+     * bleeding across block boundaries.
+     */
+    public patchTransparencyKey(): void {
+        for (const block of this.reservedBlocks) {
+            this.dilateBlock(block.x, block.y, block.x + block.w, block.y + block.h);
+        }
+    }
+
+    /** Iteratively replace 0xF81F pixels within a rectangular region by
+     *  spreading the nearest non-magenta 4-connected neighbor inward. */
+    private dilateBlock(bx0: number, by0: number, bx1: number, by1: number): void {
+        const MAGENTA = 0xf81f;
+        const data = this.imgData;
+
+        let queue = this.findBorderMagenta(bx0, by0, bx1, by1);
+
+        for (let pass = 0; pass < 64 && queue.length > 0; pass++) {
+            const next: number[] = [];
+            for (const idx of queue) {
+                if (data[idx] !== MAGENTA) continue;
+                const replaced = this.replaceFromNeighbor(idx, bx0, by0, bx1, by1);
+                if (replaced) {
+                    this.enqueueMagentaNeighbors(idx, bx0, by0, bx1, by1, next);
+                }
+            }
+            queue = next;
+        }
+    }
+
+    /** Find magenta pixels that have at least one non-magenta 4-neighbor within bounds. */
+    private findBorderMagenta(bx0: number, by0: number, bx1: number, by1: number): number[] {
+        const MAGENTA = 0xf81f;
+        const size = this.imgWidthHeight;
+        const data = this.imgData;
+        const queue: number[] = [];
+
+        for (let y = by0; y < by1; y++) {
+            for (let x = bx0; x < bx1; x++) {
+                const idx = y * size + x;
+                if (data[idx] !== MAGENTA) continue;
+                if (this.hasNonMagentaNeighbor(x, y, bx0, by0, bx1, by1)) {
+                    queue.push(idx);
+                }
+            }
+        }
+        return queue;
+    }
+
+    private hasNonMagentaNeighbor(x: number, y: number, bx0: number, by0: number, bx1: number, by1: number): boolean {
+        const MAGENTA = 0xf81f;
+        const size = this.imgWidthHeight;
+        const data = this.imgData;
+        const DX = [1, -1, 0, 0];
+        const DY = [0, 0, 1, -1];
+
+        for (let d = 0; d < 4; d++) {
+            const nx = x + DX[d]!;
+            const ny = y + DY[d]!;
+            if (nx >= bx0 && nx < bx1 && ny >= by0 && ny < by1 && data[ny * size + nx] !== MAGENTA) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Replace a magenta pixel with the first non-magenta 4-neighbor. Returns true if replaced. */
+    private replaceFromNeighbor(idx: number, bx0: number, by0: number, bx1: number, by1: number): boolean {
+        const MAGENTA = 0xf81f;
+        const size = this.imgWidthHeight;
+        const data = this.imgData;
+        const x = idx % size;
+        const y = (idx - x) / size;
+        const DX = [1, -1, 0, 0];
+        const DY = [0, 0, 1, -1];
+
+        for (let d = 0; d < 4; d++) {
+            const nx = x + DX[d]!;
+            const ny = y + DY[d]!;
+            if (nx < bx0 || nx >= bx1 || ny < by0 || ny >= by1) continue;
+            const nv = data[ny * size + nx]!;
+            if (nv !== MAGENTA) {
+                data[idx] = nv;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Add any magenta 4-neighbors of pixel at idx to the queue. */
+    private enqueueMagentaNeighbors(
+        idx: number,
+        bx0: number,
+        by0: number,
+        bx1: number,
+        by1: number,
+        queue: number[]
+    ): void {
+        const MAGENTA = 0xf81f;
+        const size = this.imgWidthHeight;
+        const data = this.imgData;
+        const x = idx % size;
+        const y = (idx - x) / size;
+        const DX = [1, -1, 0, 0];
+        const DY = [0, 0, 1, -1];
+
+        for (let d = 0; d < 4; d++) {
+            const nx = x + DX[d]!;
+            const ny = y + DY[d]!;
+            if (nx >= bx0 && nx < bx1 && ny >= by0 && ny < by1 && data[ny * size + nx] === MAGENTA) {
+                queue.push(ny * size + nx);
             }
         }
     }

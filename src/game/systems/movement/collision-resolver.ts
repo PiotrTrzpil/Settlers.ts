@@ -51,6 +51,7 @@ export interface CollisionResolverConfig {
     pathfinder: IPathfinder;
     rng: SeededRng;
     tileOccupancy: Map<string, number>;
+    buildingOccupancy: Set<string>;
     getEntity: GetEntityFn;
     updatePosition: UpdatePositionFn;
     getController: (entityId: number) => MovementController | undefined;
@@ -66,6 +67,7 @@ export class CollisionResolver implements ICollisionResolver {
     private readonly pathfinder: IPathfinder;
     private readonly rng: SeededRng;
     private readonly tileOccupancy: Map<string, number>;
+    private readonly buildingOccupancy: Set<string>;
     private readonly getEntity: GetEntityFn;
     private readonly updatePosition: UpdatePositionFn;
     private readonly getController: (entityId: number) => MovementController | undefined;
@@ -79,6 +81,7 @@ export class CollisionResolver implements ICollisionResolver {
         this.pathfinder = config.pathfinder;
         this.rng = config.rng;
         this.tileOccupancy = config.tileOccupancy;
+        this.buildingOccupancy = config.buildingOccupancy;
         this.getEntity = config.getEntity;
         this.updatePosition = config.updatePosition;
         this.getController = config.getController;
@@ -141,13 +144,11 @@ export class CollisionResolver implements ICollisionResolver {
      */
     private tryResolveObstacle(controller: MovementController, blockingEntityId: number): boolean {
         // Strategy a: 1-tile sidestep + repath suffix
+        // Only commit the detour if we can also fix the remaining path —
+        // otherwise the old suffix still goes through the blocked tile
+        // and the unit oscillates between the detour and the blocker.
         if (this.pathfinder.hasTerrainData()) {
-            const detour = this.findDetour(controller);
-            if (detour) {
-                controller.insertDetour(detour);
-                this.tryPathRepairAfterDetour(controller);
-                return true;
-            }
+            if (this.tryDetourWithRepath(controller)) return true;
         }
 
         // Strategy b: recalculate path around the obstacle
@@ -169,7 +170,8 @@ export class CollisionResolver implements ICollisionResolver {
         const neighbors = getAllNeighbors({ x: controller.tileX, y: controller.tileY });
 
         let best: TileCoord | null = null;
-        let bestScore = -Infinity;
+        // Only accept lateral or forward yields — backward yields cause oscillation
+        let bestScore = -1;
 
         for (const neighbor of neighbors) {
             if (!this.isValidSidestepTile(neighbor.x, neighbor.y)) continue;
@@ -214,7 +216,9 @@ export class CollisionResolver implements ICollisionResolver {
         const neighbors = getAllNeighbors({ x: controller.tileX, y: controller.tileY });
 
         let best: TileCoord | null = null;
-        let bestScore = -Infinity;
+        // Only accept lateral (score=0) or forward (score>0) moves.
+        // Backward sidesteps (score<0) cause oscillation in narrow passages.
+        let bestScore = -1;
 
         for (const neighbor of neighbors) {
             if (neighbor.x === blockedWp.x && neighbor.y === blockedWp.y) continue;
@@ -235,7 +239,7 @@ export class CollisionResolver implements ICollisionResolver {
         return best;
     }
 
-    /** Check if a tile is a valid sidestep candidate (in-bounds, passable, unoccupied). */
+    /** Check if a tile is a valid sidestep candidate (in-bounds, passable, not occupied by a unit or building). */
     private isValidSidestepTile(nx: number, ny: number): boolean {
         if (!this.groundType || !this.mapWidth || !this.mapHeight) return false;
 
@@ -243,33 +247,45 @@ export class CollisionResolver implements ICollisionResolver {
 
         const nIdx = nx + ny * this.mapWidth;
         if (!isPassable(this.groundType[nIdx]!)) return false;
-        if (this.tileOccupancy.has(tileKey(nx, ny))) return false;
+
+        const key = tileKey(nx, ny);
+
+        // Hard building footprint tiles are always impassable
+        if (this.buildingOccupancy.has(key)) return false;
+
+        const occupantId = this.tileOccupancy.get(key);
+        if (occupantId !== undefined) {
+            const occupant = this.getEntity(occupantId);
+            // Reject if occupied by another unit; allow door corridors (building-owned but passable)
+            if (occupant && occupant.type === EntityType.Unit) return false;
+        }
 
         return true;
     }
 
     /**
-     * After inserting a sidestep detour tile, repath the suffix from that detour tile to the
-     * original goal so the unit does not walk back into the blocker.
+     * Try a 1-tile sidestep detour and repath the remaining path from the detour tile.
+     * The detour is only committed if the suffix repath also succeeds — otherwise the
+     * old path still passes through the blocker and the unit oscillates.
      */
-    private tryPathRepairAfterDetour(controller: MovementController): void {
+    private tryDetourWithRepath(controller: MovementController): boolean {
+        const detour = this.findDetour(controller);
+        if (!detour) return false;
+
         const goal = controller.goal;
-        if (!goal) return;
-
-        const detourTile = controller.path[controller.pathIndex];
-        if (!detourTile) return;
-
-        const newSuffix = this.pathfinder.findPath(
-            detourTile.x,
-            detourTile.y,
-            goal.x,
-            goal.y,
-            false // respect occupancy
-        );
-
-        if (newSuffix && newSuffix.length > 0) {
-            controller.replacePathSuffix(newSuffix, controller.pathIndex + 1);
+        if (!goal) {
+            // No goal — just insert the detour as a one-off step
+            controller.insertDetour(detour);
+            return true;
         }
+
+        // Verify we can actually complete the path from the detour tile
+        const newSuffix = this.pathfinder.findPath(detour.x, detour.y, goal.x, goal.y, false);
+        if (!newSuffix || newSuffix.length === 0) return false;
+
+        controller.insertDetour(detour);
+        controller.replacePathSuffix(newSuffix, controller.pathIndex + 1);
+        return true;
     }
 
     // -------------------------------------------------------------------------

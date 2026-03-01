@@ -62,9 +62,6 @@ export class Hexagon2Texture extends LandscapeTextureBase implements ILandscapeT
         const use2 = (x + y) % 2 === 0;
         const { destX, destY } = this.layout.get(use2 ? this.srcX2 : this.srcX1, use2 ? this.srcY2 : this.srcY1);
 
-        // Identify which corner is the "minority" type (the one that differs from the other two).
-        // This works correctly even after fallback substitution (e.g., River3→River4) where
-        // the original TexturePoint types don't match the texture's innerType.
         const t0IsMinority = tp.t0 !== tp.t1 && tp.t0 !== tp.t2;
         const t1IsMinority = tp.t1 !== tp.t0 && tp.t1 !== tp.t2;
 
@@ -81,9 +78,6 @@ export class Hexagon2Texture extends LandscapeTextureBase implements ILandscapeT
         const use2 = (x + y) % 2 === 0;
         const { destX, destY } = this.layout.get(use2 ? this.srcX2 : this.srcX1, use2 ? this.srcY2 : this.srcY1);
 
-        // Identify which corner is the "minority" type (the one that differs from the other two).
-        // This works correctly even after fallback substitution (e.g., River3→River4) where
-        // the original TexturePoint types don't match the texture's innerType.
         const t0IsMinority = tp.t0 !== tp.t1 && tp.t0 !== tp.t2;
         const t1IsMinority = tp.t1 !== tp.t0 && tp.t1 !== tp.t2;
 

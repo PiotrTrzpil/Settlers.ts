@@ -762,8 +762,7 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
     [BuildingType.Eyecatcher12]: 75, // EYECATCHER12: exotic plant on pedestal
     // Trojan-specific (high S4BuildingType indices)
     [BuildingType.SunflowerOilMakerHut]: 81, // S4BuildingType.SUNFLOWEROILMAKERHUT (Trojan)
-    // SunflowerFarmerHut is stored in 13.gfx (DarkTribe file) as separate jobs: #109 construction, #110 completed
-    // Handled via constructionIndex override in getBuildingSpriteMap()
+    [BuildingType.SunflowerFarmerHut]: 82, // S4BuildingType.SUNFLOWERFARMERHUT (Trojan)
 };
 
 // ============================================================

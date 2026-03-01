@@ -99,12 +99,13 @@ export class MovementSystem implements TickSystem {
 
     /** (Re)build CollisionResolver and BlockedStateHandler after occupancy is available. */
     private rebuildSubServices(): void {
-        if (!this.tileOccupancy) return;
+        if (!this.tileOccupancy || !this.buildingOccupancy) return;
 
         this.collisionResolver = new CollisionResolver({
             pathfinder: this.pathfinder,
             rng: this.rng,
             tileOccupancy: this.tileOccupancy,
+            buildingOccupancy: this.buildingOccupancy,
             getEntity: this.getEntityFn,
             updatePosition: this.updatePositionFn,
             getController: id => this.controllers.get(id),
@@ -261,24 +262,20 @@ export class MovementSystem implements TickSystem {
             return false; // tile is free
         }
 
-        // Building footprint tiles are impassable (door tiles are excluded from buildingOccupancy)
+        // Building footprint tiles are impassable (door tiles excluded from buildingOccupancy).
         if (this.buildingOccupancy?.has(key)) {
-            controller.setBlocked(deltaSec);
-            return true;
+            return this.handleBuildingBlock(controller, deltaSec);
         }
 
-        // Non-unit, non-building occupants (e.g. door tiles owned by building) — allow passage
+        // Non-unit occupants (e.g. door tiles owned by a building) — allow passage
         const blockingEntity = this.getEntityFn(blockingEntityId);
         if (!blockingEntity || blockingEntity.type !== EntityType.Unit) {
             return false;
         }
 
         // Escalation (give-up / escalated repath) takes precedence over normal resolution
-        if (this.blockedStateHandler) {
-            const result = this.blockedStateHandler.handle(controller, deltaSec);
-            if (result === 'gave-up') return true;
-            if (result === 'escalated') return false; // path replaced — retry the move loop
-        }
+        const escalated = this.tryEscalate(controller, deltaSec);
+        if (escalated !== null) return escalated;
 
         // Normal collision resolution (detour, repair, push, yield, wait)
         if (this.collisionResolver) {
@@ -288,6 +285,26 @@ export class MovementSystem implements TickSystem {
         // Fallback: no resolver available yet, just mark as blocked
         controller.setBlocked(deltaSec);
         return true;
+    }
+
+    /** Handle a building-footprint block, escalating through the blocked-state handler. */
+    private handleBuildingBlock(controller: MovementController, deltaSec: number): boolean {
+        const escalated = this.tryEscalate(controller, deltaSec);
+        if (escalated !== null) return escalated;
+        controller.setBlocked(deltaSec);
+        return true;
+    }
+
+    /**
+     * Run the blocked-state handler escalation pipeline.
+     * Returns true (stop) / false (continue) when escalation fires, null when not triggered.
+     */
+    private tryEscalate(controller: MovementController, deltaSec: number): boolean | null {
+        if (!this.blockedStateHandler) return null;
+        const result = this.blockedStateHandler.handle(controller, deltaSec);
+        if (result === 'gave-up') return true;
+        if (result === 'escalated') return false;
+        return null;
     }
 
     // -------------------------------------------------------------------------

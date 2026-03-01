@@ -63,6 +63,8 @@ export class UnitSpriteCategory {
     }
 
     private warnMissing(type: UnitType, race: number): void {
+        // Don't warn if this race hasn't finished loading yet — the sprite may arrive soon
+        if (!this._loadedRaces.has(race)) return;
         const key = `${race}:${type}`;
         if (this._warnedUnits.has(key)) return;
         this._warnedUnits.add(key);

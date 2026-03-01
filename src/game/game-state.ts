@@ -237,6 +237,10 @@ export class GameState {
                 this.tileOccupancy.set(key, entity.id);
                 if (!passableKeys.has(key)) {
                     this.buildingOccupancy.add(key);
+                } else {
+                    // Corridor tile: ensure it's passable even if a previously-placed
+                    // building's footprint added it to buildingOccupancy.
+                    this.buildingOccupancy.delete(key);
                 }
             }
         } else {

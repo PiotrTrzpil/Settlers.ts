@@ -224,6 +224,7 @@ export class LandscapeRenderer extends RendererBase implements IRenderer {
         }
 
         this.landscapeTextureMap.copyTexture(img, this.texture);
+        this.texture.patchTransparencyKey();
     }
 
     // ── Buffer builders ─────────────────────────────────────────────

@@ -232,15 +232,7 @@ export function getBuildingSpriteMap(race: Race): Partial<Record<BuildingType, B
         };
     }
 
-    // SunflowerFarmerHut is stored in 13.gfx (DarkTribe file) as two separate jobs:
-    // JIL #109 = construction state, JIL #110 = completed state
-    if (race === Race.Trojan) {
-        result[BuildingType.SunflowerFarmerHut] = {
-            file: Race.DarkTribe as number,
-            index: 110,
-            constructionIndex: 109,
-        };
-    }
+    // SunflowerFarmerHut uses regular index like other buildings (S4BuildingType = 82)
 
     return result;
 }

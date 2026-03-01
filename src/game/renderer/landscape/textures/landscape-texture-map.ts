@@ -295,7 +295,8 @@ export class LandscapeTextureMap {
         this.addTexture(new BigLandscapeTexture(L, LandscapeType.Snow, 68));
 
         // [grass] 16 -> 99 -> 98 -> 96 [river] @ 72..75
-        // 3 atlas slots: A=(2,72), B=(0,74), C=(2,74)
+        // Pixel art layout: rows 72-73 = grass-heavy (outer bank), rows 74-75 = water-heavy (inner)
+        // 3 atlas slots: A=inner(2,74), B=middle(0,74), C=outer(2,72)
         {
             this.addTexture(new SmallLandscapeTexture(L, LandscapeType.River4, 0, 72));
             this.addTexture(new SmallLandscapeTexture(L, LandscapeType.River3, 1, 72));
@@ -307,17 +308,19 @@ export class LandscapeTextureMap {
 
             // Create Hexagon2Textures at fixed source positions (default config).
             // After copyTexture() the shared layout holds correct GPU atlas dest positions.
-            // Layout matches addTextureGradientReverse(Grass, River4, River3, River1, 72):
-            //   River4=99 (outermost, near grass), River1=96 (innermost, river center)
-            // Slot A: cols 2-3, rows 72-73 → River3↔River1 (inner edge, water-heavy)
-            const slotALeft = new Hexagon2Texture(L, LandscapeType.River3, LandscapeType.River1, 2, 72, 2, 73);
-            const slotARight = new Hexagon2Texture(L, LandscapeType.River1, LandscapeType.River3, 3, 72, 3, 73);
+            // Gradient: Grass(16) → River4(99) → River3(98) → River1(96)
+            // The pixel art follows addTextureGradient1 layout (outer pair at rows 72-73,
+            // inner pair at rows 74-75), matching the visual gradient:
+            //   rows 72-73 = grass-heavy art (outer bank), rows 74-75 = water-heavy art (inner river).
+            // Slot A: River3↔River1 (inner edge) → water-heavy art at cols 2-3, rows 74-75
+            const slotALeft = new Hexagon2Texture(L, LandscapeType.River3, LandscapeType.River1, 2, 74, 2, 75);
+            const slotARight = new Hexagon2Texture(L, LandscapeType.River1, LandscapeType.River3, 3, 74, 3, 75);
             // Slot B: cols 0-1, rows 74-75 → River4↔River3 (middle)
             const slotBLeft = new Hexagon2Texture(L, LandscapeType.River4, LandscapeType.River3, 0, 74, 0, 75);
             const slotBRight = new Hexagon2Texture(L, LandscapeType.River3, LandscapeType.River4, 1, 74, 1, 75);
-            // Slot C: cols 2-3, rows 74-75 → Grass↔River4 (outer edge, grass-heavy)
-            const slotCLeft = new Hexagon2Texture(L, LandscapeType.Grass, LandscapeType.River4, 2, 74, 2, 75);
-            const slotCRight = new Hexagon2Texture(L, LandscapeType.River4, LandscapeType.Grass, 3, 74, 3, 75);
+            // Slot C: Grass↔River4 (outer bank edge) → grass-heavy art at cols 2-3, rows 72-73
+            const slotCLeft = new Hexagon2Texture(L, LandscapeType.Grass, LandscapeType.River4, 2, 72, 2, 73);
+            const slotCRight = new Hexagon2Texture(L, LandscapeType.River4, LandscapeType.Grass, 3, 72, 3, 73);
 
             const allSlots = [slotALeft, slotARight, slotBLeft, slotBRight, slotCLeft, slotCRight];
             for (const tex of allSlots) {
@@ -407,8 +410,14 @@ export class LandscapeTextureMap {
         }
     }
 
-    /** Find a fallback texture by trying uniform types for each corner. */
-    private findFallback(t1: LandscapeType, t2: LandscapeType, t3: LandscapeType): ILandscapeTexture | null {
+    /** Find a fallback texture and return the substituted TexturePoint used
+     *  for the lookup, so callers can pass it to getTextureA/B for correct
+     *  minority-corner detection (e.g. River3→River4 substitution). */
+    private findFallback(
+        t1: LandscapeType,
+        t2: LandscapeType,
+        t3: LandscapeType
+    ): { text: ILandscapeTexture; tp: TexturePoint } | null {
         // For river transitions, try to find the closest available texture.
         // Map data often has Grass directly touching River3/River2/River1 without
         // the intermediate River4 step. Use Grass↔River4 as a visual approximation.
@@ -430,19 +439,19 @@ export class LandscapeTextureMap {
                     : t
             ) as [LandscapeType, LandscapeType, LandscapeType];
 
-            const subKey = new TexturePoint(substituted[0], substituted[1], substituted[2]).getKey();
-            const subText = this.lookup[subKey];
+            const subTp = new TexturePoint(substituted[0], substituted[1], substituted[2]);
+            const subText = this.lookup[subTp.getKey()];
             if (subText) {
-                return subText;
+                return { text: subText, tp: subTp };
             }
         }
 
         // Original fallback: try uniform textures for each corner
         for (const t of types) {
-            const key = new TexturePoint(t, t, t).getKey();
-            const text = this.lookup[key];
+            const tp = new TexturePoint(t, t, t);
+            const text = this.lookup[tp.getKey()];
             if (text) {
-                return text;
+                return { text, tp };
             }
         }
         return null;
@@ -456,12 +465,15 @@ export class LandscapeTextureMap {
         y: number
     ): [number, number] {
         const tp = new TexturePoint(t1, t2, t3);
-        const text = this.lookup[tp.getKey()] ?? this.findFallback(t1, t2, t3);
-        if (!text) {
+        const direct = this.lookup[tp.getKey()];
+        if (direct) {
+            return direct.getTextureA(tp, x, y);
+        }
+        const fb = this.findFallback(t1, t2, t3);
+        if (!fb) {
             return [0, 0];
         }
-
-        return text.getTextureA(tp, x, y);
+        return fb.text.getTextureA(fb.tp, x, y);
     }
 
     public getTextureB(
@@ -472,12 +484,15 @@ export class LandscapeTextureMap {
         y: number
     ): [number, number] {
         const tp = new TexturePoint(t4, t5, t6);
-        const text = this.lookup[tp.getKey()] ?? this.findFallback(t4, t5, t6);
-        if (!text) {
+        const direct = this.lookup[tp.getKey()];
+        if (direct) {
+            return direct.getTextureB(tp, x, y);
+        }
+        const fb = this.findFallback(t4, t5, t6);
+        if (!fb) {
             return [0, 0];
         }
-
-        return text.getTextureB(tp, x, y);
+        return fb.text.getTextureB(fb.tp, x, y);
     }
 
     /** copy all textures to the TextureMap */
