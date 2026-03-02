@@ -45,6 +45,8 @@ export interface PlaceBuildingCommand {
     player: number;
     /** Race for the building sprite (Race enum value) */
     race: Race;
+    /** Spawn the building's dedicated worker at the door position. */
+    spawnWorker?: boolean;
 }
 
 export interface PlaceResourceCommand {
@@ -128,6 +130,37 @@ export interface PlantTreesAreaCommand {
     radius?: number;
 }
 
+// === Production Control Commands ===
+
+export interface SetProductionModeCommand {
+    type: 'set_production_mode';
+    buildingId: number;
+    mode: 'even' | 'proportional' | 'manual';
+}
+
+export interface SetRecipeProportionCommand {
+    type: 'set_recipe_proportion';
+    buildingId: number;
+    /** The output material whose proportion to change */
+    output: EMaterialType;
+    /** Weight value (0-10) */
+    weight: number;
+}
+
+export interface AddToProductionQueueCommand {
+    type: 'add_to_production_queue';
+    buildingId: number;
+    /** The output material to add to the queue */
+    output: EMaterialType;
+}
+
+export interface RemoveFromProductionQueueCommand {
+    type: 'remove_from_production_queue';
+    buildingId: number;
+    /** The output material to remove from the queue (last occurrence) */
+    output: EMaterialType;
+}
+
 // === Script Commands (from Lua scripting API) ===
 
 export interface ScriptAddGoodsCommand {
@@ -207,7 +240,11 @@ export type Command =
     | PlantTreesAreaCommand
     | ScriptAddGoodsCommand
     | ScriptAddBuildingCommand
-    | ScriptAddSettlersCommand;
+    | ScriptAddSettlersCommand
+    | SetProductionModeCommand
+    | SetRecipeProportionCommand
+    | AddToProductionQueueCommand
+    | RemoveFromProductionQueueCommand;
 
 // === Command Result Types ===
 
@@ -299,4 +336,20 @@ export function isSelectionCommand(
  */
 export function isMovementCommand(cmd: Command): cmd is MoveUnitCommand | MoveSelectedUnitsCommand {
     return cmd.type === 'move_unit' || cmd.type === 'move_selected_units';
+}
+
+/** Type guard for production control commands. */
+export function isProductionControlCommand(
+    cmd: Command
+): cmd is
+    | SetProductionModeCommand
+    | SetRecipeProportionCommand
+    | AddToProductionQueueCommand
+    | RemoveFromProductionQueueCommand {
+    return (
+        cmd.type === 'set_production_mode' ||
+        cmd.type === 'set_recipe_proportion' ||
+        cmd.type === 'add_to_production_queue' ||
+        cmd.type === 'remove_from_production_queue'
+    );
 }

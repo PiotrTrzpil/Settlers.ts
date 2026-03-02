@@ -280,6 +280,7 @@ export class Game {
             treeSystem: this.services.treeSystem,
             cropSystem: this.services.cropSystem,
             combatSystem: this.services.combatSystem,
+            productionControlManager: this.services.productionControlManager,
         };
     }
 

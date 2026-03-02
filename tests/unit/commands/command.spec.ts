@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { EntityType, BuildingType } from '@/game/entity';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import { executeCommand } from '@/game/commands';
 import {
@@ -7,8 +6,8 @@ import {
     applyTerrainLeveling,
     CONSTRUCTION_SITE_GROUND_TYPE,
 } from '@/game/features/building-construction';
-import { TERRAIN, setTerrainAt, blockColumn } from './helpers/test-map';
-import { createTestContext, addUnit, addBuilding, toCommandContext, type TestContext } from './helpers/test-game';
+import { TERRAIN, setTerrainAt, blockColumn } from '../helpers/test-map';
+import { createTestContext, addBuilding, toCommandContext, type TestContext } from '../helpers/test-game';
 
 // Note: Happy-path command tests (place_building, spawn_unit, select, deselect,
 // area select, remove entity) are covered by flow integration tests in flows/.
@@ -71,24 +70,8 @@ describe('Command System – edge cases', () => {
         });
     });
 
-    describe('select_area', () => {
-        it('should prefer units over buildings in area', () => {
-            addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut);
-            addUnit(ctx.state, 11, 10, { subType: 2 }); // Swordsman (selectable - Military category)
-
-            executeCommand(toCommandContext(ctx), {
-                type: 'select_area',
-                x1: 9,
-                y1: 9,
-                x2: 12,
-                y2: 11,
-            });
-
-            expect(ctx.state.selection.selectedEntityIds.size).toBe(1);
-            const selectedId = Array.from(ctx.state.selection.selectedEntityIds)[0]!;
-            expect(ctx.state.getEntity(selectedId)?.type).toBe(EntityType.Unit);
-        });
-    });
+    // select_area happy paths (including units-over-buildings priority)
+    // are covered in unit-placement-selection-movement.spec.ts.
 
     describe('remove_entity', () => {
         it('should fail for non-existent entity', () => {

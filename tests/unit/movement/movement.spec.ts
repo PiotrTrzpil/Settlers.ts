@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createGameState, addUnit, addUnitWithPath } from './helpers/test-game';
+import { createGameState, addUnit, addUnitWithPath } from '../helpers/test-game';
 import type { GameState } from '@/game/game-state';
 
 // Note: Movement happy paths (advance, complete, multi-unit, occupancy, interpolation)
@@ -23,11 +23,17 @@ describe('Movement System – edge cases', () => {
     });
 
     it('should advance unit along path based on speed', () => {
-        const { entity: unit, unitState } = addUnitWithPath(state, 0, 0, [
-            { x: 1, y: 0 },
-            { x: 2, y: 0 },
-            { x: 3, y: 0 },
-        ], 2);
+        const { entity: unit, unitState } = addUnitWithPath(
+            state,
+            0,
+            0,
+            [
+                { x: 1, y: 0 },
+                { x: 2, y: 0 },
+                { x: 3, y: 0 },
+            ],
+            2
+        );
 
         // startPath sets progress=1 (immediate first step), then 0.5s at speed 2 adds 1 more
         // Total progress = 2, so unit moves 2 tiles

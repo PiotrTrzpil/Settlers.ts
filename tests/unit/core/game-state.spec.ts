@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createGameState, addUnit, addBuilding } from './helpers/test-game';
+import { createGameState, addUnit, addBuilding } from '../helpers/test-game';
 import type { GameState } from '@/game/game-state';
 import { BuildingType } from '@/game/entity';
 

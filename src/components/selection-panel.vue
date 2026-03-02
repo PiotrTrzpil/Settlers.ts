@@ -35,6 +35,79 @@
                     </button>
                 </div>
 
+                <!-- Production Control (multi-recipe buildings only) -->
+                <template v-if="productionControl">
+                    <div class="info-section production-section">
+                        <div class="section-label">Production</div>
+
+                        <!-- Mode selector -->
+                        <div class="production-mode">
+                            <button
+                                v-for="m in ['even', 'proportional', 'manual'] as const"
+                                :key="m"
+                                class="mode-btn"
+                                :class="{ active: productionControl.mode === m }"
+                                @click="setProductionMode(m)"
+                            >
+                                {{ m }}
+                            </button>
+                        </div>
+
+                        <!-- Even / Proportional mode: recipe weights -->
+                        <template v-if="productionControl.mode !== 'manual'">
+                            <div class="recipe-grid">
+                                <div
+                                    v-for="recipe in productionControl.recipes"
+                                    :key="recipe.output"
+                                    class="recipe-item"
+                                >
+                                    <span class="recipe-name">{{ recipe.outputName }}</span>
+                                    <div class="recipe-controls">
+                                        <button
+                                            class="recipe-btn"
+                                            @click="setRecipeProportion(recipe.output, recipe.weight - 1)"
+                                        >
+                                            -
+                                        </button>
+                                        <span class="recipe-weight">{{ recipe.weight }}</span>
+                                        <button
+                                            class="recipe-btn"
+                                            @click="setRecipeProportion(recipe.output, recipe.weight + 1)"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Manual mode: queue display + add/remove buttons -->
+                        <template v-else>
+                            <div v-if="productionControl.queue.length > 0" class="queue-display">
+                                {{ productionControl.queue.join(' → ') }}
+                            </div>
+                            <div v-else class="queue-empty">Queue empty (idle)</div>
+                            <div class="recipe-grid">
+                                <div
+                                    v-for="recipe in productionControl.recipes"
+                                    :key="recipe.output"
+                                    class="recipe-item"
+                                >
+                                    <span class="recipe-name">{{ recipe.outputName }}</span>
+                                    <div class="recipe-controls">
+                                        <button class="recipe-btn" @click="addToProductionQueue(recipe.output)">
+                                            +1
+                                        </button>
+                                        <button class="recipe-btn" @click="removeFromProductionQueue(recipe.output)">
+                                            -1
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
                 <!-- Destroy button -->
                 <div class="destroy-row">
                     <button v-if="!confirmingDestroy" class="destroy-btn" @click="confirmingDestroy = true">
@@ -183,6 +256,7 @@ import { useCarrierDebugInfo } from '@/composables/useCarrierDebugInfo';
 import { useBuildingDebugInfo } from '@/composables/useBuildingDebugInfo';
 import { useBuildingAdjustments } from '@/composables/useBuildingAdjustments';
 import { useWorkAreaAdjustment } from '@/composables/useWorkAreaAdjustment';
+import { useProductionControl } from '@/composables/useProductionControl';
 
 const props = defineProps<{
     game: Game | null;
@@ -210,6 +284,8 @@ const { buildingDebug } = useBuildingDebugInfo(gameRef, selectedEntity, tick);
 const { adjustExpanded, adjustGroups, activeAdjustKey, toggleAdjustItem, getItemOffsetLabel } =
     useBuildingAdjustments(selectedEntity);
 const { hasWorkArea, isWorkAreaActive, toggleWorkArea } = useWorkAreaAdjustment(selectedEntity);
+const { productionControl, setProductionMode, setRecipeProportion, addToProductionQueue, removeFromProductionQueue } =
+    useProductionControl(gameRef, selectedEntity, tick);
 
 // Debug section state
 const debugExpanded = ref(true);
@@ -618,5 +694,117 @@ const showDebugInfo = computed(() => debugStats.state.debugPanelOpen);
 .destroy-cancel:hover {
     background: rgba(80, 60, 40, 0.4);
     color: var(--text);
+}
+
+/* Production Control */
+.production-section {
+    border-top-color: var(--border-soft);
+}
+
+.production-mode {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 6px;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 2px 4px;
+    font-size: 9px;
+    text-transform: capitalize;
+    border: 1px solid rgba(180, 140, 80, 0.3);
+    border-radius: 2px;
+    background: rgba(40, 30, 15, 0.4);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+
+.mode-btn:hover {
+    background: rgba(60, 45, 20, 0.5);
+    color: var(--text);
+}
+
+.mode-btn.active {
+    background: rgba(180, 140, 60, 0.3);
+    border-color: rgba(200, 160, 60, 0.5);
+    color: var(--text-bright);
+}
+
+.recipe-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.recipe-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 4px;
+    font-size: 10px;
+}
+
+.recipe-name {
+    color: var(--text-secondary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recipe-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.recipe-btn {
+    width: 18px;
+    height: 16px;
+    font-size: 10px;
+    line-height: 1;
+    border: 1px solid rgba(180, 140, 80, 0.3);
+    border-radius: 2px;
+    background: rgba(40, 30, 15, 0.4);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.recipe-btn:hover {
+    background: rgba(80, 60, 25, 0.5);
+    color: var(--text);
+}
+
+.recipe-weight {
+    min-width: 14px;
+    text-align: center;
+    font-size: 10px;
+    color: var(--text-emphasis);
+    font-variant-numeric: tabular-nums;
+}
+
+.queue-display {
+    font-size: 9px;
+    color: var(--text-secondary);
+    padding: 3px 4px;
+    margin-bottom: 4px;
+    background: rgba(30, 25, 15, 0.4);
+    border-radius: 2px;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.queue-empty {
+    font-size: 9px;
+    color: var(--text-dim);
+    font-style: italic;
+    padding: 3px 4px;
+    margin-bottom: 4px;
 }
 </style>

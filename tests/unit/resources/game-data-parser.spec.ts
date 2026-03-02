@@ -11,7 +11,7 @@ import { parseBuildingInfo } from '@/resources/game-data/building-info-parser';
 import { parseJobInfo } from '@/resources/game-data/job-info-parser';
 import { parseObjectInfo } from '@/resources/game-data/object-info-parser';
 
-const GAME_DATA_PATH = join(__dirname, '../../public/Siedler4/GameData');
+const GAME_DATA_PATH = join(__dirname, '../../../public/Siedler4/GameData');
 
 /** Check if game data files exist (they're gitignored game assets) */
 const hasGameDataFiles = existsSync(join(GAME_DATA_PATH, 'buildingInfo.xml'));

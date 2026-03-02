@@ -178,6 +178,7 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
             searchRadius: radius ?? this.config.plantingSearchRadius,
             minDistanceSq: this.config.minDistanceSq,
             requireFreeNeighbors: this.config.requireFreeNeighbors,
+            rng: this.gameState.rng,
             proximityFilter: entity =>
                 entity.type === EntityType.MapObject &&
                 OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType] === this.config.objectCategory,

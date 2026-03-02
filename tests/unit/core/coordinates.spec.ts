@@ -25,6 +25,8 @@ import {
     screenToTile,
     tileToScreen,
     tileToWorldPos,
+    TILE_CENTER_X,
+    TILE_CENTER_Y,
 } from '@/game/systems/coordinate-system';
 
 // ═══════════════════════════════════════════════════════════════════════════

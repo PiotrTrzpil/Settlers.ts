@@ -22,6 +22,7 @@ import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types'
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { Command } from '../../commands';
 import { findEmptySpot } from '../../systems/spatial-search';
+import type { EventBus } from '../../event-bus';
 
 // ── Stages ────────────────────────────────────────────────────
 
@@ -95,8 +96,11 @@ const CROP_CONFIG: GrowableConfig = {
  * Uses EntityVisualService for visual state - no direct entity manipulation.
  */
 export class CropSystem extends GrowableSystem<CropState> {
-    constructor(gameState: GameState, visualService: EntityVisualService) {
+    private readonly eventBus: EventBus;
+
+    constructor(gameState: GameState, visualService: EntityVisualService, eventBus: EventBus) {
         super(gameState, visualService, CROP_CONFIG, 'CropSystem');
+        this.eventBus = eventBus;
     }
 
     // ── GrowableSystem implementation ────────────────────────────
@@ -147,6 +151,7 @@ export class CropSystem extends GrowableSystem<CropState> {
             if (state.progress >= 1) {
                 state.stage = CropStage.Mature;
                 state.progress = 0;
+                this.eventBus.emit('crop:matured', { entityId, cropType: state.cropType });
             }
             this.updateVisual(entityId, state);
         }
@@ -209,6 +214,7 @@ export class CropSystem extends GrowableSystem<CropState> {
             state.decayTimer = config.harvestDecayTime;
             state.progress = 0;
             this.updateVisual(entityId, state);
+            this.eventBus.emit('crop:harvested', { entityId, cropType: state.cropType });
             return true;
         }
 
@@ -252,6 +258,7 @@ export class CropSystem extends GrowableSystem<CropState> {
             gameState: this.gameState,
             searchRadius: radius ?? this.config.plantingSearchRadius,
             minDistanceSq: this.config.minDistanceSq,
+            rng: this.gameState.rng,
             proximityFilter: entity => entity.type === EntityType.MapObject && entity.subType === cropType,
         });
     }

@@ -15,8 +15,8 @@ import {
     computeHeightRange,
     MAX_SLOPE_DIFF,
 } from '@/game/features/placement';
-import { TERRAIN } from './helpers/test-map';
-import { installTestGameData, resetTestGameData } from './helpers/test-game-data';
+import { TERRAIN } from '../helpers/test-map';
+import { installTestGameData, resetTestGameData } from '../helpers/test-game-data';
 
 describe('BuildingIndicatorRenderer', () => {
     afterEach(() => {
@@ -76,32 +76,8 @@ describe('BuildingIndicatorRenderer', () => {
             expect(renderer.computePlacementStatus(5, 5)).toBe(PlacementStatus.InvalidTerrain);
         });
 
-        it('should return Medium for slight slope (difference 1-2) within footprint', () => {
-            renderer.buildingType = BuildingType.WoodcutterHut;
-            groundHeight[mapSize.toIndex(4, 4)] = 100;
-            groundHeight[mapSize.toIndex(5, 4)] = 102; // diff = 2
-            groundHeight[mapSize.toIndex(4, 5)] = 100;
-            groundHeight[mapSize.toIndex(5, 5)] = 100;
-            expect(renderer.computePlacementStatus(4, 4)).toBe(PlacementStatus.Medium);
-        });
-
-        it('should return Difficult for moderate slope (difference 3-8) within footprint', () => {
-            renderer.buildingType = BuildingType.WoodcutterHut;
-            groundHeight[mapSize.toIndex(4, 4)] = 100;
-            groundHeight[mapSize.toIndex(5, 4)] = 108; // diff = 8
-            groundHeight[mapSize.toIndex(4, 5)] = 100;
-            groundHeight[mapSize.toIndex(5, 5)] = 100;
-            expect(renderer.computePlacementStatus(4, 4)).toBe(PlacementStatus.Difficult);
-        });
-
-        it('should return TooSteep for steep slope (difference > 8) within footprint', () => {
-            renderer.buildingType = BuildingType.WoodcutterHut;
-            groundHeight[mapSize.toIndex(4, 4)] = 100;
-            groundHeight[mapSize.toIndex(5, 4)] = 110; // diff = 10
-            groundHeight[mapSize.toIndex(4, 5)] = 100;
-            groundHeight[mapSize.toIndex(5, 5)] = 100;
-            expect(renderer.computePlacementStatus(4, 4)).toBe(PlacementStatus.TooSteep);
-        });
+        // Slope difficulty thresholds (Medium/Difficult/TooSteep) are tested
+        // directly in placement.spec.ts via computeSlopeDifficulty.
 
         it('should return Occupied when tile is occupied', () => {
             renderer.tileOccupancy.set('5,5', 1);

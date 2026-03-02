@@ -11,7 +11,7 @@
 
 import { installTestGameData, installRealGameData, resetTestGameData } from './test-game-data';
 import { createTestMap, TERRAIN, type TestMap } from './test-map';
-import { EventBus } from '@/game/event-bus';
+import { EventBus, type GameEvents } from '@/game/event-bus';
 import { GameState } from '@/game/game-state';
 import { GameServices } from '@/game/game-services';
 import { executeCommand, type CommandContext } from '@/game/commands';
@@ -100,6 +100,9 @@ export interface Simulation {
     /** Errors captured during simulation ticks (system errors that would otherwise crash). */
     readonly errors: SimulationError[];
 
+    /** Log specific event bus events to console. Pass event names to subscribe, or '*' for all. */
+    logEvents(...events: (keyof GameEvents | '*')[]): void;
+
     /** Tear down all systems and event subscriptions. */
     destroy(): void;
 }
@@ -184,6 +187,7 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         treeSystem: services.treeSystem,
         cropSystem: services.cropSystem,
         combatSystem: services.combatSystem,
+        productionControlManager: services.productionControlManager,
     });
 
     // GameServices constructor captures executeCommand as a closure.
@@ -271,7 +275,7 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         if (!result.success) {
             throw new Error(`Failed to place ${BuildingType[buildingType]} at (${pos.x}, ${pos.y}): ${result.error}`);
         }
-        return result.effects![0]!.entityId;
+        return (result.effects![0]! as { entityId: number }).entityId;
     }
 
     /** Chebyshev radius of a building's footprint from its anchor. */
@@ -391,7 +395,7 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
                 `Failed to place mine ${BuildingType[buildingType]} at (${pos.x}, ${pos.y}): ${result.error}`
             );
         }
-        const entityId = result.effects![0]!.entityId;
+        const entityId = (result.effects![0]! as { entityId: number }).entityId;
 
         fillOreSquare(pos.x, pos.y, 4, oreType, oreLevel); // radius 4 = MINE_SEARCH_RADIUS
         return entityId;
@@ -409,7 +413,7 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         if (!result.success) {
             throw new Error(`Failed to spawn ${UnitType[unitType]} at (${x}, ${y}): ${result.error}`);
         }
-        return result.effects![0]!.entityId;
+        return (result.effects![0]! as { entityId: number }).entityId;
     }
 
     function moveUnitCmd(entityId: number, targetX: number, targetY: number): boolean {
@@ -455,6 +459,23 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         return state.entities.filter(e => e.type === type && (subType === undefined || e.subType === subType)).length;
     }
 
+    function logEvents(...events: (keyof GameEvents | '*')[]) {
+        if (events.includes('*')) {
+            // Subscribe to all events by proxying emit
+            const origEmit = eventBus.emit.bind(eventBus);
+            eventBus.emit = ((event: string, payload: unknown) => {
+                console.log(`[event] ${event}`, JSON.stringify(payload));
+                return origEmit(event as keyof GameEvents, payload as GameEvents[keyof GameEvents]);
+            }) as typeof eventBus.emit;
+        } else {
+            for (const event of events as (keyof GameEvents)[]) {
+                eventBus.on(event, payload => {
+                    console.log(`[event] ${event}`, JSON.stringify(payload));
+                });
+            }
+        }
+    }
+
     function destroy() {
         services.destroy();
     }
@@ -482,6 +503,7 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         getOutput,
         getInput,
         countEntities,
+        logEvents,
         destroy,
     };
 }

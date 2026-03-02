@@ -145,7 +145,9 @@ export function executeChangeTypeAtBarracks(
     _dt: number,
     _ctx: ChoreoContext
 ): TaskResult {
-    log.debug(`CHANGE_TYPE_AT_BARRACKS: settler ${settler.id} requests upgrade (trigger: '${node.trigger}')`);
+    log.warn(
+        `CHANGE_TYPE_AT_BARRACKS: settler ${settler.id} trigger='${node.trigger}' — barracks upgrade not implemented, skipping`
+    );
     return TaskResult.DONE;
 }
 
@@ -179,7 +181,9 @@ export function executeHealEntity(
     job.progress += dt / duration;
 
     if (job.progress >= 1) {
-        log.debug(`executeHealEntity: settler ${settler.id} finished healing target ${job.targetId}`);
+        log.warn(
+            `executeHealEntity: settler ${settler.id} finished healing target ${job.targetId} — HP mutation not implemented, heal skipped`
+        );
         return TaskResult.DONE;
     }
 
@@ -204,7 +208,9 @@ export function executeAttackReaction(
     job.progress += dt / duration;
 
     if (job.progress >= 1) {
-        log.debug(`executeAttackReaction: settler ${settler.id} completed reaction`);
+        log.warn(
+            `executeAttackReaction: settler ${settler.id} completed reaction — combat logic not implemented, reaction skipped`
+        );
         return TaskResult.DONE;
     }
 

@@ -5,7 +5,7 @@
 
 import { BuildingType } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
-import { BUILDING_PRODUCTIONS } from '../../economy/building-production';
+import { BUILDING_PRODUCTIONS, type Recipe } from '../../economy/building-production';
 import type { InventorySlot } from './inventory-slot';
 import {
     createSlot,
@@ -160,19 +160,8 @@ export class BuildingInventoryManager {
      */
     getOutputSlot(buildingId: number, materialType: EMaterialType): InventorySlot | undefined {
         const inventory = this.inventories.get(buildingId);
-        if (!inventory) {
-            log.warn(
-                `#${this._debugId} No inventory for building ${buildingId}. Known: [${[...this.inventories.keys()].join(', ')}]`
-            );
-            return undefined;
-        }
-        const slot = inventory.outputSlots.find(s => s.materialType === materialType);
-        if (!slot) {
-            log.warn(
-                `#${this._debugId} Building ${buildingId} (${BuildingType[inventory.buildingType]}) has no slot for ${EMaterialType[materialType]}. Has: [${inventory.outputSlots.map(s => EMaterialType[s.materialType]).join(', ')}]`
-            );
-        }
-        return slot;
+        if (!inventory) return undefined;
+        return inventory.outputSlots.find(s => s.materialType === materialType);
     }
 
     private getInputSlotOrThrow(buildingId: number, materialType: EMaterialType): InventorySlot {
@@ -408,19 +397,20 @@ export class BuildingInventoryManager {
 
     /**
      * Check if a building has all required inputs to start production.
-     * Uses BUILDING_PRODUCTIONS to determine what inputs are needed.
+     * Uses BUILDING_PRODUCTIONS to determine what inputs are needed, or the provided recipe if given.
      * @param buildingId Entity ID of the building
+     * @param recipe Optional specific recipe to check against (overrides BUILDING_PRODUCTIONS lookup)
      * @returns True if all required inputs are available (at least 1 of each)
      */
-    canStartProduction(buildingId: number): boolean {
+    canStartProduction(buildingId: number, recipe?: Recipe): boolean {
         const inventory = this.inventories.get(buildingId);
         if (!inventory) return false;
 
-        const production = BUILDING_PRODUCTIONS.get(inventory.buildingType);
-        if (!production) return false;
+        const inputs = recipe ? recipe.inputs : BUILDING_PRODUCTIONS.get(inventory.buildingType)?.inputs;
+        if (!inputs) return false;
 
         // Check that we have at least 1 of each required input
-        for (const inputMaterial of production.inputs) {
+        for (const inputMaterial of inputs) {
             const slot = inventory.inputSlots.find(s => s.materialType === inputMaterial);
             if (!slot || slot.currentAmount < 1) {
                 return false;
@@ -434,17 +424,18 @@ export class BuildingInventoryManager {
      * Consume inputs for one production cycle.
      * Withdraws 1 of each required input material.
      * @param buildingId Entity ID of the building
+     * @param recipe Optional specific recipe to consume inputs for (overrides BUILDING_PRODUCTIONS lookup)
      * @returns True if inputs were consumed successfully
      */
-    consumeProductionInputs(buildingId: number): boolean {
+    consumeProductionInputs(buildingId: number, recipe?: Recipe): boolean {
         const inventory = this.inventories.get(buildingId);
         if (!inventory) return false;
 
-        const production = BUILDING_PRODUCTIONS.get(inventory.buildingType);
-        if (!production) return false;
+        const inputs = recipe ? recipe.inputs : BUILDING_PRODUCTIONS.get(inventory.buildingType)?.inputs;
+        if (!inputs) return false;
 
         // Consume 1 of each required input
-        for (const inputMaterial of production.inputs) {
+        for (const inputMaterial of inputs) {
             this.withdrawInput(buildingId, inputMaterial, 1);
         }
 
@@ -455,36 +446,35 @@ export class BuildingInventoryManager {
      * Produce output for one production cycle.
      * Deposits 1 of the output material.
      * @param buildingId Entity ID of the building
+     * @param recipe Optional specific recipe whose output to produce (overrides BUILDING_PRODUCTIONS lookup)
      * @returns True if output was produced successfully
      */
-    produceOutput(buildingId: number): boolean {
+    produceOutput(buildingId: number, recipe?: Recipe): boolean {
         const inventory = this.inventories.get(buildingId);
         if (!inventory) return false;
 
-        const production = BUILDING_PRODUCTIONS.get(inventory.buildingType);
-        if (!production || production.output === EMaterialType.NO_MATERIAL) return false;
+        const output = recipe ? recipe.output : BUILDING_PRODUCTIONS.get(inventory.buildingType)?.output;
+        if (!output || output === EMaterialType.NO_MATERIAL) return false;
 
-        this.depositOutput(buildingId, production.output, 1);
+        this.depositOutput(buildingId, output, 1);
         return true;
     }
 
     /**
      * Check if a building's output has space for production result.
      * @param buildingId Entity ID of the building
+     * @param recipe Optional specific recipe whose output slot to check (overrides BUILDING_PRODUCTIONS lookup)
      * @returns True if output slot has space (or building has no output)
      */
-    canStoreOutput(buildingId: number): boolean {
+    canStoreOutput(buildingId: number, recipe?: Recipe): boolean {
         const inventory = this.inventories.get(buildingId);
         if (!inventory) return false;
 
-        const production = BUILDING_PRODUCTIONS.get(inventory.buildingType);
-        if (!production) return true; // No production = always ok
+        const output = recipe ? recipe.output : BUILDING_PRODUCTIONS.get(inventory.buildingType)?.output;
+        if (!output) return true; // No production = always ok
+        if (output === EMaterialType.NO_MATERIAL) return true; // No output material
 
-        if (production.output === EMaterialType.NO_MATERIAL) {
-            return true; // No output material
-        }
-
-        const slot = inventory.outputSlots.find(s => s.materialType === production.output);
+        const slot = inventory.outputSlots.find(s => s.materialType === output);
         if (!slot) return false;
 
         return slot.currentAmount < slot.maxCapacity;

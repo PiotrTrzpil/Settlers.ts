@@ -19,6 +19,7 @@ import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { Command } from '../../commands';
 import { TREE_JOB_OFFSET, TREE_JOBS_PER_TYPE, TREE_JOB_INDICES } from '../../renderer/sprite-metadata/jil-indices';
+import type { EventBus } from '../../event-bus';
 
 /**
  * Logical tree stage (game state).
@@ -79,8 +80,11 @@ const TREE_CONFIG: GrowableConfig = {
  * Uses EntityVisualService for visual state - no direct entity manipulation.
  */
 export class TreeSystem extends GrowableSystem<TreeState> {
-    constructor(gameState: GameState, visualService: EntityVisualService) {
+    private readonly eventBus: EventBus;
+
+    constructor(gameState: GameState, visualService: EntityVisualService, eventBus: EventBus) {
         super(gameState, visualService, TREE_CONFIG, 'TreeSystem');
+        this.eventBus = eventBus;
     }
 
     // ── GrowableSystem implementation ────────────────────────────
@@ -150,6 +154,7 @@ export class TreeSystem extends GrowableSystem<TreeState> {
         if (state.stage === TreeStage.Growing) {
             if (this.advanceGrowth(state, dt)) {
                 state.stage = TreeStage.Normal;
+                this.eventBus.emit('tree:matured', { entityId });
             }
             this.updateVisual(entityId, state);
         }
@@ -231,6 +236,7 @@ export class TreeSystem extends GrowableSystem<TreeState> {
             state.stumpTimer = STUMP_DECAY_TIME;
             state.progress = 0;
             this.updateVisual(entityId, state);
+            this.eventBus.emit('tree:cut', { entityId });
             return true;
         }
 

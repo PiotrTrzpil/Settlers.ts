@@ -64,6 +64,7 @@ import {
     ResourceSignSystem,
     type OreSignExports,
 } from './features/ore-veins';
+import { ProductionControlManager } from './features/production-control';
 
 export class GameServices {
     // ===== Animation =====
@@ -97,6 +98,9 @@ export class GameServices {
 
     /** Work area store — per-building work area offsets (shared between UI and gameplay) */
     public readonly workAreaStore: WorkAreaStore;
+
+    /** Production control manager — tracks per-building recipe selection mode */
+    public readonly productionControlManager: ProductionControlManager;
 
     // ===== Systems (tick each frame) =====
     /** Movement system — updates unit positions */
@@ -173,6 +177,9 @@ export class GameServices {
 
         // 2c. Work area store — per-building work area offsets
         this.workAreaStore = new WorkAreaStore();
+
+        // 2d. Production control manager — per-building recipe selection
+        this.productionControlManager = new ProductionControlManager();
 
         // 3. Movement system
         this.movement = new MovementSystem({
@@ -269,6 +276,7 @@ export class GameServices {
             getPileRegistry: () => this.pileRegistry,
             workAreaStore: this.workAreaStore,
             buildingOverlayManager: this.buildingOverlayManager,
+            getProductionControlManager: () => this.productionControlManager,
         });
         this.addSystem(this.settlerTaskSystem, 'Units');
 
@@ -342,6 +350,14 @@ export class GameServices {
             this.visualService.remove(entityId);
             gameState.resources.removeState(entityId);
             this.workAreaStore.removeInstance(entityId);
+        });
+
+        // Production control — init multi-recipe buildings on completion, cleanup on removal
+        this.subscriptions.subscribe(eventBus, 'building:completed', ({ entityId, buildingState }) => {
+            this.productionControlManager.initBuilding(entityId, buildingState.buildingType);
+        });
+        this.cleanupRegistry.onEntityRemoved(entityId => {
+            this.productionControlManager.removeBuilding(entityId);
         });
 
         // 12. Late inventory removal — MUST happen after logistics cleanup (step 8).

@@ -11,6 +11,7 @@ import type { BuildingState } from './features/building-construction';
 import type { UnitType } from './unit-types';
 import type { EntityType } from './entity';
 import type { EMaterialType } from './economy';
+import type { MapObjectType } from './types/map-object-types';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { toastError } from './toast-notifications';
@@ -171,6 +172,56 @@ export interface GameEvents {
         slotType: 'input' | 'output';
         previousAmount: number;
         newAmount: number;
+    };
+
+    // === Production Control Events ===
+
+    /** Emitted when a building's production mode changes */
+    'production:modeChanged': {
+        buildingId: number;
+        mode: 'even' | 'proportional' | 'manual';
+    };
+
+    // === Tree Events ===
+
+    /** Emitted when a tree is planted by a forester */
+    'tree:planted': {
+        entityId: number;
+        treeType: MapObjectType;
+        x: number;
+        y: number;
+    };
+
+    /** Emitted when a tree finishes growing and becomes a full tree */
+    'tree:matured': {
+        entityId: number;
+    };
+
+    /** Emitted when a tree is fully cut down */
+    'tree:cut': {
+        entityId: number;
+    };
+
+    // === Crop Events ===
+
+    /** Emitted when a crop is planted by a farmer */
+    'crop:planted': {
+        entityId: number;
+        cropType: MapObjectType;
+        x: number;
+        y: number;
+    };
+
+    /** Emitted when a crop finishes growing and becomes ready for harvest */
+    'crop:matured': {
+        entityId: number;
+        cropType: MapObjectType;
+    };
+
+    /** Emitted when a crop is fully harvested */
+    'crop:harvested': {
+        entityId: number;
+        cropType: MapObjectType;
     };
 
     // === Combat Events ===

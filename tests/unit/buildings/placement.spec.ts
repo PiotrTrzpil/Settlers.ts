@@ -7,8 +7,8 @@ import {
 } from '@/game/features/placement';
 import { BuildingType } from '@/game/entity';
 import { Race } from '@/game/race';
-import { createTestMap, TERRAIN, setTerrainAt, setHeightAt, type TestMap } from './helpers/test-map';
-import { installTestGameData, resetTestGameData } from './helpers/test-game-data';
+import { createTestMap, TERRAIN, setTerrainAt, setHeightAt, type TestMap } from '../helpers/test-map';
+import { installTestGameData, resetTestGameData } from '../helpers/test-game-data';
 
 // Note: isPassable and isBuildable terrain-type tests are covered by the
 // game-session flow test which validates all terrain types against both functions.

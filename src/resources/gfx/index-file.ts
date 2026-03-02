@@ -32,7 +32,8 @@ export class IndexFile extends ResourceFile {
     }
 
     public getItems(start: number, length?: number): IndexFileItem[] {
-        const end = length == null ? this.length : start + length;
+        // length < 0 means "last entry in parent file" — read to end of this file
+        const end = length == null || length < 0 ? this.length : start + length;
         const list: IndexFileItem[] = [];
 
         for (let i = start; i < end; i++) {

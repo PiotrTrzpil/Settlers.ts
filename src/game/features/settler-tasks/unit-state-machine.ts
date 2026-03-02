@@ -15,7 +15,7 @@
 import type { Entity } from '../../entity';
 import { UnitType } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
-import { SettlerState, type SettlerConfig, type JobState } from './types';
+import { SettlerState, type SettlerConfig, type JobState, type HomeAssignment } from './types';
 import type { IdleAnimationController, IdleAnimationState } from './idle-animation-controller';
 import type { WorkerTaskExecutor, WorkerRuntimeState, OccupancyMap } from './worker-task-executor';
 import type { GameState } from '../../game-state';
@@ -44,8 +44,8 @@ export interface UnitRuntime {
     lastDirection: number;
     /** Idle animation state */
     idleState: IdleAnimationState;
-    /** Building this worker is assigned to (reserved exclusively via occupancy tracking) */
-    assignedBuilding: number | null;
+    /** Workplace building assignment — null when unassigned or building destroyed. */
+    homeAssignment: HomeAssignment | null;
 }
 
 export class UnitStateMachine {

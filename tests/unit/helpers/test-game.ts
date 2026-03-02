@@ -317,6 +317,44 @@ export function placeBuilding(
     return executeCommand(toCommandContext(ctx), { type: 'place_building', buildingType, x, y, player, race: 10 });
 }
 
+/**
+ * Place a building via command with worker spawned at the door.
+ * Uses the place_building command with `spawnWorker: true` (bypasses the
+ * settings-based event cascade so the worker appears in the command effects).
+ * Returns both the building entity and the worker entity.
+ */
+export function placeBuildingWithWorker(
+    ctx: TestContext,
+    x: number,
+    y: number,
+    buildingType: BuildingType,
+    race = Race.Roman
+): { building: Entity; worker: Entity } {
+    const result = executeCommand(toCommandContext(ctx), {
+        type: 'place_building',
+        buildingType,
+        x,
+        y,
+        player: 0,
+        race,
+        spawnWorker: true,
+    });
+
+    if (!result.success) {
+        throw new Error(`Failed to place ${BuildingType[buildingType]} at (${x}, ${y}): ${result.error}`);
+    }
+    const effects = result.effects!;
+    const buildingEffect = effects.find(e => e.type === 'building_placed');
+    const workerEffect = effects.find(e => e.type === 'unit_spawned');
+    if (!buildingEffect) throw new Error(`No building_placed effect for ${BuildingType[buildingType]}`);
+    if (!workerEffect) throw new Error(`No unit_spawned effect for ${BuildingType[buildingType]}`);
+
+    return {
+        building: ctx.state.getEntityOrThrow(buildingEffect.entityId, 'placeBuildingWithWorker building'),
+        worker: ctx.state.getEntityOrThrow(workerEffect.entityId, 'placeBuildingWithWorker worker'),
+    };
+}
+
 /** Execute a spawn_unit command. Returns CommandResult. */
 export function spawnUnit(ctx: TestContext, x: number, y: number, unitType = 0, player = 0): CommandResult {
     return executeCommand(toCommandContext(ctx), { type: 'spawn_unit', unitType, x, y, player, race: 10 });

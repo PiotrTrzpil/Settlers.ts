@@ -28,6 +28,8 @@ import { getBuildingMaxOccupants } from '../../buildings/types';
 import { spiralSearch } from '../../utils/spiral-search';
 import type { TerrainData } from '../../terrain';
 import type { ResourceSignSystem } from '../ore-veins/resource-sign-system';
+import type { ProductionControlManager } from '../production-control';
+import type { Recipe } from '@/game/economy/building-production';
 
 // ─────────────────────────────────────────────────────────────
 // Domain helpers (used by handlers and settler-task-system)
@@ -82,8 +84,27 @@ export function createWorkplaceHandler(
     gameState: GameState,
     inventoryManager: BuildingInventoryManager,
     getAssignedBuilding: (settlerId: number) => Entity | null,
-    getOreVeinData?: () => OreVeinData | undefined
+    getOreVeinData?: () => OreVeinData | undefined,
+    getProductionControlManager?: () => ProductionControlManager | undefined
 ): EntityWorkHandler {
+    // Tracks the recipe selected at onWorkStart so onWorkComplete produces the matching output.
+    const activeRecipes = new Map<number, Recipe>();
+
+    /** Check output-slot availability for multi-recipe or single-recipe buildings. */
+    function canStoreAnyOutput(targetId: number): boolean {
+        const pcm = getProductionControlManager?.();
+        const state = pcm?.getProductionState(targetId);
+        if (!state) return inventoryManager.canStoreOutput(targetId);
+
+        // Manual mode with empty queue — building idles
+        if (state.mode === 'manual' && state.queue.length === 0) return false;
+
+        // Check that at least one recipe's output slot has space
+        const building = gameState.getEntityOrThrow(targetId, 'workplace canWork');
+        const recipes = pcm!.getRecipes(targetId, building.subType as BuildingType);
+        return recipes.some(r => inventoryManager.canStoreOutput(targetId, r));
+    }
+
     return {
         type: WorkHandlerType.ENTITY,
         shouldWaitForWork: true,
@@ -99,9 +120,9 @@ export function createWorkplaceHandler(
         },
 
         canWork: (targetId: number) => {
-            if (!inventoryManager.canStartProduction(targetId) || !inventoryManager.canStoreOutput(targetId)) {
-                return false;
-            }
+            if (!inventoryManager.canStartProduction(targetId)) return false;
+            if (!canStoreAnyOutput(targetId)) return false;
+
             // Mine buildings require ore in the surrounding mountain tiles
             const oreDataForCanWork = getOreVeinData?.();
             if (oreDataForCanWork) {
@@ -117,6 +138,16 @@ export function createWorkplaceHandler(
         },
 
         onWorkStart: (targetId: number) => {
+            const pcm = getProductionControlManager?.();
+            if (pcm) {
+                const building = gameState.getEntityOrThrow(targetId, 'workplace onWorkStart');
+                const recipe = pcm.getNextRecipe(targetId, building.subType as BuildingType);
+                if (recipe) {
+                    activeRecipes.set(targetId, recipe);
+                    inventoryManager.consumeProductionInputs(targetId, recipe);
+                    return;
+                }
+            }
             inventoryManager.consumeProductionInputs(targetId);
         },
 
@@ -139,7 +170,14 @@ export function createWorkplaceHandler(
                     }
                 }
             }
-            inventoryManager.produceOutput(targetId);
+
+            const recipe = activeRecipes.get(targetId);
+            if (recipe) {
+                activeRecipes.delete(targetId);
+                inventoryManager.produceOutput(targetId, recipe);
+            } else {
+                inventoryManager.produceOutput(targetId);
+            }
         },
     };
 }
@@ -216,6 +254,7 @@ const woodcuttingLog = new LogHandler('WoodcuttingHandler');
 export function createPlantingHandler(system: PlantingCapable): PositionWorkHandler {
     return {
         type: WorkHandlerType.POSITION,
+        useWorkAreaCenter: true,
 
         findPosition: (x: number, y: number) => {
             return system.findPlantingSpot(x, y);

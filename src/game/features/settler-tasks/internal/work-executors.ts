@@ -11,9 +11,16 @@
 
 import { LogHandler } from '@/utilities/log-handler';
 import { TaskResult } from '../types';
-import { framesToSeconds, type ChoreoContext, type ChoreoJobState, type ChoreoNode } from '../choreo-types';
+import {
+    framesToSeconds,
+    type ChoreoContext,
+    type ChoreoJobState,
+    type ChoreoNode,
+    type WorkContext,
+} from '../choreo-types';
 import type { Entity } from '../../../entity';
 import type { EntityWorkHandler } from '../types';
+import { safeCall } from '../safe-call';
 
 const log = new LogHandler('WorkExecutors');
 
@@ -27,7 +34,7 @@ function resolveDurationSeconds(node: ChoreoNode): number {
 }
 
 /** Apply direction constraint on first tick (progress === 0). No-op when dir === -1. */
-function applyDirectionConstraint(settler: Entity, node: ChoreoNode, job: ChoreoJobState, ctx: ChoreoContext): void {
+function applyDirectionConstraint(settler: Entity, node: ChoreoNode, job: ChoreoJobState, ctx: WorkContext): void {
     if (node.dir !== -1 && job.progress === 0) {
         const controller = ctx.gameState.movement.getController(settler.id);
         controller?.setDirection(node.dir);
@@ -35,7 +42,7 @@ function applyDirectionConstraint(settler: Entity, node: ChoreoNode, job: Choreo
 }
 
 /** Fire the node trigger once (guarded by !workStarted). */
-function fireTriggerOnStart(settler: Entity, node: ChoreoNode, job: ChoreoJobState, ctx: ChoreoContext): void {
+function fireTriggerOnStart(settler: Entity, node: ChoreoNode, job: ChoreoJobState, ctx: WorkContext): void {
     if (node.trigger && !job.workStarted) {
         const buildingId = ctx.getWorkerHomeBuilding(settler.id);
         if (buildingId !== null) {
@@ -47,18 +54,18 @@ function fireTriggerOnStart(settler: Entity, node: ChoreoNode, job: ChoreoJobSta
 }
 
 /** Call positionHandler.onWorkAtPositionComplete with error handling. */
-function callPositionComplete(settler: Entity, job: ChoreoJobState, ctx: ChoreoContext, label: string): void {
+function callPositionComplete(settler: Entity, job: ChoreoJobState, ctx: WorkContext, label: string): void {
     if (!ctx.positionHandler) return;
     // Use targetPos if available; fall back to settler's current position
     // (targetPos may have been cleared between nodes, but the settler is already at the target)
+    const { positionHandler, handlerErrorLogger } = ctx;
     const x = job.targetPos?.x ?? settler.x;
     const y = job.targetPos?.y ?? settler.y;
-    try {
-        ctx.positionHandler.onWorkAtPositionComplete(x, y, settler.id);
-    } catch (e) {
-        const err = e instanceof Error ? e : new Error(String(e));
-        ctx.handlerErrorLogger.error(`${label} failed for settler ${settler.id}`, err);
-    }
+    safeCall(
+        () => positionHandler.onWorkAtPositionComplete(x, y, settler.id),
+        handlerErrorLogger,
+        `${label} failed for settler ${settler.id}`
+    );
 }
 
 /** Run entity work handler onWorkTick + handle completion. Returns DONE/CONTINUE/FAILED. */
@@ -68,7 +75,7 @@ function tickEntityWork(
     node: ChoreoNode,
     dt: number,
     handler: EntityWorkHandler,
-    ctx: ChoreoContext,
+    ctx: WorkContext,
     label: string
 ): TaskResult {
     const durationSeconds = resolveDurationSeconds(node);
@@ -76,37 +83,36 @@ function tickEntityWork(
         job.progress += dt / durationSeconds;
     }
 
-    let domainDone: boolean;
-    try {
-        domainDone = handler.onWorkTick(job.targetId!, job.progress);
-    } catch (e) {
-        const err = e instanceof Error ? e : new Error(String(e));
-        ctx.handlerErrorLogger.error(`onWorkTick ${label} failed for target ${job.targetId}`, err);
-        return TaskResult.FAILED;
-    }
+    const domainDone = safeCall(
+        () => handler.onWorkTick(job.targetId!, job.progress),
+        ctx.handlerErrorLogger,
+        `onWorkTick ${label} failed for target ${job.targetId}`
+    );
+    if (domainDone === undefined) return TaskResult.FAILED;
 
     if (domainDone || job.progress >= 1) {
-        try {
-            handler.onWorkComplete?.(job.targetId!, settler.x, settler.y);
-        } catch (e) {
-            const err = e instanceof Error ? e : new Error(String(e));
-            ctx.handlerErrorLogger.error(`onWorkComplete ${label} failed for target ${job.targetId}`, err);
-        }
+        safeCall(
+            () => handler.onWorkComplete?.(job.targetId!, settler.x, settler.y),
+            ctx.handlerErrorLogger,
+            `onWorkComplete ${label} failed for target ${job.targetId}`
+        );
         return TaskResult.DONE;
     }
     return TaskResult.CONTINUE;
 }
 
 /** Start entity work on first tick. Returns FAILED on error. */
-function startEntityWork(job: ChoreoJobState, handler: EntityWorkHandler, ctx: ChoreoContext, label: string): boolean {
+function startEntityWork(job: ChoreoJobState, handler: EntityWorkHandler, ctx: WorkContext, label: string): boolean {
     if (job.workStarted) return true;
-    try {
-        handler.onWorkStart?.(job.targetId!);
-    } catch (e) {
-        const err = e instanceof Error ? e : new Error(String(e));
-        ctx.handlerErrorLogger.error(`onWorkStart ${label} failed for target ${job.targetId}`, err);
-        return false;
-    }
+    const ok = safeCall(
+        () => {
+            handler.onWorkStart?.(job.targetId!);
+            return true;
+        },
+        ctx.handlerErrorLogger,
+        `onWorkStart ${label} failed for target ${job.targetId}`
+    );
+    if (!ok) return false;
     job.workStarted = true;
     return true;
 }

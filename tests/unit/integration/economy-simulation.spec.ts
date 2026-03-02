@@ -153,6 +153,14 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', () => {
     it('full chain: farm → grain → mill → flour + waterwork → water → bakery → bread', () => {
         sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
 
+        // Track crop lifecycle events
+        let planted = 0;
+        let matured = 0;
+        let harvested = 0;
+        sim.eventBus.on('crop:planted', () => planted++);
+        sim.eventBus.on('crop:matured', () => matured++);
+        sim.eventBus.on('crop:harvested', () => harvested++);
+
         sim.placeBuilding(BuildingType.ResidenceSmall);
         sim.placeBuilding(BuildingType.GrainFarm);
         const waterworkId = sim.placeBuilding(BuildingType.WaterworkHut);
@@ -167,6 +175,14 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', () => {
         // Long timeout: grain grows ~110s, then multiple transport + processing steps.
         sim.runUntil(() => sim.getOutput(bakeryId, EMaterialType.BREAD) >= 1, { maxTicks: 3000 * 30 });
         expect(sim.getOutput(bakeryId, EMaterialType.BREAD)).toBeGreaterThanOrEqual(1);
+
+        // Verify crop lifecycle: farmer must have planted, crops must have matured and been harvested
+        expect(planted).toBeGreaterThanOrEqual(1);
+        expect(matured).toBeGreaterThanOrEqual(1);
+        expect(harvested).toBeGreaterThanOrEqual(1);
+        // Every harvested crop must have been planted and matured first
+        expect(matured).toBeGreaterThanOrEqual(harvested);
+        expect(planted).toBeGreaterThanOrEqual(matured);
     });
 
     it('mine chain: coal mine + iron mine → iron smelter → iron bars (with injected bread)', () => {
@@ -196,6 +212,81 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', () => {
             console.log('ASSIGNMENT FAILURES (first 10):', failures.slice(0, 10));
         }
         expect(sim.getOutput(smelterId, EMaterialType.IRONBAR)).toBeGreaterThanOrEqual(1);
+    });
+
+    it('tool & weapon chain: mines → smelter → iron bars → toolsmith → axes + weaponsmith → swords', () => {
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+
+        // Log inventory output changes to diagnose production pipeline
+        sim.eventBus.on('inventory:changed', e => {
+            if (e.slotType === 'output') {
+                console.log(
+                    `[output] building=${e.buildingId} mat=${EMaterialType[e.materialType]} ${e.previousAmount}->${e.newAmount}`
+                );
+            }
+        });
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const coalMineId = sim.placeMineBuilding(BuildingType.CoalMine, OreType.Coal);
+        const ironMineId = sim.placeMineBuilding(BuildingType.IronMine, OreType.Iron);
+        const smelterId = sim.placeBuilding(BuildingType.IronSmelter);
+        const toolSmithId = sim.placeBuilding(BuildingType.ToolSmith);
+        const weaponSmithId = sim.placeBuilding(BuildingType.WeaponSmith);
+
+        // Inject all raw materials directly — focus is on smelting + smithing pipeline
+        sim.injectInput(coalMineId, EMaterialType.BREAD, 8);
+        sim.injectInput(ironMineId, EMaterialType.BREAD, 8);
+        sim.injectInput(smelterId, EMaterialType.IRONORE, 8);
+        sim.injectInput(smelterId, EMaterialType.COAL, 8);
+        sim.injectInput(toolSmithId, EMaterialType.COAL, 8);
+        sim.injectInput(toolSmithId, EMaterialType.IRONBAR, 4);
+        sim.injectInput(weaponSmithId, EMaterialType.COAL, 8);
+        sim.injectInput(weaponSmithId, EMaterialType.IRONBAR, 4);
+
+        // Smelter: IRONORE+COAL → IRONBAR.
+        // ToolSmith: IRONBAR+COAL → AXE, WeaponSmith: IRONBAR+COAL → SWORD.
+        sim.runUntil(
+            () =>
+                sim.getOutput(toolSmithId, EMaterialType.AXE) >= 1 &&
+                sim.getOutput(weaponSmithId, EMaterialType.SWORD) >= 1,
+            { maxTicks: 600 * 30 }
+        );
+        expect(sim.getOutput(smelterId, EMaterialType.IRONBAR)).toBeGreaterThanOrEqual(1);
+        expect(sim.getOutput(toolSmithId, EMaterialType.AXE)).toBeGreaterThanOrEqual(1);
+        expect(sim.getOutput(weaponSmithId, EMaterialType.SWORD)).toBeGreaterThanOrEqual(1);
+    });
+
+    it('forester plants trees, woodcutter harvests them (no initial trees)', () => {
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+
+        // Track tree lifecycle events
+        let treesPlanted = 0;
+        let treesMatured = 0;
+        let treesCut = 0;
+        sim.eventBus.on('tree:planted', () => treesPlanted++);
+        sim.eventBus.on('tree:matured', () => treesMatured++);
+        sim.eventBus.on('tree:cut', () => treesCut++);
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const foresterId = sim.placeBuilding(BuildingType.ForesterHut);
+        const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
+
+        // No trees planted — forester must plant them first, then woodcutter harvests.
+        // Forester plants saplings that grow into mature trees over ~60-120s game time.
+        // Woodcutter then detects mature trees within work area and cuts them.
+        sim.runUntil(() => sim.getOutput(woodcutterId, EMaterialType.LOG) >= 2, { maxTicks: 3000 * 30 });
+        expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBeGreaterThanOrEqual(2);
+
+        // ForesterHut itself produces no material output (pure planter)
+        expect(sim.getOutput(foresterId, EMaterialType.LOG)).toBe(0);
+
+        // Verify tree lifecycle: forester planted, trees grew, woodcutter cut them
+        expect(treesPlanted).toBeGreaterThanOrEqual(2);
+        expect(treesMatured).toBeGreaterThanOrEqual(2);
+        expect(treesCut).toBeGreaterThanOrEqual(2);
+        // Every cut tree must have matured, every matured tree must have been planted
+        expect(treesMatured).toBeGreaterThanOrEqual(treesCut);
+        expect(treesPlanted).toBeGreaterThanOrEqual(treesMatured);
     });
 
     it('stonecutter mines only nearby rocks, ignores far ones', () => {

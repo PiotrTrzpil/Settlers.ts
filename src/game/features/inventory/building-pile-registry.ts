@@ -25,6 +25,12 @@ export interface PileSlot {
     dy: number;
 }
 
+/** A storage pile position — material-agnostic, bidirectional (input + output) */
+export interface StoragePilePosition {
+    dx: number;
+    dy: number;
+}
+
 /** Composite key for (BuildingType, Race) */
 function registryKey(buildingType: BuildingType, race: Race): string {
     return `${buildingType}:${race}`;
@@ -33,6 +39,8 @@ function registryKey(buildingType: BuildingType, race: Race): string {
 export class BuildingPileRegistry {
     /** Pile slots keyed by "buildingType:race" */
     private slots = new Map<string, PileSlot[]>();
+    /** Storage pile positions keyed by "buildingType:race" — bidirectional, material-agnostic */
+    private storagePositions = new Map<string, StoragePilePosition[]>();
 
     constructor(gameData: GameData) {
         this.buildFromGameData(gameData);
@@ -51,6 +59,27 @@ export class BuildingPileRegistry {
     /** Get pile slots filtered to outputs only */
     getOutputSlots(buildingType: BuildingType, race: Race): readonly PileSlot[] {
         return this.getPileSlots(buildingType, race).filter(s => s.slotType === 'output');
+    }
+
+    /** Whether this building type has storage piles (bidirectional, material-agnostic) */
+    hasStoragePiles(buildingType: BuildingType, race: Race): boolean {
+        return this.storagePositions.has(registryKey(buildingType, race));
+    }
+
+    /** Get storage pile offsets (anchor-relative) for a building type + race */
+    getStoragePilePositions(buildingType: BuildingType, race: Race): readonly StoragePilePosition[] {
+        return this.storagePositions.get(registryKey(buildingType, race)) ?? [];
+    }
+
+    /** Get storage pile positions as world coordinates */
+    getStoragePileWorldPositions(
+        buildingType: BuildingType,
+        race: Race,
+        buildingX: number,
+        buildingY: number
+    ): TileCoord[] {
+        const offsets = this.getStoragePilePositions(buildingType, race);
+        return offsets.map(p => ({ x: buildingX + p.dx, y: buildingY + p.dy }));
     }
 
     /** Get the tile position for a specific material at a building */
@@ -88,39 +117,47 @@ export class BuildingPileRegistry {
         for (const [raceId, raceBuildingData] of gameData.buildings) {
             const race = raceIdToRace(raceId);
             for (const [xmlId, buildingInfo] of raceBuildingData.buildings) {
-                const buildingTypes = getBuildingTypesByXmlId(xmlId);
-                if (!buildingTypes) continue;
-
-                const pileSlots = this.convertPiles(buildingInfo);
-                if (pileSlots.length === 0) continue;
-
-                for (const bt of buildingTypes) {
-                    this.slots.set(registryKey(bt, race), pileSlots);
-                }
+                this.registerBuildingPiles(race, xmlId, buildingInfo);
             }
         }
     }
 
-    private convertPiles(info: BuildingInfo): PileSlot[] {
-        const result: PileSlot[] = [];
+    private registerBuildingPiles(race: Race, xmlId: string, buildingInfo: BuildingInfo): void {
+        const buildingTypes = getBuildingTypesByXmlId(xmlId);
+        if (!buildingTypes) return;
+
+        const { pileSlots, storageSlots } = this.convertPiles(buildingInfo);
+
+        for (const bt of buildingTypes) {
+            const key = registryKey(bt, race);
+            if (pileSlots.length > 0) this.slots.set(key, pileSlots);
+            if (storageSlots.length > 0) this.storagePositions.set(key, storageSlots);
+        }
+    }
+
+    private convertPiles(info: BuildingInfo): { pileSlots: PileSlot[]; storageSlots: StoragePilePosition[] } {
+        const pileSlots: PileSlot[] = [];
+        const storageSlots: StoragePilePosition[] = [];
 
         for (const pile of info.piles) {
-            // Skip storage entries (type=4)
-            if (pile.type === PileSlotType.Storage) continue;
+            // Pile xOffset/yOffset are already anchor-relative (like door offsets),
+            // NOT in bitmask coordinates — no hotspot subtraction needed.
+            const dx = pile.xOffset;
+            const dy = pile.yOffset;
+
+            if (pile.type === PileSlotType.Storage) {
+                storageSlots.push({ dx, dy });
+                continue;
+            }
 
             const slotType = pile.type === PileSlotType.Output ? 'output' : 'input';
 
             const material = xmlGoodToMaterialType(pile.good);
             if (material === undefined) continue;
 
-            // Pile xOffset/yOffset are already anchor-relative (like door offsets),
-            // NOT in bitmask coordinates — no hotspot subtraction needed.
-            const dx = pile.xOffset;
-            const dy = pile.yOffset;
-
-            result.push({ material, slotType, dx, dy });
+            pileSlots.push({ material, slotType, dx, dy });
         }
 
-        return result;
+        return { pileSlots, storageSlots };
     }
 }

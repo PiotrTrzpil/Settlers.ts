@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-    decodeBuildingFootprint,
-    getFootprintBounds,
-} from '@/resources/game-data/footprint-decoder';
+import { decodeBuildingFootprint, getFootprintBounds } from '@/resources/game-data/footprint-decoder';
 
 describe('footprint-decoder', () => {
     describe('decodeBuildingFootprint', () => {
@@ -10,8 +7,8 @@ describe('footprint-decoder', () => {
             // Two rows with bits 30,31 set (positions 0,1)
             // 0xC0000000 = bits 30,31 set = -1073741824 as signed int
             const buildingPosLines = [
-                0xC0000000 >>> 0, // row 0: bits 30,31
-                0xC0000000 >>> 0, // row 1: bits 30,31
+                0xc0000000 >>> 0, // row 0: bits 30,31
+                0xc0000000 >>> 0, // row 1: bits 30,31
             ];
             // Hotspot at (1, 1) - center of 2x2
             const tiles = decodeBuildingFootprint(buildingPosLines, 1, 1);
@@ -19,9 +16,9 @@ describe('footprint-decoder', () => {
             expect(tiles).toHaveLength(4);
             // Tiles relative to hotspot (1,1)
             expect(tiles).toContainEqual({ x: -1, y: -1 }); // (0,0) - (1,1)
-            expect(tiles).toContainEqual({ x: 0, y: -1 });  // (1,0) - (1,1)
-            expect(tiles).toContainEqual({ x: -1, y: 0 });  // (0,1) - (1,1)
-            expect(tiles).toContainEqual({ x: 0, y: 0 });   // (1,1) - (1,1)
+            expect(tiles).toContainEqual({ x: 0, y: -1 }); // (1,0) - (1,1)
+            expect(tiles).toContainEqual({ x: -1, y: 0 }); // (0,1) - (1,1)
+            expect(tiles).toContainEqual({ x: 0, y: 0 }); // (1,1) - (1,1)
         });
 
         it('should decode single tile at origin', () => {

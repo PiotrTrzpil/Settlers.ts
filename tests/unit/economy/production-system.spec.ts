@@ -3,7 +3,7 @@ import { MaterialRequestSystem, type MaterialRequestSystemConfig } from '@/game/
 import { BuildingType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingConstructionPhase } from '@/game/features/building-construction';
-import { createTestContext, addBuildingWithInventory, type TestContext } from './helpers/test-game';
+import { createTestContext, addBuildingWithInventory, type TestContext } from '../helpers/test-game';
 
 describe('MaterialRequestSystem', () => {
     let ctx: TestContext;

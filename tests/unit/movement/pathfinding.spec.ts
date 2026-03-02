@@ -14,8 +14,8 @@ import {
 import { tileKey } from '@/game/entity';
 import { GameState } from '@/game/game-state';
 import { pushUnit, findRandomFreeDirection, type TerrainAccessor } from '@/game/systems/movement/index';
-import { createTestMap, TERRAIN, blockColumn, type TestMap } from './helpers/test-map';
-import { createGameState, addUnit } from './helpers/test-game';
+import { createTestMap, TERRAIN, blockColumn, type TestMap } from '../helpers/test-map';
+import { createGameState, addUnit } from '../helpers/test-game';
 
 /** Helper to create TerrainAccessor from test map */
 function makeTerrain(map: TestMap): TerrainAccessor {

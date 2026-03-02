@@ -35,7 +35,7 @@ export const TreeFeature: FeatureDefinition = {
         const subscriptions = new EventSubscriptionManager();
 
         // Create the tree system
-        const treeSystem = new TreeSystem(ctx.gameState, ctx.visualService);
+        const treeSystem = new TreeSystem(ctx.gameState, ctx.visualService, ctx.eventBus);
 
         // Register for map object creation events to auto-register trees
         subscriptions.subscribe(ctx.eventBus, 'entity:created', ({ entityId, type, subType }) => {

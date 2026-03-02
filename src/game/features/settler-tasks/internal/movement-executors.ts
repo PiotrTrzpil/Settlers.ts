@@ -10,12 +10,12 @@
  */
 
 import { EntityType, BuildingType, type Entity } from '../../../entity';
-import { EMaterialType } from '../../../economy';
 import { getBuildingDoorPos } from '../../../game-data-access';
 import { hexDistance, getApproxDirection } from '../../../systems/hex-directions';
 import { LogHandler } from '@/utilities/log-handler';
 import { TaskResult } from '../types';
-import type { ChoreoNode, ChoreoContext, ChoreoExecutorFn, ChoreoJobState } from '../choreo-types';
+import type { ChoreoNode, ChoreoExecutorFn, ChoreoJobState, MovementContext } from '../choreo-types';
+import { safeCall } from '../safe-call';
 
 const log = new LogHandler('MovementExecutors');
 
@@ -49,7 +49,7 @@ export function moveToPosition(
     targetX: number,
     targetY: number,
     node: ChoreoNode,
-    ctx: ChoreoContext,
+    ctx: MovementContext,
     arrivalDist: number = ARRIVAL_DIST
 ): TaskResult {
     const controller = ctx.gameState.movement.getController(settler.id);
@@ -88,7 +88,7 @@ export function moveToPosition(
  * Uses ctx.getWorkerHomeBuilding for worker settlers.
  * Throws if no building is assigned (contract violation).
  */
-function resolveAssignedBuildingId(settler: Entity, ctx: ChoreoContext): number {
+function resolveAssignedBuildingId(settler: Entity, ctx: MovementContext): number {
     const buildingId = ctx.getWorkerHomeBuilding(settler.id);
     if (buildingId === null) {
         throw new Error(
@@ -96,24 +96,6 @@ function resolveAssignedBuildingId(settler: Entity, ctx: ChoreoContext): number 
         );
     }
     return buildingId;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Helper: resolve material string for pile executors
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Resolve the material string for GO_TO_SOURCE_PILE / GO_TO_DESTINATION_PILE.
- *
- * Many XML nodes (e.g. woodcutter's GO_TO_DESTINATION_PILE) omit the <entity>
- * field — the material is only declared on the subsequent PUT_GOOD node.
- * In that case we fall back to the material the settler is currently carrying
- * (set by RESOURCE_GATHERING / GET_GOOD earlier in the choreography).
- */
-function resolvePileMaterial(node: ChoreoNode, job: ChoreoJobState): string {
-    if (node.entity) return node.entity;
-    if (job.carryingGood !== null) return EMaterialType[job.carryingGood];
-    return '';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -221,55 +203,26 @@ export const executeGoHome: ChoreoExecutorFn = (settler, job, node, _dt, ctx) =>
 };
 
 /**
- * GO_TO_SOURCE_PILE — move to the source (input) pile of the settler's assigned building.
+ * GO_TO_SOURCE_PILE / GO_TO_DESTINATION_PILE — move to a pile position.
  *
- * The source pile position is resolved via ctx.buildingPositionResolver.getSourcePilePosition
- * using node.entity (or job.carryingGood fallback) as the material identifier.
- * When no visual stack exists yet, falls back to the node's building-relative (x, y) offset.
- * Caches position in job.targetPos on first call.
+ * The XML already encodes the exact pile position as a building-relative (x, y) offset
+ * on the node — no material-based registry lookup is needed. The implementation is
+ * identical to GO_TO_POS: resolve building-relative offset, then walk there.
  */
-export const executeGoToSourcePile: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
-    if (!job.targetPos) {
-        const buildingId = resolveAssignedBuildingId(settler, ctx);
-        const material = resolvePileMaterial(node, job);
-        const pos = material ? ctx.buildingPositionResolver.getSourcePilePosition(buildingId, material) : null;
-        job.targetPos = pos ?? ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork);
-    }
-
-    return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST);
-};
-
-/**
- * GO_TO_DESTINATION_PILE — move to the destination (output) pile of the settler's assigned building.
- *
- * Resolved via ctx.buildingPositionResolver.getDestinationPilePosition using node.entity
- * (or job.carryingGood fallback) as the material identifier.
- * When no visual stack exists yet, falls back to the node's building-relative (x, y) offset.
- * Caches position in job.targetPos on first call.
- */
-export const executeGoToDestinationPile: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
-    if (!job.targetPos) {
-        const buildingId = resolveAssignedBuildingId(settler, ctx);
-        const material = resolvePileMaterial(node, job);
-        const pos = material ? ctx.buildingPositionResolver.getDestinationPilePosition(buildingId, material) : null;
-        job.targetPos = pos ?? ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork);
-    }
-
-    return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST);
-};
+export const executeGoToSourcePile: ChoreoExecutorFn = executeGoToPos;
+export const executeGoToDestinationPile: ChoreoExecutorFn = executeGoToPos;
 
 /** Try entity handler search. Returns null when entityHandler is absent. */
-function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: ChoreoContext): TaskResult | null {
+function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: MovementContext): TaskResult | null {
     if (!ctx.entityHandler) return null;
+    const { entityHandler, handlerErrorLogger } = ctx;
 
-    let result: { entityId: number; x: number; y: number } | null;
-    try {
-        result = ctx.entityHandler.findTarget(settler.x, settler.y, settler.id);
-    } catch (e) {
-        const err = e instanceof Error ? e : new Error(String(e));
-        ctx.handlerErrorLogger.error(`SEARCH findTarget failed for settler ${settler.id}`, err);
-        return TaskResult.FAILED;
-    }
+    const result = safeCall(
+        () => entityHandler.findTarget(settler.x, settler.y, settler.id),
+        handlerErrorLogger,
+        `SEARCH findTarget failed for settler ${settler.id}`
+    );
+    if (result === undefined) return TaskResult.FAILED;
 
     if (result) {
         job.targetId = result.entityId;
@@ -278,23 +231,34 @@ function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: Chore
         return TaskResult.DONE;
     }
 
-    if (ctx.entityHandler.shouldWaitForWork) return TaskResult.CONTINUE;
+    if (entityHandler.shouldWaitForWork) return TaskResult.CONTINUE;
     log.debug(`executeSearch: settler ${settler.id} found no entity target`);
     return TaskResult.FAILED;
 }
 
-/** Try position handler search. Returns null when positionHandler is absent. */
-function searchViaPositionHandler(settler: Entity, job: ChoreoJobState, ctx: ChoreoContext): TaskResult | null {
-    if (!ctx.positionHandler) return null;
-
-    let pos: { x: number; y: number } | null;
-    try {
-        pos = ctx.positionHandler.findPosition(settler.x, settler.y, settler.id);
-    } catch (e) {
-        const err = e instanceof Error ? e : new Error(String(e));
-        ctx.handlerErrorLogger.error(`SEARCH findPosition failed for settler ${settler.id}`, err);
-        return TaskResult.FAILED;
+/** Get the search center for a position handler — work area center or settler position. */
+function getPositionSearchCenter(settler: Entity, ctx: MovementContext): { x: number; y: number } {
+    if (ctx.positionHandler?.useWorkAreaCenter) {
+        const homeId = ctx.getWorkerHomeBuilding(settler.id);
+        if (homeId !== null) {
+            return ctx.buildingPositionResolver.resolvePosition(homeId, 0, 0, true);
+        }
     }
+    return settler;
+}
+
+/** Try position handler search. Returns null when positionHandler is absent. */
+function searchViaPositionHandler(settler: Entity, job: ChoreoJobState, ctx: MovementContext): TaskResult | null {
+    if (!ctx.positionHandler) return null;
+    const { positionHandler, handlerErrorLogger } = ctx;
+    const center = getPositionSearchCenter(settler, ctx);
+
+    const pos = safeCall(
+        () => positionHandler.findPosition(center.x, center.y, settler.id),
+        handlerErrorLogger,
+        `SEARCH findPosition failed for settler ${settler.id}`
+    );
+    if (pos === undefined) return TaskResult.FAILED;
 
     if (pos) {
         job.targetPos = { x: pos.x, y: pos.y };
@@ -302,7 +266,7 @@ function searchViaPositionHandler(settler: Entity, job: ChoreoJobState, ctx: Cho
         return TaskResult.DONE;
     }
 
-    if (ctx.positionHandler.shouldWaitForWork) return TaskResult.CONTINUE;
+    if (positionHandler.shouldWaitForWork) return TaskResult.CONTINUE;
     log.debug(`executeSearch: settler ${settler.id} found no position target`);
     return TaskResult.FAILED;
 }

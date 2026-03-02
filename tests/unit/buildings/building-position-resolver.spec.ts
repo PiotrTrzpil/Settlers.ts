@@ -222,9 +222,10 @@ describe('BuildingPositionResolverImpl', () => {
             );
         });
 
-        it('throws when registry has no pile entry', () => {
+        it('throws when registry has no pile entry for non-storage building', () => {
             const mockRegistry = {
                 getPilePositionForSlot: vi.fn().mockReturnValue(null),
+                hasStoragePiles: vi.fn().mockReturnValue(false),
             };
             const localResolver = new BuildingPositionResolverImpl({
                 gameState: mockGameState as never,

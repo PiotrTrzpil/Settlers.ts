@@ -15,9 +15,10 @@ import {
     type PositionWorkHandler,
 } from '@/game/features/settler-tasks/types';
 import { EntityVisualService } from '@/game/animation/entity-visual-service';
-import { EntityType } from '@/game/entity';
+import { EntityType, BuildingType } from '@/game/entity';
 import { UnitType } from '@/game/unit-types';
-import { createTestContext, addUnit, type TestContext } from './helpers/test-game';
+import { Race } from '@/game/race';
+import { createTestContext, addUnit, addBuilding, type TestContext } from '../helpers/test-game';
 import { CarrierManager } from '@/game/features/carriers';
 
 /** Helper: create a SettlerTaskSystem wired to a TestContext */
@@ -88,6 +89,7 @@ describe('SettlerTaskSystem job selection', () => {
             const handler = createTargetHandler({ entityId: tree.id, x: 15, y: 15 });
             (system as any).handlerRegistry.entityHandlers.set(SearchType.TREE, handler);
 
+            addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
 
             system.tick(0.016);
@@ -98,6 +100,20 @@ describe('SettlerTaskSystem job selection', () => {
         it('woodcutter stays idle when no target exists', () => {
             const system = createTaskSystem(ctx);
             (system as any).handlerRegistry.entityHandlers.set(SearchType.TREE, createNoTargetHandler());
+
+            addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut, 0, Race.Roman);
+            const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
+
+            system.tick(0.016);
+
+            expect(system.isWorking(entity.id)).toBe(false);
+        });
+
+        it('woodcutter stays idle without a home building', () => {
+            const system = createTaskSystem(ctx);
+            const tree = ctx.state.addEntity(EntityType.MapObject, 0, 15, 15, 0);
+            const handler = createTargetHandler({ entityId: tree.id, x: 15, y: 15 });
+            (system as any).handlerRegistry.entityHandlers.set(SearchType.TREE, handler);
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
 
@@ -116,6 +132,7 @@ describe('SettlerTaskSystem job selection', () => {
                 createTargetHandler({ entityId: grain.id, x: 15, y: 15 })
             );
 
+            addBuilding(ctx.state, 10, 10, BuildingType.GrainFarm, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
             system.tick(0.016);
@@ -130,6 +147,7 @@ describe('SettlerTaskSystem job selection', () => {
             (system as any).handlerRegistry.entityHandlers.set(SearchType.GRAIN, createNoTargetHandler());
             (system as any).handlerRegistry.positionHandlers.set(SearchType.GRAIN, createPositionHandler(null));
 
+            addBuilding(ctx.state, 10, 10, BuildingType.GrainFarm, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
             // Tick 1: handleIdle selects plant job → state=WORKING
@@ -152,6 +170,7 @@ describe('SettlerTaskSystem job selection', () => {
                 createPositionHandler({ x: 20, y: 20 })
             );
 
+            addBuilding(ctx.state, 10, 10, BuildingType.GrainFarm, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
             system.tick(0.016);
@@ -173,6 +192,7 @@ describe('SettlerTaskSystem job selection', () => {
                 createPositionHandler({ x: 20, y: 20 })
             );
 
+            addBuilding(ctx.state, 10, 10, BuildingType.GrainFarm, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
             system.tick(0.016);
@@ -190,6 +210,7 @@ describe('SettlerTaskSystem job selection', () => {
                 createPositionHandler({ x: 20, y: 20 })
             );
 
+            addBuilding(ctx.state, 10, 10, BuildingType.ForesterHut, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Forester });
 
             system.tick(0.016);
@@ -203,6 +224,7 @@ describe('SettlerTaskSystem job selection', () => {
             const system = createTaskSystem(ctx);
             (system as any).handlerRegistry.positionHandlers.set(SearchType.TREE_SEED_POS, createPositionHandler(null));
 
+            addBuilding(ctx.state, 10, 10, BuildingType.ForesterHut, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Forester });
 
             // Tick 1: handleIdle selects plant job → state=WORKING
@@ -237,6 +259,7 @@ describe('SettlerTaskSystem job selection', () => {
                 createPositionHandler({ x: 20, y: 20 })
             );
 
+            addBuilding(ctx.state, 10, 10, BuildingType.GrainFarm, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
             // First cycle: target exists → harvest

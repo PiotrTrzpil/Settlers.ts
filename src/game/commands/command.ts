@@ -1,6 +1,7 @@
-import { EntityType, EXTENDED_OFFSETS, tileKey, getUnitLevel } from '../entity';
+import { EntityType, EXTENDED_OFFSETS, tileKey, getUnitLevel, type Entity } from '../entity';
 import {
     BuildingConstructionPhase,
+    type BuildingState,
     type BuildingStateManager,
     captureOriginalTerrain,
     setConstructionSiteGroundType,
@@ -20,6 +21,7 @@ import type { SettlerTaskSystem } from '../features/settler-tasks';
 import type { TreeSystem } from '../features/trees';
 import type { CropSystem } from '../features/crops';
 import type { CombatSystem } from '../features/combat';
+import type { ProductionControlManager } from '../features/production-control';
 import {
     Command,
     FORMATION_OFFSETS,
@@ -41,6 +43,10 @@ import {
     type ScriptAddGoodsCommand,
     type ScriptAddBuildingCommand,
     type ScriptAddSettlersCommand,
+    type SetProductionModeCommand,
+    type SetRecipeProportionCommand,
+    type AddToProductionQueueCommand,
+    type RemoveFromProductionQueueCommand,
     type CommandResult,
     commandSuccess,
     commandFailed,
@@ -62,6 +68,8 @@ export interface CommandContext {
     cropSystem?: CropSystem;
     /** Combat system — used to release units from auto-combat when player issues commands */
     combatSystem?: CombatSystem;
+    /** Production control manager for multi-recipe buildings */
+    productionControlManager?: ProductionControlManager;
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): CommandResult {
@@ -120,9 +128,40 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
         });
     }
 
-    return commandSuccess([
+    const effects: any[] = [
         { type: 'building_placed', entityId: entity.id, buildingType: cmd.buildingType, x: cmd.x, y: cmd.y },
-    ]);
+    ];
+
+    // Spawn dedicated worker at door when explicitly requested
+    if (cmd.spawnWorker) {
+        const workerInfo = getBuildingWorkerInfo(entity.race, cmd.buildingType);
+        if (workerInfo) {
+            const door = getBuildingDoorPos(cmd.x, cmd.y, entity.race, cmd.buildingType);
+            const doorKey = tileKey(door.x, door.y);
+            const previousOwner = state.tileOccupancy.get(doorKey);
+            const workerEntity = state.addEntity(EntityType.Unit, workerInfo.unitType, door.x, door.y, cmd.player);
+            workerEntity.race = entity.race;
+            if (previousOwner === entity.id) {
+                state.tileOccupancy.set(doorKey, entity.id);
+            }
+            ctx.eventBus.emit('unit:spawned', {
+                entityId: workerEntity.id,
+                unitType: workerInfo.unitType,
+                x: door.x,
+                y: door.y,
+                player: cmd.player,
+            });
+            effects.push({
+                type: 'unit_spawned',
+                entityId: workerEntity.id,
+                unitType: workerInfo.unitType,
+                x: door.x,
+                y: door.y,
+            });
+        }
+    }
+
+    return commandSuccess(effects);
 }
 
 function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): CommandResult {
@@ -369,6 +408,46 @@ function executeSpawnVisualResource(ctx: CommandContext, cmd: SpawnVisualResourc
     return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedResource' }]);
 }
 
+type UnitSpawnEffect = { type: 'unit_spawned'; entityId: number; unitType: number; x: number; y: number };
+
+/** Spawn the building's dedicated worker at its door tile, if not already present. */
+function spawnWorkerAtDoor(
+    ctx: CommandContext,
+    entity: Entity,
+    buildingState: BuildingState,
+    bx: number,
+    by: number,
+    effects: UnitSpawnEffect[]
+): void {
+    const { state, eventBus } = ctx;
+    const workerInfo = getBuildingWorkerInfo(entity.race, buildingState.buildingType);
+    if (!workerInfo) return;
+    const door = getBuildingDoorPos(bx, by, entity.race, buildingState.buildingType);
+    const existingAtDoor = state.getEntityAt(door.x, door.y);
+    if (existingAtDoor && existingAtDoor.type === EntityType.Unit) return;
+    const doorKey = tileKey(door.x, door.y);
+    const previousOwner = state.tileOccupancy.get(doorKey);
+    const workerEntity = state.addEntity(EntityType.Unit, workerInfo.unitType, door.x, door.y, entity.player);
+    workerEntity.race = entity.race;
+    if (previousOwner === buildingState.entityId) {
+        state.tileOccupancy.set(doorKey, buildingState.entityId);
+    }
+    eventBus.emit('unit:spawned', {
+        entityId: workerEntity.id,
+        unitType: workerInfo.unitType,
+        x: door.x,
+        y: door.y,
+        player: entity.player,
+    });
+    effects.push({
+        type: 'unit_spawned',
+        entityId: workerEntity.id,
+        unitType: workerInfo.unitType,
+        x: door.x,
+        y: door.y,
+    });
+}
+
 // eslint-disable-next-line sonarjs/cognitive-complexity -- complex game state machine for unit spawning
 function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsCommand): CommandResult {
     const { state, terrain, eventBus } = ctx;
@@ -377,7 +456,7 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
     if (!buildingState)
         throw new Error(`No building state for completed building ${cmd.buildingEntityId} (executeSpawnBuildingUnits)`);
     const { tileX: bx, tileY: by } = buildingState;
-    const effects: { type: 'unit_spawned'; entityId: number; unitType: number; x: number; y: number }[] = [];
+    const effects: UnitSpawnEffect[] = [];
 
     // Spawn units from BUILDING_SPAWN_ON_COMPLETE (carriers from residences, soldiers from barracks)
     const spawnDef = BUILDING_SPAWN_ON_COMPLETE[buildingState.buildingType];
@@ -420,41 +499,11 @@ function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsC
         }
     }
 
-    // Spawn dedicated worker if placeBuildingsWithWorker is enabled
-    // Skip buildings that already spawn units via BUILDING_SPAWN_ON_COMPLETE (residences, barracks)
+    // Spawn dedicated worker if enabled by settings.
+    // Skip buildings that already spawn units via BUILDING_SPAWN_ON_COMPLETE (residences, barracks).
+    // Skip if a unit already exists at the door (placed by executePlaceBuilding's spawnWorker).
     if (ctx.settings.placeBuildingsWithWorker && !spawnDef) {
-        const workerInfo = getBuildingWorkerInfo(entity.race, buildingState.buildingType);
-        if (workerInfo) {
-            const door = getBuildingDoorPos(bx, by, entity.race, buildingState.buildingType);
-            // Remember who owned the door tile before spawning (building owns footprint tiles)
-            const doorKey = tileKey(door.x, door.y);
-            const previousOwner = state.tileOccupancy.get(doorKey);
-
-            const workerEntity = state.addEntity(EntityType.Unit, workerInfo.unitType, door.x, door.y, entity.player);
-            workerEntity.race = entity.race;
-
-            // If the door tile was on the building footprint, restore building ownership
-            // (the worker exists "inside" the building, not claiming the tile)
-            if (previousOwner === buildingState.entityId) {
-                state.tileOccupancy.set(doorKey, buildingState.entityId);
-            }
-
-            eventBus.emit('unit:spawned', {
-                entityId: workerEntity.id,
-                unitType: workerInfo.unitType,
-                x: door.x,
-                y: door.y,
-                player: entity.player,
-            });
-
-            effects.push({
-                type: 'unit_spawned',
-                entityId: workerEntity.id,
-                unitType: workerInfo.unitType,
-                x: door.x,
-                y: door.y,
-            });
-        }
+        spawnWorkerAtDoor(ctx, entity, buildingState, bx, by, effects);
     }
 
     return commandSuccess(effects);
@@ -474,6 +523,7 @@ function executePlantTree(ctx: CommandContext, cmd: PlantTreeCommand): CommandRe
     // Register with tree system for growth tracking
     if (!ctx.treeSystem) throw new Error(`plant_tree command requires treeSystem in CommandContext`);
     ctx.treeSystem.register(entity.id, cmd.treeType, true);
+    ctx.eventBus.emit('tree:planted', { entityId: entity.id, treeType: cmd.treeType, x: cmd.x, y: cmd.y });
 
     return commandSuccess([{ type: 'tree_planted', entityId: entity.id, treeType: cmd.treeType, x: cmd.x, y: cmd.y }]);
 }
@@ -501,6 +551,8 @@ function executePlantCrop(ctx: CommandContext, cmd: PlantCropCommand): CommandRe
     // Register with crop system for growth tracking (planted=true → Growing stage)
     if (!ctx.cropSystem) throw new Error(`plant_crop command requires cropSystem in CommandContext`);
     ctx.cropSystem.register(entity.id, cmd.cropType, true);
+
+    ctx.eventBus.emit('crop:planted', { entityId: entity.id, cropType: cmd.cropType, x: cmd.x, y: cmd.y });
 
     return commandSuccess([{ type: 'crop_planted', entityId: entity.id, cropType: cmd.cropType, x: cmd.x, y: cmd.y }]);
 }
@@ -575,6 +627,44 @@ function executeScriptAddSettlers(ctx: CommandContext, cmd: ScriptAddSettlersCom
     return commandSuccess(effects);
 }
 
+// === Production control command handlers ===
+
+function executeSetProductionMode(ctx: CommandContext, cmd: SetProductionModeCommand): CommandResult {
+    if (!ctx.productionControlManager) {
+        return commandFailed('Production control not available');
+    }
+    const state = ctx.productionControlManager.getProductionState(cmd.buildingId);
+    if (!state) {
+        return commandFailed(`Building ${cmd.buildingId} has no production control state`);
+    }
+    ctx.productionControlManager.setMode(cmd.buildingId, cmd.mode);
+    return { success: true };
+}
+
+function executeSetRecipeProportion(ctx: CommandContext, cmd: SetRecipeProportionCommand): CommandResult {
+    if (!ctx.productionControlManager) {
+        return commandFailed('Production control not available');
+    }
+    ctx.productionControlManager.setProportion(cmd.buildingId, cmd.output, cmd.weight);
+    return { success: true };
+}
+
+function executeAddToProductionQueue(ctx: CommandContext, cmd: AddToProductionQueueCommand): CommandResult {
+    if (!ctx.productionControlManager) {
+        return commandFailed('Production control not available');
+    }
+    ctx.productionControlManager.addToQueue(cmd.buildingId, cmd.output);
+    return { success: true };
+}
+
+function executeRemoveFromProductionQueue(ctx: CommandContext, cmd: RemoveFromProductionQueueCommand): CommandResult {
+    if (!ctx.productionControlManager) {
+        return commandFailed('Production control not available');
+    }
+    ctx.productionControlManager.removeFromQueue(cmd.buildingId, cmd.output);
+    return { success: true };
+}
+
 // Each handler takes a specific Command subtype, but the map stores them generically.
 // cmd is typed `any` intentionally: each handler is matched to its Command subtype at
 // runtime via the COMMAND_HANDLERS map, so variance errors would be false positives.
@@ -600,6 +690,10 @@ const COMMAND_HANDLERS: Record<Command['type'], CommandHandler> = {
     script_add_goods: executeScriptAddGoods,
     script_add_building: executeScriptAddBuilding,
     script_add_settlers: executeScriptAddSettlers,
+    set_production_mode: executeSetProductionMode,
+    set_recipe_proportion: executeSetRecipeProportion,
+    add_to_production_queue: executeAddToProductionQueue,
+    remove_from_production_queue: executeRemoveFromProductionQueue,
 };
 
 /**

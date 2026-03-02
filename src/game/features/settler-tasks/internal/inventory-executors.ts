@@ -11,9 +11,10 @@
 
 import { type Entity, setCarrying, clearCarrying } from '../../../entity';
 import { EMaterialType } from '../../../economy';
+import { CarrierStatus } from '../../carriers';
 import { LogHandler } from '@/utilities/log-handler';
 import { TaskResult } from '../types';
-import type { ChoreoJobState, ChoreoNode, ChoreoContext, ChoreoExecutorFn } from '../choreo-types';
+import type { ChoreoJobState, ChoreoNode, ChoreoContext, ChoreoExecutorFn, InventoryContext } from '../choreo-types';
 
 const log = new LogHandler('InventoryExecutors');
 
@@ -50,7 +51,7 @@ export function parseMaterial(entity: string): EMaterialType | null {
  * Resolve the home building ID for a settler, throwing with context on failure.
  * All inventory executors require a valid home building.
  */
-function requireHomeBuilding(settler: Entity, ctx: ChoreoContext): number {
+function requireHomeBuilding(settler: Entity, ctx: InventoryContext): number {
     const buildingId = ctx.getWorkerHomeBuilding(settler.id);
     if (buildingId == null) {
         throw new Error(
@@ -79,11 +80,17 @@ function requireMaterial(node: ChoreoNode, settlerId: number): EMaterialType {
 // Regular inventory executors
 // ─────────────────────────────────────────────────────────────
 
+/** Fatigue added per delivery cycle (carrier transport). */
+const FATIGUE_PER_DELIVERY = 5;
+
 /**
  * GET_GOOD — Withdraw one unit of material from the building's input inventory and give it to the settler.
  *
  * Used when a worker needs to pick up an input material before performing a task
  * (e.g., a baker fetching flour from the input pile before baking bread).
+ *
+ * When transportData is present (carrier transport job), uses TransportJob.pickup()
+ * instead of direct inventory withdrawal and emits carrier events.
  */
 export const executeGetGood: ChoreoExecutorFn = (
     settler: Entity,
@@ -92,6 +99,45 @@ export const executeGetGood: ChoreoExecutorFn = (
     _dt: number,
     ctx: ChoreoContext
 ): TaskResult => {
+    // ── Carrier transport branch ──
+    if (job.transportData) {
+        const td = job.transportData;
+        const { transportJob, material, sourceBuildingId, amount: requestedAmount } = td;
+
+        const withdrawn = transportJob.pickup();
+
+        if (withdrawn === 0) {
+            log.warn(`Carrier ${settler.id}: pickup failed at building ${sourceBuildingId}`);
+            ctx.eventBus.emit('carrier:pickupFailed', {
+                entityId: settler.id,
+                material,
+                fromBuilding: sourceBuildingId,
+                requestedAmount,
+            });
+            return TaskResult.FAILED;
+        }
+
+        setCarrying(settler, material, withdrawn);
+        job.carryingGood = material;
+        td.amount = withdrawn;
+
+        log.debug(
+            `Carrier ${settler.id} picked up ${withdrawn} of ${EMaterialType[material]} from building ${sourceBuildingId}`
+        );
+
+        ctx.eventBus.emit('carrier:pickupComplete', {
+            entityId: settler.id,
+            material,
+            amount: withdrawn,
+            fromBuilding: sourceBuildingId,
+        });
+
+        // Pre-set targetPos for the next movement node (GO_TO_DESTINATION_PILE)
+        job.targetPos = { x: td.destPos.x, y: td.destPos.y };
+        return TaskResult.DONE;
+    }
+
+    // ── Regular worker branch ──
     const material = requireMaterial(node, settler.id);
     const buildingId = requireHomeBuilding(settler, ctx);
 
@@ -115,6 +161,9 @@ export const executeGetGood: ChoreoExecutorFn = (
  *
  * Used when a worker has finished producing and needs to place the result into
  * the output pile so carriers can transport it.
+ *
+ * When transportData is present (carrier transport job), uses TransportJob.complete()
+ * to deposit at destination, manages fatigue/status, and emits carrier events.
  */
 export const executePutGood: ChoreoExecutorFn = (
     settler: Entity,
@@ -123,6 +172,50 @@ export const executePutGood: ChoreoExecutorFn = (
     _dt: number,
     ctx: ChoreoContext
 ): TaskResult => {
+    // ── Carrier transport branch ──
+    if (job.transportData) {
+        const td = job.transportData;
+        const { transportJob, destBuildingId, material } = td;
+
+        if (!settler.carrying) {
+            throw new Error(
+                `Carrier ${settler.id}: PUT_GOOD called but settler is not carrying anything ` +
+                    `(job: material=${EMaterialType[material]})`
+            );
+        }
+
+        const amount = settler.carrying.amount;
+        const deposited = transportJob.complete(amount);
+
+        const overflow = amount - deposited;
+        if (overflow > 0) {
+            log.warn(
+                `Carrier ${settler.id}: ${overflow} of ${EMaterialType[material]} overflow at building ${destBuildingId}`
+            );
+        }
+
+        clearCarrying(settler);
+        job.carryingGood = null;
+
+        log.debug(
+            `Carrier ${settler.id} delivered ${deposited} of ${EMaterialType[material]} to building ${destBuildingId}`
+        );
+
+        ctx.carrierManager.addFatigue(settler.id, FATIGUE_PER_DELIVERY);
+        ctx.carrierManager.setStatus(settler.id, CarrierStatus.Idle);
+
+        ctx.eventBus.emit('carrier:deliveryComplete', {
+            entityId: settler.id,
+            material,
+            amount: deposited,
+            toBuilding: destBuildingId,
+            overflow,
+        });
+
+        return TaskResult.DONE;
+    }
+
+    // ── Regular worker branch ──
     // Prefer the node's explicit material (handles transformations like LOG→BOARD);
     // fall back to job carrying state when node has no entity.
     const material = parseMaterial(node.entity) ?? job.carryingGood ?? requireMaterial(node, settler.id);

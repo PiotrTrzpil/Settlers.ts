@@ -93,6 +93,9 @@ export class InventoryLayout {
      * Resolve the tile coordinate where a new visual stack should be placed.
      * Checks the BuildingPileRegistry (XML-derived) first; falls back to the auto-calculated pool
      * for buildings not covered by the XML.
+     *
+     * Storage buildings (e.g. StorageArea) use their own XML-defined pile positions as the pool —
+     * each position is bidirectional (serves as both input and output).
      */
     resolveStackPosition(
         buildingId: number,
@@ -100,24 +103,36 @@ export class InventoryLayout {
         slotType: 'input' | 'output',
         visualState: BuildingVisualState
     ): TileCoord | null {
-        const layout = this.getLayoutPositions(buildingId);
-        const fallbackPositions = slotType === 'output' ? layout.outputPositions : layout.inputPositions;
+        const building = this.gameState.getEntity(buildingId);
 
-        if (this.pileRegistry) {
-            const building = this.gameState.getEntity(buildingId);
-            if (building) {
-                const pos = this.pileRegistry.getPilePositionForSlot(
-                    building.subType as BuildingType,
+        if (this.pileRegistry && building) {
+            // 1. Try exact material match from XML (production buildings)
+            const pos = this.pileRegistry.getPilePositionForSlot(
+                building.subType as BuildingType,
+                building.race,
+                slotType,
+                materialType,
+                building.x,
+                building.y
+            );
+            if (pos) return pos;
+
+            // 2. Storage buildings: use XML-defined positions as a shared pool
+            const bt = building.subType as BuildingType;
+            if (this.pileRegistry.hasStoragePiles(bt, building.race)) {
+                const storagePositions = this.pileRegistry.getStoragePileWorldPositions(
+                    bt,
                     building.race,
-                    slotType,
-                    materialType,
                     building.x,
                     building.y
                 );
-                if (pos) return pos;
+                return this.findAvailablePosition(visualState, storagePositions);
             }
         }
 
+        // 3. Fallback: auto-calculated adjacent positions
+        const layout = this.getLayoutPositions(buildingId);
+        const fallbackPositions = slotType === 'output' ? layout.outputPositions : layout.inputPositions;
         return this.findAvailablePosition(visualState, fallbackPositions);
     }
 

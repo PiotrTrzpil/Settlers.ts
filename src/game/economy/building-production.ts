@@ -16,6 +16,20 @@ export interface ProductionChain {
     output: EMaterialType;
 }
 
+export interface Recipe {
+    /** Materials consumed per production cycle */
+    inputs: EMaterialType[];
+    /** Material produced per cycle */
+    output: EMaterialType;
+}
+
+export interface RecipeSet {
+    /** All possible recipes this building can produce */
+    recipes: Recipe[];
+    /** True if all recipes share the same inputs (e.g., ToolSmith: all use IRONBAR + COAL) */
+    sharedInputs: boolean;
+}
+
 export interface ConstructionCost {
     material: EMaterialType;
     count: number;
@@ -42,11 +56,14 @@ export const BUILDING_PRODUCTIONS: ReadonlyMap<BuildingType, ProductionChain> = 
     [BuildingType.AnimalRanch, { inputs: [EMaterialType.GRAIN], output: EMaterialType.PIG }],
     [BuildingType.Slaughterhouse, { inputs: [EMaterialType.PIG], output: EMaterialType.MEAT }],
     [BuildingType.WaterworkHut, { inputs: [], output: EMaterialType.WATER }],
+    [BuildingType.HunterHut, { inputs: [], output: EMaterialType.MEAT }],
 
     // Mining (mines consume food — BREAD is the canonical food input)
     [BuildingType.CoalMine, { inputs: [EMaterialType.BREAD], output: EMaterialType.COAL }],
     [BuildingType.IronMine, { inputs: [EMaterialType.BREAD], output: EMaterialType.IRONORE }],
     [BuildingType.GoldMine, { inputs: [EMaterialType.BREAD], output: EMaterialType.GOLDORE }],
+    [BuildingType.StoneMine, { inputs: [EMaterialType.BREAD], output: EMaterialType.STONE }],
+    [BuildingType.SulfurMine, { inputs: [EMaterialType.BREAD], output: EMaterialType.SULFUR }],
 
     // Metal industry
     [BuildingType.IronSmelter, { inputs: [EMaterialType.IRONORE, EMaterialType.COAL], output: EMaterialType.IRONBAR }],
@@ -66,6 +83,51 @@ export const BUILDING_PRODUCTIONS: ReadonlyMap<BuildingType, ProductionChain> = 
     // Military — barrack converts weapons to soldiers, no material output
     [BuildingType.Barrack, { inputs: [EMaterialType.SWORD], output: EMaterialType.NO_MATERIAL }],
 ]);
+
+/**
+ * Recipe sets for buildings that can produce multiple different outputs from the same or
+ * varying inputs. Buildings listed here support recipe selection by the player or AI.
+ */
+export const BUILDING_RECIPE_SETS: ReadonlyMap<BuildingType, RecipeSet> = new Map([
+    [
+        BuildingType.ToolSmith,
+        {
+            recipes: [
+                { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.AXE },
+                { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.HAMMER },
+                { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.ROD },
+                { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.PICKAXE },
+                { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.SAW },
+                { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.SCYTHE },
+                { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.SHOVEL },
+            ],
+            sharedInputs: true,
+        },
+    ],
+    [
+        BuildingType.WeaponSmith,
+        {
+            // Common outputs shared by all races. Race-specific weapons
+            // (Viking=BATTLEAXE, Maya=BLOWGUN, Trojan=CATAPULT) to be added later.
+            recipes: [
+                { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.SWORD },
+                { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.BOW },
+                { inputs: [EMaterialType.IRONBAR, EMaterialType.COAL], output: EMaterialType.ARMOR },
+            ],
+            sharedInputs: true,
+        },
+    ],
+]);
+
+/** Get the recipe set for a multi-recipe building, or undefined for single-recipe buildings. */
+export function getRecipeSet(buildingType: BuildingType): RecipeSet | undefined {
+    return BUILDING_RECIPE_SETS.get(buildingType);
+}
+
+/** Check if a building type has multiple recipes. */
+export function hasMultipleRecipes(buildingType: BuildingType): boolean {
+    return BUILDING_RECIPE_SETS.has(buildingType);
+}
 
 // ── Construction costs loaded from YAML (per building, per race) ──
 
@@ -148,11 +210,19 @@ export function getConstructionCostRaceMap(
 
 /**
  * Returns all building types that consume the given material as a production input.
+ * Includes both single-recipe buildings (BUILDING_PRODUCTIONS) and multi-recipe buildings
+ * (BUILDING_RECIPE_SETS). Each building type appears at most once in the result.
  */
 export function getBuildingTypesRequestingMaterial(material: EMaterialType): BuildingType[] {
     const result: BuildingType[] = [];
     for (const [buildingType, chain] of BUILDING_PRODUCTIONS) {
         if (chain.inputs.includes(material)) {
+            result.push(buildingType);
+        }
+    }
+    for (const [buildingType, recipeSet] of BUILDING_RECIPE_SETS) {
+        if (result.includes(buildingType)) continue;
+        if (recipeSet.recipes.some(r => r.inputs.includes(material))) {
             result.push(buildingType);
         }
     }

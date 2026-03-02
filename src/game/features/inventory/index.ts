@@ -8,7 +8,7 @@
  * - Manager: BuildingInventoryManager (with change callbacks for UI updates)
  * - Helpers: createSlot, canAccept, canAcceptAny, canProvide, deposit, withdraw, depositWithResult, withdrawWithResult
  * - Config: getInventoryConfig, hasInventory, isProductionBuilding
- * - Constants: DEFAULT_INPUT_CAPACITY, DEFAULT_OUTPUT_CAPACITY, STORAGE_CAPACITY
+ * - Constants: SLOT_CAPACITY
  */
 
 // Slot types and helpers
@@ -31,13 +31,15 @@ export {
 export type { BuildingInventory, InventoryChangeCallback } from './building-inventory';
 export { BuildingInventoryManager } from './building-inventory';
 
+// Recipe type (re-exported for consumers of this feature module)
+export type { Recipe } from '@/game/economy/building-production';
+
 // Inventory configurations
 export type { SlotConfig, InventoryConfig } from './inventory-configs';
 export {
-    INVENTORY_CONFIGS,
+    SLOT_CAPACITY,
     DEFAULT_INPUT_CAPACITY,
     DEFAULT_OUTPUT_CAPACITY,
-    STORAGE_CAPACITY,
     getInventoryConfig,
     hasInventory,
     isProductionBuilding,
@@ -53,7 +55,7 @@ export type { BuildingLayoutPositions } from './inventory-layout';
 
 // Building pile registry (XML-derived pile positions)
 export { BuildingPileRegistry } from './building-pile-registry';
-export type { PileSlot } from './building-pile-registry';
+export type { PileSlot, StoragePilePosition } from './building-pile-registry';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { InventoryFeature, type InventoryExports } from './inventory-feature';

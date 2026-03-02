@@ -7,6 +7,7 @@
 
 import type { GameState } from '../game-state';
 import type { Entity } from '../entity';
+import type { SeededRng } from '../rng';
 
 // ─────────────────────────────────────────────────────────────
 // Ring iteration
@@ -82,6 +83,8 @@ export interface FindEmptySpotConfig {
     proximityFilter: (entity: Entity) => boolean;
     /** If true, all 4 cardinal neighbors must also be free (no entity occupying them). */
     requireFreeNeighbors?: boolean;
+    /** When provided, tiles within each ring are shuffled for natural-looking placement. */
+    rng?: SeededRng;
 }
 
 /**
@@ -103,6 +106,27 @@ function isValidSpot(tile: { x: number; y: number }, config: FindEmptySpotConfig
     return true;
 }
 
+/** Search a single ring for a valid spot, optionally shuffling tile order. */
+function searchRing(
+    cx: number,
+    cy: number,
+    radius: number,
+    config: FindEmptySpotConfig
+): { x: number; y: number } | null {
+    if (config.rng) {
+        const tiles = Array.from(ringTiles(cx, cy, radius));
+        config.rng.shuffle(tiles);
+        for (const tile of tiles) {
+            if (isValidSpot(tile, config)) return tile;
+        }
+    } else {
+        for (const tile of ringTiles(cx, cy, radius)) {
+            if (isValidSpot(tile, config)) return tile;
+        }
+    }
+    return null;
+}
+
 export function findEmptySpot(
     cx: number,
     cy: number,
@@ -111,9 +135,8 @@ export function findEmptySpot(
     const minRadius = config.minRadius ?? 2;
 
     for (let radius = minRadius; radius <= config.searchRadius; radius++) {
-        for (const tile of ringTiles(cx, cy, radius)) {
-            if (isValidSpot(tile, config)) return { entityId: null, x: tile.x, y: tile.y };
-        }
+        const spot = searchRing(cx, cy, radius, config);
+        if (spot) return { entityId: null, x: spot.x, y: spot.y };
     }
     return null;
 }

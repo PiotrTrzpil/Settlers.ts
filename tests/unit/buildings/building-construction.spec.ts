@@ -18,9 +18,9 @@ import {
     restoreOriginalTerrain,
     CONSTRUCTION_SITE_GROUND_TYPE,
 } from '@/game/features/building-construction';
-import { createTestMap, TERRAIN } from './helpers/test-map';
-import { createTestContext, makeBuildingState, completeConstruction, type TestContext } from './helpers/test-game';
-import { installTestGameData, resetTestGameData } from './helpers/test-game-data';
+import { createTestMap, TERRAIN } from '../helpers/test-map';
+import { createTestContext, makeBuildingState, completeConstruction, type TestContext } from '../helpers/test-game';
+import { installTestGameData, resetTestGameData } from '../helpers/test-game-data';
 
 // ---------------------------------------------------------------------------
 // Terrain Leveling

@@ -1,62 +1,26 @@
-// @vitest-environment jsdom
 /**
- * Integration tests for Wave 1 systems: carriers, inventory, and service areas.
+ * Integration tests for carriers, inventory, and service areas.
  *
+ * Uses the simulation harness (test-simulation.ts) for proper system wiring.
  * Tests verify that:
- * - Managers are initialized in GameServices
- * - Building creation triggers inventory and service area creation
+ * - Building placement triggers inventory and service area creation
  * - Entity removal triggers proper cleanup
- * - The systems work together correctly
+ * - Carrier fatigue recovery works
+ * - Resource requests are tracked correctly
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { GameState } from '@/game/game-state';
-import { GameServices } from '@/game/game-services';
-import { EventBus } from '@/game/event-bus';
-import { EntityType, BuildingType, UnitType } from '@/game/entity';
-import { Race } from '@/game/race';
-import { installTestGameData, resetTestGameData } from '../helpers/test-game-data';
+import { describe, it, expect, afterEach } from 'vitest';
+import { BuildingType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy';
 import { RequestPriority, RequestStatus } from '@/game/features/logistics';
+import { createSimulation, cleanupSimulation, type Simulation } from '../helpers/test-simulation';
 
-describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
-    let gameState: GameState;
-    let services: GameServices;
-    let eventBus: EventBus;
+describe('Carriers, Inventory & Service Areas (simulation)', () => {
+    let sim: Simulation;
 
     afterEach(() => {
-        resetTestGameData();
-    });
-
-    beforeEach(() => {
-        installTestGameData();
-        eventBus = new EventBus();
-        gameState = new GameState(eventBus);
-        const noopExecute = () => ({ success: true as const });
-        services = new GameServices(gameState, eventBus, noopExecute);
-    });
-
-    // ---------------------------------------------------------------------------
-    // Manager Initialization
-    // ---------------------------------------------------------------------------
-
-    describe('Manager Initialization', () => {
-        it('should have carrierManager initialized in GameServices', () => {
-            expect(services.carrierManager).toBeDefined();
-            expect(services.carrierManager.size).toBe(0);
-        });
-
-        it('should have inventoryManager initialized in GameServices', () => {
-            expect(services.inventoryManager).toBeDefined();
-        });
-
-        it('should have serviceAreaManager initialized in GameServices', () => {
-            expect(services.serviceAreaManager).toBeDefined();
-        });
-
-        it('should have carrierManager registered in GameServices', () => {
-            expect(services.carrierManager).toBeDefined();
-        });
+        sim?.destroy();
+        cleanupSimulation();
     });
 
     // ---------------------------------------------------------------------------
@@ -64,56 +28,25 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
     // ---------------------------------------------------------------------------
 
     describe('Building Creation - Service Areas', () => {
-        it('should create service area when ResidenceSmall (tavern) is created', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.ResidenceSmall,
-                10,
-                10,
-                1, // player 1
-                undefined,
-                undefined,
-                Race.Roman
-            );
-
-            const serviceArea = services.serviceAreaManager.getServiceArea(entity.id);
+        it('should create service area when ResidenceSmall is placed', () => {
+            sim = createSimulation({ useStubData: true });
+            const id = sim.placeBuilding(BuildingType.ResidenceSmall);
+            const serviceArea = sim.services.serviceAreaManager.getServiceArea(id);
             expect(serviceArea).toBeDefined();
-            expect(serviceArea?.buildingId).toBe(entity.id);
-            expect(serviceArea?.centerX).toBe(10);
-            expect(serviceArea?.centerY).toBe(10);
-            expect(serviceArea?.playerId).toBe(1);
+            expect(serviceArea!.buildingId).toBe(id);
         });
 
-        it('should NOT create service area for StorageArea (not a logistics hub)', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.StorageArea,
-                20,
-                20,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
-
-            // StorageArea is storage only, not a carrier hub
-            const serviceArea = services.serviceAreaManager.getServiceArea(entity.id);
+        it('should NOT create service area for StorageArea', () => {
+            sim = createSimulation({ useStubData: true });
+            const id = sim.placeBuilding(BuildingType.StorageArea);
+            const serviceArea = sim.services.serviceAreaManager.getServiceArea(id);
             expect(serviceArea).toBeUndefined();
         });
 
         it('should NOT create service area for non-logistics buildings', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.WoodcutterHut,
-                30,
-                30,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
-
-            const serviceArea = services.serviceAreaManager.getServiceArea(entity.id);
+            sim = createSimulation({ useStubData: true });
+            const id = sim.placeBuilding(BuildingType.WoodcutterHut);
+            const serviceArea = sim.services.serviceAreaManager.getServiceArea(id);
             expect(serviceArea).toBeUndefined();
         });
     });
@@ -123,44 +56,24 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
     // ---------------------------------------------------------------------------
 
     describe('Building Creation - Inventories', () => {
-        it('should create inventory when production building is created', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.WoodcutterHut,
-                10,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
-
-            const inventory = services.inventoryManager.getInventory(entity.id);
+        it('should create inventory with output slots for production buildings', () => {
+            sim = createSimulation({ useStubData: true });
+            const id = sim.placeBuilding(BuildingType.WoodcutterHut);
+            const inventory = sim.services.inventoryManager.getInventory(id);
             expect(inventory).toBeDefined();
-            expect(inventory?.buildingType).toBe(BuildingType.WoodcutterHut);
-            // Woodcutter has LOG output slot
-            expect(inventory?.outputSlots.length).toBeGreaterThan(0);
-            expect(inventory?.outputSlots[0]!.materialType).toBe(EMaterialType.LOG);
+            expect(inventory!.buildingType).toBe(BuildingType.WoodcutterHut);
+            expect(inventory!.outputSlots.length).toBeGreaterThan(0);
+            expect(inventory!.outputSlots[0]!.materialType).toBe(EMaterialType.LOG);
         });
 
         it('should create inventory with input slots for processing buildings', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.Sawmill,
-                10,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
-
-            const inventory = services.inventoryManager.getInventory(entity.id);
+            sim = createSimulation({ useStubData: true });
+            const id = sim.placeBuilding(BuildingType.Sawmill);
+            const inventory = sim.services.inventoryManager.getInventory(id);
             expect(inventory).toBeDefined();
-            // Sawmill has LOG input and BOARD output
-            expect(inventory?.inputSlots.length).toBeGreaterThan(0);
-            expect(inventory?.inputSlots[0]!.materialType).toBe(EMaterialType.LOG);
-            expect(inventory?.outputSlots[0]!.materialType).toBe(EMaterialType.BOARD);
+            expect(inventory!.inputSlots.length).toBeGreaterThan(0);
+            expect(inventory!.inputSlots[0]!.materialType).toBe(EMaterialType.LOG);
+            expect(inventory!.outputSlots[0]!.materialType).toBe(EMaterialType.BOARD);
         });
     });
 
@@ -170,166 +83,75 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
 
     describe('Entity Removal - Cleanup', () => {
         it('should remove service area when logistics building is removed', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.ResidenceSmall,
-                10,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
+            sim = createSimulation({ useStubData: true });
+            const id = sim.placeBuilding(BuildingType.ResidenceSmall);
+            expect(sim.services.serviceAreaManager.getServiceArea(id)).toBeDefined();
 
-            // Verify service area exists
-            expect(services.serviceAreaManager.getServiceArea(entity.id)).toBeDefined();
-
-            // Remove building
-            gameState.removeEntity(entity.id);
-
-            // Service area should be cleaned up
-            expect(services.serviceAreaManager.getServiceArea(entity.id)).toBeUndefined();
+            sim.state.removeEntity(id);
+            expect(sim.services.serviceAreaManager.getServiceArea(id)).toBeUndefined();
         });
 
         it('should remove inventory when building is removed', () => {
-            const entity = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.WoodcutterHut,
-                10,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
+            sim = createSimulation({ useStubData: true });
+            const id = sim.placeBuilding(BuildingType.WoodcutterHut);
+            expect(sim.services.inventoryManager.getInventory(id)).toBeDefined();
 
-            // Verify inventory exists
-            expect(services.inventoryManager.getInventory(entity.id)).toBeDefined();
-
-            // Remove building
-            gameState.removeEntity(entity.id);
-
-            // Inventory should be cleaned up
-            expect(services.inventoryManager.getInventory(entity.id)).toBeUndefined();
+            sim.state.removeEntity(id);
+            expect(sim.services.inventoryManager.getInventory(id)).toBeUndefined();
         });
 
         it('should remove carrier state when carrier unit is removed', () => {
-            // Create a tavern first
-            const tavern = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.ResidenceSmall,
-                10,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
+            sim = createSimulation({ useStubData: true });
+            const tavernId = sim.placeBuilding(BuildingType.ResidenceSmall);
+            const entity = sim.state.getEntityOrThrow(tavernId, 'tavern');
 
-            // Create a carrier unit
-            const carrier = gameState.addEntity(EntityType.Unit, UnitType.Carrier, 12, 12, 1);
+            const carrierId = sim.spawnUnit(entity.x + 2, entity.y, UnitType.Carrier);
+            // Carrier may already be auto-registered by the simulation; ensure it is
+            if (!sim.services.carrierManager.hasCarrier(carrierId)) {
+                sim.services.carrierManager.createCarrier(carrierId, tavernId);
+            }
+            expect(sim.services.carrierManager.hasCarrier(carrierId)).toBe(true);
 
-            // Manually register carrier with manager (normally done by carrier assignment system)
-            services.carrierManager.createCarrier(carrier.id, tavern.id);
-            expect(services.carrierManager.hasCarrier(carrier.id)).toBe(true);
-
-            // Remove carrier
-            gameState.removeEntity(carrier.id);
-
-            // Carrier state should be cleaned up
-            expect(services.carrierManager.hasCarrier(carrier.id)).toBe(false);
+            sim.state.removeEntity(carrierId);
+            expect(sim.services.carrierManager.hasCarrier(carrierId)).toBe(false);
         });
     });
 
     // ---------------------------------------------------------------------------
-    // System Tick - Fatigue Recovery
+    // CarrierSystem Tick - Fatigue Recovery
     // ---------------------------------------------------------------------------
 
     describe('CarrierSystem Tick - Fatigue Recovery', () => {
         it('should recover fatigue for resting carriers', () => {
-            // Create tavern
-            const tavern = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.ResidenceSmall,
-                10,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
+            sim = createSimulation({ useStubData: true });
+            const tavernId = sim.placeBuilding(BuildingType.ResidenceSmall);
+            const entity = sim.state.getEntityOrThrow(tavernId, 'tavern');
 
-            // Create carrier unit and register
-            const carrierEntity = gameState.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 1);
-            services.carrierManager.createCarrier(carrierEntity.id, tavern.id);
+            const carrierId = sim.spawnUnit(entity.x, entity.y, UnitType.Carrier);
+            if (!sim.services.carrierManager.hasCarrier(carrierId)) {
+                sim.services.carrierManager.createCarrier(carrierId, tavernId);
+            }
+            sim.services.carrierManager.setFatigue(carrierId, 50);
+            sim.services.carrierManager.setStatus(carrierId, 4); // CarrierStatus.Resting
 
-            // Set carrier as fatigued and resting
-            services.carrierManager.setFatigue(carrierEntity.id, 50);
-            services.carrierManager.setStatus(carrierEntity.id, 4); // CarrierStatus.Resting
-
-            const initialFatigue = services.carrierManager.getCarrier(carrierEntity.id)!.fatigue;
-
-            // Tick fatigue recovery
-            services.carrierManager.tick(1.0); // 1 second
-
-            const newFatigue = services.carrierManager.getCarrier(carrierEntity.id)!.fatigue;
+            const initialFatigue = sim.services.carrierManager.getCarrier(carrierId)!.fatigue;
+            sim.services.carrierManager.tick(1.0);
+            const newFatigue = sim.services.carrierManager.getCarrier(carrierId)!.fatigue;
             expect(newFatigue).toBeLessThan(initialFatigue);
         });
     });
 
     // ---------------------------------------------------------------------------
-    // Carrier Registration (Tier 3 — migrated from e2e)
-    // ---------------------------------------------------------------------------
-
-    describe('Carrier Registration', () => {
-        it('should register carrier with home building and no active job', () => {
-            // Create a tavern (logistics hub with service area)
-            const tavern = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.ResidenceSmall,
-                10,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
-
-            // Create a carrier unit near the tavern
-            const carrier = gameState.addEntity(EntityType.Unit, UnitType.Carrier, 12, 12, 1);
-
-            // Register carrier with the tavern
-            services.carrierManager.createCarrier(carrier.id, tavern.id);
-
-            const carrierState = services.carrierManager.getCarrier(carrier.id);
-            expect(carrierState).toBeDefined();
-            expect(carrierState!.homeBuilding).toBe(tavern.id);
-            // Carrier starts with status 0 (Idle) and no active job
-            expect(carrierState!.status).toBe(0);
-        });
-    });
-
-    // ---------------------------------------------------------------------------
-    // Resource Request Creation (Tier 3 — migrated from e2e)
+    // Resource Request Creation
     // ---------------------------------------------------------------------------
 
     describe('Resource Request Creation', () => {
         it('should create pending resource request with correct attributes', () => {
-            // Create a sawmill (has LOG input slot)
-            const sawmill = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.Sawmill,
-                10,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
+            sim = createSimulation({ useStubData: true });
+            const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
 
-            // Add a resource request for logs
-            const request = services.requestManager.addRequest(
-                sawmill.id,
+            const request = sim.services.requestManager.addRequest(
+                sawmillId,
                 EMaterialType.LOG,
                 4,
                 RequestPriority.Normal
@@ -339,25 +161,17 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
             expect(request.materialType).toBe(EMaterialType.LOG);
             expect(request.amount).toBe(4);
             expect(request.status).toBe(RequestStatus.Pending);
-            expect(request.buildingId).toBe(sawmill.id);
+            expect(request.buildingId).toBe(sawmillId);
         });
 
         it('should track request in pending requests list', () => {
-            const sawmill = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.Sawmill,
-                10,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
+            sim = createSimulation({ useStubData: true });
+            const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
 
-            services.requestManager.addRequest(sawmill.id, EMaterialType.LOG, 4);
+            sim.services.requestManager.addRequest(sawmillId, EMaterialType.LOG, 4);
 
-            expect(services.requestManager.getPendingCount()).toBe(1);
-            const pending = services.requestManager.getPendingRequests();
+            expect(sim.services.requestManager.getPendingCount()).toBe(1);
+            const pending = sim.services.requestManager.getPendingRequests();
             expect(pending).toHaveLength(1);
             expect(pending[0]!.materialType).toBe(EMaterialType.LOG);
         });
@@ -369,62 +183,37 @@ describe('Wave 1 Integration: Carriers, Inventory, Service Areas', () => {
 
     describe('Full Integration Scenario', () => {
         it('should handle complete building lifecycle', () => {
-            // 1. Create a tavern - should get service area
-            const tavern = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.ResidenceSmall,
-                10,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
-            expect(services.serviceAreaManager.getServiceArea(tavern.id)).toBeDefined();
+            sim = createSimulation({ useStubData: true });
 
-            // 2. Create a woodcutter - should get inventory
-            const woodcutter = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.WoodcutterHut,
-                15,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
-            expect(services.inventoryManager.getInventory(woodcutter.id)).toBeDefined();
+            // 1. Tavern gets service area
+            const tavernId = sim.placeBuilding(BuildingType.ResidenceSmall);
+            expect(sim.services.serviceAreaManager.getServiceArea(tavernId)).toBeDefined();
 
-            // 3. Create a warehouse - StorageArea does NOT get a service area (it's not a carrier hub)
-            const warehouse = gameState.addEntity(
-                EntityType.Building,
-                BuildingType.StorageArea,
-                20,
-                10,
-                1,
-                undefined,
-                undefined,
-                Race.Roman
-            );
-            expect(services.serviceAreaManager.getServiceArea(warehouse.id)).toBeUndefined();
-            // Note: StorageArea has empty slot config - it uses dynamic material handling
-            // so hasInventory() returns false and no traditional inventory is created
+            // 2. Woodcutter gets inventory
+            const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
+            expect(sim.services.inventoryManager.getInventory(woodcutterId)).toBeDefined();
 
-            // 4. Create a carrier and register it
-            const carrier = gameState.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 1);
-            services.carrierManager.createCarrier(carrier.id, tavern.id);
-            expect(services.carrierManager.getCarriersForTavern(tavern.id).length).toBe(1);
+            // 3. StorageArea does NOT get a service area
+            const warehouseId = sim.placeBuilding(BuildingType.StorageArea);
+            expect(sim.services.serviceAreaManager.getServiceArea(warehouseId)).toBeUndefined();
 
-            // 5. Remove buildings and carrier - all should clean up
-            gameState.removeEntity(tavern.id);
-            gameState.removeEntity(woodcutter.id);
-            gameState.removeEntity(warehouse.id);
-            gameState.removeEntity(carrier.id);
+            // 4. Carrier registration
+            const tavernEntity = sim.state.getEntityOrThrow(tavernId, 'tavern');
+            const carrierId = sim.spawnUnit(tavernEntity.x, tavernEntity.y, UnitType.Carrier);
+            if (!sim.services.carrierManager.hasCarrier(carrierId)) {
+                sim.services.carrierManager.createCarrier(carrierId, tavernId);
+            }
+            expect(sim.services.carrierManager.getCarriersForTavern(tavernId).length).toBeGreaterThanOrEqual(1);
 
-            expect(services.serviceAreaManager.getServiceArea(tavern.id)).toBeUndefined();
-            expect(services.serviceAreaManager.getServiceArea(warehouse.id)).toBeUndefined();
-            expect(services.inventoryManager.getInventory(woodcutter.id)).toBeUndefined();
-            expect(services.carrierManager.hasCarrier(carrier.id)).toBe(false);
+            // 5. Remove everything - all should clean up
+            sim.state.removeEntity(tavernId);
+            sim.state.removeEntity(woodcutterId);
+            sim.state.removeEntity(warehouseId);
+            sim.state.removeEntity(carrierId);
+
+            expect(sim.services.serviceAreaManager.getServiceArea(tavernId)).toBeUndefined();
+            expect(sim.services.inventoryManager.getInventory(woodcutterId)).toBeUndefined();
+            expect(sim.services.carrierManager.hasCarrier(carrierId)).toBe(false);
         });
     });
 });

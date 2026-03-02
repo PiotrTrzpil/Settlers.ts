@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { GameState } from '@/game/game-state';
 import { EntityType, UnitType, getUnitTypeSpeed, BuildingType } from '@/game/entity';
 import { Race } from '@/game/race';
-import { installTestGameData, resetTestGameData } from './helpers/test-game-data';
+import { installTestGameData, resetTestGameData } from '../helpers/test-game-data';
 import { executeCommand, type CommandContext } from '@/game/commands';
 import { MapSize } from '@/utilities/map-size';
 import { EventBus } from '@/game/event-bus';

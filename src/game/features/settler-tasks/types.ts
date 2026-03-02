@@ -62,8 +62,12 @@ export enum TaskResult {
     FAILED = 'FAILED',
 }
 
-/** Job ID for carrier transport (not XML-defined — inline choreography built programmatically). */
-export const CARRIER_TRANSPORT_JOB_ID = 'CARRIER_TRANSPORT';
+/** Tracks a worker's assigned workplace building and whether they've visited it. */
+export interface HomeAssignment {
+    readonly buildingId: number;
+    /** True once the worker has walked to the building for the first time. */
+    hasVisited: boolean;
+}
 
 /** Job state for an active settler job. */
 export type JobState = ChoreoJobState;
@@ -115,6 +119,8 @@ export interface PositionWorkHandler {
     findPosition(x: number, y: number, settlerId?: number): { x: number; y: number } | null;
     /** If true, worker waits (idles) when no position is found instead of failing */
     shouldWaitForWork?: boolean;
+    /** If true, search center is the work area center (not the settler's position). */
+    useWorkAreaCenter?: boolean;
     /** Called when WORK task completes at searched position */
     onWorkAtPositionComplete(x: number, y: number, settlerId: number): void;
 }
