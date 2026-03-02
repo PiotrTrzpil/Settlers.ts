@@ -208,7 +208,7 @@ export class BuildingConstructionSystem implements TickSystem {
             site.phase = BuildingConstructionPhase.Completed;
             // Extract site fields before removal — game-services.ts removes the site in its handler
             const { buildingType, race } = site;
-            this.eventBus.emit('building:completed', { entityId, buildingType, race });
+            this.eventBus.emit('building:completed', { entityId, buildingType, race, spawnWorker: true });
         } else {
             this.completedRisingTimers.set(entityId, remaining);
             site.completedRisingProgress = 1 - remaining / COMPLETED_RISING_DURATION;

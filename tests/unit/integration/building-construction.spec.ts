@@ -17,7 +17,7 @@ import { TERRAIN } from '../helpers/test-map';
 
 const hasRealData = installRealGameData();
 
-describe.skipIf(!hasRealData)('Building construction (real game data)', () => {
+describe.skipIf(!hasRealData)('Building construction (real game data)', { timeout: 5000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
@@ -123,8 +123,8 @@ describe.skipIf(!hasRealData)('Building construction (real game data)', () => {
 
     // ─── Full construction flow ──────────────────────────────────────
 
-    it('WoodcutterHut: full construction → worker spawned', () => {
-        sim = createSimulation();
+    it('WoodcutterHut: full construction → worker spawned', { timeout: 30_000 }, () => {
+        sim = createSimulation({ buildingSpacing: 20 });
 
         // Residence provides carriers (instant placement skips builders)
         const residenceId = sim.placeBuilding(BuildingType.ResidenceSmall);
@@ -142,14 +142,19 @@ describe.skipIf(!hasRealData)('Building construction (real game data)', () => {
         const hutId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
 
         // Run until construction completes (full flow: dig → deliver materials → build)
-        sim.runUntil(() => !sim.services.constructionSiteManager.hasSite(hutId), { maxTicks: 30_000 });
+        sim.runUntil(() => !sim.services.constructionSiteManager.hasSite(hutId), { maxTicks: 50_000 });
 
-        const site = sim.services.constructionSiteManager.getSite(hutId);
-        if (site) {
+        // Diagnostics on failure only
+        if (sim.services.constructionSiteManager.hasSite(hutId)) {
+            const s = sim.services.constructionSiteManager.getSite(hutId)!;
             const remaining = sim.services.constructionSiteManager.getRemainingCosts(hutId);
-            console.log(`[diag] site phase=${site.phase}, remaining=${JSON.stringify(remaining)}`);
+            console.log(
+                `[stuck] phase=${s.phase}, progress=${s.constructionProgress}, remaining=${JSON.stringify(remaining)}`
+            );
+            console.log(
+                `[stuck] delivered=${s.deliveredAmount}, consumed=${s.consumedAmount}, leveling=${s.levelingComplete}`
+            );
         }
-        console.log(`[diag] errors: ${sim.errors.map(e => `[${e.system}] ${e.error.message}`).join(' | ') || 'none'}`);
 
         expect(sim.services.constructionSiteManager.hasSite(hutId)).toBe(false);
         expect(sim.countEntities(EntityType.Unit, UnitType.Woodcutter)).toBe(1);

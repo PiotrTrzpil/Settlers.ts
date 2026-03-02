@@ -178,6 +178,7 @@ export function populateMapBuildings(
             entityId: entity.id,
             buildingType,
             race,
+            spawnWorker: true,
         });
 
         const entries = perPlayer.get(buildingData.player) ?? [];

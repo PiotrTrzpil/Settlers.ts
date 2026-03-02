@@ -49,7 +49,7 @@ import { createSimulation, cleanupSimulation, type Simulation } from '../helpers
 import { installRealGameData } from '../helpers/test-game-data';
 import { TERRAIN, setTerrainAt, blockColumnWithGap } from '../helpers/test-map';
 import { BuildingType } from '@/game/buildings/building-type';
-import { tileKey, type TileCoord } from '@/game/entity';
+import { tileKey, getBuildingFootprint, type TileCoord } from '@/game/entity';
 import { Race } from '@/game/race';
 import { getBuildingDoorPos } from '@/game/game-data-access';
 
@@ -75,7 +75,7 @@ function assertAllPassable(visited: TileCoord[], groundType: Uint8Array, mapWidt
 
 // ─── Tests ──────────────────────────────────────────────────────────
 
-describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data)', () => {
+describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data)', { timeout: 5000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
@@ -255,6 +255,51 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
         expect(visited[visited.length - 1]).toEqual(target);
         assertAvoidedFootprints(visited, sim.state.buildingOccupancy);
         assertAllPassable(visited, sim.map.groundType, sim.map.mapSize.width);
+    });
+
+    // ─── Tight building spacing (10-tile gap, real footprints) ─────────
+
+    it('A* finds path between two completed buildings at 10-tile spacing', () => {
+        sim = createSimulation({ buildingSpacing: 10 });
+
+        // Use non-residential buildings to avoid spawning carriers
+        sim.placeBuilding(BuildingType.Sawmill); // slot 0 → (30,30)
+        sim.placeBuilding(BuildingType.StorageArea); // slot 1 → (40,30)
+
+        // Pathfinding must succeed across the gap between buildings
+        const unitId = sim.spawnUnit(10, 30);
+        expect(sim.moveUnit(unitId, 60, 30)).toBe(true);
+    });
+
+    it('clearBuildingFootprintBlock removes all construction site tiles', () => {
+        sim = createSimulation({ buildingSpacing: 20 });
+
+        const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
+        const building = sim.state.getEntityOrThrow(siteId, 'test');
+
+        // Every tile in the construction site footprint should NOT be in buildingOccupancy
+        const footprint = getBuildingFootprint(building.x, building.y, building.subType, building.race);
+        const leaked: string[] = [];
+        for (const tile of footprint) {
+            if (sim.state.buildingOccupancy.has(tileKey(tile.x, tile.y))) {
+                leaked.push(`(${tile.x},${tile.y})`);
+            }
+        }
+        expect(leaked, `tiles still in buildingOccupancy: ${leaked.join(', ')}`).toHaveLength(0);
+    });
+
+    it('A* finds path to construction site door at 20-tile spacing', () => {
+        sim = createSimulation({ buildingSpacing: 20 });
+
+        sim.placeBuilding(BuildingType.Sawmill); // slot 0 → (30,30)
+        const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false); // slot 1 → (50,30)
+
+        const site = sim.state.getEntityOrThrow(siteId, 'test');
+        const door = getBuildingDoorPos(site.x, site.y, site.race, site.subType as BuildingType);
+
+        // Pathfinding must succeed to the construction site's door
+        const unitId = sim.spawnUnit(10, 30);
+        expect(sim.moveUnit(unitId, door.x, door.y)).toBe(true);
     });
 
     it('pathfinding fails for unreachable target', () => {

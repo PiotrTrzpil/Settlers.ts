@@ -96,7 +96,7 @@ import { ProductionMode } from '@/game/features/production-control';
 
 const hasRealData = installRealGameData();
 
-describe.skipIf(!hasRealData)('Economy simulation (real game data)', () => {
+describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 5000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {

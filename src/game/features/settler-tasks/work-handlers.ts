@@ -11,6 +11,7 @@
 import type { GameState } from '../../game-state';
 import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
+import { getBuildingDoorPos } from '../../game-data-access';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { BuildingInventoryManager } from '../inventory';
 import type { OreVeinData } from '../ore-veins';
@@ -582,7 +583,9 @@ export function createDiggerHandler(
             queue.push(settlerId);
             pendingClaims.set(buildingId, queue);
 
-            return { entityId: buildingId, x: site.tileX, y: site.tileY };
+            // Return door position — building footprint may be blocked after leveling
+            const door = getBuildingDoorPos(site.tileX, site.tileY, site.race, site.buildingType);
+            return { entityId: buildingId, x: door.x, y: door.y };
         },
 
         canWork: (targetId: number) => {
@@ -602,8 +605,10 @@ export function createDiggerHandler(
             constructionSiteManager.claimDiggerSlot(targetId, settlerId);
         },
 
-        onWorkTick: (_targetId: number, progress: number) => {
-            return progress >= 1.0;
+        onWorkTick: () => {
+            // Each choreo work cycle = one leveling step. Return true to complete immediately
+            // when the choreo node has duration=-1 (domain-controlled timing).
+            return true;
         },
 
         onWorkComplete: (targetId: number) => {
@@ -672,7 +677,9 @@ export function createBuilderHandler(
             queue.push(settlerId);
             pendingClaims.set(buildingId, queue);
 
-            return { entityId: buildingId, x: site.tileX, y: site.tileY };
+            // Return door position — building footprint is blocked after leveling
+            const door = getBuildingDoorPos(site.tileX, site.tileY, site.race, site.buildingType);
+            return { entityId: buildingId, x: door.x, y: door.y };
         },
 
         canWork: (targetId: number) => {
@@ -698,8 +705,10 @@ export function createBuilderHandler(
             constructionSiteManager.claimBuilderSlot(targetId, settlerId);
         },
 
-        onWorkTick: (_targetId: number, progress: number) => {
-            return progress >= 1.0;
+        onWorkTick: () => {
+            // Each choreo work cycle = one build step. Return true to complete immediately
+            // when the choreo node has duration=-1 (domain-controlled timing).
+            return true;
         },
 
         onWorkComplete: (targetId: number) => {

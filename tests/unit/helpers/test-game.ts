@@ -301,6 +301,19 @@ export function registerConstructionSite(
  * CompletedRising countdown (0.5s) and emit building:completed.
  */
 export function completeConstruction(ctx: TestContext, entityId: number): void {
+    // Register a construction site if one doesn't already exist (tests that create entities
+    // directly via addEntity bypass the place_building command that normally registers sites)
+    if (!ctx.constructionSiteManager.hasSite(entityId)) {
+        const entity = ctx.state.getEntityOrThrow(entityId, 'completeConstruction');
+        ctx.constructionSiteManager.registerSite(
+            entityId,
+            entity.subType as BuildingType,
+            entity.race,
+            entity.player,
+            entity.x,
+            entity.y
+        );
+    }
     // Drive through event-based phase transitions
     ctx.eventBus.emit('construction:diggingStarted', { buildingId: entityId });
     ctx.eventBus.emit('construction:levelingComplete', { buildingId: entityId });

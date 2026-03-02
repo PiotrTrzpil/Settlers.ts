@@ -14,7 +14,7 @@ import { EMaterialType } from '@/game/economy';
 import { RequestPriority, RequestStatus } from '@/game/features/logistics';
 import { createSimulation, cleanupSimulation, type Simulation } from '../helpers/test-simulation';
 
-describe('Carriers, Inventory & Service Areas (simulation)', () => {
+describe('Carriers, Inventory & Service Areas (simulation)', { timeout: 5000 }, () => {
     let sim: Simulation;
 
     afterEach(() => {
