@@ -10,7 +10,6 @@ import type { Entity } from '@/game/entity';
 import { EntityType, UnitType, BuildingType, getBuildingSize } from '@/game/entity';
 import { UNIT_TYPE_CONFIG, getUnitCategory, UnitCategory } from '@/game/unit-types';
 import { EMaterialType } from '@/game/economy';
-import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import type { Game } from '@/game/game';
 
 // Player colors for display
@@ -133,11 +132,8 @@ export function useSelectionPanel(game: Ref<Game | null>): {
         if (!entity || entity.type !== EntityType.Building) return null;
         if (!game.value) return null;
 
-        const state = game.value.services.buildingStateManager.getBuildingState(entity.id);
-        if (!state) return 'unknown';
-
-        if (state.phase === BuildingConstructionPhase.Completed) return 'completed';
-        return 'building';
+        const isUnderConstruction = game.value.services.constructionSiteManager.hasSite(entity.id);
+        return isUnderConstruction ? 'building' : 'completed';
     });
 
     const playerColor = computed(() => {

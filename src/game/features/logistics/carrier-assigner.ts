@@ -88,14 +88,12 @@ export class CarrierAssigner {
             return null;
         }
 
-        const carrierState = this.carrierManager.getCarrierOrThrow(carrier.entityId, 'for delivery assignment');
         const transportJob = TransportJob.create(
             request.id,
             match.sourceBuilding,
             request.buildingId,
             request.materialType,
             match.amount,
-            carrierState.homeBuilding,
             carrier.entityId,
             {
                 reservationManager: this.reservationManager,
@@ -116,11 +114,18 @@ export class CarrierAssigner {
             return null;
         }
 
-        const job = this.settlerTaskSystem.buildTransportJob(transportJob);
+        const job = this.settlerTaskSystem.buildTransportJob(transportJob, carrier.entityId);
         const success = this.settlerTaskSystem.assignJob(carrier.entityId, job, job.targetPos!);
 
         if (success) {
             this.carrierManager.setStatus(carrier.entityId, CarrierStatus.Walking);
+            this.eventBus.emit('carrier:assigned', {
+                requestId: request.id,
+                carrierId: carrier.entityId,
+                sourceBuilding: match.sourceBuilding,
+                destBuilding: request.buildingId,
+                material: request.materialType,
+            });
             return { transportJob, carrierId: carrier.entityId };
         }
 
@@ -137,37 +142,14 @@ export class CarrierAssigner {
     }
 
     /**
-     * Find an available carrier from the given service hubs.
-     * In global mode, falls back to searching all player hubs if no shared-hub carrier is free.
-     * In zone mode, only searches the shared hubs.
+     * Find an available idle carrier for the given player.
      */
-    private findAvailableCarrier(serviceHubs: number[], playerId: number): { entityId: number } | null {
-        // Try carriers from hubs that cover both source and dest (likely closer)
-        const fromShared = this.findIdleCarrierInHubs(serviceHubs, playerId);
-        if (fromShared || !this.globalLogistics) return fromShared;
-
-        // Global fallback: search all remaining hubs for this player
-        const sharedHubSet = new Set(serviceHubs);
-        const remainingHubs = this.serviceAreaManager
-            .getServiceAreasForPlayer(playerId)
-            .filter(area => !sharedHubSet.has(area.buildingId))
-            .map(area => area.buildingId);
-
-        return this.findIdleCarrierInHubs(remainingHubs, playerId);
-    }
-
-    /**
-     * Find the first idle carrier from the given hub IDs.
-     */
-    private findIdleCarrierInHubs(hubIds: number[], playerId: number): { entityId: number } | null {
-        for (const hubId of hubIds) {
-            const hubEntity = this.gameState.getEntity(hubId);
-            if (!hubEntity || hubEntity.player !== playerId) continue;
-
-            for (const carrier of this.carrierManager.getCarriersForTavern(hubId)) {
-                if (this.carrierManager.canAssignJobTo(carrier.entityId)) {
-                    return { entityId: carrier.entityId };
-                }
+    private findAvailableCarrier(_serviceHubs: number[], playerId: number): { entityId: number } | null {
+        for (const carrier of this.carrierManager.getAllCarriers()) {
+            const entity = this.gameState.getEntity(carrier.entityId);
+            if (!entity || entity.player !== playerId) continue;
+            if (this.carrierManager.canAssignJobTo(carrier.entityId)) {
+                return { entityId: carrier.entityId };
             }
         }
         return null;

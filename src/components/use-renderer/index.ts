@@ -15,9 +15,9 @@ import { TilePicker } from '@/game/input/tile-picker';
 import { type TileCoord } from '@/game/entity';
 import { Race, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
 import {
-    canPlaceBuildingFootprint,
     canPlaceResource,
     canPlaceUnit,
+    canPlaceBuildingFootprint,
     isBuildable,
     isMineBuildable,
     computeSlopeDifficulty,
@@ -166,13 +166,22 @@ export function useRenderer({
         const tileHover = (x: number, y: number) => updateTileDebugStats(x, y, getGame, onTileClick);
 
         inputManager.registerMode(
-            new PlaceBuildingMode((x, y, buildingType) => {
-                const game = getGame();
-                if (!game) return false;
-                const race = game.playerRaces.get(game.currentPlayer);
-                if (race === undefined) throw new Error(`No race for player ${game.currentPlayer}`);
-                return canPlaceBuildingFootprint(game.terrain, game.state.tileOccupancy, x, y, buildingType, race);
-            }, tileHover)
+            new PlaceBuildingMode(
+                (x, y, buildingType) => {
+                    const game = getGame();
+                    if (!game) return false;
+                    const race = game.playerRaces.get(game.currentPlayer);
+                    if (race === undefined) return false;
+                    return canPlaceBuildingFootprint(game.terrain, game.state.tileOccupancy, x, y, buildingType, race);
+                },
+                () => {
+                    const game = getGame();
+                    return {
+                        placeBuildingsCompleted: game?.settings.state.placeBuildingsCompleted ?? false,
+                        placeBuildingsWithWorker: game?.settings.state.placeBuildingsWithWorker ?? false,
+                    };
+                }
+            )
         );
         inputManager.registerMode(
             new PlaceResourceMode((x, y) => {

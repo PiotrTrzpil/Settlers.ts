@@ -11,16 +11,30 @@ import { Race } from '@/game/race';
 import { UnitType } from '@/game/unit-types';
 import {
     BuildingConstructionPhase,
-    type BuildingState,
+    type ConstructionSite,
     getBuildingVisualState,
     captureOriginalTerrain,
     applyTerrainLeveling,
     restoreOriginalTerrain,
     CONSTRUCTION_SITE_GROUND_TYPE,
 } from '@/game/features/building-construction';
+import type { TerrainBuildingParams } from '@/game/features/building-construction/terrain';
 import { createTestMap, TERRAIN } from '../helpers/test-map';
-import { createTestContext, makeBuildingState, completeConstruction, type TestContext } from '../helpers/test-game';
+import { createTestContext, completeConstruction, type TestContext } from '../helpers/test-game';
 import { installTestGameData, resetTestGameData } from '../helpers/test-game-data';
+
+/**
+ * Create a minimal TerrainBuildingParams object for testing terrain functions.
+ * The new terrain functions accept a narrow params interface (not ConstructionSite).
+ */
+function makeTerrainParams(
+    tileX: number,
+    tileY: number,
+    buildingType: BuildingType,
+    race = Race.Roman
+): TerrainBuildingParams {
+    return { buildingType, race, tileX, tileY };
+}
 
 // ---------------------------------------------------------------------------
 // Terrain Leveling
@@ -37,9 +51,9 @@ describe('Terrain Leveling', () => {
     describe('captureOriginalTerrain', () => {
         it('should capture all 4 footprint tiles for a 2x2 building', () => {
             const map = createTestMap();
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut);
+            const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
 
-            const captured = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const captured = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
             const footprintTiles = captured.tiles.filter(t => t.isFootprint);
             expect(footprintTiles).toHaveLength(4);
@@ -50,9 +64,9 @@ describe('Terrain Leveling', () => {
 
         it('should capture all 9 footprint tiles for a 3x3 building', () => {
             const map = createTestMap();
-            const bs = makeBuildingState(10, 10, BuildingType.StorageArea);
+            const params = makeTerrainParams(10, 10, BuildingType.StorageArea);
 
-            const captured = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const captured = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
             const footprintTiles = captured.tiles.filter(t => t.isFootprint);
             expect(footprintTiles).toHaveLength(9);
@@ -60,9 +74,9 @@ describe('Terrain Leveling', () => {
 
         it('should capture 1 footprint tile for a 1x1 decoration', () => {
             const map = createTestMap();
-            const bs = makeBuildingState(10, 10, BuildingType.Eyecatcher01);
+            const params = makeTerrainParams(10, 10, BuildingType.Eyecatcher01);
 
-            const captured = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const captured = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
             const footprintTiles = captured.tiles.filter(t => t.isFootprint);
             expect(footprintTiles).toHaveLength(1);
@@ -72,9 +86,9 @@ describe('Terrain Leveling', () => {
 
         it('should capture cardinal neighbors of the footprint', () => {
             const map = createTestMap();
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut);
+            const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
 
-            const captured = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const captured = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
             const neighborTiles = captured.tiles.filter(t => !t.isFootprint);
             expect(neighborTiles.length).toBeGreaterThanOrEqual(8);
@@ -82,9 +96,9 @@ describe('Terrain Leveling', () => {
 
         it('should not create duplicate tiles for shared neighbors', () => {
             const map = createTestMap();
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut);
+            const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
 
-            const captured = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const captured = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
             const coordKeys = captured.tiles.map(t => `${t.x},${t.y}`);
             const uniqueKeys = new Set(coordKeys);
@@ -99,8 +113,8 @@ describe('Terrain Leveling', () => {
             map.groundHeight[map.mapSize.toIndex(10, 11)] = 80;
             map.groundHeight[map.mapSize.toIndex(11, 11)] = 90;
 
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut);
-            const captured = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
+            const captured = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
             const tile1010 = captured.tiles.find(t => t.x === 10 && t.y === 10);
             expect(tile1010).toBeDefined();
@@ -113,17 +127,17 @@ describe('Terrain Leveling', () => {
 
         it('should compute target height as average of all captured tiles', () => {
             const map = createTestMap(64, 64, { flatHeight: 100 });
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut);
-            const captured = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
+            const captured = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
             expect(captured.targetHeight).toBe(100);
         });
 
         it('should handle building at map edge', () => {
             const map = createTestMap();
-            const bs = makeBuildingState(0, 0, BuildingType.WoodcutterHut);
+            const params = makeTerrainParams(0, 0, BuildingType.WoodcutterHut);
 
-            const captured = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const captured = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
             const footprintTiles = captured.tiles.filter(t => t.isFootprint);
             expect(footprintTiles).toHaveLength(4);
@@ -138,10 +152,17 @@ describe('Terrain Leveling', () => {
     describe('applyTerrainLeveling', () => {
         it('should not modify terrain at progress 0', () => {
             const map = createTestMap(64, 64, { flatHeight: 100 });
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut);
-            bs.originalTerrain = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
+            const originalTerrain = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
-            const modified = applyTerrainLeveling(bs, map.groundType, map.groundHeight, map.mapSize, 0);
+            const modified = applyTerrainLeveling(
+                params,
+                map.groundType,
+                map.groundHeight,
+                map.mapSize,
+                0,
+                originalTerrain
+            );
 
             expect(map.groundType[map.mapSize.toIndex(10, 10)]).toBe(TERRAIN.GRASS);
             expect(modified).toBe(false);
@@ -149,10 +170,10 @@ describe('Terrain Leveling', () => {
 
         it('should NOT change ground type for neighbor tiles', () => {
             const map = createTestMap();
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut);
-            bs.originalTerrain = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
+            const originalTerrain = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
-            applyTerrainLeveling(bs, map.groundType, map.groundHeight, map.mapSize, 1.0);
+            applyTerrainLeveling(params, map.groundType, map.groundHeight, map.mapSize, 1.0, originalTerrain);
 
             expect(map.groundType[map.mapSize.toIndex(9, 10)]).toBe(TERRAIN.GRASS);
             expect(map.groundType[map.mapSize.toIndex(12, 10)]).toBe(TERRAIN.GRASS);
@@ -167,11 +188,11 @@ describe('Terrain Leveling', () => {
             map.groundHeight[map.mapSize.toIndex(10, 11)] = 0;
             map.groundHeight[map.mapSize.toIndex(11, 11)] = 0;
 
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut);
-            bs.originalTerrain = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
-            const target = bs.originalTerrain!.targetHeight;
+            const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
+            const originalTerrain = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
+            const target = originalTerrain.targetHeight;
 
-            applyTerrainLeveling(bs, map.groundType, map.groundHeight, map.mapSize, 0.5);
+            applyTerrainLeveling(params, map.groundType, map.groundHeight, map.mapSize, 0.5, originalTerrain);
 
             const h1010 = map.groundHeight[map.mapSize.toIndex(10, 10)];
             const expected1010 = Math.round(200 + (target - 200) * 0.5);
@@ -185,11 +206,11 @@ describe('Terrain Leveling', () => {
             map.groundHeight[map.mapSize.toIndex(10, 11)] = 100;
             map.groundHeight[map.mapSize.toIndex(11, 11)] = 150;
 
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut);
-            bs.originalTerrain = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
-            const target = bs.originalTerrain!.targetHeight;
+            const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
+            const originalTerrain = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
+            const target = originalTerrain.targetHeight;
 
-            applyTerrainLeveling(bs, map.groundType, map.groundHeight, map.mapSize, 1.0);
+            applyTerrainLeveling(params, map.groundType, map.groundHeight, map.mapSize, 1.0, originalTerrain);
 
             for (const tile of getBuildingFootprint(10, 10, BuildingType.WoodcutterHut, Race.Roman)) {
                 expect(map.groundHeight[map.mapSize.toIndex(tile.x, tile.y)]).toBe(target);
@@ -198,10 +219,10 @@ describe('Terrain Leveling', () => {
 
         it('should change ground type on all tiles of a 3x3 building', () => {
             const map = createTestMap();
-            const bs = makeBuildingState(10, 10, BuildingType.StorageArea);
-            bs.originalTerrain = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const params = makeTerrainParams(10, 10, BuildingType.StorageArea);
+            const originalTerrain = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
-            applyTerrainLeveling(bs, map.groundType, map.groundHeight, map.mapSize, 1.0);
+            applyTerrainLeveling(params, map.groundType, map.groundHeight, map.mapSize, 1.0, originalTerrain);
 
             const footprint = getBuildingFootprint(10, 10, BuildingType.StorageArea, Race.Roman);
             expect(footprint).toHaveLength(9);
@@ -217,13 +238,13 @@ describe('Terrain Leveling', () => {
             map.groundHeight[map.mapSize.toIndex(10, 10)] = 100;
             map.groundHeight[map.mapSize.toIndex(11, 10)] = 120;
 
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut);
-            bs.originalTerrain = captureOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
+            const originalTerrain = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
-            applyTerrainLeveling(bs, map.groundType, map.groundHeight, map.mapSize, 1.0);
+            applyTerrainLeveling(params, map.groundType, map.groundHeight, map.mapSize, 1.0, originalTerrain);
             expect(map.groundType[map.mapSize.toIndex(10, 10)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
 
-            const modified = restoreOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            const modified = restoreOriginalTerrain(originalTerrain, map.groundType, map.groundHeight, map.mapSize);
             expect(modified).toBe(true);
 
             expect(map.groundType[map.mapSize.toIndex(10, 10)]).toBe(TERRAIN.GRASS);
@@ -232,11 +253,13 @@ describe('Terrain Leveling', () => {
             expect(map.groundHeight[map.mapSize.toIndex(11, 10)]).toBe(120);
         });
 
-        it('should return false when no original terrain is captured', () => {
+        it('should return false when no terrain has been modified from the original', () => {
             const map = createTestMap();
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut);
+            const params = makeTerrainParams(10, 10, BuildingType.WoodcutterHut);
+            const originalTerrain = captureOriginalTerrain(params, map.groundType, map.groundHeight, map.mapSize);
 
-            const modified = restoreOriginalTerrain(bs, map.groundType, map.groundHeight, map.mapSize);
+            // Restore without any prior leveling — terrain hasn't changed so nothing to undo
+            const modified = restoreOriginalTerrain(originalTerrain, map.groundType, map.groundHeight, map.mapSize);
             expect(modified).toBe(false);
         });
     });
@@ -248,40 +271,44 @@ describe('Terrain Leveling', () => {
 
 describe('Building Construction Phases', () => {
     describe('getBuildingVisualState', () => {
-        it('should return completed state for undefined building state', () => {
+        it('should return completed state for undefined construction site', () => {
             const state = getBuildingVisualState(undefined);
             expect(state.isCompleted).toBe(true);
             expect(state.verticalProgress).toBe(1.0);
         });
 
-        it('should return zero vertical progress during Poles phase', () => {
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut, {
-                phase: BuildingConstructionPhase.Poles,
-                phaseProgress: 0.5,
-            });
-            const state = getBuildingVisualState(bs);
+        it('should return zero vertical progress during WaitingForDiggers phase', () => {
+            const site = {
+                phase: BuildingConstructionPhase.WaitingForDiggers,
+                levelingProgress: 0.5,
+                constructionProgress: 0,
+                completedRisingProgress: 0,
+            } as Partial<ConstructionSite> as ConstructionSite;
+            const state = getBuildingVisualState(site);
             expect(state.useConstructionSprite).toBe(true);
             expect(state.verticalProgress).toBe(0.0);
         });
 
         it('should use construction sprite with rising progress during ConstructionRising', () => {
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut, {
+            const site = {
                 phase: BuildingConstructionPhase.ConstructionRising,
-                phaseProgress: 0.6,
-                elapsedTime: 15,
-            });
-            const state = getBuildingVisualState(bs);
+                levelingProgress: 1.0,
+                constructionProgress: 0.6,
+                completedRisingProgress: 0,
+            } as Partial<ConstructionSite> as ConstructionSite;
+            const state = getBuildingVisualState(site);
             expect(state.useConstructionSprite).toBe(true);
             expect(state.verticalProgress).toBe(0.6);
         });
 
         it('should use completed sprite during CompletedRising', () => {
-            const bs = makeBuildingState(10, 10, BuildingType.WoodcutterHut, {
+            const site = {
                 phase: BuildingConstructionPhase.CompletedRising,
-                phaseProgress: 0.8,
-                elapsedTime: 25,
-            });
-            const state = getBuildingVisualState(bs);
+                levelingProgress: 1.0,
+                constructionProgress: 1.0,
+                completedRisingProgress: 0.8,
+            } as Partial<ConstructionSite> as ConstructionSite;
+            const state = getBuildingVisualState(site);
             expect(state.useConstructionSprite).toBe(false);
             expect(state.verticalProgress).toBe(0.8);
         });
@@ -305,7 +332,7 @@ describe('Building Construction Phases', () => {
                 },
             });
 
-            ctx.state.addEntity(
+            const building = ctx.state.addEntity(
                 EntityType.Building,
                 BuildingType.WoodcutterHut,
                 10,
@@ -315,13 +342,26 @@ describe('Building Construction Phases', () => {
                 undefined,
                 Race.Roman
             );
-            const bs = ctx.buildingStateManager.buildingStates.values().next().value as BuildingState;
-            bs.totalDuration = 10; // 10 seconds total
 
-            // Phase 1: TerrainLeveling starts immediately (0-20% = 0-2s)
-            ctx.buildingConstructionSystem.tick(0.5);
-            expect(bs.phase).toBe(BuildingConstructionPhase.TerrainLeveling);
-            expect(bs.originalTerrain).not.toBeNull();
+            // Register a construction site so the system can track it
+            ctx.constructionSiteManager.registerSite(building.id, BuildingType.WoodcutterHut, Race.Roman, 0, 10, 10);
+            const site = ctx.constructionSiteManager.getSiteOrThrow(building.id, 'test');
+
+            // Phase 0: starts in WaitingForDiggers
+            expect(site.phase).toBe(BuildingConstructionPhase.WaitingForDiggers);
+
+            // Phase 1: diggingStarted → TerrainLeveling (captures terrain)
+            ctx.eventBus.emit('construction:diggingStarted', { buildingId: building.id });
+            expect(site.phase).toBe(BuildingConstructionPhase.TerrainLeveling);
+            expect(site.originalTerrain).not.toBeNull();
+
+            // Advance leveling progress and tick to apply terrain leveling
+            site.levelingProgress = 1.0;
+            ctx.buildingConstructionSystem.tick(0.0);
+
+            // Phase 2: levelingComplete → WaitingForBuilders (terrain finalized at 1.0)
+            ctx.eventBus.emit('construction:levelingComplete', { buildingId: building.id });
+            expect(site.phase).toBe(BuildingConstructionPhase.WaitingForBuilders);
             expect(terrainNotified).toBe(true);
 
             // All footprint tiles should have construction ground type
@@ -330,17 +370,18 @@ describe('Building Construction Phases', () => {
                 expect(ctx.map.groundType[ctx.map.mapSize.toIndex(tile.x, tile.y)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
             }
 
-            // Phase 2: ConstructionRising (20-55% = 2-5.5s)
-            ctx.buildingConstructionSystem.tick(2.0);
-            expect(bs.phase).toBe(BuildingConstructionPhase.ConstructionRising);
+            // Phase 3: buildingStarted → ConstructionRising
+            ctx.eventBus.emit('construction:buildingStarted', { buildingId: building.id });
+            expect(site.phase).toBe(BuildingConstructionPhase.ConstructionRising);
 
-            // Phase 3: CompletedRising (55-100% = 5.5-10s)
-            ctx.buildingConstructionSystem.tick(4.0);
-            expect(bs.phase).toBe(BuildingConstructionPhase.CompletedRising);
+            // Phase 4: progressComplete → CompletedRising (starts countdown timer)
+            ctx.eventBus.emit('construction:progressComplete', { buildingId: building.id });
+            expect(site.phase).toBe(BuildingConstructionPhase.CompletedRising);
 
-            // Phase 4: Completed
-            ctx.buildingConstructionSystem.tick(5.0);
-            expect(bs.phase).toBe(BuildingConstructionPhase.Completed);
+            // Phase 5: tick past CompletedRising countdown (COMPLETED_RISING_DURATION = 0.5s)
+            ctx.buildingConstructionSystem.tick(0.6);
+            // After completion, the site is removed — building is now operational
+            expect(ctx.constructionSiteManager.hasSite(building.id)).toBe(false);
         });
     });
 });
@@ -356,33 +397,7 @@ describe('Unit spawning on construction complete', () => {
         ctx = createTestContext();
     });
 
-    it('should spawn swordsmen when barrack construction completes', () => {
-        const barrack = ctx.state.addEntity(
-            EntityType.Building,
-            BuildingType.Barrack,
-            10,
-            10,
-            0,
-            undefined,
-            undefined,
-            Race.Roman
-        );
-
-        expect(ctx.state.entities.filter(e => e.type === EntityType.Unit)).toHaveLength(0);
-
-        completeConstruction(ctx, barrack.id);
-
-        expect(ctx.buildingStateManager.getBuildingState(barrack.id)!.phase).toBe(BuildingConstructionPhase.Completed);
-
-        const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
-        expect(units).toHaveLength(3);
-        for (const unit of units) {
-            expect(unit.subType).toBe(UnitType.Swordsman);
-            expect(unit.player).toBe(0);
-        }
-    });
-
-    it('should spawn units adjacent to the building', () => {
+    it('should not spawn soldiers when barrack construction completes (trained via barracks system)', () => {
         const barrack = ctx.state.addEntity(
             EntityType.Building,
             BuildingType.Barrack,
@@ -396,11 +411,12 @@ describe('Unit spawning on construction complete', () => {
 
         completeConstruction(ctx, barrack.id);
 
+        // After completion, construction site is removed — building is operational
+        expect(ctx.constructionSiteManager.hasSite(barrack.id)).toBe(false);
+
+        // Barracks no longer spawn soldiers on construction — training pipeline handles this
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
-        for (const unit of units) {
-            const dist = Math.abs(unit.x - 10) + Math.abs(unit.y - 10);
-            expect(dist).toBeLessThanOrEqual(3);
-        }
+        expect(units).toHaveLength(0);
     });
 
     it('should spawn dedicated worker for production buildings', () => {
@@ -417,16 +433,17 @@ describe('Unit spawning on construction complete', () => {
 
         completeConstruction(ctx, lj.id);
 
-        expect(ctx.buildingStateManager.getBuildingState(lj.id)!.phase).toBe(BuildingConstructionPhase.Completed);
+        // After completion, construction site is removed — building is operational
+        expect(ctx.constructionSiteManager.hasSite(lj.id)).toBe(false);
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
         expect(units).toHaveLength(1);
         expect(units[0]!.subType).toBe(UnitType.Woodcutter);
     });
 
     it('should handle limited space around the building gracefully', () => {
-        const barrack = ctx.state.addEntity(
+        const house = ctx.state.addEntity(
             EntityType.Building,
-            BuildingType.Barrack,
+            BuildingType.ResidenceSmall,
             10,
             10,
             0,
@@ -435,7 +452,7 @@ describe('Unit spawning on construction complete', () => {
             Race.Roman
         );
 
-        // Block tiles in expanding rings with water, leave only 2 free
+        // Block tiles in expanding rings with water, leave only 1 free
         for (let y = 6; y <= 15; y++) {
             for (let x = 6; x <= 15; x++) {
                 if (x >= 10 && x <= 11 && y >= 10 && y <= 11) continue; // skip footprint
@@ -445,17 +462,18 @@ describe('Unit spawning on construction complete', () => {
         ctx.map.groundType[ctx.map.mapSize.toIndex(9, 10)] = TERRAIN.GRASS;
         ctx.map.groundType[ctx.map.mapSize.toIndex(12, 10)] = TERRAIN.GRASS;
 
-        completeConstruction(ctx, barrack.id);
+        completeConstruction(ctx, house.id);
 
+        // ResidenceSmall tries 1 builder + 2 carriers = 3 units, but only 2 land tiles available
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
         expect(units.length).toBeGreaterThan(0);
-        expect(units.length).toBeLessThanOrEqual(2);
+        expect(units.length).toBeLessThanOrEqual(3);
     });
 
     it('should not spawn units on water tiles', () => {
-        const barrack = ctx.state.addEntity(
+        const house = ctx.state.addEntity(
             EntityType.Building,
-            BuildingType.Barrack,
+            BuildingType.ResidenceSmall,
             10,
             10,
             0,
@@ -472,13 +490,13 @@ describe('Unit spawning on construction complete', () => {
             }
         }
 
-        completeConstruction(ctx, barrack.id);
+        completeConstruction(ctx, house.id);
 
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
         expect(units).toHaveLength(0);
     });
 
-    it('should spawn unselectable carriers from SmallHouse', () => {
+    it('should spawn unselectable units from SmallHouse', () => {
         const house = ctx.state.addEntity(
             EntityType.Building,
             BuildingType.ResidenceSmall,
@@ -491,14 +509,15 @@ describe('Unit spawning on construction complete', () => {
         );
         completeConstruction(ctx, house.id);
 
+        // 1 builder (immediate) + 2 carriers (residence spawner immediate mode)
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
-        expect(units).toHaveLength(2);
+        expect(units).toHaveLength(3);
         for (const unit of units) {
             expect(unit.selectable).toBe(false);
         }
     });
 
-    it('should spawn unselectable carriers from MediumHouse', () => {
+    it('should spawn unselectable units from MediumHouse', () => {
         const house = ctx.state.addEntity(
             EntityType.Building,
             BuildingType.ResidenceMedium,
@@ -511,14 +530,15 @@ describe('Unit spawning on construction complete', () => {
         );
         completeConstruction(ctx, house.id);
 
+        // 1 builder + 1 digger (immediate) + 4 carriers (residence spawner immediate mode)
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
-        expect(units).toHaveLength(4);
+        expect(units).toHaveLength(6);
         for (const unit of units) {
             expect(unit.selectable).toBe(false);
         }
     });
 
-    it('should spawn unselectable carriers from LargeHouse', () => {
+    it('should spawn unselectable units from LargeHouse', () => {
         const house = ctx.state.addEntity(
             EntityType.Building,
             BuildingType.ResidenceBig,
@@ -531,14 +551,15 @@ describe('Unit spawning on construction complete', () => {
         );
         completeConstruction(ctx, house.id);
 
+        // 2 builders + 1 digger (immediate) + 6 carriers (residence spawner immediate mode)
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
-        expect(units).toHaveLength(6);
+        expect(units).toHaveLength(9);
         for (const unit of units) {
             expect(unit.selectable).toBe(false);
         }
     });
 
-    it('should spawn selectable swordsmen from Barrack', () => {
+    it('should spawn no units from Barrack on completion (soldiers come from training)', () => {
         const barrack = ctx.state.addEntity(
             EntityType.Building,
             BuildingType.Barrack,
@@ -552,9 +573,6 @@ describe('Unit spawning on construction complete', () => {
         completeConstruction(ctx, barrack.id);
 
         const units = ctx.state.entities.filter(e => e.type === EntityType.Unit);
-        expect(units).toHaveLength(3);
-        for (const unit of units) {
-            expect(unit.selectable).toBe(true);
-        }
+        expect(units).toHaveLength(0);
     });
 });

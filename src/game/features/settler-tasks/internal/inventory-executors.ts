@@ -81,7 +81,6 @@ function requireMaterial(node: ChoreoNode, settlerId: number): EMaterialType {
 // ─────────────────────────────────────────────────────────────
 
 /** Fatigue added per delivery cycle (carrier transport). */
-const FATIGUE_PER_DELIVERY = 5;
 
 /**
  * GET_GOOD — Withdraw one unit of material from the building's input inventory and give it to the settler.
@@ -201,7 +200,6 @@ export const executePutGood: ChoreoExecutorFn = (
             `Carrier ${settler.id} delivered ${deposited} of ${EMaterialType[material]} to building ${destBuildingId}`
         );
 
-        ctx.carrierManager.addFatigue(settler.id, FATIGUE_PER_DELIVERY);
         ctx.carrierManager.setStatus(settler.id, CarrierStatus.Idle);
 
         ctx.eventBus.emit('carrier:deliveryComplete', {
@@ -217,17 +215,32 @@ export const executePutGood: ChoreoExecutorFn = (
 
     // ── Regular worker branch ──
     // Prefer the node's explicit material (handles transformations like LOG→BOARD);
-    // fall back to job carrying state when node has no entity.
-    const material = parseMaterial(node.entity) ?? job.carryingGood ?? requireMaterial(node, settler.id);
+    // fall back to produceOutput() for buildings with GOOD_NO_GOOD (auto-detect from production config).
     const buildingId = requireHomeBuilding(settler, ctx);
+    const explicitMaterial = parseMaterial(node.entity);
 
-    const deposited = ctx.inventoryManager.depositOutput(buildingId, material, 1);
-    if (deposited === 0) {
-        log.warn(
-            `PUT_GOOD: settler ${settler.id} — building ${buildingId} output full for ${EMaterialType[material]}, material lost`
-        );
+    if (explicitMaterial !== null) {
+        const deposited = ctx.inventoryManager.depositOutput(buildingId, explicitMaterial, 1);
+        if (deposited === 0) {
+            log.warn(
+                `PUT_GOOD: settler ${settler.id} — building ${buildingId} output full for ` +
+                    `${EMaterialType[explicitMaterial]}, material lost`
+            );
+        } else {
+            log.debug(
+                `PUT_GOOD: settler ${settler.id} deposited ${EMaterialType[explicitMaterial]} to building ${buildingId}`
+            );
+        }
     } else {
-        log.debug(`PUT_GOOD: settler ${settler.id} deposited ${EMaterialType[material]} to building ${buildingId}`);
+        // No explicit material (GOOD_NO_GOOD) — use the building's production config to determine output.
+        // This handles multi-step XML choreographies (e.g. ToolSmith) where GET_GOOD_VIRTUAL consumes
+        // inputs and WORK_VIRTUAL is a pure timer; the correct output comes from BUILDING_PRODUCTIONS.
+        const produced = ctx.inventoryManager.produceOutput(buildingId);
+        if (!produced) {
+            log.warn(`PUT_GOOD: settler ${settler.id} — building ${buildingId} produceOutput failed`);
+        } else {
+            log.debug(`PUT_GOOD: settler ${settler.id} produced output at building ${buildingId}`);
+        }
     }
 
     clearCarrying(settler);

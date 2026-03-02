@@ -7,30 +7,20 @@ import type { Game } from './game';
 import { EntityType } from './entity';
 import type { CarryingState } from './entity';
 import type { Race } from './race';
-import { BuildingConstructionPhase } from './features/building-construction';
+import { SERVICE_AREA_BUILDINGS } from './features/service-areas/service-area-feature';
+import type { BuildingType } from './buildings/building-type';
 import type { EMaterialType } from './economy/material-type';
 import { CarrierStatus } from './features/carriers/carrier-state';
 import type { TreeStage } from './features/trees/tree-system';
 import type { StoneStage } from './features/stones/stone-system';
 import { type RequestPriority, RequestStatus } from './features/logistics/resource-request';
+import type { SerializedConstructionSite } from './features/building-construction';
 
 const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
 const LAST_MAP_KEY = 'settlers_last_map';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
-const SNAPSHOT_VERSION = 8; // Bumped for work area instance offsets
-
-/**
- * Serialized building construction state.
- */
-export interface SerializedBuildingState {
-    entityId: number;
-    phase: BuildingConstructionPhase;
-    phaseProgress: number;
-    totalDuration: number;
-    elapsedTime: number;
-    terrainModified: boolean;
-}
+const SNAPSHOT_VERSION = 9; // Bumped for building lifecycle separation (ConstructionSite replaces BuildingState)
 
 /**
  * Serialized inventory slot state.
@@ -57,9 +47,7 @@ export interface SerializedBuildingInventory {
  */
 export interface SerializedCarrier {
     entityId: number;
-    homeBuilding: number;
     status: CarrierStatus;
-    fatigue: number;
     carryingMaterial: EMaterialType | null;
     carryingAmount: number;
 }
@@ -136,11 +124,11 @@ export interface GameStateSnapshot {
     rngSeed: number;
     /** Resource stack quantities and building ownership */
     resourceQuantities: Array<{ entityId: number; quantity: number; buildingId?: number }>;
-    /** Building construction states (phase, progress, etc.) */
-    buildingStates?: SerializedBuildingState[];
+    /** Active construction sites (buildings currently under construction) */
+    constructionSites?: SerializedConstructionSite[];
     /** Building inventory states (input/output slot amounts) */
     buildingInventories?: SerializedBuildingInventory[];
-    /** Carrier states (home building, fatigue, carrying) */
+    /** Carrier states (status, carrying) */
     carriers?: SerializedCarrier[];
     /** Tree states (stage, progress, stump timer) */
     trees?: SerializedTree[];
@@ -151,16 +139,24 @@ export interface GameStateSnapshot {
     /** Production cycle progress per building (deprecated v5 field, kept for backward compat) */
     // eslint-disable-next-line @typescript-eslint/no-deprecated, sonarjs/deprecation -- backward compat with saved snapshots (v5)
     productions?: SerializedProduction[];
-    /** Modified terrain ground types (base64-encoded Uint8Array) */
+    /** Modified terrain ground types (base64-encoded Uint8Array) — full copy, used in initial state */
     terrainGroundType?: string;
-    /** Modified terrain ground heights (base64-encoded Uint8Array) */
+    /** Modified terrain ground heights (base64-encoded Uint8Array) — full copy, used in initial state */
     terrainGroundHeight?: string;
+    /** Sparse terrain ground type diff vs initial state (base64 Uint32 pairs: [index, value, ...]) */
+    terrainGroundTypeDiff?: string;
+    /** Sparse terrain ground height diff vs initial state (base64 Uint32 pairs: [index, value, ...]) */
+    terrainGroundHeightDiff?: string;
     /** Per-building work area center overrides (entityId → tile offset) */
     workAreaOffsets?: Array<{ entityId: number; dx: number; dy: number }>;
 }
 
 /** Current map identifier for save/load matching */
 let currentMapId: string = '';
+
+/** Initial terrain cached by saveInitialState; lets auto-saves store sparse diffs instead of full arrays. */
+let _cachedInitialGroundType: Uint8Array | null = null;
+let _cachedInitialGroundHeight: Uint8Array | null = null;
 
 /**
  * Set the current map identifier. Must be called when loading a map.
@@ -211,6 +207,30 @@ function base64ToUint8Array(base64: string): Uint8Array {
     return arr;
 }
 
+// === Terrain diff helpers ===
+
+/** Encode changed tiles as base64 Uint32 pairs [index, value, …]. Returns null if nothing changed. */
+function encodeTerrainDiff(current: Uint8Array, initial: Uint8Array): string | null {
+    const pairs: number[] = [];
+    for (let i = 0; i < current.length; i++) {
+        if (current[i] !== initial[i]) {
+            pairs.push(i, current[i]!);
+        }
+    }
+    if (pairs.length === 0) return null;
+    return uint8ArrayToBase64(new Uint8Array(new Uint32Array(pairs).buffer));
+}
+
+/** Apply a sparse terrain diff produced by encodeTerrainDiff to the live terrain array. */
+function applyTerrainDiff(terrain: Uint8Array, diffBase64: string): void {
+    const raw = base64ToUint8Array(diffBase64);
+    const pairs = new Uint32Array(raw.buffer, 0, raw.byteLength / 4);
+    for (let i = 0; i < pairs.length; i += 2) {
+        const idx = pairs[i]!;
+        if (idx < terrain.length) terrain[idx] = pairs[i + 1]!;
+    }
+}
+
 // === Serialization Helpers ===
 
 interface SlotLike {
@@ -248,9 +268,7 @@ function serializeCarriers(game: Game): SerializedCarrier[] {
         const entity = game.state.getEntityOrThrow(carrier.entityId, 'carrier serialization');
         result.push({
             entityId: carrier.entityId,
-            homeBuilding: carrier.homeBuilding,
             status: carrier.status,
-            fatigue: carrier.fatigue,
             carryingMaterial: entity.carrying?.material ?? null,
             carryingAmount: entity.carrying?.amount ?? 0,
         });
@@ -313,7 +331,6 @@ function serializeRequests(game: Game): SerializedRequest[] {
  */
 export function createSnapshot(game: Game): GameStateSnapshot {
     const gameState = game.state;
-    const { buildingStateManager } = game.services;
 
     const entities = gameState.entities.map(e => ({
         id: e.id,
@@ -333,18 +350,6 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         resourceQuantities.push({ entityId, quantity: state.quantity, buildingId: state.buildingId });
     }
 
-    const buildingStates: SerializedBuildingState[] = [];
-    for (const state of buildingStateManager.getAllBuildingStates()) {
-        buildingStates.push({
-            entityId: state.entityId,
-            phase: state.phase,
-            phaseProgress: state.phaseProgress,
-            totalDuration: state.totalDuration,
-            elapsedTime: state.elapsedTime,
-            terrainModified: state.terrainModified,
-        });
-    }
-
     return {
         version: SNAPSHOT_VERSION,
         timestamp: Date.now(),
@@ -353,14 +358,23 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         nextId: gameState.nextId,
         rngSeed: gameState.rng.getState(),
         resourceQuantities,
-        buildingStates,
+        constructionSites: game.services.constructionSiteManager.serializeSites(),
         buildingInventories: serializeInventories(game),
         carriers: serializeCarriers(game),
         trees: serializeTrees(game),
         stones: serializeStones(game),
         requests: serializeRequests(game),
-        terrainGroundType: uint8ArrayToBase64(game.terrain.groundType),
-        terrainGroundHeight: uint8ArrayToBase64(game.terrain.groundHeight),
+        ...(_cachedInitialGroundType
+            ? {
+                terrainGroundTypeDiff:
+                      encodeTerrainDiff(game.terrain.groundType, _cachedInitialGroundType) ?? undefined,
+                terrainGroundHeightDiff:
+                      encodeTerrainDiff(game.terrain.groundHeight, _cachedInitialGroundHeight!) ?? undefined,
+            }
+            : {
+                terrainGroundType: uint8ArrayToBase64(game.terrain.groundType),
+                terrainGroundHeight: uint8ArrayToBase64(game.terrain.groundHeight),
+            }),
         workAreaOffsets: game.services.workAreaStore.serializeInstanceOffsets(),
     };
 }
@@ -454,18 +468,10 @@ function restoreEntityProps(entity: import('./entity').Entity, saved: GameStateS
     if (saved.hidden) entity.hidden = saved.hidden;
 }
 
-// eslint-disable-next-line sonarjs/cognitive-complexity -- complex entity restoration from snapshot
 function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
     const state = game.state;
-    const { buildingStateManager } = game.services;
 
     // Build lookup maps for per-entity overrides
-    const savedBuildingStates = new Map<number, SerializedBuildingState>();
-    if (snapshot.buildingStates) {
-        for (const bs of snapshot.buildingStates) {
-            savedBuildingStates.set(bs.entityId, bs);
-        }
-    }
     const savedTreeStates = new Map<number, SerializedTree>();
     if (snapshot.trees) {
         for (const t of snapshot.trees) {
@@ -491,28 +497,6 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
         // Restore per-entity properties not covered by addEntity
         restoreEntityProps(entity, e);
 
-        // Restore building state (overwrites the fresh state created by addEntity)
-        if (e.type === EntityType.Building) {
-            const saved = savedBuildingStates.get(e.id);
-            if (saved) {
-                if (e.race === undefined) {
-                    throw new Error(`Building entity ${e.id} in snapshot is missing race — snapshot is incompatible`);
-                }
-                buildingStateManager.restoreBuildingState({
-                    entityId: e.id,
-                    buildingType: e.subType,
-                    race: e.race,
-                    tileX: e.x,
-                    tileY: e.y,
-                    phase: saved.phase,
-                    phaseProgress: saved.phaseProgress,
-                    totalDuration: saved.totalDuration,
-                    elapsedTime: saved.elapsedTime,
-                    terrainModified: saved.terrainModified,
-                });
-            }
-        }
-
         // Restore map object state (overwrites the fresh state created by register())
         if (e.type === EntityType.MapObject) {
             const savedTree = savedTreeStates.get(e.id);
@@ -533,6 +517,25 @@ function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
                     level: savedStone.level,
                 });
             }
+        }
+    }
+}
+
+/** Create service areas for completed residence buildings after entity/state restore. */
+function restoreServiceAreas(game: Game): void {
+    const { constructionSiteManager, serviceAreaManager } = game.services;
+    for (const entity of game.state.entities) {
+        if (entity.type !== EntityType.Building) continue;
+        if (!SERVICE_AREA_BUILDINGS.has(entity.subType as BuildingType)) continue;
+        // A building without a construction site is operational — create its service area.
+        if (!constructionSiteManager.hasSite(entity.id)) {
+            serviceAreaManager.createServiceArea(
+                entity.id,
+                entity.player,
+                entity.x,
+                entity.y,
+                entity.subType as BuildingType
+            );
         }
     }
 }
@@ -570,12 +573,17 @@ function restoreCarriers(game: Game, snapshot: GameStateSnapshot): void {
 
         game.services.carrierManager.restoreCarrier({
             entityId: c.entityId,
-            homeBuilding: c.homeBuilding,
             status: isJobStatus ? CarrierStatus.Idle : c.status,
-            fatigue: c.fatigue,
             carryingMaterial: c.carryingMaterial,
             carryingAmount: c.carryingAmount,
         });
+    }
+}
+
+function restoreConstructionSites(game: Game, snapshot: GameStateSnapshot): void {
+    if (!snapshot.constructionSites) return;
+    for (const site of snapshot.constructionSites) {
+        game.services.constructionSiteManager.restoreSite(site);
     }
 }
 
@@ -599,6 +607,20 @@ function restoreRequests(game: Game, snapshot: GameStateSnapshot): void {
     }
 }
 
+/** Apply terrain arrays/diffs from a snapshot to the live terrain. Auto-saves use diffs; initial state uses full arrays. */
+function restoreTerrain(game: Game, snapshot: GameStateSnapshot): void {
+    if (snapshot.terrainGroundType) game.terrain.groundType.set(base64ToUint8Array(snapshot.terrainGroundType));
+    if (snapshot.terrainGroundHeight) game.terrain.groundHeight.set(base64ToUint8Array(snapshot.terrainGroundHeight));
+    if (snapshot.terrainGroundTypeDiff) applyTerrainDiff(game.terrain.groundType, snapshot.terrainGroundTypeDiff);
+    if (snapshot.terrainGroundHeightDiff) applyTerrainDiff(game.terrain.groundHeight, snapshot.terrainGroundHeightDiff);
+    const modified =
+        snapshot.terrainGroundType ||
+        snapshot.terrainGroundHeight ||
+        snapshot.terrainGroundTypeDiff ||
+        snapshot.terrainGroundHeightDiff;
+    if (modified) game.eventBus.emit('terrain:modified', {});
+}
+
 /**
  * Restore game state from a snapshot using normal entity creation.
  * Must be called on a fresh Game instance (entities array should be empty or will be cleared).
@@ -617,18 +639,18 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
     // Recreate entities with their per-entity state overrides
     restoreEntities(game, snapshot);
 
-    // Restore terrain modifications (raw ground, leveling)
-    if (snapshot.terrainGroundType) {
-        const restored = base64ToUint8Array(snapshot.terrainGroundType);
-        game.terrain.groundType.set(restored);
-    }
-    if (snapshot.terrainGroundHeight) {
-        const restored = base64ToUint8Array(snapshot.terrainGroundHeight);
-        game.terrain.groundHeight.set(restored);
-    }
-    if (snapshot.terrainGroundType || snapshot.terrainGroundHeight) {
-        game.eventBus.emit('terrain:modified', {});
-    }
+    // Restore active construction sites BEFORE service areas.
+    // Service area restoration uses hasSite() to distinguish operational from under-construction.
+    restoreConstructionSites(game, snapshot);
+
+    // Restore terrain modifications (raw ground, leveling).
+    restoreTerrain(game, snapshot);
+
+    // Restore service areas for completed residence buildings.
+    // Service areas are created on building:completed, not entity:created,
+    // so save-restored buildings need explicit initialization.
+    // Buildings with an active construction site are under construction — no service area yet.
+    restoreServiceAreas(game);
 
     // Restore feature state
     restoreResourceQuantities(game, snapshot);
@@ -651,6 +673,9 @@ export function saveInitialState(game: Game): boolean {
         const snapshot = createSnapshot(game);
         localStorage.setItem(INITIAL_STATE_KEY, JSON.stringify(snapshot));
         console.log(`GameState: Saved initial state with ${snapshot.entities.length} entities`);
+        // Cache initial terrain in memory so subsequent auto-saves can store sparse diffs instead of full arrays.
+        _cachedInitialGroundType = new Uint8Array(game.terrain.groundType);
+        _cachedInitialGroundHeight = new Uint8Array(game.terrain.groundHeight);
         return true;
     } catch (e) {
         console.warn('Failed to save initial state:', e);
@@ -686,6 +711,8 @@ export function loadInitialState(): GameStateSnapshot | null {
  */
 export function clearInitialState(): void {
     localStorage.removeItem(INITIAL_STATE_KEY);
+    _cachedInitialGroundType = null;
+    _cachedInitialGroundHeight = null;
 }
 
 /**

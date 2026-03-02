@@ -38,8 +38,8 @@ function resolveConstructionOverlay(
     er: EntityRenderer,
     out: BuildingOverlayRenderData[]
 ): void {
-    const buildingState = g.services.buildingStateManager.getBuildingState(entityId);
-    const vs = getBuildingVisualState(buildingState);
+    const site = g.services.constructionSiteManager.getSite(entityId);
+    const vs = getBuildingVisualState(site);
     if (vs.phase !== BuildingConstructionPhase.CompletedRising || !er.spriteManager) return;
 
     const entity = g.state.getEntity(entityId);

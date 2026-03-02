@@ -55,7 +55,8 @@ export class WorkerTaskExecutor {
         private readonly animController: IdleAnimationController,
         private readonly choreoContext: ChoreoContext,
         private readonly handlerErrorLogger: ThrottledLogger,
-        private readonly missingHandlerLogger: ThrottledLogger
+        private readonly missingHandlerLogger: ThrottledLogger,
+        private readonly isBuildingAvailable?: (buildingId: number) => boolean
     ) {
         this.jobSelector = new JobSelector(choreographyStore);
     }
@@ -409,7 +410,7 @@ export class WorkerTaskExecutor {
             // Building was destroyed — release stale assignment
             releaseBuilding(runtime);
         }
-        const building = findNearestWorkplace(this.gameState, settler, buildingOccupants);
+        const building = findNearestWorkplace(this.gameState, settler, buildingOccupants, this.isBuildingAvailable);
         if (building) {
             claimBuilding(runtime, building.id);
         }

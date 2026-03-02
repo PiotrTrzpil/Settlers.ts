@@ -26,87 +26,6 @@ import { OreType } from '@/game/features/ore-veins/ore-type';
 import { isMineBuilding, getBuildingFootprint } from '@/game/buildings/types';
 import type { Entity } from '@/game/entity';
 
-// ─── Public interface ───────────────────────────────────────────────
-
-export interface Simulation {
-    readonly state: GameState;
-    readonly services: GameServices;
-    readonly eventBus: EventBus;
-    readonly map: TestMap;
-
-    /** Place a building at an auto-chosen location. Returns entity ID. */
-    placeBuilding(buildingType: BuildingType, player?: number): number;
-
-    /** Plant N mature trees near a building (within worker search radius). */
-    plantTreesNear(buildingId: number, count: number): void;
-
-    /** Plant N mature trees far from a building (outside working area radius). */
-    plantTreesFar(buildingId: number, count: number): void;
-
-    /** Place N river tiles near a building (within worker search radius). */
-    placeRiverNear(buildingId: number, count: number): void;
-
-    /** Place N stone resources near a building (within worker search radius). */
-    placeStonesNear(buildingId: number, count: number): void;
-
-    /** Place N stone resources far from a building (outside working area radius). */
-    placeStonesFar(buildingId: number, count: number): void;
-
-    /**
-     * Place a mine building on mountain terrain. Automatically sets the footprint
-     * tiles to ROCK and places ore veins of the specified type nearby.
-     * Returns entity ID.
-     */
-    placeMineBuilding(buildingType: BuildingType, oreType: OreType, oreLevel?: number): number;
-
-    /** Spawn a unit at a specific tile position. Returns entity ID. */
-    spawnUnit(x: number, y: number, unitType?: UnitType, player?: number): number;
-
-    /**
-     * Issue a move command to a unit (pathfinds and starts movement).
-     * Returns true if a valid path was found.
-     */
-    moveUnit(entityId: number, targetX: number, targetY: number): boolean;
-
-    /**
-     * Simulate movement tick-by-tick, recording every tile the unit visits.
-     * When `target` is given, keeps running until the unit reaches it (handles
-     * temporary blocks from workers/carriers). Otherwise stops when path is empty.
-     * Returns the ordered list of tiles visited (including start position).
-     */
-    simulateMovement(entityId: number, opts?: { maxTicks?: number; target?: TileCoord }): TileCoord[];
-
-    /** Deposit materials directly into a building's input inventory (for testing). */
-    injectInput(buildingId: number, material: EMaterialType, amount: number): void;
-
-    /** Tick all systems once with the given delta-time (seconds). */
-    tick(dt: number): void;
-
-    /** Run N ticks at fixed dt. Returns total simulated time (seconds). */
-    runTicks(count: number, dt?: number): number;
-
-    /** Run ticks until predicate returns true, or maxTicks reached. Returns simulated seconds elapsed. */
-    runUntil(predicate: () => boolean, opts?: { maxTicks?: number; dt?: number }): number;
-
-    /** Get output amount for a material in a building's inventory. */
-    getOutput(buildingId: number, material: EMaterialType): number;
-
-    /** Get input amount for a material in a building's inventory. */
-    getInput(buildingId: number, material: EMaterialType): number;
-
-    /** Count entities by type (and optionally subType). */
-    countEntities(type: EntityType, subType?: number): number;
-
-    /** Errors captured during simulation ticks (system errors that would otherwise crash). */
-    readonly errors: SimulationError[];
-
-    /** Log specific event bus events to console. Pass event names to subscribe, or '*' for all. */
-    logEvents(...events: (keyof GameEvents | '*')[]): void;
-
-    /** Tear down all systems and event subscriptions. */
-    destroy(): void;
-}
-
 /** An error captured during simulation ticking. */
 export interface SimulationError {
     tick: number;
@@ -151,95 +70,98 @@ export interface SimulationOptions {
     useStubData?: boolean;
 }
 
-// ─── Factory ────────────────────────────────────────────────────────
+// ─── Simulation class ────────────────────────────────────────────────
 
-export function createSimulation(opts: SimulationOptions = {}): Simulation {
-    const { mapWidth = 128, mapHeight = 128, buildingSpacing, useStubData = false } = opts;
+export class Simulation {
+    readonly state: GameState;
+    readonly services: GameServices;
+    readonly eventBus: EventBus;
+    readonly map: TestMap;
+    readonly errors: SimulationError[] = [];
+    readonly mapWidth: number;
+    readonly mapHeight: number;
 
-    if (useStubData) {
-        installTestGameData();
-    } else {
-        const loaded = installRealGameData();
-        if (!loaded) {
-            // Fall back to stubs if XML files aren't present
+    private readonly tickSystems: ReturnType<GameServices['getTickSystems']>;
+    private readonly placer: BuildingPlacer;
+    private readonly cmdContext: () => CommandContext;
+    private tickCount = 0;
+
+    constructor(opts: SimulationOptions = {}) {
+        const { mapWidth = 128, mapHeight = 128, buildingSpacing, useStubData = false } = opts;
+        this.mapWidth = mapWidth;
+        this.mapHeight = mapHeight;
+
+        if (useStubData) {
             installTestGameData();
+        } else {
+            const loaded = installRealGameData();
+            if (!loaded) {
+                installTestGameData();
+            }
         }
+
+        this.map = createTestMap(mapWidth, mapHeight);
+        this.eventBus = new EventBus();
+        this.state = new GameState(this.eventBus);
+        const settings = new GameSettingsManager();
+        settings.resetToDefaults();
+
+        this.cmdContext = (): CommandContext => ({
+            state: this.state,
+            terrain: this.map.terrain,
+            eventBus: this.eventBus,
+            settings: settings.state,
+            settlerTaskSystem: this.services.settlerTaskSystem,
+            constructionSiteManager: this.services.constructionSiteManager,
+            treeSystem: this.services.treeSystem,
+            cropSystem: this.services.cropSystem,
+            combatSystem: this.services.combatSystem,
+            productionControlManager: this.services.productionControlManager,
+        });
+
+        this.services = new GameServices(this.state, this.eventBus, cmd => executeCommand(this.cmdContext(), cmd));
+        this.services.setTerrainData(this.map.terrain);
+
+        this.services.logisticsDispatcher.globalLogistics = true;
+        this.services.residenceSpawner.immediateMode = true;
+
+        this.eventBus.on('entity:removed', ({ entityId }) => {
+            this.services.settlerTaskSystem.onEntityRemoved(entityId);
+        });
+
+        this.tickSystems = this.services.getTickSystems();
+        this.placer = new BuildingPlacer(30, 30, buildingSpacing);
     }
 
-    const map = createTestMap(mapWidth, mapHeight);
-    const eventBus = new EventBus();
-    const state = new GameState(eventBus);
-    const settings = new GameSettingsManager();
-    settings.resetToDefaults();
-
-    // Instant building completion + auto-spawn workers/carriers
-    settings.state.placeBuildingsCompleted = true;
-    settings.state.placeBuildingsWithWorker = true;
-
-    // Lazy command context — resolved after services is assigned
-    const cmdContext = (): CommandContext => ({
-        state,
-        terrain: map.terrain,
-        eventBus,
-        settings: settings.state,
-        settlerTaskSystem: services.settlerTaskSystem,
-        buildingStateManager: services.buildingStateManager,
-        treeSystem: services.treeSystem,
-        cropSystem: services.cropSystem,
-        combatSystem: services.combatSystem,
-        productionControlManager: services.productionControlManager,
-    });
-
-    // GameServices constructor captures executeCommand as a closure.
-    // The closure is only invoked during ticks (not construction), so the
-    // forward reference to `services` is safe.
-    // eslint-disable-next-line prefer-const
-    let services: GameServices;
-    services = new GameServices(state, eventBus, cmd => executeCommand(cmdContext(), cmd));
-    services.setTerrainData(map.terrain);
-
-    // Enable global logistics — skip service area checks so carriers deliver everywhere
-    services.logisticsDispatcher.globalLogistics = true;
-
-    // Wire entity:removed to settler task system (mirrors Game constructor)
-    eventBus.on('entity:removed', ({ entityId }) => {
-        services.settlerTaskSystem.onEntityRemoved(entityId);
-    });
-
-    const tickSystems = services.getTickSystems();
-    const placer = new BuildingPlacer(30, 30, buildingSpacing);
-    const errors: SimulationError[] = [];
-    let tickCount = 0;
-
-    function tick(dt: number) {
-        tickCount++;
-        for (const { system, group } of tickSystems) {
+    tick(dt: number) {
+        this.tickCount++;
+        for (const { system, group } of this.tickSystems) {
             try {
                 system.tick(dt);
             } catch (e) {
                 const err = e instanceof Error ? e : new Error(String(e));
-                errors.push({ tick: tickCount, system: group, error: err });
+                this.errors.push({ tick: this.tickCount, system: group, error: err });
             }
         }
     }
 
-    function runTicks(count: number, dt = 1 / 30): number {
-        for (let i = 0; i < count; i++) tick(dt);
+    runTicks(count: number, dt = 1 / 30): number {
+        for (let i = 0; i < count; i++) this.tick(dt);
         return count * dt;
     }
 
-    function runUntil(predicate: () => boolean, opts: { maxTicks?: number; dt?: number } = {}): number {
+    runUntil(predicate: () => boolean, opts: { maxTicks?: number; dt?: number } = {}): number {
         const { maxTicks = 30_000, dt = 1 / 30 } = opts;
-        const errorsBefore = errors.length;
+        const errorsBefore = this.errors.length;
         let elapsed = 0;
         for (let i = 0; i < maxTicks; i++) {
             if (predicate()) return elapsed;
-            tick(dt);
+            this.tick(dt);
             elapsed += dt;
         }
         // Dump errors that occurred during this run
-        if (errors.length > errorsBefore) {
-            const newErrors = errors.slice(errorsBefore);
+        if (this.errors.length > errorsBefore) {
+            const newErrors = this.errors.slice(errorsBefore);
             const unique = new Map<string, { count: number; tick: number; system: string }>();
             for (const e of newErrors) {
                 const key = e.error.message;
@@ -258,19 +180,21 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         return elapsed;
     }
 
-    function execute(cmd: Parameters<typeof executeCommand>[1]) {
-        return executeCommand(cmdContext(), cmd);
+    execute(cmd: Parameters<typeof executeCommand>[1]) {
+        return executeCommand(this.cmdContext(), cmd);
     }
 
-    function placeBuilding(buildingType: BuildingType, player = 0): number {
-        const pos = placer.next();
-        const result = execute({
+    placeBuilding(buildingType: BuildingType, player = 0, completed = true): number {
+        const pos = this.placer.next();
+        const result = this.execute({
             type: 'place_building',
             buildingType,
             x: pos.x,
             y: pos.y,
             player,
             race: Race.Roman,
+            completed,
+            spawnWorker: completed,
         });
         if (!result.success) {
             throw new Error(`Failed to place ${BuildingType[buildingType]} at (${pos.x}, ${pos.y}): ${result.error}`);
@@ -278,8 +202,41 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         return (result.effects![0]! as { entityId: number }).entityId;
     }
 
+    placeGoods(material: EMaterialType, amount: number): number {
+        const pos = this.placer.next();
+        const result = this.execute({
+            type: 'place_resource',
+            materialType: material,
+            amount,
+            x: pos.x,
+            y: pos.y,
+        });
+        if (!result.success) {
+            throw new Error(`Failed to place ${EMaterialType[material]} at (${pos.x}, ${pos.y}): ${result.error}`);
+        }
+        return (result.effects![0]! as { entityId: number }).entityId;
+    }
+
+    placeGoodsNear(buildingId: number, material: EMaterialType, amount: number) {
+        const b = this.state.getEntityOrThrow(buildingId, 'placeGoodsNear');
+        const skip = this.footprintRadius(b) + 1;
+        const tiles = this.findEmptyTiles(b.x, b.y, 1, skip);
+        if (tiles.length === 0) throw new Error(`No empty tile near building ${buildingId}`);
+        const pos = tiles[0]!;
+        const result = this.execute({
+            type: 'place_resource',
+            materialType: material,
+            amount,
+            x: pos.x,
+            y: pos.y,
+        });
+        if (!result.success) {
+            throw new Error(`Failed to place ${EMaterialType[material]} near building ${buildingId}: ${result.error}`);
+        }
+    }
+
     /** Chebyshev radius of a building's footprint from its anchor. */
-    function footprintRadius(b: Entity): number {
+    private footprintRadius(b: Entity): number {
         try {
             const fp = getBuildingFootprint(b.x, b.y, b.subType as BuildingType, b.race);
             return Math.max(...fp.map(t => Math.max(Math.abs(t.x - b.x), Math.abs(t.y - b.y))));
@@ -289,13 +246,13 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
     }
 
     /** Find N empty tiles near a point using spiralSearch, skipping `skipRadius` inner tiles. */
-    function findEmptyTiles(cx: number, cy: number, count: number, skipRadius = 2): { x: number; y: number }[] {
+    private findEmptyTiles(cx: number, cy: number, count: number, skipRadius = 2): { x: number; y: number }[] {
         const placed = new Set<string>();
         const results: { x: number; y: number }[] = [];
         for (let i = 0; i < count; i++) {
-            const pos = spiralSearch(cx, cy, mapWidth, mapHeight, (x, y) => {
+            const pos = spiralSearch(cx, cy, this.mapWidth, this.mapHeight, (x, y) => {
                 const dist = Math.max(Math.abs(x - cx), Math.abs(y - cy));
-                return dist >= skipRadius && !state.getEntityAt(x, y) && !placed.has(`${x},${y}`);
+                return dist >= skipRadius && !this.state.getEntityAt(x, y) && !placed.has(`${x},${y}`);
             });
             if (!pos) break;
             placed.add(`${pos.x},${pos.y}`);
@@ -304,68 +261,68 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         return results;
     }
 
-    function plantTreesNear(buildingId: number, count: number) {
-        const b = state.getEntityOrThrow(buildingId, 'plantTreesNear');
-        const skip = footprintRadius(b) + 1;
-        for (const pos of findEmptyTiles(b.x, b.y, count, skip)) {
-            const tree = state.addEntity(EntityType.MapObject, MapObjectType.TreePine, pos.x, pos.y, 0);
-            services.treeSystem.register(tree.id, MapObjectType.TreePine, false);
+    plantTreesNear(buildingId: number, count: number) {
+        const b = this.state.getEntityOrThrow(buildingId, 'plantTreesNear');
+        const skip = this.footprintRadius(b) + 1;
+        for (const pos of this.findEmptyTiles(b.x, b.y, count, skip)) {
+            const tree = this.state.addEntity(EntityType.MapObject, MapObjectType.TreePine, pos.x, pos.y, 0);
+            this.services.treeSystem.register(tree.id, MapObjectType.TreePine, false);
         }
     }
 
-    function plantTreesFar(buildingId: number, count: number) {
-        const b = state.getEntityOrThrow(buildingId, 'plantTreesFar');
+    plantTreesFar(buildingId: number, count: number) {
+        const b = this.state.getEntityOrThrow(buildingId, 'plantTreesFar');
         // Place trees beyond working area radius (20) so workers can't reach them
-        for (const pos of findEmptyTiles(b.x, b.y, count, 25)) {
-            const tree = state.addEntity(EntityType.MapObject, MapObjectType.TreePine, pos.x, pos.y, 0);
-            services.treeSystem.register(tree.id, MapObjectType.TreePine, false);
+        for (const pos of this.findEmptyTiles(b.x, b.y, count, 25)) {
+            const tree = this.state.addEntity(EntityType.MapObject, MapObjectType.TreePine, pos.x, pos.y, 0);
+            this.services.treeSystem.register(tree.id, MapObjectType.TreePine, false);
         }
     }
 
-    function placeRiverNear(buildingId: number, count: number) {
-        const b = state.getEntityOrThrow(buildingId, 'placeRiverNear');
-        const skip = footprintRadius(b) + 1;
-        for (const pos of findEmptyTiles(b.x, b.y, count, skip)) {
-            map.groundType[map.mapSize.toIndex(pos.x, pos.y)] = TERRAIN.RIVER_MIN;
+    placeRiverNear(buildingId: number, count: number) {
+        const b = this.state.getEntityOrThrow(buildingId, 'placeRiverNear');
+        const skip = this.footprintRadius(b) + 1;
+        for (const pos of this.findEmptyTiles(b.x, b.y, count, skip)) {
+            this.map.groundType[this.map.mapSize.toIndex(pos.x, pos.y)] = TERRAIN.RIVER_MIN;
         }
     }
 
-    function placeStonesNear(buildingId: number, count: number) {
-        const b = state.getEntityOrThrow(buildingId, 'placeStonesNear');
-        const skip = footprintRadius(b) + 1;
-        for (const pos of findEmptyTiles(b.x, b.y, count, skip)) {
-            const stone = state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone, pos.x, pos.y, 0);
-            services.stoneSystem.register(stone.id, MapObjectType.ResourceStone);
+    placeStonesNear(buildingId: number, count: number) {
+        const b = this.state.getEntityOrThrow(buildingId, 'placeStonesNear');
+        const skip = this.footprintRadius(b) + 1;
+        for (const pos of this.findEmptyTiles(b.x, b.y, count, skip)) {
+            const stone = this.state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone, pos.x, pos.y, 0);
+            this.services.stoneSystem.register(stone.id, MapObjectType.ResourceStone);
         }
     }
 
-    function placeStonesFar(buildingId: number, count: number) {
-        const b = state.getEntityOrThrow(buildingId, 'placeStonesFar');
-        for (const pos of findEmptyTiles(b.x, b.y, count, 25)) {
-            const stone = state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone, pos.x, pos.y, 0);
-            services.stoneSystem.register(stone.id, MapObjectType.ResourceStone);
+    placeStonesFar(buildingId: number, count: number) {
+        const b = this.state.getEntityOrThrow(buildingId, 'placeStonesFar');
+        for (const pos of this.findEmptyTiles(b.x, b.y, count, 25)) {
+            const stone = this.state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone, pos.x, pos.y, 0);
+            this.services.stoneSystem.register(stone.id, MapObjectType.ResourceStone);
         }
     }
 
-    function fillRockSquare(cx: number, cy: number, radius: number): void {
+    private fillRockSquare(cx: number, cy: number, radius: number): void {
         for (let dy = -radius; dy <= radius; dy++) {
             for (let dx = -radius; dx <= radius; dx++) {
                 const tx = cx + dx;
                 const ty = cy + dy;
-                if (tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight) {
-                    map.groundType[map.mapSize.toIndex(tx, ty)] = TERRAIN.ROCK;
+                if (tx >= 0 && tx < this.mapWidth && ty >= 0 && ty < this.mapHeight) {
+                    this.map.groundType[this.map.mapSize.toIndex(tx, ty)] = TERRAIN.ROCK;
                 }
             }
         }
     }
 
-    function fillOreSquare(cx: number, cy: number, radius: number, oreType: OreType, oreLevel: number): void {
+    private fillOreSquare(cx: number, cy: number, radius: number, oreType: OreType, oreLevel: number): void {
         for (let dy = -radius; dy <= radius; dy++) {
             for (let dx = -radius; dx <= radius; dx++) {
                 const tx = cx + dx;
                 const ty = cy + dy;
-                if (tx >= 0 && tx < mapWidth && ty >= 0 && ty < mapHeight) {
-                    services.oreVeinData.setOre(tx, ty, oreType, oreLevel);
+                if (tx >= 0 && tx < this.mapWidth && ty >= 0 && ty < this.mapHeight) {
+                    this.services.oreVeinData.setOre(tx, ty, oreType, oreLevel);
                 }
             }
         }
@@ -375,14 +332,14 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
      * Place a mine building: sets a region to ROCK terrain, places the building,
      * then sets ore veins of the given type around the building (within MINE_SEARCH_RADIUS=4).
      */
-    function placeMineBuilding(buildingType: BuildingType, oreType: OreType, oreLevel = 3): number {
+    placeMineBuilding(buildingType: BuildingType, oreType: OreType, oreLevel = 3): number {
         if (!isMineBuilding(buildingType)) {
             throw new Error(`${BuildingType[buildingType]} is not a mine building`);
         }
-        const pos = placer.next();
-        fillRockSquare(pos.x, pos.y, 6); // radius 6 covers footprint + ore search radius
+        const pos = this.placer.next();
+        this.fillRockSquare(pos.x, pos.y, 6); // radius 6 covers footprint + ore search radius
 
-        const result = execute({
+        const result = this.execute({
             type: 'place_building',
             buildingType,
             x: pos.x,
@@ -397,12 +354,12 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         }
         const entityId = (result.effects![0]! as { entityId: number }).entityId;
 
-        fillOreSquare(pos.x, pos.y, 4, oreType, oreLevel); // radius 4 = MINE_SEARCH_RADIUS
+        this.fillOreSquare(pos.x, pos.y, 4, oreType, oreLevel); // radius 4 = MINE_SEARCH_RADIUS
         return entityId;
     }
 
-    function spawnUnit(x: number, y: number, unitType = UnitType.Carrier, player = 0): number {
-        const result = execute({
+    spawnUnit(x: number, y: number, unitType = UnitType.Carrier, player = 0): number {
+        const result = this.execute({
             type: 'spawn_unit',
             unitType,
             x,
@@ -416,19 +373,29 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         return (result.effects![0]! as { entityId: number }).entityId;
     }
 
-    function moveUnitCmd(entityId: number, targetX: number, targetY: number): boolean {
-        return state.movement.moveUnit(entityId, targetX, targetY);
+    spawnUnitNear(buildingId: number, unitType: UnitType, count = 1, player = 0): number[] {
+        const b = this.state.getEntityOrThrow(buildingId, 'spawnUnitNear');
+        const skip = this.footprintRadius(b) + 1;
+        const ids: number[] = [];
+        for (const pos of this.findEmptyTiles(b.x, b.y, count, skip)) {
+            ids.push(this.spawnUnit(pos.x, pos.y, unitType, player));
+        }
+        return ids;
     }
 
-    function simulateMovement(entityId: number, opts: { maxTicks?: number; target?: TileCoord } = {}): TileCoord[] {
+    moveUnit(entityId: number, targetX: number, targetY: number): boolean {
+        return this.state.movement.moveUnit(entityId, targetX, targetY);
+    }
+
+    simulateMovement(entityId: number, opts: { maxTicks?: number; target?: TileCoord } = {}): TileCoord[] {
         const { maxTicks = 600, target } = opts;
-        const entity = state.getEntityOrThrow(entityId, 'simulateMovement');
-        const unitState = state.unitStates.get(entityId)!;
+        const entity = this.state.getEntityOrThrow(entityId, 'simulateMovement');
+        const unitState = this.state.unitStates.get(entityId)!;
         const visited: TileCoord[] = [{ x: entity.x, y: entity.y }];
         const dt = 1 / 30;
 
         for (let i = 0; i < maxTicks; i++) {
-            tick(dt);
+            this.tick(dt);
             const last = visited[visited.length - 1]!;
             if (entity.x !== last.x || entity.y !== last.y) {
                 visited.push({ x: entity.x, y: entity.y });
@@ -443,69 +410,51 @@ export function createSimulation(opts: SimulationOptions = {}): Simulation {
         return visited;
     }
 
-    function injectInput(buildingId: number, material: EMaterialType, amount: number) {
-        services.inventoryManager.depositInput(buildingId, material, amount);
+    injectInput(buildingId: number, material: EMaterialType, amount: number) {
+        this.services.inventoryManager.depositInput(buildingId, material, amount);
     }
 
-    function getOutput(buildingId: number, material: EMaterialType): number {
-        return services.inventoryManager.getOutputAmount(buildingId, material);
+    injectOutput(buildingId: number, material: EMaterialType, amount: number) {
+        this.services.inventoryManager.depositOutput(buildingId, material, amount);
     }
 
-    function getInput(buildingId: number, material: EMaterialType): number {
-        return services.inventoryManager.getInputAmount(buildingId, material);
+    getOutput(buildingId: number, material: EMaterialType): number {
+        return this.services.inventoryManager.getOutputAmount(buildingId, material);
     }
 
-    function countEntities(type: EntityType, subType?: number): number {
-        return state.entities.filter(e => e.type === type && (subType === undefined || e.subType === subType)).length;
+    getInput(buildingId: number, material: EMaterialType): number {
+        return this.services.inventoryManager.getInputAmount(buildingId, material);
     }
 
-    function logEvents(...events: (keyof GameEvents | '*')[]) {
+    countEntities(type: EntityType, subType?: number): number {
+        return this.state.entities.filter(e => e.type === type && (subType === undefined || e.subType === subType))
+            .length;
+    }
+
+    logEvents(...events: (keyof GameEvents | '*')[]) {
         if (events.includes('*')) {
             // Subscribe to all events by proxying emit
-            const origEmit = eventBus.emit.bind(eventBus);
-            eventBus.emit = ((event: string, payload: unknown) => {
+            const origEmit = this.eventBus.emit.bind(this.eventBus);
+            this.eventBus.emit = ((event: string, payload: unknown) => {
                 console.log(`[event] ${event}`, JSON.stringify(payload));
                 return origEmit(event as keyof GameEvents, payload as GameEvents[keyof GameEvents]);
-            }) as typeof eventBus.emit;
+            }) as typeof this.eventBus.emit;
         } else {
             for (const event of events as (keyof GameEvents)[]) {
-                eventBus.on(event, payload => {
+                this.eventBus.on(event, payload => {
                     console.log(`[event] ${event}`, JSON.stringify(payload));
                 });
             }
         }
     }
 
-    function destroy() {
-        services.destroy();
+    destroy() {
+        this.services.destroy();
     }
+}
 
-    return {
-        state,
-        services,
-        eventBus,
-        map,
-        errors,
-        placeBuilding,
-        spawnUnit,
-        moveUnit: moveUnitCmd,
-        simulateMovement,
-        plantTreesNear,
-        plantTreesFar,
-        placeRiverNear,
-        placeStonesNear,
-        placeStonesFar,
-        placeMineBuilding,
-        injectInput,
-        tick,
-        runTicks,
-        runUntil,
-        getOutput,
-        getInput,
-        countEntities,
-        logEvents,
-        destroy,
-    };
+export function createSimulation(opts: SimulationOptions = {}): Simulation {
+    return new Simulation(opts);
 }
 
 /** Clean up game data singleton after tests. Call in afterEach. */

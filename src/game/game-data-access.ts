@@ -73,7 +73,6 @@ const BUILDING_TYPE_TO_XML_ID: Partial<Record<BuildingType, string>> = {
     [BuildingType.ToolSmith]: 'BUILDING_TOOLSMITH',
     [BuildingType.Barrack]: 'BUILDING_BARRACKS',
     [BuildingType.ForesterHut]: 'BUILDING_FORESTERHUT',
-    [BuildingType.LivingHouse]: 'BUILDING_RESIDENCESMALL',
     [BuildingType.GuardTowerSmall]: 'BUILDING_GUARDTOWERSMALL',
     [BuildingType.HunterHut]: 'BUILDING_HUNTERHUT',
     [BuildingType.DonkeyRanch]: 'BUILDING_DONKEYRANCH',
@@ -118,6 +117,11 @@ const BUILDING_TYPE_TO_XML_ID: Partial<Record<BuildingType, string>> = {
     [BuildingType.Eyecatcher12]: 'BUILDING_EYECATCHER12',
 };
 
+/** Check if a BuildingType has an XML mapping in buildingInfo.xml. */
+export function hasBuildingXmlMapping(buildingType: BuildingType): boolean {
+    return BUILDING_TYPE_TO_XML_ID[buildingType] !== undefined;
+}
+
 /** Reverse map: XML building ID → BuildingType(s). Lazy-initialized. */
 let xmlIdToBuildingTypeMap: Map<string, BuildingType[]> | null = null;
 
@@ -136,7 +140,9 @@ function ensureXmlIdMap(): Map<string, BuildingType[]> {
 
 /** Resolve XML building ID → BuildingType(s). Used by settler-data-access for building-sourced jobs. */
 export function xmlIdToBuildingTypes(xmlId: string): BuildingType[] {
-    return ensureXmlIdMap().get(xmlId) ?? [];
+    const types = ensureXmlIdMap().get(xmlId);
+    if (!types) throw new Error(`No BuildingType mapping for XML ID: ${xmlId}`);
+    return types;
 }
 
 // ============ Typed game data lookups ============
@@ -201,6 +207,7 @@ export function getBuildingTypesByXmlId(xmlId: string): readonly BuildingType[] 
  */
 export const S4_TO_UNIT_TYPE: Partial<Record<S4SettlerType, UnitType>> = {
     [S4SettlerType.CARRIER]: UnitType.Carrier,
+    [S4SettlerType.DIGGER]: UnitType.Digger,
     [S4SettlerType.BUILDER]: UnitType.Builder,
     [S4SettlerType.WOODCUTTER]: UnitType.Woodcutter,
     [S4SettlerType.STONECUTTER]: UnitType.Stonecutter,

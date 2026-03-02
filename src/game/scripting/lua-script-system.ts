@@ -31,7 +31,7 @@ import {
 import { loadScriptFromString, validateScript, type ScriptSource } from './script-loader';
 import type { GameState } from '@/game/game-state';
 import type { IMapLandscape } from '@/resources/map/imap-landscape';
-import type { BuildingStateManager } from '@/game/features/building-construction';
+import type { ConstructionSiteManager } from '@/game/features/building-construction';
 import type { Command, CommandResult } from '@/game/commands';
 import type { Race } from '@/game/race';
 
@@ -43,8 +43,8 @@ const log = new LogHandler('LuaScriptSystem');
 export interface LuaScriptSystemConfig {
     /** Game state instance */
     gameState: GameState;
-    /** Building state manager for construction phases */
-    buildingStateManager: BuildingStateManager;
+    /** Construction site manager for checking building completion status */
+    constructionSiteManager: ConstructionSiteManager;
     /** Map dimensions */
     mapWidth: number;
     mapHeight: number;
@@ -153,7 +153,7 @@ export class LuaScriptSystem {
         // Buildings API context
         const buildingsContext: BuildingsAPIContext = {
             gameState: this.config.gameState,
-            buildingStateManager: this.config.buildingStateManager,
+            constructionSiteManager: this.config.constructionSiteManager,
             playerRaces: this.config.playerRaces,
             executeCommand: this.config.executeCommand,
         };

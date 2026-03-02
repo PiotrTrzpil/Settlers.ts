@@ -5,24 +5,21 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { LuaScriptSystem } from '@/game/scripting/lua-script-system';
 import { GameState } from '@/game/game-state';
-import { BuildingStateManager } from '@/game/features/building-construction';
+import { ConstructionSiteManager } from '@/game/features/building-construction';
 import { EventBus } from '@/game/event-bus';
 
 describe('LuaScriptSystem', () => {
     let gameState: GameState;
     let scriptSystem: LuaScriptSystem;
-    let buildingStateManager: BuildingStateManager;
+    let constructionSiteManager: ConstructionSiteManager;
 
     beforeEach(() => {
         const eventBus = new EventBus();
         gameState = new GameState(eventBus);
-        buildingStateManager = new BuildingStateManager({
-            entityProvider: gameState,
-            eventBus,
-        });
+        constructionSiteManager = new ConstructionSiteManager(eventBus);
         scriptSystem = new LuaScriptSystem({
             gameState,
-            buildingStateManager,
+            constructionSiteManager,
             mapWidth: 128,
             mapHeight: 128,
             localPlayer: 0,
@@ -80,7 +77,7 @@ describe('LuaScriptSystem', () => {
         it('should fail if not initialized', () => {
             const uninitSystem = new LuaScriptSystem({
                 gameState,
-                buildingStateManager,
+                constructionSiteManager,
                 mapWidth: 128,
                 mapHeight: 128,
             });

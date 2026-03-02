@@ -3,14 +3,14 @@
  *
  * Creates transport requests for buildings that need input materials.
  * Dependencies are accessed via the feature registry:
- * - building-construction: BuildingStateManager (checks construction phase)
+ * - building-construction: ConstructionSiteManager (checks construction status)
  * - inventory: BuildingInventoryManager (checks input slot levels)
  * - logistics: RequestManager (manages delivery requests)
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
 import { MaterialRequestSystem } from './material-request-system';
-import type { BuildingStateManager } from '../building-construction';
+import type { ConstructionSiteManager } from '../building-construction';
 import type { BuildingInventoryManager } from '../inventory';
 import type { RequestManager } from '../logistics';
 
@@ -23,7 +23,7 @@ export const MaterialRequestFeature: FeatureDefinition = {
     dependencies: ['building-construction', 'inventory', 'logistics'],
 
     create(ctx: FeatureContext) {
-        const { buildingStateManager } = ctx.getFeature<{ buildingStateManager: BuildingStateManager }>(
+        const { constructionSiteManager } = ctx.getFeature<{ constructionSiteManager: ConstructionSiteManager }>(
             'building-construction'
         );
         const { inventoryManager } = ctx.getFeature<{ inventoryManager: BuildingInventoryManager }>('inventory');
@@ -31,7 +31,7 @@ export const MaterialRequestFeature: FeatureDefinition = {
 
         const system = new MaterialRequestSystem({
             gameState: ctx.gameState,
-            buildingStateManager,
+            constructionSiteManager,
             inventoryManager,
             requestManager,
         });

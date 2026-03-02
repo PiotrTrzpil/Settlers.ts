@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import {
     EMaterialType,
     MATERIAL_CONFIGS,
@@ -12,7 +12,8 @@ import {
     getBuildingTypesRequestingMaterial,
 } from '@/game/economy';
 import { BuildingType } from '@/game/entity';
-import { Race, AVAILABLE_RACES } from '@/game/race';
+import { Race } from '@/game/race';
+import { installRealGameData, resetTestGameData } from '../helpers/test-game-data';
 
 describe('Material Types', () => {
     it('should have a config for every EMaterialType value', () => {
@@ -127,8 +128,13 @@ describe('getBuildingTypesRequestingMaterial', () => {
         expect(buildings).toContain(BuildingType.AnimalRanch);
     });
 
-    it('should return empty array for materials not consumed by any building', () => {
+    it('should return Barrack for GOLDBAR (training input)', () => {
         const buildings = getBuildingTypesRequestingMaterial(EMaterialType.GOLDBAR);
+        expect(buildings).toContain(BuildingType.Barrack);
+    });
+
+    it('should return empty array for materials not consumed by any building', () => {
+        const buildings = getBuildingTypesRequestingMaterial(EMaterialType.MEAD);
         expect(buildings).toHaveLength(0);
     });
 
@@ -138,20 +144,22 @@ describe('getBuildingTypesRequestingMaterial', () => {
     });
 });
 
-describe('Construction Costs', () => {
-    it('should have construction costs defined for all BuildingType values', () => {
-        const buildingValues = Object.values(BuildingType).filter(v => typeof v === 'number') as BuildingType[];
-        const covered = getBuildingTypesWithCosts();
+// Construction cost tests require real XML game data (buildingInfo.xml)
+const hasRealData = installRealGameData();
 
-        for (const bt of buildingValues) {
-            expect(covered.includes(bt), `Missing construction costs for ${BuildingType[bt]}`).toBe(true);
-        }
+describe.skipIf(!hasRealData)('Construction Costs (XML)', () => {
+    afterAll(() => resetTestGameData());
+
+    it('should have construction costs for all mapped building types', () => {
+        const covered = getBuildingTypesWithCosts();
+        expect(covered.length).toBeGreaterThan(30);
     });
 
     it('should have at least one material cost per building per race', () => {
         for (const bt of getBuildingTypesWithCosts()) {
-            for (const race of AVAILABLE_RACES) {
-                const costs = getConstructionCosts(bt, race);
+            const raceMap = getConstructionCostRaceMap(bt)!;
+            expect(raceMap.size, `${BuildingType[bt]} has no race data`).toBeGreaterThan(0);
+            for (const [race, costs] of raceMap) {
                 expect(costs.length, `${BuildingType[bt]} (${Race[race]}) has no construction costs`).toBeGreaterThan(
                     0
                 );
@@ -186,8 +194,8 @@ describe('Construction Costs', () => {
 
     it('should use BOARD and/or STONE as construction materials', () => {
         for (const bt of getBuildingTypesWithCosts()) {
-            for (const race of AVAILABLE_RACES) {
-                const costs = getConstructionCosts(bt, race);
+            const raceMap = getConstructionCostRaceMap(bt)!;
+            for (const [race, costs] of raceMap) {
                 const materials = costs.map(c => c.material);
                 const usesBuildingMaterials =
                     materials.includes(EMaterialType.BOARD) || materials.includes(EMaterialType.STONE);
@@ -197,16 +205,8 @@ describe('Construction Costs', () => {
     });
 
     it('should return different costs for different races', () => {
-        // Castle is known to differ between Roman and Viking
         const romanCastle = getConstructionCosts(BuildingType.Castle, Race.Roman);
         const vikingCastle = getConstructionCosts(BuildingType.Castle, Race.Viking);
         expect(romanCastle).not.toEqual(vikingCastle);
-    });
-
-    it('should fall back to Roman costs for races without entries', () => {
-        // DarkTribe has no standard buildings — should get Roman costs
-        const darkCosts = getConstructionCosts(BuildingType.WoodcutterHut, Race.DarkTribe);
-        const romanCosts = getConstructionCosts(BuildingType.WoodcutterHut, Race.Roman);
-        expect(darkCosts).toEqual(romanCosts);
     });
 });

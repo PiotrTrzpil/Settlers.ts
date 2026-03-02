@@ -13,7 +13,7 @@ import type { BuildingInventoryManager } from '../inventory';
 import type { ServiceAreaManager } from '../service-areas/service-area-manager';
 import { getHubsServingBothPositions, getHubsServingPosition } from '../service-areas/service-area-queries';
 import type { CarrierManager } from '../carriers/carrier-manager';
-import { CarrierStatus, canAcceptNewJob } from '../carriers/carrier-state';
+import { CarrierStatus } from '../carriers/carrier-state';
 import type { ResourceRequest } from './resource-request';
 import type { InventoryReservationManager } from './inventory-reservation';
 import { getAvailableSupplies } from './resource-supply';
@@ -106,7 +106,6 @@ export function diagnoseUnfulfilledRequest(request: ResourceRequest, config: Dia
     }
 
     // Step 4: Check if any unreserved supply shares a hub with destination
-    const validHubSets: Set<number>[] = [];
     let hasSharedHub = false;
 
     for (const supply of otherSupplies) {
@@ -127,7 +126,6 @@ export function diagnoseUnfulfilledRequest(request: ResourceRequest, config: Dia
 
         if (sharedHubs.length > 0) {
             hasSharedHub = true;
-            validHubSets.push(new Set(sharedHubs));
         }
     }
 
@@ -135,35 +133,21 @@ export function diagnoseUnfulfilledRequest(request: ResourceRequest, config: Dia
         return UnfulfilledReason.NoSharedHub;
     }
 
-    // Step 5: Check carrier availability in valid hubs
-    // Collect all valid hub IDs
-    const allValidHubs = new Set<number>();
-    for (const hubSet of validHubSets) {
-        for (const hubId of hubSet) {
-            allValidHubs.add(hubId);
-        }
-    }
-
-    let hasCarrierInHub = false;
+    // Step 5: Check carrier availability
+    let hasCarrier = false;
 
     for (const carrier of carrierManager.getAllCarriers()) {
-        if (!allValidHubs.has(carrier.homeBuilding)) continue;
+        const entity = gameState.getEntity(carrier.entityId);
+        if (!entity || entity.player !== playerId) continue;
 
-        // Verify home building belongs to right player
-        const homeBuilding = gameState.getEntity(carrier.homeBuilding);
-        if (!homeBuilding || homeBuilding.player !== playerId) continue;
+        hasCarrier = true;
 
-        hasCarrierInHub = true;
-
-        // Check if this carrier is available (idle and not exhausted)
-        if (carrier.status === CarrierStatus.Idle && canAcceptNewJob(carrier.fatigue)) {
-            // There IS an available carrier — the dispatcher should pick this up soon.
-            // This can happen transiently between diagnostic refresh and dispatcher tick.
+        if (carrier.status === CarrierStatus.Idle) {
             return UnfulfilledReason.CarriersBusy;
         }
     }
 
-    if (!hasCarrierInHub) {
+    if (!hasCarrier) {
         return UnfulfilledReason.NoCarrier;
     }
 

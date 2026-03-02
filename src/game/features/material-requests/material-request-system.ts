@@ -12,12 +12,9 @@ import type { TickSystem } from '../../tick-system';
 import type { GameState } from '../../game-state';
 import { EntityType, BuildingType } from '../../entity';
 import { EMaterialType } from '../../economy';
-import { LogHandler } from '@/utilities/log-handler';
 import { RequestPriority, type RequestManager } from '../logistics';
 import { getInventoryConfig, type InventoryConfig, type BuildingInventoryManager } from '../inventory';
-import { BuildingConstructionPhase, type BuildingStateManager } from '../building-construction';
-
-const log = new LogHandler('MaterialRequestSystem');
+import { type ConstructionSiteManager } from '../building-construction';
 
 /** Minimum input threshold before requesting more materials */
 const REQUEST_THRESHOLD = 4;
@@ -25,7 +22,7 @@ const REQUEST_THRESHOLD = 4;
 /** Configuration for MaterialRequestSystem dependencies */
 export interface MaterialRequestSystemConfig {
     gameState: GameState;
-    buildingStateManager: BuildingStateManager;
+    constructionSiteManager: ConstructionSiteManager;
     inventoryManager: BuildingInventoryManager;
     requestManager: RequestManager;
 }
@@ -36,13 +33,13 @@ export interface MaterialRequestSystemConfig {
  */
 export class MaterialRequestSystem implements TickSystem {
     private gameState: GameState;
-    private buildingStateManager: BuildingStateManager;
+    private constructionSiteManager: ConstructionSiteManager;
     private inventoryManager: BuildingInventoryManager;
     private requestManager: RequestManager;
 
     constructor(config: MaterialRequestSystemConfig) {
         this.gameState = config.gameState;
-        this.buildingStateManager = config.buildingStateManager;
+        this.constructionSiteManager = config.constructionSiteManager;
         this.inventoryManager = config.inventoryManager;
         this.requestManager = config.requestManager;
     }
@@ -57,9 +54,8 @@ export class MaterialRequestSystem implements TickSystem {
             // Skip buildings with no input slots
             if (config.inputSlots.length === 0) continue;
 
-            // Only process completed buildings
-            const buildingState = this.buildingStateManager.getBuildingState(entity.id);
-            if (!buildingState || buildingState.phase !== BuildingConstructionPhase.Completed) continue;
+            // Skip buildings still under construction
+            if (this.constructionSiteManager.hasSite(entity.id)) continue;
 
             this.requestMaterials(entity, config);
         }
@@ -78,7 +74,6 @@ export class MaterialRequestSystem implements TickSystem {
             // Request more if below threshold and no active request in the RequestManager
             if (currentAmount < REQUEST_THRESHOLD && !this.hasActiveRequest(entity.id, inputSlot.materialType)) {
                 this.requestManager.addRequest(entity.id, inputSlot.materialType, 1, RequestPriority.Normal);
-                log.debug(`Building ${entity.id} requested ${EMaterialType[inputSlot.materialType]}`);
             }
         }
     }

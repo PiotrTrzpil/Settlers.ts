@@ -6,9 +6,8 @@
 import { EntityType } from '../../entity';
 import { Race } from '../../race';
 import { BuildingType } from '../../buildings/types';
-import { BuildingConstructionPhase } from './types';
-import type { BuildingStateManager } from './building-state-manager';
 import { captureOriginalTerrain, setConstructionSiteGroundType, applyTerrainLeveling } from './terrain';
+import type { TerrainBuildingParams } from './terrain';
 import { GameState } from '../../game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
@@ -48,7 +47,6 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
     [S4BuildingType.VEHICLEHALL]: BuildingType.SiegeWorkshop,
     [S4BuildingType.BARRACKS]: BuildingType.Barrack,
     [S4BuildingType.CHARCOALMAKER]: BuildingType.CoalMine, // Approximation
-    [S4BuildingType.TRAININGCENTER]: BuildingType.LivingHouse,
     [S4BuildingType.HEALERHUT]: BuildingType.HealerHut,
     [S4BuildingType.AMMOMAKERHUT]: BuildingType.AmmunitionMaker,
     [S4BuildingType.SHIPYARD]: BuildingType.Shipyard,
@@ -95,11 +93,9 @@ const S4_TO_BUILDING_TYPE: Partial<Record<S4BuildingType, BuildingType>> = {
 export interface PopulateBuildingsOptions {
     /** Only populate buildings for this player (undefined = all players) */
     player?: number;
-    /** Building state manager for setting construction phase (required) */
-    buildingStateManager: BuildingStateManager;
-    /** Event bus for emitting unit:spawned events (required for carrier registration) */
+    /** Event bus for emitting building:completed events */
     eventBus: EventBus;
-    /** Terrain data for spawn validation and terrain modification (required) */
+    /** Terrain data for terrain modification (required) */
     terrain: TerrainData;
     /** Per-player race mapping (player index → Race) for assigning race to buildings */
     playerRaces?: Map<number, Race>;
@@ -111,7 +107,7 @@ export interface PopulateBuildingsOptions {
  *
  * @param state - Game state to add entities to
  * @param buildings - Building data from map parser
- * @param options - Filtering options (buildingStateManager is required)
+ * @param options - Filtering and terrain options
  * @returns Number of buildings spawned
  */
 export function populateMapBuildings(
@@ -119,7 +115,7 @@ export function populateMapBuildings(
     buildings: MapBuildingData[],
     options: PopulateBuildingsOptions
 ): number {
-    const { player, buildingStateManager, eventBus } = options;
+    const { player, eventBus } = options;
     let count = 0;
     let skipped = 0;
     const perPlayer = new Map<number, string[]>();
@@ -167,30 +163,21 @@ export function populateMapBuildings(
             race
         );
 
-        // Override the building state to be completed (pre-existing building)
-        const buildingState = buildingStateManager.getBuildingState(entity.id);
-        if (!buildingState) {
-            throw new Error(
-                `No building state for newly created entity ${entity.id} (${BuildingType[buildingType]}) — entity:created event may not have fired`
-            );
-        }
-
-        // Apply instant terrain modification: raw ground + leveled heights
+        // Apply instant terrain modification using a temporary params object.
+        // No ConstructionSite is created — the building is immediately operational.
+        // originalTerrain is discarded — terrain permanence for completed buildings.
         const { groundType, groundHeight, mapSize } = options.terrain;
-        buildingState.originalTerrain = captureOriginalTerrain(buildingState, groundType, groundHeight, mapSize);
-        setConstructionSiteGroundType(buildingState, groundType, mapSize);
-        applyTerrainLeveling(buildingState, groundType, groundHeight, mapSize, 1.0);
-        buildingState.terrainModified = true;
-
-        buildingState.phase = BuildingConstructionPhase.Completed;
-        buildingState.phaseProgress = 1;
-        buildingState.elapsedTime = buildingState.totalDuration;
+        const terrainParams: TerrainBuildingParams = { buildingType, race, tileX: entity.x, tileY: entity.y };
+        const originalTerrain = captureOriginalTerrain(terrainParams, groundType, groundHeight, mapSize);
+        setConstructionSiteGroundType(terrainParams, groundType, mapSize, originalTerrain);
+        applyTerrainLeveling(terrainParams, groundType, groundHeight, mapSize, 1.0, originalTerrain);
 
         // Emit building:completed so that systems (like CarrierSystem) can register service areas
         // and spawn units (handled by BuildingConstructionSystem listener)
         eventBus.emit('building:completed', {
             entityId: entity.id,
-            buildingState,
+            buildingType,
+            race,
         });
 
         const entries = perPlayer.get(buildingData.player) ?? [];

@@ -42,6 +42,7 @@ function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
         getPileRegistry: () => null,
         workAreaStore: {} as any,
         buildingOverlayManager: {} as any,
+        constructionSiteManager: { hasSite: () => false } as any,
     };
     return new SettlerTaskSystem(config);
 }

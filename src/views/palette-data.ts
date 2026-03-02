@@ -9,13 +9,12 @@ import { EMaterialType, DROPPABLE_MATERIALS } from '@/game/economy';
 /** All building definitions for the UI — filtered by race at runtime */
 export const ALL_BUILDINGS = [
     // --- Storage ---
-    { type: BuildingType.StorageArea, id: 'warehouse', name: 'Warehouse', icon: '📦' },
+    { type: BuildingType.StorageArea, id: 'storage-area', name: 'Storage Area', icon: '📦' },
 
     // --- Residential ---
     { type: BuildingType.ResidenceSmall, id: 'smallhouse', name: 'Small House', icon: '🏠' },
     { type: BuildingType.ResidenceMedium, id: 'mediumhouse', name: 'Medium House', icon: '🏡' },
     { type: BuildingType.ResidenceBig, id: 'largehouse', name: 'Large House', icon: '🏘️' },
-    { type: BuildingType.LivingHouse, id: 'livinghouse', name: 'Living House', icon: '🛖' },
 
     // --- Wood & Stone ---
     { type: BuildingType.WoodcutterHut, id: 'woodcutter', name: 'Woodcutter Hut', icon: '🪓' },

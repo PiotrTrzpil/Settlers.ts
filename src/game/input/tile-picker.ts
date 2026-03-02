@@ -75,7 +75,7 @@ export class TilePicker {
         }
 
         const idx = mapSize.toIndex(intX, intY);
-        const hWorld = heightToWorld(groundHeight[idx] ?? 0);
+        const hWorld = heightToWorld(groundHeight[idx]!);
         return tileToWorld(tileX, tileY, hWorld, viewPointX, viewPointY);
     }
 }

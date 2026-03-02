@@ -71,7 +71,6 @@ export const BUILDING_RACE_AVAILABILITY: Partial<Record<BuildingType, readonly R
     [BuildingType.TequilaMakerHut]: [Race.Mayan],
     [BuildingType.SunflowerFarmerHut]: [Race.Trojan],
     [BuildingType.SunflowerOilMakerHut]: [Race.Trojan],
-    [BuildingType.LivingHouse]: [Race.Roman, Race.Viking, Race.Mayan],
     // AmmunitionMaker not available to Vikings in original game
     [BuildingType.AmmunitionMaker]: [Race.Roman, Race.Mayan, Race.Trojan],
 };

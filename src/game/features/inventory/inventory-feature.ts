@@ -1,18 +1,20 @@
 /**
  * Inventory Feature - Self-registering feature module for building inventories.
  *
- * Creates inventories for buildings that need input/output material slots.
- * Bridges inventory change callbacks to the EventBus for UI consumers.
+ * Creates and manages the BuildingInventoryManager. Bridges inventory change callbacks
+ * to the EventBus for UI consumers.
  *
- * Note: Inventory removal on entity:removed is handled by GameServices
- * because logistics cleanup must complete before inventory is removed.
+ * Inventory lifecycle:
+ * - Construction inventory is created by GameServices on building:placed
+ * - Production inventory is created by GameServices on building:completed (swaps construction)
+ * - Inventory removal on entity:removed is handled by GameServices (after logistics cleanup)
+ *
+ * This feature does NOT eagerly create inventories on entity:created for buildings.
+ * That was eliminated to support the two-phase lifecycle (construction vs. operational).
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
-import { EventSubscriptionManager } from '../../event-bus';
-import { EntityType, BuildingType } from '../../entity';
 import { BuildingInventoryManager, type InventoryChangeCallback } from './building-inventory';
-import { hasInventory, isProductionBuilding } from './inventory-configs';
 
 export interface InventoryExports {
     inventoryManager: BuildingInventoryManager;
@@ -23,18 +25,7 @@ export const InventoryFeature: FeatureDefinition = {
     dependencies: [],
 
     create(ctx: FeatureContext) {
-        const subscriptions = new EventSubscriptionManager();
         const inventoryManager = new BuildingInventoryManager();
-
-        // Create inventories for buildings with input/output slots
-        subscriptions.subscribe(ctx.eventBus, 'entity:created', ({ entityId, type, subType }) => {
-            if (type === EntityType.Building) {
-                const buildingType = subType as BuildingType;
-                if (hasInventory(buildingType) || isProductionBuilding(buildingType)) {
-                    inventoryManager.createInventory(entityId, buildingType);
-                }
-            }
-        });
 
         // Bridge inventory changes to EventBus for consumers (debug panel, UI)
         const onInventoryChanged: InventoryChangeCallback = (
@@ -58,7 +49,6 @@ export const InventoryFeature: FeatureDefinition = {
             exports: { inventoryManager } satisfies InventoryExports,
             destroy: () => {
                 inventoryManager.offChange(onInventoryChanged);
-                subscriptions.unsubscribeAll();
             },
         };
     },

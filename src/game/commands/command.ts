@@ -1,13 +1,14 @@
-import { EntityType, EXTENDED_OFFSETS, tileKey, getUnitLevel, type Entity } from '../entity';
+import { EntityType, UnitType, EXTENDED_OFFSETS, tileKey, getUnitLevel, type Entity } from '../entity';
 import {
-    BuildingConstructionPhase,
-    type BuildingState,
-    type BuildingStateManager,
+    type ConstructionSiteManager,
     captureOriginalTerrain,
     setConstructionSiteGroundType,
     applyTerrainLeveling,
 } from '../features/building-construction';
-import { BUILDING_SPAWN_ON_COMPLETE } from '../features/building-construction/spawn-units';
+import {
+    BUILDING_SPAWN_ON_COMPLETE,
+    RESIDENCE_CONSTRUCTION_WORKER_SPAWNS,
+} from '../features/building-construction/spawn-units';
 import { getBuildingWorkerInfo, getBuildingDoorPos } from '../game-data-access';
 import { BuildingType } from '../buildings/types';
 import { GameState } from '../game-state';
@@ -60,8 +61,8 @@ export interface CommandContext {
     settings: GameSettings;
     /** Optional task system for routing movement through tasks */
     settlerTaskSystem?: SettlerTaskSystem;
-    /** Building state manager for construction phases */
-    buildingStateManager: BuildingStateManager;
+    /** Construction site manager for checking construction status */
+    constructionSiteManager: ConstructionSiteManager;
     /** Tree system for planting/registration */
     treeSystem?: TreeSystem;
     /** Crop system for planting/registration */
@@ -93,20 +94,18 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
     // Immediately capture terrain and change ground to raw earth under the building.
     // This makes the ground visually change right when the building is placed,
     // before the gradual height leveling begins during the TerrainLeveling phase.
-    const buildingState = ctx.buildingStateManager.getBuildingState(entity.id);
-    if (!buildingState)
-        throw new Error(`No building state for entity ${entity.id} after placement (${cmd.buildingType})`);
+    const terrainParams = { buildingType: cmd.buildingType, race: cmd.race, tileX: cmd.x, tileY: cmd.y };
     const { groundType, groundHeight, mapSize } = terrain;
-    buildingState.originalTerrain = captureOriginalTerrain(buildingState, groundType, groundHeight, mapSize);
-    setConstructionSiteGroundType(buildingState, groundType, mapSize);
+    const originalTerrain = captureOriginalTerrain(terrainParams, groundType, groundHeight, mapSize);
+    setConstructionSiteGroundType(terrainParams, groundType, mapSize, originalTerrain);
 
-    if (ctx.settings.placeBuildingsCompleted) {
-        // Instant mode: level heights immediately, then mark completed
-        applyTerrainLeveling(buildingState, groundType, groundHeight, mapSize, 1.0);
-        buildingState.terrainModified = true;
-        buildingState.phase = BuildingConstructionPhase.Completed;
-        buildingState.phaseProgress = 1;
-        buildingState.elapsedTime = buildingState.totalDuration;
+    if (cmd.completed) {
+        // Instant mode: level heights immediately before emitting building:placed
+        applyTerrainLeveling(terrainParams, groundType, groundHeight, mapSize, 1.0, originalTerrain);
+    } else {
+        // Construction site: footprint should be walkable during leveling phase.
+        // Re-added to buildingOccupancy when leveling completes (construction:levelingComplete).
+        state.clearBuildingFootprintBlock(entity.id);
     }
 
     // Notify renderer that terrain buffers need re-upload
@@ -120,46 +119,27 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
         player: cmd.player,
     });
 
+    // Store captured originalTerrain on the construction site (created by building:placed handler).
+    // Must happen after event emission so the site exists.
+    const site = ctx.constructionSiteManager.getSite(entity.id);
+    if (site) site.originalTerrain = originalTerrain;
+
     // If placed as completed, emit event (spawning handled by BuildingConstructionSystem listener)
-    if (ctx.settings.placeBuildingsCompleted) {
+    if (cmd.completed) {
         ctx.eventBus.emit('building:completed', {
             entityId: entity.id,
-            buildingState,
+            buildingType: cmd.buildingType,
+            race: cmd.race,
+            placedCompleted: true,
+            spawnWorker: cmd.spawnWorker,
         });
     }
 
+    // Worker spawning is handled by building:completed → spawn_building_units command.
+    // executePlaceBuilding does NOT spawn workers itself to avoid double-spawning.
     const effects: any[] = [
         { type: 'building_placed', entityId: entity.id, buildingType: cmd.buildingType, x: cmd.x, y: cmd.y },
     ];
-
-    // Spawn dedicated worker at door when explicitly requested
-    if (cmd.spawnWorker) {
-        const workerInfo = getBuildingWorkerInfo(entity.race, cmd.buildingType);
-        if (workerInfo) {
-            const door = getBuildingDoorPos(cmd.x, cmd.y, entity.race, cmd.buildingType);
-            const doorKey = tileKey(door.x, door.y);
-            const previousOwner = state.tileOccupancy.get(doorKey);
-            const workerEntity = state.addEntity(EntityType.Unit, workerInfo.unitType, door.x, door.y, cmd.player);
-            workerEntity.race = entity.race;
-            if (previousOwner === entity.id) {
-                state.tileOccupancy.set(doorKey, entity.id);
-            }
-            ctx.eventBus.emit('unit:spawned', {
-                entityId: workerEntity.id,
-                unitType: workerInfo.unitType,
-                x: door.x,
-                y: door.y,
-                player: cmd.player,
-            });
-            effects.push({
-                type: 'unit_spawned',
-                entityId: workerEntity.id,
-                unitType: workerInfo.unitType,
-                x: door.x,
-                y: door.y,
-            });
-        }
-    }
 
     return commandSuccess(effects);
 }
@@ -353,10 +333,10 @@ function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): Com
     }
 
     if (entity.type === EntityType.Building) {
-        const bs = ctx.buildingStateManager.getBuildingState(cmd.entityId);
-        if (bs) {
-            ctx.eventBus.emit('building:removed', { entityId: cmd.entityId, buildingState: bs });
-        }
+        ctx.eventBus.emit('building:removed', {
+            entityId: cmd.entityId,
+            buildingType: entity.subType as BuildingType,
+        });
     }
 
     state.removeEntity(cmd.entityId);
@@ -414,23 +394,23 @@ type UnitSpawnEffect = { type: 'unit_spawned'; entityId: number; unitType: numbe
 function spawnWorkerAtDoor(
     ctx: CommandContext,
     entity: Entity,
-    buildingState: BuildingState,
     bx: number,
     by: number,
     effects: UnitSpawnEffect[]
 ): void {
     const { state, eventBus } = ctx;
-    const workerInfo = getBuildingWorkerInfo(entity.race, buildingState.buildingType);
+    const buildingType = entity.subType as BuildingType;
+    const workerInfo = getBuildingWorkerInfo(entity.race, buildingType);
     if (!workerInfo) return;
-    const door = getBuildingDoorPos(bx, by, entity.race, buildingState.buildingType);
+    const door = getBuildingDoorPos(bx, by, entity.race, buildingType);
     const existingAtDoor = state.getEntityAt(door.x, door.y);
     if (existingAtDoor && existingAtDoor.type === EntityType.Unit) return;
     const doorKey = tileKey(door.x, door.y);
     const previousOwner = state.tileOccupancy.get(doorKey);
     const workerEntity = state.addEntity(EntityType.Unit, workerInfo.unitType, door.x, door.y, entity.player);
     workerEntity.race = entity.race;
-    if (previousOwner === buildingState.entityId) {
-        state.tileOccupancy.set(doorKey, buildingState.entityId);
+    if (previousOwner === entity.id) {
+        state.tileOccupancy.set(doorKey, entity.id);
     }
     eventBus.emit('unit:spawned', {
         entityId: workerEntity.id,
@@ -448,62 +428,96 @@ function spawnWorkerAtDoor(
     });
 }
 
-// eslint-disable-next-line sonarjs/cognitive-complexity -- complex game state machine for unit spawning
+/** Check if a tile is a valid spawn location. */
+function isSpawnableTile(ctx: CommandContext, x: number, y: number): boolean {
+    return ctx.terrain.isInBounds(x, y) && ctx.terrain.isPassable(x, y) && !ctx.state.getEntityAt(x, y);
+}
+
+/** Spawn `count` units of `unitType` near tile (bx, by), recording effects. */
+function spawnUnitsNear(
+    ctx: CommandContext,
+    bx: number,
+    by: number,
+    unitType: number,
+    count: number,
+    player: number,
+    race: number,
+    selectable: boolean | undefined,
+    effects: UnitSpawnEffect[]
+): void {
+    const { state, eventBus } = ctx;
+    let spawned = 0;
+    for (let radius = 1; radius <= 4 && spawned < count; radius++) {
+        for (const tile of ringTiles(bx, by, radius)) {
+            if (spawned >= count) break;
+            if (!isSpawnableTile(ctx, tile.x, tile.y)) continue;
+
+            const spawnedEntity = state.addEntity(EntityType.Unit, unitType, tile.x, tile.y, player, selectable);
+            spawnedEntity.race = race;
+
+            eventBus.emit('unit:spawned', {
+                entityId: spawnedEntity.id,
+                unitType: unitType as UnitType,
+                x: tile.x,
+                y: tile.y,
+                player,
+            });
+
+            effects.push({ type: 'unit_spawned', entityId: spawnedEntity.id, unitType, x: tile.x, y: tile.y });
+            spawned++;
+        }
+    }
+}
+
 function executeSpawnBuildingUnits(ctx: CommandContext, cmd: SpawnBuildingUnitsCommand): CommandResult {
-    const { state, terrain, eventBus } = ctx;
-    const entity = state.getEntityOrThrow(cmd.buildingEntityId, 'completed building for unit spawning');
-    const buildingState = ctx.buildingStateManager.getBuildingState(cmd.buildingEntityId);
-    if (!buildingState)
-        throw new Error(`No building state for completed building ${cmd.buildingEntityId} (executeSpawnBuildingUnits)`);
-    const { tileX: bx, tileY: by } = buildingState;
+    const entity = ctx.state.getEntityOrThrow(cmd.buildingEntityId, 'completed building for unit spawning');
+    const buildingType = entity.subType as BuildingType;
+    const bx = entity.x;
+    const by = entity.y;
     const effects: UnitSpawnEffect[] = [];
 
-    // Spawn units from BUILDING_SPAWN_ON_COMPLETE (carriers from residences, soldiers from barracks)
-    const spawnDef = BUILDING_SPAWN_ON_COMPLETE[buildingState.buildingType];
-    if (spawnDef) {
-        let spawned = 0;
-        for (let radius = 1; radius <= 4 && spawned < spawnDef.count; radius++) {
-            for (const tile of ringTiles(bx, by, radius)) {
-                if (spawned >= spawnDef.count) break;
-                if (!terrain.isInBounds(tile.x, tile.y)) continue;
-                if (!terrain.isPassable(tile.x, tile.y)) continue;
-                if (state.getEntityAt(tile.x, tile.y)) continue;
+    // Spawn units from BUILDING_SPAWN_ON_COMPLETE (immediate-only, i.e. no spawnInterval).
+    // Residences use interval-based spawning via ResidenceSpawnerSystem instead.
+    const spawnDef = BUILDING_SPAWN_ON_COMPLETE[buildingType];
+    if (spawnDef && !spawnDef.spawnInterval) {
+        spawnUnitsNear(
+            ctx,
+            bx,
+            by,
+            spawnDef.unitType,
+            spawnDef.count,
+            entity.player,
+            entity.race,
+            spawnDef.selectable,
+            effects
+        );
+    }
 
-                const spawnedEntity = state.addEntity(
-                    EntityType.Unit,
-                    spawnDef.unitType,
-                    tile.x,
-                    tile.y,
-                    entity.player,
-                    spawnDef.selectable
-                );
-                spawnedEntity.race = entity.race;
-
-                eventBus.emit('unit:spawned', {
-                    entityId: spawnedEntity.id,
-                    unitType: spawnDef.unitType,
-                    x: tile.x,
-                    y: tile.y,
-                    player: entity.player,
-                });
-
-                effects.push({
-                    type: 'unit_spawned',
-                    entityId: spawnedEntity.id,
-                    unitType: spawnDef.unitType,
-                    x: tile.x,
-                    y: tile.y,
-                });
-                spawned++;
-            }
+    // Spawn construction workers (builders/diggers) from residences on completion.
+    // These are roaming workers that self-assign to construction sites via the task system.
+    // Skip when buildings are instantly completed (no construction sites to work on).
+    const workerSpawns = RESIDENCE_CONSTRUCTION_WORKER_SPAWNS[buildingType];
+    if (workerSpawns && !cmd.placedCompleted) {
+        for (const workerDef of workerSpawns) {
+            spawnUnitsNear(
+                ctx,
+                bx,
+                by,
+                workerDef.unitType,
+                workerDef.count,
+                entity.player,
+                entity.race,
+                workerDef.selectable,
+                effects
+            );
         }
     }
 
-    // Spawn dedicated worker if enabled by settings.
+    // Spawn dedicated worker when requested by the command.
     // Skip buildings that already spawn units via BUILDING_SPAWN_ON_COMPLETE (residences, barracks).
     // Skip if a unit already exists at the door (placed by executePlaceBuilding's spawnWorker).
-    if (ctx.settings.placeBuildingsWithWorker && !spawnDef) {
-        spawnWorkerAtDoor(ctx, entity, buildingState, bx, by, effects);
+    if (cmd.spawnWorker && !spawnDef) {
+        spawnWorkerAtDoor(ctx, entity, bx, by, effects);
     }
 
     return commandSuccess(effects);
@@ -645,7 +659,7 @@ function executeSetRecipeProportion(ctx: CommandContext, cmd: SetRecipeProportio
     if (!ctx.productionControlManager) {
         return commandFailed('Production control not available');
     }
-    ctx.productionControlManager.setProportion(cmd.buildingId, cmd.output, cmd.weight);
+    ctx.productionControlManager.setProportion(cmd.buildingId, cmd.recipeIndex, cmd.weight);
     return { success: true };
 }
 
@@ -653,7 +667,7 @@ function executeAddToProductionQueue(ctx: CommandContext, cmd: AddToProductionQu
     if (!ctx.productionControlManager) {
         return commandFailed('Production control not available');
     }
-    ctx.productionControlManager.addToQueue(cmd.buildingId, cmd.output);
+    ctx.productionControlManager.addToQueue(cmd.buildingId, cmd.recipeIndex);
     return { success: true };
 }
 
@@ -661,7 +675,7 @@ function executeRemoveFromProductionQueue(ctx: CommandContext, cmd: RemoveFromPr
     if (!ctx.productionControlManager) {
         return commandFailed('Production control not available');
     }
-    ctx.productionControlManager.removeFromQueue(cmd.buildingId, cmd.output);
+    ctx.productionControlManager.removeFromQueue(cmd.buildingId, cmd.recipeIndex);
     return { success: true };
 }
 

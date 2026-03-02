@@ -101,23 +101,23 @@ test.describe('Building Placement Mode', { tag: '@smoke' }, () => {
         let state = await gp.actions.getGameState();
         expect(state?.placeBuildingType).toBe(1); // Lumberjack
 
-        // Switch to warehouse
-        await page.locator('[data-testid="btn-warehouse"]').click();
+        // Switch to StorageArea
+        await page.locator('[data-testid="btn-storage-area"]').click();
         await gp.wait.waitForFrames(2);
 
         state = await gp.actions.getGameState();
-        expect(state?.placeBuildingType).toBe(2); // Warehouse
+        expect(state?.placeBuildingType).toBe(2); // StorageArea
 
-        // Find a spot that fits a Warehouse (3x3)
-        const warehouseTile = await gp.actions.findBuildableTile(2);
-        if (!warehouseTile) {
+        // Find a spot that fits a StorageArea (3x3)
+        const storageAreaTile = await gp.actions.findBuildableTile(2);
+        if (!storageAreaTile) {
             test.skip();
             return;
         }
 
-        const warehouse = await gp.actions.placeBuilding(2, warehouseTile.x, warehouseTile.y);
-        expect(warehouse).not.toBeNull();
-        expect(warehouse!.subType).toBe(2); // Warehouse
+        const storageArea = await gp.actions.placeBuilding(2, storageAreaTile.x, storageAreaTile.y);
+        expect(storageArea).not.toBeNull();
+        expect(storageArea!.subType).toBe(2); // StorageArea
     });
 });
 

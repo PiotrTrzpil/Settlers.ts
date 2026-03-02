@@ -74,7 +74,7 @@ export class InventoryVisualizer {
      * Cleans up visual inventory stacks when buildings are removed.
      */
     registerEvents(_eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
-        cleanupRegistry.onEntityRemoved(entityId => this.removeBuilding(entityId));
+        cleanupRegistry.onEntityRemoved(this.removeBuilding.bind(this));
     }
 
     /** Unsubscribe from all tracked events. */
@@ -185,7 +185,6 @@ export class InventoryVisualizer {
         }
 
         this.stackState.remove(buildingId);
-        this.layout.invalidateCache(buildingId);
     }
 
     // --- Refresh / bulk rebuild ---
@@ -196,7 +195,6 @@ export class InventoryVisualizer {
      */
     refreshBuildingType(buildingType: BuildingType): void {
         this.removeVisualsForType(buildingType);
-        this.layout.invalidateCacheForType(buildingType);
         this.recreateVisualsForType(buildingType);
     }
 

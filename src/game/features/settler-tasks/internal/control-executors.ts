@@ -6,6 +6,8 @@
  */
 
 import type { Entity } from '../../../entity';
+import { EntityType, UnitType, EXTENDED_OFFSETS, getUnitTypeAtLevel } from '../../../entity';
+import type { GameState } from '../../../game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import { TaskResult } from '../types';
 import { framesToSeconds, type ChoreoJobState, type ChoreoNode, type ChoreoContext } from '../choreo-types';
@@ -128,26 +130,89 @@ export function executeChangeJobComeToWork(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Military executor stubs
+// Military executors
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Upgrade unit type at barracks.
+ * Find a spawn position near (x, y) that is not occupied by another entity.
+ * Tries all EXTENDED_OFFSETS neighbours first; falls back to the barracks position
+ * if every adjacent tile is occupied.
+ */
+function findSpawnPosition(x: number, y: number, gameState: GameState): { x: number; y: number } {
+    for (const [dx, dy] of EXTENDED_OFFSETS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!gameState.getEntityAt(nx, ny)) {
+            return { x: nx, y: ny };
+        }
+    }
+    // Fallback — all tiles occupied, spawn at barracks position
+    log.warn(`findSpawnPosition: all tiles near (${x}, ${y}) occupied, using barracks position`);
+    return { x, y };
+}
+
+/**
+ * Convert a carrier into a trained soldier at the barracks.
  *
- * Pass-through: the actual type change is driven by the barracks system once it exists.
- * Logs the upgrade request at debug level so it is visible during development without
- * flooding the console with warnings.
+ * Reads the pending training state from BarracksTrainingManager, spawns a new soldier
+ * entity with the correct type and level, then removes the carrier from the world.
+ * Emits 'unit:spawned' and 'barracks:trainingCompleted' events for downstream systems.
  */
 export function executeChangeTypeAtBarracks(
     settler: Entity,
     _job: ChoreoJobState,
-    node: ChoreoNode,
+    _node: ChoreoNode,
     _dt: number,
-    _ctx: ChoreoContext
+    ctx: ChoreoContext
 ): TaskResult {
-    log.warn(
-        `CHANGE_TYPE_AT_BARRACKS: settler ${settler.id} trigger='${node.trigger}' — barracks upgrade not implemented, skipping`
+    const training = ctx.barracksTrainingManager?.getTrainingForCarrier(settler.id);
+    if (!training) {
+        log.warn(`CHANGE_TYPE_AT_BARRACKS: no training state for carrier ${settler.id}, skipping`);
+        return TaskResult.DONE;
+    }
+
+    const { buildingId, recipe } = training;
+    const barracks = ctx.gameState.getEntityOrThrow(buildingId, 'barracks for type change');
+    const unitType = getUnitTypeAtLevel(recipe.unitType, recipe.level);
+
+    // Find a valid spawn position near the barracks
+    const spawnPos = findSpawnPosition(barracks.x, barracks.y, ctx.gameState);
+
+    // Spawn the soldier
+    const soldierEntity = ctx.gameState.addEntity(EntityType.Unit, unitType, spawnPos.x, spawnPos.y, settler.player);
+    soldierEntity.race = settler.race;
+    soldierEntity.level = recipe.level;
+
+    // Emit unit:spawned event
+    ctx.eventBus.emit('unit:spawned', {
+        entityId: soldierEntity.id,
+        unitType,
+        x: spawnPos.x,
+        y: spawnPos.y,
+        player: settler.player,
+    });
+
+    const soldierId = soldierEntity.id;
+
+    // Remove the carrier entity. CarrierManager cleanup happens via entity:removed event.
+    ctx.gameState.removeEntity(settler.id);
+
+    // Notify manager to clear training state and emit completion event
+    ctx.barracksTrainingManager!.completeTraining(buildingId);
+
+    // Emit training completed event
+    ctx.eventBus.emit('barracks:trainingCompleted', {
+        buildingId,
+        unitType: recipe.unitType,
+        level: recipe.level,
+        soldierId,
+    });
+
+    log.debug(
+        `CHANGE_TYPE_AT_BARRACKS: carrier ${settler.id} converted to soldier ${soldierId} ` +
+            `(${UnitType[unitType]} L${recipe.level}) at barracks ${buildingId}`
     );
+
     return TaskResult.DONE;
 }
 

@@ -26,8 +26,7 @@ import type { Race } from '../../race';
 import type { EventBus, EventSubscriptionManager as ESM } from '../../event-bus';
 import { EventSubscriptionManager } from '../../event-bus';
 import type { EntityCleanupRegistry } from '../entity-cleanup-registry';
-import { BuildingConstructionPhase } from '../../features/building-construction/types';
-import type { BuildingStateManager } from '../../features/building-construction/building-state-manager';
+import type { ConstructionSiteManager } from '../../features/building-construction/construction-site-manager';
 import type { OverlayRegistry } from './overlay-registry';
 import { OverlayCondition, type BuildingOverlayInstance, type BuildingOverlayDef } from './types';
 
@@ -191,12 +190,12 @@ export class BuildingOverlayManager implements TickSystem {
      * - `entity:removed` → removeBuilding (via cleanupRegistry)
      */
     registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
-        this.subscriptions.subscribe(eventBus, 'building:completed', ({ entityId, buildingState }) => {
+        this.subscriptions.subscribe(eventBus, 'building:completed', ({ entityId, buildingType }) => {
             const entity = this.entityProvider.getEntity(entityId);
             if (!entity) return;
-            this.addBuilding(entityId, buildingState.buildingType, entity.race);
+            this.addBuilding(entityId, buildingType, entity.race);
         });
-        cleanupRegistry.onEntityRemoved(entityId => this.removeBuilding(entityId));
+        cleanupRegistry.onEntityRemoved(this.removeBuilding.bind(this));
     }
 
     /** Unsubscribe from all events */
@@ -207,17 +206,17 @@ export class BuildingOverlayManager implements TickSystem {
     /**
      * Rebuild overlay state from existing completed buildings.
      * Call after game restore or HMR to reconnect overlays with existing buildings.
+     *
+     * Operational buildings are those without an active construction site.
      */
-    rebuildFromExistingEntities(buildingStateManager: BuildingStateManager): void {
+    rebuildFromExistingEntities(constructionSiteManager: ConstructionSiteManager): void {
         this.overlaysByEntity.clear();
 
-        for (const buildingState of buildingStateManager.getAllBuildingStates()) {
-            if (buildingState.phase !== BuildingConstructionPhase.Completed) continue;
+        for (const entity of this.entityProvider.entities) {
+            if (entity.type !== EntityType.Building) continue;
+            if (constructionSiteManager.hasSite(entity.id)) continue;
 
-            const entity = this.entityProvider.getEntity(buildingState.entityId);
-            if (!entity || entity.type !== EntityType.Building) continue;
-
-            this.addBuilding(buildingState.entityId, buildingState.buildingType, entity.race);
+            this.addBuilding(entity.id, entity.subType as BuildingType, entity.race);
         }
     }
 

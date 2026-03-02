@@ -3,6 +3,17 @@ import type { InputContext } from '../input-mode';
 import { BuildingType, getBuildingSize } from '../../entity';
 import type { Race } from '../../race';
 import type { PlacementEntityType } from '../render-state';
+import type { TerrainData } from '../../terrain';
+
+/** Everything PlaceBuildingMode needs from the game. */
+export interface BuildingPlacementContext {
+    readonly terrain: TerrainData;
+    readonly tileOccupancy: Map<string, number>;
+    readonly currentPlayer: number;
+    readonly playerRace: Race;
+    readonly placeBuildingsCompleted: boolean;
+    readonly placeBuildingsWithWorker: boolean;
+}
 
 /**
  * Building-specific mode data.
@@ -38,6 +49,16 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
     readonly entityType: PlacementEntityType = 'building';
     protected override readonly resetAfterPlace = true;
 
+    constructor(
+        validateFn: (x: number, y: number, buildingType: BuildingType) => boolean,
+        private readonly getCommandContext?: () => Pick<
+            BuildingPlacementContext,
+            'placeBuildingsCompleted' | 'placeBuildingsWithWorker'
+        >
+    ) {
+        super(validateFn);
+    }
+
     protected getCommandType(): string {
         return 'place_building';
     }
@@ -66,6 +87,7 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
         y: number,
         data: PlacementModeData<BuildingType>
     ): Record<string, unknown> {
+        const settings = this.getCommandContext?.();
         return {
             type: this.getCommandType(),
             buildingType: data.subType,
@@ -73,6 +95,8 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
             y,
             player: this.currentPlayer,
             race: data.race!,
+            ...(settings?.placeBuildingsCompleted && { completed: true }),
+            ...(settings?.placeBuildingsWithWorker && { spawnWorker: true }),
         };
     }
 

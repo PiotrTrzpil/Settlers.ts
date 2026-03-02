@@ -33,7 +33,7 @@ export const OreSignFeature: FeatureDefinition = {
 
         // Clean up sign tracking state when entities are removed externally
         // (e.g. the game engine removes a sign that was already handled elsewhere).
-        ctx.cleanupRegistry.onEntityRemoved(id => signSystem.onEntityRemoved(id));
+        ctx.cleanupRegistry.onEntityRemoved(signSystem.onEntityRemoved.bind(signSystem));
 
         return {
             systems: [signSystem],

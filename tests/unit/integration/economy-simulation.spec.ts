@@ -36,7 +36,7 @@
  *       IronSmelter (IRONORE+COAL→IRONBAR), SmeltGold (GOLDORE+COAL→GOLDBAR),
  *       WeaponSmith (IRONBAR+COAL→SWORD), ToolSmith (IRONBAR+COAL→AXE)
  *     • Consumers (no material output):
- *       Barrack (SWORD → spawns soldiers),
+ *       Barrack (weapons + gold → trains soldiers via training pipeline),
  *       SmallTemple (consumes mana/resources for spells)
  *
  *   Non-production — residences, towers, storage areas, temples, etc.
@@ -88,9 +88,11 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { createSimulation, cleanupSimulation, type Simulation } from '../helpers/test-simulation';
 import { installRealGameData } from '../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
-import { EntityType } from '@/game/entity';
+import { EntityType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 import { OreType } from '@/game/features/ore-veins/ore-type';
+import { TrainingRecipeIndex } from '@/game/features/barracks';
+import { ProductionMode } from '@/game/features/production-control';
 
 const hasRealData = installRealGameData();
 
@@ -130,9 +132,10 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', () => {
 
         sim.plantTreesNear(woodcutterId, 5);
 
-        // Wait for all 5 trees to become boards (1 tree → 1 log → 1 board), then idle
-        sim.runUntil(() => sim.getOutput(sawmillId, EMaterialType.BOARD) >= 5, { maxTicks: 500 * 30 });
-        sim.runTicks(60 * 30);
+        // Wait for all 5 trees to become boards (1 tree → 1 log → 1 board), then idle.
+        // Chain: woodcutter cuts tree → deposits LOG → carrier picks up → delivers to sawmill → sawmill processes → BOARD.
+        sim.runUntil(() => sim.getOutput(sawmillId, EMaterialType.BOARD) >= 5, { maxTicks: 300 * 30 });
+        sim.runTicks(30 * 30);
         expect(sim.getOutput(sawmillId, EMaterialType.BOARD)).toBe(5);
     });
 
@@ -323,5 +326,209 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', () => {
         // Run more idle ticks — should not produce more (far rocks are out of range)
         sim.runTicks(60 * 30);
         expect(sim.getOutput(stonecutterId, EMaterialType.STONE)).toBe(stonesFromNearby);
+    });
+
+    // ── Dual-input transformer production (WORK_VIRTUAL + PUT_GOOD_VIRTUAL with auto-detect) ──
+    // These buildings use XML choreographies where GET_GOOD_VIRTUAL consumes inputs,
+    // WORK_VIRTUAL is a pure timer, and PUT_GOOD_VIRTUAL must resolve the correct output
+    // from BUILDING_PRODUCTIONS (node entity is GOOD_NO_GOOD, not an explicit material).
+
+    it('iron smelter: IRONORE + COAL → IRONBAR (isolated)', () => {
+        sim = createSimulation();
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const smelterId = sim.placeBuilding(BuildingType.IronSmelter);
+
+        sim.injectInput(smelterId, EMaterialType.IRONORE, 3);
+        sim.injectInput(smelterId, EMaterialType.COAL, 3);
+
+        sim.runUntil(() => sim.getOutput(smelterId, EMaterialType.IRONBAR) >= 3, { maxTicks: 300 * 30 });
+        expect(sim.getOutput(smelterId, EMaterialType.IRONBAR)).toBe(3);
+
+        // Inputs fully consumed
+        expect(sim.getInput(smelterId, EMaterialType.IRONORE)).toBe(0);
+        expect(sim.getInput(smelterId, EMaterialType.COAL)).toBe(0);
+    });
+
+    it('toolsmith: IRONBAR + COAL → AXE (isolated, no input material in output)', () => {
+        sim = createSimulation();
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const toolSmithId = sim.placeBuilding(BuildingType.ToolSmith);
+
+        sim.injectInput(toolSmithId, EMaterialType.IRONBAR, 2);
+        sim.injectInput(toolSmithId, EMaterialType.COAL, 2);
+
+        sim.runUntil(() => sim.getOutput(toolSmithId, EMaterialType.AXE) >= 2, { maxTicks: 300 * 30 });
+        expect(sim.getOutput(toolSmithId, EMaterialType.AXE)).toBe(2);
+
+        // Inputs fully consumed — IRONBAR must not appear in output slots
+        expect(sim.getInput(toolSmithId, EMaterialType.IRONBAR)).toBe(0);
+        expect(sim.getInput(toolSmithId, EMaterialType.COAL)).toBe(0);
+    });
+
+    it('weaponsmith: IRONBAR + COAL → SWORD (isolated)', () => {
+        sim = createSimulation();
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const weaponSmithId = sim.placeBuilding(BuildingType.WeaponSmith);
+
+        sim.injectInput(weaponSmithId, EMaterialType.IRONBAR, 2);
+        sim.injectInput(weaponSmithId, EMaterialType.COAL, 2);
+
+        sim.runUntil(() => sim.getOutput(weaponSmithId, EMaterialType.SWORD) >= 2, { maxTicks: 300 * 30 });
+        expect(sim.getOutput(weaponSmithId, EMaterialType.SWORD)).toBe(2);
+    });
+
+    // SmeltGold shares the Smelter worker type with IronSmelter. The XML
+    // choreography's GET_GOOD nodes specify IRONORE (correct for IronSmelter)
+    // but SmeltGold needs GOLDORE. The buildingJobs per-building job selection
+    // should remap materials but the XML job for SmeltGold isn't resolved yet.
+    it.todo('gold smelter: GOLDORE + COAL → GOLDBAR (isolated)', () => {
+        sim = createSimulation();
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const goldSmelterId = sim.placeBuilding(BuildingType.SmeltGold);
+
+        sim.injectInput(goldSmelterId, EMaterialType.GOLDORE, 2);
+        sim.injectInput(goldSmelterId, EMaterialType.COAL, 2);
+
+        sim.runUntil(() => sim.getOutput(goldSmelterId, EMaterialType.GOLDBAR) >= 2, { maxTicks: 300 * 30 });
+        expect(sim.getOutput(goldSmelterId, EMaterialType.GOLDBAR)).toBe(2);
+    });
+
+    it('bakery: FLOUR + WATER → BREAD (isolated)', () => {
+        sim = createSimulation();
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const bakeryId = sim.placeBuilding(BuildingType.Bakery);
+
+        sim.injectInput(bakeryId, EMaterialType.FLOUR, 2);
+        sim.injectInput(bakeryId, EMaterialType.WATER, 2);
+
+        sim.runUntil(() => sim.getOutput(bakeryId, EMaterialType.BREAD) >= 2, { maxTicks: 300 * 30 });
+        expect(sim.getOutput(bakeryId, EMaterialType.BREAD)).toBe(2);
+    });
+
+    // ── Single-input transformers (explicit PUT_GOOD material — regression check) ──
+
+    it('sawmill: LOG → BOARD (single-input, explicit output material)', () => {
+        sim = createSimulation();
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const sawmillId = sim.placeBuilding(BuildingType.Sawmill);
+
+        sim.injectInput(sawmillId, EMaterialType.LOG, 3);
+
+        sim.runUntil(() => sim.getOutput(sawmillId, EMaterialType.BOARD) >= 3, { maxTicks: 300 * 30 });
+        expect(sim.getOutput(sawmillId, EMaterialType.BOARD)).toBe(3);
+        expect(sim.getInput(sawmillId, EMaterialType.LOG)).toBe(0);
+    });
+
+    it('mill: GRAIN → FLOUR (single-input transformer)', () => {
+        sim = createSimulation();
+
+        sim.placeBuilding(BuildingType.ResidenceSmall);
+        const millId = sim.placeBuilding(BuildingType.Mill);
+
+        sim.injectInput(millId, EMaterialType.GRAIN, 2);
+
+        sim.runUntil(() => sim.getOutput(millId, EMaterialType.FLOUR) >= 2, { maxTicks: 300 * 30 });
+        expect(sim.getOutput(millId, EMaterialType.FLOUR)).toBe(2);
+    });
+
+    it('barracks training: weapons + carriers → soldiers', () => {
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+
+        let trainingStarted = 0;
+        let trainingCompleted = 0;
+        sim.eventBus.on('barracks:trainingStarted', () => trainingStarted++);
+        sim.eventBus.on('barracks:trainingCompleted', () => trainingCompleted++);
+
+        sim.placeBuilding(BuildingType.StorageArea);
+        sim.placeBuilding(BuildingType.ResidenceSmall); // spawns 2 carriers
+        const barracksId = sim.placeBuilding(BuildingType.Barrack);
+
+        // Use manual mode to queue exactly 2 SwordsmanL1 (each needs 1 SWORD)
+        sim.execute({ type: 'set_production_mode', buildingId: barracksId, mode: ProductionMode.Manual });
+        sim.execute({
+            type: 'add_to_production_queue',
+            buildingId: barracksId,
+            recipeIndex: TrainingRecipeIndex.SwordsmanL1,
+        });
+        sim.execute({
+            type: 'add_to_production_queue',
+            buildingId: barracksId,
+            recipeIndex: TrainingRecipeIndex.SwordsmanL1,
+        });
+
+        // Inject 2 swords — enough for 2 SwordsmanL1 trainings
+        sim.injectInput(barracksId, EMaterialType.SWORD, 2);
+
+        // Run until both carriers are trained into soldiers
+        sim.runUntil(() => trainingCompleted >= 2, { maxTicks: 600 * 30 });
+
+        expect(trainingStarted).toBe(2);
+        expect(trainingCompleted).toBe(2);
+
+        // Both carriers consumed — 0 carriers left, 2 military units created
+        const carriers = sim.state.entities.filter(e => e.type === EntityType.Unit && e.subType === UnitType.Carrier);
+        expect(carriers).toHaveLength(0);
+    });
+
+    it('barracks training: manual mode queues specific soldier types', () => {
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+
+        const trained: { unitType: number; level: number }[] = [];
+        sim.eventBus.on('barracks:trainingCompleted', e => {
+            trained.push({ unitType: e.unitType, level: e.level });
+        });
+
+        const storageId = sim.placeBuilding(BuildingType.StorageArea);
+        sim.placeBuilding(BuildingType.ResidenceMedium); // spawns 4 carriers
+        const barracksId = sim.placeBuilding(BuildingType.Barrack);
+
+        // Switch barracks to manual mode via command system
+        sim.execute({ type: 'set_production_mode', buildingId: barracksId, mode: ProductionMode.Manual });
+
+        // Queue: Bowman L1, Swordsman L2, SquadLeader
+        sim.execute({
+            type: 'add_to_production_queue',
+            buildingId: barracksId,
+            recipeIndex: TrainingRecipeIndex.BowmanL1,
+        });
+        sim.execute({
+            type: 'add_to_production_queue',
+            buildingId: barracksId,
+            recipeIndex: TrainingRecipeIndex.SwordsmanL2,
+        });
+        sim.execute({
+            type: 'add_to_production_queue',
+            buildingId: barracksId,
+            recipeIndex: TrainingRecipeIndex.SquadLeader,
+        });
+
+        // Stock materials in StorageArea — carriers will deliver them to the barracks
+        sim.injectOutput(storageId, EMaterialType.BOW, 8);
+        sim.injectOutput(storageId, EMaterialType.SWORD, 8);
+        sim.injectOutput(storageId, EMaterialType.GOLDBAR, 8);
+        sim.injectOutput(storageId, EMaterialType.ARMOR, 8);
+
+        sim.runUntil(() => trained.length >= 3, { maxTicks: 6000 });
+
+        // Exactly 3 soldiers trained in queue order
+        expect(trained).toHaveLength(3);
+        expect(trained[0]).toEqual({ unitType: UnitType.Bowman, level: 1 });
+        expect(trained[1]).toEqual({ unitType: UnitType.Swordsman, level: 2 });
+        expect(trained[2]).toEqual({ unitType: UnitType.SquadLeader, level: 1 });
+
+        // Verify entities: Bowman, Swordsman2, SquadLeader
+        expect(sim.countEntities(EntityType.Unit, UnitType.Bowman)).toBe(1);
+        expect(sim.countEntities(EntityType.Unit, UnitType.Swordsman2)).toBe(1);
+        expect(sim.countEntities(EntityType.Unit, UnitType.SquadLeader)).toBe(1);
+
+        // Queue exhausted — no more training should happen even with extra ticks
+        sim.runTicks(60 * 30);
+        expect(trained).toHaveLength(3);
     });
 });

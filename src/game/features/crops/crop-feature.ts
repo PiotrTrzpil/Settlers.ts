@@ -39,7 +39,7 @@ export const CropFeature: FeatureDefinition = {
         });
 
         // Clean up crop state on entity removal
-        ctx.cleanupRegistry.onEntityRemoved(entityId => cropSystem.unregister(entityId));
+        ctx.cleanupRegistry.onEntityRemoved(cropSystem.unregister.bind(cropSystem));
 
         return {
             systems: [cropSystem],

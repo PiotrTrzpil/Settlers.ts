@@ -14,7 +14,7 @@ import { BuildingType, getBuildingFootprint } from '@/game/buildings';
 import { Race } from '@/game/race';
 import { UnitType } from '@/game/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
-import { BuildingConstructionPhase, CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
+import { CONSTRUCTION_SITE_GROUND_TYPE } from '@/game/features/building-construction';
 import {
     createTestContext,
     placeBuilding,
@@ -277,8 +277,6 @@ describe('Building Placement Terrain Modification', () => {
 
     beforeEach(() => {
         ctx = createTestContext();
-        // Reset completed mode
-        ctx.settings.placeBuildingsCompleted = false;
     });
 
     it('should change ground to raw immediately on placement (normal mode)', () => {
@@ -308,14 +306,13 @@ describe('Building Placement Terrain Modification', () => {
         expect(result.success).toBe(true);
 
         const building = ctx.state.entities.find(e => e.type === EntityType.Building)!;
-        const buildingState = ctx.buildingStateManager.getBuildingState(building.id)!;
-        expect(buildingState.originalTerrain).not.toBeNull();
-        expect(buildingState.originalTerrain!.tiles.length).toBeGreaterThan(0);
+        const site = ctx.constructionSiteManager.getSite(building.id);
+        expect(site).toBeDefined();
+        expect(site!.originalTerrain).not.toBeNull();
+        expect(site!.originalTerrain!.tiles.length).toBeGreaterThan(0);
     });
 
     it('should change ground and level heights instantly in completed mode', () => {
-        ctx.settings.placeBuildingsCompleted = true;
-
         const tile = findBuildableTile(ctx.map);
         expect(tile).not.toBeNull();
 
@@ -325,7 +322,7 @@ describe('Building Placement Terrain Modification', () => {
         setHeightAt(ctx.map, tile!.x, tile!.y + 1, 12);
         setHeightAt(ctx.map, tile!.x + 1, tile!.y + 1, 8);
 
-        const result = placeBuilding(ctx, tile!.x, tile!.y, BuildingType.WoodcutterHut);
+        const result = placeBuilding(ctx, tile!.x, tile!.y, BuildingType.WoodcutterHut, 0, { completed: true });
         expect(result.success).toBe(true);
 
         // Ground type should be raw
@@ -340,10 +337,8 @@ describe('Building Placement Terrain Modification', () => {
         // All footprint tiles should have the same leveled height
         expect(uniqueHeights.size).toBe(1);
 
-        // Building should be completed
+        // Building should be completed (no construction site = operational)
         const building = ctx.state.entities.find(e => e.type === EntityType.Building)!;
-        const buildingState = ctx.buildingStateManager.getBuildingState(building.id)!;
-        expect(buildingState.phase).toBe(BuildingConstructionPhase.Completed);
-        expect(buildingState.terrainModified).toBe(true);
+        expect(ctx.constructionSiteManager.hasSite(building.id)).toBe(false);
     });
 });

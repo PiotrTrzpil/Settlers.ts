@@ -2,12 +2,13 @@
  * Production Control Feature Module
  *
  * Runtime state manager for per-building production mode and recipe selection.
- * Only multi-recipe buildings (those with a RecipeSet) have tracked state.
- * Single-recipe buildings are transparent to this module.
+ * Buildings must be registered via initBuilding(buildingId, recipeCount).
+ * The manager is recipe-index-keyed: it selects indices 0..recipeCount-1 and
+ * callers resolve the concrete Recipe from their own RecipeSet.
  *
  * Public API:
  * - Types: ProductionMode, ProductionState
- * - Manager: ProductionControlManager, ProductionControlManagerConfig
+ * - Manager: ProductionControlManager
  *
  * Usage:
  * ```typescript
@@ -15,27 +16,25 @@
  *
  * const manager = new ProductionControlManager();
  *
- * // Register a ToolSmith building when it is constructed
- * manager.initBuilding(buildingId, BuildingType.ToolSmith);
+ * // Register a building when it is constructed, passing the number of recipes
+ * manager.initBuilding(buildingId, recipeSet.recipes.length);
  *
- * // Select the next recipe during a production cycle
- * const recipe = manager.getNextRecipe(buildingId, BuildingType.ToolSmith);
- * if (recipe) {
+ * // Select the next recipe index during a production cycle
+ * const recipeIndex = manager.getNextRecipeIndex(buildingId);
+ * if (recipeIndex !== null) {
+ *   const recipe = recipeSet.recipes[recipeIndex];
  *   // Produce recipe.output, consume recipe.inputs
- * } else {
- *   // Single-recipe building — fall back to ProductionChain
  * }
  *
  * // Player adjusts production proportions via UI
  * manager.setMode(buildingId, 'proportional');
- * manager.setProportion(buildingId, EMaterialType.AXE, 3);
- * manager.setProportion(buildingId, EMaterialType.SAW, 1);
+ * manager.setProportion(buildingId, 0, 3); // recipe index 0, weight 3
+ * manager.setProportion(buildingId, 1, 1); // recipe index 1, weight 1
  *
  * // Manual queue control
  * manager.setMode(buildingId, 'manual');
- * manager.addToQueue(buildingId, EMaterialType.PICKAXE);
- * manager.addToQueue(buildingId, EMaterialType.AXE);
- * manager.removeFromQueue(buildingId, EMaterialType.AXE);
+ * manager.addToQueue(buildingId, 2);    // enqueue recipe index 2
+ * manager.removeFromQueue(buildingId, 2); // remove one occurrence of index 2
  *
  * // Clean up on building destruction
  * manager.removeBuilding(buildingId);
@@ -43,7 +42,8 @@
  */
 
 // Types
-export type { ProductionMode, ProductionState } from './types';
+export { ProductionMode } from './types';
+export type { ProductionState } from './types';
 
 // Manager
 export { ProductionControlManager } from './production-control-manager';

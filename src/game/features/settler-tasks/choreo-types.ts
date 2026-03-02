@@ -14,6 +14,7 @@ import type { CarrierManager } from '../carriers';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import { JobType, type EntityWorkHandler, type PositionWorkHandler, type TaskResult } from './types';
 import type { TransportJob } from '../logistics/transport-job';
+import type { BarracksTrainingManager } from '../barracks';
 
 // ─────────────────────────────────────────────────────────────
 // CEntityTask types — 1:1 mapping from jobInfo.xml
@@ -148,16 +149,12 @@ export interface TransportData {
     sourceBuildingId: number;
     /** Destination building entity ID (delivery location). */
     destBuildingId: number;
-    /** Carrier's home building (tavern) entity ID. */
-    homeId: number;
     /** Material being transported. */
     material: EMaterialType;
     /** Amount to transport. */
     amount: number;
     /** Pre-resolved destination position (input pile / door). */
     destPos: { x: number; y: number };
-    /** Pre-resolved home position (tavern door). */
-    homePos: { x: number; y: number };
 }
 
 /** Runtime state for an active choreography job. */
@@ -278,6 +275,8 @@ export interface TransportContext {
 export interface ChoreoContext extends MovementContext, WorkContext, InventoryContext, TransportContext {
     inventoryVisualizer: InventoryVisualizer;
     jobPartResolver: JobPartResolver;
+    /** Barracks training manager — optional, only set when barracks feature is active. */
+    barracksTrainingManager?: BarracksTrainingManager;
 }
 
 /** Signature for a single choreography node executor. */

@@ -76,7 +76,6 @@ export const BUILDING_SIZE: Record<number, BuildingSize> = {
     [BuildingType.WeaponSmith]: { width: 2, height: 2 },
     [BuildingType.ToolSmith]: { width: 2, height: 2 },
     [BuildingType.ForesterHut]: { width: 2, height: 2 },
-    [BuildingType.LivingHouse]: { width: 2, height: 2 },
     [BuildingType.HunterHut]: { width: 2, height: 2 },
     [BuildingType.DonkeyRanch]: { width: 2, height: 2 },
     [BuildingType.StoneMine]: { width: 2, height: 2 },

@@ -262,6 +262,42 @@ export class GameState {
         return entity;
     }
 
+    /**
+     * Remove a building's non-door footprint tiles from buildingOccupancy.
+     * Used for construction sites — their footprints should be walkable during leveling.
+     */
+    public clearBuildingFootprintBlock(buildingId: number): void {
+        const entity = this.entityMap.get(buildingId);
+        if (!entity || entity.type !== EntityType.Building) return;
+        const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
+        for (const tile of footprint) {
+            this.buildingOccupancy.delete(tileKey(tile.x, tile.y));
+        }
+    }
+
+    /**
+     * Re-add a building's non-door footprint tiles to buildingOccupancy.
+     * Used when a construction site finishes leveling and the structure starts rising.
+     */
+    public restoreBuildingFootprintBlock(buildingId: number): void {
+        const entity = this.entityMap.get(buildingId);
+        if (!entity || entity.type !== EntityType.Building) return;
+        const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
+        const passableKeys = getBuildingDoorCorridor(
+            entity.x,
+            entity.y,
+            entity.subType as BuildingType,
+            entity.race,
+            footprint
+        );
+        for (const tile of footprint) {
+            const key = tileKey(tile.x, tile.y);
+            if (!passableKeys.has(key)) {
+                this.buildingOccupancy.add(key);
+            }
+        }
+    }
+
     public removeEntity(id: number): void {
         const entity = this.entityMap.get(id);
         if (!entity) return;

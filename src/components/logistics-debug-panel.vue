@@ -61,27 +61,12 @@
                     <span class="breakdown-label">Deliver:</span>
                     <span class="breakdown-value">{{ stats.deliveringCarriers }}</span>
                 </span>
-                <span class="breakdown-item">
-                    <span class="breakdown-label">Rest:</span>
-                    <span class="breakdown-value">{{ stats.restingCarriers }}</span>
-                </span>
-            </div>
-            <div class="fatigue-breakdown">
-                <span class="fatigue-item fresh">Fresh: {{ stats.freshCarriers }}</span>
-                <span class="fatigue-item tired">Tired: {{ stats.tiredCarriers }}</span>
-                <span class="fatigue-item exhausted">Exhausted: {{ stats.exhaustedCarriers }}</span>
-                <span class="fatigue-item collapsed" v-if="stats.collapsedCarriers > 0">
-                    Collapsed: {{ stats.collapsedCarriers }}
-                </span>
             </div>
             <div v-if="state.carriers.length === 0" class="empty-state">No carriers</div>
             <div v-for="carrier in state.carriers" :key="carrier.entityId" class="carrier-row">
                 <span class="carrier-id">#{{ carrier.entityId }}</span>
                 <span class="carrier-status" :class="'status-' + carrier.status.toLowerCase()">
                     {{ carrier.status }}
-                </span>
-                <span class="carrier-fatigue" :class="'fatigue-' + carrier.fatigueLevel.toLowerCase()">
-                    {{ carrier.fatigue }}%
                 </span>
                 <span v-if="carrier.carryingMaterial" class="carrier-carrying">
                     {{ carrier.carryingMaterial }}

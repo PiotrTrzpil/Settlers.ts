@@ -7,10 +7,12 @@ import type { Game } from '@/game/game';
 import type { Entity } from '@/game/entity';
 import { BuildingType, EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
-import { hasMultipleRecipes } from '@/game/economy/building-production';
-import type { ProductionMode } from '@/game/features/production-control';
+import { hasMultipleRecipes, getRecipeSet } from '@/game/economy/building-production';
+import { type ProductionMode } from '@/game/features/production-control';
 
 export interface RecipeInfo {
+    /** Recipe index in the building's RecipeSet */
+    index: number;
     output: EMaterialType;
     outputName: string;
     weight: number;
@@ -25,8 +27,8 @@ export interface ProductionControlState {
     recipes: RecipeInfo[];
     /** Manual mode queue (output material names) */
     queue: string[];
-    /** Raw queue for commands */
-    queueRaw: EMaterialType[];
+    /** Raw queue as recipe indices */
+    queueRaw: number[];
 }
 
 /**
@@ -43,9 +45,9 @@ export function useProductionControl(
 ): {
     productionControl: Ref<ProductionControlState | null>;
     setProductionMode: (mode: ProductionMode) => void;
-    setRecipeProportion: (output: EMaterialType, weight: number) => void;
-    addToProductionQueue: (output: EMaterialType) => void;
-    removeFromProductionQueue: (output: EMaterialType) => void;
+    setRecipeProportion: (recipeIndex: number, weight: number) => void;
+    addToProductionQueue: (recipeIndex: number) => void;
+    removeFromProductionQueue: (recipeIndex: number) => void;
 } {
     const state = computed<ProductionControlState | null>(() => {
         // Touch tick to re-evaluate each frame
@@ -60,18 +62,22 @@ export function useProductionControl(
         const bt = entity.subType as BuildingType;
         if (!hasMultipleRecipes(bt)) return null;
 
+        const recipeSet = getRecipeSet(bt);
+        if (!recipeSet) return null;
+
         const pcm = game.services.productionControlManager;
 
         const prodState = pcm.getProductionState(entity.id);
         if (!prodState) return null;
 
         const recipes: RecipeInfo[] = [];
-        const recipeList = pcm.getRecipes(entity.id, bt);
-        for (const r of recipeList) {
+        for (let i = 0; i < recipeSet.recipes.length; i++) {
+            const r = recipeSet.recipes[i]!;
             recipes.push({
+                index: i,
                 output: r.output,
                 outputName: EMaterialType[r.output],
-                weight: prodState.proportions.get(r.output) ?? 1,
+                weight: prodState.proportions.get(i) ?? 1,
             });
         }
 
@@ -79,7 +85,10 @@ export function useProductionControl(
             isMultiRecipe: true,
             mode: prodState.mode,
             recipes,
-            queue: prodState.queue.map(m => EMaterialType[m]),
+            queue: prodState.queue.map(idx => {
+                const r = recipeSet.recipes[idx];
+                return r ? EMaterialType[r.output] : `Recipe ${idx}`;
+            }),
             queueRaw: [...prodState.queue],
         };
     });
@@ -91,25 +100,25 @@ export function useProductionControl(
         game.execute({ type: 'set_production_mode', buildingId: entity.id, mode });
     }
 
-    function setProportion(output: EMaterialType, weight: number): void {
+    function setProportion(recipeIndex: number, weight: number): void {
         const entity = selectedEntity.value;
         const game = gameRef.value;
         if (!entity || !game) return;
-        game.execute({ type: 'set_recipe_proportion', buildingId: entity.id, output, weight });
+        game.execute({ type: 'set_recipe_proportion', buildingId: entity.id, recipeIndex, weight });
     }
 
-    function addToQueue(output: EMaterialType): void {
+    function addToQueue(recipeIndex: number): void {
         const entity = selectedEntity.value;
         const game = gameRef.value;
         if (!entity || !game) return;
-        game.execute({ type: 'add_to_production_queue', buildingId: entity.id, output });
+        game.execute({ type: 'add_to_production_queue', buildingId: entity.id, recipeIndex });
     }
 
-    function removeFromQueue(output: EMaterialType): void {
+    function removeFromQueue(recipeIndex: number): void {
         const entity = selectedEntity.value;
         const game = gameRef.value;
         if (!entity || !game) return;
-        game.execute({ type: 'remove_from_production_queue', buildingId: entity.id, output });
+        game.execute({ type: 'remove_from_production_queue', buildingId: entity.id, recipeIndex });
     }
 
     return {

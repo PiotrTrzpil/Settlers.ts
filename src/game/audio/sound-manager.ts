@@ -37,7 +37,7 @@ export class SoundManager implements IAudioManager {
     private constructor() {
         this.musicController = new MusicController(this);
         this.sfxPoolManager = new SfxPoolManager(
-            config => this.createHowlForConfig(config),
+            this.createHowlForConfig.bind(this),
             () => this.sfxVolume * this.masterVolume
         );
     }

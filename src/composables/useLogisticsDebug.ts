@@ -8,12 +8,11 @@
 import { ref, onUnmounted, type Ref } from 'vue';
 import type { Game } from '@/game/game';
 import type { CarrierState } from '@/game/features/carriers/carrier-state';
-import { CarrierStatus, FatigueLevel, getFatigueLevel } from '@/game/features/carriers/carrier-state';
+import { CarrierStatus } from '@/game/features/carriers/carrier-state';
 import type { ResourceRequest } from '@/game/features/logistics/resource-request';
 import { RequestPriority, RequestStatus } from '@/game/features/logistics/resource-request';
 import type { InventoryReservation } from '@/game/features/logistics/inventory-reservation';
 import type { ServiceArea } from '@/game/features/service-areas/service-area';
-import type { CarrierManager } from '@/game/features/carriers/carrier-manager';
 import { EMaterialType } from '@/game/economy';
 import { EntityType, type Entity } from '@/game/entity';
 import { UnitType } from '@/game/unit-types';
@@ -43,9 +42,6 @@ export interface RequestSummary {
 export interface CarrierSummary {
     entityId: number;
     status: string;
-    fatigue: number;
-    fatigueLevel: string;
-    homeBuilding: number;
     carryingMaterial: string | null;
     carryingAmount: number;
     hasJob: boolean;
@@ -90,13 +86,6 @@ export interface LogisticsStats {
     walkingCarriers: number;
     pickingUpCarriers: number;
     deliveringCarriers: number;
-    restingCarriers: number;
-
-    /** Carriers by fatigue level */
-    freshCarriers: number;
-    tiredCarriers: number;
-    exhaustedCarriers: number;
-    collapsedCarriers: number;
 
     /** Reservation count */
     reservationCount: number;
@@ -129,11 +118,6 @@ function createEmptyStats(): LogisticsStats {
         walkingCarriers: 0,
         pickingUpCarriers: 0,
         deliveringCarriers: 0,
-        restingCarriers: 0,
-        freshCarriers: 0,
-        tiredCarriers: 0,
-        exhaustedCarriers: 0,
-        collapsedCarriers: 0,
         reservationCount: 0,
     };
 }
@@ -155,15 +139,6 @@ export const CARRIER_STATUS_NAMES: Record<CarrierStatus, string> = {
     [CarrierStatus.Walking]: 'Walking',
     [CarrierStatus.PickingUp]: 'PickingUp',
     [CarrierStatus.Delivering]: 'Delivering',
-    [CarrierStatus.Resting]: 'Resting',
-};
-
-/** Human-readable fatigue level names for display */
-export const FATIGUE_LEVEL_NAMES: Record<FatigueLevel, string> = {
-    [FatigueLevel.Fresh]: 'Fresh',
-    [FatigueLevel.Tired]: 'Tired',
-    [FatigueLevel.Exhausted]: 'Exhausted',
-    [FatigueLevel.Collapsed]: 'Collapsed',
 };
 
 /** CSS class suffixes for carrier status styling */
@@ -172,15 +147,6 @@ export const CARRIER_STATUS_CLASSES: Record<CarrierStatus, string> = {
     [CarrierStatus.Walking]: 'walking',
     [CarrierStatus.PickingUp]: 'pickingup',
     [CarrierStatus.Delivering]: 'delivering',
-    [CarrierStatus.Resting]: 'resting',
-};
-
-/** CSS class suffixes for fatigue level styling */
-export const FATIGUE_LEVEL_CLASSES: Record<FatigueLevel, string> = {
-    [FatigueLevel.Fresh]: 'fresh',
-    [FatigueLevel.Tired]: 'tired',
-    [FatigueLevel.Exhausted]: 'exhausted',
-    [FatigueLevel.Collapsed]: 'collapsed',
 };
 
 const PRIORITY_NAMES: Record<RequestPriority, 'High' | 'Normal' | 'Low'> = {
@@ -195,15 +161,6 @@ const STATUS_STAT_KEYS: Record<CarrierStatus, keyof LogisticsStats> = {
     [CarrierStatus.Walking]: 'walkingCarriers',
     [CarrierStatus.PickingUp]: 'pickingUpCarriers',
     [CarrierStatus.Delivering]: 'deliveringCarriers',
-    [CarrierStatus.Resting]: 'restingCarriers',
-};
-
-/** Maps fatigue level to stats property key for counting */
-const FATIGUE_STAT_KEYS: Record<FatigueLevel, keyof LogisticsStats> = {
-    [FatigueLevel.Fresh]: 'freshCarriers',
-    [FatigueLevel.Tired]: 'tiredCarriers',
-    [FatigueLevel.Exhausted]: 'exhaustedCarriers',
-    [FatigueLevel.Collapsed]: 'collapsedCarriers',
 };
 
 function formatMaterial(materialType: number): string {
@@ -267,25 +224,20 @@ function gatherCarriers(
     const carriers: CarrierSummary[] = [];
 
     for (const carrier of allCarriers) {
-        const fatigueLevel = getFatigueLevel(carrier.fatigue);
         const entity = getEntity(carrier.entityId);
         const carrying = entity?.carrying;
 
         carriers.push({
             entityId: carrier.entityId,
             status: CARRIER_STATUS_NAMES[carrier.status],
-            fatigue: Math.round(carrier.fatigue),
-            fatigueLevel: FATIGUE_LEVEL_NAMES[fatigueLevel],
-            homeBuilding: carrier.homeBuilding,
             carryingMaterial: carrying ? formatMaterial(carrying.material) : null,
             carryingAmount: carrying?.amount ?? 0,
-            hasJob: carrier.status !== CarrierStatus.Idle && carrier.status !== CarrierStatus.Resting,
+            hasJob: carrier.status !== CarrierStatus.Idle,
             jobType: null,
         });
 
         stats.carrierCount++;
         stats[STATUS_STAT_KEYS[carrier.status]]++;
-        stats[FATIGUE_STAT_KEYS[fatigueLevel]]++;
     }
 
     carriers.sort((a, b) => a.entityId - b.entityId);
@@ -313,29 +265,19 @@ function gatherReservations(
     return reservations;
 }
 
-function gatherHubs(
-    serviceAreas: Iterable<ServiceArea>,
-    carrierManager: CarrierManager,
-    stats: LogisticsStats
-): HubSummary[] {
+function gatherHubs(serviceAreas: Iterable<ServiceArea>, stats: LogisticsStats): HubSummary[] {
     const hubs: HubSummary[] = [];
 
     for (const area of serviceAreas) {
-        const carrierCount = carrierManager.getCarrierCountForHub(area.buildingId);
-        const isFull = carrierCount >= area.capacity;
-
         hubs.push({
             buildingId: area.buildingId,
-            carrierCount,
+            carrierCount: 0,
             capacity: area.capacity,
-            isFull,
+            isFull: false,
         });
 
         stats.hubCount++;
         stats.totalHubCapacity += area.capacity;
-        if (isFull) {
-            stats.hubsAtCapacity++;
-        }
     }
 
     hubs.sort((a, b) => a.buildingId - b.buildingId);
@@ -370,7 +312,11 @@ export function useLogisticsDebug(getGame: () => Game | null): {
         const { pending, rawPending, inProgress } = gatherRequests(svc.requestManager.getAllRequests(), now, stats);
 
         // Gather carriers
-        const carriers = gatherCarriers(svc.carrierManager.getAllCarriers(), id => gameState.getEntity(id), stats);
+        const carriers = gatherCarriers(
+            svc.carrierManager.getAllCarriers(),
+            gameState.getEntity.bind(gameState),
+            stats
+        );
 
         // Count unregistered carriers (carrier units without carrier state in manager)
         for (const entity of gameState.entities) {
@@ -390,7 +336,7 @@ export function useLogisticsDebug(getGame: () => Game | null): {
         );
 
         // Gather hubs
-        const hubs = gatherHubs(svc.serviceAreaManager.getAllServiceAreas(), svc.carrierManager, stats);
+        const hubs = gatherHubs(svc.serviceAreaManager.getAllServiceAreas(), stats);
 
         // Diagnose why pending requests are unfulfilled (limit to displayed items to avoid perf issues)
         const diagnosticConfig: DiagnosticConfig = {

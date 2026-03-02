@@ -37,7 +37,7 @@ export const CombatFeature: FeatureDefinition = {
         });
 
         // Clean up on removal
-        ctx.cleanupRegistry.onEntityRemoved(entityId => combatSystem.unregister(entityId));
+        ctx.cleanupRegistry.onEntityRemoved(combatSystem.unregister.bind(combatSystem));
 
         return {
             systems: [combatSystem],

@@ -19,7 +19,7 @@ import {
     withdrawReserved,
     getUnreservedAmount,
 } from './inventory-slot';
-import { getInventoryConfig, type SlotConfig } from './inventory-configs';
+import { getInventoryConfig, type SlotConfig, type InventoryConfig } from './inventory-configs';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('BuildingInventory');
@@ -96,6 +96,34 @@ export class BuildingInventoryManager {
     }
 
     /**
+     * Create an inventory for a building using an explicit configuration.
+     * Used for construction inventories where the config differs from the production config.
+     * @param buildingId Entity ID of the building
+     * @param buildingType Type of building (for reference in inventory object)
+     * @param config Explicit inventory configuration to use
+     * @returns The created inventory
+     */
+    createInventoryFromConfig(
+        buildingId: number,
+        buildingType: BuildingType,
+        config: InventoryConfig
+    ): BuildingInventory {
+        const inventory: BuildingInventory = {
+            buildingId,
+            buildingType,
+            inputSlots: config.inputSlots.map((slotConfig: SlotConfig) =>
+                createSlot(slotConfig.materialType, slotConfig.maxCapacity)
+            ),
+            outputSlots: config.outputSlots.map((slotConfig: SlotConfig) =>
+                createSlot(slotConfig.materialType, slotConfig.maxCapacity)
+            ),
+        };
+
+        this.inventories.set(buildingId, inventory);
+        return inventory;
+    }
+
+    /**
      * Create an inventory for a building based on its type.
      * @param buildingId Entity ID of the building
      * @param buildingType Type of building
@@ -103,9 +131,6 @@ export class BuildingInventoryManager {
      */
     createInventory(buildingId: number, buildingType: BuildingType): BuildingInventory {
         const config = getInventoryConfig(buildingType);
-        log.debug(
-            `#${this._debugId} createInventory: building=${buildingId}, type=${BuildingType[buildingType]}, outputs=${config.outputSlots.length}`
-        );
 
         const inventory: BuildingInventory = {
             buildingId,
@@ -454,7 +479,7 @@ export class BuildingInventoryManager {
         if (!inventory) return false;
 
         const output = recipe ? recipe.output : BUILDING_PRODUCTIONS.get(inventory.buildingType)?.output;
-        if (!output || output === EMaterialType.NO_MATERIAL) return false;
+        if (output === undefined || output === EMaterialType.NO_MATERIAL) return false;
 
         this.depositOutput(buildingId, output, 1);
         return true;
@@ -471,7 +496,7 @@ export class BuildingInventoryManager {
         if (!inventory) return false;
 
         const output = recipe ? recipe.output : BUILDING_PRODUCTIONS.get(inventory.buildingType)?.output;
-        if (!output) return true; // No production = always ok
+        if (output === undefined) return true; // No production = always ok
         if (output === EMaterialType.NO_MATERIAL) return true; // No output material
 
         const slot = inventory.outputSlots.find(s => s.materialType === output);

@@ -9,6 +9,7 @@ import { GameDataLoader } from '@/resources/game-data/game-data-loader';
 import type {
     GameData,
     BuildingInfo,
+    BuildingPileInfo,
     RaceId,
     SettlerValueInfo,
     RaceSettlerValueData,
@@ -16,6 +17,7 @@ import type {
     JobNode,
     RaceJobData,
 } from '@/resources/game-data/types';
+import { PileSlotType } from '@/resources/game-data/types';
 import { clearWorkerBuildingCache } from '@/game/game-data-access';
 import { loadGameDataFromFiles } from '@/resources/game-data/load-game-data-from-files';
 import { existsSync } from 'fs';
@@ -31,19 +33,25 @@ function bitmaskRow(width: number): number {
     return bits;
 }
 
-/** Minimal BuildingInfo with only the fields needed for worker resolution. */
-function buildingInfo(id: string, inhabitant: string, tool: string, size: 1 | 2 | 3 = 2): BuildingInfo {
+/** Minimal BuildingInfo with fields needed for worker resolution and construction costs. */
+function buildingInfo(
+    id: string,
+    inhabitant: string,
+    tool: string,
+    size: 1 | 2 | 3 = 2,
+    costs: { stone?: number; boards?: number; gold?: number } = {},
+    piles: BuildingPileInfo[] = []
+): BuildingInfo {
     const row = bitmaskRow(size);
     return {
         id,
         inhabitant,
         tool,
-        // Required fields with zero defaults (not used by worker resolution)
         hotSpotX: 0,
         hotSpotY: 0,
-        stone: 0,
-        boards: 0,
-        gold: 0,
+        stone: costs.stone ?? 0,
+        boards: costs.boards ?? 0,
+        gold: costs.gold ?? 0,
         lines: 0,
         buildingPosLines: Array.from({ length: size }, () => row),
         digPosLines: [],
@@ -72,7 +80,7 @@ function buildingInfo(id: string, inhabitant: string, tool: string, size: 1 | 2 
         patches: [],
         settlers: [],
         animLists: [],
-        piles: [],
+        piles,
         builderInfos: [],
         dummyValue: 0,
         gridChangedForExport: 0,
@@ -83,73 +91,86 @@ function buildingInfo(id: string, inhabitant: string, tool: string, size: 1 | 2 
     };
 }
 
+/** Create a minimal BuildingPileInfo for test pile slots. */
+function pile(good: string, type: PileSlotType, xOffset: number, yOffset: number): BuildingPileInfo {
+    return { good, type, xOffset, yOffset, xPixelOffset: 0, yPixelOffset: 0, patch: 0, appearance: 0 };
+}
+
 /**
  * Building definitions matching buildingInfo.xml.
  * Only includes buildings that have a non-empty inhabitant (worker buildings).
  */
 const TEST_BUILDINGS: BuildingInfo[] = [
-    buildingInfo('BUILDING_WOODCUTTERHUT', 'SETTLER_WOODCUTTER', 'GOOD_AXE'),
-    buildingInfo('BUILDING_FORESTERHUT', 'SETTLER_FORESTER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_SAWMILL', 'SETTLER_SAWMILLWORKER', 'GOOD_SAW'),
-    buildingInfo('BUILDING_STONECUTTERHUT', 'SETTLER_STONECUTTER', 'GOOD_PICKAXE'),
-    buildingInfo('BUILDING_GRAINFARM', 'SETTLER_FARMERGRAIN', 'GOOD_SCYTHE'),
-    buildingInfo('BUILDING_MILL', 'SETTLER_MILLER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_BAKERY', 'SETTLER_BAKER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_FISHERHUT', 'SETTLER_FISHER', 'GOOD_ROD'),
-    buildingInfo('BUILDING_ANIMALRANCH', 'SETTLER_FARMERANIMALS', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_SLAUGHTERHOUSE', 'SETTLER_BUTCHER', 'GOOD_AXE'),
-    buildingInfo('BUILDING_WATERWORKHUT', 'SETTLER_WATERWORKER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_COALMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE'),
-    buildingInfo('BUILDING_IRONMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE'),
-    buildingInfo('BUILDING_GOLDMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE'),
-    buildingInfo('BUILDING_SULFURMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE'),
-    buildingInfo('BUILDING_STONEMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE'),
-    buildingInfo('BUILDING_SMELTIRON', 'SETTLER_SMELTER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_SMELTGOLD', 'SETTLER_SMELTER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_WEAPONSMITH', 'SETTLER_SMITH', 'GOOD_HAMMER'),
-    buildingInfo('BUILDING_TOOLSMITH', 'SETTLER_SMITH', 'GOOD_HAMMER'),
-    buildingInfo('BUILDING_AMMOMAKERHUT', 'SETTLER_AMMOMAKER', 'GOOD_PICKAXE'),
-    buildingInfo('BUILDING_HUNTERHUT', 'SETTLER_HUNTER', 'GOOD_BOW'),
-    buildingInfo('BUILDING_HEALERHUT', 'SETTLER_HEALER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_DONKEYRANCH', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_VEHICLEHALL', 'SETTLER_VEHICLEMAKER', 'GOOD_HAMMER'),
-    buildingInfo('BUILDING_VINYARD', 'SETTLER_VINTNER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_AGAVEFARMERHUT', 'SETTLER_AGAVEFARMER', 'GOOD_SCYTHE'),
-    buildingInfo('BUILDING_TEQUILAMAKERHUT', 'SETTLER_TEQUILAMAKER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_BEEKEEPERHUT', 'SETTLER_BEEKEEPER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_MEADMAKERHUT', 'SETTLER_MEADMAKER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_SUNFLOWERFARMERHUT', 'SETTLER_SUNFLOWERFARMER', 'GOOD_SCYTHE'),
-    buildingInfo('BUILDING_SUNFLOWEROILMAKERHUT', 'SETTLER_SUNFLOWEROILMAKER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_MUSHROOMFARM', 'SETTLER_MUSHROOMFARMER', 'GOOD_NO_GOOD'),
-    // Military / residential buildings (inhabitant = CARRIER, no tool)
-    buildingInfo('BUILDING_STORAGEAREA', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3),
-    buildingInfo('BUILDING_RESIDENCESMALL', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_RESIDENCEMEDIUM', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_RESIDENCEBIG', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3),
-    buildingInfo('BUILDING_BARRACKS', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_SMALLTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_BIGTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD', 3),
-    buildingInfo('BUILDING_CASTLE', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3),
-    buildingInfo('BUILDING_GUARDTOWERSMALL', 'SETTLER_CARRIER', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_GUARDTOWERBIG', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3),
-    buildingInfo('BUILDING_FORTRESS', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3),
-    buildingInfo('BUILDING_LOOKOUTTOWER', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_DARKTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD', 3),
-    buildingInfo('BUILDING_MANACOPTERHALL', 'SETTLER_MANACOPTERMASTER', 'GOOD_NO_GOOD', 3),
-    buildingInfo('BUILDING_SHIPYARDA', 'SETTLER_SHIPYARDWORKER', 'GOOD_HAMMER', 3),
-    // Eyecatchers (decorative monuments — no workers)
-    buildingInfo('BUILDING_EYECATCHER01', '', 'GOOD_NO_GOOD', 1),
-    buildingInfo('BUILDING_EYECATCHER02', '', 'GOOD_NO_GOOD', 3),
-    buildingInfo('BUILDING_EYECATCHER03', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_EYECATCHER04', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_EYECATCHER05', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_EYECATCHER06', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_EYECATCHER07', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_EYECATCHER08', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_EYECATCHER09', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_EYECATCHER10', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_EYECATCHER11', '', 'GOOD_NO_GOOD'),
-    buildingInfo('BUILDING_EYECATCHER12', '', 'GOOD_NO_GOOD'),
+    buildingInfo('BUILDING_WOODCUTTERHUT', 'SETTLER_WOODCUTTER', 'GOOD_AXE', 2, { stone: 2, boards: 2 }, [
+        pile('GOOD_LOG', PileSlotType.Output, 3, 0),
+    ]),
+    buildingInfo('BUILDING_FORESTERHUT', 'SETTLER_FORESTER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_SAWMILL', 'SETTLER_SAWMILLWORKER', 'GOOD_SAW', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_LOG', PileSlotType.Input, 3, 1),
+        pile('GOOD_BOARD', PileSlotType.Output, 3, 0),
+    ]),
+    buildingInfo('BUILDING_STONECUTTERHUT', 'SETTLER_STONECUTTER', 'GOOD_PICKAXE', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_GRAINFARM', 'SETTLER_FARMERGRAIN', 'GOOD_SCYTHE', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_MILL', 'SETTLER_MILLER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_BAKERY', 'SETTLER_BAKER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_FISHERHUT', 'SETTLER_FISHER', 'GOOD_ROD', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_ANIMALRANCH', 'SETTLER_FARMERANIMALS', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_SLAUGHTERHOUSE', 'SETTLER_BUTCHER', 'GOOD_AXE', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_WATERWORKHUT', 'SETTLER_WATERWORKER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_COALMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_IRONMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_GOLDMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_SULFURMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_STONEMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_SMELTIRON', 'SETTLER_SMELTER', 'GOOD_NO_GOOD', 2, { stone: 4, boards: 4 }),
+    buildingInfo('BUILDING_SMELTGOLD', 'SETTLER_SMELTER', 'GOOD_NO_GOOD', 2, { stone: 4, boards: 4 }),
+    buildingInfo('BUILDING_WEAPONSMITH', 'SETTLER_SMITH', 'GOOD_HAMMER', 2, { stone: 4, boards: 4 }),
+    buildingInfo('BUILDING_TOOLSMITH', 'SETTLER_SMITH', 'GOOD_HAMMER', 2, { stone: 4, boards: 4 }),
+    buildingInfo('BUILDING_AMMOMAKERHUT', 'SETTLER_AMMOMAKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_HUNTERHUT', 'SETTLER_HUNTER', 'GOOD_BOW', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_HEALERHUT', 'SETTLER_HEALER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_DONKEYRANCH', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_VEHICLEHALL', 'SETTLER_VEHICLEMAKER', 'GOOD_HAMMER', 2, { stone: 4, boards: 6 }),
+    buildingInfo('BUILDING_VINYARD', 'SETTLER_VINTNER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_AGAVEFARMERHUT', 'SETTLER_AGAVEFARMER', 'GOOD_SCYTHE', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_TEQUILAMAKERHUT', 'SETTLER_TEQUILAMAKER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_BEEKEEPERHUT', 'SETTLER_BEEKEEPER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_MEADMAKERHUT', 'SETTLER_MEADMAKER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_SUNFLOWERFARMERHUT', 'SETTLER_SUNFLOWERFARMER', 'GOOD_SCYTHE', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_SUNFLOWEROILMAKERHUT', 'SETTLER_SUNFLOWEROILMAKER', 'GOOD_NO_GOOD', 2, {
+        stone: 3,
+        boards: 3,
+    }),
+    buildingInfo('BUILDING_MUSHROOMFARM', 'SETTLER_MUSHROOMFARMER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
+    // Military / residential buildings
+    buildingInfo('BUILDING_STORAGEAREA', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3, { stone: 4, boards: 6 }),
+    buildingInfo('BUILDING_RESIDENCESMALL', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_RESIDENCEMEDIUM', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
+    buildingInfo('BUILDING_RESIDENCEBIG', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3, { stone: 5, boards: 5 }),
+    buildingInfo('BUILDING_BARRACKS', '', 'GOOD_NO_GOOD', 2, { stone: 4, boards: 4 }),
+    buildingInfo('BUILDING_SMALLTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD', 2, { stone: 6, boards: 4 }),
+    buildingInfo('BUILDING_BIGTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD', 3, { stone: 8, boards: 6 }),
+    buildingInfo('BUILDING_CASTLE', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3, { stone: 10, boards: 8, gold: 6 }),
+    buildingInfo('BUILDING_GUARDTOWERSMALL', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 2 }),
+    buildingInfo('BUILDING_GUARDTOWERBIG', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3, { stone: 5, boards: 4 }),
+    buildingInfo('BUILDING_FORTRESS', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3, { stone: 6, boards: 6 }),
+    buildingInfo('BUILDING_LOOKOUTTOWER', '', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_DARKTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD', 3, { stone: 8, boards: 6 }),
+    buildingInfo('BUILDING_MANACOPTERHALL', 'SETTLER_MANACOPTERMASTER', 'GOOD_NO_GOOD', 3, { stone: 6, boards: 6 }),
+    buildingInfo('BUILDING_SHIPYARDA', 'SETTLER_SHIPYARDWORKER', 'GOOD_HAMMER', 3, { stone: 4, boards: 6 }),
+    // Eyecatchers (decorative monuments)
+    buildingInfo('BUILDING_EYECATCHER01', '', 'GOOD_NO_GOOD', 1, { stone: 2 }),
+    buildingInfo('BUILDING_EYECATCHER02', '', 'GOOD_NO_GOOD', 3, { stone: 4 }),
+    buildingInfo('BUILDING_EYECATCHER03', '', 'GOOD_NO_GOOD', 2, { stone: 3 }),
+    buildingInfo('BUILDING_EYECATCHER04', '', 'GOOD_NO_GOOD', 2, { stone: 3 }),
+    buildingInfo('BUILDING_EYECATCHER05', '', 'GOOD_NO_GOOD', 2, { stone: 3 }),
+    buildingInfo('BUILDING_EYECATCHER06', '', 'GOOD_NO_GOOD', 2, { stone: 3 }),
+    buildingInfo('BUILDING_EYECATCHER07', '', 'GOOD_NO_GOOD', 2, { stone: 3 }),
+    buildingInfo('BUILDING_EYECATCHER08', '', 'GOOD_NO_GOOD', 2, { stone: 3 }),
+    buildingInfo('BUILDING_EYECATCHER09', '', 'GOOD_NO_GOOD', 2, { stone: 3 }),
+    buildingInfo('BUILDING_EYECATCHER10', '', 'GOOD_NO_GOOD', 2, { stone: 3 }),
+    buildingInfo('BUILDING_EYECATCHER11', '', 'GOOD_NO_GOOD', 2, { stone: 3 }),
+    buildingInfo('BUILDING_EYECATCHER12', '', 'GOOD_NO_GOOD', 2, { stone: 3 }),
 ];
 
 /** Build a race building map from the test building definitions. */

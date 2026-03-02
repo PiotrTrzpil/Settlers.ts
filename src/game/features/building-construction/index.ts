@@ -5,35 +5,31 @@
  * External code should only import from this file.
  *
  * Public API:
- * - Types: BuildingState, BuildingVisualState, BuildingConstructionPhase, TerrainContext
+ * - Types: BuildingVisualState, BuildingConstructionPhase, ConstructionSite, TerrainContext
  * - System: BuildingConstructionSystem (registers with GameLoop as TickSystem)
  * - Queries: getBuildingVisualState (for renderers)
- * - Constants: BUILDING_SPAWN_ON_COMPLETE, DEFAULT_CONSTRUCTION_DURATION
+ * - Constants: BUILDING_SPAWN_ON_COMPLETE
  */
 
 // Types
 export type {
-    BuildingState,
     BuildingVisualState,
     BuildingSpawnConfig,
     CapturedTerrainTile,
+    ConstructionSite,
     ConstructionSiteOriginalTerrain,
     TerrainContext,
 } from './types';
 export { BuildingConstructionPhase } from './types';
-
-// Manager (owns building states, lives on GameState)
-export {
-    BuildingStateManager,
-    DEFAULT_CONSTRUCTION_DURATION,
-    type BuildingStateManagerConfig,
-} from './building-state-manager';
 
 // System (for registration with GameLoop)
 export { BuildingConstructionSystem } from './construction-system';
 
 // Unit spawning constants (logic now routed through spawn_building_units command)
 export { BUILDING_SPAWN_ON_COMPLETE } from './spawn-units';
+
+// Interval-based carrier spawning from residences
+export { ResidenceSpawnerSystem } from './residence-spawner';
 
 // Queries (for renderers)
 export { getBuildingVisualState } from './visual-state';
@@ -49,3 +45,7 @@ export {
 
 // Map building population (for loading buildings from map files)
 export { type PopulateBuildingsOptions, populateMapBuildings, mapS4BuildingType } from './map-buildings';
+
+// Construction site manager, types, and request system (for game-services wiring)
+export { ConstructionSiteManager, type SerializedConstructionSite } from './construction-site-manager';
+export { ConstructionRequestSystem } from './construction-request-system';

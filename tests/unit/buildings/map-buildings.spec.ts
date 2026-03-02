@@ -5,7 +5,6 @@ import { S4BuildingType } from '@/resources/map/s4-types';
 import { BuildingType } from '@/game/buildings/types';
 import { EntityType } from '@/game/entity';
 import { Race } from '@/game/race';
-import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
 
 /** Default player→race mapping for tests (all Roman) */
@@ -18,7 +17,6 @@ const TEST_PLAYER_RACES = new Map<number, Race>([
 function createPopulateOptions(ctx: TestContext, player?: number) {
     return {
         player,
-        buildingStateManager: ctx.buildingStateManager,
         eventBus: ctx.eventBus,
         terrain: ctx.map.terrain,
         playerRaces: TEST_PLAYER_RACES,
@@ -59,7 +57,7 @@ describe('populateMapBuildings', () => {
         expect(entity2!.player).toBe(1);
     });
 
-    it('should create building states as completed', () => {
+    it('should create buildings as immediately operational (no construction site)', () => {
         const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.BARRACKS, player: 0 }];
 
         populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
@@ -67,10 +65,8 @@ describe('populateMapBuildings', () => {
         const entity = ctx.state.getEntityAt(10, 10);
         expect(entity).toBeDefined();
 
-        const buildingState = ctx.buildingStateManager.getBuildingState(entity!.id);
-        expect(buildingState).toBeDefined();
-        expect(buildingState!.phase).toBe(BuildingConstructionPhase.Completed);
-        expect(buildingState!.phaseProgress).toBe(1.0);
+        // A building with no ConstructionSite is operational — map-loaded buildings bypass construction
+        expect(ctx.constructionSiteManager.hasSite(entity!.id)).toBe(false);
     });
 
     it('should skip unmapped building types', () => {
@@ -126,14 +122,15 @@ describe('populateMapBuildings', () => {
         const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         expect(count).toBe(1);
-        // ResidenceSmall spawns 2 carriers
-        expect(ctx.state.entities).toHaveLength(3); // 1 building + 2 carriers
+        // ResidenceSmall spawns 1 builder (RESIDENCE_CONSTRUCTION_WORKER_SPAWNS) immediately,
+        // plus 2 carriers via ResidenceSpawnerSystem (wired in immediateMode in test context).
+        expect(ctx.state.entities).toHaveLength(4); // 1 building + 1 builder + 2 carriers
     });
 
-    it('should emit building:completed event', () => {
-        const completedEvents: number[] = [];
-        ctx.eventBus.on('building:completed', ({ entityId }) => {
-            completedEvents.push(entityId);
+    it('should emit building:completed event with entityId, buildingType, and race', () => {
+        const completedEvents: Array<{ entityId: number; buildingType: BuildingType; race: Race }> = [];
+        ctx.eventBus.on('building:completed', ({ entityId, buildingType, race }) => {
+            completedEvents.push({ entityId, buildingType, race });
         });
 
         const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.WOODCUTTERHUT, player: 0 }];
@@ -141,6 +138,8 @@ describe('populateMapBuildings', () => {
         populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         expect(completedEvents).toHaveLength(1);
+        expect(completedEvents[0]!.buildingType).toBe(BuildingType.WoodcutterHut);
+        expect(completedEvents[0]!.race).toBe(Race.Roman);
     });
 
     it('should emit unit:spawned events for carriers', () => {
@@ -153,8 +152,8 @@ describe('populateMapBuildings', () => {
 
         populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
-        // ResidenceSmall spawns 2 carriers
-        expect(spawnedEvents).toHaveLength(2);
+        // 1 builder (RESIDENCE_CONSTRUCTION_WORKER_SPAWNS) + 2 carriers (ResidenceSpawnerSystem immediateMode)
+        expect(spawnedEvents).toHaveLength(3);
     });
 });
 

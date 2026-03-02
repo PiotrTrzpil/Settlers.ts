@@ -68,7 +68,7 @@ export interface UnitStateLookup {
 
 /**
  * Renderer's view of a building's visual state.
- * Pre-computed in the glue layer from BuildingState + getBuildingVisualState.
+ * Pre-computed in the glue layer from ConstructionSite + getBuildingVisualState.
  * The renderer never needs to know about BuildingConstructionPhase.
  */
 export interface BuildingRenderState {

@@ -1,5 +1,6 @@
 import { BuildingType, UnitType } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
+import { ProductionMode } from '../features/production-control';
 import type { Race } from '../race';
 import type { EMaterialType } from '../economy/material-type';
 
@@ -47,6 +48,8 @@ export interface PlaceBuildingCommand {
     race: Race;
     /** Spawn the building's dedicated worker at the door position. */
     spawnWorker?: boolean;
+    /** When true, skip construction and mark the building as immediately operational. */
+    completed?: boolean;
 }
 
 export interface PlaceResourceCommand {
@@ -105,6 +108,10 @@ export interface SpawnVisualResourceCommand {
 export interface SpawnBuildingUnitsCommand {
     type: 'spawn_building_units';
     buildingEntityId: number;
+    /** When true, the building was placed as instantly completed (skip construction workers). */
+    placedCompleted?: boolean;
+    /** When true, spawn the building's dedicated worker at the door. */
+    spawnWorker?: boolean;
 }
 
 export interface PlantTreeCommand {
@@ -135,14 +142,14 @@ export interface PlantTreesAreaCommand {
 export interface SetProductionModeCommand {
     type: 'set_production_mode';
     buildingId: number;
-    mode: 'even' | 'proportional' | 'manual';
+    mode: ProductionMode;
 }
 
 export interface SetRecipeProportionCommand {
     type: 'set_recipe_proportion';
     buildingId: number;
-    /** The output material whose proportion to change */
-    output: EMaterialType;
+    /** Index of the recipe in the building's RecipeSet whose proportion to change */
+    recipeIndex: number;
     /** Weight value (0-10) */
     weight: number;
 }
@@ -150,15 +157,15 @@ export interface SetRecipeProportionCommand {
 export interface AddToProductionQueueCommand {
     type: 'add_to_production_queue';
     buildingId: number;
-    /** The output material to add to the queue */
-    output: EMaterialType;
+    /** Index of the recipe in the building's RecipeSet to add to the queue */
+    recipeIndex: number;
 }
 
 export interface RemoveFromProductionQueueCommand {
     type: 'remove_from_production_queue';
     buildingId: number;
-    /** The output material to remove from the queue (last occurrence) */
-    output: EMaterialType;
+    /** Index of the recipe in the building's RecipeSet to remove from the queue (last occurrence) */
+    recipeIndex: number;
 }
 
 // === Script Commands (from Lua scripting API) ===

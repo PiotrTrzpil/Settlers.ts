@@ -6,22 +6,26 @@
 import { BuildingType } from '../../buildings/types';
 import { Race } from '../../race';
 import { UnitType } from '../../unit-types';
+import type { EMaterialType } from '../../economy/material-type';
+import type { ConstructionCost } from '../../economy/building-production';
 
 /**
  * Phases of building construction.
- * Each phase uses different visuals and progresses over time.
+ * Progression is event-driven: diggers level terrain, carriers deliver materials, builders construct.
  */
 export enum BuildingConstructionPhase {
-    /** Initial phase: building poles/markers appear */
-    Poles = 0,
-    /** Terrain leveling phase: ground is prepared */
+    /** Placed, ground changed to DustyWay, awaiting diggers */
+    WaitingForDiggers = 0,
+    /** Diggers actively leveling terrain (driven by digger work ticks) */
     TerrainLeveling = 1,
-    /** Construction frame rises from bottom */
-    ConstructionRising = 2,
-    /** Completed building frame rises from bottom */
-    CompletedRising = 3,
-    /** Building is fully completed */
-    Completed = 4,
+    /** Leveling done, awaiting materials + builders */
+    WaitingForBuilders = 2,
+    /** Builders actively constructing (driven by builder work ticks + materials) */
+    ConstructionRising = 3,
+    /** Final rise animation (timed, 0.5s) */
+    CompletedRising = 4,
+    /** Terminal — building is fully completed */
+    Completed = 5,
 }
 
 /**
@@ -52,29 +56,52 @@ export interface ConstructionSiteOriginalTerrain {
 }
 
 /**
- * State tracking for building construction progress.
+ * Active construction site data — one per building under construction.
+ * Managed by ConstructionSiteManager.
+ * Created on building:placed, removed on building:completed or entity removal.
+ *
+ * The sole state object for a building under construction. A building entity
+ * with no ConstructionSite record is operational.
  */
-export interface BuildingState {
-    entityId: number;
-    /** Building type, used to determine footprint for terrain modification */
+export interface ConstructionSite {
+    buildingId: number;
     buildingType: BuildingType;
-    /** Race of the owning player — required for race-specific footprint/data lookups */
     race: Race;
-    /** Current construction phase */
-    phase: BuildingConstructionPhase;
-    /** Progress within current phase (0.0 to 1.0) */
-    phaseProgress: number;
-    /** Total construction duration in seconds */
-    totalDuration: number;
-    /** Time elapsed since construction started */
-    elapsedTime: number;
-    /** Building anchor tile position (top-left corner of footprint) */
+    player: number;
     tileX: number;
     tileY: number;
-    /** Original terrain state before construction */
+    /** Current construction phase */
+    phase: BuildingConstructionPhase;
+    /** Original terrain state before construction site modification. Set when digging starts. */
     originalTerrain: ConstructionSiteOriginalTerrain | null;
-    /** Whether terrain modification has been applied */
+    /** Whether terrain leveling has been finalized (applied at 1.0) */
     terrainModified: boolean;
+    /** Digger slots (from building size) */
+    requiredDiggers: number;
+    /** Entity IDs of diggers currently working */
+    assignedDiggers: Set<number>;
+    /** 0.0–1.0, incremented by each digger work tick */
+    levelingProgress: number;
+    /** All terrain leveled */
+    levelingComplete: boolean;
+    /** From getConstructionCosts(buildingType, race) */
+    constructionCosts: readonly ConstructionCost[];
+    /** Materials delivered so far */
+    deliveredMaterials: Map<EMaterialType, number>;
+    /** Sum of all cost quantities */
+    totalCostAmount: number;
+    /** Sum of all delivered quantities */
+    deliveredAmount: number;
+    /** Builder slots (from building size) */
+    requiredBuilders: number;
+    /** Entity IDs of builders currently working */
+    assignedBuilders: Set<number>;
+    /** 0.0–1.0, incremented by builder work ticks */
+    constructionProgress: number;
+    /** Materials consumed by builder work ticks */
+    consumedAmount: number;
+    /** 0.0–1.0, driven by CompletedRising timer. Used by visual state for the final rise animation. */
+    completedRisingProgress: number;
 }
 
 /**
@@ -85,6 +112,8 @@ export interface BuildingSpawnConfig {
     count: number;
     /** Override default selectability from UNIT_TYPE_CONFIG (undefined = use default) */
     selectable?: boolean;
+    /** If set, units spawn one at a time at this interval (seconds) instead of all at once */
+    spawnInterval?: number;
 }
 
 /**
@@ -105,7 +134,7 @@ export interface BuildingVisualState {
     useConstructionSprite: boolean;
     /** Vertical visibility (0.0 = hidden, 1.0 = fully visible) for "rising" effect */
     verticalProgress: number;
-    /** Overall construction progress (0.0 to 1.0) */
+    /** Overall construction progress (0.0 to 1.0) for UI display */
     overallProgress: number;
     /** Is the building fully completed */
     isCompleted: boolean;

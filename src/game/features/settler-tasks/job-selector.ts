@@ -20,6 +20,8 @@ import type { SettlerConfig } from './types';
 export const ENTITY_TARGET_TASKS: ReadonlySet<ChoreoTaskType> = new Set([
     ChoreoTaskType.GO_TO_TARGET,
     ChoreoTaskType.GO_TO_TARGET_ROUGHLY,
+    ChoreoTaskType.GO_TO_POS,
+    ChoreoTaskType.GO_TO_POS_ROUGHLY,
     ChoreoTaskType.WORK_ON_ENTITY,
 ]);
 

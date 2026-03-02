@@ -5,7 +5,6 @@
  * Tests verify that:
  * - Building placement triggers inventory and service area creation
  * - Entity removal triggers proper cleanup
- * - Carrier fatigue recovery works
  * - Resource requests are tracked correctly
  */
 
@@ -102,42 +101,17 @@ describe('Carriers, Inventory & Service Areas (simulation)', () => {
 
         it('should remove carrier state when carrier unit is removed', () => {
             sim = createSimulation({ useStubData: true });
-            const tavernId = sim.placeBuilding(BuildingType.ResidenceSmall);
-            const entity = sim.state.getEntityOrThrow(tavernId, 'tavern');
+            sim.placeBuilding(BuildingType.ResidenceSmall);
 
-            const carrierId = sim.spawnUnit(entity.x + 2, entity.y, UnitType.Carrier);
+            const carrierId = sim.spawnUnit(30, 30, UnitType.Carrier);
             // Carrier may already be auto-registered by the simulation; ensure it is
             if (!sim.services.carrierManager.hasCarrier(carrierId)) {
-                sim.services.carrierManager.createCarrier(carrierId, tavernId);
+                sim.services.carrierManager.registerCarrier(carrierId);
             }
             expect(sim.services.carrierManager.hasCarrier(carrierId)).toBe(true);
 
             sim.state.removeEntity(carrierId);
             expect(sim.services.carrierManager.hasCarrier(carrierId)).toBe(false);
-        });
-    });
-
-    // ---------------------------------------------------------------------------
-    // CarrierSystem Tick - Fatigue Recovery
-    // ---------------------------------------------------------------------------
-
-    describe('CarrierSystem Tick - Fatigue Recovery', () => {
-        it('should recover fatigue for resting carriers', () => {
-            sim = createSimulation({ useStubData: true });
-            const tavernId = sim.placeBuilding(BuildingType.ResidenceSmall);
-            const entity = sim.state.getEntityOrThrow(tavernId, 'tavern');
-
-            const carrierId = sim.spawnUnit(entity.x, entity.y, UnitType.Carrier);
-            if (!sim.services.carrierManager.hasCarrier(carrierId)) {
-                sim.services.carrierManager.createCarrier(carrierId, tavernId);
-            }
-            sim.services.carrierManager.setFatigue(carrierId, 50);
-            sim.services.carrierManager.setStatus(carrierId, 4); // CarrierStatus.Resting
-
-            const initialFatigue = sim.services.carrierManager.getCarrier(carrierId)!.fatigue;
-            sim.services.carrierManager.tick(1.0);
-            const newFatigue = sim.services.carrierManager.getCarrier(carrierId)!.fatigue;
-            expect(newFatigue).toBeLessThan(initialFatigue);
         });
     });
 
@@ -194,21 +168,20 @@ describe('Carriers, Inventory & Service Areas (simulation)', () => {
             expect(sim.services.inventoryManager.getInventory(woodcutterId)).toBeDefined();
 
             // 3. StorageArea does NOT get a service area
-            const warehouseId = sim.placeBuilding(BuildingType.StorageArea);
-            expect(sim.services.serviceAreaManager.getServiceArea(warehouseId)).toBeUndefined();
+            const storageAreaId = sim.placeBuilding(BuildingType.StorageArea);
+            expect(sim.services.serviceAreaManager.getServiceArea(storageAreaId)).toBeUndefined();
 
             // 4. Carrier registration
-            const tavernEntity = sim.state.getEntityOrThrow(tavernId, 'tavern');
-            const carrierId = sim.spawnUnit(tavernEntity.x, tavernEntity.y, UnitType.Carrier);
+            const carrierId = sim.spawnUnit(30, 30, UnitType.Carrier);
             if (!sim.services.carrierManager.hasCarrier(carrierId)) {
-                sim.services.carrierManager.createCarrier(carrierId, tavernId);
+                sim.services.carrierManager.registerCarrier(carrierId);
             }
-            expect(sim.services.carrierManager.getCarriersForTavern(tavernId).length).toBeGreaterThanOrEqual(1);
+            expect(sim.services.carrierManager.hasCarrier(carrierId)).toBe(true);
 
             // 5. Remove everything - all should clean up
             sim.state.removeEntity(tavernId);
             sim.state.removeEntity(woodcutterId);
-            sim.state.removeEntity(warehouseId);
+            sim.state.removeEntity(storageAreaId);
             sim.state.removeEntity(carrierId);
 
             expect(sim.services.serviceAreaManager.getServiceArea(tavernId)).toBeUndefined();

@@ -73,7 +73,6 @@ describe('TransportJob', () => {
 
     const SOURCE = 100;
     const DEST = 200;
-    const HOME = 300;
     const CARRIER = 1;
     const MATERIAL = EMaterialType.LOG;
 
@@ -90,7 +89,7 @@ describe('TransportJob', () => {
     }
 
     function createJob(request = addRequest()) {
-        return TransportJob.create(request.id, SOURCE, DEST, MATERIAL, 1, HOME, CARRIER, {
+        return TransportJob.create(request.id, SOURCE, DEST, MATERIAL, 1, CARRIER, {
             reservationManager,
             requestManager,
             inventoryManager: inventoryManager as unknown as BuildingInventoryManager,
@@ -110,7 +109,6 @@ describe('TransportJob', () => {
             expect(job!.destBuilding).toBe(DEST);
             expect(job!.material).toBe(MATERIAL);
             expect(job!.amount).toBe(1);
-            expect(job!.homeBuilding).toBe(HOME);
 
             // Request should be InProgress
             expect(request.status).toBe(RequestStatus.InProgress);
@@ -127,7 +125,7 @@ describe('TransportJob', () => {
             reservationManager.setInventoryManager(inventoryManager as unknown as BuildingInventoryManager);
 
             const request = addRequest();
-            const job = TransportJob.create(request.id, SOURCE, DEST, MATERIAL, 1, HOME, CARRIER, {
+            const job = TransportJob.create(request.id, SOURCE, DEST, MATERIAL, 1, CARRIER, {
                 reservationManager,
                 requestManager,
                 inventoryManager: inventoryManager as unknown as BuildingInventoryManager,

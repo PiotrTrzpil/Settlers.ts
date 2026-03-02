@@ -31,7 +31,6 @@ export class TransportJob {
     readonly destBuilding: number;
     readonly material: EMaterialType;
     readonly amount: number;
-    readonly homeBuilding: number;
     readonly reservationId: number;
 
     private _status: TransportJobStatus = 'active';
@@ -52,7 +51,6 @@ export class TransportJob {
         destBuilding: number,
         material: EMaterialType,
         amount: number,
-        homeBuilding: number,
         carrierId: number,
         deps: TransportJobDeps
     ): TransportJob | null {
@@ -71,7 +69,6 @@ export class TransportJob {
             destBuilding,
             material,
             reservation.amount,
-            homeBuilding,
             reservation.id,
             deps
         );
@@ -83,7 +80,6 @@ export class TransportJob {
         destBuilding: number,
         material: EMaterialType,
         amount: number,
-        homeBuilding: number,
         reservationId: number,
         deps: TransportJobDeps
     ) {
@@ -93,7 +89,6 @@ export class TransportJob {
         this.destBuilding = destBuilding;
         this.material = material;
         this.amount = amount;
-        this.homeBuilding = homeBuilding;
         this.reservationId = reservationId;
         this.deps = deps;
     }

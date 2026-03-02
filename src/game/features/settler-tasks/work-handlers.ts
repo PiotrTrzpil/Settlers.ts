@@ -10,6 +10,7 @@
 
 import type { GameState } from '../../game-state';
 import { EntityType, UnitType, BuildingType, type Entity } from '../../entity';
+import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { BuildingInventoryManager } from '../inventory';
 import type { OreVeinData } from '../ore-veins';
@@ -23,6 +24,7 @@ import type { StoneSystem } from '../stones/stone-system';
 import type { CropSystem } from '../crops/crop-system';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { findNearestEntity } from '../../systems/spatial-search';
+import { ProductionMode } from '../production-control';
 import { getWorkerBuildingTypes } from '../../game-data-access';
 import { getBuildingMaxOccupants } from '../../buildings/types';
 import { spiralSearch } from '../../utils/spiral-search';
@@ -30,6 +32,7 @@ import type { TerrainData } from '../../terrain';
 import type { ResourceSignSystem } from '../ore-veins/resource-sign-system';
 import type { ProductionControlManager } from '../production-control';
 import type { Recipe } from '@/game/economy/building-production';
+import { getRecipeSet } from '@/game/economy/building-production';
 
 // ─────────────────────────────────────────────────────────────
 // Domain helpers (used by handlers and settler-task-system)
@@ -39,11 +42,15 @@ import type { Recipe } from '@/game/economy/building-production';
  * Find the nearest workplace building for a settler based on their unit type.
  * Building-to-worker mapping is derived from buildingInfo.xml (inhabitant field).
  * Returns the nearest building of the appropriate type owned by the same player.
+ *
+ * @param isBuildingAvailable Optional filter — returns false for buildings that should be
+ *   skipped (e.g. buildings still under construction).
  */
 export function findNearestWorkplace(
     gameState: GameState,
     settler: Entity,
-    buildingOccupants?: ReadonlyMap<number, number>
+    buildingOccupants?: ReadonlyMap<number, number>,
+    isBuildingAvailable?: (buildingId: number) => boolean
 ): Entity | null {
     const unitType = settler.subType as UnitType;
     const workplaceTypes = getWorkerBuildingTypes(settler.race, unitType);
@@ -61,6 +68,7 @@ export function findNearestWorkplace(
             entity.type === EntityType.Building &&
             workplaceTypes.has(entity.subType as BuildingType) &&
             entity.player === settler.player &&
+            (!isBuildingAvailable || isBuildingAvailable(entity.id)) &&
             (!buildingOccupants ||
                 (buildingOccupants.get(entity.id) ?? 0) < getBuildingMaxOccupants(entity.subType as BuildingType))
     );
@@ -97,12 +105,13 @@ export function createWorkplaceHandler(
         if (!state) return inventoryManager.canStoreOutput(targetId);
 
         // Manual mode with empty queue — building idles
-        if (state.mode === 'manual' && state.queue.length === 0) return false;
+        if (state.mode === ProductionMode.Manual && state.queue.length === 0) return false;
 
         // Check that at least one recipe's output slot has space
         const building = gameState.getEntityOrThrow(targetId, 'workplace canWork');
-        const recipes = pcm!.getRecipes(targetId, building.subType as BuildingType);
-        return recipes.some(r => inventoryManager.canStoreOutput(targetId, r));
+        const recipeSet = getRecipeSet(building.subType as BuildingType);
+        if (!recipeSet) return inventoryManager.canStoreOutput(targetId);
+        return recipeSet.recipes.some(r => inventoryManager.canStoreOutput(targetId, r));
     }
 
     return {
@@ -140,12 +149,16 @@ export function createWorkplaceHandler(
         onWorkStart: (targetId: number) => {
             const pcm = getProductionControlManager?.();
             if (pcm) {
-                const building = gameState.getEntityOrThrow(targetId, 'workplace onWorkStart');
-                const recipe = pcm.getNextRecipe(targetId, building.subType as BuildingType);
-                if (recipe) {
-                    activeRecipes.set(targetId, recipe);
-                    inventoryManager.consumeProductionInputs(targetId, recipe);
-                    return;
+                const recipeIndex = pcm.getNextRecipeIndex(targetId);
+                if (recipeIndex !== null) {
+                    const building = gameState.getEntityOrThrow(targetId, 'workplace onWorkStart');
+                    const recipeSet = getRecipeSet(building.subType as BuildingType);
+                    if (recipeSet) {
+                        const recipe = recipeSet.recipes[recipeIndex]!;
+                        activeRecipes.set(targetId, recipe);
+                        inventoryManager.consumeProductionInputs(targetId, recipe);
+                        return;
+                    }
                 }
             }
             inventoryManager.consumeProductionInputs(targetId);
@@ -497,6 +510,212 @@ export function createGeologistHandler(
         onWorkAtPositionComplete: (posX: number, posY: number, _settlerId: number) => {
             oreVeinData.setProspected(posX, posY);
             signSystem.placeSign(posX, posY);
+        },
+    };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Construction handlers (digger + builder)
+// ─────────────────────────────────────────────────────────────
+
+/** Total leveling cycles a single digger would perform if working alone */
+const LEVELING_CYCLES_TOTAL = 6;
+
+/** Total base construction cycles (scaled by totalCostAmount) */
+const BUILDING_CYCLES_BASE = 2;
+
+/** Minimum total construction cycles */
+const MIN_BUILDING_CYCLES = 4;
+
+const diggerLog = new LogHandler('DiggerHandler');
+const builderLog = new LogHandler('BuilderHandler');
+
+/**
+ * Create a handler for CONSTRUCTION_DIG search type (diggers).
+ *
+ * Diggers find construction sites that need terrain leveling, walk there, and perform
+ * repeated work cycles until leveling is complete. Slot claim/release is managed
+ * via a FIFO pending queue (findTarget → onWorkStart) and an active map
+ * (onWorkStart → onWorkComplete/onWorkInterrupt) so that multiple diggers can safely
+ * work the same site concurrently without ID collisions.
+ */
+export function createDiggerHandler(
+    gameState: GameState,
+    constructionSiteManager: ConstructionSiteManager
+): EntityWorkHandler {
+    // FIFO queue per target: findTarget pushes settlerId, onWorkStart shifts it
+    const pendingClaims = new Map<number, number[]>();
+    // Active workers: settlerId → targetId; used to release the correct slot on complete/interrupt
+    const activeWorkers = new Map<number, number>();
+
+    function releaseActive(targetId: number, settlerLabel: string): void {
+        for (const [sid, tid] of activeWorkers) {
+            if (tid === targetId) {
+                const site = constructionSiteManager.getSite(targetId);
+                if (site) {
+                    constructionSiteManager.releaseDiggerSlot(targetId, sid);
+                } else {
+                    diggerLog.debug(`${settlerLabel}: site ${targetId} already removed, skipping slot release`);
+                }
+                activeWorkers.delete(sid);
+                return;
+            }
+        }
+    }
+
+    return {
+        type: WorkHandlerType.ENTITY,
+        shouldWaitForWork: true,
+
+        findTarget: (x: number, y: number, settlerId?: number) => {
+            if (settlerId === undefined) return null;
+
+            const settler = gameState.getEntityOrThrow(settlerId, 'digger findTarget');
+            const buildingId = constructionSiteManager.findSiteNeedingDiggers(x, y, settler.player);
+            if (buildingId === undefined) return null;
+
+            const site = constructionSiteManager.getSite(buildingId);
+            if (!site) return null;
+
+            // Queue this settler for slot claim in onWorkStart
+            const queue = pendingClaims.get(buildingId) ?? [];
+            queue.push(settlerId);
+            pendingClaims.set(buildingId, queue);
+
+            return { entityId: buildingId, x: site.tileX, y: site.tileY };
+        },
+
+        canWork: (targetId: number) => {
+            const site = constructionSiteManager.getSite(targetId);
+            return !!site && !site.levelingComplete && constructionSiteManager.getDiggerSlotAvailable(targetId);
+        },
+
+        onWorkStart: (targetId: number) => {
+            const queue = pendingClaims.get(targetId);
+            if (!queue || queue.length === 0) {
+                diggerLog.debug(`onWorkStart: no pending settler for site ${targetId}`);
+                return;
+            }
+            const settlerId = queue.shift()!;
+            if (queue.length === 0) pendingClaims.delete(targetId);
+            activeWorkers.set(settlerId, targetId);
+            constructionSiteManager.claimDiggerSlot(targetId, settlerId);
+        },
+
+        onWorkTick: (_targetId: number, progress: number) => {
+            return progress >= 1.0;
+        },
+
+        onWorkComplete: (targetId: number) => {
+            const site = constructionSiteManager.getSite(targetId);
+            if (site) {
+                const progressPerCycle = 1.0 / (LEVELING_CYCLES_TOTAL / site.requiredDiggers);
+                constructionSiteManager.advanceLeveling(targetId, progressPerCycle);
+            }
+            releaseActive(targetId, 'digger onWorkComplete');
+        },
+
+        onWorkInterrupt: (targetId: number) => {
+            releaseActive(targetId, 'digger onWorkInterrupt');
+        },
+    };
+}
+
+/**
+ * Create a handler for CONSTRUCTION search type (builders).
+ *
+ * Builders find construction sites where leveling is complete and materials have been
+ * delivered, walk there, and perform repeated work cycles that consume materials and
+ * advance construction progress. Uses the same pending-queue / active-map slot
+ * tracking as the digger handler.
+ */
+export function createBuilderHandler(
+    gameState: GameState,
+    constructionSiteManager: ConstructionSiteManager
+): EntityWorkHandler {
+    // FIFO queue per target: findTarget pushes settlerId, onWorkStart shifts it
+    const pendingClaims = new Map<number, number[]>();
+    // Active workers: settlerId → targetId; used to release the correct slot on complete/interrupt
+    const activeWorkers = new Map<number, number>();
+
+    function releaseActive(targetId: number, settlerLabel: string): void {
+        for (const [sid, tid] of activeWorkers) {
+            if (tid === targetId) {
+                const site = constructionSiteManager.getSite(targetId);
+                if (site) {
+                    constructionSiteManager.releaseBuilderSlot(targetId, sid);
+                } else {
+                    builderLog.debug(`${settlerLabel}: site ${targetId} already removed, skipping slot release`);
+                }
+                activeWorkers.delete(sid);
+                return;
+            }
+        }
+    }
+
+    return {
+        type: WorkHandlerType.ENTITY,
+        shouldWaitForWork: true,
+
+        findTarget: (x: number, y: number, settlerId?: number) => {
+            if (settlerId === undefined) return null;
+
+            const settler = gameState.getEntityOrThrow(settlerId, 'builder findTarget');
+            const buildingId = constructionSiteManager.findSiteNeedingBuilders(x, y, settler.player);
+            if (buildingId === undefined) return null;
+
+            const site = constructionSiteManager.getSite(buildingId);
+            if (!site) return null;
+
+            // Queue this settler for slot claim in onWorkStart
+            const queue = pendingClaims.get(buildingId) ?? [];
+            queue.push(settlerId);
+            pendingClaims.set(buildingId, queue);
+
+            return { entityId: buildingId, x: site.tileX, y: site.tileY };
+        },
+
+        canWork: (targetId: number) => {
+            const site = constructionSiteManager.getSite(targetId);
+            return (
+                !!site &&
+                site.levelingComplete &&
+                site.constructionProgress < 1.0 &&
+                constructionSiteManager.hasAvailableMaterials(targetId) &&
+                constructionSiteManager.getBuilderSlotAvailable(targetId)
+            );
+        },
+
+        onWorkStart: (targetId: number) => {
+            const queue = pendingClaims.get(targetId);
+            if (!queue || queue.length === 0) {
+                builderLog.debug(`onWorkStart: no pending settler for site ${targetId}`);
+                return;
+            }
+            const settlerId = queue.shift()!;
+            if (queue.length === 0) pendingClaims.delete(targetId);
+            activeWorkers.set(settlerId, targetId);
+            constructionSiteManager.claimBuilderSlot(targetId, settlerId);
+        },
+
+        onWorkTick: (_targetId: number, progress: number) => {
+            return progress >= 1.0;
+        },
+
+        onWorkComplete: (targetId: number) => {
+            const site = constructionSiteManager.getSite(targetId);
+            if (site) {
+                const totalCycles = Math.max(MIN_BUILDING_CYCLES, BUILDING_CYCLES_BASE * site.totalCostAmount);
+                const progressPerCycle = 1.0 / (totalCycles / site.requiredBuilders);
+                constructionSiteManager.advanceConstruction(targetId, progressPerCycle);
+                // Consume one unit of material per work cycle
+                site.consumedAmount += 1;
+            }
+            releaseActive(targetId, 'builder onWorkComplete');
+        },
+
+        onWorkInterrupt: (targetId: number) => {
+            releaseActive(targetId, 'builder onWorkInterrupt');
         },
     };
 }

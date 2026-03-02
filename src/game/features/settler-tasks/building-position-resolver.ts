@@ -176,10 +176,9 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
             return this.getInventoryVisualizer().getStackPosition(buildingId, material, slotType);
         }
 
-        throw new Error(
-            `No ${slotType} pile position in XML for ${EMaterialType[material]} ` +
-                `at ${BuildingType[building.subType]} (race=${building.race}, building=${buildingId})`
-        );
+        // No pile defined (e.g. construction materials delivered to a production building).
+        // Return null so the caller falls back to the building door.
+        return null;
     }
 }
 

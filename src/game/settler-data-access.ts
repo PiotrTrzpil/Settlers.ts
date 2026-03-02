@@ -86,7 +86,7 @@ function deriveSearchType(info: SettlerValueInfo): SearchType | null {
     case 'BUILDER_ROLE':
         return SearchType.CONSTRUCTION;
     case 'DIGGER_ROLE':
-        return SearchType.TERRAIN;
+        return SearchType.CONSTRUCTION_DIG;
     case 'HOUSE_WORKER_ROLE':
         return SearchType.WORKPLACE;
     }

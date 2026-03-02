@@ -74,7 +74,7 @@ export class EntitySpriteResolver {
             sprite: this.getResource(entity),
             progress: 1,
         }),
-        [EntityType.Unit]: entity => this.resolveUnit(entity),
+        [EntityType.Unit]: this.resolveUnit.bind(this),
         [EntityType.Decoration]: () => ({ skip: true, transitioning: false, sprite: null, progress: 1 }),
         [EntityType.None]: () => ({ skip: true, transitioning: false, sprite: null, progress: 1 }),
     };
@@ -147,7 +147,8 @@ export class EntitySpriteResolver {
     private getResource(entity: Entity): SpriteEntry | null {
         if (!this.sprites) return null;
         const state = this.resourceStates.get(entity.id);
-        const quantity = state?.quantity ?? 1;
+        if (!state) throw new Error(`No resource state for entity ${entity.id} (${entity.subType})`);
+        const quantity = state.quantity;
         const direction = Math.max(0, Math.min(quantity - 1, 7));
         return this.sprites.getResource(entity.subType as EMaterialType, direction) ?? null;
     }

@@ -39,8 +39,9 @@ export interface BuildingDebugInfo {
 }
 
 const PHASE_NAMES: Record<BuildingConstructionPhase, string> = {
-    [BuildingConstructionPhase.Poles]: 'Poles',
+    [BuildingConstructionPhase.WaitingForDiggers]: 'Waiting for Diggers',
     [BuildingConstructionPhase.TerrainLeveling]: 'Leveling',
+    [BuildingConstructionPhase.WaitingForBuilders]: 'Waiting for Builders',
     [BuildingConstructionPhase.ConstructionRising]: 'Rising',
     [BuildingConstructionPhase.CompletedRising]: 'Completing',
     [BuildingConstructionPhase.Completed]: 'Completed',
@@ -67,22 +68,25 @@ export function useBuildingDebugInfo(
         if (!game.value) return null;
 
         const svc = game.value.services;
-        const buildingState = svc.buildingStateManager.getBuildingState(entity.id);
+        const site = svc.constructionSiteManager.getSite(entity.id);
         const inventory = svc.inventoryManager.getInventory(entity.id);
         const requests = [...svc.requestManager.getRequestsForBuilding(entity.id, false)];
 
         // Construction info
-        const isConstructing =
-            buildingState !== undefined && buildingState.phase !== BuildingConstructionPhase.Completed;
+        const isConstructing = site !== undefined && site.phase !== BuildingConstructionPhase.Completed;
         let constructionPhase = '';
         let constructionProgress = 0;
 
-        if (buildingState) {
-            constructionPhase = PHASE_NAMES[buildingState.phase];
-            constructionProgress =
-                buildingState.totalDuration > 0
-                    ? Math.round((buildingState.elapsedTime / buildingState.totalDuration) * 100)
-                    : 0;
+        if (site) {
+            constructionPhase = PHASE_NAMES[site.phase];
+            // Show overall progress as percentage: phases 0-2 use levelingProgress, phase 3 uses constructionProgress
+            if (site.phase <= BuildingConstructionPhase.WaitingForBuilders) {
+                constructionProgress = Math.round(site.levelingProgress * 30);
+            } else if (site.phase === BuildingConstructionPhase.ConstructionRising) {
+                constructionProgress = 30 + Math.round(site.constructionProgress * 70);
+            } else {
+                constructionProgress = 100;
+            }
         }
 
         // Material request info - derive from RequestManager (source of truth)

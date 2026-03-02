@@ -11,7 +11,7 @@ import { Race } from '../../race';
 import type { LuaRuntime } from '../lua-runtime';
 import type { GameState } from '@/game/game-state';
 import { EntityType, BuildingType } from '@/game/entity';
-import { BuildingConstructionPhase, type BuildingStateManager } from '@/game/features/building-construction';
+import { type ConstructionSiteManager } from '@/game/features/building-construction';
 import type { Command, CommandResult } from '@/game/commands';
 
 const log = new LogHandler('BuildingsAPI');
@@ -126,19 +126,18 @@ function mapS4ToInternalType(s4Type: number): number {
 
 export interface BuildingsAPIContext {
     gameState: GameState;
-    buildingStateManager: BuildingStateManager;
+    constructionSiteManager: ConstructionSiteManager;
     /** Per-player race mapping (player index → Race) */
     playerRaces?: Map<number, Race>;
     executeCommand?: (cmd: Command) => CommandResult;
 }
 
 /**
- * Check if a building is in "completed" state
+ * Check if a building is in "completed" (operational) state.
+ * A building is operational when it has no active construction site.
  */
-function isBuildingCompleted(buildingStateManager: BuildingStateManager, entityId: number): boolean {
-    const buildingState = buildingStateManager.getBuildingState(entityId);
-    if (!buildingState) return false;
-    return buildingState.phase === BuildingConstructionPhase.Completed;
+function isBuildingCompleted(constructionSiteManager: ConstructionSiteManager, entityId: number): boolean {
+    return !constructionSiteManager.hasSite(entityId);
 }
 
 /**
@@ -211,7 +210,7 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
 
             // Filter by state if specified
             if (state !== undefined) {
-                const isComplete = isBuildingCompleted(context.buildingStateManager, entity.id);
+                const isComplete = isBuildingCompleted(context.constructionSiteManager, entity.id);
                 if (state === BUILDING_STATE_CONSTANTS.STANDARD && !isComplete) continue;
                 if (state === BUILDING_STATE_CONSTANTS.BUILD && isComplete) continue;
             }
@@ -281,13 +280,13 @@ export function registerBuildingsAPI(runtime: LuaRuntime, context: BuildingsAPIC
             return -1;
         }
 
-        const isComplete = isBuildingCompleted(context.buildingStateManager, entityId);
+        const isComplete = isBuildingCompleted(context.constructionSiteManager, entityId);
         return isComplete ? BUILDING_STATE_CONSTANTS.STANDARD : BUILDING_STATE_CONSTANTS.BUILD;
     });
 
     // Buildings.IsComplete(entityId) - Check if building is fully constructed
     runtime.registerFunction('Buildings', 'IsComplete', (entityId: number) => {
-        return isBuildingCompleted(context.buildingStateManager, entityId);
+        return isBuildingCompleted(context.constructionSiteManager, entityId);
     });
 
     // Buildings.GetPosition(entityId) - Get building position

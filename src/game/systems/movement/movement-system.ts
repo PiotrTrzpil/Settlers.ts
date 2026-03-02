@@ -108,7 +108,7 @@ export class MovementSystem implements TickSystem {
             buildingOccupancy: this.buildingOccupancy,
             getEntity: this.getEntityFn,
             updatePosition: this.updatePositionFn,
-            getController: id => this.controllers.get(id),
+            getController: this.controllers.get.bind(this.controllers),
         });
 
         this.blockedStateHandler = new BlockedStateHandler(this.pathfinder);

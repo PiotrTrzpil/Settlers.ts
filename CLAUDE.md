@@ -42,6 +42,8 @@ pnpm format           # Prettier formatting
 
 ## Editing code
 
+NEVER GIT STASH.
+
 **ALWAYS prefer cclsp mcp over manual edit for these operations:**
 
 | Operation | Tool |
@@ -61,6 +63,8 @@ ALWAYS prefer mass approaches, e.g. `sd` and others. (but carefully, first think
 
 
 ## Notes
+
+NEVER GIT STASH.
 
 - **Line length**: max 140 chars (TS), 150 chars (Vue). URLs, strings, and template literals are exempt.
 - **Complexity**: max cyclomatic complexity 15 per function. Extract helpers to stay under the limit.
@@ -96,3 +100,6 @@ Key project-specific rules:
 
 - Always lint first before running tests.
 - **Never use `--reporter=line`** — it suppresses stdout. Use `--reporter=list` instead.
+
+
+NEVER GIT STASH.

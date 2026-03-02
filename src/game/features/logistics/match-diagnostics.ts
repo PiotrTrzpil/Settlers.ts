@@ -84,9 +84,7 @@ export class MatchDiagnostics {
 
         const supplies = this.inventoryManager.getBuildingsWithOutput(request.materialType, 1);
         const otherSupplies = supplies.filter((id: number) => id !== request.buildingId);
-        if (otherSupplies.length === 0) {
-            log.debug(`Request #${request.id} (material=${request.materialType}): no supply available anywhere`);
-        } else {
+        if (otherSupplies.length > 0) {
             log.debug(
                 `Request #${request.id} (material=${request.materialType}): ` +
                     `${otherSupplies.length} supply buildings exist but all reserved or insufficient`

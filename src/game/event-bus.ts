@@ -7,11 +7,13 @@
  */
 
 import type { BuildingType } from './buildings/types';
-import type { BuildingState } from './features/building-construction';
+import type { Race } from './race';
 import type { UnitType } from './unit-types';
 import type { EntityType } from './entity';
 import type { EMaterialType } from './economy';
 import type { MapObjectType } from './types/map-object-types';
+import type { TrainingRecipe } from './features/barracks/types';
+import type { ProductionMode } from './features/production-control';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { toastError } from './toast-notifications';
@@ -29,12 +31,17 @@ export interface GameEvents {
     /** Emitted when building construction completes */
     'building:completed': {
         entityId: number;
-        buildingState: BuildingState;
+        buildingType: BuildingType;
+        race: Race;
+        /** True when the building was placed as instantly completed (no construction). */
+        placedCompleted?: boolean;
+        /** True when the building should auto-spawn its dedicated worker. */
+        spawnWorker?: boolean;
     };
     /** Emitted when a building is removed/cancelled */
     'building:removed': {
         entityId: number;
-        buildingState: BuildingState;
+        buildingType: BuildingType;
     };
     /** Emitted when a unit is spawned */
     'unit:spawned': {
@@ -62,16 +69,14 @@ export interface GameEvents {
 
     // === Carrier Events ===
 
-    /** Emitted when a carrier is registered with a tavern */
+    /** Emitted when a carrier is registered */
     'carrier:created': {
         entityId: number;
-        homeBuilding: number;
     };
 
     /** Emitted when a carrier is removed from the system */
     'carrier:removed': {
         entityId: number;
-        homeBuilding: number;
         /** True if carrier was removed while on a job */
         hadActiveJob: boolean;
     };
@@ -93,12 +98,6 @@ export interface GameEvents {
     'carrier:arrivedForDelivery': {
         entityId: number;
         buildingId: number;
-    };
-
-    /** Emitted when a carrier arrives at their home tavern */
-    'carrier:arrivedHome': {
-        entityId: number;
-        homeBuilding: number;
     };
 
     /** Emitted when a carrier completes a pickup (material transferred) */
@@ -128,10 +127,13 @@ export interface GameEvents {
         overflow: number;
     };
 
-    /** Emitted when a carrier returns to their home tavern and becomes idle/resting */
-    'carrier:returnedHome': {
-        entityId: number;
-        homeBuilding: number;
+    /** Emitted when a carrier is successfully assigned to a transport job */
+    'carrier:assigned': {
+        requestId: number;
+        carrierId: number;
+        sourceBuilding: number;
+        destBuilding: number;
+        material: EMaterialType;
     };
 
     /** Emitted when carrier assignment fails (no carrier, reservation failed, or movement failed) */
@@ -145,6 +147,13 @@ export interface GameEvents {
     };
 
     // === Logistics Events ===
+
+    /** Emitted when no supply source is found for a pending request */
+    'logistics:noMatch': {
+        requestId: number;
+        buildingId: number;
+        materialType: EMaterialType;
+    };
 
     /** Emitted when logistics cleanup completes after a building is destroyed */
     'logistics:buildingCleanedUp': {
@@ -179,7 +188,7 @@ export interface GameEvents {
     /** Emitted when a building's production mode changes */
     'production:modeChanged': {
         buildingId: number;
-        mode: 'even' | 'proportional' | 'manual';
+        mode: ProductionMode;
     };
 
     // === Tree Events ===
@@ -264,6 +273,53 @@ export interface GameEvents {
      */
     'entity:removed': {
         entityId: number;
+    };
+
+    // === Construction Events ===
+
+    /** Emitted when the first digger starts working on a construction site */
+    'construction:diggingStarted': {
+        buildingId: number;
+    };
+    /** Emitted when terrain leveling is complete for a construction site */
+    'construction:levelingComplete': {
+        buildingId: number;
+    };
+    /** Emitted when the first builder starts constructing */
+    'construction:buildingStarted': {
+        buildingId: number;
+    };
+    /** Emitted when a material is delivered to a construction site inventory */
+    'construction:materialDelivered': {
+        buildingId: number;
+        material: EMaterialType;
+    };
+    /** Emitted when construction progress reaches 1.0 */
+    'construction:progressComplete': {
+        buildingId: number;
+    };
+
+    // === Barracks Training Events ===
+
+    /** Emitted when a barracks begins a training cycle (inputs consumed, carrier recruited). */
+    'barracks:trainingStarted': {
+        buildingId: number;
+        recipe: TrainingRecipe;
+        carrierId: number;
+    };
+
+    /** Emitted when a barracks completes training — soldier spawned */
+    'barracks:trainingCompleted': {
+        buildingId: number;
+        unitType: UnitType;
+        level: number;
+        soldierId: number;
+    };
+
+    /** Emitted when a training cycle is interrupted (e.g. carrier killed en route). */
+    'barracks:trainingInterrupted': {
+        buildingId: number;
+        reason: 'carrier_killed';
     };
 }
 

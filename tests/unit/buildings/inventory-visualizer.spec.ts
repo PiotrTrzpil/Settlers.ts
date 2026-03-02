@@ -8,10 +8,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { InventoryVisualizer } from '@/game/features/inventory';
 import { BuildingInventoryManager } from '@/game/features/inventory/building-inventory';
+import { BuildingPileRegistry } from '@/game/features/inventory/building-pile-registry';
 import { createTestContext, addBuilding, toCommandContext, type TestContext } from '../helpers/test-game';
 import { executeCommand } from '@/game/commands';
 import { BuildingType, EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
+import { GameDataLoader } from '@/resources/game-data/game-data-loader';
 
 describe('InventoryVisualizer', () => {
     let ctx: TestContext;
@@ -23,6 +25,8 @@ describe('InventoryVisualizer', () => {
         inventoryManager = ctx.inventoryManager;
         const cmdCtx = toCommandContext(ctx);
         visualizer = new InventoryVisualizer(ctx.state, inventoryManager, cmd => executeCommand(cmdCtx, cmd));
+        const pileRegistry = new BuildingPileRegistry(GameDataLoader.getInstance().getData());
+        visualizer.setPileRegistry(pileRegistry);
     });
 
     afterEach(() => {
@@ -265,6 +269,7 @@ describe('InventoryVisualizer', () => {
             const newVisualizer = new InventoryVisualizer(ctx.state, inventoryManager, cmd =>
                 executeCommand(cmdCtx, cmd)
             );
+            newVisualizer.setPileRegistry(new BuildingPileRegistry(GameDataLoader.getInstance().getData()));
 
             // No visuals yet (change wasn't emitted)
             let resources = ctx.state.entities.filter(

@@ -6,7 +6,7 @@ import { installTestGameData, resetTestGameData } from '../helpers/test-game-dat
 import { executeCommand, type CommandContext } from '@/game/commands';
 import { MapSize } from '@/utilities/map-size';
 import { EventBus } from '@/game/event-bus';
-import { BuildingStateManager } from '@/game/features/building-construction';
+import { ConstructionSiteManager } from '@/game/features/building-construction';
 import { MovementSystem } from '@/game/systems/movement/index';
 import { TerrainData } from '@/game/terrain';
 import { GameSettingsManager } from '@/game/game-settings';
@@ -59,18 +59,14 @@ describe('Unit Placement, Selection & Movement', () => {
             state.resources.removeState(entityId);
         });
 
-        // BuildingStateManager requires dependencies via constructor
-        const buildingStateManager = new BuildingStateManager({
-            entityProvider: state,
-            eventBus,
-        });
+        const constructionSiteManager = new ConstructionSiteManager(eventBus);
         // Set terrain data for the movement system (required for pathfinding)
         movement.setTerrainData(groundType, groundHeight, mapSize.width, mapSize.height);
 
         const terrain = new TerrainData(groundType, groundHeight, mapSize);
         const settingsManager = new GameSettingsManager();
         settingsManager.resetToDefaults();
-        ctx = { state, terrain, eventBus, settings: settingsManager.state, buildingStateManager };
+        ctx = { state, terrain, eventBus, settings: settingsManager.state, constructionSiteManager };
     });
 
     // ── Unit Placement (spawn_unit) ────────────────────────────────────

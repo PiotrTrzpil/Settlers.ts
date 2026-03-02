@@ -5,8 +5,9 @@
  */
 
 import { BuildingType } from '../../entity';
-import { EMaterialType } from '../../economy/material-type';
-import { BUILDING_PRODUCTIONS, BUILDING_RECIPE_SETS } from '../../economy/building-production';
+import { EMaterialType, DROPPABLE_MATERIALS } from '../../economy/material-type';
+import { BUILDING_PRODUCTIONS, BUILDING_RECIPE_SETS, getConstructionCosts } from '../../economy/building-production';
+import { Race } from '../../race';
 
 /**
  * Slot configuration for a building inventory.
@@ -39,7 +40,32 @@ export const DEFAULT_OUTPUT_CAPACITY = SLOT_CAPACITY;
  * Single-recipe buildings (BUILDING_PRODUCTIONS) get one output slot.
  * Buildings not in either map get empty configs.
  */
+/** Capacity per StorageArea slot — smaller than production since there are many slots. */
+const STORAGE_SLOT_CAPACITY = 8;
+
 export function getInventoryConfig(buildingType: BuildingType): InventoryConfig {
+    // StorageArea: output-only slots for every droppable material (supply source, not a request target)
+    if (buildingType === BuildingType.StorageArea) {
+        const slots = DROPPABLE_MATERIALS.map(m => ({ materialType: m, maxCapacity: STORAGE_SLOT_CAPACITY }));
+        return { inputSlots: [], outputSlots: slots };
+    }
+
+    // Barracks: fixed superset of all weapon/gold slots regardless of race-specific recipes
+    if (buildingType === BuildingType.Barrack) {
+        return {
+            inputSlots: [
+                { materialType: EMaterialType.SWORD, maxCapacity: 4 },
+                { materialType: EMaterialType.BOW, maxCapacity: 4 },
+                { materialType: EMaterialType.GOLDBAR, maxCapacity: 4 },
+                { materialType: EMaterialType.ARMOR, maxCapacity: 4 },
+                { materialType: EMaterialType.BATTLEAXE, maxCapacity: 4 },
+                { materialType: EMaterialType.BLOWGUN, maxCapacity: 4 },
+                { materialType: EMaterialType.CATAPULT, maxCapacity: 4 },
+            ],
+            outputSlots: [],
+        };
+    }
+
     // Multi-recipe buildings: collect unique inputs + one output per recipe
     const recipeSet = BUILDING_RECIPE_SETS.get(buildingType);
     if (recipeSet) {
@@ -63,6 +89,19 @@ export function getInventoryConfig(buildingType: BuildingType): InventoryConfig 
             production.output !== EMaterialType.NO_MATERIAL
                 ? [{ materialType: production.output, maxCapacity: SLOT_CAPACITY }]
                 : [],
+    };
+}
+
+/**
+ * Get inventory config for a building under construction.
+ * Returns input-only slots matching the building's construction material costs.
+ * Each slot's maxCapacity equals the total amount needed for that material.
+ */
+export function getConstructionInventoryConfig(buildingType: BuildingType, race: Race): InventoryConfig {
+    const costs = getConstructionCosts(buildingType, race);
+    return {
+        inputSlots: costs.map(c => ({ materialType: c.material, maxCapacity: c.count })),
+        outputSlots: [],
     };
 }
 

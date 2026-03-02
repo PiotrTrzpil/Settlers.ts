@@ -71,22 +71,13 @@ export class SelectionOverlayRenderer {
             if (entity.type === EntityType.Building) {
                 // Get footprint tiles and calculate bounding box in world coordinates
                 const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
-                if (footprint.length > 0) {
-                    const bounds = this.calculateFootprintBounds(footprint, ctx);
-                    minX = bounds.minX;
-                    minY = bounds.minY;
-                    maxX = bounds.maxX;
-                    maxY = bounds.maxY;
-                } else {
-                    // Fallback if no footprint
-                    const worldPos = getEntityWorldPos(entity, ctx);
-                    const scale = this.getEntityScale(entity.type);
-                    const half = scale * FRAME_PADDING * 0.5;
-                    minX = worldPos.worldX - half;
-                    maxX = worldPos.worldX + half;
-                    minY = worldPos.worldY - half;
-                    maxY = worldPos.worldY + half;
-                }
+                if (footprint.length === 0)
+                    throw new Error(`Empty footprint for building ${entity.id} (type ${entity.subType})`);
+                const bounds = this.calculateFootprintBounds(footprint, ctx);
+                minX = bounds.minX;
+                minY = bounds.minY;
+                maxX = bounds.maxX;
+                maxY = bounds.maxY;
             } else {
                 // Non-building entities use simple scale-based sizing
                 const worldPos = getEntityWorldPos(entity, ctx);
@@ -254,7 +245,7 @@ export class SelectionOverlayRenderer {
         const lineWidth = 0.15;
 
         const idx = ctx.mapSize.toIndex(Math.round(tileX), Math.round(tileY));
-        const hWorld = heightToWorld(ctx.groundHeight[idx] ?? 0);
+        const hWorld = heightToWorld(ctx.groundHeight[idx]!);
 
         // Generate circle points in tile space, centered on the tile
         const centerTileX = tileX + 0.5;
@@ -429,7 +420,7 @@ export class SelectionOverlayRenderer {
                 }
 
                 const idx = ctx.mapSize.toIndex(tile.x, tile.y);
-                const hWorld = heightToWorld(ctx.groundHeight[idx] ?? 0);
+                const hWorld = heightToWorld(ctx.groundHeight[idx]!);
 
                 // Terrain face diamond: vertices at (x,y), (x+1,y), (x+1,y+1), (x,y+1)
                 // Shift to tile vertex (matching building sprite anchor)
@@ -483,7 +474,7 @@ export class SelectionOverlayRenderer {
         for (const area of serviceAreas) {
             // Sample ground height at center for a reasonable base height
             const centerIdx = ctx.mapSize.toIndex(Math.round(area.centerX), Math.round(area.centerY));
-            const baseH = heightToWorld(ctx.groundHeight[centerIdx] ?? 0);
+            const baseH = heightToWorld(ctx.groundHeight[centerIdx]!);
 
             // Generate circle points in tile space and convert to world space
             const points: { worldX: number; worldY: number }[] = [];
@@ -586,7 +577,7 @@ export class SelectionOverlayRenderer {
         for (const tile of footprint) {
             // Get height at integer tile position
             const idx = ctx.mapSize.toIndex(tile.x, tile.y);
-            const hWorld = heightToWorld(ctx.groundHeight[idx] ?? 0);
+            const hWorld = heightToWorld(ctx.groundHeight[idx]!);
 
             for (const offset of cornerOffsets) {
                 // Use pure tileToWorld for fractional coords (tile corners)
@@ -713,7 +704,7 @@ export class SelectionOverlayRenderer {
 
         for (const h of highlights) {
             const idx = ctx.mapSize.toIndex(Math.round(h.x), Math.round(h.y));
-            const hWorld = heightToWorld(ctx.groundHeight[idx] ?? 0);
+            const hWorld = heightToWorld(ctx.groundHeight[idx]!);
             const alpha = h.alpha ?? 0.5;
             const [r, g, b] = parseHexColor(h.color);
 

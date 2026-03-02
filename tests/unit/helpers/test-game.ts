@@ -13,10 +13,9 @@ import { EventBus } from '@/game/event-bus';
 import { spiralSearch } from '@/game/utils/spiral-search';
 import { MovementSystem } from '@/game/systems/movement/index';
 import {
-    BuildingConstructionPhase,
     BuildingConstructionSystem,
-    BuildingStateManager,
-    type BuildingState,
+    ConstructionSiteManager,
+    ResidenceSpawnerSystem,
 } from '@/game/features/building-construction';
 import { CarrierManager } from '@/game/features/carriers';
 import { BuildingInventoryManager } from '@/game/features/inventory';
@@ -97,17 +96,22 @@ export interface TestContext {
     inventoryManager: BuildingInventoryManager;
     serviceAreaManager: ServiceAreaManager;
     requestManager: RequestManager;
-    buildingStateManager: BuildingStateManager;
+    constructionSiteManager: ConstructionSiteManager;
     // System for construction events
     buildingConstructionSystem: BuildingConstructionSystem;
+    /** Residence spawner wired in immediate mode for tests */
+    residenceSpawner: ResidenceSpawnerSystem;
 }
 
 /**
  * Create a complete test context with GameState, TestMap, EventBus, and managers.
  * The state is initialized with terrain data from the map.
- * Building states are created by the buildingStateManager when buildings are added.
  *
- * By default, buildings are placed as completed with workers for easier testing.
+ * Operational buildings (completed): just create the entity — absence of a ConstructionSite
+ * record means the building is operational.
+ * Buildings under construction: create the entity AND call
+ * `constructionSiteManager.registerSite(...)` to register a construction site.
+ *
  * The BuildingConstructionSystem is registered to handle building:completed events.
  *
  * @param mapWidth - Map width (default: 64)
@@ -144,10 +148,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     const inventoryManager = new BuildingInventoryManager();
     const serviceAreaManager = new ServiceAreaManager();
     const requestManager = new RequestManager();
-    const buildingStateManager = new BuildingStateManager({
-        entityProvider: state,
-        eventBus,
-    });
+    const constructionSiteManager = new ConstructionSiteManager(eventBus);
 
     // Pre-declare context variable so the lazy executor closure can capture it
     // eslint-disable-next-line prefer-const -- must be let: assigned after construction system captures it in a closure
@@ -157,22 +158,39 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     // Uses a lazy command executor so it references the returned context
     const buildingConstructionSystem = new BuildingConstructionSystem({
         gameState: state,
-        buildingStateManager,
+        constructionSiteManager,
         executeCommand: cmd => executeCommand(toCommandContext(context), cmd),
     });
     buildingConstructionSystem.setTerrainContext({
         terrain: map.terrain,
     });
+
+    // Wire a ResidenceSpawnerSystem in immediate mode so tests can verify
+    // carrier spawning without driving the timed interval loop.
+    const residenceSpawner = new ResidenceSpawnerSystem(state, eventBus);
+    residenceSpawner.setTerrain(map.terrain);
+    residenceSpawner.immediateMode = true;
+    buildingConstructionSystem.setResidenceSpawner(residenceSpawner);
+
     buildingConstructionSystem.registerEvents(eventBus);
+
+    // Mirror game-services.ts wiring: register construction site on placement, remove on completion
+    eventBus.on('building:placed', ({ entityId, buildingType, x, y, player }) => {
+        const entity = state.getEntity(entityId);
+        if (!entity) return;
+        constructionSiteManager.registerSite(entityId, buildingType, entity.race, player, x, y);
+    });
+    eventBus.on('building:completed', ({ entityId }) => {
+        constructionSiteManager.removeSite(entityId);
+    });
 
     // Initialize terrain data on movement system
     movement.setTerrainData(map.groundType, map.groundHeight, map.mapSize.width, map.mapSize.height);
 
-    // Wire entity lifecycle events (movement controllers, resource state, building state)
+    // Wire entity lifecycle events (movement controllers, resource state)
     wireEntityLifecycleEvents(eventBus, movement, state);
     const cleanupRegistry = new EntityCleanupRegistry();
     cleanupRegistry.registerEvents(eventBus);
-    buildingStateManager.registerEvents(eventBus, cleanupRegistry);
 
     context = {
         state,
@@ -183,8 +201,9 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         inventoryManager,
         serviceAreaManager,
         requestManager,
-        buildingStateManager,
+        constructionSiteManager,
         buildingConstructionSystem,
+        residenceSpawner,
     };
     return context;
 }
@@ -254,41 +273,41 @@ export function addUnitWithPath(
 // ─── Building construction helpers ──────────────────────────────────
 
 /**
- * Create a BuildingState object for testing building construction.
+ * Register a construction site for testing building construction.
  * Useful for testing terrain leveling and construction phases.
+ * After registration the building is considered "under construction" by all systems.
+ *
+ * To simulate a completed/operational building, simply do NOT call this —
+ * the absence of a ConstructionSite record means the building is operational.
  */
-export function makeBuildingState(
+export function registerConstructionSite(
+    ctx: TestContext,
+    buildingId: number,
+    buildingType: BuildingType,
     tileX: number,
     tileY: number,
-    buildingType: BuildingType,
-    overrides: Partial<BuildingState> = {}
-): BuildingState {
-    return {
-        entityId: 1,
-        buildingType,
-        race: Race.Roman,
-        phase: BuildingConstructionPhase.TerrainLeveling,
-        phaseProgress: 0,
-        totalDuration: 30,
-        elapsedTime: 0,
-        tileX,
-        tileY,
-        originalTerrain: null,
-        terrainModified: false,
-        ...overrides,
-    };
+    player = 0,
+    race = Race.Roman
+): void {
+    ctx.constructionSiteManager.registerSite(buildingId, buildingType, race, player, tileX, tileY);
 }
 
 // ─── Construction helpers ───────────────────────────────────────────
 
 /**
- * Fast-forward a building to construction completion.
- * Sets elapsed time to just before completion, then ticks the system to trigger the Completed phase.
+ * Fast-forward a building to construction completion using event-driven phase progression.
+ * Emits all construction events to drive through WaitingForDiggers → TerrainLeveling →
+ * WaitingForBuilders → ConstructionRising → CompletedRising, then ticks to finish the
+ * CompletedRising countdown (0.5s) and emit building:completed.
  */
 export function completeConstruction(ctx: TestContext, entityId: number): void {
-    const bs = ctx.buildingStateManager.getBuildingState(entityId)!;
-    bs.elapsedTime = bs.totalDuration - 0.1;
-    ctx.buildingConstructionSystem.tick(0.2);
+    // Drive through event-based phase transitions
+    ctx.eventBus.emit('construction:diggingStarted', { buildingId: entityId });
+    ctx.eventBus.emit('construction:levelingComplete', { buildingId: entityId });
+    ctx.eventBus.emit('construction:buildingStarted', { buildingId: entityId });
+    ctx.eventBus.emit('construction:progressComplete', { buildingId: entityId });
+    // Tick past the CompletedRising countdown (COMPLETED_RISING_DURATION = 0.5s)
+    ctx.buildingConstructionSystem.tick(0.6);
 }
 
 // ─── Command execution helpers ──────────────────────────────────────
@@ -302,7 +321,7 @@ export function toCommandContext(ctx: TestContext, eventBus?: EventBus): Command
         terrain: ctx.map.terrain,
         eventBus: eventBus ?? ctx.eventBus,
         settings: ctx.settings,
-        buildingStateManager: ctx.buildingStateManager,
+        constructionSiteManager: ctx.constructionSiteManager,
     };
 }
 
@@ -312,9 +331,18 @@ export function placeBuilding(
     x: number,
     y: number,
     buildingType: number = BuildingType.WoodcutterHut,
-    player = 0
+    player = 0,
+    opts: { completed?: boolean; spawnWorker?: boolean } = {}
 ): CommandResult {
-    return executeCommand(toCommandContext(ctx), { type: 'place_building', buildingType, x, y, player, race: 10 });
+    return executeCommand(toCommandContext(ctx), {
+        type: 'place_building',
+        buildingType,
+        x,
+        y,
+        player,
+        race: 10,
+        ...opts,
+    });
 }
 
 /**

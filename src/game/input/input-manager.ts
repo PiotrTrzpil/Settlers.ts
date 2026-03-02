@@ -326,7 +326,7 @@ export class InputManager {
             state: this.state,
             currentTile,
             executeCommand: cmd => this.commandExecutor?.(cmd) ?? commandFailed('No command executor'),
-            switchMode: (mode, data) => this.switchMode(mode, data),
+            switchMode: this.switchMode.bind(this),
             getModeData: <T>() => this.modeData.get(this.currentModeName) as T | undefined,
             setModeData: <T>(data: T) => this.modeData.set(this.currentModeName, data),
         };

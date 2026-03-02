@@ -41,7 +41,7 @@ export function registerTerritoryEvents(
     });
 
     // Remove territory when buildings are destroyed
-    cleanupRegistry.onEntityRemoved(entityId => territoryManager.removeBuilding(entityId));
+    cleanupRegistry.onEntityRemoved(territoryManager.removeBuilding.bind(territoryManager));
 
     return subscriptions;
 }

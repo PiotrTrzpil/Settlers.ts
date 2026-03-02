@@ -38,7 +38,6 @@ export const BUILDING_ICON_INDICES: Record<Race, Partial<Record<BuildingType, [n
         [BuildingType.HunterHut]: [764, 765],
         [BuildingType.Slaughterhouse]: [767, 768],
         [BuildingType.Mill]: [771, 772],
-        [BuildingType.LivingHouse]: [753, 754],
         // Wood & Stone
         [BuildingType.ForesterHut]: [812, 813],
         [BuildingType.Sawmill]: [769, 770],

@@ -90,10 +90,7 @@ async function doLoad(fileId: string) {
     );
 
     const gfx = gfxFile.value;
-    gfxContent.value = collectImages(
-        () => gfx.getImageCount(),
-        i => gfx.getImage(i)
-    );
+    gfxContent.value = collectImages(gfx.getImageCount.bind(gfx), gfx.getImage.bind(gfx));
 
     log.debug('File: ' + fileId + ' with ' + gfxContent.value.length + ' images');
 }

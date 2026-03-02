@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BuildingConstructionPhase } from '@/game/features/building-construction';
 import { executeCommand } from '@/game/commands';
 import {
+    BuildingConstructionPhase,
     captureOriginalTerrain,
     applyTerrainLeveling,
     CONSTRUCTION_SITE_GROUND_TYPE,
 } from '@/game/features/building-construction';
+import { BuildingType } from '@/game/entity';
+import { Race } from '@/game/race';
 import { TERRAIN, setTerrainAt, blockColumn } from '../helpers/test-map';
 import { createTestContext, addBuilding, toCommandContext, type TestContext } from '../helpers/test-game';
 
@@ -94,12 +96,32 @@ describe('Command System – edge cases', () => {
             const originalGroundHeight = new Uint8Array(ctx.map.groundHeight);
 
             const building = addBuilding(ctx.state, 10, 10, 1);
-            const bs = ctx.buildingStateManager.getBuildingState(building.id)!;
+            // Register as construction site so terrain restoration occurs on removal
+            ctx.constructionSiteManager.registerSite(building.id, BuildingType.WoodcutterHut, Race.Roman, 1, 10, 10);
+            const site = ctx.constructionSiteManager.getSiteOrThrow(building.id, 'test terrain restore');
+            const terrainParams = {
+                buildingType: site.buildingType,
+                race: site.race,
+                tileX: site.tileX,
+                tileY: site.tileY,
+            };
 
-            bs.originalTerrain = captureOriginalTerrain(bs, ctx.map.groundType, ctx.map.groundHeight, ctx.map.mapSize);
-            bs.terrainModified = true;
-            bs.phase = BuildingConstructionPhase.TerrainLeveling;
-            applyTerrainLeveling(bs, ctx.map.groundType, ctx.map.groundHeight, ctx.map.mapSize, 1.0);
+            site.originalTerrain = captureOriginalTerrain(
+                terrainParams,
+                ctx.map.groundType,
+                ctx.map.groundHeight,
+                ctx.map.mapSize
+            );
+            site.terrainModified = true;
+            site.phase = BuildingConstructionPhase.TerrainLeveling;
+            applyTerrainLeveling(
+                terrainParams,
+                ctx.map.groundType,
+                ctx.map.groundHeight,
+                ctx.map.mapSize,
+                1.0,
+                site.originalTerrain
+            );
 
             expect(ctx.map.groundType[ctx.map.mapSize.toIndex(10, 10)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
 

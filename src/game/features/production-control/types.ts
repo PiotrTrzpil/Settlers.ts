@@ -7,17 +7,19 @@
  * Modes:
  * - 'even'         — strict round-robin through all recipes (ignores proportions)
  * - 'proportional' — weighted production converging to target proportions
- * - 'manual'       — ordered queue driven by explicit player-enqueued outputs
+ * - 'manual'       — ordered queue driven by explicit player-enqueued recipe indices
  */
-
-import type { EMaterialType } from '@/game/economy/material-type';
 
 // ============================================================================
 // Production Mode
 // ============================================================================
 
 /** Controls how the next recipe is selected for a multi-recipe building. */
-export type ProductionMode = 'even' | 'proportional' | 'manual';
+export enum ProductionMode {
+    Even = 'even',
+    Proportional = 'proportional',
+    Manual = 'manual',
+}
 
 // ============================================================================
 // Production State
@@ -27,7 +29,7 @@ export type ProductionMode = 'even' | 'proportional' | 'manual';
  * Runtime production state for a single multi-recipe building.
  *
  * Keyed by building entity ID inside ProductionControlManager.
- * Only buildings with a RecipeSet have an associated ProductionState.
+ * Only buildings with multiple recipes have an associated ProductionState.
  */
 export interface ProductionState {
     /** How the next recipe is selected. */
@@ -35,29 +37,36 @@ export interface ProductionState {
 
     /**
      * Per-recipe target weights for 'even' and 'proportional' modes.
-     * Maps output material → weight (clamped 0–10).
+     * Maps recipe index → weight (clamped 0–10).
      * Initialised to 1 for every recipe when the building is registered.
      */
-    proportions: Map<EMaterialType, number>;
+    proportions: Map<number, number>;
 
     /**
-     * Ordered output queue for 'manual' mode.
+     * Ordered recipe-index queue for 'manual' mode.
      * Items are popped from the front on each production cycle.
      * Building idles (returns null) when the queue is empty.
      */
-    queue: EMaterialType[];
+    queue: number[];
 
     /**
      * Round-robin cursor for 'even' mode.
-     * Points to the index in RecipeSet.recipes of the next recipe to produce.
+     * Points to the index of the next recipe to produce.
      * Reset to 0 when switching back to 'even' mode.
      */
     roundRobinIndex: number;
 
     /**
      * Running tally of how many times each recipe has been produced this session.
-     * Maps output material → count.
+     * Maps recipe index → count.
      * Used by 'proportional' mode to calculate actual vs target ratios.
      */
-    productionCounts: Map<EMaterialType, number>;
+    productionCounts: Map<number, number>;
+
+    /**
+     * Total number of recipes available for this building.
+     * Stored at init time so selection strategies can iterate indices without
+     * needing an external RecipeSet reference.
+     */
+    recipeCount: number;
 }

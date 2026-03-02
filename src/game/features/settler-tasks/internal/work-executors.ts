@@ -130,7 +130,11 @@ function tickDurationProgress(job: ChoreoJobState, node: ChoreoNode, dt: number)
 // ─────────────────────────────────────────────────────
 
 /**
- * WORK — position-based work at the settler's current location.
+ * WORK — generic work at the settler's current location.
+ *
+ * Delegates to entity handler (onWorkStart/onWorkTick/onWorkComplete) when
+ * an entity handler and targetId are present (digger/builder construction work).
+ * Otherwise falls back to duration-based position work (original behavior).
  *
  * Duration from node.duration (frames→seconds). Direction locked on first tick.
  * Building overlay trigger fired once at start.
@@ -144,6 +148,14 @@ export function executeWork(
 ): TaskResult {
     applyDirectionConstraint(settler, node, job, ctx);
     fireTriggerOnStart(settler, node, job, ctx);
+
+    // Entity handler path (digger/builder construction work)
+    if (ctx.entityHandler && job.targetId !== null) {
+        if (!startEntityWork(job, ctx.entityHandler, ctx, '')) return TaskResult.FAILED;
+        return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '');
+    }
+
+    // Position handler path
     if (!job.workStarted) job.workStarted = true;
 
     const result = tickDurationProgress(job, node, dt);

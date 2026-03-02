@@ -6,7 +6,7 @@
  *
  * In the Settlers.ts design, the following building types can have service areas:
  * - ResidenceSmall, ResidenceMedium, ResidenceBig - Act as taverns/carrier bases
- * - StorageArea - Warehouses that can have their own service areas
+ * - StorageArea - Storage areas that can have their own service areas
  *
  * Public API:
  * - Feature: ServiceAreaFeature (self-registering via FeatureRegistry)

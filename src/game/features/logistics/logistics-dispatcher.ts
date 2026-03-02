@@ -141,21 +141,17 @@ export class LogisticsDispatcher implements TickSystem {
     registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
         this.eventBus = eventBus;
 
-        this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', payload => {
-            this.activeJobs.delete(payload.entityId);
-        });
+        const onCarrierJobEnd = ({ entityId }: { entityId: number }) => this.activeJobs.delete(entityId);
+        this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', onCarrierJobEnd);
+        this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', onCarrierJobEnd);
 
-        this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', payload => {
-            this.activeJobs.delete(payload.entityId);
-        });
-
-        this.subscriptions.subscribe(eventBus, 'carrier:removed', payload => {
-            this.handleCarrierRemoved(payload.entityId);
-        });
+        this.subscriptions.subscribe(eventBus, 'carrier:removed', ({ entityId }) =>
+            this.handleCarrierRemoved(entityId)
+        );
 
         // Clean up logistics state when buildings are destroyed.
         // LOGISTICS priority ensures this runs before inventory removal (LATE priority).
-        cleanupRegistry.onEntityRemoved(entityId => this.handleBuildingDestroyed(entityId), CLEANUP_PRIORITY.LOGISTICS);
+        cleanupRegistry.onEntityRemoved(this.handleBuildingDestroyed.bind(this), CLEANUP_PRIORITY.LOGISTICS);
     }
 
     /** Unregister event handlers. */
@@ -201,6 +197,11 @@ export class LogisticsDispatcher implements TickSystem {
                 if (this.matchDiagnostics.isDue()) {
                     this.matchDiagnostics.logFailure(request);
                 }
+                this.eventBus.emit('logistics:noMatch', {
+                    requestId: request.id,
+                    buildingId: request.buildingId,
+                    materialType: request.materialType,
+                });
                 continue; // No supply available for this request
             }
 

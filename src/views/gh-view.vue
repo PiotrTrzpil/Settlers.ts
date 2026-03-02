@@ -80,10 +80,7 @@ async function load(file: IFileSource) {
 
     const ghFile = new GhFileReader(content);
 
-    ghContent.value = collectImages(
-        () => ghFile.getImageCount(),
-        i => ghFile.getImage(i)
-    );
+    ghContent.value = collectImages(ghFile.getImageCount.bind(ghFile), ghFile.getImage.bind(ghFile));
 
     // Auto-select first item
     if (ghContent.value.length > 0) {

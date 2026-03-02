@@ -5,10 +5,9 @@
  * External code should only import from this file.
  *
  * Public API:
- * - Types: CarrierState, CarrierStatus, FatigueLevel
- * - Manager: CarrierManager (tracks all carrier states, fatigue, auto-registration)
- * - Helpers: createCarrierState, getFatigueLevel, canAcceptNewJob
- * - Constants: FATIGUE_THRESHOLDS
+ * - Types: CarrierState, CarrierStatus
+ * - Manager: CarrierManager (tracks all carrier states, auto-registration)
+ * - Helpers: createCarrierState
  *
  * Note: Task execution (movement, animation, pickup, dropoff) is handled by
  * WorkerTaskExecutor via inline transport choreography.
@@ -16,14 +15,7 @@
 
 // Types and helpers from carrier-state
 export type { CarrierState } from './carrier-state';
-export {
-    CarrierStatus,
-    FatigueLevel,
-    FATIGUE_THRESHOLDS,
-    createCarrierState,
-    getFatigueLevel,
-    canAcceptNewJob,
-} from './carrier-state';
+export { CarrierStatus, createCarrierState } from './carrier-state';
 
 // Manager
 export { CarrierManager, type CarrierManagerConfig } from './carrier-manager';

@@ -79,7 +79,7 @@ function syncEntityRendererState(
 
     // Feature-specific computation happens here (glue layer), not in the renderer.
     // The renderer receives pre-computed BuildingRenderState via the context.
-    const bsm = g.services.buildingStateManager;
+    const csm = g.services.constructionSiteManager;
     const visualService = g.services.visualService;
 
     const renderContext = createRenderContext()
@@ -87,16 +87,16 @@ function syncEntityRendererState(
         .unitStates(g.state.unitStates)
         .resourceStates(g.state.resources.states)
         .buildingRenderStateGetter(entityId => {
-            const state = bsm.getBuildingState(entityId);
-            const vs = getBuildingVisualState(state);
+            const site = csm.getSite(entityId);
+            const vs = getBuildingVisualState(site);
             return {
                 useConstructionSprite: vs.useConstructionSprite,
                 verticalProgress: vs.verticalProgress,
             };
         })
         .buildingOverlaysGetter(entityId => resolveBuildingOverlays(entityId, g, er))
-        .visualStateGetter(entityId => visualService.getState(entityId))
-        .directionTransitionGetter(entityId => visualService.getDirectionTransition(entityId))
+        .visualStateGetter(visualService.getState.bind(visualService))
+        .directionTransitionGetter(visualService.getDirectionTransition.bind(visualService))
         .healthRatioGetter(entityId => {
             const cs = g.services.combatSystem.getState(entityId);
             if (!cs) return null;

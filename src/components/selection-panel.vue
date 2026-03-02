@@ -28,87 +28,116 @@
                     <span class="status-badge" :class="buildingStatus">{{ buildingStatus }}</span>
                 </StatRow>
 
-                <!-- Work Area button (for buildings with outdoor workers) -->
-                <div v-if="hasWorkArea" class="work-area-row">
-                    <button class="work-area-btn" :class="{ active: isWorkAreaActive }" @click="toggleWorkArea">
-                        Set Work Area
-                    </button>
-                </div>
-
-                <!-- Production Control (multi-recipe buildings only) -->
-                <template v-if="productionControl">
-                    <div class="info-section production-section">
-                        <div class="section-label">Production</div>
-
-                        <!-- Mode selector -->
-                        <div class="production-mode">
-                            <button
-                                v-for="m in ['even', 'proportional', 'manual'] as const"
-                                :key="m"
-                                class="mode-btn"
-                                :class="{ active: productionControl.mode === m }"
-                                @click="setProductionMode(m)"
-                            >
-                                {{ m }}
-                            </button>
+                <!-- Construction info (shown only while building is under construction) -->
+                <template v-if="constructionInfo">
+                    <div class="info-section construction-section">
+                        <div class="section-label">Construction</div>
+                        <div class="construction-phase">{{ constructionInfo.phase }}</div>
+                        <div class="construction-progress-bar">
+                            <div
+                                class="construction-progress-fill"
+                                :style="{ width: Math.round(constructionInfo.overallProgress * 100) + '%' }"
+                            ></div>
                         </div>
-
-                        <!-- Even / Proportional mode: recipe weights -->
-                        <template v-if="productionControl.mode !== 'manual'">
-                            <div class="recipe-grid">
-                                <div
-                                    v-for="recipe in productionControl.recipes"
-                                    :key="recipe.output"
-                                    class="recipe-item"
-                                >
-                                    <span class="recipe-name">{{ recipe.outputName }}</span>
-                                    <div class="recipe-controls">
-                                        <button
-                                            class="recipe-btn"
-                                            @click="setRecipeProportion(recipe.output, recipe.weight - 1)"
-                                        >
-                                            -
-                                        </button>
-                                        <span class="recipe-weight">{{ recipe.weight }}</span>
-                                        <button
-                                            class="recipe-btn"
-                                            @click="setRecipeProportion(recipe.output, recipe.weight + 1)"
-                                        >
-                                            +
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-
-                        <!-- Manual mode: queue display + add/remove buttons -->
-                        <template v-else>
-                            <div v-if="productionControl.queue.length > 0" class="queue-display">
-                                {{ productionControl.queue.join(' → ') }}
-                            </div>
-                            <div v-else class="queue-empty">Queue empty (idle)</div>
-                            <div class="recipe-grid">
-                                <div
-                                    v-for="recipe in productionControl.recipes"
-                                    :key="recipe.output"
-                                    class="recipe-item"
-                                >
-                                    <span class="recipe-name">{{ recipe.outputName }}</span>
-                                    <div class="recipe-controls">
-                                        <button class="recipe-btn" @click="addToProductionQueue(recipe.output)">
-                                            +1
-                                        </button>
-                                        <button class="recipe-btn" @click="removeFromProductionQueue(recipe.output)">
-                                            -1
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
+                        <div v-if="constructionInfo.materials.length > 0" class="construction-materials">
+                            {{
+                                constructionInfo.materials.map(m => `${m.delivered}/${m.required} ${m.name}`).join(', ')
+                            }}
+                        </div>
                     </div>
                 </template>
 
-                <!-- Destroy button -->
+                <!-- Operational UI (hidden during construction) -->
+                <template v-if="!constructionInfo">
+                    <!-- Work Area button (for buildings with outdoor workers) -->
+                    <div v-if="hasWorkArea" class="work-area-row">
+                        <button class="work-area-btn" :class="{ active: isWorkAreaActive }" @click="toggleWorkArea">
+                            Set Work Area
+                        </button>
+                    </div>
+
+                    <!-- Production Control (multi-recipe buildings only) -->
+                    <template v-if="productionControl">
+                        <div class="info-section production-section">
+                            <div class="section-label">Production</div>
+
+                            <!-- Mode selector -->
+                            <div class="production-mode">
+                                <button
+                                    v-for="m in [
+                                        ProductionMode.Even,
+                                        ProductionMode.Proportional,
+                                        ProductionMode.Manual,
+                                    ]"
+                                    :key="m"
+                                    class="mode-btn"
+                                    :class="{ active: productionControl.mode === m }"
+                                    @click="setProductionMode(m)"
+                                >
+                                    {{ m }}
+                                </button>
+                            </div>
+
+                            <!-- Even / Proportional mode: recipe weights -->
+                            <template v-if="productionControl.mode !== ProductionMode.Manual">
+                                <div class="recipe-grid">
+                                    <div
+                                        v-for="recipe in productionControl.recipes"
+                                        :key="recipe.output"
+                                        class="recipe-item"
+                                    >
+                                        <span class="recipe-name">{{ recipe.outputName }}</span>
+                                        <div class="recipe-controls">
+                                            <button
+                                                class="recipe-btn"
+                                                @click="setRecipeProportion(recipe.output, recipe.weight - 1)"
+                                            >
+                                                -
+                                            </button>
+                                            <span class="recipe-weight">{{ recipe.weight }}</span>
+                                            <button
+                                                class="recipe-btn"
+                                                @click="setRecipeProportion(recipe.output, recipe.weight + 1)"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Manual mode: queue display + add/remove buttons -->
+                            <template v-else>
+                                <div v-if="productionControl.queue.length > 0" class="queue-display">
+                                    {{ productionControl.queue.join(' → ') }}
+                                </div>
+                                <div v-else class="queue-empty">Queue empty (idle)</div>
+                                <div class="recipe-grid">
+                                    <div
+                                        v-for="recipe in productionControl.recipes"
+                                        :key="recipe.output"
+                                        class="recipe-item"
+                                    >
+                                        <span class="recipe-name">{{ recipe.outputName }}</span>
+                                        <div class="recipe-controls">
+                                            <button class="recipe-btn" @click="addToProductionQueue(recipe.output)">
+                                                +1
+                                            </button>
+                                            <button
+                                                class="recipe-btn"
+                                                @click="removeFromProductionQueue(recipe.output)"
+                                            >
+                                                -1
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </template>
+
+                <!-- Destroy button (shown for both construction sites and operational buildings) -->
                 <div class="destroy-row">
                     <button v-if="!confirmingDestroy" class="destroy-btn" @click="confirmingDestroy = true">
                         Destroy
@@ -173,12 +202,6 @@
                                     {{ carrierDebug.status }}
                                 </span>
                             </StatRow>
-                            <StatRow label="Fatigue">
-                                <span :class="'fatigue-' + carrierDebug.fatigueClass">
-                                    {{ carrierDebug.fatigue }}% ({{ carrierDebug.fatigueLevel }})
-                                </span>
-                            </StatRow>
-                            <StatRow label="Home" :value="'#' + carrierDebug.homeBuilding" />
                             <StatRow
                                 v-if="carrierDebug.pathLength > 0"
                                 label="Path"
@@ -257,6 +280,8 @@ import { useBuildingDebugInfo } from '@/composables/useBuildingDebugInfo';
 import { useBuildingAdjustments } from '@/composables/useBuildingAdjustments';
 import { useWorkAreaAdjustment } from '@/composables/useWorkAreaAdjustment';
 import { useProductionControl } from '@/composables/useProductionControl';
+import { useConstructionInfo } from '@/composables/useConstructionInfo';
+import { ProductionMode } from '@/game/features/production-control';
 
 const props = defineProps<{
     game: Game | null;
@@ -286,6 +311,7 @@ const { adjustExpanded, adjustGroups, activeAdjustKey, toggleAdjustItem, getItem
 const { hasWorkArea, isWorkAreaActive, toggleWorkArea } = useWorkAreaAdjustment(selectedEntity);
 const { productionControl, setProductionMode, setRecipeProportion, addToProductionQueue, removeFromProductionQueue } =
     useProductionControl(gameRef, selectedEntity, tick);
+const { constructionInfo } = useConstructionInfo(gameRef, selectedEntity, tick);
 
 // Debug section state
 const debugExpanded = ref(true);
@@ -501,23 +527,6 @@ const showDebugInfo = computed(() => debugStats.state.debugPanelOpen);
     color: #6090a0;
 }
 
-/* Fatigue colors */
-.fatigue-fresh {
-    color: var(--status-good);
-}
-
-.fatigue-tired {
-    color: var(--status-warn);
-}
-
-.fatigue-exhausted {
-    color: #e08040;
-}
-
-.fatigue-collapsed {
-    color: var(--status-bad);
-}
-
 /* Request status colors */
 .req-status-pending {
     color: #c0a040;
@@ -694,6 +703,39 @@ const showDebugInfo = computed(() => debugStats.state.debugPanelOpen);
 .destroy-cancel:hover {
     background: rgba(80, 60, 40, 0.4);
     color: var(--text);
+}
+
+/* Construction Info Section */
+.construction-section {
+    border-top-color: var(--border-soft);
+}
+
+.construction-phase {
+    font-size: 10px;
+    color: var(--status-warn);
+    margin-bottom: 4px;
+}
+
+.construction-progress-bar {
+    height: 6px;
+    background: rgba(40, 30, 15, 0.5);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+    border: 1px solid rgba(120, 90, 40, 0.3);
+}
+
+.construction-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, rgba(180, 130, 40, 0.7), rgba(220, 170, 60, 0.9));
+    border-radius: 3px;
+    transition: width 0.1s ease;
+}
+
+.construction-materials {
+    font-size: 9px;
+    color: var(--text-secondary);
+    word-break: break-word;
 }
 
 /* Production Control */

@@ -72,7 +72,8 @@ export const SETTLER_JOB_INDICES = {
         work_scythe: 69,
         pickup: 70,
     },
-    donkey_herder: {
+    // FA_ = FarmerAnimals (SETTLER_FARMERANIMALS) — animal rancher (AnimalRanch + DonkeyRanch)
+    animal_farmer: {
         walk: 72,
         carry_water: 73,
         carry_grain: 74,
@@ -488,6 +489,13 @@ export const SETTLER_KEY_TO_UNIT_TYPE: Readonly<Record<string, UnitType>> = {
     bowman_2: UnitType.Bowman2,
     bowman_3: UnitType.Bowman3,
     sawmill_worker: UnitType.SawmillWorker,
+    miller: UnitType.Miller,
+    baker: UnitType.Baker,
+    butcher: UnitType.Butcher,
+    animal_farmer: UnitType.AnimalFarmer,
+    water_worker: UnitType.Waterworker,
+    healer: UnitType.Healer,
+    sunflower_farmer: UnitType.SunflowerFarmer,
     mushroom_farmer: UnitType.MushroomFarmer,
     thief: UnitType.Thief,
     squad_leader: UnitType.SquadLeader,
@@ -720,7 +728,6 @@ export const BUILDING_JOB_INDICES: Partial<Record<BuildingType, number>> = {
     [BuildingType.SiegeWorkshop]: 23, // S4BuildingType.VEHICLEHALL
     [BuildingType.Barrack]: 24, // S4BuildingType.BARRACKS
     // 25 = CHARCOALMAKER (no JIL entry in Roman, race-specific?)
-    [BuildingType.LivingHouse]: 26, // S4BuildingType.TRAININGCENTER
     [BuildingType.HealerHut]: 27, // S4BuildingType.HEALERHUT
     [BuildingType.AmmunitionMaker]: 28, // S4BuildingType.AMMOMAKERHUT
     // 29 = GUNPOWDERMAKERHUT (no JIL entry in Roman)

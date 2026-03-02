@@ -539,7 +539,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             groundHeight: this.groundHeight,
             mapSize: this.mapSize,
             alpha: this.renderAlpha,
-            isEntityVisible: entity => this.isEntityVisible(entity),
+            isEntityVisible: this.isEntityVisible.bind(this),
         });
         profiler.endPhase('cull');
 
@@ -561,7 +561,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         const frameCtx = this.frameContext;
         const sortCtx: OptimizedSortContext = {
             spriteManager: this.spriteManager,
-            getWorldPos: entity => frameCtx.getWorldPos(entity),
+            getWorldPos: frameCtx.getWorldPos.bind(frameCtx),
             getVariation: entityId => this.getVisualState(entityId)?.variation ?? 0,
         };
         this.depthSorter.sortByDepth(this.sortedEntities, sortCtx);

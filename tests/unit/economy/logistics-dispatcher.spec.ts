@@ -56,7 +56,7 @@ describe('LogisticsDispatcher', () => {
         const hub = addBuilding(ctx.state, x, y, BuildingType.ResidenceSmall, player);
         ctx.serviceAreaManager.createServiceArea(hub.id, player, x, y, BuildingType.ResidenceSmall);
         const { entity: carrier } = addUnit(ctx.state, x + 1, y, { player, subType: UnitType.Carrier });
-        ctx.carrierManager.createCarrier(carrier.id, hub.id);
+        ctx.carrierManager.registerCarrier(carrier.id);
         return { hubId: hub.id, carrierId: carrier.id };
     }
 
@@ -129,17 +129,17 @@ describe('LogisticsDispatcher', () => {
     });
 
     it('assigns multiple requests in one tick when supply and carriers exist', () => {
-        const { carrierId: c1 } = setupHub(10, 10);
+        setupHub(10, 10);
         // Add a second carrier at the same hub
         const { entity: carrier2 } = addUnit(ctx.state, 11, 10, { subType: UnitType.Carrier });
-        ctx.carrierManager.createCarrier(carrier2.id, c1); // same hub as first carrier's... wait
+        ctx.carrierManager.registerCarrier(carrier2.id); // same hub as first carrier's... wait
 
         // Actually set up properly - need the hub id
         const hub2Carrier = addUnit(ctx.state, 12, 10, { subType: UnitType.Carrier });
         // Let's just use a second hub
         const hub = addBuilding(ctx.state, 30, 10, BuildingType.ResidenceSmall);
         ctx.serviceAreaManager.createServiceArea(hub.id, 0, 30, 10, BuildingType.ResidenceSmall);
-        ctx.carrierManager.createCarrier(hub2Carrier.entity.id, hub.id);
+        ctx.carrierManager.registerCarrier(hub2Carrier.entity.id);
 
         setupSupply(15, 10, BuildingType.WoodcutterHut, EMaterialType.LOG, 5);
         setupSupply(16, 10, BuildingType.StonecutterHut, EMaterialType.STONE, 3);
@@ -193,7 +193,7 @@ describe('LogisticsDispatcher', () => {
         const hub = addBuilding(ctx.state, 10, 10, BuildingType.ResidenceSmall);
         ctx.serviceAreaManager.createServiceArea(hub.id, 0, 10, 10, BuildingType.ResidenceSmall, 5);
         const { entity: carrier } = addUnit(ctx.state, 11, 10, { subType: UnitType.Carrier });
-        ctx.carrierManager.createCarrier(carrier.id, hub.id);
+        ctx.carrierManager.registerCarrier(carrier.id);
 
         setupSupply(12, 10, BuildingType.WoodcutterHut, EMaterialType.LOG, 5);
         // Destination is far outside the service area radius

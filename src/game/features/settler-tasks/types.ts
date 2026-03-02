@@ -26,6 +26,7 @@ export enum SearchType {
     RESOURCE_POS = 'RESOURCE_POS',
     GOOD = 'GOOD',
     CONSTRUCTION = 'CONSTRUCTION',
+    CONSTRUCTION_DIG = 'CONSTRUCTION_DIG',
     TERRAIN = 'TERRAIN',
     FORGE = 'FORGE',
     /** Worker goes to their assigned workplace building and stays there */

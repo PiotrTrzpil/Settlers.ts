@@ -99,9 +99,7 @@ export class Game {
         this.settings = new GameSettingsManager();
         this.viewState = new GameViewState();
 
-        // Create all game managers and domain systems
-        // Use arrow fn so commandContext is resolved lazily (after services is assigned)
-        this.services = new GameServices(this.state, this.eventBus, cmd => this.execute(cmd));
+        this.services = new GameServices(this.state, this.eventBus, this.execute.bind(this));
         this.services.setTerrainData(this.terrain, mapLoader.landscape.getResourceData?.());
 
         // Create frame loop and register tick systems
@@ -111,7 +109,6 @@ export class Game {
         }
 
         // Register feature toggles
-        const carrierMgr = this.services.carrierManager;
         const dispatcher = this.services.logisticsDispatcher;
         this._gameLoop.registerFeatureToggle({
             name: 'Global Logistics',
@@ -120,14 +117,6 @@ export class Game {
             get: () => dispatcher.globalLogistics,
             set: v => {
                 dispatcher.globalLogistics = v;
-            },
-        });
-        this._gameLoop.registerFeatureToggle({
-            name: 'Carrier Fatigue',
-            group: 'Logistics',
-            get: () => carrierMgr.fatigueEnabled,
-            set: v => {
-                carrierMgr.fatigueEnabled = v;
             },
         });
         this._gameLoop.registerFeatureToggle({
@@ -207,7 +196,6 @@ export class Game {
         if (entityData.buildings.length) {
             const t0 = performance.now();
             const count = populateMapBuildings(this.state, entityData.buildings, {
-                buildingStateManager: this.services.buildingStateManager,
                 eventBus: this.eventBus,
                 terrain: this.terrain,
                 playerRaces: this.playerRaces,
@@ -276,7 +264,7 @@ export class Game {
             eventBus: this.eventBus,
             settings: this.settings.state,
             settlerTaskSystem: this.services.settlerTaskSystem,
-            buildingStateManager: this.services.buildingStateManager,
+            constructionSiteManager: this.services.constructionSiteManager,
             treeSystem: this.services.treeSystem,
             cropSystem: this.services.cropSystem,
             combatSystem: this.services.combatSystem,
@@ -385,12 +373,12 @@ export class Game {
             if (!this.scriptService) {
                 const service = new ScriptService({
                     gameState: this.state,
-                    buildingStateManager: this.services.buildingStateManager,
+                    constructionSiteManager: this.services.constructionSiteManager,
                     mapWidth: this.terrain.width,
                     mapHeight: this.terrain.height,
                     landscape: this.mapLoader.landscape,
                     playerRaces: this.playerRaces,
-                    executeCommand: cmd => this.execute(cmd),
+                    executeCommand: this.execute.bind(this),
                 });
                 await service.initialize();
                 this._gameLoop.registerSystem(service, 'Scripting');

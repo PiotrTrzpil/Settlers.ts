@@ -9,12 +9,25 @@
 
 import { CARDINAL_OFFSETS } from '../../coordinates';
 import { getBuildingFootprint } from '../../buildings/types';
-import type { BuildingState, ConstructionSiteOriginalTerrain, CapturedTerrainTile } from './types';
+import type { BuildingType } from '../../buildings/types';
+import type { Race } from '../../race';
+import type { ConstructionSiteOriginalTerrain, CapturedTerrainTile } from './types';
 import { MapSize } from '@/utilities/map-size';
 import { LandscapeType } from '../../renderer/landscape/landscape-type';
 
 /** Ground type used for construction sites (raw/leveled earth) */
 export const CONSTRUCTION_SITE_GROUND_TYPE = LandscapeType.DustyWay;
+
+/**
+ * Narrow parameter interface for terrain functions.
+ * Satisfied by both ConstructionSite and temporary param objects in populateMapBuildings.
+ */
+export interface TerrainBuildingParams {
+    buildingType: BuildingType;
+    race: Race;
+    tileX: number;
+    tileY: number;
+}
 
 /**
  * Captures the original terrain state before construction begins.
@@ -25,7 +38,7 @@ export const CONSTRUCTION_SITE_GROUND_TYPE = LandscapeType.DustyWay;
  * The target height is the average height across all captured tiles.
  */
 export function captureOriginalTerrain(
-    buildingState: BuildingState,
+    params: TerrainBuildingParams,
     groundType: Uint8Array,
     groundHeight: Uint8Array,
     mapSize: MapSize
@@ -36,12 +49,7 @@ export function captureOriginalTerrain(
     const captured = new Set<number>();
 
     // Get all tiles in the building footprint
-    const footprint = getBuildingFootprint(
-        buildingState.tileX,
-        buildingState.tileY,
-        buildingState.buildingType,
-        buildingState.race
-    );
+    const footprint = getBuildingFootprint(params.tileX, params.tileY, params.buildingType, params.race);
 
     // Capture all footprint tiles
     for (const tile of footprint) {
@@ -98,31 +106,30 @@ export function captureOriginalTerrain(
  * Heights are interpolated toward the target for all captured tiles.
  * Ground type is changed to construction site material for footprint tiles only.
  *
- * @param buildingState The building state being constructed
+ * @param _params Building location and type params (interface compatibility — not used internally)
  * @param groundType Ground type array to modify
  * @param groundHeight Ground height array to modify
  * @param mapSize Map dimensions
  * @param levelingProgress Progress through the leveling phase (0.0 to 1.0)
+ * @param originalTerrain Previously captured terrain state
  * @returns true if terrain was modified
  */
 export function applyTerrainLeveling(
-    buildingState: BuildingState,
+    _params: TerrainBuildingParams,
     groundType: Uint8Array,
     groundHeight: Uint8Array,
     mapSize: MapSize,
-    levelingProgress: number
+    levelingProgress: number,
+    originalTerrain: ConstructionSiteOriginalTerrain
 ): boolean {
-    const original = buildingState.originalTerrain;
-    if (!original) return false;
-
     let modified = false;
 
-    for (const tile of original.tiles) {
+    for (const tile of originalTerrain.tiles) {
         const idx = mapSize.toIndex(tile.x, tile.y);
 
         // Interpolate height from original toward target
         const newHeight = Math.round(
-            tile.originalGroundHeight + (original.targetHeight - tile.originalGroundHeight) * levelingProgress
+            tile.originalGroundHeight + (originalTerrain.targetHeight - tile.originalGroundHeight) * levelingProgress
         );
 
         if (groundHeight[idx] !== newHeight) {
@@ -147,18 +154,20 @@ export function applyTerrainLeveling(
  * Called immediately at placement time so the ground looks "raw" right away,
  * before height leveling begins.
  *
+ * @param _params Building location and type params (interface compatibility — not used internally)
+ * @param groundType Ground type array to modify
+ * @param mapSize Map dimensions
+ * @param originalTerrain Previously captured terrain state
  * @returns true if any ground type was changed
  */
 export function setConstructionSiteGroundType(
-    buildingState: BuildingState,
+    _params: TerrainBuildingParams,
     groundType: Uint8Array,
-    mapSize: MapSize
+    mapSize: MapSize,
+    originalTerrain: ConstructionSiteOriginalTerrain
 ): boolean {
-    const original = buildingState.originalTerrain;
-    if (!original) return false;
-
     let modified = false;
-    for (const tile of original.tiles) {
+    for (const tile of originalTerrain.tiles) {
         if (!tile.isFootprint) continue;
         const idx = mapSize.toIndex(tile.x, tile.y);
         if (groundType[idx] !== CONSTRUCTION_SITE_GROUND_TYPE) {
@@ -172,19 +181,22 @@ export function setConstructionSiteGroundType(
 /**
  * Restores original terrain when a building is cancelled/removed during construction.
  * Should be called before removing the building entity.
+ *
+ * @param originalTerrain Previously captured terrain state to restore from
+ * @param groundType Ground type array to modify
+ * @param groundHeight Ground height array to modify
+ * @param mapSize Map dimensions
+ * @returns true if terrain was modified
  */
 export function restoreOriginalTerrain(
-    buildingState: BuildingState,
+    originalTerrain: ConstructionSiteOriginalTerrain,
     groundType: Uint8Array,
     groundHeight: Uint8Array,
     mapSize: MapSize
 ): boolean {
-    const original = buildingState.originalTerrain;
-    if (!original) return false;
-
     let modified = false;
 
-    for (const tile of original.tiles) {
+    for (const tile of originalTerrain.tiles) {
         const idx = mapSize.toIndex(tile.x, tile.y);
 
         if (groundType[idx] !== tile.originalGroundType) {

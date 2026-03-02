@@ -10,11 +10,7 @@
  * - Expose player-facing controls: setMode, setProportion, addToQueue, removeFromQueue
  */
 
-import type { BuildingType } from '@/game/entity';
-import type { EMaterialType } from '@/game/economy/material-type';
-import { getRecipeSet } from '@/game/economy/building-production';
-import type { Recipe } from '@/game/economy/building-production';
-import type { ProductionMode, ProductionState } from './types';
+import { ProductionMode, type ProductionState } from './types';
 
 /**
  * Manages runtime production state for all multi-recipe buildings.
@@ -22,8 +18,8 @@ import type { ProductionMode, ProductionState } from './types';
  * Usage:
  * ```typescript
  * const manager = new ProductionControlManager();
- * manager.initBuilding(buildingId, BuildingType.ToolSmith);
- * const recipe = manager.getNextRecipe(buildingId, BuildingType.ToolSmith);
+ * manager.initBuilding(buildingId, recipeCount);
+ * const recipeIndex = manager.getNextRecipeIndex(buildingId);
  * ```
  */
 export class ProductionControlManager {
@@ -36,34 +32,30 @@ export class ProductionControlManager {
     /**
      * Register a building with the manager.
      *
-     * If the building type has a RecipeSet, a fresh ProductionState is created with:
-     * - mode = 'even'
-     * - equal proportions (weight=1) for every recipe
+     * Creates a fresh ProductionState with:
+     * - mode = ProductionMode.Even
+     * - equal proportions (weight=1) for every recipe index 0..recipeCount-1
      * - empty queue, zero counts, roundRobinIndex=0
      *
-     * Single-recipe buildings are silently ignored — they need no state.
-     *
      * @param buildingId  Entity ID of the building.
-     * @param buildingType  BuildingType enum value.
+     * @param recipeCount Number of recipes available for this building.
      */
-    initBuilding(buildingId: number, buildingType: BuildingType): void {
-        const recipeSet = getRecipeSet(buildingType);
-        if (!recipeSet) return; // Single-recipe — no state needed.
+    initBuilding(buildingId: number, recipeCount: number): void {
+        const proportions = new Map<number, number>();
+        const productionCounts = new Map<number, number>();
 
-        const proportions = new Map<EMaterialType, number>();
-        const productionCounts = new Map<EMaterialType, number>();
-
-        for (const recipe of recipeSet.recipes) {
-            proportions.set(recipe.output, 1);
-            productionCounts.set(recipe.output, 0);
+        for (let i = 0; i < recipeCount; i++) {
+            proportions.set(i, 1);
+            productionCounts.set(i, 0);
         }
 
         const state: ProductionState = {
-            mode: 'even',
+            mode: ProductionMode.Even,
             proportions,
             queue: [],
             roundRobinIndex: 0,
             productionCounts,
+            recipeCount,
         };
 
         this.states.set(buildingId, state);
@@ -83,50 +75,66 @@ export class ProductionControlManager {
     // =========================================================================
 
     /**
-     * Select and return the next Recipe for a production cycle.
+     * Peek at the next recipe index that would be selected, without consuming it.
      *
-     * Returns null in two cases:
-     * 1. The building is a single-recipe building (no state) — caller uses ProductionChain.
-     * 2. The building is in 'manual' mode with an empty queue — building idles.
+     * Use this to check prerequisites (inputs, carrier availability) before
+     * committing to the recipe via getNextRecipeIndex().
      *
-     * Always increments productionCounts for the chosen recipe.
-     *
-     * @param buildingId   Entity ID of the building.
-     * @param buildingType BuildingType enum value (needed to resolve RecipeSet).
+     * Returns null when the building has no state or manual mode queue is empty.
      */
-    getNextRecipe(buildingId: number, buildingType: BuildingType): Recipe | null {
+    peekNextRecipeIndex(buildingId: number): number | null {
         const state = this.states.get(buildingId);
-        if (!state) return null; // Single-recipe building — caller falls back.
-
-        const recipeSet = getRecipeSet(buildingType);
-        if (!recipeSet) {
-            throw new Error(
-                `ProductionControlManager: state exists for building ${buildingId} ` +
-                    `(${buildingType}) but no RecipeSet found — state is corrupted.`
-            );
-        }
-
-        const { recipes } = recipeSet;
-
-        let recipe: Recipe;
+        if (!state) return null;
 
         switch (state.mode) {
-        case 'even':
-            recipe = this.selectEven(state, recipes);
+        case ProductionMode.Even:
+            return state.roundRobinIndex % state.recipeCount;
+        case ProductionMode.Proportional:
+            return this.peekProportional(state);
+        case ProductionMode.Manual:
+            return state.queue.length > 0 ? state.queue[0]! : null;
+        default: {
+            const exhaustive: never = state.mode;
+            throw new Error(`ProductionControlManager: unknown mode '${exhaustive}' for building ${buildingId}.`);
+        }
+        }
+    }
+
+    /**
+     * Select and return the next recipe index for a production cycle.
+     *
+     * Returns null in two cases:
+     * 1. The building has no tracked state (not registered) — caller uses ProductionChain.
+     * 2. The building is in ProductionMode.Manual mode with an empty queue — building idles.
+     *
+     * Always increments productionCounts for the chosen index (except manual which
+     * handles it internally via selectManual).
+     *
+     * @param buildingId  Entity ID of the building.
+     */
+    getNextRecipeIndex(buildingId: number): number | null {
+        const state = this.states.get(buildingId);
+        if (!state) return null; // No state — caller falls back to single-recipe path.
+
+        let index: number;
+
+        switch (state.mode) {
+        case ProductionMode.Even:
+            index = this.selectEven(state);
             break;
-        case 'proportional':
-            recipe = this.selectProportional(state, recipes);
+        case ProductionMode.Proportional:
+            index = this.selectProportional(state);
             break;
-        case 'manual':
-            return this.selectManual(state, recipes);
+        case ProductionMode.Manual:
+            return this.selectManual(state);
         default: {
             const exhaustive: never = state.mode;
             throw new Error(`ProductionControlManager: unknown mode '${exhaustive}' for building ${buildingId}.`);
         }
         }
 
-        state.productionCounts.set(recipe.output, (state.productionCounts.get(recipe.output) ?? 0) + 1);
-        return recipe;
+        state.productionCounts.set(index, (state.productionCounts.get(index) ?? 0) + 1);
+        return index;
     }
 
     // =========================================================================
@@ -134,85 +142,104 @@ export class ProductionControlManager {
     // =========================================================================
 
     /**
-     * Round-robin selection: advance the cursor and return the recipe at that position.
+     * Round-robin selection: advance the cursor and return the recipe index at that position.
      */
-    private selectEven(state: ProductionState, recipes: readonly Recipe[]): Recipe {
-        const recipe = recipes[state.roundRobinIndex % recipes.length]!;
-        state.roundRobinIndex = (state.roundRobinIndex + 1) % recipes.length;
-        return recipe;
+    private selectEven(state: ProductionState): number {
+        const index = state.roundRobinIndex % state.recipeCount;
+        state.roundRobinIndex = (state.roundRobinIndex + 1) % state.recipeCount;
+        return index;
     }
 
     /**
-     * Weighted deficit selection: pick the recipe furthest behind its target proportion.
+     * Peek at proportional selection without mutating state.
+     */
+    private peekProportional(state: ProductionState): number {
+        const totalProduced = [...state.productionCounts.values()].reduce((sum, c) => sum + c, 0);
+        if (totalProduced === 0) return state.roundRobinIndex % state.recipeCount;
+
+        let totalWeight = 0;
+        for (let i = 0; i < state.recipeCount; i++) {
+            totalWeight += state.proportions.get(i) ?? 1;
+        }
+        if (totalWeight === 0) return state.roundRobinIndex % state.recipeCount;
+
+        let bestIndex = 0;
+        let bestDeficit = -Infinity;
+        for (let i = 0; i < state.recipeCount; i++) {
+            const weight = state.proportions.get(i) ?? 1;
+            const targetShare = weight / totalWeight;
+            const produced = state.productionCounts.get(i) ?? 0;
+            const actualShare = produced / totalProduced;
+            const deficit = targetShare - actualShare;
+            if (deficit > bestDeficit) {
+                bestDeficit = deficit;
+                bestIndex = i;
+            }
+        }
+        return bestIndex;
+    }
+
+    /**
+     * Weighted deficit selection: pick the recipe index furthest behind its target proportion.
      *
      * Algorithm:
-     * 1. Compute totalProduced and totalWeight across all recipes.
-     * 2. For each recipe, compute its actual share (produced / totalProduced)
+     * 1. Compute totalProduced and totalWeight across all recipe indices.
+     * 2. For each index, compute its actual share (produced / totalProduced)
      *    and its target share (weight / totalWeight).
-     * 3. Select the recipe with the largest deficit (target − actual).
-     * 4. Ties are broken by recipe order (first in RecipeSet wins).
+     * 3. Select the index with the largest deficit (target − actual).
+     * 4. Ties are broken by index order (lowest index wins).
      *
      * When totalProduced is zero (first cycle), fall back to even selection.
      */
-    private selectProportional(state: ProductionState, recipes: readonly Recipe[]): Recipe {
+    private selectProportional(state: ProductionState): number {
         const totalProduced = [...state.productionCounts.values()].reduce((sum, c) => sum + c, 0);
 
         if (totalProduced === 0) {
             // No history yet — fall back to even for the first cycle.
-            return this.selectEven(state, recipes);
+            return this.selectEven(state);
         }
 
         let totalWeight = 0;
-        for (const recipe of recipes) {
-            totalWeight += state.proportions.get(recipe.output) ?? 1;
+        for (let i = 0; i < state.recipeCount; i++) {
+            totalWeight += state.proportions.get(i) ?? 1;
         }
 
         if (totalWeight === 0) {
             // All weights are zero — treat as even.
-            return this.selectEven(state, recipes);
+            return this.selectEven(state);
         }
 
-        let bestRecipe = recipes[0]!;
+        let bestIndex = 0;
         let bestDeficit = -Infinity;
 
-        for (const recipe of recipes) {
-            const weight = state.proportions.get(recipe.output) ?? 1;
+        for (let i = 0; i < state.recipeCount; i++) {
+            const weight = state.proportions.get(i) ?? 1;
             const targetShare = weight / totalWeight;
-            const produced = state.productionCounts.get(recipe.output) ?? 0;
+            const produced = state.productionCounts.get(i) ?? 0;
             const actualShare = produced / totalProduced;
             const deficit = targetShare - actualShare;
 
             if (deficit > bestDeficit) {
                 bestDeficit = deficit;
-                bestRecipe = recipe;
+                bestIndex = i;
             }
         }
 
-        return bestRecipe;
+        return bestIndex;
     }
 
     /**
-     * Manual queue selection: pop the first output material from the queue,
-     * find the matching recipe, and return it. Returns null (idle) if queue is empty.
+     * Manual queue selection: pop the first recipe index from the queue and return it.
+     * Returns null (idle) if queue is empty.
      *
-     * Throws if the queued output does not match any recipe — that indicates a bug
-     * in how queue items were added.
+     * Increments productionCounts for the chosen index.
      */
-    private selectManual(state: ProductionState, recipes: readonly Recipe[]): Recipe | null {
+    private selectManual(state: ProductionState): number | null {
         if (state.queue.length === 0) return null; // Building idles.
 
-        const output = state.queue.shift()!;
-        const recipe = recipes.find(r => r.output === output);
-
-        if (!recipe) {
-            throw new Error(
-                `ProductionControlManager: queued output ${output} does not match any recipe ` +
-                    `in the RecipeSet. Queue may be stale — clear and re-add entries.`
-            );
-        }
-
-        state.productionCounts.set(recipe.output, (state.productionCounts.get(recipe.output) ?? 0) + 1);
-        return recipe;
+        const index = state.queue.shift()!;
+        state.productionCounts.set(index, (state.productionCounts.get(index) ?? 0) + 1);
+        return index;
     }
 
     // =========================================================================
@@ -222,7 +249,7 @@ export class ProductionControlManager {
     /**
      * Change the production mode for a building.
      *
-     * Switching to 'even' resets the round-robin cursor to 0 so production
+     * Switching to ProductionMode.Even resets the round-robin cursor to 0 so production
      * starts fresh from the first recipe rather than resuming mid-cycle.
      *
      * @param buildingId Entity ID of the building.
@@ -231,57 +258,57 @@ export class ProductionControlManager {
     setMode(buildingId: number, mode: ProductionMode): void {
         const state = this.requireState(buildingId);
         state.mode = mode;
-        if (mode === 'even') {
+        if (mode === ProductionMode.Even) {
             state.roundRobinIndex = 0;
         }
     }
 
     /**
-     * Update the target weight for a recipe identified by its output material.
+     * Update the target weight for a recipe identified by its index.
      *
      * Weight is clamped to [0, 10]. A weight of 0 effectively disables the recipe
      * in proportional mode (it will never be selected unless all weights are 0).
      *
-     * @param buildingId Entity ID of the building.
-     * @param output     Output material that identifies the recipe.
-     * @param weight     Target weight in the range [0, 10].
+     * @param buildingId  Entity ID of the building.
+     * @param recipeIndex Recipe index (0..recipeCount-1).
+     * @param weight      Target weight in the range [0, 10].
      */
-    setProportion(buildingId: number, output: EMaterialType, weight: number): void {
+    setProportion(buildingId: number, recipeIndex: number, weight: number): void {
         const state = this.requireState(buildingId);
         const clamped = Math.max(0, Math.min(10, weight));
-        state.proportions.set(output, clamped);
+        state.proportions.set(recipeIndex, clamped);
     }
 
     /**
-     * Append an output material to the end of the manual production queue.
+     * Append a recipe index to the end of the manual production queue.
      *
-     * @param buildingId Entity ID of the building.
-     * @param output     Output material to enqueue.
+     * @param buildingId  Entity ID of the building.
+     * @param recipeIndex Recipe index to enqueue.
      */
-    addToQueue(buildingId: number, output: EMaterialType): void {
+    addToQueue(buildingId: number, recipeIndex: number): void {
         const state = this.requireState(buildingId);
-        state.queue.push(output);
+        state.queue.push(recipeIndex);
     }
 
     /**
-     * Remove the last occurrence of an output material from the manual queue.
+     * Remove the last occurrence of a recipe index from the manual queue.
      *
      * This mirrors a "decrement" UI action — if the player added the same recipe
      * multiple times, each call removes one instance from the back.
-     * Does nothing if the output is not in the queue.
+     * Does nothing if the index is not in the queue.
      *
-     * @param buildingId Entity ID of the building.
-     * @param output     Output material whose last queue entry should be removed.
+     * @param buildingId  Entity ID of the building.
+     * @param recipeIndex Recipe index whose last queue entry should be removed.
      */
-    removeFromQueue(buildingId: number, output: EMaterialType): void {
+    removeFromQueue(buildingId: number, recipeIndex: number): void {
         const state = this.requireState(buildingId);
         for (let i = state.queue.length - 1; i >= 0; i--) {
-            if (state.queue[i] === output) {
+            if (state.queue[i] === recipeIndex) {
                 state.queue.splice(i, 1);
                 return;
             }
         }
-        // Output not in queue — nothing to do.
+        // Index not in queue — nothing to do.
     }
 
     // =========================================================================
@@ -290,23 +317,12 @@ export class ProductionControlManager {
 
     /**
      * Return a readonly view of the current ProductionState for a building.
-     * Returns undefined for single-recipe buildings (no state tracked).
+     * Returns undefined for buildings with no tracked state.
      *
      * @param buildingId Entity ID of the building.
      */
     getProductionState(buildingId: number): Readonly<ProductionState> | undefined {
         return this.states.get(buildingId);
-    }
-
-    /**
-     * Return all recipes available for a building.
-     * Returns an empty array for single-recipe buildings (use ProductionChain instead).
-     *
-     * @param buildingId   Entity ID of the building (unused, for API symmetry).
-     * @param buildingType BuildingType enum value to resolve the RecipeSet.
-     */
-    getRecipes(_buildingId: number, buildingType: BuildingType): readonly Recipe[] {
-        return getRecipeSet(buildingType)?.recipes ?? [];
     }
 
     // =========================================================================
@@ -322,7 +338,7 @@ export class ProductionControlManager {
         if (!state) {
             throw new Error(
                 `ProductionControlManager: no state for building ${buildingId}. ` +
-                    `Ensure initBuilding() was called for a multi-recipe building.`
+                    `Ensure initBuilding() was called before invoking player-facing controls.`
             );
         }
         return state;
