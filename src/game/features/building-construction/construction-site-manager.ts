@@ -9,7 +9,7 @@
  * Consumers (digger AI, builder AI, carrier logistics) read from and mutate through
  * this manager rather than touching ConstructionSite objects directly.
  *
- * Terrain fields (originalTerrain, terrainModified) are mutated directly on the
+ * Terrain fields (terrain.originalTerrain, terrain.modified) are mutated directly on the
  * ConstructionSite record via getSiteOrThrow() — no dedicated accessor methods needed.
  */
 
@@ -20,13 +20,13 @@ import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionCost } from '../../economy/building-production';
 import { getConstructionCosts } from '../../economy/building-production';
 import type { EventBus } from '../../event-bus';
-import { BuildingConstructionPhase, type ConstructionSite } from './types';
+import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionSite } from './types';
 
 // ── Serialization types ──
 
 /**
  * Serialized form of a ConstructionSite for game state persistence.
- * Worker assignments (assignedDiggers, assignedBuilders) are NOT serialized —
+ * Worker assignments (terrain.slots.assigned, building.slots.assigned) are NOT serialized —
  * workers are re-assigned by the settler task system on load.
  */
 export interface SerializedConstructionSite {
@@ -106,7 +106,7 @@ export class ConstructionSiteManager {
         }
 
         const constructionCosts = getConstructionCosts(buildingType, race);
-        const totalCostAmount = constructionCosts.reduce((sum, c) => sum + c.count, 0);
+        const totalCost = constructionCosts.reduce((sum, c) => sum + c.count, 0);
         const workerCount = getWorkerCount(buildingType);
 
         const site: ConstructionSite = {
@@ -117,20 +117,26 @@ export class ConstructionSiteManager {
             tileX,
             tileY,
             phase: BuildingConstructionPhase.WaitingForDiggers,
-            originalTerrain: null,
-            terrainModified: false,
-            requiredDiggers: workerCount,
-            assignedDiggers: new Set(),
-            levelingProgress: 0,
-            levelingComplete: false,
-            constructionCosts,
-            deliveredMaterials: new Map(),
-            totalCostAmount,
-            deliveredAmount: 0,
-            requiredBuilders: workerCount,
-            assignedBuilders: new Set(),
-            constructionProgress: 0,
-            consumedAmount: 0,
+            terrain: {
+                slots: { required: workerCount, assigned: new Set(), started: false },
+                progress: 0,
+                complete: false,
+                originalTerrain: null,
+                modified: false,
+                unleveledTiles: null,
+                totalLevelingTiles: 0,
+            },
+            materials: {
+                costs: constructionCosts,
+                delivered: new Map(),
+                totalCost,
+                deliveredAmount: 0,
+                consumedAmount: 0,
+            },
+            building: {
+                slots: { required: workerCount, assigned: new Set(), started: false },
+                progress: 0,
+            },
             completedRisingProgress: 0,
         };
 
@@ -171,7 +177,7 @@ export class ConstructionSiteManager {
     /** True when there is at least one open digger slot on this site. */
     getDiggerSlotAvailable(buildingId: number): boolean {
         const site = this.getSiteOrThrow(buildingId, 'getDiggerSlotAvailable');
-        return site.assignedDiggers.size < site.requiredDiggers;
+        return site.terrain.slots.assigned.size < site.terrain.slots.required;
     }
 
     /**
@@ -180,9 +186,10 @@ export class ConstructionSiteManager {
      */
     claimDiggerSlot(buildingId: number, diggerId: number): void {
         const site = this.getSiteOrThrow(buildingId, 'claimDiggerSlot');
-        const wasEmpty = site.assignedDiggers.size === 0;
-        site.assignedDiggers.add(diggerId);
-        if (wasEmpty) {
+        site.terrain.slots.assigned.add(diggerId);
+        this.eventBus.emit('construction:workerAssigned', { buildingId, workerId: diggerId, role: 'digger' });
+        if (!site.terrain.slots.started) {
+            site.terrain.slots.started = true;
             this.eventBus.emit('construction:diggingStarted', { buildingId });
         }
     }
@@ -190,21 +197,105 @@ export class ConstructionSiteManager {
     /** Release a digger slot previously claimed by `diggerId`. */
     releaseDiggerSlot(buildingId: number, diggerId: number): void {
         const site = this.getSiteOrThrow(buildingId, 'releaseDiggerSlot');
-        site.assignedDiggers.delete(diggerId);
+        site.terrain.slots.assigned.delete(diggerId);
+        this.eventBus.emit('construction:workerReleased', { buildingId, workerId: diggerId, role: 'digger' });
     }
 
     /**
      * Advance terrain leveling by `amount` (0.0–1.0 fraction).
-     * Emits `construction:levelingComplete` the first time `levelingProgress` reaches 1.0.
+     * Emits `construction:levelingComplete` the first time `terrain.progress` reaches 1.0.
+     * No-op when per-tile tracking is active (unleveledTiles set) — progress is managed by completeNextTile.
      */
     advanceLeveling(buildingId: number, amount: number): void {
         const site = this.getSiteOrThrow(buildingId, 'advanceLeveling');
-        if (site.levelingComplete) return;
-        site.levelingProgress += amount;
-        if (site.levelingProgress >= 1.0) {
-            site.levelingComplete = true;
+        if (site.terrain.complete) return;
+        // Per-tile tracking active — progress is managed by completeNextTile
+        if (site.terrain.unleveledTiles) return;
+        site.terrain.progress += amount;
+        if (site.terrain.progress >= 1.0) {
+            site.terrain.complete = true;
             this.eventBus.emit('construction:levelingComplete', { buildingId });
         }
+    }
+
+    /**
+     * Populate the per-tile tracking set from captured terrain data.
+     * Called once when digging starts and originalTerrain is available.
+     * Tiles whose original height already matches targetHeight are skipped.
+     */
+    populateUnleveledTiles(buildingId: number): void {
+        const site = this.getSiteOrThrow(buildingId, 'populateUnleveledTiles');
+        if (!site.terrain.originalTerrain) {
+            throw new Error(
+                `ConstructionSiteManager[populateUnleveledTiles]: no originalTerrain for buildingId ${buildingId}`
+            );
+        }
+        const terrain = site.terrain.originalTerrain;
+        const unleveled = new Set<number>();
+        for (let i = 0; i < terrain.tiles.length; i++) {
+            if (terrain.tiles[i]!.originalGroundHeight !== terrain.targetHeight) {
+                unleveled.add(i);
+            }
+        }
+        site.terrain.unleveledTiles = unleveled;
+        site.terrain.totalLevelingTiles = unleveled.size;
+        // If no tiles need leveling (flat terrain), immediately complete
+        if (unleveled.size === 0) {
+            site.terrain.complete = true;
+            site.terrain.progress = 1;
+            this.eventBus.emit('construction:levelingComplete', { buildingId });
+        }
+    }
+
+    /**
+     * Get the position of the next unleveled tile for a digger to walk to.
+     * Returns null if no tiles remain (leveling complete).
+     * Does NOT remove the tile from the set — that happens in completeNextTile.
+     */
+    getNextUnleveledTilePos(buildingId: number): { x: number; y: number } | null {
+        const site = this.getSiteOrThrow(buildingId, 'getNextUnleveledTilePos');
+        if (!site.terrain.unleveledTiles || site.terrain.unleveledTiles.size === 0) return null;
+        const tileIndex = site.terrain.unleveledTiles.values().next().value!;
+        const tile = site.terrain.originalTerrain!.tiles[tileIndex]!;
+        return { x: tile.x, y: tile.y };
+    }
+
+    /**
+     * Complete leveling for the next unleveled tile.
+     * Removes it from the set, emits construction:tileCompleted with tile data,
+     * updates terrain.progress, and emits construction:levelingComplete when done.
+     * Returns the completed tile data, or null if no tiles remain.
+     */
+    completeNextTile(buildingId: number): CapturedTerrainTile | null {
+        const site = this.getSiteOrThrow(buildingId, 'completeNextTile');
+        if (!site.terrain.unleveledTiles || site.terrain.unleveledTiles.size === 0) return null;
+
+        const tileIndex = site.terrain.unleveledTiles.values().next().value!;
+        site.terrain.unleveledTiles.delete(tileIndex);
+
+        const tile = site.terrain.originalTerrain!.tiles[tileIndex]!;
+
+        // Emit per-tile event for terrain modification
+        this.eventBus.emit('construction:tileCompleted', {
+            buildingId,
+            tileX: tile.x,
+            tileY: tile.y,
+            targetHeight: site.terrain.originalTerrain!.targetHeight,
+            isFootprint: tile.isFootprint,
+        });
+
+        // Update derived progress
+        if (site.terrain.totalLevelingTiles > 0) {
+            site.terrain.progress = 1 - site.terrain.unleveledTiles.size / site.terrain.totalLevelingTiles;
+        }
+
+        // Check completion
+        if (site.terrain.unleveledTiles.size === 0) {
+            site.terrain.complete = true;
+            this.eventBus.emit('construction:levelingComplete', { buildingId });
+        }
+
+        return tile;
     }
 
     // ── Builder management ──
@@ -212,7 +303,7 @@ export class ConstructionSiteManager {
     /** True when there is at least one open builder slot on this site. */
     getBuilderSlotAvailable(buildingId: number): boolean {
         const site = this.getSiteOrThrow(buildingId, 'getBuilderSlotAvailable');
-        return site.assignedBuilders.size < site.requiredBuilders;
+        return site.building.slots.assigned.size < site.building.slots.required;
     }
 
     /**
@@ -221,9 +312,10 @@ export class ConstructionSiteManager {
      */
     claimBuilderSlot(buildingId: number, builderId: number): void {
         const site = this.getSiteOrThrow(buildingId, 'claimBuilderSlot');
-        const wasEmpty = site.assignedBuilders.size === 0;
-        site.assignedBuilders.add(builderId);
-        if (wasEmpty) {
+        site.building.slots.assigned.add(builderId);
+        this.eventBus.emit('construction:workerAssigned', { buildingId, workerId: builderId, role: 'builder' });
+        if (!site.building.slots.started) {
+            site.building.slots.started = true;
             this.eventBus.emit('construction:buildingStarted', { buildingId });
         }
     }
@@ -231,18 +323,19 @@ export class ConstructionSiteManager {
     /** Release a builder slot previously claimed by `builderId`. */
     releaseBuilderSlot(buildingId: number, builderId: number): void {
         const site = this.getSiteOrThrow(buildingId, 'releaseBuilderSlot');
-        site.assignedBuilders.delete(builderId);
+        site.building.slots.assigned.delete(builderId);
+        this.eventBus.emit('construction:workerReleased', { buildingId, workerId: builderId, role: 'builder' });
     }
 
     /**
      * Advance construction by `amount` (0.0–1.0 fraction).
-     * Emits `construction:progressComplete` the first time `constructionProgress` reaches 1.0.
+     * Emits `construction:progressComplete` the first time `building.progress` reaches 1.0.
      */
     advanceConstruction(buildingId: number, amount: number): void {
         const site = this.getSiteOrThrow(buildingId, 'advanceConstruction');
-        const wasComplete = site.constructionProgress >= 1.0;
-        site.constructionProgress += amount;
-        if (!wasComplete && site.constructionProgress >= 1.0) {
+        const wasComplete = site.building.progress >= 1.0;
+        site.building.progress += amount;
+        if (!wasComplete && site.building.progress >= 1.0) {
             this.eventBus.emit('construction:progressComplete', { buildingId });
         }
     }
@@ -251,13 +344,13 @@ export class ConstructionSiteManager {
 
     /**
      * Record delivery of `amount` units of `material` to this site.
-     * Accumulates into `deliveredMaterials` and increments `deliveredAmount`.
+     * Accumulates into `materials.delivered` and increments `materials.deliveredAmount`.
      */
     recordDelivery(buildingId: number, material: EMaterialType, amount: number): void {
         const site = this.getSiteOrThrow(buildingId, 'recordDelivery');
-        const current = site.deliveredMaterials.get(material) ?? 0;
-        site.deliveredMaterials.set(material, current + amount);
-        site.deliveredAmount += amount;
+        const current = site.materials.delivered.get(material) ?? 0;
+        site.materials.delivered.set(material, current + amount);
+        site.materials.deliveredAmount += amount;
     }
 
     /**
@@ -266,7 +359,7 @@ export class ConstructionSiteManager {
      */
     hasAvailableMaterials(buildingId: number): boolean {
         const site = this.getSiteOrThrow(buildingId, 'hasAvailableMaterials');
-        return site.deliveredAmount > site.consumedAmount;
+        return site.materials.deliveredAmount > site.materials.consumedAmount;
     }
 
     /**
@@ -276,8 +369,8 @@ export class ConstructionSiteManager {
     getRemainingCosts(buildingId: number): ConstructionCost[] {
         const site = this.getSiteOrThrow(buildingId, 'getRemainingCosts');
         const remaining: ConstructionCost[] = [];
-        for (const cost of site.constructionCosts) {
-            const delivered = site.deliveredMaterials.get(cost.material) ?? 0;
+        for (const cost of site.materials.costs) {
+            const delivered = site.materials.delivered.get(cost.material) ?? 0;
             if (delivered < cost.count) {
                 remaining.push({ material: cost.material, count: cost.count - delivered });
             }
@@ -289,7 +382,7 @@ export class ConstructionSiteManager {
 
     /**
      * Find the nearest site for `player` that still needs a digger.
-     * Eligibility: leveling not complete AND assignedDiggers.size < requiredDiggers.
+     * Eligibility: terrain.complete is false AND terrain.slots.assigned.size < terrain.slots.required.
      * Ties broken by buildingId (lower first) for determinism.
      * Returns the buildingId, or undefined if none found.
      */
@@ -299,8 +392,8 @@ export class ConstructionSiteManager {
 
         for (const site of this.sites.values()) {
             if (site.player !== player) continue;
-            if (site.levelingComplete) continue;
-            if (site.assignedDiggers.size >= site.requiredDiggers) continue;
+            if (site.terrain.complete) continue;
+            if (site.terrain.slots.assigned.size >= site.terrain.slots.required) continue;
 
             const dx = site.tileX - nearX;
             const dy = site.tileY - nearY;
@@ -317,7 +410,7 @@ export class ConstructionSiteManager {
 
     /**
      * Find the nearest site for `player` that needs a builder.
-     * Eligibility: levelingComplete AND hasAvailableMaterials AND assignedBuilders.size < requiredBuilders.
+     * Eligibility: terrain.complete AND hasAvailableMaterials AND building.slots.assigned.size < building.slots.required.
      * Ties broken by buildingId (lower first) for determinism.
      * Returns the buildingId, or undefined if none found.
      */
@@ -327,9 +420,9 @@ export class ConstructionSiteManager {
 
         for (const site of this.sites.values()) {
             if (site.player !== player) continue;
-            if (!site.levelingComplete) continue;
-            if (site.assignedBuilders.size >= site.requiredBuilders) continue;
-            if (site.deliveredAmount <= site.consumedAmount) continue;
+            if (!site.terrain.complete) continue;
+            if (site.building.slots.assigned.size >= site.building.slots.required) continue;
+            if (site.materials.deliveredAmount <= site.materials.consumedAmount) continue;
 
             const dx = site.tileX - nearX;
             const dy = site.tileY - nearY;
@@ -364,12 +457,12 @@ export class ConstructionSiteManager {
                 tileX: site.tileX,
                 tileY: site.tileY,
                 phase: site.phase,
-                levelingProgress: site.levelingProgress,
-                levelingComplete: site.levelingComplete,
-                constructionProgress: site.constructionProgress,
-                deliveredMaterials: [...site.deliveredMaterials.entries()],
-                consumedAmount: site.consumedAmount,
-                terrainModified: site.terrainModified,
+                levelingProgress: site.terrain.progress,
+                levelingComplete: site.terrain.complete,
+                constructionProgress: site.building.progress,
+                deliveredMaterials: [...site.materials.delivered.entries()],
+                consumedAmount: site.materials.consumedAmount,
+                terrainModified: site.terrain.modified,
             });
         }
         return result;
@@ -378,7 +471,7 @@ export class ConstructionSiteManager {
     /**
      * Restore a previously serialized construction site.
      * Worker assignments are left empty — settler task system re-assigns on load.
-     * originalTerrain is not restored — terrain is already in its modified state.
+     * terrain.originalTerrain is not restored — terrain is already in its modified state.
      */
     restoreSite(data: SerializedConstructionSite): void {
         if (this.sites.has(data.buildingId)) {
@@ -388,11 +481,11 @@ export class ConstructionSiteManager {
         }
 
         const constructionCosts = getConstructionCosts(data.buildingType, data.race);
-        const totalCostAmount = constructionCosts.reduce((sum, c) => sum + c.count, 0);
+        const totalCost = constructionCosts.reduce((sum, c) => sum + c.count, 0);
         const workerCount = getWorkerCount(data.buildingType);
 
-        const deliveredMaterials = new Map<EMaterialType, number>(data.deliveredMaterials);
-        const deliveredAmount = [...deliveredMaterials.values()].reduce((sum, v) => sum + v, 0);
+        const delivered = new Map<EMaterialType, number>(data.deliveredMaterials);
+        const deliveredAmount = [...delivered.values()].reduce((sum, v) => sum + v, 0);
 
         const site: ConstructionSite = {
             buildingId: data.buildingId,
@@ -402,20 +495,34 @@ export class ConstructionSiteManager {
             tileX: data.tileX,
             tileY: data.tileY,
             phase: data.phase,
-            originalTerrain: null, // Not persisted — terrain is already in modified state
-            terrainModified: data.terrainModified,
-            requiredDiggers: workerCount,
-            assignedDiggers: new Set(),
-            levelingProgress: data.levelingProgress,
-            levelingComplete: data.levelingComplete,
-            constructionCosts,
-            deliveredMaterials,
-            totalCostAmount,
-            deliveredAmount,
-            requiredBuilders: workerCount,
-            assignedBuilders: new Set(),
-            constructionProgress: data.constructionProgress,
-            consumedAmount: data.consumedAmount,
+            terrain: {
+                slots: {
+                    required: workerCount,
+                    assigned: new Set(),
+                    started: data.levelingProgress > 0,
+                },
+                progress: data.levelingProgress,
+                complete: data.levelingComplete,
+                originalTerrain: null, // Not persisted — terrain is already in modified state
+                modified: data.terrainModified,
+                unleveledTiles: null,
+                totalLevelingTiles: 0,
+            },
+            materials: {
+                costs: constructionCosts,
+                delivered,
+                totalCost,
+                deliveredAmount,
+                consumedAmount: data.consumedAmount,
+            },
+            building: {
+                slots: {
+                    required: workerCount,
+                    assigned: new Set(),
+                    started: data.constructionProgress > 0,
+                },
+                progress: data.constructionProgress,
+            },
             completedRisingProgress: 0,
         };
 

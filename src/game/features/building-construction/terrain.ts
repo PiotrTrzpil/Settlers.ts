@@ -150,6 +150,45 @@ export function applyTerrainLeveling(
 }
 
 /**
+ * Apply terrain leveling for a single tile.
+ * Sets the tile's height to the target height and changes ground type for footprint tiles.
+ * Called by construction-system when a digger completes one tile.
+ *
+ * @param tileX Tile X coordinate
+ * @param tileY Tile Y coordinate
+ * @param targetHeight The target leveled height
+ * @param isFootprint Whether this tile is part of the building footprint
+ * @param groundType Ground type array to modify
+ * @param groundHeight Ground height array to modify
+ * @param mapSize Map dimensions
+ * @returns true if terrain was actually modified
+ */
+export function applySingleTileLeveling(
+    tileX: number,
+    tileY: number,
+    targetHeight: number,
+    isFootprint: boolean,
+    groundType: Uint8Array,
+    groundHeight: Uint8Array,
+    mapSize: MapSize
+): boolean {
+    const idx = mapSize.toIndex(tileX, tileY);
+    let modified = false;
+
+    if (groundHeight[idx] !== targetHeight) {
+        groundHeight[idx] = targetHeight;
+        modified = true;
+    }
+
+    if (isFootprint && groundType[idx] !== CONSTRUCTION_SITE_GROUND_TYPE) {
+        groundType[idx] = CONSTRUCTION_SITE_GROUND_TYPE;
+        modified = true;
+    }
+
+    return modified;
+}
+
+/**
  * Sets ground type to construction site material for all footprint tiles.
  * Called immediately at placement time so the ground looks "raw" right away,
  * before height leveling begins.

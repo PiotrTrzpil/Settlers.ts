@@ -81,9 +81,9 @@ export function useBuildingDebugInfo(
             constructionPhase = PHASE_NAMES[site.phase];
             // Show overall progress as percentage: phases 0-2 use levelingProgress, phase 3 uses constructionProgress
             if (site.phase <= BuildingConstructionPhase.WaitingForBuilders) {
-                constructionProgress = Math.round(site.levelingProgress * 30);
+                constructionProgress = Math.round(site.terrain.progress * 30);
             } else if (site.phase === BuildingConstructionPhase.ConstructionRising) {
-                constructionProgress = 30 + Math.round(site.constructionProgress * 70);
+                constructionProgress = 30 + Math.round(site.building.progress * 70);
             } else {
                 constructionProgress = 100;
             }

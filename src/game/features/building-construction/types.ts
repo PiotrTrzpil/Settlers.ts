@@ -56,6 +56,66 @@ export interface ConstructionSiteOriginalTerrain {
 }
 
 /**
+ * Worker slot tracking — shared structure for both digger and builder phases.
+ * Tracks assigned workers and the one-shot "started" event flag.
+ */
+export interface WorkerSlots {
+    /** Max concurrent workers for this phase (derived from building size) */
+    required: number;
+    /** Entity IDs of workers currently assigned */
+    assigned: Set<number>;
+    /** Whether the first worker has been assigned (for one-shot event emission) */
+    started: boolean;
+}
+
+/**
+ * Terrain leveling phase data.
+ * Tracks digger slots, leveling progress, and captured terrain for restoration.
+ */
+export interface TerrainPhase {
+    slots: WorkerSlots;
+    /** 0.0–1.0, incremented by each digger work tick */
+    progress: number;
+    /** All terrain leveled — gate for builder assignment */
+    complete: boolean;
+    /** Original terrain state before construction site modification. Set when digging starts. */
+    originalTerrain: ConstructionSiteOriginalTerrain | null;
+    /** Whether terrain leveling has been finalized (applied at 1.0) */
+    modified: boolean;
+    /** Indices into originalTerrain.tiles[] for tiles that still need height leveling. Null before terrain capture. */
+    unleveledTiles: Set<number> | null;
+    /** Total number of tiles that needed leveling (for progress calculation). 0 before terrain capture. */
+    totalLevelingTiles: number;
+}
+
+/**
+ * Material delivery tracking.
+ * Tracks construction costs and delivered/consumed quantities.
+ */
+export interface MaterialsData {
+    /** From getConstructionCosts(buildingType, race) */
+    costs: readonly ConstructionCost[];
+    /** Materials delivered so far */
+    delivered: Map<EMaterialType, number>;
+    /** Sum of all cost quantities */
+    totalCost: number;
+    /** Sum of all delivered quantities */
+    deliveredAmount: number;
+    /** Materials consumed by builder work ticks */
+    consumedAmount: number;
+}
+
+/**
+ * Building construction phase data.
+ * Tracks builder slots and construction progress.
+ */
+export interface BuildingPhase {
+    slots: WorkerSlots;
+    /** 0.0–1.0, incremented by builder work ticks */
+    progress: number;
+}
+
+/**
  * Active construction site data — one per building under construction.
  * Managed by ConstructionSiteManager.
  * Created on building:placed, removed on building:completed or entity removal.
@@ -72,34 +132,12 @@ export interface ConstructionSite {
     tileY: number;
     /** Current construction phase */
     phase: BuildingConstructionPhase;
-    /** Original terrain state before construction site modification. Set when digging starts. */
-    originalTerrain: ConstructionSiteOriginalTerrain | null;
-    /** Whether terrain leveling has been finalized (applied at 1.0) */
-    terrainModified: boolean;
-    /** Digger slots (from building size) */
-    requiredDiggers: number;
-    /** Entity IDs of diggers currently working */
-    assignedDiggers: Set<number>;
-    /** 0.0–1.0, incremented by each digger work tick */
-    levelingProgress: number;
-    /** All terrain leveled */
-    levelingComplete: boolean;
-    /** From getConstructionCosts(buildingType, race) */
-    constructionCosts: readonly ConstructionCost[];
-    /** Materials delivered so far */
-    deliveredMaterials: Map<EMaterialType, number>;
-    /** Sum of all cost quantities */
-    totalCostAmount: number;
-    /** Sum of all delivered quantities */
-    deliveredAmount: number;
-    /** Builder slots (from building size) */
-    requiredBuilders: number;
-    /** Entity IDs of builders currently working */
-    assignedBuilders: Set<number>;
-    /** 0.0–1.0, incremented by builder work ticks */
-    constructionProgress: number;
-    /** Materials consumed by builder work ticks */
-    consumedAmount: number;
+    /** Terrain leveling phase data (digger slots, progress, captured terrain) */
+    terrain: TerrainPhase;
+    /** Material delivery tracking */
+    materials: MaterialsData;
+    /** Building construction phase data (builder slots, progress) */
+    building: BuildingPhase;
     /** 0.0–1.0, driven by CompletedRising timer. Used by visual state for the final rise animation. */
     completedRisingProgress: number;
 }

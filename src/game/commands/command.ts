@@ -83,7 +83,17 @@ export interface CommandContext {
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): CommandResult {
     const { state, terrain } = ctx;
 
-    if (!canPlaceBuildingFootprint(terrain, state.tileOccupancy, cmd.x, cmd.y, cmd.buildingType, cmd.race)) {
+    if (
+        !canPlaceBuildingFootprint(
+            terrain,
+            state.tileOccupancy,
+            cmd.x,
+            cmd.y,
+            cmd.buildingType,
+            cmd.race,
+            state.buildingFootprint
+        )
+    ) {
         return commandFailed(`Cannot place building at (${cmd.x}, ${cmd.y}): invalid placement`);
     }
 
@@ -120,7 +130,7 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
     // Store captured originalTerrain on the construction site (created by building:placed handler).
     // Must happen after event emission so the site exists.
     const site = ctx.constructionSiteManager.getSite(entity.id);
-    if (site) site.originalTerrain = originalTerrain;
+    if (site) site.terrain.originalTerrain = originalTerrain;
 
     // If placed as completed, emit event (spawning handled by BuildingConstructionSystem listener)
     if (cmd.completed) {

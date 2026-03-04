@@ -20,7 +20,7 @@ import type { GameState } from '../../game-state';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { BuildingConstructionPhase, type TerrainContext, type ConstructionSite } from './types';
 import { COMPLETED_RISING_DURATION } from './internal/phase-transitions';
-import { captureOriginalTerrain, applyTerrainLeveling, restoreOriginalTerrain } from './terrain';
+import { captureOriginalTerrain, restoreOriginalTerrain, applySingleTileLeveling } from './terrain';
 import type { ConstructionSiteManager } from './construction-site-manager';
 import type { Command, CommandResult } from '../../commands';
 import { BUILDING_SPAWN_ON_COMPLETE } from './spawn-units';
@@ -103,26 +103,46 @@ export class BuildingConstructionSystem implements TickSystem {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
             site.phase = BuildingConstructionPhase.TerrainLeveling;
-            if (!site.originalTerrain && this.terrainContext) {
+            if (!site.terrain.originalTerrain && this.terrainContext) {
                 const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
-                site.originalTerrain = captureOriginalTerrain(site, groundType, groundHeight, mapSize);
+                site.terrain.originalTerrain = captureOriginalTerrain(site, groundType, groundHeight, mapSize);
             }
+            // Populate per-tile tracking from captured terrain
+            this.constructionSiteManager.populateUnleveledTiles(buildingId);
         });
 
-        // construction:levelingComplete → WaitingForBuilders (finalize terrain at 1.0)
+        // construction:tileCompleted → apply single tile terrain change
+        this.subscriptions.subscribe(
+            this.eventBus,
+            'construction:tileCompleted',
+            ({ tileX, tileY, targetHeight, isFootprint }) => {
+                if (!this.terrainContext) return;
+                const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
+                const modified = applySingleTileLeveling(
+                    tileX,
+                    tileY,
+                    targetHeight,
+                    isFootprint,
+                    groundType,
+                    groundHeight,
+                    mapSize
+                );
+                if (modified && this.terrainContext.onTerrainModified) {
+                    this.terrainContext.onTerrainModified();
+                }
+            }
+        );
+
+        // construction:levelingComplete → WaitingForBuilders (all tiles already leveled individually)
         this.subscriptions.subscribe(this.eventBus, 'construction:levelingComplete', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
             site.phase = BuildingConstructionPhase.WaitingForBuilders;
             // Building structure starts rising — footprint is no longer walkable.
             this.state.restoreBuildingFootprintBlock(buildingId);
-            if (this.terrainContext && site.originalTerrain && !site.terrainModified) {
-                site.terrainModified = true;
-                const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
-                applyTerrainLeveling(site, groundType, groundHeight, mapSize, 1.0, site.originalTerrain);
-                if (this.terrainContext.onTerrainModified) {
-                    this.terrainContext.onTerrainModified();
-                }
+            // Mark terrain as fully modified (individual tiles already applied via tileCompleted events)
+            if (site.terrain.originalTerrain && !site.terrain.modified) {
+                site.terrain.modified = true;
             }
         });
 
@@ -188,18 +208,9 @@ export class BuildingConstructionSystem implements TickSystem {
         return false;
     }
 
-    /** Apply incremental terrain leveling for a building in TerrainLeveling phase. */
-    private tickTerrainLeveling(site: ConstructionSite): boolean {
-        if (!this.terrainContext || !site.originalTerrain) return false;
-        const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
-        return applyTerrainLeveling(
-            site,
-            groundType,
-            groundHeight,
-            mapSize,
-            site.levelingProgress,
-            site.originalTerrain
-        );
+    /** Per-tile leveling is now event-driven via construction:tileCompleted. */
+    private tickTerrainLeveling(_site: ConstructionSite): boolean {
+        return false;
     }
 
     /** Count down CompletedRising timer and transition to Completed. */
@@ -221,10 +232,10 @@ export class BuildingConstructionSystem implements TickSystem {
     private onBuildingRemoved(entityId: number): void {
         this.completedRisingTimers.delete(entityId);
         const site = this.constructionSiteManager.getSite(entityId);
-        if (!site || !site.originalTerrain) return;
+        if (!site || !site.terrain.originalTerrain) return;
         if (!this.terrainContext) return;
         const { groundType, groundHeight, mapSize } = this.terrainContext.terrain;
-        const modified = restoreOriginalTerrain(site.originalTerrain, groundType, groundHeight, mapSize);
+        const modified = restoreOriginalTerrain(site.terrain.originalTerrain, groundType, groundHeight, mapSize);
         if (modified && this.terrainContext.onTerrainModified) {
             this.terrainContext.onTerrainModified();
         }

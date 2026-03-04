@@ -519,9 +519,6 @@ export function createGeologistHandler(
 // Construction handlers (digger + builder)
 // ─────────────────────────────────────────────────────────────
 
-/** Total leveling cycles a single digger would perform if working alone */
-const LEVELING_CYCLES_TOTAL = 6;
-
 /** Total base construction cycles (scaled by totalCostAmount) */
 const BUILDING_CYCLES_BASE = 2;
 
@@ -571,6 +568,21 @@ export function createDiggerHandler(
         findTarget: (x: number, y: number, settlerId?: number) => {
             if (settlerId === undefined) return null;
 
+            // If already claimed on a site, continue there
+            const existingTarget = activeWorkers.get(settlerId);
+            if (existingTarget !== undefined) {
+                const site = constructionSiteManager.getSite(existingTarget);
+                if (site && !site.terrain.complete) {
+                    // Return next unleveled tile position (not door) for intra-site walking
+                    const tilePos = constructionSiteManager.getNextUnleveledTilePos(existingTarget);
+                    if (tilePos) {
+                        return { entityId: existingTarget, x: tilePos.x, y: tilePos.y };
+                    }
+                }
+                // Work done or site removed — release
+                releaseActive(existingTarget, 'digger findTarget (done)');
+            }
+
             const settler = gameState.getEntityOrThrow(settlerId, 'digger findTarget');
             const buildingId = constructionSiteManager.findSiteNeedingDiggers(x, y, settler.player);
             if (buildingId === undefined) return null;
@@ -583,22 +595,25 @@ export function createDiggerHandler(
             queue.push(settlerId);
             pendingClaims.set(buildingId, queue);
 
-            // Return door position — building footprint may be blocked after leveling
+            // Return next unleveled tile position for direct walking to work site
+            const tilePos = constructionSiteManager.getNextUnleveledTilePos(buildingId);
+            if (tilePos) {
+                return { entityId: buildingId, x: tilePos.x, y: tilePos.y };
+            }
+            // No tiles to level (shouldn't happen for a site needing diggers)
             const door = getBuildingDoorPos(site.tileX, site.tileY, site.race, site.buildingType);
             return { entityId: buildingId, x: door.x, y: door.y };
         },
 
         canWork: (targetId: number) => {
             const site = constructionSiteManager.getSite(targetId);
-            return !!site && !site.levelingComplete && constructionSiteManager.getDiggerSlotAvailable(targetId);
+            return !!site && !site.terrain.complete;
         },
 
         onWorkStart: (targetId: number) => {
+            // If settler already claimed (continuing work), skip re-claim
             const queue = pendingClaims.get(targetId);
-            if (!queue || queue.length === 0) {
-                diggerLog.debug(`onWorkStart: no pending settler for site ${targetId}`);
-                return;
-            }
+            if (!queue || queue.length === 0) return;
             const settlerId = queue.shift()!;
             if (queue.length === 0) pendingClaims.delete(targetId);
             activeWorkers.set(settlerId, targetId);
@@ -614,8 +629,10 @@ export function createDiggerHandler(
         onWorkComplete: (targetId: number) => {
             const site = constructionSiteManager.getSite(targetId);
             if (site) {
-                const progressPerCycle = 1.0 / (LEVELING_CYCLES_TOTAL / site.requiredDiggers);
-                constructionSiteManager.advanceLeveling(targetId, progressPerCycle);
+                // Complete one tile's terrain leveling
+                constructionSiteManager.completeNextTile(targetId);
+                // Stay claimed until leveling is complete
+                if (!site.terrain.complete) return;
             }
             releaseActive(targetId, 'digger onWorkComplete');
         },
@@ -665,6 +682,22 @@ export function createBuilderHandler(
         findTarget: (x: number, y: number, settlerId?: number) => {
             if (settlerId === undefined) return null;
 
+            // If already claimed on a site, continue there if materials available
+            const existingTarget = activeWorkers.get(settlerId);
+            if (existingTarget !== undefined) {
+                const site = constructionSiteManager.getSite(existingTarget);
+                if (
+                    site &&
+                    site.building.progress < 1.0 &&
+                    constructionSiteManager.hasAvailableMaterials(existingTarget)
+                ) {
+                    const door = getBuildingDoorPos(site.tileX, site.tileY, site.race, site.buildingType);
+                    return { entityId: existingTarget, x: door.x, y: door.y };
+                }
+                // Construction done, materials exhausted, or site removed — release
+                releaseActive(existingTarget, 'builder findTarget (done)');
+            }
+
             const settler = gameState.getEntityOrThrow(settlerId, 'builder findTarget');
             const buildingId = constructionSiteManager.findSiteNeedingBuilders(x, y, settler.player);
             if (buildingId === undefined) return null;
@@ -686,19 +719,16 @@ export function createBuilderHandler(
             const site = constructionSiteManager.getSite(targetId);
             return (
                 !!site &&
-                site.levelingComplete &&
-                site.constructionProgress < 1.0 &&
-                constructionSiteManager.hasAvailableMaterials(targetId) &&
-                constructionSiteManager.getBuilderSlotAvailable(targetId)
+                site.terrain.complete &&
+                site.building.progress < 1.0 &&
+                constructionSiteManager.hasAvailableMaterials(targetId)
             );
         },
 
         onWorkStart: (targetId: number) => {
+            // If settler already claimed (continuing work), skip re-claim
             const queue = pendingClaims.get(targetId);
-            if (!queue || queue.length === 0) {
-                builderLog.debug(`onWorkStart: no pending settler for site ${targetId}`);
-                return;
-            }
+            if (!queue || queue.length === 0) return;
             const settlerId = queue.shift()!;
             if (queue.length === 0) pendingClaims.delete(targetId);
             activeWorkers.set(settlerId, targetId);
@@ -714,11 +744,13 @@ export function createBuilderHandler(
         onWorkComplete: (targetId: number) => {
             const site = constructionSiteManager.getSite(targetId);
             if (site) {
-                const totalCycles = Math.max(MIN_BUILDING_CYCLES, BUILDING_CYCLES_BASE * site.totalCostAmount);
-                const progressPerCycle = 1.0 / (totalCycles / site.requiredBuilders);
+                const totalCycles = Math.max(MIN_BUILDING_CYCLES, BUILDING_CYCLES_BASE * site.materials.totalCost);
+                const progressPerCycle = 1.0 / (totalCycles / site.building.slots.required);
                 constructionSiteManager.advanceConstruction(targetId, progressPerCycle);
                 // Consume one unit of material per work cycle
-                site.consumedAmount += 1;
+                site.materials.consumedAmount += 1;
+                // Stay claimed until construction done or materials exhausted
+                if (site.building.progress < 1.0 && constructionSiteManager.hasAvailableMaterials(targetId)) return;
             }
             releaseActive(targetId, 'builder onWorkComplete');
         },

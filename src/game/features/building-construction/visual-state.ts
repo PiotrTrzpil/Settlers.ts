@@ -24,7 +24,9 @@ export function getBuildingVisualState(site: ConstructionSite | undefined): Buil
         };
     }
 
-    const { phase, levelingProgress, constructionProgress, completedRisingProgress } = site;
+    const { phase, completedRisingProgress } = site;
+    const levelingProgress = site.terrain.progress;
+    const constructionProgress = site.building.progress;
 
     switch (phase) {
     case BuildingConstructionPhase.WaitingForDiggers:

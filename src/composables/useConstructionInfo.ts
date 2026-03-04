@@ -84,11 +84,11 @@ export function useConstructionInfo(
         const site = csm.getSite(entity.id);
         if (!site) return null;
 
-        const overallProgress = computeOverallProgress(site.phase, site.levelingProgress, site.constructionProgress);
+        const overallProgress = computeOverallProgress(site.phase, site.terrain.progress, site.building.progress);
 
-        const materials: ConstructionMaterialInfo[] = site.constructionCosts.map(cost => ({
+        const materials: ConstructionMaterialInfo[] = site.materials.costs.map(cost => ({
             name: EMaterialType[cost.material],
-            delivered: site.deliveredMaterials.get(cost.material) ?? 0,
+            delivered: site.materials.delivered.get(cost.material) ?? 0,
             required: cost.count,
         }));
 

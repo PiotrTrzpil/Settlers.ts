@@ -280,8 +280,8 @@ describe('Building Construction Phases', () => {
         it('should return zero vertical progress during WaitingForDiggers phase', () => {
             const site = {
                 phase: BuildingConstructionPhase.WaitingForDiggers,
-                levelingProgress: 0.5,
-                constructionProgress: 0,
+                terrain: { progress: 0.5 },
+                building: { progress: 0 },
                 completedRisingProgress: 0,
             } as Partial<ConstructionSite> as ConstructionSite;
             const state = getBuildingVisualState(site);
@@ -292,8 +292,8 @@ describe('Building Construction Phases', () => {
         it('should use construction sprite with rising progress during ConstructionRising', () => {
             const site = {
                 phase: BuildingConstructionPhase.ConstructionRising,
-                levelingProgress: 1.0,
-                constructionProgress: 0.6,
+                terrain: { progress: 1.0 },
+                building: { progress: 0.6 },
                 completedRisingProgress: 0,
             } as Partial<ConstructionSite> as ConstructionSite;
             const state = getBuildingVisualState(site);
@@ -304,8 +304,8 @@ describe('Building Construction Phases', () => {
         it('should use completed sprite during CompletedRising', () => {
             const site = {
                 phase: BuildingConstructionPhase.CompletedRising,
-                levelingProgress: 1.0,
-                constructionProgress: 1.0,
+                terrain: { progress: 1.0 },
+                building: { progress: 1.0 },
                 completedRisingProgress: 0.8,
             } as Partial<ConstructionSite> as ConstructionSite;
             const state = getBuildingVisualState(site);
@@ -321,6 +321,11 @@ describe('Building Construction Phases', () => {
             ctx = createTestContext();
             ctx.map.groundType.fill(TERRAIN.GRASS);
             ctx.map.groundHeight.fill(100);
+            // Make some tiles uneven so per-tile leveling has work to do
+            const footprint = getBuildingFootprint(10, 10, BuildingType.WoodcutterHut, Race.Roman);
+            for (const tile of footprint) {
+                ctx.map.groundHeight[ctx.map.mapSize.toIndex(tile.x, tile.y)] = 110;
+            }
         });
 
         it('should transition through all phases and modify terrain', () => {
@@ -350,17 +355,20 @@ describe('Building Construction Phases', () => {
             // Phase 0: starts in WaitingForDiggers
             expect(site.phase).toBe(BuildingConstructionPhase.WaitingForDiggers);
 
-            // Phase 1: diggingStarted → TerrainLeveling (captures terrain)
+            // Phase 1: diggingStarted → TerrainLeveling (captures terrain + populates per-tile set)
             ctx.eventBus.emit('construction:diggingStarted', { buildingId: building.id });
             expect(site.phase).toBe(BuildingConstructionPhase.TerrainLeveling);
-            expect(site.originalTerrain).not.toBeNull();
+            expect(site.terrain.originalTerrain).not.toBeNull();
+            expect(site.terrain.unleveledTiles).not.toBeNull();
+            expect(site.terrain.unleveledTiles!.size).toBeGreaterThan(0);
 
-            // Advance leveling progress and tick to apply terrain leveling
-            site.levelingProgress = 1.0;
-            ctx.buildingConstructionSystem.tick(0.0);
+            // Complete all tiles one by one (per-tile leveling)
+            while (site.terrain.unleveledTiles!.size > 0) {
+                ctx.constructionSiteManager.completeNextTile(building.id);
+            }
 
-            // Phase 2: levelingComplete → WaitingForBuilders (terrain finalized at 1.0)
-            ctx.eventBus.emit('construction:levelingComplete', { buildingId: building.id });
+            // Phase 2: levelingComplete fires automatically → WaitingForBuilders
+            expect(site.terrain.complete).toBe(true);
             expect(site.phase).toBe(BuildingConstructionPhase.WaitingForBuilders);
             expect(terrainNotified).toBe(true);
 
