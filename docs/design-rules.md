@@ -3,7 +3,8 @@
 Architectural rules and conventions for Settlers.ts. These rules ensure consistency, maintainability, and extensibility as the codebase grows.
 
 **Related docs:**
-- `coding-style.md` — TypeScript patterns (error handling, optimistic programming)
+- `coding-style.md` — TypeScript patterns (error handling, async/await)
+- `optimistic.md` — **CRITICAL** optimistic programming rules
 - `architecture/feature-modules.md` — Feature module structure and patterns
 - `testing/guide.md` — Testing guidelines
 
@@ -31,13 +32,14 @@ Architectural rules and conventions for Settlers.ts. These rules ensure consiste
 ### Rule 1.1: Dependency Direction Must Flow Downward
 
 ```
-Layer 0 (Pure Data):  coordinates, buildings/types, unit-types, economy/types
-Layer 1 (Algorithms): pathfinding, ai, hex-directions, movement math
-Layer 2 (Features):   building-construction, placement, carriers, logistics
-Layer 3 (State):      game-state, event-bus
-Layer 4 (Systems):    game-loop, commands, tick systems
-Layer 5 (I/O):        renderer, input, audio
-Layer 6 (Glue):       game.ts, Vue views/composables
+Layer 0 (Pure Data):     coordinates, buildings/types, unit-types, economy/types
+Layer 1 (Algorithms):    pathfinding, ai, hex-directions, movement math
+Layer 2 (Infra):         movement, entity-cleanup-registry, spatial-search     ← systems/ directory
+Layer 3 (State):         game-state, event-bus
+Layer 4 (Domain):        building-construction, placement, carriers, logistics  ← features/ directory
+Layer 5 (Orchestration): game-loop, commands, game-services
+Layer 6 (I/O):           renderer, input, audio
+Layer 7 (Glue):          game.ts, Vue views/composables
 ```
 
 **Rule:** A module may only import from its own layer or lower layers. Never upward.
@@ -56,28 +58,24 @@ Modules in Layer 1 (`pathfinding/`, `ai/behavior-tree/`, `coordinates/`) must no
 
 ## 2. Feature Module Rules
 
-### Rule 2.0: Features vs Systems
+### Rule 2.0: Features vs Systems — Classification by Dependency Direction
 
-Use **features/** for complex business domains. Use **systems/** for simple focused behavior.
+`systems/` and `features/` represent distinct architectural layers. The dividing line is **dependency direction**, not file count or complexity.
 
-| Location | Complexity | Characteristics | Examples |
-|----------|------------|-----------------|----------|
-| `features/` | High | Multiple files, Manager + System split, events, cross-cutting integrations | carriers, logistics, building-construction |
-| `systems/` | Low | Single file or small folder, owns its own state, focused behavior | tree-system, woodcutting-system, idle-behavior |
+| Location | Role | Dependency rule | Examples |
+|----------|------|-----------------|---------|
+| `systems/` | Kernel infrastructure | May be imported by features; must **never** import from `features/` | `movement`, `pathfinding`, `entity-cleanup-registry`, `spatial-search` |
+| `features/` | Domain modules | May import from `systems/`; participate in `FeatureRegistry` | `carriers`, `logistics`, `building-construction`, `trees`, `crops` |
 
-**When to use `features/`:**
-- Multiple interacting components (Manager, System, Controller)
-- Emits or subscribes to events
-- Complex state machines
-- Cross-cutting integrations with other modules
+**The test:** If a module in `systems/` imports anything from `features/`, it is misclassified — move it to `features/`.
 
-**When to use `systems/`:**
-- Single TickSystem implementation
-- Simple state (just a Map of entity data)
-- No events needed
-- Focused, self-contained behavior
+**The enforcing question:** Can any feature import it without creating a cycle?
+- Yes, and it imports nothing from `features/` → belongs in `systems/`
+- Depends on a feature → belongs in `features/`
 
-**Note:** A system in `systems/` can own its own state. The Manager/System split is only required for complex features.
+**Why this matters:** Systems are foundational infrastructure. Features are built on top of systems. If a "system" imports a feature, then every consumer of that system gains an implicit dependency on that feature — a coupling that destroys composability and testability.
+
+**Note:** Complexity and file count are signals, not the rule. A multi-file module with its own registry belongs in `systems/` if it has zero feature dependencies. A 2-file module belongs in `features/` if it depends on inventory or carriers.
 
 ### Rule 2.1: Single Entry Point
 
@@ -526,19 +524,9 @@ const value = Math.random();
 
 ## 9. Avoiding Over-Engineering
 
-See `coding-style.md` for the full optimistic programming philosophy. This section covers project-specific applications.
+**CRITICAL — see `docs/optimistic.md` for the full optimistic programming rules. Violations are treated as bugs.**
 
-### Rule 9.1: Use getEntityOrThrow for Required Lookups
-
-```typescript
-// BAD — no context when it crashes
-const entity = this.gameState.getEntity(id)!;
-
-// GOOD — crashes with helpful context
-const entity = this.gameState.getEntityOrThrow(id, 'source building');
-```
-
-### Rule 9.2: Delete Rather Than Deprecate
+### Rule 9.1: Delete Rather Than Deprecate
 
 When removing functionality, delete the code. Don't leave "just in case" fallbacks.
 
@@ -548,7 +536,7 @@ When removing functionality, delete the code. Don't leave "just in case" fallbac
 
 ## 10. Error Handling Rules
 
-See `coding-style.md` for general error handling patterns. This section covers game-specific rules.
+See `docs/optimistic.md` for error handling and throwing rules. This section covers game-specific rules.
 
 ### Rule 10.1: TickSystems Must Not Throw
 
@@ -679,6 +667,58 @@ Use consistent domain prefixes for events:
 | `get*` | value or `undefined` | `getEntity(id)` |
 | `find*` | value or `null` | `findNearestBuilding()` |
 
+### Rule 12.4: Race Is Never a Fallback — CRITICAL
+
+**NEVER use a hardcoded race (e.g. `Race.Roman`) as a default or fallback value.**
+
+Every code path that depends on race must receive it explicitly. If race is unknown at a call site, that is a bug in the caller — fix the caller, not the callee.
+
+```typescript
+// BAD — silently hides the bug, Roman assets appear for wrong race
+function getSettlerSprite(race?: Race): SpriteIndex {
+    const r = race ?? Race.Roman;  // NEVER
+    return sprites[r];
+}
+
+// BAD — optional race that defaults to a specific race
+function loadUnitSprites(unitType: UnitType, race = Race.Roman) { ... }  // NEVER
+
+// GOOD — race is required; caller must supply it
+function getSettlerSprite(race: Race): SpriteIndex {
+    return sprites[race];
+}
+```
+
+**Why:** Fallback races silently show wrong assets for other races (Vikings, Mayans, etc.). The error is invisible in testing if you only play as Romans.
+
+### Rule 12.5: Race Parameters Are Never Optional
+
+If a function, class, or data structure needs race, race is a **required** parameter. Do not make it optional with `?` or give it a default.
+
+```typescript
+// BAD
+interface SpriteLoaderConfig {
+    race?: Race;  // NEVER — callers will forget to set it
+}
+
+// BAD
+class SpriteLoader {
+    constructor(private race: Race = Race.Roman) { ... }  // NEVER
+}
+
+// GOOD
+interface SpriteLoaderConfig {
+    race: Race;  // required — every caller must be explicit
+}
+
+// GOOD
+class SpriteLoader {
+    constructor(private race: Race) { ... }
+}
+```
+
+**Enforcement:** If TypeScript requires a default because the value is not available at construction time, that is a design smell — restructure to pass race at the point where it is known, or carry it through the call chain explicitly.
+
 ---
 
 ## Enforcement Summary
@@ -693,6 +733,7 @@ Use consistent domain prefixes for events:
 | Deterministic iteration | grep for unordered Map iteration |
 | Query immutability | TypeScript `Readonly<T>` return types |
 | Test patterns | Code review + `testing/guide.md` |
+| Race fallbacks | grep for `Race.Roman` as default/fallback; ESLint no-param-defaults for race |
 
 ---
 
@@ -713,3 +754,4 @@ When adding a new feature:
 - [ ] Export only public API from `index.ts`
 - [ ] Write unit tests for algorithms
 - [ ] Write e2e tests for UI integration
+- [ ] Race is **required** (not optional, no default) wherever it's needed — no `Race.Roman` fallbacks

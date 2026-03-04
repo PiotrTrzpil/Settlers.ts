@@ -9,7 +9,9 @@ Features that are scattered across many files create several issues:
 1. **Hard to understand** - Logic for one feature lives in 10+ files
 2. **Hard to modify** - Changing behavior requires edits everywhere
 3. **Hard to remove** - Removing a feature means hunting through the codebase
-4. **Tight coupling** - Core systems know about every feature
+4. **Tight coupling** - Infrastructure systems know about every feature
+
+> **`features/` vs `systems/`:** See Rule 2.0 in `design-rules.md`. The short version: `systems/` is kernel infrastructure (movement, pathfinding, entity cleanup) that features depend on. `features/` is domain logic that depends on systems. A module belongs in `systems/` only if it can be imported by any feature without creating a cycle — i.e., it imports nothing from `features/`.
 
 **Example: Territory System (removed)**
 

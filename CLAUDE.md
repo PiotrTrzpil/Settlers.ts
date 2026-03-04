@@ -59,7 +59,11 @@ If you are doing some editing patterns that are similar in many files:
 
 ALWAYS prefer mass approaches, e.g. `sd` and others. (but carefully, first think deeper if your pattern to find will not miss some similar cases (maybe do some fuzzy search first), and do a dry run of replace somehow first or a limited run before running on all needed files.)
 
-- **Validate after your changes**: Run full unit test suite after you are done with a large change.
+- **Validate after your changes**: Run `pnpm lint` (NOT `pnpm build`) after changes — lint runs both type-check and ESLint. `pnpm build` only type-checks and misses ESLint errors.
+
+- **NEVER run `pnpm lint` more than once per validation cycle.** Capture output to a file and grep/read from it: `pnpm lint 2>&1 | tee /tmp/lint.txt`. Do NOT re-run lint just to narrow output — read the file instead.
+
+- **NEVER run tests more than once per validation cycle.** Capture output to a file and grep/read from it: `pnpm test:unit 2>&1 | tee /tmp/test.txt`. Do NOT re-run tests just to see different output — read the file instead.
 
 
 ## Notes
@@ -74,7 +78,9 @@ NEVER GIT STASH.
 
 ## Coding guidelines
 
-**Read `docs/coding-style.md`** for TypeScript patterns (error handling, optimistic programming, async/await).
+**CRITICAL — Read `docs/optimistic.md`** before writing any code. Optimistic programming rules are mandatory and violations are treated as bugs.
+
+**Read `docs/coding-style.md`** for TypeScript patterns (error handling, async/await).
 
 Key project-specific rules:
 - Use `getEntityOrThrow(id, 'context')` instead of `getEntity(id)!`
@@ -93,6 +99,24 @@ Key project-specific rules:
 - Defensive code OK for: nullable-by-design, API boundaries, cleanup/destroy, external input
 
 
+
+## Validation — MANDATORY RULES
+
+**ALWAYS use `pnpm lint` (NOT `pnpm build`) to validate changes.** `pnpm build` only type-checks; it misses all ESLint errors.
+
+**NEVER run `pnpm lint` more than once per validation cycle.** Capture output to a file and grep from it:
+```sh
+pnpm lint 2>&1 | tee /tmp/lint.txt   # run ONCE
+grep "error" /tmp/lint.txt            # then filter from the file
+```
+Re-running lint to narrow output is forbidden. Read `/tmp/lint.txt` instead.
+
+**NEVER run tests more than once per validation cycle.** Capture output to a file and read/grep from it:
+```sh
+pnpm test:unit 2>&1 | tee /tmp/test.txt   # run ONCE
+grep "FAIL\|error" /tmp/test.txt           # then filter from the file
+```
+Re-running tests just to see different output is forbidden. Read `/tmp/test.txt` instead.
 
 ## E2E testing
 

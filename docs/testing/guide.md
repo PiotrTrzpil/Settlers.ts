@@ -427,6 +427,16 @@ expect(sim.getOutput(woodcutterId, EMaterialType.LOG)).toBe(3); // only nearby t
 4. **Testing implementation details** — test behavior through public APIs
 5. **Test interdependency** — each test must be independent and repeatable
 6. **Tautological assertions** — don't assert what `runUntil` already guarantees (see above)
+7. **`useStubData` in `tests/unit/integration/`** — see rule below
+
+### Rule: `tests/unit/integration/` always uses real data
+
+All tests in `tests/unit/integration/` **must** use `createSimulation()` with real game data (no
+`useStubData: true`, no `useStubData` argument at all). Wrap the entire describe block with
+`describe.skipIf(!hasRealData)`. Integration tests exist to verify multi-system behavior against real
+building definitions, positions, and XML content — stub data defeats the purpose and silently tests
+nothing meaningful about the actual game. Pure unit tests that don't need a simulation belong in the
+sibling directories (`carriers/`, `inventory/`, `buildings/`, etc.), not in `integration/`.
 
 ---
 

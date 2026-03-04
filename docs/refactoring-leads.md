@@ -2,6 +2,30 @@
 
 Parallelizable refactoring tasks ordered by impact. Each task is independent and can be executed by a separate agent.
 
+> **Note (2026-03-03):** See `reviews/arch-review-2026-03-03-1122.md` for an up-to-date list of current architectural issues. Many tasks below are already completed — file sizes and structures referenced may no longer match the current code.
+
+---
+
+## Task 0: Migrate remaining manually-wired features to FeatureDefinition
+
+**Done (2026-03-03):** `CarrierFeature` has been migrated. `CommandContext` optional fields have been made required.
+
+**Remaining manually-wired systems** in `game-services.ts` (candidates for future migration):
+
+| System | Location | Notes |
+|--------|----------|-------|
+| `BuildingConstructionSystem` | `features/building-construction` | Complex: depends on constructionSiteManager, executeCommand, residenceSpawner |
+| `ResidenceSpawnerSystem` | `features/building-construction` | Depends on construction system |
+| `ConstructionRequestSystem` | `features/building-construction` | Depends on requestManager (from InventoryFeature) |
+| `LogisticsDispatcher` | `features/logistics` | Depends on carrierManager, settlerTaskSystem, requestManager, serviceAreaManager, inventoryManager |
+| `SettlerTaskSystem` | `features/settler-tasks` | Depends on many managers; work handlers registered separately |
+| `BarracksTrainingManager` | `features/barracks` | Depends on settlerTaskSystem, inventoryManager, carrierManager |
+| `BuildingOverlayManager` | `systems/building-overlays` | Should move to `features/building-overlays/` first (see arch review issue 3) |
+
+**Approach for each:** Create a `FeatureDefinition` in the feature's directory following the pattern in `features/carriers/carrier-feature.ts` and `features/trees/tree-feature.ts`. Declare dependencies, move event subscriptions into the feature `create()`, extract exports. Remove `registerEvents()`/`unregisterEvents()` from the manager class. Add to `featureRegistry.loadAll()` in game-services.ts.
+
+**Validation:** `pnpm lint && pnpm test:unit`
+
 ---
 
 ## Task 1: Split SpriteRenderManager (1,370 lines, 20+ async methods)
