@@ -39,6 +39,13 @@ export interface PlacementContext {
     mapSize: MapSize;
     tileOccupancy: Map<string, number>;
     /**
+     * All building footprint tiles (including door corridors).
+     * Used to enforce a 1-tile gap between building footprints for pathfinding.
+     * When provided, placement is rejected if any external neighbor of the new
+     * footprint is in this set.
+     */
+    buildingFootprint?: ReadonlySet<string>;
+    /**
      * Race of the player placing the building.
      * Required for building placement — validateBuildingPlacement throws if absent.
      * Optional for resource/unit validators which don't use race.

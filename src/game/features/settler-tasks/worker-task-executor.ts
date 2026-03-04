@@ -198,6 +198,14 @@ export class WorkerTaskExecutor {
                 `target ${entityTarget?.entityId ?? 'none'}, pos ${posStr}, ` +
                 `home ${homeBuilding?.id ?? 'none'}`
         );
+
+        this.choreoContext.eventBus.emit('settler:taskStarted', {
+            unitId: settler.id,
+            jobId: selected.id,
+            targetId: entityTarget?.entityId ?? null,
+            targetPos: jobState.targetPos,
+            homeBuilding: homeBuilding?.id ?? null,
+        });
     }
 
     /**
@@ -296,6 +304,12 @@ export class WorkerTaskExecutor {
         }
 
         log.debug(`Settler ${settler.id} completed job ${job.jobId}`);
+
+        this.choreoContext.eventBus.emit('settler:taskCompleted', {
+            unitId: settler.id,
+            jobId: job.jobId,
+        });
+
         runtime.state = SettlerState.IDLE;
         runtime.job = null;
         settler.hidden = false;
@@ -313,6 +327,9 @@ export class WorkerTaskExecutor {
     /**
      * Interrupt a job (target gone, pathfinding failure, etc.).
      * Calls onWorkInterrupt on the entity handler if work had started.
+     *
+     * Must NOT be called when the job has already completed all nodes —
+     * use completeJob for that case. Callers should check `isJobDone()` first.
      */
     interruptJob(settler: Entity, config: SettlerConfig, runtime: WorkerRuntimeState): void {
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
@@ -349,6 +366,26 @@ export class WorkerTaskExecutor {
         settler.hidden = false;
 
         log.debug(`Settler ${settler.id} interrupted job ${job.jobId}`);
+
+        const failedNode = job.nodes[job.nodeIndex];
+        let failedStep: string;
+        if (failedNode) {
+            failedStep = ChoreoTaskType[failedNode.task];
+        } else if (job.nodeIndex >= job.nodes.length) {
+            failedStep = 'END';
+        } else {
+            failedStep = 'unknown';
+        }
+        this.choreoContext.eventBus.emit('settler:taskFailed', {
+            unitId: settler.id,
+            jobId: job.jobId,
+            nodeIndex: job.nodeIndex,
+            failedStep,
+            targetId: job.targetId ?? null,
+            workStarted: job.workStarted,
+            wasCarrying: !!settler.carrying,
+        });
+
         runtime.state = SettlerState.INTERRUPTED;
         this.animController.setIdleAnimation(settler);
     }

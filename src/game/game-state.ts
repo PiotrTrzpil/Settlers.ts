@@ -165,6 +165,9 @@ export class GameState {
     /** Building footprint tiles — always blocks pathfinding regardless of ignoreOccupancy */
     public buildingOccupancy: Set<string> = new Set();
 
+    /** All building footprint tiles (including door corridors) — used for placement gap check */
+    public buildingFootprint: Set<string> = new Set();
+
     /** Event bus for entity lifecycle events */
     private readonly eventBus: EventBus;
 
@@ -239,6 +242,7 @@ export class GameState {
             for (const tile of footprint) {
                 const key = tileKey(tile.x, tile.y);
                 this.tileOccupancy.set(key, entity.id);
+                this.buildingFootprint.add(key);
                 if (!passableKeys.has(key)) {
                     this.buildingOccupancy.add(key);
                 } else {
@@ -327,8 +331,10 @@ export class GameState {
         if (entity.type === EntityType.Building) {
             const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
             for (const tile of footprint) {
-                this.tileOccupancy.delete(tileKey(tile.x, tile.y));
-                this.buildingOccupancy.delete(tileKey(tile.x, tile.y));
+                const key = tileKey(tile.x, tile.y);
+                this.tileOccupancy.delete(key);
+                this.buildingOccupancy.delete(key);
+                this.buildingFootprint.delete(key);
             }
         } else {
             this.tileOccupancy.delete(tileKey(entity.x, entity.y));

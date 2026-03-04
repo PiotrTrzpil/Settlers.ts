@@ -12,7 +12,7 @@ import { EntityRenderer } from '@/game/renderer/entity-renderer';
 import { BuildingIndicatorRenderer } from '@/game/renderer/building-indicator-renderer';
 import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
-import { type TileCoord } from '@/game/entity';
+import { type TileCoord, BuildingType } from '@/game/entity';
 import { Race, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
 import {
     canPlaceResource,
@@ -76,6 +76,23 @@ async function loadOverlaySpritesAndUpdateFrameCounts(er: EntityRenderer, game: 
             }
         }
     }
+}
+
+/** Check whether a building can be placed at (x, y), including the 1-tile footprint gap rule. */
+function canPlaceBuilding(getGame: () => Game | null, x: number, y: number, buildingType: BuildingType): boolean {
+    const game = getGame();
+    if (!game) return false;
+    const race = game.playerRaces.get(game.currentPlayer);
+    if (race === undefined) return false;
+    return canPlaceBuildingFootprint(
+        game.terrain,
+        game.state.tileOccupancy,
+        x,
+        y,
+        buildingType,
+        race,
+        game.state.buildingFootprint
+    );
 }
 
 interface UseRendererOptions {
@@ -171,13 +188,7 @@ export function useRenderer({
 
         inputManager.registerMode(
             new PlaceBuildingMode(
-                (x, y, buildingType) => {
-                    const game = getGame();
-                    if (!game) return false;
-                    const race = game.playerRaces.get(game.currentPlayer);
-                    if (race === undefined) return false;
-                    return canPlaceBuildingFootprint(game.terrain, game.state.tileOccupancy, x, y, buildingType, race);
-                },
+                (x, y, buildingType) => canPlaceBuilding(getGame, x, y, buildingType),
                 () => {
                     const game = getGame();
                     return {

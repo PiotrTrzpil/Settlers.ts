@@ -6,8 +6,8 @@
  */
 
 import type { Entity } from '../../../entity';
-import { UnitType, EXTENDED_OFFSETS, getUnitTypeAtLevel } from '../../../entity';
-import type { GameState } from '../../../game-state';
+import { UnitType, getUnitTypeAtLevel } from '../../../entity';
+import { ringTiles } from '../../../systems/spatial-search';
 import { LogHandler } from '@/utilities/log-handler';
 import { TaskResult } from '../types';
 import { framesToSeconds, type ChoreoJobState, type ChoreoNode, type ChoreoContext } from '../choreo-types';
@@ -134,29 +134,12 @@ export function executeChangeJobComeToWork(
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Find a spawn position near (x, y) that is not occupied by another entity.
- * Tries all EXTENDED_OFFSETS neighbours first; falls back to the barracks position
- * if every adjacent tile is occupied.
- */
-function findSpawnPosition(x: number, y: number, gameState: GameState): { x: number; y: number } {
-    for (const [dx, dy] of EXTENDED_OFFSETS) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (!gameState.getEntityAt(nx, ny)) {
-            return { x: nx, y: ny };
-        }
-    }
-    // Fallback — all tiles occupied, spawn at barracks position
-    log.warn(`findSpawnPosition: all tiles near (${x}, ${y}) occupied, using barracks position`);
-    return { x, y };
-}
-
-/**
  * Convert a carrier into a trained soldier at the barracks.
  *
- * Reads the pending training state from BarracksTrainingManager, spawns a new soldier
- * entity with the correct type and level, then removes the carrier from the world.
- * Emits 'unit:spawned' and 'barracks:trainingCompleted' events for downstream systems.
+ * The carrier is already at the building door (walked there via GO_TO_TARGET).
+ * We spawn the soldier near the carrier's position (door = footprint edge, so
+ * adjacent tiles are free), then remove the carrier.
+ * Cannot remove carrier first — entity must exist during executor execution.
  */
 export function executeChangeTypeAtBarracks(
     settler: Entity,
@@ -172,13 +155,24 @@ export function executeChangeTypeAtBarracks(
     }
 
     const { buildingId, recipe } = training;
-    const barracks = ctx.gameState.getEntityOrThrow(buildingId, 'barracks for type change');
     const unitType = getUnitTypeAtLevel(recipe.unitType, recipe.level);
 
-    // Find a valid spawn position near the barracks
-    const spawnPos = findSpawnPosition(barracks.x, barracks.y, ctx.gameState);
+    // Find a free tile near the carrier (at the door = footprint edge).
+    // Uses the same ringTiles pattern as spawnUnitsNear for building completion.
+    let spawnPos: { x: number; y: number } | null = null;
+    for (let r = 1; r <= 4 && !spawnPos; r++) {
+        for (const tile of ringTiles(settler.x, settler.y, r)) {
+            if (!ctx.gameState.getEntityAt(tile.x, tile.y)) {
+                spawnPos = tile;
+                break;
+            }
+        }
+    }
+    if (!spawnPos) {
+        log.warn(`CHANGE_TYPE_AT_BARRACKS: no free tile near door for carrier ${settler.id}`);
+        return TaskResult.DONE;
+    }
 
-    // Spawn the soldier via command (handles entity creation, race/level, and unit:spawned event)
     const spawnResult = ctx.executeCommand({
         type: 'spawn_unit',
         unitType,
@@ -195,7 +189,7 @@ export function executeChangeTypeAtBarracks(
     const firstEffect = spawnResult.effects?.[0];
     const soldierId = firstEffect?.type === 'unit_spawned' ? firstEffect.entityId : 0;
 
-    // Remove the carrier entity via command. CarrierManager cleanup happens via entity:removed event.
+    // Remove the carrier after spawning. CarrierManager cleanup happens via entity:removed event.
     ctx.executeCommand({ type: 'remove_entity', entityId: settler.id });
 
     // Notify manager to clear training state and emit completion event

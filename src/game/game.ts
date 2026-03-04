@@ -16,6 +16,8 @@ import { EventBus } from './event-bus';
 import { EntityType } from './entity';
 import { GameSettingsManager } from './game-settings';
 import { GameViewState } from './game-view-state';
+import { setDirectionRunLength } from './systems/pathfinding';
+import { watch } from 'vue';
 import type { FrameRenderTiming } from './renderer/renderer';
 import { debugStats } from './debug-stats';
 
@@ -98,6 +100,13 @@ export class Game {
         this.state = new GameState(this.eventBus);
         this.settings = new GameSettingsManager();
         this.viewState = new GameViewState();
+
+        // Sync pathfinding direction run length from settings (initial + reactive)
+        setDirectionRunLength(this.settings.state.pathStraightness);
+        watch(
+            () => this.settings.state.pathStraightness,
+            v => setDirectionRunLength(v)
+        );
 
         this.services = new GameServices(this.state, this.eventBus, this.execute.bind(this));
         this.services.setTerrainData(this.terrain, mapLoader.landscape.getResourceData?.());

@@ -229,6 +229,8 @@ const DEFAULT_SETTINGS: PersistedDebugSettings = {
 /** Load persisted settings from localStorage */
 function loadDebugSettings(): PersistedDebugSettings {
     try {
+        if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function')
+            return { ...DEFAULT_SETTINGS };
         const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
         if (!stored) return { ...DEFAULT_SETTINGS };
         const parsed = JSON.parse(stored) as Partial<PersistedDebugSettings>;

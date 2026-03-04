@@ -20,6 +20,7 @@ import type {
 import { PileSlotType } from '@/resources/game-data/types';
 import { clearWorkerBuildingCache } from '@/game/game-data-access';
 import { loadGameDataFromFiles } from '@/resources/game-data/load-game-data-from-files';
+import { resetJobChoreographyStore } from '@/game/features/settler-tasks/job-choreography-store';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 
@@ -463,6 +464,13 @@ export function installTestGameData(): void {
 }
 
 /**
+ * Cached parsed game data — XML files are read-only reference data that never
+ * changes between tests, so we parse once and reuse.  This eliminates the
+ * ~245 MB-per-cycle heap growth that previously caused OOM in long test files.
+ */
+let cachedRealGameData: GameData | null = null;
+
+/**
  * Attempt to load real XML game data from disk.
  * Returns true if real data was loaded, false if XML files are not present.
  * Use with describe.skipIf(!hasRealData) for tests that need real game data.
@@ -473,8 +481,10 @@ export function installRealGameData(): boolean {
     if (!existsSync(resolve(gameDataDir, 'buildingInfo.xml'))) return false;
 
     clearWorkerBuildingCache();
-    const data = loadGameDataFromFiles(gameDataDir);
-    GameDataLoader.getInstance().setData(data);
+    if (!cachedRealGameData) {
+        cachedRealGameData = loadGameDataFromFiles(gameDataDir);
+    }
+    GameDataLoader.getInstance().setData(cachedRealGameData);
     return true;
 }
 
@@ -483,5 +493,6 @@ export function installRealGameData(): boolean {
  */
 export function resetTestGameData(): void {
     clearWorkerBuildingCache();
+    resetJobChoreographyStore();
     GameDataLoader.resetInstance();
 }

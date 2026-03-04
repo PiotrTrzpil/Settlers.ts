@@ -5,6 +5,7 @@
 
 import { tileKey, getBuildingFootprint, BuildingType, isMineBuilding } from '../../../entity';
 import type { Race } from '../../../race';
+import { getAllNeighbors } from '../../../systems/hex-directions';
 import type { PlacementContext, PlacementResult } from '../types';
 import { PlacementStatus } from '../types';
 import { isBuildable, isMineBuildable } from './terrain';
@@ -33,6 +34,24 @@ function checkTileBasics(tile: TileCoord, ctx: PlacementContext, isMine: boolean
     if (!terrainOk) return PlacementStatus.InvalidTerrain;
     if (ctx.tileOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
     return null;
+}
+
+/**
+ * Enforce 1-tile gap between building footprints for pathfinding.
+ * Rejects if any external neighbor of the new footprint touches any
+ * existing building footprint tile (including door corridors).
+ */
+function footprintTouchesBuilding(footprint: TileCoord[], buildingFootprint: ReadonlySet<string>): boolean {
+    const fpKeys = new Set(footprint.map(t => tileKey(t.x, t.y)));
+    for (const tile of footprint) {
+        for (const n of getAllNeighbors(tile)) {
+            const key = tileKey(n.x, n.y);
+            if (!fpKeys.has(key) && buildingFootprint.has(key)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 /**
@@ -71,6 +90,13 @@ export function validateBuildingPlacement(
         }
     }
 
+    // 1-tile gap between building footprints for pathfinding
+    if (ctx.buildingFootprint && ctx.buildingFootprint.size > 0) {
+        if (footprintTouchesBuilding(footprint, ctx.buildingFootprint)) {
+            return { canPlace: false, status: PlacementStatus.Occupied };
+        }
+    }
+
     // Check slope across footprint
     const slopeStatus = computeSlopeDifficulty(footprint, ctx.groundHeight, ctx.mapSize);
     if (slopeStatus === PlacementStatus.TooSteep) {
@@ -90,13 +116,15 @@ export function canPlaceBuildingFootprint(
     x: number,
     y: number,
     buildingType: BuildingType,
-    race: Race
+    race: Race,
+    buildingFootprint?: ReadonlySet<string>
 ): boolean {
     const ctx: PlacementContext = {
         groundType: terrain.groundType,
         groundHeight: terrain.groundHeight,
         mapSize: terrain.mapSize,
         tileOccupancy,
+        buildingFootprint,
         race,
     };
     return validateBuildingPlacement(x, y, buildingType, ctx).canPlace;

@@ -247,7 +247,16 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Selection (select_at_tile)', () => {
         it('should select a unit at a tile', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
 
             const result = executeCommand(ctx, {
                 type: 'select_at_tile',
@@ -263,7 +272,16 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should deselect when clicking empty tile', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             state.selection.selectedEntityId = unit.id;
             state.selection.selectedEntityIds.add(unit.id);
 
@@ -280,8 +298,26 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should replace selection on normal click', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 20, 20, 0);
+            const unit1 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
+            const unit2 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                20,
+                20,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
 
             // Select unit1
             executeCommand(ctx, {
@@ -308,8 +344,26 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should add to selection with shift+click', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 20, 20, 0);
+            const unit1 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
+            const unit2 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                20,
+                20,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
 
             // Select unit1
             executeCommand(ctx, {
@@ -333,8 +387,26 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should toggle entity off with shift+click on already-selected', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 20, 20, 0);
+            const unit1 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
+            const unit2 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                20,
+                20,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
 
             // Select both
             state.selection.selectedEntityIds.add(unit1.id);
@@ -355,8 +427,26 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should update primary selection when toggling off primary', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 20, 20, 0);
+            const unit1 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
+            const unit2 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                20,
+                20,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
 
             state.selection.selectedEntityIds.add(unit1.id);
             state.selection.selectedEntityIds.add(unit2.id);
@@ -401,7 +491,16 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Toggle Selection', () => {
         it('should add entity to selection', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
 
             const result = executeCommand(ctx, {
                 type: 'toggle_selection',
@@ -413,7 +512,16 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should remove entity from selection', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             state.selection.selectedEntityIds.add(unit.id);
             state.selection.selectedEntityId = unit.id;
 
@@ -437,7 +545,16 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should set primary selection when adding first entity', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
 
             executeCommand(ctx, {
                 type: 'toggle_selection',
@@ -448,8 +565,26 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should maintain primary when adding second entity', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 10, 10, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 20, 20, 0);
+            const unit1 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                10,
+                10,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
+            const unit2 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                20,
+                20,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
 
             state.selection.selectedEntityIds.add(unit1.id);
             state.selection.selectedEntityId = unit1.id;
@@ -468,7 +603,16 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Move Selected Units (move_selected_units)', () => {
         it('should move a single selected unit to target', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                5,
+                5,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             state.selection.selectedEntityIds.add(unit.id);
             state.selection.selectedEntityId = unit.id;
 
@@ -485,8 +629,26 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should move multiple selected units with formation', () => {
-            const unit1 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
-            const unit2 = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 7, 0);
+            const unit1 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                5,
+                5,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
+            const unit2 = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                5,
+                7,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             state.selection.selectedEntityIds.add(unit1.id);
             state.selection.selectedEntityIds.add(unit2.id);
             state.selection.selectedEntityId = unit1.id;
@@ -544,7 +706,16 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should move only units when selection includes buildings', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                5,
+                5,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             const building = state.addEntity(
                 EntityType.Building,
                 BuildingType.WoodcutterHut,
@@ -575,7 +746,7 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Unit Movement Integration', () => {
         it('should move unit along path over multiple ticks', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0, undefined, undefined, Race.Roman);
             state.selection.selectedEntityIds.add(unit.id);
             state.selection.selectedEntityId = unit.id;
 
@@ -601,7 +772,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should update tile occupancy during movement', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0, undefined, undefined, Race.Roman);
             const controller = state.movement.getController(unit.id)!;
             controller.startPath([
                 { x: 6, y: 5 },
@@ -618,7 +789,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should track previous position for interpolation', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0, undefined, undefined, Race.Roman);
             const controller = state.movement.getController(unit.id)!;
             const unitState = state.unitStates.get(unit.id)!;
             // Longer path to test incremental movement
@@ -638,7 +809,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should reset state after path completion', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 5, 5, 0, undefined, undefined, Race.Roman);
             const controller = state.movement.getController(unit.id)!;
             const unitState = state.unitStates.get(unit.id)!;
             controller.startPath([{ x: 6, y: 5 }]);
@@ -821,9 +992,9 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Selection Area', () => {
         it('should select all units in rectangle', () => {
-            state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
-            state.addEntity(EntityType.Unit, UnitType.Swordsman, 7, 7, 0);
-            state.addEntity(EntityType.Unit, UnitType.Swordsman, 20, 20, 0);
+            state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0, undefined, undefined, Race.Roman);
+            state.addEntity(EntityType.Unit, UnitType.Swordsman, 7, 7, 0, undefined, undefined, Race.Roman);
+            state.addEntity(EntityType.Unit, UnitType.Swordsman, 20, 20, 0, undefined, undefined, Race.Roman);
 
             executeCommand(ctx, {
                 type: 'select_area',
@@ -847,7 +1018,7 @@ describe('Unit Placement, Selection & Movement', () => {
                 undefined,
                 Race.Roman
             );
-            state.addEntity(EntityType.Unit, UnitType.Swordsman, 11, 10, 0);
+            state.addEntity(EntityType.Unit, UnitType.Swordsman, 11, 10, 0, undefined, undefined, Race.Roman);
 
             executeCommand(ctx, {
                 type: 'select_area',
@@ -863,7 +1034,16 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should clear selection when area is empty', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                5,
+                5,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             state.selection.selectedEntityIds.add(unit.id);
             state.selection.selectedEntityId = unit.id;
 
@@ -880,8 +1060,8 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should handle reversed coordinates (bottom-right to top-left drag)', () => {
-            state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
-            state.addEntity(EntityType.Unit, UnitType.Swordsman, 7, 7, 0);
+            state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0, undefined, undefined, Race.Roman);
+            state.addEntity(EntityType.Unit, UnitType.Swordsman, 7, 7, 0, undefined, undefined, Race.Roman);
 
             // Drag from bottom-right to top-left
             executeCommand(ctx, {
@@ -900,7 +1080,16 @@ describe('Unit Placement, Selection & Movement', () => {
 
     describe('Deselect and Remove', () => {
         it('should deselect all with select null', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                5,
+                5,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             state.selection.selectedEntityIds.add(unit.id);
             state.selection.selectedEntityId = unit.id;
 
@@ -914,7 +1103,16 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should clear selection when entity is removed', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                5,
+                5,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             state.selection.selectedEntityIds.add(unit.id);
             state.selection.selectedEntityId = unit.id;
 
@@ -928,7 +1126,16 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should remove unit state when unit is removed', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                5,
+                5,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             expect(state.unitStates.has(unit.id)).toBe(true);
 
             executeCommand(ctx, {
@@ -940,7 +1147,16 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should clear tile occupancy when unit is removed', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
+            const unit = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                5,
+                5,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
             expect(state.getEntityAt(5, 5)).toBeDefined();
 
             executeCommand(ctx, {
@@ -957,7 +1173,7 @@ describe('Unit Placement, Selection & Movement', () => {
     describe('Unselectable Entities', () => {
         it('should not select unselectable entity via select_at_tile', () => {
             // Spawn unselectable unit
-            state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
+            state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false, undefined, Race.Roman);
 
             executeCommand(ctx, {
                 type: 'select_at_tile',
@@ -971,8 +1187,17 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should not add unselectable entity with shift+click', () => {
-            const selectable = state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
-            state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
+            const selectable = state.addEntity(
+                EntityType.Unit,
+                UnitType.Swordsman,
+                5,
+                5,
+                0,
+                undefined,
+                undefined,
+                Race.Roman
+            );
+            state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false, undefined, Race.Roman);
 
             // Select the selectable one
             executeCommand(ctx, {
@@ -997,9 +1222,9 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should exclude unselectable entities from box selection', () => {
-            state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0);
-            state.addEntity(EntityType.Unit, UnitType.Carrier, 7, 7, 0, false); // unselectable
-            state.addEntity(EntityType.Unit, UnitType.Swordsman, 6, 6, 0);
+            state.addEntity(EntityType.Unit, UnitType.Swordsman, 5, 5, 0, undefined, undefined, Race.Roman);
+            state.addEntity(EntityType.Unit, UnitType.Carrier, 7, 7, 0, false, undefined, Race.Roman); // unselectable
+            state.addEntity(EntityType.Unit, UnitType.Swordsman, 6, 6, 0, undefined, undefined, Race.Roman);
 
             executeCommand(ctx, {
                 type: 'select_area',
@@ -1014,7 +1239,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should not select unselectable entity via select command', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false, undefined, Race.Roman);
 
             executeCommand(ctx, {
                 type: 'select',
@@ -1026,7 +1251,7 @@ describe('Unit Placement, Selection & Movement', () => {
         });
 
         it('should not toggle unselectable entity via toggle_selection', () => {
-            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false);
+            const unit = state.addEntity(EntityType.Unit, UnitType.Carrier, 10, 10, 0, false, undefined, Race.Roman);
 
             const result = executeCommand(ctx, {
                 type: 'toggle_selection',

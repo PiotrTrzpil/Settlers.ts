@@ -30,6 +30,7 @@ import { installTestGameData } from './test-game-data';
 export function createGameState(): GameState {
     installTestGameData();
     const eventBus = new EventBus();
+    eventBus.strict = true;
     const state = new GameState(eventBus);
     const movement = new MovementSystem({
         eventBus,
@@ -124,6 +125,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
 
     const map = createTestMap(mapWidth, mapHeight);
     const eventBus = new EventBus();
+    eventBus.strict = true;
     const state = new GameState(eventBus);
     const settingsManager = new GameSettingsManager();
     settingsManager.resetToDefaults();
@@ -221,9 +223,18 @@ export function addUnit(
     state: GameState,
     x: number,
     y: number,
-    options: { player?: number; subType?: number } = {}
+    options: { player?: number; subType?: number; race?: Race } = {}
 ): { entity: Entity; unitState: UnitStateView } {
-    const entity = state.addEntity(EntityType.Unit, options.subType ?? 0, x, y, options.player ?? 0);
+    const entity = state.addEntity(
+        EntityType.Unit,
+        options.subType ?? 0,
+        x,
+        y,
+        options.player ?? 0,
+        undefined,
+        undefined,
+        options.race ?? Race.Roman
+    );
     const unitState = state.unitStates.get(entity.id);
     if (!unitState) throw new Error(`UnitState not created for unit ${entity.id}`);
     return { entity, unitState };

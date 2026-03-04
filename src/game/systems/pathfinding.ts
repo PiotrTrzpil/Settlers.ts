@@ -7,5 +7,5 @@
 
 export { findPath, findPathAStar, type PathfindingTerrain } from './pathfinding/index';
 export { BucketPriorityQueue } from './pathfinding/bucket-priority-queue';
-export { getHexLine, cubeRound, isHexLinePassable } from './pathfinding/hex-line';
+export { getHexLine, cubeRound, isHexLinePassable, setDirectionRunLength } from './pathfinding/hex-line';
 export { smoothPath, type PathSmoothingParams } from './pathfinding/path-smoothing';

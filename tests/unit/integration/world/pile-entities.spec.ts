@@ -11,8 +11,8 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { createSimulation, cleanupSimulation, type Simulation } from '../helpers/test-simulation';
-import { installRealGameData } from '../helpers/test-game-data';
+import { createSimulation, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
+import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType, EntityType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
 

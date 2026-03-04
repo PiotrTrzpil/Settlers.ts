@@ -80,68 +80,117 @@ export function getHexLine(x1: number, y1: number, x2: number, y2: number): Tile
     return groupDirectionRuns(results);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// DIRECTION RUN LENGTH CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
- * Reorder tiles in a hex line to create longer same-direction runs.
- *
- * The standard cube interpolation distributes direction changes maximally
- * evenly (e.g. E,SE,E,SE,E,SE). This function swaps adjacent pairs to
- * create runs of 2 (e.g. E,E,SE,SE,E,SE), which looks more natural.
- *
- * Each swap preserves the property that consecutive tiles are hex neighbors,
- * because swapping two adjacent hex steps (A then B → B then A) always
- * produces valid hex neighbors (the intermediate tile changes but both
- * directions are valid hex moves from any tile).
+ * Module-level direction run length for hex line grouping.
+ * Controls how many tiles a unit moves in one direction before turning.
+ * - 1 = maximum zigzag (alternating every tile, like raw cube interpolation)
+ * - 2 = mild grouping (current visual default)
+ * - 8 = moderate straightness (recommended default)
+ * - 20+ = very straight paths with sharp turns
  */
-export function groupDirectionRuns(tiles: TileCoord[]): TileCoord[] {
-    if (tiles.length <= 3) return tiles;
+let _directionRunLength = 8;
 
-    // Extract step directions as (dx, dy) pairs
-    const n = tiles.length - 1;
-    const dirs: Array<{ dx: number; dy: number }> = [];
-    for (let i = 0; i < n; i++) {
-        dirs.push({
-            dx: tiles[i + 1]!.x - tiles[i]!.x,
-            dy: tiles[i + 1]!.y - tiles[i]!.y,
-        });
+/**
+ * Set the direction run length for hex line grouping.
+ * Called from game initialization to sync with GameSettings.pathStraightness.
+ */
+export function setDirectionRunLength(length: number): void {
+    _directionRunLength = Math.max(1, Math.min(50, Math.round(length)));
+}
+
+interface Dir {
+    dx: number;
+    dy: number;
+}
+
+/** Extract step directions from a tile sequence. */
+function extractStepDirs(tiles: TileCoord[]): Dir[] {
+    const dirs: Dir[] = [];
+    for (let i = 0; i < tiles.length - 1; i++) {
+        dirs.push({ dx: tiles[i + 1]!.x - tiles[i]!.x, dy: tiles[i + 1]!.y - tiles[i]!.y });
     }
+    return dirs;
+}
 
-    // Single pass: swap adjacent steps to extend runs.
-    // Pattern: if we see X, Y, X (singleton Y between two X's),
-    // swap Y and the second X to get X, X, Y — extending the X run.
-    // Skip the swap if it would create a run of 3+ (keep runs at ~2).
-    let i = 0;
-    while (i < dirs.length - 2) {
-        const curr = dirs[i]!;
-        const next = dirs[i + 1]!;
-        const after = dirs[i + 2]!;
+/** Count occurrences of each unique direction in a step sequence. */
+function countDirTypes(dirs: Dir[]): Array<Dir & { count: number }> {
+    const types: Array<Dir & { count: number }> = [];
+    for (const d of dirs) {
+        const existing = types.find(t => t.dx === d.dx && t.dy === d.dy);
+        if (existing) existing.count++;
+        else types.push({ dx: d.dx, dy: d.dy, count: 1 });
+    }
+    return types;
+}
 
-        if (curr.dx === after.dx && curr.dy === after.dy && (curr.dx !== next.dx || curr.dy !== next.dy)) {
-            // Would this create a run of 3+? Check if previous step is same direction.
-            if (i > 0 && dirs[i - 1]!.dx === after.dx && dirs[i - 1]!.dy === after.dy) {
-                i++;
-                continue;
-            }
+/** Distribute two direction types into alternating runs of up to `runLen`. */
+function interleaveRuns(a: Dir, countA: number, b: Dir, countB: number, startWithA: boolean, runLen: number): Dir[] {
+    const result: Dir[] = [];
+    let remainA = countA;
+    let remainB = countB;
+    let emitA = startWithA;
 
-            // Swap: [i+1] and [i+2]
-            dirs[i + 1] = after;
-            dirs[i + 2] = next;
-            i += 3; // Skip past the created run
-        } else {
-            i++;
+    while (remainA > 0 || remainB > 0) {
+        const dir = emitA ? a : b;
+        const remain = emitA ? remainA : remainB;
+
+        if (remain > 0) {
+            const run = Math.min(runLen, remain);
+            for (let j = 0; j < run; j++) result.push({ dx: dir.dx, dy: dir.dy });
+            if (emitA) remainA -= run;
+            else remainB -= run;
         }
-    }
 
-    // Rebuild tile coordinates from directions
-    const result: TileCoord[] = [tiles[0]!];
-    let x = tiles[0]!.x;
-    let y = tiles[0]!.y;
+        emitA = !emitA;
+    }
+    return result;
+}
+
+/** Rebuild tile coordinates from a start point and a direction sequence. */
+function rebuildTilesFromDirs(start: TileCoord, dirs: Dir[]): TileCoord[] {
+    const result: TileCoord[] = [start];
+    let { x, y } = start;
     for (const dir of dirs) {
         x += dir.dx;
         y += dir.dy;
         result.push({ x, y });
     }
-
     return result;
+}
+
+/**
+ * Reorder tiles in a hex line to create same-direction runs of configurable length.
+ *
+ * The standard cube interpolation distributes direction changes maximally
+ * evenly (e.g. E,SE,E,SE,E,SE). This function redistributes the steps into
+ * runs of up to `_directionRunLength` (e.g. with length 3: E,E,E,SE,SE,SE).
+ *
+ * Any permutation of the same set of hex steps produces a valid path from
+ * start to end, since each step is a valid hex direction move.
+ *
+ * @param tiles The raw hex line tiles
+ * @param maxRunLength Override for the module-level setting (for testing)
+ */
+export function groupDirectionRuns(tiles: TileCoord[], maxRunLength?: number): TileCoord[] {
+    const runLen = maxRunLength ?? _directionRunLength;
+    if (tiles.length <= 2 || runLen <= 1) return tiles;
+
+    const dirs = extractStepDirs(tiles);
+    const dirTypes = countDirTypes(dirs);
+
+    // Single direction or >2 directions — no regrouping needed
+    if (dirTypes.length !== 2) return tiles;
+
+    const a = dirTypes[0]!;
+    const b = dirTypes[1]!;
+    const startWithA = dirs[0]!.dx === a.dx && dirs[0]!.dy === a.dy;
+    const grouped = interleaveRuns(a, a.count, b, b.count, startWithA, runLen);
+
+    return rebuildTilesFromDirs(tiles[0]!, grouped);
 }
 
 /**

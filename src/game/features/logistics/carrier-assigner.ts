@@ -73,19 +73,12 @@ export class CarrierAssigner {
     /**
      * Try to assign a carrier to fulfill a matched request.
      *
-     * @returns AssignmentSuccess (job + carrierId) on success, or null on failure.
+     * @returns AssignmentSuccess on success, `'no_carrier'` when all carriers are busy, or null on hard failure.
      */
-    tryAssign(request: ResourceRequest, match: RequestMatchResult): AssignmentSuccess | null {
+    tryAssign(request: ResourceRequest, match: RequestMatchResult): AssignmentSuccess | 'no_carrier' | null {
         const carrier = this.findAvailableCarrier(match.serviceHubs, match.playerId);
         if (!carrier) {
-            this.eventBus.emit('carrier:assignmentFailed', {
-                requestId: request.id,
-                reason: 'no_carrier',
-                sourceBuilding: match.sourceBuilding,
-                destBuilding: request.buildingId,
-                material: request.materialType,
-            });
-            return null;
+            return 'no_carrier';
         }
 
         const transportJob = TransportJob.create(

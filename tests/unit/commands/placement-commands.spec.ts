@@ -308,8 +308,8 @@ describe('Building Placement Terrain Modification', () => {
         const building = ctx.state.entities.find(e => e.type === EntityType.Building)!;
         const site = ctx.constructionSiteManager.getSite(building.id);
         expect(site).toBeDefined();
-        expect(site!.originalTerrain).not.toBeNull();
-        expect(site!.originalTerrain!.tiles.length).toBeGreaterThan(0);
+        expect(site!.terrain.originalTerrain).not.toBeNull();
+        expect(site!.terrain.originalTerrain!.tiles.length).toBeGreaterThan(0);
     });
 
     it('should change ground and level heights instantly in completed mode', () => {

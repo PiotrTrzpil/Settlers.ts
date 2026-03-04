@@ -19,7 +19,7 @@ export { findPathAStar, type PathfindingTerrain } from './astar';
 export { BucketPriorityQueue } from './bucket-priority-queue';
 
 // Hex line utilities
-export { getHexLine, cubeRound, isHexLinePassable, groupDirectionRuns } from './hex-line';
+export { getHexLine, cubeRound, isHexLinePassable, groupDirectionRuns, setDirectionRunLength } from './hex-line';
 
 // Path post-processing
 export { smoothPath, type PathSmoothingParams } from './path-smoothing';

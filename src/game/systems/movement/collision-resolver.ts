@@ -19,6 +19,7 @@ import type { TerrainAccessor } from './push-utils';
 import { MovementController } from './movement-controller';
 import type { IPathfinder } from './pathfinding-service';
 import type { SeededRng } from '../../rng';
+import type { EventBus } from '../../event-bus';
 
 /** How many steps ahead to look when doing prefix path repair */
 const PATH_REPAIR_DISTANCE = 10;
@@ -55,6 +56,7 @@ export interface CollisionResolverConfig {
     getEntity: GetEntityFn;
     updatePosition: UpdatePositionFn;
     getController: (entityId: number) => MovementController | undefined;
+    eventBus: EventBus;
     groundType?: Uint8Array;
     mapWidth?: number;
     mapHeight?: number;
@@ -71,6 +73,10 @@ export class CollisionResolver implements ICollisionResolver {
     private readonly getEntity: GetEntityFn;
     private readonly updatePosition: UpdatePositionFn;
     private readonly getController: (entityId: number) => MovementController | undefined;
+    private readonly eventBus: EventBus;
+
+    /** Enable verbose collision events (gated by MovementSystem.verbose) */
+    verbose = false;
 
     // Terrain data — optional because it may not be set yet
     private groundType: Uint8Array | undefined;
@@ -85,6 +91,7 @@ export class CollisionResolver implements ICollisionResolver {
         this.getEntity = config.getEntity;
         this.updatePosition = config.updatePosition;
         this.getController = config.getController;
+        this.eventBus = config.eventBus;
         this.groundType = config.groundType;
         this.mapWidth = config.mapWidth;
         this.mapHeight = config.mapHeight;
@@ -103,7 +110,7 @@ export class CollisionResolver implements ICollisionResolver {
      * Check whether the waypoint is occupied by another unit and attempt resolution.
      * Returns true if the unit ends up blocked (caller should break from the move loop).
      */
-    resolveBlockedWaypoint(controller: MovementController, wp: TileCoord, deltaSec: number): boolean {
+    resolveBlockedWaypoint(controller: MovementController, wp: TileCoord, _deltaSec: number): boolean {
         const blockingEntityId = this.tileOccupancy.get(tileKey(wp.x, wp.y));
         if (blockingEntityId === undefined || blockingEntityId === controller.entityId) {
             return false; // tile is free — no collision
@@ -116,7 +123,16 @@ export class CollisionResolver implements ICollisionResolver {
 
         if (!this.tryResolveObstacle(controller, blockingEntityId)) {
             if (!this.tryYield(controller, blockingEntityId)) {
-                controller.setBlocked(deltaSec);
+                this.emitResolution(
+                    controller.entityId,
+                    'wait',
+                    true,
+                    controller.tileX,
+                    controller.tileY,
+                    undefined,
+                    blockingEntityId
+                );
+                controller.setBlocked();
                 return true;
             }
         }
@@ -126,7 +142,7 @@ export class CollisionResolver implements ICollisionResolver {
         if (currentWp) {
             const stillBlocked = this.tileOccupancy.get(tileKey(currentWp.x, currentWp.y));
             if (stillBlocked !== undefined && stillBlocked !== controller.entityId) {
-                controller.setBlocked(deltaSec);
+                controller.setBlocked();
                 return true;
             }
         }
@@ -143,19 +159,32 @@ export class CollisionResolver implements ICollisionResolver {
      * Returns true if any strategy succeeded.
      */
     private tryResolveObstacle(controller: MovementController, blockingEntityId: number): boolean {
+        const x = controller.tileX;
+        const y = controller.tileY;
+
         // Strategy a: 1-tile sidestep + repath suffix
         // Only commit the detour if we can also fix the remaining path —
         // otherwise the old suffix still goes through the blocked tile
         // and the unit oscillates between the detour and the blocker.
         if (this.pathfinder.hasTerrainData()) {
-            if (this.tryDetourWithRepath(controller)) return true;
+            if (this.tryDetourWithRepath(controller)) {
+                this.emitResolution(controller.entityId, 'detour', true, x, y, controller.nextWaypoint);
+                return true;
+            }
+            this.emitResolution(controller.entityId, 'detour', false, x, y);
         }
 
         // Strategy b: recalculate path around the obstacle
-        if (this.tryPathRepair(controller)) return true;
+        if (this.tryPathRepair(controller)) {
+            this.emitResolution(controller.entityId, 'pathRepair', true, x, y);
+            return true;
+        }
+        this.emitResolution(controller.entityId, 'pathRepair', false, x, y);
 
         // Strategy c: push the blocking unit
-        return this.pushUnit(controller.entityId, blockingEntityId);
+        const pushed = this.pushUnit(controller.entityId, blockingEntityId);
+        this.emitResolution(controller.entityId, 'push', pushed, x, y, undefined, blockingEntityId);
+        return pushed;
     }
 
     /**
@@ -188,7 +217,18 @@ export class CollisionResolver implements ICollisionResolver {
             }
         }
 
-        if (!best) return false;
+        if (!best) {
+            this.emitResolution(
+                controller.entityId,
+                'yield',
+                false,
+                controller.tileX,
+                controller.tileY,
+                undefined,
+                blockingEntityId
+            );
+            return false;
+        }
 
         controller.handlePush(best.x, best.y);
         this.updatePosition(controller.entityId, best.x, best.y);
@@ -197,6 +237,15 @@ export class CollisionResolver implements ICollisionResolver {
             this.repathToGoal(controller, goal);
         }
 
+        this.emitResolution(
+            controller.entityId,
+            'yield',
+            true,
+            controller.tileX,
+            controller.tileY,
+            best,
+            blockingEntityId
+        );
         return true;
     }
 
@@ -283,6 +332,11 @@ export class CollisionResolver implements ICollisionResolver {
         const newSuffix = this.pathfinder.findPath(detour.x, detour.y, goal.x, goal.y, false);
         if (!newSuffix || newSuffix.length === 0) return false;
 
+        // Reject if the repath immediately routes back through the pre-detour tile —
+        // that would cause a 180° reversal (current → detour → current again).
+        const firstStep = newSuffix[0]!;
+        if (firstStep.x === controller.tileX && firstStep.y === controller.tileY) return false;
+
         controller.insertDetour(detour);
         controller.replacePathSuffix(newSuffix, controller.pathIndex + 1);
         return true;
@@ -316,6 +370,7 @@ export class CollisionResolver implements ICollisionResolver {
         );
 
         if (newPrefix && newPrefix.length > 0) {
+            if (this.wouldReverse(controller, newPrefix)) return false;
             controller.replacePathPrefix(newPrefix, prefixTargetIdx + 1);
             return true;
         }
@@ -336,6 +391,7 @@ export class CollisionResolver implements ICollisionResolver {
         );
 
         if (newPath && newPath.length > 0) {
+            if (this.wouldReverse(controller, newPath)) return false;
             controller.replacePath(newPath);
             return true;
         }
@@ -361,7 +417,12 @@ export class CollisionResolver implements ICollisionResolver {
         if (blockedController.isInTransit) return false;
 
         const terrain = this.buildTerrainAccessor();
-        const goal = blockedController.goal;
+
+        // Use the pusher's goal as bias — push the blocker out of the pusher's
+        // path rather than toward the blocker's own goal (which may point back
+        // into the pusher, causing 180° reversals in head-on collisions).
+        const pushingController = this.getController(pushingEntityId);
+        const biasGoal = pushingController?.goal ?? blockedController.goal;
 
         const freeDir = findSmartFreeDirection(
             blockedController.tileX,
@@ -369,16 +430,17 @@ export class CollisionResolver implements ICollisionResolver {
             this.tileOccupancy,
             this.rng,
             terrain,
-            goal?.x,
-            goal?.y
+            biasGoal?.x,
+            biasGoal?.y
         );
         if (!freeDir) return false;
 
         blockedController.handlePush(freeDir.x, freeDir.y);
         this.updatePosition(blockingEntityId, freeDir.x, freeDir.y);
 
-        if (goal) {
-            this.repathToGoal(blockedController, goal);
+        const ownGoal = blockedController.goal;
+        if (ownGoal) {
+            this.repathToGoal(blockedController, ownGoal);
         }
 
         return true;
@@ -414,13 +476,47 @@ export class CollisionResolver implements ICollisionResolver {
         }
 
         if (newPath && newPath.length > 0) {
+            if (this.wouldReverse(controller, newPath)) return;
             controller.redirectPath(newPath);
         }
+    }
+
+    /**
+     * Check if the first step of a new path would reverse back to the unit's previous tile.
+     * This prevents 180° turns when repath/repair routes back through the tile the unit just left.
+     */
+    private wouldReverse(controller: MovementController, path: TileCoord[]): boolean {
+        if (!controller.isInTransit) return false; // not moving — no reversal possible
+        const first = path[0]!;
+        return first.x === controller.prevTileX && first.y === controller.prevTileY;
     }
 
     /** Build a TerrainAccessor from current terrain state, or return undefined if unavailable. */
     private buildTerrainAccessor(): TerrainAccessor | undefined {
         if (!this.groundType || !this.mapWidth || !this.mapHeight) return undefined;
         return { groundType: this.groundType, mapWidth: this.mapWidth, mapHeight: this.mapHeight };
+    }
+
+    /** Emit a collision resolution event (when verbose mode is enabled). */
+    private emitResolution(
+        entityId: number,
+        strategy: 'detour' | 'pathRepair' | 'push' | 'yield' | 'wait',
+        success: boolean,
+        x: number,
+        y: number,
+        to?: TileCoord | null,
+        targetId?: number
+    ): void {
+        if (!this.verbose) return;
+        this.eventBus.emit('movement:collisionResolved', {
+            entityId,
+            strategy,
+            success,
+            x,
+            y,
+            toX: to?.x,
+            toY: to?.y,
+            targetId,
+        });
     }
 }

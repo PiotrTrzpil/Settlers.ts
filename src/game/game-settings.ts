@@ -37,6 +37,12 @@ export interface GameSettings {
     // UI state (persisted)
     settingsPanelOpen: boolean;
 
+    // Pathfinding
+    /** Direction run length for hex line grouping.
+     *  1 = maximum zigzag (alternating every tile), higher = straighter paths.
+     *  Controls how many tiles a unit moves in one direction before turning. */
+    pathStraightness: number;
+
     // Performance
     cacheDisabled: boolean;
     cacheCompressionEnabled: boolean;
@@ -71,6 +77,9 @@ const DEFAULT_SETTINGS: GameSettings = {
     placeBuildingsCompleted: false,
     placeBuildingsWithWorker: true,
 
+    // Pathfinding
+    pathStraightness: 8,
+
     // UI state
     settingsPanelOpen: false,
 
@@ -82,6 +91,8 @@ const DEFAULT_SETTINGS: GameSettings = {
 /** Load settings from localStorage, merging with defaults */
 function loadSettings(): GameSettings {
     try {
+        if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function')
+            return { ...DEFAULT_SETTINGS };
         const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
         if (!stored) return { ...DEFAULT_SETTINGS };
 

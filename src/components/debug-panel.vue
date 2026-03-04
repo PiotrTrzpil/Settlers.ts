@@ -40,6 +40,12 @@
             </div>
         </CollapseSection>
 
+        <!-- Pathfinding -->
+        <CollapseSection title="Pathfinding" :default-open="false">
+            <SettingsSlider v-model="settings.pathStraightness" label="Straightness" :min="1" :max="20" :step="1" />
+            <StatRow label="" dim :value="straightnessHint" />
+        </CollapseSection>
+
         <!-- Map Objects -->
         <CollapseSection title="Map Objects" :default-open="false">
             <Checkbox v-model="settings.darkLandDilation" label="Dark land gap filling" />
@@ -87,6 +93,7 @@ import OverlayPanel from './OverlayPanel.vue';
 import DebugPerformanceSection from './DebugPerformanceSection.vue';
 import DebugFrameTimings from './DebugFrameTimings.vue';
 import DebugMapLoadTimings from './DebugMapLoadTimings.vue';
+import SettingsSlider from './settings/SettingsSlider.vue';
 
 const props = defineProps<{
     paused: boolean;
@@ -116,6 +123,17 @@ function onTreeExpansionChange(val: boolean): void {
     // Strip tree entities from saved state so next reload re-populates from map data
     clearSavedTreeState();
 }
+
+// Pathfinding straightness hint
+const straightnessHint = computed(() => {
+    const v = settings.pathStraightness;
+    if (v <= 1) return 'Max zigzag (shortest path)';
+    if (v <= 3) return 'High zigzag';
+    if (v <= 6) return 'Moderate zigzag';
+    if (v <= 10) return 'Moderate straightness';
+    if (v <= 15) return 'Straight paths';
+    return 'Very straight (sharp turns)';
+});
 
 // Map objects functionality (extracted to composable)
 const getGame = (): Game | null => props.game;

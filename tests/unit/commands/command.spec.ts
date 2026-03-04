@@ -106,13 +106,13 @@ describe('Command System – edge cases', () => {
                 tileY: site.tileY,
             };
 
-            site.originalTerrain = captureOriginalTerrain(
+            site.terrain.originalTerrain = captureOriginalTerrain(
                 terrainParams,
                 ctx.map.groundType,
                 ctx.map.groundHeight,
                 ctx.map.mapSize
             );
-            site.terrainModified = true;
+            site.terrain.modified = true;
             site.phase = BuildingConstructionPhase.TerrainLeveling;
             applyTerrainLeveling(
                 terrainParams,
@@ -120,7 +120,7 @@ describe('Command System – edge cases', () => {
                 ctx.map.groundHeight,
                 ctx.map.mapSize,
                 1.0,
-                site.originalTerrain
+                site.terrain.originalTerrain
             );
 
             expect(ctx.map.groundType[ctx.map.mapSize.toIndex(10, 10)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);

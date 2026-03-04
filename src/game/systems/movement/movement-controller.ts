@@ -254,8 +254,8 @@ export class MovementController {
      * @returns The accumulated progress (may be > 1 if multiple moves are pending)
      */
     advanceProgress(deltaSec: number, maxProgress?: number): number {
-        // Only advance if moving or in visual transit
-        if (this._state === 'moving' || this.isInTransit) {
+        // Advance if moving, blocked (so blocked units retry collision resolution), or in visual transit
+        if (this._state === 'moving' || this._state === 'blocked' || this.isInTransit) {
             // Divide by distance factor so longer world-space steps take proportionally more time,
             // producing uniform visual speed regardless of hex direction.
             this._progress += (this._speed * deltaSec) / this._distanceFactor;
@@ -316,18 +316,28 @@ export class MovementController {
 
         // Clear blocked state on successful move
         this._blockedTime = 0;
+        this._state = 'moving';
 
         return wp;
     }
 
     /**
      * Mark the unit as blocked this tick.
-     * @param deltaSec Time since last tick (for timeout tracking)
+     * Resets progress so the unit waits before retrying.
+     * Blocked time is accumulated externally by the movement system every tick.
      */
-    setBlocked(deltaSec: number): void {
+    setBlocked(): void {
         this._state = 'blocked';
-        this._blockedTime += deltaSec;
         this._progress = 0; // Wait for next tick
+    }
+
+    /**
+     * Add elapsed time to the blocked counter.
+     * Called every tick the unit remains in 'blocked' state so that
+     * the give-up timeout is based on wall-clock time, not retry count.
+     */
+    addBlockedTime(deltaSec: number): void {
+        this._blockedTime += deltaSec;
     }
 
     /**

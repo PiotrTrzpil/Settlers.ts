@@ -67,6 +67,57 @@ export interface GameEvents {
         direction: number;
     };
 
+    // === Verbose Movement Events (gated by MovementSystem.verbose) ===
+
+    /** A path was requested and found */
+    'movement:pathFound': {
+        entityId: number;
+        fromX: number;
+        fromY: number;
+        toX: number;
+        toY: number;
+        pathLength: number;
+        redirect: boolean;
+    };
+
+    /** A path was requested but no route exists */
+    'movement:pathFailed': {
+        entityId: number;
+        fromX: number;
+        fromY: number;
+        toX: number;
+        toY: number;
+    };
+
+    /** Unit's next waypoint is blocked by another entity */
+    'movement:blocked': {
+        entityId: number;
+        x: number;
+        y: number;
+        blockerId: number;
+        isBuilding: boolean;
+    };
+
+    /** Blocked-state handler escalated (repath or gave up) */
+    'movement:escalation': {
+        entityId: number;
+        result: 'repath' | 'gave_up';
+    };
+
+    /** Collision resolution strategy was attempted */
+    'movement:collisionResolved': {
+        entityId: number;
+        strategy: 'detour' | 'pathRepair' | 'push' | 'yield' | 'wait';
+        success: boolean;
+        x: number;
+        y: number;
+        /** Target tile of the resolution (detour/push/yield destination) */
+        toX?: number;
+        toY?: number;
+        /** Entity that was pushed or blocking */
+        targetId?: number;
+    };
+
     // === Carrier Events ===
 
     /** Emitted when a carrier is registered */
@@ -136,14 +187,25 @@ export interface GameEvents {
         material: EMaterialType;
     };
 
-    /** Emitted when carrier assignment fails (no carrier, reservation failed, or movement failed) */
+    /** Emitted when carrier assignment fails (reservation failed or movement failed) */
     'carrier:assignmentFailed': {
         requestId: number;
-        reason: 'no_carrier' | 'reservation_failed' | 'movement_failed';
+        reason: 'reservation_failed' | 'movement_failed';
         sourceBuilding: number;
         destBuilding: number;
         material: EMaterialType;
         carrierId?: number;
+    };
+
+    /**
+     * Emitted (throttled) when no idle carrier is available for a pending request.
+     * Deduplicated per (building, material) — fires at most once per ~5 seconds.
+     */
+    'logistics:noCarrier': {
+        requestId: number;
+        buildingId: number;
+        materialType: EMaterialType;
+        sourceBuilding: number;
     };
 
     // === Logistics Events ===
@@ -163,7 +225,7 @@ export interface GameEvents {
     };
 
     /** Emitted when a new resource request is created */
-    'request:created': {
+    'logistics:requestCreated': {
         requestId: number;
         buildingId: number;
         materialType: EMaterialType;
@@ -281,6 +343,14 @@ export interface GameEvents {
     'construction:diggingStarted': {
         buildingId: number;
     };
+    /** Emitted when a single tile's terrain is leveled during construction */
+    'construction:tileCompleted': {
+        buildingId: number;
+        tileX: number;
+        tileY: number;
+        targetHeight: number;
+        isFootprint: boolean;
+    };
     /** Emitted when terrain leveling is complete for a construction site */
     'construction:levelingComplete': {
         buildingId: number;
@@ -297,6 +367,53 @@ export interface GameEvents {
     /** Emitted when construction progress reaches 1.0 */
     'construction:progressComplete': {
         buildingId: number;
+    };
+    /** Emitted when a digger or builder claims a slot on a construction site. */
+    'construction:workerAssigned': {
+        buildingId: number;
+        workerId: number;
+        role: 'digger' | 'builder';
+    };
+    /** Emitted when a digger or builder releases their slot (finished or interrupted). */
+    'construction:workerReleased': {
+        buildingId: number;
+        workerId: number;
+        role: 'digger' | 'builder';
+    };
+
+    // === Barracks Training Events ===
+
+    // === Settler Task Events ===
+
+    /** Emitted when a settler starts a choreography job (walking to target, gathering, etc.) */
+    'settler:taskStarted': {
+        unitId: number;
+        jobId: string;
+        targetId: number | null;
+        targetPos: { x: number; y: number } | null;
+        homeBuilding: number | null;
+    };
+
+    /** Emitted when a settler completes a choreography job and returns to idle. */
+    'settler:taskCompleted': {
+        unitId: number;
+        jobId: string;
+    };
+
+    /** Emitted when a settler's job is interrupted (target lost, pathfinding failure, etc.) */
+    'settler:taskFailed': {
+        unitId: number;
+        jobId: string;
+        /** Index of the choreography node that was executing when the failure occurred. */
+        nodeIndex: number;
+        /** The choreography step type that failed (e.g. GO_TO_TARGET, WORK_ON_ENTITY). */
+        failedStep: string;
+        /** Entity target of the job, if any. */
+        targetId: number | null;
+        /** Whether work had actually started before the interruption. */
+        workStarted: boolean;
+        /** Whether the unit was carrying material that was lost. */
+        wasCarrying: boolean;
     };
 
     // === Barracks Training Events ===
@@ -329,6 +446,12 @@ const log = new LogHandler('EventBus');
 
 export class EventBus {
     private handlers = new Map<string, Set<EventHandler<any>>>();
+
+    /**
+     * When true, handler errors are re-thrown instead of caught.
+     * Enable in tests so failures surface immediately.
+     */
+    public strict = false;
 
     /** Per-event throttled logger to prevent error spam */
     private errorLoggers = new Map<string, ThrottledLogger>();
@@ -366,6 +489,10 @@ export class EventBus {
         if (!handlers) return;
 
         for (const handler of handlers) {
+            if (this.strict) {
+                handler(payload);
+                continue;
+            }
             try {
                 handler(payload);
             } catch (e) {
@@ -374,7 +501,6 @@ export class EventBus {
                     `Handler for '${event as string}' threw`,
                     err
                 );
-                // Toast on first failure (when throttle allows logging)
                 if (logged) {
                     toastError('EventBus', `${event as string}: ${err.message}`);
                 }

@@ -22,7 +22,7 @@ export const RequestManagerFeature: FeatureDefinition = {
 
         // Bridge request creation to EventBus for consumers (debug panel, UI)
         const onRequestAdded: RequestEventListener<'requestAdded'> = ({ request }) => {
-            ctx.eventBus.emit('request:created', {
+            ctx.eventBus.emit('logistics:requestCreated', {
                 requestId: request.id,
                 buildingId: request.buildingId,
                 materialType: request.materialType,

@@ -584,10 +584,16 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     /**
-     * Interrupt a job for cleanup purposes (entity removal or task reassignment).
+     * Clean up a current job for entity removal or task reassignment.
+     * Completes the job if all nodes were already executed; interrupts otherwise.
      */
     private interruptJobForCleanup(entity: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
-        this.workerExecutor.interruptJob(entity, config, runtime);
+        const job = runtime.job!;
+        if (job.nodeIndex >= job.nodes.length) {
+            this.workerExecutor.completeJob(entity, runtime);
+        } else {
+            this.workerExecutor.interruptJob(entity, config, runtime);
+        }
     }
 
     /**

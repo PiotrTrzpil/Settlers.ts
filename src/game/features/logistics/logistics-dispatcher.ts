@@ -22,7 +22,7 @@ import type { GameState } from '../../game-state';
 import type { CarrierManager } from '../carriers';
 import type { RequestManager } from './request-manager';
 import type { ServiceAreaManager } from '../service-areas';
-import { RequestStatus } from './resource-request';
+import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
 import type { TransportJob } from './transport-job';
 import type { BuildingInventoryManager } from '../inventory';
@@ -35,6 +35,9 @@ import { MatchDiagnostics } from './match-diagnostics';
 
 /** Maximum number of job assignments per tick (to avoid frame drops) */
 const MAX_ASSIGNMENTS_PER_TICK = 5;
+
+/** Cooldown in seconds for `logistics:noCarrier` event per (building, material) pair. */
+const NO_CARRIER_COOLDOWN = 5;
 
 /** Configuration for LogisticsDispatcher dependencies */
 export interface LogisticsDispatcherConfig {
@@ -66,6 +69,11 @@ export class LogisticsDispatcher implements TickSystem {
 
     /** Active transport jobs indexed by carrier ID */
     private readonly activeJobs: Map<number, TransportJob> = new Map();
+
+    /** Throttle for `logistics:noCarrier` and `logistics:noMatch` — tracks last emit time per key. */
+    private readonly noCarrierCooldowns = new Map<string, number>();
+    private readonly noMatchCooldowns = new Map<string, number>();
+    private elapsedTime = 0;
 
     /** Event subscription manager for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
@@ -164,6 +172,7 @@ export class LogisticsDispatcher implements TickSystem {
      * Main tick — assign pending requests to available carriers and check for stalls.
      */
     tick(dt: number): void {
+        this.elapsedTime += dt;
         this.matchDiagnostics.tick(dt);
         this.assignPendingRequests();
         this.matchDiagnostics.markConsumed();
@@ -193,20 +202,47 @@ export class LogisticsDispatcher implements TickSystem {
                 if (this.matchDiagnostics.isDue()) {
                     this.matchDiagnostics.logFailure(request);
                 }
-                this.eventBus.emit('logistics:noMatch', {
-                    requestId: request.id,
-                    buildingId: request.buildingId,
-                    materialType: request.materialType,
-                });
+                this.emitNoMatchThrottled(request);
                 continue; // No supply available for this request
             }
 
-            const assignment = this.carrierAssigner.tryAssign(request, match);
-            if (assignment) {
-                this.activeJobs.set(assignment.carrierId, assignment.transportJob);
+            const result = this.carrierAssigner.tryAssign(request, match);
+            if (result === 'no_carrier') {
+                this.emitNoCarrierThrottled(request, match.sourceBuilding);
+                continue;
+            }
+            if (result) {
+                this.activeJobs.set(result.carrierId, result.transportJob);
                 assignmentCount++;
             }
         }
+    }
+
+    /** Emit `logistics:noMatch` at most once per 5 seconds per (building, material) pair. */
+    private emitNoMatchThrottled(request: ResourceRequest): void {
+        const key = `${request.buildingId}:${request.materialType}`;
+        const lastEmit = this.noMatchCooldowns.get(key) ?? -Infinity;
+        if (this.elapsedTime - lastEmit < NO_CARRIER_COOLDOWN) return;
+        this.noMatchCooldowns.set(key, this.elapsedTime);
+        this.eventBus.emit('logistics:noMatch', {
+            requestId: request.id,
+            buildingId: request.buildingId,
+            materialType: request.materialType,
+        });
+    }
+
+    /** Emit `logistics:noCarrier` at most once per 5 seconds per (building, material) pair. */
+    private emitNoCarrierThrottled(request: ResourceRequest, sourceBuilding: number): void {
+        const key = `${request.buildingId}:${request.materialType}`;
+        const lastEmit = this.noCarrierCooldowns.get(key) ?? -Infinity;
+        if (this.elapsedTime - lastEmit < NO_CARRIER_COOLDOWN) return;
+        this.noCarrierCooldowns.set(key, this.elapsedTime);
+        this.eventBus.emit('logistics:noCarrier', {
+            requestId: request.id,
+            buildingId: request.buildingId,
+            materialType: request.materialType,
+            sourceBuilding,
+        });
     }
 
     /**

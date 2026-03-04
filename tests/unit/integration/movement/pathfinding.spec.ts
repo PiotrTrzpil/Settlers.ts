@@ -45,11 +45,13 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { createSimulation, cleanupSimulation, type Simulation } from '../helpers/test-simulation';
-import { installRealGameData } from '../helpers/test-game-data';
-import { TERRAIN, setTerrainAt, blockColumnWithGap } from '../helpers/test-map';
+import { createSimulation, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
+import { installRealGameData } from '../../helpers/test-game-data';
+import { TERRAIN, setTerrainAt, blockColumnWithGap } from '../../helpers/test-map';
 import { BuildingType } from '@/game/buildings/building-type';
 import { tileKey, getBuildingFootprint, type TileCoord } from '@/game/entity';
+import { UnitType } from '@/game/unit-types';
+import { hexDistance, GRID_DELTAS } from '@/game/systems/hex-directions';
 import { Race } from '@/game/race';
 import { getBuildingDoorPos } from '@/game/game-data-access';
 
@@ -170,7 +172,7 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
     });
 
     it('unit navigates between multiple buildings without crossing footprints', () => {
-        sim = createSimulation({ mapWidth: 128, mapHeight: 128, buildingSpacing: 12 });
+        sim = createSimulation({ mapWidth: 128, mapHeight: 128 });
 
         sim.placeBuilding(BuildingType.ResidenceSmall);
         sim.placeBuilding(BuildingType.WoodcutterHut);
@@ -260,7 +262,7 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
     // ─── Tight building spacing (10-tile gap, real footprints) ─────────
 
     it('A* finds path between two completed buildings at 10-tile spacing', () => {
-        sim = createSimulation({ buildingSpacing: 10 });
+        sim = createSimulation();
 
         // Use non-residential buildings to avoid spawning carriers
         sim.placeBuilding(BuildingType.Sawmill); // slot 0 → (30,30)
@@ -272,7 +274,7 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
     });
 
     it('clearBuildingFootprintBlock removes all construction site tiles', () => {
-        sim = createSimulation({ buildingSpacing: 20 });
+        sim = createSimulation();
 
         const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false);
         const building = sim.state.getEntityOrThrow(siteId, 'test');
@@ -289,7 +291,7 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
     });
 
     it('A* finds path to construction site door at 20-tile spacing', () => {
-        sim = createSimulation({ buildingSpacing: 20 });
+        sim = createSimulation();
 
         sim.placeBuilding(BuildingType.Sawmill); // slot 0 → (30,30)
         const siteId = sim.placeBuilding(BuildingType.WoodcutterHut, 0, false); // slot 1 → (50,30)
@@ -347,5 +349,275 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
         // Distinct occupancy
         expect(sim.state.tileOccupancy.get(tileKey(40, 50))).toBe(u1);
         expect(sim.state.tileOccupancy.get(tileKey(40, 70))).toBe(u2);
+    });
+
+    // ─── Group collision (two squads passing through each other) ──────
+
+    /**
+     * Spawn a column of units near a location.
+     * Units are placed in a vertical column at (x, startY), (x, startY+spacing), etc.
+     */
+    function spawnGroup(
+        s: Simulation,
+        opts: { count: number; x: number; startY: number; spacing?: number; unitType?: UnitType }
+    ): number[] {
+        const { count, x, startY, spacing = 2, unitType = UnitType.Swordsman } = opts;
+        const ids: number[] = [];
+        for (let i = 0; i < count; i++) {
+            ids.push(s.spawnUnit(x, startY + i * spacing, unitType));
+        }
+        return ids;
+    }
+
+    /**
+     * Issue move orders for a group — each unit moves to (targetX, same Y).
+     * Returns { ids, targets } ready for runWithPositionTracking.
+     */
+    function moveGroupTo(s: Simulation, ids: number[], targetX: number) {
+        const targets: TileCoord[] = [];
+        for (const id of ids) {
+            const e = s.state.getEntityOrThrow(id, 'moveGroup');
+            targets.push({ x: targetX, y: e.y });
+        }
+        for (let i = 0; i < ids.length; i++) {
+            expect(s.moveUnit(ids[i]!, targets[i]!.x, targets[i]!.y)).toBe(true);
+        }
+        return { ids, targets };
+    }
+
+    /** Spawn two opposing groups and move them toward each other's start positions. */
+    function spawnOpposingGroups(
+        s: Simulation,
+        opts: { count: number; leftX: number; rightX: number; startY: number; ySpacing: number; unitType?: UnitType }
+    ) {
+        const { count, leftX, rightX, startY, ySpacing, unitType = UnitType.Swordsman } = opts;
+        const leftGroup = spawnGroup(s, { count, x: leftX, startY, spacing: ySpacing, unitType });
+        const rightGroup = spawnGroup(s, { count, x: rightX, startY, spacing: ySpacing, unitType });
+
+        const ids: number[] = [];
+        const targets: TileCoord[] = [];
+        for (let i = 0; i < count; i++) {
+            ids.push(leftGroup[i]!);
+            targets.push({ x: rightX, y: startY + i * ySpacing });
+            ids.push(rightGroup[i]!);
+            targets.push({ x: leftX, y: startY + i * ySpacing });
+        }
+
+        for (let i = 0; i < ids.length; i++) {
+            expect(s.moveUnit(ids[i]!, targets[i]!.x, targets[i]!.y)).toBe(true);
+        }
+        return { ids, targets };
+    }
+
+    /**
+     * Tick the simulation while tracking every unit's position each tick.
+     * Returns a map from entity ID to the sequence of positions it occupied.
+     * Only records a new entry when the position actually changes (deduped).
+     */
+    function runWithPositionTracking(
+        s: Simulation,
+        ids: number[],
+        targets: TileCoord[],
+        opts: { maxTicks: number; label: string; dt?: number }
+    ): Map<number, TileCoord[]> {
+        const trails = new Map<number, TileCoord[]>();
+        for (const id of ids) {
+            const e = s.state.getEntityOrThrow(id, 'track-init');
+            trails.set(id, [{ x: e.x, y: e.y }]);
+        }
+
+        s.runUntil(
+            () => {
+                // Record positions each tick
+                for (const id of ids) {
+                    const e = s.state.getEntityOrThrow(id, 'track');
+                    const trail = trails.get(id)!;
+                    const last = trail[trail.length - 1]!;
+                    if (e.x !== last.x || e.y !== last.y) {
+                        trail.push({ x: e.x, y: e.y });
+                    }
+                }
+                return ids.every((id, i) => {
+                    const e = s.state.getEntityOrThrow(id, 'arrive');
+                    return e.x === targets[i]!.x && e.y === targets[i]!.y;
+                });
+            },
+            {
+                maxTicks: opts.maxTicks,
+                dt: opts.dt,
+                label: opts.label,
+                diagnose: () => {
+                    const stuck: string[] = [];
+                    for (let i = 0; i < ids.length; i++) {
+                        const e = s.state.getEntityOrThrow(ids[i]!, 'diag');
+                        const t = targets[i]!;
+                        if (e.x !== t.x || e.y !== t.y) {
+                            const group = i % 2 === 0 ? 'A' : 'B';
+                            stuck.push(`${group}[${Math.floor(i / 2)}] #${e.id} at (${e.x},${e.y}) → (${t.x},${t.y})`);
+                        }
+                    }
+                    return `${stuck.length}/${ids.length} units didn't arrive:\n  ${stuck.join('\n  ')}`;
+                },
+            }
+        );
+        return trails;
+    }
+
+    /** Assert no unit teleported — every consecutive position must be a hex neighbor. */
+    function assertNoTeleports(trails: Map<number, TileCoord[]>) {
+        for (const [id, trail] of trails) {
+            for (let i = 1; i < trail.length; i++) {
+                const prev = trail[i - 1]!;
+                const curr = trail[i]!;
+                const dist = hexDistance(prev.x, prev.y, curr.x, curr.y);
+                expect(dist, `unit #${id} teleported (${prev.x},${prev.y})→(${curr.x},${curr.y}) dist=${dist}`).toBe(1);
+            }
+        }
+    }
+
+    /**
+     * Convert a step delta to a hex direction index (0-5), or -1 if zero delta.
+     * Matches GRID_DELTAS: NE=0, E=1, SE=2, SW=3, W=4, NW=5.
+     */
+    function stepToDirection(dx: number, dy: number): number {
+        for (let d = 0; d < GRID_DELTAS.length; d++) {
+            if (GRID_DELTAS[d]![0] === dx && GRID_DELTAS[d]![1] === dy) return d;
+        }
+        return -1;
+    }
+
+    /** Hex angular distance between two directions (0-3, where 3 = 180°). */
+    function turnAngle(dirA: number, dirB: number): number {
+        const diff = Math.abs(dirA - dirB);
+        return Math.min(diff, 6 - diff);
+    }
+
+    /** Direction names for diagnostic output. */
+    const DIR_NAMES = ['NE', 'E', 'SE', 'SW', 'W', 'NW'];
+
+    /**
+     * Assert no unit makes a sharp turn (> 120° on hex grid).
+     * Hex turns: 0°=same, 60°=one step, 120°=two steps, 180°=reversal.
+     * "Around 90° max" on a hex grid means ≤ 120° (turnAngle ≤ 2).
+     *
+     * maxAngle: maximum allowed hex turn steps (default 2 = 120°).
+     */
+    function assertSmoothMovement(trails: Map<number, TileCoord[]>, maxAngle = 2) {
+        for (const [id, trail] of trails) {
+            if (trail.length < 3) continue;
+
+            for (let i = 2; i < trail.length; i++) {
+                const dx1 = trail[i - 1]!.x - trail[i - 2]!.x;
+                const dy1 = trail[i - 1]!.y - trail[i - 2]!.y;
+                const dx2 = trail[i]!.x - trail[i - 1]!.x;
+                const dy2 = trail[i]!.y - trail[i - 1]!.y;
+
+                const d1 = stepToDirection(dx1, dy1);
+                const d2 = stepToDirection(dx2, dy2);
+                if (d1 === -1 || d2 === -1) continue;
+
+                const angle = turnAngle(d1, d2);
+                expect(
+                    angle,
+                    `unit #${id} sharp turn ${DIR_NAMES[d1]}→${DIR_NAMES[d2]} (${angle * 60}°) ` +
+                        `at step ${i}: (${trail[i - 2]!.x},${trail[i - 2]!.y})→` +
+                        `(${trail[i - 1]!.x},${trail[i - 1]!.y})→(${trail[i]!.x},${trail[i]!.y})`
+                ).toBeLessThanOrEqual(maxAngle);
+            }
+        }
+    }
+
+    /** Assert every unit sits on its target and no two share a tile. */
+    function assertAllArrived(s: Simulation, ids: number[], targets: TileCoord[]) {
+        const occupied = new Set<string>();
+        for (let i = 0; i < ids.length; i++) {
+            const e = s.state.getEntityOrThrow(ids[i]!, 'verify');
+            expect(e.x, `unit #${e.id} x`).toBe(targets[i]!.x);
+            expect(e.y, `unit #${e.id} y`).toBe(targets[i]!.y);
+            const key = tileKey(e.x, e.y);
+            expect(occupied.has(key), `duplicate occupancy at (${e.x},${e.y})`).toBe(false);
+            occupied.add(key);
+        }
+    }
+
+    it('two groups of five swordsmen pass through each other', () => {
+        sim = createSimulation();
+
+        const { ids, targets } = spawnOpposingGroups(sim, {
+            count: 5,
+            leftX: 20,
+            rightX: 60,
+            startY: 50,
+            ySpacing: 2,
+        });
+
+        const trails = runWithPositionTracking(sim, ids, targets, {
+            maxTicks: 3000,
+            label: '2×5 swordsmen open terrain',
+        });
+        assertAllArrived(sim, ids, targets);
+        assertNoTeleports(trails);
+        assertSmoothMovement(trails);
+    });
+
+    it('two groups pass through each other in a narrow corridor', () => {
+        sim = createSimulation();
+
+        // 5-tile-wide corridor: water walls above y=47 and below y=53
+        for (let x = 30; x <= 70; x++) {
+            for (let dy = -3; dy >= -6; dy--) setTerrainAt(sim.map, x, 50 + dy, TERRAIN.WATER);
+            for (let dy = 5; dy <= 8; dy++) setTerrainAt(sim.map, x, 50 + dy, TERRAIN.WATER);
+        }
+
+        const { ids, targets } = spawnOpposingGroups(sim, {
+            count: 5,
+            leftX: 25,
+            rightX: 75,
+            startY: 48,
+            ySpacing: 1,
+        });
+
+        const trails = runWithPositionTracking(sim, ids, targets, {
+            maxTicks: 6000,
+            label: '2×5 swordsmen narrow corridor',
+        });
+        assertAllArrived(sim, ids, targets);
+        assertNoTeleports(trails);
+        assertSmoothMovement(trails);
+    });
+
+    it('ten swordsmen march through a dense building cluster with idle settlers', () => {
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
+
+        // Dense building cluster near center — 6 buildings in a 3×2 grid
+        sim.placeBuilding(BuildingType.ResidenceSmall); // spawns carriers
+        sim.placeBuilding(BuildingType.WoodcutterHut);
+        sim.placeBuilding(BuildingType.Sawmill);
+        sim.placeBuilding(BuildingType.StorageArea);
+        sim.placeBuilding(BuildingType.ForesterHut);
+        sim.placeBuilding(BuildingType.StonecutterHut);
+
+        expect(sim.state.buildingOccupancy.size).toBeGreaterThan(0);
+
+        // Let auto-spawned workers/carriers settle at their buildings
+        sim.runTicks(120);
+
+        // Scatter idle swordsmen among the buildings to congest the gaps
+        spawnGroup(sim, { count: 5, x: 35, startY: 28, spacing: 4 });
+
+        // 10 swordsmen start far left, must cross the entire cluster to the right
+        const marchGroup = spawnGroup(sim, { count: 10, x: 10, startY: 26 });
+        const { ids, targets } = moveGroupTo(sim, marchGroup, 90);
+
+        const trails = runWithPositionTracking(sim, ids, targets, {
+            maxTicks: 6000,
+            label: '10 swordsmen through building cluster',
+        });
+        assertAllArrived(sim, ids, targets);
+        assertNoTeleports(trails);
+        assertSmoothMovement(trails);
+        for (const [, trail] of trails) {
+            assertAvoidedFootprints(trail, sim.state.buildingOccupancy);
+        }
     });
 });

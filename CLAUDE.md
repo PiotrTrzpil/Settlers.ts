@@ -27,6 +27,13 @@ npx playwright test   # Run Playwright e2e tests (uses dev server locally)
 pnpm format           # Prettier formatting
 ```
 
+### Test environment variables
+
+```sh
+DUMP_TIMELINE=1 pnpm test:unit      # Dump timeline diagnostics for every test
+VERBOSE_MOVEMENT=1 pnpm test:unit   # Include detailed pathfinding/movement events in timeline
+```
+
 ## Key patterns
 
 - **Debug bridge**: Game exposes `window.__settlers_debug__` for e2e tests and the debug panel

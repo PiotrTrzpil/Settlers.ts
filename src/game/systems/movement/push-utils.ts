@@ -66,8 +66,10 @@ export function findSmartFreeDirection(
     goalX?: number,
     goalY?: number
 ): TileCoord | null {
-    // Collect all valid directions
-    const validDirs: { coord: TileCoord; score: number }[] = [];
+    let best: TileCoord | null = null;
+    // Only accept lateral (score=0) or forward (score>0) moves.
+    // Backward pushes (score<0) cause 180° reversals and visual ping-ponging.
+    let bestScore = -1;
 
     for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
         const [dx, dy] = GRID_DELTAS[d]!;
@@ -76,30 +78,20 @@ export function findSmartFreeDirection(
 
         if (!isValidPushTile(nx, ny, occupancy, terrain)) continue;
 
-        // Score based on how well this direction helps toward the goal
         let score = 0;
         if (goalX !== undefined && goalY !== undefined) {
-            // Calculate distance change: positive = getting closer to goal
             const currDist = Math.abs(x - goalX) + Math.abs(y - goalY);
             const newDist = Math.abs(nx - goalX) + Math.abs(ny - goalY);
-            score = currDist - newDist; // Positive = closer to goal
+            score = currDist - newDist;
         }
 
-        validDirs.push({ coord: { x: nx, y: ny }, score });
+        if (score > bestScore) {
+            bestScore = score;
+            best = { x: nx, y: ny };
+        }
     }
 
-    if (validDirs.length === 0) return null;
-
-    // Sort by score (higher is better), then shuffle within same score for variety
-    validDirs.sort((a, b) => b.score - a.score);
-
-    // Among top-scoring directions (within 1 point), pick randomly
-    const topScore = validDirs[0]!.score;
-    const topDirs = validDirs.filter(d => d.score >= topScore - 1);
-
-    // Use RNG to pick from top directions for some variety
-    const idx = rng.nextInt(topDirs.length);
-    return topDirs[idx]!.coord;
+    return best;
 }
 
 /**
@@ -171,13 +163,24 @@ export function executePush(
     terrain: TerrainAccessor | undefined,
     onPositionUpdate: (entityId: number, x: number, y: number) => void
 ): boolean {
-    const freeDir = findRandomFreeDirection(blockedController.tileX, blockedController.tileY, occupancy, rng, terrain);
+    const goal = blockedController.goal;
+    // Prefer goal-aware push (rejects backward directions).
+    // Fall back to random only when all forward/lateral tiles are blocked.
+    let freeDir = findSmartFreeDirection(
+        blockedController.tileX,
+        blockedController.tileY,
+        occupancy,
+        rng,
+        terrain,
+        goal?.x,
+        goal?.y
+    );
+    if (!freeDir) {
+        freeDir = findRandomFreeDirection(blockedController.tileX, blockedController.tileY, occupancy, rng, terrain);
+    }
     if (!freeDir) return false;
 
-    // Handle the push in the controller
     blockedController.handlePush(freeDir.x, freeDir.y);
-
-    // Update game state via callback
     onPositionUpdate(blockedController.entityId, freeDir.x, freeDir.y);
 
     return true;

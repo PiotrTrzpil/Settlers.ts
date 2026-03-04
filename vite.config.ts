@@ -62,7 +62,6 @@ export default defineConfig({
         environment: 'node',
         include: ['tests/unit/**/*.spec.ts'],
         reporters: process.env['CI'] ? ['verbose', 'github-actions'] : ['verbose'],
-        // Vitest 4 defaults to 'forks' pool with sensible parallelism
         // Timeouts to prevent hung processes
         testTimeout: 10000,
         hookTimeout: 10000,

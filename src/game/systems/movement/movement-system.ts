@@ -55,6 +55,18 @@ export class MovementSystem implements TickSystem {
     // Event bus for notifying other systems of movement changes
     private readonly eventBus: EventBus;
 
+    /** Enable verbose movement events (pathFound, pathFailed, blocked, escalation, collisionResolved) */
+    private _verbose = false;
+
+    get verbose(): boolean {
+        return this._verbose;
+    }
+
+    set verbose(value: boolean) {
+        this._verbose = value;
+        this.collisionResolver.verbose = value;
+    }
+
     // Pathfinding, collision, and blocked-state sub-services
     private readonly pathfinder: PathfindingService;
     private readonly collisionResolver: CollisionResolver;
@@ -88,6 +100,7 @@ export class MovementSystem implements TickSystem {
             getEntity: this.getEntityFn,
             updatePosition: this.updatePositionFn,
             getController: this.controllers.get.bind(this.controllers),
+            eventBus: this.eventBus,
         });
         this.blockedStateHandler = new BlockedStateHandler(this.pathfinder);
     }
@@ -159,20 +172,41 @@ export class MovementSystem implements TickSystem {
         const controller = this.controllers.get(entityId);
         if (!controller) return false;
 
+        const fromX = controller.tileX;
+        const fromY = controller.tileY;
+
         const path = this.pathfinder.findPath(
-            controller.tileX,
-            controller.tileY,
+            fromX,
+            fromY,
             targetX,
             targetY,
             true // ignoreOccupancy: initial plan should ignore transient units
         );
 
-        if (!path || path.length === 0) return false;
+        if (!path || path.length === 0) {
+            if (this.verbose) {
+                this.eventBus.emit('movement:pathFailed', { entityId, fromX, fromY, toX: targetX, toY: targetY });
+            }
+            return false;
+        }
 
-        if (controller.isInTransit) {
+        const redirect = controller.isInTransit;
+        if (redirect) {
             controller.redirectPath(path);
         } else {
             controller.startPath(path);
+        }
+
+        if (this.verbose) {
+            this.eventBus.emit('movement:pathFound', {
+                entityId,
+                fromX,
+                fromY,
+                toX: targetX,
+                toY: targetY,
+                pathLength: path.length,
+                redirect,
+            });
         }
 
         return true;
@@ -214,6 +248,12 @@ export class MovementSystem implements TickSystem {
         const prevState = this.prevStates.get(controller.entityId) ?? controller.state;
 
         controller.advanceProgress(deltaSec);
+
+        // Accumulate blocked time every tick the unit remains blocked
+        // (not just on collision-check ticks, so the give-up timeout tracks wall-clock time)
+        if (controller.state === 'blocked') {
+            controller.addBlockedTime(deltaSec);
+        }
 
         while (controller.canMove()) {
             const wp = controller.nextWaypoint;
@@ -257,6 +297,15 @@ export class MovementSystem implements TickSystem {
 
         // Building footprint tiles are impassable (door tiles excluded from buildingOccupancy).
         if (this.buildingOccupancy.has(key)) {
+            if (this.verbose) {
+                this.eventBus.emit('movement:blocked', {
+                    entityId: controller.entityId,
+                    x: wp.x,
+                    y: wp.y,
+                    blockerId: blockingEntityId,
+                    isBuilding: true,
+                });
+            }
             return this.handleBuildingBlock(controller, deltaSec);
         }
 
@@ -264,6 +313,16 @@ export class MovementSystem implements TickSystem {
         const blockingEntity = this.getEntityFn(blockingEntityId);
         if (!blockingEntity || blockingEntity.type !== EntityType.Unit) {
             return false;
+        }
+
+        if (this.verbose) {
+            this.eventBus.emit('movement:blocked', {
+                entityId: controller.entityId,
+                x: wp.x,
+                y: wp.y,
+                blockerId: blockingEntityId,
+                isBuilding: false,
+            });
         }
 
         // Escalation (give-up / escalated repath) takes precedence over normal resolution
@@ -278,7 +337,7 @@ export class MovementSystem implements TickSystem {
     private handleBuildingBlock(controller: MovementController, deltaSec: number): boolean {
         const escalated = this.tryEscalate(controller, deltaSec);
         if (escalated !== null) return escalated;
-        controller.setBlocked(deltaSec);
+        controller.setBlocked();
         return true;
     }
 
@@ -288,8 +347,18 @@ export class MovementSystem implements TickSystem {
      */
     private tryEscalate(controller: MovementController, deltaSec: number): boolean | null {
         const result = this.blockedStateHandler.handle(controller, deltaSec);
-        if (result === 'gave-up') return true;
-        if (result === 'escalated') return false;
+        if (result === 'gave-up') {
+            if (this.verbose) {
+                this.eventBus.emit('movement:escalation', { entityId: controller.entityId, result: 'gave_up' });
+            }
+            return true;
+        }
+        if (result === 'escalated') {
+            if (this.verbose) {
+                this.eventBus.emit('movement:escalation', { entityId: controller.entityId, result: 'repath' });
+            }
+            return false;
+        }
         return null;
     }
 

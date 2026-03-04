@@ -85,8 +85,8 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { createSimulation, cleanupSimulation, type Simulation } from '../helpers/test-simulation';
-import { installRealGameData } from '../helpers/test-game-data';
+import { createSimulation, cleanupSimulation, type Simulation } from '../../helpers/test-simulation';
+import { installRealGameData } from '../../helpers/test-game-data';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType, UnitType } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
@@ -154,7 +154,7 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 
     });
 
     it('full chain: farm → grain → mill → flour + waterwork → water → bakery → bread', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
 
         // Track crop lifecycle events
         let planted = 0;
@@ -189,7 +189,7 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 
     });
 
     it('mine chain: coal mine + iron mine → iron smelter → iron bars (with injected bread)', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
 
         // Monitor assignment failures for diagnostics
         const failures: string[] = [];
@@ -218,7 +218,7 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 
     });
 
     it('tool & weapon chain: mines → smelter → iron bars → toolsmith → axes + weaponsmith → swords', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
 
         // Log inventory output changes to diagnose production pipeline
         sim.eventBus.on('inventory:changed', e => {
@@ -260,7 +260,7 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 
     });
 
     it('forester plants trees, woodcutter harvests them (no initial trees)', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
 
         // Track tree lifecycle events
         let treesPlanted = 0;
@@ -438,7 +438,7 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 
     });
 
     it('barracks training: weapons + carriers → soldiers', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
 
         let trainingStarted = 0;
         let trainingCompleted = 0;
@@ -477,7 +477,7 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 
     });
 
     it('barracks training: manual mode queues specific soldier types', () => {
-        sim = createSimulation({ mapWidth: 256, mapHeight: 256, buildingSpacing: 16 });
+        sim = createSimulation({ mapWidth: 256, mapHeight: 256 });
 
         const trained: { unitType: number; level: number }[] = [];
         sim.eventBus.on('barracks:trainingCompleted', e => {

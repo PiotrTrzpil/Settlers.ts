@@ -3,6 +3,7 @@ import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
 import { Entity, EntityType, TileCoord, tileKey, BuildingType, getBuildingFootprint, isMineBuilding } from '../entity';
+import { getAllNeighbors } from '../systems/hex-directions';
 import { PlacementStatus } from '../features/placement';
 import type { Race } from '../race';
 import { ShaderProgram } from './shader-program';
@@ -128,8 +129,9 @@ export class BuildingIndicatorRenderer implements IRenderer {
     public buildingType: BuildingType | null = null;
     public placementRace: Race | null = null;
 
-    // Occupancy map — rebuilt when entities change
+    // Occupancy maps — rebuilt when entities change
     public tileOccupancy: Map<string, number> = new Map();
+    public buildingFootprint: Set<string> = new Set();
     private occupancyEntitiesRef: readonly Entity[] | null = null;
 
     constructor(mapSize: MapSize, groundType: Uint8Array, groundHeight: Uint8Array, placement: PlacementChecker) {
@@ -164,11 +166,14 @@ export class BuildingIndicatorRenderer implements IRenderer {
     /** Rebuild the tile occupancy map from current entities. */
     private rebuildOccupancyMap(entities: readonly Entity[]): void {
         this.tileOccupancy.clear();
+        this.buildingFootprint.clear();
         for (const e of entities) {
             if (e.type === EntityType.Building) {
                 const footprint = getBuildingFootprint(e.x, e.y, e.subType as BuildingType, e.race);
                 for (const tile of footprint) {
-                    this.tileOccupancy.set(`${tile.x},${tile.y}`, e.id);
+                    const key = `${tile.x},${tile.y}`;
+                    this.tileOccupancy.set(key, e.id);
+                    this.buildingFootprint.add(key);
                 }
             } else {
                 this.tileOccupancy.set(`${e.x},${e.y}`, e.id);
@@ -225,6 +230,18 @@ export class BuildingIndicatorRenderer implements IRenderer {
         return null;
     }
 
+    /** Check if new footprint would touch any existing building footprint tile. */
+    private footprintTouchesBuilding(footprint: TileCoord[]): boolean {
+        const fpKeys = new Set(footprint.map(t => tileKey(t.x, t.y)));
+        for (const tile of footprint) {
+            for (const n of getAllNeighbors(tile)) {
+                const key = tileKey(n.x, n.y);
+                if (!fpKeys.has(key) && this.buildingFootprint.has(key)) return true;
+            }
+        }
+        return false;
+    }
+
     /** Compute slope difficulty rating using injected placement logic */
     private computeSlopeDifficultyForFootprint(footprint: TileCoord[]): PlacementStatus {
         return this.placement.computeSlopeDifficulty(footprint, this.groundHeight, this.mapSize);
@@ -245,6 +262,11 @@ export class BuildingIndicatorRenderer implements IRenderer {
         for (const tile of footprint) {
             const issue = this.checkTileBasics(tile, isMine);
             if (issue !== null) return issue;
+        }
+
+        // 1-tile gap between building footprints for pathfinding
+        if (this.buildingFootprint.size > 0 && this.footprintTouchesBuilding(footprint)) {
+            return PlacementStatus.Occupied;
         }
 
         return this.computeSlopeDifficultyForFootprint(footprint);
