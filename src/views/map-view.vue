@@ -123,7 +123,7 @@
                         :key="r.type"
                         class="sidebar-btn"
                         :data-testid="'btn-resource-' + r.id"
-                        :class="{ active: currentMode === 'place_resource' && placeResourceType === r.type }"
+                        :class="{ active: currentMode === 'place_pile' && placeResourceType === r.type }"
                         @click="setPlaceResourceMode(r.type)"
                     >
                         <span class="btn-icon">

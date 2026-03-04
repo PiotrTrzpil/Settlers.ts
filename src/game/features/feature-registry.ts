@@ -14,6 +14,7 @@ import type { EventBus } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
 import type { FeatureDefinition, FeatureInstance, FeatureContext } from './feature';
+import type { Command, CommandResult } from '../commands';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('FeatureRegistry');
@@ -26,6 +27,7 @@ export interface FeatureRegistryConfig {
     eventBus: EventBus;
     visualService: EntityVisualService;
     cleanupRegistry: EntityCleanupRegistry;
+    executeCommand: (cmd: Command) => CommandResult;
 }
 
 /**
@@ -169,6 +171,7 @@ export class FeatureRegistry {
             eventBus: this.config.eventBus,
             visualService: this.config.visualService,
             cleanupRegistry: this.config.cleanupRegistry,
+            executeCommand: this.config.executeCommand,
 
             getFeature: <T>(featureId: string): T => {
                 if (!allowedSet.has(featureId)) {

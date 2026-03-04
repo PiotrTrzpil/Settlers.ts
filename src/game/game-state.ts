@@ -13,7 +13,7 @@ import type { MovementSystem, MovementController } from './systems/movement/inde
 import { SeededRng, createGameRng } from './rng';
 import { EventBus } from './event-bus';
 import { SelectionManager } from './selection-manager';
-import { StackedResourceManager } from './stacked-resource-manager';
+import { StackedPileManager } from './stacked-pile-manager';
 
 /**
  * Legacy UnitState interface for backward compatibility.
@@ -117,7 +117,7 @@ function resolveEntitySelectable(type: EntityType, subType: number): boolean | u
     case EntityType.Building:
         return true;
     case EntityType.MapObject:
-    case EntityType.StackedResource:
+    case EntityType.StackedPile:
     case EntityType.Decoration:
     case EntityType.None:
         return false;
@@ -134,7 +134,7 @@ function resolveEntitySelectable(type: EntityType, subType: number): boolean | u
  *
  * Extracted concerns (owned here but encapsulated in dedicated classes):
  * - Selection state → SelectionManager
- * - Stacked resource state → StackedResourceManager
+ * - Stacked resource state → StackedPileManager
  * - Movement → MovementSystem (created externally, set via initMovement)
  */
 export class GameState {
@@ -155,7 +155,7 @@ export class GameState {
     public readonly selection: SelectionManager;
 
     /** Stacked resource state (quantities, building ownership) */
-    public readonly resources: StackedResourceManager;
+    public readonly piles: StackedPileManager;
 
     public nextId = 1;
 
@@ -172,7 +172,7 @@ export class GameState {
         this.eventBus = eventBus;
         this.rng = createGameRng(seed);
         this.selection = new SelectionManager(this);
-        this.resources = new StackedResourceManager(this);
+        this.piles = new StackedPileManager(this);
     }
 
     /**
@@ -189,7 +189,7 @@ export class GameState {
      * Selectability rules:
      * - Units: determined by UnitCategory (Military and Religious are selectable)
      * - Buildings: selectable
-     * - MapObject/StackedResource: NOT selectable
+     * - MapObject/StackedPile: NOT selectable
      * Speed defaults to UnitTypeConfig value for units.
      */
 
@@ -208,7 +208,11 @@ export class GameState {
                 `addEntity: race is required for buildings (BuildingType ${BuildingType[subType as BuildingType]})`
             );
         }
-        const entityRace: Race = race !== undefined ? race : Race.Roman;
+        if (type === EntityType.Unit && race === undefined) {
+            throw new Error(`addEntity: race is required for units (UnitType ${subType})`);
+        }
+        // Race is unused for MapObject / StackedPile / Decoration — any value works.
+        const entityRace: Race = race ?? Race.Roman;
         const resolvedSelectable = selectable !== undefined ? selectable : resolveEntitySelectable(type, subType);
 
         const entity: Entity = {
@@ -260,6 +264,16 @@ export class GameState {
         });
 
         return entity;
+    }
+
+    /** Spawn a unit with a required race. */
+    public addUnit(unitType: UnitType, x: number, y: number, player: number, race: Race, selectable?: boolean): Entity {
+        return this.addEntity(EntityType.Unit, unitType, x, y, player, selectable, undefined, race);
+    }
+
+    /** Place a building with a required race. */
+    public addBuilding(buildingType: BuildingType, x: number, y: number, player: number, race: Race): Entity {
+        return this.addEntity(EntityType.Building, buildingType, x, y, player, undefined, undefined, race);
     }
 
     /**

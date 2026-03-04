@@ -20,5 +20,8 @@ export { CarrierStatus, createCarrierState } from './carrier-state';
 // Manager
 export { CarrierManager, type CarrierManagerConfig } from './carrier-manager';
 
+// Feature definition
+export { CarrierFeature, type CarrierFeatureExports } from './carrier-feature';
+
 // Re-export EntityProvider from entity for convenience
 export type { EntityProvider } from '../../entity';

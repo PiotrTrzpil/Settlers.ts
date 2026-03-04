@@ -3,7 +3,6 @@
  * Maps S4BuildingType to our internal BuildingType and creates completed buildings.
  */
 
-import { EntityType } from '../../entity';
 import { Race } from '../../race';
 import { BuildingType } from '../../buildings/types';
 import { captureOriginalTerrain, setConstructionSiteGroundType, applyTerrainLeveling } from './terrain';
@@ -152,16 +151,7 @@ export function populateMapBuildings(
         }
 
         // Create the building entity with the correct race so footprint lookup uses the right data
-        const entity = state.addEntity(
-            EntityType.Building,
-            buildingType,
-            buildingData.x,
-            buildingData.y,
-            buildingData.player,
-            undefined,
-            undefined,
-            race
-        );
+        const entity = state.addBuilding(buildingType, buildingData.x, buildingData.y, buildingData.player, race);
 
         // Apply instant terrain modification using a temporary params object.
         // No ConstructionSite is created — the building is immediately operational.

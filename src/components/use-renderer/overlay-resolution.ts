@@ -9,7 +9,7 @@ import { OverlayRenderLayer, type BuildingOverlayRenderData } from '@/game/rende
 import { getBuildingVisualState, BuildingConstructionPhase } from '@/game/features/building-construction';
 import { PIXELS_TO_WORLD } from '@/game/renderer/sprite-metadata';
 import type { BuildingType } from '@/game/entity';
-import { getOverlayFrame } from '@/game/systems/building-overlays';
+import { getOverlayFrame } from '@/game/features/building-overlays';
 import { ENTITY_SCALE, scaleSprite } from '@/game/renderer/entity-renderer-constants';
 
 const EMPTY_OVERLAY_DATA: readonly BuildingOverlayRenderData[] = [];

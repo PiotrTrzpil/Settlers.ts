@@ -17,7 +17,7 @@ import type { GameState } from '../../game-state';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
-import type { Command } from '../../commands';
+import type { Command, CommandResult } from '../../commands';
 import { TREE_JOB_OFFSET, TREE_JOBS_PER_TYPE, TREE_JOB_INDICES } from '../../renderer/sprite-metadata/jil-indices';
 import type { EventBus } from '../../event-bus';
 
@@ -79,12 +79,25 @@ const TREE_CONFIG: GrowableConfig = {
  * Manages tree growth, cutting, and stump decay.
  * Uses EntityVisualService for visual state - no direct entity manipulation.
  */
+export interface TreeSystemConfig {
+    gameState: GameState;
+    visualService: EntityVisualService;
+    eventBus: EventBus;
+    executeCommand: (cmd: Command) => CommandResult;
+}
+
 export class TreeSystem extends GrowableSystem<TreeState> {
     private readonly eventBus: EventBus;
 
-    constructor(gameState: GameState, visualService: EntityVisualService, eventBus: EventBus) {
-        super(gameState, visualService, TREE_CONFIG, 'TreeSystem');
-        this.eventBus = eventBus;
+    constructor(cfg: TreeSystemConfig) {
+        super({
+            gameState: cfg.gameState,
+            visualService: cfg.visualService,
+            growableConfig: TREE_CONFIG,
+            logName: 'TreeSystem',
+            executeCommand: cfg.executeCommand,
+        });
+        this.eventBus = cfg.eventBus;
     }
 
     // ── GrowableSystem implementation ────────────────────────────

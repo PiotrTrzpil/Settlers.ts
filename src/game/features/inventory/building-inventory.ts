@@ -5,6 +5,7 @@
 
 import { BuildingType } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
+import { Race } from '../../race';
 import { BUILDING_PRODUCTIONS, type Recipe } from '../../economy/building-production';
 import type { InventorySlot } from './inventory-slot';
 import {
@@ -58,6 +59,7 @@ let _instanceCounter = 0;
 export class BuildingInventoryManager {
     private inventories: Map<number, BuildingInventory> = new Map();
     private changeListeners: Set<InventoryChangeCallback> = new Set();
+    private allowedMaterials = new Map<number, Set<EMaterialType>>();
     private _debugId = ++_instanceCounter;
 
     /**
@@ -129,8 +131,8 @@ export class BuildingInventoryManager {
      * @param buildingType Type of building
      * @returns The created inventory
      */
-    createInventory(buildingId: number, buildingType: BuildingType): BuildingInventory {
-        const config = getInventoryConfig(buildingType);
+    createInventory(buildingId: number, buildingType: BuildingType, race: Race): BuildingInventory {
+        const config = getInventoryConfig(buildingType, race);
 
         const inventory: BuildingInventory = {
             buildingId,
@@ -157,12 +159,34 @@ export class BuildingInventoryManager {
     }
 
     /**
-     * Remove a building's inventory.
+     * Destroy a building's inventory, releasing all slots.
+     * Called by the cleanup registry LATE handler when a building entity is removed.
      * @param buildingId Entity ID of the building
-     * @returns True if inventory was removed, false if not found
+     * @returns True if inventory was found and removed, false if not found
+     */
+    destroyBuildingInventory(buildingId: number): boolean {
+        this.allowedMaterials.delete(buildingId);
+        return this.inventories.delete(buildingId);
+    }
+
+    /**
+     * @deprecated Use destroyBuildingInventory instead.
      */
     removeInventory(buildingId: number): boolean {
-        return this.inventories.delete(buildingId);
+        return this.destroyBuildingInventory(buildingId);
+    }
+
+    /**
+     * Atomically swap from construction inventory to production inventory.
+     * Destroys the existing (construction) inventory and creates a fresh production inventory.
+     * Emits NO change events — InventoryPileSync handles pile clearing before this is called,
+     * and the new inventory starts empty.
+     * @param buildingId Entity ID of the building
+     * @param buildingType Type of the completed building
+     */
+    swapInventoryPhase(buildingId: number, buildingType: BuildingType, race: Race): void {
+        this.destroyBuildingInventory(buildingId);
+        this.createInventory(buildingId, buildingType, race);
     }
 
     /**
@@ -238,12 +262,29 @@ export class BuildingInventoryManager {
 
     /**
      * Withdraw material from a building's output slot.
+     * For StorageArea buildings, frees the dynamic slot back to NO_MATERIAL when it drains to zero.
      * @param buildingId Entity ID of the building
      * @param materialType Material type to withdraw
      * @param amount Amount to withdraw
      * @returns Actual amount withdrawn (may be less than requested)
      */
     withdrawOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
+        if (this.isStorageArea(buildingId)) {
+            const inventory = this.inventories.get(buildingId);
+            if (!inventory)
+                throw new Error(`No inventory for building ${buildingId} in BuildingInventoryManager.withdrawOutput`);
+            const slot = inventory.outputSlots.find(s => s.materialType === materialType);
+            if (!slot || slot.currentAmount < amount) return 0;
+            const prev = slot.currentAmount;
+            const withdrawn = Math.min(amount, slot.currentAmount);
+            slot.currentAmount -= withdrawn;
+            if (slot.currentAmount === 0) {
+                slot.materialType = EMaterialType.NO_MATERIAL; // Free this slot for the next material
+            }
+            this.emitChange(buildingId, materialType, 'output', prev, slot.currentAmount);
+            return withdrawn;
+        }
+
         const slot = this.getOutputSlotOrThrow(buildingId, materialType);
 
         const previousAmount = slot.currentAmount;
@@ -316,12 +357,16 @@ export class BuildingInventoryManager {
 
     /**
      * Check if a building can accept material into its input.
+     * Throws if called on a StorageArea — use depositOutput instead.
      * @param buildingId Entity ID of the building
      * @param materialType Material type to check
      * @param amount Amount to check
      * @returns True if the building can accept the material
      */
     canAcceptInput(buildingId: number, materialType: EMaterialType, amount: number): boolean {
+        if (this.isStorageArea(buildingId)) {
+            throw new Error(`canAcceptInput called on StorageArea building ${buildingId} — use depositOutput instead`);
+        }
         const slot = this.getInputSlot(buildingId, materialType);
         if (!slot) return false;
         return canAccept(slot, materialType, amount);
@@ -342,11 +387,17 @@ export class BuildingInventoryManager {
 
     /**
      * Get available space in a building's input slot.
+     * Throws if called on a StorageArea — StorageArea has no input slots.
      * @param buildingId Entity ID of the building
      * @param materialType Material type to check
      * @returns Available space, or 0 if slot not found
      */
     getInputSpace(buildingId: number, materialType: EMaterialType): number {
+        if (this.isStorageArea(buildingId)) {
+            throw new Error(
+                `getInputSpace called on StorageArea building ${buildingId} — StorageArea has no input slots`
+            );
+        }
         const slot = this.getInputSlot(buildingId, materialType);
         if (!slot) return 0;
         return getAvailableSpace(slot);
@@ -375,7 +426,46 @@ export class BuildingInventoryManager {
     }
 
     /**
+     * Check whether a building is a StorageArea.
+     * Used to gate dynamic-slot logic in depositOutput / withdrawOutput.
+     */
+    private isStorageArea(buildingId: number): boolean {
+        return this.inventories.get(buildingId)?.buildingType === BuildingType.StorageArea;
+    }
+
+    /**
+     * Get the set of allowed materials for a StorageArea building.
+     * The actual routing filter lives in StorageFilterManager — this is a read-only view.
+     * @param buildingId Entity ID of the building
+     * @returns ReadonlySet of allowed material types (empty set = nothing configured)
+     */
+    getAllowedMaterials(buildingId: number): ReadonlySet<EMaterialType> {
+        return this.allowedMaterials.get(buildingId) ?? new Set();
+    }
+
+    /**
+     * Configure whether a specific material is allowed into this building's storage.
+     * Note: The isAllowed check lives ONLY in logistics routing — depositOutput does NOT enforce it.
+     * @param buildingId Entity ID of the building
+     * @param material Material type to configure
+     * @param allowed True to allow, false to disallow
+     */
+    setAllowedMaterial(buildingId: number, material: EMaterialType, allowed: boolean): void {
+        let set = this.allowedMaterials.get(buildingId);
+        if (!set) {
+            set = new Set();
+            this.allowedMaterials.set(buildingId, set);
+        }
+        if (allowed) set.add(material);
+        else set.delete(material);
+    }
+
+    /**
      * Deposit material into a building's output slot (used by production).
+     * For StorageArea buildings, uses dynamic slot assignment:
+     *   1. Find an existing slot with the matching material type.
+     *   2. If none, claim the first free slot (NO_MATERIAL with amount 0) and assign it.
+     *   3. If all slots are occupied, return 0.
      * @param buildingId Entity ID of the building
      * @param materialType Material type to deposit
      * @param amount Amount to deposit
@@ -383,6 +473,29 @@ export class BuildingInventoryManager {
      */
     depositOutput(buildingId: number, materialType: EMaterialType, amount: number): number {
         log.debug(`#${this._debugId} depositOutput: building=${buildingId}, listeners=${this.changeListeners.size}`);
+
+        if (this.isStorageArea(buildingId)) {
+            const inventory = this.inventories.get(buildingId);
+            if (!inventory)
+                throw new Error(`No inventory for building ${buildingId} in BuildingInventoryManager.depositOutput`);
+            // 1. Find an existing slot already assigned to this material
+            let slot = inventory.outputSlots.find(s => s.materialType === materialType);
+            if (!slot) {
+                // 2. Find a free slot (NO_MATERIAL sentinel with no contents) and assign it
+                slot = inventory.outputSlots.find(
+                    s => s.materialType === EMaterialType.NO_MATERIAL && s.currentAmount === 0
+                );
+                if (!slot) return 0; // All dynamic slots are occupied
+                slot.materialType = materialType;
+            }
+            const deposited = Math.min(amount, slot.maxCapacity - slot.currentAmount);
+            if (deposited <= 0) return 0;
+            const prev = slot.currentAmount;
+            slot.currentAmount += deposited;
+            this.emitChange(buildingId, materialType, 'output', prev, slot.currentAmount);
+            return deposited;
+        }
+
         const slot = this.getOutputSlotOrThrow(buildingId, materialType);
 
         const previousAmount = slot.currentAmount;

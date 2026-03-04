@@ -14,5 +14,5 @@
 
 export type { CombatState, CombatStats } from './combat-state';
 export { CombatStatus, getCombatStats, createCombatState } from './combat-state';
-export { CombatSystem } from './combat-system';
+export { CombatSystem, type CombatSystemConfig } from './combat-system';
 export { CombatFeature, type CombatExports } from './combat-feature';

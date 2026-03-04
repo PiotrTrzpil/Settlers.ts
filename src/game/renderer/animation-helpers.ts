@@ -9,6 +9,16 @@
 import type { AnimationPlayback } from '../animation/entity-visual-service';
 import type { AnimationData } from '../animation';
 import type { SpriteEntry } from './sprite-metadata';
+import type { EntityType } from '../entity';
+
+/**
+ * Unified animation data provider interface.
+ * Decouples animation consumers from the sprite loading/management implementation.
+ */
+export interface AnimationDataProvider {
+    getAnimationData(entityType: EntityType, subType: number, race: number): AnimationData | null;
+    hasAnimation(entityType: EntityType, subType: number, race: number): boolean;
+}
 
 /**
  * Resolve an animation playback to a concrete sprite frame.

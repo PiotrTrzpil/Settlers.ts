@@ -2,10 +2,9 @@
  * CarrierManager - Manages all carrier states and auto-registration.
  */
 
-import { type EventBus, EventSubscriptionManager } from '../../event-bus';
-import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
+import type { EventBus } from '../../event-bus';
 import { EMaterialType } from '../../economy';
-import { UnitType, type EntityProvider } from '../../entity';
+import type { EntityProvider } from '../../entity';
 import { CarrierStatus, type CarrierState, createCarrierState } from './carrier-state';
 import { LogHandler } from '@/utilities/log-handler';
 
@@ -33,35 +32,9 @@ export class CarrierManager {
     /** Event bus for emitting carrier events */
     private readonly eventBus: EventBus;
 
-    /** Tracked event subscriptions for cleanup */
-    private readonly subscriptions = new EventSubscriptionManager();
-
     constructor(config: CarrierManagerConfig) {
         this.entityProvider = config.entityProvider;
         this.eventBus = config.eventBus;
-    }
-
-    /**
-     * Subscribe to entity lifecycle events.
-     * Auto-registers spawned carriers and removes carrier state on entity removal.
-     */
-    registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
-        this.subscriptions.subscribe(eventBus, 'unit:spawned', payload => {
-            if (payload.unitType === UnitType.Carrier) {
-                this.registerCarrier(payload.entityId);
-            }
-        });
-
-        cleanupRegistry.onEntityRemoved(entityId => {
-            if (this.hasCarrier(entityId)) {
-                this.removeCarrier(entityId);
-            }
-        });
-    }
-
-    /** Unsubscribe from all tracked events. */
-    unregisterEvents(): void {
-        this.subscriptions.unsubscribeAll();
     }
 
     /**

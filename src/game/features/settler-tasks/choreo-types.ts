@@ -9,12 +9,13 @@ import type { Entity } from '../../entity';
 import { EMaterialType } from '../../economy';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
-import type { BuildingInventoryManager, InventoryVisualizer } from '../inventory';
+import type { BuildingInventoryManager } from '../inventory';
 import type { CarrierManager } from '../carriers';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import { JobType, type EntityWorkHandler, type PositionWorkHandler, type TaskResult } from './types';
 import type { TransportJob } from '../logistics/transport-job';
 import type { BarracksTrainingManager } from '../barracks';
+import type { Command, CommandResult } from '../../commands';
 
 // ─────────────────────────────────────────────────────────────
 // CEntityTask types — 1:1 mapping from jobInfo.xml
@@ -269,14 +270,15 @@ export interface TransportContext {
 
 /**
  * Full service bag for choreography executors — composes all phase-specific contexts.
- * Ancillary services (inventoryVisualizer, jobPartResolver) are used by the task
+ * Ancillary services (jobPartResolver) are used by the task
  * system itself rather than by individual executor functions.
  */
 export interface ChoreoContext extends MovementContext, WorkContext, InventoryContext, TransportContext {
-    inventoryVisualizer: InventoryVisualizer;
     jobPartResolver: JobPartResolver;
     /** Barracks training manager — optional, only set when barracks feature is active. */
     barracksTrainingManager?: BarracksTrainingManager;
+    /** Command executor for entity creation/removal during simulation. */
+    executeCommand: (cmd: Command) => CommandResult;
 }
 
 /** Signature for a single choreography node executor. */

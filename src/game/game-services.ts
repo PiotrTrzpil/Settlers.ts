@@ -33,14 +33,16 @@ import {
     ConstructionSiteManager,
     ConstructionRequestSystem,
 } from './features/building-construction';
-import { CarrierManager } from './features/carriers';
+import { CarrierManager, CarrierFeature, type CarrierFeatureExports } from './features/carriers';
 import {
-    InventoryVisualizer,
     BuildingInventoryManager,
     BuildingPileRegistry,
     InventoryFeature,
     type InventoryExports,
     getConstructionInventoryConfig,
+    PilePositionResolver,
+    InventoryPileSync,
+    StorageFilterManager,
 } from './features/inventory';
 import { getGameDataLoader } from '@/resources/game-data';
 import {
@@ -57,7 +59,12 @@ import { CropFeature, CropSystem, type CropFeatureExports } from './features/cro
 import { CombatFeature, CombatSystem, type CombatExports } from './features/combat';
 import { TerritoryManager, registerTerritoryEvents } from './features/territory';
 import { WorkAreaStore } from './features/work-areas';
-import { BuildingOverlayManager, OverlayRegistry, populateOverlayRegistry } from './systems/building-overlays';
+import {
+    BuildingOverlayManager,
+    OverlayRegistry,
+    BuildingOverlayFeature,
+    type BuildingOverlayFeatureExports,
+} from './features/building-overlays';
 import { EntityCleanupRegistry, CLEANUP_PRIORITY } from './systems/entity-cleanup-registry';
 import { EventBus, EventSubscriptionManager, type GameEvents } from './event-bus';
 import { EntityType, UnitType, BuildingType, getUnitTypeSpeed } from './entity';
@@ -82,8 +89,8 @@ export class GameServices {
     public readonly visualService: EntityVisualService;
 
     // ===== Managers (own state, no tick) =====
-    /** Carrier manager — tracks carrier state and assignments */
-    public readonly carrierManager: CarrierManager;
+    /** Carrier manager — tracks carrier state and assignments (via FeatureRegistry) */
+    public readonly carrierManager!: CarrierManager;
 
     /** Building inventory manager — tracks building input/output slots (via FeatureRegistry) */
     public readonly inventoryManager!: BuildingInventoryManager;
@@ -100,11 +107,11 @@ export class GameServices {
     /** Construction request system — creates material delivery requests for construction sites */
     public readonly constructionRequestSystem: ConstructionRequestSystem;
 
-    /** Building overlay manager — tracks layered sprite overlays on buildings */
-    public readonly buildingOverlayManager: BuildingOverlayManager;
+    /** Building overlay manager — tracks layered sprite overlays on buildings (via FeatureRegistry) */
+    public readonly buildingOverlayManager!: BuildingOverlayManager;
 
-    /** Overlay registry — static definitions for building overlays (shared with renderer) */
-    public readonly overlayRegistry: OverlayRegistry;
+    /** Overlay registry — static definitions for building overlays (via FeatureRegistry) */
+    public readonly overlayRegistry!: OverlayRegistry;
 
     /** Territory manager — tracks territory zones from towers/castles (set in setTerrainData) */
     public territoryManager!: TerritoryManager;
@@ -134,8 +141,11 @@ export class GameServices {
     /** Logistics dispatcher — connects resource requests to carriers */
     public readonly logisticsDispatcher!: LogisticsDispatcher;
 
-    /** Inventory visualizer — syncs building outputs to visual stacked resources */
-    public readonly inventoryVisualizer: InventoryVisualizer;
+    /** Pile sync — event-driven synchronization between inventory state and pile entities */
+    public inventoryPileSync: InventoryPileSync | null = null;
+
+    /** Storage filter manager — tracks per-building material allow-lists for StorageArea buildings */
+    public readonly storageFilterManager!: StorageFilterManager;
 
     /** XML-derived pile positions for building inventory stacks */
     private pileRegistry: BuildingPileRegistry | null = null;
@@ -179,18 +189,6 @@ export class GameServices {
         );
 
         // 2. Manually-created managers (complex wiring that isn't yet feature-based)
-        this.carrierManager = new CarrierManager({
-            entityProvider: gameState,
-            eventBus,
-        });
-
-        // 2b. Building overlay system — layered sprites on buildings
-        this.overlayRegistry = new OverlayRegistry();
-        populateOverlayRegistry(this.overlayRegistry);
-        this.buildingOverlayManager = new BuildingOverlayManager({
-            overlayRegistry: this.overlayRegistry,
-            entityProvider: gameState,
-        });
 
         // 2c. Work area store — per-building work area offsets
         this.workAreaStore = new WorkAreaStore();
@@ -210,28 +208,26 @@ export class GameServices {
                 return true;
             },
             getEntity: gameState.getEntity.bind(gameState),
+            tileOccupancy: gameState.tileOccupancy,
+            buildingOccupancy: gameState.buildingOccupancy,
         });
-        this.movement.setTileOccupancy(gameState.tileOccupancy, gameState.buildingOccupancy);
         gameState.initMovement(this.movement);
         this.addSystem(this.movement, 'Units');
 
         // 4. Building construction system
         this.constructionSystem = new BuildingConstructionSystem({
             gameState,
+            eventBus,
             constructionSiteManager: this.constructionSiteManager,
             executeCommand,
         });
-        this.residenceSpawner = new ResidenceSpawnerSystem(gameState, eventBus);
+        this.residenceSpawner = new ResidenceSpawnerSystem({ gameState, executeCommand });
         this.constructionSystem.setResidenceSpawner(this.residenceSpawner);
-        this.constructionSystem.registerEvents(eventBus);
+        this.constructionSystem.registerEvents();
         this.addSystem(this.constructionSystem, 'Buildings');
         this.addSystem(this.residenceSpawner, 'Buildings');
 
-        // 5. Register early lifecycle events — carriers self-subscribe.
-        //    Must happen before feature loading so handlers fire in the right order.
-        this.buildingOverlayManager.registerEvents(eventBus, this.cleanupRegistry);
-        this.carrierManager.registerEvents(eventBus, this.cleanupRegistry);
-        this.addSystem(this.buildingOverlayManager, 'Buildings');
+        // 5. (building-overlays is now registered via FeatureRegistry below)
 
         // 6. Feature registry — load self-registering features.
         //    Features register with cleanupRegistry for entity:removed cleanup.
@@ -240,6 +236,7 @@ export class GameServices {
             eventBus,
             visualService: this.visualService,
             cleanupRegistry: this.cleanupRegistry,
+            executeCommand,
         });
 
         // Pre-register externally-created managers so features can access them via ctx.getFeature().
@@ -248,6 +245,8 @@ export class GameServices {
         });
 
         this.featureRegistry.loadAll([
+            CarrierFeature,
+            BuildingOverlayFeature,
             ServiceAreaFeature,
             InventoryFeature,
             RequestManagerFeature,
@@ -260,9 +259,16 @@ export class GameServices {
         ]);
 
         // Retrieve managers created by features
+        this.carrierManager = this.featureRegistry.getFeatureExports<CarrierFeatureExports>('carriers').carrierManager;
+        const overlayExports =
+            this.featureRegistry.getFeatureExports<BuildingOverlayFeatureExports>('building-overlays');
+        this.buildingOverlayManager = overlayExports.buildingOverlayManager;
+        this.overlayRegistry = overlayExports.overlayRegistry;
         this.serviceAreaManager =
             this.featureRegistry.getFeatureExports<ServiceAreaExports>('service-areas').serviceAreaManager;
-        this.inventoryManager = this.featureRegistry.getFeatureExports<InventoryExports>('inventory').inventoryManager;
+        const inventoryExports = this.featureRegistry.getFeatureExports<InventoryExports>('inventory');
+        this.inventoryManager = inventoryExports.inventoryManager;
+        this.storageFilterManager = inventoryExports.storageFilterManager;
         this.requestManager = this.featureRegistry.getFeatureExports<RequestManagerExports>('logistics').requestManager;
 
         // Construction request system — creates material delivery requests for construction sites.
@@ -275,10 +281,8 @@ export class GameServices {
 
         this.combatSystem = this.featureRegistry.getFeatureExports<CombatExports>('combat').combatSystem;
         this.treeSystem = this.featureRegistry.getFeatureExports<TreeFeatureExports>('trees').treeSystem;
-        this.treeSystem.setCommandExecutor(executeCommand);
         this.stoneSystem = this.featureRegistry.getFeatureExports<StoneFeatureExports>('stones').stoneSystem;
         this.cropSystem = this.featureRegistry.getFeatureExports<CropFeatureExports>('crops').cropSystem;
-        this.cropSystem.setCommandExecutor(executeCommand);
         this.signSystem = this.featureRegistry.getFeatureExports<OreSignExports>('ore-signs').signSystem;
         const featureSystemGroups: Record<string, string> = {
             TreeSystem: 'World',
@@ -298,13 +302,14 @@ export class GameServices {
             inventoryManager: this.inventoryManager,
             carrierManager: this.carrierManager,
             eventBus,
-            getInventoryVisualizer: () => this.inventoryVisualizer,
+            getPileSlotRegistry: () => inventoryExports.pileRegistry,
             getPileRegistry: () => this.pileRegistry,
             workAreaStore: this.workAreaStore,
             buildingOverlayManager: this.buildingOverlayManager,
             getProductionControlManager: () => this.productionControlManager,
             getBarracksTrainingManager: () => this.barracksTrainingManager,
             constructionSiteManager: this.constructionSiteManager,
+            executeCommand,
         });
         this.addSystem(this.settlerTaskSystem, 'Units');
 
@@ -374,15 +379,24 @@ export class GameServices {
             );
         }
 
-        // 10. Inventory visualizer — registers for entity:removed cleanup
-        this.inventoryVisualizer = new InventoryVisualizer(gameState, this.inventoryManager, executeCommand);
-        this.inventoryVisualizer.registerEvents(eventBus, this.cleanupRegistry);
-
-        // Wire XML-derived pile positions (replaces the old YAML stack positions)
+        // 10. Inventory pile sync — event-driven synchronization between inventory state and pile entities.
+        //     Must subscribe to building:completed BEFORE GameServices does (guaranteed by ordering here).
         const dataLoader = getGameDataLoader();
         if (dataLoader.isLoaded()) {
-            this.pileRegistry = new BuildingPileRegistry(dataLoader.getData());
-            this.inventoryVisualizer.setPileRegistry(this.pileRegistry);
+            const gameData = dataLoader.getData();
+            this.pileRegistry = new BuildingPileRegistry(gameData);
+            const pilePositionResolver = new PilePositionResolver(gameState, this.pileRegistry);
+            const pileRegistry = inventoryExports.pileRegistry;
+            const inventoryPileSync = new InventoryPileSync(
+                gameState,
+                this.inventoryManager,
+                this.constructionSiteManager,
+                pileRegistry,
+                pilePositionResolver,
+                executeCommand
+            );
+            inventoryPileSync.registerEvents(eventBus, this.cleanupRegistry);
+            this.inventoryPileSync = inventoryPileSync;
         }
 
         // 11. Core entity lifecycle — movement controllers and resource state.
@@ -391,7 +405,7 @@ export class GameServices {
         this.cleanupRegistry.onEntityRemoved(entityId => {
             this.movement.removeController(entityId);
             this.visualService.remove(entityId);
-            this.gameState.resources.removeState(entityId);
+            this.gameState.piles.removeState(entityId);
             this.workAreaStore.removeInstance(entityId);
         });
 
@@ -418,7 +432,7 @@ export class GameServices {
         //     Uses CLEANUP_PRIORITY.LATE to ensure inventory data still exists when
         //     LogisticsDispatcher releases inventory reservations (LOGISTICS priority).
         this.cleanupRegistry.onEntityRemoved(
-            this.inventoryManager.removeInventory.bind(this.inventoryManager),
+            this.inventoryManager.destroyBuildingInventory.bind(this.inventoryManager),
             CLEANUP_PRIORITY.LATE
         );
 
@@ -492,9 +506,7 @@ export class GameServices {
             }
         }
         this.featureRegistry.destroy();
-        this.buildingOverlayManager.unregisterEvents();
-        this.carrierManager.unregisterEvents();
-        this.inventoryVisualizer.unregisterEvents();
+        this.inventoryPileSync?.unregisterEvents();
         this.territoryCleanup?.();
         this.cleanupRegistry.destroy();
         this.subscriptions.unsubscribeAll();
@@ -508,8 +520,8 @@ export class GameServices {
         if (type === EntityType.Unit) {
             const speed = getUnitTypeSpeed(subType as UnitType);
             this.movement.createController(entityId, x, y, speed);
-        } else if (type === EntityType.StackedResource) {
-            this.gameState.resources.createState(entityId);
+        } else if (type === EntityType.StackedPile) {
+            this.gameState.piles.createState(entityId);
         }
     }
 
@@ -542,10 +554,9 @@ export class GameServices {
     }
 
     private onBuildingCompleted({ entityId, buildingType, race }: GameEvents['building:completed']): void {
-        // Swap construction inventory → production inventory.
-        // Construction inventory was created on building:placed; remove it and create production inventory.
-        this.inventoryManager.removeInventory(entityId);
-        this.inventoryManager.createInventory(entityId, buildingType);
+        // InventoryPileSync.onBuildingCompleted fires FIRST (subscribed before GameServices in step 10)
+        // and clears all construction-phase piles. Then we atomically swap the inventory phase.
+        this.inventoryManager.swapInventoryPhase(entityId, buildingType, race);
 
         // Remove the construction site record (construction is done).
         this.constructionSiteManager.removeSite(entityId);

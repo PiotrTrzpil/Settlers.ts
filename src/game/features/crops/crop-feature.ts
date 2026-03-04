@@ -26,7 +26,12 @@ export const CropFeature: FeatureDefinition = {
 
     create(ctx: FeatureContext) {
         const subscriptions = new EventSubscriptionManager();
-        const cropSystem = new CropSystem(ctx.gameState, ctx.visualService, ctx.eventBus);
+        const cropSystem = new CropSystem({
+            gameState: ctx.gameState,
+            visualService: ctx.visualService,
+            eventBus: ctx.eventBus,
+            executeCommand: ctx.executeCommand,
+        });
 
         // Register crop entities on creation (map-loaded crops start as Mature)
         subscriptions.subscribe(ctx.eventBus, 'entity:created', ({ entityId, type, subType }) => {

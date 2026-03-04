@@ -25,7 +25,7 @@ export interface GameViewStateData {
     // Input mode (written by InputManager onModeChange callback)
     mode: string;
     placeBuildingType: number;
-    placeResourceType: number;
+    placePileType: number;
     placeUnitType: number;
     placeUnitLevel: number;
 
@@ -37,7 +37,7 @@ export interface GameViewStateData {
     entityCount: number;
     buildingCount: number;
     unitCount: number;
-    resourceCount: number;
+    pileCount: number;
     environmentCount: number;
     treeCount: number;
     stoneCount: number;
@@ -60,7 +60,7 @@ export class GameViewState {
             ticksPaused: true,
             mode: 'select',
             placeBuildingType: 0,
-            placeResourceType: 0,
+            placePileType: 0,
             placeUnitType: 0,
             placeUnitLevel: 1,
             selectedEntityId: null,
@@ -68,7 +68,7 @@ export class GameViewState {
             entityCount: 0,
             buildingCount: 0,
             unitCount: 0,
-            resourceCount: 0,
+            pileCount: 0,
             environmentCount: 0,
             treeCount: 0,
             stoneCount: 0,
@@ -123,7 +123,7 @@ export class GameViewState {
             case EntityType.Unit:
                 units++;
                 break;
-            case EntityType.StackedResource:
+            case EntityType.StackedPile:
                 resources++;
                 break;
             case EntityType.MapObject: {
@@ -156,7 +156,7 @@ export class GameViewState {
         }
         this.state.buildingCount = buildings;
         this.state.unitCount = units;
-        this.state.resourceCount = resources;
+        this.state.pileCount = resources;
         this.state.environmentCount = environment;
         this.state.treeCount = trees;
         this.state.stoneCount = stones;

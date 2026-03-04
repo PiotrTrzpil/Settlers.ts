@@ -1,13 +1,14 @@
 /**
  * Inventory configuration helpers for building types.
- * Derives slot configurations from BUILDING_PRODUCTIONS and BUILDING_RECIPE_SETS
- * — no manual duplication of production data.
+ * Derives slot configurations entirely from XML pile data (buildingInfo.xml).
  */
 
 import { BuildingType } from '../../entity';
-import { EMaterialType, DROPPABLE_MATERIALS } from '../../economy/material-type';
-import { BUILDING_PRODUCTIONS, BUILDING_RECIPE_SETS, getConstructionCosts } from '../../economy/building-production';
+import { EMaterialType } from '../../economy/material-type';
+import { getConstructionCosts } from '../../economy/building-production';
 import { Race } from '../../race';
+import { getBuildingInfo, hasBuildingXmlMapping, xmlGoodToMaterialType } from '../../game-data-access';
+import { PileSlotType } from '@/resources/game-data';
 
 /**
  * Slot configuration for a building inventory.
@@ -28,68 +29,34 @@ export interface InventoryConfig {
 /** Capacity per inventory slot (uniform for all buildings). */
 export const SLOT_CAPACITY = 8;
 
-/** @deprecated Use SLOT_CAPACITY instead. */
-export const DEFAULT_INPUT_CAPACITY = SLOT_CAPACITY;
-
-/** @deprecated Use SLOT_CAPACITY instead. */
-export const DEFAULT_OUTPUT_CAPACITY = SLOT_CAPACITY;
-
 /**
- * Derive inventory configuration for a building type from production data.
- * Multi-recipe buildings (BUILDING_RECIPE_SETS) get one output slot per recipe.
- * Single-recipe buildings (BUILDING_PRODUCTIONS) get one output slot.
- * Buildings not in either map get empty configs.
+ * Derive inventory configuration for a building type from XML pile data.
+ * Input piles (type=1) → inputSlots. Output piles (type=0) → outputSlots.
+ * Storage piles (type=4) → outputSlots with NO_MATERIAL (assigned on first deposit).
+ * Buildings with no XML entry or no piles get empty configs.
  */
-/** Capacity per StorageArea slot — smaller than production since there are many slots. */
-const STORAGE_SLOT_CAPACITY = 8;
+export function getInventoryConfig(buildingType: BuildingType, race: Race): InventoryConfig {
+    if (!hasBuildingXmlMapping(buildingType)) return { inputSlots: [], outputSlots: [] };
+    const info = getBuildingInfo(race, buildingType);
+    if (!info) return { inputSlots: [], outputSlots: [] };
 
-export function getInventoryConfig(buildingType: BuildingType): InventoryConfig {
-    // StorageArea: output-only slots for every droppable material (supply source, not a request target)
-    if (buildingType === BuildingType.StorageArea) {
-        const slots = DROPPABLE_MATERIALS.map(m => ({ materialType: m, maxCapacity: STORAGE_SLOT_CAPACITY }));
-        return { inputSlots: [], outputSlots: slots };
-    }
+    const inputSlots: SlotConfig[] = [];
+    const outputSlots: SlotConfig[] = [];
 
-    // Barracks: fixed superset of all weapon/gold slots regardless of race-specific recipes
-    if (buildingType === BuildingType.Barrack) {
-        return {
-            inputSlots: [
-                { materialType: EMaterialType.SWORD, maxCapacity: 4 },
-                { materialType: EMaterialType.BOW, maxCapacity: 4 },
-                { materialType: EMaterialType.GOLDBAR, maxCapacity: 4 },
-                { materialType: EMaterialType.ARMOR, maxCapacity: 4 },
-                { materialType: EMaterialType.BATTLEAXE, maxCapacity: 4 },
-                { materialType: EMaterialType.BLOWGUN, maxCapacity: 4 },
-                { materialType: EMaterialType.CATAPULT, maxCapacity: 4 },
-            ],
-            outputSlots: [],
-        };
-    }
-
-    // Multi-recipe buildings: collect unique inputs + one output per recipe
-    const recipeSet = BUILDING_RECIPE_SETS.get(buildingType);
-    if (recipeSet) {
-        const inputMaterials = new Set<EMaterialType>();
-        for (const recipe of recipeSet.recipes) {
-            for (const input of recipe.inputs) inputMaterials.add(input);
+    for (const pile of info.piles) {
+        if (pile.type === PileSlotType.Input) {
+            const materialType = xmlGoodToMaterialType(pile.good);
+            if (materialType !== undefined) inputSlots.push({ materialType, maxCapacity: SLOT_CAPACITY });
+        } else if (pile.type === PileSlotType.Output) {
+            const materialType = xmlGoodToMaterialType(pile.good);
+            if (materialType !== undefined) outputSlots.push({ materialType, maxCapacity: SLOT_CAPACITY });
+        } else {
+            // Storage pile (type=4) — NO_MATERIAL slot, material assigned on first deposit
+            outputSlots.push({ materialType: EMaterialType.NO_MATERIAL, maxCapacity: SLOT_CAPACITY });
         }
-        return {
-            inputSlots: [...inputMaterials].map(m => ({ materialType: m, maxCapacity: SLOT_CAPACITY })),
-            outputSlots: recipeSet.recipes.map(r => ({ materialType: r.output, maxCapacity: SLOT_CAPACITY })),
-        };
     }
 
-    // Single-recipe buildings
-    const production = BUILDING_PRODUCTIONS.get(buildingType);
-    if (!production) return { inputSlots: [], outputSlots: [] };
-
-    return {
-        inputSlots: production.inputs.map(m => ({ materialType: m, maxCapacity: SLOT_CAPACITY })),
-        outputSlots:
-            production.output !== EMaterialType.NO_MATERIAL
-                ? [{ materialType: production.output, maxCapacity: SLOT_CAPACITY }]
-                : [],
-    };
+    return { inputSlots, outputSlots };
 }
 
 /**
@@ -108,21 +75,21 @@ export function getConstructionInventoryConfig(buildingType: BuildingType, race:
 /**
  * Check if a building type has any inventory slots.
  */
-export function hasInventory(buildingType: BuildingType): boolean {
-    const config = getInventoryConfig(buildingType);
+export function hasInventory(buildingType: BuildingType, race: Race): boolean {
+    const config = getInventoryConfig(buildingType, race);
     return config.inputSlots.length > 0 || config.outputSlots.length > 0;
 }
 
 /**
  * Check if a building type is a production building (has output slots).
  */
-export function isProductionBuilding(buildingType: BuildingType): boolean {
-    return getInventoryConfig(buildingType).outputSlots.length > 0;
+export function isProductionBuilding(buildingType: BuildingType, race: Race): boolean {
+    return getInventoryConfig(buildingType, race).outputSlots.length > 0;
 }
 
 /**
  * Check if a building type consumes materials (has input slots).
  */
-export function consumesMaterials(buildingType: BuildingType): boolean {
-    return getInventoryConfig(buildingType).inputSlots.length > 0;
+export function consumesMaterials(buildingType: BuildingType, race: Race): boolean {
+    return getInventoryConfig(buildingType, race).inputSlots.length > 0;
 }

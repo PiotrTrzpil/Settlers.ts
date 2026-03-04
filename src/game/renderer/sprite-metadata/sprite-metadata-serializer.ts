@@ -16,7 +16,7 @@ import {
     BuildingSpriteCategory,
     UnitSpriteCategory,
     MapObjectSpriteCategory,
-    ResourceSpriteCategory,
+    GoodSpriteCategory,
     DecorationSpriteCategory,
     AnimatedEntityCategory,
 } from './categories';
@@ -80,7 +80,7 @@ export class SpriteMetadataSerializer {
         buildings: BuildingSpriteCategory,
         units: UnitSpriteCategory,
         mapObjects: MapObjectSpriteCategory,
-        resources: ResourceSpriteCategory,
+        goods: GoodSpriteCategory,
         decoration: DecorationSpriteCategory,
         animated: AnimatedEntityCategory,
         loadedRaces: ReadonlySet<number>
@@ -115,7 +115,7 @@ export class SpriteMetadataSerializer {
         return {
             buildingsByRace: serializedBuildings,
             mapObjects: mapToArray(mapObjects.getEntries()),
-            resources: mapToArray(resources.getEntries()).map(([k, v]) => [k, mapToArray(v)]),
+            goods: mapToArray(goods.getEntries()).map(([k, v]) => [k, mapToArray(v)]),
             unitsByRace: serializedUnits,
             flags: mapToArray(decoration.getFlagsMap()),
             territoryDots: mapToArray(decoration.getTerritoryDotsMap()),
@@ -133,7 +133,7 @@ export class SpriteMetadataSerializer {
         buildings: BuildingSpriteCategory;
         units: UnitSpriteCategory;
         mapObjects: MapObjectSpriteCategory;
-        resources: ResourceSpriteCategory;
+        goods: GoodSpriteCategory;
         decoration: DecorationSpriteCategory;
         animated: AnimatedEntityCategory;
         loadedRaces: Set<number>;
@@ -141,7 +141,7 @@ export class SpriteMetadataSerializer {
         const buildings = new BuildingSpriteCategory();
         const units = new UnitSpriteCategory();
         const mapObjects = new MapObjectSpriteCategory();
-        const resources = new ResourceSpriteCategory();
+        const goods = new GoodSpriteCategory();
         const decoration = new DecorationSpriteCategory();
         const animated = new AnimatedEntityCategory();
         const loadedRaces = new Set<number>();
@@ -149,12 +149,12 @@ export class SpriteMetadataSerializer {
         SpriteMetadataSerializer.deserializeBuildings(data, buildings, loadedRaces);
         SpriteMetadataSerializer.deserializeUnits(data, units, loadedRaces);
         SpriteMetadataSerializer.deserializeMapObjects(data, mapObjects);
-        SpriteMetadataSerializer.deserializeResources(data, resources);
+        SpriteMetadataSerializer.deserializeGoods(data, goods);
         SpriteMetadataSerializer.deserializeDecoration(data, decoration);
         SpriteMetadataSerializer.deserializeAnimated(data, animated);
         SpriteMetadataSerializer.deserializeLegacyLoadedRaces(data, loadedRaces);
 
-        return { buildings, units, mapObjects, resources, decoration, animated, loadedRaces };
+        return { buildings, units, mapObjects, goods, decoration, animated, loadedRaces };
     }
 
     // ---- Private deserialization helpers ----
@@ -199,11 +199,11 @@ export class SpriteMetadataSerializer {
         if (data.mapObjects) mapObjects.setEntries(arrayToMap(data.mapObjects));
     }
 
-    private static deserializeResources(data: any, resources: ResourceSpriteCategory): void {
-        if (data.resources) {
-            resources.setEntries(
+    private static deserializeGoods(data: any, goods: GoodSpriteCategory): void {
+        if (data.goods) {
+            goods.setEntries(
                 new Map(
-                    (data.resources as Array<[EMaterialType, Array<[number, SpriteEntry]>]>).map(([k, v]) => [
+                    (data.goods as Array<[EMaterialType, Array<[number, SpriteEntry]>]>).map(([k, v]) => [
                         k,
                         arrayToMap(v),
                     ])

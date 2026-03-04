@@ -74,7 +74,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
 
     /**
      * Get the command type string for executing placement.
-     * @example 'place_building', 'place_resource'
+     * @example 'place_building', 'place_pile'
      */
     protected abstract getCommandType(): string;
 

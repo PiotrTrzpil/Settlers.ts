@@ -15,8 +15,8 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { TriggerSystemImpl, type TriggerSystemConfig } from '@/game/systems/building-overlays/trigger-system';
-import type { BuildingOverlayManager } from '@/game/systems/building-overlays/building-overlay-manager';
+import { TriggerSystemImpl, type TriggerSystemConfig } from '@/game/features/building-overlays/trigger-system';
+import type { BuildingOverlayManager } from '@/game/features/building-overlays/building-overlay-manager';
 import type { GameState } from '@/game/game-state';
 import type { GameDataLoader } from '@/resources/game-data/game-data-loader';
 import type { BuildingTrigger } from '@/resources/game-data/types';

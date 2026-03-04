@@ -48,17 +48,37 @@ export interface UnitRuntime {
     homeAssignment: HomeAssignment | null;
 }
 
+export interface UnitStateMachineConfig {
+    gameState: GameState;
+    visualService: EntityVisualService;
+    settlerConfigs: SettlerConfigs;
+    animController: IdleAnimationController;
+    workerExecutor: WorkerTaskExecutor;
+    buildingOccupants: Map<number, number>;
+    claimBuilding: (runtime: UnitRuntime, buildingId: number) => void;
+    releaseBuilding: (runtime: UnitRuntime) => void;
+}
+
 export class UnitStateMachine {
-    constructor(
-        private readonly gameState: GameState,
-        private readonly visualService: EntityVisualService,
-        private readonly settlerConfigs: SettlerConfigs,
-        private readonly animController: IdleAnimationController,
-        private readonly workerExecutor: WorkerTaskExecutor,
-        private readonly buildingOccupants: Map<number, number>,
-        private readonly claimBuilding: (runtime: UnitRuntime, buildingId: number) => void,
-        private readonly releaseBuilding: (runtime: UnitRuntime) => void
-    ) {}
+    private readonly gameState: GameState;
+    private readonly visualService: EntityVisualService;
+    private readonly settlerConfigs: SettlerConfigs;
+    private readonly animController: IdleAnimationController;
+    private readonly workerExecutor: WorkerTaskExecutor;
+    private readonly buildingOccupants: Map<number, number>;
+    private readonly claimBuilding: (runtime: UnitRuntime, buildingId: number) => void;
+    private readonly releaseBuilding: (runtime: UnitRuntime) => void;
+
+    constructor(cfg: UnitStateMachineConfig) {
+        this.gameState = cfg.gameState;
+        this.visualService = cfg.visualService;
+        this.settlerConfigs = cfg.settlerConfigs;
+        this.animController = cfg.animController;
+        this.workerExecutor = cfg.workerExecutor;
+        this.buildingOccupants = cfg.buildingOccupants;
+        this.claimBuilding = cfg.claimBuilding;
+        this.releaseBuilding = cfg.releaseBuilding;
+    }
 
     /**
      * Process one tick for a single unit.

@@ -14,6 +14,7 @@
  */
 
 import type { TickSystem } from '../../tick-system';
+import { sortedEntries } from '@/utilities/collections';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { CLEANUP_PRIORITY } from '../../systems/entity-cleanup-registry';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
@@ -61,7 +62,7 @@ export class LogisticsDispatcher implements TickSystem {
     private readonly stallDetector: StallDetector;
     private readonly matchDiagnostics: MatchDiagnostics;
 
-    private eventBus!: EventBus;
+    private readonly eventBus: EventBus;
 
     /** Active transport jobs indexed by carrier ID */
     private readonly activeJobs: Map<number, TransportJob> = new Map();
@@ -72,10 +73,7 @@ export class LogisticsDispatcher implements TickSystem {
     constructor(config: LogisticsDispatcherConfig) {
         this.eventBus = config.eventBus;
         this.requestManager = config.requestManager;
-        this.reservationManager = new InventoryReservationManager();
-
-        // Wire up inventory manager for slot-level reservation enforcement
-        this.reservationManager.setInventoryManager(config.inventoryManager);
+        this.reservationManager = new InventoryReservationManager(config.inventoryManager);
 
         this.requestMatcher = new RequestMatcher({
             gameState: config.gameState,
@@ -139,8 +137,6 @@ export class LogisticsDispatcher implements TickSystem {
      * before inventory removal (inventory data must exist when releasing reservations).
      */
     registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
-        this.eventBus = eventBus;
-
         const onCarrierJobEnd = ({ entityId }: { entityId: number }) => this.activeJobs.delete(entityId);
         this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', onCarrierJobEnd);
         this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', onCarrierJobEnd);
@@ -245,7 +241,7 @@ export class LogisticsDispatcher implements TickSystem {
         };
 
         // Cancel all active TransportJobs that reference this building
-        for (const [carrierId, job] of this.activeJobs) {
+        for (const [carrierId, job] of sortedEntries(this.activeJobs)) {
             if (job.sourceBuilding === buildingId || job.destBuilding === buildingId) {
                 job.cancel('building_destroyed');
                 this.activeJobs.delete(carrierId);

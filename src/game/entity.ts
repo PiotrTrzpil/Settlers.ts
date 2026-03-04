@@ -6,6 +6,7 @@
 /** Material carrying state - used by any unit that can carry materials */
 import type { EMaterialType } from './economy';
 import type { Race } from './race';
+import type { PileKind } from './features/inventory/pile-kind';
 
 export interface CarryingState {
     material: EMaterialType;
@@ -24,8 +25,8 @@ export enum EntityType {
     Building = 2,
     /** Map objects like trees, stones, resources */
     MapObject = 3,
-    /** Stacked resources on the ground (logs, planks, etc.) */
-    StackedResource = 4,
+    /** Stacked piles on the ground (logs, planks, etc.) */
+    StackedPile = 4,
     /** Visual-only decorations (flags, signs) — no tile occupancy */
     Decoration = 5,
 }
@@ -74,7 +75,7 @@ export interface Entity {
      * Race/civilization this entity belongs to (matches Race enum values: 10=Roman, 11=Viking, etc.).
      * Determines which sprite set is used for rendering.
      * Set from the owning player's tribe when loading from map, or from the UI selection when placing.
-     * Required for buildings and units; unused for map objects and stacked resources.
+     * Required for buildings and units; unused for map objects and stacked piles.
      */
     race: Race;
 
@@ -143,23 +144,24 @@ export function clearCarrying(entity: Entity): void {
 }
 
 /**
- * Maximum items that can be stacked in a single resource pile.
+ * Maximum items that can be stacked in a single pile.
  * This matches Settlers 4 behavior where carriers drop resources in stacks.
  */
-export const MAX_RESOURCE_STACK_SIZE = 8;
+export const MAX_PILE_SIZE = 8;
 
 /**
- * State tracking for stacked resources on the ground.
+ * State tracking for stacked piles on the ground.
  * These are mutable - carriers can add to or take from stacks.
  */
-export interface StackedResourceState {
+export interface StackedPileState {
     entityId: number;
     /** Number of items in the stack (1 to MAX_RESOURCE_STACK_SIZE) */
     quantity: number;
     /**
-     * If set, this resource pile is a visual representation of a building's inventory.
-     * Resources with a buildingId are reserved for that building and should not be
-     * picked up by carriers or used by other systems.
+     * Describes what kind of pile this is and which building it belongs to (if any).
+     * Free piles can be picked up by carriers; linked piles are reserved for their building.
      */
-    buildingId?: number;
+    kind: PileKind;
 }
+
+export type { PileKind };

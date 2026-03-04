@@ -22,6 +22,7 @@ import { findEmptySpot } from '../../systems/spatial-search';
 import type { Command, CommandResult } from '../../commands';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { LogHandler } from '@/utilities/log-handler';
+import { sortedEntries } from '@/utilities/collections';
 
 /** Minimum state shared by all growable entities */
 export interface GrowableState {
@@ -53,6 +54,14 @@ export interface PlantingCapable {
     plantEntity(x: number, y: number, settlerId: number): void;
 }
 
+export interface GrowableSystemConfig {
+    gameState: GameState;
+    visualService: EntityVisualService;
+    growableConfig: GrowableConfig;
+    logName: string;
+    executeCommand: (cmd: Command) => CommandResult;
+}
+
 /**
  * Abstract base for systems managing growable map objects.
  * Subclasses implement domain-specific stages, visuals, and tick behavior.
@@ -64,18 +73,14 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
     protected readonly visualService: EntityVisualService;
     protected readonly config: GrowableConfig;
     protected readonly log: LogHandler;
-    protected _executeCommand!: (cmd: Command) => CommandResult;
+    protected readonly _executeCommand: (cmd: Command) => CommandResult;
 
-    constructor(gameState: GameState, visualService: EntityVisualService, config: GrowableConfig, logName: string) {
-        this.gameState = gameState;
-        this.visualService = visualService;
-        this.config = config;
-        this.log = new LogHandler(logName);
-    }
-
-    /** Wire up command execution (called after command system is initialized) */
-    setCommandExecutor(executor: (cmd: Command) => CommandResult): void {
-        this._executeCommand = executor;
+    constructor(cfg: GrowableSystemConfig) {
+        this.gameState = cfg.gameState;
+        this.visualService = cfg.visualService;
+        this.config = cfg.growableConfig;
+        this.log = new LogHandler(cfg.logName);
+        this._executeCommand = cfg.executeCommand;
     }
 
     // ── Abstract methods (subclass must implement) ───────────────
@@ -158,14 +163,19 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
     tick(dt: number): void {
         const toRemove: number[] = [];
 
-        for (const [entityId, state] of this.states) {
-            if (this.tickState(entityId, state, dt) === 'remove') {
-                toRemove.push(entityId);
+        for (const [entityId, state] of sortedEntries(this.states)) {
+            try {
+                if (this.tickState(entityId, state, dt) === 'remove') {
+                    toRemove.push(entityId);
+                }
+            } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                this.log.error(`Unhandled error in growth tick for entity ${entityId}`, err);
             }
         }
 
         for (const entityId of toRemove) {
-            this.gameState.removeEntity(entityId);
+            this._executeCommand({ type: 'remove_entity', entityId });
         }
     }
 

@@ -13,7 +13,6 @@ import { LayerVisibility, loadLayerVisibility, saveLayerVisibility } from '@/gam
 import type { InputManager } from '@/game/input';
 import { loadBuildingIcons, loadResourceIcons, loadUnitIcons, type IconEntry } from './sprite-icon-loader';
 import { debugStats } from '@/game/debug-stats';
-import { prefetchSpriteCache } from '@/game/renderer/sprite-render-manager';
 import {
     gameStatePersistence,
     loadSnapshot,
@@ -28,7 +27,7 @@ import { ALL_BUILDINGS, ALL_UNITS, ALL_RESOURCES } from './palette-data';
 export interface LayerCounts {
     buildings: number;
     units: number;
-    resources: number;
+    piles: number;
     environment: number;
     trees: number;
     stones: number;
@@ -39,7 +38,7 @@ export interface LayerCounts {
 const EMPTY_COUNTS: LayerCounts = {
     buildings: 0,
     units: 0,
-    resources: 0,
+    piles: 0,
     environment: 0,
     trees: 0,
     stones: 0,
@@ -108,7 +107,7 @@ function tryRestoreGameState(game: Game): void {
     const t0 = performance.now();
     log.info('Restoring saved game state...');
     restoreFromSnapshot(game, snapshot);
-    game.services.inventoryVisualizer.rebuildFromExistingEntities();
+    game.services.inventoryPileSync?.rebuildFromExistingEntities();
     game.services.buildingOverlayManager.rebuildFromExistingEntities(game.services.constructionSiteManager);
     debugStats.state.mapLoadTimings.stateRestore = Math.round(performance.now() - t0);
 }
@@ -135,18 +134,15 @@ function createModeToggler(getGame: () => Game | null, getInputManager: () => In
             }
         },
 
-        setPlaceResourceMode(resourceType: EMaterialType, amount: number): void {
+        setPlacePileMode(resourceType: EMaterialType, amount: number): void {
             const game = getGame();
             const inputManager = getInputManager();
             if (!game || !inputManager) return;
 
-            if (
-                game.viewState.state.mode === 'place_resource' &&
-                game.viewState.state.placeResourceType === resourceType
-            ) {
+            if (game.viewState.state.mode === 'place_pile' && game.viewState.state.placePileType === resourceType) {
                 inputManager.switchMode('select');
             } else {
-                inputManager.switchMode('place_resource', { resourceType, amount });
+                inputManager.switchMode('place_pile', { resourceType, amount });
             }
         },
 
@@ -197,7 +193,7 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
             const restored = gameStatePersistence.restoreToInitialState(g);
             if (restored) {
                 // Rebuild state from restored entities
-                g.services.inventoryVisualizer.rebuildFromExistingEntities();
+                g.services.inventoryPileSync?.rebuildFromExistingEntities();
                 g.services.buildingOverlayManager.rebuildFromExistingEntities(g.services.constructionSiteManager);
                 log.info('Game state reset to initial map state');
             } else {
@@ -217,10 +213,6 @@ export function useMapView(
     getInputManager?: () => InputManager | null,
     selectedRace?: Ref<Race>
 ) {
-    // Start IDB sprite cache read immediately — overlaps with everything that follows
-    // (route resolution, file read, game constructor, landscape init)
-    prefetchSpriteCache();
-
     const route = useRoute();
     // Check if testMap query param is present - use computed for reactivity
     // in case the route isn't fully resolved when the composable first runs
@@ -266,8 +258,6 @@ export function useMapView(
 
         mapLoadState.isLoading = true;
         debugStats.startMapLoad();
-        // Re-trigger prefetch for subsequent loads (first load uses the setup-time prefetch)
-        prefetchSpriteCache();
 
         try {
             // Destroy old game first to prevent multiple game loops
@@ -436,7 +426,7 @@ export function useMapView(
     // Mode state - sourced from the game's view state
     const currentMode = computed(() => game.value?.viewState.state.mode ?? 'select');
     const placeBuildingType = computed(() => game.value?.viewState.state.placeBuildingType ?? 0);
-    const placeResourceType = computed(() => game.value?.viewState.state.placeResourceType ?? 0);
+    const placeResourceType = computed(() => game.value?.viewState.state.placePileType ?? 0);
     const placeUnitType = computed(() => game.value?.viewState.state.placeUnitType ?? 0);
     const placeUnitLevel = computed(() => game.value?.viewState.state.placeUnitLevel ?? 1);
 
@@ -446,7 +436,7 @@ export function useMapView(
         return {
             buildings: vs.buildingCount,
             units: vs.unitCount,
-            resources: vs.resourceCount,
+            piles: vs.pileCount,
             environment: vs.environmentCount,
             trees: vs.treeCount,
             stones: vs.stoneCount,
@@ -473,11 +463,11 @@ export function useMapView(
 
     // Update resource placement mode when amount changes
     watch(resourceAmount, () => {
-        if (game.value?.viewState.state.mode === 'place_resource' && game.value.viewState.state.placeResourceType) {
+        if (game.value?.viewState.state.mode === 'place_pile' && game.value.viewState.state.placePileType) {
             const inputManager = getInputManager?.();
             if (inputManager) {
-                inputManager.switchMode('place_resource', {
-                    resourceType: game.value.viewState.state.placeResourceType,
+                inputManager.switchMode('place_pile', {
+                    resourceType: game.value.viewState.state.placePileType,
                     amount: resourceAmount.value,
                 });
             }
@@ -496,7 +486,7 @@ export function useMapView(
     const gameActions = createGameActions(() => game.value, game);
 
     const setPlaceMode = modeToggler.setPlaceMode;
-    const setPlaceResourceMode = (rt: EMaterialType) => modeToggler.setPlaceResourceMode(rt, resourceAmount.value);
+    const setPlaceResourceMode = (rt: EMaterialType) => modeToggler.setPlacePileMode(rt, resourceAmount.value);
     const setPlaceUnitMode = (ut: UnitType, level?: number) =>
         modeToggler.setPlaceUnitMode(ut, currentPlayerRace.value, level);
     const setSelectMode = modeToggler.setSelectMode;

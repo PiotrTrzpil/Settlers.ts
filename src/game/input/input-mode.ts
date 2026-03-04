@@ -3,6 +3,7 @@ import type { InputState } from './input-state';
 import type { TileCoord } from '../entity';
 import { type ModeRenderState, createDefaultRenderState } from './render-state';
 import type { CommandResult } from '../commands';
+import type { Race } from '../race';
 
 /**
  * Context passed to input mode handlers.
@@ -20,6 +21,8 @@ export interface InputContext {
     getModeData: <T>() => T | undefined;
     /** Set mode-specific data */
     setModeData: <T>(data: T) => void;
+    /** Race of the local player — null if not yet known (e.g. test map). */
+    localPlayerRace: Race | null;
 }
 
 /**

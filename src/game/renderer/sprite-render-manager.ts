@@ -26,7 +26,7 @@ import { yieldToEventLoop } from './batch-loader';
 import { BuildingType, UnitType, EntityType } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { AnimationData } from '../animation';
-import { AnimationDataProvider } from '../systems/animation';
+import { AnimationDataProvider } from './animation-helpers';
 import { EMaterialType } from '../economy';
 import { TEAM_COLOR_PALETTES } from '@/resources/gfx/team-colors';
 import { loadUnitSpritesForRace } from './sprite-unit-loader';
@@ -35,7 +35,7 @@ import {
     loadGilManifest,
     loadBuildingSprites,
     loadMapObjectSprites,
-    loadResourceSprites,
+    loadGoodSprites,
     loadOverlaySprites,
 } from './sprite-loaders';
 import { type SpriteLoadContext } from './sprite-load-context';
@@ -75,7 +75,8 @@ export class SpriteRenderManager {
     // OK: nullable - null until init() loads sprites, allows graceful fallback to procedural rendering
     private _spriteAtlas: EntityTextureAtlas | null = null;
     private _spriteRegistry: SpriteMetadataRegistry | null = null;
-    private _currentRace: Race = Race.Roman;
+    // OK: null until setInitialRace() or setRace() is called before init()
+    private _currentRace: Race | null = null;
 
     /** Combined palette texture for palettized atlas rendering */
     private _paletteManager: PaletteTextureManager;
@@ -103,14 +104,23 @@ export class SpriteRenderManager {
         return this._spriteRegistry;
     }
 
-    /** Get the current race */
-    get currentRace(): Race {
+    /** Get the current race (null if not yet set via setInitialRace / setRace). */
+    get currentRace(): Race | null {
         return this._currentRace;
     }
 
     /** Check if sprites are available for rendering */
     get hasSprites(): boolean {
         return this._spriteAtlas !== null && this._spriteRegistry !== null;
+    }
+
+    /**
+     * Set the initial race before GL is available. Must be called before prefetchCache() and init().
+     * No-op if race is already set (prevents overwriting during HMR).
+     */
+    public setInitialRace(race: Race): void {
+        if (this._currentRace !== null) return;
+        this._currentRace = race;
     }
 
     /**
@@ -129,8 +139,10 @@ export class SpriteRenderManager {
     /**
      * Adopt the module-level early prefetch (started during map load), or start
      * a new IDB read if no early prefetch is available.
+     * No-op if the race has not been set yet.
      */
     public prefetchCache(): void {
+        if (this._currentRace === null) return;
         this.cacheManager.adoptPrefetch(this._currentRace);
     }
 
@@ -139,6 +151,9 @@ export class SpriteRenderManager {
      */
     public async init(gl: WebGL2RenderingContext): Promise<boolean> {
         this.glContext = gl;
+        if (this._currentRace === null) {
+            throw new Error('SpriteRenderManager.init: race not set — call setInitialRace() before init()');
+        }
         return this.loadSpritesForRace(gl, this._currentRace);
     }
 
@@ -147,7 +162,8 @@ export class SpriteRenderManager {
      * Returns true if sprites were loaded successfully.
      */
     public async setRace(race: Race): Promise<boolean> {
-        SpriteRenderManager.log.debug(`setRace called: ${Race[race]} (current: ${Race[this._currentRace]})`);
+        const currentLabel = this._currentRace !== null ? Race[this._currentRace] : 'none';
+        SpriteRenderManager.log.debug(`setRace called: ${Race[race]} (current: ${currentLabel})`);
 
         if (race === this._currentRace) return true;
         if (!this.glContext) {
@@ -179,14 +195,18 @@ export class SpriteRenderManager {
      * Get a building sprite entry by type and race (completed state).
      */
     public getBuilding(type: BuildingType, race?: number): SpriteEntry | null {
-        return this._spriteRegistry?.getBuilding(type, race ?? this._currentRace) ?? null;
+        const resolvedRace = race ?? this._currentRace;
+        if (resolvedRace === null) return null;
+        return this._spriteRegistry?.getBuilding(type, resolvedRace) ?? null;
     }
 
     /**
      * Get a building construction sprite entry by type and race.
      */
     public getBuildingConstruction(type: BuildingType, race?: number): SpriteEntry | null {
-        return this._spriteRegistry?.getBuildingConstruction(type, race ?? this._currentRace) ?? null;
+        const resolvedRace = race ?? this._currentRace;
+        if (resolvedRace === null) return null;
+        return this._spriteRegistry?.getBuildingConstruction(type, resolvedRace) ?? null;
     }
 
     /**
@@ -236,8 +256,8 @@ export class SpriteRenderManager {
     /**
      * Get a resource/material sprite entry by type.
      */
-    public getResource(type: EMaterialType, direction: number = 0): SpriteEntry | null {
-        return this._spriteRegistry?.getResource(type, direction) ?? null;
+    public getGoodSprite(type: EMaterialType, direction: number = 0): SpriteEntry | null {
+        return this._spriteRegistry?.getGoodSprite(type, direction) ?? null;
     }
 
     /**
@@ -415,8 +435,8 @@ export class SpriteRenderManager {
         const mapObjectsLoaded = await loadMapObjectSprites(ctx);
         const mapObjects = t.lap();
 
-        const resourcesLoaded = await loadResourceSprites(ctx);
-        const resources = t.lap();
+        const goodsLoaded = await loadGoodSprites(ctx);
+        const goods = t.lap();
 
         let unitsLoaded = false;
         const unitRaceTimings: Record<string, number> = {};
@@ -433,7 +453,7 @@ export class SpriteRenderManager {
         // Load selection indicator sprites from GFX file 7 (HUD overlays)
         await this.loadSelectionIndicators(ctx);
 
-        if (!buildingsLoaded && !mapObjectsLoaded && !resourcesLoaded && !unitsLoaded) {
+        if (!buildingsLoaded && !mapObjectsLoaded && !goodsLoaded && !unitsLoaded) {
             return false;
         }
 
@@ -452,7 +472,7 @@ export class SpriteRenderManager {
                 atlasAlloc,
                 buildings,
                 mapObjects,
-                resources,
+                goods,
                 units,
                 unitsByRace: unitRaceTimings,
                 gpuUpload,
@@ -465,7 +485,7 @@ export class SpriteRenderManager {
         return (
             registry.hasBuildingSprites() ||
             registry.hasMapObjectSprites() ||
-            registry.hasResourceSprites() ||
+            registry.hasGoodSprites() ||
             registry.hasUnitSprites()
         );
     }
@@ -512,7 +532,7 @@ export class SpriteRenderManager {
             atlasAlloc: number;
             buildings: number;
             mapObjects: number;
-            resources: number;
+            goods: number;
             units: number;
             unitsByRace: Record<string, number>;
             gpuUpload: number;
@@ -529,7 +549,7 @@ export class SpriteRenderManager {
             spriteCount:
                 registry.getBuildingCount() +
                 registry.getMapObjectCount() +
-                registry.getResourceCount() +
+                registry.getGoodCount() +
                 registry.getUnitCount(),
             cacheHit: false,
             cacheSource: null,
@@ -537,7 +557,7 @@ export class SpriteRenderManager {
 
         SpriteRenderManager.log.debug(
             `Sprite loading (ms): preload=${timings.filePreload}, buildings=${timings.buildings}, ` +
-                `mapObj=${timings.mapObjects}, resources=${timings.resources}, units=${timings.units}, ` +
+                `mapObj=${timings.mapObjects}, goods=${timings.goods}, units=${timings.units}, ` +
                 `gpu=${timings.gpuUpload}, TOTAL=${timer.total()}, workers=${getDecoderPool().getDecodeCount()}`
         );
     }

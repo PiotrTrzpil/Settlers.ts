@@ -49,7 +49,7 @@ export class StackGhostPass implements IRenderPass {
             );
 
             for (let v = 0; v < ghost.count; v++) {
-                const rawSprite = ctx.spriteResolver.getPreviewSprite('resource', ghost.materialType, v);
+                const rawSprite = ctx.spriteResolver.getPreviewSprite('pile', ghost.materialType, v);
                 if (!rawSprite) continue;
 
                 const sprite = scaleSprite(rawSprite);

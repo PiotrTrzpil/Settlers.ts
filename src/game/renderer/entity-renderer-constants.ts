@@ -37,7 +37,7 @@ export const DECORATION_SCALE = 1.0;
 // Entity scale factors (for procedural/fallback rendering)
 export const BUILDING_SCALE = 1.5;
 export const UNIT_SCALE = 0.6;
-export const RESOURCE_SCALE = 0.5;
+export const PILE_SCALE = 0.5;
 export const PATH_DOT_SCALE = 0.24;
 export const PATH_TARGET_SCALE = 0.4;
 export const PATH_TARGET_RING_SCALE = 0.7;
@@ -51,7 +51,7 @@ export const PATH_TARGET_RING_SCALE = 0.7;
 export const DEPTH_FACTOR_BUILDING = 0.5; // Middle of building
 export const DEPTH_FACTOR_MAP_OBJECT = 0.85; // Near bottom (trees, stones have base at bottom)
 export const DEPTH_FACTOR_UNIT = 1.0; // At feet (units stand on ground)
-export const DEPTH_FACTOR_RESOURCE = 1.0; // On ground
+export const DEPTH_FACTOR_PILE = 1.0; // On ground
 
 /**
  * Depth bias subtracted from seed trees (growing saplings) and fallen/cut tree stages

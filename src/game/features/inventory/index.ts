@@ -9,6 +9,7 @@
  * - Helpers: createSlot, canAccept, canAcceptAny, canProvide, deposit, withdraw, depositWithResult, withdrawWithResult
  * - Config: getInventoryConfig, hasInventory, isProductionBuilding
  * - Constants: SLOT_CAPACITY
+ * - Pile system: PileRegistry, PilePositionResolver, InventoryPileSync, StorageFilterManager
  */
 
 // Slot types and helpers
@@ -38,8 +39,6 @@ export type { Recipe } from '@/game/economy/building-production';
 export type { SlotConfig, InventoryConfig } from './inventory-configs';
 export {
     SLOT_CAPACITY,
-    DEFAULT_INPUT_CAPACITY,
-    DEFAULT_OUTPUT_CAPACITY,
     getInventoryConfig,
     getConstructionInventoryConfig,
     hasInventory,
@@ -47,15 +46,18 @@ export {
     consumesMaterials,
 } from './inventory-configs';
 
-// Inventory visualization
-export { InventoryVisualizer } from './inventory-visualizer';
-export { MaterialStackState } from './material-stack-state';
-export type { BuildingVisualState as InventoryVisualState } from './material-stack-state';
-export { InventoryLayout } from './inventory-layout';
-
 // Building pile registry (XML-derived pile positions)
 export { BuildingPileRegistry } from './building-pile-registry';
 export type { PileSlot, StoragePilePosition } from './building-pile-registry';
+
+// Pile system
+export { PileRegistry } from './pile-registry';
+export type { PileSlotKey } from './pile-registry';
+export { InventoryPileSync } from './inventory-pile-sync';
+export { StorageFilterManager } from './storage-filter-manager';
+export { PilePositionResolver } from './pile-position-resolver';
+export type { PileKind, LinkedPileKind, LinkedSlotKind } from './pile-kind';
+export { SlotKind, isLinkedPile, getOwnerBuildingId } from './pile-kind';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { InventoryFeature, type InventoryExports } from './inventory-feature';

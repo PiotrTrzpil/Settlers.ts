@@ -13,7 +13,7 @@ export function updatePlacementModeState(er: EntityRenderer, renderState: ModeRe
     // Handle new unified PlacementPreview type
     if (preview?.type === 'placement') {
         const amount = (preview.extra?.['amount'] as number | undefined) ?? 1;
-        const variation = preview.entityType === 'resource' ? Math.max(0, Math.min(amount - 1, 7)) : undefined;
+        const variation = preview.entityType === 'pile' ? Math.max(0, Math.min(amount - 1, 7)) : undefined;
 
         er.placementPreview = {
             tile: { x: preview.x, y: preview.y },
@@ -34,7 +34,7 @@ export function updatePlacementModeState(er: EntityRenderer, renderState: ModeRe
             entityType: 'building',
             subType: buildingPreview.buildingType,
         };
-    } else if (preview?.type === 'resource') {
+    } else if (preview?.type === 'pile') {
         // Handle legacy ResourcePreview for backward compatibility
         // eslint-disable-next-line sonarjs/deprecation, @typescript-eslint/no-deprecated -- legacy union type
         const resourcePreview: ResourcePreview = preview;
@@ -42,7 +42,7 @@ export function updatePlacementModeState(er: EntityRenderer, renderState: ModeRe
         er.placementPreview = {
             tile: { x: resourcePreview.x, y: resourcePreview.y },
             valid: resourcePreview.valid,
-            entityType: 'resource',
+            entityType: 'pile',
             subType: resourcePreview.materialType,
             variation: Math.max(0, Math.min(amount - 1, 7)),
         };

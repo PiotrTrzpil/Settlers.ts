@@ -16,11 +16,12 @@
 
 import type { BuildingPositionResolver } from './choreo-types';
 import type { GameState } from '../../game-state';
-import type { InventoryVisualizer } from '../inventory';
 import type { BuildingPileRegistry } from '../inventory/building-pile-registry';
+import type { PileRegistry } from '../inventory/pile-registry';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import { EntityType, BuildingType, type Entity } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
+import { SlotKind } from '../inventory/pile-kind';
 
 // ─────────────────────────────────────────────────────────────
 // String → EMaterialType lookup
@@ -42,8 +43,8 @@ function parseMaterialString(material: string): EMaterialType | null {
 /** Constructor dependencies for BuildingPositionResolverImpl. */
 export interface BuildingPositionResolverConfig {
     gameState: GameState;
-    /** Lazy getter — the visualizer may not be available at construction time. */
-    getInventoryVisualizer: () => InventoryVisualizer;
+    /** Lazy getter — the pile slot registry for live entity lookup. */
+    getPileSlotRegistry: () => PileRegistry | null;
     /** Lazy getter — the pile registry may not be available at construction time. */
     getPileRegistry: () => BuildingPileRegistry | null;
     workAreaStore: WorkAreaStore;
@@ -71,13 +72,13 @@ export interface BuildingPositionResolverConfig {
  */
 export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     private readonly gameState: GameState;
-    private readonly getInventoryVisualizer: () => InventoryVisualizer;
+    private readonly getPileSlotRegistry: () => PileRegistry | null;
     private readonly getPileRegistry: () => BuildingPileRegistry | null;
     private readonly workAreaStore: WorkAreaStore;
 
     constructor(config: BuildingPositionResolverConfig) {
         this.gameState = config.gameState;
-        this.getInventoryVisualizer = config.getInventoryVisualizer;
+        this.getPileSlotRegistry = config.getPileSlotRegistry;
         this.getPileRegistry = config.getPileRegistry;
         this.workAreaStore = config.workAreaStore;
     }
@@ -121,7 +122,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         const materialType = parseMaterialString(material);
         if (materialType === null) return null;
 
-        return this.resolvePileFromRegistry(buildingId, materialType, 'input');
+        return this.resolvePileFromRegistry(buildingId, materialType, SlotKind.Input);
     }
 
     /**
@@ -135,7 +136,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         const materialType = parseMaterialString(material);
         if (materialType === null) return null;
 
-        return this.resolvePileFromRegistry(buildingId, materialType, 'output');
+        return this.resolvePileFromRegistry(buildingId, materialType, SlotKind.Output);
     }
 
     /**
@@ -148,7 +149,7 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
     private resolvePileFromRegistry(
         buildingId: number,
         material: EMaterialType,
-        slotType: 'input' | 'output'
+        slotType: SlotKind.Input | SlotKind.Output
     ): { x: number; y: number } | null {
         const building = this.gameState.getEntityOrThrow(buildingId, 'resolvePileFromRegistry');
         assertIsBuilding(building, buildingId);
@@ -171,9 +172,21 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         );
         if (pos) return pos;
 
-        // Storage buildings: piles are material-agnostic, query the visualizer for existing stacks
+        // Storage buildings: look up the live pile entity in the slot registry
         if (registry.hasStoragePiles(building.subType as BuildingType, building.race)) {
-            return this.getInventoryVisualizer().getStackPosition(buildingId, material, slotType);
+            const slotReg = this.getPileSlotRegistry();
+            if (!slotReg) {
+                throw new Error(
+                    `PileRegistry not available when resolving storage pile for ` +
+                        `${EMaterialType[material]} at building ${buildingId} (${BuildingType[building.subType as BuildingType]})`
+                );
+            }
+            const slotKind = slotType === 'output' ? SlotKind.Output : SlotKind.Storage;
+            const entityId = slotReg.getEntityId({ buildingId, material, slotKind });
+            if (entityId !== undefined) {
+                return this.gameState.getEntityOrThrow(entityId, 'storage pile entity from registry');
+            }
+            return null;
         }
 
         // No pile defined (e.g. construction materials delivered to a production building).

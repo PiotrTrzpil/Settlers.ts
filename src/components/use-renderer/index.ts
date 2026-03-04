@@ -160,6 +160,10 @@ export function useRenderer({
             commandExecutor: executeCommand,
             initialMode: 'select',
             onModeChange: handleModeChange(getGame),
+            raceProvider: () => {
+                const g = getGame();
+                return g?.playerRaces.get(g.currentPlayer) ?? null;
+            },
         });
 
         inputManager.registerMode(new SelectMode());
@@ -256,7 +260,8 @@ export function useRenderer({
         const gl = renderer.gl;
         if (gl) {
             rendererInitStart = performance.now();
-            void initRenderersAsync(gl, landscapeRenderer, indicatorRenderer, entityRenderer);
+            const localPlayerRace = game.playerRaces.get(game.currentPlayer) ?? null;
+            void initRenderersAsync(gl, landscapeRenderer, indicatorRenderer, entityRenderer, localPlayerRace);
         } else {
             debugStats.state.gameLoaded = true;
             if (game.useProceduralTextures) {

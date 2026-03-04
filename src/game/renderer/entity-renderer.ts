@@ -1,7 +1,7 @@
 import { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { RendererBase } from './renderer-base';
-import { Entity, EntityType, StackedResourceState } from '../entity';
+import { Entity, EntityType, StackedPileState } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { MapSize } from '@/utilities/map-size';
 import { LogHandler } from '@/utilities/log-handler';
@@ -106,8 +106,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Health ratio provider (from context, backed by CombatSystem)
     private getHealthRatio: (entityId: number) => number | null = () => null;
 
-    // Resource states for stacked resources (quantity tracking)
-    public resourceStates: Map<number, StackedResourceState> = new Map();
+    // Resource states for stacked piles (quantity tracking)
+    public pileStates: Map<number, StackedPileState> = new Map();
 
     // Rendering-relevant settings (from context)
     private renderSettings: RenderSettings = {
@@ -236,7 +236,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
                 .then(loaded => {
                     if (loaded) {
                         EntityRenderer.log.debug(
-                            `Sprite loading complete: ${this.spriteManager?.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${Race[this.spriteManager?.currentRace ?? 0]}`
+                            `Sprite loading complete: ${this.spriteManager?.spriteRegistry?.getBuildingCount() ?? 0} building sprites for ${this.spriteManager?.currentRace != null ? Race[this.spriteManager.currentRace] : 'unknown'}`
                         );
                     }
                     // Notify when sprites are loaded (even if loading failed, animations are ready)
@@ -266,11 +266,17 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     /**
      * Get the current race being used for building sprites.
      */
+    /** Set the initial race before GL init. Must be called before init(). */
+    public setInitialRace(race: Race): void {
+        this.spriteManager?.setInitialRace(race);
+    }
+
     public getRace(): Race {
-        if (!this.spriteManager?.currentRace) {
-            throw new Error('EntityRenderer: no race set — spriteManager must be initialized before calling getRace');
+        const race = this.spriteManager?.currentRace ?? null;
+        if (race === null) {
+            throw new Error('EntityRenderer: no race set — call setInitialRace() before init()');
         }
-        return this.spriteManager.currentRace;
+        return race;
     }
 
     /**
@@ -298,7 +304,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.getVisualState = ctx.getVisualState;
         this.getDirectionTransition = ctx.getDirectionTransition;
         this.getHealthRatio = ctx.getHealthRatio;
-        this.resourceStates = ctx.resourceStates as Map<number, StackedResourceState>;
+        this.pileStates = ctx.pileStates as Map<number, StackedPileState>;
         this.renderAlpha = ctx.alpha;
         this.layerVisibility = ctx.layerVisibility;
         this.renderSettings = ctx.settings;
@@ -315,7 +321,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             ctx.getVisualState,
             ctx.getDirectionTransition,
             ctx.getBuildingRenderState,
-            ctx.resourceStates,
+            ctx.pileStates,
             ctx.layerVisibility
         );
     }
@@ -480,7 +486,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
             entities: this.entities,
             selectedEntityIds: this.selectedEntityIds,
             unitStates: this.unitStates,
-            resourceStates: this.resourceStates,
+            pileStates: this.pileStates,
             getBuildingRenderState: this.getBuildingRenderState,
             getBuildingOverlays: this.getBuildingOverlays,
             getVisualState: this.getVisualState,
@@ -580,7 +586,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         case EntityType.MapObject:
             return isMapObjectVisible(this.layerVisibility, entity.subType as MapObjectType);
         case EntityType.Decoration:
-        case EntityType.StackedResource:
+        case EntityType.StackedPile:
         case EntityType.None:
             return true;
         }

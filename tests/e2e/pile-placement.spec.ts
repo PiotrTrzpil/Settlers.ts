@@ -12,7 +12,7 @@ import { test, expect } from './fixtures';
 // --- Resource Placement Mode ---
 
 test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
-    test('clicking resource button activates place_resource mode', async ({ gpWithUI: gp }) => {
+    test('clicking resource button activates place_pile mode', async ({ gpWithUI: gp }) => {
         const page = gp.page;
         await page.locator('.tab-btn', { hasText: 'Goods' }).click({ force: true });
 
@@ -20,7 +20,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         await expect(btn).toBeVisible();
         await btn.click();
 
-        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
+        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_pile', { timeout: 5000 });
     });
 
     test('resource placement via placeResource helper', async ({ gs }) => {
@@ -38,7 +38,7 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
     });
 
     test('multiple resources can be placed at different locations', async ({ gs }) => {
-        const result = await gs.actions.placeMultiple(3, { kind: 'resource' });
+        const result = await gs.actions.placeMultiple(3, { kind: 'pile' });
         expect(result.placedCount).toBeGreaterThanOrEqual(2);
         expect(result.totalEntities).toBeGreaterThanOrEqual(2);
     });
@@ -51,14 +51,14 @@ test.describe('Resource Placement Mode', { tag: '@smoke' }, () => {
         const btn0 = page.locator('[data-testid="btn-resource-board"]');
         await expect(btn0).toBeVisible();
         await btn0.click({ force: true });
-        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
+        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_pile', { timeout: 5000 });
 
         // Check second resource button
         const btn1 = page.locator('[data-testid="btn-resource-stone"]');
         if (await btn1.isVisible()) {
             await btn1.click({ force: true });
             await gp.wait.waitForFrames(2);
-            await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
+            await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_pile', { timeout: 5000 });
         }
     });
 });
@@ -111,7 +111,7 @@ test.describe('Resource Rendering', () => {
         const btn = page.locator('[data-testid="btn-resource-board"]');
         await expect(btn).toBeVisible();
         await btn.click();
-        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_resource', { timeout: 5000 });
+        await expect(gp.modeIndicator).toHaveAttribute('data-mode', 'place_pile', { timeout: 5000 });
 
         const passableTile = await gp.actions.findPassableTile();
         if (!passableTile) {

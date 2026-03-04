@@ -9,7 +9,7 @@
  * happens in the composable/glue layer (use-renderer.ts) before entering the renderer.
  */
 
-import type { Entity, StackedResourceState, TileCoord } from '../entity';
+import type { Entity, StackedPileState, TileCoord } from '../entity';
 import type { Race } from '../race';
 import type { EntityVisualState, DirectionTransition } from '../animation/entity-visual-service';
 import type { IViewPoint } from './i-view-point';
@@ -24,7 +24,7 @@ import type { SpriteEntry } from './sprite-metadata/sprite-metadata';
  * Supported placement entity types.
  * Renderer-local definition — mirrors input/render-state.PlacementEntityType.
  */
-export type PlacementEntityType = 'building' | 'resource' | 'unit';
+export type PlacementEntityType = 'building' | 'pile' | 'unit';
 
 /**
  * Consolidated placement preview state for the renderer.
@@ -192,7 +192,7 @@ export interface IRenderContext {
     /** Unit movement states for interpolation */
     readonly unitStates: UnitStateLookup;
     /** Resource stack states */
-    readonly resourceStates: ReadonlyMap<number, StackedResourceState>;
+    readonly pileStates: ReadonlyMap<number, StackedPileState>;
 
     // === Building Visual State ===
     /** Get the pre-computed render state for a building entity */
@@ -267,7 +267,7 @@ export interface IRenderContext {
 export class RenderContextBuilder {
     private _entities: readonly Entity[] = [];
     private _unitStates: UnitStateLookup = { get: () => undefined };
-    private _resourceStates: ReadonlyMap<number, StackedResourceState> = new Map();
+    private _pileStates: ReadonlyMap<number, StackedPileState> = new Map();
     private _buildingRenderStateGetter: (entityId: number) => BuildingRenderState = () => DEFAULT_BUILDING_RENDER_STATE;
     private _buildingOverlaysGetter: (entityId: number) => readonly BuildingOverlayRenderData[] = () => EMPTY_OVERLAYS;
     private _visualStateGetter: (entityId: number) => EntityVisualState | null = () => null;
@@ -299,8 +299,8 @@ export class RenderContextBuilder {
         return this;
     }
 
-    resourceStates(states: ReadonlyMap<number, StackedResourceState>): this {
-        this._resourceStates = states;
+    pileStates(states: ReadonlyMap<number, StackedPileState>): this {
+        this._pileStates = states;
         return this;
     }
 
@@ -412,7 +412,7 @@ export class RenderContextBuilder {
         return {
             entities: this._entities,
             unitStates: this._unitStates,
-            resourceStates: this._resourceStates,
+            pileStates: this._pileStates,
             getBuildingRenderState: this._buildingRenderStateGetter,
             getBuildingOverlays: this._buildingOverlaysGetter,
             getVisualState: this._visualStateGetter,

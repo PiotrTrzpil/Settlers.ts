@@ -10,7 +10,7 @@
 import { EMaterialType } from '@/game/economy';
 import type { SpriteEntry } from '../types';
 
-export class ResourceSpriteCategory {
+export class GoodSpriteCategory {
     /** Resource sprites keyed by material type → direction */
     private readonly entries: Map<EMaterialType, Map<number, SpriteEntry>> = new Map();
 

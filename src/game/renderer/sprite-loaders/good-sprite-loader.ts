@@ -12,7 +12,7 @@ import { type SpriteLoadContext, getPaletteBase } from '../sprite-load-context';
  * Load resource sprites (carried materials) using SafeLoadBatch pattern.
  * Returns true if any resource sprites were loaded.
  */
-export async function loadResourceSprites(ctx: SpriteLoadContext): Promise<boolean> {
+export async function loadGoodSprites(ctx: SpriteLoadContext): Promise<boolean> {
     const fileId = `${GFX_FILE_NUMBERS.RESOURCES}`;
     const fileSet = await ctx.spriteLoader.loadFileSet(fileId);
     if (!fileSet?.jilReader || !fileSet.dilReader) return false;
@@ -38,7 +38,7 @@ export async function loadResourceSprites(ctx: SpriteLoadContext): Promise<boole
     }
 
     batch.finalize(ctx.atlas, ctx.gl, data => {
-        ctx.registry.registerResource(data.type, data.dir, data.entry);
+        ctx.registry.registerGood(data.type, data.dir, data.entry);
     });
 
     return batch.count > 0;

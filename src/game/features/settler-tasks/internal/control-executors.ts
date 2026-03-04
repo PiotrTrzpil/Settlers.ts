@@ -6,7 +6,7 @@
  */
 
 import type { Entity } from '../../../entity';
-import { EntityType, UnitType, EXTENDED_OFFSETS, getUnitTypeAtLevel } from '../../../entity';
+import { UnitType, EXTENDED_OFFSETS, getUnitTypeAtLevel } from '../../../entity';
 import type { GameState } from '../../../game-state';
 import { LogHandler } from '@/utilities/log-handler';
 import { TaskResult } from '../types';
@@ -178,24 +178,25 @@ export function executeChangeTypeAtBarracks(
     // Find a valid spawn position near the barracks
     const spawnPos = findSpawnPosition(barracks.x, barracks.y, ctx.gameState);
 
-    // Spawn the soldier
-    const soldierEntity = ctx.gameState.addEntity(EntityType.Unit, unitType, spawnPos.x, spawnPos.y, settler.player);
-    soldierEntity.race = settler.race;
-    soldierEntity.level = recipe.level;
-
-    // Emit unit:spawned event
-    ctx.eventBus.emit('unit:spawned', {
-        entityId: soldierEntity.id,
+    // Spawn the soldier via command (handles entity creation, race/level, and unit:spawned event)
+    const spawnResult = ctx.executeCommand({
+        type: 'spawn_unit',
         unitType,
         x: spawnPos.x,
         y: spawnPos.y,
         player: settler.player,
+        race: settler.race,
     });
+    if (!spawnResult.success) {
+        log.warn(`CHANGE_TYPE_AT_BARRACKS: failed to spawn soldier for carrier ${settler.id}: ${spawnResult.error}`);
+        return TaskResult.DONE;
+    }
 
-    const soldierId = soldierEntity.id;
+    const firstEffect = spawnResult.effects?.[0];
+    const soldierId = firstEffect?.type === 'unit_spawned' ? firstEffect.entityId : 0;
 
-    // Remove the carrier entity. CarrierManager cleanup happens via entity:removed event.
-    ctx.gameState.removeEntity(settler.id);
+    // Remove the carrier entity via command. CarrierManager cleanup happens via entity:removed event.
+    ctx.executeCommand({ type: 'remove_entity', entityId: settler.id });
 
     // Notify manager to clear training state and emit completion event
     ctx.barracksTrainingManager!.completeTraining(buildingId);

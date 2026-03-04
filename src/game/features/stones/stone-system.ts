@@ -13,8 +13,8 @@ import type { EntityVisualService } from '../../animation/entity-visual-service'
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
 import { LogHandler } from '@/utilities/log-handler';
-import { EntityType } from '../../entity';
 import { findEmptySpot } from '../../systems/spatial-search';
+import type { Command, CommandResult } from '../../commands';
 
 const log = new LogHandler('StoneSystem');
 
@@ -48,19 +48,27 @@ export interface StoneState {
     level: number;
 }
 
+export interface StoneSystemConfig {
+    gameState: GameState;
+    visualService: EntityVisualService;
+    executeCommand: (cmd: Command) => CommandResult;
+}
+
 /**
  * Manages stone mining depletion and variant assignment.
  */
 export class StoneSystem {
     private gameState: GameState;
     private readonly visualService: EntityVisualService;
+    private readonly executeCommand: (cmd: Command) => CommandResult;
 
     /** Internal state storage: entityId -> StoneState */
     private readonly states = new Map<number, StoneState>();
 
-    constructor(gameState: GameState, visualService: EntityVisualService) {
-        this.gameState = gameState;
-        this.visualService = visualService;
+    constructor(cfg: StoneSystemConfig) {
+        this.gameState = cfg.gameState;
+        this.visualService = cfg.visualService;
+        this.executeCommand = cfg.executeCommand;
     }
 
     /**
@@ -154,7 +162,7 @@ export class StoneSystem {
 
         if (state.level < 0) {
             log.debug(`Stone ${entityId} fully depleted, removing`);
-            this.gameState.removeEntity(entityId);
+            this.executeCommand({ type: 'remove_entity', entityId });
             return true;
         }
 
@@ -192,7 +200,12 @@ export class StoneSystem {
                 proximityFilter: () => false,
             });
             if (!spot) break;
-            this.gameState.addEntity(EntityType.MapObject, MapObjectType.ResourceStone, spot.x, spot.y, 0);
+            this.executeCommand({
+                type: 'spawn_map_object',
+                objectType: MapObjectType.ResourceStone,
+                x: spot.x,
+                y: spot.y,
+            });
             placed++;
         }
         return placed;

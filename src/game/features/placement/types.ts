@@ -28,7 +28,7 @@ export enum PlacementStatus {
 /**
  * Entity types that can be placed on the map.
  */
-export type PlacementEntityType = 'building' | 'resource' | 'unit';
+export type PlacementEntityType = 'building' | 'pile' | 'unit';
 
 /**
  * Game context required for placement validation.

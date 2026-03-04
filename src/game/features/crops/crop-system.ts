@@ -20,7 +20,7 @@ import type { GameState } from '../../game-state';
 import { EntityType } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
-import type { Command } from '../../commands';
+import type { Command, CommandResult } from '../../commands';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { EventBus } from '../../event-bus';
 
@@ -95,12 +95,25 @@ const CROP_CONFIG: GrowableConfig = {
  * Manages crop growth, harvesting, and decay for all crop types.
  * Uses EntityVisualService for visual state - no direct entity manipulation.
  */
+export interface CropSystemConfig {
+    gameState: GameState;
+    visualService: EntityVisualService;
+    eventBus: EventBus;
+    executeCommand: (cmd: Command) => CommandResult;
+}
+
 export class CropSystem extends GrowableSystem<CropState> {
     private readonly eventBus: EventBus;
 
-    constructor(gameState: GameState, visualService: EntityVisualService, eventBus: EventBus) {
-        super(gameState, visualService, CROP_CONFIG, 'CropSystem');
-        this.eventBus = eventBus;
+    constructor(cfg: CropSystemConfig) {
+        super({
+            gameState: cfg.gameState,
+            visualService: cfg.visualService,
+            growableConfig: CROP_CONFIG,
+            logName: 'CropSystem',
+            executeCommand: cfg.executeCommand,
+        });
+        this.eventBus = cfg.eventBus;
     }
 
     // ── GrowableSystem implementation ────────────────────────────

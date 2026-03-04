@@ -15,7 +15,7 @@ export enum RenderLayer {
     Buildings = 'buildings',
     Units = 'units',
     Environment = 'environment',
-    Resources = 'resources',
+    Piles = 'resources',
 }
 
 /** Sub-layers within the Environment layer */
@@ -43,7 +43,7 @@ export interface LayerVisibility {
     buildings: boolean;
     units: boolean;
     environment: boolean;
-    resources: boolean;
+    piles: boolean;
     /** Sub-layer visibility (only applies when environment is true) */
     environmentLayers: EnvironmentLayerVisibility;
     /** Debug: when set, only show map objects with this raw type value. null = show all. */
@@ -63,7 +63,7 @@ export const DEFAULT_LAYER_VISIBILITY: LayerVisibility = {
     buildings: true,
     units: true,
     environment: true,
-    resources: true,
+    piles: true,
     environmentLayers: {
         trees: true,
         stones: true,
@@ -124,7 +124,7 @@ export function isMapObjectVisible(visibility: LayerVisibility, objectType: MapO
 
     // Resource deposits are controlled by the Resources layer
     if (isResourceDeposit(objectType)) {
-        return visibility.resources;
+        return visibility.piles;
     }
 
     // Other map objects use the Environment layer and sub-layers

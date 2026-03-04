@@ -29,7 +29,7 @@ export const OreSignFeature: FeatureDefinition = {
     id: 'ore-signs',
 
     create(ctx: FeatureContext) {
-        const signSystem = new ResourceSignSystem(ctx.gameState);
+        const signSystem = new ResourceSignSystem({ executeCommand: ctx.executeCommand });
 
         // Clean up sign tracking state when entities are removed externally
         // (e.g. the game engine removes a sign that was already handled elsewhere).

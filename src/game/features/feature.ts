@@ -15,7 +15,10 @@
  *     id: 'trees',
  *     dependencies: [],
  *     create(ctx) {
- *         const treeSystem = new TreeSystem(ctx.gameState, ctx.visualService);
+ *         const treeSystem = new TreeSystem({
+ *             gameState: ctx.gameState, visualService: ctx.visualService,
+ *             eventBus: ctx.eventBus, executeCommand: ctx.executeCommand,
+ *         });
  *         return {
  *             systems: [treeSystem],
  *             exports: { treeSystem },
@@ -30,6 +33,7 @@ import type { GameState } from '../game-state';
 import type { EventBus } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
+import type { Command, CommandResult } from '../commands';
 
 /**
  * Context provided to features during creation.
@@ -53,6 +57,9 @@ export interface FeatureContext {
      * ctx.cleanupRegistry.onEntityRemoved(entityId => myMap.delete(entityId));
      */
     cleanupRegistry: EntityCleanupRegistry;
+
+    /** Execute a game command. Available to all features at creation time. */
+    executeCommand: (cmd: Command) => CommandResult;
 
     /**
      * Get exports from another feature.

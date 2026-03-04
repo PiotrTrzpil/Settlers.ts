@@ -20,7 +20,12 @@ export const CombatFeature: FeatureDefinition = {
 
     create(ctx) {
         const subscriptions = new EventSubscriptionManager();
-        const combatSystem = new CombatSystem(ctx.gameState, ctx.eventBus, ctx.visualService);
+        const combatSystem = new CombatSystem({
+            gameState: ctx.gameState,
+            eventBus: ctx.eventBus,
+            visualService: ctx.visualService,
+            executeCommand: ctx.executeCommand,
+        });
 
         // Auto-register military units when they spawn
         subscriptions.subscribe(ctx.eventBus, 'unit:spawned', ({ entityId, unitType, player }) => {

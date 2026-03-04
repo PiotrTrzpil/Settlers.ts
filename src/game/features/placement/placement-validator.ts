@@ -42,7 +42,7 @@ export function validatePlacement(
     case 'building':
         return validateBuildingPlacement(x, y, subType as BuildingType, ctx);
 
-    case 'resource':
+    case 'pile':
         return validateResourcePlacement(x, y, ctx);
 
     case 'unit':

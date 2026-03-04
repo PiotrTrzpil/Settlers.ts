@@ -68,8 +68,8 @@ export function handleModeChange(
             newMode === 'place_building' && data?.['buildingType'] !== undefined ? (data['buildingType'] as number) : 0;
 
         // Update resource type
-        vs.placeResourceType =
-            newMode === 'place_resource' && data?.['resourceType'] !== undefined ? (data['resourceType'] as number) : 0;
+        vs.placePileType =
+            newMode === 'place_pile' && data?.['resourceType'] !== undefined ? (data['resourceType'] as number) : 0;
 
         // Update unit type and level
         const isUnitMode = newMode === 'place_unit';

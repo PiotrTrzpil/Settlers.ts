@@ -34,7 +34,11 @@ export const StoneFeature: FeatureDefinition = {
     create(ctx: FeatureContext) {
         const subscriptions = new EventSubscriptionManager();
 
-        const stoneSystem = new StoneSystem(ctx.gameState, ctx.visualService);
+        const stoneSystem = new StoneSystem({
+            gameState: ctx.gameState,
+            visualService: ctx.visualService,
+            executeCommand: ctx.executeCommand,
+        });
 
         // Register for map object creation events to auto-register stones.
         // The variation from map data encodes the initial depletion level (1-12).

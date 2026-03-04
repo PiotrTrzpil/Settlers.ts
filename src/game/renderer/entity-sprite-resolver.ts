@@ -6,7 +6,7 @@
  * SpriteRenderManager and state providers.
  */
 
-import { Entity, EntityType, BuildingType, UnitType, type StackedResourceState } from '../entity';
+import { Entity, EntityType, BuildingType, UnitType, type StackedPileState } from '../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { EMaterialType } from '../economy';
 import type { SpriteEntry } from './sprite-metadata/sprite-metadata';
@@ -42,7 +42,7 @@ export class EntitySpriteResolver {
         private readonly getVisualState: (entityId: number) => EntityVisualState | null,
         private readonly getDirectionTransition: (entityId: number) => DirectionTransition | null,
         private readonly getBuildingRenderState: (entityId: number) => BuildingRenderState,
-        private readonly resourceStates: ReadonlyMap<number, StackedResourceState>,
+        private readonly pileStates: ReadonlyMap<number, StackedPileState>,
         private readonly layerVisibility: LayerVisibility
     ) {}
 
@@ -68,10 +68,10 @@ export class EntitySpriteResolver {
             sprite: this.getMapObject(entity),
             progress: 1,
         }),
-        [EntityType.StackedResource]: entity => ({
+        [EntityType.StackedPile]: entity => ({
             skip: false,
             transitioning: false,
-            sprite: this.getResource(entity),
+            sprite: this.getPileSprite(entity),
             progress: 1,
         }),
         [EntityType.Unit]: this.resolveUnit.bind(this),
@@ -144,13 +144,13 @@ export class EntitySpriteResolver {
     }
 
     /** Stacked resource sprite based on quantity. */
-    private getResource(entity: Entity): SpriteEntry | null {
+    private getPileSprite(entity: Entity): SpriteEntry | null {
         if (!this.sprites) return null;
-        const state = this.resourceStates.get(entity.id);
+        const state = this.pileStates.get(entity.id);
         if (!state) throw new Error(`No resource state for entity ${entity.id} (${entity.subType})`);
         const quantity = state.quantity;
         const direction = Math.max(0, Math.min(quantity - 1, 7));
-        return this.sprites.getResource(entity.subType as EMaterialType, direction) ?? null;
+        return this.sprites.getGoodSprite(entity.subType as EMaterialType, direction) ?? null;
     }
 
     /** Unit sprite resolution — returns transitioning if mid-direction-change. */
@@ -207,7 +207,7 @@ export class EntitySpriteResolver {
             if (!this.layerVisibility.decorationTextures) return false;
             return !!this.sprites?.getMapObject(entity.subType as MapObjectType);
         },
-        [EntityType.StackedResource]: entity => !!this.sprites?.getResource(entity.subType as EMaterialType),
+        [EntityType.StackedPile]: entity => !!this.sprites?.getGoodSprite(entity.subType as EMaterialType),
         [EntityType.Unit]: entity => !!this.sprites?.getUnit(entity.subType as UnitType, 0, entity.race),
         [EntityType.Decoration]: () => false,
         [EntityType.None]: () => false,
@@ -232,8 +232,8 @@ export class EntitySpriteResolver {
         switch (entityType) {
         case 'building':
             return this.sprites.getBuilding(subType as BuildingType, race);
-        case 'resource':
-            return this.sprites.getResource(subType as EMaterialType, variation ?? 0);
+        case 'pile':
+            return this.sprites.getGoodSprite(subType as EMaterialType, variation ?? 0);
         case 'unit':
             return this.getUnitPreviewSprite(subType as UnitType, race, level ?? 1);
         default: {

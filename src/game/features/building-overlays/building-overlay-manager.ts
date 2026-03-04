@@ -23,12 +23,12 @@
 import type { TickSystem } from '../../tick-system';
 import { EntityType, type BuildingType, type EntityProvider } from '../../entity';
 import type { Race } from '../../race';
-import type { EventBus, EventSubscriptionManager as ESM } from '../../event-bus';
-import { EventSubscriptionManager } from '../../event-bus';
-import type { EntityCleanupRegistry } from '../entity-cleanup-registry';
-import type { ConstructionSiteManager } from '../../features/building-construction/construction-site-manager';
+import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import type { OverlayRegistry } from './overlay-registry';
 import { OverlayCondition, type BuildingOverlayInstance, type BuildingOverlayDef } from './types';
+import { LogHandler } from '@/utilities/log-handler';
+
+const log = new LogHandler('BuildingOverlayManager');
 
 // ============================================================================
 // Config
@@ -55,7 +55,6 @@ export class BuildingOverlayManager implements TickSystem {
     private readonly registry: OverlayRegistry;
     private readonly entityProvider: EntityProvider;
     private readonly overlaysByEntity = new Map<number, BuildingOverlayInstance[]>();
-    private readonly subscriptions: ESM = new EventSubscriptionManager();
 
     constructor(config: BuildingOverlayManagerConfig) {
         this.registry = config.overlayRegistry;
@@ -172,35 +171,17 @@ export class BuildingOverlayManager implements TickSystem {
     /** Advance animation timers for all active overlays */
     tick(dt: number): void {
         const dtMs = dt * 1000;
-        for (const instances of this.overlaysByEntity.values()) {
-            for (const inst of instances) {
-                if (!inst.active || inst.def.frameDurationMs <= 0) continue;
-                inst.elapsedMs += dtMs;
+        for (const [entityId, instances] of this.overlaysByEntity) {
+            try {
+                for (const inst of instances) {
+                    if (!inst.active || inst.def.frameDurationMs <= 0) continue;
+                    inst.elapsedMs += dtMs;
+                }
+            } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                log.error(`Unhandled error in overlay tick for entity ${entityId}`, err);
             }
         }
-    }
-
-    // ========================================================================
-    // Event Registration
-    // ========================================================================
-
-    /**
-     * Subscribe to building lifecycle events.
-     * - `building:completed` → addBuilding
-     * - `entity:removed` → removeBuilding (via cleanupRegistry)
-     */
-    registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
-        this.subscriptions.subscribe(eventBus, 'building:completed', ({ entityId, buildingType }) => {
-            const entity = this.entityProvider.getEntity(entityId);
-            if (!entity) return;
-            this.addBuilding(entityId, buildingType, entity.race);
-        });
-        cleanupRegistry.onEntityRemoved(this.removeBuilding.bind(this));
-    }
-
-    /** Unsubscribe from all events */
-    unregisterEvents(): void {
-        this.subscriptions.unsubscribeAll();
     }
 
     /**
@@ -222,7 +203,6 @@ export class BuildingOverlayManager implements TickSystem {
 
     /** Clean up all state */
     destroy(): void {
-        this.unregisterEvents();
         this.overlaysByEntity.clear();
     }
 }

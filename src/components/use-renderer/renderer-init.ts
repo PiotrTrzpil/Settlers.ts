@@ -8,16 +8,23 @@ import type { BuildingIndicatorRenderer } from '@/game/renderer/building-indicat
 import type { ViewPoint } from '@/game/renderer/view-point';
 import type { InputManager } from '@/game/input';
 import { debugStats } from '@/game/debug-stats';
+import type { Race } from '@/game/race';
 
 /**
  * Initialize renderers asynchronously (landscape first for camera, then sprites).
+ * @param localPlayerRace Race of the local player — required for sprite loading. Null for test maps (no sprites loaded).
  */
 export async function initRenderersAsync(
     gl: WebGL2RenderingContext,
     landscapeRenderer: LandscapeRenderer,
     indicatorRenderer: BuildingIndicatorRenderer,
-    entityRenderer: EntityRenderer
+    entityRenderer: EntityRenderer,
+    localPlayerRace: Race | null
 ): Promise<void> {
+    // Set race before prefetch so the cache uses the correct IDB key
+    if (localPlayerRace !== null) {
+        entityRenderer.setInitialRace(localPlayerRace);
+    }
     // Start IndexedDB cache read in parallel with landscape init
     entityRenderer.spriteManager?.prefetchCache();
 

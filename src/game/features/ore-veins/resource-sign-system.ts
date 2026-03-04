@@ -10,11 +10,14 @@
  */
 
 import type { TickSystem } from '../../tick-system';
-import type { GameState } from '../../game-state';
 import type { OreVeinData } from './ore-vein-data';
 import { OreType } from './ore-type';
-import { EntityType } from '../../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
+import { LogHandler } from '@/utilities/log-handler';
+import type { Command, CommandResult } from '../../commands';
+import { sortedEntries } from '@/utilities/collections';
+
+const log = new LogHandler('ResourceSignSystem');
 
 /** Signs remain visible for 5 minutes of game time. */
 const SIGN_LIFETIME = 300;
@@ -35,13 +38,20 @@ const ORE_TYPE_TO_MAP_OBJECT: Partial<Record<OreType, MapObjectType>> = {
     [OreType.Stone]: MapObjectType.ResStone,
 };
 
+export interface ResourceSignSystemConfig {
+    executeCommand: (cmd: Command) => CommandResult;
+}
+
 export class ResourceSignSystem implements TickSystem {
     /** Maps sign entity ID to its position and game-time expiry. */
     private readonly signs = new Map<number, { x: number; y: number; expiresAt: number }>();
     private elapsed = 0;
-    private oreVeinData!: OreVeinData;
+    private oreVeinData!: OreVeinData; // OK: genuinely deferred — set via setOreVeinData() after terrain loads
+    private readonly executeCommand: (cmd: Command) => CommandResult;
 
-    constructor(private readonly gameState: GameState) {}
+    constructor(cfg: ResourceSignSystemConfig) {
+        this.executeCommand = cfg.executeCommand;
+    }
 
     /**
      * Inject the ore vein data after terrain has loaded.
@@ -76,8 +86,10 @@ export class ResourceSignSystem implements TickSystem {
             variation = levelToVariation(oreLevel);
         }
 
-        const entity = this.gameState.addEntity(EntityType.MapObject, signType, x, y, 0, undefined, variation);
-        this.signs.set(entity.id, { x, y, expiresAt: this.elapsed + SIGN_LIFETIME });
+        const result = this.executeCommand({ type: 'spawn_map_object', objectType: signType, x, y, variation });
+        const effect = result.effects?.[0];
+        if (!effect || effect.type !== 'entity_created') return;
+        this.signs.set(effect.entityId, { x, y, expiresAt: this.elapsed + SIGN_LIFETIME });
     }
 
     /**
@@ -87,11 +99,16 @@ export class ResourceSignSystem implements TickSystem {
     tick(dt: number): void {
         this.elapsed += dt;
 
-        for (const [id, sign] of this.signs) {
-            if (this.elapsed >= sign.expiresAt) {
-                this.oreVeinData.clearProspected(sign.x, sign.y);
-                this.gameState.removeEntity(id);
-                this.signs.delete(id);
+        for (const [id, sign] of sortedEntries(this.signs)) {
+            try {
+                if (this.elapsed >= sign.expiresAt) {
+                    this.oreVeinData.clearProspected(sign.x, sign.y);
+                    this.executeCommand({ type: 'remove_entity', entityId: id });
+                    this.signs.delete(id);
+                }
+            } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                log.error(`Unhandled error expiring sign ${id}`, err);
             }
         }
     }

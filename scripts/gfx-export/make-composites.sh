@@ -9,7 +9,7 @@
 #   # First export with --group-by-size:
 #   npx tsx scripts/gfx-export/cli.ts public/Siedler4/Gfx/9.gfx output/gfx9-by-size -g
 #   # Then generate composites:
-#   ./scripts/gfx-export/make-composites.sh output/gfx9-by-size/9 dist/gfx9-composites
+#   ./scripts/gfx-export/make-composites.sh output/gfx9-by-size/9 output/gfx9-composites
 #
 # Each size group (e.g. 32x32/) becomes one composite PNG + a .txt index file
 # mapping grid row,col -> original filename (GFX index).

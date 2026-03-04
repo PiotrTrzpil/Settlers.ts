@@ -26,7 +26,7 @@ export interface LoadTimings {
     atlasAlloc: number;
     buildings: number;
     mapObjects: number;
-    resources: number;
+    goods: number;
     units: number;
     /** Per-race unit sprite load timing (race name → ms) */
     unitsByRace: Record<string, number>;
@@ -334,7 +334,7 @@ class DebugStats {
                 atlasAlloc: 0,
                 buildings: 0,
                 mapObjects: 0,
-                resources: 0,
+                goods: 0,
                 units: 0,
                 unitsByRace: {},
                 deserialize: 0,

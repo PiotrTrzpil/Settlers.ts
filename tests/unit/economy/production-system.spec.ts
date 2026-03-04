@@ -94,7 +94,7 @@ describe('MaterialRequestSystem', () => {
             expect(materials).toContain(EMaterialType.COAL);
         });
 
-        it('should create material requests for Slaughterhouse (PIG input)', () => {
+        it('should create material requests for Slaughterhouse (SHEEP input, Roman)', () => {
             // Buildings with no construction site are operational by default
             addBuildingWithInventory(ctx, 10, 10, BuildingType.Slaughterhouse);
 
@@ -102,7 +102,7 @@ describe('MaterialRequestSystem', () => {
 
             const pending = ctx.requestManager.getPendingRequests();
             expect(pending.length).toBe(1);
-            expect(pending[0]!.materialType).toBe(EMaterialType.PIG);
+            expect(pending[0]!.materialType).toBe(EMaterialType.SHEEP);
         });
 
         it('should not create requests for buildings without input slots', () => {

@@ -31,20 +31,19 @@ const log = new LogHandler('SpriteAtlasCacheManager');
 
 const PREFETCH_T0 = performance.now();
 let prefetchResolvedAt = 0;
-let earlyPrefetch: Promise<CachedAtlasData | null> | null = isCacheDisabled()
-    ? null
-    : getIndexedDBCache(Race.Roman).then(v => {
-        prefetchResolvedAt = performance.now();
-        return v;
-    });
+let earlyPrefetch: Promise<CachedAtlasData | null> | null = null;
 
 /**
- * Re-trigger prefetch if the early one was already consumed (e.g., second map load).
- * No-op if a prefetch is already in flight.
+ * Trigger an IDB prefetch for the given race.
+ * Call as soon as the local player's race is known (after map load).
+ * No-op if a prefetch is already in flight or cache is disabled.
  */
-export function prefetchSpriteCache(): void {
+export function prefetchSpriteCache(race: Race): void {
     if (!earlyPrefetch && !isCacheDisabled()) {
-        earlyPrefetch = getIndexedDBCache(Race.Roman);
+        earlyPrefetch = getIndexedDBCache(race).then(v => {
+            prefetchResolvedAt = performance.now();
+            return v;
+        });
     }
 }
 
@@ -262,7 +261,7 @@ export class SpriteAtlasCacheManager {
             atlasAlloc: 0,
             buildings: 0,
             mapObjects: 0,
-            resources: 0,
+            goods: 0,
             units: 0,
             deserialize,
             gpuUpload,
@@ -271,7 +270,7 @@ export class SpriteAtlasCacheManager {
             spriteCount:
                 registry.getBuildingCount() +
                 registry.getMapObjectCount() +
-                registry.getResourceCount() +
+                registry.getGoodCount() +
                 registry.getUnitCount(),
             cacheHit: true,
             cacheSource: source,

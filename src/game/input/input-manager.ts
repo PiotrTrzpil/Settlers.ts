@@ -1,6 +1,7 @@
 import type { Ref } from 'vue';
 import type { TileCoord } from '../entity';
 import type { InputMode, InputContext, InputResult } from './input-mode';
+import type { Race } from '../race';
 import type { InputConfig } from './input-config';
 import type { InputState } from './input-state';
 import type { ModeRenderState } from './render-state';
@@ -51,6 +52,8 @@ export interface InputManagerOptions {
     initialMode?: string;
     /** Callback when mode changes */
     onModeChange?: ModeChangeCallback;
+    /** Provider for the local player's race (used in debug spawn commands). */
+    raceProvider?: () => Race | null;
 }
 
 /**
@@ -70,6 +73,7 @@ export class InputManager {
     private isDestroyed = false;
     /** Game settings — nullable by design, set via setSettings when game loads */
     private _settings: GameSettings | null = null;
+    private raceProvider: (() => Race | null) | null = null;
 
     // Bound event handlers for cleanup
     private boundHandlers: {
@@ -89,6 +93,7 @@ export class InputManager {
         this.tileResolver = options.tileResolver ?? null;
         this.commandExecutor = options.commandExecutor ?? null;
         this.onModeChange = options.onModeChange ?? null;
+        this.raceProvider = options.raceProvider ?? null;
 
         // Create input state tracker
         this.state = createInputState(this.target, this.config);
@@ -329,6 +334,7 @@ export class InputManager {
             switchMode: this.switchMode.bind(this),
             getModeData: <T>() => this.modeData.get(this.currentModeName) as T | undefined,
             setModeData: <T>(data: T) => this.modeData.set(this.currentModeName, data),
+            localPlayerRace: this.raceProvider?.() ?? null,
         };
     }
 

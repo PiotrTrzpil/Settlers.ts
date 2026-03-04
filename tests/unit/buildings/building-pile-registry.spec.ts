@@ -18,6 +18,7 @@ import { Race } from '@/game/race';
 import { EMaterialType } from '@/game/economy/material-type';
 import { PileSlotType } from '@/resources/game-data';
 import type { GameData, BuildingInfo, BuildingPileInfo, RaceBuildingData } from '@/resources/game-data';
+import { SlotKind } from '@/game/features/inventory/pile-kind';
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -110,7 +111,7 @@ describe('BuildingPileRegistry', () => {
             const slots = registry.getPileSlots(BuildingType.WoodcutterHut, Race.Roman);
 
             expect(slots).toHaveLength(1);
-            expect(slots[0]).toMatchObject({ dx: 4, dy: 2, material: EMaterialType.LOG, slotType: 'output' });
+            expect(slots[0]).toMatchObject({ dx: 4, dy: 2, material: EMaterialType.LOG, slotType: SlotKind.Output });
         });
 
         it('stores multiple slots with correct input/output distinction', () => {
@@ -127,12 +128,12 @@ describe('BuildingPileRegistry', () => {
             expect(slots.find(s => s.material === EMaterialType.LOG)).toMatchObject({
                 dx: 4,
                 dy: 1,
-                slotType: 'input',
+                slotType: SlotKind.Input,
             });
             expect(slots.find(s => s.material === EMaterialType.BOARD)).toMatchObject({
                 dx: 5,
                 dy: 6,
-                slotType: 'output',
+                slotType: SlotKind.Output,
             });
         });
     });
@@ -208,10 +209,24 @@ describe('BuildingPileRegistry', () => {
             const registry = new BuildingPileRegistry(gameData);
 
             expect(
-                registry.getPilePositionForSlot(BuildingType.Sawmill, Race.Roman, 'input', EMaterialType.LOG, 5, 10)
+                registry.getPilePositionForSlot(
+                    BuildingType.Sawmill,
+                    Race.Roman,
+                    SlotKind.Input,
+                    EMaterialType.LOG,
+                    5,
+                    10
+                )
             ).toEqual({ x: 9, y: 11 });
             expect(
-                registry.getPilePositionForSlot(BuildingType.Sawmill, Race.Roman, 'output', EMaterialType.BOARD, 5, 10)
+                registry.getPilePositionForSlot(
+                    BuildingType.Sawmill,
+                    Race.Roman,
+                    SlotKind.Output,
+                    EMaterialType.BOARD,
+                    5,
+                    10
+                )
             ).toEqual({ x: 10, y: 16 });
         });
 
@@ -221,7 +236,14 @@ describe('BuildingPileRegistry', () => {
             const registry = new BuildingPileRegistry(gameData);
 
             expect(
-                registry.getPilePositionForSlot(BuildingType.Sawmill, Race.Roman, 'output', EMaterialType.LOG, 5, 10)
+                registry.getPilePositionForSlot(
+                    BuildingType.Sawmill,
+                    Race.Roman,
+                    SlotKind.Output,
+                    EMaterialType.LOG,
+                    5,
+                    10
+                )
             ).toBeNull();
         });
     });

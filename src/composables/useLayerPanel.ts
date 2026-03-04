@@ -83,7 +83,7 @@ export function useLayerPanel(onEmit: (value: LayerVisibility) => void): {
         let count = 0;
         if (visibility.buildings) count++;
         if (visibility.units) count++;
-        if (visibility.resources) count++;
+        if (visibility.piles) count++;
         if (visibility.environment) count++;
         return count;
     });
@@ -124,7 +124,7 @@ export function useLayerPanel(onEmit: (value: LayerVisibility) => void): {
     function showAll(): void {
         visibility.buildings = true;
         visibility.units = true;
-        visibility.resources = true;
+        visibility.piles = true;
         visibility.environment = true;
         visibility.environmentLayers.trees = true;
         visibility.environmentLayers.stones = true;
@@ -136,7 +136,7 @@ export function useLayerPanel(onEmit: (value: LayerVisibility) => void): {
     function hideAll(): void {
         visibility.buildings = false;
         visibility.units = false;
-        visibility.resources = false;
+        visibility.piles = false;
         visibility.environment = false;
         saveAndEmit();
     }

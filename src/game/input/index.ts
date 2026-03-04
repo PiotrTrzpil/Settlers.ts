@@ -60,10 +60,10 @@ export {
     type PlaceBuildingEnterData,
 } from './modes/place-building-mode';
 export {
-    PlaceResourceMode,
-    type PlaceResourceModeData,
-    type PlaceResourceEnterData,
-} from './modes/place-resource-mode';
+    PlacePileMode as PlaceResourceMode,
+    type PlacePileModeData as PlaceResourceModeData,
+    type PlacePileEnterData as PlaceResourceEnterData,
+} from './modes/place-pile-mode';
 export { PlaceUnitMode, type PlaceUnitModeData, type PlaceUnitEnterData } from './modes/place-unit-mode';
 export { CameraMode } from './modes/camera-mode';
 export { BuildingAdjustMode, type BuildingAdjustDeps, type ActiveAdjustment } from './modes/building-adjust-mode';

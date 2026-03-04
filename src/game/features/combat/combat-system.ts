@@ -19,6 +19,8 @@ import { CombatState, CombatStatus, createCombatState, getCombatStats } from './
 import { resolveTaskAnimation } from '../../animation/index';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { LogHandler } from '@/utilities/log-handler';
+import { sortedEntries } from '@/utilities/collections';
+import type { Command, CommandResult } from '../../commands';
 
 const log = new LogHandler('CombatSystem');
 
@@ -40,11 +42,19 @@ const SCAN_INTERVAL = 0.5;
  */
 const PURSUIT_REPATH_INTERVAL = 1.0;
 
+export interface CombatSystemConfig {
+    gameState: GameState;
+    eventBus: EventBus;
+    visualService: EntityVisualService;
+    executeCommand: (cmd: Command) => CommandResult;
+}
+
 export class CombatSystem implements TickSystem {
     private readonly states = new Map<number, CombatState>();
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly visualService: EntityVisualService;
+    private readonly executeCommand: (cmd: Command) => CommandResult;
 
     /** Accumulated time for periodic enemy scanning */
     private scanTimer = 0;
@@ -52,10 +62,11 @@ export class CombatSystem implements TickSystem {
     /** Per-unit timers for pursuit re-pathing */
     private pursuitTimers = new Map<number, number>();
 
-    constructor(gameState: GameState, eventBus: EventBus, visualService: EntityVisualService) {
-        this.gameState = gameState;
-        this.eventBus = eventBus;
-        this.visualService = visualService;
+    constructor(cfg: CombatSystemConfig) {
+        this.gameState = cfg.gameState;
+        this.eventBus = cfg.eventBus;
+        this.visualService = cfg.visualService;
+        this.executeCommand = cfg.executeCommand;
     }
 
     // ── Registration ──────────────────────────────────────────────────────
@@ -106,23 +117,28 @@ export class CombatSystem implements TickSystem {
             this.pursuitTimers.set(id, t + dt);
         }
 
-        for (const state of this.states.values()) {
-            const entity = this.gameState.getEntity(state.entityId);
-            if (!entity) {
-                this.states.delete(state.entityId);
-                continue;
-            }
+        for (const [id, state] of sortedEntries(this.states)) {
+            try {
+                const entity = this.gameState.getEntity(state.entityId);
+                if (!entity) {
+                    this.states.delete(id);
+                    continue;
+                }
 
-            switch (state.status) {
-            case CombatStatus.Idle:
-                if (shouldScan) this.handleIdle(state, entity);
-                break;
-            case CombatStatus.Pursuing:
-                this.handlePursuing(state, entity, dt);
-                break;
-            case CombatStatus.Fighting:
-                this.handleFighting(state, entity, dt);
-                break;
+                switch (state.status) {
+                case CombatStatus.Idle:
+                    if (shouldScan) this.handleIdle(state, entity);
+                    break;
+                case CombatStatus.Pursuing:
+                    this.handlePursuing(state, entity, dt);
+                    break;
+                case CombatStatus.Fighting:
+                    this.handleFighting(state, entity, dt);
+                    break;
+                }
+            } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                log.error(`Unhandled error in combat tick for entity ${state.entityId}`, err);
             }
         }
     }
@@ -243,7 +259,7 @@ export class CombatSystem implements TickSystem {
         }
 
         // Remove entity from game (triggers entity:removed → unregister)
-        this.gameState.removeEntity(state.entityId);
+        this.executeCommand({ type: 'remove_entity', entityId: state.entityId });
     }
 
     // ── Target finding ────────────────────────────────────────────────────

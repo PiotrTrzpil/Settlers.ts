@@ -58,7 +58,6 @@ describe('BuildingPositionResolverImpl', () => {
 
     let building: Entity;
     let mockGameState: ReturnType<typeof makeMockGameState>;
-    let mockInventoryVisualizer: ReturnType<typeof makeMockInventoryVisualizer>;
     let mockWorkAreaStore: ReturnType<typeof makeMockWorkAreaStore>;
     let resolver: BuildingPositionResolverImpl;
 
@@ -73,15 +72,6 @@ describe('BuildingPositionResolverImpl', () => {
         };
     }
 
-    function makeMockInventoryVisualizer() {
-        return {
-            getStackPosition: vi.fn(
-                (_buildingId: number, _material: EMaterialType, _slotType: 'input' | 'output') =>
-                    null as { x: number; y: number } | null
-            ),
-        };
-    }
-
     function makeMockWorkAreaStore(centerX: number, centerY: number) {
         return {
             getAbsoluteCenter: vi.fn(() => ({ x: centerX, y: centerY })),
@@ -93,13 +83,12 @@ describe('BuildingPositionResolverImpl', () => {
         const entityMap = new Map<number, Entity>([[BUILDING_ID, building]]);
 
         mockGameState = makeMockGameState(entityMap);
-        mockInventoryVisualizer = makeMockInventoryVisualizer();
         // Work area center is at building anchor + (0, 4) by default
         mockWorkAreaStore = makeMockWorkAreaStore(BUILDING_X, BUILDING_Y + 4);
 
         resolver = new BuildingPositionResolverImpl({
             gameState: mockGameState as never,
-            getInventoryVisualizer: () => mockInventoryVisualizer as never,
+            getPileSlotRegistry: () => null,
             getPileRegistry: () => null,
             workAreaStore: mockWorkAreaStore as never,
         });
@@ -176,7 +165,7 @@ describe('BuildingPositionResolverImpl', () => {
 
             const localResolver = new BuildingPositionResolverImpl({
                 gameState: localState as never,
-                getInventoryVisualizer: () => mockInventoryVisualizer as never,
+                getPileSlotRegistry: () => null,
                 getPileRegistry: () => null,
                 workAreaStore: mockWorkAreaStore as never,
             });
@@ -206,7 +195,7 @@ describe('BuildingPositionResolverImpl', () => {
             };
             const localResolver = new BuildingPositionResolverImpl({
                 gameState: mockGameState as never,
-                getInventoryVisualizer: () => mockInventoryVisualizer as never,
+                getPileSlotRegistry: () => null,
                 getPileRegistry: () => mockRegistry as never,
                 workAreaStore: mockWorkAreaStore as never,
             });
@@ -222,18 +211,18 @@ describe('BuildingPositionResolverImpl', () => {
             );
         });
 
-        it('throws when registry has no pile entry for non-storage building', () => {
+        it('returns null when registry has no pile entry for non-storage building (caller falls back to door)', () => {
             const mockRegistry = {
                 getPilePositionForSlot: vi.fn().mockReturnValue(null),
                 hasStoragePiles: vi.fn().mockReturnValue(false),
             };
             const localResolver = new BuildingPositionResolverImpl({
                 gameState: mockGameState as never,
-                getInventoryVisualizer: () => mockInventoryVisualizer as never,
+                getPileSlotRegistry: () => null,
                 getPileRegistry: () => mockRegistry as never,
                 workAreaStore: mockWorkAreaStore as never,
             });
-            expect(() => localResolver.getSourcePilePosition(BUILDING_ID, 'LOG')).toThrow('No input pile position');
+            expect(localResolver.getSourcePilePosition(BUILDING_ID, 'LOG')).toBeNull();
         });
     });
 
@@ -252,7 +241,7 @@ describe('BuildingPositionResolverImpl', () => {
             };
             const localResolver = new BuildingPositionResolverImpl({
                 gameState: mockGameState as never,
-                getInventoryVisualizer: () => mockInventoryVisualizer as never,
+                getPileSlotRegistry: () => null,
                 getPileRegistry: () => mockRegistry as never,
                 workAreaStore: mockWorkAreaStore as never,
             });

@@ -94,7 +94,7 @@ export class SpriteLoader {
     public async loadFileSet(fileId: string): Promise<LoadedGfxFileSet | null> {
         // Return cached file set if available (module-level cache persists across HMR)
         if (globalFileSetCache.has(fileId)) {
-            return globalFileSetCache.get(fileId)!;
+            return globalFileSetCache.get(fileId)!; // OK: has() check above guarantees entry exists
         }
 
         // Check for .pil or .pi4 palette index format

@@ -71,16 +71,6 @@ export {
 } from './pathfinding';
 
 // ============================================================================
-// Animation
-// ============================================================================
-export {
-    DEFAULT_ANIMATION_DIRECTION,
-    type AnimationDataProvider,
-    getAnimatedSprite,
-    getAnimatedSpriteForDirection,
-} from './animation';
-
-// ============================================================================
 // Map Objects
 // ============================================================================
 export {
@@ -92,11 +82,6 @@ export {
     clearMapObjects,
     countMapObjectsByCategory,
 } from './map-objects';
-
-// ============================================================================
-// Tree Expansion
-// ============================================================================
-export { type ExpandTreesOptions, expandTrees } from '../features/trees/tree-expansion';
 
 // ============================================================================
 // Map Resources

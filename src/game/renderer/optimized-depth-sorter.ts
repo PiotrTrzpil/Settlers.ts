@@ -21,7 +21,7 @@ import {
     DEPTH_FACTOR_BUILDING,
     DEPTH_FACTOR_MAP_OBJECT,
     DEPTH_FACTOR_UNIT,
-    DEPTH_FACTOR_RESOURCE,
+    DEPTH_FACTOR_PILE,
     FLAT_TREE_DEPTH_BIAS,
 } from './entity-renderer-constants';
 
@@ -195,8 +195,8 @@ export class OptimizedDepthSorter {
             return DEPTH_FACTOR_MAP_OBJECT;
         case EntityType.Unit:
             return DEPTH_FACTOR_UNIT;
-        case EntityType.StackedResource:
-            return DEPTH_FACTOR_RESOURCE;
+        case EntityType.StackedPile:
+            return DEPTH_FACTOR_PILE;
         case EntityType.Decoration:
             return DEPTH_FACTOR_BUILDING;
         case EntityType.None:
@@ -217,8 +217,8 @@ export class OptimizedDepthSorter {
             return spriteManager.getMapObject(entity.subType as MapObjectType);
         case EntityType.Unit:
             return spriteManager.getUnit(entity.subType as UnitType, 0, entity.race);
-        case EntityType.StackedResource:
-            return spriteManager.getResource(entity.subType as EMaterialType);
+        case EntityType.StackedPile:
+            return spriteManager.getGoodSprite(entity.subType as EMaterialType);
         case EntityType.Decoration:
         case EntityType.None:
             return null;

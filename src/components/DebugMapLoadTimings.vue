@@ -30,7 +30,7 @@
                 <StatRow label="Atlas Alloc" :value="`${slt.atlasAlloc} ms`" :depth="2" />
                 <StatRow label="Buildings" :value="`${slt.buildings} ms`" :depth="2" />
                 <StatRow label="Map Objects" :value="`${slt.mapObjects} ms`" :depth="2" />
-                <StatRow label="Resources" :value="`${slt.resources} ms`" :depth="2" />
+                <StatRow label="Resources" :value="`${slt.goods} ms`" :depth="2" />
                 <StatRow label="Units" :value="`${slt.units} ms`" :depth="2" />
                 <StatRow
                     v-for="(ms, name) in slt.unitsByRace"

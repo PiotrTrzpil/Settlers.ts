@@ -16,10 +16,12 @@ import type { TickSystem } from '../../tick-system';
 import { EntityType, UnitType, type Entity } from '../../entity';
 import { LogHandler } from '@/utilities/log-handler';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
+import { sortedEntries } from '@/utilities/collections';
 import { SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
 import { buildAllSettlerConfigs } from '../../settler-data-access';
 import type { EventBus } from '../../event-bus';
-import type { BuildingInventoryManager, InventoryVisualizer, BuildingPileRegistry } from '../inventory';
+import type { BuildingInventoryManager, BuildingPileRegistry } from '../inventory';
+import type { PileRegistry } from '../inventory/pile-registry';
 import type { CarrierManager } from '../carriers';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
@@ -30,7 +32,7 @@ import { UnitStateMachine, type UnitRuntime } from './unit-state-machine';
 import { JobChoreographyStore } from './job-choreography-store';
 import { BuildingPositionResolverImpl } from './building-position-resolver';
 import { JobPartResolverImpl } from './job-part-resolver';
-import { TriggerSystemImpl } from '../../systems/building-overlays/trigger-system';
+import { TriggerSystemImpl } from '../building-overlays/trigger-system';
 import { getGameDataLoader } from '@/resources/game-data';
 import type { ChoreoContext } from './choreo-types';
 import { createChoreoJobState } from './choreo-types';
@@ -40,11 +42,12 @@ import { getBuildingDoorPos } from '../../game-data-access';
 import { BuildingType } from '../../buildings/building-type';
 import { EMaterialType } from '../../economy';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
-import type { BuildingOverlayManager } from '../../systems/building-overlays/building-overlay-manager';
+import type { BuildingOverlayManager } from '../building-overlays/building-overlay-manager';
 import type { OreVeinData } from '../ore-veins/ore-vein-data';
 import type { ProductionControlManager } from '../production-control';
 import type { BarracksTrainingManager } from '../barracks';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
+import type { Command, CommandResult } from '../../commands';
 
 const log = new LogHandler('SettlerTaskSystem');
 
@@ -61,8 +64,8 @@ export interface SettlerTaskSystemConfig {
     inventoryManager: BuildingInventoryManager;
     carrierManager: CarrierManager;
     eventBus: EventBus;
-    /** Lazy getter — resolved on first use (breaks circular init dependency). */
-    getInventoryVisualizer: () => InventoryVisualizer;
+    /** Lazy getter — pile slot registry for live entity lookup. */
+    getPileSlotRegistry: () => PileRegistry | null;
     /** Lazy getter — pile registry may be set after construction (game data load). */
     getPileRegistry: () => BuildingPileRegistry | null;
     /** Work area store for resolving building work-center positions. */
@@ -75,6 +78,8 @@ export interface SettlerTaskSystemConfig {
     getBarracksTrainingManager?: () => BarracksTrainingManager;
     /** Construction site manager — used to filter out buildings still under construction. */
     constructionSiteManager: ConstructionSiteManager;
+    /** Command executor for entity creation/removal during simulation. */
+    executeCommand: (cmd: Command) => CommandResult;
 }
 
 /**
@@ -110,8 +115,6 @@ export class SettlerTaskSystem implements TickSystem {
         const handlerErrorLogger = new ThrottledLogger(log, 2000);
         const missingHandlerLogger = new ThrottledLogger(log, 5000);
 
-        // Build choreo context — inventoryVisualizer is resolved lazily
-        const getViz = config.getInventoryVisualizer;
         const jobPartResolver = new JobPartResolverImpl();
         const triggerSystem = new TriggerSystemImpl({
             overlayManager: config.buildingOverlayManager,
@@ -121,7 +124,7 @@ export class SettlerTaskSystem implements TickSystem {
 
         this.buildingPositionResolver = new BuildingPositionResolverImpl({
             gameState: this.gameState,
-            getInventoryVisualizer: getViz,
+            getPileSlotRegistry: config.getPileSlotRegistry,
             getPileRegistry: config.getPileRegistry,
             workAreaStore: config.workAreaStore,
         });
@@ -129,9 +132,6 @@ export class SettlerTaskSystem implements TickSystem {
         const choreoContext: ChoreoContext = {
             gameState: this.gameState,
             inventoryManager: this.inventoryManager,
-            get inventoryVisualizer() {
-                return getViz();
-            },
             carrierManager: config.carrierManager,
             eventBus: config.eventBus,
             handlerErrorLogger,
@@ -139,6 +139,7 @@ export class SettlerTaskSystem implements TickSystem {
             buildingPositionResolver: this.buildingPositionResolver,
             triggerSystem,
             getWorkerHomeBuilding: this.getAssignedBuilding.bind(this),
+            executeCommand: config.executeCommand,
             get barracksTrainingManager() {
                 return config.getBarracksTrainingManager?.();
             },
@@ -150,27 +151,27 @@ export class SettlerTaskSystem implements TickSystem {
         this.animController = new IdleAnimationController(config.visualService, this.gameState.rng);
 
         const constructionSiteManager = config.constructionSiteManager;
-        this.workerExecutor = new WorkerTaskExecutor(
-            this.gameState,
-            this.choreographyStore,
-            this.handlerRegistry,
-            this.animController,
+        this.workerExecutor = new WorkerTaskExecutor({
+            gameState: this.gameState,
+            choreographyStore: this.choreographyStore,
+            handlerRegistry: this.handlerRegistry,
+            animController: this.animController,
             choreoContext,
             handlerErrorLogger,
             missingHandlerLogger,
-            (buildingId: number) => !constructionSiteManager.hasSite(buildingId)
-        );
+            isBuildingAvailable: (buildingId: number) => !constructionSiteManager.hasSite(buildingId),
+        });
 
-        this.stateMachine = new UnitStateMachine(
-            this.gameState,
-            config.visualService,
-            this.settlerConfigs,
-            this.animController,
-            this.workerExecutor,
-            this.buildingOccupants,
-            this.claimBuilding.bind(this),
-            this.releaseBuilding.bind(this)
-        );
+        this.stateMachine = new UnitStateMachine({
+            gameState: this.gameState,
+            visualService: config.visualService,
+            settlerConfigs: this.settlerConfigs,
+            animController: this.animController,
+            workerExecutor: this.workerExecutor,
+            buildingOccupants: this.buildingOccupants,
+            claimBuilding: this.claimBuilding.bind(this),
+            releaseBuilding: this.releaseBuilding.bind(this),
+        });
 
         // Register built-in WORKPLACE handler for building workers
         this.handlerRegistry.register(
@@ -314,7 +315,9 @@ export class SettlerTaskSystem implements TickSystem {
     private releaseBuilding(runtime: UnitRuntime): void {
         if (!runtime.homeAssignment) return;
         const id = runtime.homeAssignment.buildingId;
-        const count = this.buildingOccupants.get(id) ?? 1;
+        const count = this.buildingOccupants.get(id);
+        if (count === undefined)
+            throw new Error(`No occupant count for building ${id} in SettlerTaskSystem.releaseBuilding`);
         if (count <= 1) {
             this.buildingOccupants.delete(id);
         } else {
@@ -506,7 +509,7 @@ export class SettlerTaskSystem implements TickSystem {
     /** Release and interrupt all workers assigned to a destroyed building so they return to idle. */
     private onBuildingRemoved(buildingId: number): void {
         this.buildingOccupants.delete(buildingId);
-        for (const [settlerId, runtime] of this.runtimes) {
+        for (const [settlerId, runtime] of sortedEntries(this.runtimes)) {
             if (runtime.homeAssignment?.buildingId !== buildingId) continue;
 
             runtime.homeAssignment = null;

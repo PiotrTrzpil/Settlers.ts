@@ -168,7 +168,7 @@ export class Game {
         console.log(`Game\tMap loaded: ${this.terrain.width}x${this.terrain.height} in ${mlt.gameConstructor}ms`);
     }
 
-    /** Load players, objects, buildings, settlers, and resource stacks from parsed map data. */
+    /** Load players, objects, buildings, settlers, and pile stacks from parsed map data. */
     private populateMapEntities(mapLoader: IMapLoader): void {
         const mlt = debugStats.state.mapLoadTimings;
         const entityData = mapLoader.entityData;
@@ -219,7 +219,7 @@ export class Game {
             const t0 = performance.now();
             const count = populateMapStacks(this.state, entityData.stacks);
             mlt.populateStacks = Math.round(performance.now() - t0);
-            if (count > 0) console.log(`Game: Loaded ${count} resource stacks from map data`);
+            if (count > 0) console.log(`Game: Loaded ${count} pile stacks from map data`);
         }
     }
 
@@ -269,6 +269,7 @@ export class Game {
             cropSystem: this.services.cropSystem,
             combatSystem: this.services.combatSystem,
             productionControlManager: this.services.productionControlManager,
+            storageFilterManager: this.services.storageFilterManager,
         };
     }
 
@@ -333,8 +334,8 @@ export class Game {
 
         // Determine which entity types to remove
         const typesToRemove = keepEnvironment
-            ? [EntityType.Unit, EntityType.Building, EntityType.StackedResource]
-            : [EntityType.Unit, EntityType.Building, EntityType.StackedResource, EntityType.MapObject];
+            ? [EntityType.Unit, EntityType.Building, EntityType.StackedPile]
+            : [EntityType.Unit, EntityType.Building, EntityType.StackedPile, EntityType.MapObject];
 
         // Collect entities to remove (snapshot IDs first to avoid mutation during iteration)
         const idsToRemove = this.state.entities.filter(e => typesToRemove.includes(e.type)).map(e => e.id);
@@ -344,9 +345,9 @@ export class Game {
             this.execute({ type: 'remove_entity', entityId: id });
         }
 
-        // Rebuild inventory visualizer to sync with new entity state
+        // Rebuild inventory pile sync to reconnect registry to pre-existing pile entities
         if (rebuildInventory) {
-            this.services.inventoryVisualizer.rebuildFromExistingEntities();
+            this.services.inventoryPileSync?.rebuildFromExistingEntities();
         }
 
         return idsToRemove.length;

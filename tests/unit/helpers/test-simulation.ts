@@ -117,6 +117,7 @@ export class Simulation {
             cropSystem: this.services.cropSystem,
             combatSystem: this.services.combatSystem,
             productionControlManager: this.services.productionControlManager,
+            storageFilterManager: this.services.storageFilterManager,
         });
 
         this.services = new GameServices(this.state, this.eventBus, cmd => executeCommand(this.cmdContext(), cmd));
@@ -205,7 +206,7 @@ export class Simulation {
     placeGoods(material: EMaterialType, amount: number): number {
         const pos = this.placer.next();
         const result = this.execute({
-            type: 'place_resource',
+            type: 'place_pile',
             materialType: material,
             amount,
             x: pos.x,
@@ -224,7 +225,7 @@ export class Simulation {
         if (tiles.length === 0) throw new Error(`No empty tile near building ${buildingId}`);
         const pos = tiles[0]!;
         const result = this.execute({
-            type: 'place_resource',
+            type: 'place_pile',
             materialType: material,
             amount,
             x: pos.x,
@@ -346,6 +347,8 @@ export class Simulation {
             y: pos.y,
             player: 0,
             race: Race.Roman,
+            completed: true,
+            spawnWorker: true,
         });
         if (!result.success) {
             throw new Error(

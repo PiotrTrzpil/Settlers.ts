@@ -9,11 +9,10 @@
 
 import type { TickSystem } from '../../tick-system';
 import type { GameState } from '../../game-state';
-import type { EventBus } from '../../event-bus';
 import type { TerrainData } from '../../terrain';
 import type { BuildingSpawnConfig } from './types';
-import { EntityType } from '../../entity';
 import { ringTiles } from '../../systems/spatial-search';
+import type { Command, CommandResult } from '../../commands';
 
 interface PendingSpawn {
     buildingEntityId: number;
@@ -22,16 +21,23 @@ interface PendingSpawn {
     timer: number;
 }
 
+export interface ResidenceSpawnerConfig {
+    gameState: GameState;
+    executeCommand: (cmd: Command) => CommandResult;
+}
+
 export class ResidenceSpawnerSystem implements TickSystem {
     private readonly pending: PendingSpawn[] = [];
+    private readonly gameState: GameState;
+    private readonly executeCommand: (cmd: Command) => CommandResult;
 
     /** When true, register() spawns all carriers immediately instead of queuing. */
     immediateMode = false;
 
-    constructor(
-        private readonly gameState: GameState,
-        private readonly eventBus: EventBus
-    ) {}
+    constructor(cfg: ResidenceSpawnerConfig) {
+        this.gameState = cfg.gameState;
+        this.executeCommand = cfg.executeCommand;
+    }
 
     /** Terrain reference — set when terrain is loaded */
     private terrain!: TerrainData;
@@ -90,24 +96,14 @@ export class ResidenceSpawnerSystem implements TickSystem {
                 if (!this.terrain.isPassable(tile.x, tile.y)) continue;
                 if (this.gameState.getEntityAt(tile.x, tile.y)) continue;
 
-                const spawnedEntity = this.gameState.addEntity(
-                    EntityType.Unit,
-                    config.unitType,
-                    tile.x,
-                    tile.y,
-                    building.player,
-                    config.selectable
-                );
-                spawnedEntity.race = building.race;
-
-                this.eventBus.emit('unit:spawned', {
-                    entityId: spawnedEntity.id,
+                this.executeCommand({
+                    type: 'spawn_unit',
                     unitType: config.unitType,
                     x: tile.x,
                     y: tile.y,
                     player: building.player,
+                    race: building.race,
                 });
-
                 return true;
             }
         }

@@ -21,6 +21,34 @@ import { BucketPriorityQueue } from './bucket-priority-queue';
 import { smoothPath } from './path-smoothing';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// REUSABLE BUFFERS (avoid per-call TypedArray allocation)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Module-level buffers reused across all findPathAStar calls.
+ * JavaScript is single-threaded so this is safe. Each call reset via fill()
+ * which is an order of magnitude cheaper than allocation + GC.
+ */
+let _bufferSize = 0;
+let _gCost = new Float32Array(0);
+let _parent = new Int32Array(0);
+let _flags = new Uint8Array(0);
+const _openQueue = new BucketPriorityQueue();
+
+function prepareBuffers(totalTiles: number): void {
+    if (totalTiles > _bufferSize) {
+        _gCost = new Float32Array(totalTiles);
+        _parent = new Int32Array(totalTiles);
+        _flags = new Uint8Array(totalTiles);
+        _bufferSize = totalTiles;
+    }
+    _gCost.fill(Infinity, 0, totalTiles);
+    _parent.fill(-1, 0, totalTiles);
+    _flags.fill(0, 0, totalTiles);
+    _openQueue.clear();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -222,16 +250,13 @@ export function findPathAStar(
         return null;
     }
 
-    // Initialize search data structures
+    // Prepare reusable buffers (fill-reset is far cheaper than per-call allocation)
     const totalTiles = mapWidth * mapHeight;
-    const gCost = new Float32Array(totalTiles);
-    gCost.fill(Infinity);
-
-    const parent = new Int32Array(totalTiles);
-    parent.fill(-1);
-
-    const flags = new Uint8Array(totalTiles);
-    const openQueue = new BucketPriorityQueue();
+    prepareBuffers(totalTiles);
+    const gCost = _gCost;
+    const parent = _parent;
+    const flags = _flags;
+    const openQueue = _openQueue;
 
     const ctx: SearchContext = {
         terrain,

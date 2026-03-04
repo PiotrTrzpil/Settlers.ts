@@ -353,7 +353,9 @@ export class ConstructionSiteManager {
     serializeSites(): SerializedConstructionSite[] {
         const result: SerializedConstructionSite[] = [];
         for (const id of this.getAllSiteIds()) {
-            const site = this.sites.get(id)!;
+            const site = this.sites.get(id);
+            if (!site)
+                throw new Error(`No construction site for building ${id} in ConstructionSiteManager.serializeSites`);
             result.push({
                 buildingId: site.buildingId,
                 buildingType: site.buildingType,

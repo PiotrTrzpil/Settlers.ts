@@ -40,3 +40,6 @@ export { BuildingOverlayManager, type BuildingOverlayManagerConfig } from './bui
 
 // Data loader
 export { populateOverlayRegistry } from './overlay-data-loader';
+
+// Feature definition
+export { BuildingOverlayFeature, type BuildingOverlayFeatureExports } from './building-overlay-feature';

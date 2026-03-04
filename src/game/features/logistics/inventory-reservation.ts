@@ -61,15 +61,11 @@ export class InventoryReservationManager {
     /** Next reservation ID */
     private nextId = 1;
 
-    /** Reference to inventory manager for slot-level enforcement (required) */
-    private inventoryManager!: BuildingInventoryManager;
+    /** Reference to inventory manager for slot-level enforcement */
+    private readonly inventoryManager: BuildingInventoryManager;
 
-    /**
-     * Set the inventory manager for slot-level reservation enforcement.
-     * MUST be called before creating reservations - will crash if not set.
-     */
-    setInventoryManager(manager: BuildingInventoryManager): void {
-        this.inventoryManager = manager;
+    constructor(inventoryManager: BuildingInventoryManager) {
+        this.inventoryManager = inventoryManager;
     }
 
     /**

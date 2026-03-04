@@ -49,7 +49,7 @@ export class MaterialRequestSystem implements TickSystem {
             if (entity.type !== EntityType.Building) continue;
 
             const buildingType = entity.subType as BuildingType;
-            const config = getInventoryConfig(buildingType);
+            const config = getInventoryConfig(buildingType, entity.race);
 
             // Skip buildings with no input slots
             if (config.inputSlots.length === 0) continue;

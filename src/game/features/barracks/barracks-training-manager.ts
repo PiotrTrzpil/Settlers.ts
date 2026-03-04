@@ -28,6 +28,7 @@ import {
 import { getTrainingRecipeSet, getTrainingRecipes } from './training-recipes';
 import type { TrainingRecipe, BarracksTrainingState } from './types';
 import { LogHandler } from '@/utilities/log-handler';
+import { sortedEntries } from '@/utilities/collections';
 
 const log = new LogHandler('BarracksTraining');
 
@@ -131,7 +132,7 @@ export class BarracksTrainingManager {
 
     private tryStartTraining(buildingId: number): void {
         const race = this.barracksRaces.get(buildingId);
-        if (!race) return;
+        if (!race) throw new Error(`No race for barracks ${buildingId} in BarracksTrainingManager`);
 
         // 1. Peek at the next recipe WITHOUT consuming it from the queue
         const recipeIndex = this.pcm.peekNextRecipeIndex(buildingId);
@@ -237,7 +238,7 @@ export class BarracksTrainingManager {
      * which recipe to apply when the carrier completes training.
      */
     getTrainingForCarrier(carrierId: number): { buildingId: number; recipe: TrainingRecipe } | undefined {
-        for (const [buildingId, state] of this.activeTrainings) {
+        for (const [buildingId, state] of sortedEntries(this.activeTrainings)) {
             if (state.carrierId === carrierId) {
                 return { buildingId, recipe: state.recipe };
             }

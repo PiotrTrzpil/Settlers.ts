@@ -3,7 +3,7 @@
  * Maps S4SettlerType to internal UnitType and creates unit entities with correct race.
  */
 
-import { EntityType, getUnitLevel } from '../entity';
+import { getUnitLevel } from '../entity';
 import { Race } from '../race';
 import { GameState } from '../game-state';
 import { S4_TO_UNIT_TYPE } from '../game-data-access';
@@ -48,14 +48,13 @@ export function populateMapSettlers(
             continue;
         }
 
-        const entity = state.addEntity(EntityType.Unit, unitType, settlerData.x, settlerData.y, settlerData.player);
         const race = options.playerRaces?.get(settlerData.player);
         if (race === undefined) {
             throw new Error(
                 `No race mapping for player ${settlerData.player} — playerRaces must be populated before spawning settlers`
             );
         }
-        entity.race = race;
+        const entity = state.addUnit(unitType, settlerData.x, settlerData.y, settlerData.player, race);
         entity.level = getUnitLevel(unitType);
 
         created++;

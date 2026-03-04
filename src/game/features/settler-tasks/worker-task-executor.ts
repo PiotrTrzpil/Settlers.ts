@@ -45,20 +45,38 @@ export interface WorkerRuntimeState {
 /** Building occupancy map (read-only view for finding workplaces). */
 export type OccupancyMap = ReadonlyMap<number, number>;
 
+export interface WorkerTaskExecutorConfig {
+    gameState: GameState;
+    choreographyStore: JobChoreographyStore;
+    handlerRegistry: WorkHandlerRegistry;
+    animController: IdleAnimationController;
+    choreoContext: ChoreoContext;
+    handlerErrorLogger: ThrottledLogger;
+    missingHandlerLogger: ThrottledLogger;
+    isBuildingAvailable?: (buildingId: number) => boolean;
+}
+
 export class WorkerTaskExecutor {
+    private readonly gameState: GameState;
+    private readonly choreographyStore: JobChoreographyStore;
+    private readonly handlerRegistry: WorkHandlerRegistry;
+    private readonly animController: IdleAnimationController;
+    private readonly choreoContext: ChoreoContext;
+    private readonly handlerErrorLogger: ThrottledLogger;
+    private readonly missingHandlerLogger: ThrottledLogger;
+    private readonly isBuildingAvailable?: (buildingId: number) => boolean;
     private readonly jobSelector: JobSelector;
 
-    constructor(
-        private readonly gameState: GameState,
-        private readonly choreographyStore: JobChoreographyStore,
-        private readonly handlerRegistry: WorkHandlerRegistry,
-        private readonly animController: IdleAnimationController,
-        private readonly choreoContext: ChoreoContext,
-        private readonly handlerErrorLogger: ThrottledLogger,
-        private readonly missingHandlerLogger: ThrottledLogger,
-        private readonly isBuildingAvailable?: (buildingId: number) => boolean
-    ) {
-        this.jobSelector = new JobSelector(choreographyStore);
+    constructor(cfg: WorkerTaskExecutorConfig) {
+        this.gameState = cfg.gameState;
+        this.choreographyStore = cfg.choreographyStore;
+        this.handlerRegistry = cfg.handlerRegistry;
+        this.animController = cfg.animController;
+        this.choreoContext = cfg.choreoContext;
+        this.handlerErrorLogger = cfg.handlerErrorLogger;
+        this.missingHandlerLogger = cfg.missingHandlerLogger;
+        this.isBuildingAvailable = cfg.isBuildingAvailable;
+        this.jobSelector = new JobSelector(cfg.choreographyStore);
     }
 
     /**
@@ -243,10 +261,10 @@ export class WorkerTaskExecutor {
     private advanceToNextNode(settler: Entity, job: ChoreoJobState, nodes: readonly ChoreoNode[]): void {
         // Stop active trigger when leaving a node
         if (job.activeTrigger) {
-            this.choreoContext.triggerSystem.stopTrigger(
-                this.choreoContext.getWorkerHomeBuilding(settler.id) ?? 0,
-                job.activeTrigger
-            );
+            const buildingId = this.choreoContext.getWorkerHomeBuilding(settler.id);
+            if (buildingId !== null) {
+                this.choreoContext.triggerSystem.stopTrigger(buildingId, job.activeTrigger);
+            }
             job.activeTrigger = '';
         }
         job.nodeIndex++;

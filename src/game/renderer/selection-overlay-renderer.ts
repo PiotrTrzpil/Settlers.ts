@@ -12,7 +12,7 @@ import {
     MAX_PATH_DOTS,
     BUILDING_SCALE,
     UNIT_SCALE,
-    RESOURCE_SCALE,
+    PILE_SCALE,
     PATH_DOT_SCALE,
     FRAME_PADDING,
     FRAME_THICKNESS,
@@ -600,7 +600,7 @@ export class SelectionOverlayRenderer {
      */
     private getEntityScale(entityType: EntityType): number {
         if (entityType === EntityType.Building) return BUILDING_SCALE;
-        if (entityType === EntityType.StackedResource) return RESOURCE_SCALE;
+        if (entityType === EntityType.StackedPile) return PILE_SCALE;
         return UNIT_SCALE;
     }
 

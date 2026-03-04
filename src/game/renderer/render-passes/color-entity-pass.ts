@@ -16,7 +16,7 @@ import {
     BASE_QUAD,
     BUILDING_SCALE,
     UNIT_SCALE,
-    RESOURCE_SCALE,
+    PILE_SCALE,
     decoHueToRgb,
     decoTypeToHue,
 } from '../entity-renderer-constants';
@@ -92,7 +92,7 @@ export class ColorEntityPass implements IRenderPass {
 
     private getEntityScale(entityType: EntityType): number {
         if (entityType === EntityType.Building) return BUILDING_SCALE;
-        if (entityType === EntityType.StackedResource) return RESOURCE_SCALE;
+        if (entityType === EntityType.StackedPile) return PILE_SCALE;
         return UNIT_SCALE;
     }
 

@@ -98,7 +98,7 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
         // For now, count stacks on the map
         let count = 0;
         for (const entity of context.gameState.entities) {
-            if (entity.type === EntityType.StackedResource && entity.subType === goodType && entity.player === player) {
+            if (entity.type === EntityType.StackedPile && entity.subType === goodType && entity.player === player) {
                 // Stack entity - count would be stored in entity data
                 count++;
             }
@@ -132,11 +132,7 @@ export function registerGoodsAPI(runtime: LuaRuntime, context: GoodsAPIContext):
     // Goods.GetStackAt(x, y) - Get goods info at position
     runtime.registerFunction('Goods', 'GetStackAt', (x: number, y: number) => {
         for (const entity of context.gameState.entities) {
-            if (
-                entity.type === EntityType.StackedResource &&
-                Math.floor(entity.x) === x &&
-                Math.floor(entity.y) === y
-            ) {
+            if (entity.type === EntityType.StackedPile && Math.floor(entity.x) === x && Math.floor(entity.y) === y) {
                 return {
                     type: entity.subType,
                     amount: 1, // TODO: Get actual amount from stack data

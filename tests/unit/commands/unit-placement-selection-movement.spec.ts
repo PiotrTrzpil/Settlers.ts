@@ -41,8 +41,9 @@ describe('Unit Placement, Selection & Movement', () => {
                 return true;
             },
             getEntity: id => state.getEntity(id),
+            tileOccupancy: state.tileOccupancy,
+            buildingOccupancy: state.buildingOccupancy,
         });
-        movement.setTileOccupancy(state.tileOccupancy, state.buildingOccupancy);
         state.initMovement(movement);
 
         // Wire entity lifecycle events (movement controllers, resource state)
@@ -50,13 +51,13 @@ describe('Unit Placement, Selection & Movement', () => {
             if (type === EntityType.Unit) {
                 const speed = getUnitTypeSpeed(subType as UnitType);
                 movement.createController(entityId, x, y, speed);
-            } else if (type === EntityType.StackedResource) {
-                state.resources.createState(entityId);
+            } else if (type === EntityType.StackedPile) {
+                state.piles.createState(entityId);
             }
         });
         eventBus.on('entity:removed', ({ entityId }) => {
             movement.removeController(entityId);
-            state.resources.removeState(entityId);
+            state.piles.removeState(entityId);
         });
 
         const constructionSiteManager = new ConstructionSiteManager(eventBus);
@@ -66,7 +67,24 @@ describe('Unit Placement, Selection & Movement', () => {
         const terrain = new TerrainData(groundType, groundHeight, mapSize);
         const settingsManager = new GameSettingsManager();
         settingsManager.resetToDefaults();
-        ctx = { state, terrain, eventBus, settings: settingsManager.state, constructionSiteManager };
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        ctx = {
+            state,
+            terrain,
+            eventBus,
+            settings: settingsManager.state,
+            constructionSiteManager,
+            // Stubs — these fields are required by CommandContext but not exercised in this test file.
+            settlerTaskSystem: {
+                assignMoveTask: (id: number, x: number, y: number) => state.movement.moveUnit(id, x, y),
+            } as any,
+            combatSystem: { releaseFromCombat: () => {} } as any,
+            treeSystem: undefined as any,
+            cropSystem: undefined as any,
+            productionControlManager: undefined as any,
+            storageFilterManager: undefined as any,
+        };
+        /* eslint-enable @typescript-eslint/no-explicit-any */
     });
 
     // ── Unit Placement (spawn_unit) ────────────────────────────────────

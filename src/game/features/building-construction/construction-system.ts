@@ -31,6 +31,7 @@ import type { ResidenceSpawnerSystem } from './residence-spawner';
  */
 export interface BuildingConstructionSystemConfig {
     gameState: GameState;
+    eventBus: EventBus;
     constructionSiteManager: ConstructionSiteManager;
     executeCommand: (cmd: Command) => CommandResult;
 }
@@ -45,7 +46,7 @@ export class BuildingConstructionSystem implements TickSystem {
     private readonly constructionSiteManager: ConstructionSiteManager;
     private readonly executeCommand: (cmd: Command) => CommandResult;
     private terrainContext: TerrainContext | undefined; // OK: optional, set via setter
-    private eventBus!: EventBus; // MUST be set via registerEvents
+    private readonly eventBus: EventBus;
     private residenceSpawner: ResidenceSpawnerSystem | null = null;
 
     /** Remaining time (seconds) for buildings in CompletedRising phase */
@@ -56,6 +57,7 @@ export class BuildingConstructionSystem implements TickSystem {
 
     constructor(config: BuildingConstructionSystemConfig) {
         this.state = config.gameState;
+        this.eventBus = config.eventBus;
         this.constructionSiteManager = config.constructionSiteManager;
         this.executeCommand = config.executeCommand;
     }
@@ -71,16 +73,16 @@ export class BuildingConstructionSystem implements TickSystem {
     }
 
     /** Register event handlers with the event bus */
-    registerEvents(eventBus: EventBus): void {
-        this.eventBus = eventBus;
-
-        this.subscriptions.subscribe(eventBus, 'building:removed', ({ entityId }) => this.onBuildingRemoved(entityId));
+    registerEvents(): void {
+        this.subscriptions.subscribe(this.eventBus, 'building:removed', ({ entityId }) =>
+            this.onBuildingRemoved(entityId)
+        );
 
         // Listen for building:completed to spawn units.
         // Always execute spawn_building_units (handles construction workers + dedicated workers).
         // Additionally, register interval-based carrier spawning for residences.
         this.subscriptions.subscribe(
-            eventBus,
+            this.eventBus,
             'building:completed',
             ({ entityId, buildingType, placedCompleted, spawnWorker }) => {
                 this.executeCommand({
@@ -97,7 +99,7 @@ export class BuildingConstructionSystem implements TickSystem {
         );
 
         // construction:diggingStarted → TerrainLeveling (capture terrain if needed)
-        this.subscriptions.subscribe(eventBus, 'construction:diggingStarted', ({ buildingId }) => {
+        this.subscriptions.subscribe(this.eventBus, 'construction:diggingStarted', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
             site.phase = BuildingConstructionPhase.TerrainLeveling;
@@ -108,7 +110,7 @@ export class BuildingConstructionSystem implements TickSystem {
         });
 
         // construction:levelingComplete → WaitingForBuilders (finalize terrain at 1.0)
-        this.subscriptions.subscribe(eventBus, 'construction:levelingComplete', ({ buildingId }) => {
+        this.subscriptions.subscribe(this.eventBus, 'construction:levelingComplete', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
             site.phase = BuildingConstructionPhase.WaitingForBuilders;
@@ -125,14 +127,14 @@ export class BuildingConstructionSystem implements TickSystem {
         });
 
         // construction:buildingStarted → ConstructionRising
-        this.subscriptions.subscribe(eventBus, 'construction:buildingStarted', ({ buildingId }) => {
+        this.subscriptions.subscribe(this.eventBus, 'construction:buildingStarted', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
             site.phase = BuildingConstructionPhase.ConstructionRising;
         });
 
         // construction:progressComplete → CompletedRising (start countdown timer)
-        this.subscriptions.subscribe(eventBus, 'construction:progressComplete', ({ buildingId }) => {
+        this.subscriptions.subscribe(this.eventBus, 'construction:progressComplete', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
             site.phase = BuildingConstructionPhase.CompletedRising;

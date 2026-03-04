@@ -146,17 +146,18 @@ export function getConstructionCosts(buildingType: BuildingType, race: Race): re
     return buildingInfoToCosts(info);
 }
 
-/** All building types that have construction costs defined in XML game data. */
+/** All building types that have construction costs defined in XML game data (for any race). */
 export function getBuildingTypesWithCosts(): BuildingType[] {
     const result: BuildingType[] = [];
     for (const val of Object.values(BuildingType)) {
         if (typeof val !== 'number') continue;
         const bt = val as BuildingType;
         if (!hasBuildingXmlMapping(bt)) continue;
-        const info = getBuildingInfo(Race.Roman, bt);
-        if (info && (info.stone > 0 || info.boards > 0 || info.gold > 0)) {
-            result.push(bt);
-        }
+        const hasCosts = AVAILABLE_RACES.some(race => {
+            const info = getBuildingInfo(race, bt);
+            return info && (info.stone > 0 || info.boards > 0 || info.gold > 0);
+        });
+        if (hasCosts) result.push(bt);
     }
     return result;
 }

@@ -3,6 +3,7 @@ import { MapObjectType } from '@/game/types/map-object-types';
 import { ProductionMode } from '../features/production-control';
 import type { Race } from '../race';
 import type { EMaterialType } from '../economy/material-type';
+import type { PileKind } from '../features/inventory/pile-kind';
 
 /**
  * Formation offsets for multi-unit movement commands.
@@ -52,8 +53,8 @@ export interface PlaceBuildingCommand {
     completed?: boolean;
 }
 
-export interface PlaceResourceCommand {
-    type: 'place_resource';
+export interface PlacePileCommand {
+    type: 'place_pile';
     materialType: number; // EMaterialType
     amount: number;
     x: number;
@@ -94,15 +95,36 @@ export interface MoveSelectedUnitsCommand {
 
 // === System Commands (internal, not player-initiated) ===
 
-export interface SpawnVisualResourceCommand {
-    type: 'spawn_visual_resource';
+export interface SpawnPileCommand {
+    type: 'spawn_pile';
     materialType: EMaterialType;
     x: number;
     y: number;
     player: number;
     quantity: number;
-    /** If set, marks the resource as reserved for this building */
-    buildingId?: number;
+    kind: PileKind;
+}
+
+export interface SpawnMapObjectCommand {
+    type: 'spawn_map_object';
+    objectType: MapObjectType;
+    x: number;
+    y: number;
+    /** Optional sprite variation override */
+    variation?: number;
+}
+
+export interface UpdatePileQuantityCommand {
+    type: 'update_pile_quantity';
+    entityId: number;
+    quantity: number;
+}
+
+export interface SetStorageFilterCommand {
+    type: 'set_storage_filter';
+    buildingId: number;
+    material: EMaterialType;
+    allowed: boolean;
 }
 
 export interface SpawnBuildingUnitsCommand {
@@ -231,7 +253,7 @@ export interface SelectAreaCommand {
  */
 export type Command =
     | PlaceBuildingCommand
-    | PlaceResourceCommand
+    | PlacePileCommand
     | SpawnUnitCommand
     | MoveUnitCommand
     | SelectCommand
@@ -240,7 +262,10 @@ export type Command =
     | SelectAreaCommand
     | MoveSelectedUnitsCommand
     | RemoveEntityCommand
-    | SpawnVisualResourceCommand
+    | SpawnPileCommand
+    | SpawnMapObjectCommand
+    | UpdatePileQuantityCommand
+    | SetStorageFilterCommand
     | SpawnBuildingUnitsCommand
     | PlantTreeCommand
     | PlantCropCommand
@@ -313,8 +338,8 @@ export function isBuildingCommand(cmd: Command): cmd is PlaceBuildingCommand | R
 /**
  * Type guard for resource-related commands.
  */
-export function isResourceCommand(cmd: Command): cmd is PlaceResourceCommand {
-    return cmd.type === 'place_resource';
+export function isPileCommand(cmd: Command): cmd is PlacePileCommand {
+    return cmd.type === 'place_pile';
 }
 
 /**

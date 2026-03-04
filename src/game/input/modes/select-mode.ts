@@ -1,7 +1,6 @@
 import { BaseInputMode, HANDLED, UNHANDLED, type InputContext, type InputResult } from '../input-mode';
 import { InputAction, MouseButton, type PointerData, type DragData } from '../input-actions';
 import { CursorType, type ModeRenderState, type SelectionBox } from '../render-state';
-import { Race } from '../../race';
 
 /**
  * Select mode - default mode for selecting entities and issuing commands.
@@ -37,14 +36,15 @@ export class SelectMode extends BaseInputMode {
 
         case InputAction.SpawnCarrier: {
             const tile = context.currentTile;
-            if (tile) {
+            const race = context.localPlayerRace;
+            if (tile && race !== null) {
                 context.executeCommand({
                     type: 'spawn_unit',
                     unitType: 0, // Carrier
                     x: tile.x,
                     y: tile.y,
                     player: 0,
-                    race: Race.Roman,
+                    race,
                 });
             }
             return HANDLED;
@@ -52,14 +52,15 @@ export class SelectMode extends BaseInputMode {
 
         case InputAction.SpawnSwordsman: {
             const tile = context.currentTile;
-            if (tile) {
+            const race = context.localPlayerRace;
+            if (tile && race !== null) {
                 context.executeCommand({
                     type: 'spawn_unit',
                     unitType: 2, // Swordsman
                     x: tile.x,
                     y: tile.y,
                     player: 0,
-                    race: Race.Roman,
+                    race,
                 });
             }
             return HANDLED;

@@ -39,7 +39,6 @@ export {
     type BuildingSpriteInfo,
     BUILDING_JOB_INDICES,
     BUILDING_OVERLAY_JIL_INDICES,
-    BUILDING_SPRITE_MAP,
     type BuildingSpriteEntries,
     getBuildingSpriteMap,
 
@@ -63,7 +62,7 @@ export {
     RESOURCE_JOB_INDICES,
     CARRIER_MATERIAL_JOB_INDICES,
     type ResourceSpriteInfo,
-    getResourceSpriteMap,
+    getGoodSpriteMap as getResourceSpriteMap,
 
     // Tree/MapObject data
     TREE_JOB_OFFSET,

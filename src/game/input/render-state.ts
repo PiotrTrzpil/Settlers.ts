@@ -5,7 +5,7 @@ import type { Race } from '../race';
  * Supported placement entity types.
  * Extend this union when adding new placeable entity types.
  */
-export type PlacementEntityType = 'building' | 'resource' | 'unit';
+export type PlacementEntityType = 'building' | 'pile' | 'unit';
 
 /**
  * Cursor types for different interaction states.
@@ -60,10 +60,10 @@ export interface BuildingPreview {
 
 /**
  * Resource placement preview data.
- * @deprecated Use PlacementPreview with entityType='resource' instead
+ * @deprecated Use PlacementPreview with entityType='pile' instead
  */
 export interface ResourcePreview {
-    type: 'resource';
+    type: 'pile';
     /** Material type being placed */
     materialType: import('../economy').EMaterialType;
     /** X position */

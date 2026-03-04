@@ -10,5 +10,5 @@
 export { loadGilManifest, loadGilSpriteBatch } from './gil-manifest-loader';
 export { loadBuildingSprites, collectBuildingFileNumbers } from './building-sprite-loader';
 export { loadMapObjectSprites } from './map-objects-sprite-loader';
-export { loadResourceSprites } from './resource-sprite-loader';
+export { loadGoodSprites } from './good-sprite-loader';
 export { loadOverlaySprites } from './overlay-sprite-loader';

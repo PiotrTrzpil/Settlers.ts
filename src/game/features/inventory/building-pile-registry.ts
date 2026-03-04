@@ -15,11 +15,12 @@ import { BuildingType } from '../../buildings/building-type';
 import type { GameData, BuildingInfo } from '@/resources/game-data';
 import { PileSlotType } from '@/resources/game-data';
 import { getBuildingTypesByXmlId, raceIdToRace, xmlGoodToMaterialType } from '../../game-data-access';
+import { SlotKind } from './pile-kind';
 
 /** A single pile slot with hotspot-adjusted offsets */
 export interface PileSlot {
     material: EMaterialType;
-    slotType: 'input' | 'output';
+    slotType: SlotKind.Input | SlotKind.Output;
     /** Tile offset from building anchor (already hotspot-adjusted) */
     dx: number;
     dy: number;
@@ -53,12 +54,12 @@ export class BuildingPileRegistry {
 
     /** Get pile slots filtered to inputs only */
     getInputSlots(buildingType: BuildingType, race: Race): readonly PileSlot[] {
-        return this.getPileSlots(buildingType, race).filter(s => s.slotType === 'input');
+        return this.getPileSlots(buildingType, race).filter(s => s.slotType === SlotKind.Input);
     }
 
     /** Get pile slots filtered to outputs only */
     getOutputSlots(buildingType: BuildingType, race: Race): readonly PileSlot[] {
-        return this.getPileSlots(buildingType, race).filter(s => s.slotType === 'output');
+        return this.getPileSlots(buildingType, race).filter(s => s.slotType === SlotKind.Output);
     }
 
     /** Whether this building type has storage piles (bidirectional, material-agnostic) */
@@ -100,7 +101,7 @@ export class BuildingPileRegistry {
     getPilePositionForSlot(
         buildingType: BuildingType,
         race: Race,
-        slotType: 'input' | 'output',
+        slotType: SlotKind.Input | SlotKind.Output,
         material: EMaterialType,
         buildingX: number,
         buildingY: number
@@ -150,7 +151,7 @@ export class BuildingPileRegistry {
                 continue;
             }
 
-            const slotType = pile.type === PileSlotType.Output ? 'output' : 'input';
+            const slotType = pile.type === PileSlotType.Output ? SlotKind.Output : SlotKind.Input;
 
             const material = xmlGoodToMaterialType(pile.good);
             if (material === undefined) continue;

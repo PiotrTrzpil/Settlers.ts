@@ -6,6 +6,9 @@ import { BlockedStateHandler } from './blocked-state-handler';
 import type { TickSystem } from '../../tick-system';
 import type { EventBus } from '../../event-bus';
 import type { SeededRng } from '../../rng';
+import { LogHandler } from '@/utilities/log-handler';
+
+const log = new LogHandler('MovementSystem');
 
 /**
  * Callback for updating entity position in the game state.
@@ -26,6 +29,8 @@ export interface MovementSystemConfig {
     rng: SeededRng;
     updatePosition: UpdatePositionFn;
     getEntity: GetEntityFn;
+    tileOccupancy: Map<string, number>;
+    buildingOccupancy: Set<string>;
 }
 
 /**
@@ -44,16 +49,16 @@ export class MovementSystem implements TickSystem {
     private controllers: Map<number, MovementController> = new Map();
 
     // Terrain and occupancy references (also forwarded to sub-services)
-    private tileOccupancy?: Map<string, number>;
-    private buildingOccupancy?: Set<string>;
+    private readonly tileOccupancy: Map<string, number>;
+    private readonly buildingOccupancy: Set<string>;
 
     // Event bus for notifying other systems of movement changes
     private readonly eventBus: EventBus;
 
     // Pathfinding, collision, and blocked-state sub-services
     private readonly pathfinder: PathfindingService;
-    private collisionResolver?: CollisionResolver;
-    private blockedStateHandler?: BlockedStateHandler;
+    private readonly collisionResolver: CollisionResolver;
+    private readonly blockedStateHandler: BlockedStateHandler;
 
     // Cached callbacks
     private readonly updatePositionFn: UpdatePositionFn;
@@ -70,7 +75,21 @@ export class MovementSystem implements TickSystem {
         this.rng = config.rng;
         this.updatePositionFn = config.updatePosition;
         this.getEntityFn = config.getEntity;
+        this.tileOccupancy = config.tileOccupancy;
+        this.buildingOccupancy = config.buildingOccupancy;
         this.pathfinder = new PathfindingService();
+        this.pathfinder.setOccupancy(config.tileOccupancy);
+        this.pathfinder.setBuildingOccupancy(config.buildingOccupancy);
+        this.collisionResolver = new CollisionResolver({
+            pathfinder: this.pathfinder,
+            rng: this.rng,
+            tileOccupancy: config.tileOccupancy,
+            buildingOccupancy: config.buildingOccupancy,
+            getEntity: this.getEntityFn,
+            updatePosition: this.updatePositionFn,
+            getController: this.controllers.get.bind(this.controllers),
+        });
+        this.blockedStateHandler = new BlockedStateHandler(this.pathfinder);
     }
 
     // -------------------------------------------------------------------------
@@ -82,36 +101,7 @@ export class MovementSystem implements TickSystem {
      */
     setTerrainData(groundType: Uint8Array, groundHeight: Uint8Array, mapWidth: number, mapHeight: number): void {
         this.pathfinder.setTerrainData(groundType, groundHeight, mapWidth, mapHeight);
-        this.collisionResolver?.setTerrainData(groundType, mapWidth, mapHeight);
-    }
-
-    /**
-     * Set the tile occupancy map for collision detection.
-     * Must be called before any movement updates occur.
-     */
-    setTileOccupancy(occupancy: Map<string, number>, buildingOccupancy: Set<string>): void {
-        this.tileOccupancy = occupancy;
-        this.buildingOccupancy = buildingOccupancy;
-        this.pathfinder.setOccupancy(occupancy);
-        this.pathfinder.setBuildingOccupancy(buildingOccupancy);
-        this.rebuildSubServices();
-    }
-
-    /** (Re)build CollisionResolver and BlockedStateHandler after occupancy is available. */
-    private rebuildSubServices(): void {
-        if (!this.tileOccupancy || !this.buildingOccupancy) return;
-
-        this.collisionResolver = new CollisionResolver({
-            pathfinder: this.pathfinder,
-            rng: this.rng,
-            tileOccupancy: this.tileOccupancy,
-            buildingOccupancy: this.buildingOccupancy,
-            getEntity: this.getEntityFn,
-            updatePosition: this.updatePositionFn,
-            getController: this.controllers.get.bind(this.controllers),
-        });
-
-        this.blockedStateHandler = new BlockedStateHandler(this.pathfinder);
+        this.collisionResolver.setTerrainData(groundType, mapWidth, mapHeight);
     }
 
     // -------------------------------------------------------------------------
@@ -207,7 +197,12 @@ export class MovementSystem implements TickSystem {
         for (const entityId of sortedIds) {
             const controller = this.controllers.get(entityId);
             if (controller) {
-                this.updateController(controller, deltaSec);
+                try {
+                    this.updateController(controller, deltaSec);
+                } catch (e) {
+                    const err = e instanceof Error ? e : new Error(String(e));
+                    log.error(`Unhandled error in movement tick for entity ${entityId}`, err);
+                }
             }
         }
     }
@@ -254,8 +249,6 @@ export class MovementSystem implements TickSystem {
      * Returns true when the unit should stop processing moves this tick.
      */
     private handleBlockedWaypoint(controller: MovementController, wp: TileCoord, deltaSec: number): boolean {
-        if (!this.tileOccupancy) return false;
-
         const key = tileKey(wp.x, wp.y);
         const blockingEntityId = this.tileOccupancy.get(key);
         if (blockingEntityId === undefined || blockingEntityId === controller.entityId) {
@@ -263,7 +256,7 @@ export class MovementSystem implements TickSystem {
         }
 
         // Building footprint tiles are impassable (door tiles excluded from buildingOccupancy).
-        if (this.buildingOccupancy?.has(key)) {
+        if (this.buildingOccupancy.has(key)) {
             return this.handleBuildingBlock(controller, deltaSec);
         }
 
@@ -278,13 +271,7 @@ export class MovementSystem implements TickSystem {
         if (escalated !== null) return escalated;
 
         // Normal collision resolution (detour, repair, push, yield, wait)
-        if (this.collisionResolver) {
-            return this.collisionResolver.resolveBlockedWaypoint(controller, wp, deltaSec);
-        }
-
-        // Fallback: no resolver available yet, just mark as blocked
-        controller.setBlocked(deltaSec);
-        return true;
+        return this.collisionResolver.resolveBlockedWaypoint(controller, wp, deltaSec);
     }
 
     /** Handle a building-footprint block, escalating through the blocked-state handler. */
@@ -300,7 +287,6 @@ export class MovementSystem implements TickSystem {
      * Returns true (stop) / false (continue) when escalation fires, null when not triggered.
      */
     private tryEscalate(controller: MovementController, deltaSec: number): boolean | null {
-        if (!this.blockedStateHandler) return null;
         const result = this.blockedStateHandler.handle(controller, deltaSec);
         if (result === 'gave-up') return true;
         if (result === 'escalated') return false;

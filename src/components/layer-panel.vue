@@ -68,10 +68,10 @@
                 />
             </div>
             <LayerCheckbox
-                v-model="visibility.resources"
+                v-model="visibility.piles"
                 label="Resources"
                 emoji="💎"
-                :count="props.counts?.resources"
+                :count="props.counts?.piles"
                 @update:modelValue="saveAndEmit()"
             />
             <LayerCheckbox

@@ -6,7 +6,7 @@
  */
 
 import type { IViewPoint } from '../i-view-point';
-import type { Entity, StackedResourceState } from '@/game/entity';
+import type { Entity, StackedPileState } from '@/game/entity';
 import type {
     UnitStateLookup,
     BuildingRenderState,
@@ -59,7 +59,7 @@ export interface PassContext {
     readonly entities: Entity[];
     readonly selectedEntityIds: Set<number>;
     readonly unitStates: UnitStateLookup;
-    readonly resourceStates: Map<number, StackedResourceState>;
+    readonly pileStates: Map<number, StackedPileState>;
 
     // Building state providers
     readonly getBuildingRenderState: (entityId: number) => BuildingRenderState;

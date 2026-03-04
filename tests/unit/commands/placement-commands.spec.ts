@@ -177,7 +177,7 @@ describe('Resource Placement Commands', () => {
         ctx = createTestContext();
     });
 
-    it('place_resource creates entity with correct attributes', () => {
+    it('place_pile creates entity with correct attributes', () => {
         const tile = findPassableTile(ctx.map);
         expect(tile).not.toBeNull();
 
@@ -185,22 +185,22 @@ describe('Resource Placement Commands', () => {
         const result = placeResource(ctx, tile!.x, tile!.y, EMaterialType.LOG, amount);
         expect(result.success).toBe(true);
 
-        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedResource);
+        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedPile);
         expect(resources.length).toBe(1);
 
         const resource = resources[0]!;
-        expect(resource.type).toBe(EntityType.StackedResource);
+        expect(resource.type).toBe(EntityType.StackedPile);
         expect(resource.subType).toBe(EMaterialType.LOG);
         expect(resource.x).toBe(tile!.x);
         expect(resource.y).toBe(tile!.y);
 
         // Verify amount stored in resource state
-        const resourceState = ctx.state.resources.states.get(resource.id);
+        const resourceState = ctx.state.piles.states.get(resource.id);
         expect(resourceState).toBeDefined();
         expect(resourceState!.quantity).toBe(amount);
     });
 
-    it('place_resource with different material types', () => {
+    it('place_pile with different material types', () => {
         const tile = findPassableTile(ctx.map);
         expect(tile).not.toBeNull();
 
@@ -208,9 +208,9 @@ describe('Resource Placement Commands', () => {
         const result = placeResource(ctx, tile!.x, tile!.y, EMaterialType.BOARD, amount);
         expect(result.success).toBe(true);
 
-        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedResource);
+        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedPile);
         expect(resources.length).toBe(1);
-        expect(resources[0]!.type).toBe(EntityType.StackedResource);
+        expect(resources[0]!.type).toBe(EntityType.StackedPile);
         expect(resources[0]!.subType).toBe(EMaterialType.BOARD);
     });
 
@@ -226,7 +226,7 @@ describe('Resource Placement Commands', () => {
 
         expect(placedCount).toBeGreaterThanOrEqual(2);
 
-        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedResource);
+        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedPile);
         expect(resources.length).toBeGreaterThanOrEqual(2);
     });
 
@@ -239,7 +239,7 @@ describe('Resource Placement Commands', () => {
             const y = 10 + i * 3;
             const result = placeResource(ctx, x, y, EMaterialType.LOG, amounts[i]);
             if (result.success) {
-                const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedResource);
+                const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedPile);
                 const newest = resources[resources.length - 1]!;
                 placed.push({ id: newest.id, subType: newest.subType });
             }
@@ -248,14 +248,14 @@ describe('Resource Placement Commands', () => {
         expect(placed.length).toBeGreaterThanOrEqual(2);
 
         // Verify all placed resources exist
-        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedResource);
+        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedPile);
         for (const p of placed) {
             const found = resources.find(r => r.id === p.id);
             expect(found).toBeDefined();
         }
     });
 
-    it('place_resource fails on water terrain', () => {
+    it('place_pile fails on water terrain', () => {
         const cx = Math.floor(ctx.map.mapSize.width / 2);
         const cy = Math.floor(ctx.map.mapSize.height / 2);
         ctx.map.groundType[ctx.map.mapSize.toIndex(cx, cy)] = TERRAIN.WATER;
@@ -263,7 +263,7 @@ describe('Resource Placement Commands', () => {
         const result = placeResource(ctx, cx, cy, EMaterialType.LOG);
         expect(result.success).toBe(false);
 
-        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedResource);
+        const resources = ctx.state.entities.filter(e => e.type === EntityType.StackedPile);
         expect(resources.length).toBe(0);
     });
 });

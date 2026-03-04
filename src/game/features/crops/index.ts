@@ -6,5 +6,12 @@
  */
 
 export { CropFeature, type CropFeatureExports } from './crop-feature';
-export { CropSystem, CropStage, type CropState, type CropTypeConfig, type CropSpriteConfig } from './crop-system';
+export {
+    CropSystem,
+    CropStage,
+    type CropState,
+    type CropTypeConfig,
+    type CropSpriteConfig,
+    type CropSystemConfig,
+} from './crop-system';
 export { CROP_SPRITE_CONFIGS, getCropTypeConfig } from './crop-system';

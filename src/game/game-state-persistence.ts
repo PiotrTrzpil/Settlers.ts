@@ -346,8 +346,8 @@ export function createSnapshot(game: Game): GameStateSnapshot {
     }));
 
     const resourceQuantities: Array<{ entityId: number; quantity: number; buildingId?: number }> = [];
-    for (const [entityId, state] of gameState.resources.states) {
-        resourceQuantities.push({ entityId, quantity: state.quantity, buildingId: state.buildingId });
+    for (const [entityId, state] of gameState.piles.states) {
+        resourceQuantities.push({ entityId, quantity: state.quantity });
     }
 
     return {
@@ -542,10 +542,9 @@ function restoreServiceAreas(game: Game): void {
 
 function restoreResourceQuantities(game: Game, snapshot: GameStateSnapshot): void {
     for (const rq of snapshot.resourceQuantities) {
-        const resourceState = game.state.resources.states.get(rq.entityId);
+        const resourceState = game.state.piles.states.get(rq.entityId);
         if (resourceState) {
             resourceState.quantity = rq.quantity;
-            resourceState.buildingId = rq.buildingId;
         }
     }
 }

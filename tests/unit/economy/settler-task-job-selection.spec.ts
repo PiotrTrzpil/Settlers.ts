@@ -38,11 +38,12 @@ function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
         inventoryManager: ctx.inventoryManager,
         eventBus: ctx.eventBus,
         carrierManager,
-        getInventoryVisualizer: () => null as any,
+        getPileSlotRegistry: () => null,
         getPileRegistry: () => null,
         workAreaStore: {} as any,
         buildingOverlayManager: {} as any,
         constructionSiteManager: { hasSite: () => false } as any,
+        executeCommand: () => ({ success: true, effects: [] }),
     };
     return new SettlerTaskSystem(config);
 }

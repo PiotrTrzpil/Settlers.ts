@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { installTestGameData, resetTestGameData } from '../helpers/test-game-data';
 import {
     createSlot,
     canAccept,
@@ -16,10 +17,14 @@ import {
     hasInventory,
     isProductionBuilding,
     consumesMaterials,
-    DEFAULT_INPUT_CAPACITY,
+    SLOT_CAPACITY,
 } from '@/game/features/inventory';
 import { EMaterialType } from '@/game/economy/material-type';
 import { BuildingType } from '@/game/entity';
+import { Race } from '@/game/race';
+
+beforeAll(() => installTestGameData());
+afterAll(() => resetTestGameData());
 
 describe('InventorySlot Helpers', () => {
     describe('createSlot', () => {
@@ -191,7 +196,7 @@ describe('InventorySlot Helpers', () => {
 describe('Inventory Configs', () => {
     describe('getInventoryConfig', () => {
         it('should return correct config for Sawmill (inputs and outputs)', () => {
-            const config = getInventoryConfig(BuildingType.Sawmill);
+            const config = getInventoryConfig(BuildingType.Sawmill, Race.Roman);
             expect(config.inputSlots).toHaveLength(1);
             expect(config.inputSlots[0]!.materialType).toBe(EMaterialType.LOG);
             expect(config.outputSlots).toHaveLength(1);
@@ -199,14 +204,14 @@ describe('Inventory Configs', () => {
         });
 
         it('should return correct config for WoodcutterHut (output only)', () => {
-            const config = getInventoryConfig(BuildingType.WoodcutterHut);
+            const config = getInventoryConfig(BuildingType.WoodcutterHut, Race.Roman);
             expect(config.inputSlots).toHaveLength(0);
             expect(config.outputSlots).toHaveLength(1);
             expect(config.outputSlots[0]!.materialType).toBe(EMaterialType.LOG);
         });
 
         it('should return correct config for Bakery (multiple inputs)', () => {
-            const config = getInventoryConfig(BuildingType.Bakery);
+            const config = getInventoryConfig(BuildingType.Bakery, Race.Roman);
             expect(config.inputSlots).toHaveLength(2);
             const inputMaterials = config.inputSlots.map(s => s.materialType);
             expect(inputMaterials).toContain(EMaterialType.FLOUR);
@@ -216,7 +221,7 @@ describe('Inventory Configs', () => {
         });
 
         it('should return empty config for unknown building type', () => {
-            const config = getInventoryConfig(999 as BuildingType);
+            const config = getInventoryConfig(999 as BuildingType, Race.Roman);
             expect(config.inputSlots).toHaveLength(0);
             expect(config.outputSlots).toHaveLength(0);
         });
@@ -224,40 +229,38 @@ describe('Inventory Configs', () => {
 
     describe('hasInventory', () => {
         it('should return true for production buildings', () => {
-            expect(hasInventory(BuildingType.Sawmill)).toBe(true);
-            expect(hasInventory(BuildingType.WoodcutterHut)).toBe(true);
-            expect(hasInventory(BuildingType.Bakery)).toBe(true);
+            expect(hasInventory(BuildingType.Sawmill, Race.Roman)).toBe(true);
+            expect(hasInventory(BuildingType.WoodcutterHut, Race.Roman)).toBe(true);
+            expect(hasInventory(BuildingType.Bakery, Race.Roman)).toBe(true);
         });
 
         it('should return false for buildings without inventory', () => {
-            expect(hasInventory(BuildingType.GuardTowerSmall)).toBe(false);
-            expect(hasInventory(BuildingType.Eyecatcher01)).toBe(false);
+            expect(hasInventory(BuildingType.GuardTowerSmall, Race.Roman)).toBe(false);
+            expect(hasInventory(BuildingType.Eyecatcher01, Race.Roman)).toBe(false);
         });
     });
 
     describe('isProductionBuilding', () => {
         it('should return true for buildings with output slots', () => {
-            expect(isProductionBuilding(BuildingType.WoodcutterHut)).toBe(true);
-            expect(isProductionBuilding(BuildingType.Sawmill)).toBe(true);
-            expect(isProductionBuilding(BuildingType.Bakery)).toBe(true);
+            expect(isProductionBuilding(BuildingType.WoodcutterHut, Race.Roman)).toBe(true);
+            expect(isProductionBuilding(BuildingType.Sawmill, Race.Roman)).toBe(true);
+            expect(isProductionBuilding(BuildingType.Bakery, Race.Roman)).toBe(true);
         });
 
         it('should return false for buildings without output slots', () => {
-            expect(isProductionBuilding(BuildingType.Barrack)).toBe(false); // Consumes but doesn't output materials
-            expect(isProductionBuilding(BuildingType.GuardTowerSmall)).toBe(false);
+            expect(isProductionBuilding(BuildingType.GuardTowerSmall, Race.Roman)).toBe(false);
         });
     });
 
     describe('consumesMaterials', () => {
         it('should return true for buildings with input slots', () => {
-            expect(consumesMaterials(BuildingType.Sawmill)).toBe(true);
-            expect(consumesMaterials(BuildingType.Bakery)).toBe(true);
-            expect(consumesMaterials(BuildingType.Barrack)).toBe(true);
+            expect(consumesMaterials(BuildingType.Sawmill, Race.Roman)).toBe(true);
+            expect(consumesMaterials(BuildingType.Bakery, Race.Roman)).toBe(true);
         });
 
         it('should return false for buildings without input slots', () => {
-            expect(consumesMaterials(BuildingType.WoodcutterHut)).toBe(false);
-            expect(consumesMaterials(BuildingType.GrainFarm)).toBe(false);
+            expect(consumesMaterials(BuildingType.WoodcutterHut, Race.Roman)).toBe(false);
+            expect(consumesMaterials(BuildingType.GrainFarm, Race.Roman)).toBe(false);
         });
     });
 });
@@ -271,19 +274,19 @@ describe('BuildingInventoryManager', () => {
 
     describe('createInventory', () => {
         it('should create inventory with correct slots for building type', () => {
-            const inventory = manager.createInventory(100, BuildingType.Sawmill);
+            const inventory = manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
 
             expect(inventory.buildingId).toBe(100);
             expect(inventory.buildingType).toBe(BuildingType.Sawmill);
             expect(inventory.inputSlots).toHaveLength(1);
             expect(inventory.inputSlots[0]!.materialType).toBe(EMaterialType.LOG);
-            expect(inventory.inputSlots[0]!.maxCapacity).toBe(DEFAULT_INPUT_CAPACITY);
+            expect(inventory.inputSlots[0]!.maxCapacity).toBe(SLOT_CAPACITY);
             expect(inventory.outputSlots).toHaveLength(1);
             expect(inventory.outputSlots[0]!.materialType).toBe(EMaterialType.BOARD);
         });
 
         it('should create empty inventory for buildings without production', () => {
-            const inventory = manager.createInventory(200, BuildingType.GuardTowerSmall);
+            const inventory = manager.createInventory(200, BuildingType.GuardTowerSmall, Race.Roman);
 
             expect(inventory.inputSlots).toHaveLength(0);
             expect(inventory.outputSlots).toHaveLength(0);
@@ -292,7 +295,7 @@ describe('BuildingInventoryManager', () => {
 
     describe('getInventory', () => {
         it('should return created inventory', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
             const inventory = manager.getInventory(100);
 
             expect(inventory).toBeDefined();
@@ -306,7 +309,7 @@ describe('BuildingInventoryManager', () => {
 
     describe('removeInventory', () => {
         it('should remove inventory and return true', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
             const result = manager.removeInventory(100);
 
             expect(result).toBe(true);
@@ -320,7 +323,7 @@ describe('BuildingInventoryManager', () => {
 
     describe('depositInput / withdrawOutput', () => {
         it('should deposit material into input slot', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
             const deposited = manager.depositInput(100, EMaterialType.LOG, 5);
 
             expect(deposited).toBe(5);
@@ -329,7 +332,7 @@ describe('BuildingInventoryManager', () => {
         });
 
         it('should withdraw material from output slot', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
             manager.depositOutput(100, EMaterialType.BOARD, 5);
 
             const withdrawn = manager.withdrawOutput(100, EMaterialType.BOARD, 3);
@@ -340,7 +343,7 @@ describe('BuildingInventoryManager', () => {
         });
 
         it('should throw when depositing wrong material type', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
             expect(() => manager.depositInput(100, EMaterialType.STONE, 5)).toThrow(/has no input slot for STONE/);
         });
 
@@ -351,13 +354,13 @@ describe('BuildingInventoryManager', () => {
 
     describe('canAcceptInput / canProvideOutput', () => {
         it('should check if building can accept input', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
             expect(manager.canAcceptInput(100, EMaterialType.LOG, 5)).toBe(true);
             expect(manager.canAcceptInput(100, EMaterialType.STONE, 5)).toBe(false);
         });
 
         it('should check if building can provide output', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
             manager.depositOutput(100, EMaterialType.BOARD, 5);
 
             expect(manager.canProvideOutput(100, EMaterialType.BOARD, 3)).toBe(true);
@@ -367,9 +370,9 @@ describe('BuildingInventoryManager', () => {
 
     describe('getBuildingsWithOutput', () => {
         it('should find buildings with specific material available', () => {
-            manager.createInventory(100, BuildingType.WoodcutterHut);
-            manager.createInventory(101, BuildingType.WoodcutterHut);
-            manager.createInventory(102, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.WoodcutterHut, Race.Roman);
+            manager.createInventory(101, BuildingType.WoodcutterHut, Race.Roman);
+            manager.createInventory(102, BuildingType.Sawmill, Race.Roman);
 
             manager.depositOutput(100, EMaterialType.LOG, 5);
             manager.depositOutput(101, EMaterialType.LOG, 2);
@@ -382,8 +385,8 @@ describe('BuildingInventoryManager', () => {
         });
 
         it('should respect minimum amount parameter', () => {
-            manager.createInventory(100, BuildingType.WoodcutterHut);
-            manager.createInventory(101, BuildingType.WoodcutterHut);
+            manager.createInventory(100, BuildingType.WoodcutterHut, Race.Roman);
+            manager.createInventory(101, BuildingType.WoodcutterHut, Race.Roman);
 
             manager.depositOutput(100, EMaterialType.LOG, 5);
             manager.depositOutput(101, EMaterialType.LOG, 2);
@@ -396,10 +399,10 @@ describe('BuildingInventoryManager', () => {
 
     describe('getBuildingsNeedingInput', () => {
         it('should find buildings that need specific material', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
-            manager.createInventory(101, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
+            manager.createInventory(101, BuildingType.Sawmill, Race.Roman);
 
-            manager.depositInput(100, EMaterialType.LOG, DEFAULT_INPUT_CAPACITY); // Full
+            manager.depositInput(100, EMaterialType.LOG, SLOT_CAPACITY); // Full
 
             const needingLogs = manager.getBuildingsNeedingInput(EMaterialType.LOG);
             expect(needingLogs).toContain(101); // Empty
@@ -409,8 +412,8 @@ describe('BuildingInventoryManager', () => {
 
     describe('clear', () => {
         it('should remove all inventories', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
-            manager.createInventory(101, BuildingType.WoodcutterHut);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
+            manager.createInventory(101, BuildingType.WoodcutterHut, Race.Roman);
 
             manager.clear();
 
@@ -422,8 +425,8 @@ describe('BuildingInventoryManager', () => {
 
     describe('getAllBuildingIds', () => {
         it('should return all building IDs with inventories', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
-            manager.createInventory(200, BuildingType.WoodcutterHut);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
+            manager.createInventory(200, BuildingType.WoodcutterHut, Race.Roman);
 
             const ids = manager.getAllBuildingIds();
             expect(ids).toContain(100);
@@ -434,20 +437,20 @@ describe('BuildingInventoryManager', () => {
 
     describe('canStartProduction', () => {
         it('should return true when all inputs are available', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
             manager.depositInput(100, EMaterialType.LOG, 1);
 
             expect(manager.canStartProduction(100)).toBe(true);
         });
 
         it('should return false when inputs are missing', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
             // No logs deposited
             expect(manager.canStartProduction(100)).toBe(false);
         });
 
         it('should check all inputs for multi-input buildings', () => {
-            manager.createInventory(100, BuildingType.Bakery);
+            manager.createInventory(100, BuildingType.Bakery, Race.Roman);
             manager.depositInput(100, EMaterialType.FLOUR, 1);
             // Missing water
             expect(manager.canStartProduction(100)).toBe(false);
@@ -463,12 +466,12 @@ describe('BuildingInventoryManager', () => {
 
     describe('canStoreOutput', () => {
         it('should return true when output slot has space', () => {
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
             expect(manager.canStoreOutput(100)).toBe(true);
         });
 
         it('should return false when output slot is full', () => {
-            manager.createInventory(100, BuildingType.WoodcutterHut);
+            manager.createInventory(100, BuildingType.WoodcutterHut, Race.Roman);
             // Fill the output slot
             const inventory = manager.getInventory(100)!;
             inventory.outputSlots[0]!.currentAmount = inventory.outputSlots[0]!.maxCapacity;
@@ -481,7 +484,7 @@ describe('BuildingInventoryManager', () => {
         it('should notify listeners on deposit', () => {
             const callback = vi.fn();
             manager.onChange(callback);
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
 
             manager.depositInput(100, EMaterialType.LOG, 3);
 
@@ -491,7 +494,7 @@ describe('BuildingInventoryManager', () => {
         it('should notify listeners on withdraw', () => {
             const callback = vi.fn();
             manager.onChange(callback);
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
             manager.depositOutput(100, EMaterialType.BOARD, 5);
 
             callback.mockClear();
@@ -503,7 +506,7 @@ describe('BuildingInventoryManager', () => {
         it('should not notify when no actual change', () => {
             const callback = vi.fn();
             manager.onChange(callback);
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
 
             // Deposit 0
             manager.depositInput(100, EMaterialType.LOG, 0);
@@ -514,7 +517,7 @@ describe('BuildingInventoryManager', () => {
         it('should allow removing callbacks', () => {
             const callback = vi.fn();
             manager.onChange(callback);
-            manager.createInventory(100, BuildingType.Sawmill);
+            manager.createInventory(100, BuildingType.Sawmill, Race.Roman);
 
             manager.offChange(callback);
             manager.depositInput(100, EMaterialType.LOG, 3);

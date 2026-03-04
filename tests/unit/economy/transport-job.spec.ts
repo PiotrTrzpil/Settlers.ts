@@ -79,9 +79,8 @@ describe('TransportJob', () => {
     beforeEach(() => {
         resetTransportJobIds();
         requestManager = new RequestManager();
-        reservationManager = new InventoryReservationManager();
         inventoryManager = createInventoryStub(5);
-        reservationManager.setInventoryManager(inventoryManager as unknown as BuildingInventoryManager);
+        reservationManager = new InventoryReservationManager(inventoryManager as unknown as BuildingInventoryManager);
     });
 
     function addRequest() {
@@ -121,8 +120,9 @@ describe('TransportJob', () => {
 
         it('returns null if reservation fails (no inventory)', () => {
             inventoryManager = createInventoryStub(0);
-            reservationManager = new InventoryReservationManager();
-            reservationManager.setInventoryManager(inventoryManager as unknown as BuildingInventoryManager);
+            reservationManager = new InventoryReservationManager(
+                inventoryManager as unknown as BuildingInventoryManager
+            );
 
             const request = addRequest();
             const job = TransportJob.create(request.id, SOURCE, DEST, MATERIAL, 1, CARRIER, {

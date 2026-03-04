@@ -85,7 +85,7 @@ function syncEntityRendererState(
     const renderContext = createRenderContext()
         .entities(g.state.entities)
         .unitStates(g.state.unitStates)
-        .resourceStates(g.state.resources.states)
+        .pileStates(g.state.piles.states)
         .buildingRenderStateGetter(entityId => {
             const site = csm.getSite(entityId);
             const vs = getBuildingVisualState(site);
@@ -225,7 +225,7 @@ export function createRenderCallback(
 
             const renderState = inputManager?.getRenderState();
             const mode = g.viewState.state.mode;
-            const inPlacementMode = mode === 'place_building' || mode === 'place_resource' || mode === 'place_unit';
+            const inPlacementMode = mode === 'place_building' || mode === 'place_pile' || mode === 'place_unit';
             if (inPlacementMode) {
                 updatePlacementModeState(er, renderState);
             } else {

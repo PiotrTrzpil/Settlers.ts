@@ -27,7 +27,7 @@ import {
     Command,
     FORMATION_OFFSETS,
     PlaceBuildingCommand,
-    PlaceResourceCommand,
+    PlacePileCommand,
     SpawnUnitCommand,
     MoveUnitCommand,
     SelectCommand,
@@ -36,7 +36,10 @@ import {
     SelectAreaCommand,
     MoveSelectedUnitsCommand,
     RemoveEntityCommand,
-    type SpawnVisualResourceCommand,
+    type SpawnPileCommand,
+    type SpawnMapObjectCommand,
+    type UpdatePileQuantityCommand,
+    type SetStorageFilterCommand,
     type SpawnBuildingUnitsCommand,
     type PlantTreeCommand,
     type PlantCropCommand,
@@ -51,7 +54,9 @@ import {
     type CommandResult,
     commandSuccess,
     commandFailed,
+    COMMAND_OK,
 } from './command-types';
+import type { StorageFilterManager } from '../features/inventory/storage-filter-manager';
 
 export interface CommandContext {
     state: GameState;
@@ -59,18 +64,20 @@ export interface CommandContext {
     eventBus: EventBus;
     /** Game settings (reactive state) — used by placement commands for instant-complete mode */
     settings: GameSettings;
-    /** Optional task system for routing movement through tasks */
-    settlerTaskSystem?: SettlerTaskSystem;
+    /** Task system for routing movement through settler tasks and handling animation */
+    settlerTaskSystem: SettlerTaskSystem;
     /** Construction site manager for checking construction status */
     constructionSiteManager: ConstructionSiteManager;
     /** Tree system for planting/registration */
-    treeSystem?: TreeSystem;
+    treeSystem: TreeSystem;
     /** Crop system for planting/registration */
-    cropSystem?: CropSystem;
+    cropSystem: CropSystem;
     /** Combat system — used to release units from auto-combat when player issues commands */
-    combatSystem?: CombatSystem;
+    combatSystem: CombatSystem;
     /** Production control manager for multi-recipe buildings */
-    productionControlManager?: ProductionControlManager;
+    productionControlManager: ProductionControlManager;
+    /** Storage filter manager for controlling which materials a storage accepts */
+    storageFilterManager: StorageFilterManager;
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): CommandResult {
@@ -80,16 +87,7 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
         return commandFailed(`Cannot place building at (${cmd.x}, ${cmd.y}): invalid placement`);
     }
 
-    const entity = state.addEntity(
-        EntityType.Building,
-        cmd.buildingType,
-        cmd.x,
-        cmd.y,
-        cmd.player,
-        undefined,
-        undefined,
-        cmd.race
-    );
+    const entity = state.addBuilding(cmd.buildingType, cmd.x, cmd.y, cmd.player, cmd.race);
 
     // Immediately capture terrain and change ground to raw earth under the building.
     // This makes the ground visually change right when the building is placed,
@@ -162,8 +160,7 @@ function executeSpawnUnit(ctx: CommandContext, cmd: SpawnUnitCommand): CommandRe
         spawnY = found.y;
     }
 
-    const entity = state.addEntity(EntityType.Unit, cmd.unitType, spawnX, spawnY, cmd.player);
-    entity.race = cmd.race;
+    const entity = state.addUnit(cmd.unitType, spawnX, spawnY, cmd.player, cmd.race);
     entity.level = getUnitLevel(cmd.unitType);
 
     ctx.eventBus.emit('unit:spawned', {
@@ -201,15 +198,13 @@ function executeMoveUnit(ctx: CommandContext, cmd: MoveUnitCommand): CommandResu
     }
 
     // Player command overrides auto-combat — release unit so it obeys
-    ctx.combatSystem?.releaseFromCombat(cmd.entityId);
+    ctx.combatSystem.releaseFromCombat(cmd.entityId);
 
     const fromX = entity.x;
     const fromY = entity.y;
 
-    // Route through task system if available (handles animation)
-    const success = ctx.settlerTaskSystem
-        ? ctx.settlerTaskSystem.assignMoveTask(cmd.entityId, cmd.targetX, cmd.targetY)
-        : ctx.state.movement.moveUnit(cmd.entityId, cmd.targetX, cmd.targetY);
+    // Route through task system (handles animation and interrupts current job)
+    const success = ctx.settlerTaskSystem.assignMoveTask(cmd.entityId, cmd.targetX, cmd.targetY);
 
     if (!success) {
         return commandFailed(`Cannot move unit ${cmd.entityId} to (${cmd.targetX}, ${cmd.targetY})`);
@@ -274,7 +269,7 @@ function executeSelectArea(ctx: CommandContext, cmd: SelectAreaCommand): Command
 }
 
 function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCommand): CommandResult {
-    const { state, settlerTaskSystem } = ctx;
+    const { state } = ctx;
 
     const selectedUnits = state.selection.getSelectedByType(EntityType.Unit);
     if (selectedUnits.length === 0) {
@@ -296,15 +291,13 @@ function executeMoveSelectedUnits(ctx: CommandContext, cmd: MoveSelectedUnitsCom
         const targetY = cmd.targetY + offset[1];
 
         // Player command overrides auto-combat — release unit so it obeys
-        ctx.combatSystem?.releaseFromCombat(unit.id);
+        ctx.combatSystem.releaseFromCombat(unit.id);
 
         const fromX = unit.x;
         const fromY = unit.y;
 
-        // Route through task system if available (handles animation)
-        const moved = settlerTaskSystem
-            ? settlerTaskSystem.assignMoveTask(unit.id, targetX, targetY)
-            : state.movement.moveUnit(unit.id, targetX, targetY);
+        // Route through task system (handles animation and interrupts current job)
+        const moved = ctx.settlerTaskSystem.assignMoveTask(unit.id, targetX, targetY);
 
         if (moved) {
             effects.push({
@@ -343,7 +336,7 @@ function executeRemoveEntity(ctx: CommandContext, cmd: RemoveEntityCommand): Com
     return commandSuccess([{ type: 'entity_removed', entityId: cmd.entityId }]);
 }
 
-function executePlaceResource(ctx: CommandContext, cmd: PlaceResourceCommand): CommandResult {
+function executePlacePile(ctx: CommandContext, cmd: PlacePileCommand): CommandResult {
     const { state, terrain } = ctx;
 
     if (!terrain.isInBounds(cmd.x, cmd.y)) {
@@ -360,32 +353,61 @@ function executePlaceResource(ctx: CommandContext, cmd: PlaceResourceCommand): C
         return commandFailed(`Position (${cmd.x}, ${cmd.y}) is already occupied`);
     }
 
-    // Create a StackedResource entity for the material
-    const entity = state.addEntity(EntityType.StackedResource, cmd.materialType, cmd.x, cmd.y, 0);
+    // Create a StackedPile entity for the material
+    const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd.x, cmd.y, 0);
 
     // Update quantity in resource state
-    const resourceState = state.resources.states.get(entity.id);
+    const resourceState = state.piles.states.get(entity.id);
     if (resourceState) {
         resourceState.quantity = cmd.amount;
     }
 
-    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedResource' }]);
+    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedPile' }]);
 }
 
 // === System command handlers ===
 
-function executeSpawnVisualResource(ctx: CommandContext, cmd: SpawnVisualResourceCommand): CommandResult {
-    const { state } = ctx;
+function executeSpawnMapObject(_ctx: CommandContext, cmd: SpawnMapObjectCommand): CommandResult {
+    const entity = _ctx.state.addEntity(
+        EntityType.MapObject,
+        cmd.objectType,
+        cmd.x,
+        cmd.y,
+        0,
+        undefined,
+        cmd.variation
+    );
+    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'MapObject' }]);
+}
 
-    const entity = state.addEntity(EntityType.StackedResource, cmd.materialType, cmd.x, cmd.y, cmd.player);
-
-    state.resources.setQuantity(entity.id, cmd.quantity);
-
-    if (cmd.buildingId !== undefined) {
-        state.resources.setBuildingId(entity.id, cmd.buildingId);
+function executeSpawnPile(ctx: CommandContext, cmd: SpawnPileCommand): CommandResult {
+    const { state, terrain } = ctx;
+    if (!terrain.isInBounds(cmd.x, cmd.y)) {
+        throw new Error(`spawn_pile: position (${cmd.x}, ${cmd.y}) out of bounds`);
     }
+    const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd.x, cmd.y, cmd.player);
+    // onEntityCreated already called createState(entity.id) with default { kind: 'free' }
+    state.piles.setKind(entity.id, cmd.kind);
+    state.piles.setQuantity(entity.id, cmd.quantity);
+    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedPile' }]);
+}
 
-    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedResource' }]);
+function executeUpdatePileQuantity(ctx: CommandContext, cmd: UpdatePileQuantityCommand): CommandResult {
+    ctx.state.piles.setQuantity(cmd.entityId, cmd.quantity);
+    return COMMAND_OK;
+}
+
+function executeSetStorageFilter(ctx: CommandContext, cmd: SetStorageFilterCommand): CommandResult {
+    const building = ctx.state.getEntityOrThrow(cmd.buildingId, 'set_storage_filter');
+    if ((building.subType as BuildingType) !== BuildingType.StorageArea) {
+        return commandFailed(`set_storage_filter: building ${cmd.buildingId} is not a StorageArea`);
+    }
+    if (cmd.allowed) {
+        ctx.storageFilterManager.allow(cmd.buildingId, cmd.material);
+    } else {
+        ctx.storageFilterManager.disallow(cmd.buildingId, cmd.material);
+    }
+    return COMMAND_OK;
 }
 
 type UnitSpawnEffect = { type: 'unit_spawned'; entityId: number; unitType: number; x: number; y: number };
@@ -407,8 +429,7 @@ function spawnWorkerAtDoor(
     if (existingAtDoor && existingAtDoor.type === EntityType.Unit) return;
     const doorKey = tileKey(door.x, door.y);
     const previousOwner = state.tileOccupancy.get(doorKey);
-    const workerEntity = state.addEntity(EntityType.Unit, workerInfo.unitType, door.x, door.y, entity.player);
-    workerEntity.race = entity.race;
+    const workerEntity = state.addUnit(workerInfo.unitType, door.x, door.y, entity.player, entity.race);
     if (previousOwner === entity.id) {
         state.tileOccupancy.set(doorKey, entity.id);
     }
@@ -452,8 +473,7 @@ function spawnUnitsNear(
             if (spawned >= count) break;
             if (!isSpawnableTile(ctx, tile.x, tile.y)) continue;
 
-            const spawnedEntity = state.addEntity(EntityType.Unit, unitType, tile.x, tile.y, player, selectable);
-            spawnedEntity.race = race;
+            const spawnedEntity = state.addUnit(unitType, tile.x, tile.y, player, race, selectable);
 
             eventBus.emit('unit:spawned', {
                 entityId: spawnedEntity.id,
@@ -535,7 +555,6 @@ function executePlantTree(ctx: CommandContext, cmd: PlantTreeCommand): CommandRe
     const entity = state.addEntity(EntityType.MapObject, cmd.treeType, cmd.x, cmd.y, 0);
 
     // Register with tree system for growth tracking
-    if (!ctx.treeSystem) throw new Error(`plant_tree command requires treeSystem in CommandContext`);
     ctx.treeSystem.register(entity.id, cmd.treeType, true);
     ctx.eventBus.emit('tree:planted', { entityId: entity.id, treeType: cmd.treeType, x: cmd.x, y: cmd.y });
 
@@ -543,7 +562,6 @@ function executePlantTree(ctx: CommandContext, cmd: PlantTreeCommand): CommandRe
 }
 
 function executePlantTreesArea(ctx: CommandContext, cmd: PlantTreesAreaCommand): CommandResult {
-    if (!ctx.treeSystem) throw new Error(`plant_trees_area command requires treeSystem in CommandContext`);
     const planted = ctx.treeSystem.plantTreesNear(cmd.centerX, cmd.centerY, cmd.count, cmd.radius);
     if (planted === 0) {
         return commandFailed(`Could not plant any trees near (${cmd.centerX}, ${cmd.centerY})`);
@@ -563,7 +581,6 @@ function executePlantCrop(ctx: CommandContext, cmd: PlantCropCommand): CommandRe
     const entity = state.addEntity(EntityType.MapObject, cmd.cropType, cmd.x, cmd.y, 0);
 
     // Register with crop system for growth tracking (planted=true → Growing stage)
-    if (!ctx.cropSystem) throw new Error(`plant_crop command requires cropSystem in CommandContext`);
     ctx.cropSystem.register(entity.id, cmd.cropType, true);
 
     ctx.eventBus.emit('crop:planted', { entityId: entity.id, cropType: cmd.cropType, x: cmd.x, y: cmd.y });
@@ -576,28 +593,19 @@ function executePlantCrop(ctx: CommandContext, cmd: PlantCropCommand): CommandRe
 function executeScriptAddGoods(ctx: CommandContext, cmd: ScriptAddGoodsCommand): CommandResult {
     const { state } = ctx;
 
-    const entity = state.addEntity(EntityType.StackedResource, cmd.materialType, cmd.x, cmd.y, 0);
+    const entity = state.addEntity(EntityType.StackedPile, cmd.materialType, cmd.x, cmd.y, 0);
 
     if (cmd.amount > 1) {
-        state.resources.setQuantity(entity.id, cmd.amount);
+        state.piles.setQuantity(entity.id, cmd.amount);
     }
 
-    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedResource' }]);
+    return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedPile' }]);
 }
 
 function executeScriptAddBuilding(ctx: CommandContext, cmd: ScriptAddBuildingCommand): CommandResult {
     const { state } = ctx;
 
-    const entity = state.addEntity(
-        EntityType.Building,
-        cmd.buildingType,
-        cmd.x,
-        cmd.y,
-        cmd.player,
-        undefined,
-        undefined,
-        cmd.race
-    );
+    const entity = state.addBuilding(cmd.buildingType, cmd.x, cmd.y, cmd.player, cmd.race);
 
     return commandSuccess([
         {
@@ -618,8 +626,7 @@ function executeScriptAddSettlers(ctx: CommandContext, cmd: ScriptAddSettlersCom
         const offsetX = cmd.x + (i % 3);
         const offsetY = cmd.y + Math.floor(i / 3);
 
-        const entity = state.addEntity(EntityType.Unit, cmd.unitType, offsetX, offsetY, cmd.player);
-        entity.race = cmd.race;
+        const entity = state.addUnit(cmd.unitType, offsetX, offsetY, cmd.player, cmd.race);
 
         eventBus.emit('unit:spawned', {
             entityId: entity.id,
@@ -644,9 +651,6 @@ function executeScriptAddSettlers(ctx: CommandContext, cmd: ScriptAddSettlersCom
 // === Production control command handlers ===
 
 function executeSetProductionMode(ctx: CommandContext, cmd: SetProductionModeCommand): CommandResult {
-    if (!ctx.productionControlManager) {
-        return commandFailed('Production control not available');
-    }
     const state = ctx.productionControlManager.getProductionState(cmd.buildingId);
     if (!state) {
         return commandFailed(`Building ${cmd.buildingId} has no production control state`);
@@ -656,25 +660,16 @@ function executeSetProductionMode(ctx: CommandContext, cmd: SetProductionModeCom
 }
 
 function executeSetRecipeProportion(ctx: CommandContext, cmd: SetRecipeProportionCommand): CommandResult {
-    if (!ctx.productionControlManager) {
-        return commandFailed('Production control not available');
-    }
     ctx.productionControlManager.setProportion(cmd.buildingId, cmd.recipeIndex, cmd.weight);
     return { success: true };
 }
 
 function executeAddToProductionQueue(ctx: CommandContext, cmd: AddToProductionQueueCommand): CommandResult {
-    if (!ctx.productionControlManager) {
-        return commandFailed('Production control not available');
-    }
     ctx.productionControlManager.addToQueue(cmd.buildingId, cmd.recipeIndex);
     return { success: true };
 }
 
 function executeRemoveFromProductionQueue(ctx: CommandContext, cmd: RemoveFromProductionQueueCommand): CommandResult {
-    if (!ctx.productionControlManager) {
-        return commandFailed('Production control not available');
-    }
     ctx.productionControlManager.removeFromQueue(cmd.buildingId, cmd.recipeIndex);
     return { success: true };
 }
@@ -687,7 +682,7 @@ type CommandHandler = (ctx: CommandContext, cmd: any) => CommandResult;
 /** Map of command type -> handler function. Keeps executeCommand under complexity limit. */
 const COMMAND_HANDLERS: Record<Command['type'], CommandHandler> = {
     place_building: executePlaceBuilding,
-    place_resource: executePlaceResource,
+    place_pile: executePlacePile,
     spawn_unit: executeSpawnUnit,
     move_unit: executeMoveUnit,
     select: executeSelect,
@@ -696,7 +691,10 @@ const COMMAND_HANDLERS: Record<Command['type'], CommandHandler> = {
     select_area: executeSelectArea,
     move_selected_units: executeMoveSelectedUnits,
     remove_entity: executeRemoveEntity,
-    spawn_visual_resource: executeSpawnVisualResource,
+    spawn_map_object: executeSpawnMapObject,
+    spawn_pile: executeSpawnPile,
+    update_pile_quantity: executeUpdatePileQuantity,
+    set_storage_filter: executeSetStorageFilter,
     spawn_building_units: executeSpawnBuildingUnits,
     plant_tree: executePlantTree,
     plant_crop: executePlantCrop,

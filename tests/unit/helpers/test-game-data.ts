@@ -109,45 +109,153 @@ const TEST_BUILDINGS: BuildingInfo[] = [
         pile('GOOD_LOG', PileSlotType.Input, 3, 1),
         pile('GOOD_BOARD', PileSlotType.Output, 3, 0),
     ]),
-    buildingInfo('BUILDING_STONECUTTERHUT', 'SETTLER_STONECUTTER', 'GOOD_PICKAXE', 2, { stone: 2, boards: 2 }),
-    buildingInfo('BUILDING_GRAINFARM', 'SETTLER_FARMERGRAIN', 'GOOD_SCYTHE', 2, { stone: 2, boards: 2 }),
-    buildingInfo('BUILDING_MILL', 'SETTLER_MILLER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_BAKERY', 'SETTLER_BAKER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_FISHERHUT', 'SETTLER_FISHER', 'GOOD_ROD', 2, { stone: 2, boards: 2 }),
-    buildingInfo('BUILDING_ANIMALRANCH', 'SETTLER_FARMERANIMALS', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
-    buildingInfo('BUILDING_SLAUGHTERHOUSE', 'SETTLER_BUTCHER', 'GOOD_AXE', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_WATERWORKHUT', 'SETTLER_WATERWORKER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
-    buildingInfo('BUILDING_COALMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_IRONMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_GOLDMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_SULFURMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_STONEMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_SMELTIRON', 'SETTLER_SMELTER', 'GOOD_NO_GOOD', 2, { stone: 4, boards: 4 }),
-    buildingInfo('BUILDING_SMELTGOLD', 'SETTLER_SMELTER', 'GOOD_NO_GOOD', 2, { stone: 4, boards: 4 }),
-    buildingInfo('BUILDING_WEAPONSMITH', 'SETTLER_SMITH', 'GOOD_HAMMER', 2, { stone: 4, boards: 4 }),
-    buildingInfo('BUILDING_TOOLSMITH', 'SETTLER_SMITH', 'GOOD_HAMMER', 2, { stone: 4, boards: 4 }),
-    buildingInfo('BUILDING_AMMOMAKERHUT', 'SETTLER_AMMOMAKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_HUNTERHUT', 'SETTLER_HUNTER', 'GOOD_BOW', 2, { stone: 2, boards: 2 }),
+    buildingInfo('BUILDING_STONECUTTERHUT', 'SETTLER_STONECUTTER', 'GOOD_PICKAXE', 2, { stone: 2, boards: 2 }, [
+        pile('GOOD_STONE', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_GRAINFARM', 'SETTLER_FARMERGRAIN', 'GOOD_SCYTHE', 2, { stone: 2, boards: 2 }, [
+        pile('GOOD_GRAIN', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_MILL', 'SETTLER_MILLER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_GRAIN', PileSlotType.Input, 0, 0),
+        pile('GOOD_FLOUR', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_BAKERY', 'SETTLER_BAKER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_FLOUR', PileSlotType.Input, 0, 0),
+        pile('GOOD_WATER', PileSlotType.Input, 0, 0),
+        pile('GOOD_BREAD', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_FISHERHUT', 'SETTLER_FISHER', 'GOOD_ROD', 2, { stone: 2, boards: 2 }, [
+        pile('GOOD_FISH', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_WATERWORKHUT', 'SETTLER_WATERWORKER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }, [
+        pile('GOOD_WATER', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_HUNTERHUT', 'SETTLER_HUNTER', 'GOOD_BOW', 2, { stone: 2, boards: 2 }, [
+        pile('GOOD_MEAT', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_COALMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_FISH', PileSlotType.Input, 0, 0),
+        pile('GOOD_MEAT', PileSlotType.Input, 0, 0),
+        pile('GOOD_BREAD', PileSlotType.Input, 0, 0),
+        pile('GOOD_COAL', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_IRONMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_MEAT', PileSlotType.Input, 0, 0),
+        pile('GOOD_FISH', PileSlotType.Input, 0, 0),
+        pile('GOOD_BREAD', PileSlotType.Input, 0, 0),
+        pile('GOOD_IRONORE', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_GOLDMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_BREAD', PileSlotType.Input, 0, 0),
+        pile('GOOD_FISH', PileSlotType.Input, 0, 0),
+        pile('GOOD_MEAT', PileSlotType.Input, 0, 0),
+        pile('GOOD_GOLDORE', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_SULFURMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_BREAD', PileSlotType.Input, 0, 0),
+        pile('GOOD_FISH', PileSlotType.Input, 0, 0),
+        pile('GOOD_MEAT', PileSlotType.Input, 0, 0),
+        pile('GOOD_SULFUR', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_STONEMINE', 'SETTLER_MINEWORKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_FISH', PileSlotType.Input, 0, 0),
+        pile('GOOD_BREAD', PileSlotType.Input, 0, 0),
+        pile('GOOD_MEAT', PileSlotType.Input, 0, 0),
+        pile('GOOD_STONE', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_SMELTIRON', 'SETTLER_SMELTER', 'GOOD_NO_GOOD', 2, { stone: 4, boards: 4 }, [
+        pile('GOOD_COAL', PileSlotType.Input, 0, 0),
+        pile('GOOD_IRONORE', PileSlotType.Input, 0, 0),
+        pile('GOOD_IRONBAR', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_SMELTGOLD', 'SETTLER_SMELTER', 'GOOD_NO_GOOD', 2, { stone: 4, boards: 4 }, [
+        pile('GOOD_COAL', PileSlotType.Input, 0, 0),
+        pile('GOOD_GOLDORE', PileSlotType.Input, 0, 0),
+        pile('GOOD_GOLDBAR', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_WEAPONSMITH', 'SETTLER_SMITH', 'GOOD_HAMMER', 2, { stone: 4, boards: 4 }, [
+        pile('GOOD_COAL', PileSlotType.Input, 0, 0),
+        pile('GOOD_IRONBAR', PileSlotType.Input, 0, 0),
+        pile('GOOD_SWORD', PileSlotType.Output, 0, 0),
+        pile('GOOD_BOW', PileSlotType.Output, 0, 0),
+        pile('GOOD_ARMOR', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_TOOLSMITH', 'SETTLER_SMITH', 'GOOD_HAMMER', 2, { stone: 4, boards: 4 }, [
+        pile('GOOD_IRONBAR', PileSlotType.Input, 0, 0),
+        pile('GOOD_COAL', PileSlotType.Input, 0, 0),
+        pile('GOOD_AXE', PileSlotType.Output, 0, 0),
+        pile('GOOD_HAMMER', PileSlotType.Output, 0, 0),
+        pile('GOOD_ROD', PileSlotType.Output, 0, 0),
+        pile('GOOD_PICKAXE', PileSlotType.Output, 0, 0),
+        pile('GOOD_SAW', PileSlotType.Output, 0, 0),
+        pile('GOOD_SCYTHE', PileSlotType.Output, 0, 0),
+        pile('GOOD_SHOVEL', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_AMMOMAKERHUT', 'SETTLER_AMMOMAKER', 'GOOD_PICKAXE', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_STONE', PileSlotType.Input, 0, 0),
+        pile('GOOD_AMMO', PileSlotType.Output, 0, 0),
+    ]),
     buildingInfo('BUILDING_HEALERHUT', 'SETTLER_HEALER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
-    buildingInfo('BUILDING_DONKEYRANCH', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_VEHICLEHALL', 'SETTLER_VEHICLEMAKER', 'GOOD_HAMMER', 2, { stone: 4, boards: 6 }),
-    buildingInfo('BUILDING_VINYARD', 'SETTLER_VINTNER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
-    buildingInfo('BUILDING_AGAVEFARMERHUT', 'SETTLER_AGAVEFARMER', 'GOOD_SCYTHE', 2, { stone: 2, boards: 2 }),
-    buildingInfo('BUILDING_TEQUILAMAKERHUT', 'SETTLER_TEQUILAMAKER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_BEEKEEPERHUT', 'SETTLER_BEEKEEPER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
-    buildingInfo('BUILDING_MEADMAKERHUT', 'SETTLER_MEADMAKER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
-    buildingInfo('BUILDING_SUNFLOWERFARMERHUT', 'SETTLER_SUNFLOWERFARMER', 'GOOD_SCYTHE', 2, { stone: 2, boards: 2 }),
-    buildingInfo('BUILDING_SUNFLOWEROILMAKERHUT', 'SETTLER_SUNFLOWEROILMAKER', 'GOOD_NO_GOOD', 2, {
-        stone: 3,
-        boards: 3,
-    }),
+    buildingInfo('BUILDING_DONKEYRANCH', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_WATER', PileSlotType.Input, 0, 0),
+        pile('GOOD_GRAIN', PileSlotType.Input, 0, 0),
+    ]),
+    buildingInfo('BUILDING_VEHICLEHALL', 'SETTLER_VEHICLEMAKER', 'GOOD_HAMMER', 2, { stone: 4, boards: 6 }, [
+        pile('GOOD_BOARD', PileSlotType.Input, 0, 0),
+        pile('GOOD_IRONBAR', PileSlotType.Input, 0, 0),
+    ]),
+    buildingInfo('BUILDING_VINYARD', 'SETTLER_VINTNER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }, [
+        pile('GOOD_WINE', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_AGAVEFARMERHUT', 'SETTLER_AGAVEFARMER', 'GOOD_SCYTHE', 2, { stone: 2, boards: 2 }, [
+        pile('GOOD_AGAVE', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_TEQUILAMAKERHUT', 'SETTLER_TEQUILAMAKER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_AGAVE', PileSlotType.Input, 0, 0),
+        pile('GOOD_TEQUILA', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_BEEKEEPERHUT', 'SETTLER_BEEKEEPER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }, [
+        pile('GOOD_HONEY', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_MEADMAKERHUT', 'SETTLER_MEADMAKER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }, [
+        pile('GOOD_HONEY', PileSlotType.Input, 0, 0),
+        pile('GOOD_MEAD', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo('BUILDING_SUNFLOWERFARMERHUT', 'SETTLER_SUNFLOWERFARMER', 'GOOD_SCYTHE', 2, { stone: 2, boards: 2 }, [
+        pile('GOOD_SUNFLOWER', PileSlotType.Output, 0, 0),
+    ]),
+    buildingInfo(
+        'BUILDING_SUNFLOWEROILMAKERHUT',
+        'SETTLER_SUNFLOWEROILMAKER',
+        'GOOD_NO_GOOD',
+        2,
+        {
+            stone: 3,
+            boards: 3,
+        },
+        [pile('GOOD_SUNFLOWER', PileSlotType.Input, 0, 0), pile('GOOD_SUNFLOWEROIL', PileSlotType.Output, 0, 0)]
+    ),
     buildingInfo('BUILDING_MUSHROOMFARM', 'SETTLER_MUSHROOMFARMER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
     // Military / residential buildings
-    buildingInfo('BUILDING_STORAGEAREA', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3, { stone: 4, boards: 6 }),
+    buildingInfo('BUILDING_STORAGEAREA', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3, { stone: 4, boards: 6 }, [
+        pile('GOOD_AGAVE', PileSlotType.Storage, 0, 0),
+        pile('GOOD_AGAVE', PileSlotType.Storage, 0, 0),
+        pile('GOOD_AGAVE', PileSlotType.Storage, 0, 0),
+        pile('GOOD_AGAVE', PileSlotType.Storage, 0, 0),
+        pile('GOOD_AGAVE', PileSlotType.Storage, 0, 0),
+        pile('GOOD_AGAVE', PileSlotType.Storage, 0, 0),
+        pile('GOOD_AGAVE', PileSlotType.Storage, 0, 0),
+        pile('GOOD_AGAVE', PileSlotType.Storage, 0, 0),
+    ]),
     buildingInfo('BUILDING_RESIDENCESMALL', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }),
     buildingInfo('BUILDING_RESIDENCEMEDIUM', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 2, { stone: 3, boards: 3 }),
     buildingInfo('BUILDING_RESIDENCEBIG', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3, { stone: 5, boards: 5 }),
-    buildingInfo('BUILDING_BARRACKS', '', 'GOOD_NO_GOOD', 2, { stone: 4, boards: 4 }),
+    buildingInfo('BUILDING_BARRACKS', '', 'GOOD_NO_GOOD', 2, { stone: 4, boards: 4 }, [
+        pile('GOOD_GOLDBAR', PileSlotType.Input, 0, 0),
+        pile('GOOD_SWORD', PileSlotType.Input, 0, 0),
+        pile('GOOD_BOW', PileSlotType.Input, 0, 0),
+        pile('GOOD_ARMOR', PileSlotType.Input, 0, 0),
+    ]),
     buildingInfo('BUILDING_SMALLTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD', 2, { stone: 6, boards: 4 }),
     buildingInfo('BUILDING_BIGTEMPLE', 'SETTLER_TEMPLE_SERVANT', 'GOOD_NO_GOOD', 3, { stone: 8, boards: 6 }),
     buildingInfo('BUILDING_CASTLE', 'SETTLER_CARRIER', 'GOOD_NO_GOOD', 3, { stone: 10, boards: 8, gold: 6 }),
@@ -173,12 +281,37 @@ const TEST_BUILDINGS: BuildingInfo[] = [
     buildingInfo('BUILDING_EYECATCHER12', '', 'GOOD_NO_GOOD', 2, { stone: 3 }),
 ];
 
-/** Build a race building map from the test building definitions. */
-function buildRaceBuildingMap(): Map<string, BuildingInfo> {
+/** Animal good per race for AnimalRanch / Slaughterhouse. */
+const RACE_ANIMAL_GOOD: Record<RaceId, string> = {
+    RACE_ROMAN: 'GOOD_SHEEP',
+    RACE_VIKING: 'GOOD_GOAT',
+    RACE_MAYA: 'GOOD_PIG',
+    RACE_TROJAN: 'GOOD_GOOSE',
+    RACE_DARK: 'GOOD_SHEEP', // DarkTribe fallback
+};
+
+/** Build a race building map including race-specific AnimalRanch and Slaughterhouse. */
+function buildRaceBuildingMap(raceId: RaceId): Map<string, BuildingInfo> {
     const map = new Map<string, BuildingInfo>();
     for (const b of TEST_BUILDINGS) {
         map.set(b.id, b);
     }
+    const animalGood = RACE_ANIMAL_GOOD[raceId] ?? 'GOOD_SHEEP';
+    map.set(
+        'BUILDING_ANIMALRANCH',
+        buildingInfo('BUILDING_ANIMALRANCH', 'SETTLER_FARMERANIMALS', 'GOOD_NO_GOOD', 2, { stone: 2, boards: 2 }, [
+            pile('GOOD_WATER', PileSlotType.Input, 0, 0),
+            pile('GOOD_GRAIN', PileSlotType.Input, 0, 0),
+            pile(animalGood, PileSlotType.Output, 0, 0),
+        ])
+    );
+    map.set(
+        'BUILDING_SLAUGHTERHOUSE',
+        buildingInfo('BUILDING_SLAUGHTERHOUSE', 'SETTLER_BUTCHER', 'GOOD_AXE', 2, { stone: 3, boards: 3 }, [
+            pile(animalGood, PileSlotType.Input, 0, 0),
+            pile('GOOD_MEAT', PileSlotType.Output, 0, 0),
+        ])
+    );
     return map;
 }
 
@@ -299,12 +432,11 @@ function buildRaceJobMap(): RaceJobData {
  */
 export function installTestGameData(): void {
     clearWorkerBuildingCache();
-    const raceBuildingMap = buildRaceBuildingMap();
     const races: RaceId[] = ['RACE_ROMAN', 'RACE_VIKING', 'RACE_MAYA', 'RACE_DARK', 'RACE_TROJAN'];
 
     const buildings = new Map();
     for (const raceId of races) {
-        buildings.set(raceId, { buildings: raceBuildingMap });
+        buildings.set(raceId, { buildings: buildRaceBuildingMap(raceId) });
     }
 
     const settlers = new Map<RaceId, RaceSettlerValueData>();

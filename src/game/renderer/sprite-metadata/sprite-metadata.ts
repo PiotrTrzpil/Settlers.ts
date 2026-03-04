@@ -43,7 +43,7 @@ import {
     BuildingSpriteCategory,
     UnitSpriteCategory,
     MapObjectSpriteCategory,
-    ResourceSpriteCategory,
+    GoodSpriteCategory,
     DecorationSpriteCategory,
     OverlaySpriteCategory,
     AnimatedEntityCategory,
@@ -171,7 +171,7 @@ export interface ResourceSpriteInfo {
  * Get the resource sprite map.
  * Resources use JIL job indices from file 3.gfx.
  */
-export function getResourceSpriteMap(): Partial<Record<EMaterialType, ResourceSpriteInfo>> {
+export function getGoodSpriteMap(): Partial<Record<EMaterialType, ResourceSpriteInfo>> {
     const result: Partial<Record<EMaterialType, ResourceSpriteInfo>> = {};
 
     for (const [typeStr, jobIndex] of Object.entries(RESOURCE_JOB_INDICES)) {
@@ -236,9 +236,6 @@ export function getBuildingSpriteMap(race: Race): Partial<Record<BuildingType, B
 
     return result;
 }
-
-/** Default building sprite map using Roman race */
-export const BUILDING_SPRITE_MAP = getBuildingSpriteMap(Race.Roman);
 
 /**
  * Sprite information for a map object type.
@@ -305,7 +302,7 @@ export class SpriteMetadataRegistry {
     private readonly buildings = new BuildingSpriteCategory();
     private readonly units = new UnitSpriteCategory();
     private readonly mapObjectsCategory = new MapObjectSpriteCategory();
-    private readonly resourcesCategory = new ResourceSpriteCategory();
+    private readonly goodsCategory = new GoodSpriteCategory();
     private readonly decoration = new DecorationSpriteCategory();
     private readonly overlays = new OverlaySpriteCategory();
     private readonly animated = new AnimatedEntityCategory();
@@ -453,16 +450,16 @@ export class SpriteMetadataRegistry {
     /**
      * Register a sprite entry for a resource/material type.
      */
-    public registerResource(type: EMaterialType, direction: number, entry: SpriteEntry): void {
-        this.resourcesCategory.register(type, direction, entry);
+    public registerGood(type: EMaterialType, direction: number, entry: SpriteEntry): void {
+        this.goodsCategory.register(type, direction, entry);
     }
 
     /**
      * Look up the sprite entry for a resource/material type.
      * Returns null if no sprite is registered for this type.
      */
-    public getResource(type: EMaterialType, direction: number = 0): SpriteEntry | null {
-        return this.resourcesCategory.get(type, direction);
+    public getGoodSprite(type: EMaterialType, direction: number = 0): SpriteEntry | null {
+        return this.goodsCategory.get(type, direction);
     }
 
     // ========================================================================
@@ -561,8 +558,8 @@ export class SpriteMetadataRegistry {
     }
 
     /** Check if any resource sprites have been registered. */
-    public hasResourceSprites(): boolean {
-        return this.resourcesCategory.hasSprites();
+    public hasGoodSprites(): boolean {
+        return this.goodsCategory.hasSprites();
     }
 
     /** Check if any unit sprites have been registered. */
@@ -586,8 +583,8 @@ export class SpriteMetadataRegistry {
     }
 
     /** Get the number of registered resource sprites. */
-    public getResourceCount(): number {
-        return this.resourcesCategory.getCount();
+    public getGoodCount(): number {
+        return this.goodsCategory.getCount();
     }
 
     // ========================================================================
@@ -598,7 +595,7 @@ export class SpriteMetadataRegistry {
     public clear(): void {
         this.buildings.clear();
         this.mapObjectsCategory.clear();
-        this.resourcesCategory.clear();
+        this.goodsCategory.clear();
         this.units.clear();
         this.decoration.clear();
         this.overlays.clear();
@@ -619,7 +616,7 @@ export class SpriteMetadataRegistry {
             this.buildings,
             this.units,
             this.mapObjectsCategory,
-            this.resourcesCategory,
+            this.goodsCategory,
             this.decoration,
             this.animated,
             this._loadedRaces
@@ -640,7 +637,7 @@ export class SpriteMetadataRegistry {
             registry.units.setRaceEntry(race, typeMap);
         }
         registry.mapObjectsCategory.setEntries(result.mapObjects.getEntries());
-        registry.resourcesCategory.setEntries(result.resources.getEntries());
+        registry.goodsCategory.setEntries(result.goods.getEntries());
         registry.decoration.setFlagsMap(result.decoration.getFlagsMap());
         registry.decoration.setTerritoryDotsMap(result.decoration.getTerritoryDotsMap());
         for (const [entityType, subTypeMap] of result.animated.getSharedEntities()) {

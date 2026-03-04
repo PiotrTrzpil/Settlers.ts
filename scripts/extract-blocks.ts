@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 /**
  * Extract specific 64×64 texture blocks from 2.gh6 for visual comparison.
- * Outputs PNG files to dist/texture-blocks/.
+ * Outputs PNG files to output/texture-blocks/.
  */
 
 import * as fs from 'fs/promises';
@@ -255,7 +255,7 @@ async function main() {
         console.log(`Extracted: ${label} (col=${col}, row=${row}, px=${col * 64},${row * 64})`);
     }
 
-    const outDir = path.resolve('dist/texture-blocks');
+    const outDir = path.resolve('output/texture-blocks');
     await fs.mkdir(outDir, { recursive: true });
 
     // Write individual PPM files

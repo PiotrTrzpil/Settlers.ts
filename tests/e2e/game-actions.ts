@@ -165,7 +165,7 @@ export async function getPlacementPreview(page: Page): Promise<PlacementPreview 
             : null;
         return {
             previewBuildingType: preview?.entityType === 'building' ? preview.subType : null,
-            previewMaterialType: preview?.entityType === 'resource' ? preview.subType : null,
+            previewMaterialType: preview?.entityType === 'pile' ? preview.subType : null,
             placementPreview: preview,
         };
     });
@@ -244,7 +244,7 @@ export async function placeResource(
             const game = window.__settlers__?.game;
             if (!game) return null;
             const cmdResult = game.execute({
-                type: 'place_resource',
+                type: 'place_pile',
                 materialType: mt,
                 x: posX,
                 y: posY,
@@ -255,7 +255,7 @@ export async function placeResource(
             if (entityId == null) return null;
             const entity = game.state.getEntity(entityId);
             if (!entity) return null;
-            const resourceState = game.state.resources?.states?.get(entityId);
+            const resourceState = game.state.piles?.states?.get(entityId);
             window.__settlers__?.viewState?.forceCountUpdate();
             return {
                 id: entity.id,
@@ -390,7 +390,7 @@ export async function findPassableTile(page: Page): Promise<{ x: number; y: numb
 
 export type PlacementSpec =
     | { kind: 'building'; buildingTypes?: number[]; players?: number[] }
-    | { kind: 'resource'; materialTypes?: number[] };
+    | { kind: 'pile'; materialTypes?: number[] };
 
 /**
  * Place multiple entities at different positions, spiraling from map center.
@@ -429,7 +429,7 @@ export async function placeMultiple(page: Page, count: number, spec: PlacementSp
                     } else {
                         const mt = s.materialTypes ? s.materialTypes[placed % s.materialTypes.length]! : placed % 3;
                         result = game.execute({
-                            type: 'place_resource',
+                            type: 'place_pile',
                             materialType: mt,
                             amount: placed + 1,
                             x: tx,

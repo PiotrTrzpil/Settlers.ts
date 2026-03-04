@@ -1,5 +1,5 @@
 /**
- * Populates resource stacks from map entity data.
+ * Populates pile stacks from map entity data.
  * Maps S4GoodType to internal EMaterialType and creates stacked resource entities.
  */
 
@@ -45,9 +45,9 @@ export function populateMapStacks(state: GameState, stacks: MapStackData[]): num
             continue;
         }
 
-        const entity = state.addEntity(EntityType.StackedResource, materialType, stackData.x, stackData.y, 0);
-        state.resources.createState(entity.id);
-        state.resources.setQuantity(entity.id, stackData.amount);
+        const entity = state.addEntity(EntityType.StackedPile, materialType, stackData.x, stackData.y, 0);
+        // entity:created handler in game-services.ts calls createState(entity.id) with kind: 'free' as default.
+        state.piles.setQuantity(entity.id, stackData.amount);
 
         created++;
     }

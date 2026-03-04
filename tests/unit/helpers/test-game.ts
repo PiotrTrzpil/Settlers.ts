@@ -39,8 +39,9 @@ export function createGameState(): GameState {
             return true;
         },
         getEntity: id => state.getEntity(id),
+        tileOccupancy: state.tileOccupancy,
+        buildingOccupancy: state.buildingOccupancy,
     });
-    movement.setTileOccupancy(state.tileOccupancy, state.buildingOccupancy);
     state.initMovement(movement);
 
     // Wire entity lifecycle events (mirrors GameServices subscriptions)
@@ -58,13 +59,13 @@ function wireEntityLifecycleEvents(eventBus: EventBus, movement: MovementSystem,
         if (type === EntityType.Unit) {
             const speed = getUnitTypeSpeed(subType as UnitType);
             movement.createController(entityId, x, y, speed);
-        } else if (type === EntityType.StackedResource) {
-            state.resources.createState(entityId);
+        } else if (type === EntityType.StackedPile) {
+            state.piles.createState(entityId);
         }
     });
     eventBus.on('entity:removed', ({ entityId }) => {
         movement.removeController(entityId);
-        state.resources.removeState(entityId);
+        state.piles.removeState(entityId);
     });
 }
 
@@ -136,8 +137,9 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
             return true;
         },
         getEntity: id => state.getEntity(id),
+        tileOccupancy: state.tileOccupancy,
+        buildingOccupancy: state.buildingOccupancy,
     });
-    movement.setTileOccupancy(state.tileOccupancy, state.buildingOccupancy);
     state.initMovement(movement);
 
     // Create managers with required dependencies via constructor
@@ -158,6 +160,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     // Uses a lazy command executor so it references the returned context
     const buildingConstructionSystem = new BuildingConstructionSystem({
         gameState: state,
+        eventBus,
         constructionSiteManager,
         executeCommand: cmd => executeCommand(toCommandContext(context), cmd),
     });
@@ -167,12 +170,15 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
 
     // Wire a ResidenceSpawnerSystem in immediate mode so tests can verify
     // carrier spawning without driving the timed interval loop.
-    const residenceSpawner = new ResidenceSpawnerSystem(state, eventBus);
+    const residenceSpawner = new ResidenceSpawnerSystem({
+        gameState: state,
+        executeCommand: cmd => executeCommand(toCommandContext(context), cmd),
+    });
     residenceSpawner.setTerrain(map.terrain);
     residenceSpawner.immediateMode = true;
     buildingConstructionSystem.setResidenceSpawner(residenceSpawner);
 
-    buildingConstructionSystem.registerEvents(eventBus);
+    buildingConstructionSystem.registerEvents();
 
     // Mirror game-services.ts wiring: register construction site on placement, remove on completion
     eventBus.on('building:placed', ({ entityId, buildingType, x, y, player }) => {
@@ -248,7 +254,7 @@ export function addBuildingWithInventory(
     race = Race.Roman
 ): Entity {
     const building = ctx.state.addEntity(EntityType.Building, buildingType, x, y, player, undefined, undefined, race);
-    ctx.inventoryManager.createInventory(building.id, buildingType as BuildingType);
+    ctx.inventoryManager.createInventory(building.id, buildingType as BuildingType, race);
     return building;
 }
 
@@ -335,6 +341,18 @@ export function toCommandContext(ctx: TestContext, eventBus?: EventBus): Command
         eventBus: eventBus ?? ctx.eventBus,
         settings: ctx.settings,
         constructionSiteManager: ctx.constructionSiteManager,
+        // Stubs for systems not wired in unit-test contexts.
+        // Tests that exercise tree/crop/production commands should use TestSimulation instead.
+        settlerTaskSystem: {
+            assignMoveTask: (id: number, x: number, y: number) => ctx.state.movement.moveUnit(id, x, y),
+        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
+        combatSystem: {
+            releaseFromCombat: () => {},
+        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
+        treeSystem: undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
+        cropSystem: undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
+        productionControlManager: undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
+        storageFilterManager: undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
     };
 }
 
@@ -423,9 +441,9 @@ export function removeEntity(ctx: TestContext, entityId: number): CommandResult 
     return executeCommand(toCommandContext(ctx), { type: 'remove_entity', entityId });
 }
 
-/** Execute a place_resource command. Returns CommandResult. */
+/** Execute a place_pile command. Returns CommandResult. */
 export function placeResource(ctx: TestContext, x: number, y: number, materialType: number, amount = 1): CommandResult {
-    return executeCommand(toCommandContext(ctx), { type: 'place_resource', materialType, amount, x, y });
+    return executeCommand(toCommandContext(ctx), { type: 'place_pile', materialType, amount, x, y });
 }
 
 // ─── Terrain query helpers ───────────────────────────────────────────
