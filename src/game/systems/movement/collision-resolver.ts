@@ -13,12 +13,9 @@
 import { TileCoord, tileKey } from '../../entity';
 import { EntityType } from '../../entity';
 import { isPassable } from '../../terrain';
-import { getAllNeighbors, hexDistance } from '../hex-directions';
-import { findSmartFreeDirection, shouldYieldToPush } from './push-utils';
-import type { TerrainAccessor } from './push-utils';
+import { findBestNeighbor, shouldYieldToPush } from './push-utils';
 import { MovementController } from './movement-controller';
 import type { IPathfinder } from './pathfinding-service';
-import type { SeededRng } from '../../rng';
 import type { EventBus } from '../../event-bus';
 
 /** How many steps ahead to look when doing prefix path repair */
@@ -39,10 +36,10 @@ export type UpdatePositionFn = (entityId: number, x: number, y: number) => boole
  */
 export interface ICollisionResolver {
     /**
-     * Attempt to resolve a collision at the given waypoint.
+     * Classify the block (building footprint vs unit) and attempt resolution.
      * Returns true if the unit is blocked (caller should skip this tick).
      */
-    resolveBlockedWaypoint(controller: MovementController, wp: TileCoord, deltaSec: number): boolean;
+    resolveBlock(controller: MovementController, wp: TileCoord, blockingEntityId: number): boolean;
 }
 
 /**
@@ -50,7 +47,6 @@ export interface ICollisionResolver {
  */
 export interface CollisionResolverConfig {
     pathfinder: IPathfinder;
-    rng: SeededRng;
     tileOccupancy: Map<string, number>;
     buildingOccupancy: Set<string>;
     getEntity: GetEntityFn;
@@ -67,7 +63,6 @@ export interface CollisionResolverConfig {
  */
 export class CollisionResolver implements ICollisionResolver {
     private readonly pathfinder: IPathfinder;
-    private readonly rng: SeededRng;
     private readonly tileOccupancy: Map<string, number>;
     private readonly buildingOccupancy: Set<string>;
     private readonly getEntity: GetEntityFn;
@@ -85,7 +80,6 @@ export class CollisionResolver implements ICollisionResolver {
 
     constructor(config: CollisionResolverConfig) {
         this.pathfinder = config.pathfinder;
-        this.rng = config.rng;
         this.tileOccupancy = config.tileOccupancy;
         this.buildingOccupancy = config.buildingOccupancy;
         this.getEntity = config.getEntity;
@@ -107,20 +101,35 @@ export class CollisionResolver implements ICollisionResolver {
     }
 
     /**
-     * Check whether the waypoint is occupied by another unit and attempt resolution.
-     * Returns true if the unit ends up blocked (caller should break from the move loop).
+     * Classify the block and attempt resolution.
+     * Building footprint → block immediately.
+     * Non-unit occupant (door) → allow passage.
+     * Unit → delegate to unit collision resolution pipeline.
      */
-    resolveBlockedWaypoint(controller: MovementController, wp: TileCoord, _deltaSec: number): boolean {
-        const blockingEntityId = this.tileOccupancy.get(tileKey(wp.x, wp.y));
-        if (blockingEntityId === undefined || blockingEntityId === controller.entityId) {
-            return false; // tile is free — no collision
+    resolveBlock(controller: MovementController, wp: TileCoord, blockingEntityId: number): boolean {
+        const key = tileKey(wp.x, wp.y);
+
+        // Building footprint tiles are impassable (door tiles excluded from buildingOccupancy)
+        if (this.buildingOccupancy.has(key)) {
+            this.emitBlocked(controller.entityId, wp, blockingEntityId, true);
+            controller.setBlocked();
+            return true;
         }
 
+        // Non-unit occupants (e.g. door tiles owned by a building) — allow passage
         const blockingEntity = this.getEntity(blockingEntityId);
         if (!blockingEntity || blockingEntity.type !== EntityType.Unit) {
-            return false; // non-unit blocker — ignore
+            return false;
         }
 
+        this.emitBlocked(controller.entityId, wp, blockingEntityId, false);
+        return this.resolveUnitCollision(controller, blockingEntityId);
+    }
+
+    /**
+     * Resolve a collision with another unit using progressive de-blocking strategies.
+     */
+    private resolveUnitCollision(controller: MovementController, blockingEntityId: number): boolean {
         if (!this.tryResolveObstacle(controller, blockingEntityId)) {
             if (!this.tryYield(controller, blockingEntityId)) {
                 this.emitResolution(
@@ -196,26 +205,13 @@ export class CollisionResolver implements ICollisionResolver {
         if (!blockerController || blockerController.state === 'idle') return false;
 
         const goal = controller.goal;
-        const neighbors = getAllNeighbors({ x: controller.tileX, y: controller.tileY });
-
-        let best: TileCoord | null = null;
-        // Only accept lateral or forward yields — backward yields cause oscillation
-        let bestScore = -1;
-
-        for (const neighbor of neighbors) {
-            if (!this.isValidSidestepTile(neighbor.x, neighbor.y)) continue;
-
-            let score = 0;
-            if (goal) {
-                const currDist = hexDistance(controller.tileX, controller.tileY, goal.x, goal.y);
-                const newDist = hexDistance(neighbor.x, neighbor.y, goal.x, goal.y);
-                score = currDist - newDist;
-            }
-            if (score > bestScore) {
-                bestScore = score;
-                best = neighbor;
-            }
-        }
+        const best = findBestNeighbor({
+            x: controller.tileX,
+            y: controller.tileY,
+            goalX: goal?.x,
+            goalY: goal?.y,
+            isValid: (nx, ny) => this.isValidSidestepTile(nx, ny),
+        });
 
         if (!best) {
             this.emitResolution(
@@ -262,40 +258,23 @@ export class CollisionResolver implements ICollisionResolver {
         if (!blockedWp) return null;
 
         const goal = controller.goal;
-        const neighbors = getAllNeighbors({ x: controller.tileX, y: controller.tileY });
-
-        let best: TileCoord | null = null;
-        // Only accept lateral (score=0) or forward (score>0) moves.
-        // Backward sidesteps (score<0) cause oscillation in narrow passages.
-        let bestScore = -1;
-
-        for (const neighbor of neighbors) {
-            if (neighbor.x === blockedWp.x && neighbor.y === blockedWp.y) continue;
-            if (!this.isValidSidestepTile(neighbor.x, neighbor.y)) continue;
-
-            let score = 0;
-            if (goal) {
-                const currDist = hexDistance(controller.tileX, controller.tileY, goal.x, goal.y);
-                const newDist = hexDistance(neighbor.x, neighbor.y, goal.x, goal.y);
-                score = currDist - newDist;
-            }
-            if (score > bestScore) {
-                bestScore = score;
-                best = neighbor;
-            }
-        }
-
-        return best;
+        return findBestNeighbor({
+            x: controller.tileX,
+            y: controller.tileY,
+            goalX: goal?.x,
+            goalY: goal?.y,
+            excludeTile: blockedWp,
+            isValid: (nx, ny) => this.isValidSidestepTile(nx, ny),
+        });
     }
 
     /** Check if a tile is a valid sidestep candidate (in-bounds, passable, not occupied by a unit or building). */
     private isValidSidestepTile(nx: number, ny: number): boolean {
-        if (!this.groundType || !this.mapWidth || !this.mapHeight) return false;
-
-        if (nx < 0 || nx >= this.mapWidth || ny < 0 || ny >= this.mapHeight) return false;
-
-        const nIdx = nx + ny * this.mapWidth;
-        if (!isPassable(this.groundType[nIdx]!)) return false;
+        if (this.groundType && this.mapWidth && this.mapHeight) {
+            if (nx < 0 || nx >= this.mapWidth || ny < 0 || ny >= this.mapHeight) return false;
+            const nIdx = nx + ny * this.mapWidth;
+            if (!isPassable(this.groundType[nIdx]!)) return false;
+        }
 
         const key = tileKey(nx, ny);
 
@@ -416,23 +395,19 @@ export class CollisionResolver implements ICollisionResolver {
         // Do not push a unit mid-transit — it would cause a visual teleport
         if (blockedController.isInTransit) return false;
 
-        const terrain = this.buildTerrainAccessor();
-
         // Use the pusher's goal as bias — push the blocker out of the pusher's
         // path rather than toward the blocker's own goal (which may point back
         // into the pusher, causing 180° reversals in head-on collisions).
         const pushingController = this.getController(pushingEntityId);
         const biasGoal = pushingController?.goal ?? blockedController.goal;
 
-        const freeDir = findSmartFreeDirection(
-            blockedController.tileX,
-            blockedController.tileY,
-            this.tileOccupancy,
-            this.rng,
-            terrain,
-            biasGoal?.x,
-            biasGoal?.y
-        );
+        const freeDir = findBestNeighbor({
+            x: blockedController.tileX,
+            y: blockedController.tileY,
+            goalX: biasGoal?.x,
+            goalY: biasGoal?.y,
+            isValid: (nx, ny) => this.isValidSidestepTile(nx, ny),
+        });
         if (!freeDir) return false;
 
         blockedController.handlePush(freeDir.x, freeDir.y);
@@ -491,10 +466,10 @@ export class CollisionResolver implements ICollisionResolver {
         return first.x === controller.prevTileX && first.y === controller.prevTileY;
     }
 
-    /** Build a TerrainAccessor from current terrain state, or return undefined if unavailable. */
-    private buildTerrainAccessor(): TerrainAccessor | undefined {
-        if (!this.groundType || !this.mapWidth || !this.mapHeight) return undefined;
-        return { groundType: this.groundType, mapWidth: this.mapWidth, mapHeight: this.mapHeight };
+    /** Emit a movement:blocked event (when verbose mode is enabled). */
+    private emitBlocked(entityId: number, wp: TileCoord, blockerId: number, isBuilding: boolean): void {
+        if (!this.verbose) return;
+        this.eventBus.emit('movement:blocked', { entityId, x: wp.x, y: wp.y, blockerId, isBuilding });
     }
 
     /** Emit a collision resolution event (when verbose mode is enabled). */

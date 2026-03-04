@@ -43,10 +43,11 @@ export {
     pushUnit,
     findRandomFreeDirection,
     findSmartFreeDirection,
+    findBestNeighbor,
     shouldYieldToPush,
     executePush,
 } from './push-utils';
-export type { TileOccupancyAccessor, TerrainAccessor } from './push-utils';
+export type { TileOccupancyAccessor, TerrainAccessor, FindNeighborOptions } from './push-utils';
 
 // Extracted sub-modules
 export type { IPathfinder, PathfindingTerrain } from './pathfinding-service';

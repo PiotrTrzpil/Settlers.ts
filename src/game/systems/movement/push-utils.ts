@@ -7,7 +7,7 @@
 
 import { TileCoord, tileKey } from '../../entity';
 import { isPassable } from '../../terrain';
-import { GRID_DELTAS, NUMBER_OF_DIRECTIONS } from '../hex-directions';
+import { getAllNeighbors, GRID_DELTAS, hexDistance, NUMBER_OF_DIRECTIONS } from '../hex-directions';
 import { MovementController } from './movement-controller';
 import type { SeededRng } from '../../rng';
 
@@ -46,52 +46,72 @@ function isValidPushTile(nx: number, ny: number, occupancy: TileOccupancyAccesso
 }
 
 /**
- * Find a free hex neighbor for a pushed unit, preferring directions
- * that help the unit continue toward its goal.
- *
- * @param x Current x position
- * @param y Current y position
- * @param occupancy Tile occupancy map
- * @param rng Seeded random number generator for deterministic shuffling
- * @param terrain Optional terrain data for passability check
- * @param goalX Optional goal X position to prefer directions toward
- * @param goalY Optional goal Y position to prefer directions toward
+ * Options for findBestNeighbor — the shared neighbor-scoring kernel.
  */
-export function findSmartFreeDirection(
-    x: number,
-    y: number,
-    occupancy: TileOccupancyAccessor,
-    rng: SeededRng,
-    terrain?: TerrainAccessor,
-    goalX?: number,
-    goalY?: number
-): TileCoord | null {
+export interface FindNeighborOptions {
+    x: number;
+    y: number;
+    goalX?: number;
+    goalY?: number;
+    /** Tile to skip (e.g. the blocked waypoint in detour search). */
+    excludeTile?: TileCoord;
+    /** Per-tile validation callback (bounds, passability, occupancy). */
+    isValid: (nx: number, ny: number) => boolean;
+}
+
+/**
+ * Shared scoring loop for finding the best hex neighbor toward a goal.
+ * Uses hexDistance for correct hex-grid scoring.
+ * Only accepts lateral (score >= 0) or forward (score > 0) moves —
+ * backward moves (score < 0) are rejected to prevent 180° reversals.
+ */
+export function findBestNeighbor(opts: FindNeighborOptions): TileCoord | null {
+    const neighbors = getAllNeighbors({ x: opts.x, y: opts.y });
+
     let best: TileCoord | null = null;
-    // Only accept lateral (score=0) or forward (score>0) moves.
-    // Backward pushes (score<0) cause 180° reversals and visual ping-ponging.
     let bestScore = -1;
 
-    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
-        const [dx, dy] = GRID_DELTAS[d]!;
-        const nx = x + dx;
-        const ny = y + dy;
-
-        if (!isValidPushTile(nx, ny, occupancy, terrain)) continue;
+    for (const neighbor of neighbors) {
+        if (opts.excludeTile && neighbor.x === opts.excludeTile.x && neighbor.y === opts.excludeTile.y) continue;
+        if (!opts.isValid(neighbor.x, neighbor.y)) continue;
 
         let score = 0;
-        if (goalX !== undefined && goalY !== undefined) {
-            const currDist = Math.abs(x - goalX) + Math.abs(y - goalY);
-            const newDist = Math.abs(nx - goalX) + Math.abs(ny - goalY);
+        if (opts.goalX !== undefined && opts.goalY !== undefined) {
+            const currDist = hexDistance(opts.x, opts.y, opts.goalX, opts.goalY);
+            const newDist = hexDistance(neighbor.x, neighbor.y, opts.goalX, opts.goalY);
             score = currDist - newDist;
         }
 
         if (score > bestScore) {
             bestScore = score;
-            best = { x: nx, y: ny };
+            best = neighbor;
         }
     }
 
     return best;
+}
+
+/**
+ * Find a free hex neighbor for a pushed unit, preferring directions
+ * that help the unit continue toward its goal.
+ * Delegates to findBestNeighbor with push-specific tile validation.
+ */
+export function findSmartFreeDirection(
+    x: number,
+    y: number,
+    occupancy: TileOccupancyAccessor,
+    _rng: SeededRng,
+    terrain?: TerrainAccessor,
+    goalX?: number,
+    goalY?: number
+): TileCoord | null {
+    return findBestNeighbor({
+        x,
+        y,
+        goalX,
+        goalY,
+        isValid: (nx, ny) => isValidPushTile(nx, ny, occupancy, terrain),
+    });
 }
 
 /**

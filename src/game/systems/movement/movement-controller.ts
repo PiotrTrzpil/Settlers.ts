@@ -66,6 +66,17 @@ export class MovementController {
     }
 
     /**
+     * Centralized state transition. Automatically clears blocked time
+     * whenever the unit leaves the 'blocked' state.
+     */
+    private setState(newState: MovementState): void {
+        if (newState !== 'blocked') {
+            this._blockedTime = 0;
+        }
+        this._state = newState;
+    }
+
+    /**
      * Compute the current visual position (fractional tile coordinates).
      * This is what the renderer would display.
      */
@@ -198,7 +209,7 @@ export class MovementController {
 
         this._path = [...path];
         this._pathIndex = 0;
-        this._state = 'moving';
+        this.setState('moving');
 
         // Set up for smooth interpolation
         if (!this.isInTransit) {
@@ -209,7 +220,6 @@ export class MovementController {
         }
         // If in transit, keep current progress to avoid visual jump
 
-        this._blockedTime = 0;
         this.warnIfTeleported(visualBefore, 'startPath');
     }
 
@@ -227,8 +237,7 @@ export class MovementController {
 
         this._path = [...path];
         this._pathIndex = 0;
-        this._state = 'moving';
-        this._blockedTime = 0;
+        this.setState('moving');
 
         // Don't touch progress or prevTile - keep smooth motion
         this.warnIfTeleported(visualBefore, 'redirectPath');
@@ -240,8 +249,7 @@ export class MovementController {
     clearPath(): void {
         this._path = [];
         this._pathIndex = 0;
-        this._state = 'idle';
-        this._blockedTime = 0;
+        this.setState('idle');
     }
 
     // === Tick Processing ===
@@ -315,8 +323,7 @@ export class MovementController {
         this.consumeMoveTick();
 
         // Clear blocked state on successful move
-        this._blockedTime = 0;
-        this._state = 'moving';
+        this.setState('moving');
 
         return wp;
     }
@@ -327,7 +334,7 @@ export class MovementController {
      * Blocked time is accumulated externally by the movement system every tick.
      */
     setBlocked(): void {
-        this._state = 'blocked';
+        this.setState('blocked');
         this._progress = 0; // Wait for next tick
     }
 
@@ -366,12 +373,12 @@ export class MovementController {
                     this._prevTileX = this._tileX;
                     this._prevTileY = this._tileY;
                     this._progress = 0;
-                    this._state = 'idle';
+                    this.setState('idle');
                 }
             } else {
                 // Already stationary
                 this._progress = 0;
-                this._state = 'idle';
+                this.setState('idle');
             }
         }
     }
@@ -422,7 +429,7 @@ export class MovementController {
         this._distanceFactor = getStepDistanceFactor(this._tileX - this._prevTileX, this._tileY - this._prevTileY);
 
         // Set state to moving so the renderer interpolates this forced move
-        this._state = 'moving';
+        this.setState('moving');
     }
 
     /**

@@ -76,15 +76,11 @@ export class MovementSystem implements TickSystem {
     private readonly updatePositionFn: UpdatePositionFn;
     private readonly getEntityFn: GetEntityFn;
 
-    // Seeded RNG for deterministic push behavior
-    private readonly rng: SeededRng;
-
     // Previous movement state per controller for change detection
     private prevStates: Map<number, MovementState> = new Map();
 
     constructor(config: MovementSystemConfig) {
         this.eventBus = config.eventBus;
-        this.rng = config.rng;
         this.updatePositionFn = config.updatePosition;
         this.getEntityFn = config.getEntity;
         this.tileOccupancy = config.tileOccupancy;
@@ -94,7 +90,6 @@ export class MovementSystem implements TickSystem {
         this.pathfinder.setBuildingOccupancy(config.buildingOccupancy);
         this.collisionResolver = new CollisionResolver({
             pathfinder: this.pathfinder,
-            rng: this.rng,
             tileOccupancy: config.tileOccupancy,
             buildingOccupancy: config.buildingOccupancy,
             getEntity: this.getEntityFn,
@@ -295,50 +290,12 @@ export class MovementSystem implements TickSystem {
             return false; // tile is free
         }
 
-        // Building footprint tiles are impassable (door tiles excluded from buildingOccupancy).
-        if (this.buildingOccupancy.has(key)) {
-            if (this.verbose) {
-                this.eventBus.emit('movement:blocked', {
-                    entityId: controller.entityId,
-                    x: wp.x,
-                    y: wp.y,
-                    blockerId: blockingEntityId,
-                    isBuilding: true,
-                });
-            }
-            return this.handleBuildingBlock(controller, deltaSec);
-        }
-
-        // Non-unit occupants (e.g. door tiles owned by a building) — allow passage
-        const blockingEntity = this.getEntityFn(blockingEntityId);
-        if (!blockingEntity || blockingEntity.type !== EntityType.Unit) {
-            return false;
-        }
-
-        if (this.verbose) {
-            this.eventBus.emit('movement:blocked', {
-                entityId: controller.entityId,
-                x: wp.x,
-                y: wp.y,
-                blockerId: blockingEntityId,
-                isBuilding: false,
-            });
-        }
-
         // Escalation (give-up / escalated repath) takes precedence over normal resolution
         const escalated = this.tryEscalate(controller, deltaSec);
         if (escalated !== null) return escalated;
 
-        // Normal collision resolution (detour, repair, push, yield, wait)
-        return this.collisionResolver.resolveBlockedWaypoint(controller, wp, deltaSec);
-    }
-
-    /** Handle a building-footprint block, escalating through the blocked-state handler. */
-    private handleBuildingBlock(controller: MovementController, deltaSec: number): boolean {
-        const escalated = this.tryEscalate(controller, deltaSec);
-        if (escalated !== null) return escalated;
-        controller.setBlocked();
-        return true;
+        // Block classification + resolution (building footprint, non-unit, unit collision)
+        return this.collisionResolver.resolveBlock(controller, wp, blockingEntityId);
     }
 
     /**
