@@ -31,6 +31,7 @@ export const MaterialRequestFeature: FeatureDefinition = {
 
         const system = new MaterialRequestSystem({
             gameState: ctx.gameState,
+            eventBus: ctx.eventBus,
             constructionSiteManager,
             inventoryManager,
             requestManager,
@@ -39,6 +40,7 @@ export const MaterialRequestFeature: FeatureDefinition = {
         return {
             systems: [system],
             exports: { materialRequestSystem: system } satisfies MaterialRequestExports,
+            destroy: () => system.destroy(),
         };
     },
 };

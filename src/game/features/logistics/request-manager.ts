@@ -6,6 +6,7 @@
  */
 
 import { EMaterialType } from '../../economy/material-type';
+import type { EventBus } from '../../event-bus';
 import {
     ResourceRequest,
     RequestPriority,
@@ -29,27 +30,6 @@ export type RequestResetReason =
     | 'cancelled';
 
 /**
- * Events emitted by the RequestManager.
- */
-export interface RequestManagerEvents {
-    /** Emitted when a new request is added */
-    requestAdded: { request: ResourceRequest };
-    /** Emitted when a request is removed/cancelled */
-    requestRemoved: { requestId: number };
-    /** Emitted when a request is assigned to a carrier */
-    requestAssigned: { request: ResourceRequest; carrierId: number; sourceBuilding: number };
-    /** Emitted when a request is fulfilled */
-    requestFulfilled: { request: ResourceRequest };
-    /** Emitted when a request is reset to pending (e.g., carrier dropped it, timeout) */
-    requestReset: { request: ResourceRequest; reason: RequestResetReason };
-}
-
-/**
- * Callback type for request event listeners.
- */
-export type RequestEventListener<K extends keyof RequestManagerEvents> = (data: RequestManagerEvents[K]) => void;
-
-/**
  * Manages resource requests from buildings.
  *
  * Provides methods to add, remove, query, and fulfill requests.
@@ -69,10 +49,33 @@ export class RequestManager {
      * Set to true by invalidatePendingCache() when requests are mutated. */
     private pendingCacheDirty = true;
 
-    /** Event listeners */
-    private listeners: {
-        [K in keyof RequestManagerEvents]?: Set<RequestEventListener<K>>;
-    } = {};
+    /**
+     * Accumulated game time in seconds. Updated each tick via advanceTime().
+     * Used for deterministic request timestamps and stall detection
+     * instead of wall-clock Date.now().
+     */
+    private gameTime = 0;
+
+    /** Global event bus — all events are emitted under the `logistics:` namespace. */
+    private readonly eventBus: EventBus | null;
+
+    constructor(eventBus?: EventBus) {
+        this.eventBus = eventBus ?? null;
+    }
+
+    /**
+     * Advance the internal game clock. Call once per tick with the game delta time.
+     * All time-based operations (timestamps, stall detection) use this clock
+     * instead of wall-clock time for determinism.
+     */
+    advanceTime(dt: number): void {
+        this.gameTime += dt;
+    }
+
+    /** Get the current accumulated game time in seconds. */
+    getGameTime(): number {
+        return this.gameTime;
+    }
 
     /**
      * Add a new resource request.
@@ -89,11 +92,17 @@ export class RequestManager {
         amount: number,
         priority: RequestPriority = RequestPriority.Normal
     ): ResourceRequest {
-        const request = createResourceRequest(this.nextId++, buildingId, materialType, amount, priority);
+        const request = createResourceRequest(this.nextId++, buildingId, materialType, amount, priority, this.gameTime);
 
         this.requests.set(request.id, request);
         this.invalidatePendingCache();
-        this.emit('requestAdded', { request });
+        this.eventBus?.emit('logistics:requestCreated', {
+            requestId: request.id,
+            buildingId: request.buildingId,
+            materialType: request.materialType,
+            amount: request.amount,
+            priority: request.priority,
+        });
 
         return request;
     }
@@ -115,7 +124,7 @@ export class RequestManager {
 
         this.requests.delete(requestId);
         this.invalidatePendingCache();
-        this.emit('requestRemoved', { requestId });
+        this.eventBus?.emit('logistics:requestRemoved', { requestId });
 
         return true;
     }
@@ -187,10 +196,14 @@ export class RequestManager {
         request.status = RequestStatus.InProgress;
         request.assignedCarrier = carrierId;
         request.sourceBuilding = sourceBuilding;
-        request.assignedAt = Date.now();
+        request.assignedAt = this.gameTime;
         this.invalidatePendingCache();
 
-        this.emit('requestAssigned', { request, carrierId, sourceBuilding });
+        this.eventBus?.emit('logistics:requestAssigned', {
+            requestId: request.id,
+            carrierId,
+            sourceBuilding,
+        });
 
         return true;
     }
@@ -209,7 +222,11 @@ export class RequestManager {
 
         request.status = RequestStatus.Fulfilled;
         this.invalidatePendingCache();
-        this.emit('requestFulfilled', { request });
+        this.eventBus?.emit('logistics:requestFulfilled', {
+            requestId: request.id,
+            buildingId: request.buildingId,
+            materialType: request.materialType,
+        });
 
         // Remove fulfilled requests to prevent memory buildup
         this.requests.delete(requestId);
@@ -316,17 +333,18 @@ export class RequestManager {
     /**
      * Get all in-progress requests that have been assigned longer than the given duration.
      *
-     * @param maxAgeMs Maximum age in milliseconds before a request is considered stalled
+     * Uses deterministic game time (advanced via advanceTime) instead of wall-clock time.
+     *
+     * @param maxAgeSec Maximum age in seconds before a request is considered stalled
      * @returns Array of requests that have exceeded the timeout
      */
-    getStalledRequests(maxAgeMs: number): ResourceRequest[] {
-        const now = Date.now();
+    getStalledRequests(maxAgeSec: number): ResourceRequest[] {
         const stalled: ResourceRequest[] = [];
 
         for (const request of this.requests.values()) {
             if (request.status === RequestStatus.InProgress && request.assignedAt !== null) {
-                const age = now - request.assignedAt;
-                if (age > maxAgeMs) {
+                const age = this.gameTime - request.assignedAt;
+                if (age > maxAgeSec) {
                     stalled.push(request);
                 }
             }
@@ -395,8 +413,9 @@ export class RequestManager {
         this.requests.clear();
         this.invalidatePendingCache();
         this.nextId = 1;
+        this.gameTime = 0;
         for (const id of ids) {
-            this.emit('requestRemoved', { requestId: id });
+            this.eventBus?.emit('logistics:requestRemoved', { requestId: id });
         }
     }
 
@@ -437,7 +456,12 @@ export class RequestManager {
         request.assignedCarrier = null;
         request.sourceBuilding = null;
         request.assignedAt = null;
-        this.emit('requestReset', { request, reason });
+        this.eventBus?.emit('logistics:requestReset', {
+            requestId: request.id,
+            buildingId: request.buildingId,
+            materialType: request.materialType,
+            reason,
+        });
     }
 
     /** Return request IDs sorted numerically for deterministic iteration. */
@@ -447,39 +471,5 @@ export class RequestManager {
 
     private invalidatePendingCache(): void {
         this.pendingCacheDirty = true;
-    }
-
-    // === Event System ===
-
-    /**
-     * Subscribe to a request event.
-     */
-    on<K extends keyof RequestManagerEvents>(event: K, listener: RequestEventListener<K>): void {
-        if (!this.listeners[event]) {
-            this.listeners[event] = new Set<RequestEventListener<K>>() as any; // TS limitation with mapped type writes
-        }
-        this.listeners[event]!.add(listener);
-    }
-
-    /**
-     * Unsubscribe from a request event.
-     */
-    off<K extends keyof RequestManagerEvents>(event: K, listener: RequestEventListener<K>): void {
-        const listeners = this.listeners[event];
-        if (listeners) {
-            listeners.delete(listener);
-        }
-    }
-
-    /**
-     * Emit a request event.
-     */
-    private emit<K extends keyof RequestManagerEvents>(event: K, data: RequestManagerEvents[K]): void {
-        const listeners = this.listeners[event];
-        if (listeners) {
-            for (const listener of listeners) {
-                listener(data);
-            }
-        }
     }
 }

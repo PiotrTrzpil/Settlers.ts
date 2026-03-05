@@ -14,11 +14,11 @@ import type { RequestManager } from './request-manager';
 import type { InventoryReservationManager } from './inventory-reservation';
 import type { TransportJob } from './transport-job';
 
-/** Request timeout in milliseconds — requests older than this are considered stalled. */
-const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
+/** Request timeout in game-time seconds — requests older than this are considered stalled. */
+const REQUEST_TIMEOUT_SEC = 30;
 
-/** How often to check for stalled requests (in milliseconds). */
-const STALL_CHECK_INTERVAL_MS = 5_000; // Check every 5 seconds
+/** How often to check for stalled requests (in game-time seconds). */
+const STALL_CHECK_INTERVAL_SEC = 5;
 
 const log = new LogHandler('StallDetector');
 
@@ -38,7 +38,7 @@ export class StallDetector {
     private readonly requestManager: RequestManager;
     private readonly reservationManager: InventoryReservationManager;
 
-    /** Accumulated time since last stall check (in ms). */
+    /** Accumulated game time since last stall check (in seconds). */
     private timeSinceCheck = 0;
 
     constructor(config: StallDetectorConfig) {
@@ -50,12 +50,14 @@ export class StallDetector {
      * Advance the stall-check timer. When the interval elapses, scans all
      * in-progress requests and cancels those that have exceeded the timeout.
      *
+     * Uses game-time seconds (deterministic) rather than wall-clock time.
+     *
      * @param dt Delta time in seconds.
      * @param activeJobs Map of carrier ID → TransportJob (mutated: stalled jobs are deleted).
      */
     tick(dt: number, activeJobs: Map<number, TransportJob>): void {
-        this.timeSinceCheck += dt * 1000;
-        if (this.timeSinceCheck >= STALL_CHECK_INTERVAL_MS) {
+        this.timeSinceCheck += dt;
+        if (this.timeSinceCheck >= STALL_CHECK_INTERVAL_SEC) {
             this.timeSinceCheck = 0;
             this.checkNow(activeJobs);
         }
@@ -67,11 +69,11 @@ export class StallDetector {
      * @param activeJobs Map of carrier ID → TransportJob (mutated: stalled jobs are deleted).
      */
     checkNow(activeJobs: Map<number, TransportJob>): void {
-        const stalledRequests = this.requestManager.getStalledRequests(REQUEST_TIMEOUT_MS);
+        const stalledRequests = this.requestManager.getStalledRequests(REQUEST_TIMEOUT_SEC);
 
         for (const request of stalledRequests) {
             log.warn(
-                `Request #${request.id} stalled after ${REQUEST_TIMEOUT_MS / 1000}s: ` +
+                `Request #${request.id} stalled after ${REQUEST_TIMEOUT_SEC}s: ` +
                     `material=${request.materialType}, building=${request.buildingId}, carrier=${request.assignedCarrier}. ` +
                     'Cancelling transport job.'
             );

@@ -36,6 +36,9 @@ export enum RequestStatus {
 
 /**
  * A request for materials to be delivered to a building.
+ *
+ * All time fields use accumulated game time (seconds) rather than wall-clock
+ * time to preserve determinism across game speeds, pauses, and replays.
  */
 export interface ResourceRequest {
     /** Unique identifier for this request */
@@ -48,7 +51,7 @@ export interface ResourceRequest {
     amount: number;
     /** Priority level of the request */
     priority: RequestPriority;
-    /** Timestamp when the request was created (for ordering) */
+    /** Game time when the request was created (seconds, for ordering) */
     readonly timestamp: number;
     /** Current status of the request */
     status: RequestStatus;
@@ -56,7 +59,7 @@ export interface ResourceRequest {
     assignedCarrier: number | null;
     /** Entity ID of the source building (if matched) */
     sourceBuilding: number | null;
-    /** Timestamp when the request was assigned to a carrier (for timeout detection) */
+    /** Game time when the request was assigned to a carrier (seconds, for timeout detection) */
     assignedAt: number | null;
 }
 
@@ -68,6 +71,7 @@ export interface ResourceRequest {
  * @param materialType Type of material requested
  * @param amount Amount of material requested
  * @param priority Priority level (defaults to Normal)
+ * @param gameTime Current accumulated game time in seconds (for deterministic ordering)
  * @returns A new ResourceRequest
  */
 export function createResourceRequest(
@@ -75,7 +79,8 @@ export function createResourceRequest(
     buildingId: number,
     materialType: EMaterialType,
     amount: number,
-    priority: RequestPriority = RequestPriority.Normal
+    priority: RequestPriority = RequestPriority.Normal,
+    gameTime: number = 0
 ): ResourceRequest {
     return {
         id,
@@ -83,7 +88,7 @@ export function createResourceRequest(
         materialType,
         amount: Math.max(1, Math.floor(amount)),
         priority,
-        timestamp: Date.now(),
+        timestamp: gameTime,
         status: RequestStatus.Pending,
         assignedCarrier: null,
         sourceBuilding: null,

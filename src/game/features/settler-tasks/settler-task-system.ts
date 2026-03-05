@@ -35,12 +35,6 @@ import { JobPartResolverImpl } from './job-part-resolver';
 import { TriggerSystemImpl } from '../building-overlays/trigger-system';
 import { getGameDataLoader } from '@/resources/game-data';
 import type { ChoreoContext } from './choreo-types';
-import { createChoreoJobState } from './choreo-types';
-import type { TransportJob } from '../logistics/transport-job';
-import { raceToRaceId } from '../../game-data-access';
-import { getBuildingDoorPos } from '../../game-data-access';
-import { BuildingType } from '../../buildings/building-type';
-import { EMaterialType } from '../../economy';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import type { BuildingOverlayManager } from '../building-overlays/building-overlay-manager';
 import type { OreVeinData } from '../ore-veins/ore-vein-data';
@@ -191,6 +185,16 @@ export class SettlerTaskSystem implements TickSystem {
         log.debug(
             `Loaded ${this.settlerConfigs.size} settler configs, ${this.choreographyStore.cacheSize} cached jobs`
         );
+    }
+
+    /** Expose the building position resolver for external consumers (logistics transport job builder). */
+    getPositionResolver(): BuildingPositionResolverImpl {
+        return this.buildingPositionResolver;
+    }
+
+    /** Expose the choreography store for external consumers (logistics transport job builder). */
+    getChoreographyStore(): JobChoreographyStore {
+        return this.choreographyStore;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -385,37 +389,6 @@ export class SettlerTaskSystem implements TickSystem {
     }
 
     /**
-     * Build a ChoreoJobState for a carrier transport delivery.
-     * Resolves pile positions (output pile at source, input pile at dest) via the
-     * building position resolver, falling back to building door.
-     */
-    buildTransportJob(transportJob: TransportJob, carrierId: number): JobState {
-        const sourcePos = this.resolveTransportPos(transportJob.sourceBuilding, transportJob.material, 'output');
-        const destPos = this.resolveTransportPos(transportJob.destBuilding, transportJob.material, 'input');
-
-        const carrier = this.gameState.getEntityOrThrow(carrierId, 'transport carrier');
-        const raceId = raceToRaceId(carrier.race);
-        const xmlJob = this.choreographyStore.getJob(raceId, 'JOB_CARRIER_TRANSPORT_GOOD');
-        if (!xmlJob) {
-            throw new Error(`JOB_CARRIER_TRANSPORT_GOOD not found for race ${raceId}`);
-        }
-
-        const job = createChoreoJobState(xmlJob.id, structuredClone(xmlJob.nodes));
-        job.managedTargetPos = true;
-        job.targetPos = { x: sourcePos.x, y: sourcePos.y };
-        job.transportData = {
-            transportJob,
-            sourceBuildingId: transportJob.sourceBuilding,
-            destBuildingId: transportJob.destBuilding,
-            material: transportJob.material,
-            amount: transportJob.amount,
-            destPos,
-        };
-
-        return job;
-    }
-
-    /**
      * Assign an externally-constructed job to a unit.
      * Used by LogisticsDispatcher for carrier transport jobs and potentially
      * for future external job assignments (military orders, etc.).
@@ -594,25 +567,5 @@ export class SettlerTaskSystem implements TickSystem {
         } else {
             this.workerExecutor.interruptJob(entity, config, runtime);
         }
-    }
-
-    /**
-     * Resolve a pile position for a carrier transport (output pile for pickup, input pile for delivery).
-     * Falls back to building door when no pile is defined in the building config.
-     */
-    private resolveTransportPos(
-        buildingId: number,
-        material: EMaterialType,
-        slotType: 'input' | 'output'
-    ): { x: number; y: number } {
-        const materialName = EMaterialType[material];
-        // getSourcePilePosition = input pile, getDestinationPilePosition = output pile
-        const pile =
-            slotType === 'input'
-                ? this.buildingPositionResolver.getSourcePilePosition(buildingId, materialName)
-                : this.buildingPositionResolver.getDestinationPilePosition(buildingId, materialName);
-        if (pile) return pile;
-        const building = this.gameState.getEntityOrThrow(buildingId, 'transport building');
-        return getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
     }
 }

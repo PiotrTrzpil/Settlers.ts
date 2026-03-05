@@ -26,12 +26,12 @@ import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
 import type { TransportJob } from './transport-job';
 import type { BuildingInventoryManager } from '../inventory';
-import type { SettlerTaskSystem } from '../settler-tasks';
 import type { TerritoryManager } from '../territory';
 import { RequestMatcher } from './request-matcher';
-import { CarrierAssigner } from './carrier-assigner';
+import { CarrierAssigner, type JobAssigner } from './carrier-assigner';
 import { StallDetector } from './stall-detector';
 import { MatchDiagnostics } from './match-diagnostics';
+import { TransportJobBuilder, type TransportPositionResolver, type ChoreographyLookup } from './transport-job-builder';
 
 /** Maximum number of job assignments per tick (to avoid frame drops) */
 const MAX_ASSIGNMENTS_PER_TICK = 5;
@@ -44,7 +44,9 @@ export interface LogisticsDispatcherConfig {
     gameState: GameState;
     eventBus: EventBus;
     carrierManager: CarrierManager;
-    settlerTaskSystem: SettlerTaskSystem;
+    jobAssigner: JobAssigner;
+    positionResolver: TransportPositionResolver;
+    choreographyLookup: ChoreographyLookup;
     requestManager: RequestManager;
     serviceAreaManager: ServiceAreaManager;
     inventoryManager: BuildingInventoryManager;
@@ -90,11 +92,18 @@ export class LogisticsDispatcher implements TickSystem {
             reservationManager: this.reservationManager,
         });
 
+        const transportJobBuilder = new TransportJobBuilder({
+            gameState: config.gameState,
+            positionResolver: config.positionResolver,
+            choreographyLookup: config.choreographyLookup,
+        });
+
         this.carrierAssigner = new CarrierAssigner({
             gameState: config.gameState,
             eventBus: config.eventBus,
             carrierManager: config.carrierManager,
-            settlerTaskSystem: config.settlerTaskSystem,
+            jobAssigner: config.jobAssigner,
+            transportJobBuilder,
             serviceAreaManager: config.serviceAreaManager,
             reservationManager: this.reservationManager,
             requestManager: config.requestManager,
@@ -149,6 +158,13 @@ export class LogisticsDispatcher implements TickSystem {
         this.subscriptions.subscribe(eventBus, 'carrier:deliveryComplete', onCarrierJobEnd);
         this.subscriptions.subscribe(eventBus, 'carrier:pickupFailed', onCarrierJobEnd);
 
+        // Unified cleanup: TransportJob.cancel() emits this event regardless of which path cancelled.
+        // This ensures activeJobs is always cleaned up — even when cancellation comes from
+        // WorkerTaskExecutor.interruptJob() (the "dual path" that previously left stale entries).
+        this.subscriptions.subscribe(eventBus, 'carrier:transportCancelled', ({ carrierId }) =>
+            this.activeJobs.delete(carrierId)
+        );
+
         this.subscriptions.subscribe(eventBus, 'carrier:removed', ({ entityId }) =>
             this.handleCarrierRemoved(entityId)
         );
@@ -173,6 +189,7 @@ export class LogisticsDispatcher implements TickSystem {
      */
     tick(dt: number): void {
         this.elapsedTime += dt;
+        this.requestManager.advanceTime(dt);
         this.matchDiagnostics.tick(dt);
         this.assignPendingRequests();
         this.matchDiagnostics.markConsumed();

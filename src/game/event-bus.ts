@@ -187,6 +187,13 @@ export interface GameEvents {
         material: EMaterialType;
     };
 
+    /** Emitted when a transport job is cancelled (from any path — task interruption, carrier removal, etc.) */
+    'carrier:transportCancelled': {
+        carrierId: number;
+        requestId: number;
+        reason: string;
+    };
+
     /** Emitted when carrier assignment fails (reservation failed or movement failed) */
     'carrier:assignmentFailed': {
         requestId: number;
@@ -232,6 +239,33 @@ export interface GameEvents {
         amount: number;
         /** RequestPriority enum value (0=High, 1=Normal, 2=Low) */
         priority: number;
+    };
+
+    /** Emitted when a resource request is removed/cancelled */
+    'logistics:requestRemoved': {
+        requestId: number;
+    };
+
+    /** Emitted when a resource request is assigned to a carrier */
+    'logistics:requestAssigned': {
+        requestId: number;
+        carrierId: number;
+        sourceBuilding: number;
+    };
+
+    /** Emitted when a resource request is fulfilled (delivery complete) */
+    'logistics:requestFulfilled': {
+        requestId: number;
+        buildingId: number;
+        materialType: EMaterialType;
+    };
+
+    /** Emitted when a resource request is reset to pending (carrier dropped it, timeout, etc.) */
+    'logistics:requestReset': {
+        requestId: number;
+        buildingId: number;
+        materialType: EMaterialType;
+        reason: string;
     };
 
     // === Inventory Events ===

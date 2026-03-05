@@ -126,6 +126,34 @@ export class CarrierManager {
     }
 
     /**
+     * Transition carrier to Walking (assigned a transport job).
+     */
+    startTransport(carrierId: number): void {
+        this.setStatus(carrierId, CarrierStatus.Walking);
+    }
+
+    /**
+     * Transition carrier to PickingUp (arrived at source, picking up material).
+     */
+    startPickup(carrierId: number): void {
+        this.setStatus(carrierId, CarrierStatus.PickingUp);
+    }
+
+    /**
+     * Transition carrier to Delivering (carrying material to destination).
+     */
+    startDelivery(carrierId: number): void {
+        this.setStatus(carrierId, CarrierStatus.Delivering);
+    }
+
+    /**
+     * Transition carrier back to Idle (delivery complete or job cancelled).
+     */
+    completeTransport(carrierId: number): void {
+        this.setStatus(carrierId, CarrierStatus.Idle);
+    }
+
+    /**
      * Get all carrier states.
      */
     *getAllCarriers(): IterableIterator<CarrierState> {

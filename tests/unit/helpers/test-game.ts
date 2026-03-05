@@ -151,7 +151,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     });
     const inventoryManager = new BuildingInventoryManager();
     const serviceAreaManager = new ServiceAreaManager();
-    const requestManager = new RequestManager();
+    const requestManager = new RequestManager(eventBus);
     const constructionSiteManager = new ConstructionSiteManager(eventBus);
 
     // Pre-declare context variable so the lazy executor closure can capture it

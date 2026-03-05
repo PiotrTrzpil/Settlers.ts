@@ -10,6 +10,7 @@ import type { EMaterialType } from '../../economy/material-type';
 import type { BuildingInventoryManager } from '../inventory';
 import type { InventoryReservationManager } from './inventory-reservation';
 import type { RequestManager, RequestResetReason } from './request-manager';
+import type { EventBus } from '../../event-bus';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('TransportJob');
@@ -20,6 +21,7 @@ export interface TransportJobDeps {
     reservationManager: InventoryReservationManager;
     requestManager: RequestManager;
     inventoryManager: BuildingInventoryManager;
+    eventBus: EventBus;
 }
 
 let nextJobId = 1;
@@ -32,6 +34,7 @@ export class TransportJob {
     readonly material: EMaterialType;
     readonly amount: number;
     readonly reservationId: number;
+    readonly carrierId: number;
 
     private _status: TransportJobStatus = 'active';
     private readonly deps: TransportJobDeps;
@@ -70,6 +73,7 @@ export class TransportJob {
             material,
             reservation.amount,
             reservation.id,
+            carrierId,
             deps
         );
     }
@@ -81,6 +85,7 @@ export class TransportJob {
         material: EMaterialType,
         amount: number,
         reservationId: number,
+        carrierId: number,
         deps: TransportJobDeps
     ) {
         this.id = nextJobId++;
@@ -90,6 +95,7 @@ export class TransportJob {
         this.material = material;
         this.amount = amount;
         this.reservationId = reservationId;
+        this.carrierId = carrierId;
         this.deps = deps;
     }
 
@@ -160,6 +166,14 @@ export class TransportJob {
         // Reset request back to pending so it can be reassigned
         this.deps.requestManager.resetRequest(this.requestId, reason);
         this._status = 'cancelled';
+
+        // Notify listeners so LogisticsDispatcher.activeJobs can be cleaned up
+        // regardless of which path triggered the cancellation.
+        this.deps.eventBus.emit('carrier:transportCancelled', {
+            carrierId: this.carrierId,
+            requestId: this.requestId,
+            reason,
+        });
     }
 }
 

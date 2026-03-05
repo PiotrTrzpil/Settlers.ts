@@ -278,11 +278,9 @@ export class WorkerTaskExecutor {
         job.nodeIndex++;
         job.progress = 0;
         job.workStarted = false;
-        // Reset targetPos unless executors manage it between nodes (e.g. transport jobs
-        // pre-set the next movement target in GET_GOOD / PUT_GOOD transport branches).
-        if (!job.managedTargetPos) {
-            job.targetPos = null;
-        }
+        // Reset targetPos between nodes. Transport jobs read positions directly from
+        // transportData (sourcePos/destPos) so they don't rely on cross-node targetPos.
+        job.targetPos = null;
         // Apply animation for next node if there is one
         if (job.nodeIndex < nodes.length) {
             this.applyChoreoAnimation(settler, nodes[job.nodeIndex]!);

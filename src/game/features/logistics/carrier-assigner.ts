@@ -11,21 +11,28 @@
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { CarrierManager } from '../carriers';
-import { CarrierStatus } from '../carriers';
 import type { ServiceAreaManager } from '../service-areas';
-import type { SettlerTaskSystem } from '../settler-tasks';
 import { TransportJob } from './transport-job';
 import type { InventoryReservationManager } from './inventory-reservation';
 import type { RequestManager } from './request-manager';
 import type { BuildingInventoryManager } from '../inventory';
 import type { RequestMatchResult } from './request-matcher';
 import type { ResourceRequest } from './resource-request';
+import type { TransportJobBuilder } from './transport-job-builder';
+import type { JobState } from '../settler-tasks/types';
+import { hexDistance } from '../../systems/hex-directions';
+
+/** Assigns a job to a settler and optionally starts movement. */
+export interface JobAssigner {
+    assignJob(entityId: number, job: JobState, moveTo?: { x: number; y: number }): boolean;
+}
 
 export interface CarrierAssignerConfig {
     gameState: GameState;
     eventBus: EventBus;
     carrierManager: CarrierManager;
-    settlerTaskSystem: SettlerTaskSystem;
+    jobAssigner: JobAssigner;
+    transportJobBuilder: TransportJobBuilder;
     serviceAreaManager: ServiceAreaManager;
     reservationManager: InventoryReservationManager;
     requestManager: RequestManager;
@@ -50,7 +57,8 @@ export class CarrierAssigner {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
     private readonly carrierManager: CarrierManager;
-    private readonly settlerTaskSystem: SettlerTaskSystem;
+    private readonly jobAssigner: JobAssigner;
+    private readonly transportJobBuilder: TransportJobBuilder;
     private readonly serviceAreaManager: ServiceAreaManager;
     private readonly reservationManager: InventoryReservationManager;
     private readonly requestManager: RequestManager;
@@ -63,7 +71,8 @@ export class CarrierAssigner {
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
         this.carrierManager = config.carrierManager;
-        this.settlerTaskSystem = config.settlerTaskSystem;
+        this.jobAssigner = config.jobAssigner;
+        this.transportJobBuilder = config.transportJobBuilder;
         this.serviceAreaManager = config.serviceAreaManager;
         this.reservationManager = config.reservationManager;
         this.requestManager = config.requestManager;
@@ -76,7 +85,8 @@ export class CarrierAssigner {
      * @returns AssignmentSuccess on success, `'no_carrier'` when all carriers are busy, or null on hard failure.
      */
     tryAssign(request: ResourceRequest, match: RequestMatchResult): AssignmentSuccess | 'no_carrier' | null {
-        const carrier = this.findAvailableCarrier(match.serviceHubs, match.playerId);
+        const sourceBuilding = this.gameState.getEntityOrThrow(match.sourceBuilding, 'carrier source building');
+        const carrier = this.findAvailableCarrier(sourceBuilding.x, sourceBuilding.y, match.playerId);
         if (!carrier) {
             return 'no_carrier';
         }
@@ -92,6 +102,7 @@ export class CarrierAssigner {
                 reservationManager: this.reservationManager,
                 requestManager: this.requestManager,
                 inventoryManager: this.inventoryManager,
+                eventBus: this.eventBus,
             }
         );
 
@@ -107,11 +118,11 @@ export class CarrierAssigner {
             return null;
         }
 
-        const job = this.settlerTaskSystem.buildTransportJob(transportJob, carrier.entityId);
-        const success = this.settlerTaskSystem.assignJob(carrier.entityId, job, job.targetPos!);
+        const job = this.transportJobBuilder.build(transportJob, carrier.entityId);
+        const success = this.jobAssigner.assignJob(carrier.entityId, job, job.targetPos!);
 
         if (success) {
-            this.carrierManager.setStatus(carrier.entityId, CarrierStatus.Walking);
+            this.carrierManager.startTransport(carrier.entityId);
             this.eventBus.emit('carrier:assigned', {
                 requestId: request.id,
                 carrierId: carrier.entityId,
@@ -135,16 +146,25 @@ export class CarrierAssigner {
     }
 
     /**
-     * Find an available idle carrier for the given player.
+     * Find the nearest available idle carrier for the given player.
+     * Prefers carriers closest to the source building to minimize transport time.
      */
-    private findAvailableCarrier(_serviceHubs: number[], playerId: number): { entityId: number } | null {
+    private findAvailableCarrier(sourceX: number, sourceY: number, playerId: number): { entityId: number } | null {
+        let bestId: number | null = null;
+        let bestDist = Infinity;
+
         for (const carrier of this.carrierManager.getAllCarriers()) {
+            if (!this.carrierManager.canAssignJobTo(carrier.entityId)) continue;
             const entity = this.gameState.getEntity(carrier.entityId);
             if (!entity || entity.player !== playerId) continue;
-            if (this.carrierManager.canAssignJobTo(carrier.entityId)) {
-                return { entityId: carrier.entityId };
+
+            const dist = hexDistance(entity.x, entity.y, sourceX, sourceY);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestId = carrier.entityId;
             }
         }
-        return null;
+
+        return bestId !== null ? { entityId: bestId } : null;
     }
 }

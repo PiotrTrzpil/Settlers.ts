@@ -203,14 +203,42 @@ export const executeGoHome: ChoreoExecutorFn = (settler, job, node, _dt, ctx) =>
 };
 
 /**
- * GO_TO_SOURCE_PILE / GO_TO_DESTINATION_PILE — move to a pile position.
+ * GO_TO_SOURCE_PILE — move to a source pile position for pickup.
  *
- * The XML already encodes the exact pile position as a building-relative (x, y) offset
- * on the node — no material-based registry lookup is needed. The implementation is
- * identical to GO_TO_POS: resolve building-relative offset, then walk there.
+ * For carrier transport jobs: reads the source position directly from
+ * transportData.sourcePos, pre-resolved by TransportJobBuilder.
+ * For regular workers: resolves the building-relative (x, y) offset from the XML node,
+ * identical to GO_TO_POS.
  */
-export const executeGoToSourcePile: ChoreoExecutorFn = executeGoToPos;
-export const executeGoToDestinationPile: ChoreoExecutorFn = executeGoToPos;
+export const executeGoToSourcePile: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
+    // Transport jobs: read source directly from transport data
+    if (job.transportData) {
+        const { sourcePos } = job.transportData;
+        return moveToPosition(settler, sourcePos.x, sourcePos.y, node, ctx, ARRIVAL_DIST);
+    }
+
+    // Regular workers: resolve building-relative offset (same as GO_TO_POS)
+    return executeGoToPos(settler, job, node, _dt, ctx);
+};
+
+/**
+ * GO_TO_DESTINATION_PILE — move to a destination pile position for delivery.
+ *
+ * For carrier transport jobs: reads the destination position directly from
+ * transportData.destPos, making the data flow explicit (no cross-node targetPos coupling).
+ * For regular workers: resolves the building-relative (x, y) offset from the XML node,
+ * identical to GO_TO_POS.
+ */
+export const executeGoToDestinationPile: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
+    // Transport jobs: read destination directly from transport data
+    if (job.transportData) {
+        const { destPos } = job.transportData;
+        return moveToPosition(settler, destPos.x, destPos.y, node, ctx, ARRIVAL_DIST);
+    }
+
+    // Regular workers: resolve building-relative offset (same as GO_TO_POS)
+    return executeGoToPos(settler, job, node, _dt, ctx);
+};
 
 /** Try entity handler search. Returns null when entityHandler is absent. */
 function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: MovementContext): TaskResult | null {

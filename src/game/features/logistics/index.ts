@@ -55,7 +55,7 @@ export {
 } from './resource-supply';
 
 // Request manager
-export { RequestManager, type RequestManagerEvents, type RequestEventListener } from './request-manager';
+export { RequestManager, type RequestResetReason } from './request-manager';
 
 // Fulfillment matching
 export {
@@ -85,7 +85,20 @@ export { TransportJob, type TransportJobDeps, type TransportJobStatus } from './
 export { RequestMatcher, type RequestMatcherConfig, type RequestMatchResult } from './request-matcher';
 
 // Carrier assigner (finds idle carriers and creates transport jobs)
-export { CarrierAssigner, type CarrierAssignerConfig, type AssignmentSuccess } from './carrier-assigner';
+export {
+    CarrierAssigner,
+    type CarrierAssignerConfig,
+    type AssignmentSuccess,
+    type JobAssigner,
+} from './carrier-assigner';
+
+// Transport job builder (constructs ChoreoJobState for carrier transport)
+export {
+    TransportJobBuilder,
+    type TransportJobBuilderConfig,
+    type TransportPositionResolver,
+    type ChoreographyLookup,
+} from './transport-job-builder';
 
 // Stall detector (cancels timed-out in-progress requests)
 export { StallDetector, type StallDetectorConfig } from './stall-detector';

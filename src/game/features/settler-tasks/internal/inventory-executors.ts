@@ -11,10 +11,10 @@
 
 import { type Entity, setCarrying, clearCarrying } from '../../../entity';
 import { EMaterialType } from '../../../economy';
-import { CarrierStatus } from '../../carriers';
 import { LogHandler } from '@/utilities/log-handler';
 import { TaskResult } from '../types';
 import type { ChoreoJobState, ChoreoNode, ChoreoContext, ChoreoExecutorFn, InventoryContext } from '../choreo-types';
+import { executeTransportPickup, executeTransportDelivery } from './transport-executors';
 
 const log = new LogHandler('InventoryExecutors');
 
@@ -98,42 +98,9 @@ export const executeGetGood: ChoreoExecutorFn = (
     _dt: number,
     ctx: ChoreoContext
 ): TaskResult => {
-    // ── Carrier transport branch ──
+    // ── Carrier transport branch (delegated to transport-executors) ──
     if (job.transportData) {
-        const td = job.transportData;
-        const { transportJob, material, sourceBuildingId, amount: requestedAmount } = td;
-
-        const withdrawn = transportJob.pickup();
-
-        if (withdrawn === 0) {
-            log.warn(`Carrier ${settler.id}: pickup failed at building ${sourceBuildingId}`);
-            ctx.eventBus.emit('carrier:pickupFailed', {
-                entityId: settler.id,
-                material,
-                fromBuilding: sourceBuildingId,
-                requestedAmount,
-            });
-            return TaskResult.FAILED;
-        }
-
-        setCarrying(settler, material, withdrawn);
-        job.carryingGood = material;
-        td.amount = withdrawn;
-
-        log.debug(
-            `Carrier ${settler.id} picked up ${withdrawn} of ${EMaterialType[material]} from building ${sourceBuildingId}`
-        );
-
-        ctx.eventBus.emit('carrier:pickupComplete', {
-            entityId: settler.id,
-            material,
-            amount: withdrawn,
-            fromBuilding: sourceBuildingId,
-        });
-
-        // Pre-set targetPos for the next movement node (GO_TO_DESTINATION_PILE)
-        job.targetPos = { x: td.destPos.x, y: td.destPos.y };
-        return TaskResult.DONE;
+        return executeTransportPickup(settler, job, job.transportData, ctx);
     }
 
     // ── Regular worker branch ──
@@ -171,46 +138,9 @@ export const executePutGood: ChoreoExecutorFn = (
     _dt: number,
     ctx: ChoreoContext
 ): TaskResult => {
-    // ── Carrier transport branch ──
+    // ── Carrier transport branch (delegated to transport-executors) ──
     if (job.transportData) {
-        const td = job.transportData;
-        const { transportJob, destBuildingId, material } = td;
-
-        if (!settler.carrying) {
-            throw new Error(
-                `Carrier ${settler.id}: PUT_GOOD called but settler is not carrying anything ` +
-                    `(job: material=${EMaterialType[material]})`
-            );
-        }
-
-        const amount = settler.carrying.amount;
-        const deposited = transportJob.complete(amount);
-
-        const overflow = amount - deposited;
-        if (overflow > 0) {
-            log.warn(
-                `Carrier ${settler.id}: ${overflow} of ${EMaterialType[material]} overflow at building ${destBuildingId}`
-            );
-        }
-
-        clearCarrying(settler);
-        job.carryingGood = null;
-
-        log.debug(
-            `Carrier ${settler.id} delivered ${deposited} of ${EMaterialType[material]} to building ${destBuildingId}`
-        );
-
-        ctx.carrierManager.setStatus(settler.id, CarrierStatus.Idle);
-
-        ctx.eventBus.emit('carrier:deliveryComplete', {
-            entityId: settler.id,
-            material,
-            amount: deposited,
-            toBuilding: destBuildingId,
-            overflow,
-        });
-
-        return TaskResult.DONE;
+        return executeTransportDelivery(settler, job, job.transportData, ctx);
     }
 
     // ── Regular worker branch ──

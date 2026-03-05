@@ -18,6 +18,7 @@ describe('MaterialRequestSystem', () => {
 
         const config: MaterialRequestSystemConfig = {
             gameState: ctx.state,
+            eventBus: ctx.eventBus,
             constructionSiteManager,
             inventoryManager: ctx.inventoryManager,
             requestManager: ctx.requestManager,

@@ -16,7 +16,8 @@ import {
 } from '../helpers/test-game';
 import { installTestGameData } from '../helpers/test-game-data';
 import { LogisticsDispatcher } from '@/game/features/logistics/logistics-dispatcher';
-import type { SettlerTaskSystem } from '@/game/features/settler-tasks';
+import type { JobAssigner } from '@/game/features/logistics/carrier-assigner';
+import type { TransportPositionResolver, ChoreographyLookup } from '@/game/features/logistics/transport-job-builder';
 import { BuildingType } from '@/game/buildings/building-type';
 import { UnitType } from '@/game/unit-types';
 import { EMaterialType } from '@/game/economy/material-type';
@@ -30,18 +31,29 @@ describe('LogisticsDispatcher', () => {
         installTestGameData();
         ctx = createTestContext(64, 64);
 
-        // Create a mock settler task system — we need assignJob and buildTransportJob
+        // Create mock dependencies for job assignment and transport job building
         assignJobSpy = vi.fn().mockReturnValue(true);
-        const mockSettlerTaskSystem = {
-            assignJob: assignJobSpy,
-            buildTransportJob: vi.fn().mockReturnValue({ targetPos: { x: 0, y: 0 } }),
-        } as unknown as SettlerTaskSystem;
+        const mockJobAssigner: JobAssigner = {
+            assignJob: assignJobSpy as JobAssigner['assignJob'],
+        };
+        const mockPositionResolver: TransportPositionResolver = {
+            getSourcePilePosition: vi.fn().mockReturnValue({ x: 0, y: 0 }),
+            getDestinationPilePosition: vi.fn().mockReturnValue({ x: 0, y: 0 }),
+        };
+        const mockChoreographyLookup: ChoreographyLookup = {
+            getJob: vi.fn<ChoreographyLookup['getJob']>().mockReturnValue({
+                id: 'JOB_CARRIER_TRANSPORT_GOOD',
+                nodes: [],
+            }),
+        };
 
         dispatcher = new LogisticsDispatcher({
             gameState: ctx.state,
             eventBus: ctx.eventBus,
             carrierManager: ctx.carrierManager,
-            settlerTaskSystem: mockSettlerTaskSystem,
+            jobAssigner: mockJobAssigner,
+            positionResolver: mockPositionResolver,
+            choreographyLookup: mockChoreographyLookup,
             requestManager: ctx.requestManager,
             serviceAreaManager: ctx.serviceAreaManager,
             inventoryManager: ctx.inventoryManager,

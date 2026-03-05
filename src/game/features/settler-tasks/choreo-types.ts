@@ -154,7 +154,9 @@ export interface TransportData {
     material: EMaterialType;
     /** Amount to transport. */
     amount: number;
-    /** Pre-resolved destination position (input pile / door). */
+    /** Pre-resolved source position (output pile / door for pickup). */
+    sourcePos: { x: number; y: number };
+    /** Pre-resolved destination position (input pile / door for delivery). */
     destPos: { x: number; y: number };
 }
 
@@ -181,11 +183,6 @@ export interface ChoreoJobState {
     carryingGood: EMaterialType | null;
     /** Whether work was started for current node (for cleanup tracking) */
     workStarted: boolean;
-    /**
-     * When true, executors manage targetPos between nodes (e.g. transport jobs pre-set the
-     * next movement target before returning DONE). advanceToNextNode must not reset targetPos.
-     */
-    managedTargetPos: boolean;
     /** Transport data for carrier jobs (GET_GOOD / PUT_GOOD transport branches). */
     transportData?: TransportData;
 }
@@ -204,7 +201,6 @@ export function createChoreoJobState(jobId: string, nodes: ChoreoNode[] = []): C
         targetPos: null,
         carryingGood: null,
         workStarted: false,
-        managedTargetPos: false,
     };
 }
 
@@ -236,7 +232,14 @@ export interface TriggerSystem {
     stopTrigger(buildingId: number, triggerId: string): void;
 }
 
-/** Context required by movement-phase executors (GO_TO_TARGET, GO_HOME, SEARCH, …). */
+/**
+ * Context required by movement-phase executors (GO_TO_TARGET, GO_HOME, SEARCH, …).
+ *
+ * Used by: movement-executors.ts
+ * Fields: gameState (entity lookup, movement commands), buildingPositionResolver (building-relative
+ * offset → world coords), getWorkerHomeBuilding (settler → home building mapping),
+ * entityHandler/positionHandler (SEARCH target finding).
+ */
 export interface MovementContext {
     gameState: GameState;
     buildingPositionResolver: BuildingPositionResolver;
@@ -246,7 +249,13 @@ export interface MovementContext {
     positionHandler?: PositionWorkHandler;
 }
 
-/** Context required by work-phase executors (WORK, WORK_ON_ENTITY, PRODUCE_VIRTUAL, …). */
+/**
+ * Context required by work-phase executors (WORK, WORK_ON_ENTITY, PRODUCE_VIRTUAL, …).
+ *
+ * Used by: work-executors.ts
+ * Fields: gameState (entity lookup), triggerSystem (building overlay animations),
+ * getWorkerHomeBuilding (home building ID), entityHandler/positionHandler (work completion callbacks).
+ */
 export interface WorkContext {
     gameState: GameState;
     triggerSystem: TriggerSystem;
@@ -256,13 +265,23 @@ export interface WorkContext {
     positionHandler?: PositionWorkHandler;
 }
 
-/** Context required by inventory executors (GET_GOOD, PUT_GOOD, RESOURCE_GATHERING, …). */
+/**
+ * Context required by inventory executors (GET_GOOD, PUT_GOOD, RESOURCE_GATHERING, …).
+ *
+ * Used by: inventory-executors.ts
+ * Fields: inventoryManager (withdraw/deposit operations), getWorkerHomeBuilding (settler → building mapping).
+ */
 export interface InventoryContext {
     inventoryManager: BuildingInventoryManager;
     getWorkerHomeBuilding: (settlerId: number) => number | null;
 }
 
-/** Context required by transport (carrier) executors. */
+/**
+ * Context required by transport (carrier) executors.
+ *
+ * Used by: transport-executors.ts
+ * Fields: eventBus (carrier lifecycle events), carrierManager (status transitions).
+ */
 export interface TransportContext {
     eventBus: EventBus;
     carrierManager: CarrierManager;
@@ -270,7 +289,15 @@ export interface TransportContext {
 
 /**
  * Full service bag for choreography executors — composes all phase-specific contexts.
- * Ancillary services (jobPartResolver) are used by the task
+ *
+ * Each executor only uses a subset of this context:
+ * - Movement executors (GO_TO_*, SEARCH): MovementContext fields
+ * - Work executors (WORK, WORK_ON_ENTITY, PLANT): WorkContext fields
+ * - Inventory executors (GET_GOOD, PUT_GOOD, RESOURCE_GATHERING, LOAD_GOOD): InventoryContext fields
+ * - Transport executors (carrier branches of GET_GOOD/PUT_GOOD): TransportContext fields
+ *
+ * The sub-interfaces above document which fields each phase requires.
+ * Ancillary services (jobPartResolver, executeCommand) are used by the task
  * system itself rather than by individual executor functions.
  */
 export interface ChoreoContext extends MovementContext, WorkContext, InventoryContext, TransportContext {

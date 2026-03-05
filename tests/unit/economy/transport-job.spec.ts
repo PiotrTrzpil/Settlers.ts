@@ -11,6 +11,7 @@ import { InventoryReservationManager } from '@/game/features/logistics/inventory
 import { EMaterialType } from '@/game/economy';
 import { RequestPriority, RequestStatus } from '@/game/features/logistics';
 import type { BuildingInventoryManager } from '@/game/features/inventory';
+import { EventBus } from '@/game/event-bus';
 
 // ─── Minimal BuildingInventoryManager stub ──────────────────────────
 
@@ -70,6 +71,7 @@ describe('TransportJob', () => {
     let requestManager: RequestManager;
     let reservationManager: InventoryReservationManager;
     let inventoryManager: InventoryStub;
+    let eventBus: EventBus;
 
     const SOURCE = 100;
     const DEST = 200;
@@ -78,7 +80,8 @@ describe('TransportJob', () => {
 
     beforeEach(() => {
         resetTransportJobIds();
-        requestManager = new RequestManager();
+        eventBus = new EventBus();
+        requestManager = new RequestManager(eventBus);
         inventoryManager = createInventoryStub(5);
         reservationManager = new InventoryReservationManager(inventoryManager as unknown as BuildingInventoryManager);
     });
@@ -92,6 +95,7 @@ describe('TransportJob', () => {
             reservationManager,
             requestManager,
             inventoryManager: inventoryManager as unknown as BuildingInventoryManager,
+            eventBus,
         });
     }
 
@@ -129,6 +133,7 @@ describe('TransportJob', () => {
                 reservationManager,
                 requestManager,
                 inventoryManager: inventoryManager as unknown as BuildingInventoryManager,
+                eventBus,
             });
 
             expect(job).toBeNull();
