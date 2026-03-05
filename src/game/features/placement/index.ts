@@ -35,6 +35,9 @@ export {
     canPlaceUnit,
 } from './placement-validator';
 
+// Building-specific validator (used by indicator renderer for exact parity)
+export { validateBuildingPlacement } from './internal/building-validator';
+
 // Terrain checks (needed by movement, pathfinding, etc.)
 export { isPassable, isBuildable, isMineBuildable, isRock } from './terrain';
 

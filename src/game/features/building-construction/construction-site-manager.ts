@@ -14,12 +14,12 @@
  */
 
 import type { BuildingType } from '../../buildings/types';
-import { getBuildingSize } from '../../buildings/types';
 import type { Race } from '../../race';
 import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionCost } from '../../economy/building-production';
 import { getConstructionCosts } from '../../economy/building-production';
 import type { EventBus } from '../../event-bus';
+import { getBuildingInfo } from '../../game-data-access';
 import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionSite } from './types';
 
 // ── Serialization types ──
@@ -47,14 +47,16 @@ export interface SerializedConstructionSite {
 
 // ── Worker count helpers ──
 
+/** Default worker count when XML data is unavailable (e.g. eyecatchers without BuildingInfo). */
+const DEFAULT_WORKER_COUNT = 2;
+
 /**
- * Derive worker slot count from building footprint area.
- * 2×2 (area ≤ 4) → 2 workers; 3×3 (area = 9) → 3 workers.
+ * Get worker slot count from XML builderNumber.
+ * Falls back to DEFAULT_WORKER_COUNT if no BuildingInfo exists for this building/race.
  */
-function getWorkerCount(buildingType: BuildingType): number {
-    const size = getBuildingSize(buildingType);
-    const area = size.width * size.height;
-    return area <= 4 ? 2 : 3;
+function getWorkerCount(buildingType: BuildingType, race: Race): number {
+    const info = getBuildingInfo(race, buildingType);
+    return info ? info.builderNumber : DEFAULT_WORKER_COUNT;
 }
 
 // ── ConstructionSiteManager ──
@@ -107,7 +109,7 @@ export class ConstructionSiteManager {
 
         const constructionCosts = getConstructionCosts(buildingType, race);
         const totalCost = constructionCosts.reduce((sum, c) => sum + c.count, 0);
-        const workerCount = getWorkerCount(buildingType);
+        const workerCount = getWorkerCount(buildingType, race);
 
         const site: ConstructionSite = {
             buildingId,
@@ -482,7 +484,7 @@ export class ConstructionSiteManager {
 
         const constructionCosts = getConstructionCosts(data.buildingType, data.race);
         const totalCost = constructionCosts.reduce((sum, c) => sum + c.count, 0);
-        const workerCount = getWorkerCount(data.buildingType);
+        const workerCount = getWorkerCount(data.buildingType, data.race);
 
         const delivered = new Map<EMaterialType, number>(data.deliveredMaterials);
         const deliveredAmount = [...delivered.values()].reduce((sum, v) => sum + v, 0);

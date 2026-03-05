@@ -212,6 +212,46 @@ export class InventoryReservationManager {
     }
 
     /**
+     * Transfer a reservation from one building to another.
+     * Used when building piles are converted to free piles — the reservation
+     * moves from the destroyed building's inventory to the pile entity's inventory.
+     *
+     * @returns True if the transfer succeeded
+     */
+    transferReservation(requestId: number, newBuildingId: number): boolean {
+        const reservationId = this.byRequest.get(requestId);
+        if (reservationId === undefined) return false;
+        const old = this.reservations.get(reservationId);
+        if (!old) return false;
+
+        // Release slot-level reservation on old building
+        this.inventoryManager.releaseOutputReservation(old.buildingId, old.materialType, old.amount);
+
+        // Reserve on new building
+        const actualReserved = this.inventoryManager.reserveOutput(newBuildingId, old.materialType, old.amount);
+        if (actualReserved === 0) return false;
+
+        // Remove old index entry
+        const oldKey = reservationKey(old.buildingId, old.materialType);
+        this.byBuildingMaterial.get(oldKey)?.delete(reservationId);
+
+        // Create updated reservation
+        const updated: InventoryReservation = { ...old, buildingId: newBuildingId, amount: actualReserved };
+        this.reservations.set(reservationId, updated);
+
+        // Add new index entry
+        const newKey = reservationKey(newBuildingId, old.materialType);
+        let byNew = this.byBuildingMaterial.get(newKey);
+        if (!byNew) {
+            byNew = new Set();
+            this.byBuildingMaterial.set(newKey, byNew);
+        }
+        byNew.add(reservationId);
+
+        return true;
+    }
+
+    /**
      * Release all reservations for a building.
      * Useful when a building is destroyed.
      *

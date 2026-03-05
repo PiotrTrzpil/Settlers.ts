@@ -7,6 +7,7 @@
  */
 
 import { EMaterialType } from '../../economy';
+import { EntityType } from '../../entity';
 import { BuildingType } from '../../buildings/building-type';
 import { raceToRaceId, getBuildingDoorPos } from '../../game-data-access';
 import { createChoreoJobState, type ChoreoJob } from '../settler-tasks/choreo-types';
@@ -100,7 +101,9 @@ export class TransportJobBuilder {
                 ? this.positionResolver.getSourcePilePosition(buildingId, materialName)
                 : this.positionResolver.getDestinationPilePosition(buildingId, materialName);
         if (pile) return pile;
-        const building = this.gameState.getEntityOrThrow(buildingId, 'transport building');
-        return getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
+        const entity = this.gameState.getEntityOrThrow(buildingId, 'transport building/pile');
+        // Free piles: use entity position directly (not a building, no door offset)
+        if (entity.type !== EntityType.Building) return entity;
+        return getBuildingDoorPos(entity.x, entity.y, entity.race, entity.subType as BuildingType);
     }
 }

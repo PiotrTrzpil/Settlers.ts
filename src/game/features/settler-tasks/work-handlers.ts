@@ -519,12 +519,6 @@ export function createGeologistHandler(
 // Construction handlers (digger + builder)
 // ─────────────────────────────────────────────────────────────
 
-/** Total base construction cycles (scaled by totalCostAmount) */
-const BUILDING_CYCLES_BASE = 2;
-
-/** Minimum total construction cycles */
-const MIN_BUILDING_CYCLES = 4;
-
 const diggerLog = new LogHandler('DiggerHandler');
 const builderLog = new LogHandler('BuilderHandler');
 
@@ -590,8 +584,13 @@ export function createDiggerHandler(
             const site = constructionSiteManager.getSite(buildingId);
             if (!site) return null;
 
+            // Check that pending + assigned doesn't exceed slot limit
+            const pending = pendingClaims.get(buildingId);
+            const pendingCount = pending ? pending.length : 0;
+            if (site.terrain.slots.assigned.size + pendingCount >= site.terrain.slots.required) return null;
+
             // Queue this settler for slot claim in onWorkStart
-            const queue = pendingClaims.get(buildingId) ?? [];
+            const queue = pending ?? [];
             queue.push(settlerId);
             pendingClaims.set(buildingId, queue);
 
@@ -705,8 +704,13 @@ export function createBuilderHandler(
             const site = constructionSiteManager.getSite(buildingId);
             if (!site) return null;
 
+            // Check that pending + assigned doesn't exceed slot limit
+            const pending = pendingClaims.get(buildingId);
+            const pendingCount = pending ? pending.length : 0;
+            if (site.building.slots.assigned.size + pendingCount >= site.building.slots.required) return null;
+
             // Queue this settler for slot claim in onWorkStart
-            const queue = pendingClaims.get(buildingId) ?? [];
+            const queue = pending ?? [];
             queue.push(settlerId);
             pendingClaims.set(buildingId, queue);
 
@@ -744,8 +748,7 @@ export function createBuilderHandler(
         onWorkComplete: (targetId: number) => {
             const site = constructionSiteManager.getSite(targetId);
             if (site) {
-                const totalCycles = Math.max(MIN_BUILDING_CYCLES, BUILDING_CYCLES_BASE * site.materials.totalCost);
-                const progressPerCycle = 1.0 / (totalCycles / site.building.slots.required);
+                const progressPerCycle = 1.0 / site.materials.totalCost;
                 constructionSiteManager.advanceConstruction(targetId, progressPerCycle);
                 // Consume one unit of material per work cycle
                 site.materials.consumedAmount += 1;

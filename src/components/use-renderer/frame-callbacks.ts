@@ -233,7 +233,12 @@ export function createRenderCallback(
             }
 
             // Update building indicator renderer state
-            ctx.indicatorRenderer?.setState(inPlacementMode, g.state.entities, er.placementPreview);
+            ctx.indicatorRenderer?.setState(
+                inPlacementMode,
+                g.state.tileOccupancy,
+                g.state.buildingFootprint,
+                er.placementPreview
+            );
 
             er.tileHighlights = renderState?.highlights ?? [];
         }

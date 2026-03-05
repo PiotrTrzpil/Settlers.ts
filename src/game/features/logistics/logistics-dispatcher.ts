@@ -14,6 +14,7 @@
  */
 
 import type { TickSystem } from '../../tick-system';
+import type { EMaterialType } from '../../economy/material-type';
 import { sortedEntries } from '@/utilities/collections';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { CLEANUP_PRIORITY } from '../../systems/entity-cleanup-registry';
@@ -69,8 +70,8 @@ export class LogisticsDispatcher implements TickSystem {
 
     private readonly eventBus: EventBus;
 
-    /** Active transport jobs indexed by carrier ID */
-    private readonly activeJobs: Map<number, TransportJob> = new Map();
+    /** Active transport jobs indexed by carrier ID. Exposed read-only for testing/diagnostics. */
+    readonly activeJobs: Map<number, TransportJob> = new Map();
 
     /** Throttle for `logistics:noCarrier` and `logistics:noMatch` — tracks last emit time per key. */
     private readonly noCarrierCooldowns = new Map<string, number>();
@@ -79,6 +80,9 @@ export class LogisticsDispatcher implements TickSystem {
 
     /** Event subscription manager for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
+
+    /** Pending pile redirects from building destruction (set at DEFAULT, consumed at LOGISTICS priority). */
+    private readonly pendingPileRedirects = new Map<number, Map<EMaterialType, number>>();
 
     constructor(config: LogisticsDispatcherConfig) {
         this.eventBus = config.eventBus;
@@ -167,6 +171,12 @@ export class LogisticsDispatcher implements TickSystem {
 
         this.subscriptions.subscribe(eventBus, 'carrier:removed', ({ entityId }) =>
             this.handleCarrierRemoved(entityId)
+        );
+
+        // Store pile redirect info when building piles are converted to free piles.
+        // This fires at DEFAULT priority (before LOGISTICS), so data is ready for handleBuildingDestroyed.
+        this.subscriptions.subscribe(eventBus, 'pile:buildingPilesConverted', ({ buildingId, piles }) =>
+            this.pendingPileRedirects.set(buildingId, piles)
         );
 
         // Clean up logistics state when buildings are destroyed.
@@ -293,12 +303,30 @@ export class LogisticsDispatcher implements TickSystem {
             jobsCancelled: 0,
         };
 
-        // Cancel all active TransportJobs that reference this building
+        // Check if building piles were converted to free piles (set by pile:buildingPilesConverted at DEFAULT priority)
+        const pileRedirects = this.pendingPileRedirects.get(buildingId);
+        this.pendingPileRedirects.delete(buildingId);
+
+        // Handle active TransportJobs referencing this building
         for (const [carrierId, job] of sortedEntries(this.activeJobs)) {
-            if (job.sourceBuilding === buildingId || job.destBuilding === buildingId) {
+            if (job.destBuilding === buildingId) {
+                // Destination destroyed — must cancel, carrier has nowhere to deliver
                 job.cancel('building_destroyed');
                 this.activeJobs.delete(carrierId);
                 result.jobsCancelled++;
+            } else if (job.sourceBuilding === buildingId) {
+                // Source destroyed — redirect to free pile if it exists
+                const pileEntityId = pileRedirects?.get(job.material);
+                if (
+                    pileEntityId !== undefined &&
+                    this.reservationManager.transferReservation(job.requestId, pileEntityId)
+                ) {
+                    job.sourceBuilding = pileEntityId;
+                } else {
+                    job.cancel('building_destroyed');
+                    this.activeJobs.delete(carrierId);
+                    result.jobsCancelled++;
+                }
             }
         }
 

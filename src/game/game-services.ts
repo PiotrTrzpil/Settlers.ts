@@ -411,6 +411,9 @@ export class GameServices {
             this.workAreaStore.removeInstance(entityId);
         });
 
+        // Free pile logistics — register output-only inventory so carriers can pick up free piles.
+        this.subscriptions.subscribe(eventBus, 'pile:freePilePlaced', this.onFreePilePlaced.bind(this));
+
         // Construction site registration — register when a building is placed, remove when entity is cleaned up.
         // Also creates and swaps inventories: construction inventory on placement, production on completion.
         this.subscriptions.subscribe(eventBus, 'building:placed', this.onBuildingPlaced.bind(this));
@@ -527,6 +530,25 @@ export class GameServices {
         }
     }
 
+    private onFreePilePlaced({ entityId, materialType, quantity }: GameEvents['pile:freePilePlaced']): void {
+        const entity = this.gameState.getEntityOrThrow(entityId, 'onFreePilePlaced');
+
+        // Assign ownership based on territory — free piles belong to whoever controls the land.
+        if (entity.player === 0) {
+            const owner = this.territoryManager.getOwner(entity.x, entity.y);
+            if (owner >= 0) {
+                entity.player = owner;
+            }
+        }
+
+        // Register an output-only inventory so the logistics system can discover and pick up free piles.
+        this.inventoryManager.createInventoryFromConfig(entityId, BuildingType.StorageArea, {
+            inputSlots: [],
+            outputSlots: [{ materialType, maxCapacity: quantity }],
+        });
+        this.inventoryManager.depositOutput(entityId, materialType, quantity);
+    }
+
     private onBuildingPlaced({ entityId, buildingType, x, y, player }: GameEvents['building:placed']): void {
         const entity = this.gameState.getEntity(entityId);
         if (!entity) return;
@@ -546,13 +568,26 @@ export class GameServices {
         newAmount,
         previousAmount,
     }: GameEvents['inventory:changed']): void {
-        if (slotType !== 'input') return;
-        if (newAmount <= previousAmount) return; // not a deposit
-        const site = this.constructionSiteManager.getSite(buildingId);
-        if (!site) return;
-        const deposited = newAmount - previousAmount;
-        this.constructionSiteManager.recordDelivery(buildingId, materialType, deposited);
-        this.eventBus.emit('construction:materialDelivered', { buildingId, material: materialType });
+        // Construction material delivery tracking
+        if (slotType === 'input' && newAmount > previousAmount) {
+            const site = this.constructionSiteManager.getSite(buildingId);
+            if (site) {
+                const deposited = newAmount - previousAmount;
+                this.constructionSiteManager.recordDelivery(buildingId, materialType, deposited);
+                this.eventBus.emit('construction:materialDelivered', { buildingId, material: materialType });
+            }
+        }
+
+        // Free pile sync: when output is withdrawn, update pile quantity and remove if depleted
+        if (slotType === 'output' && newAmount < previousAmount) {
+            const entity = this.gameState.getEntity(buildingId);
+            if (entity?.type === EntityType.StackedPile) {
+                this.gameState.piles.setQuantity(buildingId, newAmount);
+                if (newAmount === 0) {
+                    this.gameState.removeEntity(buildingId);
+                }
+            }
+        }
     }
 
     private onBuildingCompleted({ entityId, buildingType, race }: GameEvents['building:completed']): void {

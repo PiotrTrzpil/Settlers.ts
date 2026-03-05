@@ -7,6 +7,7 @@ import { EntityType } from '../entity';
 import { GameState } from '../game-state';
 import { S4_TO_MATERIAL_TYPE } from '../game-data-access';
 import { LogHandler } from '@/utilities/log-handler';
+import type { EventBus } from '../event-bus';
 import type { MapStackData } from '@/resources/map/map-entity-data';
 import { S4GoodType } from '@/resources/map/s4-types';
 
@@ -20,7 +21,7 @@ const log = new LogHandler('Map:Stacks');
  *
  * @returns Number of stacks successfully created
  */
-export function populateMapStacks(state: GameState, stacks: MapStackData[]): number {
+export function populateMapStacks(state: GameState, stacks: MapStackData[], eventBus?: EventBus): number {
     let created = 0;
     let skipped = 0;
 
@@ -48,6 +49,13 @@ export function populateMapStacks(state: GameState, stacks: MapStackData[]): num
         const entity = state.addEntity(EntityType.StackedPile, materialType, stackData.x, stackData.y, 0);
         // entity:created handler in game-services.ts calls createState(entity.id) with kind: 'free' as default.
         state.piles.setQuantity(entity.id, stackData.amount);
+
+        // Register free pile as output source for the logistics system
+        eventBus?.emit('pile:freePilePlaced', {
+            entityId: entity.id,
+            materialType,
+            quantity: stackData.amount,
+        });
 
         created++;
     }

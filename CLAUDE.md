@@ -32,6 +32,7 @@ pnpm format           # Prettier formatting
 ```sh
 DUMP_TIMELINE=1 pnpm test:unit      # Dump timeline diagnostics for every test
 VERBOSE_MOVEMENT=1 pnpm test:unit   # Include detailed pathfinding/movement events in timeline
+VERBOSE_CHOREO=1 pnpm test:unit     # Include detailed choreography events in timeline
 ```
 
 ## Key patterns

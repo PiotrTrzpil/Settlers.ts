@@ -2,9 +2,9 @@ import type { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
-import { Entity, EntityType, TileCoord, tileKey, BuildingType, getBuildingFootprint, isMineBuilding } from '../entity';
-import { getAllNeighbors } from '../systems/hex-directions';
-import { PlacementStatus } from '../features/placement';
+import { TileCoord, BuildingType, getBuildingFootprint } from '../entity';
+import { PlacementStatus, validateBuildingPlacement } from '../features/placement';
+import type { PlacementContext } from '../features/placement';
 import type { Race } from '../race';
 import { ShaderProgram } from './shader-program';
 import type { PlacementPreviewState } from './render-context';
@@ -16,17 +16,10 @@ import fragCode from './shaders/entity-frag.glsl';
 export { PlacementStatus } from '../features/placement';
 
 /**
- * Injected terrain validation functions for building indicator display.
- * Decouples the renderer from direct feature module imports.
- * The glue layer (use-renderer.ts) provides an implementation sourced from features/placement.
+ * Injected functions for building indicator color gradient display.
+ * Placement validation is handled directly via validateBuildingPlacement.
  */
 export interface PlacementChecker {
-    /** Check if a ground type value allows building placement */
-    isBuildableTerrain(groundTypeValue: number): boolean;
-    /** Check if a ground type value allows mine placement */
-    isMineBuildableTerrain(groundTypeValue: number): boolean;
-    /** Compute slope difficulty for a building footprint */
-    computeSlopeDifficulty(footprint: TileCoord[], groundHeight: Uint8Array, mapSize: MapSize): PlacementStatus;
     /** Compute height range across a footprint (for color gradient) */
     computeHeightRange(footprint: TileCoord[], groundHeight: Uint8Array, mapSize: MapSize): number;
     /** Maximum slope difference for gradient normalization */
@@ -122,6 +115,8 @@ export class BuildingIndicatorRenderer implements IRenderer {
     private cacheZoom = 0;
     private cacheBuildingType: BuildingType | null = null;
     private cachePlacementRace: Race | null = null;
+    private cacheOccupancySize = 0;
+    private cacheBuildingFootprintSize = 0;
 
     // State set per-frame by the glue layer
     private enabled = false;
@@ -129,10 +124,9 @@ export class BuildingIndicatorRenderer implements IRenderer {
     public buildingType: BuildingType | null = null;
     public placementRace: Race | null = null;
 
-    // Occupancy maps — rebuilt when entities change
-    public tileOccupancy: Map<string, number> = new Map();
-    public buildingFootprint: Set<string> = new Set();
-    private occupancyEntitiesRef: readonly Entity[] | null = null;
+    // Occupancy maps — shared references from game state (not copied)
+    public tileOccupancy: ReadonlyMap<string, number> = new Map();
+    public buildingFootprint: ReadonlySet<string> = new Set();
 
     constructor(mapSize: MapSize, groundType: Uint8Array, groundHeight: Uint8Array, placement: PlacementChecker) {
         this.mapSize = mapSize;
@@ -147,7 +141,8 @@ export class BuildingIndicatorRenderer implements IRenderer {
      */
     public setState(
         indicatorsEnabled: boolean,
-        entities: readonly Entity[],
+        tileOccupancy: ReadonlyMap<string, number>,
+        buildingFootprint: ReadonlySet<string>,
         placementPreview: PlacementPreviewState | null
     ): void {
         this.enabled = indicatorsEnabled;
@@ -155,30 +150,8 @@ export class BuildingIndicatorRenderer implements IRenderer {
         this.buildingType =
             placementPreview?.entityType === 'building' ? (placementPreview.subType as BuildingType) : null;
         this.placementRace = placementPreview?.entityType === 'building' ? (placementPreview.race ?? null) : null;
-
-        // Rebuild occupancy map only when entities change
-        if (indicatorsEnabled && entities !== this.occupancyEntitiesRef) {
-            this.rebuildOccupancyMap(entities);
-            this.occupancyEntitiesRef = entities;
-        }
-    }
-
-    /** Rebuild the tile occupancy map from current entities. */
-    private rebuildOccupancyMap(entities: readonly Entity[]): void {
-        this.tileOccupancy.clear();
-        this.buildingFootprint.clear();
-        for (const e of entities) {
-            if (e.type === EntityType.Building) {
-                const footprint = getBuildingFootprint(e.x, e.y, e.subType as BuildingType, e.race);
-                for (const tile of footprint) {
-                    const key = `${tile.x},${tile.y}`;
-                    this.tileOccupancy.set(key, e.id);
-                    this.buildingFootprint.add(key);
-                }
-            } else {
-                this.tileOccupancy.set(`${e.x},${e.y}`, e.id);
-            }
-        }
+        this.tileOccupancy = tileOccupancy;
+        this.buildingFootprint = buildingFootprint;
     }
 
     // eslint-disable-next-line @typescript-eslint/require-await -- IRenderer interface requires Promise
@@ -214,62 +187,24 @@ export class BuildingIndicatorRenderer implements IRenderer {
         this.shaderProgram = null;
     }
 
-    /** Check if footprint is within map bounds */
-    private isFootprintInBounds(footprint: TileCoord[]): boolean {
-        return footprint.every(t => t.x >= 0 && t.x < this.mapSize.width && t.y >= 0 && t.y < this.mapSize.height);
-    }
-
-    /** Check individual tile for basic placement requirements */
-    private checkTileBasics(tile: TileCoord, isMine: boolean): PlacementStatus | null {
-        const idx = this.mapSize.toIndex(tile.x, tile.y);
-        const terrainOk = isMine
-            ? this.placement.isMineBuildableTerrain(this.groundType[idx]!)
-            : this.placement.isBuildableTerrain(this.groundType[idx]!);
-        if (!terrainOk) return PlacementStatus.InvalidTerrain;
-        if (this.tileOccupancy.has(tileKey(tile.x, tile.y))) return PlacementStatus.Occupied;
-        return null;
-    }
-
-    /** Check if new footprint would touch any existing building footprint tile. */
-    private footprintTouchesBuilding(footprint: TileCoord[]): boolean {
-        const fpKeys = new Set(footprint.map(t => tileKey(t.x, t.y)));
-        for (const tile of footprint) {
-            for (const n of getAllNeighbors(tile)) {
-                const key = tileKey(n.x, n.y);
-                if (!fpKeys.has(key) && this.buildingFootprint.has(key)) return true;
-            }
-        }
-        return false;
-    }
-
-    /** Compute slope difficulty rating using injected placement logic */
-    private computeSlopeDifficultyForFootprint(footprint: TileCoord[]): PlacementStatus {
-        return this.placement.computeSlopeDifficulty(footprint, this.groundHeight, this.mapSize);
-    }
-
     /**
-     * Compute placement status for placing a building with top-left at (x, y).
-     * Checks the entire building footprint.
+     * Compute placement status for placing a building at (x, y).
+     * Delegates to the same validateBuildingPlacement used by the placement mode
+     * to guarantee indicator dots match the actual placement validator.
      */
     public computePlacementStatus(x: number, y: number): PlacementStatus {
         if (this.buildingType === null || this.placementRace === null) return PlacementStatus.InvalidTerrain;
 
-        const footprint = getBuildingFootprint(x, y, this.buildingType, this.placementRace);
-        const isMine = isMineBuilding(this.buildingType);
+        const ctx: PlacementContext = {
+            groundType: this.groundType,
+            groundHeight: this.groundHeight,
+            mapSize: this.mapSize,
+            tileOccupancy: this.tileOccupancy as Map<string, number>,
+            buildingFootprint: this.buildingFootprint,
+            race: this.placementRace,
+        };
 
-        if (!this.isFootprintInBounds(footprint)) return PlacementStatus.InvalidTerrain;
-
-        for (const tile of footprint) {
-            const issue = this.checkTileBasics(tile, isMine);
-            if (issue !== null) return issue;
-        }
-
-        // 1-tile gap between building footprints for pathfinding
-        if (this.buildingFootprint.size > 0 && this.footprintTouchesBuilding(footprint)) {
-            return PlacementStatus.Occupied;
-        }
-
-        return this.computeSlopeDifficultyForFootprint(footprint);
+        return validateBuildingPlacement(x, y, this.buildingType, ctx).status;
     }
 
     /**
@@ -283,7 +218,9 @@ export class BuildingIndicatorRenderer implements IRenderer {
             viewDist < 5 &&
             zoomDiff < 0.01 &&
             this.buildingType === this.cacheBuildingType &&
-            this.placementRace === this.cachePlacementRace
+            this.placementRace === this.cachePlacementRace &&
+            this.tileOccupancy.size === this.cacheOccupancySize &&
+            this.buildingFootprint.size === this.cacheBuildingFootprintSize
         );
     }
 
@@ -341,6 +278,8 @@ export class BuildingIndicatorRenderer implements IRenderer {
         this.cacheZoom = viewPoint.zoom;
         this.cacheBuildingType = this.buildingType;
         this.cachePlacementRace = this.placementRace;
+        this.cacheOccupancySize = this.tileOccupancy.size;
+        this.cacheBuildingFootprintSize = this.buildingFootprint.size;
     }
 
     /**

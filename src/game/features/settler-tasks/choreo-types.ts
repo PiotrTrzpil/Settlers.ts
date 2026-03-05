@@ -194,7 +194,7 @@ export function createChoreoJobState(jobId: string, nodes: ChoreoNode[] = []): C
         jobId,
         nodes,
         nodeIndex: 0,
-        progress: 0,
+        progress: -1,
         visible: true,
         activeTrigger: '',
         targetId: null,

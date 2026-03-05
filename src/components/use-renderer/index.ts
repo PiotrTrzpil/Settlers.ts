@@ -18,9 +18,6 @@ import {
     canPlaceResource,
     canPlaceUnit,
     canPlaceBuildingFootprint,
-    isBuildable,
-    isMineBuildable,
-    computeSlopeDifficulty,
     computeHeightRange,
     MAX_SLOPE_DIFF,
 } from '@/game/features/placement';
@@ -242,9 +239,6 @@ export function useRenderer({
             game.terrain.groundType,
             game.terrain.groundHeight,
             {
-                isBuildableTerrain: isBuildable,
-                isMineBuildableTerrain: isMineBuildable,
-                computeSlopeDifficulty,
                 computeHeightRange,
                 maxSlopeDiff: MAX_SLOPE_DIFF,
             }

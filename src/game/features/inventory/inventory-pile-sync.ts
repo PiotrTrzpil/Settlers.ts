@@ -65,6 +65,7 @@ export class InventoryPileSync {
 
     private readonly subscriptions = new EventSubscriptionManager();
     private readonly changeHandler: InventoryChangeCallback;
+    private eventBus: EventBus | null = null;
 
     constructor(
         gameState: GameState,
@@ -91,6 +92,7 @@ export class InventoryPileSync {
      * - entity:removed      → convert linked piles to free piles when building is destroyed.
      */
     registerEvents(eventBus: EventBus, cleanupRegistry: EntityCleanupRegistry): void {
+        this.eventBus = eventBus;
         this.subscriptions.subscribe(eventBus, 'building:completed', ({ entityId }) => {
             this.onBuildingCompleted(entityId);
         });
@@ -139,6 +141,11 @@ export class InventoryPileSync {
     ): void {
         log.debug(`onChange: building=${buildingId}, ${EMaterialType[materialType]}, ${slotType}, amount=${newAmount}`);
 
+        // Free piles: the pile entity already exists — no sync needed.
+        // Quantity updates are handled by GameServices.onInventoryChanged.
+        const entity = this.gameState.getEntity(buildingId);
+        if (entity?.type === EntityType.StackedPile) return;
+
         const slotKind = this.resolveSlotKind(buildingId, slotType);
         const key: PileSlotKey = { buildingId, material: materialType, slotKind };
         const existingEntityId = this.pileRegistry.getEntityId(key);
@@ -174,15 +181,34 @@ export class InventoryPileSync {
     }
 
     /**
-     * Handle entity removal (at STANDARD priority via EntityCleanupRegistry).
+     * Handle entity removal (at DEFAULT priority via EntityCleanupRegistry).
      *
      * When a building is destroyed, its linked piles are converted to free piles
      * rather than removed — they remain on the ground for carriers to pick up.
+     * Emits pile:freePilePlaced so the logistics system can discover the pile
+     * as an output source and reassign carriers.
      */
     private onBuildingRemoved(buildingId: number): void {
         const cleared = this.pileRegistry.clearBuilding(buildingId);
+        const convertedPiles = new Map<EMaterialType, number>();
+
         for (const [, pileEntityId] of cleared) {
             this.gameState.piles.setKind(pileEntityId, { kind: SlotKind.Free });
+            const entity = this.gameState.getEntity(pileEntityId);
+            if (!entity || entity.type !== EntityType.StackedPile) continue;
+            const materialType = entity.subType as EMaterialType;
+            const quantity = this.gameState.piles.getQuantity(pileEntityId);
+            if (quantity <= 0) continue;
+            this.eventBus?.emit('pile:freePilePlaced', {
+                entityId: pileEntityId,
+                materialType,
+                quantity,
+            });
+            convertedPiles.set(materialType, pileEntityId);
+        }
+
+        if (convertedPiles.size > 0) {
+            this.eventBus?.emit('pile:buildingPilesConverted', { buildingId, piles: convertedPiles });
         }
     }
 

@@ -7,7 +7,8 @@
 
 import { computed, type Ref } from 'vue';
 import type { Entity } from '@/game/entity';
-import { EntityType, UnitType, BuildingType, getBuildingSize } from '@/game/entity';
+import { EntityType, UnitType, BuildingType } from '@/game/entity';
+import { getBuildingInfo } from '@/game/game-data-access';
 import { UNIT_TYPE_CONFIG, getUnitCategory, UnitCategory } from '@/game/unit-types';
 import { EMaterialType } from '@/game/economy';
 import type { Game } from '@/game/game';
@@ -123,8 +124,11 @@ export function useSelectionPanel(game: Ref<Game | null>): {
     const buildingSize = computed(() => {
         const entity = selectedEntity.value;
         if (!entity || entity.type !== EntityType.Building) return '';
-        const size = getBuildingSize(entity.subType as BuildingType);
-        return `${size.width}x${size.height}`;
+        const info = getBuildingInfo(entity.race, entity.subType as BuildingType);
+        if (!info) return '';
+        const w = info.boundingRect.maxX - info.boundingRect.minX + 1;
+        const h = info.boundingRect.maxY - info.boundingRect.minY + 1;
+        return `${w}x${h}`;
     });
 
     const buildingStatus = computed(() => {

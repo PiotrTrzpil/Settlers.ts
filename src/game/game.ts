@@ -226,7 +226,7 @@ export class Game {
         // Resource stacks
         if (entityData.stacks.length) {
             const t0 = performance.now();
-            const count = populateMapStacks(this.state, entityData.stacks);
+            const count = populateMapStacks(this.state, entityData.stacks, this.eventBus);
             mlt.populateStacks = Math.round(performance.now() - t0);
             if (count > 0) console.log(`Game: Loaded ${count} pile stacks from map data`);
         }

@@ -111,7 +111,7 @@ export class SettlerTaskSystem implements TickSystem {
 
         const jobPartResolver = new JobPartResolverImpl();
         const triggerSystem = new TriggerSystemImpl({
-            overlayManager: config.buildingOverlayManager,
+            setWorkingOverlay: (buildingId, working) => config.buildingOverlayManager.setWorking(buildingId, working),
             gameState: this.gameState,
             dataLoader: getGameDataLoader(),
         });
@@ -197,6 +197,15 @@ export class SettlerTaskSystem implements TickSystem {
         return this.choreographyStore;
     }
 
+    /** Enable verbose choreography events (nodeStarted, nodeCompleted, animationApplied, waitingAtHome). */
+    get verbose(): boolean {
+        return this.workerExecutor.verbose;
+    }
+
+    set verbose(value: boolean) {
+        this.workerExecutor.verbose = value;
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Query API
     // ─────────────────────────────────────────────────────────────
@@ -223,6 +232,16 @@ export class SettlerTaskSystem implements TickSystem {
     hasMoveTask(entityId: number): boolean {
         const runtime = this.runtimes.get(entityId);
         return runtime !== undefined && runtime.moveTask !== null;
+    }
+
+    /** Get the active job ID for a settler, or null if idle/no job. */
+    getActiveJobId(entityId: number): string | null {
+        return this.runtimes.get(entityId)?.job?.jobId ?? null;
+    }
+
+    /** Get the current settler state (IDLE/WORKING/INTERRUPTED), or null if not tracked. */
+    getSettlerState(entityId: number): SettlerState | null {
+        return this.runtimes.get(entityId)?.state ?? null;
     }
 
     /**

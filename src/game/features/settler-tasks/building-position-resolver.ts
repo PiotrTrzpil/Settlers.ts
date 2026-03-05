@@ -152,6 +152,8 @@ export class BuildingPositionResolverImpl implements BuildingPositionResolver {
         slotType: SlotKind.Input | SlotKind.Output
     ): { x: number; y: number } | null {
         const building = this.gameState.getEntityOrThrow(buildingId, 'resolvePileFromRegistry');
+        // Free piles are not buildings — return null so caller falls back to entity position
+        if (building.type !== EntityType.Building) return null;
         assertIsBuilding(building, buildingId);
 
         const registry = this.getPileRegistry();

@@ -10,7 +10,11 @@ import { raceIdToRace, getBuildingTypesByXmlId } from '../../game-data-access';
 import type { RaceId } from '@/resources/game-data';
 import { OverlayCondition, OverlayLayer, type BuildingOverlayDef, type OverlaySpriteRef } from './types';
 import type { OverlayRegistry } from './overlay-registry';
-import { BUILDING_OVERLAY_JIL_INDICES } from '../../renderer/sprite-metadata/jil-indices';
+import {
+    BUILDING_OVERLAY_JIL_INDICES,
+    BUILDING_JOB_INDICES,
+    resolveOverlayJilEntry,
+} from '../../renderer/sprite-metadata/jil-indices';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('OverlayDataLoader');
@@ -29,12 +33,13 @@ const FLAG_SPRITE_REF: OverlaySpriteRef = { gfxFile: 0, jobIndex: 0 };
 
 /**
  * Resolve a patch job name to a sprite ref.
- * Returns null if the JIL index is not yet mapped (value -1 in BUILDING_OVERLAY_JIL_INDICES).
+ * @param parentJobIndex The parent building's JIL job index, needed for parent-relative entries (`{ dir }`).
+ * Returns null if the overlay is unmapped (null) or unknown.
  */
-function resolveOverlaySpriteRef(jobName: string, gfxFile: number): OverlaySpriteRef | null {
-    const jobIndex = BUILDING_OVERLAY_JIL_INDICES[jobName];
-    if (jobIndex === undefined || jobIndex < 0) return null;
-    return { gfxFile, jobIndex };
+function resolveOverlaySpriteRef(jobName: string, gfxFile: number, parentJobIndex?: number): OverlaySpriteRef | null {
+    const resolved = resolveOverlayJilEntry(BUILDING_OVERLAY_JIL_INDICES[jobName] ?? null, parentJobIndex);
+    if (!resolved) return null;
+    return { gfxFile, jobIndex: resolved.jobIndex, directionIndex: resolved.directionIndex || undefined };
 }
 
 /**
@@ -85,9 +90,10 @@ function patchToDef(
     patch: BuildingPatch,
     buildingXmlId: string,
     slot: number,
-    gfxFile: number
+    gfxFile: number,
+    parentJobIndex?: number
 ): BuildingOverlayDef | null {
-    const spriteRef = resolveOverlaySpriteRef(patch.job, gfxFile);
+    const spriteRef = resolveOverlaySpriteRef(patch.job, gfxFile, parentJobIndex);
     if (!spriteRef) return null;
 
     const key = deriveOverlayKey(patch.job, buildingXmlId);
@@ -114,14 +120,15 @@ function patchToDef(
 function convertPatches(
     patches: readonly BuildingPatch[],
     buildingXmlId: string,
-    gfxFile: number
+    gfxFile: number,
+    parentJobIndex?: number
 ): BuildingOverlayDef[] {
     const defs: BuildingOverlayDef[] = [];
     const usedKeys = new Set<string>();
 
     for (const patch of patches) {
         if (!patch.job) continue;
-        let def = patchToDef(patch, buildingXmlId, 0, gfxFile);
+        let def = patchToDef(patch, buildingXmlId, 0, gfxFile, parentJobIndex);
         if (!def) continue; // JIL index not yet mapped — skip until filled in
         // Ensure unique key within this building
         if (usedKeys.has(def.key)) {
@@ -152,17 +159,18 @@ function registerRaceOverlays(
         const buildingTypes = getBuildingTypesByXmlId(buildingXmlId);
         if (!buildingTypes) continue;
 
-        const defs: BuildingOverlayDef[] = [];
-
-        // Animation patch overlays (smoke, fire, wheels, etc.)
-        if (buildingInfo.patches.length > 0) {
-            defs.push(...convertPatches(buildingInfo.patches, buildingXmlId, gfxFile));
-        }
-
-        // Flag overlay — all buildings carry a player flag
-        defs.push(createFlagDef(buildingInfo));
-
         for (const bt of buildingTypes) {
+            const defs: BuildingOverlayDef[] = [];
+            const parentJobIndex = BUILDING_JOB_INDICES[bt];
+
+            // Animation patch overlays (smoke, fire, wheels, etc.)
+            if (buildingInfo.patches.length > 0) {
+                defs.push(...convertPatches(buildingInfo.patches, buildingXmlId, gfxFile, parentJobIndex));
+            }
+
+            // Flag overlay — all buildings carry a player flag
+            defs.push(createFlagDef(buildingInfo));
+
             registry.register(bt, race, defs);
             count += defs.length;
         }

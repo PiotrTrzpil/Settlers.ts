@@ -32,6 +32,51 @@ tests/
 
 ---
 
+## What to Test (AI-Assisted Development)
+
+AI rarely introduces typos, off-by-one errors, or missing null checks. The bugs it *does* introduce
+are subtler: misunderstood contracts between modules, code that works but doesn't match intent,
+stale assumptions about how the system behaves, and silent semantic drift during refactoring. Test
+strategy should target these failure modes.
+
+### High-value tests — write these
+
+| Category | Why it catches AI bugs | Example |
+|----------|----------------------|---------|
+| **Integration boundaries** | AI reads one module, assumes how another works — assumptions break at the seam | `building-lifecycle.spec.ts`: construction + placement + materials + carriers |
+| **Behavioral specifications** | Encodes *what the user actually wanted*, not implementation details — catches "works but wrong" | "carrier delivers to nearest site first", not "carrierAssign calls sort" |
+| **State machine transitions** | AI gets happy paths right but mishandles edge transitions | Builder arrives at a site that was cancelled mid-construction |
+| **Regression anchors** | AI will re-introduce the same bug in a future refactor — it doesn't remember prior context | After fixing a bug, write a test that fails without the fix |
+| **Multi-step flows with ordering** | Composition of correct pieces can still be wrong | Production chain: tree → log → sawmill → board → construction site |
+
+### Low-value tests — skip or deprioritize
+
+| Category | Why it's low value |
+|----------|--------------------|
+| **Trivial pure functions** | AI won't mess up `clamp(value, min, max)` — only test when logic encodes complex domain rules |
+| **Mock-heavy isolation tests** | Mocking 5 dependencies to test 1 function tests mocks, not code — the real bugs live in the interactions you mocked away |
+| **Coverage-driven tests** | "Every function needs a test" is waste — AI can generate code + passing tests without catching real issues |
+| **Implementation-detail tests** | Asserting internal method calls or private state breaks on every refactor and catches nothing |
+
+### Litmus test
+
+Before writing a test, ask: **"Could an AI re-implementing this feature from the type signatures
+alone get it wrong in a way this test would catch?"** If yes — valuable test. If it would pass
+regardless of any reasonable implementation — skip it.
+
+### Structure preferences
+
+- **Scenario-based over unit-based** — organize tests around user-visible behaviors ("builder
+  constructs a woodcutter hut"), not around classes/functions. One scenario test exercising the real
+  pipeline catches more than 10 isolated unit tests.
+- **Real dependencies over mocks** — use `test-game.ts` helpers. Wire up real systems, only fake
+  what you must (rendering, assets). The integration surface is where bugs live.
+- **Event/state assertions over call assertions** — assert on observable events and state changes,
+  not internal calls. This makes tests resilient to refactoring while still catching behavioral
+  regressions. The `DUMP_TIMELINE` pattern is ideal for this.
+
+---
+
 ## E2E Test Tiers (Projects)
 
 The Playwright config defines **test projects** with different timeouts based on tags:

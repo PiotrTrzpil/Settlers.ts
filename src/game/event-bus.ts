@@ -371,6 +371,22 @@ export interface GameEvents {
         entityId: number;
     };
 
+    // === Pile Events ===
+
+    /** Emitted after a free pile entity is fully created (kind + quantity set). */
+    'pile:freePilePlaced': {
+        entityId: number;
+        materialType: EMaterialType;
+        quantity: number;
+    };
+
+    /** Emitted when a building's piles are converted to free piles (during building destruction). */
+    'pile:buildingPilesConverted': {
+        buildingId: number;
+        /** Maps material type → pile entity ID for each converted pile. */
+        piles: Map<EMaterialType, number>;
+    };
+
     // === Construction Events ===
 
     /** Emitted when the first digger starts working on a construction site */
@@ -418,6 +434,46 @@ export interface GameEvents {
     // === Barracks Training Events ===
 
     // === Settler Task Events ===
+
+    // --- Verbose Choreography Events (gated by WorkerTaskExecutor.verbose) ---
+
+    /** A choreography node started executing */
+    'choreo:nodeStarted': {
+        unitId: number;
+        jobId: string;
+        nodeIndex: number;
+        /** Total number of nodes in the job */
+        nodeCount: number;
+        /** ChoreoTaskType name (e.g. GO_TO_TARGET, WORK_ON_ENTITY) */
+        task: string;
+        /** Animation jobPart key (empty string if none) */
+        jobPart: string;
+        /** Duration in frames (0 for open-ended nodes like movement) */
+        duration: number;
+    };
+
+    /** A choreography node completed and advanced to the next */
+    'choreo:nodeCompleted': {
+        unitId: number;
+        jobId: string;
+        nodeIndex: number;
+        task: string;
+    };
+
+    /** Animation was resolved and applied to a settler */
+    'choreo:animationApplied': {
+        unitId: number;
+        jobPart: string;
+        sequenceKey: string;
+        loop: boolean;
+    };
+
+    /** Settler returned home to wait (output full, input unavailable, or first visit) */
+    'choreo:waitingAtHome': {
+        unitId: number;
+        homeBuilding: number;
+        reason: 'output_full' | 'cant_work' | 'first_visit';
+    };
 
     /** Emitted when a settler starts a choreography job (walking to target, gathering, etc.) */
     'settler:taskStarted': {

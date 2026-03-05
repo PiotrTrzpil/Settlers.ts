@@ -39,6 +39,8 @@ export {
     type BuildingSpriteInfo,
     BUILDING_JOB_INDICES,
     BUILDING_OVERLAY_JIL_INDICES,
+    type OverlayJilEntry,
+    resolveOverlayJilEntry,
     type BuildingSpriteEntries,
     getBuildingSpriteMap,
 

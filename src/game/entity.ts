@@ -33,16 +33,8 @@ export enum EntityType {
 
 // === Re-exports from specialized modules ===
 
-// Building types and sizes
-export type { BuildingSize } from './buildings';
-export {
-    BuildingType,
-    BUILDING_SIZE,
-    getBuildingSize,
-    getBuildingFootprint,
-    getBuildingHotspot,
-    isMineBuilding,
-} from './buildings';
+// Building types
+export { BuildingType, getBuildingFootprint, getBuildingHotspot, isMineBuilding } from './buildings';
 
 // Unit types and configuration
 export type { UnitTypeConfig } from './unit-types';

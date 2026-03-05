@@ -372,6 +372,13 @@ function executePlacePile(ctx: CommandContext, cmd: PlacePileCommand): CommandRe
         resourceState.quantity = cmd.amount;
     }
 
+    // Free piles participate in logistics as output-only sources
+    ctx.eventBus.emit('pile:freePilePlaced', {
+        entityId: entity.id,
+        materialType: cmd.materialType,
+        quantity: cmd.amount,
+    });
+
     return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedPile' }]);
 }
 
@@ -399,6 +406,16 @@ function executeSpawnPile(ctx: CommandContext, cmd: SpawnPileCommand): CommandRe
     // onEntityCreated already called createState(entity.id) with default { kind: 'free' }
     state.piles.setKind(entity.id, cmd.kind);
     state.piles.setQuantity(entity.id, cmd.quantity);
+
+    // Free piles participate in logistics as output-only sources
+    if (cmd.kind.kind === 'free') {
+        ctx.eventBus.emit('pile:freePilePlaced', {
+            entityId: entity.id,
+            materialType: cmd.materialType,
+            quantity: cmd.quantity,
+        });
+    }
+
     return commandSuccess([{ type: 'entity_created', entityId: entity.id, entityType: 'StackedPile' }]);
 }
 

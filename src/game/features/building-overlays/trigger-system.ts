@@ -19,8 +19,6 @@ import type { GameDataLoader } from '@/resources/game-data/game-data-loader';
 import type { BuildingTrigger } from '@/resources/game-data/types';
 import { EntityType } from '@/game/entity';
 import { raceToRaceId } from '@/game/game-data-access';
-import type { BuildingOverlayManager } from './building-overlay-manager';
-
 const log = new LogHandler('TriggerSystem');
 
 // ============================================================================
@@ -29,12 +27,12 @@ const log = new LogHandler('TriggerSystem');
 
 /** Constructor dependencies for TriggerSystemImpl. */
 export interface TriggerSystemConfig {
-    /** Manages building overlay animation state (Working / Idle conditions). */
-    overlayManager: BuildingOverlayManager;
+    /** Callback to set working/idle overlay state on a building. */
+    setWorkingOverlay: (buildingId: number, working: boolean) => void;
     /** Entity store for building race and type lookups. */
-    gameState: GameState;
+    gameState: Pick<GameState, 'getEntity'>;
     /** Game data loader for BuildingTrigger XML definitions. */
-    dataLoader: GameDataLoader;
+    dataLoader: Pick<GameDataLoader, 'getBuildingTrigger'>;
 }
 
 // ============================================================================
@@ -66,15 +64,15 @@ type ActiveTriggerSet = Set<string>;
  * the (unusual) case where two triggers fire simultaneously for the same building.
  */
 export class TriggerSystemImpl implements TriggerSystem {
-    private readonly overlayManager: BuildingOverlayManager;
-    private readonly gameState: GameState;
-    private readonly dataLoader: GameDataLoader;
+    private readonly setWorkingOverlay: (buildingId: number, working: boolean) => void;
+    private readonly gameState: Pick<GameState, 'getEntity'>;
+    private readonly dataLoader: Pick<GameDataLoader, 'getBuildingTrigger'>;
 
     /** Active triggers per building: buildingId → Set of active trigger IDs */
     private readonly activeTriggers = new Map<number, ActiveTriggerSet>();
 
     constructor(config: TriggerSystemConfig) {
-        this.overlayManager = config.overlayManager;
+        this.setWorkingOverlay = config.setWorkingOverlay;
         this.gameState = config.gameState;
         this.dataLoader = config.dataLoader;
     }
@@ -134,7 +132,7 @@ export class TriggerSystemImpl implements TriggerSystem {
 
         // Activate overlay: if this is the first trigger on the building, switch to Working
         if (activeSet.size === 1) {
-            this.overlayManager.setWorking(buildingId, true);
+            this.setWorkingOverlay(buildingId, true);
         }
 
         this.applyTriggerEffects(buildingId, triggerDef, true);
@@ -162,7 +160,7 @@ export class TriggerSystemImpl implements TriggerSystem {
         if (activeSet.size === 0) {
             // No more active triggers — deactivate Working overlays
             this.activeTriggers.delete(buildingId);
-            this.overlayManager.setWorking(buildingId, false);
+            this.setWorkingOverlay(buildingId, false);
 
             // Apply stop effects (if any)
             const building = this.gameState.getEntity(buildingId);
@@ -187,7 +185,7 @@ export class TriggerSystemImpl implements TriggerSystem {
     clearBuilding(buildingId: number): void {
         if (!this.activeTriggers.has(buildingId)) return;
         this.activeTriggers.delete(buildingId);
-        this.overlayManager.setWorking(buildingId, false);
+        this.setWorkingOverlay(buildingId, false);
     }
 
     /** Clear all active trigger state. */

@@ -28,9 +28,17 @@ const log = new LogHandler('WorkExecutors');
 // Internal helpers
 // ─────────────────────────────────────────────────────
 
+/**
+ * Default work-cycle length for nodes with duration=0 (one animation cycle).
+ * In the original S4, duration=0 means "play one full work animation", not "instant".
+ */
+const DEFAULT_WORK_CYCLE_FRAMES = 10; // 1.0 seconds at CHOREO_FPS
+
 /** Compute effective duration in seconds. Returns Infinity when duration === -1. */
 function resolveDurationSeconds(node: ChoreoNode): number {
-    return node.duration === -1 ? Infinity : framesToSeconds(node.duration);
+    if (node.duration === -1) return Infinity;
+    if (node.duration === 0) return framesToSeconds(DEFAULT_WORK_CYCLE_FRAMES);
+    return framesToSeconds(node.duration);
 }
 
 /** Apply direction constraint on first tick (progress === 0). No-op when dir === -1. */
@@ -90,7 +98,11 @@ function tickEntityWork(
     );
     if (domainDone === undefined) return TaskResult.FAILED;
 
-    if (domainDone || job.progress >= 1) {
+    // Domain-controlled (duration=-1): handler alone decides when work ends
+    // Duration-controlled: animation must play for full duration regardless of handler
+    const complete = durationSeconds === Infinity ? domainDone : job.progress >= 1;
+
+    if (complete) {
         safeCall(
             () => handler.onWorkComplete?.(job.targetId!, settler.x, settler.y),
             ctx.handlerErrorLogger,

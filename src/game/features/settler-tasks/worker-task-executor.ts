@@ -67,6 +67,9 @@ export class WorkerTaskExecutor {
     private readonly isBuildingAvailable?: (buildingId: number) => boolean;
     private readonly jobSelector: JobSelector;
 
+    /** Enable verbose choreography events (nodeStarted, nodeCompleted, animationApplied, waitingAtHome) */
+    verbose = false;
+
     constructor(cfg: WorkerTaskExecutorConfig) {
         this.gameState = cfg.gameState;
         this.choreographyStore = cfg.choreographyStore;
@@ -118,7 +121,7 @@ export class WorkerTaskExecutor {
             if (this.isAtHomeBuilding(settler, homeBuilding)) {
                 runtime.homeAssignment!.hasVisited = true;
             } else {
-                this.returnHomeAndWait(settler, homeBuilding);
+                this.returnHomeAndWait(settler, homeBuilding, 'first_visit');
                 return;
             }
         }
@@ -160,11 +163,13 @@ export class WorkerTaskExecutor {
         entityTarget: { entityId: number; x: number; y: number } | null
     ): boolean {
         if (homeBuilding && this.isOutputFull(homeBuilding, job)) {
-            this.returnHomeAndWait(settler, homeBuilding);
+            this.returnHomeAndWait(settler, homeBuilding, 'output_full');
             return true;
         }
         if (entityHandler?.canWork && entityTarget && !entityHandler.canWork(entityTarget.entityId)) {
-            if (homeBuilding) this.returnHomeAndWait(settler, homeBuilding);
+            if (homeBuilding) {
+                this.returnHomeAndWait(settler, homeBuilding, 'cant_work');
+            }
             return true;
         }
         return false;
@@ -223,9 +228,14 @@ export class WorkerTaskExecutor {
 
         const node = nodes[job.nodeIndex]!;
 
-        // Apply animation for current node (on first tick)
-        if (job.progress === 0) {
+        // Apply animation once on the true first tick of this node.
+        // progress < 0 is the sentinel set by advanceToNextNode / createChoreoJobState.
+        if (job.progress < 0) {
             this.applyChoreoAnimation(settler, node);
+            if (this.verbose) {
+                this.emitNodeStarted(settler, job, node);
+            }
+            job.progress = 0;
         }
 
         // Set visibility from node
@@ -267,6 +277,15 @@ export class WorkerTaskExecutor {
 
     /** Advance to the next choreography node after the current one completes. */
     private advanceToNextNode(settler: Entity, job: ChoreoJobState, nodes: readonly ChoreoNode[]): void {
+        if (this.verbose) {
+            const completedNode = nodes[job.nodeIndex]!;
+            this.choreoContext.eventBus.emit('choreo:nodeCompleted', {
+                unitId: settler.id,
+                jobId: job.jobId,
+                nodeIndex: job.nodeIndex,
+                task: ChoreoTaskType[completedNode.task],
+            });
+        }
         // Stop active trigger when leaving a node
         if (job.activeTrigger) {
             const buildingId = this.choreoContext.getWorkerHomeBuilding(settler.id);
@@ -276,15 +295,12 @@ export class WorkerTaskExecutor {
             job.activeTrigger = '';
         }
         job.nodeIndex++;
-        job.progress = 0;
+        job.progress = -1; // sentinel: next tick is "first tick" of the new node
         job.workStarted = false;
         // Reset targetPos between nodes. Transport jobs read positions directly from
         // transportData (sourcePos/destPos) so they don't rely on cross-node targetPos.
         job.targetPos = null;
-        // Apply animation for next node if there is one
-        if (job.nodeIndex < nodes.length) {
-            this.applyChoreoAnimation(settler, nodes[job.nodeIndex]!);
-        }
+        // Animation for the next node is applied on its first tick (progress sentinel = -1).
     }
 
     /**
@@ -470,11 +486,45 @@ export class WorkerTaskExecutor {
         return building;
     }
 
+    /** Emit verbose choreo:waitingAtHome event. */
+    private emitWaitingAtHome(
+        settler: Entity,
+        home: Entity,
+        reason: 'output_full' | 'cant_work' | 'first_visit'
+    ): void {
+        this.choreoContext.eventBus.emit('choreo:waitingAtHome', {
+            unitId: settler.id,
+            homeBuilding: home.id,
+            reason,
+        });
+    }
+
+    /** Emit verbose choreo:nodeStarted event. */
+    private emitNodeStarted(settler: Entity, job: ChoreoJobState, node: ChoreoNode): void {
+        this.choreoContext.eventBus.emit('choreo:nodeStarted', {
+            unitId: settler.id,
+            jobId: job.jobId,
+            nodeIndex: job.nodeIndex,
+            nodeCount: job.nodes.length,
+            task: ChoreoTaskType[node.task],
+            jobPart: node.jobPart,
+            duration: node.duration,
+        });
+    }
+
     /** Apply choreography animation for a node via the JobPartResolver. */
     private applyChoreoAnimation(settler: Entity, node: ChoreoNode): void {
         if (!node.jobPart) return;
         const resolution: JobPartResolution = this.choreoContext.jobPartResolver.resolve(node.jobPart, settler);
         this.animController.applyChoreoAnimation(settler, resolution);
+        if (this.verbose) {
+            this.choreoContext.eventBus.emit('choreo:animationApplied', {
+                unitId: settler.id,
+                jobPart: node.jobPart,
+                sequenceKey: resolution.sequenceKey,
+                loop: resolution.loop,
+            });
+        }
     }
 
     /**
@@ -512,9 +562,14 @@ export class WorkerTaskExecutor {
 
     /**
      * Make settler return to home building and wait there.
-     * Used when output is full and settler can't work.
+     * Used when output is full, settler can't work, or first visit.
+     * Emits choreo:waitingAtHome once on the transition (movement start or entering hidden).
      */
-    private returnHomeAndWait(settler: Entity, homeBuilding: Entity): void {
+    private returnHomeAndWait(
+        settler: Entity,
+        homeBuilding: Entity,
+        reason?: 'output_full' | 'cant_work' | 'first_visit'
+    ): void {
         const controller = this.gameState.movement.getController(settler.id);
         if (!controller) {
             throw new Error(`Settler ${settler.id} (${UnitType[settler.subType]}) has no movement controller`);
@@ -530,6 +585,9 @@ export class WorkerTaskExecutor {
 
         // If already at home, hide inside building
         if (dist <= 1) {
+            if (this.verbose && reason && !settler.hidden) {
+                this.emitWaitingAtHome(settler, homeBuilding, reason);
+            }
             settler.hidden = true;
             this.animController.setIdleAnimation(settler);
             return;
@@ -537,6 +595,9 @@ export class WorkerTaskExecutor {
 
         // If not moving, start moving home
         if (controller.state === 'idle') {
+            if (this.verbose && reason) {
+                this.emitWaitingAtHome(settler, homeBuilding, reason);
+            }
             this.gameState.movement.moveUnit(settler.id, door.x, door.y);
             this.animController.startWalkAnimation(settler, controller.direction);
         }

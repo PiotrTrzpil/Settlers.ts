@@ -72,6 +72,21 @@ export const EventFmt = {
 
     'entity:removed': (e: GameEvents['entity:removed']) => `#${e.entityId}`,
 
+    // Verbose choreography
+    'choreo:nodeStarted': (e: GameEvents['choreo:nodeStarted']) =>
+        parts(
+            `${e.task}[${e.nodeIndex}/${e.nodeCount}]`,
+            e.jobPart && `anim=${e.jobPart}`,
+            e.duration > 0 && `dur=${e.duration}`
+        ),
+
+    'choreo:nodeCompleted': (e: GameEvents['choreo:nodeCompleted']) => `${e.task}[${e.nodeIndex}]`,
+
+    'choreo:animationApplied': (e: GameEvents['choreo:animationApplied']) =>
+        parts(e.jobPart, `→${e.sequenceKey}`, e.loop && 'loop'),
+
+    'choreo:waitingAtHome': (e: GameEvents['choreo:waitingAtHome']) => `home=#${e.homeBuilding} ${e.reason}`,
+
     'settler:taskStarted': (e: GameEvents['settler:taskStarted']) =>
         parts(
             e.jobId,
@@ -172,4 +187,23 @@ export const EventFmt = {
         `${UnitType[e.unitType]} L${e.level} → #${e.soldierId}`,
 
     'barracks:trainingInterrupted': (e: GameEvents['barracks:trainingInterrupted']) => e.reason,
-} satisfies { [K in keyof GameEvents]?: (e: GameEvents[K]) => string };
+
+    'carrier:transportCancelled': (e: GameEvents['carrier:transportCancelled']) => `req=${e.requestId} ${e.reason}`,
+
+    'logistics:requestRemoved': (e: GameEvents['logistics:requestRemoved']) => `req=${e.requestId}`,
+
+    'logistics:requestAssigned': (e: GameEvents['logistics:requestAssigned']) =>
+        `req=${e.requestId} carrier=#${e.carrierId} src=#${e.sourceBuilding}`,
+
+    'logistics:requestFulfilled': (e: GameEvents['logistics:requestFulfilled']) =>
+        `${EMaterialType[e.materialType]} req=${e.requestId}`,
+
+    'logistics:requestReset': (e: GameEvents['logistics:requestReset']) =>
+        `${EMaterialType[e.materialType]} req=${e.requestId} ${e.reason}`,
+
+    'pile:freePilePlaced': (e: GameEvents['pile:freePilePlaced']) =>
+        `#${e.entityId} ${EMaterialType[e.materialType]} ×${e.quantity}`,
+
+    'pile:buildingPilesConverted': (e: GameEvents['pile:buildingPilesConverted']) =>
+        `building=#${e.buildingId} ${e.piles.size} piles`,
+} satisfies { [K in keyof GameEvents]: (e: GameEvents[K]) => string };

@@ -29,7 +29,8 @@ let nextJobId = 1;
 export class TransportJob {
     readonly id: number;
     readonly requestId: number;
-    readonly sourceBuilding: number;
+    /** Source building (or free pile) entity ID. Updated by redirectSource() when building is destroyed. */
+    sourceBuilding: number;
     readonly destBuilding: number;
     readonly material: EMaterialType;
     readonly amount: number;
