@@ -2,29 +2,16 @@ import type { IRenderer } from './i-renderer';
 import { IViewPoint } from './i-view-point';
 import { MapSize } from '@/utilities/map-size';
 import { TilePicker } from '../input/tile-picker';
-import { TileCoord, BuildingType, getBuildingFootprint } from '../entity';
-import { PlacementStatus, validateBuildingPlacement } from '../features/placement';
-import type { PlacementContext } from '../features/placement';
-import type { Race } from '../race';
+import { TileCoord } from '../entity';
+import { PlacementStatus } from '../features/placement';
 import { ShaderProgram } from './shader-program';
-import type { PlacementPreviewState } from './render-context';
+import type { ValidPositionGrid } from '../features/placement/valid-position-grid';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
 
 // Re-export PlacementStatus for backward compatibility
 export { PlacementStatus } from '../features/placement';
-
-/**
- * Injected functions for building indicator color gradient display.
- * Placement validation is handled directly via validateBuildingPlacement.
- */
-export interface PlacementChecker {
-    /** Compute height range across a footprint (for color gradient) */
-    computeHeightRange(footprint: TileCoord[], groundHeight: Uint8Array, mapSize: MapSize): number;
-    /** Maximum slope difference for gradient normalization */
-    maxSlopeDiff: number;
-}
 
 /**
  * Color mapping for non-buildable statuses (RGBA, 0-1 range).
@@ -60,6 +47,7 @@ const STATUS_COLORS: Record<PlacementStatus, number[]> = {
     [PlacementStatus.Difficult]: SLOPE_GRADIENT[7]!,
     [PlacementStatus.Medium]: SLOPE_GRADIENT[4]!,
     [PlacementStatus.Easy]: SLOPE_GRADIENT[0]!,
+    [PlacementStatus.OutOfTerritory]: UNBUILDABLE_COLORS[PlacementStatus.InvalidTerrain]!,
 };
 
 // Hover highlight - brighter version
@@ -95,9 +83,7 @@ export class BuildingIndicatorRenderer implements IRenderer {
     private dynamicBuffer: WebGLBuffer | null = null;
 
     private mapSize: MapSize;
-    private groundType: Uint8Array;
     private groundHeight: Uint8Array;
-    private placement: PlacementChecker;
 
     // Cached attribute locations
     private aPosition = -1;
@@ -108,31 +94,15 @@ export class BuildingIndicatorRenderer implements IRenderer {
     private batchBuffer: Float32Array = new Float32Array(MAX_BATCH_INDICATORS * FLOATS_PER_INDICATOR);
     private batchCount = 0;
 
-    // Cached indicator data with numeric coords (avoid string parsing in draw loop)
-    private indicatorCache: Array<{ x: number; y: number; status: PlacementStatus; heightRange: number }> = [];
-    private cacheViewX = 0;
-    private cacheViewY = 0;
-    private cacheZoom = 0;
-    private cacheBuildingType: BuildingType | null = null;
-    private cachePlacementRace: Race | null = null;
-    private cacheOccupancySize = 0;
-    private cacheBuildingFootprintSize = 0;
-
     // State set per-frame by the glue layer
     private enabled = false;
     private hoveredTile: TileCoord | null = null;
-    public buildingType: BuildingType | null = null;
-    public placementRace: Race | null = null;
+    private grid: ValidPositionGrid | null = null;
+    private maxSlopeDiff: number = 8;
 
-    // Occupancy maps — shared references from game state (not copied)
-    public tileOccupancy: ReadonlyMap<string, number> = new Map();
-    public buildingFootprint: ReadonlySet<string> = new Set();
-
-    constructor(mapSize: MapSize, groundType: Uint8Array, groundHeight: Uint8Array, placement: PlacementChecker) {
+    constructor(mapSize: MapSize, groundHeight: Uint8Array) {
         this.mapSize = mapSize;
-        this.groundType = groundType;
         this.groundHeight = groundHeight;
-        this.placement = placement;
     }
 
     /**
@@ -141,17 +111,14 @@ export class BuildingIndicatorRenderer implements IRenderer {
      */
     public setState(
         indicatorsEnabled: boolean,
-        tileOccupancy: ReadonlyMap<string, number>,
-        buildingFootprint: ReadonlySet<string>,
-        placementPreview: PlacementPreviewState | null
+        grid: ValidPositionGrid | null,
+        hoveredTile: TileCoord | null,
+        maxSlopeDiff: number
     ): void {
         this.enabled = indicatorsEnabled;
-        this.hoveredTile = placementPreview?.tile ?? null;
-        this.buildingType =
-            placementPreview?.entityType === 'building' ? (placementPreview.subType as BuildingType) : null;
-        this.placementRace = placementPreview?.entityType === 'building' ? (placementPreview.race ?? null) : null;
-        this.tileOccupancy = tileOccupancy;
-        this.buildingFootprint = buildingFootprint;
+        this.grid = grid;
+        this.hoveredTile = hoveredTile;
+        this.maxSlopeDiff = maxSlopeDiff;
     }
 
     // eslint-disable-next-line @typescript-eslint/require-await -- IRenderer interface requires Promise
@@ -188,147 +155,80 @@ export class BuildingIndicatorRenderer implements IRenderer {
     }
 
     /**
-     * Compute placement status for placing a building at (x, y).
-     * Delegates to the same validateBuildingPlacement used by the placement mode
-     * to guarantee indicator dots match the actual placement validator.
-     */
-    public computePlacementStatus(x: number, y: number): PlacementStatus {
-        if (this.buildingType === null || this.placementRace === null) return PlacementStatus.InvalidTerrain;
-
-        const ctx: PlacementContext = {
-            groundType: this.groundType,
-            groundHeight: this.groundHeight,
-            mapSize: this.mapSize,
-            tileOccupancy: this.tileOccupancy as Map<string, number>,
-            buildingFootprint: this.buildingFootprint,
-            race: this.placementRace,
-        };
-
-        return validateBuildingPlacement(x, y, this.buildingType, ctx).status;
-    }
-
-    /**
-     * Check if cache is still valid.
-     */
-    private isCacheValid(viewPoint: IViewPoint): boolean {
-        const viewDist = Math.abs(viewPoint.x - this.cacheViewX) + Math.abs(viewPoint.y - this.cacheViewY);
-        const zoomDiff = Math.abs(viewPoint.zoom - this.cacheZoom);
-
-        return (
-            viewDist < 5 &&
-            zoomDiff < 0.01 &&
-            this.buildingType === this.cacheBuildingType &&
-            this.placementRace === this.cachePlacementRace &&
-            this.tileOccupancy.size === this.cacheOccupancySize &&
-            this.buildingFootprint.size === this.cacheBuildingFootprintSize
-        );
-    }
-
-    /**
      * Get gradient color based on height range.
      * Maps height range 0 to maxSlopeDiff onto the 10-color gradient.
      */
     private getGradientColor(heightRange: number): number[] {
-        const normalizedSlope = Math.min(heightRange / this.placement.maxSlopeDiff, 1.0);
+        const normalizedSlope = Math.min(heightRange / this.maxSlopeDiff, 1.0);
         const index = Math.min(Math.floor(normalizedSlope * 10), 9);
         return SLOPE_GRADIENT[index]!;
     }
 
     /**
-     * Rebuild the indicator cache for visible tiles.
-     * Only stores buildable tiles to minimize draw loop iterations.
-     */
-    private rebuildCache(viewPoint: IViewPoint): void {
-        this.indicatorCache.length = 0;
-
-        // Compute visible tile range based on viewport
-        // World visible range is 2/zoom in Y, multiply by aspectRatio for X
-        // Tiles are roughly 1:0.5 world units in X:Y due to isometric projection
-        const visibleWorldRange = 2 / viewPoint.zoom;
-        const visibleWidth = Math.ceil(visibleWorldRange * viewPoint.aspectRatio) + 10;
-        const visibleHeight = Math.ceil(visibleWorldRange * 2) + 10; // *2 for tile-to-world Y factor
-
-        const centerX = Math.round(viewPoint.x);
-        const centerY = Math.round(viewPoint.y);
-
-        const minX = Math.max(0, centerX - visibleWidth);
-        const maxX = Math.min(this.mapSize.width - 1, centerX + visibleWidth);
-        const minY = Math.max(0, centerY - visibleHeight);
-        const maxY = Math.min(this.mapSize.height - 1, centerY + visibleHeight);
-
-        for (let y = minY; y <= maxY; y++) {
-            for (let x = minX; x <= maxX; x++) {
-                const status = this.computePlacementStatus(x, y);
-                // Only store buildable tiles (skip invalid ones entirely)
-                if (isBuildableStatus(status)) {
-                    // Compute height range for gradient color
-                    const footprint =
-                        this.buildingType !== null && this.placementRace !== null
-                            ? getBuildingFootprint(x, y, this.buildingType, this.placementRace)
-                            : [{ x, y }];
-                    const heightRange = this.placement.computeHeightRange(footprint, this.groundHeight, this.mapSize);
-                    this.indicatorCache.push({ x, y, status, heightRange });
-                }
-            }
-        }
-
-        // Update cache metadata
-        this.cacheViewX = viewPoint.x;
-        this.cacheViewY = viewPoint.y;
-        this.cacheZoom = viewPoint.zoom;
-        this.cacheBuildingType = this.buildingType;
-        this.cachePlacementRace = this.placementRace;
-        this.cacheOccupancySize = this.tileOccupancy.size;
-        this.cacheBuildingFootprintSize = this.buildingFootprint.size;
-    }
-
-    /**
      * Draw building placement indicators using batched rendering.
+     * Reads positions from the ValidPositionGrid — no self-computed validation.
      */
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
-        if (!this.enabled || !this.shaderProgram || !this.dynamicBuffer) {
+        if (!this.enabled || !this.shaderProgram || !this.dynamicBuffer || !this.grid) {
             return;
         }
 
-        // Rebuild cache if needed
-        if (!this.isCacheValid(viewPoint)) {
-            this.rebuildCache(viewPoint);
-        }
-
-        if (this.indicatorCache.length === 0) {
-            return;
-        }
+        const positions = this.grid.getPositions();
+        if (positions.length === 0) return;
 
         // Setup shader
         this.shaderProgram.use();
         this.shaderProgram.setMatrix('projection', projection);
 
-        // Build batched vertex data
         this.batchCount = 0;
+        this.batchPositions(positions, viewPoint);
 
-        for (const indicator of this.indicatorCache) {
+        if (this.batchCount === 0) return;
+
+        this.uploadAndDraw(gl);
+    }
+
+    /** Batch visible positions into the vertex buffer with frustum culling. */
+    private batchPositions(
+        positions: readonly import('../features/placement/valid-position-grid').ValidPositionEntry[],
+        viewPoint: IViewPoint
+    ): void {
+        const visibleWorldRange = 2 / viewPoint.zoom;
+        const visibleWidth = Math.ceil(visibleWorldRange * viewPoint.aspectRatio) + 10;
+        const visibleHeight = Math.ceil(visibleWorldRange * 2) + 10;
+        const centerX = Math.round(viewPoint.x);
+        const centerY = Math.round(viewPoint.y);
+        const minX = centerX - visibleWidth;
+        const maxX = centerX + visibleWidth;
+        const minY = centerY - visibleHeight;
+        const maxY = centerY + visibleHeight;
+
+        for (const pos of positions) {
             if (this.batchCount >= MAX_BATCH_INDICATORS) break;
+            if (pos.x < minX || pos.x > maxX || pos.y < minY || pos.y > maxY) continue;
 
-            const { x, y } = indicator;
+            const isHovered = this.hoveredTile && this.hoveredTile.x === pos.x && this.hoveredTile.y === pos.y;
+            const worldPos = TilePicker.tileToWorld(
+                pos.x,
+                pos.y,
+                this.groundHeight,
+                this.mapSize,
+                viewPoint.x,
+                viewPoint.y
+            );
 
-            const isHovered = this.hoveredTile && this.hoveredTile.x === x && this.hoveredTile.y === y;
-
-            const worldPos = TilePicker.tileToWorld(x, y, this.groundHeight, this.mapSize, viewPoint.x, viewPoint.y);
-
-            const color = isHovered ? HOVER_COLOR : this.getGradientColor(indicator.heightRange);
+            const color = isHovered ? HOVER_COLOR : this.getGradientColor(pos.heightRange);
             const scale = isHovered ? HOVER_DOT_SCALE : INDICATOR_DOT_SCALE;
-
             this.addQuadToBatch(worldPos.worldX, worldPos.worldY, scale, color);
 
-            // Add hover ring as additional quad
             if (isHovered && this.batchCount < MAX_BATCH_INDICATORS) {
                 this.addQuadToBatch(worldPos.worldX, worldPos.worldY, HOVER_RING_SCALE, HOVER_RING_COLOR);
             }
         }
+    }
 
-        if (this.batchCount === 0) return;
-
-        // Upload and draw all indicators in one call
+    /** Upload batch buffer to GPU and issue the draw call. */
+    private uploadAndDraw(gl: WebGL2RenderingContext): void {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.dynamicBuffer);
         gl.bufferData(
             gl.ARRAY_BUFFER,
@@ -336,17 +236,11 @@ export class BuildingIndicatorRenderer implements IRenderer {
             gl.DYNAMIC_DRAW
         );
 
-        const stride = 8 * 4; // 8 floats per vertex
-
-        // Position offset attribute: 2 floats at offset 0
+        const stride = 8 * 4;
         gl.enableVertexAttribArray(this.aPosition);
         gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, stride, 0);
-
-        // Entity position attribute: 2 floats at offset 2
         gl.enableVertexAttribArray(this.aEntityPos);
         gl.vertexAttribPointer(this.aEntityPos, 2, gl.FLOAT, false, stride, 2 * 4);
-
-        // Color attribute: 4 floats at offset 4
         gl.enableVertexAttribArray(this.aColor);
         gl.vertexAttribPointer(this.aColor, 4, gl.FLOAT, false, stride, 4 * 4);
 
@@ -424,13 +318,8 @@ export class BuildingIndicatorRenderer implements IRenderer {
             return 'Can build: Slight slope';
         case PlacementStatus.Easy:
             return 'Can build: Flat terrain';
+        case PlacementStatus.OutOfTerritory:
+            return 'Cannot build: Outside territory';
         }
-    }
-
-    /**
-     * Invalidate cache to force recalculation.
-     */
-    public invalidateCache(): void {
-        this.indicatorCache.length = 0;
     }
 }

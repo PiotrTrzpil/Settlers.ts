@@ -4,6 +4,7 @@ import { BuildingType } from '../../entity';
 import type { Race } from '../../race';
 import type { PlacementEntityType } from '../render-state';
 import type { TerrainData } from '../../terrain';
+import type { ValidPositionGrid } from '../../features/placement/valid-position-grid';
 
 /** Everything PlaceBuildingMode needs from the game. */
 export interface BuildingPlacementContext {
@@ -49,6 +50,12 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
     readonly entityType: PlacementEntityType = 'building';
     protected override readonly resetAfterPlace = true;
 
+    private grid: ValidPositionGrid | null = null;
+
+    setGrid(grid: ValidPositionGrid | null): void {
+        this.grid = grid;
+    }
+
     constructor(
         validateFn: (x: number, y: number, buildingType: BuildingType) => boolean,
         private readonly getCommandContext?: () => Pick<
@@ -57,6 +64,10 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
         >
     ) {
         super(validateFn);
+    }
+
+    protected override isPositionValid(x: number, y: number, _buildingType: BuildingType): boolean {
+        return this.grid?.isValid(x, y) ?? false;
     }
 
     protected getCommandType(): string {
@@ -92,6 +103,7 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
             y,
             player: this.currentPlayer,
             race: data.race!,
+            trusted: this.grid !== null,
             ...(settings?.placeBuildingsCompleted && { completed: true }),
             ...(settings?.placeBuildingsWithWorker && { spawnWorker: true }),
         };
@@ -114,6 +126,11 @@ export class PlaceBuildingMode extends BasePlacementMode<BuildingType> {
             previewValid: false,
             extra: {},
         };
+    }
+
+    /** Notify the grid that a building was placed so it can update. */
+    notifyPlacement(x: number, y: number, buildingType: BuildingType, race: Race): void {
+        this.grid?.patchAfterPlacement(x, y, buildingType, race);
     }
 
     /**

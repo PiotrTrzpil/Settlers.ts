@@ -20,6 +20,8 @@ import { EntityType } from '@/game/entity';
 import { getBuildingVisualState } from '@/game/features/building-construction';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { IViewPoint } from '@/game/renderer/i-view-point';
+import type { ValidPositionGrid } from '@/game/features/placement/valid-position-grid';
+import { MAX_SLOPE_DIFF } from '@/game/features/placement';
 import { WorkAreaAdjustHandler } from '@/game/features/building-adjust';
 import { computeWorkAreaColoredRings } from '@/game/features/work-areas/work-area-boundary';
 import { debugStats } from '@/game/debug-stats';
@@ -36,6 +38,7 @@ export interface CallbackContext {
     debugGrid: boolean;
     darkLandDilation: boolean;
     layerVisibility: LayerVisibility;
+    placementGrid: ValidPositionGrid | null;
 }
 
 /** Update entity renderer state from game using RenderContext interface */
@@ -193,6 +196,11 @@ export function createUpdateCallback(
             }
         }
 
+        // Advance grid computation (spiral outward from camera center)
+        if (ctx.placementGrid && !ctx.placementGrid.isComplete) {
+            ctx.placementGrid.computeChunk(1000);
+        }
+
         // Debug stats + sound
         if (g) {
             debugStats.updateFromGame(g, g.settings);
@@ -235,9 +243,9 @@ export function createRenderCallback(
             // Update building indicator renderer state
             ctx.indicatorRenderer?.setState(
                 inPlacementMode,
-                g.state.tileOccupancy,
-                g.state.buildingFootprint,
-                er.placementPreview
+                ctx.placementGrid,
+                er.placementPreview?.tile ?? null,
+                MAX_SLOPE_DIFF
             );
 
             er.tileHighlights = renderState?.highlights ?? [];

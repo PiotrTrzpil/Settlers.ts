@@ -154,6 +154,15 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
         return data.previewValid ? `Place ${typeName}` : 'Cannot place here';
     }
 
+    /**
+     * Check if a position is valid for placement.
+     * Default: delegates to the validatePlacement callback.
+     * PlaceBuildingMode overrides to use the precomputed grid.
+     */
+    protected isPositionValid(x: number, y: number, subType: TSubType): boolean {
+        return this.validatePlacement(x, y, subType);
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // InputMode lifecycle implementation
     // ─────────────────────────────────────────────────────────────────
@@ -231,7 +240,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
         const anchor = this.resolveAnchorPosition(data.tileX, data.tileY, modeData.subType);
         modeData.previewX = anchor.x;
         modeData.previewY = anchor.y;
-        modeData.previewValid = this.validatePlacement(anchor.x, anchor.y, modeData.subType);
+        modeData.previewValid = this.isPositionValid(anchor.x, anchor.y, modeData.subType);
 
         context.setModeData(modeData);
 
@@ -298,7 +307,7 @@ export abstract class BasePlacementMode<TSubType = number> extends BaseInputMode
                 return;
             }
             // Re-validate current tile (now occupied) so preview updates
-            modeData.previewValid = this.validatePlacement(modeData.previewX, modeData.previewY, modeData.subType);
+            modeData.previewValid = this.isPositionValid(modeData.previewX, modeData.previewY, modeData.subType);
             context.setModeData(modeData);
         } else {
             this.logPlacement(modeData, false, result.error ?? 'Command failed');

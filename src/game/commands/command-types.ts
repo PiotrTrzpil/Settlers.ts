@@ -51,6 +51,8 @@ export interface PlaceBuildingCommand {
     spawnWorker?: boolean;
     /** When true, skip construction and mark the building as immediately operational. */
     completed?: boolean;
+    /** When true, skip placement validation (from grid-backed UI where positions are precomputed). */
+    trusted?: boolean;
 }
 
 export interface PlacePileCommand {

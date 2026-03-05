@@ -14,13 +14,8 @@ import { Renderer } from '@/game/renderer/renderer';
 import { TilePicker } from '@/game/input/tile-picker';
 import { type TileCoord, BuildingType } from '@/game/entity';
 import { Race, AVAILABLE_RACES } from '@/game/renderer/sprite-metadata';
-import {
-    canPlaceResource,
-    canPlaceUnit,
-    canPlaceBuildingFootprint,
-    computeHeightRange,
-    MAX_SLOPE_DIFF,
-} from '@/game/features/placement';
+import { canPlaceResource, canPlaceUnit, canPlaceBuildingFootprint } from '@/game/features/placement';
+import { ValidPositionGrid, type GridComputeRequest } from '@/game/features/placement/valid-position-grid';
 import type { Command, CommandResult } from '@/game/commands';
 import { debugStats } from '@/game/debug-stats';
 import {
@@ -92,6 +87,54 @@ function canPlaceBuilding(getGame: () => Game | null, x: number, y: number, buil
     );
 }
 
+/** Create a ValidPositionGrid for the given building type when entering placement mode. */
+function createPlacementGrid(game: Game, buildingType: number, viewX: number, viewY: number): ValidPositionGrid | null {
+    const race = game.playerRaces.get(game.currentPlayer);
+    if (race === undefined) return null;
+    const request: GridComputeRequest = {
+        buildingType,
+        race,
+        player: game.currentPlayer,
+        centerX: Math.round(viewX),
+        centerY: Math.round(viewY),
+        placementFilter: game.commandContext.placementFilter,
+    };
+    return new ValidPositionGrid(
+        request,
+        game.terrain.mapSize,
+        game.terrain.groundType,
+        game.terrain.groundHeight,
+        game.state.tileOccupancy,
+        game.state.buildingFootprint
+    );
+}
+
+/** Execute a game command, updating debug stats for tile-targeting commands. */
+function executeGameCommand(
+    command: Record<string, unknown>,
+    getGame: () => Game | null,
+    onTileClick: (tile: { x: number; y: number }) => void
+): CommandResult {
+    const game = getGame();
+    if (!game) return { success: false, error: 'Game not initialized' };
+
+    if (command['type'] === 'select_at_tile' || command['type'] === 'move_selected_units') {
+        const x = (command['x'] ?? command['targetX']) as number | undefined;
+        const y = (command['y'] ?? command['targetY']) as number | undefined;
+        if (x !== undefined && y !== undefined) {
+            onTileClick({ x, y });
+            debugStats.state.hasTile = true;
+            debugStats.state.tileX = x;
+            debugStats.state.tileY = y;
+            const idx = game.terrain.toIndex(x, y);
+            debugStats.state.tileGroundType = game.terrain.groundType[idx]!;
+            debugStats.state.tileGroundHeight = game.terrain.groundHeight[idx]!;
+        }
+    }
+
+    return game.execute(command as unknown as Command);
+}
+
 interface UseRendererOptions {
     canvas: Ref<HTMLCanvasElement | null>;
     getGame: () => Game | null;
@@ -116,6 +159,7 @@ export function useRenderer({
     let landscapeRenderer: LandscapeRenderer | null = null;
     let inputManager: InputManager | null = null;
     let rendererInitStart = 0;
+    let placementGrid: ValidPositionGrid | null = null;
 
     // Selection box state for rendering drag selection overlay
     const selectionBox = ref<SelectionBox | null>(null);
@@ -135,31 +179,8 @@ export function useRenderer({
         );
     }
 
-    /**
-     * Execute a game command, updating debug stats for tile clicks.
-     * Returns CommandResult with success status, error details, and effects.
-     */
-    function executeCommand(command: Record<string, unknown>): CommandResult {
-        const game = getGame();
-        if (!game) return { success: false, error: 'Game not initialized' };
-
-        // Track tile info for debug stats on tile-targeting commands
-        if (command['type'] === 'select_at_tile' || command['type'] === 'move_selected_units') {
-            const x = (command['x'] ?? command['targetX']) as number | undefined;
-            const y = (command['y'] ?? command['targetY']) as number | undefined;
-            if (x !== undefined && y !== undefined) {
-                onTileClick({ x, y });
-                debugStats.state.hasTile = true;
-                debugStats.state.tileX = x;
-                debugStats.state.tileY = y;
-                const idx = game.terrain.toIndex(x, y);
-                debugStats.state.tileGroundType = game.terrain.groundType[idx]!;
-                debugStats.state.tileGroundHeight = game.terrain.groundHeight[idx]!;
-            }
-        }
-
-        return game.execute(command as unknown as Command);
-    }
+    const executeCommand = (command: Record<string, unknown>): CommandResult =>
+        executeGameCommand(command, getGame, onTileClick);
 
     /**
      * Create and configure the InputManager.
@@ -167,13 +188,50 @@ export function useRenderer({
     function createInputManager(): void {
         if (!canvas.value) return;
 
+        const placeBuildingMode = new PlaceBuildingMode(
+            (x, y, buildingType) => canPlaceBuilding(getGame, x, y, buildingType),
+            () => {
+                const game = getGame();
+                return {
+                    placeBuildingsCompleted: game?.settings.state.placeBuildingsCompleted ?? false,
+                    placeBuildingsWithWorker: game?.settings.state.placeBuildingsWithWorker ?? false,
+                };
+            }
+        );
+
+        const baseModeChange = handleModeChange(getGame);
+
         inputManager = new InputManager({
             target: canvas as Ref<HTMLElement | null>,
             config: getDefaultInputConfig(),
             tileResolver: resolveTile,
             commandExecutor: executeCommand,
             initialMode: 'select',
-            onModeChange: handleModeChange(getGame),
+            onModeChange: (oldMode: string, newMode: string, data?: Record<string, unknown>) => {
+                baseModeChange(oldMode, newMode, data);
+
+                // Create grid when entering building placement mode
+                if (newMode === 'place_building') {
+                    const game = getGame();
+                    const buildingType =
+                        (data?.['buildingType'] as number | undefined) ?? (data?.['subType'] as number | undefined);
+                    if (game && buildingType !== undefined) {
+                        placementGrid = createPlacementGrid(
+                            game,
+                            buildingType,
+                            renderer!.viewPoint.x,
+                            renderer!.viewPoint.y
+                        );
+                        placeBuildingMode.setGrid(placementGrid);
+                    }
+                }
+
+                // Destroy grid when leaving building placement mode
+                if (oldMode === 'place_building') {
+                    placementGrid = null;
+                    placeBuildingMode.setGrid(null);
+                }
+            },
             raceProvider: () => {
                 const g = getGame();
                 return g?.playerRaces.get(g.currentPlayer) ?? null;
@@ -183,18 +241,7 @@ export function useRenderer({
         inputManager.registerMode(new SelectMode());
         const tileHover = (x: number, y: number) => updateTileDebugStats(x, y, getGame, onTileClick);
 
-        inputManager.registerMode(
-            new PlaceBuildingMode(
-                (x, y, buildingType) => canPlaceBuilding(getGame, x, y, buildingType),
-                () => {
-                    const game = getGame();
-                    return {
-                        placeBuildingsCompleted: game?.settings.state.placeBuildingsCompleted ?? false,
-                        placeBuildingsWithWorker: game?.settings.state.placeBuildingsWithWorker ?? false,
-                    };
-                }
-            )
-        );
+        inputManager.registerMode(placeBuildingMode);
         inputManager.registerMode(
             new PlaceResourceMode((x, y) => {
                 const game = getGame();
@@ -234,15 +281,7 @@ export function useRenderer({
         );
         renderer.add(landscapeRenderer);
 
-        indicatorRenderer = new BuildingIndicatorRenderer(
-            game.terrain.mapSize,
-            game.terrain.groundType,
-            game.terrain.groundHeight,
-            {
-                computeHeightRange,
-                maxSlopeDiff: MAX_SLOPE_DIFF,
-            }
-        );
+        indicatorRenderer = new BuildingIndicatorRenderer(game.terrain.mapSize, game.terrain.groundHeight);
         renderer.add(indicatorRenderer);
 
         entityRenderer = new EntityRenderer(game.terrain.mapSize, game.terrain.groundHeight, game.fileManager);
@@ -289,6 +328,7 @@ export function useRenderer({
             debugGrid: getDebugGrid(),
             darkLandDilation: getGame()?.settings.state.darkLandDilation ?? true,
             layerVisibility: getLayerVisibility(),
+            placementGrid,
         });
 
         // Register update callback (input, sound, debug stats — runs before render)
@@ -332,8 +372,6 @@ export function useRenderer({
 
     onMounted(() => {
         const cavEl = canvas.value!;
-        // Pass externalInput: true to disable ViewPoint's legacy mouse handlers
-        // since we use InputManager for all input handling
         const game = getGame();
         renderer = new Renderer(cavEl, { externalInput: true, antialias: game?.settings.state.antialias });
         tilePicker = new TilePicker(cavEl);
@@ -370,16 +408,10 @@ export function useRenderer({
         return entityRenderer.getRace();
     }
 
-    /**
-     * Get the input manager for external control.
-     */
     function getInputManager(): InputManager | null {
         return inputManager;
     }
 
-    /**
-     * Get current camera state for saving/restoring across recreations.
-     */
     function getCamera(): { x: number; y: number; zoom: number } | null {
         if (!renderer) return null;
         return {

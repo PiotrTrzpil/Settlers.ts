@@ -11,6 +11,7 @@
  * - Terrain: isPassable, isBuildable (for movement, pathfinding)
  * - Slope: MAX_SLOPE_DIFF, computeSlopeDifficulty (for indicator renderer)
  * - Convenience: canPlaceBuildingFootprint, canPlaceResource, canPlaceUnit
+ * - Grid: ValidPositionGrid (precomputed valid positions for building placement)
  */
 
 // Types
@@ -20,6 +21,7 @@ export type {
     PlacementEntityType,
     PlacementValidator,
     DetailedPlacementValidator,
+    PlacementFilter,
 } from './types';
 export { PlacementStatus } from './types';
 
@@ -43,3 +45,6 @@ export { isPassable, isBuildable, isMineBuildable, isRock } from './terrain';
 
 // Slope utilities (for indicator renderer)
 export { MAX_SLOPE_DIFF, computeSlopeDifficulty, computeHeightRange } from './slope';
+
+// Valid Position Grid (for precomputed placement validation)
+export { ValidPositionGrid, type ValidPositionEntry, type GridComputeRequest } from './valid-position-grid';
