@@ -342,7 +342,7 @@ export function completeConstruction(ctx: TestContext, entityId: number): void {
 
 // ─── Command execution helpers ──────────────────────────────────────
 
-import { executeCommand, type CommandResult, type CommandContext } from '@/game/commands';
+import { executeCommand, commandSuccess, type CommandResult, type CommandContext } from '@/game/commands';
 
 /** Build a CommandContext from a TestContext (optionally override eventBus). */
 export function toCommandContext(ctx: TestContext, eventBus?: EventBus): CommandContext {
@@ -500,4 +500,44 @@ export function findBuildableTile(map: TestMap): { x: number; y: number } | null
         const index = map.mapSize.toIndex(x, y);
         return BUILDABLE.includes(map.groundType[index]!);
     });
+}
+
+// ─── InputContext test helper ────────────────────────────────────────
+
+import type { InputContext } from '@/game/input/input-mode';
+
+/** Create a mock InputContext for input mode tests. */
+export function createTestInputContext(overrides?: Partial<InputContext>): {
+    ctx: InputContext;
+    commands: Record<string, unknown>[];
+    getSwitchedMode: () => string | null;
+    getModeData: () => unknown;
+} {
+    let modeData: unknown;
+    const commands: Record<string, unknown>[] = [];
+    let switchedTo: string | null = null;
+
+    const ctx: InputContext = {
+        state: {
+            pointer: { value: { x: 0, y: 0, tileX: 10, tileY: 10 } },
+            keys: { value: new Set() },
+            drag: { value: null },
+        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- minimal InputState stub
+        currentTile: { x: 10, y: 10 },
+        getModeData: <T>() => modeData as T,
+        setModeData: <T>(data: T) => {
+            modeData = data;
+        },
+        switchMode: (name: string) => {
+            switchedTo = name;
+        },
+        executeCommand: cmd => {
+            commands.push(cmd);
+            return commandSuccess();
+        },
+        localPlayerRace: null,
+        ...overrides,
+    };
+
+    return { ctx, commands, getSwitchedMode: () => switchedTo, getModeData: () => modeData };
 }

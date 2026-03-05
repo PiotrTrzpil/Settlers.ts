@@ -24,10 +24,7 @@
  *
  * SCENARIO BUILDERS
  * ─────────────────
- * Use createScenario() for common setups:
- *   createScenario.singleProducer(type)         - residence + 1 building
- *   createScenario.chain(producer, transformer)  - residence + 2 buildings
- *   createScenario.isolatedTransformer(type, inputs) - building with injected inputs
+ * See test-scenarios.ts for pre-configured simulation setups (createScenario).
  */
 
 import { installTestGameData, installRealGameData, resetTestGameData } from './test-game-data';
@@ -193,6 +190,34 @@ const DUMP_TIMELINE = !!process.env['DUMP_TIMELINE'];
 /** Set VERBOSE_MOVEMENT=1 to enable detailed pathfinding/movement events in the timeline */
 const VERBOSE_MOVEMENT = !!process.env['VERBOSE_MOVEMENT'];
 
+/** Set VERBOSE_CHOREO=1 to enable detailed choreography events in the timeline */
+const VERBOSE_CHOREO = !!process.env['VERBOSE_CHOREO'];
+
+// ─── Timeline auto-wiring ────────────────────────────────────────
+
+/** Map event namespace to timeline category (unmapped namespaces use the namespace itself). */
+const CATEGORY_MAP: Record<string, TimelineCategory> = {
+    building: 'building',
+    unit: 'unit',
+    settler: 'unit',
+    carrier: 'carrier',
+    inventory: 'inventory',
+    logistics: 'logistics',
+    entity: 'world',
+    terrain: 'world',
+    tree: 'world',
+    crop: 'world',
+    movement: 'movement',
+    choreo: 'unit',
+    combat: 'combat',
+    construction: 'building',
+    production: 'building',
+    barracks: 'building',
+};
+
+/** Entity ID field priority — first match wins. */
+const ENTITY_ID_KEYS = ['entityId', 'unitId', 'buildingId', 'carrierId', 'attackerId'] as const;
+
 // ─── Invariant checking ─────────────────────────────────────────
 
 const INVARIANT_CHECK_INTERVAL = 30; // every ~1 simulated second
@@ -271,116 +296,60 @@ export class Simulation {
         if (VERBOSE_MOVEMENT) {
             this.state.movement.verbose = true;
         }
+        if (VERBOSE_CHOREO) {
+            this.services.settlerTaskSystem.verbose = true;
+        }
     }
 
     // ─── Timeline event subscriptions ─────────────────────────────
 
     /**
-     * Wire a single event to the timeline recorder.
-     * `category` and `entityKey` define how the event maps to a timeline entry.
-     * Formatting is handled by EventFmt in game code.
+     * Auto-wire ALL events from the EventBus to the timeline recorder.
+     *
+     * Wraps `eventBus.emit` so every event is captured automatically — no
+     * manual wiring needed when new events are added to GameEvents.
+     *
+     * Category, label, and entity ID are derived from the event name and payload:
+     *   - `building:placed`  → category=building, label=placed, entityId from payload
+     *   - `settler:taskStarted` → category=unit, label=task_started, unitId from payload
      */
-    private wire<K extends keyof typeof EventFmt>(
-        event: K,
-        category: TimelineCategory,
-        label: string,
-        entityKey: string
-    ) {
-        this.eventBus.on(event, (payload: GameEvents[K]) => {
-            const detail = EventFmt[event](payload as never);
-            const entityId = (payload as Record<string, unknown>)[entityKey] as number | undefined;
-            this.timeline.record(this.tickCount, category, entityId, label, detail);
-        });
+    private subscribeTimeline() {
+        const origEmit = this.eventBus.emit.bind(this.eventBus);
+        this.eventBus.emit = (<K extends keyof GameEvents>(event: K, payload: GameEvents[K]) => {
+            this.recordTimelineEvent(event as string, payload as Record<string, unknown>);
+            return origEmit(event, payload);
+        }) as typeof this.eventBus.emit;
     }
 
-    private subscribeTimeline() {
-        this.wire('entity:created', 'world', 'entity_created', 'entityId');
-        this.wire('entity:removed', 'world', 'entity_removed', 'entityId');
-        this.wire('terrain:modified', 'world', 'terrain_modified', 'entityId');
+    private recordTimelineEvent(event: string, payload: Record<string, unknown>) {
+        const colonIdx = event.indexOf(':');
+        const namespace = colonIdx >= 0 ? event.slice(0, colonIdx) : event;
+        const action = colonIdx >= 0 ? event.slice(colonIdx + 1) : event;
 
-        // Building lifecycle
-        this.wire('building:placed', 'building', 'placed', 'entityId');
-        this.wire('building:completed', 'building', 'completed', 'entityId');
-        this.wire('building:removed', 'building', 'removed', 'entityId');
+        // Gate verbose events
+        if (namespace === 'movement' && !VERBOSE_MOVEMENT) return;
+        if (namespace === 'choreo' && !VERBOSE_CHOREO) return;
 
-        // Unit lifecycle
-        this.wire('unit:spawned', 'unit', 'spawned', 'entityId');
-        this.wire('unit:movementStopped', 'unit', 'movement_stopped', 'entityId');
+        const category = (CATEGORY_MAP[namespace] ?? namespace) as TimelineCategory;
+        const label = action.replace(/[A-Z]/g, m => '_' + m.toLowerCase());
 
-        // Settler task lifecycle
-        this.wire('settler:taskStarted', 'unit', 'task_started', 'unitId');
-        this.wire('settler:taskCompleted', 'unit', 'task_completed', 'unitId');
-        this.wire('settler:taskFailed', 'unit', 'task_failed', 'unitId');
-
-        // Carrier lifecycle
-        this.wire('carrier:created', 'carrier', 'created', 'entityId');
-        this.wire('carrier:removed', 'carrier', 'removed', 'entityId');
-        this.wire('carrier:statusChanged', 'carrier', 'status', 'entityId');
-        this.wire('carrier:arrivedForPickup', 'carrier', 'at_pickup', 'entityId');
-        this.wire('carrier:arrivedForDelivery', 'carrier', 'at_delivery', 'entityId');
-        this.wire('carrier:assigned', 'carrier', 'assigned', 'carrierId');
-        this.wire('carrier:pickupComplete', 'carrier', 'picked_up', 'entityId');
-        this.wire('carrier:deliveryComplete', 'carrier', 'delivered', 'entityId');
-        this.wire('carrier:assignmentFailed', 'carrier', 'assign_failed', 'carrierId');
-        this.wire('carrier:pickupFailed', 'carrier', 'pickup_failed', 'entityId');
-
-        // Inventory — uses slotType as label (input/output)
-        this.eventBus.on('inventory:changed', e => {
-            this.timeline.record(
-                this.tickCount,
-                'inventory',
-                e.buildingId,
-                e.slotType,
-                EventFmt['inventory:changed'](e)
-            );
-        });
-
-        // Logistics
-        this.wire('logistics:noMatch', 'logistics', 'no_match', 'buildingId');
-        this.wire('logistics:noCarrier', 'logistics', 'no_carrier', 'buildingId');
-        this.wire('logistics:buildingCleanedUp', 'logistics', 'building_cleanup', 'buildingId');
-        this.wire('logistics:requestCreated', 'logistics', 'request_created', 'buildingId');
-
-        // Production
-        this.wire('production:modeChanged', 'building', 'prod_mode', 'buildingId');
-
-        // Tree lifecycle
-        this.wire('tree:planted', 'world', 'tree_planted', 'entityId');
-        this.wire('tree:matured', 'world', 'tree_matured', 'entityId');
-        this.wire('tree:cut', 'world', 'tree_cut', 'entityId');
-
-        // Crop lifecycle
-        this.wire('crop:planted', 'world', 'crop_planted', 'entityId');
-        this.wire('crop:matured', 'world', 'crop_matured', 'entityId');
-        this.wire('crop:harvested', 'world', 'crop_harvested', 'entityId');
-
-        // Construction
-        this.wire('construction:diggingStarted', 'building', 'digging_started', 'buildingId');
-        this.wire('construction:tileCompleted', 'building', 'tile_leveled', 'buildingId');
-        this.wire('construction:levelingComplete', 'building', 'leveling_done', 'buildingId');
-        this.wire('construction:workerAssigned', 'building', 'worker_assigned', 'buildingId');
-        this.wire('construction:workerReleased', 'building', 'worker_released', 'buildingId');
-        this.wire('construction:materialDelivered', 'building', 'material_delivered', 'buildingId');
-        this.wire('construction:buildingStarted', 'building', 'construction_started', 'buildingId');
-        this.wire('construction:progressComplete', 'building', 'construction_done', 'buildingId');
-
-        // Verbose movement (only wired when VERBOSE_MOVEMENT=1)
-        if (VERBOSE_MOVEMENT) {
-            this.wire('movement:pathFound', 'movement', 'path_found', 'entityId');
-            this.wire('movement:pathFailed', 'movement', 'path_failed', 'entityId');
-            this.wire('movement:blocked', 'movement', 'blocked', 'entityId');
-            this.wire('movement:escalation', 'movement', 'escalation', 'entityId');
-            this.wire('movement:collisionResolved', 'movement', 'collision', 'entityId');
+        // Find primary entity ID from payload
+        let entityId: number | undefined;
+        for (const key of ENTITY_ID_KEYS) {
+            if (typeof payload[key] === 'number') {
+                entityId = payload[key] as number;
+                break;
+            }
         }
 
-        // Combat
-        this.wire('combat:unitAttacked', 'combat', 'attacked', 'attackerId');
-        this.wire('combat:unitDefeated', 'combat', 'defeated', 'entityId');
+        // Use inventory slotType as label (preserves input/output distinction)
+        const finalLabel = event === 'inventory:changed' ? (payload['slotType'] as string) : label;
 
-        // Barracks
-        this.wire('barracks:trainingStarted', 'building', 'training_started', 'buildingId');
-        this.wire('barracks:trainingCompleted', 'building', 'training_completed', 'buildingId');
-        this.wire('barracks:trainingInterrupted', 'building', 'training_interrupted', 'buildingId');
+        // Format using EventFmt when available, fall back to JSON
+        const formatter = EventFmt[event as keyof typeof EventFmt] as ((e: unknown) => string) | undefined;
+        const detail = formatter ? formatter(payload) : JSON.stringify(payload);
+
+        this.timeline.record(this.tickCount, category, entityId, finalLabel, detail);
     }
 
     // ─── Tick & run ───────────────────────────────────────────────
@@ -423,53 +392,9 @@ export class Simulation {
     /** Dump full diagnostics on runUntil timeout. */
     private dumpTimeoutDiagnostics(opts: RunUntilOptions, maxTicks: number, errorsBefore: number) {
         const label = opts.label ?? 'predicate';
-        const sep = '═'.repeat(70);
-        console.log(`\n${sep}`);
-        console.log(`  TIMEOUT: "${label}" not reached in ${maxTicks} ticks`);
-        console.log(sep);
-
-        if (opts.diagnose) {
-            console.log(`\n[Diagnosis] ${opts.diagnose()}`);
-        }
-
-        const snap = this.snapshot();
-        console.log(`\n[Snapshot at tick ${snap.tick}]`);
-        console.log(`  Entities: ${JSON.stringify(snap.entityCounts)}`);
-        this.dumpSnapshotDetails(snap);
-
-        console.log(`\n[Timeline — last 50 entries]`);
-        console.log(this.timeline.format(10000));
-
-        this.dumpErrorSummary(errorsBefore);
-        console.log(`${sep}\n`);
-    }
-
-    private dumpSnapshotDetails(snap: SimSnapshot) {
-        for (const b of snap.buildings) {
-            const parts = [b.inputs, b.outputs].filter(Boolean);
-            console.log(`    #${b.id} ${b.type}${parts.length ? ': ' + parts.join(' | ') : ''}`);
-        }
-        for (const c of snap.carriers) {
-            console.log(`    #${c.id} ${c.status} ${c.pos}${c.carrying ? ' ' + c.carrying : ''}`);
-        }
-    }
-
-    private dumpErrorSummary(errorsBefore: number) {
-        if (this.errors.length <= errorsBefore) return;
-        const newErrors = this.errors.slice(errorsBefore);
-        const unique = new Map<string, { count: number; tick: number; system: string }>();
-        for (const e of newErrors) {
-            const existing = unique.get(e.error.message);
-            if (existing) {
-                existing.count++;
-            } else {
-                unique.set(e.error.message, { count: 1, tick: e.tick, system: e.system });
-            }
-        }
-        console.log(`\n[Errors] ${newErrors.length} error(s) during run (${unique.size} unique):`);
-        for (const [msg, info] of unique) {
-            console.log(`  [tick ${info.tick}, ${info.system}] (×${info.count}) ${msg}`);
-        }
+        const header = `TIMEOUT: "${label}" not reached in ${maxTicks} ticks`;
+        const extra = opts.diagnose ? `\n[Diagnosis] ${opts.diagnose()}` : '';
+        this.dumpDiagnosticsBody(header + extra, 10000, errorsBefore);
     }
 
     // ─── Snapshot ─────────────────────────────────────────────────
@@ -633,7 +558,7 @@ export class Simulation {
         if (!result.success) {
             throw new Error(`Failed to place ${BuildingType[buildingType]} at (${x}, ${y}): ${result.error}`);
         }
-        return (result.effects![0]! as { entityId: number }).entityId;
+        return this.resultEntityId(result);
     }
 
     placeGoods(material: EMaterialType, amount: number): number {
@@ -648,13 +573,11 @@ export class Simulation {
         if (!result.success) {
             throw new Error(`Failed to place ${EMaterialType[material]} at (${pos.x}, ${pos.y}): ${result.error}`);
         }
-        return (result.effects![0]! as { entityId: number }).entityId;
+        return this.resultEntityId(result);
     }
 
     placeGoodsNear(buildingId: number, material: EMaterialType, amount: number) {
-        const b = this.state.getEntityOrThrow(buildingId, 'placeGoodsNear');
-        const skip = this.footprintRadius(b) + 1;
-        const tiles = this.findEmptyTiles(b.x, b.y, 1, skip);
+        const tiles = this.tilesNearBuilding(buildingId, 1);
         if (tiles.length === 0) throw new Error(`No empty tile near building ${buildingId}`);
         const pos = tiles[0]!;
         const result = this.execute({
@@ -672,42 +595,36 @@ export class Simulation {
     // ─── Map object placement ─────────────────────────────────────
 
     plantTreesNear(buildingId: number, count: number) {
-        const b = this.state.getEntityOrThrow(buildingId, 'plantTreesNear');
-        const skip = this.footprintRadius(b) + 1;
-        for (const pos of this.findEmptyTiles(b.x, b.y, count, skip)) {
-            const tree = this.state.addEntity(EntityType.MapObject, MapObjectType.TreePine, pos.x, pos.y, 0);
-            this.services.treeSystem.register(tree.id, MapObjectType.TreePine, false);
-        }
+        this.placeTreeEntities(this.tilesNearBuilding(buildingId, count));
     }
 
     plantTreesFar(buildingId: number, count: number) {
-        const b = this.state.getEntityOrThrow(buildingId, 'plantTreesFar');
-        for (const pos of this.findEmptyTiles(b.x, b.y, count, 25)) {
-            const tree = this.state.addEntity(EntityType.MapObject, MapObjectType.TreePine, pos.x, pos.y, 0);
-            this.services.treeSystem.register(tree.id, MapObjectType.TreePine, false);
-        }
+        this.placeTreeEntities(this.tilesNearBuilding(buildingId, count, true));
     }
 
     placeRiverNear(buildingId: number, count: number) {
-        const b = this.state.getEntityOrThrow(buildingId, 'placeRiverNear');
-        const skip = this.footprintRadius(b) + 1;
-        for (const pos of this.findEmptyTiles(b.x, b.y, count, skip)) {
+        for (const pos of this.tilesNearBuilding(buildingId, count)) {
             this.map.groundType[this.map.mapSize.toIndex(pos.x, pos.y)] = TERRAIN.RIVER_MIN;
         }
     }
 
     placeStonesNear(buildingId: number, count: number) {
-        const b = this.state.getEntityOrThrow(buildingId, 'placeStonesNear');
-        const skip = this.footprintRadius(b) + 1;
-        for (const pos of this.findEmptyTiles(b.x, b.y, count, skip)) {
-            const stone = this.state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone, pos.x, pos.y, 0);
-            this.services.stoneSystem.register(stone.id, MapObjectType.ResourceStone);
-        }
+        this.placeStoneEntities(this.tilesNearBuilding(buildingId, count));
     }
 
     placeStonesFar(buildingId: number, count: number) {
-        const b = this.state.getEntityOrThrow(buildingId, 'placeStonesFar');
-        for (const pos of this.findEmptyTiles(b.x, b.y, count, 25)) {
+        this.placeStoneEntities(this.tilesNearBuilding(buildingId, count, true));
+    }
+
+    private placeTreeEntities(tiles: { x: number; y: number }[]) {
+        for (const pos of tiles) {
+            const tree = this.state.addEntity(EntityType.MapObject, MapObjectType.TreePine, pos.x, pos.y, 0);
+            this.services.treeSystem.register(tree.id, MapObjectType.TreePine, false);
+        }
+    }
+
+    private placeStoneEntities(tiles: { x: number; y: number }[]) {
+        for (const pos of tiles) {
             const stone = this.state.addEntity(EntityType.MapObject, MapObjectType.ResourceStone, pos.x, pos.y, 0);
             this.services.stoneSystem.register(stone.id, MapObjectType.ResourceStone);
         }
@@ -741,7 +658,7 @@ export class Simulation {
                 `Failed to place mine ${BuildingType[buildingType]} at (${pos.x}, ${pos.y}): ${result.error}`
             );
         }
-        const entityId = (result.effects![0]! as { entityId: number }).entityId;
+        const entityId = this.resultEntityId(result);
 
         this.fillOreSquare(pos.x, pos.y, 4, oreType, oreLevel);
         return entityId;
@@ -761,17 +678,11 @@ export class Simulation {
         if (!result.success) {
             throw new Error(`Failed to spawn ${UnitType[unitType]} at (${x}, ${y}): ${result.error}`);
         }
-        return (result.effects![0]! as { entityId: number }).entityId;
+        return this.resultEntityId(result);
     }
 
     spawnUnitNear(buildingId: number, unitType: UnitType, count = 1, player = 0): number[] {
-        const b = this.state.getEntityOrThrow(buildingId, 'spawnUnitNear');
-        const skip = this.footprintRadius(b) + 1;
-        const ids: number[] = [];
-        for (const pos of this.findEmptyTiles(b.x, b.y, count, skip)) {
-            ids.push(this.spawnUnit(pos.x, pos.y, unitType, player));
-        }
-        return ids;
+        return this.tilesNearBuilding(buildingId, count).map(pos => this.spawnUnit(pos.x, pos.y, unitType, player));
     }
 
     moveUnit(entityId: number, targetX: number, targetY: number): boolean {
@@ -847,21 +758,45 @@ export class Simulation {
 
     /** Print timeline and snapshot to console. Call from afterEach or onTestFailed. */
     dumpDiagnostics(lastEntries = 100) {
+        this.dumpDiagnosticsBody(
+            `DIAGNOSTICS at tick ${this.tickCount} (${this.errors.length} errors)`,
+            lastEntries,
+            0
+        );
+    }
+
+    private dumpDiagnosticsBody(header: string, lastEntries: number, errorsBefore: number) {
         const sep = '═'.repeat(70);
         console.log(`\n${sep}`);
-        console.log(`  DIAGNOSTICS at tick ${this.tickCount} (${this.errors.length} errors)`);
+        console.log(`  ${header}`);
         console.log(sep);
 
         const snap = this.snapshot();
-        console.log(`\n[Snapshot]`);
+        console.log(`\n[Snapshot at tick ${snap.tick}]`);
         console.log(`  Entities: ${JSON.stringify(snap.entityCounts)}`);
-        this.dumpSnapshotDetails(snap);
+        for (const b of snap.buildings) {
+            const parts = [b.inputs, b.outputs].filter(Boolean);
+            console.log(`    #${b.id} ${b.type}${parts.length ? ': ' + parts.join(' | ') : ''}`);
+        }
+        for (const c of snap.carriers) {
+            console.log(`    #${c.id} ${c.status} ${c.pos}${c.carrying ? ' ' + c.carrying : ''}`);
+        }
 
         console.log(`\n[Timeline — last ${lastEntries} entries]`);
         console.log(this.timeline.format(lastEntries));
 
-        if (this.errors.length > 0) {
-            this.dumpErrorSummary(0);
+        if (this.errors.length > errorsBefore) {
+            const newErrors = this.errors.slice(errorsBefore);
+            const unique = new Map<string, { count: number; tick: number; system: string }>();
+            for (const e of newErrors) {
+                const existing = unique.get(e.error.message);
+                if (existing) existing.count++;
+                else unique.set(e.error.message, { count: 1, tick: e.tick, system: e.system });
+            }
+            console.log(`\n[Errors] ${newErrors.length} error(s) during run (${unique.size} unique):`);
+            for (const [msg, info] of unique) {
+                console.log(`  [tick ${info.tick}, ${info.system}] (×${info.count}) ${msg}`);
+            }
         }
         console.log(`${sep}\n`);
     }
@@ -876,6 +811,21 @@ export class Simulation {
     }
 
     // ─── Private helpers ──────────────────────────────────────────
+
+    /** Extract entity ID from a successful command result. */
+    private resultEntityId(result: ReturnType<Simulation['execute']>): number {
+        return (result.effects![0]! as { entityId: number }).entityId;
+    }
+
+    /**
+     * Find N empty tiles near a building.
+     * `far` uses a fixed offset (25) to place outside work area; otherwise adjacent to footprint.
+     */
+    private tilesNearBuilding(buildingId: number, count: number, far = false): { x: number; y: number }[] {
+        const b = this.state.getEntityOrThrow(buildingId, 'tilesNearBuilding');
+        const skip = far ? 25 : this.footprintRadius(b) + 1;
+        return this.findEmptyTiles(b.x, b.y, count, skip);
+    }
 
     /** Chebyshev radius of a building's footprint from its anchor. */
     private footprintRadius(b: Entity): number {
@@ -944,90 +894,5 @@ export function cleanupSimulation(): void {
     resetTestGameData();
 }
 
-// ─── Scenario builders ──────────────────────────────────────────
-
-/** Simulation + primary building ID for single-building scenarios. */
-export type SingleBuildingSim = Simulation & { buildingId: number };
-
-/** Simulation + producer and transformer IDs for chain scenarios. */
-export type ChainSim = Simulation & { producerId: number; transformerId: number };
-
-export const createScenario = {
-    /**
-     * Single producer/building with a ResidenceSmall for carriers.
-     * Returns sim with `buildingId` for the primary building.
-     */
-    singleProducer(buildingType: BuildingType, opts?: SimulationOptions): SingleBuildingSim {
-        const sim = new Simulation(opts);
-        sim.placeBuilding(BuildingType.ResidenceSmall);
-        const buildingId = sim.placeBuilding(buildingType);
-        return Object.assign(sim, { buildingId });
-    },
-
-    /**
-     * Producer → Transformer chain with carrier logistics.
-     * Returns sim with `producerId` and `transformerId`.
-     */
-    chain(producer: BuildingType, transformer: BuildingType, opts?: SimulationOptions): ChainSim {
-        const sim = new Simulation(opts);
-        sim.placeBuilding(BuildingType.ResidenceSmall);
-        const producerId = sim.placeBuilding(producer);
-        const transformerId = sim.placeBuilding(transformer);
-        return Object.assign(sim, { producerId, transformerId });
-    },
-
-    /**
-     * Isolated transformer — inputs pre-injected, no supply chain needed.
-     * Returns sim with `buildingId` for the transformer.
-     */
-    isolatedTransformer(
-        buildingType: BuildingType,
-        inputs: [EMaterialType, number][],
-        opts?: SimulationOptions
-    ): SingleBuildingSim {
-        const sim = new Simulation(opts);
-        sim.placeBuilding(BuildingType.ResidenceSmall);
-        const buildingId = sim.placeBuilding(buildingType);
-        for (const [mat, amt] of inputs) {
-            sim.injectInput(buildingId, mat, amt);
-        }
-        return Object.assign(sim, { buildingId });
-    },
-
-    /**
-     * Military training setup: StorageArea + ResidenceSmall + Barracks.
-     * Returns sim with `barracksId` and `storageId`.
-     */
-    militaryTraining(opts?: SimulationOptions): Simulation & { barracksId: number; storageId: number } {
-        const sim = new Simulation(opts ?? { mapWidth: 256, mapHeight: 256 });
-        const storageId = sim.placeBuilding(BuildingType.StorageArea);
-        sim.placeBuilding(BuildingType.ResidenceSmall);
-        const barracksId = sim.placeBuilding(BuildingType.Barrack);
-        return Object.assign(sim, { barracksId, storageId });
-    },
-
-    /**
-     * Construction site setup: ResidenceSmall (for carriers) + digger + builder +
-     * StorageArea with materials + a building placed as construction site.
-     * Returns sim with `siteId` (the building under construction) and `storageId`.
-     */
-    constructionSite(
-        buildingType: BuildingType,
-        materials: [EMaterialType, number][] = [
-            [EMaterialType.BOARD, 8],
-            [EMaterialType.STONE, 8],
-        ],
-        opts?: SimulationOptions
-    ): Simulation & { siteId: number; storageId: number } {
-        const sim = new Simulation(opts ?? {});
-        const residenceId = sim.placeBuilding(BuildingType.ResidenceSmall);
-        sim.spawnUnitNear(residenceId, UnitType.Digger);
-        sim.spawnUnitNear(residenceId, UnitType.Builder);
-        const storageId = sim.placeBuilding(BuildingType.StorageArea);
-        for (const [mat, amt] of materials) {
-            sim.injectOutput(storageId, mat, amt);
-        }
-        const siteId = sim.placeBuilding(buildingType, 0, false);
-        return Object.assign(sim, { siteId, storageId });
-    },
-};
+// Re-export scenario builders for convenience
+export { createScenario, type SingleBuildingSim, type ChainSim } from './test-scenarios';

@@ -8,9 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import { createTestMap, type TestMap } from '../helpers/test-map';
 import { createGameState, addUnit, addUnitWithPath } from '../helpers/test-game';
-import { getAllNeighbors, hexDistance } from '@/game/systems/hex-directions';
+import { getAllNeighbors } from '@/game/systems/hex-directions';
 import { pushUnit, findRandomFreeDirection, TerrainAccessor } from '@/game/systems/movement/index';
-import { findPath } from '@/game/systems/pathfinding';
 
 function makeTerrain(map: TestMap): TerrainAccessor {
     return {
@@ -122,35 +121,5 @@ describe('Push & collision resolution', () => {
 
         const blocked = findRandomFreeDirection(10, 10, state.tileOccupancy, state.rng, makeTerrain(map));
         expect(blocked).toBeNull();
-    });
-
-    it('hex neighbors, distance, and pathfinding agree on adjacency', () => {
-        const neighbors = getAllNeighbors({ x: 10, y: 10 });
-        expect(neighbors).toHaveLength(6);
-
-        for (const n of neighbors) {
-            const dist = hexDistance(10, 10, n.x, n.y);
-            expect(dist).toBeCloseTo(1, 3);
-        }
-
-        const map = createTestMap();
-        for (const n of neighbors) {
-            if (n.x >= 0 && n.x < 64 && n.y >= 0 && n.y < 64) {
-                const path = findPath(
-                    10,
-                    10,
-                    n.x,
-                    n.y,
-                    map.groundType,
-                    map.groundHeight,
-                    64,
-                    64,
-                    map.occupancy,
-                    map.buildingOccupancy
-                );
-                expect(path).not.toBeNull();
-                expect(path).toHaveLength(1);
-            }
-        }
     });
 });

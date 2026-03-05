@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Tests for settler job selection/rotation in SettlerTaskSystem.
  *
@@ -10,6 +9,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { SettlerTaskSystem, type SettlerTaskSystemConfig } from '@/game/features/settler-tasks/settler-task-system';
 import {
     SearchType,
+    SettlerState,
     WorkHandlerType,
     type EntityWorkHandler,
     type PositionWorkHandler,
@@ -20,6 +20,9 @@ import { UnitType } from '@/game/unit-types';
 import { Race } from '@/game/race';
 import { createTestContext, addUnit, addBuilding, type TestContext } from '../helpers/test-game';
 import { CarrierManager } from '@/game/features/carriers';
+import type { WorkAreaStore } from '@/game/features/work-areas/work-area-store';
+import type { BuildingOverlayManager } from '@/game/features/building-overlays/building-overlay-manager';
+import type { ConstructionSiteManager } from '@/game/features/building-construction/construction-site-manager';
 
 /** Helper: create a SettlerTaskSystem wired to a TestContext */
 function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
@@ -40,9 +43,9 @@ function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
         carrierManager,
         getPileSlotRegistry: () => null,
         getPileRegistry: () => null,
-        workAreaStore: {} as any,
-        buildingOverlayManager: {} as any,
-        constructionSiteManager: { hasSite: () => false } as any,
+        workAreaStore: { getWorkArea: () => undefined } as unknown as WorkAreaStore,
+        buildingOverlayManager: { setWorking() {} } as unknown as BuildingOverlayManager,
+        constructionSiteManager: { hasSite: () => false } as unknown as ConstructionSiteManager,
         executeCommand: () => ({ success: true, effects: [] }),
     };
     return new SettlerTaskSystem(config);
@@ -89,7 +92,7 @@ describe('SettlerTaskSystem job selection', () => {
             const system = createTaskSystem(ctx);
             const tree = ctx.state.addEntity(EntityType.MapObject, 0, 15, 15, 0);
             const handler = createTargetHandler({ entityId: tree.id, x: 15, y: 15 });
-            (system as any).handlerRegistry.entityHandlers.set(SearchType.TREE, handler);
+            system.registerWorkHandler(SearchType.TREE, handler);
 
             addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
@@ -101,7 +104,7 @@ describe('SettlerTaskSystem job selection', () => {
 
         it('woodcutter stays idle when no target exists', () => {
             const system = createTaskSystem(ctx);
-            (system as any).handlerRegistry.entityHandlers.set(SearchType.TREE, createNoTargetHandler());
+            system.registerWorkHandler(SearchType.TREE, createNoTargetHandler());
 
             addBuilding(ctx.state, 10, 10, BuildingType.WoodcutterHut, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
@@ -115,7 +118,7 @@ describe('SettlerTaskSystem job selection', () => {
             const system = createTaskSystem(ctx);
             const tree = ctx.state.addEntity(EntityType.MapObject, 0, 15, 15, 0);
             const handler = createTargetHandler({ entityId: tree.id, x: 15, y: 15 });
-            (system as any).handlerRegistry.entityHandlers.set(SearchType.TREE, handler);
+            system.registerWorkHandler(SearchType.TREE, handler);
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
 
@@ -129,10 +132,7 @@ describe('SettlerTaskSystem job selection', () => {
         it('farmer selects harvest job when harvestable grain target exists', () => {
             const system = createTaskSystem(ctx);
             const grain = ctx.state.addEntity(EntityType.MapObject, 0, 15, 15, 0);
-            (system as any).handlerRegistry.entityHandlers.set(
-                SearchType.GRAIN,
-                createTargetHandler({ entityId: grain.id, x: 15, y: 15 })
-            );
+            system.registerWorkHandler(SearchType.GRAIN, createTargetHandler({ entityId: grain.id, x: 15, y: 15 }));
 
             addBuilding(ctx.state, 10, 10, BuildingType.GrainFarm, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
@@ -140,37 +140,32 @@ describe('SettlerTaskSystem job selection', () => {
             system.tick(0.016);
 
             expect(system.isWorking(entity.id)).toBe(true);
-            const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job.jobId).toBe('JOB_FARMERGRAIN_HARVEST');
+            expect(system.getActiveJobId(entity.id)).toBe('JOB_FARMERGRAIN_HARVEST');
         });
 
         it('farmer selects plant job when no harvestable target exists', () => {
             const system = createTaskSystem(ctx);
-            (system as any).handlerRegistry.entityHandlers.set(SearchType.GRAIN, createNoTargetHandler());
-            (system as any).handlerRegistry.positionHandlers.set(SearchType.GRAIN, createPositionHandler(null));
+            system.registerWorkHandler(SearchType.GRAIN, createNoTargetHandler());
+            system.registerWorkHandler(SearchType.GRAIN_SEED_POS, createPositionHandler(null));
 
             addBuilding(ctx.state, 10, 10, BuildingType.GrainFarm, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
             // Tick 1: handleIdle selects plant job → state=WORKING
             system.tick(0.016);
-            const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job!.jobId).toBe('JOB_FARMERGRAIN_PLANT');
+            expect(system.getActiveJobId(entity.id)).toBe('JOB_FARMERGRAIN_PLANT');
 
             // Tick 2: SEARCH_POS runs, findPosition returns null, no shouldWaitForWork → FAILED → INTERRUPTED
             system.tick(0.016);
             // Tick 3: INTERRUPTED → IDLE
             system.tick(0.016);
-            expect(runtime.state).toBe('IDLE');
+            expect(system.getSettlerState(entity.id)).toBe(SettlerState.IDLE);
         });
 
         it('farmer selects plant when entity handler returns no target', () => {
             const system = createTaskSystem(ctx);
-            (system as any).handlerRegistry.entityHandlers.set(SearchType.GRAIN, createNoTargetHandler());
-            (system as any).handlerRegistry.positionHandlers.set(
-                SearchType.GRAIN,
-                createPositionHandler({ x: 20, y: 20 })
-            );
+            system.registerWorkHandler(SearchType.GRAIN, createNoTargetHandler());
+            system.registerWorkHandler(SearchType.GRAIN_SEED_POS, createPositionHandler({ x: 20, y: 20 }));
 
             addBuilding(ctx.state, 10, 10, BuildingType.GrainFarm, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
@@ -178,39 +173,28 @@ describe('SettlerTaskSystem job selection', () => {
             system.tick(0.016);
 
             expect(system.isWorking(entity.id)).toBe(true);
-            const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job.jobId).toBe('JOB_FARMERGRAIN_PLANT');
+            expect(system.getActiveJobId(entity.id)).toBe('JOB_FARMERGRAIN_PLANT');
         });
 
         it('farmer prefers harvest over plant when entity target exists', () => {
             const system = createTaskSystem(ctx);
             const grain = ctx.state.addEntity(EntityType.MapObject, 0, 12, 12, 0);
-            (system as any).handlerRegistry.entityHandlers.set(
-                SearchType.GRAIN,
-                createTargetHandler({ entityId: grain.id, x: 12, y: 12 })
-            );
-            (system as any).handlerRegistry.positionHandlers.set(
-                SearchType.GRAIN,
-                createPositionHandler({ x: 20, y: 20 })
-            );
+            system.registerWorkHandler(SearchType.GRAIN, createTargetHandler({ entityId: grain.id, x: 12, y: 12 }));
+            system.registerWorkHandler(SearchType.GRAIN_SEED_POS, createPositionHandler({ x: 20, y: 20 }));
 
             addBuilding(ctx.state, 10, 10, BuildingType.GrainFarm, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
             system.tick(0.016);
 
-            const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job.jobId).toBe('JOB_FARMERGRAIN_HARVEST');
+            expect(system.getActiveJobId(entity.id)).toBe('JOB_FARMERGRAIN_HARVEST');
         });
     });
 
     describe('forester (single self-searching job)', () => {
         it('forester selects plant job when position handler returns a position', () => {
             const system = createTaskSystem(ctx);
-            (system as any).handlerRegistry.positionHandlers.set(
-                SearchType.TREE_SEED_POS,
-                createPositionHandler({ x: 20, y: 20 })
-            );
+            system.registerWorkHandler(SearchType.TREE_SEED_POS, createPositionHandler({ x: 20, y: 20 }));
 
             addBuilding(ctx.state, 10, 10, BuildingType.ForesterHut, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Forester });
@@ -218,27 +202,25 @@ describe('SettlerTaskSystem job selection', () => {
             system.tick(0.016);
 
             expect(system.isWorking(entity.id)).toBe(true);
-            const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job.jobId).toBe('JOB_FORESTER_PLANT');
+            expect(system.getActiveJobId(entity.id)).toBe('JOB_FORESTER_PLANT');
         });
 
         it('forester selects plant job when findPosition returns null', () => {
             const system = createTaskSystem(ctx);
-            (system as any).handlerRegistry.positionHandlers.set(SearchType.TREE_SEED_POS, createPositionHandler(null));
+            system.registerWorkHandler(SearchType.TREE_SEED_POS, createPositionHandler(null));
 
             addBuilding(ctx.state, 10, 10, BuildingType.ForesterHut, 0, Race.Roman);
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Forester });
 
             // Tick 1: handleIdle selects plant job → state=WORKING
             system.tick(0.016);
-            const runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job!.jobId).toBe('JOB_FORESTER_PLANT');
+            expect(system.getActiveJobId(entity.id)).toBe('JOB_FORESTER_PLANT');
 
             // Tick 2: SEARCH_POS fails (null position, no shouldWaitForWork) → INTERRUPTED
             system.tick(0.016);
             // Tick 3: INTERRUPTED → IDLE
             system.tick(0.016);
-            expect(runtime.state).toBe('IDLE');
+            expect(system.getSettlerState(entity.id)).toBe(SettlerState.IDLE);
         });
     });
 
@@ -255,29 +237,25 @@ describe('SettlerTaskSystem job selection', () => {
                 onWorkTick: (_targetId, progress) => progress >= 1.0,
                 onWorkComplete: () => {},
             };
-            (system as any).handlerRegistry.entityHandlers.set(SearchType.GRAIN, entityHandler);
-            (system as any).handlerRegistry.positionHandlers.set(
-                SearchType.GRAIN,
-                createPositionHandler({ x: 20, y: 20 })
-            );
+            system.registerWorkHandler(SearchType.GRAIN, entityHandler);
+            system.registerWorkHandler(SearchType.GRAIN_SEED_POS, createPositionHandler({ x: 20, y: 20 }));
 
             addBuilding(ctx.state, 10, 10, BuildingType.GrainFarm, 0, Race.Roman);
-            const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
+            const { entity: farmer1 } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
 
             // First cycle: target exists → harvest
             system.tick(0.016);
-            let runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job.jobId).toBe('JOB_FARMERGRAIN_HARVEST');
+            expect(system.getActiveJobId(farmer1.id)).toBe('JOB_FARMERGRAIN_HARVEST');
 
-            // Simulate job completion by resetting state
-            runtime.state = 'IDLE';
-            runtime.job = null;
+            // Simulate cycle reset: remove entity and re-add so system picks a fresh job
+            system.onEntityRemoved(farmer1.id);
+            ctx.state.removeEntity(farmer1.id);
 
             // Second cycle: no target → plant
             hasTarget = false;
+            const { entity: farmer2 } = addUnit(ctx.state, 10, 10, { subType: UnitType.Farmer });
             system.tick(0.016);
-            runtime = (system as any).runtimes.get(entity.id)!;
-            expect(runtime.job!.jobId).toBe('JOB_FARMERGRAIN_PLANT');
+            expect(system.getActiveJobId(farmer2.id)).toBe('JOB_FARMERGRAIN_PLANT');
         });
     });
 
@@ -302,7 +280,7 @@ describe('SettlerTaskSystem job selection', () => {
                 canWork: () => false,
                 onWorkTick: () => false,
             };
-            (system as any).handlerRegistry.entityHandlers.set(SearchType.TREE, handler);
+            system.registerWorkHandler(SearchType.TREE, handler);
 
             const { entity } = addUnit(ctx.state, 10, 10, { subType: UnitType.Woodcutter });
 

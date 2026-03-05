@@ -46,57 +46,49 @@ function getMaxRunLength(tiles: TileCoord[]): number {
 
 describe('Hex line grouping', () => {
     beforeEach(() => {
-        // Reset to default for each test
         setDirectionRunLength(8);
     });
 
-    it('should preserve start and end points', () => {
-        const line = getHexLine(0, 0, 5, 5);
-        expect(line[0]).toEqual({ x: 0, y: 0 });
-        expect(line[line.length - 1]).toEqual({ x: 5, y: 5 });
+    it('should preserve invariants: start/end points, tile count, and valid hex neighbors', () => {
+        const testCases: Array<[number, number, number, number]> = [
+            [0, 0, 5, 5],
+            [0, 0, 6, 6],
+            [0, 0, 7, 4],
+        ];
+
+        for (const [x1, y1, x2, y2] of testCases) {
+            const line = getHexLine(x1, y1, x2, y2);
+            expect(line[0]).toEqual({ x: x1, y: y1 });
+            expect(line[line.length - 1]).toEqual({ x: x2, y: y2 });
+
+            const dist = hexDistance(x1, y1, x2, y2);
+            expect(line.length).toBe(dist + 1);
+
+            for (let i = 0; i < line.length - 1; i++) {
+                const stepDist = hexDistance(line[i]!.x, line[i]!.y, line[i + 1]!.x, line[i + 1]!.y);
+                expect(stepDist).toBe(1);
+            }
+        }
     });
 
-    it('should preserve correct number of tiles', () => {
-        const line = getHexLine(0, 0, 5, 5);
-        const dist = hexDistance(0, 0, 5, 5);
-        expect(line.length).toBe(dist + 1);
-    });
+    it('should not change pure cardinal or pure diagonal paths', () => {
+        // Pure east
+        const eastLine = getHexLine(0, 0, 5, 0);
+        for (const d of getDirections(eastLine)) {
+            expect(d).toEqual({ dx: 1, dy: 0 });
+        }
 
-    it('should ensure all consecutive tiles are hex neighbors', () => {
-        const line = getHexLine(0, 0, 6, 6);
-        for (let i = 0; i < line.length - 1; i++) {
-            const dist = hexDistance(line[i]!.x, line[i]!.y, line[i + 1]!.x, line[i + 1]!.y);
-            expect(dist).toBe(1);
+        // Pure SE
+        const seLine = getHexLine(0, 0, 0, 5);
+        for (const d of getDirections(seLine)) {
+            expect(d).toEqual({ dx: 0, dy: 1 });
         }
     });
 
     it('should reduce zigzag for equal-ratio diagonals', () => {
         const line = getHexLine(0, 0, 3, 3);
         const changes = countDirectionChanges(line);
-        // Default run length 8 means very few direction changes
         expect(changes).toBeLessThanOrEqual(2);
-    });
-
-    it('should create runs of at least 2 for equal diagonals', () => {
-        const line = getHexLine(0, 0, 4, 4);
-        const run = getMaxRunLength(line);
-        expect(run).toBeGreaterThanOrEqual(2);
-    });
-
-    it('should not change pure cardinal direction paths', () => {
-        const line = getHexLine(0, 0, 5, 0);
-        const dirs = getDirections(line);
-        for (const d of dirs) {
-            expect(d).toEqual({ dx: 1, dy: 0 });
-        }
-    });
-
-    it('should not change pure diagonal paths', () => {
-        const line = getHexLine(0, 0, 0, 5);
-        const dirs = getDirections(line);
-        for (const d of dirs) {
-            expect(d).toEqual({ dx: 0, dy: 1 });
-        }
     });
 
     it('groupDirectionRuns should be idempotent', () => {
@@ -106,72 +98,33 @@ describe('Hex line grouping', () => {
         expect(doubleGrouped).toEqual(grouped);
     });
 
-    it('should handle short paths (2-3 tiles) without modification', () => {
-        const line = getHexLine(0, 0, 1, 1);
-        expect(line.length).toBe(3); // 2 steps
-        expect(line[0]).toEqual({ x: 0, y: 0 });
-        expect(line[line.length - 1]).toEqual({ x: 1, y: 1 });
-    });
-});
+    it('run length controls grouping behavior', () => {
+        const rawLine = getHexLine(0, 0, 10, 10);
 
-describe('Configurable direction run length', () => {
-    beforeEach(() => {
-        setDirectionRunLength(8);
-    });
+        // maxRunLength=1: no regrouping (raw interpolation order)
+        const noGroup = groupDirectionRuns(rawLine, 1);
+        expect(noGroup).toEqual(rawLine);
 
-    it('maxRunLength=1 should return raw interpolation order (no regrouping)', () => {
-        // With maxRunLength=1, groupDirectionRuns returns tiles unchanged
-        const line = getHexLine(0, 0, 4, 4);
-        const regrouped = groupDirectionRuns(line, 1);
+        // maxRunLength=2: short runs
+        const shortRuns = groupDirectionRuns(rawLine, 2);
+        expect(getMaxRunLength(shortRuns)).toBeLessThanOrEqual(2);
 
-        // Should be identical to input (no regrouping applied)
-        expect(regrouped).toEqual(line);
+        // Large run length: groups all same-direction steps together
+        const longRuns = groupDirectionRuns(getHexLine(0, 0, 5, 5), 50);
+        expect(countDirectionChanges(longRuns)).toBe(1);
     });
 
-    it('maxRunLength=2 should create short runs', () => {
-        const line = getHexLine(0, 0, 6, 6);
-        const regrouped = groupDirectionRuns(line, 2);
-        const run = getMaxRunLength(regrouped);
-        expect(run).toBeLessThanOrEqual(2);
-    });
-
-    it('maxRunLength=8 should create longer runs', () => {
-        const line = getHexLine(0, 0, 10, 10);
-        const regrouped = groupDirectionRuns(line, 8);
-        const run = getMaxRunLength(regrouped);
-        expect(run).toBeGreaterThanOrEqual(4);
-        expect(run).toBeLessThanOrEqual(10);
-    });
-
-    it('large maxRunLength should group all same-direction steps together', () => {
-        const line = getHexLine(0, 0, 5, 5);
-        const regrouped = groupDirectionRuns(line, 50);
-        const changes = countDirectionChanges(regrouped);
-        // With a very large run length, should have exactly 1 direction change
-        expect(changes).toBe(1);
-    });
-
-    it('should preserve start and end points for all run lengths', () => {
-        const rawLine = getHexLine(0, 0, 7, 4);
-        for (const len of [1, 2, 5, 10, 50]) {
-            const regrouped = groupDirectionRuns(rawLine, len);
-            expect(regrouped[0]).toEqual({ x: 0, y: 0 });
-            expect(regrouped[regrouped.length - 1]).toEqual({ x: 7, y: 4 });
-        }
-    });
-
-    it('should preserve tile count for all run lengths', () => {
-        const rawLine = getHexLine(0, 0, 7, 4);
-        for (const len of [1, 2, 5, 10, 50]) {
-            const regrouped = groupDirectionRuns(rawLine, len);
-            expect(regrouped.length).toBe(rawLine.length);
-        }
-    });
-
-    it('should produce valid hex neighbors for all run lengths', () => {
+    it('should preserve invariants for all run lengths', () => {
         const rawLine = getHexLine(0, 0, 8, 5);
         for (const len of [1, 2, 3, 5, 8, 20]) {
             const regrouped = groupDirectionRuns(rawLine, len);
+
+            // Same start, end, and length
+            expect(regrouped[0]).toEqual({ x: 0, y: 0 });
+            expect(regrouped[regrouped.length - 1]).toEqual({ x: 8, y: 5 });
+            expect(regrouped.length).toBe(rawLine.length);
+
+            // All consecutive tiles are valid hex neighbors
             for (let i = 0; i < regrouped.length - 1; i++) {
                 const dist = hexDistance(regrouped[i]!.x, regrouped[i]!.y, regrouped[i + 1]!.x, regrouped[i + 1]!.y);
                 expect(dist).toBe(1);

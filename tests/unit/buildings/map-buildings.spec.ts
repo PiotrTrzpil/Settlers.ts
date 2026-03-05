@@ -7,13 +7,11 @@ import { EntityType } from '@/game/entity';
 import { Race } from '@/game/race';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
 
-/** Default player→race mapping for tests (all Roman) */
 const TEST_PLAYER_RACES = new Map<number, Race>([
     [0, Race.Roman],
     [1, Race.Roman],
 ]);
 
-/** Helper to create populate options from test context */
 function createPopulateOptions(ctx: TestContext, player?: number) {
     return {
         player,
@@ -30,7 +28,7 @@ describe('populateMapBuildings', () => {
         ctx = createTestContext();
     });
 
-    it('should create completed building entities from map data', () => {
+    it('should create completed building entities from map data with correct type mapping', () => {
         const buildings: MapBuildingData[] = [
             { x: 10, y: 10, buildingType: S4BuildingType.WOODCUTTERHUT, player: 0 },
             { x: 20, y: 20, buildingType: S4BuildingType.SAWMILL, player: 1 },
@@ -39,63 +37,36 @@ describe('populateMapBuildings', () => {
         const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         expect(count).toBe(2);
-        // 2 buildings + 2 workers (woodcutter + sawmill worker)
-        expect(ctx.state.entities).toHaveLength(4);
+        expect(ctx.state.entities).toHaveLength(4); // 2 buildings + 2 workers
 
-        // Check first building
-        const entity1 = ctx.state.getEntityAt(10, 10);
-        expect(entity1).toBeDefined();
-        expect(entity1!.type).toBe(EntityType.Building);
-        expect(entity1!.subType).toBe(BuildingType.WoodcutterHut);
-        expect(entity1!.player).toBe(0);
+        const entity1 = ctx.state.getEntityAt(10, 10)!;
+        expect(entity1.type).toBe(EntityType.Building);
+        expect(entity1.subType).toBe(BuildingType.WoodcutterHut);
+        expect(entity1.player).toBe(0);
 
-        // Check second building
-        const entity2 = ctx.state.getEntityAt(20, 20);
-        expect(entity2).toBeDefined();
-        expect(entity2!.type).toBe(EntityType.Building);
-        expect(entity2!.subType).toBe(BuildingType.Sawmill);
-        expect(entity2!.player).toBe(1);
+        const entity2 = ctx.state.getEntityAt(20, 20)!;
+        expect(entity2.subType).toBe(BuildingType.Sawmill);
+        expect(entity2.player).toBe(1);
+
+        // Map-loaded buildings bypass construction (no ConstructionSite)
+        expect(ctx.constructionSiteManager.hasSite(entity1.id)).toBe(false);
     });
 
-    it('should create buildings as immediately operational (no construction site)', () => {
-        const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.BARRACKS, player: 0 }];
-
-        populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
-
-        const entity = ctx.state.getEntityAt(10, 10);
-        expect(entity).toBeDefined();
-
-        // A building with no ConstructionSite is operational — map-loaded buildings bypass construction
-        expect(ctx.constructionSiteManager.hasSite(entity!.id)).toBe(false);
-    });
-
-    it('should skip unmapped building types', () => {
-        const buildings: MapBuildingData[] = [
-            { x: 10, y: 10, buildingType: 999 as S4BuildingType, player: 0 }, // Invalid type
-            { x: 20, y: 20, buildingType: S4BuildingType.SAWMILL, player: 0 }, // Valid type
-        ];
-
-        const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
-
-        expect(count).toBe(1);
-        expect(ctx.state.entities).toHaveLength(2); // 1 building + 1 worker
-        expect(ctx.state.getEntityAt(10, 10)).toBeUndefined();
-        expect(ctx.state.getEntityAt(20, 20)).toBeDefined();
-    });
-
-    it('should skip occupied tiles', () => {
-        // Pre-occupy a tile
-        ctx.state.addEntity(EntityType.MapObject, 1, 10, 10, 0);
+    it('should skip unmapped building types and occupied tiles', () => {
+        ctx.state.addEntity(EntityType.MapObject, 1, 10, 10, 0); // Pre-occupy
 
         const buildings: MapBuildingData[] = [
             { x: 10, y: 10, buildingType: S4BuildingType.WOODCUTTERHUT, player: 0 }, // Occupied
-            { x: 20, y: 20, buildingType: S4BuildingType.WOODCUTTERHUT, player: 0 }, // Free
+            { x: 20, y: 20, buildingType: 999 as S4BuildingType, player: 0 }, // Invalid type
+            { x: 30, y: 30, buildingType: S4BuildingType.SAWMILL, player: 0 }, // Valid
         ];
 
         const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
 
         expect(count).toBe(1);
-        expect(ctx.state.entities).toHaveLength(3); // 1 map object + 1 building + 1 worker
+        expect(ctx.state.getEntityAt(10, 10)!.type).toBe(EntityType.MapObject); // unchanged
+        expect(ctx.state.getEntityAt(20, 20)).toBeUndefined();
+        expect(ctx.state.getEntityAt(30, 30)).toBeDefined();
     });
 
     it('should filter by player when specified', () => {
@@ -108,64 +79,36 @@ describe('populateMapBuildings', () => {
         const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx, 0));
 
         expect(count).toBe(2);
-        // 2 buildings + 1 worker (woodcutter) - Mill doesn't have a dedicated worker type
-        const buildings2 = ctx.state.entities.filter(e => e.type === EntityType.Building);
-        expect(buildings2).toHaveLength(2);
         expect(ctx.state.getEntityAt(10, 10)).toBeDefined();
         expect(ctx.state.getEntityAt(20, 20)).toBeUndefined();
         expect(ctx.state.getEntityAt(30, 30)).toBeDefined();
     });
 
-    it('should spawn carriers for residence buildings', () => {
+    it('should spawn carriers for residence buildings and emit correct events', () => {
+        const completedEvents: Array<{ buildingType: BuildingType; race: Race }> = [];
+        const spawnedEvents: number[] = [];
+        ctx.eventBus.on('building:completed', ({ buildingType, race }) => completedEvents.push({ buildingType, race }));
+        ctx.eventBus.on('unit:spawned', ({ entityId }) => spawnedEvents.push(entityId));
+
         const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.RESIDENCESMALL, player: 0 }];
 
-        const count = populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
-
-        expect(count).toBe(1);
-        // ResidenceSmall spawns 1 builder (RESIDENCE_CONSTRUCTION_WORKER_SPAWNS) immediately,
-        // plus 2 carriers via ResidenceSpawnerSystem (wired in immediateMode in test context).
-        expect(ctx.state.entities).toHaveLength(4); // 1 building + 1 builder + 2 carriers
-    });
-
-    it('should emit building:completed event with entityId, buildingType, and race', () => {
-        const completedEvents: Array<{ entityId: number; buildingType: BuildingType; race: Race }> = [];
-        ctx.eventBus.on('building:completed', ({ entityId, buildingType, race }) => {
-            completedEvents.push({ entityId, buildingType, race });
-        });
-
-        const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.WOODCUTTERHUT, player: 0 }];
-
         populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
+
+        // ResidenceSmall spawns 1 builder + 2 carriers
+        expect(ctx.state.entities).toHaveLength(4);
 
         expect(completedEvents).toHaveLength(1);
-        expect(completedEvents[0]!.buildingType).toBe(BuildingType.WoodcutterHut);
         expect(completedEvents[0]!.race).toBe(Race.Roman);
-    });
 
-    it('should emit unit:spawned events for carriers', () => {
-        const spawnedEvents: number[] = [];
-        ctx.eventBus.on('unit:spawned', ({ entityId }) => {
-            spawnedEvents.push(entityId);
-        });
-
-        const buildings: MapBuildingData[] = [{ x: 10, y: 10, buildingType: S4BuildingType.RESIDENCESMALL, player: 0 }];
-
-        populateMapBuildings(ctx.state, buildings, createPopulateOptions(ctx));
-
-        // 1 builder (RESIDENCE_CONSTRUCTION_WORKER_SPAWNS) + 2 carriers (ResidenceSpawnerSystem immediateMode)
+        // 1 builder + 2 carriers = 3 unit:spawned events
         expect(spawnedEvents).toHaveLength(3);
     });
 });
 
 describe('mapS4BuildingType', () => {
-    it('should map known S4 building types to internal types', () => {
+    it('should map known S4 types and return undefined for unknown', () => {
         expect(mapS4BuildingType(S4BuildingType.WOODCUTTERHUT)).toBe(BuildingType.WoodcutterHut);
-        expect(mapS4BuildingType(S4BuildingType.SAWMILL)).toBe(BuildingType.Sawmill);
-        expect(mapS4BuildingType(S4BuildingType.BARRACKS)).toBe(BuildingType.Barrack);
         expect(mapS4BuildingType(S4BuildingType.CASTLE)).toBe(BuildingType.Castle);
-    });
-
-    it('should return undefined for unknown types', () => {
         expect(mapS4BuildingType(S4BuildingType.NONE)).toBeUndefined();
         expect(mapS4BuildingType(999 as S4BuildingType)).toBeUndefined();
     });

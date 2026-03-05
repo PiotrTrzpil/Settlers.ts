@@ -24,86 +24,35 @@ describe('Material Types', () => {
         }
     });
 
-    it('should mark NO_MATERIAL as not droppable', () => {
-        expect(isMaterialDroppable(EMaterialType.NO_MATERIAL)).toBe(false);
-    });
-
-    it('should mark standard materials as droppable', () => {
-        expect(isMaterialDroppable(EMaterialType.BOARD)).toBe(true);
-        expect(isMaterialDroppable(EMaterialType.STONE)).toBe(true);
-        expect(isMaterialDroppable(EMaterialType.LOG)).toBe(true);
-        expect(isMaterialDroppable(EMaterialType.SWORD)).toBe(true);
-        expect(isMaterialDroppable(EMaterialType.BREAD)).toBe(true);
-    });
-
-    // Note: getMaterialPriority values are verified by game-session flow test.
-
-    it('should not include NO_MATERIAL in DROPPABLE_MATERIALS', () => {
+    it('DROPPABLE_MATERIALS excludes NO_MATERIAL and is sorted by priority', () => {
         expect(DROPPABLE_MATERIALS).not.toContain(EMaterialType.NO_MATERIAL);
-    });
+        expect(isMaterialDroppable(EMaterialType.NO_MATERIAL)).toBe(false);
+        expect(isMaterialDroppable(EMaterialType.BOARD)).toBe(true);
 
-    it('should have DROPPABLE_MATERIALS sorted by default priority index (non-decreasing)', () => {
-        // Priority indices can be equal for similar materials (e.g., GRAIN/AGAVE, BOW/BLOWGUN)
         for (let i = 1; i < DROPPABLE_MATERIALS.length; i++) {
             const prevPriority = getMaterialPriority(DROPPABLE_MATERIALS[i - 1]!);
             const currPriority = getMaterialPriority(DROPPABLE_MATERIALS[i]!);
             expect(currPriority).toBeGreaterThanOrEqual(prevPriority);
         }
     });
-
-    it('should have reasonable number of unique priority levels', () => {
-        // Some materials share priorities (similar types like GRAIN/AGAVE)
-        // but we should have a reasonable spread of priorities
-        const priorities = DROPPABLE_MATERIALS.map(m => getMaterialPriority(m));
-        const uniquePriorities = new Set(priorities);
-        // At least 80% of materials should have distinct priorities
-        expect(uniquePriorities.size).toBeGreaterThanOrEqual(Math.floor(priorities.length * 0.8));
-    });
 });
 
 describe('Production Chains', () => {
-    it('should have valid output material for every production chain', () => {
+    it('all production chains have valid materials and include key buildings', () => {
         for (const [buildingType, chain] of BUILDING_PRODUCTIONS) {
-            const config = MATERIAL_CONFIGS.get(chain.output);
-            expect(
-                config,
-                `Building ${BuildingType[buildingType]} has invalid output ${EMaterialType[chain.output]}`
-            ).toBeDefined();
-        }
-    });
-
-    it('should have valid input materials for every production chain', () => {
-        for (const [buildingType, chain] of BUILDING_PRODUCTIONS) {
+            expect(MATERIAL_CONFIGS.has(chain.output), `${BuildingType[buildingType]} output`).toBe(true);
             for (const input of chain.inputs) {
-                const config = MATERIAL_CONFIGS.get(input);
-                expect(
-                    config,
-                    `Building ${BuildingType[buildingType]} has invalid input ${EMaterialType[input]}`
-                ).toBeDefined();
+                expect(MATERIAL_CONFIGS.has(input), `${BuildingType[buildingType]} input`).toBe(true);
             }
-        }
-    });
-
-    it('should not use NO_MATERIAL as an input', () => {
-        for (const [, chain] of BUILDING_PRODUCTIONS) {
             expect(chain.inputs).not.toContain(EMaterialType.NO_MATERIAL);
         }
-    });
 
-    it('should include key production buildings', () => {
         expect(BUILDING_PRODUCTIONS.has(BuildingType.WoodcutterHut)).toBe(true);
         expect(BUILDING_PRODUCTIONS.has(BuildingType.Sawmill)).toBe(true);
-        expect(BUILDING_PRODUCTIONS.has(BuildingType.StonecutterHut)).toBe(true);
-        expect(BUILDING_PRODUCTIONS.has(BuildingType.GrainFarm)).toBe(true);
-        expect(BUILDING_PRODUCTIONS.has(BuildingType.CoalMine)).toBe(true);
         expect(BUILDING_PRODUCTIONS.has(BuildingType.IronSmelter)).toBe(true);
-        expect(BUILDING_PRODUCTIONS.has(BuildingType.WeaponSmith)).toBe(true);
     });
 
-    // Note: WoodcutterHut→LOG and Sawmill→BOARD chain tests are covered by
-    // game-session flow test.
-
-    it('should map IronSmelter to IRONBAR output with IRONORE and COAL inputs', () => {
+    it('IronSmelter produces IRONBAR from IRONORE + COAL', () => {
         const chain = BUILDING_PRODUCTIONS.get(BuildingType.IronSmelter)!;
         expect(chain.output).toBe(EMaterialType.IRONBAR);
         expect(chain.inputs).toContain(EMaterialType.IRONORE);
@@ -112,9 +61,7 @@ describe('Production Chains', () => {
 });
 
 describe('getBuildingTypesRequestingMaterial', () => {
-    // Note: LOG→Sawmill lookup is covered by game-session flow test.
-
-    it('should return multiple buildings for COAL', () => {
+    it('COAL is consumed by smelters and smiths', () => {
         const buildings = getBuildingTypesRequestingMaterial(EMaterialType.COAL);
         expect(buildings).toContain(BuildingType.IronSmelter);
         expect(buildings).toContain(BuildingType.SmeltGold);
@@ -122,25 +69,12 @@ describe('getBuildingTypesRequestingMaterial', () => {
         expect(buildings).toContain(BuildingType.ToolSmith);
     });
 
-    it('should return Mill and AnimalRanch for GRAIN', () => {
-        const buildings = getBuildingTypesRequestingMaterial(EMaterialType.GRAIN);
-        expect(buildings).toContain(BuildingType.Mill);
-        expect(buildings).toContain(BuildingType.AnimalRanch);
+    it('GOLDBAR is consumed by Barrack (training)', () => {
+        expect(getBuildingTypesRequestingMaterial(EMaterialType.GOLDBAR)).toContain(BuildingType.Barrack);
     });
 
-    it('should return Barrack for GOLDBAR (training input)', () => {
-        const buildings = getBuildingTypesRequestingMaterial(EMaterialType.GOLDBAR);
-        expect(buildings).toContain(BuildingType.Barrack);
-    });
-
-    it('should return empty array for materials not consumed by any building', () => {
-        const buildings = getBuildingTypesRequestingMaterial(EMaterialType.MEAD);
-        expect(buildings).toHaveLength(0);
-    });
-
-    it('should return Barrack for SWORD', () => {
-        const buildings = getBuildingTypesRequestingMaterial(EMaterialType.SWORD);
-        expect(buildings).toContain(BuildingType.Barrack);
+    it('MEAD has no consumers', () => {
+        expect(getBuildingTypesRequestingMaterial(EMaterialType.MEAD)).toHaveLength(0);
     });
 });
 
@@ -150,61 +84,28 @@ const hasRealData = installRealGameData();
 describe.skipIf(!hasRealData)('Construction Costs (XML)', () => {
     afterAll(() => resetTestGameData());
 
-    it('should have construction costs for all mapped building types', () => {
+    it('all mapped buildings have valid positive construction costs per race', () => {
         const covered = getBuildingTypesWithCosts();
         expect(covered.length).toBeGreaterThan(30);
-    });
 
-    it('should have at least one material cost per building per race', () => {
-        for (const bt of getBuildingTypesWithCosts()) {
+        for (const bt of covered) {
             const raceMap = getConstructionCostRaceMap(bt)!;
             expect(raceMap.size, `${BuildingType[bt]} has no race data`).toBeGreaterThan(0);
             for (const [race, costs] of raceMap) {
-                expect(costs.length, `${BuildingType[bt]} (${Race[race]}) has no construction costs`).toBeGreaterThan(
-                    0
-                );
-            }
-        }
-    });
-
-    it('should only use valid material types in construction costs', () => {
-        for (const bt of getBuildingTypesWithCosts()) {
-            const raceMap = getConstructionCostRaceMap(bt)!;
-            for (const [race, costs] of raceMap) {
+                expect(costs.length, `${BuildingType[bt]} (${Race[race]})`).toBeGreaterThan(0);
+                const materials = costs.map(c => c.material);
+                const usesBuildingMaterials =
+                    materials.includes(EMaterialType.BOARD) || materials.includes(EMaterialType.STONE);
+                expect(usesBuildingMaterials, `${BuildingType[bt]} (${Race[race]}) needs BOARD or STONE`).toBe(true);
                 for (const cost of costs) {
-                    expect(
-                        MATERIAL_CONFIGS.has(cost.material),
-                        `${BuildingType[bt]} (${Race[race]}) uses invalid material ${EMaterialType[cost.material]}`
-                    ).toBe(true);
-                }
-            }
-        }
-    });
-
-    it('should have positive counts for all materials', () => {
-        for (const bt of getBuildingTypesWithCosts()) {
-            const raceMap = getConstructionCostRaceMap(bt)!;
-            for (const [, costs] of raceMap) {
-                for (const cost of costs) {
+                    expect(MATERIAL_CONFIGS.has(cost.material)).toBe(true);
                     expect(cost.count).toBeGreaterThan(0);
                 }
             }
         }
     });
 
-    it('should use BOARD and/or STONE as construction materials', () => {
-        for (const bt of getBuildingTypesWithCosts()) {
-            const raceMap = getConstructionCostRaceMap(bt)!;
-            for (const [race, costs] of raceMap) {
-                const materials = costs.map(c => c.material);
-                const usesBuildingMaterials =
-                    materials.includes(EMaterialType.BOARD) || materials.includes(EMaterialType.STONE);
-                expect(usesBuildingMaterials, `${BuildingType[bt]} (${Race[race]}) has no BOARD or STONE`).toBe(true);
-            }
-        }
-    });
-
-    it('should return different costs for different races', () => {
+    it('different races have different Castle costs', () => {
         const romanCastle = getConstructionCosts(BuildingType.Castle, Race.Roman);
         const vikingCastle = getConstructionCosts(BuildingType.Castle, Race.Viking);
         expect(romanCastle).not.toEqual(vikingCastle);

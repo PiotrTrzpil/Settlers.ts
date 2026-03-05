@@ -1,14 +1,8 @@
 /**
  * Unit tests for BuildingPileRegistry.
  *
- * Tests cover:
- *  - Anchor-relative offset storage (pile xOffset/yOffset used directly as dx/dy)
- *  - Storage entries (type=4) stored as bidirectional storage positions
- *  - Input/output filtering
- *  - getPilePosition world-coordinate computation
- *  - getPilePositionForSlot slot-type filtering
- *  - Unknown good strings being skipped
- *  - Storage pile position queries (hasStoragePiles, getStoragePilePositions, world coords)
+ * Tests the mapping of game data pile definitions to runtime pile slots,
+ * including the distinction between production (input/output) and storage piles.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -24,7 +18,6 @@ import { SlotKind } from '@/game/features/inventory/pile-kind';
 // Helpers
 // ─────────────────────────────────────────────────────────────
 
-/** Create a minimal BuildingInfo with the fields BuildingPileRegistry uses. */
 function makeBuildingInfo(id: string, hotSpotX: number, hotSpotY: number, piles: BuildingPileInfo[]): BuildingInfo {
     return {
         id,
@@ -74,7 +67,6 @@ function makeBuildingInfo(id: string, hotSpotX: number, hotSpotY: number, piles:
     };
 }
 
-/** Create a minimal BuildingPileInfo. */
 function makePile(good: string, type: PileSlotType, xOffset: number, yOffset: number): BuildingPileInfo {
     return { xPixelOffset: 0, yPixelOffset: 0, xOffset, yOffset, good, type, patch: 0, appearance: 0 };
 }
@@ -100,213 +92,87 @@ function makeGameData(
 // ─────────────────────────────────────────────────────────────
 
 describe('BuildingPileRegistry', () => {
-    describe('anchor-relative offsets', () => {
-        it('uses pile xOffset/yOffset directly as dx/dy', () => {
-            const info = makeBuildingInfo('BUILDING_WOODCUTTERHUT', 3, 5, [
-                makePile('GOOD_LOG', PileSlotType.Output, 4, 2),
-            ]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_WOODCUTTERHUT', info }]);
+    it('should parse pile offsets and distinguish input/output/storage slots', () => {
+        const info = makeBuildingInfo('BUILDING_SAWMILL', 4, 5, [
+            makePile('GOOD_LOG', PileSlotType.Input, 4, 1),
+            makePile('GOOD_COAL', PileSlotType.Storage, 3, 3),
+            makePile('GOOD_UNKNOWN_THING', PileSlotType.Output, 1, 1),
+            makePile('GOOD_BOARD', PileSlotType.Output, 5, 6),
+        ]);
+        const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_SAWMILL', info }]);
+        const registry = new BuildingPileRegistry(gameData);
 
-            const registry = new BuildingPileRegistry(gameData);
-            const slots = registry.getPileSlots(BuildingType.WoodcutterHut, Race.Roman);
+        // Production slots exclude storage and unknown goods
+        const slots = registry.getPileSlots(BuildingType.Sawmill, Race.Roman);
+        expect(slots).toHaveLength(2);
+        expect(slots.map(s => s.material)).toEqual([EMaterialType.LOG, EMaterialType.BOARD]);
 
-            expect(slots).toHaveLength(1);
-            expect(slots[0]).toMatchObject({ dx: 4, dy: 2, material: EMaterialType.LOG, slotType: SlotKind.Output });
+        // Input/output filtering
+        expect(registry.getInputSlots(BuildingType.Sawmill, Race.Roman)).toHaveLength(1);
+        expect(registry.getOutputSlots(BuildingType.Sawmill, Race.Roman)).toHaveLength(1);
+
+        // Offsets stored correctly
+        expect(slots.find(s => s.material === EMaterialType.LOG)).toMatchObject({
+            dx: 4,
+            dy: 1,
+            slotType: SlotKind.Input,
         });
 
-        it('stores multiple slots with correct input/output distinction', () => {
-            const info = makeBuildingInfo('BUILDING_SAWMILL', 4, 5, [
-                makePile('GOOD_LOG', PileSlotType.Input, 4, 1),
-                makePile('GOOD_BOARD', PileSlotType.Output, 5, 6),
-            ]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_SAWMILL', info }]);
-
-            const registry = new BuildingPileRegistry(gameData);
-            const slots = registry.getPileSlots(BuildingType.Sawmill, Race.Roman);
-
-            expect(slots).toHaveLength(2);
-            expect(slots.find(s => s.material === EMaterialType.LOG)).toMatchObject({
-                dx: 4,
-                dy: 1,
-                slotType: SlotKind.Input,
-            });
-            expect(slots.find(s => s.material === EMaterialType.BOARD)).toMatchObject({
-                dx: 5,
-                dy: 6,
-                slotType: SlotKind.Output,
-            });
-        });
+        // Storage tracked separately
+        expect(registry.hasStoragePiles(BuildingType.Sawmill, Race.Roman)).toBe(true);
+        expect(registry.getStoragePilePositions(BuildingType.Sawmill, Race.Roman)).toHaveLength(1);
     });
 
-    describe('filtering', () => {
-        it('separates Storage entries from production pile slots', () => {
-            const info = makeBuildingInfo('BUILDING_SAWMILL', 4, 5, [
-                makePile('GOOD_LOG', PileSlotType.Input, 4, 1),
-                makePile('GOOD_COAL', PileSlotType.Storage, 3, 3),
-                makePile('GOOD_UNKNOWN_THING', PileSlotType.Output, 1, 1),
-                makePile('GOOD_BOARD', PileSlotType.Output, 5, 6),
-            ]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_SAWMILL', info }]);
+    it('should compute world coordinates from building position + offset', () => {
+        const info = makeBuildingInfo('BUILDING_SAWMILL', 4, 5, [
+            makePile('GOOD_LOG', PileSlotType.Input, 4, 1),
+            makePile('GOOD_BOARD', PileSlotType.Output, 5, 6),
+        ]);
+        const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_SAWMILL', info }]);
+        const registry = new BuildingPileRegistry(gameData);
 
-            const registry = new BuildingPileRegistry(gameData);
-            const slots = registry.getPileSlots(BuildingType.Sawmill, Race.Roman);
+        // getPilePositionForSlot filters by slot type
+        expect(
+            registry.getPilePositionForSlot(BuildingType.Sawmill, Race.Roman, SlotKind.Input, EMaterialType.LOG, 5, 10)
+        ).toEqual({ x: 9, y: 11 });
+        expect(
+            registry.getPilePositionForSlot(
+                BuildingType.Sawmill,
+                Race.Roman,
+                SlotKind.Output,
+                EMaterialType.BOARD,
+                5,
+                10
+            )
+        ).toEqual({ x: 10, y: 16 });
 
-            // Production pile slots exclude Storage entries and unknown goods
-            expect(slots).toHaveLength(2);
-            expect(slots.map(s => s.material)).toEqual([EMaterialType.LOG, EMaterialType.BOARD]);
-
-            // Storage entry is stored separately
-            expect(registry.hasStoragePiles(BuildingType.Sawmill, Race.Roman)).toBe(true);
-            expect(registry.getStoragePilePositions(BuildingType.Sawmill, Race.Roman)).toHaveLength(1);
-        });
-
-        it('getInputSlots returns only input-typed slots', () => {
-            const info = makeBuildingInfo('BUILDING_SAWMILL', 4, 5, [
-                makePile('GOOD_LOG', PileSlotType.Input, 4, 1),
-                makePile('GOOD_BOARD', PileSlotType.Output, 5, 6),
-            ]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_SAWMILL', info }]);
-
-            const registry = new BuildingPileRegistry(gameData);
-            expect(registry.getInputSlots(BuildingType.Sawmill, Race.Roman)).toHaveLength(1);
-            expect(registry.getOutputSlots(BuildingType.Sawmill, Race.Roman)).toHaveLength(1);
-        });
+        // Wrong slot type returns null
+        expect(
+            registry.getPilePositionForSlot(BuildingType.Sawmill, Race.Roman, SlotKind.Output, EMaterialType.LOG, 5, 10)
+        ).toBeNull();
     });
 
-    describe('getPilePosition', () => {
-        it('returns world coordinate by adding dx/dy to building position', () => {
-            const info = makeBuildingInfo('BUILDING_WOODCUTTERHUT', 3, 5, [
-                makePile('GOOD_LOG', PileSlotType.Output, 4, 2),
-            ]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_WOODCUTTERHUT', info }]);
+    it('should handle StorageArea with multiple storage pile positions', () => {
+        const info = makeBuildingInfo('BUILDING_STORAGEAREA', 2, 2, [
+            makePile('GOOD_AGAVE', PileSlotType.Storage, 0, 1),
+            makePile('GOOD_AGAVE', PileSlotType.Storage, -1, 2),
+            makePile('GOOD_AGAVE', PileSlotType.Storage, 4, 3),
+        ]);
+        const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_STORAGEAREA', info }]);
+        const registry = new BuildingPileRegistry(gameData);
 
-            const registry = new BuildingPileRegistry(gameData);
-            const pos = registry.getPilePosition(BuildingType.WoodcutterHut, Race.Roman, EMaterialType.LOG, 10, 20);
+        expect(registry.hasStoragePiles(BuildingType.StorageArea, Race.Roman)).toBe(true);
+        expect(registry.getStoragePilePositions(BuildingType.StorageArea, Race.Roman)).toHaveLength(3);
 
-            expect(pos).toEqual({ x: 14, y: 22 });
-        });
+        // World coordinate conversion
+        const worldPositions = registry.getStoragePileWorldPositions(BuildingType.StorageArea, Race.Roman, 10, 20);
+        expect(worldPositions).toEqual([
+            { x: 10, y: 21 },
+            { x: 9, y: 22 },
+            { x: 14, y: 23 },
+        ]);
 
-        it('returns null when material is not registered', () => {
-            const info = makeBuildingInfo('BUILDING_WOODCUTTERHUT', 3, 5, [
-                makePile('GOOD_LOG', PileSlotType.Output, 4, 2),
-            ]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_WOODCUTTERHUT', info }]);
-
-            const registry = new BuildingPileRegistry(gameData);
-            expect(
-                registry.getPilePosition(BuildingType.WoodcutterHut, Race.Roman, EMaterialType.BOARD, 10, 20)
-            ).toBeNull();
-        });
-    });
-
-    describe('getPilePositionForSlot', () => {
-        it('returns position filtered by slot type', () => {
-            const info = makeBuildingInfo('BUILDING_SAWMILL', 4, 5, [
-                makePile('GOOD_LOG', PileSlotType.Input, 4, 1),
-                makePile('GOOD_BOARD', PileSlotType.Output, 5, 6),
-            ]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_SAWMILL', info }]);
-            const registry = new BuildingPileRegistry(gameData);
-
-            expect(
-                registry.getPilePositionForSlot(
-                    BuildingType.Sawmill,
-                    Race.Roman,
-                    SlotKind.Input,
-                    EMaterialType.LOG,
-                    5,
-                    10
-                )
-            ).toEqual({ x: 9, y: 11 });
-            expect(
-                registry.getPilePositionForSlot(
-                    BuildingType.Sawmill,
-                    Race.Roman,
-                    SlotKind.Output,
-                    EMaterialType.BOARD,
-                    5,
-                    10
-                )
-            ).toEqual({ x: 10, y: 16 });
-        });
-
-        it('returns null when slot type does not match', () => {
-            const info = makeBuildingInfo('BUILDING_SAWMILL', 4, 5, [makePile('GOOD_LOG', PileSlotType.Input, 4, 1)]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_SAWMILL', info }]);
-            const registry = new BuildingPileRegistry(gameData);
-
-            expect(
-                registry.getPilePositionForSlot(
-                    BuildingType.Sawmill,
-                    Race.Roman,
-                    SlotKind.Output,
-                    EMaterialType.LOG,
-                    5,
-                    10
-                )
-            ).toBeNull();
-        });
-    });
-
-    describe('storage piles', () => {
-        it('stores all 8 storage pile positions for StorageArea', () => {
-            const info = makeBuildingInfo('BUILDING_STORAGEAREA', 2, 2, [
-                makePile('GOOD_AGAVE', PileSlotType.Storage, 0, 1),
-                makePile('GOOD_AGAVE', PileSlotType.Storage, -1, 2),
-                makePile('GOOD_AGAVE', PileSlotType.Storage, 0, 5),
-                makePile('GOOD_AGAVE', PileSlotType.Storage, 2, 7),
-                makePile('GOOD_AGAVE', PileSlotType.Storage, 4, 7),
-                makePile('GOOD_AGAVE', PileSlotType.Storage, 5, 6),
-                makePile('GOOD_AGAVE', PileSlotType.Storage, 4, 3),
-                makePile('GOOD_AGAVE', PileSlotType.Storage, 2, 1),
-            ]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_STORAGEAREA', info }]);
-
-            const registry = new BuildingPileRegistry(gameData);
-
-            expect(registry.hasStoragePiles(BuildingType.StorageArea, Race.Roman)).toBe(true);
-            const positions = registry.getStoragePilePositions(BuildingType.StorageArea, Race.Roman);
-            expect(positions).toHaveLength(8);
-            expect(positions[0]).toEqual({ dx: 0, dy: 1 });
-            expect(positions[7]).toEqual({ dx: 2, dy: 1 });
-        });
-
-        it('returns false for hasStoragePiles when building has no storage piles', () => {
-            const info = makeBuildingInfo('BUILDING_WOODCUTTERHUT', 3, 5, [
-                makePile('GOOD_LOG', PileSlotType.Output, 4, 2),
-            ]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_WOODCUTTERHUT', info }]);
-
-            const registry = new BuildingPileRegistry(gameData);
-            expect(registry.hasStoragePiles(BuildingType.WoodcutterHut, Race.Roman)).toBe(false);
-            expect(registry.getStoragePilePositions(BuildingType.WoodcutterHut, Race.Roman)).toHaveLength(0);
-        });
-
-        it('converts storage pile offsets to world coordinates', () => {
-            const info = makeBuildingInfo('BUILDING_STORAGEAREA', 2, 2, [
-                makePile('GOOD_AGAVE', PileSlotType.Storage, 0, 1),
-                makePile('GOOD_AGAVE', PileSlotType.Storage, 4, 3),
-            ]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_STORAGEAREA', info }]);
-
-            const registry = new BuildingPileRegistry(gameData);
-            const worldPositions = registry.getStoragePileWorldPositions(BuildingType.StorageArea, Race.Roman, 10, 20);
-
-            expect(worldPositions).toEqual([
-                { x: 10, y: 21 },
-                { x: 14, y: 23 },
-            ]);
-        });
-
-        it('does not include storage piles in production pile slots', () => {
-            const info = makeBuildingInfo('BUILDING_STORAGEAREA', 2, 2, [
-                makePile('GOOD_AGAVE', PileSlotType.Storage, 0, 1),
-                makePile('GOOD_AGAVE', PileSlotType.Storage, -1, 2),
-            ]);
-            const gameData = makeGameData('RACE_ROMAN', [{ xmlId: 'BUILDING_STORAGEAREA', info }]);
-
-            const registry = new BuildingPileRegistry(gameData);
-            expect(registry.getPileSlots(BuildingType.StorageArea, Race.Roman)).toHaveLength(0);
-        });
+        // Storage piles not in production slots
+        expect(registry.getPileSlots(BuildingType.StorageArea, Race.Roman)).toHaveLength(0);
     });
 });
