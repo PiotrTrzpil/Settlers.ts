@@ -79,6 +79,7 @@ describe('Unit Placement, Selection & Movement', () => {
             cropSystem: undefined as any,
             productionControlManager: undefined as any,
             storageFilterManager: undefined as any,
+            placementFilter: null,
         };
         /* eslint-enable @typescript-eslint/no-explicit-any */
     });

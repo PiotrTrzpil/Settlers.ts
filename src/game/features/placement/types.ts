@@ -23,6 +23,8 @@ export enum PlacementStatus {
     Medium = 4,
     /** Can place - easy (flat terrain) */
     Easy = 5,
+    /** Cannot place - outside player's territory */
+    OutOfTerritory = 6,
 }
 
 /**
@@ -51,6 +53,15 @@ export interface PlacementContext {
      * Optional for resource/unit validators which don't use race.
      */
     race?: Race;
+    /**
+     * Optional policy filter for placement restrictions (territory, diplomacy, etc.).
+     * Null means no extra restrictions. Called after bounds check, before terrain checks.
+     */
+    placementFilter?: PlacementFilter | null;
+    /**
+     * Player performing placement. Required when placementFilter is set.
+     */
+    player?: number;
 }
 
 /**
@@ -72,3 +83,10 @@ export type PlacementValidator = (x: number, y: number, subType: number) => bool
  * Detailed validator that returns status information.
  */
 export type DetailedPlacementValidator = (x: number, y: number, subType: number) => PlacementResult;
+
+/**
+ * Optional filter that rejects placement based on game rules (territory, diplomacy, etc.).
+ * Returns a PlacementStatus rejection reason, or null if placement is allowed.
+ * Validators call this after bounds check, before terrain/occupancy/slope checks.
+ */
+export type PlacementFilter = (x: number, y: number, player: number) => PlacementStatus | null;

@@ -364,6 +364,7 @@ export function toCommandContext(ctx: TestContext, eventBus?: EventBus): Command
         cropSystem: undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
         productionControlManager: undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
         storageFilterManager: undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
+        placementFilter: null,
     };
 }
 

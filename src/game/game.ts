@@ -20,6 +20,12 @@ import { setDirectionRunLength } from './systems/pathfinding';
 import { watch } from 'vue';
 import type { FrameRenderTiming } from './renderer/renderer';
 import { debugStats } from './debug-stats';
+import type { PlacementFilter } from './features/placement';
+import {
+    createTerritoryPlacementFilter,
+    createTerritoryMatchFilter,
+    createTerritoryCarrierFilter,
+} from './features/territory';
 
 /** Options for resetToCleanState */
 export interface ResetOptions {
@@ -68,6 +74,12 @@ export class Game {
     /** Callback to sync Territory feature toggle with visual layer visibility */
     private _onTerritoryToggle: ((enabled: boolean) => void) | null = null;
 
+    /** Whether territory boundary dots are visible (toggled by debug panel) */
+    private _territoryVisible = false;
+
+    /** Territory-based placement filter — created after terrain data is available */
+    private _placementFilter: PlacementFilter | null = null;
+
     /** Current interaction mode */
     public mode: string = 'select';
 
@@ -110,6 +122,7 @@ export class Game {
 
         this.services = new GameServices(this.state, this.eventBus, this.execute.bind(this));
         this.services.setTerrainData(this.terrain, mapLoader.landscape.getResourceData?.());
+        // Territory filters start as null (off). Enabled via the Territory feature toggle.
 
         // Create frame loop and register tick systems
         this._gameLoop = new GameLoop(this.state, this.services.visualService, this.settings.state, this.viewState);
@@ -131,10 +144,15 @@ export class Game {
         this._gameLoop.registerFeatureToggle({
             name: 'Territory',
             group: 'World',
-            get: () => dispatcher.territoryEnabled,
+            get: () => this._territoryVisible,
             set: v => {
-                dispatcher.territoryEnabled = v;
+                this._territoryVisible = v;
                 this._onTerritoryToggle?.(v);
+                // Toggle territory enforcement for placement and logistics
+                const tm = this.services.territoryManager;
+                this._placementFilter = v ? createTerritoryPlacementFilter(tm) : null;
+                dispatcher.setMatchFilter(v ? createTerritoryMatchFilter(tm) : null);
+                dispatcher.setCarrierFilter(v ? createTerritoryCarrierFilter(tm) : null);
             },
         });
 
@@ -216,9 +234,14 @@ export class Game {
         // Settlers (units)
         if (entityData.settlers.length) {
             const t0 = performance.now();
-            const count = populateMapSettlers(this.state, entityData.settlers, {
-                playerRaces: this.playerRaces,
-            });
+            const count = populateMapSettlers(
+                this.state,
+                entityData.settlers,
+                {
+                    playerRaces: this.playerRaces,
+                },
+                this.eventBus
+            );
             mlt.populateUnits = Math.round(performance.now() - t0);
             if (count > 0) console.log(`Game: Loaded ${count} settlers from map data`);
         }
@@ -279,6 +302,7 @@ export class Game {
             combatSystem: this.services.combatSystem,
             productionControlManager: this.services.productionControlManager,
             storageFilterManager: this.services.storageFilterManager,
+            placementFilter: this._placementFilter,
         };
     }
 
@@ -451,7 +475,7 @@ export class Game {
     public onTerritoryToggle(callback: (enabled: boolean) => void): void {
         this._onTerritoryToggle = callback;
         // Fire immediately with current state so visual matches on connect
-        callback(this.services.logisticsDispatcher.territoryEnabled);
+        callback(this._territoryVisible);
     }
 
     private static readonly FEATURE_STORAGE_KEY = 'settlers-feature-toggles';

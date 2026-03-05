@@ -27,8 +27,8 @@ import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
 import type { TransportJob } from './transport-job';
 import type { BuildingInventoryManager } from '../inventory';
-import type { TerritoryManager } from '../territory';
 import { RequestMatcher } from './request-matcher';
+import type { LogisticsMatchFilter, CarrierFilter } from './logistics-filter';
 import { CarrierAssigner, type JobAssigner } from './carrier-assigner';
 import { StallDetector } from './stall-detector';
 import { MatchDiagnostics } from './match-diagnostics';
@@ -51,6 +51,8 @@ export interface LogisticsDispatcherConfig {
     requestManager: RequestManager;
     serviceAreaManager: ServiceAreaManager;
     inventoryManager: BuildingInventoryManager;
+    matchFilter?: LogisticsMatchFilter;
+    carrierFilter?: CarrierFilter;
 }
 
 /**
@@ -94,6 +96,7 @@ export class LogisticsDispatcher implements TickSystem {
             inventoryManager: config.inventoryManager,
             serviceAreaManager: config.serviceAreaManager,
             reservationManager: this.reservationManager,
+            matchFilter: config.matchFilter,
         });
 
         const transportJobBuilder = new TransportJobBuilder({
@@ -112,6 +115,7 @@ export class LogisticsDispatcher implements TickSystem {
             reservationManager: this.reservationManager,
             requestManager: config.requestManager,
             inventoryManager: config.inventoryManager,
+            carrierFilter: config.carrierFilter,
         });
 
         this.stallDetector = new StallDetector({
@@ -135,18 +139,14 @@ export class LogisticsDispatcher implements TickSystem {
         this.carrierAssigner.globalLogistics = enabled;
     }
 
-    /** Whether carrier operations are restricted to player territory. */
-    get territoryEnabled(): boolean {
-        return this.requestMatcher.territoryEnabled;
+    /** Set the match filter for supply matching (territory, diplomacy, etc.). */
+    setMatchFilter(filter: LogisticsMatchFilter | null): void {
+        this.requestMatcher.matchFilter = filter;
     }
 
-    set territoryEnabled(enabled: boolean) {
-        this.requestMatcher.territoryEnabled = enabled;
-    }
-
-    /** Set the territory manager for territory-based filtering. */
-    setTerritoryManager(manager: TerritoryManager): void {
-        this.requestMatcher.setTerritoryManager(manager);
+    /** Set the carrier eligibility filter (territory, etc.). */
+    setCarrierFilter(filter: CarrierFilter | null): void {
+        this.carrierAssigner.carrierFilter = filter;
     }
 
     /**

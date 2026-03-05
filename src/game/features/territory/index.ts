@@ -15,3 +15,8 @@ export { registerTerritoryEvents, type TerritoryExports } from './territory-feat
 export { TerritoryManager } from './territory-manager';
 export type { TerritoryDot } from './territory-types';
 export { TERRITORY_BUILDINGS, TERRITORY_RADIUS } from './territory-types';
+export {
+    createTerritoryPlacementFilter,
+    createTerritoryMatchFilter,
+    createTerritoryCarrierFilter,
+} from './territory-filters';

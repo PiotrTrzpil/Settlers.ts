@@ -109,5 +109,8 @@ export { MatchDiagnostics, type MatchDiagnosticsConfig } from './match-diagnosti
 // Logistics dispatcher (connects requests to carriers)
 export { LogisticsDispatcher, type LogisticsDispatcherConfig } from './logistics-dispatcher';
 
+// Logistics filter types (pluggable policy enforcement)
+export type { LogisticsMatchFilter, CarrierFilter } from './logistics-filter';
+
 // Feature definition (self-registering via FeatureRegistry)
 export { RequestManagerFeature, type RequestManagerExports } from './request-manager-feature';

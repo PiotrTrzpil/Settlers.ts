@@ -26,6 +26,14 @@ export function validateSingleTilePlacement(x: number, y: number, ctx: Placement
         return { canPlace: false, status: PlacementStatus.InvalidTerrain };
     }
 
+    // Policy filter (territory, diplomacy, etc.) — fail fast before terrain checks
+    if (ctx.placementFilter && ctx.player !== undefined) {
+        const rejection = ctx.placementFilter(x, y, ctx.player);
+        if (rejection !== null) {
+            return { canPlace: false, status: rejection };
+        }
+    }
+
     const idx = ctx.mapSize.toIndex(x, y);
 
     // Must be passable terrain (not water, rock)

@@ -13,6 +13,7 @@ import { getBuildingWorkerInfo, getBuildingDoorPos } from '../game-data-access';
 import { BuildingType } from '../buildings/types';
 import { GameState } from '../game-state';
 import { canPlaceBuildingFootprint } from '../features/placement';
+import type { PlacementFilter } from '../features/placement';
 import { ringTiles } from '../systems/spatial-search';
 import type { TerrainData } from '../terrain';
 import type { EventBus } from '../event-bus';
@@ -78,12 +79,15 @@ export interface CommandContext {
     productionControlManager: ProductionControlManager;
     /** Storage filter manager for controlling which materials a storage accepts */
     storageFilterManager: StorageFilterManager;
+    /** Optional placement filter for territory/policy enforcement */
+    placementFilter: PlacementFilter | null;
 }
 
 function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): CommandResult {
     const { state, terrain } = ctx;
 
     if (
+        !cmd.trusted &&
         !canPlaceBuildingFootprint(
             terrain,
             state.tileOccupancy,
@@ -91,7 +95,9 @@ function executePlaceBuilding(ctx: CommandContext, cmd: PlaceBuildingCommand): C
             cmd.y,
             cmd.buildingType,
             cmd.race,
-            state.buildingFootprint
+            state.buildingFootprint,
+            ctx.placementFilter,
+            cmd.player
         )
     ) {
         return commandFailed(`Cannot place building at (${cmd.x}, ${cmd.y}): invalid placement`);

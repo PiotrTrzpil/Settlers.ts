@@ -1,24 +1,25 @@
 /**
  * RequestMatcher
  *
- * Wraps the request-to-supply matching algorithm with territory filtering.
+ * Wraps the request-to-supply matching algorithm with pluggable policy filtering.
  * Given a pending resource request, finds the best available supply source
- * while respecting service area and territory constraints.
+ * while respecting service area constraints and optional match filters.
  */
 
 import type { GameState } from '../../game-state';
 import type { ServiceAreaManager } from '../service-areas';
-import type { TerritoryManager } from '../territory';
 import type { BuildingInventoryManager } from '../inventory';
 import { matchRequestToSupply, type FulfillmentMatch } from './fulfillment-matcher';
 import type { InventoryReservationManager } from './inventory-reservation';
 import type { ResourceRequest } from './resource-request';
+import type { LogisticsMatchFilter } from './logistics-filter';
 
 export interface RequestMatcherConfig {
     gameState: GameState;
     inventoryManager: BuildingInventoryManager;
     serviceAreaManager: ServiceAreaManager;
     reservationManager: InventoryReservationManager;
+    matchFilter?: LogisticsMatchFilter;
 }
 
 /**
@@ -44,22 +45,14 @@ export class RequestMatcher {
     /** When false, deliveries are restricted to buildings within a shared service area. */
     globalLogistics = true;
 
-    /** When true, both source and destination must be in the requesting player's territory. */
-    territoryEnabled = false;
-
-    /** Territory manager for position checks (set via setTerritoryManager). */
-    private territoryManager: TerritoryManager | null = null;
+    matchFilter: LogisticsMatchFilter | null;
 
     constructor(config: RequestMatcherConfig) {
         this.gameState = config.gameState;
         this.inventoryManager = config.inventoryManager;
         this.serviceAreaManager = config.serviceAreaManager;
         this.reservationManager = config.reservationManager;
-    }
-
-    /** Set the territory manager used for territory-based filtering. */
-    setTerritoryManager(manager: TerritoryManager): void {
-        this.territoryManager = manager;
+        this.matchFilter = config.matchFilter ?? null;
     }
 
     /**
@@ -81,14 +74,10 @@ export class RequestMatcher {
             return null;
         }
 
-        // Territory filter: both source and destination must be in the player's territory
-        if (this.territoryEnabled && this.territoryManager) {
-            const sourceBuilding = this.gameState.getEntity(match.sourceBuilding);
-            if (
-                !sourceBuilding ||
-                !this.territoryManager.isInTerritory(destBuilding.x, destBuilding.y, playerId) ||
-                !this.territoryManager.isInTerritory(sourceBuilding.x, sourceBuilding.y, playerId)
-            ) {
+        // Generic policy filter — replaces hardcoded territory check
+        if (this.matchFilter) {
+            const sourceEntity = this.gameState.getEntityOrThrow(match.sourceBuilding, 'match filter source');
+            if (!this.matchFilter(sourceEntity, destBuilding, playerId)) {
                 return null;
             }
         }

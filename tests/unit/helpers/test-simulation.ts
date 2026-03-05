@@ -278,6 +278,7 @@ export class Simulation {
             combatSystem: this.services.combatSystem,
             productionControlManager: this.services.productionControlManager,
             storageFilterManager: this.services.storageFilterManager,
+            placementFilter: null,
         });
 
         this.services = new GameServices(this.state, this.eventBus, cmd => executeCommand(this.cmdContext(), cmd));

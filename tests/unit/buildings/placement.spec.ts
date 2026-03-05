@@ -4,7 +4,9 @@ import {
     canPlaceBuildingFootprint,
     computeSlopeDifficulty,
     PlacementStatus,
+    validateBuildingPlacement,
 } from '@/game/features/placement';
+import type { PlacementFilter } from '@/game/features/placement';
 import { BuildingType } from '@/game/entity';
 import { Race } from '@/game/race';
 import { createTestMap, TERRAIN, setTerrainAt, setHeightAt, type TestMap } from '../helpers/test-map';
@@ -166,5 +168,74 @@ describe('computeSlopeDifficulty', () => {
         setHeightAt(map, 11, 10, 20);
         setHeightAt(map, 11, 11, 10);
         expect(computeSlopeDifficulty(tiles2x2, map.groundHeight, map.mapSize)).toBe(PlacementStatus.TooSteep);
+    });
+});
+
+describe('placement filter integration', () => {
+    let map: TestMap;
+
+    afterEach(() => resetTestGameData());
+    beforeEach(() => {
+        installTestGameData();
+        map = createTestMap();
+    });
+
+    it('should reject building placement when filter returns OutOfTerritory', () => {
+        // Mock filter: tiles with x < 20 are "in territory", others are out
+        const filter: PlacementFilter = (x, _y, _player) => (x < 20 ? null : PlacementStatus.OutOfTerritory);
+
+        // In-territory placement should succeed
+        expect(
+            canPlaceBuildingFootprint(
+                map.terrain,
+                map.occupancy,
+                10,
+                10,
+                BuildingType.StorageArea,
+                Race.Roman,
+                undefined,
+                filter,
+                1
+            )
+        ).toBe(true);
+
+        // Out-of-territory placement should fail
+        expect(
+            canPlaceBuildingFootprint(
+                map.terrain,
+                map.occupancy,
+                25,
+                10,
+                BuildingType.StorageArea,
+                Race.Roman,
+                undefined,
+                filter,
+                1
+            )
+        ).toBe(false);
+    });
+
+    it('should allow placement when no filter is set', () => {
+        // No filter — same as today, no territory restriction
+        expect(
+            canPlaceBuildingFootprint(map.terrain, map.occupancy, 30, 10, BuildingType.StorageArea, Race.Roman)
+        ).toBe(true);
+    });
+
+    it('should return OutOfTerritory status from detailed validator', () => {
+        const filter: PlacementFilter = (_x, _y, _player) => PlacementStatus.OutOfTerritory;
+
+        const result = validateBuildingPlacement(10, 10, BuildingType.StorageArea, {
+            groundType: map.terrain.groundType,
+            groundHeight: map.terrain.groundHeight,
+            mapSize: map.terrain.mapSize,
+            tileOccupancy: map.occupancy,
+            race: Race.Roman,
+            placementFilter: filter,
+            player: 1,
+        });
+
+        expect(result.canPlace).toBe(false);
+        expect(result.status).toBe(PlacementStatus.OutOfTerritory);
     });
 });

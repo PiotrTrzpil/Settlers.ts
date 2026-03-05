@@ -493,9 +493,6 @@ export class GameServices {
             this.cleanupRegistry
         );
         this.territoryCleanup = () => territorySubscriptions.unsubscribeAll();
-
-        // Wire territory manager to logistics dispatcher for territory-based carrier filtering
-        this.logisticsDispatcher.setTerritoryManager(this.territoryManager);
     }
 
     /** Ordered tick systems for the frame loop, with group labels */

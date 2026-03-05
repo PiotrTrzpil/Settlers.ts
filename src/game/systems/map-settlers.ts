@@ -8,6 +8,7 @@ import { Race } from '../race';
 import { GameState } from '../game-state';
 import { S4_TO_UNIT_TYPE } from '../game-data-access';
 import { LogHandler } from '@/utilities/log-handler';
+import type { EventBus } from '../event-bus';
 import type { MapSettlerData } from '@/resources/map/map-entity-data';
 import { S4SettlerType } from '@/resources/map/s4-types';
 
@@ -26,7 +27,8 @@ export interface PopulateMapSettlersOptions {
 export function populateMapSettlers(
     state: GameState,
     settlers: MapSettlerData[],
-    options: PopulateMapSettlersOptions
+    options: PopulateMapSettlersOptions,
+    eventBus?: EventBus
 ): number {
     let created = 0;
     let skipped = 0;
@@ -56,6 +58,15 @@ export function populateMapSettlers(
         }
         const entity = state.addUnit(unitType, settlerData.x, settlerData.y, settlerData.player, race);
         entity.level = getUnitLevel(unitType);
+
+        // Register the unit with carrier/combat/task systems (same event as spawn_unit command)
+        eventBus?.emit('unit:spawned', {
+            entityId: entity.id,
+            unitType,
+            x: settlerData.x,
+            y: settlerData.y,
+            player: settlerData.player,
+        });
 
         created++;
     }

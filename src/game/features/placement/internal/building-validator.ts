@@ -37,6 +37,19 @@ function checkTileBasics(tile: TileCoord, ctx: PlacementContext, isMine: boolean
 }
 
 /**
+ * Check placement filter against all footprint tiles.
+ * Returns the first rejection status, or null if all tiles pass.
+ */
+function checkPlacementFilter(footprint: TileCoord[], ctx: PlacementContext): PlacementStatus | null {
+    if (!ctx.placementFilter || ctx.player === undefined) return null;
+    for (const tile of footprint) {
+        const rejection = ctx.placementFilter(tile.x, tile.y, ctx.player);
+        if (rejection !== null) return rejection;
+    }
+    return null;
+}
+
+/**
  * Enforce 1-tile gap between building footprints for pathfinding.
  * Rejects if any external neighbor of the new footprint touches any
  * existing building footprint tile (including door corridors).
@@ -82,6 +95,12 @@ export function validateBuildingPlacement(
         return { canPlace: false, status: PlacementStatus.InvalidTerrain };
     }
 
+    // Policy filter (territory, diplomacy, etc.) — fail fast before terrain checks
+    const filterRejection = checkPlacementFilter(footprint, ctx);
+    if (filterRejection !== null) {
+        return { canPlace: false, status: filterRejection };
+    }
+
     // Check each tile for terrain and occupancy
     for (const tile of footprint) {
         const blockingStatus = checkTileBasics(tile, ctx, isMine);
@@ -117,7 +136,9 @@ export function canPlaceBuildingFootprint(
     y: number,
     buildingType: BuildingType,
     race: Race,
-    buildingFootprint?: ReadonlySet<string>
+    buildingFootprint?: ReadonlySet<string>,
+    placementFilter?: import('../types').PlacementFilter | null,
+    player?: number
 ): boolean {
     const ctx: PlacementContext = {
         groundType: terrain.groundType,
@@ -126,6 +147,8 @@ export function canPlaceBuildingFootprint(
         tileOccupancy,
         buildingFootprint,
         race,
+        placementFilter: placementFilter ?? null,
+        player,
     };
     return validateBuildingPlacement(x, y, buildingType, ctx).canPlace;
 }

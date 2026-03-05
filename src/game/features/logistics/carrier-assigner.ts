@@ -21,6 +21,7 @@ import type { ResourceRequest } from './resource-request';
 import type { TransportJobBuilder } from './transport-job-builder';
 import type { JobState } from '../settler-tasks/types';
 import { hexDistance } from '../../systems/hex-directions';
+import type { CarrierFilter } from './logistics-filter';
 
 /** Assigns a job to a settler and optionally starts movement. */
 export interface JobAssigner {
@@ -37,6 +38,7 @@ export interface CarrierAssignerConfig {
     reservationManager: InventoryReservationManager;
     requestManager: RequestManager;
     inventoryManager: BuildingInventoryManager;
+    carrierFilter?: CarrierFilter;
 }
 
 /** Result of a successful carrier assignment. */
@@ -63,6 +65,7 @@ export class CarrierAssigner {
     private readonly reservationManager: InventoryReservationManager;
     private readonly requestManager: RequestManager;
     private readonly inventoryManager: BuildingInventoryManager;
+    carrierFilter: CarrierFilter | null;
 
     /** When false, only search hubs shared by source and destination. */
     globalLogistics = true;
@@ -77,6 +80,7 @@ export class CarrierAssigner {
         this.reservationManager = config.reservationManager;
         this.requestManager = config.requestManager;
         this.inventoryManager = config.inventoryManager;
+        this.carrierFilter = config.carrierFilter ?? null;
     }
 
     /**
@@ -157,6 +161,7 @@ export class CarrierAssigner {
             if (!this.carrierManager.canAssignJobTo(carrier.entityId)) continue;
             const entity = this.gameState.getEntity(carrier.entityId);
             if (!entity || entity.player !== playerId) continue;
+            if (this.carrierFilter && !this.carrierFilter(entity, playerId)) continue;
 
             const dist = hexDistance(entity.x, entity.y, sourceX, sourceY);
             if (dist < bestDist) {
