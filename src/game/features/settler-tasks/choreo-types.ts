@@ -149,8 +149,10 @@ export interface ChoreoJob {
 /** Transport job lifecycle operations — injected into executor context. */
 export interface TransportJobOps {
     getJob(jobId: number): TransportJobRecord | undefined;
-    pickUp(jobId: number): void;
-    deliver(jobId: number): void;
+    /** Consume reservation after carrier picks up material. Returns false if job no longer exists. */
+    pickUp(jobId: number): boolean;
+    /** Fulfill request after carrier delivers material. Returns false if job no longer exists. */
+    deliver(jobId: number): boolean;
     cancel(jobId: number): void;
 }
 

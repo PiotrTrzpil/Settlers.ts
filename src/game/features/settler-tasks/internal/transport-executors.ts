@@ -31,6 +31,12 @@ export function executeTransportPickup(
 ): TaskResult {
     const { jobId, material, sourceBuildingId, amount: requestedAmount } = td;
 
+    // Job may have been cancelled externally (building destroyed, state restore, etc.)
+    if (!ctx.transportJobOps.getJob(jobId)) {
+        log.debug(`Carrier ${settler.id}: transport job ${jobId} no longer exists, aborting pickup`);
+        return TaskResult.FAILED;
+    }
+
     const withdrawn = ctx.materialTransfer.pickUp(settler.id, sourceBuildingId, material, requestedAmount, true);
 
     if (withdrawn === 0) {
@@ -44,7 +50,11 @@ export function executeTransportPickup(
         return TaskResult.FAILED;
     }
 
-    ctx.transportJobOps.pickUp(jobId);
+    // Job may have been cancelled between getJob check and now (e.g. during inventory withdrawal)
+    if (!ctx.transportJobOps.pickUp(jobId)) {
+        log.debug(`Carrier ${settler.id}: transport job ${jobId} cancelled during pickup`);
+        return TaskResult.FAILED;
+    }
     job.carryingGood = material;
     td.amount = withdrawn;
 
@@ -85,6 +95,7 @@ export function executeTransportDelivery(
 
     const amount = settler.carrying.amount;
     const deposited = ctx.materialTransfer.deliver(settler.id, destBuildingId, 'input');
+    // Job may have been cancelled externally — deliver gracefully handles missing jobs
     ctx.transportJobOps.deliver(jobId);
 
     const overflow = amount - deposited;

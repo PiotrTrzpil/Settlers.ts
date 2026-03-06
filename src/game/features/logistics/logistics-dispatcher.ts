@@ -289,12 +289,16 @@ export class LogisticsDispatcher implements TickSystem {
                 return undefined;
             },
             pickUp: jobId => {
-                const record = findJobOrThrow(activeJobs, jobId, 'pickUp');
+                const record = findJobById(activeJobs, jobId);
+                if (!record) return false;
                 TransportJobService.pickUp(record, deps);
+                return true;
             },
             deliver: jobId => {
-                const record = findJobOrThrow(activeJobs, jobId, 'deliver');
+                const record = findJobById(activeJobs, jobId);
+                if (!record) return false;
                 TransportJobService.deliver(record, deps);
+                return true;
             },
             cancel: jobId => {
                 const record = findJobById(activeJobs, jobId);
@@ -400,18 +404,6 @@ export interface BuildingCleanupResult {
     buildingId: number;
     requestsCancelled: number;
     jobsCancelled: number;
-}
-
-/** Find a job record by ID across all active jobs, or throw. */
-function findJobOrThrow(
-    activeJobs: ReadonlyMap<number, TransportJobRecord>,
-    jobId: number,
-    operation: string
-): TransportJobRecord {
-    for (const record of activeJobs.values()) {
-        if (record.id === jobId) return record;
-    }
-    throw new Error(`TransportJobOps.${operation}: job ${jobId} not found in activeJobs`);
 }
 
 /** Find a job record by ID across all active jobs, or return undefined. */
