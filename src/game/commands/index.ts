@@ -15,6 +15,7 @@ export type {
     SelectAtTileCommand,
     ToggleSelectionCommand,
     SelectAreaCommand,
+    SelectMultipleCommand,
     MoveSelectedUnitsCommand,
     RemoveEntityCommand,
     SpawnPileCommand,
@@ -43,5 +44,4 @@ export {
 } from './command-types';
 
 // Command execution
-export { executeCommand } from './command';
-export type { CommandContext } from './command';
+export { CommandHandlerRegistry, registerAllHandlers, type CommandRegistrationDeps } from './command';

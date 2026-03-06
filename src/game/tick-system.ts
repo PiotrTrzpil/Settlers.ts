@@ -25,4 +25,10 @@ export interface TickSystem {
      * This is called automatically by GameLoop.destroy() for all registered systems.
      */
     destroy?(): void;
+
+    /**
+     * Optional: Return sub-timings from the last tick for debug panel display.
+     * Keys are prefixed with the system name by GameLoop (e.g. "  idle: 2.1").
+     */
+    getSubTimings?(): Record<string, number>;
 }

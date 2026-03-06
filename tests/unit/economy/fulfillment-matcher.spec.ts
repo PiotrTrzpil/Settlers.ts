@@ -47,17 +47,6 @@ describe('RequestManager state machine', () => {
         expect(requestManager.cancelRequestsForBuilding(100)).toBe(2);
         expect(requestManager.getPendingCount()).toBe(1);
     });
-
-    it('resetRequestsForCarrier returns in-progress requests to pending', () => {
-        const r1 = requestManager.addRequest(100, EMaterialType.LOG, 1);
-        const r2 = requestManager.addRequest(101, EMaterialType.STONE, 2);
-        requestManager.assignRequest(r1.id, 200, 300);
-        requestManager.assignRequest(r2.id, 201, 300);
-
-        expect(requestManager.resetRequestsForCarrier(300)).toBe(2);
-        expect(r1.status).toBe(RequestStatus.Pending);
-        expect(r1.assignedCarrier).toBeNull();
-    });
 });
 
 describe('InventoryReservationManager', () => {
@@ -88,8 +77,8 @@ describe('InventoryReservationManager', () => {
         reservationManager.createReservation(100, EMaterialType.STONE, 3, 2);
         reservationManager.createReservation(101, EMaterialType.LOG, 7, 3);
 
-        // Release by ID
-        expect(reservationManager.releaseReservation(r1.id)).toBe(true);
+        // Release by request ID
+        expect(reservationManager.releaseReservationForRequest(r1.requestId)).toBe(true);
         expect(reservationManager.getReservedAmount(100, EMaterialType.LOG)).toBe(0);
 
         // Release by building

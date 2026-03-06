@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { Timeout } from './wait-config';
 
 /**
- * E2E tests for game state reset (resetToCleanState).
+ * E2E tests for game state reset (restoreToInitialState).
  *
  * Reset is called between every e2e test via the gp fixture, so bugs here
  * break the entire test suite. These tests verify that reset works correctly

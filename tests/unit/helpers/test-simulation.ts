@@ -33,7 +33,7 @@ import { TimelineRecorder, type TimelineCategory } from './timeline-recorder';
 import { EventBus, type GameEvents } from '@/game/event-bus';
 import { GameState } from '@/game/game-state';
 import { GameServices } from '@/game/game-services';
-import { executeCommand, type CommandContext } from '@/game/commands';
+import { CommandHandlerRegistry, registerAllHandlers } from '@/game/commands';
 import { BuildingType } from '@/game/buildings/building-type';
 import { EntityType, UnitType, tileKey, type TileCoord } from '@/game/entity';
 import { EMaterialType } from '@/game/economy/material-type';
@@ -44,11 +44,11 @@ import { spiralSearch } from '@/game/utils/spiral-search';
 import { OreType } from '@/game/features/ore-veins/ore-type';
 import { isMineBuilding, getBuildingFootprint } from '@/game/buildings/types';
 import { canPlaceBuildingFootprint } from '@/game/features/placement';
-import { CarrierStatus } from '@/game/features/carriers/carrier-state';
 import { BuildingConstructionPhase } from '@/game/features/building-construction/types';
 import type { InventorySlot } from '@/game/features/inventory/inventory-slot';
 import type { Entity } from '@/game/entity';
 import { EventFmt } from '@/game/event-formatting';
+import { query } from '@/game/ecs';
 
 // ─── Formatting helpers ──────────────────────────────────────────
 
@@ -236,7 +236,7 @@ export class Simulation {
 
     private readonly tickSystems: ReturnType<GameServices['getTickSystems']>;
     private readonly placer: SmartBuildingPlacer;
-    private readonly cmdContext: () => CommandContext;
+    private readonly commandRegistry: CommandHandlerRegistry;
     private tickCount = 0;
 
     constructor(opts: SimulationOptions = {}) {
@@ -258,6 +258,10 @@ export class Simulation {
         this.eventBus = new EventBus();
         this.eventBus.strict = true;
         this.state = new GameState(this.eventBus);
+        this.state.playerRaces = new Map([
+            [0, Race.Roman],
+            [1, Race.Roman],
+        ]);
 
         // Subscribe timeline FIRST — before any other system registers handlers,
         // so every event is captured from the very first entity placement.
@@ -266,7 +270,12 @@ export class Simulation {
         const settings = new GameSettingsManager();
         settings.resetToDefaults();
 
-        this.cmdContext = (): CommandContext => ({
+        this.commandRegistry = new CommandHandlerRegistry();
+        this.services = new GameServices(this.state, this.eventBus, cmd => this.commandRegistry.execute(cmd));
+        this.services.setTerrainData(this.map.terrain);
+
+        // Register handlers now that services exist
+        registerAllHandlers(this.commandRegistry, {
             state: this.state,
             terrain: this.map.terrain,
             eventBus: this.eventBus,
@@ -278,14 +287,15 @@ export class Simulation {
             combatSystem: this.services.combatSystem,
             productionControlManager: this.services.productionControlManager,
             storageFilterManager: this.services.storageFilterManager,
-            placementFilter: null,
+            getPlacementFilter: () => null,
         });
 
-        this.services = new GameServices(this.state, this.eventBus, cmd => executeCommand(this.cmdContext(), cmd));
-        this.services.setTerrainData(this.map.terrain);
-
-        this.services.logisticsDispatcher.globalLogistics = true;
         this.services.residenceSpawner.immediateMode = true;
+
+        // Establish territory for player 0 covering the entire test map.
+        // Workers use the spatial grid's territory-aware queries, so they need
+        // their tiles to be inside territory to find resources.
+        this.establishTerritory(0);
 
         this.eventBus.on('entity:removed', ({ entityId }) => {
             this.services.settlerTaskSystem.onEntityRemoved(entityId);
@@ -437,13 +447,12 @@ export class Simulation {
 
     private snapshotCarriers(): CarrierSnapshot[] {
         const carriers: CarrierSnapshot[] = [];
-        for (const cs of this.services.carrierManager.getAllCarriers()) {
-            const entity = this.state.getEntity(cs.entityId);
-            const pos = entity ? `(${entity.x},${entity.y})` : '(?)';
-            const carrying = entity?.carrying
+        for (const [id, , entity] of query(this.services.carrierRegistry.store, this.state.store)) {
+            const pos = `(${entity.x},${entity.y})`;
+            const carrying = entity.carrying
                 ? `${EMaterialType[entity.carrying.material]}×${entity.carrying.amount}`
                 : '';
-            carriers.push({ id: cs.entityId, status: CarrierStatus[cs.status], pos, carrying });
+            carriers.push({ id, status: 'registered', pos, carrying });
         }
         return carriers;
     }
@@ -491,8 +500,8 @@ export class Simulation {
 
     // ─── Commands ─────────────────────────────────────────────────
 
-    execute(cmd: Parameters<typeof executeCommand>[1]) {
-        return executeCommand(this.cmdContext(), cmd);
+    execute(cmd: import('@/game/commands').Command) {
+        return this.commandRegistry.execute(cmd);
     }
 
     /** Remove a building entity. Throws if the command fails. */
@@ -563,6 +572,7 @@ export class Simulation {
     }
 
     placeGoods(material: EMaterialType, amount: number): number {
+        if (amount > 8) throw new Error(`placeGoods: amount ${amount} exceeds max pile size of 8`);
         const pos = this.placer.findOpenPosition();
         const result = this.execute({
             type: 'place_pile',
@@ -578,6 +588,7 @@ export class Simulation {
     }
 
     placeGoodsNear(buildingId: number, material: EMaterialType, amount: number) {
+        if (amount > 8) throw new Error(`placeGoodsNear: amount ${amount} exceeds max pile size of 8`);
         const tiles = this.tilesNearBuilding(buildingId, 1);
         if (tiles.length === 0) throw new Error(`No empty tile near building ${buildingId}`);
         const pos = tiles[0]!;
@@ -800,6 +811,19 @@ export class Simulation {
             }
         }
         console.log(`${sep}\n`);
+    }
+
+    /**
+     * Register a virtual territory-generating building so the entire map
+     * belongs to a player. Workers use territory-aware spatial queries,
+     * so this is required for them to find resources.
+     */
+    establishTerritory(player: number): void {
+        const tm = this.services.territoryManager;
+        // Register a virtual castle at map center covering the whole map
+        tm.addBuilding(-1 - player, this.mapWidth >> 1, this.mapHeight >> 1, player, BuildingType.Castle);
+        // Force territory computation and spatial grid cell rebuild
+        tm.getOwner(0, 0);
     }
 
     // ─── Lifecycle ────────────────────────────────────────────────

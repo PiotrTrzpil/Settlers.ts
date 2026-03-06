@@ -70,7 +70,8 @@ const EXACT_OVERRIDES: ReadonlyMap<string, JobPartResolution> = new Map<string, 
     // Carrier strike: enter-strike is a one-shot work, wait-strike is standing idle
     ['C_STRIKE1', SHORT_WORK_RESOLUTION],
     ['C_STRIKE2', IDLE_RESOLUTION],
-    ['C_DOWN_NONE', IDLE_RESOLUTION],
+    // C_DOWN_NONE: carrier bends down to pick up / drop off goods
+    ['C_DOWN_NONE', { sequenceKey: pickupSequenceKey(0), loop: false, stopped: false }],
 
     // Geologist searching = walking around the terrain
     ['G_SEARCH', WALK_RESOLUTION],

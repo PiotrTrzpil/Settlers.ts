@@ -74,9 +74,8 @@ export const SELECTION_ORIGIN_DOT_COLOR = [1.0, 0.4, 0.2, 1.0]; // Orange dot at
 // Footprint debug visualization
 export const FOOTPRINT_TILE_COLOR = [0.2, 0.8, 1.0, 0.4]; // Semi-transparent cyan
 
-// Service area overlay
-export const SERVICE_AREA_CIRCLE_COLOR = [0.3, 0.7, 1.0, 0.6]; // Blue circle outline
-export const SERVICE_AREA_CIRCLE_SEGMENTS = 64; // Number of segments for circle approximation
+// Circle overlay segments (used by work area circles)
+export const CIRCLE_OVERLAY_SEGMENTS = 64;
 
 // Work area overlay
 export const WORK_AREA_CIRCLE_COLOR = [0.9, 0.6, 0.2, 0.6]; // Orange circle outline

@@ -5,22 +5,21 @@
 
 import type { Game } from './game';
 import { EntityType } from './entity';
-import type { CarryingState } from './entity';
+import type { CarryingState, Entity } from './entity';
 import type { Race } from './race';
-import { SERVICE_AREA_BUILDINGS } from './features/service-areas/service-area-feature';
-import type { BuildingType } from './buildings/building-type';
 import type { EMaterialType } from './economy/material-type';
-import { CarrierStatus } from './features/carriers/carrier-state';
 import type { TreeStage } from './features/trees/tree-system';
 import type { StoneStage } from './features/stones/stone-system';
-import { type RequestPriority, RequestStatus } from './features/logistics/resource-request';
+import type { RequestPriority, RequestStatus } from './features/logistics/resource-request';
 import type { SerializedConstructionSite } from './features/building-construction';
 
 const STORAGE_KEY = 'settlers_game_state';
 const INITIAL_STATE_KEY = 'settlers_initial_state';
 const LAST_MAP_KEY = 'settlers_last_map';
 const AUTO_SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
-const SNAPSHOT_VERSION = 9; // Bumped for building lifecycle separation (ConstructionSite replaces BuildingState)
+// Bumped: persistence for crops, storage filters, production control, residence spawns,
+// resource signs, combat, barracks training, auto-recruit
+const SNAPSHOT_VERSION = 11;
 
 /**
  * Serialized inventory slot state.
@@ -47,9 +46,6 @@ export interface SerializedBuildingInventory {
  */
 export interface SerializedCarrier {
     entityId: number;
-    status: CarrierStatus;
-    carryingMaterial: EMaterialType | null;
-    carryingAmount: number;
 }
 
 /**
@@ -72,6 +68,99 @@ export interface SerializedStone {
     stage: StoneStage;
     variant: number;
     level: number;
+}
+
+/**
+ * Serialized crop state.
+ */
+export interface SerializedCrop {
+    entityId: number;
+    stage: number; // CropStage enum
+    cropType: number; // MapObjectType enum
+    progress: number;
+    decayTimer: number;
+    currentOffset: number;
+}
+
+/**
+ * Serialized storage filter state.
+ */
+export interface SerializedStorageFilter {
+    buildingId: number;
+    materials: number[]; // EMaterialType values
+}
+
+/**
+ * Serialized production control state.
+ */
+export interface SerializedProductionControl {
+    buildingId: number;
+    mode: string; // ProductionMode string
+    recipeCount: number;
+    roundRobinIndex: number;
+    proportions: Array<{ index: number; weight: number }>;
+    queue: number[];
+    productionCounts: Array<{ index: number; count: number }>;
+}
+
+/**
+ * Serialized pending spawn state for residence buildings.
+ */
+export interface SerializedPendingSpawn {
+    buildingEntityId: number;
+    remaining: number;
+    timer: number;
+    unitType: number;
+    count: number;
+    spawnInterval: number;
+}
+
+/**
+ * Serialized resource sign state.
+ */
+export interface SerializedResourceSign {
+    elapsed: number;
+    signs: Array<{ entityId: number; x: number; y: number; expiresAt: number }>;
+}
+
+/**
+ * Serialized combat unit state.
+ */
+export interface SerializedCombatUnit {
+    entityId: number;
+    health: number;
+    maxHealth: number;
+}
+
+/**
+ * Serialized barracks training state.
+ */
+export interface SerializedBarracksTraining {
+    races: Array<{ buildingId: number; race: number }>;
+    activeTrainings: Array<{
+        buildingId: number;
+        carrierId: number;
+        recipe: { inputs: Array<{ material: number; count: number }>; unitType: number; level: number };
+    }>;
+}
+
+/**
+ * Serialized auto-recruit state.
+ */
+export interface SerializedAutoRecruit {
+    accumulatedTime: number;
+    playerStates: Array<{
+        player: number;
+        pendingDiggers: number;
+        pendingBuilders: number;
+        recruitments: Array<{
+            carrierId: number;
+            targetUnitType: number;
+            toolMaterial: number;
+            pileEntityId: number;
+            siteId: number;
+        }>;
+    }>;
 }
 
 /**
@@ -134,6 +223,22 @@ export interface GameStateSnapshot {
     trees?: SerializedTree[];
     /** Stone states (depletion level, variant) */
     stones?: SerializedStone[];
+    /** Crop states (stage, progress, decay) */
+    crops?: SerializedCrop[];
+    /** Storage filter configurations per building */
+    storageFilters?: SerializedStorageFilter[];
+    /** Production control states per building */
+    productionControl?: SerializedProductionControl[];
+    /** Pending residence spawns */
+    residenceSpawns?: SerializedPendingSpawn[];
+    /** Resource sign state (elapsed timer + active signs) */
+    resourceSigns?: SerializedResourceSign;
+    /** Combat unit health states */
+    combat?: SerializedCombatUnit[];
+    /** Barracks training state (races + active trainings) */
+    barracksTraining?: SerializedBarracksTraining;
+    /** Auto-recruit state (accumulated time + per-player recruitments) */
+    autoRecruit?: SerializedAutoRecruit;
     /** Resource requests (pending and in-progress) */
     requests?: SerializedRequest[];
     /** Production cycle progress per building (deprecated v5 field, kept for backward compat) */
@@ -157,6 +262,9 @@ let currentMapId: string = '';
 /** Initial terrain cached by saveInitialState; lets auto-saves store sparse diffs instead of full arrays. */
 let _cachedInitialGroundType: Uint8Array | null = null;
 let _cachedInitialGroundHeight: Uint8Array | null = null;
+
+/** In-memory fallback for initial state when localStorage is unavailable/full */
+let _cachedInitialSnapshot: GameStateSnapshot | null = null;
 
 /**
  * Set the current map identifier. Must be called when loading a map.
@@ -231,99 +339,26 @@ function applyTerrainDiff(terrain: Uint8Array, diffBase64: string): void {
     }
 }
 
-// === Serialization Helpers ===
+// === Terrain Snapshot Helper ===
 
-interface SlotLike {
-    materialType: EMaterialType;
-    currentAmount: number;
-    maxCapacity: number;
-    reservedAmount: number;
-}
-
-function serializeSlots(slots: SlotLike[]): SerializedInventorySlot[] {
-    return slots.map(s => ({
-        materialType: s.materialType,
-        current: s.currentAmount,
-        max: s.maxCapacity,
-        reserved: s.reservedAmount,
-    }));
-}
-
-function serializeInventories(game: Game): SerializedBuildingInventory[] {
-    const result: SerializedBuildingInventory[] = [];
-    for (const inv of game.services.inventoryManager.getAllInventories()) {
-        result.push({
-            entityId: inv.buildingId,
-            buildingType: inv.buildingType,
-            inputSlots: serializeSlots(inv.inputSlots),
-            outputSlots: serializeSlots(inv.outputSlots),
-        });
+/** Build terrain fields for the snapshot — sparse diff when initial state is cached, full copy otherwise. */
+function terrainSnapshotFields(
+    game: Game
+): Pick<
+    GameStateSnapshot,
+    'terrainGroundType' | 'terrainGroundHeight' | 'terrainGroundTypeDiff' | 'terrainGroundHeightDiff'
+> {
+    if (_cachedInitialGroundType) {
+        return {
+            terrainGroundTypeDiff: encodeTerrainDiff(game.terrain.groundType, _cachedInitialGroundType) ?? undefined,
+            terrainGroundHeightDiff:
+                encodeTerrainDiff(game.terrain.groundHeight, _cachedInitialGroundHeight!) ?? undefined,
+        };
     }
-    return result;
-}
-
-function serializeCarriers(game: Game): SerializedCarrier[] {
-    const result: SerializedCarrier[] = [];
-    for (const carrier of game.services.carrierManager.getAllCarriers()) {
-        const entity = game.state.getEntityOrThrow(carrier.entityId, 'carrier serialization');
-        result.push({
-            entityId: carrier.entityId,
-            status: carrier.status,
-            carryingMaterial: entity.carrying?.material ?? null,
-            carryingAmount: entity.carrying?.amount ?? 0,
-        });
-    }
-    return result;
-}
-
-function serializeTrees(game: Game): SerializedTree[] {
-    const trees: SerializedTree[] = [];
-    for (const [entityId, state] of game.services.treeSystem.getAllTreeStates()) {
-        trees.push({
-            entityId,
-            stage: state.stage,
-            progress: state.progress,
-            stumpTimer: state.stumpTimer,
-            currentOffset: state.currentOffset,
-            variant: state.variant,
-        });
-    }
-    return trees;
-}
-
-function serializeStones(game: Game): SerializedStone[] {
-    const stones: SerializedStone[] = [];
-    for (const entity of game.state.entities) {
-        if (entity.type !== EntityType.MapObject) continue;
-        const state = game.services.stoneSystem.getStoneState(entity.id);
-        if (!state) continue;
-        stones.push({
-            entityId: entity.id,
-            stage: state.stage,
-            variant: state.variant,
-            level: state.level,
-        });
-    }
-    return stones;
-}
-
-function serializeRequests(game: Game): SerializedRequest[] {
-    const result: SerializedRequest[] = [];
-    for (const req of game.services.requestManager.getAllRequests()) {
-        result.push({
-            id: req.id,
-            buildingId: req.buildingId,
-            materialType: req.materialType,
-            amount: req.amount,
-            priority: req.priority,
-            timestamp: req.timestamp,
-            status: req.status,
-            assignedCarrier: req.assignedCarrier,
-            sourceBuilding: req.sourceBuilding,
-            assignedAt: req.assignedAt,
-        });
-    }
-    return result;
+    return {
+        terrainGroundType: uint8ArrayToBase64(game.terrain.groundType),
+        terrainGroundHeight: uint8ArrayToBase64(game.terrain.groundHeight),
+    };
 }
 
 /**
@@ -345,11 +380,6 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         hidden: e.hidden || undefined,
     }));
 
-    const resourceQuantities: Array<{ entityId: number; quantity: number; buildingId?: number }> = [];
-    for (const [entityId, state] of gameState.piles.states) {
-        resourceQuantities.push({ entityId, quantity: state.quantity });
-    }
-
     return {
         version: SNAPSHOT_VERSION,
         timestamp: Date.now(),
@@ -357,26 +387,11 @@ export function createSnapshot(game: Game): GameStateSnapshot {
         entities,
         nextId: gameState.nextId,
         rngSeed: gameState.rng.getState(),
-        resourceQuantities,
-        constructionSites: game.services.constructionSiteManager.serializeSites(),
-        buildingInventories: serializeInventories(game),
-        carriers: serializeCarriers(game),
-        trees: serializeTrees(game),
-        stones: serializeStones(game),
-        requests: serializeRequests(game),
-        ...(_cachedInitialGroundType
-            ? {
-                terrainGroundTypeDiff:
-                      encodeTerrainDiff(game.terrain.groundType, _cachedInitialGroundType) ?? undefined,
-                terrainGroundHeightDiff:
-                      encodeTerrainDiff(game.terrain.groundHeight, _cachedInitialGroundHeight!) ?? undefined,
-            }
-            : {
-                terrainGroundType: uint8ArrayToBase64(game.terrain.groundType),
-                terrainGroundHeight: uint8ArrayToBase64(game.terrain.groundHeight),
-            }),
-        workAreaOffsets: game.services.workAreaStore.serializeInstanceOffsets(),
-    };
+        // Terrain snapshot
+        ...terrainSnapshotFields(game),
+        // Feature state from registry
+        ...game.services.persistenceRegistry.serializeAll(),
+    } as GameStateSnapshot;
 }
 
 /**
@@ -462,7 +477,7 @@ export function hasSavedGameState(): boolean {
 // === Restore Helpers ===
 
 /** Restore entity properties that addEntity doesn't set (race, carrying, hidden). */
-function restoreEntityProps(entity: import('./entity').Entity, saved: GameStateSnapshot['entities'][number]): void {
+function restoreEntityProps(entity: Entity, saved: GameStateSnapshot['entities'][number]): void {
     if (saved.race !== undefined) entity.race = saved.race;
     if (saved.carrying) entity.carrying = saved.carrying;
     if (saved.hidden) entity.hidden = saved.hidden;
@@ -471,138 +486,19 @@ function restoreEntityProps(entity: import('./entity').Entity, saved: GameStateS
 function restoreEntities(game: Game, snapshot: GameStateSnapshot): void {
     const state = game.state;
 
-    // Build lookup maps for per-entity overrides
-    const savedTreeStates = new Map<number, SerializedTree>();
-    if (snapshot.trees) {
-        for (const t of snapshot.trees) {
-            savedTreeStates.set(t.entityId, t);
-        }
-    }
-    const savedStoneStates = new Map<number, SerializedStone>();
-    if (snapshot.stones) {
-        for (const s of snapshot.stones) {
-            savedStoneStates.set(s.entityId, s);
-        }
-    }
-
-    // Recreate entities using the normal addEntity path
+    // Recreate entities using the normal addEntity path.
     // This emits entity:created events — subscribers handle type-specific initialization
+    // (e.g., TreeSystem registers fresh tree state, MovementSystem creates controllers).
+    // Feature state (trees, stones, carriers, etc.) is overwritten later by deserializeAll().
     for (const e of snapshot.entities) {
         const savedNextId = state.nextId;
         state.nextId = e.id;
 
-        const entity = state.addEntity(e.type, e.subType, e.x, e.y, e.player, undefined, e.variation, e.race);
+        const entity = state.addEntity(e.type, e.subType, e.x, e.y, e.player, { variation: e.variation, race: e.race });
         state.nextId = Math.max(savedNextId, e.id + 1);
 
         // Restore per-entity properties not covered by addEntity
         restoreEntityProps(entity, e);
-
-        // Restore map object state (overwrites the fresh state created by register())
-        if (e.type === EntityType.MapObject) {
-            const savedTree = savedTreeStates.get(e.id);
-            if (savedTree) {
-                game.services.treeSystem.restoreTreeState(e.id, {
-                    stage: savedTree.stage,
-                    progress: savedTree.progress,
-                    stumpTimer: savedTree.stumpTimer,
-                    currentOffset: savedTree.currentOffset,
-                    variant: savedTree.variant ?? 0,
-                });
-            }
-            const savedStone = savedStoneStates.get(e.id);
-            if (savedStone) {
-                game.services.stoneSystem.restoreStoneState(e.id, {
-                    stage: savedStone.stage,
-                    variant: savedStone.variant,
-                    level: savedStone.level,
-                });
-            }
-        }
-    }
-}
-
-/** Create service areas for completed residence buildings after entity/state restore. */
-function restoreServiceAreas(game: Game): void {
-    const { constructionSiteManager, serviceAreaManager } = game.services;
-    for (const entity of game.state.entities) {
-        if (entity.type !== EntityType.Building) continue;
-        if (!SERVICE_AREA_BUILDINGS.has(entity.subType as BuildingType)) continue;
-        // A building without a construction site is operational — create its service area.
-        if (!constructionSiteManager.hasSite(entity.id)) {
-            serviceAreaManager.createServiceArea(
-                entity.id,
-                entity.player,
-                entity.x,
-                entity.y,
-                entity.subType as BuildingType
-            );
-        }
-    }
-}
-
-function restoreResourceQuantities(game: Game, snapshot: GameStateSnapshot): void {
-    for (const rq of snapshot.resourceQuantities) {
-        const resourceState = game.state.piles.states.get(rq.entityId);
-        if (resourceState) {
-            resourceState.quantity = rq.quantity;
-        }
-    }
-}
-
-function restoreInventories(game: Game, snapshot: GameStateSnapshot): void {
-    if (!snapshot.buildingInventories) return;
-    // Reset reservations to 0 since in-progress requests are reset to pending
-    for (const inv of snapshot.buildingInventories) {
-        game.services.inventoryManager.restoreInventory({
-            ...inv,
-            inputSlots: inv.inputSlots.map(s => ({ ...s, reserved: 0 })),
-            outputSlots: inv.outputSlots.map(s => ({ ...s, reserved: 0 })),
-        });
-    }
-}
-
-function restoreCarriers(game: Game, snapshot: GameStateSnapshot): void {
-    if (!snapshot.carriers) return;
-    for (const c of snapshot.carriers) {
-        // Reset job-dependent statuses to Idle since jobs aren't persisted
-        const isJobStatus =
-            c.status === CarrierStatus.Walking ||
-            c.status === CarrierStatus.PickingUp ||
-            c.status === CarrierStatus.Delivering;
-
-        game.services.carrierManager.restoreCarrier({
-            entityId: c.entityId,
-            status: isJobStatus ? CarrierStatus.Idle : c.status,
-            carryingMaterial: c.carryingMaterial,
-            carryingAmount: c.carryingAmount,
-        });
-    }
-}
-
-function restoreConstructionSites(game: Game, snapshot: GameStateSnapshot): void {
-    if (!snapshot.constructionSites) return;
-    for (const site of snapshot.constructionSites) {
-        game.services.constructionSiteManager.restoreSite(site);
-    }
-}
-
-function restoreRequests(game: Game, snapshot: GameStateSnapshot): void {
-    if (!snapshot.requests) return;
-    // Reset in-progress requests to pending since carriers restart idle
-    for (const req of snapshot.requests) {
-        const wasInProgress = req.status === RequestStatus.InProgress;
-        game.services.requestManager.restoreRequest({
-            id: req.id,
-            buildingId: req.buildingId,
-            materialType: req.materialType,
-            amount: req.amount,
-            priority: req.priority,
-            timestamp: req.timestamp,
-            status: wasInProgress ? RequestStatus.Pending : req.status,
-            assignedCarrier: wasInProgress ? null : req.assignedCarrier,
-            sourceBuilding: wasInProgress ? null : req.sourceBuilding,
-            assignedAt: wasInProgress ? null : req.assignedAt,
-        });
     }
 }
 
@@ -625,40 +521,30 @@ function restoreTerrain(game: Game, snapshot: GameStateSnapshot): void {
  * Must be called on a fresh Game instance (entities array should be empty or will be cleared).
  */
 export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): void {
-    // Clear existing entities via the normal removal path
+    // 1. Clear existing entities via the normal removal path
     const existingIds = game.state.entities.map(e => e.id);
     for (const id of existingIds) {
         game.execute({ type: 'remove_entity', entityId: id });
     }
 
-    // Restore RNG state and nextId
+    // 2. Restore RNG state and nextId
     game.state.rng.setState(snapshot.rngSeed);
     game.state.nextId = snapshot.nextId;
 
-    // Recreate entities with their per-entity state overrides
+    // 3. Recreate entities with their per-entity state overrides (triggers entity:created events)
     restoreEntities(game, snapshot);
 
-    // Restore active construction sites BEFORE service areas.
-    // Service area restoration uses hasSite() to distinguish operational from under-construction.
-    restoreConstructionSites(game, snapshot);
-
-    // Restore terrain modifications (raw ground, leveling).
+    // 4. Restore terrain modifications (raw ground, leveling)
     restoreTerrain(game, snapshot);
 
-    // Restore service areas for completed residence buildings.
-    // Service areas are created on building:completed, not entity:created,
-    // so save-restored buildings need explicit initialization.
-    // Buildings with an active construction site are under construction — no service area yet.
-    restoreServiceAreas(game);
+    // 5. Restore all feature state via registry (topological order handles dependencies)
+    game.services.persistenceRegistry.deserializeAll(snapshot as unknown as Record<string, unknown>);
 
-    // Restore feature state
-    restoreResourceQuantities(game, snapshot);
-    restoreInventories(game, snapshot);
-    restoreCarriers(game, snapshot);
-    restoreRequests(game, snapshot);
-    if (snapshot.workAreaOffsets) {
-        game.services.workAreaStore.restoreInstanceOffsets(snapshot.workAreaOffsets);
-    }
+    // 6. Rebuild derived state that is not persisted independently.
+    // Pile registry reconnects StackedPile entities to building inventories.
+    // Building overlays recreate animation instances for completed buildings.
+    game.services.inventoryPileSync?.rebuildFromExistingEntities();
+    game.services.buildingOverlayManager.rebuildFromExistingEntities(game.services.constructionSiteManager);
 
     console.log(`GameState: Restored ${snapshot.entities.length} entities from snapshot`);
 }
@@ -670,7 +556,13 @@ export function restoreFromSnapshot(game: Game, snapshot: GameStateSnapshot): vo
 export function saveInitialState(game: Game): boolean {
     try {
         const snapshot = createSnapshot(game);
-        localStorage.setItem(INITIAL_STATE_KEY, JSON.stringify(snapshot));
+        // Always keep in-memory copy so reset works even if localStorage is full
+        _cachedInitialSnapshot = snapshot;
+        try {
+            localStorage.setItem(INITIAL_STATE_KEY, JSON.stringify(snapshot));
+        } catch {
+            console.warn('GameState: localStorage full — initial state cached in memory only');
+        }
         console.log(`GameState: Saved initial state with ${snapshot.entities.length} entities`);
         // Cache initial terrain in memory so subsequent auto-saves can store sparse diffs instead of full arrays.
         _cachedInitialGroundType = new Uint8Array(game.terrain.groundType);
@@ -687,12 +579,16 @@ export function saveInitialState(game: Game): boolean {
  * Only returns snapshot if it matches the current map.
  */
 export function loadInitialState(): GameStateSnapshot | null {
+    // Prefer in-memory cache (always available if saveInitialState succeeded)
+    if (_cachedInitialSnapshot && _cachedInitialSnapshot.mapId === currentMapId) {
+        return _cachedInitialSnapshot;
+    }
+
     try {
         const stored = localStorage.getItem(INITIAL_STATE_KEY);
         if (!stored) return null;
 
         const snapshot = JSON.parse(stored) as GameStateSnapshot;
-        // Version check is less strict for initial state - it's from the same session
         if (snapshot.mapId !== currentMapId) {
             console.log(`Initial state is for different map (${snapshot.mapId}), not available`);
             return null;
@@ -706,12 +602,27 @@ export function loadInitialState(): GameStateSnapshot | null {
 }
 
 /**
+ * Restore terrain ground types and heights to the initial map state.
+ * Uses the in-memory cache from saveInitialState.
+ * Emits terrain:modified so renderers refresh.
+ */
+export function restoreInitialTerrain(game: Game): void {
+    if (!_cachedInitialGroundType || !_cachedInitialGroundHeight) {
+        throw new Error('restoreInitialTerrain: no initial terrain cached — saveInitialState must be called first');
+    }
+    game.terrain.groundType.set(_cachedInitialGroundType);
+    game.terrain.groundHeight.set(_cachedInitialGroundHeight);
+    game.eventBus.emit('terrain:modified', {});
+}
+
+/**
  * Clear initial state (called when loading a new map).
  */
 export function clearInitialState(): void {
     localStorage.removeItem(INITIAL_STATE_KEY);
     _cachedInitialGroundType = null;
     _cachedInitialGroundHeight = null;
+    _cachedInitialSnapshot = null;
 }
 
 /**
@@ -779,22 +690,6 @@ class GameStatePersistence {
     /** Clear initial state (call when loading a new map). */
     resetForNewMap(): void {
         clearInitialState();
-    }
-
-    /**
-     * Restore to initial map state (used by reset button).
-     * Returns true if successful, false if no initial state available.
-     */
-    restoreToInitialState(game: Game): boolean {
-        const initialSnapshot = loadInitialState();
-        if (!initialSnapshot) {
-            console.warn('No initial state available for reset');
-            return false;
-        }
-
-        restoreFromSnapshot(game, initialSnapshot);
-        console.log('GameState: Restored to initial map state');
-        return true;
     }
 }
 

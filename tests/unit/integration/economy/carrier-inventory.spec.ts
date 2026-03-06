@@ -1,5 +1,5 @@
 /**
- * Integration tests for carriers, inventory, and service areas.
+ * Integration tests for carriers and inventory.
  *
  * Uses the simulation harness (test-simulation.ts) for proper system wiring.
  * Tests verify that:
@@ -20,34 +20,6 @@ describe('Carriers, Inventory & Service Areas (simulation)', { timeout: 5000 }, 
     afterEach(() => {
         sim?.destroy();
         cleanupSimulation();
-    });
-
-    // ---------------------------------------------------------------------------
-    // Building Creation - Service Areas
-    // ---------------------------------------------------------------------------
-
-    describe('Building Creation - Service Areas', () => {
-        it('should create service area when ResidenceSmall is placed', () => {
-            sim = createSimulation({ useStubData: true });
-            const id = sim.placeBuilding(BuildingType.ResidenceSmall);
-            const serviceArea = sim.services.serviceAreaManager.getServiceArea(id);
-            expect(serviceArea).toBeDefined();
-            expect(serviceArea!.buildingId).toBe(id);
-        });
-
-        it('should NOT create service area for StorageArea', () => {
-            sim = createSimulation({ useStubData: true });
-            const id = sim.placeBuilding(BuildingType.StorageArea);
-            const serviceArea = sim.services.serviceAreaManager.getServiceArea(id);
-            expect(serviceArea).toBeUndefined();
-        });
-
-        it('should NOT create service area for non-logistics buildings', () => {
-            sim = createSimulation({ useStubData: true });
-            const id = sim.placeBuilding(BuildingType.WoodcutterHut);
-            const serviceArea = sim.services.serviceAreaManager.getServiceArea(id);
-            expect(serviceArea).toBeUndefined();
-        });
     });
 
     // ---------------------------------------------------------------------------
@@ -81,15 +53,6 @@ describe('Carriers, Inventory & Service Areas (simulation)', { timeout: 5000 }, 
     // ---------------------------------------------------------------------------
 
     describe('Entity Removal - Cleanup', () => {
-        it('should remove service area when logistics building is removed', () => {
-            sim = createSimulation({ useStubData: true });
-            const id = sim.placeBuilding(BuildingType.ResidenceSmall);
-            expect(sim.services.serviceAreaManager.getServiceArea(id)).toBeDefined();
-
-            sim.state.removeEntity(id);
-            expect(sim.services.serviceAreaManager.getServiceArea(id)).toBeUndefined();
-        });
-
         it('should remove inventory when building is removed', () => {
             sim = createSimulation({ useStubData: true });
             const id = sim.placeBuilding(BuildingType.WoodcutterHut);
@@ -105,13 +68,13 @@ describe('Carriers, Inventory & Service Areas (simulation)', { timeout: 5000 }, 
 
             const carrierId = sim.spawnUnit(30, 30, UnitType.Carrier);
             // Carrier may already be auto-registered by the simulation; ensure it is
-            if (!sim.services.carrierManager.hasCarrier(carrierId)) {
-                sim.services.carrierManager.registerCarrier(carrierId);
+            if (!sim.services.carrierRegistry.has(carrierId)) {
+                sim.services.carrierRegistry.register(carrierId);
             }
-            expect(sim.services.carrierManager.hasCarrier(carrierId)).toBe(true);
+            expect(sim.services.carrierRegistry.has(carrierId)).toBe(true);
 
             sim.state.removeEntity(carrierId);
-            expect(sim.services.carrierManager.hasCarrier(carrierId)).toBe(false);
+            expect(sim.services.carrierRegistry.has(carrierId)).toBe(false);
         });
     });
 
@@ -159,34 +122,23 @@ describe('Carriers, Inventory & Service Areas (simulation)', { timeout: 5000 }, 
         it('should handle complete building lifecycle', () => {
             sim = createSimulation({ useStubData: true });
 
-            // 1. Tavern gets service area
-            const tavernId = sim.placeBuilding(BuildingType.ResidenceSmall);
-            expect(sim.services.serviceAreaManager.getServiceArea(tavernId)).toBeDefined();
-
-            // 2. Woodcutter gets inventory
+            // 1. Woodcutter gets inventory
             const woodcutterId = sim.placeBuilding(BuildingType.WoodcutterHut);
             expect(sim.services.inventoryManager.getInventory(woodcutterId)).toBeDefined();
 
-            // 3. StorageArea does NOT get a service area
-            const storageAreaId = sim.placeBuilding(BuildingType.StorageArea);
-            expect(sim.services.serviceAreaManager.getServiceArea(storageAreaId)).toBeUndefined();
-
-            // 4. Carrier registration
+            // 2. Carrier registration
             const carrierId = sim.spawnUnit(30, 30, UnitType.Carrier);
-            if (!sim.services.carrierManager.hasCarrier(carrierId)) {
-                sim.services.carrierManager.registerCarrier(carrierId);
+            if (!sim.services.carrierRegistry.has(carrierId)) {
+                sim.services.carrierRegistry.register(carrierId);
             }
-            expect(sim.services.carrierManager.hasCarrier(carrierId)).toBe(true);
+            expect(sim.services.carrierRegistry.has(carrierId)).toBe(true);
 
-            // 5. Remove everything - all should clean up
-            sim.state.removeEntity(tavernId);
+            // 3. Remove everything - all should clean up
             sim.state.removeEntity(woodcutterId);
-            sim.state.removeEntity(storageAreaId);
             sim.state.removeEntity(carrierId);
 
-            expect(sim.services.serviceAreaManager.getServiceArea(tavernId)).toBeUndefined();
             expect(sim.services.inventoryManager.getInventory(woodcutterId)).toBeUndefined();
-            expect(sim.services.carrierManager.hasCarrier(carrierId)).toBe(false);
+            expect(sim.services.carrierRegistry.has(carrierId)).toBe(false);
         });
     });
 });

@@ -128,15 +128,6 @@ export interface GameEvents {
     /** Emitted when a carrier is removed from the system */
     'carrier:removed': {
         entityId: number;
-        /** True if carrier was removed while on a job */
-        hadActiveJob: boolean;
-    };
-
-    /** Emitted when a carrier's status changes */
-    'carrier:statusChanged': {
-        entityId: number;
-        previousStatus: number;
-        newStatus: number;
     };
 
     /** Emitted when a carrier arrives at a building for pickup */
@@ -528,9 +519,38 @@ export interface GameEvents {
         buildingId: number;
         reason: 'carrier_killed';
     };
+
+    // === Auto-Recruit Events ===
+
+    /** Emitted when a carrier is dispatched to pick up a tool for recruitment. */
+    'recruitment:started': {
+        carrierId: number;
+        targetUnitType: UnitType;
+        pileEntityId: number;
+        siteId: number;
+    };
+
+    /** Emitted when a carrier completes tool pickup and is ready for transformation. */
+    'recruitment:completed': {
+        carrierId: number;
+        targetUnitType: UnitType;
+    };
+
+    /** Emitted when a recruitment fails (pile gone, path blocked, etc.). */
+    'recruitment:failed': {
+        carrierId: number;
+        reason: string;
+    };
+
+    /** Emitted when a carrier is transformed into a different unit type. */
+    'unit:transformed': {
+        entityId: number;
+        fromType: UnitType;
+        toType: UnitType;
+    };
 }
 
-type EventHandler<T> = (payload: T) => void;
+export type EventHandler<T> = (payload: T) => void;
 
 const log = new LogHandler('EventBus');
 

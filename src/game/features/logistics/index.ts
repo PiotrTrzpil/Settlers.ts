@@ -7,7 +7,7 @@
  * - Resource requests: Buildings request materials they need
  * - Resource supply discovery: Finding buildings with available materials
  * - Request management: Tracking pending/in-progress/fulfilled requests
- * - Fulfillment matching: Matching requests to supplies within service areas
+ * - Fulfillment matching: Matching requests to supplies by distance
  *
  * Usage:
  * ```typescript
@@ -26,7 +26,7 @@
  * );
  *
  * // Find a supply to fulfill it
- * const match = matchRequestToSupply(request, gameState, serviceAreaManager);
+ * const match = matchRequestToSupply(request, gameState, inventoryManager);
  * if (match) {
  *   // Assign a carrier to pick up from match.sourceBuilding
  * }
@@ -49,7 +49,6 @@ export {
     type ResourceSupply,
     type SupplySearchOptions,
     getAvailableSupplies,
-    getSuppliesInServiceArea,
     hasAnySupply,
     getTotalSupply,
 } from './resource-supply';
@@ -78,8 +77,10 @@ export {
     diagnoseUnfulfilledRequest,
 } from './fulfillment-diagnostics';
 
-// Transport job (owns reservation + request lifecycle for a single delivery)
-export { TransportJob, type TransportJobDeps, type TransportJobStatus } from './transport-job';
+// Transport job record + service (flat data + stateless lifecycle)
+export { TransportPhase, type TransportJobRecord } from './transport-job-record';
+export * as TransportJobService from './transport-job-service';
+export type { TransportJobDeps } from './transport-job-service';
 
 // Request matcher (supply matching with territory filtering)
 export { RequestMatcher, type RequestMatcherConfig, type RequestMatchResult } from './request-matcher';
@@ -114,3 +115,4 @@ export type { LogisticsMatchFilter, CarrierFilter } from './logistics-filter';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { RequestManagerFeature, type RequestManagerExports } from './request-manager-feature';
+export { LogisticsDispatcherFeature, type LogisticsDispatcherExports } from './logistics-dispatcher-feature';

@@ -11,4 +11,7 @@ export {
     type PositionWorkHandler,
     type WorkHandler,
 } from './types';
-export type { ChoreoContext, ChoreoJobState } from './choreo-types';
+export type { ChoreoJobState } from './choreo-types';
+
+// Feature definition (self-registering via FeatureRegistry)
+export { SettlerTaskFeature, type SettlerTaskExports } from './settler-tasks-feature';

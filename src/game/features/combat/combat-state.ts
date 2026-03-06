@@ -38,14 +38,14 @@ export interface CombatStats {
 
 /** Base combat stats per military unit type (L1 base type) */
 const COMBAT_STATS: Partial<Record<UnitType, CombatStats>> = {
-    [UnitType.Swordsman]: { maxHealth: 100, attackPower: 15, attackCooldown: 1.5 },
-    [UnitType.Bowman]: { maxHealth: 80, attackPower: 12, attackCooldown: 2.0 },
+    [UnitType.Swordsman1]: { maxHealth: 100, attackPower: 15, attackCooldown: 1.5 },
+    [UnitType.Bowman1]: { maxHealth: 80, attackPower: 12, attackCooldown: 2.0 },
     [UnitType.SquadLeader]: { maxHealth: 120, attackPower: 18, attackCooldown: 1.5 },
-    [UnitType.Medic]: { maxHealth: 60, attackPower: 5, attackCooldown: 2.0 },
+    [UnitType.Medic1]: { maxHealth: 60, attackPower: 5, attackCooldown: 2.0 },
     [UnitType.Healer]: { maxHealth: 60, attackPower: 5, attackCooldown: 2.0 },
-    [UnitType.AxeWarrior]: { maxHealth: 100, attackPower: 16, attackCooldown: 1.4 },
-    [UnitType.BlowgunWarrior]: { maxHealth: 70, attackPower: 10, attackCooldown: 1.8 },
-    [UnitType.BackpackCatapultist]: { maxHealth: 80, attackPower: 20, attackCooldown: 2.5 },
+    [UnitType.AxeWarrior1]: { maxHealth: 100, attackPower: 16, attackCooldown: 1.4 },
+    [UnitType.BlowgunWarrior1]: { maxHealth: 70, attackPower: 10, attackCooldown: 1.8 },
+    [UnitType.BackpackCatapultist1]: { maxHealth: 80, attackPower: 20, attackCooldown: 2.5 },
 };
 
 /** Level multipliers for combat stats: [L1, L2, L3] */

@@ -5,7 +5,7 @@
  */
 
 import type { IViewPoint } from '../i-view-point';
-import type { IRenderPass, PassContext } from './types';
+import type { IRenderPass, PlacementPreviewContext } from './types';
 import { TilePicker } from '@/game/input/tile-picker';
 import { TILE_CENTER_X, TILE_CENTER_Y } from '@/game/systems/coordinate-system';
 import { PALETTE_TEXTURE_WIDTH } from '../palette-texture';
@@ -19,11 +19,11 @@ import {
 import { TINT_PREVIEW_VALID, TINT_PREVIEW_INVALID } from '../tint-utils';
 
 export class PlacementPreviewPass implements IRenderPass {
-    private ctx!: PassContext;
+    private ctx!: PlacementPreviewContext;
 
     private readonly vertexData = new Float32Array(6 * 2);
 
-    public prepare(ctx: PassContext): void {
+    public prepare(ctx: PlacementPreviewContext): void {
         this.ctx = ctx;
     }
 

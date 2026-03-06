@@ -1,4 +1,20 @@
-export type { IRenderPass, PassContext, SelectionPassContext } from './types';
+export type {
+    IRenderPass,
+    PassContext,
+    SpatialPassData,
+    ColorShaderPassData,
+    SpritePassData,
+    EntityFramePassData,
+    PathIndicatorContext,
+    GroundOverlayContext,
+    TerritoryDotContext,
+    EntitySpriteContext,
+    TransitionBlendContext,
+    ColorEntityContext,
+    SelectionContext,
+    StackGhostContext,
+    PlacementPreviewContext,
+} from './types';
 export { PathIndicatorPass } from './path-indicator-pass';
 export { GroundOverlayPass } from './ground-overlay-pass';
 export { TerritoryDotPass } from './territory-dot-pass';

@@ -183,12 +183,14 @@ export abstract class GrowableSystem<TState extends GrowableState = GrowableStat
 
     /** Find an empty tile near (cx, cy) that respects spacing constraints */
     findPlantingSpot(cx: number, cy: number, radius?: number): { x: number; y: number } | null {
+        const searchRadius = radius ?? this.config.plantingSearchRadius;
         return findEmptySpot(cx, cy, {
             gameState: this.gameState,
-            searchRadius: radius ?? this.config.plantingSearchRadius,
+            searchRadius,
             minDistanceSq: this.config.minDistanceSq,
             requireFreeNeighbors: this.config.requireFreeNeighbors,
             rng: this.gameState.rng,
+            proximityEntities: [...this.gameState.spatialIndex.nearby(cx, cy, searchRadius * 2)],
             proximityFilter: entity =>
                 entity.type === EntityType.MapObject &&
                 OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType] === this.config.objectCategory,

@@ -33,10 +33,11 @@ export function* ringTiles(cx: number, cy: number, radius: number): Generator<{ 
 
 /**
  * Find the nearest entity matching a filter within a search radius.
- * Works for any entity type — the caller's filter controls type/subtype checks.
+ *
+ * @param entities Candidate entities to search (e.g. from `gameState.entityIndex`).
  */
 export function findNearestEntity(
-    gameState: GameState,
+    entities: Iterable<Entity>,
     x: number,
     y: number,
     radius: number,
@@ -46,19 +47,16 @@ export function findNearestEntity(
     let minDistSq = Infinity;
     const radiusSq = radius * radius;
 
-    for (const entity of gameState.entities) {
+    for (const entity of entities) {
         if (!filter(entity)) continue;
-
         const dx = entity.x - x;
         const dy = entity.y - y;
         const distSq = dx * dx + dy * dy;
-
         if (distSq < radiusSq && distSq < minDistSq) {
             minDistSq = distSq;
             nearest = { entityId: entity.id, x: entity.x, y: entity.y };
         }
     }
-
     return nearest;
 }
 
@@ -81,6 +79,11 @@ export interface FindEmptySpotConfig {
     minDistanceSq: number;
     /** Filter for entities that count as "too close". Only checked when minDistanceSq > 0. */
     proximityFilter: (entity: Entity) => boolean;
+    /**
+     * Pre-filtered entity iterable for proximity checks (e.g. from SpatialGrid.nearby).
+     * Falls back to gameState.entities when not provided.
+     */
+    proximityEntities?: Iterable<Entity>;
     /** If true, all 4 cardinal neighbors must also be free (no entity occupying them). */
     requireFreeNeighbors?: boolean;
     /** When provided, tiles within each ring are shuffled for natural-looking placement. */
@@ -100,7 +103,13 @@ function isValidSpot(tile: { x: number; y: number }, config: FindEmptySpotConfig
     if (config.requireFreeNeighbors && !hasFreNeighbors(config.gameState, tile.x, tile.y)) return false;
     if (
         config.minDistanceSq > 0 &&
-        isTooClose(config.gameState, tile.x, tile.y, config.minDistanceSq, config.proximityFilter)
+        isTooClose(
+            config.proximityEntities ?? config.gameState.entities,
+            tile.x,
+            tile.y,
+            config.minDistanceSq,
+            config.proximityFilter
+        )
     )
         return false;
     return true;
@@ -142,13 +151,13 @@ export function findEmptySpot(
 }
 
 function isTooClose(
-    gameState: GameState,
+    entities: Iterable<Entity>,
     x: number,
     y: number,
     minDistanceSq: number,
     filter: (entity: Entity) => boolean
 ): boolean {
-    for (const entity of gameState.entities) {
+    for (const entity of entities) {
         if (!filter(entity)) continue;
 
         const dx = entity.x - x;

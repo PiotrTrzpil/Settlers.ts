@@ -8,11 +8,17 @@
 import type { Entity } from '../../../entity';
 import { UnitType, getUnitTypeAtLevel } from '../../../entity';
 import { ringTiles } from '../../../systems/spatial-search';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
-import { framesToSeconds, type ChoreoJobState, type ChoreoNode, type ChoreoContext } from '../choreo-types';
+import {
+    framesToSeconds,
+    tickDuration,
+    type ChoreoJobState,
+    type ChoreoNode,
+    type ControlContext,
+} from '../choreo-types';
 
-const log = new LogHandler('ControlExecutors');
+const log = createLogger('ControlExecutors');
 
 // ─────────────────────────────────────────────────────────────
 // Wait executors
@@ -29,37 +35,10 @@ export function executeWait(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    _ctx: ChoreoContext
+    _ctx: ControlContext
 ): TaskResult {
-    if (node.duration <= 0) {
-        return TaskResult.DONE;
-    }
-
-    const durationSeconds = framesToSeconds(node.duration);
-    job.progress += dt / durationSeconds;
-
-    if (job.progress >= 1) {
-        return TaskResult.DONE;
-    }
-
-    return TaskResult.CONTINUE;
-}
-
-/**
- * Virtual wait — same timer logic as WAIT but the settler is invisible.
- *
- * Marks `job.visible = false` so the rendering layer hides the settler
- * for the duration of this node.
- */
-export function executeWaitVirtual(
-    settler: Entity,
-    job: ChoreoJobState,
-    node: ChoreoNode,
-    dt: number,
-    ctx: ChoreoContext
-): TaskResult {
-    job.visible = false;
-    return executeWait(settler, job, node, dt, ctx);
+    if (node.duration <= 0) return TaskResult.DONE;
+    return tickDuration(job, dt, framesToSeconds(node.duration));
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -78,7 +57,7 @@ export function executeCheckin(
     job: ChoreoJobState,
     _node: ChoreoNode,
     _dt: number,
-    _ctx: ChoreoContext
+    _ctx: ControlContext
 ): TaskResult {
     job.visible = false;
     return TaskResult.DONE;
@@ -96,7 +75,7 @@ export function executeChangeJob(
     job: ChoreoJobState,
     node: ChoreoNode,
     _dt: number,
-    _ctx: ChoreoContext
+    _ctx: ControlContext
 ): TaskResult {
     const newJobId = node.entity;
     if (!newJobId) {
@@ -112,21 +91,6 @@ export function executeChangeJob(
     job.workStarted = false;
 
     return TaskResult.DONE;
-}
-
-/**
- * Switch to a different job ID, intending for the new job to handle movement to
- * the workplace. Functionally identical to CHANGE_JOB — the movement is handled
- * by the first nodes of the new job definition.
- */
-export function executeChangeJobComeToWork(
-    settler: Entity,
-    job: ChoreoJobState,
-    node: ChoreoNode,
-    dt: number,
-    ctx: ChoreoContext
-): TaskResult {
-    return executeChangeJob(settler, job, node, dt, ctx);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -146,7 +110,7 @@ export function executeChangeTypeAtBarracks(
     _job: ChoreoJobState,
     _node: ChoreoNode,
     _dt: number,
-    ctx: ChoreoContext
+    ctx: ControlContext
 ): TaskResult {
     const training = ctx.barracksTrainingManager?.getTrainingForCarrier(settler.id);
     if (!training) {
@@ -173,7 +137,7 @@ export function executeChangeTypeAtBarracks(
         return TaskResult.DONE;
     }
 
-    const spawnResult = ctx.executeCommand({
+    const spawnResult = ctx.executeCommand!({
         type: 'spawn_unit',
         unitType,
         x: spawnPos.x,
@@ -189,8 +153,8 @@ export function executeChangeTypeAtBarracks(
     const firstEffect = spawnResult.effects?.[0];
     const soldierId = firstEffect?.type === 'unit_spawned' ? firstEffect.entityId : 0;
 
-    // Remove the carrier after spawning. CarrierManager cleanup happens via entity:removed event.
-    ctx.executeCommand({ type: 'remove_entity', entityId: settler.id });
+    // Remove the carrier after spawning. Carrier cleanup happens via entity:removed event.
+    ctx.executeCommand!({ type: 'remove_entity', entityId: settler.id });
 
     // Notify manager to clear training state and emit completion event
     ctx.barracksTrainingManager!.completeTraining(buildingId);
@@ -223,7 +187,7 @@ export function executeHealEntity(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: ChoreoContext
+    ctx: ControlContext
 ): TaskResult {
     if (job.targetId === null) {
         log.debug(`executeHealEntity: settler ${settler.id} has no target`);
@@ -238,16 +202,13 @@ export function executeHealEntity(
     }
 
     const duration = node.duration > 0 ? framesToSeconds(node.duration) : 2.0;
-    job.progress += dt / duration;
-
-    if (job.progress >= 1) {
+    const result = tickDuration(job, dt, duration);
+    if (result === TaskResult.DONE) {
         log.warn(
             `executeHealEntity: settler ${settler.id} finished healing target ${job.targetId} — HP mutation not implemented, heal skipped`
         );
-        return TaskResult.DONE;
     }
-
-    return TaskResult.CONTINUE;
+    return result;
 }
 
 /**
@@ -262,17 +223,14 @@ export function executeAttackReaction(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    _ctx: ChoreoContext
+    _ctx: ControlContext
 ): TaskResult {
     const duration = node.duration > 0 ? framesToSeconds(node.duration) : 0.5;
-    job.progress += dt / duration;
-
-    if (job.progress >= 1) {
+    const result = tickDuration(job, dt, duration);
+    if (result === TaskResult.DONE) {
         log.warn(
             `executeAttackReaction: settler ${settler.id} completed reaction — combat logic not implemented, reaction skipped`
         );
-        return TaskResult.DONE;
     }
-
-    return TaskResult.CONTINUE;
+    return result;
 }

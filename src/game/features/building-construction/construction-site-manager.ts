@@ -13,14 +13,17 @@
  * ConstructionSite record via getSiteOrThrow() — no dedicated accessor methods needed.
  */
 
-import type { BuildingType } from '../../buildings/types';
+import { getBuildingFootprint, type BuildingType } from '../../buildings/types';
 import type { Race } from '../../race';
 import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionCost } from '../../economy/building-production';
 import { getConstructionCosts } from '../../economy/building-production';
 import type { EventBus } from '../../event-bus';
 import { getBuildingInfo } from '../../game-data-access';
+import type { SeededRng } from '../../rng';
+import { type ComponentStore, mapStore } from '../../ecs';
 import { BuildingConstructionPhase, type CapturedTerrainTile, type ConstructionSite } from './types';
+import type { Persistable } from '@/game/persistence';
 
 // ── Serialization types ──
 
@@ -59,6 +62,17 @@ function getWorkerCount(buildingType: BuildingType, race: Race): number {
     return info ? info.builderNumber : DEFAULT_WORKER_COUNT;
 }
 
+/** Pick a random element from a Set using the given RNG. Caller must ensure the set is non-empty. */
+function randomFromSet(set: Set<number>, rng: SeededRng): number {
+    const idx = rng.nextInt(set.size);
+    let i = 0;
+    for (const val of set) {
+        if (i === idx) return val;
+        i++;
+    }
+    return set.values().next().value!; // unreachable, satisfies TS
+}
+
 // ── ConstructionSiteManager ──
 
 /**
@@ -68,12 +82,19 @@ function getWorkerCount(buildingType: BuildingType, race: Race): number {
  * by `removeSite` when construction finishes or is cancelled. Internal methods
  * that require the site to exist throw with context rather than returning silently.
  */
-export class ConstructionSiteManager {
+export class ConstructionSiteManager implements Persistable<SerializedConstructionSite[]> {
+    readonly persistKey = 'constructionSites' as const;
     private readonly sites = new Map<number, ConstructionSite>();
-    private readonly eventBus: EventBus;
 
-    constructor(eventBus: EventBus) {
+    /** Uniform read-only view for cross-cutting queries */
+    readonly store: ComponentStore<ConstructionSite> = mapStore(this.sites);
+
+    private readonly eventBus: EventBus;
+    private readonly rng: SeededRng;
+
+    constructor(eventBus: EventBus, rng: SeededRng) {
         this.eventBus = eventBus;
+        this.rng = rng;
     }
 
     // ── Private helpers ──
@@ -250,20 +271,20 @@ export class ConstructionSiteManager {
     }
 
     /**
-     * Get the position of the next unleveled tile for a digger to walk to.
+     * Get the position of a random unleveled tile for a digger to walk to.
      * Returns null if no tiles remain (leveling complete).
      * Does NOT remove the tile from the set — that happens in completeNextTile.
      */
     getNextUnleveledTilePos(buildingId: number): { x: number; y: number } | null {
         const site = this.getSiteOrThrow(buildingId, 'getNextUnleveledTilePos');
         if (!site.terrain.unleveledTiles || site.terrain.unleveledTiles.size === 0) return null;
-        const tileIndex = site.terrain.unleveledTiles.values().next().value!;
+        const tileIndex = randomFromSet(site.terrain.unleveledTiles, this.rng);
         const tile = site.terrain.originalTerrain!.tiles[tileIndex]!;
         return { x: tile.x, y: tile.y };
     }
 
     /**
-     * Complete leveling for the next unleveled tile.
+     * Complete leveling for a random unleveled tile.
      * Removes it from the set, emits construction:tileCompleted with tile data,
      * updates terrain.progress, and emits construction:levelingComplete when done.
      * Returns the completed tile data, or null if no tiles remain.
@@ -272,7 +293,7 @@ export class ConstructionSiteManager {
         const site = this.getSiteOrThrow(buildingId, 'completeNextTile');
         if (!site.terrain.unleveledTiles || site.terrain.unleveledTiles.size === 0) return null;
 
-        const tileIndex = site.terrain.unleveledTiles.values().next().value!;
+        const tileIndex = randomFromSet(site.terrain.unleveledTiles, this.rng);
         site.terrain.unleveledTiles.delete(tileIndex);
 
         const tile = site.terrain.originalTerrain!.tiles[tileIndex]!;
@@ -327,6 +348,26 @@ export class ConstructionSiteManager {
         const site = this.getSiteOrThrow(buildingId, 'releaseBuilderSlot');
         site.building.slots.assigned.delete(builderId);
         this.eventBus.emit('construction:workerReleased', { buildingId, workerId: builderId, role: 'builder' });
+    }
+
+    /**
+     * Get a random position along the lower border of the building footprint.
+     * Builders walk to a random tile on the highest-Y row of the footprint each work cycle.
+     */
+    getRandomBuilderWorkPos(buildingId: number): { x: number; y: number } {
+        const site = this.getSiteOrThrow(buildingId, 'getRandomBuilderWorkPos');
+        const footprint = getBuildingFootprint(site.tileX, site.tileY, site.buildingType, site.race);
+
+        // Find the maximum Y (lower border)
+        let maxY = -Infinity;
+        for (const tile of footprint) {
+            if (tile.y > maxY) maxY = tile.y;
+        }
+
+        // Collect all tiles on the lower border
+        const lowerBorder = footprint.filter(t => t.y === maxY);
+        const picked = lowerBorder[this.rng.nextInt(lowerBorder.length)]!;
+        return { x: picked.x, y: picked.y };
     }
 
     /**
@@ -468,6 +509,18 @@ export class ConstructionSiteManager {
             });
         }
         return result;
+    }
+
+    // ── Persistable implementation ──
+
+    serialize(): SerializedConstructionSite[] {
+        return this.serializeSites();
+    }
+
+    deserialize(data: SerializedConstructionSite[]): void {
+        for (const site of data) {
+            this.restoreSite(site);
+        }
     }
 
     /**

@@ -7,8 +7,6 @@
 
 import { EMaterialType } from '../../economy/material-type';
 import type { GameState } from '../../game-state';
-import type { ServiceAreaManager } from '../service-areas/service-area-manager';
-import { getBuildingsInServiceArea } from '../service-areas/service-area-queries';
 import type { BuildingInventoryManager } from '../inventory';
 
 /**
@@ -27,10 +25,8 @@ export interface ResourceSupply {
  * Options for filtering supply searches.
  */
 export interface SupplySearchOptions {
-    /** Only search within service areas of this player */
+    /** Only search within buildings owned by this player */
     playerId?: number;
-    /** Only search within buildings in this service area (building ID) */
-    serviceAreaBuildingId?: number;
     /** Minimum amount required */
     minAmount?: number;
 }
@@ -65,53 +61,6 @@ export function getAvailableSupplies(
             }
         }
 
-        const amount = inventoryManager.getOutputAmount(buildingId, materialType);
-        if (amount >= minAmount) {
-            supplies.push({
-                buildingId,
-                materialType,
-                availableAmount: amount,
-            });
-        }
-    }
-
-    return supplies;
-}
-
-/**
- * Find supplies within a specific service area.
- *
- * @param gameState The game state
- * @param inventoryManager The inventory manager for building inventories
- * @param materialType Type of material to search for
- * @param serviceAreaManager Service area manager
- * @param serviceAreaBuildingId Building ID of the service area to search within
- * @param options Additional search filters
- * @returns Array of ResourceSupply objects
- */
-export function getSuppliesInServiceArea(
-    gameState: GameState,
-    inventoryManager: BuildingInventoryManager,
-    materialType: EMaterialType,
-    serviceAreaManager: ServiceAreaManager,
-    serviceAreaBuildingId: number,
-    options: SupplySearchOptions = {}
-): ResourceSupply[] {
-    const { playerId, minAmount = 1 } = options;
-    const serviceArea = serviceAreaManager.getServiceArea(serviceAreaBuildingId);
-
-    if (!serviceArea) {
-        return [];
-    }
-
-    // Get buildings in this service area
-    const buildingsInArea = getBuildingsInServiceArea(serviceArea, gameState, {
-        playerId,
-    });
-
-    const supplies: ResourceSupply[] = [];
-
-    for (const buildingId of buildingsInArea) {
         const amount = inventoryManager.getOutputAmount(buildingId, materialType);
         if (amount >= minAmount) {
             supplies.push({

@@ -22,12 +22,8 @@ const DARK_TRIBE_EXCLUSIVE_BASE: ReadonlySet<UnitType> = new Set([
     UnitType.Shaman,
     UnitType.MushroomFarmer,
     UnitType.SlavedSettler,
-    UnitType.Angel,
     UnitType.ManacopterMaster,
 ]);
-
-/** Standard military base types that Dark Tribe does NOT have. */
-const STANDARD_ONLY_BASE: ReadonlySet<UnitType> = new Set([UnitType.SquadLeader]);
 
 /** Exact (non-base) unit types that Dark Tribe does not have — L2/L3 military missing from 23.jil. */
 const DARK_TRIBE_EXCLUDED_EXACT: ReadonlySet<UnitType> = new Set([
@@ -38,15 +34,30 @@ const DARK_TRIBE_EXCLUDED_EXACT: ReadonlySet<UnitType> = new Set([
 ]);
 
 /**
+ * Race-specific economy worker units — each race has unique drink/food production workers
+ * whose sprites only exist in that race's settler GFX file.
+ * Workers NOT listed here are shared by all non-Dark-Tribe races.
+ */
+const WORKER_UNIT_RACE: Partial<Record<UnitType, readonly Race[]>> = {
+    [UnitType.Winemaker]: [Race.Roman],
+    [UnitType.Beekeeper]: [Race.Viking],
+    [UnitType.Meadmaker]: [Race.Viking],
+    [UnitType.AgaveFarmer]: [Race.Mayan],
+    [UnitType.Tequilamaker]: [Race.Mayan],
+    [UnitType.SunflowerFarmer]: [Race.Trojan],
+    [UnitType.SunflowerOilMaker]: [Race.Trojan],
+};
+
+/**
  * Race-specific specialist units — each race has one specialist type that uses the
  * same JIL indices (254/258/262) but with different art in each race's GFX file.
  * Maps base UnitType → Race. Level variants are resolved via getBaseUnitType().
  */
 export const SPECIALIST_UNIT_RACE: ReadonlyMap<UnitType, Race> = new Map([
-    [UnitType.Medic, Race.Roman],
-    [UnitType.AxeWarrior, Race.Viking],
-    [UnitType.BlowgunWarrior, Race.Mayan],
-    [UnitType.BackpackCatapultist, Race.Trojan],
+    [UnitType.Medic1, Race.Roman],
+    [UnitType.AxeWarrior1, Race.Viking],
+    [UnitType.BlowgunWarrior1, Race.Mayan],
+    [UnitType.BackpackCatapultist1, Race.Trojan],
 ]);
 
 /** The only buildings Dark Tribe can construct. */
@@ -105,17 +116,22 @@ export function isMaterialAvailableForRace(materialType: EMaterialType, race: Ra
 export function isUnitAvailableForRace(unitType: UnitType, race: Race): boolean {
     const base = getBaseUnitType(unitType);
     if (race === Race.DarkTribe) {
-        // DarkTribe uses the same job indices as standard races (23.jil has DarkTribe-specific
-        // sprites at identical offsets), but some standard units don't exist for Dark Tribe.
-        return (
-            !STANDARD_ONLY_BASE.has(base) && !SPECIALIST_UNIT_RACE.has(base) && !DARK_TRIBE_EXCLUDED_EXACT.has(unitType)
-        );
+        // Dark Tribe has their exclusive units, Angels, plus basic L1 military (swordsman, bowman)
+        if (DARK_TRIBE_EXCLUSIVE_BASE.has(base)) return true;
+        if (base === UnitType.Angel) return true;
+        if (base === UnitType.Swordsman1 || base === UnitType.Bowman1) {
+            return !DARK_TRIBE_EXCLUDED_EXACT.has(unitType);
+        }
+        return false;
     }
     // Dark Tribe exclusive units not available to other races.
     if (DARK_TRIBE_EXCLUSIVE_BASE.has(base)) return false;
     // Race-specific specialists: only available for their designated race.
     const specialistRace = SPECIALIST_UNIT_RACE.get(base);
     if (specialistRace !== undefined) return specialistRace === race;
+    // Race-specific economy workers: only available for their designated races.
+    const workerRaces = WORKER_UNIT_RACE[unitType];
+    if (workerRaces) return workerRaces.includes(race);
     return true;
 }
 

@@ -14,6 +14,9 @@ import { SeededRng, createGameRng } from './rng';
 import { EventBus } from './event-bus';
 import { SelectionManager } from './selection-manager';
 import { StackedPileManager } from './stacked-pile-manager';
+import { type ComponentStore, mapStore } from './ecs';
+import { EntityIndex } from './entity-index';
+import type { SpatialGrid } from './spatial-grid';
 
 /**
  * Legacy UnitState interface for backward compatibility.
@@ -124,6 +127,28 @@ function resolveEntitySelectable(type: EntityType, subType: number): boolean | u
     }
 }
 
+/** Options for addEntity — all optional, with sensible defaults. */
+export interface AddEntityOptions {
+    selectable?: boolean;
+    variation?: number;
+    race?: Race;
+    /** Set false to skip tile occupancy (visual-only entities). Defaults to true. */
+    occupancy?: boolean;
+}
+
+/** Options for addUnit. Race is validated at runtime (throws if missing). */
+export interface AddUnitOptions {
+    race?: Race;
+    selectable?: boolean;
+    /** Set false to skip tile occupancy (visual-only entities). Defaults to true. */
+    occupancy?: boolean;
+}
+
+/** Options for addBuilding. Race is validated at runtime (throws if missing). */
+export interface AddBuildingOptions {
+    race?: Race;
+}
+
 /**
  * Core entity store and spatial index.
  *
@@ -141,6 +166,15 @@ export class GameState {
     public entities: Entity[] = [];
     /** O(1) entity lookup by ID */
     private entityMap: Map<number, Entity> = new Map();
+
+    /** Uniform read-only view for cross-cutting queries */
+    readonly store: ComponentStore<Entity> = mapStore(this.entityMap);
+
+    /** Fast lookup by entity type and player — maintained on add/remove. */
+    public readonly entityIndex = new EntityIndex(id => this.entityMap.get(id));
+
+    /** Spatial hash with territory-aware cell states — set via initSpatialIndex() */
+    public spatialIndex!: SpatialGrid;
 
     /** Movement system for all units — set by GameServices before adding entities */
     public movement!: MovementSystem;
@@ -168,6 +202,9 @@ export class GameState {
     /** All building footprint tiles (including door corridors) — used for placement gap check */
     public buildingFootprint: Set<string> = new Set();
 
+    /** Per-player race mapping (player index → Race). Set via setPlayerRaces() before adding entities. */
+    public playerRaces: ReadonlyMap<number, Race> = new Map();
+
     /** Event bus for entity lifecycle events */
     private readonly eventBus: EventBus;
 
@@ -188,6 +225,15 @@ export class GameState {
     }
 
     /**
+     * Initialize the spatial index for map objects and stacked piles.
+     * Called by the TerritoryFeature after terrain data and getOwner are available.
+     */
+    public initSpatialIndex(spatialIndex: SpatialGrid): void {
+        this.spatialIndex = spatialIndex;
+        this.piles.initSpatialIndex(spatialIndex);
+    }
+
+    /**
      * Add an entity to the game state.
      * Selectability rules:
      * - Units: determined by UnitCategory (Military and Religious are selectable)
@@ -202,10 +248,14 @@ export class GameState {
         x: number,
         y: number,
         player: number,
-        selectable?: boolean,
-        variation?: number,
-        race?: Race
+        opts?: AddEntityOptions
     ): Entity {
+        const selectable = opts?.selectable;
+        const variation = opts?.variation;
+        const occupancy = opts?.occupancy ?? true;
+
+        // Resolve race: explicit opt > player lookup > fallback for non-unit/building types
+        const race = opts?.race ?? this.playerRaces.get(player);
         if (type === EntityType.Building && race === undefined) {
             throw new Error(
                 `addEntity: race is required for buildings (BuildingType ${BuildingType[subType as BuildingType]})`
@@ -231,28 +281,10 @@ export class GameState {
 
         this.entities.push(entity);
         this.entityMap.set(entity.id, entity);
+        this.entityIndex.add(entity.id, type, player);
 
-        // Add occupancy for all tiles in the entity's footprint.
-        // Decoration entities (flags, signs) are visual-only — no tile occupancy.
-        if (type === EntityType.Decoration) {
-            // no-op: decorations don't occupy tiles
-        } else if (type === EntityType.Building) {
-            const footprint = getBuildingFootprint(x, y, subType as BuildingType, entity.race);
-            const passableKeys = getBuildingDoorCorridor(x, y, subType as BuildingType, entity.race, footprint);
-            for (const tile of footprint) {
-                const key = tileKey(tile.x, tile.y);
-                this.tileOccupancy.set(key, entity.id);
-                this.buildingFootprint.add(key);
-                if (!passableKeys.has(key)) {
-                    this.buildingOccupancy.add(key);
-                } else {
-                    // Corridor tile: ensure it's passable even if a previously-placed
-                    // building's footprint added it to buildingOccupancy.
-                    this.buildingOccupancy.delete(key);
-                }
-            }
-        } else {
-            this.tileOccupancy.set(tileKey(x, y), entity.id);
+        if (occupancy) {
+            this.addSpatialAndOccupancy(entity, type, subType, x, y);
         }
 
         // Emit generic lifecycle event — subscribers handle type-specific initialization
@@ -270,14 +302,49 @@ export class GameState {
         return entity;
     }
 
-    /** Spawn a unit with a required race. */
-    public addUnit(unitType: UnitType, x: number, y: number, player: number, race: Race, selectable?: boolean): Entity {
-        return this.addEntity(EntityType.Unit, unitType, x, y, player, selectable, undefined, race);
+    /** Add entity to spatial index and tile occupancy maps. */
+    private addSpatialAndOccupancy(entity: Entity, type: EntityType, subType: number, x: number, y: number): void {
+        // Add to spatial grid for map objects and stacked piles
+        if (type === EntityType.MapObject || type === EntityType.StackedPile) {
+            this.spatialIndex.add(entity.id, x, y);
+        }
+
+        // Add occupancy for all tiles in the entity's footprint.
+        // Decoration entities (flags, signs) are visual-only — no tile occupancy.
+        if (type === EntityType.Decoration) {
+            // no-op: decorations don't occupy tiles
+        } else if (type === EntityType.Building) {
+            const footprint = getBuildingFootprint(x, y, subType as BuildingType, entity.race);
+            const passableKeys = getBuildingDoorCorridor(x, y, subType as BuildingType, entity.race, footprint);
+            for (const tile of footprint) {
+                const key = tileKey(tile.x, tile.y);
+                this.tileOccupancy.set(key, entity.id);
+                this.buildingFootprint.add(key);
+                if (!passableKeys.has(key)) {
+                    this.buildingOccupancy.add(key);
+                } else {
+                    this.buildingOccupancy.delete(key);
+                }
+            }
+        } else {
+            this.tileOccupancy.set(tileKey(x, y), entity.id);
+        }
     }
 
-    /** Place a building with a required race. */
-    public addBuilding(buildingType: BuildingType, x: number, y: number, player: number, race: Race): Entity {
-        return this.addEntity(EntityType.Building, buildingType, x, y, player, undefined, undefined, race);
+    /** Spawn a unit. Race is required (throws if missing). */
+    public addUnit(unitType: UnitType, x: number, y: number, player: number, opts?: AddUnitOptions): Entity {
+        return this.addEntity(EntityType.Unit, unitType, x, y, player, opts);
+    }
+
+    /** Place a building. Race is required (throws if missing). */
+    public addBuilding(
+        buildingType: BuildingType,
+        x: number,
+        y: number,
+        player: number,
+        opts?: AddBuildingOptions
+    ): Entity {
+        return this.addEntity(EntityType.Building, buildingType, x, y, player, opts);
     }
 
     /**
@@ -325,7 +392,13 @@ export class GameState {
             this.entities.splice(index, 1);
         }
 
+        // Remove from spatial grid before index removal
+        if (entity.type === EntityType.MapObject || entity.type === EntityType.StackedPile) {
+            this.spatialIndex.remove(id);
+        }
+
         this.entityMap.delete(id);
+        this.entityIndex.remove(id, entity.type, entity.player);
 
         // Remove occupancy for all tiles in the entity's footprint
         if (entity.type === EntityType.Building) {

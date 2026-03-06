@@ -53,6 +53,7 @@ export async function loadGilManifest(manifest: GilSpriteManifest, ctx: SpriteLo
 
 /**
  * Load sprites for a batch of GIL indices from an already-loaded file set.
+ * Uses combined parse+decode worker for batch efficiency.
  * Uploads to GPU after all sprites are packed, then returns loaded entries.
  */
 export async function loadGilSpriteBatch(
@@ -64,11 +65,11 @@ export async function loadGilSpriteBatch(
     paletteBase: number,
     trim?: SpriteTrim
 ): Promise<Map<number, SpriteEntry>> {
-    const result = new Map<number, SpriteEntry>();
+    const loaded = await spriteLoader.loadDirectSpriteBatch(fileSet, gilIndices, null, atlas, paletteBase, trim);
 
-    for (const gilIndex of gilIndices) {
-        const sprite = await spriteLoader.loadDirectSprite(fileSet, gilIndex, null, atlas, paletteBase, trim);
-        if (sprite) result.set(gilIndex, sprite.entry);
+    const result = new Map<number, SpriteEntry>();
+    for (const [gilIndex, sprite] of loaded) {
+        result.set(gilIndex, sprite.entry);
     }
 
     if (result.size > 0) atlas.update(gl);

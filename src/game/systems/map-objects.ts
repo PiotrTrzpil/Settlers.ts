@@ -221,7 +221,7 @@ function addMapObject(
     const entry = lookupRawObject(rawType);
     if (entry?.type != null) {
         if (entry.category === MapObjectCategory.Trees && !isBuildable(groundType[mapSize.toIndex(x, y)]!)) return null;
-        state.addEntity(EntityType.MapObject, entry.type, x, y, 0, undefined, entry.variation);
+        state.addEntity(EntityType.MapObject, entry.type, x, y, 0, { variation: entry.variation });
         return isTreeType(entry.type) ? 'tree' : 'deco';
     }
 

@@ -93,6 +93,106 @@ export async function testJilLookup(page: Page, fileId: string, jobIndices: numb
     );
 }
 
+// ── Race switching ──────────────────────────────────────────────
+
+/**
+ * Switch the sprite renderer to a different race, reloading all sprites.
+ * Returns true if sprites loaded successfully for the new race.
+ */
+export async function switchSpriteRace(page: Page, race: number): Promise<boolean> {
+    return page.evaluate(async r => {
+        const sm = window.__settlers__?.entityRenderer?.spriteManager;
+        if (!sm) return false;
+        return sm.setRace(r);
+    }, race);
+}
+
+// ── Sprite coverage ─────────────────────────────────────────────
+
+export interface MissingSpriteInfo {
+    entityId: number;
+    entityType: number;
+    entityTypeName: string;
+    subType: number;
+    subTypeName: string;
+    race: number;
+}
+
+/**
+ * Find all entities currently in the game state that have no textured sprite.
+ * Queries the SpriteRenderManager directly for each entity.
+ * Filters out Decoration and None entity types (they never have sprites).
+ */
+export async function getEntitiesWithoutSprites(page: Page): Promise<MissingSpriteInfo[]> {
+    return page.evaluate(() => {
+        const game = window.__settlers__?.game;
+        const renderer = window.__settlers__?.entityRenderer;
+        if (!game || !renderer) return [];
+
+        const sm = renderer.spriteManager;
+        if (!sm) return [];
+
+        // EntityType enum values (inlined to avoid import boundary)
+        const ET_UNIT = 1;
+        const ET_BUILDING = 2;
+        const ET_MAP_OBJECT = 3;
+        const ET_STACKED_PILE = 4;
+
+        const entityTypeNames: Record<number, string> = {
+            0: 'None',
+            1: 'Unit',
+            2: 'Building',
+            3: 'MapObject',
+            4: 'StackedPile',
+            5: 'Decoration',
+        };
+
+        const missing: Array<{
+            entityId: number;
+            entityType: number;
+            entityTypeName: string;
+            subType: number;
+            subTypeName: string;
+            race: number;
+        }> = [];
+
+        for (const entity of game.state.entities) {
+            // Skip types that never have sprites
+            if (
+                entity.type !== ET_UNIT &&
+                entity.type !== ET_BUILDING &&
+                entity.type !== ET_MAP_OBJECT &&
+                entity.type !== ET_STACKED_PILE
+            )
+                continue;
+
+            let hasSprite = false;
+            if (entity.type === ET_UNIT) {
+                hasSprite = sm.getUnit(entity.subType, 0, entity.race) !== null;
+            } else if (entity.type === ET_BUILDING) {
+                hasSprite = sm.getBuilding(entity.subType, entity.race) !== null;
+            } else if (entity.type === ET_MAP_OBJECT) {
+                hasSprite = sm.getMapObject(entity.subType) !== null;
+            } else if (entity.type === ET_STACKED_PILE) {
+                hasSprite = sm.getGoodSprite(entity.subType) !== null;
+            }
+
+            if (!hasSprite) {
+                missing.push({
+                    entityId: entity.id,
+                    entityType: entity.type,
+                    entityTypeName: entityTypeNames[entity.type] ?? `Unknown(${entity.type})`,
+                    subType: entity.subType,
+                    subTypeName: `${entity.subType}`,
+                    race: entity.race,
+                });
+            }
+        }
+
+        return missing;
+    });
+}
+
 // ── Cache helpers ───────────────────────────────────────────────
 
 /** Get sprite load timings from debug state. */

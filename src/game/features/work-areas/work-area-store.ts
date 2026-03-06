@@ -13,11 +13,15 @@ import type { Race } from '../../race';
 import type { TileOffset } from '../building-adjust/types';
 import { WORK_AREA_BUILDINGS } from './types';
 import { getBuildingInfo } from '../../game-data-access';
+import type { Persistable } from '@/game/persistence';
 
 /** Default work area center offset from the building tile anchor (tiles). Easy to change. */
 export const DEFAULT_WORK_AREA_CENTER: TileOffset = { dx: 0, dy: 4 };
 
-export class WorkAreaStore {
+type SerializedWorkAreaOffset = { entityId: number; dx: number; dy: number };
+
+export class WorkAreaStore implements Persistable<SerializedWorkAreaOffset[]> {
+    readonly persistKey = 'workAreaOffsets' as const;
     /** Per-instance overrides (entityId → offset) */
     private readonly instanceOffsets = new Map<number, TileOffset>();
 
@@ -62,6 +66,16 @@ export class WorkAreaStore {
     ): { x: number; y: number } {
         const offset = this.getOffset(buildingType, race, buildingId);
         return { x: buildingX + offset.dx, y: buildingY + offset.dy };
+    }
+
+    // ── Persistable ───────────────────────────────────────────────
+
+    serialize(): SerializedWorkAreaOffset[] {
+        return this.serializeInstanceOffsets();
+    }
+
+    deserialize(data: SerializedWorkAreaOffset[]): void {
+        this.restoreInstanceOffsets(data);
     }
 
     /** Serialize instance offsets for game state persistence. */

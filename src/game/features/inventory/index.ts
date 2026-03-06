@@ -61,3 +61,4 @@ export { SlotKind, isLinkedPile, getOwnerBuildingId } from './pile-kind';
 
 // Feature definition (self-registering via FeatureRegistry)
 export { InventoryFeature, type InventoryExports } from './inventory-feature';
+export { InventoryPileSyncFeature, type InventoryPileSyncExports } from './inventory-pile-sync-feature';

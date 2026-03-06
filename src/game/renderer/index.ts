@@ -37,7 +37,6 @@ export {
     type UnitRenderState,
     type BuildingRenderState,
     type RenderSettings,
-    type ServiceAreaRenderData,
     RenderContextBuilder,
     createRenderContext,
 } from './render-context';

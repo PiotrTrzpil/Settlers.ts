@@ -14,42 +14,42 @@
  */
 
 import type { TickSystem } from '../../tick-system';
+import type { CoreDeps } from '../feature';
 import type { EMaterialType } from '../../economy/material-type';
 import { sortedEntries } from '@/utilities/collections';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
 import { CLEANUP_PRIORITY } from '../../systems/entity-cleanup-registry';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
-import type { GameState } from '../../game-state';
-import type { CarrierManager } from '../carriers';
+import type { CarrierRegistry } from '../carriers';
 import type { RequestManager } from './request-manager';
-import type { ServiceAreaManager } from '../service-areas';
 import { RequestStatus, type ResourceRequest } from './resource-request';
 import { InventoryReservationManager } from './inventory-reservation';
-import type { TransportJob } from './transport-job';
+import type { TransportJobRecord } from './transport-job-record';
+import * as TransportJobService from './transport-job-service';
+import type { TransportJobDeps } from './transport-job-service';
+import type { TransportJobOps } from '../settler-tasks/choreo-types';
 import type { BuildingInventoryManager } from '../inventory';
 import { RequestMatcher } from './request-matcher';
 import type { LogisticsMatchFilter, CarrierFilter } from './logistics-filter';
 import { CarrierAssigner, type JobAssigner } from './carrier-assigner';
 import { StallDetector } from './stall-detector';
 import { MatchDiagnostics } from './match-diagnostics';
+import { ThrottledEmitter } from './throttled-emitter';
 import { TransportJobBuilder, type TransportPositionResolver, type ChoreographyLookup } from './transport-job-builder';
 
 /** Maximum number of job assignments per tick (to avoid frame drops) */
 const MAX_ASSIGNMENTS_PER_TICK = 5;
 
-/** Cooldown in seconds for `logistics:noCarrier` event per (building, material) pair. */
-const NO_CARRIER_COOLDOWN = 5;
+/** Cooldown in seconds for throttled logistics events per (building, material) pair. */
+const EVENT_COOLDOWN_SEC = 5;
 
 /** Configuration for LogisticsDispatcher dependencies */
-export interface LogisticsDispatcherConfig {
-    gameState: GameState;
-    eventBus: EventBus;
-    carrierManager: CarrierManager;
+export interface LogisticsDispatcherConfig extends CoreDeps {
+    carrierRegistry: CarrierRegistry;
     jobAssigner: JobAssigner;
     positionResolver: TransportPositionResolver;
     choreographyLookup: ChoreographyLookup;
     requestManager: RequestManager;
-    serviceAreaManager: ServiceAreaManager;
     inventoryManager: BuildingInventoryManager;
     matchFilter?: LogisticsMatchFilter;
     carrierFilter?: CarrierFilter;
@@ -73,12 +73,13 @@ export class LogisticsDispatcher implements TickSystem {
     private readonly eventBus: EventBus;
 
     /** Active transport jobs indexed by carrier ID. Exposed read-only for testing/diagnostics. */
-    readonly activeJobs: Map<number, TransportJob> = new Map();
+    readonly activeJobs: Map<number, TransportJobRecord> = new Map();
 
-    /** Throttle for `logistics:noCarrier` and `logistics:noMatch` — tracks last emit time per key. */
-    private readonly noCarrierCooldowns = new Map<string, number>();
-    private readonly noMatchCooldowns = new Map<string, number>();
-    private elapsedTime = 0;
+    /** Dependencies for TransportJobService lifecycle operations. */
+    private readonly transportJobDeps: TransportJobDeps;
+
+    private readonly noMatchEmitter: ThrottledEmitter<'logistics:noMatch'>;
+    private readonly noCarrierEmitter: ThrottledEmitter<'logistics:noCarrier'>;
 
     /** Event subscription manager for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
@@ -91,10 +92,15 @@ export class LogisticsDispatcher implements TickSystem {
         this.requestManager = config.requestManager;
         this.reservationManager = new InventoryReservationManager(config.inventoryManager);
 
+        this.transportJobDeps = {
+            reservationManager: this.reservationManager,
+            requestManager: this.requestManager,
+            eventBus: this.eventBus,
+        };
+
         this.requestMatcher = new RequestMatcher({
             gameState: config.gameState,
             inventoryManager: config.inventoryManager,
-            serviceAreaManager: config.serviceAreaManager,
             reservationManager: this.reservationManager,
             matchFilter: config.matchFilter,
         });
@@ -108,35 +114,26 @@ export class LogisticsDispatcher implements TickSystem {
         this.carrierAssigner = new CarrierAssigner({
             gameState: config.gameState,
             eventBus: config.eventBus,
-            carrierManager: config.carrierManager,
+            carrierRegistry: config.carrierRegistry,
             jobAssigner: config.jobAssigner,
             transportJobBuilder,
-            serviceAreaManager: config.serviceAreaManager,
             reservationManager: this.reservationManager,
             requestManager: config.requestManager,
-            inventoryManager: config.inventoryManager,
             carrierFilter: config.carrierFilter,
+            activeJobs: this.activeJobs,
         });
 
         this.stallDetector = new StallDetector({
             requestManager: config.requestManager,
-            reservationManager: this.reservationManager,
         });
 
         this.matchDiagnostics = new MatchDiagnostics({
             gameState: config.gameState,
             inventoryManager: config.inventoryManager,
         });
-    }
 
-    /** Whether carriers can deliver globally (true) or only within shared service areas (false). */
-    get globalLogistics(): boolean {
-        return this.requestMatcher.globalLogistics;
-    }
-
-    set globalLogistics(enabled: boolean) {
-        this.requestMatcher.globalLogistics = enabled;
-        this.carrierAssigner.globalLogistics = enabled;
+        this.noMatchEmitter = new ThrottledEmitter(config.eventBus, 'logistics:noMatch', EVENT_COOLDOWN_SEC);
+        this.noCarrierEmitter = new ThrottledEmitter(config.eventBus, 'logistics:noCarrier', EVENT_COOLDOWN_SEC);
     }
 
     /** Set the match filter for supply matching (territory, diplomacy, etc.). */
@@ -169,8 +166,11 @@ export class LogisticsDispatcher implements TickSystem {
             this.activeJobs.delete(carrierId)
         );
 
-        this.subscriptions.subscribe(eventBus, 'carrier:removed', ({ entityId }) =>
-            this.handleCarrierRemoved(entityId)
+        // When a construction site completes, cancel all in-flight jobs and pending requests
+        // targeting it. The inventory is swapped from construction → production, so carriers
+        // can no longer deposit construction materials there.
+        this.subscriptions.subscribe(eventBus, 'building:completed', ({ entityId }) =>
+            this.handleConstructionCompleted(entityId)
         );
 
         // Store pile redirect info when building piles are converted to free piles.
@@ -198,7 +198,8 @@ export class LogisticsDispatcher implements TickSystem {
      * Main tick — assign pending requests to available carriers and check for stalls.
      */
     tick(dt: number): void {
-        this.elapsedTime += dt;
+        this.noMatchEmitter.advance(dt);
+        this.noCarrierEmitter.advance(dt);
         this.requestManager.advanceTime(dt);
         this.matchDiagnostics.tick(dt);
         this.assignPendingRequests();
@@ -239,32 +240,26 @@ export class LogisticsDispatcher implements TickSystem {
                 continue;
             }
             if (result) {
-                this.activeJobs.set(result.carrierId, result.transportJob);
+                this.activeJobs.set(result.carrierId, result.record);
                 assignmentCount++;
             }
         }
     }
 
-    /** Emit `logistics:noMatch` at most once per 5 seconds per (building, material) pair. */
+    /** Emit `logistics:noMatch` at most once per cooldown per (building, material) pair. */
     private emitNoMatchThrottled(request: ResourceRequest): void {
         const key = `${request.buildingId}:${request.materialType}`;
-        const lastEmit = this.noMatchCooldowns.get(key) ?? -Infinity;
-        if (this.elapsedTime - lastEmit < NO_CARRIER_COOLDOWN) return;
-        this.noMatchCooldowns.set(key, this.elapsedTime);
-        this.eventBus.emit('logistics:noMatch', {
+        this.noMatchEmitter.tryEmit(key, {
             requestId: request.id,
             buildingId: request.buildingId,
             materialType: request.materialType,
         });
     }
 
-    /** Emit `logistics:noCarrier` at most once per 5 seconds per (building, material) pair. */
+    /** Emit `logistics:noCarrier` at most once per cooldown per (building, material) pair. */
     private emitNoCarrierThrottled(request: ResourceRequest, sourceBuilding: number): void {
         const key = `${request.buildingId}:${request.materialType}`;
-        const lastEmit = this.noCarrierCooldowns.get(key) ?? -Infinity;
-        if (this.elapsedTime - lastEmit < NO_CARRIER_COOLDOWN) return;
-        this.noCarrierCooldowns.set(key, this.elapsedTime);
-        this.eventBus.emit('logistics:noCarrier', {
+        this.noCarrierEmitter.tryEmit(key, {
             requestId: request.id,
             buildingId: request.buildingId,
             materialType: request.materialType,
@@ -273,21 +268,70 @@ export class LogisticsDispatcher implements TickSystem {
     }
 
     /**
-     * Handle carrier removed — cancel its TransportJob if active.
-     */
-    private handleCarrierRemoved(carrierId: number): void {
-        const job = this.activeJobs.get(carrierId);
-        if (!job) return;
-
-        job.cancel('carrier_removed');
-        this.activeJobs.delete(carrierId);
-    }
-
-    /**
      * Get the reservation manager for testing/debugging.
      */
     getReservationManager(): InventoryReservationManager {
         return this.reservationManager;
+    }
+
+    /**
+     * Create a TransportJobOps implementation for the settler task system.
+     * Resolves job IDs against activeJobs and delegates lifecycle to TransportJobService.
+     */
+    createTransportJobOps(): TransportJobOps {
+        const activeJobs = this.activeJobs;
+        const deps = this.transportJobDeps;
+        return {
+            getJob: jobId => {
+                for (const record of activeJobs.values()) {
+                    if (record.id === jobId) return record;
+                }
+                return undefined;
+            },
+            pickUp: jobId => {
+                const record = findJobOrThrow(activeJobs, jobId, 'pickUp');
+                TransportJobService.pickUp(record, deps);
+            },
+            deliver: jobId => {
+                const record = findJobOrThrow(activeJobs, jobId, 'deliver');
+                TransportJobService.deliver(record, deps);
+            },
+            cancel: jobId => {
+                const record = findJobById(activeJobs, jobId);
+                if (record) {
+                    TransportJobService.cancel(record, 'cancelled', deps);
+                }
+            },
+        };
+    }
+
+    /**
+     * Cancel all logistics targeting a building that just finished construction.
+     *
+     * When a construction site completes, its inventory is swapped from construction
+     * (input slots for BOARD/STONE) to production (output slots). Any in-flight
+     * carriers or pending requests targeting the old construction inventory must be
+     * cancelled to prevent deposit failures.
+     */
+    private handleConstructionCompleted(buildingId: number): void {
+        let jobsCancelled = 0;
+        for (const [carrierId, job] of sortedEntries(this.activeJobs)) {
+            if (job.destBuilding === buildingId) {
+                TransportJobService.cancel(job, 'construction_completed', this.transportJobDeps);
+                this.activeJobs.delete(carrierId);
+                jobsCancelled++;
+            }
+        }
+
+        const requestsCancelled = this.requestManager.cancelRequestsForBuilding(buildingId);
+
+        if (requestsCancelled + jobsCancelled > 0) {
+            this.eventBus.emit('logistics:buildingCleanedUp', {
+                buildingId,
+                requestsCancelled,
+                jobsCancelled,
+            });
+        }
     }
 
     /**
@@ -311,7 +355,7 @@ export class LogisticsDispatcher implements TickSystem {
         for (const [carrierId, job] of sortedEntries(this.activeJobs)) {
             if (job.destBuilding === buildingId) {
                 // Destination destroyed — must cancel, carrier has nowhere to deliver
-                job.cancel('building_destroyed');
+                TransportJobService.cancel(job, 'building_destroyed', this.transportJobDeps);
                 this.activeJobs.delete(carrierId);
                 result.jobsCancelled++;
             } else if (job.sourceBuilding === buildingId) {
@@ -319,11 +363,11 @@ export class LogisticsDispatcher implements TickSystem {
                 const pileEntityId = pileRedirects?.get(job.material);
                 if (
                     pileEntityId !== undefined &&
-                    this.reservationManager.transferReservation(job.requestId, pileEntityId)
+                    TransportJobService.redirectSource(job, pileEntityId, this.transportJobDeps)
                 ) {
-                    job.sourceBuilding = pileEntityId;
+                    // sourceBuilding already updated by redirectSource
                 } else {
-                    job.cancel('building_destroyed');
+                    TransportJobService.cancel(job, 'building_destroyed', this.transportJobDeps);
                     this.activeJobs.delete(carrierId);
                     result.jobsCancelled++;
                 }
@@ -356,4 +400,27 @@ export interface BuildingCleanupResult {
     buildingId: number;
     requestsCancelled: number;
     jobsCancelled: number;
+}
+
+/** Find a job record by ID across all active jobs, or throw. */
+function findJobOrThrow(
+    activeJobs: ReadonlyMap<number, TransportJobRecord>,
+    jobId: number,
+    operation: string
+): TransportJobRecord {
+    for (const record of activeJobs.values()) {
+        if (record.id === jobId) return record;
+    }
+    throw new Error(`TransportJobOps.${operation}: job ${jobId} not found in activeJobs`);
+}
+
+/** Find a job record by ID across all active jobs, or return undefined. */
+function findJobById(
+    activeJobs: ReadonlyMap<number, TransportJobRecord>,
+    jobId: number
+): TransportJobRecord | undefined {
+    for (const record of activeJobs.values()) {
+        if (record.id === jobId) return record;
+    }
+    return undefined;
 }

@@ -45,8 +45,8 @@ export interface PlaceBuildingCommand {
     x: number;
     y: number;
     player: number;
-    /** Race for the building sprite (Race enum value) */
-    race: Race;
+    /** Race override — defaults to player race from GameState.playerRaces. */
+    race?: Race;
     /** Spawn the building's dedicated worker at the door position. */
     spawnWorker?: boolean;
     /** When true, skip construction and mark the building as immediately operational. */
@@ -76,8 +76,8 @@ export interface SpawnUnitCommand {
     x: number;
     y: number;
     player: number;
-    /** Race for the unit sprite (Race enum value) */
-    race: Race;
+    /** Race override — defaults to player race from GameState.playerRaces. */
+    race?: Race;
     /** Military unit level (1-3). Defaults to 1. */
     level?: number;
 }
@@ -208,8 +208,8 @@ export interface ScriptAddBuildingCommand {
     x: number;
     y: number;
     player: number;
-    /** Race for the building sprite (Race enum value) */
-    race: Race;
+    /** Race override — defaults to player race from GameState.playerRaces. */
+    race?: Race;
 }
 
 export interface ScriptAddSettlersCommand {
@@ -219,8 +219,8 @@ export interface ScriptAddSettlersCommand {
     y: number;
     player: number;
     amount: number;
-    /** Race for the unit sprite (Race enum value) */
-    race: Race;
+    /** Race override — defaults to player race from GameState.playerRaces. */
+    race?: Race;
 }
 
 // === Selection Commands ===
@@ -250,6 +250,11 @@ export interface SelectAreaCommand {
     y2: number;
 }
 
+export interface SelectMultipleCommand {
+    type: 'select_multiple';
+    entityIds: number[];
+}
+
 /**
  * Union type of all game commands.
  */
@@ -262,6 +267,7 @@ export type Command =
     | SelectAtTileCommand
     | ToggleSelectionCommand
     | SelectAreaCommand
+    | SelectMultipleCommand
     | MoveSelectedUnitsCommand
     | RemoveEntityCommand
     | SpawnPileCommand
@@ -356,12 +362,13 @@ export function isUnitCommand(cmd: Command): cmd is SpawnUnitCommand | MoveUnitC
  */
 export function isSelectionCommand(
     cmd: Command
-): cmd is SelectCommand | SelectAtTileCommand | ToggleSelectionCommand | SelectAreaCommand {
+): cmd is SelectCommand | SelectAtTileCommand | ToggleSelectionCommand | SelectAreaCommand | SelectMultipleCommand {
     return (
         cmd.type === 'select' ||
         cmd.type === 'select_at_tile' ||
         cmd.type === 'toggle_selection' ||
-        cmd.type === 'select_area'
+        cmd.type === 'select_area' ||
+        cmd.type === 'select_multiple'
     );
 }
 

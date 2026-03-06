@@ -5,18 +5,18 @@
  */
 
 import type { IViewPoint } from '../i-view-point';
-import type { IRenderPass, PassContext } from './types';
+import type { IRenderPass, StackGhostContext } from './types';
 import { TilePicker } from '@/game/input/tile-picker';
 import { PALETTE_TEXTURE_WIDTH } from '../palette-texture';
 import { scaleSprite } from '../entity-renderer-constants';
 
 export class StackGhostPass implements IRenderPass {
-    private ctx!: PassContext;
+    private ctx!: StackGhostContext;
 
     /** Draw calls emitted by this pass (updated each frame). */
     public lastDrawCalls = 0;
 
-    public prepare(ctx: PassContext): void {
+    public prepare(ctx: StackGhostContext): void {
         this.ctx = ctx;
     }
 

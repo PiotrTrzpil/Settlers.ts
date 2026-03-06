@@ -7,15 +7,13 @@
 
 import { ref, onUnmounted, type Ref } from 'vue';
 import type { Game } from '@/game/game';
-import type { CarrierState } from '@/game/features/carriers/carrier-state';
-import { CarrierStatus } from '@/game/features/carriers/carrier-state';
 import type { ResourceRequest } from '@/game/features/logistics/resource-request';
 import { RequestPriority, RequestStatus } from '@/game/features/logistics/resource-request';
 import type { InventoryReservation } from '@/game/features/logistics/inventory-reservation';
-import type { ServiceArea } from '@/game/features/service-areas/service-area';
 import { EMaterialType } from '@/game/economy';
 import { EntityType, type Entity } from '@/game/entity';
 import { UnitType } from '@/game/unit-types';
+import { query, type ComponentStore } from '@/game/ecs';
 import {
     diagnoseUnfulfilledRequest,
     UNFULFILLED_REASON_LABELS,
@@ -50,19 +48,10 @@ export interface CarrierSummary {
 
 /** Summary of an inventory reservation */
 export interface ReservationSummary {
-    id: number;
     buildingId: number;
     material: string;
     amount: number;
     requestId: number;
-}
-
-/** Summary of a hub's capacity */
-export interface HubSummary {
-    buildingId: number;
-    carrierCount: number;
-    capacity: number;
-    isFull: boolean;
 }
 
 /** Aggregated logistics stats */
@@ -76,16 +65,9 @@ export interface LogisticsStats {
     /** Unregistered carrier units (missing entity.carrier - need hub or all hubs full) */
     unregisteredCarriers: number;
 
-    /** Hub stats */
-    hubCount: number;
-    totalHubCapacity: number;
-    hubsAtCapacity: number;
-
-    /** Carriers by status */
+    /** Carriers by activity */
     idleCarriers: number;
-    walkingCarriers: number;
-    pickingUpCarriers: number;
-    deliveringCarriers: number;
+    busyCarriers: number;
 
     /** Reservation count */
     reservationCount: number;
@@ -98,7 +80,6 @@ export interface LogisticsDebugState {
     inProgressRequests: RequestSummary[];
     carriers: CarrierSummary[];
     reservations: ReservationSummary[];
-    hubs: HubSummary[];
 }
 
 const STALL_THRESHOLD_MS = 30_000;
@@ -111,13 +92,8 @@ function createEmptyStats(): LogisticsStats {
         stalledCount: 0,
         carrierCount: 0,
         unregisteredCarriers: 0,
-        hubCount: 0,
-        totalHubCapacity: 0,
-        hubsAtCapacity: 0,
         idleCarriers: 0,
-        walkingCarriers: 0,
-        pickingUpCarriers: 0,
-        deliveringCarriers: 0,
+        busyCarriers: 0,
         reservationCount: 0,
     };
 }
@@ -129,38 +105,13 @@ function createEmptyState(): LogisticsDebugState {
         inProgressRequests: [],
         carriers: [],
         reservations: [],
-        hubs: [],
     };
 }
-
-/** Human-readable status names for display */
-export const CARRIER_STATUS_NAMES: Record<CarrierStatus, string> = {
-    [CarrierStatus.Idle]: 'Idle',
-    [CarrierStatus.Walking]: 'Walking',
-    [CarrierStatus.PickingUp]: 'PickingUp',
-    [CarrierStatus.Delivering]: 'Delivering',
-};
-
-/** CSS class suffixes for carrier status styling */
-export const CARRIER_STATUS_CLASSES: Record<CarrierStatus, string> = {
-    [CarrierStatus.Idle]: 'idle',
-    [CarrierStatus.Walking]: 'walking',
-    [CarrierStatus.PickingUp]: 'pickingup',
-    [CarrierStatus.Delivering]: 'delivering',
-};
 
 const PRIORITY_NAMES: Record<RequestPriority, 'High' | 'Normal' | 'Low'> = {
     [RequestPriority.High]: 'High',
     [RequestPriority.Normal]: 'Normal',
     [RequestPriority.Low]: 'Low',
-};
-
-/** Maps status to stats property key for counting */
-const STATUS_STAT_KEYS: Record<CarrierStatus, keyof LogisticsStats> = {
-    [CarrierStatus.Idle]: 'idleCarriers',
-    [CarrierStatus.Walking]: 'walkingCarriers',
-    [CarrierStatus.PickingUp]: 'pickingUpCarriers',
-    [CarrierStatus.Delivering]: 'deliveringCarriers',
 };
 
 function formatMaterial(materialType: number): string {
@@ -217,27 +168,33 @@ function gatherRequests(
 }
 
 function gatherCarriers(
-    allCarriers: Iterable<CarrierState>,
-    getEntity: (id: number) => Entity | undefined,
+    carrierStore: ComponentStore<{ entityId: number }>,
+    entityStore: ComponentStore<Entity>,
+    getActiveJobId: (entityId: number) => string | null,
     stats: LogisticsStats
 ): CarrierSummary[] {
     const carriers: CarrierSummary[] = [];
 
-    for (const carrier of allCarriers) {
-        const entity = getEntity(carrier.entityId);
-        const carrying = entity?.carrying;
+    for (const [id, , entity] of query(carrierStore, entityStore)) {
+        const carrying = entity.carrying;
+        const activeJobId = getActiveJobId(id);
+        const hasJob = activeJobId !== null;
 
         carriers.push({
-            entityId: carrier.entityId,
-            status: CARRIER_STATUS_NAMES[carrier.status],
+            entityId: id,
+            status: hasJob ? 'Busy' : 'Idle',
             carryingMaterial: carrying ? formatMaterial(carrying.material) : null,
             carryingAmount: carrying?.amount ?? 0,
-            hasJob: carrier.status !== CarrierStatus.Idle,
-            jobType: null,
+            hasJob,
+            jobType: activeJobId,
         });
 
         stats.carrierCount++;
-        stats[STATUS_STAT_KEYS[carrier.status]]++;
+        if (hasJob) {
+            stats.busyCarriers++;
+        } else {
+            stats.idleCarriers++;
+        }
     }
 
     carriers.sort((a, b) => a.entityId - b.entityId);
@@ -252,7 +209,6 @@ function gatherReservations(
 
     for (const reservation of allReservations) {
         reservations.push({
-            id: reservation.id,
             buildingId: reservation.buildingId,
             material: formatMaterial(reservation.materialType),
             amount: reservation.amount,
@@ -261,27 +217,8 @@ function gatherReservations(
     }
 
     stats.reservationCount = reservations.length;
-    reservations.sort((a, b) => a.id - b.id);
+    reservations.sort((a, b) => a.requestId - b.requestId);
     return reservations;
-}
-
-function gatherHubs(serviceAreas: Iterable<ServiceArea>, stats: LogisticsStats): HubSummary[] {
-    const hubs: HubSummary[] = [];
-
-    for (const area of serviceAreas) {
-        hubs.push({
-            buildingId: area.buildingId,
-            carrierCount: 0,
-            capacity: area.capacity,
-            isFull: false,
-        });
-
-        stats.hubCount++;
-        stats.totalHubCapacity += area.capacity;
-    }
-
-    hubs.sort((a, b) => a.buildingId - b.buildingId);
-    return hubs;
 }
 
 /**
@@ -313,8 +250,9 @@ export function useLogisticsDebug(getGame: () => Game | null): {
 
         // Gather carriers
         const carriers = gatherCarriers(
-            svc.carrierManager.getAllCarriers(),
-            gameState.getEntity.bind(gameState),
+            svc.carrierRegistry.store,
+            gameState.store,
+            svc.settlerTaskSystem.getActiveJobId.bind(svc.settlerTaskSystem),
             stats
         );
 
@@ -323,7 +261,7 @@ export function useLogisticsDebug(getGame: () => Game | null): {
             if (
                 entity.type === EntityType.Unit &&
                 entity.subType === UnitType.Carrier &&
-                !svc.carrierManager.hasCarrier(entity.id)
+                !svc.carrierRegistry.has(entity.id)
             ) {
                 stats.unregisteredCarriers++;
             }
@@ -335,16 +273,13 @@ export function useLogisticsDebug(getGame: () => Game | null): {
             stats
         );
 
-        // Gather hubs
-        const hubs = gatherHubs(svc.serviceAreaManager.getAllServiceAreas(), stats);
-
         // Diagnose why pending requests are unfulfilled (limit to displayed items to avoid perf issues)
         const diagnosticConfig: DiagnosticConfig = {
             gameState,
             inventoryManager: svc.inventoryManager,
-            serviceAreaManager: svc.serviceAreaManager,
-            carrierManager: svc.carrierManager,
+            carrierRegistry: svc.carrierRegistry,
             reservationManager: svc.logisticsDispatcher.getReservationManager(),
+            getActiveJobId: svc.settlerTaskSystem.getActiveJobId.bind(svc.settlerTaskSystem),
         };
         const diagnosticLimit = Math.min(rawPending.length, MAX_LIST_ITEMS);
         for (let i = 0; i < diagnosticLimit; i++) {
@@ -358,7 +293,6 @@ export function useLogisticsDebug(getGame: () => Game | null): {
             inProgressRequests: inProgress.slice(0, MAX_LIST_ITEMS),
             carriers: carriers.slice(0, MAX_LIST_ITEMS),
             reservations: reservations.slice(0, MAX_LIST_ITEMS),
-            hubs: hubs.slice(0, MAX_LIST_ITEMS),
         };
     }
 

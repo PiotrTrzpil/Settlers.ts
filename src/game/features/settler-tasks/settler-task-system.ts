@@ -12,17 +12,19 @@
  */
 
 import type { GameState } from '../../game-state';
+import type { CoreDeps } from '../feature';
 import type { TickSystem } from '../../tick-system';
+import type { Persistable } from '../../persistence/types';
 import { EntityType, UnitType, type Entity } from '../../entity';
-import { LogHandler } from '@/utilities/log-handler';
+import { isAngelUnitType } from '../../unit-types';
+import { createLogger } from '@/utilities/logger';
 import { ThrottledLogger } from '@/utilities/throttled-logger';
 import { sortedEntries } from '@/utilities/collections';
-import { SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
+import { JobType, SearchType, SettlerState, type JobState, type WorkHandler, type SettlerConfig } from './types';
+import type { ChoreoJobState, ChoreoNode, TransportJobOps } from './choreo-types';
 import { buildAllSettlerConfigs } from '../../settler-data-access';
-import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager, BuildingPileRegistry } from '../inventory';
 import type { PileRegistry } from '../inventory/pile-registry';
-import type { CarrierManager } from '../carriers';
 import { createWorkplaceHandler, createCarrierHandler } from './work-handlers';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { WorkHandlerRegistry } from './work-handler-registry';
@@ -34,7 +36,6 @@ import { BuildingPositionResolverImpl } from './building-position-resolver';
 import { JobPartResolverImpl } from './job-part-resolver';
 import { TriggerSystemImpl } from '../building-overlays/trigger-system';
 import { getGameDataLoader } from '@/resources/game-data';
-import type { ChoreoContext } from './choreo-types';
 import type { WorkAreaStore } from '../work-areas/work-area-store';
 import type { BuildingOverlayManager } from '../building-overlays/building-overlay-manager';
 import type { OreVeinData } from '../ore-veins/ore-vein-data';
@@ -42,22 +43,23 @@ import type { ProductionControlManager } from '../production-control';
 import type { BarracksTrainingManager } from '../barracks';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import type { Command, CommandResult } from '../../commands';
+import type { MaterialTransfer } from '../material-transfer';
 
-const log = new LogHandler('SettlerTaskSystem');
+const log = createLogger('SettlerTaskSystem');
 
 /** How often to run the orphan-runtime safety net (in ticks) */
 const ORPHAN_CHECK_INTERVAL = 60;
+
+/** How many ticks an idle settler waits before re-scanning for work. */
+const IDLE_SEARCH_COOLDOWN = 10;
 
 /** Local alias — Map from UnitType to settler config. */
 type SettlerConfigs = Map<UnitType, SettlerConfig>;
 
 /** Configuration for SettlerTaskSystem dependencies */
-export interface SettlerTaskSystemConfig {
-    gameState: GameState;
+export interface SettlerTaskSystemConfig extends CoreDeps {
     visualService: EntityVisualService;
     inventoryManager: BuildingInventoryManager;
-    carrierManager: CarrierManager;
-    eventBus: EventBus;
     /** Lazy getter — pile slot registry for live entity lookup. */
     getPileSlotRegistry: () => PileRegistry | null;
     /** Lazy getter — pile registry may be set after construction (game data load). */
@@ -74,19 +76,45 @@ export interface SettlerTaskSystemConfig {
     constructionSiteManager: ConstructionSiteManager;
     /** Command executor for entity creation/removal during simulation. */
     executeCommand: (cmd: Command) => CommandResult;
+    /** Material transfer service — unified material movement & conservation. */
+    materialTransfer: MaterialTransfer;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Serialization types
+// ─────────────────────────────────────────────────────────────
+
+interface SerializedChoreoJob {
+    jobId: string;
+    nodes: ChoreoNode[];
+    nodeIndex: number;
+    progress: number;
+    visible: boolean;
+    activeTrigger: string;
+    targetId: number | null;
+    targetPos: { x: number; y: number } | null;
+    carryingGood: number | null;
+    workStarted: boolean;
+}
+
+interface SerializedUnitRuntime {
+    entityId: number;
+    state: string;
+    lastDirection: number;
+    homeAssignment: { buildingId: number; hasVisited: boolean } | null;
+    job: SerializedChoreoJob | null;
 }
 
 /**
  * Manages all unit behaviors through task execution.
  */
-export class SettlerTaskSystem implements TickSystem {
+export class SettlerTaskSystem implements TickSystem, Persistable<SerializedUnitRuntime[]> {
     private readonly gameState: GameState;
     private readonly inventoryManager: BuildingInventoryManager;
     private readonly settlerConfigs: SettlerConfigs;
     private readonly choreographyStore: JobChoreographyStore;
     private readonly handlerRegistry: WorkHandlerRegistry;
     private readonly animController: IdleAnimationController;
-    private readonly choreoContext: ChoreoContext;
     private readonly buildingPositionResolver: BuildingPositionResolverImpl;
     private readonly workerExecutor: WorkerTaskExecutor;
     private readonly stateMachine: UnitStateMachine;
@@ -97,6 +125,11 @@ export class SettlerTaskSystem implements TickSystem {
     private oreVeinData: OreVeinData | undefined;
     /** Tick counter for throttling the orphan-runtime safety net */
     private ticksSinceOrphanCheck = 0;
+    /** Late-bound transport job ops — set by LogisticsDispatcherFeature after construction. */
+    private _transportJobOps: TransportJobOps | null = null;
+
+    /** Internal timing breakdown from last tick (exposed via getSubTimings). */
+    private lastSubTimings: Record<string, number> = {};
 
     constructor(config: SettlerTaskSystemConfig) {
         this.gameState = config.gameState;
@@ -123,37 +156,37 @@ export class SettlerTaskSystem implements TickSystem {
             workAreaStore: config.workAreaStore,
         });
 
-        const choreoContext: ChoreoContext = {
-            gameState: this.gameState,
-            inventoryManager: this.inventoryManager,
-            carrierManager: config.carrierManager,
-            eventBus: config.eventBus,
-            handlerErrorLogger,
-            jobPartResolver,
-            buildingPositionResolver: this.buildingPositionResolver,
-            triggerSystem,
-            getWorkerHomeBuilding: this.getAssignedBuilding.bind(this),
-            executeCommand: config.executeCommand,
-            get barracksTrainingManager() {
-                return config.getBarracksTrainingManager?.();
-            },
-        };
-
-        this.choreoContext = choreoContext;
         this.handlerRegistry = new WorkHandlerRegistry();
 
         this.animController = new IdleAnimationController(config.visualService, this.gameState.rng);
 
         const constructionSiteManager = config.constructionSiteManager;
+        // Lazy proxy — LogisticsDispatcher sets the real impl after construction via setTransportJobOps().
+        const transportJobOps: TransportJobOps = {
+            getJob: jobId => this._transportJobOps!.getJob(jobId),
+            pickUp: jobId => this._transportJobOps!.pickUp(jobId),
+            deliver: jobId => this._transportJobOps!.deliver(jobId),
+            cancel: jobId => this._transportJobOps!.cancel(jobId),
+        };
+
         this.workerExecutor = new WorkerTaskExecutor({
             gameState: this.gameState,
             choreographyStore: this.choreographyStore,
             handlerRegistry: this.handlerRegistry,
             animController: this.animController,
-            choreoContext,
             handlerErrorLogger,
             missingHandlerLogger,
             isBuildingAvailable: (buildingId: number) => !constructionSiteManager.hasSite(buildingId),
+            eventBus: config.eventBus,
+            inventoryManager: this.inventoryManager,
+            buildingPositionResolver: this.buildingPositionResolver,
+            triggerSystem,
+            getWorkerHomeBuilding: this.getAssignedBuilding.bind(this),
+            jobPartResolver,
+            materialTransfer: config.materialTransfer,
+            transportJobOps,
+            getBarracksTrainingManager: config.getBarracksTrainingManager,
+            executeCommand: config.executeCommand,
         });
 
         this.stateMachine = new UnitStateMachine({
@@ -165,6 +198,7 @@ export class SettlerTaskSystem implements TickSystem {
             buildingOccupants: this.buildingOccupants,
             claimBuilding: this.claimBuilding.bind(this),
             releaseBuilding: this.releaseBuilding.bind(this),
+            idleSearchCooldown: IDLE_SEARCH_COOLDOWN,
         });
 
         // Register built-in WORKPLACE handler for building workers
@@ -185,6 +219,99 @@ export class SettlerTaskSystem implements TickSystem {
         log.debug(
             `Loaded ${this.settlerConfigs.size} settler configs, ${this.choreographyStore.cacheSize} cached jobs`
         );
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Persistable implementation
+    // ─────────────────────────────────────────────────────────────
+
+    readonly persistKey = 'settlerTasks' as const;
+
+    serialize(): SerializedUnitRuntime[] {
+        const result: SerializedUnitRuntime[] = [];
+        for (const [entityId, runtime] of this.runtimes) {
+            result.push(this.serializeRuntime(entityId, runtime));
+        }
+        return result;
+    }
+
+    deserialize(data: SerializedUnitRuntime[]): void {
+        this.runtimes.clear();
+        this.buildingOccupants.clear();
+
+        for (const entry of data) {
+            const entity = this.gameState.getEntityOrThrow(entry.entityId, 'settler-task restore');
+
+            const runtime = this.getRuntime(entity.id);
+            runtime.state = entry.state as SettlerState;
+            runtime.lastDirection = entry.lastDirection;
+
+            if (entry.homeAssignment) {
+                this.claimBuilding(runtime, entry.homeAssignment.buildingId);
+                runtime.homeAssignment!.hasVisited = entry.homeAssignment.hasVisited;
+            }
+
+            if (entry.job) {
+                runtime.job = this.deserializeJob(entry.job);
+            }
+        }
+    }
+
+    private serializeRuntime(entityId: number, runtime: UnitRuntime): SerializedUnitRuntime {
+        const job = runtime.job;
+        // Transport jobs restart idle (Option A) — skip the job
+        const hasTransport = job?.transportData !== undefined;
+        const serializedJob = job && !hasTransport ? this.serializeJob(job) : null;
+
+        return {
+            entityId,
+            state: hasTransport ? SettlerState.IDLE : runtime.state,
+            lastDirection: runtime.lastDirection,
+            homeAssignment: runtime.homeAssignment
+                ? {
+                    buildingId: runtime.homeAssignment.buildingId,
+                    hasVisited: runtime.homeAssignment.hasVisited,
+                }
+                : null,
+            job: serializedJob,
+        };
+    }
+
+    private serializeJob(job: ChoreoJobState): SerializedChoreoJob {
+        return {
+            jobId: job.jobId,
+            nodes: job.nodes,
+            nodeIndex: job.nodeIndex,
+            progress: job.progress,
+            visible: job.visible,
+            activeTrigger: job.activeTrigger,
+            targetId: job.targetId,
+            targetPos: job.targetPos ? { x: job.targetPos.x, y: job.targetPos.y } : null,
+            carryingGood: job.carryingGood,
+            workStarted: job.workStarted,
+        };
+    }
+
+    private deserializeJob(data: SerializedChoreoJob): ChoreoJobState {
+        return {
+            type: JobType.CHOREO,
+            jobId: data.jobId,
+            nodes: data.nodes,
+            nodeIndex: data.nodeIndex,
+            progress: data.progress,
+            visible: data.visible,
+            activeTrigger: data.activeTrigger,
+            targetId: data.targetId,
+            targetPos: data.targetPos ? { x: data.targetPos.x, y: data.targetPos.y } : null,
+            carryingGood: data.carryingGood as ChoreoJobState['carryingGood'],
+            workStarted: data.workStarted,
+            pathRetryCountdown: 0,
+        };
+    }
+
+    /** Set the transport job ops implementation (called by LogisticsDispatcherFeature after construction). */
+    setTransportJobOps(ops: TransportJobOps): void {
+        this._transportJobOps = ops;
     }
 
     /** Expose the building position resolver for external consumers (logistics transport job builder). */
@@ -528,19 +655,58 @@ export class SettlerTaskSystem implements TickSystem {
 
     /** TickSystem interface */
     tick(dt: number): void {
-        for (const entity of this.gameState.entities) {
-            if (entity.type === EntityType.Unit) {
-                try {
-                    const runtime = this.getRuntime(entity.id);
-                    this.stateMachine.updateUnit(entity, runtime, dt);
-                } catch (e) {
-                    const err = e instanceof Error ? e : new Error(String(e));
-                    log.error(`Unhandled error updating unit ${entity.id}`, err);
+        let idleCount = 0;
+        let workingCount = 0;
+        let otherCount = 0;
+        let idleTime = 0;
+        let workingTime = 0;
+        let otherTime = 0;
+
+        const unitIds = this.gameState.entityIndex.idsOfType(EntityType.Unit);
+        for (const id of unitIds) {
+            const entity = this.gameState.getEntity(id);
+            if (!entity) continue;
+            // Skip ephemeral visual-only units (death angels)
+            if (isAngelUnitType(entity.subType as UnitType)) continue;
+
+            try {
+                const runtime = this.getRuntime(entity.id);
+                const t0 = performance.now();
+                this.stateMachine.updateUnit(entity, runtime, dt);
+                const elapsed = performance.now() - t0;
+
+                switch (runtime.state) {
+                case SettlerState.IDLE:
+                    idleCount++;
+                    idleTime += elapsed;
+                    break;
+                case SettlerState.WORKING:
+                    workingCount++;
+                    workingTime += elapsed;
+                    break;
+                case SettlerState.INTERRUPTED:
+                    otherCount++;
+                    otherTime += elapsed;
+                    break;
                 }
+            } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                log.error(`Unhandled error updating unit ${entity.id}`, err);
             }
         }
 
         this.cleanOrphanedRuntimes();
+
+        this.lastSubTimings = {
+            [`idle(${idleCount})`]: Math.round(idleTime * 100) / 100,
+            [`working(${workingCount})`]: Math.round(workingTime * 100) / 100,
+            [`other(${otherCount})`]: Math.round(otherTime * 100) / 100,
+        };
+    }
+
+    /** Expose sub-timings for the debug panel. */
+    getSubTimings(): Record<string, number> {
+        return this.lastSubTimings;
     }
 
     /** Safety net: clean up runtimes for entities removed without onEntityRemoved signal. */
@@ -569,6 +735,7 @@ export class SettlerTaskSystem implements TickSystem {
                 lastDirection: 0,
                 idleState: this.animController.createIdleState(),
                 homeAssignment: null,
+                idleSearchCooldown: 0,
             };
             this.runtimes.set(entityId, runtime);
         }

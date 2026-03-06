@@ -3,6 +3,7 @@
  */
 
 import type { Game } from '@/game/game';
+import type { BuildingAdjustHandler } from '@/game/features/building-adjust/types';
 import { BuildingAdjustMode } from '@/game/input';
 import { WorkAreaAdjustHandler } from '@/game/features/building-adjust';
 import { debugStats } from '@/game/debug-stats';
@@ -35,7 +36,7 @@ export function updateTileDebugStats(
  * Registers all adjust handlers: work areas.
  */
 export function createBuildingAdjustMode(getGame: () => Game | null): BuildingAdjustMode {
-    let handlers: readonly import('@/game/features/building-adjust/types').BuildingAdjustHandler[] | null = null;
+    let handlers: readonly BuildingAdjustHandler[] | null = null;
 
     return new BuildingAdjustMode(() => {
         const game = getGame();

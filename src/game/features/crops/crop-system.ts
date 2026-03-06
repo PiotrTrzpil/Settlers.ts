@@ -16,13 +16,15 @@
  */
 
 import { GrowableSystem, type GrowableConfig, type GrowableState, type PlantingCapable } from '../growth';
-import type { GameState } from '../../game-state';
+import type { CoreDeps } from '../feature';
 import { EntityType } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import type { Command, CommandResult } from '../../commands';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { EventBus } from '../../event-bus';
+import type { Persistable } from '@/game/persistence';
+import type { SerializedCrop } from '@/game/game-state-persistence';
 
 // ── Stages ────────────────────────────────────────────────────
 
@@ -95,14 +97,13 @@ const CROP_CONFIG: GrowableConfig = {
  * Manages crop growth, harvesting, and decay for all crop types.
  * Uses EntityVisualService for visual state - no direct entity manipulation.
  */
-export interface CropSystemConfig {
-    gameState: GameState;
+export interface CropSystemConfig extends CoreDeps {
     visualService: EntityVisualService;
-    eventBus: EventBus;
     executeCommand: (cmd: Command) => CommandResult;
 }
 
-export class CropSystem extends GrowableSystem<CropState> {
+export class CropSystem extends GrowableSystem<CropState> implements Persistable<SerializedCrop[]> {
+    readonly persistKey = 'crops' as const;
     private readonly eventBus: EventBus;
 
     constructor(cfg: CropSystemConfig) {
@@ -267,11 +268,13 @@ export class CropSystem extends GrowableSystem<CropState> {
         cropType: MapObjectType,
         radius?: number
     ): { x: number; y: number } | null {
+        const searchRadius = radius ?? this.config.plantingSearchRadius;
         return findEmptySpot(cx, cy, {
             gameState: this.gameState,
-            searchRadius: radius ?? this.config.plantingSearchRadius,
+            searchRadius,
             minDistanceSq: this.config.minDistanceSq,
             rng: this.gameState.rng,
+            proximityEntities: [...this.gameState.spatialIndex.nearby(cx, cy, searchRadius * 2)],
             proximityFilter: entity => entity.type === EntityType.MapObject && entity.subType === cropType,
         });
     }
@@ -288,7 +291,36 @@ export class CropSystem extends GrowableSystem<CropState> {
         }
     }
 
-    // ── Persistence ───────────────────────────────────────────────
+    // ── Persistable ──────────────────────────────────────────────
+
+    serialize(): SerializedCrop[] {
+        const result: SerializedCrop[] = [];
+        for (const [entityId, state] of this.getAllCropStates()) {
+            result.push({
+                entityId,
+                stage: state.stage,
+                cropType: state.cropType,
+                progress: state.progress,
+                decayTimer: state.decayTimer,
+                currentOffset: state.currentOffset,
+            });
+        }
+        return result;
+    }
+
+    deserialize(data: SerializedCrop[]): void {
+        for (const c of data) {
+            this.restoreCropState(c.entityId, {
+                stage: c.stage,
+                cropType: c.cropType,
+                progress: c.progress,
+                decayTimer: c.decayTimer,
+                currentOffset: c.currentOffset,
+            });
+        }
+    }
+
+    // ── Backward-compatible aliases ──────────────────────────────
 
     *getAllCropStates(): IterableIterator<[number, CropState]> {
         yield* this.getAllStates();

@@ -4,7 +4,7 @@ import { GeneralMapInformation } from '@/resources/map/general-map-information';
 import { MapSize } from '@/utilities/map-size';
 import { LandscapeType } from './renderer/landscape/landscape-type';
 import type { MapEntityData, MapObjectData } from '@/resources/map/map-entity-data';
-import { S4TreeType } from '@/resources/map/s4-types';
+import { S4TreeType, S4Tribe } from '@/resources/map/s4-types';
 import { SeededRng } from './rng';
 
 const MAP_SIZE = 256;
@@ -99,5 +99,41 @@ export function createTestMapLoader(): IMapLoader {
         general,
         mapSize,
         entityData,
+    };
+}
+
+/**
+ * Creates a flat, empty all-grass map with no objects.
+ * Used for entity catalog tests where a clean background is needed
+ * while still loading real sprite assets.
+ */
+export function createEmptyMapLoader(): IMapLoader {
+    const mapSize = new MapSize(MAP_SIZE, MAP_SIZE);
+    const total = MAP_SIZE * MAP_SIZE;
+    const groundType = new Uint8Array(total);
+    const groundHeight = new Uint8Array(total);
+
+    // Fill with flat grass at uniform height
+    groundType.fill(LandscapeType.Grass);
+    groundHeight.fill(10);
+
+    const landscape: IMapLandscape = {
+        getGroundType: () => groundType,
+        getGroundHeight: () => groundHeight,
+    };
+
+    return {
+        landscape,
+        general: new GeneralMapInformation(),
+        mapSize,
+        entityData: {
+            players: [{ playerIndex: 0, tribe: S4Tribe.ROMAN, startX: MAP_SIZE / 2, startY: MAP_SIZE / 2 }],
+            buildings: [],
+            settlers: [],
+            stacks: [],
+            objects: [],
+            teams: null,
+            quest: { questText: '', questTip: '' },
+        },
     };
 }

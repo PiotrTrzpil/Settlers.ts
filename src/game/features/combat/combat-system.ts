@@ -10,6 +10,7 @@
  */
 
 import type { TickSystem } from '../../tick-system';
+import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { Entity } from '../../entity';
@@ -18,11 +19,13 @@ import { hexDistance, getApproxDirection } from '../../systems/hex-directions';
 import { CombatState, CombatStatus, createCombatState, getCombatStats } from './combat-state';
 import { resolveTaskAnimation } from '../../animation/index';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
 import type { Command, CommandResult } from '../../commands';
+import type { Persistable } from '@/game/persistence';
+import type { SerializedCombatUnit } from '@/game/game-state-persistence';
 
-const log = new LogHandler('CombatSystem');
+const log = createLogger('CombatSystem');
 
 /** Detection range: how far a unit scans for enemies (in hex tiles) */
 const DETECTION_RANGE = 12;
@@ -42,14 +45,14 @@ const SCAN_INTERVAL = 0.5;
  */
 const PURSUIT_REPATH_INTERVAL = 1.0;
 
-export interface CombatSystemConfig {
-    gameState: GameState;
-    eventBus: EventBus;
+export interface CombatSystemConfig extends CoreDeps {
     visualService: EntityVisualService;
     executeCommand: (cmd: Command) => CommandResult;
 }
 
-export class CombatSystem implements TickSystem {
+export class CombatSystem implements TickSystem, Persistable<SerializedCombatUnit[]> {
+    readonly persistKey = 'combat' as const;
+
     private readonly states = new Map<number, CombatState>();
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
@@ -341,5 +344,28 @@ export class CombatSystem implements TickSystem {
         if (!entity) return;
         const intent = resolveTaskAnimation('idle', entity);
         this.visualService.applyIntent(entityId, intent);
+    }
+
+    // ── Persistable ───────────────────────────────────────────────
+
+    serialize(): SerializedCombatUnit[] {
+        const result: SerializedCombatUnit[] = [];
+        for (const [entityId, state] of this.states) {
+            result.push({
+                entityId,
+                health: state.health,
+                maxHealth: state.maxHealth,
+            });
+        }
+        return result;
+    }
+
+    deserialize(data: SerializedCombatUnit[]): void {
+        for (const s of data) {
+            const state = this.states.get(s.entityId);
+            if (!state) continue;
+            state.health = s.health;
+            state.maxHealth = s.maxHealth;
+        }
     }
 }

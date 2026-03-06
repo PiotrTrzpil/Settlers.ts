@@ -8,7 +8,6 @@
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
-import { EventSubscriptionManager } from '../../event-bus';
 import { BuildingOverlayManager } from './building-overlay-manager';
 import { OverlayRegistry } from './overlay-registry';
 import { populateOverlayRegistry } from './overlay-data-loader';
@@ -26,8 +25,6 @@ export const BuildingOverlayFeature: FeatureDefinition = {
     dependencies: [],
 
     create(ctx: FeatureContext) {
-        const subscriptions = new EventSubscriptionManager();
-
         const overlayRegistry = new OverlayRegistry();
         populateOverlayRegistry(overlayRegistry);
 
@@ -36,7 +33,7 @@ export const BuildingOverlayFeature: FeatureDefinition = {
             entityProvider: ctx.gameState,
         });
 
-        subscriptions.subscribe(ctx.eventBus, 'building:completed', ({ entityId, buildingType }) => {
+        ctx.on('building:completed', ({ entityId, buildingType }) => {
             const entity = ctx.gameState.getEntity(entityId);
             if (!entity) return;
             buildingOverlayManager.addBuilding(entityId, buildingType, entity.race);
@@ -47,9 +44,6 @@ export const BuildingOverlayFeature: FeatureDefinition = {
         return {
             systems: [buildingOverlayManager],
             exports: { buildingOverlayManager, overlayRegistry } satisfies BuildingOverlayFeatureExports,
-            destroy: () => {
-                subscriptions.unsubscribeAll();
-            },
         };
     },
 };

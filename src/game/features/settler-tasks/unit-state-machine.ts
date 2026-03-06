@@ -14,7 +14,7 @@
 
 import type { Entity } from '../../entity';
 import { UnitType } from '../../entity';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import { SettlerState, type SettlerConfig, type JobState, type HomeAssignment } from './types';
 import type { IdleAnimationController, IdleAnimationState } from './idle-animation-controller';
 import type { WorkerTaskExecutor, WorkerRuntimeState, OccupancyMap } from './worker-task-executor';
@@ -24,7 +24,7 @@ import type { EntityVisualService } from '../../animation/entity-visual-service'
 /** Settler configs keyed by UnitType (from settler-data-access.ts). */
 type SettlerConfigs = Map<UnitType, SettlerConfig>;
 
-const log = new LogHandler('UnitStateMachine');
+const log = createLogger('UnitStateMachine');
 
 /** Simple move task state (for user-initiated movement) */
 export interface MoveTaskState {
@@ -46,6 +46,8 @@ export interface UnitRuntime {
     idleState: IdleAnimationState;
     /** Workplace building assignment — null when unassigned or building destroyed. */
     homeAssignment: HomeAssignment | null;
+    /** Ticks remaining before next idle work search (0 = search now). */
+    idleSearchCooldown: number;
 }
 
 export interface UnitStateMachineConfig {
@@ -57,6 +59,8 @@ export interface UnitStateMachineConfig {
     buildingOccupants: Map<number, number>;
     claimBuilding: (runtime: UnitRuntime, buildingId: number) => void;
     releaseBuilding: (runtime: UnitRuntime) => void;
+    /** Ticks to wait between idle work searches (0 = every tick). */
+    idleSearchCooldown: number;
 }
 
 export class UnitStateMachine {
@@ -68,6 +72,11 @@ export class UnitStateMachine {
     private readonly buildingOccupants: Map<number, number>;
     private readonly claimBuilding: (runtime: UnitRuntime, buildingId: number) => void;
     private readonly releaseBuilding: (runtime: UnitRuntime) => void;
+    private readonly idleSearchCooldown: number;
+
+    /** Pre-bound closures for handleIdle — avoids allocating new closures per call. */
+    private readonly boundClaimBuilding: (r: WorkerRuntimeState, buildingId: number) => void;
+    private readonly boundReleaseBuilding: (r: WorkerRuntimeState) => void;
 
     constructor(cfg: UnitStateMachineConfig) {
         this.gameState = cfg.gameState;
@@ -78,6 +87,10 @@ export class UnitStateMachine {
         this.buildingOccupants = cfg.buildingOccupants;
         this.claimBuilding = cfg.claimBuilding;
         this.releaseBuilding = cfg.releaseBuilding;
+        this.idleSearchCooldown = cfg.idleSearchCooldown;
+
+        this.boundClaimBuilding = (r, buildingId) => cfg.claimBuilding(r as UnitRuntime, buildingId);
+        this.boundReleaseBuilding = r => cfg.releaseBuilding(r as UnitRuntime);
     }
 
     /**
@@ -86,17 +99,19 @@ export class UnitStateMachine {
     updateUnit(unit: Entity, runtime: UnitRuntime, dt: number): void {
         const config = this.settlerConfigs.get(unit.subType as UnitType);
 
-        // Update direction tracking and animation
-        this.updateDirectionTracking(unit, runtime);
-
         // Handle move task first (takes priority)
         if (runtime.moveTask) {
+            this.updateDirectionTracking(unit, runtime);
             this.updateMoveTask(unit, runtime);
             return;
         }
 
         // Handle choreography-based jobs for configured settlers
         if (config) {
+            // Working path calls updateDirectionTracking itself (after executor, for mid-tick direction changes)
+            if (runtime.state !== SettlerState.WORKING) {
+                this.updateDirectionTracking(unit, runtime);
+            }
             this.updateSettler(unit, config, runtime, dt);
             return;
         }
@@ -163,7 +178,12 @@ export class UnitStateMachine {
     private updateSettler(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
         switch (runtime.state) {
         case SettlerState.IDLE:
-            this.handleIdle(settler, config, runtime);
+            // Throttle expensive idle work search — only run when cooldown expires
+            if (runtime.idleSearchCooldown > 0) {
+                runtime.idleSearchCooldown--;
+            } else {
+                this.handleIdle(settler, config, runtime);
+            }
             // Also handle idle turning when not working (handleIdle may change state to WORKING)
             // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- handleIdle mutates runtime.state
             if (runtime.state === SettlerState.IDLE) {
@@ -180,22 +200,26 @@ export class UnitStateMachine {
             break;
 
         case SettlerState.INTERRUPTED:
-            // Return to idle after interruption
+            // Return to idle after interruption — search immediately on next tick
             runtime.state = SettlerState.IDLE;
             runtime.job = null;
+            runtime.idleSearchCooldown = 0;
             break;
         }
     }
 
     private handleIdle(settler: Entity, config: SettlerConfig, runtime: UnitRuntime): void {
-        this.workerExecutor.handleIdle(
+        const found = this.workerExecutor.handleIdle(
             settler,
             config,
             runtime as WorkerRuntimeState,
             this.buildingOccupants as OccupancyMap,
-            (r, buildingId) => this.claimBuilding(r as UnitRuntime, buildingId),
-            r => this.releaseBuilding(r as UnitRuntime)
+            this.boundClaimBuilding,
+            this.boundReleaseBuilding
         );
+        if (!found) {
+            runtime.idleSearchCooldown = this.idleSearchCooldown;
+        }
     }
 
     private handleWorking(settler: Entity, config: SettlerConfig, runtime: UnitRuntime, dt: number): void {
@@ -203,5 +227,10 @@ export class UnitStateMachine {
 
         // Sync direction immediately after task execution (FACE_POS sets it mid-tick, avoid one-frame lag)
         this.updateDirectionTracking(settler, runtime);
+
+        // Job completed/interrupted → search for new work immediately on next idle tick
+        if (runtime.state !== SettlerState.WORKING) {
+            runtime.idleSearchCooldown = 0;
+        }
     }
 }

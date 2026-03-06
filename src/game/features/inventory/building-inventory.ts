@@ -21,9 +21,11 @@ import {
     getUnreservedAmount,
 } from './inventory-slot';
 import { getInventoryConfig, type SlotConfig, type InventoryConfig } from './inventory-configs';
-import { LogHandler } from '@/utilities/log-handler';
+import { type ComponentStore, mapStore } from '../../ecs';
+import { createLogger } from '@/utilities/logger';
+import type { Persistable } from '@/game/persistence';
 
-const log = new LogHandler('BuildingInventory');
+const log = createLogger('BuildingInventory');
 
 /**
  * Complete inventory state for a building.
@@ -37,6 +39,22 @@ export interface BuildingInventory {
     inputSlots: InventorySlot[];
     /** Output slots for materials produced */
     outputSlots: InventorySlot[];
+}
+
+// ── Serialization types ──
+
+export interface SerializedInventorySlot {
+    materialType: EMaterialType;
+    current: number;
+    max: number;
+    reserved: number;
+}
+
+export interface SerializedBuildingInventory {
+    entityId: number;
+    buildingType: number;
+    inputSlots: SerializedInventorySlot[];
+    outputSlots: SerializedInventorySlot[];
 }
 
 /**
@@ -56,8 +74,13 @@ let _instanceCounter = 0;
  * Manages building inventories across the game.
  * Provides methods to create, query, and modify building inventories.
  */
-export class BuildingInventoryManager {
+export class BuildingInventoryManager implements Persistable<SerializedBuildingInventory[]> {
+    readonly persistKey = 'buildingInventories' as const;
     private inventories: Map<number, BuildingInventory> = new Map();
+
+    /** Uniform read-only view for cross-cutting queries */
+    readonly store: ComponentStore<BuildingInventory> = mapStore(this.inventories);
+
     private changeListeners: Set<InventoryChangeCallback> = new Set();
     private allowedMaterials = new Map<number, Set<EMaterialType>>();
     private _debugId = ++_instanceCounter;
@@ -671,6 +694,41 @@ export class BuildingInventoryManager {
      */
     getAllInventories(): IterableIterator<BuildingInventory> {
         return this.inventories.values();
+    }
+
+    // ── Persistable implementation ──
+
+    serialize(): SerializedBuildingInventory[] {
+        const result: SerializedBuildingInventory[] = [];
+        for (const inv of this.getAllInventories()) {
+            result.push({
+                entityId: inv.buildingId,
+                buildingType: inv.buildingType,
+                inputSlots: this.serializeSlots(inv.inputSlots),
+                outputSlots: this.serializeSlots(inv.outputSlots),
+            });
+        }
+        return result;
+    }
+
+    deserialize(data: SerializedBuildingInventory[]): void {
+        // Reset reservations to 0 since in-progress requests are reset to pending on restore
+        for (const inv of data) {
+            this.restoreInventory({
+                ...inv,
+                inputSlots: inv.inputSlots.map(s => ({ ...s, reserved: 0 })),
+                outputSlots: inv.outputSlots.map(s => ({ ...s, reserved: 0 })),
+            });
+        }
+    }
+
+    private serializeSlots(slots: InventorySlot[]): SerializedInventorySlot[] {
+        return slots.map(s => ({
+            materialType: s.materialType,
+            current: s.currentAmount,
+            max: s.maxCapacity,
+            reserved: s.reservedAmount,
+        }));
     }
 
     /**

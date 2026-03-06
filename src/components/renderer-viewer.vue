@@ -77,9 +77,9 @@ function drawOverlayLabels(): void {
     for (const label of labels) {
         const x = label.screenX * invDpr;
         const y = label.screenY * invDpr;
-        const text = String(label.type);
+        const text = label.name ?? String(label.type);
         ctx.strokeText(text, x, y - 4);
-        ctx.fillStyle = `hsl(${label.hue}, 90%, 65%)`;
+        ctx.fillStyle = label.name ? '#ff6666' : `hsl(${label.hue}, 90%, 65%)`;
         ctx.fillText(text, x, y - 4);
     }
     ctx.restore();

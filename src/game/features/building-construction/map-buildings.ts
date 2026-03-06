@@ -3,18 +3,17 @@
  * Maps S4BuildingType to our internal BuildingType and creates completed buildings.
  */
 
-import { Race } from '../../race';
 import { BuildingType } from '../../buildings/types';
 import { captureOriginalTerrain, setConstructionSiteGroundType, applyTerrainLeveling } from './terrain';
 import type { TerrainBuildingParams } from './terrain';
 import { GameState } from '../../game-state';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
 import { S4BuildingType } from '@/resources/map/s4-types';
 import type { EventBus } from '../../event-bus';
 import type { TerrainData } from '../../terrain';
 
-const log = new LogHandler('MapBuildings');
+const log = createLogger('MapBuildings');
 
 /**
  * Mapping from Settlers 4 building types to our internal building types.
@@ -96,8 +95,6 @@ export interface PopulateBuildingsOptions {
     eventBus: EventBus;
     /** Terrain data for terrain modification (required) */
     terrain: TerrainData;
-    /** Per-player race mapping (player index → Race) for assigning race to buildings */
-    playerRaces?: Map<number, Race>;
 }
 
 /**
@@ -142,32 +139,29 @@ export function populateMapBuildings(
             continue;
         }
 
-        // Resolve race before creating the entity — needed for race-specific footprint lookup
-        const race = options.playerRaces?.get(buildingData.player);
-        if (race === undefined) {
-            throw new Error(
-                `No race mapping for player ${buildingData.player} — playerRaces must be populated before spawning buildings`
-            );
-        }
-
-        // Create the building entity with the correct race so footprint lookup uses the right data
-        const entity = state.addBuilding(buildingType, buildingData.x, buildingData.y, buildingData.player, race);
+        // Create the building entity — race is derived from playerRaces[player] in GameState
+        const entity = state.addBuilding(buildingType, buildingData.x, buildingData.y, buildingData.player);
 
         // Apply instant terrain modification using a temporary params object.
         // No ConstructionSite is created — the building is immediately operational.
         // originalTerrain is discarded — terrain permanence for completed buildings.
         const { groundType, groundHeight, mapSize } = options.terrain;
-        const terrainParams: TerrainBuildingParams = { buildingType, race, tileX: entity.x, tileY: entity.y };
+        const terrainParams: TerrainBuildingParams = {
+            buildingType,
+            race: entity.race,
+            tileX: entity.x,
+            tileY: entity.y,
+        };
         const originalTerrain = captureOriginalTerrain(terrainParams, groundType, groundHeight, mapSize);
         setConstructionSiteGroundType(terrainParams, groundType, mapSize, originalTerrain);
         applyTerrainLeveling(terrainParams, groundType, groundHeight, mapSize, 1.0, originalTerrain);
 
-        // Emit building:completed so that systems (like CarrierSystem) can register service areas
+        // Emit building:completed so that systems (like CarrierSystem) can register state
         // and spawn units (handled by BuildingConstructionSystem listener)
         eventBus.emit('building:completed', {
             entityId: entity.id,
             buildingType,
-            race,
+            race: entity.race,
             spawnWorker: true,
         });
 

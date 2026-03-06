@@ -49,3 +49,6 @@ export { type PopulateBuildingsOptions, populateMapBuildings, mapS4BuildingType 
 // Construction site manager, types, and request system (for game-services wiring)
 export { ConstructionSiteManager, type SerializedConstructionSite } from './construction-site-manager';
 export { ConstructionRequestSystem } from './construction-request-system';
+
+// Feature definition (self-registering via FeatureRegistry)
+export { BuildingConstructionFeature, type BuildingConstructionExports } from './building-construction-feature';

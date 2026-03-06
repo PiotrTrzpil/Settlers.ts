@@ -76,9 +76,9 @@ export class GamePage {
 
     // ── Navigation ──────────────────────────────────────────
 
-    /** Navigate to the map view with an optional test map. */
-    async goto(options: { testMap?: boolean } = {}): Promise<void> {
-        const query = options.testMap ? '?testMap=true' : '';
+    /** Navigate to the map view with an optional test/empty map. */
+    async goto(options: { testMap?: boolean; emptyMap?: boolean } = {}): Promise<void> {
+        const query = options.testMap ? '?testMap=true' : options.emptyMap ? '?emptyMap=true' : '';
         await this.page.goto(`/map-view${query}`);
     }
 
@@ -93,7 +93,7 @@ export class GamePage {
             const game = window.__settlers__?.game;
             if (!game) return;
 
-            game.resetToCleanState({ keepEnvironment: true, rebuildInventory: true });
+            game.restoreToInitialState();
 
             const input = window.__settlers__?.input;
             if (input && input.getModeName() !== 'select') {

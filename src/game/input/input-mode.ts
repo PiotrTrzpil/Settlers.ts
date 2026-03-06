@@ -23,6 +23,10 @@ export interface InputContext {
     setModeData: <T>(data: T) => void;
     /** Race of the local player — null if not yet known (e.g. test map). */
     localPlayerRace: Race | null;
+    /** Pick an entity at screen coordinates (sprite-bounds hit test). Null if not wired. */
+    pickEntityAtScreen: ((screenX: number, screenY: number) => number | null) | null;
+    /** Pick entities whose sprites intersect a screen-space rectangle. Null if not wired. */
+    pickEntitiesInScreenRect: ((sx1: number, sy1: number, sx2: number, sy2: number) => number[]) | null;
 }
 
 /**

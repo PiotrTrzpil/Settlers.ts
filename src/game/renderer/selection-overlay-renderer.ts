@@ -3,7 +3,7 @@ import type { TileHighlight } from '../input/render-state';
 import { TilePicker } from '../input/tile-picker';
 import { tileToWorld, heightToWorld, TILE_CENTER_X, TILE_CENTER_Y } from '../systems/coordinate-system';
 import { getEntityWorldPos, type WorldPositionContext } from './world-position';
-import type { ServiceAreaRenderData } from './render-context';
+import type { CircleRenderData } from './render-context';
 import {
     FRAME_COLOR,
     FRAME_CORNER_COLOR,
@@ -21,8 +21,7 @@ import {
     SELECTION_ORIGIN_DOT_SCALE,
     SELECTION_ORIGIN_DOT_COLOR,
     FOOTPRINT_TILE_COLOR,
-    SERVICE_AREA_CIRCLE_COLOR,
-    SERVICE_AREA_CIRCLE_SEGMENTS,
+    CIRCLE_OVERLAY_SEGMENTS,
     SHADER_VERTEX_SCALE,
 } from './entity-renderer-constants';
 
@@ -447,31 +446,31 @@ export class SelectionOverlayRenderer {
     }
 
     /**
-     * Draw circle outlines around service areas for selected hub buildings.
+     * Draw circle outlines around areas (work areas, etc.).
      * Each circle is approximated as a ring of thin quad segments in world space.
      */
-    public drawServiceAreaCircles(
+    public drawCircleOverlays(
         gl: WebGL2RenderingContext,
         buffer: WebGLBuffer,
-        serviceAreas: readonly ServiceAreaRenderData[],
+        circles: readonly CircleRenderData[],
         aEntityPos: number,
         aColor: number,
         ctx: SelectionRenderContext,
-        color?: readonly number[]
+        color: readonly number[]
     ): void {
-        if (serviceAreas.length === 0) return;
+        if (circles.length === 0) return;
 
-        const c = color ?? SERVICE_AREA_CIRCLE_COLOR;
+        const c = color;
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
         gl.vertexAttrib4f(aColor, c[0]!, c[1]!, c[2]!, c[3]!);
 
-        const segments = SERVICE_AREA_CIRCLE_SEGMENTS;
+        const segments = CIRCLE_OVERLAY_SEGMENTS;
         const lineWidth = 0.3; // Width of circle outline in tile units
 
         // 6 vertices per quad segment (2 triangles)
         const segmentVerts = new Float32Array(12);
 
-        for (const area of serviceAreas) {
+        for (const area of circles) {
             // Sample ground height at center for a reasonable base height
             const centerIdx = ctx.mapSize.toIndex(Math.round(area.centerX), Math.round(area.centerY));
             const baseH = heightToWorld(ctx.groundHeight[centerIdx]!);

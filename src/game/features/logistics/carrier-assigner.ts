@@ -9,42 +9,41 @@
  */
 
 import type { GameState } from '../../game-state';
+import type { CoreDeps } from '../feature';
 import type { EventBus } from '../../event-bus';
-import type { CarrierManager } from '../carriers';
-import type { ServiceAreaManager } from '../service-areas';
-import { TransportJob } from './transport-job';
+import type { CarrierRegistry } from '../carriers';
+import type { TransportJobRecord } from './transport-job-record';
+import * as TransportJobService from './transport-job-service';
+import type { TransportJobDeps } from './transport-job-service';
 import type { InventoryReservationManager } from './inventory-reservation';
 import type { RequestManager } from './request-manager';
-import type { BuildingInventoryManager } from '../inventory';
 import type { RequestMatchResult } from './request-matcher';
 import type { ResourceRequest } from './resource-request';
 import type { TransportJobBuilder } from './transport-job-builder';
 import type { JobState } from '../settler-tasks/types';
 import { hexDistance } from '../../systems/hex-directions';
 import type { CarrierFilter } from './logistics-filter';
+import { query } from '../../ecs';
 
 /** Assigns a job to a settler and optionally starts movement. */
 export interface JobAssigner {
     assignJob(entityId: number, job: JobState, moveTo?: { x: number; y: number }): boolean;
 }
 
-export interface CarrierAssignerConfig {
-    gameState: GameState;
-    eventBus: EventBus;
-    carrierManager: CarrierManager;
+export interface CarrierAssignerConfig extends CoreDeps {
+    carrierRegistry: CarrierRegistry;
     jobAssigner: JobAssigner;
     transportJobBuilder: TransportJobBuilder;
-    serviceAreaManager: ServiceAreaManager;
     reservationManager: InventoryReservationManager;
     requestManager: RequestManager;
-    inventoryManager: BuildingInventoryManager;
     carrierFilter?: CarrierFilter;
+    activeJobs: ReadonlyMap<number, unknown>;
 }
 
 /** Result of a successful carrier assignment. */
 export interface AssignmentSuccess {
-    /** The created transport job. */
-    transportJob: TransportJob;
+    /** The created transport job record. */
+    record: TransportJobRecord;
     /** Entity ID of the carrier that was assigned. */
     carrierId: number;
 }
@@ -58,28 +57,29 @@ export interface AssignmentSuccess {
 export class CarrierAssigner {
     private readonly gameState: GameState;
     private readonly eventBus: EventBus;
-    private readonly carrierManager: CarrierManager;
+    private readonly carrierRegistry: CarrierRegistry;
     private readonly jobAssigner: JobAssigner;
     private readonly transportJobBuilder: TransportJobBuilder;
-    private readonly serviceAreaManager: ServiceAreaManager;
     private readonly reservationManager: InventoryReservationManager;
     private readonly requestManager: RequestManager;
-    private readonly inventoryManager: BuildingInventoryManager;
+    private readonly activeJobs: ReadonlyMap<number, unknown>;
+    private readonly transportJobDeps: TransportJobDeps;
     carrierFilter: CarrierFilter | null;
-
-    /** When false, only search hubs shared by source and destination. */
-    globalLogistics = true;
 
     constructor(config: CarrierAssignerConfig) {
         this.gameState = config.gameState;
         this.eventBus = config.eventBus;
-        this.carrierManager = config.carrierManager;
+        this.carrierRegistry = config.carrierRegistry;
         this.jobAssigner = config.jobAssigner;
         this.transportJobBuilder = config.transportJobBuilder;
-        this.serviceAreaManager = config.serviceAreaManager;
         this.reservationManager = config.reservationManager;
         this.requestManager = config.requestManager;
-        this.inventoryManager = config.inventoryManager;
+        this.activeJobs = config.activeJobs;
+        this.transportJobDeps = {
+            reservationManager: this.reservationManager,
+            requestManager: this.requestManager,
+            eventBus: this.eventBus,
+        };
         this.carrierFilter = config.carrierFilter ?? null;
     }
 
@@ -95,22 +95,17 @@ export class CarrierAssigner {
             return 'no_carrier';
         }
 
-        const transportJob = TransportJob.create(
+        const record = TransportJobService.activate(
             request.id,
             match.sourceBuilding,
             request.buildingId,
             request.materialType,
             match.amount,
             carrier.entityId,
-            {
-                reservationManager: this.reservationManager,
-                requestManager: this.requestManager,
-                inventoryManager: this.inventoryManager,
-                eventBus: this.eventBus,
-            }
+            this.transportJobDeps
         );
 
-        if (!transportJob) {
+        if (!record) {
             this.eventBus.emit('carrier:assignmentFailed', {
                 requestId: request.id,
                 reason: 'reservation_failed',
@@ -122,11 +117,10 @@ export class CarrierAssigner {
             return null;
         }
 
-        const job = this.transportJobBuilder.build(transportJob, carrier.entityId);
+        const job = this.transportJobBuilder.build(record, carrier.entityId);
         const success = this.jobAssigner.assignJob(carrier.entityId, job, job.targetPos!);
 
         if (success) {
-            this.carrierManager.startTransport(carrier.entityId);
             this.eventBus.emit('carrier:assigned', {
                 requestId: request.id,
                 carrierId: carrier.entityId,
@@ -134,7 +128,7 @@ export class CarrierAssigner {
                 destBuilding: request.buildingId,
                 material: request.materialType,
             });
-            return { transportJob, carrierId: carrier.entityId };
+            return { record, carrierId: carrier.entityId };
         }
 
         this.eventBus.emit('carrier:assignmentFailed', {
@@ -145,7 +139,7 @@ export class CarrierAssigner {
             material: request.materialType,
             carrierId: carrier.entityId,
         });
-        transportJob.cancel('assignment_failed');
+        TransportJobService.cancel(record, 'assignment_failed', this.transportJobDeps);
         return null;
     }
 
@@ -157,16 +151,15 @@ export class CarrierAssigner {
         let bestId: number | null = null;
         let bestDist = Infinity;
 
-        for (const carrier of this.carrierManager.getAllCarriers()) {
-            if (!this.carrierManager.canAssignJobTo(carrier.entityId)) continue;
-            const entity = this.gameState.getEntity(carrier.entityId);
-            if (!entity || entity.player !== playerId) continue;
+        for (const [id, , entity] of query(this.carrierRegistry.store, this.gameState.store)) {
+            if (this.activeJobs.has(id)) continue;
+            if (entity.player !== playerId) continue;
             if (this.carrierFilter && !this.carrierFilter(entity, playerId)) continue;
 
             const dist = hexDistance(entity.x, entity.y, sourceX, sourceY);
             if (dist < bestDist) {
                 bestDist = dist;
-                bestId = carrier.entityId;
+                bestId = id;
             }
         }
 

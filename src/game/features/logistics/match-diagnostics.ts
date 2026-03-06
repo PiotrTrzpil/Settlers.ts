@@ -6,15 +6,16 @@
  * development and gameplay debugging.
  */
 
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import type { BuildingInventoryManager } from '../inventory';
 import type { GameState } from '../../game-state';
 import type { ResourceRequest } from './resource-request';
+import { PeriodicTimer } from './periodic-timer';
 
-/** How often to log match failure diagnostics (in milliseconds). */
-const MATCH_DIAGNOSTIC_INTERVAL_MS = 10_000;
+/** How often to log match failure diagnostics (in seconds). */
+const MATCH_DIAGNOSTIC_INTERVAL_SEC = 10;
 
-const log = new LogHandler('MatchDiagnostics');
+const log = createLogger('MatchDiagnostics');
 
 export interface MatchDiagnosticsConfig {
     gameState: GameState;
@@ -32,9 +33,7 @@ export interface MatchDiagnosticsConfig {
 export class MatchDiagnostics {
     private readonly gameState: GameState;
     private readonly inventoryManager: BuildingInventoryManager;
-
-    /** Accumulated time since last diagnostic log (in ms). */
-    private timeSinceDiagnostic = 0;
+    private readonly timer = new PeriodicTimer(MATCH_DIAGNOSTIC_INTERVAL_SEC);
 
     /** True when the diagnostic interval has elapsed and failures should be logged. */
     private diagnosticDue = false;
@@ -50,9 +49,7 @@ export class MatchDiagnostics {
      * @param dt Delta time in seconds.
      */
     tick(dt: number): void {
-        this.timeSinceDiagnostic += dt * 1000;
-        if (this.timeSinceDiagnostic >= MATCH_DIAGNOSTIC_INTERVAL_MS) {
-            this.timeSinceDiagnostic = 0;
+        if (this.timer.advance(dt)) {
             this.diagnosticDue = true;
         }
     }

@@ -5,13 +5,13 @@
  */
 
 import type { IViewPoint } from '../i-view-point';
-import type { IRenderPass, PassContext } from './types';
+import type { IRenderPass, TerritoryDotContext } from './types';
 import { TilePicker } from '@/game/input/tile-picker';
 import { PALETTE_TEXTURE_WIDTH } from '../palette-texture';
 import { scaleSprite } from '../entity-renderer-constants';
 
 export class TerritoryDotPass implements IRenderPass {
-    private ctx!: PassContext;
+    private ctx!: TerritoryDotContext;
 
     /** Draw calls emitted by this pass (updated each frame). */
     public lastDrawCalls = 0;
@@ -19,7 +19,7 @@ export class TerritoryDotPass implements IRenderPass {
     /** One-shot diagnostic flag — warns once per lifetime when sprites are missing. */
     private warnedMissingSprite = false;
 
-    public prepare(ctx: PassContext): void {
+    public prepare(ctx: TerritoryDotContext): void {
         this.ctx = ctx;
     }
 

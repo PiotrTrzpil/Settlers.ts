@@ -9,22 +9,20 @@
  */
 
 import type { TickSystem } from '../tick-system';
-import type { GameState } from '../game-state';
-import type { EventBus } from '../event-bus';
+import { EventSubscriptionManager } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
-import type { FeatureDefinition, FeatureInstance, FeatureContext } from './feature';
+import type { CoreDeps, FeatureDefinition, FeatureInstance, FeatureContext } from './feature';
 import type { Command, CommandResult } from '../commands';
-import { LogHandler } from '@/utilities/log-handler';
+import type { TerrainData } from '../terrain';
+import { createLogger } from '@/utilities/logger';
 
-const log = new LogHandler('FeatureRegistry');
+const log = createLogger('FeatureRegistry');
 
 /**
  * Configuration for FeatureRegistry.
  */
-export interface FeatureRegistryConfig {
-    gameState: GameState;
-    eventBus: EventBus;
+export interface FeatureRegistryConfig extends CoreDeps {
     visualService: EntityVisualService;
     cleanupRegistry: EntityCleanupRegistry;
     executeCommand: (cmd: Command) => CommandResult;
@@ -39,11 +37,14 @@ export class FeatureRegistry {
     /** Loaded feature instances by ID */
     private readonly instances = new Map<string, FeatureInstance>();
 
+    /** Auto-tracked event subscriptions per feature (from ctx.on()) */
+    private readonly autoSubscriptions = new Map<string, EventSubscriptionManager>();
+
     /** Feature exports by ID */
     private readonly exports = new Map<string, Record<string, unknown>>();
 
-    /** All systems from loaded features */
-    private readonly allSystems: TickSystem[] = [];
+    /** All systems from loaded features, with group labels */
+    private readonly allSystems: { system: TickSystem; group: string }[] = [];
 
     /** Track loaded feature IDs for summary logging */
     private readonly loadedIds: string[] = [];
@@ -86,8 +87,10 @@ export class FeatureRegistry {
             }
         }
 
-        // Create context for this feature
-        const ctx = this.createContext(definition.dependencies ?? []);
+        // Create context for this feature (with auto-tracked event subscriptions)
+        const autoSubs = new EventSubscriptionManager();
+        this.autoSubscriptions.set(definition.id, autoSubs);
+        const ctx = this.createContext(definition.dependencies ?? [], autoSubs);
 
         // Create the feature instance
         const instance = definition.create(ctx);
@@ -98,9 +101,12 @@ export class FeatureRegistry {
             this.exports.set(definition.id, instance.exports);
         }
 
-        // Collect systems
+        // Collect systems with their group label
         if (instance.systems) {
-            this.allSystems.push(...instance.systems);
+            const group = instance.systemGroup ?? 'Other';
+            for (const system of instance.systems) {
+                this.allSystems.push({ system, group });
+            }
         }
 
         this.loadedIds.push(definition.id);
@@ -123,11 +129,23 @@ export class FeatureRegistry {
     }
 
     /**
-     * Get all systems from loaded features.
+     * Get all systems from loaded features, with group labels.
      * Use this to register systems with GameLoop.
      */
-    getSystems(): TickSystem[] {
+    getSystems(): readonly { system: TickSystem; group: string }[] {
         return this.allSystems;
+    }
+
+    /**
+     * Forward terrain data to all features that declared onTerrainReady.
+     * Called in load order so features can safely access terrain-dependent
+     * exports from their dependencies.
+     */
+    setTerrainData(terrain: TerrainData, resourceData?: Uint8Array): void {
+        for (const id of this.loadedIds) {
+            const instance = this.instances.get(id);
+            instance?.onTerrainReady?.(terrain, resourceData);
+        }
     }
 
     /**
@@ -151,24 +169,30 @@ export class FeatureRegistry {
         for (const id of ids) {
             const instance = this.instances.get(id);
             if (!instance) throw new Error(`FeatureRegistry: instance ${id} missing from internal map (destroy)`);
-            if (instance.destroy) {
-                instance.destroy();
-            }
+            // Auto-unsubscribe ctx.on() subscriptions before feature destroy
+            this.autoSubscriptions.get(id)?.unsubscribeAll();
+            instance.destroy?.();
+        }
+        // Destroy tick systems that have a destroy method
+        for (const { system } of this.allSystems) {
+            system.destroy?.();
         }
         this.instances.clear();
         this.exports.clear();
+        this.autoSubscriptions.clear();
         this.allSystems.length = 0;
     }
 
     /**
      * Create a context for a feature with access to dependencies.
      */
-    private createContext(allowedDeps: string[]): FeatureContext {
+    private createContext(allowedDeps: string[], autoSubs: EventSubscriptionManager): FeatureContext {
         const allowedSet = new Set(allowedDeps);
+        const eventBus = this.config.eventBus;
 
         return {
             gameState: this.config.gameState,
-            eventBus: this.config.eventBus,
+            eventBus,
             visualService: this.config.visualService,
             cleanupRegistry: this.config.cleanupRegistry,
             executeCommand: this.config.executeCommand,
@@ -181,6 +205,10 @@ export class FeatureRegistry {
                     );
                 }
                 return this.getFeatureExports<T>(featureId);
+            },
+
+            on(event, handler) {
+                autoSubs.subscribe(eventBus, event as any, handler as any);
             },
         };
     }

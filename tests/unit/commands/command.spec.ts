@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { executeCommand } from '@/game/commands';
 import {
     BuildingConstructionPhase,
     captureOriginalTerrain,
@@ -9,7 +8,7 @@ import {
 import { BuildingType } from '@/game/entity';
 import { Race } from '@/game/race';
 import { TERRAIN, setTerrainAt, blockColumn } from '../helpers/test-map';
-import { createTestContext, addBuilding, toCommandContext, type TestContext } from '../helpers/test-game';
+import { createTestContext, addBuilding, createTestRegistry, type TestContext } from '../helpers/test-game';
 
 // Note: Happy-path command tests (place_building, spawn_unit, select, deselect,
 // area select, remove entity) are covered by flow integration tests in flows/.
@@ -25,7 +24,7 @@ describe('Command System – edge cases', () => {
     describe('place_building', () => {
         it('should reject building on water', () => {
             setTerrainAt(ctx.map, 10, 10, TERRAIN.WATER);
-            const result = executeCommand(toCommandContext(ctx), {
+            const result = createTestRegistry(ctx).execute({
                 type: 'place_building',
                 buildingType: 1,
                 x: 10,
@@ -41,7 +40,7 @@ describe('Command System – edge cases', () => {
 
     describe('move_unit', () => {
         it('should fail for non-existent unit', () => {
-            const result = executeCommand(toCommandContext(ctx), {
+            const result = createTestRegistry(ctx).execute({
                 type: 'move_unit',
                 entityId: 999,
                 targetX: 10,
@@ -51,7 +50,7 @@ describe('Command System – edge cases', () => {
         });
 
         it('should fail when no path exists', () => {
-            executeCommand(toCommandContext(ctx), {
+            createTestRegistry(ctx).execute({
                 type: 'spawn_unit',
                 unitType: 0,
                 x: 5,
@@ -62,7 +61,7 @@ describe('Command System – edge cases', () => {
 
             blockColumn(ctx.map, 15);
 
-            const result = executeCommand(toCommandContext(ctx), {
+            const result = createTestRegistry(ctx).execute({
                 type: 'move_unit',
                 entityId: ctx.state.entities[0]!.id,
                 targetX: 20,
@@ -77,7 +76,7 @@ describe('Command System – edge cases', () => {
 
     describe('remove_entity', () => {
         it('should fail for non-existent entity', () => {
-            const result = executeCommand(toCommandContext(ctx), {
+            const result = createTestRegistry(ctx).execute({
                 type: 'remove_entity',
                 entityId: 999,
             });
@@ -125,7 +124,7 @@ describe('Command System – edge cases', () => {
 
             expect(ctx.map.groundType[ctx.map.mapSize.toIndex(10, 10)]).toBe(CONSTRUCTION_SITE_GROUND_TYPE);
 
-            executeCommand(toCommandContext(ctx), {
+            createTestRegistry(ctx).execute({
                 type: 'remove_entity',
                 entityId: building.id,
             });

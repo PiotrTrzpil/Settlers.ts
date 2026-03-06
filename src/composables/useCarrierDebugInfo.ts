@@ -8,7 +8,6 @@ import { computed, type Ref } from 'vue';
 import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
 import type { Game } from '@/game/game';
-import { CARRIER_STATUS_NAMES, CARRIER_STATUS_CLASSES } from '@/composables/useLogisticsDebug';
 
 export interface CarrierDebugInfo {
     status: string;
@@ -32,16 +31,18 @@ export function useCarrierDebugInfo(
         if (!entity || entity.type !== EntityType.Unit) return null;
         if (!game.value) return null;
 
-        const carrier = game.value.services.carrierManager.getCarrier(entity.id);
-        if (!carrier) return null;
+        if (!game.value.services.carrierRegistry.has(entity.id)) return null;
 
         const movement = game.value.state.movement.getController(entity.id);
         const pathLength = movement?.path.length ?? 0;
         const pathProgress = movement?.pathIndex ?? 0;
 
+        const activeJobId = game.value.services.settlerTaskSystem.getActiveJobId(entity.id);
+        const hasJob = activeJobId !== null;
+
         return {
-            status: CARRIER_STATUS_NAMES[carrier.status],
-            statusClass: CARRIER_STATUS_CLASSES[carrier.status],
+            status: hasJob ? 'Busy' : 'Idle',
+            statusClass: hasJob ? 'busy' : 'idle',
             pathLength,
             pathProgress,
         };

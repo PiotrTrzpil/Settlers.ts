@@ -19,7 +19,7 @@ import { LayerVisibility, DEFAULT_LAYER_VISIBILITY, isMapObjectVisible } from '.
 import type { TileHighlight } from '../input/render-state';
 import type {
     IRenderContext,
-    ServiceAreaRenderData,
+    CircleRenderData,
     TerritoryDotRenderData,
     StackGhostRenderData,
     PlacementPreviewState,
@@ -37,7 +37,8 @@ export type { PlacementPreviewState } from './render-context';
 
 import { TEXTURE_UNIT_SPRITE_ATLAS } from './entity-renderer-constants';
 
-import type { PassContext } from './render-passes/types';
+import type { PassContext } from './render-passes';
+import type { DebugEntityLabel } from './render-passes/types';
 import { PathIndicatorPass } from './render-passes/path-indicator-pass';
 import { GroundOverlayPass } from './render-passes/ground-overlay-pass';
 import { TerritoryDotPass } from './render-passes/territory-dot-pass';
@@ -80,7 +81,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     // Sprite resolution (animation, construction state, resource quantity)
     // Rebuilt each frame in setContext() with current state providers. Null before first setContext() call.
-    private spriteResolver: EntitySpriteResolver | null = null;
+    private _spriteResolver: EntitySpriteResolver | null = null;
+
+    /** Current sprite resolver (rebuilt each frame). Null before first setContext(). */
+    get spriteResolver(): EntitySpriteResolver | null {
+        return this._spriteResolver;
+    }
 
     // Entity data to render (set externally each frame)
     public entities: Entity[] = [];
@@ -119,8 +125,8 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Consolidated placement preview state
     public placementPreview: PlacementPreviewState | null = null;
 
-    /** Debug: decoration labels collected during ColorEntityPass (screen-space) */
-    public debugDecoLabels: Array<{ screenX: number; screenY: number; type: number; hue: number }> = [];
+    /** Debug: entity labels collected during ColorEntityPass (screen-space) */
+    public debugDecoLabels: DebugEntityLabel[] = [];
 
     /** Tile highlight rings from input modes (e.g., stack-adjust tool). */
     public tileHighlights: TileHighlight[] = [];
@@ -131,14 +137,11 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     // Layer visibility settings
     public layerVisibility: LayerVisibility = { ...DEFAULT_LAYER_VISIBILITY };
 
-    // Service areas to render for selected hub buildings
-    public selectedServiceAreas: readonly ServiceAreaRenderData[] = [];
-
     // Territory boundary dots to render
     private territoryDots: readonly TerritoryDotRenderData[] = [];
 
     // Work area circles to render during work-area editing (debug mode: line circles)
-    private workAreaCircles: readonly ServiceAreaRenderData[] = [];
+    private workAreaCircles: readonly CircleRenderData[] = [];
 
     // Work area boundary dots to render as sprites (gameplay mode: dot sprites)
     private workAreaDots: readonly TerritoryDotRenderData[] = [];
@@ -309,14 +312,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.layerVisibility = ctx.layerVisibility;
         this.renderSettings = ctx.settings;
         this.placementPreview = ctx.placementPreview;
-        this.selectedServiceAreas = ctx.selectedServiceAreas;
         this.territoryDots = ctx.territoryDots;
         this.workAreaCircles = ctx.workAreaCircles;
         this.workAreaDots = ctx.workAreaDots;
         this.stackGhosts = ctx.stackGhosts;
 
         // Rebuild sprite resolver with current frame's state providers
-        this.spriteResolver = new EntitySpriteResolver(
+        this._spriteResolver = new EntitySpriteResolver(
             this.spriteManager,
             ctx.getVisualState,
             ctx.getDirectionTransition,
@@ -355,7 +357,7 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         if (!this.dynamicBuffer) return;
-        if (!this.spriteResolver) {
+        if (!this._spriteResolver) {
             throw new Error('EntityRenderer.draw() called before setContext() — spriteResolver not initialized');
         }
         if (this.entities.length === 0 && !this.placementPreview) return;
@@ -483,36 +485,39 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     /** Build the PassContext for the current frame. */
     private buildPassContext(): PassContext {
         return {
-            entities: this.entities,
+            // Spatial
+            mapSize: this.mapSize,
+            groundHeight: this.groundHeight,
+            // Color shader
+            aPosition: this.aPosition,
+            aEntityPos: this.aEntityPos,
+            aColor: this.aColor,
+            dynamicBuffer: this.dynamicBuffer!,
+            // Sprite subsystems
+            spriteManager: this.spriteManager,
+            spriteBatchRenderer: this.spriteBatchRenderer,
+            spriteResolver: this._spriteResolver!,
+            // Entity frame
+            sortedEntities: this.sortedEntities,
+            frameContext: this.frameContext,
             selectedEntityIds: this.selectedEntityIds,
             unitStates: this.unitStates,
-            pileStates: this.pileStates,
-            getBuildingRenderState: this.getBuildingRenderState,
+            // Entity state providers
             getBuildingOverlays: this.getBuildingOverlays,
             getVisualState: this.getVisualState,
             getDirectionTransition: this.getDirectionTransition,
             getHealthRatio: this.getHealthRatio,
+            // Render parameters
             renderSettings: this.renderSettings,
             layerVisibility: this.layerVisibility,
-            renderAlpha: this.renderAlpha,
-            mapSize: this.mapSize,
-            groundHeight: this.groundHeight,
-            selectedServiceAreas: this.selectedServiceAreas,
+            // Overlay / special pass data
             territoryDots: this.territoryDots,
             workAreaCircles: this.workAreaCircles,
             workAreaDots: this.workAreaDots,
             stackGhosts: this.stackGhosts,
             placementPreview: this.placementPreview,
             tileHighlights: this.tileHighlights,
-            spriteManager: this.spriteManager,
-            spriteBatchRenderer: this.spriteBatchRenderer,
-            spriteResolver: this.spriteResolver!,
-            frameContext: this.frameContext,
-            sortedEntities: this.sortedEntities,
-            aPosition: this.aPosition,
-            aEntityPos: this.aEntityPos,
-            aColor: this.aColor,
-            dynamicBuffer: this.dynamicBuffer!,
+            // Debug
             debugDecoLabels: this.debugDecoLabels,
         };
     }

@@ -2,7 +2,7 @@ import { ref, shallowRef, triggerRef, computed, watch, onMounted, reactive, type
 import { useRoute } from 'vue-router';
 import { MapLoader } from '@/resources/map/map-loader';
 import { Game } from '@/game/game';
-import { createTestMapLoader } from '@/game/test-map-factory';
+import { createTestMapLoader, createEmptyMapLoader } from '@/game/test-map-factory';
 import { Entity, TileCoord, UnitType } from '@/game/entity';
 import { isUnitAvailableForRace, isBuildingAvailableForRace } from '@/game/race-availability';
 import { Race } from '@/game/race';
@@ -22,6 +22,7 @@ import {
     saveInitialState,
 } from '@/game/game-state-persistence';
 import { ALL_BUILDINGS, ALL_UNITS, ALL_RESOURCES } from './palette-data';
+import { toastError } from '@/game/toast-notifications';
 
 /** Entity counts per layer for display in the layer panel */
 export interface LayerCounts {
@@ -63,6 +64,12 @@ function createTestGame(fileManager: FileManager): Game {
     const g = new Game(fileManager, mapContent);
     g.useProceduralTextures = true;
     return g;
+}
+
+/** Create a flat empty map Game instance (for entity catalog tests with real sprites) */
+function createEmptyMapGame(fileManager: FileManager): Game {
+    const mapContent = createEmptyMapLoader();
+    return new Game(fileManager, mapContent);
 }
 
 /** Load a map file and create a Game instance */
@@ -107,8 +114,6 @@ function tryRestoreGameState(game: Game): void {
     const t0 = performance.now();
     log.info('Restoring saved game state...');
     restoreFromSnapshot(game, snapshot);
-    game.services.inventoryPileSync?.rebuildFromExistingEntities();
-    game.services.buildingOverlayManager.rebuildFromExistingEntities(game.services.constructionSiteManager);
     debugStats.state.mapLoadTimings.stateRestore = Math.round(performance.now() - t0);
 }
 
@@ -186,26 +191,55 @@ function createGameActions(getGame: () => Game | null, game: ShallowRef<Game | n
             const g = getGame();
             if (!g) return;
 
-            // Clear saved state
-            clearSavedGameState();
-
-            // Restore to initial map state (trees, buildings, etc. from map load)
-            const restored = gameStatePersistence.restoreToInitialState(g);
-            if (restored) {
-                // Rebuild state from restored entities
-                g.services.inventoryPileSync?.rebuildFromExistingEntities();
-                g.services.buildingOverlayManager.rebuildFromExistingEntities(g.services.constructionSiteManager);
+            try {
+                clearSavedGameState();
+                g.restoreToInitialState();
                 log.info('Game state reset to initial map state');
-            } else {
-                // Fallback: no initial state, use clean reset (keeps environment)
-                log.warn('No initial state available, resetting to clean state');
-                g.resetToCleanState({ keepEnvironment: true, rebuildInventory: true });
+            } catch (e) {
+                const err = e instanceof Error ? e : new Error(String(e));
+                toastError('Reset', err.message);
+                log.error('Failed to reset game state:', err);
+                return;
             }
 
-            // Force UI update
             triggerRef(game);
         },
     };
+}
+
+/** Set up icon loading watches: load icons when game or race changes */
+function setupIconLoading(
+    game: ShallowRef<Game | null>,
+    getFileManager: () => FileManager,
+    currentPlayerRace: Ref<Race>,
+    resourceIcons: Ref<Record<number, string>>,
+    buildingIcons: Ref<Record<number, IconEntry>>,
+    unitIcons: Ref<Record<string, IconEntry>>
+): void {
+    watch(game, g => {
+        if (g) {
+            void loadResourceIcons(getFileManager(), availableResources).then(icons => {
+                resourceIcons.value = icons;
+            });
+            void loadBuildingIcons(getFileManager(), currentPlayerRace.value, ALL_BUILDINGS).then(icons => {
+                buildingIcons.value = icons;
+            });
+            void loadUnitIcons(getFileManager(), currentPlayerRace.value, ALL_UNITS).then(icons => {
+                unitIcons.value = icons;
+            });
+        }
+    });
+
+    watch(currentPlayerRace, race => {
+        if (game.value) {
+            void loadBuildingIcons(getFileManager(), race, ALL_BUILDINGS).then(icons => {
+                buildingIcons.value = icons;
+            });
+            void loadUnitIcons(getFileManager(), race, ALL_UNITS).then(icons => {
+                unitIcons.value = icons;
+            });
+        }
+    });
 }
 
 export function useMapView(
@@ -218,6 +252,11 @@ export function useMapView(
     // in case the route isn't fully resolved when the composable first runs
     const isTestMap = computed(() => {
         const param = route.query['testMap'];
+        return param === 'true' || param === '';
+    });
+
+    const isEmptyMap = computed(() => {
+        const param = route.query['emptyMap'];
         return param === 'true' || param === '';
     });
 
@@ -240,7 +279,10 @@ export function useMapView(
      * Central map loading function. All map loads go through here.
      * Handles guards, cleanup, and state management in one place.
      */
-    async function loadMap(file: IFileSource | null, options: { isTestMap?: boolean } = {}): Promise<boolean> {
+    async function loadMap(
+        file: IFileSource | null,
+        options: { isTestMap?: boolean; isEmptyMap?: boolean } = {}
+    ): Promise<boolean> {
         const fm = getFileManager();
 
         // Guard: prevent concurrent loads
@@ -289,6 +331,20 @@ export function useMapView(
                 tryRestoreGameState(game.value);
 
                 // Start auto-saving (won't save initial state again since we already did)
+                gameStatePersistence.start(game.value);
+                return true;
+            }
+
+            if (options.isEmptyMap) {
+                // Load flat empty map with real sprite assets (for entity catalog tests)
+                mapInfo.value = 'Empty map (flat 256x256 grass)';
+                fileName.value = null;
+                mapLoadState.currentFile = '__empty_map__';
+                setCurrentMapId('__empty_map__');
+
+                game.value = createEmptyMapGame(fm);
+                wireFeatureToggles(game.value);
+                saveInitialState(game.value);
                 gameStatePersistence.start(game.value);
                 return true;
             }
@@ -348,6 +404,8 @@ export function useMapView(
 
         if (isTestMap.value) {
             void loadMap(null, { isTestMap: true });
+        } else if (isEmptyMap.value) {
+            void loadMap(null, { isEmptyMap: true });
         }
         // For real maps, the file-browser component handles selection
         // and emits 'select' which calls onFileSelect → loadMap
@@ -357,8 +415,8 @@ export function useMapView(
      * Handle user file selection from file browser.
      */
     function onFileSelect(file: IFileSource): void {
-        // In test map mode, ignore file browser selections
-        if (isTestMap.value) return;
+        // In test/empty map mode, ignore file browser selections
+        if (isTestMap.value || isEmptyMap.value) return;
 
         void loadMap(file);
     }
@@ -494,32 +552,8 @@ export function useMapView(
     const togglePause = gameActions.togglePause;
     const resetGameState = gameActions.resetGameState;
 
-    // Load icons from GFX files when game becomes available
-    watch(game, g => {
-        if (g) {
-            void loadResourceIcons(getFileManager(), availableResources).then(icons => {
-                resourceIcons.value = icons;
-            });
-            void loadBuildingIcons(getFileManager(), currentPlayerRace.value, ALL_BUILDINGS).then(icons => {
-                buildingIcons.value = icons;
-            });
-            void loadUnitIcons(getFileManager(), currentPlayerRace.value, ALL_UNITS).then(icons => {
-                unitIcons.value = icons;
-            });
-        }
-    });
-
-    // Reload building/unit icons when race changes (different GFX file per race)
-    watch(currentPlayerRace, race => {
-        if (game.value) {
-            void loadBuildingIcons(getFileManager(), race, ALL_BUILDINGS).then(icons => {
-                buildingIcons.value = icons;
-            });
-            void loadUnitIcons(getFileManager(), race, ALL_UNITS).then(icons => {
-                unitIcons.value = icons;
-            });
-        }
-    });
+    // Load icons from GFX files when game becomes available / race changes
+    setupIconLoading(game, getFileManager, currentPlayerRace, resourceIcons, buildingIcons, unitIcons);
 
     return {
         fileName,

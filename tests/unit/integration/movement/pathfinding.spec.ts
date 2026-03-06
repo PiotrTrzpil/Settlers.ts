@@ -361,7 +361,7 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
         s: Simulation,
         opts: { count: number; x: number; startY: number; spacing?: number; unitType?: UnitType }
     ): number[] {
-        const { count, x, startY, spacing = 2, unitType = UnitType.Swordsman } = opts;
+        const { count, x, startY, spacing = 2, unitType = UnitType.Swordsman1 } = opts;
         const ids: number[] = [];
         for (let i = 0; i < count; i++) {
             ids.push(s.spawnUnit(x, startY + i * spacing, unitType));
@@ -390,7 +390,7 @@ describe.skipIf(!hasRealData)('Movement & Pathfinding simulation (real game data
         s: Simulation,
         opts: { count: number; leftX: number; rightX: number; startY: number; ySpacing: number; unitType?: UnitType }
     ) {
-        const { count, leftX, rightX, startY, ySpacing, unitType = UnitType.Swordsman } = opts;
+        const { count, leftX, rightX, startY, ySpacing, unitType = UnitType.Swordsman1 } = opts;
         const leftGroup = spawnGroup(s, { count, x: leftX, startY, spacing: ySpacing, unitType });
         const rightGroup = spawnGroup(s, { count, x: rightX, startY, spacing: ySpacing, unitType });
 

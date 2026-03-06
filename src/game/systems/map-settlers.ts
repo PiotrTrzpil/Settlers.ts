@@ -4,7 +4,6 @@
  */
 
 import { getUnitLevel } from '../entity';
-import { Race } from '../race';
 import { GameState } from '../game-state';
 import { S4_TO_UNIT_TYPE } from '../game-data-access';
 import { LogHandler } from '@/utilities/log-handler';
@@ -14,22 +13,12 @@ import { S4SettlerType } from '@/resources/map/s4-types';
 
 const log = new LogHandler('Map:Settlers');
 
-export interface PopulateMapSettlersOptions {
-    /** Per-player race mapping (player index → Race) */
-    playerRaces?: Map<number, Race>;
-}
-
 /**
  * Create unit entities from parsed map settler data.
  *
  * @returns Number of settlers successfully created
  */
-export function populateMapSettlers(
-    state: GameState,
-    settlers: MapSettlerData[],
-    options: PopulateMapSettlersOptions,
-    eventBus?: EventBus
-): number {
+export function populateMapSettlers(state: GameState, settlers: MapSettlerData[], eventBus?: EventBus): number {
     let created = 0;
     let skipped = 0;
 
@@ -50,13 +39,7 @@ export function populateMapSettlers(
             continue;
         }
 
-        const race = options.playerRaces?.get(settlerData.player);
-        if (race === undefined) {
-            throw new Error(
-                `No race mapping for player ${settlerData.player} — playerRaces must be populated before spawning settlers`
-            );
-        }
-        const entity = state.addUnit(unitType, settlerData.x, settlerData.y, settlerData.player, race);
+        const entity = state.addUnit(unitType, settlerData.x, settlerData.y, settlerData.player);
         entity.level = getUnitLevel(unitType);
 
         // Register the unit with carrier/combat/task systems (same event as spawn_unit command)

@@ -33,19 +33,86 @@ let _bufferSize = 0;
 let _gCost = new Float32Array(0);
 let _parent = new Int32Array(0);
 let _flags = new Uint8Array(0);
+/** Integer-indexed building occupancy bitmap — avoids tileKey string creation in hot loop. */
+let _buildingBitmap = new Uint8Array(0);
 const _openQueue = new BucketPriorityQueue();
+
+/**
+ * Clear the building bitmap for the building surrounding the start tile.
+ * Uses tileOccupancy to identify which building owns the neighbors, then
+ * clears those tiles so the unit can exit.
+ */
+function clearStartBuildingFromBitmap(
+    startX: number,
+    startY: number,
+    mapWidth: number,
+    mapHeight: number,
+    tileOccupancy: Map<string, number>
+): void {
+    const buildingId = findStartBuildingId(startX, startY, mapWidth, mapHeight, tileOccupancy);
+    if (buildingId === undefined) return;
+
+    _buildingBitmap[startX + startY * mapWidth] = 0;
+    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+        const [dx, dy] = GRID_DELTAS[d]!;
+        const nx = startX + dx;
+        const ny = startY + dy;
+        if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) continue;
+        const nIdx = nx + ny * mapWidth;
+        if (_buildingBitmap[nIdx] && tileOccupancy.get(tileKey(nx, ny)) === buildingId) {
+            _buildingBitmap[nIdx] = 0;
+        }
+    }
+}
+
+/** Find the building entity that owns the footprint around the start tile. */
+function findStartBuildingId(
+    startX: number,
+    startY: number,
+    mapWidth: number,
+    mapHeight: number,
+    tileOccupancy: Map<string, number>
+): number | undefined {
+    // Check neighbors first — they reliably hold the building entity ID in tileOccupancy.
+    // The start tile itself may hold a unit (the one trying to path out), not the building.
+    for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+        const [dx, dy] = GRID_DELTAS[d]!;
+        const nx = startX + dx;
+        const ny = startY + dy;
+        if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) continue;
+        if (!_buildingBitmap[nx + ny * mapWidth]) continue;
+        const occupant = tileOccupancy.get(tileKey(nx, ny));
+        if (occupant !== undefined) return occupant;
+    }
+    return undefined;
+}
 
 function prepareBuffers(totalTiles: number): void {
     if (totalTiles > _bufferSize) {
         _gCost = new Float32Array(totalTiles);
         _parent = new Int32Array(totalTiles);
         _flags = new Uint8Array(totalTiles);
+        _buildingBitmap = new Uint8Array(totalTiles);
         _bufferSize = totalTiles;
     }
     _gCost.fill(Infinity, 0, totalTiles);
     _parent.fill(-1, 0, totalTiles);
     _flags.fill(0, 0, totalTiles);
     _openQueue.clear();
+}
+
+/** Snapshot the string-keyed building occupancy Set into the integer-indexed bitmap. */
+function populateBuildingBitmap(buildingOccupancy: Set<string>, mapWidth: number, totalTiles: number): void {
+    _buildingBitmap.fill(0, 0, totalTiles);
+    for (const key of buildingOccupancy) {
+        const comma = key.indexOf(',');
+        const x = +key.slice(0, comma);
+        const y = +key.slice(comma + 1);
+        const idx = x + y * mapWidth;
+        if (idx >= 0 && idx < totalTiles) {
+            _buildingBitmap[idx] = 1;
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -88,8 +155,9 @@ interface SearchContext {
     terrain: PathfindingTerrain;
     goalX: number;
     goalY: number;
+    goalIdx: number;
     tileOccupancy: Map<string, number>;
-    buildingOccupancy: Set<string>;
+    buildingBitmap: Uint8Array;
     ignoreOccupancy: boolean;
     gCost: Float32Array;
     parent: Int32Array;
@@ -111,14 +179,14 @@ function canEnterTile(nx: number, ny: number, nIdx: number, ctx: SearchContext):
     // Impassable terrain?
     if (!isPassable(ctx.terrain.groundType[nIdx]!)) return false;
 
-    const key = tileKey(nx, ny);
-    const isGoal = nx === ctx.goalX && ny === ctx.goalY;
+    // Goal tile is always enterable (for building interaction / final position)
+    if (nIdx === ctx.goalIdx) return true;
 
-    // Building footprints always block (goal tile allowed for building interaction)
-    if (!isGoal && ctx.buildingOccupancy.has(key)) return false;
+    // Building footprints always block — integer-indexed bitmap (no string creation)
+    if (ctx.buildingBitmap[nIdx]) return false;
 
-    // Occupied by another unit? (allow goal tile even if occupied)
-    if (!ctx.ignoreOccupancy && !isGoal && ctx.tileOccupancy.has(key)) {
+    // Occupied by another unit?
+    if (!ctx.ignoreOccupancy && ctx.tileOccupancy.has(tileKey(nx, ny))) {
         return false;
     }
 
@@ -210,6 +278,98 @@ function reconstructPath(goalIdx: number, parent: Int32Array, mapWidth: number):
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DIAGNOSTICS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Optional hook to resolve entity IDs to human-readable descriptions (e.g. "Carrier", "Woodcutter", "WoodcutterHut"). */
+let _describeEntity: ((entityId: number) => string) | undefined;
+
+/** Register a callback that resolves entity IDs to descriptive names for A* diagnostic logs. */
+export function setEntityDescriber(fn: (entityId: number) => string): void {
+    _describeEntity = fn;
+}
+
+/** Format an entity reference: "id(Type)" if describer is set, otherwise just "id". */
+function entityTag(entityId: number): string {
+    if (!_describeEntity) return String(entityId);
+    return entityId + '(' + _describeEntity(entityId) + ')';
+}
+
+/** Diagnose why a single neighbor was rejected. */
+function diagnoseNeighbor(
+    d: number,
+    startX: number,
+    startY: number,
+    groundType: Uint8Array,
+    mapWidth: number,
+    mapHeight: number,
+    tileOccupancy: Map<string, number>,
+    ignoreOccupancy: boolean
+): string {
+    const [dx, dy] = GRID_DELTAS[d]!;
+    const nx = startX + dx;
+    const ny = startY + dy;
+    const pos = `d${d}(${nx},${ny})`;
+    if (nx < 0 || nx >= mapWidth || ny < 0 || ny >= mapHeight) return pos + ':OOB';
+    const nIdx = nx + ny * mapWidth;
+    if (!isPassable(groundType[nIdx]!)) return pos + ':terrain';
+    if (_buildingBitmap[nIdx]) {
+        const occupant = tileOccupancy.get(tileKey(nx, ny));
+        return pos + ':building' + (occupant !== undefined ? '[' + entityTag(occupant) + ']' : '');
+    }
+    if (!ignoreOccupancy && tileOccupancy.has(tileKey(nx, ny))) {
+        return pos + ':unit[' + entityTag(tileOccupancy.get(tileKey(nx, ny))!) + ']';
+    }
+    return pos + ':closed';
+}
+
+/** Log detailed diagnostic info when pathfinding fails. */
+function logPathfindingFailure(
+    startX: number,
+    startY: number,
+    goalX: number,
+    goalY: number,
+    startIdx: number,
+    goalIdx: number,
+    nodesSearched: number,
+    groundType: Uint8Array,
+    mapWidth: number,
+    mapHeight: number,
+    tileOccupancy: Map<string, number>,
+    buildingOccupancy: Set<string>,
+    ignoreOccupancy: boolean
+): void {
+    const startKey = tileKey(startX, startY);
+    const goalKey = tileKey(goalX, goalY);
+    const startInBuilding = buildingOccupancy.has(startKey);
+    const goalInBuilding = buildingOccupancy.has(goalKey);
+    const startPassable = isPassable(groundType[startIdx]!);
+    const goalPassable = isPassable(groundType[goalIdx]!);
+    const exhausted = nodesSearched >= MAX_SEARCH_NODES;
+    const startOccupant = tileOccupancy.get(startKey);
+
+    let neighborInfo = '';
+    if (nodesSearched <= 1) {
+        const reasons: string[] = [];
+        for (let d = 0; d < NUMBER_OF_DIRECTIONS; d++) {
+            reasons.push(
+                diagnoseNeighbor(d, startX, startY, groundType, mapWidth, mapHeight, tileOccupancy, ignoreOccupancy)
+            );
+        }
+        neighborInfo = ' neighbors=[' + reasons.join(', ') + ']';
+    }
+
+    const occupantTag = startOccupant !== undefined ? ', occupant=' + entityTag(startOccupant) : '';
+    console.warn(
+        `[A*] No path (${startX},${startY})->(${goalX},${goalY}): ` +
+            `searched=${nodesSearched}/${MAX_SEARCH_NODES} ${exhausted ? 'EXHAUSTED' : 'EMPTY_QUEUE'} ` +
+            `start[passable=${startPassable}, inBuilding=${startInBuilding}${occupantTag}] ` +
+            `goal[passable=${goalPassable}, inBuilding=${goalInBuilding}] ` +
+            `ignoreOccupancy=${ignoreOccupancy}${neighborInfo}`
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // PUBLIC API
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -253,6 +413,7 @@ export function findPathAStar(
     // Prepare reusable buffers (fill-reset is far cheaper than per-call allocation)
     const totalTiles = mapWidth * mapHeight;
     prepareBuffers(totalTiles);
+    populateBuildingBitmap(buildingOccupancy, mapWidth, totalTiles);
     const gCost = _gCost;
     const parent = _parent;
     const flags = _flags;
@@ -262,8 +423,9 @@ export function findPathAStar(
         terrain,
         goalX,
         goalY,
+        goalIdx,
         tileOccupancy,
-        buildingOccupancy,
+        buildingBitmap: _buildingBitmap,
         ignoreOccupancy,
         gCost,
         parent,
@@ -273,6 +435,13 @@ export function findPathAStar(
 
     // Initialize start node
     const startIdx = startX + startY * mapWidth;
+
+    // If start is inside a building footprint, clear that building's tiles from the bitmap
+    // so the unit can walk out (e.g. workers spawned inside their workplace).
+    if (_buildingBitmap[startIdx]) {
+        clearStartBuildingFromBitmap(startX, startY, mapWidth, mapHeight, tileOccupancy);
+    }
+
     gCost[startIdx] = 0;
     flags[startIdx] = FLAG_OPEN;
     openQueue.insert(startIdx, hexDistance(startX, startY, goalX, goalY) * COST_SCALE);
@@ -313,20 +482,20 @@ export function findPathAStar(
         }
     }
 
-    // No path found — log diagnostic info
-    const startKey = tileKey(startX, startY);
-    const goalKey = tileKey(goalX, goalY);
-    const startInBuilding = buildingOccupancy.has(startKey);
-    const goalInBuilding = buildingOccupancy.has(goalKey);
-    const startPassable = isPassable(groundType[startIdx]!);
-    const goalPassable = isPassable(groundType[goalIdx]!);
-    const exhausted = nodesSearched >= MAX_SEARCH_NODES;
-    console.warn(
-        `[A*] No path (${startX},${startY})->(${goalX},${goalY}): ` +
-            `searched=${nodesSearched}/${MAX_SEARCH_NODES} ${exhausted ? 'EXHAUSTED' : 'EMPTY_QUEUE'} ` +
-            `start[passable=${startPassable}, inBuilding=${startInBuilding}] ` +
-            `goal[passable=${goalPassable}, inBuilding=${goalInBuilding}] ` +
-            `ignoreOccupancy=${ignoreOccupancy}`
+    logPathfindingFailure(
+        startX,
+        startY,
+        goalX,
+        goalY,
+        startIdx,
+        goalIdx,
+        nodesSearched,
+        groundType,
+        mapWidth,
+        mapHeight,
+        tileOccupancy,
+        buildingOccupancy,
+        ignoreOccupancy
     );
     return null;
 }

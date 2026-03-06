@@ -6,6 +6,7 @@ import { BlockedStateHandler } from './blocked-state-handler';
 import type { TickSystem } from '../../tick-system';
 import type { EventBus } from '../../event-bus';
 import type { SeededRng } from '../../rng';
+import { type ComponentStore, mapStore } from '../../ecs';
 import { LogHandler } from '@/utilities/log-handler';
 
 const log = new LogHandler('MovementSystem');
@@ -47,6 +48,9 @@ export interface MovementSystemConfig {
  */
 export class MovementSystem implements TickSystem {
     private controllers: Map<number, MovementController> = new Map();
+
+    /** Uniform read-only view for cross-cutting queries */
+    readonly store: ComponentStore<MovementController> = mapStore(this.controllers);
 
     // Terrain and occupancy references (also forwarded to sub-services)
     private readonly tileOccupancy: Map<string, number>;
@@ -268,7 +272,11 @@ export class MovementSystem implements TickSystem {
         const teleportDist = controller.detectTeleport();
         if (teleportDist > 1.5) {
             console.warn(
-                `[MovementSystem] TELEPORT DETECTED! Entity ${controller.entityId} jumped ${teleportDist.toFixed(2)} tiles`
+                `[MovementSystem] TELEPORT DETECTED! Entity ${controller.entityId} jumped ${teleportDist.toFixed(2)} tiles` +
+                    ` | state=${controller.state} prevState=${prevState}` +
+                    ` | tile=(${controller.tileX},${controller.tileY}) prev=(${controller.prevTileX},${controller.prevTileY})` +
+                    ` | progress=${controller.progress.toFixed(2)} inTransit=${controller.isInTransit}` +
+                    ` | pathLen=${controller.path.length} pathIdx=${controller.pathIndex}`
             );
         }
 

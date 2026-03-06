@@ -3,7 +3,7 @@ import { IMapLoader } from '@/resources/map/imap-loader';
 import { GameState } from './game-state';
 import { GameLoop } from './game-loop';
 import { GameServices } from './game-services';
-import { Command, executeCommand, type CommandResult, type CommandContext } from './commands';
+import { type Command, type CommandResult, CommandHandlerRegistry, registerAllHandlers } from './commands';
 import { TerrainData } from './terrain';
 import { populateMapObjectsFromEntityData } from './systems/map-objects';
 import { expandTrees } from './features/trees/tree-expansion';
@@ -13,13 +13,16 @@ import { populateMapStacks } from './systems/map-stacks';
 import { SoundManager } from './audio';
 import { Race, s4TribeToRace, loadSavedRace } from './race';
 import { EventBus } from './event-bus';
-import { EntityType } from './entity';
 import { GameSettingsManager } from './game-settings';
 import { GameViewState } from './game-view-state';
 import { setDirectionRunLength } from './systems/pathfinding';
 import { watch } from 'vue';
 import type { FrameRenderTiming } from './renderer/renderer';
+import type { MapObjectData } from '@/resources/map/map-entity-data';
+import type { MapLoadTimings } from './debug-stats';
 import { debugStats } from './debug-stats';
+import type { SystemState } from './game-loop';
+import { loadInitialState, restoreFromSnapshot, restoreInitialTerrain } from './game-state-persistence';
 import type { PlacementFilter } from './features/placement';
 import {
     createTerritoryPlacementFilter,
@@ -27,13 +30,6 @@ import {
     createTerritoryCarrierFilter,
 } from './features/territory';
 
-/** Options for resetToCleanState */
-export interface ResetOptions {
-    /** Keep environment objects (trees, stones). Default: true */
-    keepEnvironment?: boolean;
-    /** Rebuild inventory visualizer after reset. Default: true */
-    rebuildInventory?: boolean;
-}
 // Scripting is loaded dynamically to avoid bundling Lua when disabled
 // import { ScriptService, type ScriptLoadResult } from './scripting';
 type ScriptLoadResult = { success: boolean; scriptPath: string | null; error?: string };
@@ -80,6 +76,11 @@ export class Game {
     /** Territory-based placement filter — created after terrain data is available */
     private _placementFilter: PlacementFilter | null = null;
 
+    /** Public accessor for the current placement filter (used by renderer/UI) */
+    get placementFilter(): PlacementFilter | null {
+        return this._placementFilter;
+    }
+
     /** Current interaction mode */
     public mode: string = 'select';
 
@@ -120,8 +121,27 @@ export class Game {
             v => setDirectionRunLength(v)
         );
 
-        this.services = new GameServices(this.state, this.eventBus, this.execute.bind(this));
+        // Command registry is populated after GameServices creates all systems.
+        // GameServices receives a lazy executeCommand that delegates to the registry.
+        this.commandRegistry = new CommandHandlerRegistry();
+        this.services = new GameServices(this.state, this.eventBus, cmd => this.commandRegistry.execute(cmd));
         this.services.setTerrainData(this.terrain, mapLoader.landscape.getResourceData?.());
+
+        // Register all command handlers now that systems exist.
+        registerAllHandlers(this.commandRegistry, {
+            state: this.state,
+            terrain: this.terrain,
+            eventBus: this.eventBus,
+            settings: this.settings.state,
+            settlerTaskSystem: this.services.settlerTaskSystem,
+            constructionSiteManager: this.services.constructionSiteManager,
+            treeSystem: this.services.treeSystem,
+            cropSystem: this.services.cropSystem,
+            combatSystem: this.services.combatSystem,
+            productionControlManager: this.services.productionControlManager,
+            storageFilterManager: this.services.storageFilterManager,
+            getPlacementFilter: () => this._placementFilter,
+        });
         // Territory filters start as null (off). Enabled via the Territory feature toggle.
 
         // Create frame loop and register tick systems
@@ -132,15 +152,6 @@ export class Game {
 
         // Register feature toggles
         const dispatcher = this.services.logisticsDispatcher;
-        this._gameLoop.registerFeatureToggle({
-            name: 'Global Logistics',
-            group: 'Logistics',
-            requires: ['Territory'],
-            get: () => dispatcher.globalLogistics,
-            set: v => {
-                dispatcher.globalLogistics = v;
-            },
-        });
         this._gameLoop.registerFeatureToggle({
             name: 'Territory',
             group: 'World',
@@ -205,6 +216,7 @@ export class Game {
         for (const p of entityData.players) {
             this.playerRaces.set(p.playerIndex, s4TribeToRace(p.tribe));
         }
+        this.state.playerRaces = this.playerRaces;
 
         // Default to first player from map data
         if (entityData.players.length > 0) {
@@ -225,7 +237,6 @@ export class Game {
             const count = populateMapBuildings(this.state, entityData.buildings, {
                 eventBus: this.eventBus,
                 terrain: this.terrain,
-                playerRaces: this.playerRaces,
             });
             mlt.populateBuildings = Math.round(performance.now() - t0);
             if (count > 0) console.log(`Game: Loaded ${count} buildings from map data`);
@@ -234,14 +245,7 @@ export class Game {
         // Settlers (units)
         if (entityData.settlers.length) {
             const t0 = performance.now();
-            const count = populateMapSettlers(
-                this.state,
-                entityData.settlers,
-                {
-                    playerRaces: this.playerRaces,
-                },
-                this.eventBus
-            );
+            const count = populateMapSettlers(this.state, entityData.settlers, this.eventBus);
             mlt.populateUnits = Math.round(performance.now() - t0);
             if (count > 0) console.log(`Game: Loaded ${count} settlers from map data`);
         }
@@ -260,10 +264,7 @@ export class Game {
     }
 
     /** Load trees/decorations from map objects and optionally expand forests. */
-    private populateMapTrees(
-        objects: import('@/resources/map/map-entity-data').MapObjectData[],
-        mlt: import('./debug-stats').MapLoadTimings
-    ): void {
+    private populateMapTrees(objects: MapObjectData[], mlt: MapLoadTimings): void {
         const beforeCount = this.state.entities.length;
         const seedCount = populateMapObjectsFromEntityData(this.state, objects, this.terrain);
         const totalAdded = this.state.entities.length - beforeCount;
@@ -288,27 +289,12 @@ export class Game {
         }
     }
 
-    /** Shared context passed to every command execution */
-    public get commandContext(): CommandContext {
-        return {
-            state: this.state,
-            terrain: this.terrain,
-            eventBus: this.eventBus,
-            settings: this.settings.state,
-            settlerTaskSystem: this.services.settlerTaskSystem,
-            constructionSiteManager: this.services.constructionSiteManager,
-            treeSystem: this.services.treeSystem,
-            cropSystem: this.services.cropSystem,
-            combatSystem: this.services.combatSystem,
-            productionControlManager: this.services.productionControlManager,
-            storageFilterManager: this.services.storageFilterManager,
-            placementFilter: this._placementFilter,
-        };
-    }
+    /** Command handler registry — handlers bound with specific deps at init */
+    private readonly commandRegistry: CommandHandlerRegistry;
 
     /** Execute a command against the game state */
     public execute(cmd: Command): CommandResult {
-        return executeCommand(this.commandContext, cmd);
+        return this.commandRegistry.execute(cmd);
     }
 
     /** Find the starting position for the current player from map data */
@@ -344,46 +330,36 @@ export class Game {
     }
 
     /**
-     * Remove all entities via the command pipeline.
-     * Each entity goes through the full remove_entity command flow
-     * (terrain restoration, movement cleanup, selection cleanup, etc.).
+     * Remove every entity from the map, leaving only bare terrain.
+     * All entities (units, buildings, trees, stones, piles, decorations) are removed
+     * via the command pipeline so cleanup handlers run properly.
+     *
+     * @param resetTerrain If true, also restores terrain ground types and heights
+     *                     to the initial map state (reverting leveling, roads, etc.).
      */
-    public removeAllEntities(): void {
+    public clearAllEntities(options: { resetTerrain?: boolean } = {}): void {
         const ids = this.state.entities.map(e => e.id);
         for (const id of ids) {
             this.execute({ type: 'remove_entity', entityId: id });
         }
+        if (options.resetTerrain) {
+            restoreInitialTerrain(this);
+        }
     }
 
     /**
-     * Reset game to a clean state by removing user-placed entities.
-     * Used by both debug panel and e2e tests for consistent reset behavior.
-     *
-     * @param options Reset options
-     * @returns Number of entities removed
+     * Reset game to initial map state via the persistence pipeline.
+     * Removes all entities, recreates from snapshot, restores all feature state.
+     * Initial state is always saved at map load time (saveInitialState).
      */
-    public resetToCleanState(options: ResetOptions = {}): number {
-        const { keepEnvironment = true, rebuildInventory = true } = options;
-
-        // Determine which entity types to remove
-        const typesToRemove = keepEnvironment
-            ? [EntityType.Unit, EntityType.Building, EntityType.StackedPile]
-            : [EntityType.Unit, EntityType.Building, EntityType.StackedPile, EntityType.MapObject];
-
-        // Collect entities to remove (snapshot IDs first to avoid mutation during iteration)
-        const idsToRemove = this.state.entities.filter(e => typesToRemove.includes(e.type)).map(e => e.id);
-
-        // Remove via command pipeline for proper cleanup
-        for (const id of idsToRemove) {
-            this.execute({ type: 'remove_entity', entityId: id });
+    public restoreToInitialState(): void {
+        const snapshot = loadInitialState();
+        if (!snapshot) {
+            throw new Error(
+                'Game.restoreToInitialState: no initial state — saveInitialState must be called at map load'
+            );
         }
-
-        // Rebuild inventory pile sync to reconnect registry to pre-existing pile entities
-        if (rebuildInventory) {
-            this.services.inventoryPileSync?.rebuildFromExistingEntities();
-        }
-
-        return idsToRemove.length;
+        restoreFromSnapshot(this, snapshot);
     }
 
     /**
@@ -459,7 +435,7 @@ export class Game {
     }
 
     /** Get the name, group, and enabled state of every registered system and feature toggle */
-    public getSystemStates(): import('./game-loop').SystemState[] {
+    public getSystemStates(): SystemState[] {
         return this._gameLoop.getSystemStates();
     }
 

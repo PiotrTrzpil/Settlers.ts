@@ -3,6 +3,7 @@
  * Validates single-tile unit placement (similar to resources but for units).
  */
 
+import type { TerrainData } from '../../../terrain';
 import type { PlacementContext, PlacementResult } from '../types';
 import { validateSingleTilePlacement, canPlaceSingleTile } from './single-tile-validator';
 
@@ -26,11 +27,6 @@ export function validateUnitPlacement(x: number, y: number, ctx: PlacementContex
  * Simple boolean check for unit placement.
  * Use validateUnitPlacement for detailed status.
  */
-export function canPlaceUnit(
-    terrain: import('../../../terrain').TerrainData,
-    tileOccupancy: Map<string, number>,
-    x: number,
-    y: number
-): boolean {
+export function canPlaceUnit(terrain: TerrainData, tileOccupancy: Map<string, number>, x: number, y: number): boolean {
     return canPlaceSingleTile(terrain, tileOccupancy, x, y);
 }

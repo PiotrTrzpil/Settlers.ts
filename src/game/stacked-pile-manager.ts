@@ -9,12 +9,29 @@ import type { StackedPileState } from './entity';
 import { MAX_PILE_SIZE, EntityType, type Entity, type EntityProvider } from './entity';
 import type { EMaterialType } from './economy';
 import { type PileKind, getOwnerBuildingId, SlotKind } from './features/inventory/pile-kind';
+import { type ComponentStore, mapStore } from './ecs';
+import type { Persistable } from '@/game/persistence';
+import type { SpatialGrid } from './spatial-grid';
 
-export class StackedPileManager {
+type SerializedResourceQuantity = { entityId: number; quantity: number };
+
+export class StackedPileManager implements Persistable<SerializedResourceQuantity[]> {
+    readonly persistKey = 'resourceQuantities' as const;
+
     /** Stacked resource state tracking (quantity of items in each stack) */
     public readonly states: Map<number, StackedPileState> = new Map();
 
+    /** Uniform read-only view for cross-cutting queries */
+    readonly store: ComponentStore<StackedPileState> = mapStore(this.states);
+
+    private spatialIndex?: SpatialGrid;
+
     constructor(private entityProvider: EntityProvider) {}
+
+    /** Inject spatial index for fast proximity queries. Called after SpatialGrid is created. */
+    initSpatialIndex(index: SpatialGrid): void {
+        this.spatialIndex = index;
+    }
 
     /** Create initial state for a new stacked resource entity. */
     createState(entityId: number, kind: PileKind = { kind: SlotKind.Free }): void {
@@ -75,12 +92,26 @@ export class StackedPileManager {
     /**
      * Find the nearest free stacked resource of the given material type within radius.
      * Only considers piles where kind.kind === 'free' (not linked to any building).
+     *
+     * When `player` is provided and a spatial index is available, uses the
+     * territory-aware spatial hash to avoid scanning all entities.
      */
-    findNearestFree(x: number, y: number, material: EMaterialType, radius: number): Entity | undefined {
+    findNearestFree(
+        x: number,
+        y: number,
+        material: EMaterialType,
+        radius: number,
+        player?: number
+    ): Entity | undefined {
         let nearest: Entity | undefined;
         let minDistSq = radius * radius;
 
-        for (const entity of this.entityProvider.entities) {
+        const candidates =
+            this.spatialIndex && player !== undefined
+                ? this.spatialIndex.nearbyForPlayer(x, y, radius, player)
+                : this.entityProvider.entities;
+
+        for (const entity of candidates) {
             if (entity.type !== EntityType.StackedPile) continue;
             if (entity.subType !== material) continue;
             const state = this.states.get(entity.id);
@@ -95,6 +126,25 @@ export class StackedPileManager {
             }
         }
         return nearest;
+    }
+
+    // ── Persistable ───────────────────────────────────────────────
+
+    serialize(): SerializedResourceQuantity[] {
+        const result: SerializedResourceQuantity[] = [];
+        for (const [entityId, state] of this.states) {
+            result.push({ entityId, quantity: state.quantity });
+        }
+        return result;
+    }
+
+    deserialize(data: SerializedResourceQuantity[]): void {
+        for (const rq of data) {
+            const state = this.states.get(rq.entityId);
+            if (state) {
+                state.quantity = rq.quantity;
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

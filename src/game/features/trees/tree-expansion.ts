@@ -11,11 +11,11 @@ import { GameState } from '../../game-state';
 import { MapSize } from '@/utilities/map-size';
 import { isBuildable } from '../../terrain';
 import type { TerrainData } from '../../terrain';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import { S4GroundType } from '@/resources/map/s4-types';
 import { OBJECT_TYPE_CATEGORY, getTypesForCategory } from '../../systems/map-objects';
 
-const log = new LogHandler('TreeExpansion');
+const log = createLogger('TreeExpansion');
 
 /** Palm tree types (allowed on beach/sand) */
 const PALM_TREES = new Set([MapObjectType.TreeCoconut, MapObjectType.TreeDate]);

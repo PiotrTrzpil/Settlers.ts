@@ -10,12 +10,12 @@ import { EMaterialType } from '../../economy';
 import type { GameState } from '../../game-state';
 import type { EventBus } from '../../event-bus';
 import type { BuildingInventoryManager } from '../inventory';
-import type { CarrierManager } from '../carriers';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
-import { JobType, type EntityWorkHandler, type PositionWorkHandler, type TaskResult } from './types';
-import type { TransportJob } from '../logistics/transport-job';
+import { JobType, TaskResult, type EntityWorkHandler, type PositionWorkHandler } from './types';
 import type { BarracksTrainingManager } from '../barracks';
+import type { MaterialTransfer } from '../material-transfer';
 import type { Command, CommandResult } from '../../commands';
+import type { TransportJobRecord } from '../logistics/transport-job-record';
 
 // ─────────────────────────────────────────────────────────────
 // CEntityTask types — 1:1 mapping from jobInfo.xml
@@ -64,6 +64,9 @@ export enum ChoreoTaskType {
     CHANGE_TYPE_AT_BARRACKS,
     HEAL_ENTITY,
     ATTACK_REACTION,
+
+    // Auto-recruit
+    TRANSFORM_RECRUIT,
 }
 
 /** Map task string (prefix-stripped at parse time) → ChoreoTaskType enum. */
@@ -98,6 +101,7 @@ const TASK_STRING_MAP: Record<string, ChoreoTaskType> = {
     CHANGE_TYPE_AT_BARRACKS: ChoreoTaskType.CHANGE_TYPE_AT_BARRACKS,
     HEAL_ENTITY: ChoreoTaskType.HEAL_ENTITY,
     ATTACK_REACTION: ChoreoTaskType.ATTACK_REACTION,
+    TRANSFORM_RECRUIT: ChoreoTaskType.TRANSFORM_RECRUIT,
 };
 
 /** Parse a CEntityTask string from XML → ChoreoTaskType. Throws on unknown type. */
@@ -139,20 +143,32 @@ export interface ChoreoJob {
 // ─────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────
+// Transport job operations — injected into executor context
+// ─────────────────────────────────────────────────────────────
+
+/** Transport job lifecycle operations — injected into executor context. */
+export interface TransportJobOps {
+    getJob(jobId: number): TransportJobRecord | undefined;
+    pickUp(jobId: number): void;
+    deliver(jobId: number): void;
+    cancel(jobId: number): void;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Transport data — for carrier transport jobs via choreography
 // ─────────────────────────────────────────────────────────────
 
-/** Carrier transport data stored on ChoreoJobState for TRANSPORT_* task types. */
+/** Transport metadata stored on ChoreoJobState for carrier transport jobs. */
 export interface TransportData {
-    /** The TransportJob that owns reservation and request lifecycle. */
-    transportJob: TransportJob;
+    /** Transport job record ID — used to call TransportJobOps lifecycle methods. */
+    jobId: number;
     /** Source building entity ID (pickup location). */
     sourceBuildingId: number;
     /** Destination building entity ID (delivery location). */
     destBuildingId: number;
     /** Material being transported. */
     material: EMaterialType;
-    /** Amount to transport. */
+    /** Amount to transport (may be reduced after pickup if source had less). */
     amount: number;
     /** Pre-resolved source position (output pile / door for pickup). */
     sourcePos: { x: number; y: number };
@@ -185,6 +201,8 @@ export interface ChoreoJobState {
     workStarted: boolean;
     /** Transport data for carrier jobs (GET_GOOD / PUT_GOOD transport branches). */
     transportData?: TransportData;
+    /** Ticks to wait before retrying a failed pathfinding attempt (0 = try now). */
+    pathRetryCountdown: number;
 }
 
 /** Create a fresh ChoreoJobState for starting a job. */
@@ -201,6 +219,7 @@ export function createChoreoJobState(jobId: string, nodes: ChoreoNode[] = []): C
         targetPos: null,
         carryingGood: null,
         workStarted: false,
+        pathRetryCountdown: 0,
     };
 }
 
@@ -276,46 +295,71 @@ export interface InventoryContext {
     getWorkerHomeBuilding: (settlerId: number) => number | null;
 }
 
-/**
- * Context required by transport (carrier) executors.
- *
- * Used by: transport-executors.ts
- * Fields: eventBus (carrier lifecycle events), carrierManager (status transitions).
- */
-export interface TransportContext {
-    eventBus: EventBus;
-    carrierManager: CarrierManager;
-}
+// ─────────────────────────────────────────────────────────────
+// Category-scoped executor types (replaces single ChoreoExecutorFn)
+// ─────────────────────────────────────────────────────────────
 
-/**
- * Full service bag for choreography executors — composes all phase-specific contexts.
- *
- * Each executor only uses a subset of this context:
- * - Movement executors (GO_TO_*, SEARCH): MovementContext fields
- * - Work executors (WORK, WORK_ON_ENTITY, PLANT): WorkContext fields
- * - Inventory executors (GET_GOOD, PUT_GOOD, RESOURCE_GATHERING, LOAD_GOOD): InventoryContext fields
- * - Transport executors (carrier branches of GET_GOOD/PUT_GOOD): TransportContext fields
- *
- * The sub-interfaces above document which fields each phase requires.
- * Ancillary services (jobPartResolver, executeCommand) are used by the task
- * system itself rather than by individual executor functions.
- */
-export interface ChoreoContext extends MovementContext, WorkContext, InventoryContext, TransportContext {
-    jobPartResolver: JobPartResolver;
-    /** Barracks training manager — optional, only set when barracks feature is active. */
-    barracksTrainingManager?: BarracksTrainingManager;
-    /** Command executor for entity creation/removal during simulation. */
-    executeCommand: (cmd: Command) => CommandResult;
-}
-
-/** Signature for a single choreography node executor. */
-export type ChoreoExecutorFn = (
+/** Movement executor — GO_TO_*, SEARCH, GO_HOME, GO_VIRTUAL */
+export type MovementExecutorFn = (
     settler: Entity,
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: ChoreoContext
+    ctx: MovementContext
 ) => TaskResult;
+
+/** Work executor — WORK, WORK_ON_ENTITY, PLANT, *_VIRTUAL, PRODUCE_VIRTUAL */
+export type WorkExecutorFn = (
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number,
+    ctx: WorkContext
+) => TaskResult;
+
+/** Inventory executor — GET_GOOD, PUT_GOOD, RESOURCE_GATHERING, LOAD_GOOD, *_VIRTUAL */
+export type InventoryExecutorFn = (
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number,
+    ctx: InventoryExecutorContext
+) => TaskResult;
+
+/** Control executor — WAIT, CHECKIN, CHANGE_JOB, military, auto-recruit */
+export type ControlExecutorFn = (
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number,
+    ctx: ControlContext
+) => TaskResult;
+
+/**
+ * Extended inventory context for executors that handle both worker and carrier paths.
+ * Includes materialTransfer (needed by both) and eventBus (carrier events).
+ */
+export interface InventoryExecutorContext extends InventoryContext {
+    materialTransfer: MaterialTransfer;
+    eventBus: EventBus;
+    transportJobOps: TransportJobOps;
+}
+
+/**
+ * Context for control executors (WAIT, CHECKIN, CHANGE_JOB, military stubs).
+ * Minimal — most control nodes are timers or state transitions.
+ */
+export interface ControlContext {
+    gameState: GameState;
+    eventBus: EventBus;
+    handlerErrorLogger: ThrottledLogger;
+    /** Barracks training manager — only needed by CHANGE_TYPE_AT_BARRACKS. */
+    barracksTrainingManager?: BarracksTrainingManager;
+    /** Command executor — needed by TRANSFORM_RECRUIT. */
+    executeCommand?: (cmd: Command) => CommandResult;
+    /** Inventory manager — needed by TRANSFORM_RECRUIT for pile withdrawal. */
+    inventoryManager?: BuildingInventoryManager;
+}
 
 // ─────────────────────────────────────────────────────────────
 // Constants
@@ -327,4 +371,14 @@ export const CHOREO_FPS = 10;
 /** Convert frame count to seconds. */
 export function framesToSeconds(frames: number): number {
     return frames / CHOREO_FPS;
+}
+
+/**
+ * Tick duration-based progress on a job. Advances job.progress by dt/durationSeconds.
+ * Returns DONE when progress >= 1 or duration is non-positive/infinite, CONTINUE otherwise.
+ */
+export function tickDuration(job: ChoreoJobState, dt: number, durationSeconds: number): TaskResult {
+    if (durationSeconds <= 0 || durationSeconds === Infinity) return TaskResult.DONE;
+    job.progress += dt / durationSeconds;
+    return job.progress >= 1 ? TaskResult.DONE : TaskResult.CONTINUE;
 }

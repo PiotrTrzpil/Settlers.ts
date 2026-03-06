@@ -8,7 +8,7 @@
  * @module renderer/sprite-metadata/jil-indices
  */
 
-import { BuildingType, UnitType, getLevelVariants } from '../../entity';
+import { BuildingType, UnitType } from '../../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
 import { EMaterialType } from '../../economy';
 
@@ -31,10 +31,10 @@ import { EMaterialType } from '../../economy';
 export const SETTLER_JOB_INDICES = {
     carrier: {
         walk: 1,
-        idle_1: 44,
-        idle_2: 45,
-        idle_3: 46,
-        idle_4: 47,
+        pickup: 44, // Bend-down animation for picking up / dropping off goods (same anim for both)
+        idle_1: 45,
+        idle_2: 46,
+        idle_3: 47,
         work_strike: 48,
         work_strik_walk: 49,
     },
@@ -86,7 +86,7 @@ export const SETTLER_JOB_INDICES = {
         walk: 80,
         carry_fish: 81,
         work_1: 82,
-        work_2: 83,
+        pickup_fish: 83,
         work_3: 84,
         work_4: 85,
     },
@@ -299,8 +299,8 @@ export const SETTLER_JOB_INDICES = {
         work_shoot_4: 252,
         fight: 249,
     },
-    // Specialists for romans and vikings
-    // NOTE: mayans and trojans have their specialist under separate indices
+    // Roman specialist (Medic)
+    // Other races have their own specialist keys below
     specialist_1: {
         walk: 254,
         work: 255,
@@ -315,6 +315,20 @@ export const SETTLER_JOB_INDICES = {
         walk: 262,
         work: 263,
         fight: 264,
+    },
+
+    // Viking specialist
+    axe_warrior_1: {
+        walk: 266,
+        fight: 267,
+    },
+    axe_warrior_2: {
+        walk: 269,
+        fight: 270,
+    },
+    axe_warrior_3: {
+        walk: 272,
+        fight: 273,
     },
 
     // Mayan specialist
@@ -341,8 +355,8 @@ export const SETTLER_JOB_INDICES = {
         fight: 345,
     },
     catapultist_3: {
-        walk: 346,
-        fight: 347,
+        walk: 347,
+        fight: 348,
     },
 
     squad_leader: {
@@ -428,6 +442,7 @@ export const SETTLER_JOB_INDICES = {
         carry_sunfloweroil: 359,
         carry_sunflower: 360,
         pickup_sunflower: 361,
+        pickup_sunfloweroil: 362,
     },
 
     // Mushroom farmer (Dark Tribe specific, file 23.jil)
@@ -435,7 +450,7 @@ export const SETTLER_JOB_INDICES = {
         walk: 313,
         work: 314,
     },
-    dark_carrier: {
+    dark_gardener: {
         walk: 315,
         carry: 316,
         work_1: 317,
@@ -464,9 +479,8 @@ export const SETTLER_JOB_INDICES = {
 /**
  * Mapping from SETTLER_JOB_INDICES keys to UnitType.
  * Each level maps to a distinct UnitType (e.g. swordsman_2 → UnitType.Swordsman2).
- * specialist_1/2/3 map to Medic (Roman) and are reused for AxeWarrior (Viking) via
- * UNIT_BASE_JOB_INDICES. Other race specialists have their own keys:
- * blowgun_warrior_* (Mayan), catapultist_* (Trojan).
+ * specialist_1/2/3 map to Medic (Roman). Each other race has its own specialist keys:
+ * axe_warrior_* (Viking), blowgun_warrior_* (Mayan), catapultist_* (Trojan).
  */
 export const SETTLER_KEY_TO_UNIT_TYPE: Readonly<Record<string, UnitType>> = {
     carrier: UnitType.Carrier,
@@ -482,10 +496,10 @@ export const SETTLER_KEY_TO_UNIT_TYPE: Readonly<Record<string, UnitType>> = {
     priest: UnitType.Priest,
     geologist: UnitType.Geologist,
     pioneer: UnitType.Pioneer,
-    swordsman_1: UnitType.Swordsman,
+    swordsman_1: UnitType.Swordsman1,
     swordsman_2: UnitType.Swordsman2,
     swordsman_3: UnitType.Swordsman3,
-    bowman_1: UnitType.Bowman,
+    bowman_1: UnitType.Bowman1,
     bowman_2: UnitType.Bowman2,
     bowman_3: UnitType.Bowman3,
     sawmill_worker: UnitType.SawmillWorker,
@@ -499,23 +513,27 @@ export const SETTLER_KEY_TO_UNIT_TYPE: Readonly<Record<string, UnitType>> = {
     mushroom_farmer: UnitType.MushroomFarmer,
     thief: UnitType.Thief,
     squad_leader: UnitType.SquadLeader,
-    specialist_1: UnitType.Medic,
+    specialist_1: UnitType.Medic1,
     specialist_2: UnitType.Medic2,
     specialist_3: UnitType.Medic3,
-    catapultist_1: UnitType.BackpackCatapultist,
+    axe_warrior_1: UnitType.AxeWarrior1,
+    axe_warrior_2: UnitType.AxeWarrior2,
+    axe_warrior_3: UnitType.AxeWarrior3,
+    catapultist_1: UnitType.BackpackCatapultist1,
     catapultist_2: UnitType.BackpackCatapultist2,
     catapultist_3: UnitType.BackpackCatapultist3,
     angel_1: UnitType.Angel,
     angel_2: UnitType.Angel2,
     angel_3: UnitType.Angel3,
     shaman: UnitType.Shaman,
-    dark_carrier: UnitType.Carrier, // Dark Tribe carrier — same UnitType, different race GFX file
-    gardener: UnitType.DarkGardener,
+    dark_gardener: UnitType.DarkGardener,
+    gardener: UnitType.Gardener,
+    fisher: UnitType.Fisher,
     hunter: UnitType.Hunter,
     stonecutter: UnitType.Stonecutter,
     smelter: UnitType.Smelter,
     donkey: UnitType.Donkey,
-    blowgun_warrior_1: UnitType.BlowgunWarrior,
+    blowgun_warrior_1: UnitType.BlowgunWarrior1,
     blowgun_warrior_2: UnitType.BlowgunWarrior2,
     blowgun_warrior_3: UnitType.BlowgunWarrior3,
     wine_maker: UnitType.Winemaker,
@@ -525,6 +543,7 @@ export const SETTLER_KEY_TO_UNIT_TYPE: Readonly<Record<string, UnitType>> = {
     temple_servant: UnitType.TempleServant,
     manacopter_master: UnitType.ManacopterMaster,
     slaved_settler: UnitType.SlavedSettler,
+    oil_maker: UnitType.SunflowerOilMaker,
 };
 
 /** Type alias for a settler's animation data — all fields are plain numbers. */
@@ -655,19 +674,9 @@ function computeUnitBaseJobIndices(): Partial<Record<UnitType, number>> {
 /**
  * Base JIL job index per UnitType, derived from SETTLER_JOB_INDICES.
  * Used by getUnitSpriteMap() and icon loading to find the default sprite for each unit.
- *
- * AxeWarrior (Viking) shares specialist_1/2/3 JIL indices with Medic —
- * each race's GFX file has different art at those slots.
  */
 export const UNIT_BASE_JOB_INDICES: Partial<Record<UnitType, number>> = (() => {
-    const base = computeUnitBaseJobIndices();
-    // AxeWarrior (Viking) shares specialist_1/2/3 JIL indices with Medic
-    const axeVariants = getLevelVariants(UnitType.AxeWarrior)!;
-    const medicVariants = getLevelVariants(UnitType.Medic)!;
-    for (let i = 0; i < 3; i++) {
-        base[axeVariants[i]!] = base[medicVariants[i]!]!;
-    }
-    return base;
+    return computeUnitBaseJobIndices();
 })();
 
 // ============================================================

@@ -13,11 +13,13 @@ import type { TickSystem } from '../../tick-system';
 import type { OreVeinData } from './ore-vein-data';
 import { OreType } from './ore-type';
 import { MapObjectType } from '@/game/types/map-object-types';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import type { Command, CommandResult } from '../../commands';
 import { sortedEntries } from '@/utilities/collections';
+import type { Persistable } from '@/game/persistence';
+import type { SerializedResourceSign } from '@/game/game-state-persistence';
 
-const log = new LogHandler('ResourceSignSystem');
+const log = createLogger('ResourceSignSystem');
 
 /** Signs remain visible for 5 minutes of game time. */
 const SIGN_LIFETIME = 300;
@@ -42,7 +44,8 @@ export interface ResourceSignSystemConfig {
     executeCommand: (cmd: Command) => CommandResult;
 }
 
-export class ResourceSignSystem implements TickSystem {
+export class ResourceSignSystem implements TickSystem, Persistable<SerializedResourceSign> {
+    readonly persistKey = 'resourceSigns' as const;
     /** Maps sign entity ID to its position and game-time expiry. */
     private readonly signs = new Map<number, { x: number; y: number; expiresAt: number }>();
     private elapsed = 0;
@@ -122,6 +125,24 @@ export class ResourceSignSystem implements TickSystem {
         if (sign) {
             this.oreVeinData.clearProspected(sign.x, sign.y);
             this.signs.delete(entityId);
+        }
+    }
+
+    // ── Persistable ───────────────────────────────────────────────
+
+    serialize(): SerializedResourceSign {
+        const signs: SerializedResourceSign['signs'] = [];
+        for (const [entityId, sign] of this.signs) {
+            signs.push({ entityId, x: sign.x, y: sign.y, expiresAt: sign.expiresAt });
+        }
+        return { elapsed: this.elapsed, signs };
+    }
+
+    deserialize(data: SerializedResourceSign): void {
+        this.elapsed = data.elapsed;
+        this.signs.clear();
+        for (const s of data.signs) {
+            this.signs.set(s.entityId, { x: s.x, y: s.y, expiresAt: s.expiresAt });
         }
     }
 }

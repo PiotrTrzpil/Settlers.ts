@@ -27,6 +27,12 @@ export class GfxFileReader extends ResourceFile {
         return this.gilFileReader.length;
     }
 
+    /** Return the raw GFX file buffer for batch worker decoding */
+    public getBuffer(): ArrayBuffer {
+        const buf = this.reader.getBuffer();
+        return buf.buffer as ArrayBuffer;
+    }
+
     /** return a Image by index */
     public getImage(index: number): GfxImage | null {
         if (index < 0 || index >= this.gilFileReader.length) {

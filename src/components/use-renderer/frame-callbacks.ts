@@ -12,11 +12,10 @@ import { InputManager, BuildingAdjustMode } from '@/game/input';
 import type { SelectionBox } from '@/game/input/render-state';
 import {
     createRenderContext,
-    type ServiceAreaRenderData,
+    type CircleRenderData,
     type TerritoryDotRenderData,
     type StackGhostRenderData,
 } from '@/game/renderer/render-context';
-import { EntityType } from '@/game/entity';
 import { getBuildingVisualState } from '@/game/features/building-construction';
 import type { LayerVisibility } from '@/game/renderer/layer-visibility';
 import type { IViewPoint } from '@/game/renderer/i-view-point';
@@ -49,19 +48,6 @@ function syncEntityRendererState(
     alpha: number,
     viewPoint: IViewPoint
 ): void {
-    // Collect service areas for selected hub buildings
-    const serviceAreas: ServiceAreaRenderData[] = [];
-    const sam = g.services.serviceAreaManager;
-    for (const id of g.state.selection.selectedEntityIds) {
-        const entity = g.state.getEntity(id);
-        if (entity && entity.type === EntityType.Building) {
-            const sa = sam.getServiceArea(id);
-            if (sa) {
-                serviceAreas.push({ centerX: sa.centerX, centerY: sa.centerY, radius: sa.radius });
-            }
-        }
-    }
-
     // Collect territory boundary dots (only when territory display is enabled)
     const territoryDots: readonly TerritoryDotRenderData[] = ctx.layerVisibility.showTerritory
         ? g.services.territoryManager.getBoundaryDots()
@@ -69,7 +55,7 @@ function syncEntityRendererState(
 
     // Collect work area visualization (dots for gameplay mode, circles for debug mode)
     // Isolated: getRadius() throws if BuildingInfo is missing, which must not kill the whole frame.
-    let workAreaVis: { circles: readonly ServiceAreaRenderData[]; dots: readonly TerritoryDotRenderData[] };
+    let workAreaVis: { circles: readonly CircleRenderData[]; dots: readonly TerritoryDotRenderData[] };
     try {
         workAreaVis = collectWorkAreaVisualization(ctx.inputManager, g);
     } catch (e) {
@@ -109,7 +95,6 @@ function syncEntityRendererState(
             primaryId: g.state.selection.selectedEntityId,
             ids: g.state.selection.selectedEntityIds,
         })
-        .selectedServiceAreas(serviceAreas)
         .territoryDots(territoryDots)
         .workAreaCircles(workAreaVis.circles)
         .workAreaDots(workAreaVis.dots)
@@ -132,7 +117,7 @@ function syncEntityRendererState(
 }
 
 /** Empty result for when no work area visualization is needed */
-const EMPTY_WORK_AREA_VIS = { circles: [] as ServiceAreaRenderData[], dots: [] as TerritoryDotRenderData[] };
+const EMPTY_WORK_AREA_VIS = { circles: [] as CircleRenderData[], dots: [] as TerritoryDotRenderData[] };
 
 /**
  * Collect work area visualization data.
@@ -143,7 +128,7 @@ const EMPTY_WORK_AREA_VIS = { circles: [] as ServiceAreaRenderData[], dots: [] a
 function collectWorkAreaVisualization(
     inputManager: InputManager | null,
     game: Game
-): { circles: readonly ServiceAreaRenderData[]; dots: readonly TerritoryDotRenderData[] } {
+): { circles: readonly CircleRenderData[]; dots: readonly TerritoryDotRenderData[] } {
     if (!inputManager) return EMPTY_WORK_AREA_VIS;
 
     const mode = inputManager.getMode('building-adjust');

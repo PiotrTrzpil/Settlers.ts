@@ -27,12 +27,36 @@ import {
     getDefaultInputConfig,
 } from '@/game/input';
 import type { SelectionBox } from '@/game/input/render-state';
+import type { DebugEntityLabel } from '@/game/renderer/render-passes/types';
 import { LayerVisibility } from '@/game/renderer/layer-visibility';
 import { loadCameraState } from '@/game/renderer/camera-persistence';
 import { getCurrentMapId } from '@/game/game-state-persistence';
 import { initRenderersAsync, exposeForE2E } from './renderer-init';
 import { createUpdateCallback, createRenderCallback } from './frame-callbacks';
 import { updateTileDebugStats, createBuildingAdjustMode, handleModeChange } from './input-setup';
+import { createEntityPicker, createEntityRectPicker, type EntityPickerContext } from '@/game/input/entity-picker';
+
+/** Build the EntityPickerContext from current game/renderer state. */
+function buildPickerContext(
+    getGame: () => Game | null,
+    renderer: Renderer | null,
+    entityRenderer: EntityRenderer | null,
+    canvas: Ref<HTMLCanvasElement | null>
+): EntityPickerContext | null {
+    const game = getGame();
+    if (!game || !renderer) return null;
+    const el = canvas.value;
+    if (!el) return null;
+    return {
+        mapSize: game.terrain.mapSize,
+        groundHeight: game.terrain.groundHeight,
+        viewPoint: renderer.viewPoint,
+        unitStates: entityRenderer?.unitStates ?? { get: () => undefined },
+        canvasWidth: el.clientWidth,
+        canvasHeight: el.clientHeight,
+        zoom: renderer.viewPoint.zoom,
+    };
+}
 
 /**
  * After building sprites finish loading, load overlay sprites for all races
@@ -97,7 +121,7 @@ function createPlacementGrid(game: Game, buildingType: number, viewX: number, vi
         player: game.currentPlayer,
         centerX: Math.round(viewX),
         centerY: Math.round(viewY),
-        placementFilter: game.commandContext.placementFilter,
+        placementFilter: game.placementFilter,
     };
     return new ValidPositionGrid(
         request,
@@ -182,6 +206,20 @@ export function useRenderer({
     const executeCommand = (command: Record<string, unknown>): CommandResult =>
         executeGameCommand(command, getGame, onTileClick);
 
+    const entityPicker = createEntityPicker(
+        () => entityRenderer?.entities ?? [],
+        () => entityRenderer?.spriteResolver ?? null,
+        () => getGame()!.state.selection,
+        () => buildPickerContext(getGame, renderer, entityRenderer, canvas)
+    );
+
+    const entityRectPicker = createEntityRectPicker(
+        () => entityRenderer?.entities ?? [],
+        () => entityRenderer?.spriteResolver ?? null,
+        () => getGame()!.state.selection,
+        () => buildPickerContext(getGame, renderer, entityRenderer, canvas)
+    );
+
     /**
      * Create and configure the InputManager.
      */
@@ -206,6 +244,8 @@ export function useRenderer({
             config: getDefaultInputConfig(),
             tileResolver: resolveTile,
             commandExecutor: executeCommand,
+            entityPicker,
+            entityRectPicker,
             initialMode: 'select',
             onModeChange: (oldMode: string, newMode: string, data?: Record<string, unknown>) => {
                 baseModeChange(oldMode, newMode, data);
@@ -433,7 +473,7 @@ export function useRenderer({
         }
     }
 
-    function getDecoLabels(): Array<{ screenX: number; screenY: number; type: number; hue: number }> {
+    function getDecoLabels(): DebugEntityLabel[] {
         return entityRenderer?.debugDecoLabels ?? [];
     }
 

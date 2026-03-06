@@ -1,236 +1,143 @@
 /**
  * GameServices — composition root for all game managers and systems.
  *
- * Creates, wires, and owns every domain manager and tick system.
- * Each feature/manager self-subscribes to lifecycle events via registerEvents()
- * or FeatureRegistry. This module contains no domain logic — only construction,
- * wiring, and the entity:removed handler ordering constraint.
+ * Creates a FeatureRegistry, loads all game features in dependency order,
+ * and exposes commonly-accessed managers/systems as typed properties.
  *
- * GameLoop (frame scheduling) and Game (public façade) depend on this;
- * this module knows nothing about either of them.
+ * All domain logic lives in feature modules (src/game/features/).
+ * This module contains no domain logic — only feature loading,
+ * property extraction, and the entity:removed ordering constraint.
  */
 
 import { GameState } from './game-state';
-import { MovementSystem } from './systems/movement/index';
-import { SettlerTaskSystem, SearchType } from './features/settler-tasks';
-import {
-    createWoodcuttingHandler,
-    createStonecuttingHandler,
-    createForesterHandler,
-    createCropHarvestHandler,
-    createPlantingHandler,
-    createWaterHandler,
-    createGeologistHandler,
-    createDiggerHandler,
-    createBuilderHandler,
-} from './features/settler-tasks/work-handlers';
-import { MaterialRequestFeature } from './features/material-requests';
 import type { TerrainData } from './terrain';
 import type { TickSystem } from './tick-system';
-import {
-    BuildingConstructionSystem,
-    ResidenceSpawnerSystem,
-    ConstructionSiteManager,
-    ConstructionRequestSystem,
-} from './features/building-construction';
-import { CarrierManager, CarrierFeature, type CarrierFeatureExports } from './features/carriers';
-import {
-    BuildingInventoryManager,
-    BuildingPileRegistry,
-    InventoryFeature,
-    type InventoryExports,
-    getConstructionInventoryConfig,
-    PilePositionResolver,
-    InventoryPileSync,
-    StorageFilterManager,
-} from './features/inventory';
-import { getGameDataLoader } from '@/resources/game-data';
-import {
-    LogisticsDispatcher,
-    RequestManager,
-    RequestManagerFeature,
-    type RequestManagerExports,
-} from './features/logistics';
-import { ServiceAreaManager, ServiceAreaFeature, type ServiceAreaExports } from './features/service-areas';
-import { FeatureRegistry } from './features/feature-registry';
-import { TreeFeature, TreeSystem, type TreeFeatureExports } from './features/trees';
-import { StoneFeature, StoneSystem, type StoneFeatureExports } from './features/stones';
-import { CropFeature, CropSystem, type CropFeatureExports } from './features/crops';
-import { CombatFeature, CombatSystem, type CombatExports } from './features/combat';
-import { TerritoryManager, registerTerritoryEvents } from './features/territory';
-import { WorkAreaStore } from './features/work-areas';
-import {
-    BuildingOverlayManager,
-    OverlayRegistry,
-    BuildingOverlayFeature,
-    type BuildingOverlayFeatureExports,
-} from './features/building-overlays';
-import { EntityCleanupRegistry, CLEANUP_PRIORITY } from './systems/entity-cleanup-registry';
-import { EventBus, EventSubscriptionManager, type GameEvents } from './event-bus';
-import { EntityType, UnitType, BuildingType, getUnitTypeSpeed } from './entity';
-import { MapObjectType } from '@/game/types/map-object-types';
+import { EntityType } from './entity';
+import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityVisualService } from './animation/entity-visual-service';
 import type { Command, CommandResult } from './commands';
+import { EntityCleanupRegistry, CLEANUP_PRIORITY } from './systems/entity-cleanup-registry';
+import { FeatureRegistry } from './features/feature-registry';
+import { PersistenceRegistry } from './persistence';
+
+// Feature definitions
+import { MovementFeature, type MovementExports } from './features/movement/movement-feature';
+import { WorkAreaFeature, type WorkAreaExports } from './features/work-areas/work-areas-feature';
 import {
-    OreVeinData,
-    populateOreVeins,
-    loadOreVeinsFromResourceData,
-    OreSignFeature,
-    ResourceSignSystem,
-    type OreSignExports,
-} from './features/ore-veins';
-import { ProductionControlManager } from './features/production-control';
-import { BarracksTrainingManager } from './features/barracks';
-import { getRecipeSet } from './economy/building-production';
+    ProductionControlFeature,
+    type ProductionControlExports,
+} from './features/production-control/production-control-feature';
+import { CarrierFeature, type CarrierFeatureExports } from './features/carriers';
+import { InventoryFeature, type InventoryExports } from './features/inventory';
+import { RequestManagerFeature, type RequestManagerExports } from './features/logistics';
+import { BuildingOverlayFeature, type BuildingOverlayFeatureExports } from './features/building-overlays';
+import {
+    BuildingConstructionFeature,
+    type BuildingConstructionExports,
+} from './features/building-construction/building-construction-feature';
+import { MaterialRequestFeature } from './features/material-requests';
+import { TreeFeature, type TreeFeatureExports } from './features/trees';
+import { StoneFeature, type StoneFeatureExports } from './features/stones';
+import { CropFeature, type CropFeatureExports } from './features/crops';
+import { CombatFeature, type CombatExports } from './features/combat';
+import { DeathAngelFeature } from './features/death-angel';
+import { OreSignFeature, type OreSignExports } from './features/ore-veins';
+import {
+    MaterialTransferFeature,
+    type MaterialTransferExports,
+} from './features/material-transfer/material-transfer-feature';
+import { SettlerTaskFeature, type SettlerTaskExports } from './features/settler-tasks/settler-tasks-feature';
+import { AutoRecruitFeature, type AutoRecruitExports } from './features/auto-recruit';
+import type { AutoRecruitSystem } from './features/auto-recruit';
+import {
+    LogisticsDispatcherFeature,
+    type LogisticsDispatcherExports,
+} from './features/logistics/logistics-dispatcher-feature';
+import { BarracksFeature, type BarracksExports } from './features/barracks/barracks-feature';
+import {
+    InventoryPileSyncFeature,
+    type InventoryPileSyncExports,
+} from './features/inventory/inventory-pile-sync-feature';
+import { FreePilesFeature } from './features/free-piles/free-piles-feature';
+import { TerritoryFeature, type TerritoryExports } from './features/territory/territory-feature';
+
+// Re-export types that external code imports transitively via GameServices
+import type { MovementSystem } from './systems/movement';
+import type { CarrierRegistry } from './features/carriers';
+import type { BuildingInventoryManager, StorageFilterManager, InventoryPileSync } from './features/inventory';
+import type { RequestManager, LogisticsDispatcher } from './features/logistics';
+import type { BuildingOverlayManager, OverlayRegistry } from './features/building-overlays';
+import type {
+    ConstructionSiteManager,
+    BuildingConstructionSystem,
+    ResidenceSpawnerSystem,
+} from './features/building-construction';
+import type { TerritoryManager } from './features/territory';
+import type { WorkAreaStore } from './features/work-areas';
+import type { ProductionControlManager } from './features/production-control';
+import type { BarracksTrainingManager } from './features/barracks';
+import type { MaterialTransfer } from './features/material-transfer';
+import type { TreeSystem } from './features/trees';
+import type { StoneSystem } from './features/stones';
+import type { CropSystem } from './features/crops';
+import type { CombatSystem } from './features/combat';
+import type { OreVeinData, ResourceSignSystem } from './features/ore-veins';
+import type { SettlerTaskSystem } from './features/settler-tasks';
 
 export class GameServices {
-    // ===== Animation =====
-    /** Visual service — manages entity visual state (variation + animation) */
+    // ===== Kernel services =====
     public readonly visualService: EntityVisualService;
 
-    // ===== Managers (own state, no tick) =====
-    /** Carrier manager — tracks carrier state and assignments (via FeatureRegistry) */
-    public readonly carrierManager!: CarrierManager;
-
-    /** Building inventory manager — tracks building input/output slots (via FeatureRegistry) */
-    public readonly inventoryManager!: BuildingInventoryManager;
-
-    /** Service area manager — tracks logistics service areas (via FeatureRegistry) */
-    public readonly serviceAreaManager!: ServiceAreaManager;
-
-    /** Request manager — tracks material delivery requests (via FeatureRegistry) */
-    public readonly requestManager!: RequestManager;
-
-    /** Construction site manager — tracks active construction sites (diggers, builders, materials) */
-    public readonly constructionSiteManager: ConstructionSiteManager;
-
-    /** Construction request system — creates material delivery requests for construction sites */
-    public readonly constructionRequestSystem: ConstructionRequestSystem;
-
-    /** Building overlay manager — tracks layered sprite overlays on buildings (via FeatureRegistry) */
-    public readonly buildingOverlayManager!: BuildingOverlayManager;
-
-    /** Overlay registry — static definitions for building overlays (via FeatureRegistry) */
-    public readonly overlayRegistry!: OverlayRegistry;
-
-    /** Territory manager — tracks territory zones from towers/castles (set in setTerrainData) */
-    public territoryManager!: TerritoryManager;
-
-    /** Work area store — per-building work area offsets (shared between UI and gameplay) */
-    public readonly workAreaStore: WorkAreaStore;
-
-    /** Production control manager — tracks per-building recipe selection mode */
-    public readonly productionControlManager: ProductionControlManager;
-
-    /** Barracks training manager — handles soldier training lifecycle */
-    public readonly barracksTrainingManager: BarracksTrainingManager;
-
-    // ===== Systems (tick each frame) =====
-    /** Movement system — updates unit positions */
+    // ===== Managers & systems (extracted from feature exports) =====
     public readonly movement: MovementSystem;
-
-    /** Building construction system — terrain modification, phase transitions */
+    public readonly carrierRegistry: CarrierRegistry;
+    public readonly inventoryManager: BuildingInventoryManager;
+    public readonly storageFilterManager: StorageFilterManager;
+    public readonly requestManager: RequestManager;
+    public readonly buildingOverlayManager: BuildingOverlayManager;
+    public readonly overlayRegistry: OverlayRegistry;
+    public readonly constructionSiteManager: ConstructionSiteManager;
     public readonly constructionSystem: BuildingConstructionSystem;
-
-    /** Residence spawner — interval-based carrier spawning from residences */
     public readonly residenceSpawner: ResidenceSpawnerSystem;
-
-    /** Settler task system — manages all settler behaviors */
+    public readonly workAreaStore: WorkAreaStore;
+    public readonly productionControlManager: ProductionControlManager;
+    public readonly materialTransfer: MaterialTransfer;
     public readonly settlerTaskSystem: SettlerTaskSystem;
-
-    /** Logistics dispatcher — connects resource requests to carriers */
-    public readonly logisticsDispatcher!: LogisticsDispatcher;
-
-    /** Pile sync — event-driven synchronization between inventory state and pile entities */
-    public inventoryPileSync: InventoryPileSync | null = null;
-
-    /** Storage filter manager — tracks per-building material allow-lists for StorageArea buildings */
-    public readonly storageFilterManager!: StorageFilterManager;
-
-    /** XML-derived pile positions for building inventory stacks */
-    private pileRegistry: BuildingPileRegistry | null = null;
-
-    /** Tree lifecycle system — growth and cutting states */
+    public readonly logisticsDispatcher: LogisticsDispatcher;
+    public readonly barracksTrainingManager: BarracksTrainingManager;
     public readonly treeSystem: TreeSystem;
-
-    /** Stone mining system — depletion and variant tracking */
     public readonly stoneSystem: StoneSystem;
-
-    /** Crop lifecycle system — growth, harvesting, and decay */
     public readonly cropSystem: CropSystem;
-
-    /** Combat system — enemy detection, pursuit, and melee damage */
     public readonly combatSystem: CombatSystem;
+    public readonly signSystem: ResourceSignSystem;
+    public readonly autoRecruitSystem: AutoRecruitSystem;
+    public readonly inventoryPileSync: InventoryPileSync | null;
+    public readonly persistenceRegistry: PersistenceRegistry;
 
-    /** Per-tile ore vein data on mountain terrain — consumed by mine buildings */
-    public oreVeinData!: OreVeinData;
+    /** Territory manager — available after setTerrainData(). */
+    public get territoryManager(): TerritoryManager {
+        return this.featureRegistry.getFeatureExports<TerritoryExports>('territory').territoryManager!;
+    }
 
-    /** Resource sign system — places geologist signs on prospected tiles */
-    public readonly signSystem!: ResourceSignSystem;
+    /** Ore vein data — available after setTerrainData(). */
+    public get oreVeinData(): OreVeinData {
+        return this.featureRegistry.getFeatureExports<OreSignExports>('ore-signs').oreVeinData!;
+    }
 
     // ===== Internal =====
     private readonly featureRegistry: FeatureRegistry;
     private readonly subscriptions = new EventSubscriptionManager();
     private readonly cleanupRegistry = new EntityCleanupRegistry();
-    private readonly gameState: GameState;
-    private readonly eventBus: EventBus;
-    private readonly tickSystems: { system: TickSystem; group: string }[] = [];
-    private territoryCleanup: (() => void) | null = null;
 
     constructor(gameState: GameState, eventBus: EventBus, executeCommand: (cmd: Command) => CommandResult) {
-        this.gameState = gameState;
-        this.eventBus = eventBus;
-
-        // 1. Visual service — other systems depend on it.
-        //    Init handler MUST fire before any feature handler (order matters).
+        // 1. Kernel services — created before features, provided via FeatureContext.
+        //    Visual init handler MUST fire before any feature handler (subscribed first).
         this.visualService = new EntityVisualService();
         this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, variation }) =>
             this.visualService.init(entityId, variation)
         );
 
-        // 2. Manually-created managers (complex wiring that isn't yet feature-based)
-
-        // 2c. Work area store — per-building work area offsets
-        this.workAreaStore = new WorkAreaStore();
-
-        // 2d. Production control manager — per-building recipe selection
-        this.productionControlManager = new ProductionControlManager();
-
-        // 2e. Construction site manager — tracks active construction sites (diggers, builders, materials)
-        this.constructionSiteManager = new ConstructionSiteManager(eventBus);
-
-        // 3. Movement system
-        this.movement = new MovementSystem({
-            eventBus,
-            rng: gameState.rng,
-            updatePosition: (id, x, y) => {
-                gameState.updateEntityPosition(id, x, y);
-                return true;
-            },
-            getEntity: gameState.getEntity.bind(gameState),
-            tileOccupancy: gameState.tileOccupancy,
-            buildingOccupancy: gameState.buildingOccupancy,
-        });
-        gameState.initMovement(this.movement);
-        this.addSystem(this.movement, 'Units');
-
-        // 4. Building construction system
-        this.constructionSystem = new BuildingConstructionSystem({
-            gameState,
-            eventBus,
-            constructionSiteManager: this.constructionSiteManager,
-            executeCommand,
-        });
-        this.residenceSpawner = new ResidenceSpawnerSystem({ gameState, executeCommand });
-        this.constructionSystem.setResidenceSpawner(this.residenceSpawner);
-        this.constructionSystem.registerEvents();
-        this.addSystem(this.constructionSystem, 'Buildings');
-        this.addSystem(this.residenceSpawner, 'Buildings');
-
-        // 5. (building-overlays is now registered via FeatureRegistry below)
-
-        // 6. Feature registry — load self-registering features.
-        //    Features register with cleanupRegistry for entity:removed cleanup.
+        // 2. Feature registry — loads all game features in dependency order.
         this.featureRegistry = new FeatureRegistry({
             gameState,
             eventBus,
@@ -239,203 +146,110 @@ export class GameServices {
             executeCommand,
         });
 
-        // Pre-register externally-created managers so features can access them via ctx.getFeature().
-        this.featureRegistry.registerExports('building-construction', {
-            constructionSiteManager: this.constructionSiteManager,
-        });
-
         this.featureRegistry.loadAll([
+            // Tier 0: no dependencies
+            MovementFeature,
+            WorkAreaFeature,
+            ProductionControlFeature,
             CarrierFeature,
-            BuildingOverlayFeature,
-            ServiceAreaFeature,
             InventoryFeature,
             RequestManagerFeature,
+            BuildingOverlayFeature,
             TreeFeature,
             StoneFeature,
             CropFeature,
-            MaterialRequestFeature,
             CombatFeature,
+            DeathAngelFeature,
             OreSignFeature,
+            TerritoryFeature,
+            // Tier 1: depend on tier-0 features
+            BuildingConstructionFeature,
+            MaterialTransferFeature,
+            MaterialRequestFeature,
+            // Tier 2: depend on tier-0 and tier-1
+            SettlerTaskFeature,
+            // Tier 3: depend on settler-tasks
+            LogisticsDispatcherFeature,
+            // Tier 4: depend on logistics-dispatcher
+            BarracksFeature,
+            AutoRecruitFeature,
+            // Independent chains
+            InventoryPileSyncFeature,
+            FreePilesFeature,
         ]);
 
-        // Retrieve managers created by features
-        this.carrierManager = this.featureRegistry.getFeatureExports<CarrierFeatureExports>('carriers').carrierManager;
-        const overlayExports =
-            this.featureRegistry.getFeatureExports<BuildingOverlayFeatureExports>('building-overlays');
+        // 3. Extract commonly-accessed exports for external consumers.
+        this.movement = this.feat<MovementExports>('movement').movement;
+        this.carrierRegistry = this.feat<CarrierFeatureExports>('carriers').carrierRegistry;
+        const invExports = this.feat<InventoryExports>('inventory');
+        this.inventoryManager = invExports.inventoryManager;
+        this.storageFilterManager = invExports.storageFilterManager;
+        this.requestManager = this.feat<RequestManagerExports>('logistics').requestManager;
+        const overlayExports = this.feat<BuildingOverlayFeatureExports>('building-overlays');
         this.buildingOverlayManager = overlayExports.buildingOverlayManager;
         this.overlayRegistry = overlayExports.overlayRegistry;
-        this.serviceAreaManager =
-            this.featureRegistry.getFeatureExports<ServiceAreaExports>('service-areas').serviceAreaManager;
-        const inventoryExports = this.featureRegistry.getFeatureExports<InventoryExports>('inventory');
-        this.inventoryManager = inventoryExports.inventoryManager;
-        this.storageFilterManager = inventoryExports.storageFilterManager;
-        this.requestManager = this.featureRegistry.getFeatureExports<RequestManagerExports>('logistics').requestManager;
+        const constrExports = this.feat<BuildingConstructionExports>('building-construction');
+        this.constructionSiteManager = constrExports.constructionSiteManager;
+        this.constructionSystem = constrExports.constructionSystem;
+        this.residenceSpawner = constrExports.residenceSpawner;
+        this.workAreaStore = this.feat<WorkAreaExports>('work-areas').workAreaStore;
+        this.productionControlManager =
+            this.feat<ProductionControlExports>('production-control').productionControlManager;
+        this.materialTransfer = this.feat<MaterialTransferExports>('material-transfer').materialTransfer;
+        this.settlerTaskSystem = this.feat<SettlerTaskExports>('settler-tasks').settlerTaskSystem;
+        this.logisticsDispatcher = this.feat<LogisticsDispatcherExports>('logistics-dispatcher').logisticsDispatcher;
+        this.barracksTrainingManager = this.feat<BarracksExports>('barracks').barracksTrainingManager;
+        this.treeSystem = this.feat<TreeFeatureExports>('trees').treeSystem;
+        this.stoneSystem = this.feat<StoneFeatureExports>('stones').stoneSystem;
+        this.cropSystem = this.feat<CropFeatureExports>('crops').cropSystem;
+        this.combatSystem = this.feat<CombatExports>('combat').combatSystem;
+        this.signSystem = this.feat<OreSignExports>('ore-signs').signSystem;
+        this.autoRecruitSystem = this.feat<AutoRecruitExports>('auto-recruit').autoRecruitSystem;
+        const pileSyncExports = this.feat<InventoryPileSyncExports>('inventory-pile-sync');
+        this.inventoryPileSync = pileSyncExports.inventoryPileSync;
 
-        // Construction request system — creates material delivery requests for construction sites.
-        // Needs requestManager which is only available after feature loading.
-        this.constructionRequestSystem = new ConstructionRequestSystem(
-            this.constructionSiteManager,
-            this.requestManager
-        );
-        this.addSystem(this.constructionRequestSystem, 'Buildings');
+        // 4. Persistence registry — register all Persistable managers in dependency order.
+        this.persistenceRegistry = new PersistenceRegistry();
+        this.persistenceRegistry.register(this.constructionSiteManager);
+        this.persistenceRegistry.register(this.carrierRegistry);
+        this.persistenceRegistry.register(this.workAreaStore);
+        this.persistenceRegistry.register(this.treeSystem);
+        this.persistenceRegistry.register(this.stoneSystem);
+        this.persistenceRegistry.register(gameState.piles);
+        this.persistenceRegistry.register(this.inventoryManager, ['constructionSites']);
+        this.persistenceRegistry.register(this.requestManager, ['constructionSites']);
+        this.persistenceRegistry.register(this.cropSystem);
+        this.persistenceRegistry.register(this.storageFilterManager);
+        this.persistenceRegistry.register(this.combatSystem);
+        this.persistenceRegistry.register(this.signSystem);
+        this.persistenceRegistry.register(this.residenceSpawner);
+        this.persistenceRegistry.register(this.productionControlManager);
+        this.persistenceRegistry.register(this.barracksTrainingManager, ['productionControl']);
+        this.persistenceRegistry.register(this.autoRecruitSystem);
+        this.persistenceRegistry.register(this.settlerTaskSystem, [
+            'carriers',
+            'constructionSites',
+            'buildingInventories',
+        ]);
 
-        this.combatSystem = this.featureRegistry.getFeatureExports<CombatExports>('combat').combatSystem;
-        this.treeSystem = this.featureRegistry.getFeatureExports<TreeFeatureExports>('trees').treeSystem;
-        this.stoneSystem = this.featureRegistry.getFeatureExports<StoneFeatureExports>('stones').stoneSystem;
-        this.cropSystem = this.featureRegistry.getFeatureExports<CropFeatureExports>('crops').cropSystem;
-        this.signSystem = this.featureRegistry.getFeatureExports<OreSignExports>('ore-signs').signSystem;
-        const featureSystemGroups: Record<string, string> = {
-            TreeSystem: 'World',
-            CropSystem: 'World',
-            MaterialRequestSystem: 'Logistics',
-            CombatSystem: 'Units',
-            ResourceSignSystem: 'World',
-        };
-        for (const system of this.featureRegistry.getSystems()) {
-            this.addSystem(system, featureSystemGroups[system.constructor.name] ?? 'Other');
+        // 5. Wire pile registry to settler-tasks (cross-feature, conditional).
+        if (pileSyncExports.pileRegistry) {
+            this.feat<SettlerTaskExports>('settler-tasks').setPileRegistry(pileSyncExports.pileRegistry);
         }
 
-        // 7. Settler task system
-        this.settlerTaskSystem = new SettlerTaskSystem({
-            gameState,
-            visualService: this.visualService,
-            inventoryManager: this.inventoryManager,
-            carrierManager: this.carrierManager,
-            eventBus,
-            getPileSlotRegistry: () => inventoryExports.pileRegistry,
-            getPileRegistry: () => this.pileRegistry,
-            workAreaStore: this.workAreaStore,
-            buildingOverlayManager: this.buildingOverlayManager,
-            getProductionControlManager: () => this.productionControlManager,
-            getBarracksTrainingManager: () => this.barracksTrainingManager,
-            constructionSiteManager: this.constructionSiteManager,
-            executeCommand,
+        // 6. Core entity lifecycle — too small to be a feature.
+        this.subscriptions.subscribe(eventBus, 'entity:created', ({ entityId, type }) => {
+            if (type === EntityType.StackedPile) {
+                gameState.piles.createState(entityId);
+            }
         });
-        this.addSystem(this.settlerTaskSystem, 'Units');
 
-        // 7b. Barracks training manager — soldier training lifecycle.
-        //     Created after settlerTaskSystem and inventoryManager (both required).
-        this.barracksTrainingManager = new BarracksTrainingManager({
-            gameState,
-            inventoryManager: this.inventoryManager,
-            carrierManager: this.carrierManager,
-            settlerTaskSystem: this.settlerTaskSystem,
-            productionControlManager: this.productionControlManager,
-            eventBus,
-        });
-        this.addSystem(this.barracksTrainingManager, 'Military');
-
-        // 8. Logistics dispatcher — registers for carrier events AND entity:removed.
-        //    MUST be registered before inventory removal (logistics needs inventory for reservation release).
-        this.logisticsDispatcher = new LogisticsDispatcher({
-            gameState,
-            eventBus,
-            carrierManager: this.carrierManager,
-            jobAssigner: this.settlerTaskSystem,
-            positionResolver: this.settlerTaskSystem.getPositionResolver(),
-            choreographyLookup: this.settlerTaskSystem.getChoreographyStore(),
-            requestManager: this.requestManager,
-            serviceAreaManager: this.serviceAreaManager,
-            inventoryManager: this.inventoryManager,
-        });
-        this.logisticsDispatcher.registerEvents(eventBus, this.cleanupRegistry);
-        this.addSystem(this.logisticsDispatcher, 'Logistics');
-
-        // 9. Work handlers
-        // Construction work handlers — diggers level terrain, builders construct
-        this.settlerTaskSystem.registerWorkHandler(
-            SearchType.CONSTRUCTION_DIG,
-            createDiggerHandler(gameState, this.constructionSiteManager)
-        );
-        this.settlerTaskSystem.registerWorkHandler(
-            SearchType.CONSTRUCTION,
-            createBuilderHandler(gameState, this.constructionSiteManager)
-        );
-
-        this.settlerTaskSystem.registerWorkHandler(
-            SearchType.TREE,
-            createWoodcuttingHandler(gameState, this.treeSystem)
-        );
-        this.settlerTaskSystem.registerWorkHandler(
-            SearchType.STONE,
-            createStonecuttingHandler(gameState, this.stoneSystem)
-        );
-        this.settlerTaskSystem.registerWorkHandler(SearchType.TREE_SEED_POS, createForesterHandler(this.treeSystem));
-
-        // Crop handlers — entity handler (harvest) under main search type,
-        // position handler (plant) under the _SEED_POS type that matches plantSearch in XML config.
-        const cropHandlerConfigs: Array<{ search: SearchType; plantSearch: SearchType; crop: MapObjectType }> = [
-            { search: SearchType.GRAIN, plantSearch: SearchType.GRAIN_SEED_POS, crop: MapObjectType.Grain },
-            { search: SearchType.SUNFLOWER, plantSearch: SearchType.SUNFLOWER_SEED_POS, crop: MapObjectType.Sunflower },
-            { search: SearchType.AGAVE, plantSearch: SearchType.AGAVE_SEED_POS, crop: MapObjectType.Agave },
-            { search: SearchType.BEEHIVE, plantSearch: SearchType.BEEHIVE_SEED_POS, crop: MapObjectType.Beehive },
-        ];
-        for (const { search, plantSearch, crop } of cropHandlerConfigs) {
-            this.settlerTaskSystem.registerWorkHandler(
-                search,
-                createCropHarvestHandler(gameState, this.cropSystem, crop)
-            );
-            this.settlerTaskSystem.registerWorkHandler(
-                plantSearch,
-                createPlantingHandler(this.cropSystem.getCropPlanter(crop))
-            );
-        }
-
-        // 10. Inventory pile sync — event-driven synchronization between inventory state and pile entities.
-        //     Must subscribe to building:completed BEFORE GameServices does (guaranteed by ordering here).
-        const dataLoader = getGameDataLoader();
-        if (dataLoader.isLoaded()) {
-            const gameData = dataLoader.getData();
-            this.pileRegistry = new BuildingPileRegistry(gameData);
-            const pilePositionResolver = new PilePositionResolver(gameState, this.pileRegistry);
-            const pileRegistry = inventoryExports.pileRegistry;
-            const inventoryPileSync = new InventoryPileSync(
-                gameState,
-                this.inventoryManager,
-                this.constructionSiteManager,
-                pileRegistry,
-                pilePositionResolver,
-                executeCommand
-            );
-            inventoryPileSync.registerEvents(eventBus, this.cleanupRegistry);
-            this.inventoryPileSync = inventoryPileSync;
-        }
-
-        // 11. Core entity lifecycle — movement controllers and resource state.
-        //     These are not feature-specific, so they stay in the composition root.
-        this.subscriptions.subscribe(eventBus, 'entity:created', this.onEntityCreated.bind(this));
         this.cleanupRegistry.onEntityRemoved(entityId => {
-            this.movement.removeController(entityId);
             this.visualService.remove(entityId);
-            this.gameState.piles.removeState(entityId);
-            this.workAreaStore.removeInstance(entityId);
+            gameState.piles.removeState(entityId);
         });
 
-        // Free pile logistics — register output-only inventory so carriers can pick up free piles.
-        this.subscriptions.subscribe(eventBus, 'pile:freePilePlaced', this.onFreePilePlaced.bind(this));
-
-        // Construction site registration — register when a building is placed, remove when entity is cleaned up.
-        // Also creates and swaps inventories: construction inventory on placement, production on completion.
-        this.subscriptions.subscribe(eventBus, 'building:placed', this.onBuildingPlaced.bind(this));
-
-        this.cleanupRegistry.onEntityRemoved(
-            this.constructionSiteManager.removeSite.bind(this.constructionSiteManager)
-        );
-
-        // Wire material delivery to construction site tracking.
-        // When a carrier deposits into a construction building's inventory, record delivery and emit event.
-        this.subscriptions.subscribe(eventBus, 'inventory:changed', this.onInventoryChanged.bind(this));
-
-        // On building completion: swap inventory, remove construction site, init production control and barracks.
-        this.subscriptions.subscribe(eventBus, 'building:completed', this.onBuildingCompleted.bind(this));
-        this.cleanupRegistry.onEntityRemoved(entityId => {
-            this.productionControlManager.removeBuilding(entityId);
-            this.barracksTrainingManager.removeBarracks(entityId);
-        });
-
-        // 12. Late inventory removal — MUST happen after logistics cleanup (step 8).
-        //     Uses CLEANUP_PRIORITY.LATE to ensure inventory data still exists when
-        //     LogisticsDispatcher releases inventory reservations (LOGISTICS priority).
+        // 7. Late inventory removal — MUST happen after logistics cleanup.
         this.cleanupRegistry.onEntityRemoved(
             this.inventoryManager.destroyBuildingInventory.bind(this.inventoryManager),
             CLEANUP_PRIORITY.LATE
@@ -445,163 +259,24 @@ export class GameServices {
         this.cleanupRegistry.registerEvents(eventBus);
     }
 
-    /** Provide terrain data to movement and construction systems.
-     *  Optional resourceData is the per-tile S4 resource layer (MapObjects byte 3).
-     *  When absent, ore veins are populated randomly (test maps). */
+    /** Provide terrain data to all features that need it. */
     public setTerrainData(terrain: TerrainData, resourceData?: Uint8Array): void {
-        this.movement.setTerrainData(terrain.groundType, terrain.groundHeight, terrain.width, terrain.height);
-        this.constructionSystem.setTerrainContext({
-            terrain,
-            onTerrainModified: () => this.eventBus.emit('terrain:modified', {}),
-        });
-        this.residenceSpawner.setTerrain(terrain);
-
-        // Water handler — needs terrain to find river tiles
-        this.settlerTaskSystem.registerWorkHandler(
-            SearchType.WATER,
-            createWaterHandler(
-                terrain,
-                this.inventoryManager,
-                this.settlerTaskSystem.getAssignedBuilding.bind(this.settlerTaskSystem)
-            )
-        );
-
-        // Ore vein data — per-tile ore type + level on rock tiles.
-        // Created here (from terrain) so mine workers can check/consume ore.
-        this.oreVeinData = new OreVeinData(terrain.width, terrain.height);
-        if (resourceData) {
-            loadOreVeinsFromResourceData(this.oreVeinData, resourceData);
-        } else {
-            populateOreVeins(this.oreVeinData, terrain);
-        }
-        this.settlerTaskSystem.setOreVeinData(this.oreVeinData);
-
-        // Geologist handler — walks to unprospected rock tiles, places resource signs
-        this.signSystem.setOreVeinData(this.oreVeinData);
-        this.settlerTaskSystem.registerWorkHandler(
-            SearchType.RESOURCE_POS,
-            createGeologistHandler(this.oreVeinData, terrain, this.signSystem)
-        );
-
-        // Territory manager needs map dimensions from terrain.
-        // Created here (before populateMapEntities) so events are registered
-        // before buildings are loaded.
-        this.territoryManager = new TerritoryManager(terrain.width, terrain.height);
-        const territorySubscriptions = registerTerritoryEvents(
-            this.eventBus,
-            this.territoryManager,
-            this.cleanupRegistry
-        );
-        this.territoryCleanup = () => territorySubscriptions.unsubscribeAll();
+        this.featureRegistry.setTerrainData(terrain, resourceData);
     }
 
-    /** Ordered tick systems for the frame loop, with group labels */
+    /** Ordered tick systems for the frame loop, with group labels. */
     public getTickSystems(): readonly { system: TickSystem; group: string }[] {
-        return this.tickSystems;
+        return this.featureRegistry.getSystems();
     }
 
-    /** Clean up all event subscriptions and system state */
+    /** Clean up all event subscriptions and system state. */
     public destroy(): void {
-        for (const { system } of this.tickSystems) {
-            if (system.destroy) {
-                system.destroy();
-            }
-        }
         this.featureRegistry.destroy();
-        this.inventoryPileSync?.unregisterEvents();
-        this.territoryCleanup?.();
         this.cleanupRegistry.destroy();
         this.subscriptions.unsubscribeAll();
     }
 
-    private addSystem(system: TickSystem, group = 'Other'): void {
-        this.tickSystems.push({ system, group });
-    }
-
-    private onEntityCreated({ entityId, type, subType, x, y }: GameEvents['entity:created']): void {
-        if (type === EntityType.Unit) {
-            const speed = getUnitTypeSpeed(subType as UnitType);
-            this.movement.createController(entityId, x, y, speed);
-        } else if (type === EntityType.StackedPile) {
-            this.gameState.piles.createState(entityId);
-        }
-    }
-
-    private onFreePilePlaced({ entityId, materialType, quantity }: GameEvents['pile:freePilePlaced']): void {
-        const entity = this.gameState.getEntityOrThrow(entityId, 'onFreePilePlaced');
-
-        // Assign ownership based on territory — free piles belong to whoever controls the land.
-        if (entity.player === 0) {
-            const owner = this.territoryManager.getOwner(entity.x, entity.y);
-            if (owner >= 0) {
-                entity.player = owner;
-            }
-        }
-
-        // Register an output-only inventory so the logistics system can discover and pick up free piles.
-        this.inventoryManager.createInventoryFromConfig(entityId, BuildingType.StorageArea, {
-            inputSlots: [],
-            outputSlots: [{ materialType, maxCapacity: quantity }],
-        });
-        this.inventoryManager.depositOutput(entityId, materialType, quantity);
-    }
-
-    private onBuildingPlaced({ entityId, buildingType, x, y, player }: GameEvents['building:placed']): void {
-        const entity = this.gameState.getEntity(entityId);
-        if (!entity) return;
-        this.constructionSiteManager.registerSite(entityId, buildingType, entity.race, player, x, y);
-        // Create construction inventory so carriers can deliver materials during construction.
-        // This replaces the production inventory created by InventoryFeature on entity:created.
-        const constructionConfig = getConstructionInventoryConfig(buildingType, entity.race);
-        if (constructionConfig.inputSlots.length > 0) {
-            this.inventoryManager.createInventoryFromConfig(entityId, buildingType, constructionConfig);
-        }
-    }
-
-    private onInventoryChanged({
-        buildingId,
-        materialType,
-        slotType,
-        newAmount,
-        previousAmount,
-    }: GameEvents['inventory:changed']): void {
-        // Construction material delivery tracking
-        if (slotType === 'input' && newAmount > previousAmount) {
-            const site = this.constructionSiteManager.getSite(buildingId);
-            if (site) {
-                const deposited = newAmount - previousAmount;
-                this.constructionSiteManager.recordDelivery(buildingId, materialType, deposited);
-                this.eventBus.emit('construction:materialDelivered', { buildingId, material: materialType });
-            }
-        }
-
-        // Free pile sync: when output is withdrawn, update pile quantity and remove if depleted
-        if (slotType === 'output' && newAmount < previousAmount) {
-            const entity = this.gameState.getEntity(buildingId);
-            if (entity?.type === EntityType.StackedPile) {
-                this.gameState.piles.setQuantity(buildingId, newAmount);
-                if (newAmount === 0) {
-                    this.gameState.removeEntity(buildingId);
-                }
-            }
-        }
-    }
-
-    private onBuildingCompleted({ entityId, buildingType, race }: GameEvents['building:completed']): void {
-        // InventoryPileSync.onBuildingCompleted fires FIRST (subscribed before GameServices in step 10)
-        // and clears all construction-phase piles. Then we atomically swap the inventory phase.
-        this.inventoryManager.swapInventoryPhase(entityId, buildingType, race);
-
-        // Remove the construction site record (construction is done).
-        this.constructionSiteManager.removeSite(entityId);
-
-        const recipeSet = getRecipeSet(buildingType);
-        if (recipeSet) {
-            this.productionControlManager.initBuilding(entityId, recipeSet.recipes.length);
-        }
-
-        if (buildingType === BuildingType.Barrack) {
-            this.barracksTrainingManager.initBarracks(entityId, race);
-        }
+    private feat<T>(featureId: string): T {
+        return this.featureRegistry.getFeatureExports<T>(featureId);
     }
 }

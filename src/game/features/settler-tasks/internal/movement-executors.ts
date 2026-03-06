@@ -6,18 +6,18 @@
  *     GO_HOME, GO_TO_SOURCE_PILE, GO_TO_DESTINATION_PILE, SEARCH)
  *   - Virtual (interior/invisible) movement (GO_VIRTUAL)
  *
- * Each executor matches the ChoreoExecutorFn signature defined in choreo-types.ts.
+ * Each executor matches the MovementExecutorFn signature defined in choreo-types.ts.
  */
 
 import { EntityType, BuildingType, type Entity } from '../../../entity';
 import { getBuildingDoorPos } from '../../../game-data-access';
 import { hexDistance, getApproxDirection } from '../../../systems/hex-directions';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
-import type { ChoreoNode, ChoreoExecutorFn, ChoreoJobState, MovementContext } from '../choreo-types';
+import type { ChoreoNode, MovementExecutorFn, ChoreoJobState, MovementContext } from '../choreo-types';
 import { safeCall } from '../safe-call';
 
-const log = new LogHandler('MovementExecutors');
+const log = createLogger('MovementExecutors');
 
 // ─────────────────────────────────────────────────────────────
 // Constants
@@ -28,6 +28,9 @@ const ARRIVAL_DIST = 1;
 
 /** Arrival threshold for "roughly" movement tasks — settler doesn't need to be adjacent. */
 const ARRIVAL_DIST_ROUGH = 2;
+
+/** Ticks to wait before retrying pathfinding after a failed attempt. */
+const PATH_RETRY_COOLDOWN = 10;
 
 // ─────────────────────────────────────────────────────────────
 // Shared movement helper
@@ -44,13 +47,36 @@ const ARRIVAL_DIST_ROUGH = 2;
  *
  * When node.dir !== -1, the controller's direction is set on arrival.
  */
+/** Try to issue pathfinding with retry cooldown. Returns true if movement was started. */
+function tryIssuePath(
+    settler: Entity,
+    targetX: number,
+    targetY: number,
+    ctx: MovementContext,
+    job?: ChoreoJobState
+): boolean {
+    if (job && job.pathRetryCountdown > 0) {
+        job.pathRetryCountdown--;
+        return false;
+    }
+    const moved = ctx.gameState.movement.moveUnit(settler.id, targetX, targetY);
+    if (!moved) {
+        if (job) job.pathRetryCountdown = PATH_RETRY_COOLDOWN;
+        log.debug(`moveToPosition: path failed for settler ${settler.id}, retrying in ${PATH_RETRY_COOLDOWN} ticks`);
+        return false;
+    }
+    if (job) job.pathRetryCountdown = 0;
+    return true;
+}
+
 export function moveToPosition(
     settler: Entity,
     targetX: number,
     targetY: number,
     node: ChoreoNode,
     ctx: MovementContext,
-    arrivalDist: number = ARRIVAL_DIST
+    arrivalDist: number = ARRIVAL_DIST,
+    job?: ChoreoJobState
 ): TaskResult {
     const controller = ctx.gameState.movement.getController(settler.id);
     if (!controller) {
@@ -58,22 +84,13 @@ export function moveToPosition(
         return TaskResult.FAILED;
     }
 
-    const dist = hexDistance(settler.x, settler.y, targetX, targetY);
-
-    if (dist <= arrivalDist && controller.state === 'idle') {
-        // Apply explicit direction on arrival if specified
-        if (node.dir !== -1) {
-            controller.setDirection(node.dir);
-        }
+    if (hexDistance(settler.x, settler.y, targetX, targetY) <= arrivalDist && controller.state === 'idle') {
+        if (node.dir !== -1) controller.setDirection(node.dir);
         return TaskResult.DONE;
     }
 
     if (controller.state === 'idle') {
-        const moved = ctx.gameState.movement.moveUnit(settler.id, targetX, targetY);
-        if (!moved) {
-            log.debug(`moveToPosition: moveUnit failed for settler ${settler.id} -> (${targetX}, ${targetY})`);
-            return TaskResult.FAILED;
-        }
+        tryIssuePath(settler, targetX, targetY, ctx, job);
     }
 
     return TaskResult.CONTINUE;
@@ -102,86 +119,46 @@ function resolveAssignedBuildingId(settler: Entity, ctx: MovementContext): numbe
 // Phase 2A — Regular movement executors
 // ─────────────────────────────────────────────────────────────
 
-/**
- * GO_TO_TARGET — move to the target entity's position (from job.targetId).
- * If the target is a building, navigate to its door tile.
- * Falls back to job.targetPos when no entity target exists (position-only jobs like planting).
- * DONE when hexDistance ≤ 1 and controller idle.
- */
-export const executeGoToTarget: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
-    // Entity target: walk to entity position (building door for buildings)
-    if (job.targetId !== null) {
-        const target = ctx.gameState.getEntityOrThrow(job.targetId, 'GO_TO_TARGET target');
+/** GO_TO_TARGET / GO_TO_TARGET_ROUGHLY — move to entity or position target. */
+function makeGoToTarget(arrivalDist: number): MovementExecutorFn {
+    return (settler, job, node, _dt, ctx) => {
+        if (job.targetId !== null) {
+            const target = ctx.gameState.getEntityOrThrow(job.targetId, 'GO_TO_TARGET target');
 
-        if (target.type === EntityType.Building) {
-            const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
-            return moveToPosition(settler, door.x, door.y, node, ctx, ARRIVAL_DIST);
+            if (target.type === EntityType.Building) {
+                const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
+                return moveToPosition(settler, door.x, door.y, node, ctx, arrivalDist, job);
+            }
+
+            return moveToPosition(settler, target.x, target.y, node, ctx, arrivalDist, job);
         }
 
-        return moveToPosition(settler, target.x, target.y, node, ctx, ARRIVAL_DIST);
-    }
-
-    // Position-only target (e.g. forester/farmer planting spot from position handler)
-    if (job.targetPos) {
-        return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST);
-    }
-
-    log.debug(`executeGoToTarget: settler ${settler.id} has no target`);
-    return TaskResult.FAILED;
-};
-
-/**
- * GO_TO_TARGET_ROUGHLY — same as GO_TO_TARGET but with a larger arrival threshold (≤ 2).
- * Falls back to job.targetPos when no entity target exists.
- */
-export const executeGoToTargetRoughly: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
-    if (job.targetId !== null) {
-        const target = ctx.gameState.getEntityOrThrow(job.targetId, 'GO_TO_TARGET_ROUGHLY target');
-
-        if (target.type === EntityType.Building) {
-            const door = getBuildingDoorPos(target.x, target.y, target.race, target.subType as BuildingType);
-            return moveToPosition(settler, door.x, door.y, node, ctx, ARRIVAL_DIST_ROUGH);
+        if (job.targetPos) {
+            return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, arrivalDist, job);
         }
 
-        return moveToPosition(settler, target.x, target.y, node, ctx, ARRIVAL_DIST_ROUGH);
-    }
+        log.debug(`executeGoToTarget: settler ${settler.id} has no target`);
+        return TaskResult.FAILED;
+    };
+}
 
-    if (job.targetPos) {
-        return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST_ROUGH);
-    }
+export const executeGoToTarget = makeGoToTarget(ARRIVAL_DIST);
+export const executeGoToTargetRoughly = makeGoToTarget(ARRIVAL_DIST_ROUGH);
 
-    log.debug(`executeGoToTargetRoughly: settler ${settler.id} has no target`);
-    return TaskResult.FAILED;
-};
+/** GO_TO_POS / GO_TO_POS_ROUGHLY — move to building-relative position. */
+function makeGoToPos(arrivalDist: number): MovementExecutorFn {
+    return (settler, job, node, _dt, ctx) => {
+        if (!job.targetPos) {
+            const buildingId = resolveAssignedBuildingId(settler, ctx);
+            job.targetPos = ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork);
+        }
 
-/**
- * GO_TO_POS — move to a building-relative position resolved from the node's (x, y).
- *
- * On first tick (progress === 0): resolves the world position via
- * ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork)
- * and caches it in job.targetPos.
- * Subsequent ticks reuse the cached position.
- */
-export const executeGoToPos: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
-    if (!job.targetPos) {
-        const buildingId = resolveAssignedBuildingId(settler, ctx);
-        job.targetPos = ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork);
-    }
+        return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, arrivalDist, job);
+    };
+}
 
-    return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST);
-};
-
-/**
- * GO_TO_POS_ROUGHLY — same as GO_TO_POS but with a larger arrival threshold (≤ 2).
- */
-export const executeGoToPosRoughly: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
-    if (!job.targetPos) {
-        const buildingId = resolveAssignedBuildingId(settler, ctx);
-        job.targetPos = ctx.buildingPositionResolver.resolvePosition(buildingId, node.x, node.y, node.useWork);
-    }
-
-    return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST_ROUGH);
-};
+export const executeGoToPos = makeGoToPos(ARRIVAL_DIST);
+export const executeGoToPosRoughly = makeGoToPos(ARRIVAL_DIST_ROUGH);
 
 /**
  * GO_HOME — move to the settler's home building door.
@@ -189,7 +166,7 @@ export const executeGoToPosRoughly: ChoreoExecutorFn = (settler, job, node, _dt,
  * Resolves the home building via ctx.getWorkerHomeBuilding(settler.id),
  * then navigates to its door offset (or building position if door offset is zero).
  */
-export const executeGoHome: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
+export const executeGoHome: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
     const homeId = ctx.getWorkerHomeBuilding(settler.id);
     if (homeId === null) {
         log.debug(`executeGoHome: settler ${settler.id} has no home building`);
@@ -199,7 +176,7 @@ export const executeGoHome: ChoreoExecutorFn = (settler, job, node, _dt, ctx) =>
     const building = ctx.gameState.getEntityOrThrow(homeId, 'GO_HOME home building');
     const door = getBuildingDoorPos(building.x, building.y, building.race, building.subType as BuildingType);
 
-    return moveToPosition(settler, door.x, door.y, node, ctx, ARRIVAL_DIST);
+    return moveToPosition(settler, door.x, door.y, node, ctx, ARRIVAL_DIST, job);
 };
 
 /**
@@ -210,11 +187,11 @@ export const executeGoHome: ChoreoExecutorFn = (settler, job, node, _dt, ctx) =>
  * For regular workers: resolves the building-relative (x, y) offset from the XML node,
  * identical to GO_TO_POS.
  */
-export const executeGoToSourcePile: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
+export const executeGoToSourcePile: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
     // Transport jobs: read source directly from transport data
     if (job.transportData) {
         const { sourcePos } = job.transportData;
-        return moveToPosition(settler, sourcePos.x, sourcePos.y, node, ctx, ARRIVAL_DIST);
+        return moveToPosition(settler, sourcePos.x, sourcePos.y, node, ctx, ARRIVAL_DIST, job);
     }
 
     // Regular workers: resolve building-relative offset (same as GO_TO_POS)
@@ -229,11 +206,11 @@ export const executeGoToSourcePile: ChoreoExecutorFn = (settler, job, node, _dt,
  * For regular workers: resolves the building-relative (x, y) offset from the XML node,
  * identical to GO_TO_POS.
  */
-export const executeGoToDestinationPile: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
+export const executeGoToDestinationPile: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
     // Transport jobs: read destination directly from transport data
     if (job.transportData) {
         const { destPos } = job.transportData;
-        return moveToPosition(settler, destPos.x, destPos.y, node, ctx, ARRIVAL_DIST);
+        return moveToPosition(settler, destPos.x, destPos.y, node, ctx, ARRIVAL_DIST, job);
     }
 
     // Regular workers: resolve building-relative offset (same as GO_TO_POS)
@@ -246,7 +223,7 @@ function searchViaEntityHandler(settler: Entity, job: ChoreoJobState, ctx: Movem
     const { entityHandler, handlerErrorLogger } = ctx;
 
     const result = safeCall(
-        () => entityHandler.findTarget(settler.x, settler.y, settler.id),
+        () => entityHandler.findTarget(settler.x, settler.y, settler.id, settler.player),
         handlerErrorLogger,
         `SEARCH findTarget failed for settler ${settler.id}`
     );
@@ -307,7 +284,7 @@ function searchViaPositionHandler(settler: Entity, job: ChoreoJobState, ctx: Mov
  * - CONTINUE when nothing found and shouldWaitForWork is true.
  * - FAILED when nothing found and shouldWaitForWork is false.
  */
-export const executeSearch: ChoreoExecutorFn = (settler, job, _node, _dt, ctx) => {
+export const executeSearch: MovementExecutorFn = (settler, job, _node, _dt, ctx) => {
     const entityResult = searchViaEntityHandler(settler, job, ctx);
     if (entityResult !== null) return entityResult;
 
@@ -332,7 +309,7 @@ export const executeSearch: ChoreoExecutorFn = (settler, job, _node, _dt, ctx) =
  * If node.dir !== -1, the settler's direction is set to node.dir.
  * Returns DONE immediately after positioning.
  */
-export const executeGoVirtual: ChoreoExecutorFn = (settler, job, node, _dt, ctx) => {
+export const executeGoVirtual: MovementExecutorFn = (settler, job, node, _dt, ctx) => {
     const buildingId = resolveAssignedBuildingId(settler, ctx);
 
     // When working on a target entity with useWork offsets, resolve positions
@@ -345,7 +322,7 @@ export const executeGoVirtual: ChoreoExecutorFn = (settler, job, node, _dt, ctx)
         if (!job.targetPos) {
             job.targetPos = { x: target.x + node.x, y: target.y + node.y };
         }
-        return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST);
+        return moveToPosition(settler, job.targetPos.x, job.targetPos.y, node, ctx, ARRIVAL_DIST, job);
     }
 
     // No target entity — interior/building teleport (original behavior)

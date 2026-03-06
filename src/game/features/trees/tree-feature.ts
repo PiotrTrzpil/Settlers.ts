@@ -10,7 +10,6 @@
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
-import { EventSubscriptionManager } from '../../event-bus';
 import { TreeSystem } from './tree-system';
 import { EntityType } from '../../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
@@ -32,9 +31,6 @@ export const TreeFeature: FeatureDefinition = {
     dependencies: [],
 
     create(ctx: FeatureContext) {
-        const subscriptions = new EventSubscriptionManager();
-
-        // Create the tree system
         const treeSystem = new TreeSystem({
             gameState: ctx.gameState,
             visualService: ctx.visualService,
@@ -43,7 +39,7 @@ export const TreeFeature: FeatureDefinition = {
         });
 
         // Register for map object creation events to auto-register trees
-        subscriptions.subscribe(ctx.eventBus, 'entity:created', ({ entityId, type, subType }) => {
+        ctx.on('entity:created', ({ entityId, type, subType }) => {
             if (type === EntityType.MapObject) {
                 treeSystem.register(entityId, subType as MapObjectType);
             }
@@ -55,9 +51,6 @@ export const TreeFeature: FeatureDefinition = {
         return {
             systems: [treeSystem],
             exports: { treeSystem } satisfies TreeFeatureExports,
-            destroy: () => {
-                subscriptions.unsubscribeAll();
-            },
         };
     },
 };

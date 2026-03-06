@@ -19,14 +19,14 @@ import type { TrainingRecipe, TrainingRecipeSet } from './types';
 /** Swordsman L1–L3, Bowman L1–L3, SquadLeader — shared by all races. */
 export const COMMON_TRAINING_RECIPES: readonly TrainingRecipe[] = [
     // Swordsman L1
-    { inputs: [{ material: EMaterialType.SWORD, count: 1 }], unitType: UnitType.Swordsman, level: 1 },
+    { inputs: [{ material: EMaterialType.SWORD, count: 1 }], unitType: UnitType.Swordsman1, level: 1 },
     // Swordsman L2
     {
         inputs: [
             { material: EMaterialType.SWORD, count: 1 },
             { material: EMaterialType.GOLDBAR, count: 1 },
         ],
-        unitType: UnitType.Swordsman,
+        unitType: UnitType.Swordsman1,
         level: 2,
     },
     // Swordsman L3
@@ -35,18 +35,18 @@ export const COMMON_TRAINING_RECIPES: readonly TrainingRecipe[] = [
             { material: EMaterialType.SWORD, count: 1 },
             { material: EMaterialType.GOLDBAR, count: 2 },
         ],
-        unitType: UnitType.Swordsman,
+        unitType: UnitType.Swordsman1,
         level: 3,
     },
     // Bowman L1
-    { inputs: [{ material: EMaterialType.BOW, count: 1 }], unitType: UnitType.Bowman, level: 1 },
+    { inputs: [{ material: EMaterialType.BOW, count: 1 }], unitType: UnitType.Bowman1, level: 1 },
     // Bowman L2
     {
         inputs: [
             { material: EMaterialType.BOW, count: 1 },
             { material: EMaterialType.GOLDBAR, count: 1 },
         ],
-        unitType: UnitType.Bowman,
+        unitType: UnitType.Bowman1,
         level: 2,
     },
     // Bowman L3
@@ -55,7 +55,7 @@ export const COMMON_TRAINING_RECIPES: readonly TrainingRecipe[] = [
             { material: EMaterialType.BOW, count: 1 },
             { material: EMaterialType.GOLDBAR, count: 2 },
         ],
-        unitType: UnitType.Bowman,
+        unitType: UnitType.Bowman1,
         level: 3,
     },
     // SquadLeader
@@ -118,18 +118,18 @@ function makeSpecialistRecipes(unitType: UnitType, weapon: EMaterialType): reado
 
 /** Race → specialist L1–L3 recipes. DarkTribe has none. */
 const SPECIALIST_RECIPES: ReadonlyMap<Race, readonly TrainingRecipe[]> = new Map([
-    [Race.Roman, makeSpecialistRecipes(UnitType.Medic, EMaterialType.SWORD)],
-    [Race.Viking, makeSpecialistRecipes(UnitType.AxeWarrior, EMaterialType.BATTLEAXE)],
-    [Race.Mayan, makeSpecialistRecipes(UnitType.BlowgunWarrior, EMaterialType.BLOWGUN)],
-    [Race.Trojan, makeSpecialistRecipes(UnitType.BackpackCatapultist, EMaterialType.CATAPULT)],
+    [Race.Roman, makeSpecialistRecipes(UnitType.Medic1, EMaterialType.SWORD)],
+    [Race.Viking, makeSpecialistRecipes(UnitType.AxeWarrior1, EMaterialType.BATTLEAXE)],
+    [Race.Mayan, makeSpecialistRecipes(UnitType.BlowgunWarrior1, EMaterialType.BLOWGUN)],
+    [Race.Trojan, makeSpecialistRecipes(UnitType.BackpackCatapultist1, EMaterialType.CATAPULT)],
 ]);
 
 /** Race → specialist unit type. */
 const SPECIALIST_UNIT_TYPES: ReadonlyMap<Race, UnitType> = new Map([
-    [Race.Roman, UnitType.Medic],
-    [Race.Viking, UnitType.AxeWarrior],
-    [Race.Mayan, UnitType.BlowgunWarrior],
-    [Race.Trojan, UnitType.BackpackCatapultist],
+    [Race.Roman, UnitType.Medic1],
+    [Race.Viking, UnitType.AxeWarrior1],
+    [Race.Mayan, UnitType.BlowgunWarrior1],
+    [Race.Trojan, UnitType.BackpackCatapultist1],
 ]);
 
 /** Race → specialist weapon material. */

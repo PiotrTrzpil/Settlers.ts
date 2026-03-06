@@ -6,8 +6,9 @@
  */
 
 import type { Entity } from '../../entity';
-import { UnitType, clearCarrying } from '../../entity';
-import { LogHandler } from '@/utilities/log-handler';
+import type { CoreDeps } from '../feature';
+import { UnitType } from '../../entity';
+import { createLogger } from '@/utilities/logger';
 import type { ThrottledLogger } from '@/utilities/throttled-logger';
 import { hexDistance } from '../../systems/hex-directions';
 import {
@@ -19,13 +20,38 @@ import {
     type PositionWorkHandler,
     type HomeAssignment,
 } from './types';
-import type { ChoreoContext, ChoreoJobState, ChoreoNode, ChoreoJob, JobPartResolution } from './choreo-types';
+import type {
+    ChoreoJobState,
+    ChoreoNode,
+    ChoreoJob,
+    JobPartResolution,
+    MovementContext,
+    WorkContext,
+    InventoryExecutorContext,
+    ControlContext,
+    BuildingPositionResolver,
+    TriggerSystem,
+    JobPartResolver,
+    TransportJobOps,
+} from './choreo-types';
 import { ChoreoTaskType, createChoreoJobState } from './choreo-types';
-import { CHOREO_EXECUTOR_MAP } from './choreo-executors';
+import {
+    ExecutorCategory,
+    TASK_CATEGORY,
+    MOVEMENT_EXECUTORS,
+    WORK_EXECUTORS,
+    INVENTORY_EXECUTORS,
+    CONTROL_EXECUTORS,
+} from './choreo-executors';
 import type { JobChoreographyStore } from './job-choreography-store';
 import type { WorkHandlerRegistry } from './work-handler-registry';
 import type { IdleAnimationController } from './idle-animation-controller';
 import type { GameState } from '../../game-state';
+import type { EventBus } from '../../event-bus';
+import type { BuildingInventoryManager } from '../inventory';
+import type { MaterialTransfer } from '../material-transfer';
+import type { BarracksTrainingManager } from '../barracks';
+import type { Command, CommandResult } from '../../commands';
 import { EMaterialType } from '../../economy';
 import { getBuildingDoorPos, getWorkerBuildingTypes } from '../../game-data-access';
 import { BuildingType } from '../../buildings/building-type';
@@ -33,7 +59,7 @@ import { findNearestWorkplace } from './work-handlers';
 import { JobSelector } from './job-selector';
 import { safeCall } from './safe-call';
 
-const log = new LogHandler('WorkerTaskExecutor');
+const log = createLogger('WorkerTaskExecutor');
 
 /** Per-unit state needed by the worker executor (subset of UnitRuntime). */
 export interface WorkerRuntimeState {
@@ -45,15 +71,22 @@ export interface WorkerRuntimeState {
 /** Building occupancy map (read-only view for finding workplaces). */
 export type OccupancyMap = ReadonlyMap<number, number>;
 
-export interface WorkerTaskExecutorConfig {
-    gameState: GameState;
+export interface WorkerTaskExecutorConfig extends CoreDeps {
     choreographyStore: JobChoreographyStore;
     handlerRegistry: WorkHandlerRegistry;
     animController: IdleAnimationController;
-    choreoContext: ChoreoContext;
     handlerErrorLogger: ThrottledLogger;
     missingHandlerLogger: ThrottledLogger;
     isBuildingAvailable?: (buildingId: number) => boolean;
+    inventoryManager: BuildingInventoryManager;
+    buildingPositionResolver: BuildingPositionResolver;
+    triggerSystem: TriggerSystem;
+    getWorkerHomeBuilding: (settlerId: number) => number | null;
+    jobPartResolver: JobPartResolver;
+    materialTransfer: MaterialTransfer;
+    transportJobOps: TransportJobOps;
+    getBarracksTrainingManager?: () => BarracksTrainingManager | undefined;
+    executeCommand?: (cmd: Command) => CommandResult;
 }
 
 export class WorkerTaskExecutor {
@@ -61,11 +94,26 @@ export class WorkerTaskExecutor {
     private readonly choreographyStore: JobChoreographyStore;
     private readonly handlerRegistry: WorkHandlerRegistry;
     private readonly animController: IdleAnimationController;
-    private readonly choreoContext: ChoreoContext;
     private readonly handlerErrorLogger: ThrottledLogger;
     private readonly missingHandlerLogger: ThrottledLogger;
     private readonly isBuildingAvailable?: (buildingId: number) => boolean;
     private readonly jobSelector: JobSelector;
+
+    // Service references used directly by the executor (not passed to category executors)
+    private readonly eventBus: EventBus;
+    private readonly inventoryManager: BuildingInventoryManager;
+    private readonly jobPartResolver: JobPartResolver;
+    private readonly materialTransfer: MaterialTransfer;
+    private readonly transportJobOps: TransportJobOps;
+    private readonly triggerSystem: TriggerSystem;
+    private readonly getWorkerHomeBuilding: (settlerId: number) => number | null;
+    private readonly buildingPositionResolver: BuildingPositionResolver;
+
+    // Pre-built context objects — handler fields updated in-place per tick (no allocation)
+    private readonly movementCtx: MovementContext;
+    private readonly workCtx: WorkContext;
+    private readonly inventoryCtx: InventoryExecutorContext;
+    private readonly controlCtx: ControlContext;
 
     /** Enable verbose choreography events (nodeStarted, nodeCompleted, animationApplied, waitingAtHome) */
     verbose = false;
@@ -75,15 +123,64 @@ export class WorkerTaskExecutor {
         this.choreographyStore = cfg.choreographyStore;
         this.handlerRegistry = cfg.handlerRegistry;
         this.animController = cfg.animController;
-        this.choreoContext = cfg.choreoContext;
         this.handlerErrorLogger = cfg.handlerErrorLogger;
         this.missingHandlerLogger = cfg.missingHandlerLogger;
         this.isBuildingAvailable = cfg.isBuildingAvailable;
         this.jobSelector = new JobSelector(cfg.choreographyStore);
+
+        // Store service references for direct use
+        this.eventBus = cfg.eventBus;
+        this.inventoryManager = cfg.inventoryManager;
+        this.jobPartResolver = cfg.jobPartResolver;
+        this.materialTransfer = cfg.materialTransfer;
+        this.transportJobOps = cfg.transportJobOps;
+        this.triggerSystem = cfg.triggerSystem;
+        this.getWorkerHomeBuilding = cfg.getWorkerHomeBuilding;
+        this.buildingPositionResolver = cfg.buildingPositionResolver;
+
+        // Pre-built context objects — handler fields mutated in-place each tick (zero allocation)
+        this.movementCtx = {
+            gameState: cfg.gameState,
+            buildingPositionResolver: cfg.buildingPositionResolver,
+            getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
+            handlerErrorLogger: cfg.handlerErrorLogger,
+            entityHandler: undefined,
+            positionHandler: undefined,
+        };
+
+        this.workCtx = {
+            gameState: cfg.gameState,
+            triggerSystem: cfg.triggerSystem,
+            getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
+            handlerErrorLogger: cfg.handlerErrorLogger,
+            entityHandler: undefined,
+            positionHandler: undefined,
+        };
+
+        this.inventoryCtx = {
+            inventoryManager: cfg.inventoryManager,
+            getWorkerHomeBuilding: cfg.getWorkerHomeBuilding,
+            materialTransfer: cfg.materialTransfer,
+            eventBus: cfg.eventBus,
+            transportJobOps: cfg.transportJobOps,
+        };
+
+        const getBarracksTrainingManager = cfg.getBarracksTrainingManager;
+        this.controlCtx = {
+            gameState: cfg.gameState,
+            eventBus: cfg.eventBus,
+            handlerErrorLogger: cfg.handlerErrorLogger,
+            get barracksTrainingManager() {
+                return getBarracksTrainingManager?.();
+            },
+            executeCommand: cfg.executeCommand,
+            inventoryManager: cfg.inventoryManager,
+        };
     }
 
     /**
      * Handle a worker in IDLE state: find a target and start a job.
+     * @returns true if a job was started, false if the settler remains idle.
      */
     handleIdle(
         settler: Entity,
@@ -92,7 +189,7 @@ export class WorkerTaskExecutor {
         buildingOccupants: OccupancyMap,
         claimBuilding: (runtime: WorkerRuntimeState, buildingId: number) => void,
         releaseBuilding: (runtime: WorkerRuntimeState) => void
-    ): void {
+    ): boolean {
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
         // Position handler may be registered under a separate plantSearch type (e.g. GRAIN_SEED_POS)
         const positionHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
@@ -102,7 +199,7 @@ export class WorkerTaskExecutor {
                 `No work handler registered for search type: ${config.search}. ` +
                     `Settler ${settler.id} (${UnitType[settler.subType]}) will stay idle until feature is implemented.`
             );
-            return;
+            return false;
         }
 
         const homeBuilding = this.resolveHomeBuilding(
@@ -114,7 +211,7 @@ export class WorkerTaskExecutor {
         );
 
         // Workers with workplace buildings must have an assigned workplace before starting work
-        if (!homeBuilding && getWorkerBuildingTypes(settler.race, settler.subType as UnitType)) return;
+        if (!homeBuilding && getWorkerBuildingTypes(settler.race, settler.subType as UnitType)) return false;
 
         // First visit: worker must walk to their building before starting work
         if (homeBuilding && !runtime.homeAssignment!.hasVisited) {
@@ -122,19 +219,20 @@ export class WorkerTaskExecutor {
                 runtime.homeAssignment!.hasVisited = true;
             } else {
                 this.returnHomeAndWait(settler, homeBuilding, 'first_visit');
-                return;
+                return false;
             }
         }
 
         const targets = this.findTargets(settler, entityHandler, positionHandler, homeBuilding);
-        if (!targets) return; // error already logged
+        if (!targets) return false; // error already logged
 
         const selected = this.jobSelector.selectJob(settler, config, targets.entity, homeBuilding, targets.position);
-        if (!selected) return;
+        if (!selected) return false;
 
-        if (this.shouldWaitBeforeStarting(settler, homeBuilding, selected, entityHandler, targets.entity)) return;
+        if (this.shouldWaitBeforeStarting(settler, homeBuilding, selected, entityHandler, targets.entity)) return false;
 
         this.startJob(settler, runtime, selected, targets.entity, homeBuilding, targets.position);
+        return true;
     }
 
     /** Find entity and position targets for a settler. Returns null if a handler errored. */
@@ -204,7 +302,7 @@ export class WorkerTaskExecutor {
                 `home ${homeBuilding?.id ?? 'none'}`
         );
 
-        this.choreoContext.eventBus.emit('settler:taskStarted', {
+        this.eventBus.emit('settler:taskStarted', {
             unitId: settler.id,
             jobId: selected.id,
             targetId: entityTarget?.entityId ?? null,
@@ -241,24 +339,16 @@ export class WorkerTaskExecutor {
         // Set visibility from node
         settler.hidden = !node.visible;
 
-        // Build per-tick context with work handlers
-        // Position handler may be under a separate plantSearch type (e.g. GRAIN_SEED_POS for farmer)
+        // Update handler fields in-place (no allocation) for movement/work contexts
         const entityHandler = this.handlerRegistry.getEntityHandler(config.search);
         const positionHandler = this.handlerRegistry.getPositionHandler(config.plantSearch ?? config.search);
-        const ctx: ChoreoContext = {
-            ...this.choreoContext,
-            entityHandler,
-            positionHandler,
-        };
+        this.movementCtx.entityHandler = entityHandler;
+        this.movementCtx.positionHandler = positionHandler;
+        this.workCtx.entityHandler = entityHandler;
+        this.workCtx.positionHandler = positionHandler;
 
-        // Execute via choreo executor map
-        const executor = CHOREO_EXECUTOR_MAP[node.task];
-        const result =
-            safeCall(
-                () => executor(settler, job, node, dt, ctx),
-                this.handlerErrorLogger,
-                `Executor crash: settler=${settler.id} job=${job.jobId} nodeIdx=${job.nodeIndex} task=${node.task}`
-            ) ?? TaskResult.FAILED;
+        // Execute via category-scoped executor dispatch
+        const result = this.executeNode(settler, job, node, dt);
 
         switch (result) {
         case TaskResult.DONE:
@@ -279,7 +369,7 @@ export class WorkerTaskExecutor {
     private advanceToNextNode(settler: Entity, job: ChoreoJobState, nodes: readonly ChoreoNode[]): void {
         if (this.verbose) {
             const completedNode = nodes[job.nodeIndex]!;
-            this.choreoContext.eventBus.emit('choreo:nodeCompleted', {
+            this.eventBus.emit('choreo:nodeCompleted', {
                 unitId: settler.id,
                 jobId: job.jobId,
                 nodeIndex: job.nodeIndex,
@@ -288,19 +378,69 @@ export class WorkerTaskExecutor {
         }
         // Stop active trigger when leaving a node
         if (job.activeTrigger) {
-            const buildingId = this.choreoContext.getWorkerHomeBuilding(settler.id);
+            const buildingId = this.getWorkerHomeBuilding(settler.id);
             if (buildingId !== null) {
-                this.choreoContext.triggerSystem.stopTrigger(buildingId, job.activeTrigger);
+                this.triggerSystem.stopTrigger(buildingId, job.activeTrigger);
             }
             job.activeTrigger = '';
         }
         job.nodeIndex++;
         job.progress = -1; // sentinel: next tick is "first tick" of the new node
         job.workStarted = false;
+        job.pathRetryCountdown = 0;
         // Reset targetPos between nodes. Transport jobs read positions directly from
         // transportData (sourcePos/destPos) so they don't rely on cross-node targetPos.
         job.targetPos = null;
         // Animation for the next node is applied on its first tick (progress sentinel = -1).
+    }
+
+    /** Execute a single choreography node, catching executor crashes. */
+    private executeNode(settler: Entity, job: ChoreoJobState, node: ChoreoNode, dt: number): TaskResult {
+        const category = TASK_CATEGORY[node.task];
+        try {
+            switch (category) {
+            case ExecutorCategory.MOVEMENT:
+                return MOVEMENT_EXECUTORS[node.task as keyof typeof MOVEMENT_EXECUTORS](
+                    settler,
+                    job,
+                    node,
+                    dt,
+                    this.movementCtx
+                );
+            case ExecutorCategory.WORK:
+                return WORK_EXECUTORS[node.task as keyof typeof WORK_EXECUTORS](
+                    settler,
+                    job,
+                    node,
+                    dt,
+                    this.workCtx
+                );
+            case ExecutorCategory.INVENTORY:
+                return INVENTORY_EXECUTORS[node.task as keyof typeof INVENTORY_EXECUTORS](
+                    settler,
+                    job,
+                    node,
+                    dt,
+                    this.inventoryCtx
+                );
+            case ExecutorCategory.CONTROL:
+                return CONTROL_EXECUTORS[node.task as keyof typeof CONTROL_EXECUTORS](
+                    settler,
+                    job,
+                    node,
+                    dt,
+                    this.controlCtx
+                );
+            default:
+                return TaskResult.FAILED;
+            }
+        } catch (e) {
+            this.handlerErrorLogger.error(
+                `Executor crash: settler=${settler.id} job=${job.jobId} nodeIdx=${job.nodeIndex} task=${node.task}`,
+                e instanceof Error ? e : new Error(String(e))
+            );
+            return TaskResult.FAILED;
+        }
     }
 
     /**
@@ -311,15 +451,15 @@ export class WorkerTaskExecutor {
 
         // Stop any active trigger
         if (job.activeTrigger) {
-            const homeId = this.choreoContext.getWorkerHomeBuilding(settler.id);
+            const homeId = this.getWorkerHomeBuilding(settler.id);
             if (homeId !== null) {
-                this.choreoContext.triggerSystem.stopTrigger(homeId, job.activeTrigger);
+                this.triggerSystem.stopTrigger(homeId, job.activeTrigger);
             }
         }
 
         log.debug(`Settler ${settler.id} completed job ${job.jobId}`);
 
-        this.choreoContext.eventBus.emit('settler:taskCompleted', {
+        this.eventBus.emit('settler:taskCompleted', {
             unitId: settler.id,
             jobId: job.jobId,
         });
@@ -360,20 +500,18 @@ export class WorkerTaskExecutor {
 
         // Cancel transport job if active (releases reservation + resets request)
         if (job.transportData) {
-            job.transportData.transportJob.cancel();
+            this.transportJobOps.cancel(job.transportData.jobId);
         }
+
+        // Drop carried material as free pile (no-op if not carrying)
+        this.materialTransfer.drop(settler.id);
 
         // Stop any active trigger
         if (job.activeTrigger) {
-            const homeId = this.choreoContext.getWorkerHomeBuilding(settler.id);
+            const homeId = this.getWorkerHomeBuilding(settler.id);
             if (homeId !== null) {
-                this.choreoContext.triggerSystem.stopTrigger(homeId, job.activeTrigger);
+                this.triggerSystem.stopTrigger(homeId, job.activeTrigger);
             }
-        }
-
-        // Clear carrying state if unit was carrying material
-        if (settler.carrying) {
-            clearCarrying(settler);
         }
 
         // Restore visibility
@@ -390,7 +528,7 @@ export class WorkerTaskExecutor {
         } else {
             failedStep = 'unknown';
         }
-        this.choreoContext.eventBus.emit('settler:taskFailed', {
+        this.eventBus.emit('settler:taskFailed', {
             unitId: settler.id,
             jobId: job.jobId,
             nodeIndex: job.nodeIndex,
@@ -412,7 +550,7 @@ export class WorkerTaskExecutor {
         settler: Entity
     ): { entityId: number; x: number; y: number } | null | undefined {
         return safeCall(
-            () => handler.findTarget(settler.x, settler.y, settler.id),
+            () => handler.findTarget(settler.x, settler.y, settler.id, settler.player),
             this.handlerErrorLogger,
             `findTarget failed for settler ${settler.id}`
         );
@@ -442,7 +580,7 @@ export class WorkerTaskExecutor {
         homeBuilding: Entity | null
     ): { x: number; y: number } {
         if (handler.useWorkAreaCenter && homeBuilding) {
-            return this.choreoContext.buildingPositionResolver.resolvePosition(homeBuilding.id, 0, 0, true);
+            return this.buildingPositionResolver.resolvePosition(homeBuilding.id, 0, 0, true);
         }
         return settler;
     }
@@ -492,7 +630,7 @@ export class WorkerTaskExecutor {
         home: Entity,
         reason: 'output_full' | 'cant_work' | 'first_visit'
     ): void {
-        this.choreoContext.eventBus.emit('choreo:waitingAtHome', {
+        this.eventBus.emit('choreo:waitingAtHome', {
             unitId: settler.id,
             homeBuilding: home.id,
             reason,
@@ -501,7 +639,7 @@ export class WorkerTaskExecutor {
 
     /** Emit verbose choreo:nodeStarted event. */
     private emitNodeStarted(settler: Entity, job: ChoreoJobState, node: ChoreoNode): void {
-        this.choreoContext.eventBus.emit('choreo:nodeStarted', {
+        this.eventBus.emit('choreo:nodeStarted', {
             unitId: settler.id,
             jobId: job.jobId,
             nodeIndex: job.nodeIndex,
@@ -515,10 +653,10 @@ export class WorkerTaskExecutor {
     /** Apply choreography animation for a node via the JobPartResolver. */
     private applyChoreoAnimation(settler: Entity, node: ChoreoNode): void {
         if (!node.jobPart) return;
-        const resolution: JobPartResolution = this.choreoContext.jobPartResolver.resolve(node.jobPart, settler);
+        const resolution: JobPartResolution = this.jobPartResolver.resolve(node.jobPart, settler);
         this.animController.applyChoreoAnimation(settler, resolution);
         if (this.verbose) {
-            this.choreoContext.eventBus.emit('choreo:animationApplied', {
+            this.eventBus.emit('choreo:animationApplied', {
                 unitId: settler.id,
                 jobPart: node.jobPart,
                 sequenceKey: resolution.sequenceKey,
@@ -541,7 +679,7 @@ export class WorkerTaskExecutor {
         if (material === null) return false;
 
         const id = homeBuilding.id;
-        const inv = this.choreoContext.inventoryManager;
+        const inv = this.inventoryManager;
         if (inv.canAcceptInput(id, material, 1)) return false;
         if (inv.getInputSpace(id, material) > 0) return false;
 

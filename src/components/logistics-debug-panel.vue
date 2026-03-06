@@ -16,10 +16,6 @@
             <StatRow v-if="stats.unregisteredCarriers > 0" label="Unregistered">
                 <span class="value-warning">{{ stats.unregisteredCarriers }}</span>
             </StatRow>
-            <StatRow label="Hubs" :value="`${stats.hubCount} (${stats.totalHubCapacity} cap)`" />
-            <StatRow v-if="stats.hubsAtCapacity > 0" label="Hubs at capacity">
-                <span class="value-warning">{{ stats.hubsAtCapacity }}</span>
-            </StatRow>
             <StatRow label="Reservations" :value="stats.reservationCount" />
         </CollapseSection>
 
@@ -50,16 +46,8 @@
                     <span class="breakdown-value">{{ stats.idleCarriers }}</span>
                 </span>
                 <span class="breakdown-item">
-                    <span class="breakdown-label">Walk:</span>
-                    <span class="breakdown-value">{{ stats.walkingCarriers }}</span>
-                </span>
-                <span class="breakdown-item">
-                    <span class="breakdown-label">Pickup:</span>
-                    <span class="breakdown-value">{{ stats.pickingUpCarriers }}</span>
-                </span>
-                <span class="breakdown-item">
-                    <span class="breakdown-label">Deliver:</span>
-                    <span class="breakdown-value">{{ stats.deliveringCarriers }}</span>
+                    <span class="breakdown-label">Busy:</span>
+                    <span class="breakdown-value">{{ stats.busyCarriers }}</span>
                 </span>
             </div>
             <div v-if="state.carriers.length === 0" class="empty-state">No carriers</div>
@@ -89,23 +77,11 @@
         <!-- Reservations -->
         <CollapseSection :title="`Reservations (${stats.reservationCount})`" :default-open="false">
             <div v-if="state.reservations.length === 0" class="empty-state">No reservations</div>
-            <div v-for="res in state.reservations" :key="res.id" class="reservation-row">
+            <div v-for="res in state.reservations" :key="res.requestId" class="reservation-row">
                 <span class="res-building">#{{ res.buildingId }}</span>
                 <span class="res-material">{{ res.material }}</span>
                 <span class="res-amount">×{{ res.amount }}</span>
                 <span class="res-request">→ req#{{ res.requestId }}</span>
-            </div>
-        </CollapseSection>
-
-        <!-- Hubs -->
-        <CollapseSection :title="`Hubs (${stats.hubCount})`" :default-open="false">
-            <div v-if="state.hubs.length === 0" class="empty-state">No hubs</div>
-            <div v-for="hub in state.hubs" :key="hub.buildingId" class="hub-row">
-                <span class="hub-id">#{{ hub.buildingId }}</span>
-                <span class="hub-capacity" :class="{ 'hub-full': hub.isFull }">
-                    {{ hub.carrierCount }}/{{ hub.capacity }}
-                </span>
-                <Badge v-if="hub.isFull" color="alert">FULL</Badge>
             </div>
         </CollapseSection>
     </OverlayPanel>
@@ -122,7 +98,6 @@ import Checkbox from './Checkbox.vue';
 import CollapseSection from './CollapseSection.vue';
 import StatRow from './StatRow.vue';
 import OverlayPanel from './OverlayPanel.vue';
-import Badge from './Badge.vue';
 
 const props = defineProps<{
     game: Game | null;
@@ -431,25 +406,5 @@ const activeJobCount = computed(() => carriersWithJobs.value.length);
 .res-request {
     color: var(--text-faint);
     font-size: 9px;
-}
-
-/* Hubs */
-.hub-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 0;
-    font-size: 10px;
-}
-.hub-id {
-    color: var(--text-muted);
-    min-width: 30px;
-}
-.hub-capacity {
-    color: var(--status-good);
-    min-width: 40px;
-}
-.hub-capacity.hub-full {
-    color: var(--status-alert);
 }
 </style>

@@ -2,9 +2,8 @@
  * ConstructionRequestSystem — tick system that creates material delivery requests for buildings under construction.
  *
  * Periodically scans all active construction sites and, for each material still needed,
- * ensures at most two active requests exist in the logistics system. This rate-limits
- * the number of carriers dispatched per material per site, matching the original game's
- * one-unit-at-a-time delivery behaviour while preventing logistics flooding.
+ * creates requests up to the remaining cost (capped at MAX_ACTIVE_PER_MATERIAL) so that
+ * multiple carriers deliver in parallel — matching the original game's behaviour.
  *
  * Requests are created as soon as a site is registered — carriers may deliver materials
  * during terrain leveling, parallel to the diggers, exactly as in Settlers 4.
@@ -17,7 +16,7 @@ import type { RequestManager } from '../logistics/request-manager';
 import { RequestPriority } from '../logistics/resource-request';
 
 /** Maximum number of active (pending + in-progress) requests per material per construction site. */
-const MAX_PENDING_PER_MATERIAL = 2;
+const MAX_ACTIVE_PER_MATERIAL = 8;
 
 export class ConstructionRequestSystem implements TickSystem {
     private readonly constructionSiteManager: ConstructionSiteManager;
@@ -42,17 +41,18 @@ export class ConstructionRequestSystem implements TickSystem {
         for (const site of this.constructionSiteManager.getAllActiveSites()) {
             const remainingCosts = this.constructionSiteManager.getRemainingCosts(site.buildingId);
             for (const cost of remainingCosts) {
-                this.ensureRequestsForMaterial(site.buildingId, cost.material);
+                this.ensureRequestsForMaterial(site.buildingId, cost.material, cost.count);
             }
         }
     }
 
-    private ensureRequestsForMaterial(buildingId: number, material: EMaterialType): void {
+    private ensureRequestsForMaterial(buildingId: number, material: EMaterialType, remaining: number): void {
         const activeRequests = this.requestManager
             .getRequestsForBuilding(buildingId)
             .filter(r => r.materialType === material).length;
 
-        if (activeRequests < MAX_PENDING_PER_MATERIAL) {
+        const cap = Math.min(remaining, MAX_ACTIVE_PER_MATERIAL);
+        for (let i = activeRequests; i < cap; i++) {
             this.requestManager.addRequest(buildingId, material, 1, RequestPriority.Normal);
         }
     }

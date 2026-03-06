@@ -13,21 +13,20 @@
  */
 
 import type { TickSystem } from '../../tick-system';
+import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import { EntityType, BuildingType } from '../../entity';
 import { EMaterialType } from '../../economy';
 import { RequestPriority, type RequestManager } from '../logistics';
 import { getInventoryConfig, type InventoryConfig, type BuildingInventoryManager } from '../inventory';
 import { type ConstructionSiteManager } from '../building-construction';
-import { EventSubscriptionManager, type EventBus } from '../../event-bus';
+import { EventSubscriptionManager } from '../../event-bus';
 
 /** Minimum input threshold before requesting more materials */
 const REQUEST_THRESHOLD = 4;
 
 /** Configuration for MaterialRequestSystem dependencies */
-export interface MaterialRequestSystemConfig {
-    gameState: GameState;
-    eventBus: EventBus;
+export interface MaterialRequestSystemConfig extends CoreDeps {
     constructionSiteManager: ConstructionSiteManager;
     inventoryManager: BuildingInventoryManager;
     requestManager: RequestManager;

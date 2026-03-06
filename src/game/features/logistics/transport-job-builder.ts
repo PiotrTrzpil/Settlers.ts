@@ -12,7 +12,7 @@ import { BuildingType } from '../../buildings/building-type';
 import { raceToRaceId, getBuildingDoorPos } from '../../game-data-access';
 import { createChoreoJobState, type ChoreoJob } from '../settler-tasks/choreo-types';
 import type { JobState } from '../settler-tasks/types';
-import type { TransportJob } from './transport-job';
+import type { TransportJobRecord } from './transport-job-record';
 import type { GameState } from '../../game-state';
 import type { RaceId } from '@/resources/game-data/types';
 
@@ -61,9 +61,9 @@ export class TransportJobBuilder {
      * Build a ChoreoJobState for a carrier transport delivery.
      * Resolves pile positions and sets up transport data for the choreography executors.
      */
-    build(transportJob: TransportJob, carrierId: number): JobState {
-        const sourcePos = this.resolveTransportPos(transportJob.sourceBuilding, transportJob.material, 'output');
-        const destPos = this.resolveTransportPos(transportJob.destBuilding, transportJob.material, 'input');
+    build(record: TransportJobRecord, carrierId: number): JobState {
+        const sourcePos = this.resolveTransportPos(record.sourceBuilding, record.material, 'output');
+        const destPos = this.resolveTransportPos(record.destBuilding, record.material, 'input');
 
         const carrier = this.gameState.getEntityOrThrow(carrierId, 'transport carrier');
         const raceId = raceToRaceId(carrier.race);
@@ -74,11 +74,11 @@ export class TransportJobBuilder {
 
         const job = createChoreoJobState(xmlJob.id, structuredClone(xmlJob.nodes));
         job.transportData = {
-            transportJob,
-            sourceBuildingId: transportJob.sourceBuilding,
-            destBuildingId: transportJob.destBuilding,
-            material: transportJob.material,
-            amount: transportJob.amount,
+            jobId: record.id,
+            sourceBuildingId: record.sourceBuilding,
+            destBuildingId: record.destBuilding,
+            material: record.material,
+            amount: record.amount,
             sourcePos,
             destPos,
         };

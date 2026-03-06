@@ -9,30 +9,29 @@
  * Called by executeGetGood/executePutGood when job.transportData is present.
  */
 
-import { type Entity, setCarrying, clearCarrying } from '../../../entity';
+import { type Entity } from '../../../entity';
 import { EMaterialType } from '../../../economy';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
-import type { ChoreoJobState, ChoreoContext, TransportData } from '../choreo-types';
+import type { ChoreoJobState, InventoryExecutorContext, TransportData } from '../choreo-types';
 
-const log = new LogHandler('TransportExecutors');
+const log = createLogger('TransportExecutors');
 
 /**
- * Handle carrier pickup from source building via TransportJob.
+ * Handle carrier pickup from source building.
  *
- * Calls transportJob.pickup() to atomically release reservation and withdraw inventory,
- * transitions carrier to Delivering status, and emits pickup events.
- * Pre-sets job.targetPos for the next movement node (GO_TO_DESTINATION_PILE).
+ * Withdraws material via materialTransfer.pickUp(), then calls callbacks.onPickedUp()
+ * to notify logistics (consumes reservation). Emits pickup events.
  */
 export function executeTransportPickup(
     settler: Entity,
     job: ChoreoJobState,
     td: TransportData,
-    ctx: ChoreoContext
+    ctx: InventoryExecutorContext
 ): TaskResult {
-    const { transportJob, material, sourceBuildingId, amount: requestedAmount } = td;
+    const { jobId, material, sourceBuildingId, amount: requestedAmount } = td;
 
-    const withdrawn = transportJob.pickup();
+    const withdrawn = ctx.materialTransfer.pickUp(settler.id, sourceBuildingId, material, requestedAmount, true);
 
     if (withdrawn === 0) {
         log.warn(`Carrier ${settler.id}: pickup failed at building ${sourceBuildingId}`);
@@ -45,15 +44,13 @@ export function executeTransportPickup(
         return TaskResult.FAILED;
     }
 
-    setCarrying(settler, material, withdrawn);
+    ctx.transportJobOps.pickUp(jobId);
     job.carryingGood = material;
     td.amount = withdrawn;
 
     log.debug(
         `Carrier ${settler.id} picked up ${withdrawn} of ${EMaterialType[material]} from building ${sourceBuildingId}`
     );
-
-    ctx.carrierManager.startDelivery(settler.id);
 
     ctx.eventBus.emit('carrier:pickupComplete', {
         entityId: settler.id,
@@ -66,18 +63,18 @@ export function executeTransportPickup(
 }
 
 /**
- * Handle carrier delivery to destination building via TransportJob.
+ * Handle carrier delivery to destination building.
  *
- * Calls transportJob.complete() to deposit inventory and fulfill the request,
- * transitions carrier back to Idle, and emits delivery events.
+ * Deposits material via materialTransfer.deliver(), then calls callbacks.onDelivered()
+ * to notify logistics (fulfills request). Emits delivery events.
  */
 export function executeTransportDelivery(
     settler: Entity,
     job: ChoreoJobState,
     td: TransportData,
-    ctx: ChoreoContext
+    ctx: InventoryExecutorContext
 ): TaskResult {
-    const { transportJob, destBuildingId, material } = td;
+    const { jobId, destBuildingId, material } = td;
 
     if (!settler.carrying) {
         throw new Error(
@@ -87,7 +84,8 @@ export function executeTransportDelivery(
     }
 
     const amount = settler.carrying.amount;
-    const deposited = transportJob.complete(amount);
+    const deposited = ctx.materialTransfer.deliver(settler.id, destBuildingId, 'input');
+    ctx.transportJobOps.deliver(jobId);
 
     const overflow = amount - deposited;
     if (overflow > 0) {
@@ -96,14 +94,16 @@ export function executeTransportDelivery(
         );
     }
 
-    clearCarrying(settler);
     job.carryingGood = null;
 
     log.debug(
         `Carrier ${settler.id} delivered ${deposited} of ${EMaterialType[material]} to building ${destBuildingId}`
     );
 
-    ctx.carrierManager.completeTransport(settler.id);
+    // NOTE: completeTransport (carrier → Idle) is NOT called here.
+    // It is deferred until the PUT_GOOD animation finishes (tickInventoryDuration returns DONE),
+    // to prevent the logistics dispatcher from re-assigning the carrier mid-animation.
+    // See executePutGood in inventory-executors.ts.
 
     ctx.eventBus.emit('carrier:deliveryComplete', {
         entityId: settler.id,

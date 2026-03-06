@@ -28,6 +28,7 @@ import { MapObjectType } from '@/game/types/map-object-types';
 import { AnimationData } from '../animation';
 import { AnimationDataProvider } from './animation-helpers';
 import { EMaterialType } from '../economy';
+import type { AtlasRegion } from './entity-texture-atlas';
 import { TEAM_COLOR_PALETTES } from '@/resources/gfx/team-colors';
 import { loadUnitSpritesForRace } from './sprite-unit-loader';
 import { SpriteAtlasCacheManager, prefetchSpriteCache } from './sprite-atlas-cache-manager';
@@ -299,10 +300,7 @@ export class SpriteRenderManager {
      * Extract a sprite region from the atlas as RGBA ImageData.
      * Handles palette lookup internally — callers don't need to know about palettes.
      */
-    public extractSpriteAsImageData(
-        region: import('./entity-texture-atlas').AtlasRegion,
-        paletteBaseOffset = 0
-    ): ImageData | null {
+    public extractSpriteAsImageData(region: AtlasRegion, paletteBaseOffset = 0): ImageData | null {
         if (!this._spriteAtlas) return null;
         const paletteData = this._paletteManager.getPaletteData() ?? undefined;
         return this._spriteAtlas.extractRegion(region, paletteData, paletteBaseOffset);
@@ -429,11 +427,11 @@ export class SpriteRenderManager {
             paletteManager: this._paletteManager,
         };
 
-        const { loaded: buildingsLoaded } = await loadBuildingSprites(ctx);
-        const buildings = t.lap();
-
         const mapObjectsLoaded = await loadMapObjectSprites(ctx);
         const mapObjects = t.lap();
+
+        const { loaded: buildingsLoaded } = await loadBuildingSprites(ctx);
+        const buildings = t.lap();
 
         const goodsLoaded = await loadGoodSprites(ctx);
         const goods = t.lap();

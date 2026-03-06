@@ -38,8 +38,8 @@ describe.skipIf(!hasRealData)('Building construction (real game data)', { timeou
         sim = createSimulation();
         sim.placeBuilding(BuildingType.Barrack);
 
-        expect(sim.countEntities(EntityType.Unit, UnitType.Swordsman)).toBe(0);
-        expect(sim.countEntities(EntityType.Unit, UnitType.Bowman)).toBe(0);
+        expect(sim.countEntities(EntityType.Unit, UnitType.Swordsman1)).toBe(0);
+        expect(sim.countEntities(EntityType.Unit, UnitType.Bowman1)).toBe(0);
     });
 
     it('ResidenceSmall spawns 2 carriers on instant completion (no construction workers)', () => {

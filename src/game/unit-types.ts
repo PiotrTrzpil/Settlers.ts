@@ -8,66 +8,73 @@
  */
 
 export enum UnitType {
+    // ── Common workers (all non-Dark-Tribe races) ──
     Carrier = 0,
     Builder = 1,
-    Swordsman = 2, // L1
-    Bowman = 3, // L1
-    // Removed: Pikeman = 4 (doesn't exist in S4, race-specific variants are Axewarrior/Blowgunwarrior)
-    Priest = 5,
-    Pioneer = 6,
-    Thief = 7,
-    Geologist = 8,
-    Woodcutter = 9,
-    Miner = 10,
-    Forester = 11,
-    Farmer = 12,
-    Smith = 13,
-    Digger = 14, // Landscaper/Shovelworker
-    SawmillWorker = 15,
-    Miller = 16,
-    Butcher = 17,
-    Stonecutter = 18,
-    SquadLeader = 19,
-    DarkGardener = 20,
-    Shaman = 21,
-    Medic = 22, // L1 — Roman specialist
-    Hunter = 23,
-    Healer = 24,
-    Smelter = 25,
-    Donkey = 26,
-    MushroomFarmer = 27,
-    SlavedSettler = 28, // Dark Tribe (no levels)
-    AgaveFarmer = 29,
-    Beekeeper = 30,
-    AxeWarrior = 31, // L1 — Viking specialist (same JIL as Medic, different race file)
-    BlowgunWarrior = 32, // L1 — Mayan specialist
-    BackpackCatapultist = 33, // L1 — Trojan specialist
-    // Level 2/3 variants for military units
-    Swordsman2 = 34,
-    Swordsman3 = 35,
-    Bowman2 = 36,
-    Bowman3 = 37,
-    Medic2 = 38,
-    Medic3 = 39,
-    AxeWarrior2 = 42,
-    AxeWarrior3 = 43,
-    BlowgunWarrior2 = 44,
-    BlowgunWarrior3 = 45,
-    BackpackCatapultist2 = 46,
-    BackpackCatapultist3 = 47,
-    Winemaker = 48,
-    Meadmaker = 49,
-    Tequilamaker = 50,
-    Baker = 58,
-    AnimalFarmer = 59,
-    SunflowerFarmer = 60,
-    Waterworker = 57,
-    Saboteur = 51,
-    TempleServant = 52,
-    ManacopterMaster = 53,
-    Angel = 54, // L1 — Dark Tribe, distinct from SlavedSettler
-    Angel2 = 55,
-    Angel3 = 56,
+    Digger = 2,
+    Woodcutter = 3,
+    Stonecutter = 4,
+    Forester = 5,
+    Farmer = 6,
+    Fisher = 7,
+    Hunter = 8,
+    Miner = 9,
+    Smelter = 10,
+    Smith = 11,
+    SawmillWorker = 12,
+    Miller = 13,
+    Baker = 14,
+    Butcher = 15,
+    AnimalFarmer = 16,
+    Waterworker = 17,
+    Healer = 18,
+    Donkey = 19,
+    // ── Race-specific economy workers ──
+    Winemaker = 20, // Roman
+    Beekeeper = 21, // Viking
+    Meadmaker = 22, // Viking
+    AgaveFarmer = 23, // Mayan
+    Tequilamaker = 24, // Mayan
+    SunflowerFarmer = 25, // Trojan
+    SunflowerOilMaker = 26, // Trojan
+    // ── Military (L1 base + L2/L3 variants) ──
+    Swordsman1 = 27,
+    Swordsman2 = 28,
+    Swordsman3 = 29,
+    Bowman1 = 30,
+    Bowman2 = 31,
+    Bowman3 = 32,
+    SquadLeader = 33,
+    // ── Race-specific specialists (L1 + L2/L3) ──
+    Medic1 = 34, // Roman
+    Medic2 = 35,
+    Medic3 = 36,
+    AxeWarrior1 = 37, // Viking (same JIL as Medic, different race file)
+    AxeWarrior2 = 38,
+    AxeWarrior3 = 39,
+    BlowgunWarrior1 = 40, // Mayan
+    BlowgunWarrior2 = 41,
+    BlowgunWarrior3 = 42,
+    BackpackCatapultist1 = 43, // Trojan
+    BackpackCatapultist2 = 44,
+    BackpackCatapultist3 = 45,
+    // ── Non-military specialists ──
+    Priest = 46,
+    Pioneer = 47,
+    Thief = 48,
+    Geologist = 49,
+    Saboteur = 50,
+    Gardener = 51, // All non-Dark-Tribe races (JIL 308-310)
+    // ── Dark Tribe exclusive ──
+    DarkGardener = 52,
+    Shaman = 53,
+    MushroomFarmer = 54,
+    SlavedSettler = 55,
+    TempleServant = 56,
+    ManacopterMaster = 57,
+    Angel = 58,
+    Angel2 = 59,
+    Angel3 = 60,
 }
 
 /**
@@ -106,59 +113,68 @@ export interface UnitTypeConfig {
  * 3. Optionally add it to BUILDING_SPAWN_ON_COMPLETE if a building produces it
  */
 export const UNIT_TYPE_CONFIG: Record<UnitType, UnitTypeConfig> = {
+    // ── Common workers ──
     [UnitType.Carrier]: { name: 'Carrier', category: UnitCategory.Worker, speed: 2 },
     [UnitType.Builder]: { name: 'Builder', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Swordsman]: { name: 'Swordsman', category: UnitCategory.Military, speed: 2 },
-    [UnitType.Bowman]: { name: 'Bowman', category: UnitCategory.Military, speed: 2.2 },
+    [UnitType.Digger]: { name: 'Digger', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Woodcutter]: { name: 'Woodcutter', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Stonecutter]: { name: 'Stonecutter', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Forester]: { name: 'Forester', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Farmer]: { name: 'Farmer', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Fisher]: { name: 'Fisher', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Hunter]: { name: 'Hunter', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Miner]: { name: 'Miner', category: UnitCategory.Worker, speed: 1.5 },
+    [UnitType.Smelter]: { name: 'Smelter', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Smith]: { name: 'Smith', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.SawmillWorker]: { name: 'Sawmill Worker', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Miller]: { name: 'Miller', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Baker]: { name: 'Baker', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Butcher]: { name: 'Butcher', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.AnimalFarmer]: { name: 'Animal Farmer', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Waterworker]: { name: 'Water Worker', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Healer]: { name: 'Healer', category: UnitCategory.Worker, speed: 1.5 },
+    [UnitType.Donkey]: { name: 'Donkey', category: UnitCategory.Worker, speed: 1.5 },
+    // ── Race-specific economy workers ──
+    [UnitType.Winemaker]: { name: 'Wine Maker', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Beekeeper]: { name: 'Beekeeper', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Meadmaker]: { name: 'Mead Maker', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.AgaveFarmer]: { name: 'Agave Farmer', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.Tequilamaker]: { name: 'Tequila Maker', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.SunflowerFarmer]: { name: 'Sunflower Farmer', category: UnitCategory.Worker, speed: 2 },
+    [UnitType.SunflowerOilMaker]: { name: 'Sunflower Oil Maker', category: UnitCategory.Worker, speed: 2 },
+    // ── Military ──
+    [UnitType.Swordsman1]: { name: 'Swordsman', category: UnitCategory.Military, speed: 2 },
+    [UnitType.Swordsman2]: { name: 'Swordsman L2', category: UnitCategory.Military, speed: 2 },
+    [UnitType.Swordsman3]: { name: 'Swordsman L3', category: UnitCategory.Military, speed: 2 },
+    [UnitType.Bowman1]: { name: 'Bowman', category: UnitCategory.Military, speed: 2.2 },
+    [UnitType.Bowman2]: { name: 'Bowman L2', category: UnitCategory.Military, speed: 2.2 },
+    [UnitType.Bowman3]: { name: 'Bowman L3', category: UnitCategory.Military, speed: 2.2 },
+    [UnitType.SquadLeader]: { name: 'Squad Leader', category: UnitCategory.Military, speed: 2 },
+    // ── Race-specific specialists ──
+    [UnitType.Medic1]: { name: 'Medic', category: UnitCategory.Military, speed: 2 },
+    [UnitType.Medic2]: { name: 'Medic L2', category: UnitCategory.Military, speed: 2 },
+    [UnitType.Medic3]: { name: 'Medic L3', category: UnitCategory.Military, speed: 2 },
+    [UnitType.AxeWarrior1]: { name: 'Axe Warrior', category: UnitCategory.Military, speed: 2 },
+    [UnitType.AxeWarrior2]: { name: 'Axe Warrior L2', category: UnitCategory.Military, speed: 2 },
+    [UnitType.AxeWarrior3]: { name: 'Axe Warrior L3', category: UnitCategory.Military, speed: 2 },
+    [UnitType.BlowgunWarrior1]: { name: 'Blowgun Warrior', category: UnitCategory.Military, speed: 2 },
+    [UnitType.BlowgunWarrior2]: { name: 'Blowgun Warrior L2', category: UnitCategory.Military, speed: 2 },
+    [UnitType.BlowgunWarrior3]: { name: 'Blowgun Warrior L3', category: UnitCategory.Military, speed: 2 },
+    [UnitType.BackpackCatapultist1]: { name: 'Backpack Catapultist', category: UnitCategory.Military, speed: 2 },
+    [UnitType.BackpackCatapultist2]: { name: 'Backpack Catapultist L2', category: UnitCategory.Military, speed: 2 },
+    [UnitType.BackpackCatapultist3]: { name: 'Backpack Catapultist L3', category: UnitCategory.Military, speed: 2 },
+    // ── Non-military specialists ──
     [UnitType.Priest]: { name: 'Priest', category: UnitCategory.Religious, speed: 1.5 },
     [UnitType.Pioneer]: { name: 'Pioneer', category: UnitCategory.Specialist, speed: 2 },
     [UnitType.Thief]: { name: 'Thief', category: UnitCategory.Specialist, speed: 3 },
     [UnitType.Geologist]: { name: 'Geologist', category: UnitCategory.Specialist, speed: 1.5 },
-    [UnitType.Woodcutter]: { name: 'Woodcutter', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Miner]: { name: 'Miner', category: UnitCategory.Worker, speed: 1.5 },
-    [UnitType.Forester]: { name: 'Forester', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Farmer]: { name: 'Farmer', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Smith]: { name: 'Smith', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Digger]: { name: 'Digger', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.SawmillWorker]: { name: 'Sawmill Worker', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Miller]: { name: 'Miller', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Butcher]: { name: 'Butcher', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Stonecutter]: { name: 'Stonecutter', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.SquadLeader]: { name: 'Squad Leader', category: UnitCategory.Military, speed: 2 },
+    [UnitType.Saboteur]: { name: 'Saboteur', category: UnitCategory.Specialist, speed: 2 },
+    [UnitType.Gardener]: { name: 'Gardener', category: UnitCategory.Specialist, speed: 1.5 },
+    // ── Dark Tribe exclusive ──
     [UnitType.DarkGardener]: { name: 'Dark Gardener', category: UnitCategory.Worker, speed: 2 },
     [UnitType.Shaman]: { name: 'Shaman', category: UnitCategory.Religious, speed: 1.5 },
-    [UnitType.Medic]: { name: 'Medic', category: UnitCategory.Military, speed: 2 },
-    [UnitType.Hunter]: { name: 'Hunter', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Healer]: { name: 'Healer', category: UnitCategory.Military, speed: 1.5 },
-    [UnitType.Smelter]: { name: 'Smelter', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Donkey]: { name: 'Donkey', category: UnitCategory.Worker, speed: 1.5 },
     [UnitType.MushroomFarmer]: { name: 'Mushroom Farmer', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.SlavedSettler]: { name: 'Angel', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.AgaveFarmer]: { name: 'Agave Farmer', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Beekeeper]: { name: 'Beekeeper', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.AxeWarrior]: { name: 'Axe Warrior', category: UnitCategory.Military, speed: 2 },
-    [UnitType.BlowgunWarrior]: { name: 'Blowgun Warrior', category: UnitCategory.Military, speed: 2 },
-    [UnitType.BackpackCatapultist]: { name: 'Backpack Catapultist', category: UnitCategory.Military, speed: 2 },
-    [UnitType.Swordsman2]: { name: 'Swordsman L2', category: UnitCategory.Military, speed: 2 },
-    [UnitType.Swordsman3]: { name: 'Swordsman L3', category: UnitCategory.Military, speed: 2 },
-    [UnitType.Bowman2]: { name: 'Bowman L2', category: UnitCategory.Military, speed: 2.2 },
-    [UnitType.Bowman3]: { name: 'Bowman L3', category: UnitCategory.Military, speed: 2.2 },
-    [UnitType.Medic2]: { name: 'Medic L2', category: UnitCategory.Military, speed: 2 },
-    [UnitType.Medic3]: { name: 'Medic L3', category: UnitCategory.Military, speed: 2 },
-    [UnitType.AxeWarrior2]: { name: 'Axe Warrior L2', category: UnitCategory.Military, speed: 2 },
-    [UnitType.AxeWarrior3]: { name: 'Axe Warrior L3', category: UnitCategory.Military, speed: 2 },
-    [UnitType.BlowgunWarrior2]: { name: 'Blowgun Warrior L2', category: UnitCategory.Military, speed: 2 },
-    [UnitType.BlowgunWarrior3]: { name: 'Blowgun Warrior L3', category: UnitCategory.Military, speed: 2 },
-    [UnitType.BackpackCatapultist2]: { name: 'Backpack Catapultist L2', category: UnitCategory.Military, speed: 2 },
-    [UnitType.BackpackCatapultist3]: { name: 'Backpack Catapultist L3', category: UnitCategory.Military, speed: 2 },
-    [UnitType.Winemaker]: { name: 'Wine Maker', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Meadmaker]: { name: 'Mead Maker', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Tequilamaker]: { name: 'Tequila Maker', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Waterworker]: { name: 'Water Worker', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Baker]: { name: 'Baker', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.AnimalFarmer]: { name: 'Animal Farmer', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.SunflowerFarmer]: { name: 'Sunflower Farmer', category: UnitCategory.Worker, speed: 2 },
-    [UnitType.Saboteur]: { name: 'Saboteur', category: UnitCategory.Specialist, speed: 2 },
+    [UnitType.SlavedSettler]: { name: 'Slaved Settler', category: UnitCategory.Worker, speed: 2 },
     [UnitType.TempleServant]: { name: 'Temple Servant', category: UnitCategory.Worker, speed: 2 },
     [UnitType.ManacopterMaster]: { name: 'Manacopter Master', category: UnitCategory.Military, speed: 2 },
     [UnitType.Angel]: { name: 'Angel', category: UnitCategory.Worker, speed: 2 },
@@ -180,14 +196,14 @@ const SELECTABLE_CATEGORIES: ReadonlySet<UnitCategory> = new Set([
  * Only unit types that have level variants are listed here.
  */
 const LEVEL_GROUPS: ReadonlyMap<UnitType, readonly [UnitType, UnitType, UnitType]> = new Map([
-    [UnitType.Swordsman, [UnitType.Swordsman, UnitType.Swordsman2, UnitType.Swordsman3]],
-    [UnitType.Bowman, [UnitType.Bowman, UnitType.Bowman2, UnitType.Bowman3]],
-    [UnitType.Medic, [UnitType.Medic, UnitType.Medic2, UnitType.Medic3]],
-    [UnitType.AxeWarrior, [UnitType.AxeWarrior, UnitType.AxeWarrior2, UnitType.AxeWarrior3]],
-    [UnitType.BlowgunWarrior, [UnitType.BlowgunWarrior, UnitType.BlowgunWarrior2, UnitType.BlowgunWarrior3]],
+    [UnitType.Swordsman1, [UnitType.Swordsman1, UnitType.Swordsman2, UnitType.Swordsman3]],
+    [UnitType.Bowman1, [UnitType.Bowman1, UnitType.Bowman2, UnitType.Bowman3]],
+    [UnitType.Medic1, [UnitType.Medic1, UnitType.Medic2, UnitType.Medic3]],
+    [UnitType.AxeWarrior1, [UnitType.AxeWarrior1, UnitType.AxeWarrior2, UnitType.AxeWarrior3]],
+    [UnitType.BlowgunWarrior1, [UnitType.BlowgunWarrior1, UnitType.BlowgunWarrior2, UnitType.BlowgunWarrior3]],
     [
-        UnitType.BackpackCatapultist,
-        [UnitType.BackpackCatapultist, UnitType.BackpackCatapultist2, UnitType.BackpackCatapultist3],
+        UnitType.BackpackCatapultist1,
+        [UnitType.BackpackCatapultist1, UnitType.BackpackCatapultist2, UnitType.BackpackCatapultist3],
     ],
     [UnitType.Angel, [UnitType.Angel, UnitType.Angel2, UnitType.Angel3]],
 ]);
@@ -247,6 +263,11 @@ export function isUnitTypeMilitary(unitType: UnitType): boolean {
 /** Get the default speed for a unit type. */
 export function getUnitTypeSpeed(unitType: UnitType): number {
     return UNIT_TYPE_CONFIG[unitType].speed;
+}
+
+/** Check if a unit type is an angel (ephemeral death effect, not a real settler). */
+export function isAngelUnitType(type: UnitType): boolean {
+    return type === UnitType.Angel || type === UnitType.Angel2 || type === UnitType.Angel3;
 }
 
 /** Get all unit types in a specific category. */

@@ -204,6 +204,9 @@ export class CollisionResolver implements ICollisionResolver {
         const blockerController = this.getController(blockingEntityId);
         if (!blockerController || blockerController.state === 'idle') return false;
 
+        // Do not yield a unit mid-transit — it would cause a visual teleport
+        if (controller.isInTransit) return false;
+
         const goal = controller.goal;
         const best = findBestNeighbor({
             x: controller.tileX,

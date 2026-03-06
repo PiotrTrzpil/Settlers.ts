@@ -9,14 +9,21 @@
  * animation nodes that precede them are responsible for any timing.
  */
 
-import { type Entity, setCarrying, clearCarrying } from '../../../entity';
+import { type Entity, clearCarrying } from '../../../entity';
 import { EMaterialType } from '../../../economy';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
-import type { ChoreoJobState, ChoreoNode, ChoreoContext, ChoreoExecutorFn, InventoryContext } from '../choreo-types';
+import {
+    tickDuration,
+    type ChoreoJobState,
+    type ChoreoNode,
+    type InventoryExecutorFn,
+    type InventoryExecutorContext,
+    type InventoryContext,
+} from '../choreo-types';
 import { executeTransportPickup, executeTransportDelivery } from './transport-executors';
 
-const log = new LogHandler('InventoryExecutors');
+const log = createLogger('InventoryExecutors');
 
 // ─────────────────────────────────────────────────────────────
 // Material parsing
@@ -77,10 +84,28 @@ function requireMaterial(node: ChoreoNode, settlerId: number): EMaterialType {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Regular inventory executors
+// Duration helpers
 // ─────────────────────────────────────────────────────────────
 
-/** Fatigue added per delivery cycle (carrier transport). */
+import { framesToSeconds } from '../choreo-types';
+
+/**
+ * Default animation cycle for inventory nodes with duration=0 (one pickup/dropoff animation).
+ * In the original S4, duration=0 means "play one full animation cycle", not "instant".
+ * Carrier pickup/dropoff animations are typically 4-5 frames at 100ms each.
+ */
+const DEFAULT_INVENTORY_CYCLE_FRAMES = 5; // 0.5 seconds at CHOREO_FPS
+
+/** Compute effective duration in seconds for inventory nodes. */
+function resolveInventoryDuration(node: ChoreoNode): number {
+    if (node.duration === 0) return framesToSeconds(DEFAULT_INVENTORY_CYCLE_FRAMES);
+    if (node.duration <= 0) return 0; // duration=-1 or negative → instant
+    return framesToSeconds(node.duration);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Regular inventory executors
+// ─────────────────────────────────────────────────────────────
 
 /**
  * GET_GOOD — Withdraw one unit of material from the building's input inventory and give it to the settler.
@@ -88,38 +113,52 @@ function requireMaterial(node: ChoreoNode, settlerId: number): EMaterialType {
  * Used when a worker needs to pick up an input material before performing a task
  * (e.g., a baker fetching flour from the input pile before baking bread).
  *
+ * The inventory transfer happens on the first tick. The node then continues
+ * for the animation duration (duration=0 → one full animation cycle) so the
+ * pickup animation plays before advancing to the next node.
+ *
  * When transportData is present (carrier transport job), uses TransportJob.pickup()
  * instead of direct inventory withdrawal and emits carrier events.
  */
-export const executeGetGood: ChoreoExecutorFn = (
+export const executeGetGood: InventoryExecutorFn = (
     settler: Entity,
     job: ChoreoJobState,
     node: ChoreoNode,
-    _dt: number,
-    ctx: ChoreoContext
+    dt: number,
+    ctx: InventoryExecutorContext
 ): TaskResult => {
-    // ── Carrier transport branch (delegated to transport-executors) ──
-    if (job.transportData) {
-        return executeTransportPickup(settler, job, job.transportData, ctx);
+    // Inventory transfer on first tick only
+    if (!job.workStarted) {
+        job.workStarted = true;
+
+        // ── Carrier transport branch (delegated to transport-executors) ──
+        if (job.transportData) {
+            const result = executeTransportPickup(settler, job, job.transportData, ctx);
+            if (result === TaskResult.FAILED) return TaskResult.FAILED;
+        } else {
+            // ── Regular worker branch ──
+            const material = requireMaterial(node, settler.id);
+            const buildingId = requireHomeBuilding(settler, ctx);
+
+            const withdrawn = ctx.materialTransfer.pickUp(settler.id, buildingId, material, 1, false);
+            if (withdrawn === 0) {
+                log.warn(
+                    `GET_GOOD: settler ${settler.id} — building ${buildingId} has no ` +
+                        `${EMaterialType[material]} in input inventory`
+                );
+                return TaskResult.FAILED;
+            }
+
+            job.carryingGood = material;
+
+            log.debug(
+                `GET_GOOD: settler ${settler.id} withdrew ${EMaterialType[material]} from building ${buildingId}`
+            );
+        }
     }
 
-    // ── Regular worker branch ──
-    const material = requireMaterial(node, settler.id);
-    const buildingId = requireHomeBuilding(settler, ctx);
-
-    const withdrawn = ctx.inventoryManager.withdrawInput(buildingId, material, 1);
-    if (withdrawn === 0) {
-        log.warn(
-            `GET_GOOD: settler ${settler.id} — building ${buildingId} has no ${EMaterialType[material]} in input inventory`
-        );
-        return TaskResult.FAILED;
-    }
-
-    setCarrying(settler, material, 1);
-    job.carryingGood = material;
-
-    log.debug(`GET_GOOD: settler ${settler.id} withdrew ${EMaterialType[material]} from building ${buildingId}`);
-    return TaskResult.DONE;
+    // Wait for the animation to complete
+    return tickDuration(job, dt, resolveInventoryDuration(node));
 };
 
 /**
@@ -128,28 +167,27 @@ export const executeGetGood: ChoreoExecutorFn = (
  * Used when a worker has finished producing and needs to place the result into
  * the output pile so carriers can transport it.
  *
+ * The inventory deposit happens on the first tick. The node then continues
+ * for the animation duration (duration=0 → one full animation cycle) so the
+ * dropoff animation plays before advancing to the next node.
+ *
  * When transportData is present (carrier transport job), uses TransportJob.complete()
  * to deposit at destination, manages fatigue/status, and emits carrier events.
  */
-export const executePutGood: ChoreoExecutorFn = (
+/** Deposit carried material into the building's output inventory (regular worker path). */
+function depositWorkerGood(
     settler: Entity,
     job: ChoreoJobState,
     node: ChoreoNode,
-    _dt: number,
-    ctx: ChoreoContext
-): TaskResult => {
-    // ── Carrier transport branch (delegated to transport-executors) ──
-    if (job.transportData) {
-        return executeTransportDelivery(settler, job, job.transportData, ctx);
-    }
-
-    // ── Regular worker branch ──
-    // Prefer the node's explicit material (handles transformations like LOG→BOARD);
-    // fall back to produceOutput() for buildings with GOOD_NO_GOOD (auto-detect from production config).
+    ctx: InventoryExecutorContext
+): void {
     const buildingId = requireHomeBuilding(settler, ctx);
     const explicitMaterial = parseMaterial(node.entity);
 
     if (explicitMaterial !== null) {
+        // Worker production: the explicit material from the node (e.g. BOARD) may differ from
+        // what the settler is carrying (e.g. LOG). This is a production transformation, not a
+        // material transfer — deposit the node's output material directly.
         const deposited = ctx.inventoryManager.depositOutput(buildingId, explicitMaterial, 1);
         if (deposited === 0) {
             log.warn(
@@ -158,9 +196,11 @@ export const executePutGood: ChoreoExecutorFn = (
             );
         } else {
             log.debug(
-                `PUT_GOOD: settler ${settler.id} deposited ${EMaterialType[explicitMaterial]} to building ${buildingId}`
+                `PUT_GOOD: settler ${settler.id} deposited ${EMaterialType[explicitMaterial]} ` +
+                    `to building ${buildingId}`
             );
         }
+        clearCarrying(settler);
     } else {
         // No explicit material (GOOD_NO_GOOD) — use the building's production config to determine output.
         // This handles multi-step XML choreographies (e.g. ToolSmith) where GET_GOOD_VIRTUAL consumes
@@ -171,11 +211,35 @@ export const executePutGood: ChoreoExecutorFn = (
         } else {
             log.debug(`PUT_GOOD: settler ${settler.id} produced output at building ${buildingId}`);
         }
+        clearCarrying(settler);
     }
 
-    clearCarrying(settler);
     job.carryingGood = null;
-    return TaskResult.DONE;
+}
+
+export const executePutGood: InventoryExecutorFn = (
+    settler: Entity,
+    job: ChoreoJobState,
+    node: ChoreoNode,
+    dt: number,
+    ctx: InventoryExecutorContext
+): TaskResult => {
+    // Inventory deposit on first tick only
+    if (!job.workStarted) {
+        job.workStarted = true;
+
+        if (job.transportData) {
+            const result = executeTransportDelivery(settler, job, job.transportData, ctx);
+            if (result === TaskResult.FAILED) return TaskResult.FAILED;
+        } else {
+            depositWorkerGood(settler, job, node, ctx);
+        }
+    }
+
+    // Wait for the animation to complete
+    const result = tickDuration(job, dt, resolveInventoryDuration(node));
+
+    return result;
 };
 
 /**
@@ -185,16 +249,16 @@ export const executePutGood: ChoreoExecutorFn = (
  * represent picking up the resource that was just produced. No inventory withdrawal
  * occurs — the resource is assumed to have appeared on the ground as the work result.
  */
-export const executeResourceGathering: ChoreoExecutorFn = (
+export const executeResourceGathering: InventoryExecutorFn = (
     settler: Entity,
     job: ChoreoJobState,
     node: ChoreoNode,
     _dt: number,
-    _ctx: ChoreoContext
+    ctx: InventoryExecutorContext
 ): TaskResult => {
     const material = requireMaterial(node, settler.id);
 
-    setCarrying(settler, material, 1);
+    ctx.materialTransfer.produce(settler.id, material, 1);
     job.carryingGood = material;
 
     log.debug(`RESOURCE_GATHERING: settler ${settler.id} gathered ${EMaterialType[material]}`);
@@ -208,17 +272,17 @@ export const executeResourceGathering: ChoreoExecutorFn = (
  * loader rather than a consumer (e.g., loading material onto a donkey or barge).
  * Withdraws from input inventory and marks the settler as carrying.
  */
-export const executeLoadGood: ChoreoExecutorFn = (
+export const executeLoadGood: InventoryExecutorFn = (
     settler: Entity,
     job: ChoreoJobState,
     node: ChoreoNode,
     _dt: number,
-    ctx: ChoreoContext
+    ctx: InventoryExecutorContext
 ): TaskResult => {
     const material = requireMaterial(node, settler.id);
     const buildingId = requireHomeBuilding(settler, ctx);
 
-    const withdrawn = ctx.inventoryManager.withdrawInput(buildingId, material, 1);
+    const withdrawn = ctx.materialTransfer.pickUp(settler.id, buildingId, material, 1, false);
     if (withdrawn === 0) {
         log.warn(
             `LOAD_GOOD: settler ${settler.id} — building ${buildingId} has no ${EMaterialType[material]} in input inventory`
@@ -226,64 +290,8 @@ export const executeLoadGood: ChoreoExecutorFn = (
         return TaskResult.FAILED;
     }
 
-    setCarrying(settler, material, 1);
     job.carryingGood = material;
 
     log.debug(`LOAD_GOOD: settler ${settler.id} loaded ${EMaterialType[material]} from building ${buildingId}`);
     return TaskResult.DONE;
-};
-
-// ─────────────────────────────────────────────────────────────
-// Virtual inventory executors (settler is hidden)
-// ─────────────────────────────────────────────────────────────
-
-/**
- * GET_GOOD_VIRTUAL — Same as GET_GOOD but the settler is not visible during execution.
- *
- * Used when the original game hides the settler inside the building for the
- * pickup animation (the settler appears to reach in and take a resource).
- */
-export const executeGetGoodVirtual: ChoreoExecutorFn = (
-    settler: Entity,
-    job: ChoreoJobState,
-    node: ChoreoNode,
-    dt: number,
-    ctx: ChoreoContext
-): TaskResult => {
-    job.visible = false;
-    return executeGetGood(settler, job, node, dt, ctx);
-};
-
-/**
- * PUT_GOOD_VIRTUAL — Same as PUT_GOOD but the settler is not visible during execution.
- *
- * Used when the deposit happens "inside" the building and the settler should
- * be hidden from the player's view.
- */
-export const executePutGoodVirtual: ChoreoExecutorFn = (
-    settler: Entity,
-    job: ChoreoJobState,
-    node: ChoreoNode,
-    dt: number,
-    ctx: ChoreoContext
-): TaskResult => {
-    job.visible = false;
-    return executePutGood(settler, job, node, dt, ctx);
-};
-
-/**
- * RESOURCE_GATHERING_VIRTUAL — Same as RESOURCE_GATHERING but the settler is hidden.
- *
- * Used when the resource is picked up "off-screen" or inside a building (e.g.,
- * a miller collecting flour from the mill's internal hopper).
- */
-export const executeResourceGatheringVirtual: ChoreoExecutorFn = (
-    settler: Entity,
-    job: ChoreoJobState,
-    node: ChoreoNode,
-    dt: number,
-    _ctx: ChoreoContext
-): TaskResult => {
-    job.visible = false;
-    return executeResourceGathering(settler, job, node, dt, _ctx);
 };

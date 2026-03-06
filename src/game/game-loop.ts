@@ -456,6 +456,14 @@ export class GameLoop {
             }
             const elapsed = performance.now() - start;
             timings[errorState.name] = (timings[errorState.name] ?? 0) + elapsed;
+
+            // Merge sub-timings from systems that provide them
+            if (system.getSubTimings) {
+                const sub = system.getSubTimings();
+                for (const [key, value] of Object.entries(sub)) {
+                    timings[`  ${key}`] = value;
+                }
+            }
         }
 
         this.lastTickSystemTimings = timings;

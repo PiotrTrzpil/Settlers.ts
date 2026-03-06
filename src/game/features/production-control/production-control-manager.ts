@@ -11,6 +11,9 @@
  */
 
 import { ProductionMode, type ProductionState } from './types';
+import { type ComponentStore, mapStore } from '../../ecs';
+import type { Persistable } from '@/game/persistence';
+import type { SerializedProductionControl } from '@/game/game-state-persistence';
 
 /**
  * Manages runtime production state for all multi-recipe buildings.
@@ -22,8 +25,12 @@ import { ProductionMode, type ProductionState } from './types';
  * const recipeIndex = manager.getNextRecipeIndex(buildingId);
  * ```
  */
-export class ProductionControlManager {
+export class ProductionControlManager implements Persistable<SerializedProductionControl[]> {
+    readonly persistKey = 'productionControl' as const;
     private readonly states: Map<number, ProductionState> = new Map();
+
+    /** Uniform read-only view for cross-cutting queries */
+    readonly store: ComponentStore<ProductionState> = mapStore(this.states);
 
     // =========================================================================
     // Lifecycle
@@ -323,6 +330,61 @@ export class ProductionControlManager {
      */
     getProductionState(buildingId: number): Readonly<ProductionState> | undefined {
         return this.states.get(buildingId);
+    }
+
+    // =========================================================================
+    // Persistable
+    // =========================================================================
+
+    serialize(): SerializedProductionControl[] {
+        const result: SerializedProductionControl[] = [];
+        for (const [buildingId, state] of this.states) {
+            const proportions: Array<{ index: number; weight: number }> = [];
+            for (const [index, weight] of state.proportions) {
+                proportions.push({ index, weight });
+            }
+
+            const productionCounts: Array<{ index: number; count: number }> = [];
+            for (const [index, count] of state.productionCounts) {
+                productionCounts.push({ index, count });
+            }
+
+            result.push({
+                buildingId,
+                mode: state.mode,
+                recipeCount: state.recipeCount,
+                roundRobinIndex: state.roundRobinIndex,
+                proportions,
+                queue: [...state.queue],
+                productionCounts,
+            });
+        }
+        return result;
+    }
+
+    deserialize(data: SerializedProductionControl[]): void {
+        for (const entry of data) {
+            const proportions = new Map<number, number>();
+            for (const p of entry.proportions) {
+                proportions.set(p.index, p.weight);
+            }
+
+            const productionCounts = new Map<number, number>();
+            for (const pc of entry.productionCounts) {
+                productionCounts.set(pc.index, pc.count);
+            }
+
+            const state: ProductionState = {
+                mode: entry.mode as ProductionMode,
+                recipeCount: entry.recipeCount,
+                roundRobinIndex: entry.roundRobinIndex,
+                proportions,
+                queue: [...entry.queue],
+                productionCounts,
+            };
+
+            this.states.set(entry.buildingId, state);
+        }
     }
 
     // =========================================================================

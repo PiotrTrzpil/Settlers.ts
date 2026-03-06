@@ -11,6 +11,7 @@ import { GRID_DELTA_X, GRID_DELTA_Y, NUMBER_OF_DIRECTIONS } from '../../systems/
 import { TERRITORY_RADIUS, type TerritoryDot } from './territory-types';
 import type { BuildingType } from '../../buildings/types';
 import { thinDotsInScreenSpace, isInsideIsoEllipse } from '../../systems/boundary-ring';
+import { type ComponentStore, mapStore } from '../../ecs';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -41,8 +42,20 @@ export class TerritoryManager {
     /** Whether the grid needs recomputation */
     private dirty = true;
 
+    /** Whether boundary dots need recomputation (without full grid recompute) */
+    private boundaryDirty = false;
+
+    /** Callback for single-tile ownership changes (pioneer expansion) */
+    onTileChanged?: (x: number, y: number, oldOwner: number, newOwner: number) => void;
+
+    /** Callback after full recomputation (tower build/destroy) */
+    onRecomputed?: () => void;
+
     /** Territory-generating buildings indexed by entity ID */
     private readonly buildings = new Map<number, TerritoryBuilding>();
+
+    /** Uniform read-only view for cross-cutting queries */
+    readonly store: ComponentStore<TerritoryBuilding> = mapStore(this.buildings);
 
     constructor(mapWidth: number, mapHeight: number) {
         this.mapWidth = mapWidth;
@@ -77,6 +90,21 @@ export class TerritoryManager {
         return this.buildings.size;
     }
 
+    /**
+     * Claim a single tile for a player (pioneer expansion path).
+     * Does NOT trigger full recompute — only marks boundary dots dirty
+     * and notifies the spatial index via onTileChanged.
+     */
+    claimTile(x: number, y: number, player: number): void {
+        this.recomputeIfDirty(); // ensure grid is up to date before mutating
+        const idx = y * this.mapWidth + x;
+        const oldValue = this.territoryGrid[idx]!;
+        const oldOwner = oldValue === 0 ? -1 : oldValue - 1;
+        this.territoryGrid[idx] = player + 1;
+        this.onTileChanged?.(x, y, oldOwner, player);
+        this.boundaryDirty = true;
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Queries
     // ─────────────────────────────────────────────────────────────
@@ -106,6 +134,10 @@ export class TerritoryManager {
     /** Get boundary dots for rendering (cached, recomputed when dirty) */
     getBoundaryDots(): readonly TerritoryDot[] {
         this.recomputeIfDirty();
+        if (this.boundaryDirty) {
+            this.boundaryDirty = false;
+            this.cachedBoundaryDots = this.computeBoundaryDots();
+        }
         return this.cachedBoundaryDots;
     }
 
@@ -117,6 +149,7 @@ export class TerritoryManager {
         if (!this.dirty) return;
         this.dirty = false;
         this.recompute();
+        this.onRecomputed?.();
     }
 
     private recompute(): void {

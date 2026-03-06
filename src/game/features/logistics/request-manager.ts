@@ -16,16 +16,31 @@ import {
     canAssignRequest,
     isRequestActive,
 } from './resource-request';
+import type { Persistable } from '@/game/persistence';
+
+// ── Serialization types ──
+
+export interface SerializedRequest {
+    id: number;
+    buildingId: number;
+    materialType: EMaterialType;
+    amount: number;
+    priority: RequestPriority;
+    timestamp: number;
+    status: RequestStatus;
+    assignedCarrier: number | null;
+    sourceBuilding: number | null;
+    assignedAt: number | null;
+}
 
 /**
  * Reasons why a request was reset to pending.
  */
 export type RequestResetReason =
-    | 'carrier_removed'
     | 'source_unavailable'
-    | 'timeout'
     | 'pickup_failed'
     | 'building_destroyed'
+    | 'construction_completed'
     | 'assignment_failed'
     | 'cancelled';
 
@@ -35,7 +50,8 @@ export type RequestResetReason =
  * Provides methods to add, remove, query, and fulfill requests.
  * Maintains requests sorted by priority and timestamp.
  */
-export class RequestManager {
+export class RequestManager implements Persistable<SerializedRequest[]> {
+    readonly persistKey = 'requests' as const;
     /** All requests indexed by ID */
     private requests: Map<number, ResourceRequest> = new Map();
 
@@ -261,32 +277,6 @@ export class RequestManager {
     }
 
     /**
-     * Reset all requests assigned to a carrier back to pending.
-     * Useful when a carrier is removed or reassigned.
-     *
-     * @param carrierId Entity ID of the carrier
-     * @returns Number of requests reset
-     */
-    resetRequestsForCarrier(carrierId: number): number {
-        let count = 0;
-
-        for (const requestId of this.sortedRequestIds()) {
-            const request = this.requests.get(requestId);
-            if (!request)
-                throw new Error(
-                    `RequestManager: request ${requestId} missing from internal map (resetRequestsForCarrier)`
-                );
-            if (request.assignedCarrier === carrierId && request.status === RequestStatus.InProgress) {
-                this.resetToPending(request, 'carrier_removed');
-                count++;
-            }
-        }
-
-        if (count > 0) this.invalidatePendingCache();
-        return count;
-    }
-
-    /**
      * Reset all requests that were sourcing from a specific building.
      * Useful when a source building is destroyed or its inventory depleted.
      *
@@ -424,6 +414,46 @@ export class RequestManager {
      */
     getAllRequests(): IterableIterator<ResourceRequest> {
         return this.requests.values();
+    }
+
+    // ── Persistable implementation ──
+
+    serialize(): SerializedRequest[] {
+        const result: SerializedRequest[] = [];
+        for (const req of this.getAllRequests()) {
+            result.push({
+                id: req.id,
+                buildingId: req.buildingId,
+                materialType: req.materialType,
+                amount: req.amount,
+                priority: req.priority,
+                timestamp: req.timestamp,
+                status: req.status,
+                assignedCarrier: req.assignedCarrier,
+                sourceBuilding: req.sourceBuilding,
+                assignedAt: req.assignedAt,
+            });
+        }
+        return result;
+    }
+
+    deserialize(data: SerializedRequest[]): void {
+        // Reset in-progress requests to pending since carriers restart idle on restore
+        for (const req of data) {
+            const wasInProgress = req.status === RequestStatus.InProgress;
+            this.restoreRequest({
+                id: req.id,
+                buildingId: req.buildingId,
+                materialType: req.materialType,
+                amount: req.amount,
+                priority: req.priority,
+                timestamp: req.timestamp,
+                status: wasInProgress ? RequestStatus.Pending : req.status,
+                assignedCarrier: wasInProgress ? null : req.assignedCarrier,
+                sourceBuilding: wasInProgress ? null : req.sourceBuilding,
+                assignedAt: wasInProgress ? null : req.assignedAt,
+            });
+        }
     }
 
     /**

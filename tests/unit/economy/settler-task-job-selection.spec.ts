@@ -19,7 +19,7 @@ import { EntityType, BuildingType } from '@/game/entity';
 import { UnitType } from '@/game/unit-types';
 import { Race } from '@/game/race';
 import { createTestContext, addUnit, addBuilding, type TestContext } from '../helpers/test-game';
-import { CarrierManager } from '@/game/features/carriers';
+import { MaterialTransfer } from '@/game/features/material-transfer';
 import type { WorkAreaStore } from '@/game/features/work-areas/work-area-store';
 import type { BuildingOverlayManager } from '@/game/features/building-overlays/building-overlay-manager';
 import type { ConstructionSiteManager } from '@/game/features/building-construction/construction-site-manager';
@@ -31,22 +31,23 @@ function createTaskSystem(ctx: TestContext): SettlerTaskSystem {
     ctx.eventBus.on('entity:created', ({ entityId, variation }) => {
         visualService.init(entityId, variation);
     });
-    const carrierManager = new CarrierManager({
-        entityProvider: ctx.state,
-        eventBus: ctx.eventBus,
-    });
     const config: SettlerTaskSystemConfig = {
         gameState: ctx.state,
         visualService,
         inventoryManager: ctx.inventoryManager,
         eventBus: ctx.eventBus,
-        carrierManager,
         getPileSlotRegistry: () => null,
         getPileRegistry: () => null,
         workAreaStore: { getWorkArea: () => undefined } as unknown as WorkAreaStore,
         buildingOverlayManager: { setWorking() {} } as unknown as BuildingOverlayManager,
         constructionSiteManager: { hasSite: () => false } as unknown as ConstructionSiteManager,
         executeCommand: () => ({ success: true, effects: [] }),
+        materialTransfer: new MaterialTransfer(
+            ctx.state,
+            ctx.inventoryManager,
+            () => ({ success: true, effects: [] }),
+            ctx.eventBus
+        ),
     };
     return new SettlerTaskSystem(config);
 }

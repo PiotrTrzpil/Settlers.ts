@@ -20,6 +20,13 @@ import { resolveAnimationFrame, getAnimatedSpriteForDirection } from './animatio
 // Result types (replaces sentinel string 'transitioning')
 // ============================================================================
 
+/** Pre-resolved sprites for a direction transition (old → new cross-fade). */
+export interface TransitionSpriteData {
+    readonly oldSprite: SpriteEntry;
+    readonly newSprite: SpriteEntry;
+    readonly blendFactor: number;
+}
+
 /** Resolved sprite data for a single entity. */
 export interface SpriteResolveResult {
     /** True if entity should be skipped entirely (e.g., progress <= 0) */
@@ -30,7 +37,17 @@ export interface SpriteResolveResult {
     sprite: SpriteEntry | null;
     /** Vertical visibility progress (0.0 = hidden, 1.0 = fully visible) */
     progress: number;
+    /** Pre-resolved transition sprites (only set when transitioning=true) */
+    transitionData: TransitionSpriteData | null;
 }
+
+const SKIP_RESULT: SpriteResolveResult = {
+    skip: true,
+    transitioning: false,
+    sprite: null,
+    progress: 1,
+    transitionData: null,
+};
 
 // ============================================================================
 // EntitySpriteResolver
@@ -60,6 +77,7 @@ export class EntitySpriteResolver {
                 transitioning: false,
                 sprite: result.sprite,
                 progress: result.progress,
+                transitionData: null,
             };
         },
         [EntityType.MapObject]: entity => ({
@@ -67,16 +85,18 @@ export class EntitySpriteResolver {
             transitioning: false,
             sprite: this.getMapObject(entity),
             progress: 1,
+            transitionData: null,
         }),
         [EntityType.StackedPile]: entity => ({
             skip: false,
             transitioning: false,
             sprite: this.getPileSprite(entity),
             progress: 1,
+            transitionData: null,
         }),
         [EntityType.Unit]: this.resolveUnit.bind(this),
-        [EntityType.Decoration]: () => ({ skip: true, transitioning: false, sprite: null, progress: 1 }),
-        [EntityType.None]: () => ({ skip: true, transitioning: false, sprite: null, progress: 1 }),
+        [EntityType.Decoration]: () => SKIP_RESULT,
+        [EntityType.None]: () => SKIP_RESULT,
     };
 
     /** Resolve an entity's sprite for rendering. */
@@ -153,17 +173,45 @@ export class EntitySpriteResolver {
         return this.sprites.getGoodSprite(entity.subType as EMaterialType, direction) ?? null;
     }
 
-    /** Unit sprite resolution — returns transitioning if mid-direction-change. */
+    /** Unit sprite resolution — pre-resolves transition sprites if mid-direction-change. */
     private resolveUnit(entity: Entity): SpriteResolveResult {
-        if (!this.sprites) return { skip: false, transitioning: false, sprite: null, progress: 1 };
+        const noSprite: SpriteResolveResult = {
+            skip: false,
+            transitioning: false,
+            sprite: null,
+            progress: 1,
+            transitionData: null,
+        };
+        if (!this.sprites) return noSprite;
 
         const vs = this.getVisualState(entity.id);
-        if (!vs) return { skip: false, transitioning: false, sprite: null, progress: 1 };
+        if (!vs) return noSprite;
 
-        // Detect direction transition (needs blend shader)
+        // Detect direction transition — resolve both direction sprites up-front
         const transition = this.getDirectionTransition(entity.id);
-        if (transition) {
-            return { skip: false, transitioning: true, sprite: null, progress: 1 };
+        if (transition && vs.animation) {
+            const unitType = entity.subType as UnitType;
+            const oldSprite = this.getUnitSpriteForDirection(
+                unitType,
+                vs.animation,
+                transition.previousDirection,
+                entity.race
+            );
+            const newSprite = this.getUnitSpriteForDirection(
+                unitType,
+                vs.animation,
+                vs.animation.direction,
+                entity.race
+            );
+            if (oldSprite && newSprite) {
+                return {
+                    skip: false,
+                    transitioning: true,
+                    sprite: null,
+                    progress: 1,
+                    transitionData: { oldSprite, newSprite, blendFactor: transition.progress },
+                };
+            }
         }
 
         const direction = vs.animation?.direction ?? 0;
@@ -173,11 +221,13 @@ export class EntitySpriteResolver {
             const entry = this.sprites.getAnimatedEntity(entity.type, entity.subType, entity.race);
             if (entry) {
                 const frame = resolveAnimationFrame(vs.animation, entry.animationData);
-                if (frame) return { skip: false, transitioning: false, sprite: frame, progress: 1 };
+                if (frame) {
+                    return { skip: false, transitioning: false, sprite: frame, progress: 1, transitionData: null };
+                }
             }
         }
 
-        return { skip: false, transitioning: false, sprite: staticSprite, progress: 1 };
+        return { skip: false, transitioning: false, sprite: staticSprite, progress: 1, transitionData: null };
     }
 
     /** Get animated sprite for a specific direction (used for direction transitions). */

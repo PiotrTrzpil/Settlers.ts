@@ -10,13 +10,15 @@
  */
 
 import type { GameState } from '@/game/game-state';
+import type { CoreDeps } from '../feature';
 import type { BuildingInventoryManager } from '@/game/features/inventory';
-import type { CarrierManager } from '@/game/features/carriers';
+import type { CarrierRegistry } from '@/game/features/carriers';
 import type { SettlerTaskSystem } from '@/game/features/settler-tasks';
 import type { ProductionControlManager } from '@/game/features/production-control';
 import type { EventBus } from '@/game/event-bus';
-import type { Race } from '@/game/race';
+import { type Race } from '@/game/race';
 import { UnitType } from '@/game/unit-types';
+import { type EMaterialType } from '@/game/economy/material-type';
 import { BuildingType } from '@/game/buildings/building-type';
 import { getBuildingDoorPos } from '@/game/game-data-access';
 import {
@@ -27,30 +29,34 @@ import {
 } from '@/game/features/settler-tasks/choreo-types';
 import { getTrainingRecipeSet, getTrainingRecipes } from './training-recipes';
 import type { TrainingRecipe, BarracksTrainingState } from './types';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import { sortedEntries } from '@/utilities/collections';
+import { query } from '@/game/ecs';
+import type { Persistable } from '@/game/persistence';
+import type { SerializedBarracksTraining } from '@/game/game-state-persistence';
 
-const log = new LogHandler('BarracksTraining');
+const log = createLogger('BarracksTraining');
 
 /** Training duration in animation frames (at 10fps = 3 seconds). */
 export const TRAINING_DURATION_FRAMES = 30;
 
-export interface BarracksTrainingManagerConfig {
-    gameState: GameState;
+export interface BarracksTrainingManagerConfig extends CoreDeps {
     inventoryManager: BuildingInventoryManager;
-    carrierManager: CarrierManager;
+    carrierRegistry: CarrierRegistry;
     settlerTaskSystem: SettlerTaskSystem;
     productionControlManager: ProductionControlManager;
-    eventBus: EventBus;
+    isCarrierBusy: (carrierId: number) => boolean;
 }
 
-export class BarracksTrainingManager {
+export class BarracksTrainingManager implements Persistable<SerializedBarracksTraining> {
+    readonly persistKey = 'barracksTraining' as const;
     private readonly gameState: GameState;
     private readonly inventoryManager: BuildingInventoryManager;
-    private readonly carrierManager: CarrierManager;
+    private readonly carrierRegistry: CarrierRegistry;
     private readonly settlerTaskSystem: SettlerTaskSystem;
     private readonly pcm: ProductionControlManager;
     private readonly eventBus: EventBus;
+    private readonly isCarrierBusy: (carrierId: number) => boolean;
 
     /** Per-barracks race mapping (set at initBarracks). */
     private readonly barracksRaces = new Map<number, Race>();
@@ -61,10 +67,11 @@ export class BarracksTrainingManager {
     constructor(config: BarracksTrainingManagerConfig) {
         this.gameState = config.gameState;
         this.inventoryManager = config.inventoryManager;
-        this.carrierManager = config.carrierManager;
+        this.carrierRegistry = config.carrierRegistry;
         this.settlerTaskSystem = config.settlerTaskSystem;
         this.pcm = config.productionControlManager;
         this.eventBus = config.eventBus;
+        this.isCarrierBusy = config.isCarrierBusy;
     }
 
     // =========================================================================
@@ -169,7 +176,7 @@ export class BarracksTrainingManager {
         }
 
         // 7. Remove carrier from logistics so it won't be reassigned
-        this.carrierManager.removeCarrier(carrierId);
+        this.carrierRegistry.remove(carrierId);
 
         // 8. Track active training
         this.activeTrainings.set(buildingId, { recipe, carrierId });
@@ -202,18 +209,16 @@ export class BarracksTrainingManager {
 
     /**
      * Find the nearest idle carrier belonging to `player` near the given position.
-     * Iterates all carriers managed by CarrierManager, filters by player entity lookup
-     * and `canAssignJobTo`, then selects the closest by Euclidean distance squared.
+     * Iterates all carriers managed by CarrierRegistry, filters by player entity lookup
+     * and busy state, then selects the closest by Euclidean distance squared.
      */
     private findIdleCarrier(player: number, nearX: number, nearY: number): number | null {
         let bestId: number | null = null;
         let bestDistSq = Infinity;
 
-        for (const carrierState of this.carrierManager.getAllCarriers()) {
-            if (!this.carrierManager.canAssignJobTo(carrierState.entityId)) continue;
-
-            const entity = this.gameState.getEntity(carrierState.entityId);
-            if (!entity || entity.player !== player) continue;
+        for (const [id, , entity] of query(this.carrierRegistry.store, this.gameState.store)) {
+            if (this.isCarrierBusy(id)) continue;
+            if (entity.player !== player) continue;
 
             const dx = entity.x - nearX;
             const dy = entity.y - nearY;
@@ -221,7 +226,7 @@ export class BarracksTrainingManager {
 
             if (distSq < bestDistSq) {
                 bestDistSq = distSq;
-                bestId = carrierState.entityId;
+                bestId = id;
             }
         }
 
@@ -278,6 +283,55 @@ export class BarracksTrainingManager {
     /** Returns true if a barracks has an active training session in progress. */
     isTraining(buildingId: number): boolean {
         return this.activeTrainings.has(buildingId);
+    }
+
+    // =========================================================================
+    // Persistable
+    // =========================================================================
+
+    serialize(): SerializedBarracksTraining {
+        const races: SerializedBarracksTraining['races'] = [];
+        for (const [buildingId, race] of this.barracksRaces) {
+            races.push({ buildingId, race: race as number });
+        }
+
+        const activeTrainings: SerializedBarracksTraining['activeTrainings'] = [];
+        for (const [buildingId, state] of this.activeTrainings) {
+            activeTrainings.push({
+                buildingId,
+                carrierId: state.carrierId,
+                recipe: {
+                    inputs: state.recipe.inputs.map(i => ({ material: i.material as number, count: i.count })),
+                    unitType: state.recipe.unitType as number,
+                    level: state.recipe.level,
+                },
+            });
+        }
+
+        return { races, activeTrainings };
+    }
+
+    deserialize(data: SerializedBarracksTraining): void {
+        this.barracksRaces.clear();
+        for (const entry of data.races) {
+            this.barracksRaces.set(entry.buildingId, entry.race as Race);
+        }
+
+        this.activeTrainings.clear();
+        for (const entry of data.activeTrainings) {
+            const recipe: TrainingRecipe = {
+                inputs: entry.recipe.inputs.map(i => ({
+                    material: i.material as EMaterialType,
+                    count: i.count,
+                })),
+                unitType: entry.recipe.unitType as UnitType,
+                level: entry.recipe.level,
+            };
+            this.activeTrainings.set(entry.buildingId, {
+                recipe,
+                carrierId: entry.carrierId,
+            });
+        }
     }
 }
 

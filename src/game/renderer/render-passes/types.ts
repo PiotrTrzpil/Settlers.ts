@@ -1,18 +1,17 @@
 /**
  * Shared types and interfaces for render passes.
  *
- * Each pass handles a specific rendering concern and can be composed by
- * EntityRenderer acting as a coordinator.
+ * Data is decomposed into focused sub-interfaces so each pass declares exactly
+ * the fields it needs, preventing accidental coupling between passes.
  */
 
 import type { IViewPoint } from '../i-view-point';
-import type { Entity, StackedPileState } from '@/game/entity';
+import type { Entity } from '@/game/entity';
 import type {
     UnitStateLookup,
-    BuildingRenderState,
     BuildingOverlayRenderData,
     RenderSettings,
-    ServiceAreaRenderData,
+    CircleRenderData,
     TerritoryDotRenderData,
     StackGhostRenderData,
     PlacementPreviewState,
@@ -27,42 +26,122 @@ import type { IFrameContext } from '../frame-context';
 import type { MapSize } from '@/utilities/map-size';
 
 // ============================================================================
-// IRenderPass
+// Sub-interfaces — composable building blocks for pass contexts
+// ============================================================================
+
+/** Terrain / spatial data — needed by every pass. */
+export interface SpatialPassData {
+    readonly mapSize: MapSize;
+    readonly groundHeight: Uint8Array;
+}
+
+/** Color shader attribute locations and reusable dynamic buffer. */
+export interface ColorShaderPassData {
+    readonly aPosition: number;
+    readonly aEntityPos: number;
+    readonly aColor: number;
+    readonly dynamicBuffer: WebGLBuffer;
+}
+
+/** Sprite rendering subsystems (atlas, batch renderer, resolver). */
+export interface SpritePassData {
+    readonly spriteManager: SpriteRenderManager | null;
+    readonly spriteBatchRenderer: SpriteBatchRenderer;
+    readonly spriteResolver: EntitySpriteResolver;
+}
+
+/** Per-frame depth-sorted entity state (populated after cull + sort). */
+export interface EntityFramePassData {
+    readonly sortedEntities: Entity[];
+    frameContext: IFrameContext | null;
+    readonly selectedEntityIds: Set<number>;
+    readonly unitStates: UnitStateLookup;
+}
+
+// ============================================================================
+// Per-pass context interfaces
+// ============================================================================
+
+export interface PathIndicatorContext extends SpatialPassData, ColorShaderPassData {
+    readonly selectedEntityIds: Set<number>;
+    readonly unitStates: UnitStateLookup;
+    readonly layerVisibility: LayerVisibility;
+}
+
+export interface GroundOverlayContext extends SpatialPassData, ColorShaderPassData, EntityFramePassData {
+    readonly renderSettings: RenderSettings;
+    readonly workAreaCircles: readonly CircleRenderData[];
+}
+
+export interface TerritoryDotContext extends SpatialPassData, SpritePassData {
+    readonly territoryDots: readonly TerritoryDotRenderData[];
+    readonly workAreaDots: readonly TerritoryDotRenderData[];
+    readonly renderSettings: RenderSettings;
+}
+
+export interface EntitySpriteContext extends SpatialPassData, SpritePassData, EntityFramePassData {
+    readonly renderSettings: RenderSettings;
+    readonly getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[];
+    readonly getHealthRatio: (entityId: number) => number | null;
+}
+
+export interface TransitionBlendContext extends SpatialPassData, EntityFramePassData {
+    readonly spriteManager: SpriteRenderManager | null;
+    readonly spriteBatchRenderer: SpriteBatchRenderer;
+    readonly renderSettings: RenderSettings;
+}
+
+/** Label rendered on the 2D overlay for color-fallback entities */
+export interface DebugEntityLabel {
+    screenX: number;
+    screenY: number;
+    type: number;
+    hue: number;
+    /** Human-readable name (e.g. "Swordsman", "WoodcutterHut"). Falls back to numeric type if absent. */
+    name?: string;
+}
+
+export interface ColorEntityContext extends SpatialPassData, ColorShaderPassData, EntityFramePassData {
+    readonly spriteResolver: EntitySpriteResolver;
+    debugDecoLabels: DebugEntityLabel[];
+}
+
+export interface SelectionContext extends SpatialPassData, ColorShaderPassData, EntityFramePassData {
+    readonly tileHighlights: TileHighlight[];
+}
+
+export interface StackGhostContext extends SpatialPassData, SpritePassData {
+    readonly stackGhosts: readonly StackGhostRenderData[];
+    readonly renderSettings: RenderSettings;
+}
+
+export interface PlacementPreviewContext extends SpatialPassData, SpritePassData, ColorShaderPassData {
+    readonly placementPreview: PlacementPreviewState | null;
+    readonly renderSettings: RenderSettings;
+}
+
+// ============================================================================
+// IRenderPass — base interface for all passes (draw signature only)
 // ============================================================================
 
 /**
- * A single rendering pass. Passes are prepared once with context data each
- * frame, then drawn in order by the EntityRenderer coordinator.
+ * A single rendering pass. Each pass has its own typed prepare() method;
+ * draw() is the common interface used by EntityRenderer.
  */
 export interface IRenderPass {
-    /**
-     * Called once per frame before any drawing to supply the shared pass context.
-     */
-    prepare(ctx: PassContext): void;
-
-    /**
-     * Execute the pass's WebGL draw calls.
-     */
     draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void;
 }
 
 // ============================================================================
-// PassContext — shared per-frame data supplied to all passes
+// PassContext — full per-frame data assembled by EntityRenderer
 // ============================================================================
 
 /**
- * All data that passes may need for a frame.
- * Assembled by EntityRenderer.setContext() and passed to each pass's prepare().
+ * Complete frame data assembled by EntityRenderer.buildPassContext().
+ * Satisfies all per-pass context interfaces via structural subtyping.
  */
-export interface PassContext {
-    // Core entity data
-    readonly entities: Entity[];
-    readonly selectedEntityIds: Set<number>;
-    readonly unitStates: UnitStateLookup;
-    readonly pileStates: Map<number, StackedPileState>;
-
-    // Building state providers
-    readonly getBuildingRenderState: (entityId: number) => BuildingRenderState;
+export interface PassContext extends SpatialPassData, ColorShaderPassData, SpritePassData, EntityFramePassData {
+    // Entity state providers
     readonly getBuildingOverlays: (entityId: number) => readonly BuildingOverlayRenderData[];
     readonly getVisualState: (entityId: number) => EntityVisualState | null;
     readonly getDirectionTransition: (entityId: number) => DirectionTransition | null;
@@ -71,48 +150,15 @@ export interface PassContext {
     // Render parameters
     readonly renderSettings: RenderSettings;
     readonly layerVisibility: LayerVisibility;
-    readonly renderAlpha: number;
 
-    // Spatial / terrain
-    readonly mapSize: MapSize;
-    readonly groundHeight: Uint8Array;
-
-    // Overlay / special passes data
-    readonly selectedServiceAreas: readonly ServiceAreaRenderData[];
+    // Overlay / special pass data
     readonly territoryDots: readonly TerritoryDotRenderData[];
-    readonly workAreaCircles: readonly ServiceAreaRenderData[];
+    readonly workAreaCircles: readonly CircleRenderData[];
     readonly workAreaDots: readonly TerritoryDotRenderData[];
     readonly stackGhosts: readonly StackGhostRenderData[];
     readonly placementPreview: PlacementPreviewState | null;
     readonly tileHighlights: TileHighlight[];
 
-    // Renderer subsystems (nullable — unavailable in testMap/procedural mode)
-    readonly spriteManager: SpriteRenderManager | null;
-    readonly spriteBatchRenderer: SpriteBatchRenderer;
-    readonly spriteResolver: EntitySpriteResolver;
-
-    // Per-frame computed state (set by EntityRenderer after depth sort)
-    // frameContext is mutable: EntityRenderer writes it after sortEntitiesByDepth()
-    frameContext: IFrameContext | null;
-    readonly sortedEntities: Entity[];
-
-    // Color shader attribute locations
-    readonly aPosition: number;
-    readonly aEntityPos: number;
-    readonly aColor: number;
-    readonly dynamicBuffer: WebGLBuffer;
-
     // Debug output — passes write labels here during drawColorEntities
-    debugDecoLabels: Array<{ screenX: number; screenY: number; type: number; hue: number }>;
-}
-
-// ============================================================================
-// Selection context (subset used by selection/path passes)
-// ============================================================================
-
-export interface SelectionPassContext {
-    readonly mapSize: MapSize;
-    readonly groundHeight: Uint8Array;
-    readonly viewPoint: IViewPoint;
-    readonly unitStates: UnitStateLookup;
+    debugDecoLabels: DebugEntityLabel[];
 }

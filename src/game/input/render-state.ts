@@ -1,3 +1,4 @@
+import type { EMaterialType } from '../economy';
 import type { BuildingType } from '../entity';
 import type { Race } from '../race';
 
@@ -65,7 +66,7 @@ export interface BuildingPreview {
 export interface ResourcePreview {
     type: 'pile';
     /** Material type being placed */
-    materialType: import('../economy').EMaterialType;
+    materialType: EMaterialType;
     /** X position */
     x: number;
     /** Y position */

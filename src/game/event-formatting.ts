@@ -15,7 +15,6 @@ import { BuildingType } from './buildings/building-type';
 import { UnitType } from './unit-types';
 import { EntityType } from './entity';
 import { EMaterialType } from './economy/material-type';
-import { CarrierStatus } from './features/carriers/carrier-state';
 import type { GameEvents } from './event-bus';
 
 /** Join non-empty parts with spaces. */
@@ -108,10 +107,7 @@ export const EventFmt = {
 
     'carrier:created': (e: GameEvents['carrier:created']) => `#${e.entityId}`,
 
-    'carrier:removed': (e: GameEvents['carrier:removed']) => parts(`#${e.entityId}`, e.hadActiveJob && 'hadJob'),
-
-    'carrier:statusChanged': (e: GameEvents['carrier:statusChanged']) =>
-        `${CarrierStatus[e.previousStatus]}→${CarrierStatus[e.newStatus]}`,
+    'carrier:removed': (e: GameEvents['carrier:removed']) => `#${e.entityId}`,
 
     'carrier:arrivedForPickup': (e: GameEvents['carrier:arrivedForPickup']) => `at #${e.buildingId}`,
 
@@ -206,4 +202,15 @@ export const EventFmt = {
 
     'pile:buildingPilesConverted': (e: GameEvents['pile:buildingPilesConverted']) =>
         `building=#${e.buildingId} ${e.piles.size} piles`,
+
+    'recruitment:started': (e: GameEvents['recruitment:started']) =>
+        `carrier=#${e.carrierId} → ${UnitType[e.targetUnitType]} pile=#${e.pileEntityId} site=#${e.siteId}`,
+
+    'recruitment:completed': (e: GameEvents['recruitment:completed']) =>
+        `carrier=#${e.carrierId} → ${UnitType[e.targetUnitType]}`,
+
+    'recruitment:failed': (e: GameEvents['recruitment:failed']) => `carrier=#${e.carrierId} ${e.reason}`,
+
+    'unit:transformed': (e: GameEvents['unit:transformed']) =>
+        `#${e.entityId} ${UnitType[e.fromType]} → ${UnitType[e.toType]}`,
 } satisfies { [K in keyof GameEvents]: (e: GameEvents[K]) => string };

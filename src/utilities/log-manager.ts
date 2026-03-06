@@ -15,6 +15,14 @@ export interface ILogMessage {
 
 export type LogMessageCallback = (msg: ILogMessage) => void;
 
+/** Severity ordering for log levels (higher = more important) */
+const LOG_SEVERITY: Record<LogType, number> = {
+    [LogType.Debug]: 0,
+    [LogType.Info]: 1,
+    [LogType.Warn]: 2,
+    [LogType.Error]: 3,
+};
+
 /** Minimum interval between identical log messages (in ms) */
 const LOG_THROTTLE_MS = 1000;
 
@@ -70,6 +78,9 @@ export class LogManager {
     private logMsgCount = 0;
     private listener: LogMessageCallback | null = null;
 
+    /** Minimum log level for console output. Debug messages are suppressed by default. */
+    public consoleMinLevel: LogType = LogType.Info;
+
     /** Throttle state: source+msg -> { lastTime, suppressedCount } */
     private throttleState = new Map<string, { lastTime: number; suppressedCount: number }>();
 
@@ -86,7 +97,21 @@ export class LogManager {
         }
     }
 
-    // eslint-disable-next-line sonarjs/cognitive-complexity -- dispatches to multiple consumers with level filtering
+    /**
+     * Record a message to the buffer and listener only (no console output).
+     * Used by the loglevel wrapper which handles its own console output.
+     */
+    public record(msg: ILogMessage): void {
+        msg.index = this.logMsgCount++;
+        this.log.push(msg);
+        if (this.log.length > 100) {
+            this.log.shift();
+        }
+        if (this.listener) {
+            this.listener(msg);
+        }
+    }
+
     public push(msg: ILogMessage): void {
         msg.index = this.logMsgCount++;
 
@@ -101,6 +126,15 @@ export class LogManager {
             this.listener(msg);
         }
 
+        // Skip console output for messages below minimum level
+        if (LOG_SEVERITY[msg.type] < LOG_SEVERITY[this.consoleMinLevel]) {
+            return;
+        }
+
+        this.writeToConsole(msg);
+    }
+
+    private writeToConsole(msg: ILogMessage): void {
         // Check throttle for console output
         const msgStr = typeof msg.msg === 'string' ? msg.msg : JSON.stringify(msg.msg);
         const throttleKey = `${msg.source}:${msg.type}:${msgStr}`;
@@ -108,47 +142,42 @@ export class LogManager {
         const state = this.throttleState.get(throttleKey);
 
         if (state && now - state.lastTime < LOG_THROTTLE_MS) {
-            // Throttled - just count
             state.suppressedCount++;
             return;
         }
 
-        // Not throttled - log to console
         const suppressedNote =
             state && state.suppressedCount > 0 ? ` (${state.suppressedCount} similar suppressed)` : '';
 
-        // Reset or create throttle state
         this.throttleState.set(throttleKey, { lastTime: now, suppressedCount: 0 });
 
-        // write out to console
         if (typeof msg.msg !== 'string') {
             console.dir(msg.msg);
-        } else {
-            // Build complete message including exception details to avoid multiple console calls
-            // (each console.error triggers Chrome to show async stack traces)
-            let formatted = msg.source + '\t' + msg.msg + suppressedNote;
+            return;
+        }
 
-            if (msg.exception) {
-                formatted += '\n' + msg.exception.message;
-                if (msg.exception.stack) {
-                    formatted += '\n' + cleanStackTrace(msg.exception.stack);
-                }
-            }
+        let formatted = msg.source + '\t' + msg.msg + suppressedNote;
 
-            switch (msg.type) {
-            case LogType.Error:
-                console.error(formatted);
-                break;
-            case LogType.Warn:
-                console.warn(formatted);
-                break;
-            case LogType.Info:
-                console.info(formatted);
-                break;
-            case LogType.Debug:
-                console.log(formatted);
-                break;
+        if (msg.exception) {
+            formatted += '\n' + msg.exception.message;
+            if (msg.exception.stack) {
+                formatted += '\n' + cleanStackTrace(msg.exception.stack);
             }
+        }
+
+        switch (msg.type) {
+        case LogType.Error:
+            console.error(formatted);
+            break;
+        case LogType.Warn:
+            console.warn(formatted);
+            break;
+        case LogType.Info:
+            console.info(formatted);
+            break;
+        case LogType.Debug:
+            console.log(formatted);
+            break;
         }
     }
 }

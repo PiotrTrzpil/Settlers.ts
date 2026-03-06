@@ -16,8 +16,11 @@
  */
 
 import type { TickSystem } from '../../tick-system';
+import type { CoreDeps } from '../feature';
 import type { GameState } from '../../game-state';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
+import { EntityType, BuildingType, tileKey, getBuildingFootprint } from '../../entity';
+import { getBuildingDoorCorridor } from '../../buildings/types';
 import { BuildingConstructionPhase, type TerrainContext, type ConstructionSite } from './types';
 import { COMPLETED_RISING_DURATION } from './internal/phase-transitions';
 import { captureOriginalTerrain, restoreOriginalTerrain, applySingleTileLeveling } from './terrain';
@@ -25,13 +28,12 @@ import type { ConstructionSiteManager } from './construction-site-manager';
 import type { Command, CommandResult } from '../../commands';
 import { BUILDING_SPAWN_ON_COMPLETE } from './spawn-units';
 import type { ResidenceSpawnerSystem } from './residence-spawner';
+import { ringTiles } from '../../systems/spatial-search';
 
 /**
  * Configuration for BuildingConstructionSystem dependencies.
  */
-export interface BuildingConstructionSystemConfig {
-    gameState: GameState;
-    eventBus: EventBus;
+export interface BuildingConstructionSystemConfig extends CoreDeps {
     constructionSiteManager: ConstructionSiteManager;
     executeCommand: (cmd: Command) => CommandResult;
 }
@@ -51,6 +53,13 @@ export class BuildingConstructionSystem implements TickSystem {
 
     /** Remaining time (seconds) for buildings in CompletedRising phase */
     private readonly completedRisingTimers = new Map<number, number>();
+
+    /**
+     * Buildings awaiting evacuation before footprint block is restored.
+     * Maps buildingId → set of unit entity IDs that were on the footprint when leveling completed.
+     * Footprint block is deferred until all tracked units leave the footprint tiles.
+     */
+    private readonly pendingEvacuations = new Map<number, Set<number>>();
 
     /** Event subscription manager for cleanup */
     private readonly subscriptions = new EventSubscriptionManager();
@@ -134,15 +143,25 @@ export class BuildingConstructionSystem implements TickSystem {
         );
 
         // construction:levelingComplete → WaitingForBuilders (all tiles already leveled individually)
+        // If units are still on the footprint, defer blocking and evacuate them first.
         this.subscriptions.subscribe(this.eventBus, 'construction:levelingComplete', ({ buildingId }) => {
             const site = this.constructionSiteManager.getSite(buildingId);
             if (!site) return;
-            site.phase = BuildingConstructionPhase.WaitingForBuilders;
-            // Building structure starts rising — footprint is no longer walkable.
-            this.state.restoreBuildingFootprintBlock(buildingId);
             // Mark terrain as fully modified (individual tiles already applied via tileCompleted events)
             if (site.terrain.originalTerrain && !site.terrain.modified) {
                 site.terrain.modified = true;
+            }
+
+            const unitsOnFootprint = this.findUnitsOnFootprint(buildingId);
+            if (unitsOnFootprint.size > 0) {
+                // Defer footprint block — evacuate units first
+                this.pendingEvacuations.set(buildingId, unitsOnFootprint);
+                this.evacuateUnits(buildingId, unitsOnFootprint);
+                // Phase stays at TerrainLeveling-equivalent until evacuation completes;
+                // we set WaitingForBuilders once all units have left (in tickEvacuation).
+            } else {
+                site.phase = BuildingConstructionPhase.WaitingForBuilders;
+                this.state.restoreBuildingFootprintBlock(buildingId);
             }
         });
 
@@ -205,6 +224,12 @@ export class BuildingConstructionSystem implements TickSystem {
             const err = e instanceof Error ? e : new Error(String(e));
             console.error(`[BuildingConstructionSystem] Error ticking site ${entityId}:`, err);
         }
+
+        // Check pending evacuations
+        if (this.pendingEvacuations.has(entityId)) {
+            this.tickEvacuation(entityId, site);
+        }
+
         return false;
     }
 
@@ -228,9 +253,126 @@ export class BuildingConstructionSystem implements TickSystem {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // Footprint evacuation
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Find all unit entity IDs standing on the building's non-door footprint tiles.
+     */
+    private findUnitsOnFootprint(buildingId: number): Set<number> {
+        const entity = this.state.getEntityOrThrow(buildingId, 'findUnitsOnFootprint');
+        const footprint = getBuildingFootprint(entity.x, entity.y, entity.subType as BuildingType, entity.race);
+        const passableKeys = getBuildingDoorCorridor(
+            entity.x,
+            entity.y,
+            entity.subType as BuildingType,
+            entity.race,
+            footprint
+        );
+        const unitIds = new Set<number>();
+
+        for (const tile of footprint) {
+            const key = tileKey(tile.x, tile.y);
+            if (passableKeys.has(key)) continue; // door corridor — always passable
+            const occupant = this.state.tileOccupancy.get(key);
+            if (occupant === undefined) continue;
+            // Only evacuate units, not the building itself or piles
+            const occupantEntity = this.state.getEntity(occupant);
+            if (occupantEntity && occupantEntity.type === EntityType.Unit) {
+                unitIds.add(occupant);
+            }
+        }
+        return unitIds;
+    }
+
+    /**
+     * Issue move commands to evacuate units from a building's footprint.
+     * Each unit is directed to the nearest free tile outside the footprint.
+     */
+    private evacuateUnits(buildingId: number, unitIds: Set<number>): void {
+        const building = this.state.getEntityOrThrow(buildingId, 'evacuateUnits');
+        const footprint = getBuildingFootprint(building.x, building.y, building.subType as BuildingType, building.race);
+        const footprintKeys = new Set<string>();
+        for (const tile of footprint) {
+            footprintKeys.add(tileKey(tile.x, tile.y));
+        }
+
+        for (const unitId of unitIds) {
+            const unit = this.state.getEntity(unitId);
+            if (!unit) continue;
+            const target = this.findNearestFreeOutside(unit.x, unit.y, footprintKeys);
+            if (target) {
+                this.executeCommand({ type: 'move_unit', entityId: unitId, targetX: target.x, targetY: target.y });
+            }
+        }
+    }
+
+    /**
+     * Find the nearest free tile that is NOT part of the given footprint.
+     */
+    private findNearestFreeOutside(
+        cx: number,
+        cy: number,
+        footprintKeys: Set<string>
+    ): { x: number; y: number } | null {
+        for (let radius = 1; radius <= 10; radius++) {
+            for (const tile of ringTiles(cx, cy, radius)) {
+                const key = tileKey(tile.x, tile.y);
+                if (footprintKeys.has(key)) continue;
+                if (this.state.getEntityAt(tile.x, tile.y)) continue;
+                return tile;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Check if all evacuating units have left the footprint.
+     * Once clear, restore footprint block and transition to WaitingForBuilders.
+     */
+    private tickEvacuation(buildingId: number, site: ConstructionSite): void {
+        const unitIds = this.pendingEvacuations.get(buildingId)!;
+        const building = this.state.getEntity(buildingId);
+        if (!building) {
+            this.pendingEvacuations.delete(buildingId);
+            return;
+        }
+
+        // Build set of blocked (non-door) footprint tile keys
+        const footprint = getBuildingFootprint(building.x, building.y, building.subType as BuildingType, building.race);
+        const passableKeys = getBuildingDoorCorridor(
+            building.x,
+            building.y,
+            building.subType as BuildingType,
+            building.race,
+            footprint
+        );
+        const blockedKeys = new Set<string>();
+        for (const tile of footprint) {
+            const key = tileKey(tile.x, tile.y);
+            if (!passableKeys.has(key)) blockedKeys.add(key);
+        }
+
+        // Check if any tracked unit is still on a blocked footprint tile
+        for (const unitId of unitIds) {
+            const unit = this.state.getEntity(unitId);
+            if (!unit || !blockedKeys.has(tileKey(unit.x, unit.y))) {
+                unitIds.delete(unitId);
+            }
+        }
+
+        if (unitIds.size === 0) {
+            this.pendingEvacuations.delete(buildingId);
+            site.phase = BuildingConstructionPhase.WaitingForBuilders;
+            this.state.restoreBuildingFootprintBlock(buildingId);
+        }
+    }
+
     /** Handle building removal - restore terrain and clean up timers */
     private onBuildingRemoved(entityId: number): void {
         this.completedRisingTimers.delete(entityId);
+        this.pendingEvacuations.delete(entityId);
         const site = this.constructionSiteManager.getSite(entityId);
         if (!site || !site.terrain.originalTerrain) return;
         if (!this.terrainContext) return;

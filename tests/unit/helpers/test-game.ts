@@ -12,14 +12,14 @@ import { createTestMap, type TestMap } from './test-map';
 import { EventBus } from '@/game/event-bus';
 import { spiralSearch } from '@/game/utils/spiral-search';
 import { MovementSystem } from '@/game/systems/movement/index';
+import { SpatialGrid } from '@/game/spatial-grid';
 import {
     BuildingConstructionSystem,
     ConstructionSiteManager,
     ResidenceSpawnerSystem,
 } from '@/game/features/building-construction';
-import { CarrierManager } from '@/game/features/carriers';
+import { CarrierRegistry } from '@/game/features/carriers';
 import { BuildingInventoryManager } from '@/game/features/inventory';
-import { ServiceAreaManager } from '@/game/features/service-areas';
 import { RequestManager } from '@/game/features/logistics';
 import { GameSettingsManager, type GameSettings } from '@/game/game-settings';
 import { EntityCleanupRegistry } from '@/game/systems';
@@ -27,11 +27,30 @@ import { installTestGameData } from './test-game-data';
 
 // ─── GameState factory ──────────────────────────────────────────────
 
+const DEFAULT_TEST_MAP_SIZE = 256;
+
 export function createGameState(): GameState {
     installTestGameData();
     const eventBus = new EventBus();
     eventBus.strict = true;
     const state = new GameState(eventBus);
+    state.playerRaces = new Map([
+        [0, Race.Roman],
+        [1, Race.Roman],
+    ]);
+
+    // SpatialGrid must be initialized before any entities are added.
+    // In tests, all tiles are "owned" by player 0 so nearbyForPlayer works.
+    const spatialIndex = new SpatialGrid(
+        DEFAULT_TEST_MAP_SIZE,
+        DEFAULT_TEST_MAP_SIZE,
+        4,
+        id => state.getEntity(id),
+        () => 0 // all tiles owned by player 0
+    );
+    state.initSpatialIndex(spatialIndex);
+    spatialIndex.rebuildAllCells();
+
     const movement = new MovementSystem({
         eventBus,
         rng: state.rng,
@@ -94,15 +113,16 @@ export interface TestContext {
     /** Per-test GameSettings (reactive state) — isolated from other tests */
     settings: GameSettings;
     // Managers (created by tests, not from GameState)
-    carrierManager: CarrierManager;
+    carrierRegistry: CarrierRegistry;
     inventoryManager: BuildingInventoryManager;
-    serviceAreaManager: ServiceAreaManager;
     requestManager: RequestManager;
     constructionSiteManager: ConstructionSiteManager;
     // System for construction events
     buildingConstructionSystem: BuildingConstructionSystem;
     /** Residence spawner wired in immediate mode for tests */
     residenceSpawner: ResidenceSpawnerSystem;
+    /** Command handler registry — lazily created on first use */
+    registry?: CommandHandlerRegistry;
 }
 
 /**
@@ -127,8 +147,24 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     const eventBus = new EventBus();
     eventBus.strict = true;
     const state = new GameState(eventBus);
+    state.playerRaces = new Map([
+        [0, Race.Roman],
+        [1, Race.Roman],
+    ]);
     const settingsManager = new GameSettingsManager();
     settingsManager.resetToDefaults();
+
+    // SpatialGrid must be initialized before any entities are added.
+    // In tests, all tiles are "owned" by player 0 so nearbyForPlayer works.
+    const spatialIndex = new SpatialGrid(
+        mapWidth,
+        mapHeight,
+        4,
+        id => state.getEntity(id),
+        () => 0 // all tiles owned by player 0
+    );
+    state.initSpatialIndex(spatialIndex);
+    spatialIndex.rebuildAllCells();
 
     // Create MovementSystem (owned externally, set on GameState)
     const movement = new MovementSystem({
@@ -145,14 +181,13 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     state.initMovement(movement);
 
     // Create managers with required dependencies via constructor
-    const carrierManager = new CarrierManager({
+    const carrierRegistry = new CarrierRegistry({
         entityProvider: state,
         eventBus,
     });
     const inventoryManager = new BuildingInventoryManager();
-    const serviceAreaManager = new ServiceAreaManager();
     const requestManager = new RequestManager(eventBus);
-    const constructionSiteManager = new ConstructionSiteManager(eventBus);
+    const constructionSiteManager = new ConstructionSiteManager(eventBus, state.rng);
 
     // Pre-declare context variable so the lazy executor closure can capture it
     // eslint-disable-next-line prefer-const -- must be let: assigned after construction system captures it in a closure
@@ -164,7 +199,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         gameState: state,
         eventBus,
         constructionSiteManager,
-        executeCommand: cmd => executeCommand(toCommandContext(context), cmd),
+        executeCommand: cmd => getRegistry(context).execute(cmd),
     });
     buildingConstructionSystem.setTerrainContext({
         terrain: map.terrain,
@@ -174,7 +209,7 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
     // carrier spawning without driving the timed interval loop.
     const residenceSpawner = new ResidenceSpawnerSystem({
         gameState: state,
-        executeCommand: cmd => executeCommand(toCommandContext(context), cmd),
+        executeCommand: cmd => getRegistry(context).execute(cmd),
     });
     residenceSpawner.setTerrain(map.terrain);
     residenceSpawner.immediateMode = true;
@@ -205,9 +240,8 @@ export function createTestContext(mapWidth = 64, mapHeight = 64): TestContext {
         map,
         eventBus,
         settings: settingsManager.state,
-        carrierManager,
+        carrierRegistry,
         inventoryManager,
-        serviceAreaManager,
         requestManager,
         constructionSiteManager,
         buildingConstructionSystem,
@@ -225,16 +259,9 @@ export function addUnit(
     y: number,
     options: { player?: number; subType?: number; race?: Race } = {}
 ): { entity: Entity; unitState: UnitStateView } {
-    const entity = state.addEntity(
-        EntityType.Unit,
-        options.subType ?? 0,
-        x,
-        y,
-        options.player ?? 0,
-        undefined,
-        undefined,
-        options.race ?? Race.Roman
-    );
+    const entity = state.addEntity(EntityType.Unit, options.subType ?? 0, x, y, options.player ?? 0, {
+        race: options.race ?? Race.Roman,
+    });
     const unitState = state.unitStates.get(entity.id);
     if (!unitState) throw new Error(`UnitState not created for unit ${entity.id}`);
     return { entity, unitState };
@@ -249,7 +276,7 @@ export function addBuilding(
     player = 0,
     race = Race.Roman
 ): Entity {
-    return state.addEntity(EntityType.Building, buildingType, x, y, player, undefined, undefined, race);
+    return state.addEntity(EntityType.Building, buildingType, x, y, player, { race });
 }
 
 /**
@@ -264,7 +291,7 @@ export function addBuildingWithInventory(
     player = 0,
     race = Race.Roman
 ): Entity {
-    const building = ctx.state.addEntity(EntityType.Building, buildingType, x, y, player, undefined, undefined, race);
+    const building = ctx.state.addEntity(EntityType.Building, buildingType, x, y, player, { race });
     ctx.inventoryManager.createInventory(building.id, buildingType as BuildingType, race);
     return building;
 }
@@ -342,30 +369,48 @@ export function completeConstruction(ctx: TestContext, entityId: number): void {
 
 // ─── Command execution helpers ──────────────────────────────────────
 
-import { executeCommand, commandSuccess, type CommandResult, type CommandContext } from '@/game/commands';
+import { commandSuccess, type CommandResult, CommandHandlerRegistry, registerAllHandlers } from '@/game/commands';
 
-/** Build a CommandContext from a TestContext (optionally override eventBus). */
-export function toCommandContext(ctx: TestContext, eventBus?: EventBus): CommandContext {
-    return {
+/**
+ * Build a CommandHandlerRegistry from a TestContext.
+ * Stubs systems not wired in unit-test contexts (tree, crop, production, storage filter).
+ * Tests that exercise those commands should use TestSimulation instead.
+ */
+export function createTestRegistry(ctx: TestContext, eventBus?: EventBus): CommandHandlerRegistry {
+    const registry = new CommandHandlerRegistry();
+    /* eslint-disable @typescript-eslint/no-explicit-any -- test stubs for systems not wired in unit tests */
+    registerAllHandlers(registry, {
         state: ctx.state,
         terrain: ctx.map.terrain,
         eventBus: eventBus ?? ctx.eventBus,
         settings: ctx.settings,
         constructionSiteManager: ctx.constructionSiteManager,
-        // Stubs for systems not wired in unit-test contexts.
-        // Tests that exercise tree/crop/production commands should use TestSimulation instead.
         settlerTaskSystem: {
             assignMoveTask: (id: number, x: number, y: number) => ctx.state.movement.moveUnit(id, x, y),
-        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
-        combatSystem: {
-            releaseFromCombat: () => {},
-        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
-        treeSystem: undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
-        cropSystem: undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
-        productionControlManager: undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
-        storageFilterManager: undefined as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- test stub
-        placementFilter: null,
-    };
+        } as any,
+        combatSystem: { releaseFromCombat: () => {} } as any,
+        treeSystem: undefined as any,
+        cropSystem: undefined as any,
+        productionControlManager: undefined as any,
+        storageFilterManager: undefined as any,
+        getPlacementFilter: () => null,
+    });
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    return registry;
+}
+
+/** Get or create a cached registry for the test context. */
+function getRegistry(ctx: TestContext): CommandHandlerRegistry {
+    if (!ctx.registry) {
+        ctx.registry = createTestRegistry(ctx);
+    }
+    return ctx.registry;
+}
+
+/** @deprecated Use createTestRegistry instead. Kept for backward compatibility during migration. */
+export function toCommandContext(ctx: TestContext, eventBus?: EventBus): CommandHandlerRegistry {
+    if (eventBus) return createTestRegistry(ctx, eventBus);
+    return getRegistry(ctx);
 }
 
 /** Execute a place_building command. Returns CommandResult. */
@@ -377,7 +422,7 @@ export function placeBuilding(
     player = 0,
     opts: { completed?: boolean; spawnWorker?: boolean } = {}
 ): CommandResult {
-    return executeCommand(toCommandContext(ctx), {
+    return getRegistry(ctx).execute({
         type: 'place_building',
         buildingType,
         x,
@@ -401,7 +446,7 @@ export function placeBuildingWithWorker(
     buildingType: BuildingType,
     race = Race.Roman
 ): { building: Entity; worker: Entity } {
-    const result = executeCommand(toCommandContext(ctx), {
+    const result = getRegistry(ctx).execute({
         type: 'place_building',
         buildingType,
         x,
@@ -428,7 +473,7 @@ export function placeBuildingWithWorker(
 
 /** Execute a spawn_unit command. Returns CommandResult. */
 export function spawnUnit(ctx: TestContext, x: number, y: number, unitType = 0, player = 0): CommandResult {
-    return executeCommand(toCommandContext(ctx), { type: 'spawn_unit', unitType, x, y, player, race: 10 });
+    return getRegistry(ctx).execute({ type: 'spawn_unit', unitType, x, y, player, race: 10 });
 }
 
 /** Execute a move_unit command. Returns CommandResult. */
@@ -440,22 +485,22 @@ export function moveUnit(ctx: TestContext, entityId: number, targetX: number, ta
         ctx.map.mapSize.width,
         ctx.map.mapSize.height
     );
-    return executeCommand(toCommandContext(ctx), { type: 'move_unit', entityId, targetX, targetY });
+    return getRegistry(ctx).execute({ type: 'move_unit', entityId, targetX, targetY });
 }
 
 /** Execute a select command. Returns CommandResult. */
 export function selectEntity(ctx: TestContext, entityId: number | null): CommandResult {
-    return executeCommand(toCommandContext(ctx), { type: 'select', entityId });
+    return getRegistry(ctx).execute({ type: 'select', entityId });
 }
 
 /** Execute a remove_entity command. Returns CommandResult. */
 export function removeEntity(ctx: TestContext, entityId: number): CommandResult {
-    return executeCommand(toCommandContext(ctx), { type: 'remove_entity', entityId });
+    return getRegistry(ctx).execute({ type: 'remove_entity', entityId });
 }
 
 /** Execute a place_pile command. Returns CommandResult. */
 export function placeResource(ctx: TestContext, x: number, y: number, materialType: number, amount = 1): CommandResult {
-    return executeCommand(toCommandContext(ctx), { type: 'place_pile', materialType, amount, x, y });
+    return getRegistry(ctx).execute({ type: 'place_pile', materialType, amount, x, y });
 }
 
 // ─── Terrain query helpers ───────────────────────────────────────────
@@ -537,6 +582,8 @@ export function createTestInputContext(overrides?: Partial<InputContext>): {
             return commandSuccess();
         },
         localPlayerRace: null,
+        pickEntityAtScreen: null,
+        pickEntitiesInScreenRect: null,
         ...overrides,
     };
 

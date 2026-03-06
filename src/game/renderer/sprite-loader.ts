@@ -17,6 +17,7 @@ import { GfxImage } from '@/resources/gfx/gfx-image';
 import { EntityTextureAtlas, AtlasRegion } from './entity-texture-atlas';
 import { SpriteEntry, PIXELS_TO_WORLD } from './sprite-metadata';
 import { getDecoderPool } from './sprite-decoder-pool';
+import type { BatchSpriteDescriptor, BatchSpriteResult } from './sprite-batch-decode-worker';
 
 /**
  * Trim configuration for sprite loading.
@@ -43,7 +44,7 @@ export interface LoadedGfxFileSet {
  * Result of loading a sprite into the atlas.
  */
 export interface LoadedSprite {
-    image: GfxImage;
+    image: GfxImage | null;
     region: AtlasRegion;
     entry: SpriteEntry;
 }
@@ -368,11 +369,6 @@ export class SpriteLoader {
     ): Promise<LoadedSprite | null> {
         const trim = trimOverride ?? SpriteLoader.DEFAULT_TRIM;
         const pool = getDecoderPool();
-
-        if (!pool.isAvailable) {
-            return this.packSpriteIntoAtlasFallback(gfxImage, atlas, paletteBaseOffset, trimOverride);
-        }
-
         const params = gfxImage.getDecodeParams();
 
         const trimmedWidth = params.width;
@@ -559,6 +555,214 @@ export class SpriteLoader {
         }
 
         return result.size > 0 ? result : null;
+    }
+
+    /**
+     * Blit a single decoded sprite result from a batch into the atlas.
+     * Returns the LoadedSprite if successful, or null if the sprite is empty or atlas is full.
+     */
+    private blitBatchResult(
+        sr: BatchSpriteResult,
+        allIndices: Uint16Array,
+        atlas: EntityTextureAtlas,
+        paletteBaseOffset: number,
+        trimTop: number
+    ): LoadedSprite | null {
+        if (sr.height <= 0 || sr.width <= 0) return null;
+
+        const region = atlas.reserve(sr.width, sr.height);
+        if (!region) {
+            SpriteLoader.log.error(`Atlas full, cannot fit sprite ${sr.width}x${sr.height}`);
+            return null;
+        }
+
+        const indices = allIndices.subarray(sr.indicesOffset, sr.indicesOffset + sr.indicesLength);
+        atlas.blitIndices(region, indices);
+
+        const entry: SpriteEntry = {
+            atlasRegion: region,
+            offsetX: -sr.left * PIXELS_TO_WORLD,
+            offsetY: -(sr.top - trimTop) * PIXELS_TO_WORLD,
+            widthWorld: sr.width * PIXELS_TO_WORLD,
+            heightWorld: sr.height * PIXELS_TO_WORLD,
+            paletteBaseOffset: paletteBaseOffset + sr.paletteOffset,
+        };
+
+        return { image: null, region, entry };
+    }
+
+    /**
+     * Build a batch manifest for a job's frames across all directions.
+     * Returns the manifest entries and a parallel array mapping each entry to its direction index.
+     */
+    private buildJobManifest(
+        fileSet: LoadedGfxFileSet,
+        jobIndex: number,
+        trim: SpriteTrim
+    ): { manifest: BatchSpriteDescriptor[]; dirIndices: number[] } | null {
+        const jobItem = fileSet.jilReader!.getItem(jobIndex);
+        if (!jobItem) return null;
+
+        const dirItems = fileSet.dilReader!.getItems(jobItem.offset, jobItem.length);
+        if (dirItems.length === 0) return null;
+
+        const manifest: BatchSpriteDescriptor[] = [];
+        const dirIndices: number[] = [];
+        const paletteOffset = fileSet.paletteCollection.getOffset(jobIndex);
+
+        for (let d = 0; d < dirItems.length; d++) {
+            const dirItem = dirItems[d]!;
+            const frameItems = fileSet.gilReader.getItems(dirItem.offset, dirItem.length);
+
+            for (let f = 0; f < frameItems.length; f++) {
+                const gfxOffset = fileSet.gilReader.getImageOffset(frameItems[f]!.index);
+                manifest.push({ gfxOffset, paletteOffset, trimTop: trim.top, trimBottom: trim.bottom });
+                dirIndices.push(d);
+            }
+        }
+
+        return manifest.length > 0 ? { manifest, dirIndices } : null;
+    }
+
+    /** Build a combined manifest for multiple jobs. */
+    private buildMultiJobManifest(
+        fileSet: LoadedGfxFileSet,
+        jobIndices: number[],
+        trim: SpriteTrim
+    ): { manifest: BatchSpriteDescriptor[]; entryMap: { jobIndex: number; dir: number }[] } {
+        const manifest: BatchSpriteDescriptor[] = [];
+        const entryMap: { jobIndex: number; dir: number }[] = [];
+
+        for (const jobIndex of jobIndices) {
+            const built = this.buildJobManifest(fileSet, jobIndex, trim);
+            if (!built) continue;
+            for (let i = 0; i < built.manifest.length; i++) {
+                manifest.push(built.manifest[i]!);
+                entryMap.push({ jobIndex, dir: built.dirIndices[i]! });
+            }
+        }
+
+        return { manifest, entryMap };
+    }
+
+    /** Insert a sprite into a nested job→direction→sprites map. */
+    private static insertIntoJobMap(
+        map: Map<number, Map<number, LoadedSprite[]>>,
+        jobIndex: number,
+        dir: number,
+        sprite: LoadedSprite
+    ): void {
+        let jobDirs = map.get(jobIndex);
+        if (!jobDirs) {
+            jobDirs = new Map<number, LoadedSprite[]>();
+            map.set(jobIndex, jobDirs);
+        }
+        let dirSprites = jobDirs.get(dir);
+        if (!dirSprites) {
+            dirSprites = [];
+            jobDirs.set(dir, dirSprites);
+        }
+        dirSprites.push(sprite);
+    }
+
+    /**
+     * Batch-load multiple jobs (all directions × all frames each) in a single worker round-trip.
+     * Best for loading many jobs from the same GFX file (e.g., all unit types for a race).
+     *
+     * @param paletteBaseOffset Base offset for this file's palette in the combined texture
+     */
+    public async loadMultiJobBatch(
+        fileSet: LoadedGfxFileSet,
+        jobIndices: number[],
+        atlas: EntityTextureAtlas,
+        paletteBaseOffset: number
+    ): Promise<Map<number, Map<number, LoadedSprite[]>>> {
+        const result = new Map<number, Map<number, LoadedSprite[]>>();
+
+        if (!fileSet.jilReader || !fileSet.dilReader) return result;
+
+        const pool = getDecoderPool();
+
+        // Build one big manifest for all jobs
+        const trim = SpriteLoader.DEFAULT_TRIM;
+        const { manifest, entryMap } = this.buildMultiJobManifest(fileSet, jobIndices, trim);
+        if (manifest.length === 0) return result;
+
+        const batchResult = await pool.decodeBatch(fileSet.gfxReader.getBuffer(), manifest);
+
+        for (let i = 0; i < batchResult.results.length; i++) {
+            const sprite = this.blitBatchResult(
+                batchResult.results[i]!,
+                batchResult.allIndices,
+                atlas,
+                paletteBaseOffset,
+                trim.top
+            );
+            if (!sprite) continue;
+            SpriteLoader.insertIntoJobMap(result, entryMap[i]!.jobIndex, entryMap[i]!.dir, sprite);
+        }
+
+        return result;
+    }
+
+    /**
+     * Batch-load sprites by direct GIL indices using the combined parse+decode worker.
+     * All sprites are decoded in one worker round-trip.
+     *
+     * @param paletteBaseOffset Base offset for this file's palette in the combined texture
+     */
+    public async loadDirectSpriteBatch(
+        fileSet: LoadedGfxFileSet,
+        gilIndices: readonly number[],
+        paletteIndex: number | null,
+        atlas: EntityTextureAtlas,
+        paletteBaseOffset: number,
+        trimOverride?: SpriteTrim
+    ): Promise<Map<number, LoadedSprite>> {
+        const resultMap = new Map<number, LoadedSprite>();
+
+        if (gilIndices.length === 0) return resultMap;
+
+        const pool = getDecoderPool();
+
+        const trim = trimOverride ?? SpriteLoader.DEFAULT_TRIM;
+        const manifest: BatchSpriteDescriptor[] = [];
+
+        for (const gilIndex of gilIndices) {
+            const gfxOffset = fileSet.gilReader.getImageOffset(gilIndex);
+            let pIdx: number;
+            if (paletteIndex != null) {
+                pIdx = paletteIndex;
+            } else if (fileSet.dilReader && fileSet.jilReader) {
+                // Reverse lookup: GIL → DIL → JIL to find the owning job index,
+                // same as GfxFileReader.getImage() does for single-sprite loading.
+                const dirOffset = fileSet.dilReader.reverseLookupIndex(gilIndex);
+                pIdx = fileSet.jilReader.reverseLookupIndex(dirOffset);
+            } else {
+                pIdx = gilIndex;
+            }
+            manifest.push({
+                gfxOffset,
+                paletteOffset: fileSet.paletteCollection.getOffset(pIdx),
+                trimTop: trim.top,
+                trimBottom: trim.bottom,
+            });
+        }
+
+        const batchResult = await pool.decodeBatch(fileSet.gfxReader.getBuffer(), manifest);
+
+        for (let i = 0; i < batchResult.results.length; i++) {
+            const sprite = this.blitBatchResult(
+                batchResult.results[i]!,
+                batchResult.allIndices,
+                atlas,
+                paletteBaseOffset,
+                trim.top
+            );
+            if (sprite) resultMap.set(gilIndices[i]!, sprite);
+        }
+
+        return resultMap;
     }
 
     /**

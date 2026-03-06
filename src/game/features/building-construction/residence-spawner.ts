@@ -13,6 +13,8 @@ import type { TerrainData } from '../../terrain';
 import type { BuildingSpawnConfig } from './types';
 import { ringTiles } from '../../systems/spatial-search';
 import type { Command, CommandResult } from '../../commands';
+import type { Persistable } from '@/game/persistence';
+import type { SerializedPendingSpawn } from '@/game/game-state-persistence';
 
 interface PendingSpawn {
     buildingEntityId: number;
@@ -26,7 +28,8 @@ export interface ResidenceSpawnerConfig {
     executeCommand: (cmd: Command) => CommandResult;
 }
 
-export class ResidenceSpawnerSystem implements TickSystem {
+export class ResidenceSpawnerSystem implements TickSystem, Persistable<SerializedPendingSpawn[]> {
+    readonly persistKey = 'residenceSpawns' as const;
     private readonly pending: PendingSpawn[] = [];
     private readonly gameState: GameState;
     private readonly executeCommand: (cmd: Command) => CommandResult;
@@ -118,5 +121,34 @@ export class ResidenceSpawnerSystem implements TickSystem {
     /** Number of pending spawn entries (for testing) */
     get pendingCount(): number {
         return this.pending.length;
+    }
+
+    // ── Persistable ───────────────────────────────────────────────
+
+    serialize(): SerializedPendingSpawn[] {
+        return this.pending.map(p => ({
+            buildingEntityId: p.buildingEntityId,
+            remaining: p.remaining,
+            timer: p.timer,
+            unitType: p.config.unitType,
+            count: p.config.count,
+            spawnInterval: p.config.spawnInterval!,
+        }));
+    }
+
+    deserialize(data: SerializedPendingSpawn[]): void {
+        this.pending.length = 0;
+        for (const s of data) {
+            this.pending.push({
+                buildingEntityId: s.buildingEntityId,
+                remaining: s.remaining,
+                timer: s.timer,
+                config: {
+                    unitType: s.unitType,
+                    count: s.count,
+                    spawnInterval: s.spawnInterval,
+                },
+            });
+        }
     }
 }

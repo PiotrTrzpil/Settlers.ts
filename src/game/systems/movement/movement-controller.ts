@@ -2,55 +2,47 @@ import { TileCoord } from '../../entity';
 import { getApproxDirection, EDirection, getStepDistanceFactor } from '../hex-directions';
 
 /**
- * Movement state machine states.
+ * Movement state machine states (external API).
  * - idle: Unit has no path and is stationary
- * - moving: Unit is actively following a path
+ * - moving: Unit is actively following a path (or sliding after push)
  * - blocked: Unit is temporarily blocked and waiting
  */
 export type MovementState = 'idle' | 'moving' | 'blocked';
 
 /**
- * Per-unit movement controller that encapsulates all movement state.
- * Manages the state machine for a single unit's movement, including
- * path following, visual interpolation, and state transitions.
+ * Tagged union for controller phase — makes state transitions explicit
+ * and scopes path/blocked data to the phases that use them.
+ */
+type ControllerPhase =
+    | { readonly tag: 'idle' }
+    | { readonly tag: 'moving'; path: TileCoord[]; pathIndex: number }
+    | { readonly tag: 'blocked'; path: TileCoord[]; pathIndex: number; blockedTime: number };
+
+const IDLE: ControllerPhase = { tag: 'idle' };
+
+/**
+ * Per-unit movement controller with explicit tagged-union state machine.
+ * Manages path following, visual interpolation, and state transitions.
  */
 export class MovementController {
-    /** Entity ID this controller manages */
     readonly entityId: number;
 
-    /** Current movement state */
-    private _state: MovementState = 'idle';
+    // --- Phase (tagged union) ---
+    private _phase: ControllerPhase = IDLE;
 
-    /** Current tile position (logical position) */
+    // --- Position (common to all phases) ---
     private _tileX: number;
     private _tileY: number;
-
-    /** Previous tile position (for visual interpolation) */
     private _prevTileX: number;
     private _prevTileY: number;
 
-    /** Interpolation progress (0 to 1) between prevTile and current tile */
+    // --- Interpolation & movement ---
     private _progress: number = 0;
-
-    /** Movement speed in tiles per second */
     private _speed: number;
-
-    /** Current path to follow */
-    private _path: TileCoord[] = [];
-
-    /** Current index in path */
-    private _pathIndex: number = 0;
-
-    /** Time spent blocked in seconds (for timeout handling) */
-    private _blockedTime: number = 0;
-
-    /** Current facing direction (0-5 for hex directions, updated when steps are taken) */
     private _direction: number = EDirection.EAST;
-
-    /** World-space distance factor for the current step (normalizes visual speed across directions) */
     private _distanceFactor: number = 1.0;
 
-    /** Last computed visual position for teleport detection */
+    // --- Teleport detection ---
     private _lastVisualX = 0;
     private _lastVisualY = 0;
 
@@ -65,55 +57,15 @@ export class MovementController {
         this._lastVisualY = y;
     }
 
-    /**
-     * Centralized state transition. Automatically clears blocked time
-     * whenever the unit leaves the 'blocked' state.
-     */
-    private setState(newState: MovementState): void {
-        if (newState !== 'blocked') {
-            this._blockedTime = 0;
-        }
-        this._state = newState;
-    }
+    // =====================================================================
+    // State getters
+    // =====================================================================
 
-    /**
-     * Compute the current visual position (fractional tile coordinates).
-     * This is what the renderer would display.
-     */
-    private computeVisualPosition(): { x: number; y: number } {
-        const t = Math.max(0, Math.min(this._progress, 1));
-        return {
-            x: this._prevTileX + (this._tileX - this._prevTileX) * t,
-            y: this._prevTileY + (this._tileY - this._prevTileY) * t,
-        };
-    }
-
-    /**
-     * Update the last visual position. Call this at the END of each tick
-     * after all state changes, so we can detect teleports on the next change.
-     */
-    updateLastVisualPosition(): void {
-        const pos = this.computeVisualPosition();
-        this._lastVisualX = pos.x;
-        this._lastVisualY = pos.y;
-    }
-
-    /**
-     * Check if the current visual position is continuous with the last visual position.
-     * A teleport is detected if the visual position jumps by more than a small threshold.
-     * @returns Distance jumped, or 0 if continuous
-     */
-    detectTeleport(): number {
-        const pos = this.computeVisualPosition();
-        const dx = pos.x - this._lastVisualX;
-        const dy = pos.y - this._lastVisualY;
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    // === State Getters ===
-
+    /** External state — derives from phase tag + transit status. */
     get state(): MovementState {
-        return this._state;
+        if (this._phase.tag !== 'idle') return this._phase.tag === 'blocked' ? 'blocked' : 'moving';
+        // Idle phase but still sliding (e.g. after push without path) → report 'moving'
+        return this.isInTransit ? 'moving' : 'idle';
     }
 
     get tileX(): number {
@@ -140,93 +92,74 @@ export class MovementController {
         return this._speed;
     }
 
-    /** Set movement speed (tiles per second). Primarily for testing. */
     setSpeed(speed: number): void {
         this._speed = speed;
     }
 
     get path(): ReadonlyArray<TileCoord> {
-        return this._path;
+        return this._phase.tag !== 'idle' ? this._phase.path : [];
     }
 
     get pathIndex(): number {
-        return this._pathIndex;
+        return this._phase.tag !== 'idle' ? this._phase.pathIndex : 0;
     }
 
-    /** Check if unit is currently in visual transit (interpolating between tiles) */
+    /** Unit is visually interpolating between tiles. */
     get isInTransit(): boolean {
         return this._prevTileX !== this._tileX || this._prevTileY !== this._tileY;
     }
 
-    /** Check if unit has more path to follow */
+    /** Unit has more path waypoints to follow. */
     get hasPath(): boolean {
-        return this._pathIndex < this._path.length;
+        return this._phase.tag !== 'idle' && this._phase.pathIndex < this._phase.path.length;
     }
 
-    /** Get next waypoint, or null if no more waypoints */
     get nextWaypoint(): TileCoord | null {
-        return this._pathIndex < this._path.length ? (this._path[this._pathIndex] ?? null) : null;
+        if (this._phase.tag === 'idle') return null;
+        const { path, pathIndex } = this._phase;
+        return pathIndex < path.length ? (path[pathIndex] ?? null) : null;
     }
 
-    /** Current facing direction (0-5 for hex directions). Updated when movement steps occur. */
     get direction(): number {
         return this._direction;
     }
 
-    /** Explicitly set facing direction without moving (e.g. face a work target). */
     setDirection(direction: EDirection): void {
         this._direction = direction;
     }
 
-    /** Get the current goal (final waypoint), or null if no path. */
     get goal(): TileCoord | null {
-        return this._path.length > 0 ? (this._path[this._path.length - 1] ?? null) : null;
+        if (this._phase.tag === 'idle') return null;
+        const { path } = this._phase;
+        return path.length > 0 ? (path[path.length - 1] ?? null) : null;
     }
 
-    // === Path Management ===
-
-    /** Warn if visual position jumped discontinuously after a path change */
-    private warnIfTeleported(visualBefore: { x: number; y: number }, label: string): void {
-        const visualAfter = this.computeVisualPosition();
-        const dx = visualAfter.x - visualBefore.x;
-        const dy = visualAfter.y - visualBefore.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 0.1) {
-            console.warn(
-                `[MovementController] ${label} caused teleport! Entity ${this.entityId} jumped ${dist.toFixed(2)} tiles`
-            );
-        }
+    get blockedTime(): number {
+        return this._phase.tag === 'blocked' ? this._phase.blockedTime : 0;
     }
 
-    /**
-     * Start following a new path from stationary state.
-     * Progress starts at 0; the unit will move after (1/speed) seconds.
-     */
+    // =====================================================================
+    // Path management
+    // =====================================================================
+
+    /** Start following a new path from stationary state. */
     startPath(path: TileCoord[]): void {
         if (path.length === 0) return;
 
         const visualBefore = this.computeVisualPosition();
 
-        this._path = [...path];
-        this._pathIndex = 0;
-        this.setState('moving');
+        this._phase = { tag: 'moving', path: [...path], pathIndex: 0 };
 
-        // Set up for smooth interpolation
         if (!this.isInTransit) {
             this._prevTileX = this._tileX;
             this._prevTileY = this._tileY;
-            // Start at 1 to trigger immediate first step execution in next update
-            this._progress = 1;
+            this._progress = 1; // Trigger immediate first step
         }
-        // If in transit, keep current progress to avoid visual jump
 
         this.warnIfTeleported(visualBefore, 'startPath');
     }
 
-    /**
-     * Redirect to a new path while potentially in motion.
-     * Preserves current visual interpolation state.
-     */
+    /** Redirect to a new path while potentially in motion. */
     redirectPath(path: TileCoord[]): void {
         if (path.length === 0) {
             this.clearPath();
@@ -234,179 +167,157 @@ export class MovementController {
         }
 
         const visualBefore = this.computeVisualPosition();
-
-        this._path = [...path];
-        this._pathIndex = 0;
-        this.setState('moving');
-
-        // Don't touch progress or prevTile - keep smooth motion
+        this._phase = { tag: 'moving', path: [...path], pathIndex: 0 };
         this.warnIfTeleported(visualBefore, 'redirectPath');
     }
 
-    /**
-     * Clear the current path and transition to idle.
-     */
+    /** Clear the current path and transition to idle. */
     clearPath(): void {
-        this._path = [];
-        this._pathIndex = 0;
-        this.setState('idle');
+        this._phase = IDLE;
     }
 
-    // === Tick Processing ===
+    /** Insert a detour tile at the current path position. */
+    insertDetour(tile: TileCoord): void {
+        const p = this.activePathPhase();
+        p.path.splice(p.pathIndex, 0, tile);
+    }
 
-    /**
-     * Advance movement progress by delta time.
-     * Call this every tick before processing moves.
-     * @param deltaSec Time since last tick
-     * @param maxProgress Optional cap on total progress (prevents teleporting on lag)
-     * @returns The accumulated progress (may be > 1 if multiple moves are pending)
-     */
+    /** Replace path with a new prefix and keep remaining suffix. */
+    replacePathPrefix(newPrefix: TileCoord[], suffixStartIndex: number): void {
+        const p = this.activePathPhase();
+        const suffix = p.path.slice(suffixStartIndex);
+        p.path = [...newPrefix, ...suffix];
+        p.pathIndex = 0;
+    }
+
+    /** Replace entire remaining path. */
+    replacePath(newPath: TileCoord[]): void {
+        const p = this.activePathPhase();
+        p.path = [...newPath];
+        p.pathIndex = 0;
+    }
+
+    /** Replace path from a given index onward with a new suffix. */
+    replacePathSuffix(newSuffix: TileCoord[], suffixStartIndex: number): void {
+        const p = this.activePathPhase();
+        p.path = [...p.path.slice(0, suffixStartIndex), ...newSuffix];
+    }
+
+    // =====================================================================
+    // Tick processing
+    // =====================================================================
+
+    /** Advance movement progress by delta time. */
     advanceProgress(deltaSec: number, maxProgress?: number): number {
-        // Advance if moving, blocked (so blocked units retry collision resolution), or in visual transit
-        if (this._state === 'moving' || this._state === 'blocked' || this.isInTransit) {
-            // Divide by distance factor so longer world-space steps take proportionally more time,
-            // producing uniform visual speed regardless of hex direction.
+        if (this._phase.tag !== 'idle' || this.isInTransit) {
             this._progress += (this._speed * deltaSec) / this._distanceFactor;
-
-            // Cap progress to prevent teleporting on large delta times
             if (maxProgress !== undefined && this._progress > maxProgress) {
                 this._progress = maxProgress;
             }
         }
-
         return this._progress;
     }
 
-    /**
-     * Check if a move is ready (progress >= 1 and path available).
-     */
+    /** Check if a move is ready (progress >= 1 and path available). */
     canMove(): boolean {
         return this._progress >= 1 && this.hasPath;
     }
 
-    /**
-     * Consume one move tick worth of progress.
-     * Call this when a tile move is executed.
-     */
-    consumeMoveTick(): void {
-        this._progress -= 1;
-    }
-
-    /**
-     * Execute a move to the next waypoint.
-     * Updates internal state and returns the new position.
-     * @returns The new tile position, or null if no move was made
-     */
+    /** Execute a move to the next waypoint. Returns new position or null. */
     executeMove(): TileCoord | null {
         if (!this.canMove()) return null;
 
-        const wp = this._path[this._pathIndex]!;
+        const p = this.activePathPhase();
+        const wp = p.path[p.pathIndex]!;
 
-        // Store previous position for interpolation
         this._prevTileX = this._tileX;
         this._prevTileY = this._tileY;
-
-        // Update current position
         this._tileX = wp.x;
         this._tileY = wp.y;
 
-        // Update facing direction based on movement
         this._direction = getApproxDirection(this._prevTileX, this._prevTileY, this._tileX, this._tileY);
-
-        // Update distance factor for this step's world-space distance
         this._distanceFactor = getStepDistanceFactor(this._tileX - this._prevTileX, this._tileY - this._prevTileY);
 
-        // Advance path
-        this._pathIndex++;
+        p.pathIndex++;
+        this._progress -= 1;
 
-        // Consume progress
-        this.consumeMoveTick();
-
-        // Clear blocked state on successful move
-        this.setState('moving');
+        // Successful move → ensure we're in 'moving' phase (clears blocked)
+        if (p.tag === 'blocked') {
+            this._phase = { tag: 'moving', path: p.path, pathIndex: p.pathIndex };
+        }
 
         return wp;
     }
 
-    /**
-     * Mark the unit as blocked this tick.
-     * Resets progress so the unit waits before retrying.
-     * Blocked time is accumulated externally by the movement system every tick.
-     */
+    /** Mark the unit as blocked this tick. Resets progress so the unit waits. */
     setBlocked(): void {
-        this.setState('blocked');
-        this._progress = 0; // Wait for next tick
+        const phase = this._phase;
+        if (phase.tag === 'idle') return; // pushed/sliding unit — nothing to block
+        this._phase = {
+            tag: 'blocked',
+            path: phase.path,
+            pathIndex: phase.pathIndex,
+            blockedTime: phase.tag === 'blocked' ? phase.blockedTime : 0,
+        };
+        this._progress = 0;
     }
 
-    /**
-     * Add elapsed time to the blocked counter.
-     * Called every tick the unit remains in 'blocked' state so that
-     * the give-up timeout is based on wall-clock time, not retry count.
-     */
+    /** Add elapsed time to the blocked counter (called every tick while blocked). */
     addBlockedTime(deltaSec: number): void {
-        this._blockedTime += deltaSec;
-    }
-
-    /**
-     * Get how long the unit has been blocked.
-     */
-    get blockedTime(): number {
-        return this._blockedTime;
-    }
-
-    /**
-     * Handle path completion and transit completion.
-     * Call this after processing all moves for the tick.
-     */
-    finalizeTick(): void {
-        // Check if path is complete
-        if (!this.hasPath) {
-            if (this._path.length > 0) {
-                this._path = [];
-                this._pathIndex = 0;
-            }
-
-            // Check if visual transit is complete
-            if (this.isInTransit) {
-                if (this._progress >= 1) {
-                    // Interpolation complete, sync prev to current
-                    this._prevTileX = this._tileX;
-                    this._prevTileY = this._tileY;
-                    this._progress = 0;
-                    this.setState('idle');
-                }
-            } else {
-                // Already stationary
-                this._progress = 0;
-                this.setState('idle');
-            }
+        if (this._phase.tag === 'blocked') {
+            this._phase.blockedTime += deltaSec;
         }
     }
 
-    // === Position Updates (for external coordination) ===
+    /** Reset blocked time (e.g. after escalated repath succeeds). */
+    resetBlockedTime(): void {
+        if (this._phase.tag === 'blocked') {
+            this._phase.blockedTime = 0;
+        }
+    }
 
-    /**
-     * Sync position from external entity state.
-     * Used when entity position changes outside of normal movement
-     * (e.g., initial spawn, teleport, editor placement).
-     */
+    /** Handle path completion and transit completion. Call after processing all moves. */
+    finalizeTick(): void {
+        if (this.hasPath) return;
+
+        // Path exhausted — clean up phase
+        if (this._phase.tag !== 'idle') {
+            this._phase = IDLE;
+        }
+
+        // Handle visual transit completion
+        if (this.isInTransit) {
+            if (this._progress >= 1) {
+                this._prevTileX = this._tileX;
+                this._prevTileY = this._tileY;
+                this._progress = 0;
+            }
+        } else {
+            this._progress = 0;
+        }
+    }
+
+    // =====================================================================
+    // Position updates (external coordination)
+    // =====================================================================
+
+    /** Sync position from external state (spawn, teleport, editor). */
     syncPosition(x: number, y: number): void {
         this._tileX = x;
         this._tileY = y;
         this._prevTileX = x;
         this._prevTileY = y;
         this._progress = 0;
-        // Preserve current facing direction on position sync (teleport/spawn)
+        this._lastVisualX = x;
+        this._lastVisualY = y;
     }
 
     /**
      * Handle being pushed by another unit.
-     * Only updates position and visual state - path management is handled by caller.
+     * Only updates position and visual state — path management is handled by caller.
      * IMPORTANT: Caller must ensure unit is NOT mid-transit to prevent teleporting.
      */
     handlePush(newX: number, newY: number): void {
-        // ASSERT: We should not be mid-transit when pushed
-        // If we are, log it and handle gracefully
         if (this.isInTransit) {
             console.warn(
                 `[MovementController] handlePush called mid-transit for entity ${this.entityId}! ` +
@@ -414,60 +325,71 @@ export class MovementController {
             );
         }
 
-        // When not mid-transit, prevTile === currTile, so visual is at currTile
-        // Set up push animation: from current tile to pushed position
         this._prevTileX = this._tileX;
         this._prevTileY = this._tileY;
         this._tileX = newX;
         this._tileY = newY;
         this._progress = 0;
 
-        // Update facing direction based on push direction
         this._direction = getApproxDirection(this._prevTileX, this._prevTileY, this._tileX, this._tileY);
-
-        // Update distance factor for this push step
         this._distanceFactor = getStepDistanceFactor(this._tileX - this._prevTileX, this._tileY - this._prevTileY);
 
-        // Set state to moving so the renderer interpolates this forced move
-        this.setState('moving');
+        // Transition to moving if we have a path; idle units stay idle (transit tracked via isInTransit)
+        if (this._phase.tag !== 'idle') {
+            this._phase = { tag: 'moving', path: this._phase.path, pathIndex: this._phase.pathIndex };
+        }
     }
 
-    /**
-     * Insert a detour tile at the current path position.
-     */
-    insertDetour(tile: TileCoord): void {
-        this._path.splice(this._pathIndex, 0, tile);
+    // =====================================================================
+    // Teleport detection
+    // =====================================================================
+
+    updateLastVisualPosition(): void {
+        const pos = this.computeVisualPosition();
+        this._lastVisualX = pos.x;
+        this._lastVisualY = pos.y;
     }
 
-    /**
-     * Replace path with a new prefix and keep remaining suffix.
-     */
-    replacePathPrefix(newPrefix: TileCoord[], suffixStartIndex: number): void {
-        const suffix = this._path.slice(suffixStartIndex);
-        this._path = [...newPrefix, ...suffix];
-        this._pathIndex = 0;
+    detectTeleport(): number {
+        const pos = this.computeVisualPosition();
+        const dx = pos.x - this._lastVisualX;
+        const dy = pos.y - this._lastVisualY;
+        return Math.sqrt(dx * dx + dy * dy);
     }
 
-    /**
-     * Replace entire remaining path.
-     */
-    replacePath(newPath: TileCoord[]): void {
-        this._path = [...newPath];
-        this._pathIndex = 0;
+    // =====================================================================
+    // Internal helpers
+    // =====================================================================
+
+    private computeVisualPosition(): { x: number; y: number } {
+        const t = Math.max(0, Math.min(this._progress, 1));
+        return {
+            x: this._prevTileX + (this._tileX - this._prevTileX) * t,
+            y: this._prevTileY + (this._tileY - this._prevTileY) * t,
+        };
     }
 
-    /**
-     * Replace path from a given index onward with a new suffix.
-     * Keeps everything before suffixStartIndex, replaces the rest.
-     */
-    replacePathSuffix(newSuffix: TileCoord[], suffixStartIndex: number): void {
-        this._path = [...this._path.slice(0, suffixStartIndex), ...newSuffix];
+    /** Get the active path phase (moving or blocked). Throws on idle — contract violation. */
+    private activePathPhase(): Exclude<ControllerPhase, { tag: 'idle' }> {
+        if (this._phase.tag === 'idle') {
+            throw new Error(`Entity ${this.entityId}: path operation on idle controller`);
+        }
+        return this._phase;
     }
 
-    /**
-     * Reset blocked time (e.g. after escalated repath succeeds).
-     */
-    resetBlockedTime(): void {
-        this._blockedTime = 0;
+    private warnIfTeleported(visualBefore: { x: number; y: number }, label: string): void {
+        const visualAfter = this.computeVisualPosition();
+        const dx = visualAfter.x - visualBefore.x;
+        const dy = visualAfter.y - visualBefore.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 0.1) {
+            console.warn(
+                `[MovementController] ${label} caused teleport! Entity ${this.entityId} jumped ${dist.toFixed(2)} tiles` +
+                    ` | before=(${visualBefore.x.toFixed(1)},${visualBefore.y.toFixed(1)})` +
+                    ` after=(${visualAfter.x.toFixed(1)},${visualAfter.y.toFixed(1)})` +
+                    ` | tile=(${this._tileX},${this._tileY}) prev=(${this._prevTileX},${this._prevTileY})` +
+                    ` | progress=${this._progress.toFixed(2)} state=${this._phase.tag}`
+            );
+        }
     }
 }

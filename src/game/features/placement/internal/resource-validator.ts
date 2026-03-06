@@ -3,6 +3,7 @@
  * Validates single-tile resource placement.
  */
 
+import type { TerrainData } from '../../../terrain';
 import type { PlacementContext, PlacementResult } from '../types';
 import { validateSingleTilePlacement, canPlaceSingleTile } from './single-tile-validator';
 
@@ -27,7 +28,7 @@ export function validateResourcePlacement(x: number, y: number, ctx: PlacementCo
  * Use validateResourcePlacement for detailed status.
  */
 export function canPlaceResource(
-    terrain: import('../../../terrain').TerrainData,
+    terrain: TerrainData,
     tileOccupancy: Map<string, number>,
     x: number,
     y: number

@@ -1,5 +1,3 @@
-import { LogHandler } from './log-handler';
-
 /**
  * Throttled logger that prevents console flooding.
  *
@@ -13,12 +11,18 @@ import { LogHandler } from './log-handler';
  *   tl.error('Layer "Landscape" failed', err);
  *   tl.warn('Feature not implemented');
  */
+
+interface MinimalLogger {
+    error(msg: string, ...args: unknown[]): void;
+    warn(msg: string, ...args: unknown[]): void;
+}
+
 export class ThrottledLogger {
     private lastTime = 0;
     private suppressed = 0;
 
     constructor(
-        private readonly log: LogHandler,
+        private readonly log: MinimalLogger,
         private readonly throttleMs: number
     ) {}
 

@@ -1,17 +1,20 @@
 // @vitest-environment jsdom
 /**
- * Unit tests for TransportJob — the single object that owns a carrier transport's
- * reservation, request status, and inventory operations.
+ * Unit tests for TransportJobService — stateless lifecycle operations
+ * for TransportJobRecord (reservation, request status, and inventory operations).
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { TransportJob, resetTransportJobIds } from '@/game/features/logistics/transport-job';
+import * as TransportJobService from '@/game/features/logistics/transport-job-service';
+import { resetTransportJobIds } from '@/game/features/logistics/transport-job-service';
+import { TransportPhase, type TransportJobRecord } from '@/game/features/logistics/transport-job-record';
 import { RequestManager } from '@/game/features/logistics/request-manager';
 import { InventoryReservationManager } from '@/game/features/logistics/inventory-reservation';
 import { EMaterialType } from '@/game/economy';
 import { RequestPriority, RequestStatus } from '@/game/features/logistics';
 import type { BuildingInventoryManager } from '@/game/features/inventory';
 import { EventBus } from '@/game/event-bus';
+import type { TransportJobDeps } from '@/game/features/logistics/transport-job-service';
 
 // ─── Minimal BuildingInventoryManager stub ──────────────────────────
 
@@ -42,16 +45,6 @@ function createInventoryStub(outputAmount = 5) {
             const slot = getOrCreate(buildingId, material);
             slot.reserved = Math.max(0, slot.reserved - amount);
         },
-        withdrawReservedOutput(buildingId: number, material: EMaterialType, amount: number): number {
-            const slot = getOrCreate(buildingId, material);
-            const withdrawn = Math.min(amount, slot.reserved, slot.current);
-            slot.current -= withdrawn;
-            slot.reserved -= withdrawn;
-            return withdrawn;
-        },
-        depositInput(_buildingId: number, _material: EMaterialType, amount: number): number {
-            return amount; // Accept all
-        },
         getBuildingsWithOutput: () => [],
         getInventory: () => undefined,
         getSlot,
@@ -63,15 +56,14 @@ function createInventoryStub(outputAmount = 5) {
     }
 }
 
-type InventoryStub = ReturnType<typeof createInventoryStub>;
-
 // ─── Test setup ─────────────────────────────────────────────────────
 
-describe('TransportJob', () => {
+describe('TransportJobService', () => {
     let requestManager: RequestManager;
     let reservationManager: InventoryReservationManager;
-    let inventoryManager: InventoryStub;
+    let inventoryManager: ReturnType<typeof createInventoryStub>;
     let eventBus: EventBus;
+    let deps: TransportJobDeps;
 
     const SOURCE = 100;
     const DEST = 200;
@@ -84,34 +76,30 @@ describe('TransportJob', () => {
         requestManager = new RequestManager(eventBus);
         inventoryManager = createInventoryStub(5);
         reservationManager = new InventoryReservationManager(inventoryManager as unknown as BuildingInventoryManager);
+        deps = { reservationManager, requestManager, eventBus };
     });
 
     function addRequest() {
         return requestManager.addRequest(DEST, MATERIAL, 1, RequestPriority.Normal);
     }
 
-    function createJob(request = addRequest()) {
-        return TransportJob.create(request.id, SOURCE, DEST, MATERIAL, 1, CARRIER, {
-            reservationManager,
-            requestManager,
-            inventoryManager: inventoryManager as unknown as BuildingInventoryManager,
-            eventBus,
-        });
+    function createRecord(request = addRequest()): TransportJobRecord | null {
+        return TransportJobService.activate(request.id, SOURCE, DEST, MATERIAL, 1, CARRIER, deps);
     }
 
-    // ─── Creation ───────────────────────────────────────────────────
+    // ─── activate ───────────────────────────────────────────────────
 
-    describe('create', () => {
+    describe('activate', () => {
         it('reserves inventory and marks request InProgress', () => {
             const request = addRequest();
-            const job = createJob(request);
+            const record = createRecord(request);
 
-            expect(job).not.toBeNull();
-            expect(job!.status).toBe('active');
-            expect(job!.sourceBuilding).toBe(SOURCE);
-            expect(job!.destBuilding).toBe(DEST);
-            expect(job!.material).toBe(MATERIAL);
-            expect(job!.amount).toBe(1);
+            expect(record).not.toBeNull();
+            expect(record!.phase).toBe(TransportPhase.Reserved);
+            expect(record!.sourceBuilding).toBe(SOURCE);
+            expect(record!.destBuilding).toBe(DEST);
+            expect(record!.material).toBe(MATERIAL);
+            expect(record!.amount).toBe(1);
 
             // Request should be InProgress
             expect(request.status).toBe(RequestStatus.InProgress);
@@ -127,131 +115,105 @@ describe('TransportJob', () => {
             reservationManager = new InventoryReservationManager(
                 inventoryManager as unknown as BuildingInventoryManager
             );
+            deps = { reservationManager, requestManager, eventBus };
 
             const request = addRequest();
-            const job = TransportJob.create(request.id, SOURCE, DEST, MATERIAL, 1, CARRIER, {
-                reservationManager,
-                requestManager,
-                inventoryManager: inventoryManager as unknown as BuildingInventoryManager,
-                eventBus,
-            });
+            const record = TransportJobService.activate(request.id, SOURCE, DEST, MATERIAL, 1, CARRIER, deps);
 
-            expect(job).toBeNull();
+            expect(record).toBeNull();
             // Request should still be Pending (not assigned)
             expect(request.status).toBe(RequestStatus.Pending);
         });
     });
 
-    // ─── Pickup ─────────────────────────────────────────────────────
+    // ─── pickUp ─────────────────────────────────────────────────────
 
-    describe('pickup', () => {
-        it('withdraws reserved inventory and transitions to picked-up', () => {
-            const job = createJob()!;
+    describe('pickUp', () => {
+        it('transitions to picked-up and consumes reservation', () => {
+            const record = createRecord()!;
 
-            const withdrawn = job.pickup();
+            TransportJobService.pickUp(record, deps);
 
-            expect(withdrawn).toBe(1);
-            expect(job.status).toBe('picked-up');
+            expect(record.phase).toBe(TransportPhase.PickedUp);
             // Reservation bookkeeping should be cleaned up
             expect(reservationManager.size).toBe(0);
         });
 
-        it('returns 0 and cancels job if withdrawal fails', () => {
-            const request = addRequest();
-            const job = createJob(request)!;
+        it('throws if called when not Reserved', () => {
+            const record = createRecord()!;
+            TransportJobService.pickUp(record, deps);
 
-            // Drain the inventory so withdrawal fails
-            const slot = inventoryManager.getSlot(SOURCE, MATERIAL)!;
-            slot.current = 0;
-            slot.reserved = 0;
-
-            const withdrawn = job.pickup();
-
-            expect(withdrawn).toBe(0);
-            expect(job.status).toBe('cancelled');
-            // Request should be reset to Pending
-            expect(request.status).toBe(RequestStatus.Pending);
+            expect(() => TransportJobService.pickUp(record, deps)).toThrow(/picked-up/);
         });
 
-        it('is a no-op if called twice', () => {
-            const job = createJob()!;
-            job.pickup();
-            const second = job.pickup();
+        it('throws if called when cancelled', () => {
+            const record = createRecord()!;
+            TransportJobService.cancel(record, 'cancelled', deps);
 
-            expect(second).toBe(0);
-            expect(job.status).toBe('picked-up');
+            expect(() => TransportJobService.pickUp(record, deps)).toThrow(/cancelled/);
         });
     });
 
-    // ─── Complete ───────────────────────────────────────────────────
+    // ─── deliver ────────────────────────────────────────────────────
 
-    describe('complete', () => {
-        it('deposits and fulfills the request', () => {
+    describe('deliver', () => {
+        it('fulfills the request after pickup', () => {
             const request = addRequest();
-            const job = createJob(request)!;
-            job.pickup();
+            const record = createRecord(request)!;
+            TransportJobService.pickUp(record, deps);
 
-            const deposited = job.complete(1);
+            TransportJobService.deliver(record, deps);
 
-            expect(deposited).toBe(1);
-            expect(job.status).toBe('completed');
             // Request should be fulfilled (removed from manager)
             expect(requestManager.getRequest(request.id)).toBeUndefined();
         });
 
-        it('is a no-op if not in picked-up state', () => {
-            const job = createJob()!;
-            // Still 'active' — haven't picked up yet
-            const deposited = job.complete(1);
+        it('throws if called when still Reserved (not picked up)', () => {
+            const record = createRecord()!;
 
-            expect(deposited).toBe(0);
-            expect(job.status).toBe('active');
+            expect(() => TransportJobService.deliver(record, deps)).toThrow(/reserved/);
+        });
+
+        it('throws if called when cancelled', () => {
+            const record = createRecord()!;
+            TransportJobService.cancel(record, 'cancelled', deps);
+
+            expect(() => TransportJobService.deliver(record, deps)).toThrow(/cancelled/);
         });
     });
 
-    // ─── Cancel ─────────────────────────────────────────────────────
+    // ─── cancel ─────────────────────────────────────────────────────
 
     describe('cancel', () => {
-        it('releases reservation and resets request when active', () => {
+        it('releases reservation and resets request when reserved', () => {
             const request = addRequest();
-            const job = createJob(request)!;
+            const record = createRecord(request)!;
 
-            job.cancel('timeout');
+            TransportJobService.cancel(record, 'cancelled', deps);
 
-            expect(job.status).toBe('cancelled');
+            expect(record.phase).toBe(TransportPhase.Cancelled);
             expect(reservationManager.size).toBe(0);
             expect(request.status).toBe(RequestStatus.Pending);
         });
 
         it('resets request when picked-up (no reservation to release)', () => {
             const request = addRequest();
-            const job = createJob(request)!;
-            job.pickup();
+            const record = createRecord(request)!;
+            TransportJobService.pickUp(record, deps);
 
-            job.cancel('carrier_removed');
+            TransportJobService.cancel(record, 'cancelled', deps);
 
-            expect(job.status).toBe('cancelled');
+            expect(record.phase).toBe(TransportPhase.Cancelled);
             // Request was InProgress, now reset to Pending
             expect(request.status).toBe(RequestStatus.Pending);
         });
 
-        it('is a no-op if already completed', () => {
-            const request = addRequest();
-            const job = createJob(request)!;
-            job.pickup();
-            job.complete(1);
-
-            job.cancel(); // should be a no-op
-
-            expect(job.status).toBe('completed');
-        });
-
         it('is a no-op if already cancelled', () => {
-            const job = createJob()!;
-            job.cancel('timeout');
-            job.cancel('carrier_removed'); // second call should be fine
+            const record = createRecord()!;
+            TransportJobService.cancel(record, 'cancelled', deps);
+            TransportJobService.cancel(record, 'cancelled', deps); // second call should be fine
 
-            expect(job.status).toBe('cancelled');
+            expect(record.phase).toBe(TransportPhase.Cancelled);
         });
     });
 });

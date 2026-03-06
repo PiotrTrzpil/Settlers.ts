@@ -19,8 +19,6 @@ import type { BuildingInventoryManager } from '../inventory';
  * A reservation of inventory at a building.
  */
 export interface InventoryReservation {
-    /** Unique ID for this reservation */
-    readonly id: number;
     /** Entity ID of the building with the reserved inventory */
     readonly buildingId: number;
     /** Material type reserved */
@@ -34,47 +32,69 @@ export interface InventoryReservation {
 }
 
 /**
- * Key for looking up reservations by building and material.
- */
-function reservationKey(buildingId: number, materialType: EMaterialType): string {
-    return `${buildingId}:${materialType}`;
-}
-
-/**
  * Manages inventory reservations across all buildings.
  *
- * Reservations temporarily reduce the "available" amount of a material
- * without actually removing it from the building's inventory.
+ * Single nested Map<buildingId, Map<materialType, Map<requestId, Reservation>>>
+ * is the sole source of truth. A secondary byRequest index stores the same
+ * object references for O(1) request lookups.
  *
  * Delegates to BuildingInventoryManager for slot-level enforcement.
  */
 export class InventoryReservationManager {
-    /** All reservations indexed by ID */
-    private reservations: Map<number, InventoryReservation> = new Map();
+    /** Source of truth: buildingId → materialType → requestId → Reservation */
+    private store = new Map<number, Map<EMaterialType, Map<number, InventoryReservation>>>();
 
-    /** Reservations indexed by building+material for fast lookup */
-    private byBuildingMaterial: Map<string, Set<number>> = new Map();
+    /** Secondary index for O(1) request lookup (same object references) */
+    private byRequest = new Map<number, InventoryReservation>();
 
-    /** Reservations indexed by request ID */
-    private byRequest: Map<number, number> = new Map();
+    /** Total reservation count */
+    private _size = 0;
 
-    /** Next reservation ID */
-    private nextId = 1;
-
-    /** Reference to inventory manager for slot-level enforcement */
     private readonly inventoryManager: BuildingInventoryManager;
 
     constructor(inventoryManager: BuildingInventoryManager) {
         this.inventoryManager = inventoryManager;
     }
 
+    // --- Single mutation point ---
+
+    private addReservation(r: InventoryReservation): void {
+        let byMaterial = this.store.get(r.buildingId);
+        if (!byMaterial) {
+            byMaterial = new Map();
+            this.store.set(r.buildingId, byMaterial);
+        }
+        let byReq = byMaterial.get(r.materialType);
+        if (!byReq) {
+            byReq = new Map();
+            byMaterial.set(r.materialType, byReq);
+        }
+        byReq.set(r.requestId, r);
+        this.byRequest.set(r.requestId, r);
+        this._size++;
+    }
+
+    private removeReservation(r: InventoryReservation): void {
+        const byMaterial = this.store.get(r.buildingId);
+        if (!byMaterial) return;
+        const byReq = byMaterial.get(r.materialType);
+        if (!byReq) return;
+        byReq.delete(r.requestId);
+        if (byReq.size === 0) {
+            byMaterial.delete(r.materialType);
+            if (byMaterial.size === 0) {
+                this.store.delete(r.buildingId);
+            }
+        }
+        this.byRequest.delete(r.requestId);
+        this._size--;
+    }
+
+    // --- Public API ---
+
     /**
      * Create a reservation for inventory at a building.
      *
-     * @param buildingId Building with the inventory
-     * @param materialType Material to reserve
-     * @param amount Amount to reserve
-     * @param requestId Request this reservation is for
      * @returns The created reservation, or null if invalid or not enough inventory
      */
     createReservation(
@@ -85,14 +105,10 @@ export class InventoryReservationManager {
     ): InventoryReservation | null {
         if (amount <= 0) return null;
 
-        // Enforce slot-level reservation (optimistic - inventoryManager must be set)
         const actualReserved = this.inventoryManager.reserveOutput(buildingId, materialType, amount);
-        if (actualReserved === 0) {
-            return null; // Nothing to reserve
-        }
+        if (actualReserved === 0) return null;
 
         const reservation: InventoryReservation = {
-            id: this.nextId++,
             buildingId,
             materialType,
             amount: actualReserved,
@@ -100,128 +116,75 @@ export class InventoryReservationManager {
             timestamp: Date.now(),
         };
 
-        this.reservations.set(reservation.id, reservation);
-
-        // Index by building+material
-        const key = reservationKey(buildingId, materialType);
-        let byBuilding = this.byBuildingMaterial.get(key);
-        if (!byBuilding) {
-            byBuilding = new Set();
-            this.byBuildingMaterial.set(key, byBuilding);
-        }
-        byBuilding.add(reservation.id);
-
-        // Index by request
-        this.byRequest.set(requestId, reservation.id);
-
+        this.addReservation(reservation);
         return reservation;
     }
 
     /**
-     * Release a reservation by ID.
-     *
-     * @param reservationId ID of the reservation to release
-     * @returns True if reservation was released
+     * Release the reservation for a specific request.
+     * Releases both the bookkeeping AND the slot-level reservation.
      */
-    releaseReservation(reservationId: number): boolean {
-        const reservation = this.reservations.get(reservationId);
+    releaseReservationForRequest(requestId: number): boolean {
+        const reservation = this.byRequest.get(requestId);
         if (!reservation) return false;
 
-        // Release slot-level reservation (optimistic - inventoryManager must be set)
         this.inventoryManager.releaseOutputReservation(
             reservation.buildingId,
             reservation.materialType,
             reservation.amount
         );
-
-        this.reservations.delete(reservationId);
-
-        // Remove from building+material index
-        const key = reservationKey(reservation.buildingId, reservation.materialType);
-        const byBuilding = this.byBuildingMaterial.get(key);
-        if (byBuilding) {
-            byBuilding.delete(reservationId);
-            if (byBuilding.size === 0) {
-                this.byBuildingMaterial.delete(key);
-            }
-        }
-
-        // Remove from request index
-        this.byRequest.delete(reservation.requestId);
-
+        this.removeReservation(reservation);
         return true;
     }
 
     /**
-     * Release the reservation for a specific request.
-     *
-     * @param requestId ID of the request
-     * @returns True if a reservation was released
+     * Remove reservation bookkeeping for a request WITHOUT releasing the slot-level reservation.
+     * Used after `withdrawReservedOutput()` which already decremented `slot.reservedAmount`.
+     * Calling `releaseReservationForRequest` after withdrawal would double-release the slot.
      */
-    releaseReservationForRequest(requestId: number): boolean {
-        const reservationId = this.byRequest.get(requestId);
-        if (reservationId === undefined) return false;
-        return this.releaseReservation(reservationId);
+    consumeReservationForRequest(requestId: number): boolean {
+        const reservation = this.byRequest.get(requestId);
+        if (!reservation) return false;
+
+        this.removeReservation(reservation);
+        return true;
     }
 
     /**
      * Get the reservation for a specific request.
-     *
-     * @param requestId ID of the request
-     * @returns The reservation or undefined
      */
     getReservationForRequest(requestId: number): InventoryReservation | undefined {
-        const reservationId = this.byRequest.get(requestId);
-        if (reservationId === undefined) return undefined;
-        return this.reservations.get(reservationId);
+        return this.byRequest.get(requestId);
     }
 
     /**
      * Get total reserved amount for a building and material type.
-     *
-     * @param buildingId Building to check
-     * @param materialType Material to check
-     * @returns Total reserved amount
      */
     getReservedAmount(buildingId: number, materialType: EMaterialType): number {
-        const key = reservationKey(buildingId, materialType);
-        const reservationIds = this.byBuildingMaterial.get(key);
-        if (!reservationIds) return 0;
+        const byReq = this.store.get(buildingId)?.get(materialType);
+        if (!byReq) return 0;
 
         let total = 0;
-        for (const id of reservationIds) {
-            const reservation = this.reservations.get(id);
-            if (reservation) {
-                total += reservation.amount;
-            }
+        for (const r of byReq.values()) {
+            total += r.amount;
         }
         return total;
     }
 
     /**
      * Get available amount at a building, accounting for reservations.
-     *
-     * @param buildingId Building to check
-     * @param materialType Material to check
-     * @param actualAmount Actual amount in inventory
-     * @returns Available amount (actual minus reserved)
      */
     getAvailableAmount(buildingId: number, materialType: EMaterialType, actualAmount: number): number {
-        const reserved = this.getReservedAmount(buildingId, materialType);
-        return Math.max(0, actualAmount - reserved);
+        return Math.max(0, actualAmount - this.getReservedAmount(buildingId, materialType));
     }
 
     /**
      * Transfer a reservation from one building to another.
      * Used when building piles are converted to free piles — the reservation
      * moves from the destroyed building's inventory to the pile entity's inventory.
-     *
-     * @returns True if the transfer succeeded
      */
     transferReservation(requestId: number, newBuildingId: number): boolean {
-        const reservationId = this.byRequest.get(requestId);
-        if (reservationId === undefined) return false;
-        const old = this.reservations.get(reservationId);
+        const old = this.byRequest.get(requestId);
         if (!old) return false;
 
         // Release slot-level reservation on old building
@@ -231,22 +194,10 @@ export class InventoryReservationManager {
         const actualReserved = this.inventoryManager.reserveOutput(newBuildingId, old.materialType, old.amount);
         if (actualReserved === 0) return false;
 
-        // Remove old index entry
-        const oldKey = reservationKey(old.buildingId, old.materialType);
-        this.byBuildingMaterial.get(oldKey)?.delete(reservationId);
-
-        // Create updated reservation
+        // Swap in the store: remove old, add updated
+        this.removeReservation(old);
         const updated: InventoryReservation = { ...old, buildingId: newBuildingId, amount: actualReserved };
-        this.reservations.set(reservationId, updated);
-
-        // Add new index entry
-        const newKey = reservationKey(newBuildingId, old.materialType);
-        let byNew = this.byBuildingMaterial.get(newKey);
-        if (!byNew) {
-            byNew = new Set();
-            this.byBuildingMaterial.set(newKey, byNew);
-        }
-        byNew.add(reservationId);
+        this.addReservation(updated);
 
         return true;
     }
@@ -254,46 +205,45 @@ export class InventoryReservationManager {
     /**
      * Release all reservations for a building.
      * Useful when a building is destroyed.
-     *
-     * @param buildingId Building to clear reservations for
-     * @returns Number of reservations released
      */
     releaseReservationsForBuilding(buildingId: number): number {
-        const toRelease: number[] = [];
+        const byMaterial = this.store.get(buildingId);
+        if (!byMaterial) return 0;
 
-        for (const reservation of this.reservations.values()) {
-            if (reservation.buildingId === buildingId) {
-                toRelease.push(reservation.id);
+        let count = 0;
+        for (const byReq of byMaterial.values()) {
+            for (const r of byReq.values()) {
+                this.inventoryManager.releaseOutputReservation(r.buildingId, r.materialType, r.amount);
+                this.byRequest.delete(r.requestId);
+                count++;
             }
         }
+        this.store.delete(buildingId);
+        this._size -= count;
 
-        for (const id of toRelease) {
-            this.releaseReservation(id);
-        }
-
-        return toRelease.length;
+        return count;
     }
 
     /**
      * Get all reservations.
      */
-    getAllReservations(): IterableIterator<InventoryReservation> {
-        return this.reservations.values();
+    *getAllReservations(): IterableIterator<InventoryReservation> {
+        yield* this.byRequest.values();
     }
 
     /**
      * Get count of active reservations.
      */
     get size(): number {
-        return this.reservations.size;
+        return this._size;
     }
 
     /**
      * Clear all reservations.
      */
     clear(): void {
-        this.reservations.clear();
-        this.byBuildingMaterial.clear();
+        this.store.clear();
         this.byRequest.clear();
+        this._size = 0;
     }
 }

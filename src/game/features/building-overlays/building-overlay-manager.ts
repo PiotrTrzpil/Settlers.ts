@@ -26,9 +26,9 @@ import type { Race } from '../../race';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import type { OverlayRegistry } from './overlay-registry';
 import { OverlayCondition, type BuildingOverlayInstance, type BuildingOverlayDef } from './types';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 
-const log = new LogHandler('BuildingOverlayManager');
+const log = createLogger('BuildingOverlayManager');
 
 // ============================================================================
 // Config

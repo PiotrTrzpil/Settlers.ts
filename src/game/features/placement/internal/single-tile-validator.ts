@@ -4,6 +4,7 @@
  */
 
 import { tileKey } from '../../../entity';
+import type { TerrainData } from '../../../terrain';
 import type { PlacementContext, PlacementResult } from '../types';
 import { PlacementStatus } from '../types';
 import { isPassable } from './terrain';
@@ -55,7 +56,7 @@ export function validateSingleTilePlacement(x: number, y: number, ctx: Placement
  * Use validateSingleTilePlacement for detailed status.
  */
 export function canPlaceSingleTile(
-    terrain: import('../../../terrain').TerrainData,
+    terrain: TerrainData,
     tileOccupancy: Map<string, number>,
     x: number,
     y: number

@@ -5,8 +5,9 @@
 
 import { tileKey, getBuildingFootprint, BuildingType, isMineBuilding } from '../../../entity';
 import type { Race } from '../../../race';
+import type { TerrainData } from '../../../terrain';
 import { getAllNeighbors } from '../../../systems/hex-directions';
-import type { PlacementContext, PlacementResult } from '../types';
+import type { PlacementContext, PlacementFilter, PlacementResult } from '../types';
 import { PlacementStatus } from '../types';
 import { isBuildable, isMineBuildable } from './terrain';
 import { computeSlopeDifficulty } from './slope';
@@ -130,14 +131,14 @@ export function validateBuildingPlacement(
  * Use validateBuildingPlacement for detailed status.
  */
 export function canPlaceBuildingFootprint(
-    terrain: import('../../../terrain').TerrainData,
+    terrain: TerrainData,
     tileOccupancy: Map<string, number>,
     x: number,
     y: number,
     buildingType: BuildingType,
     race: Race,
     buildingFootprint?: ReadonlySet<string>,
-    placementFilter?: import('../types').PlacementFilter | null,
+    placementFilter?: PlacementFilter | null,
     player?: number
 ): boolean {
     const ctx: PlacementContext = {
@@ -159,7 +160,7 @@ export function canPlaceBuildingFootprint(
  * for the full footprint, which is more lenient since terrain leveling handles slopes.
  */
 export function canPlaceBuilding(
-    terrain: import('../../../terrain').TerrainData,
+    terrain: TerrainData,
     tileOccupancy: Map<string, number>,
     x: number,
     y: number

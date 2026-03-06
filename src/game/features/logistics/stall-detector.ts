@@ -2,95 +2,75 @@
  * StallDetector
  *
  * Periodically checks for transport requests that have been in-progress
- * too long and cancels them so they can be reassigned.
+ * too long and logs them as warnings. Stalled requests indicate bugs in
+ * the carrier or logistics system that should be investigated and fixed.
  *
- * A stalled request is one that has been assigned to a carrier but not
- * completed within the timeout window. This guards against carriers that
- * get stuck, die, or are otherwise unable to complete their assignment.
+ * Does NOT cancel or modify any jobs — purely diagnostic.
  */
 
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import type { RequestManager } from './request-manager';
-import type { InventoryReservationManager } from './inventory-reservation';
-import type { TransportJob } from './transport-job';
+import type { TransportJobRecord } from './transport-job-record';
+import { PeriodicTimer } from './periodic-timer';
 
 /** Request timeout in game-time seconds — requests older than this are considered stalled. */
 const REQUEST_TIMEOUT_SEC = 30;
 
 /** How often to check for stalled requests (in game-time seconds). */
-const STALL_CHECK_INTERVAL_SEC = 5;
+const STALL_CHECK_INTERVAL_SEC = 10;
 
-const log = new LogHandler('StallDetector');
+const log = createLogger('StallDetector');
 
 export interface StallDetectorConfig {
     requestManager: RequestManager;
-    reservationManager: InventoryReservationManager;
 }
 
 /**
- * Detects and resolves stalled transport requests.
+ * Detects and warns about stalled transport requests.
  *
- * Call `tick(dt)` each game tick. When a stall check is due, `checkNow(activeJobs)`
- * is called internally. The caller is responsible for removing cancelled jobs
- * from its own `activeJobs` map after each tick.
+ * Call `tick(dt)` each game tick. Purely diagnostic — logs warnings
+ * but never cancels jobs or modifies state.
  */
 export class StallDetector {
     private readonly requestManager: RequestManager;
-    private readonly reservationManager: InventoryReservationManager;
-
-    /** Accumulated game time since last stall check (in seconds). */
-    private timeSinceCheck = 0;
+    private readonly timer = new PeriodicTimer(STALL_CHECK_INTERVAL_SEC);
 
     constructor(config: StallDetectorConfig) {
         this.requestManager = config.requestManager;
-        this.reservationManager = config.reservationManager;
     }
 
     /**
      * Advance the stall-check timer. When the interval elapses, scans all
-     * in-progress requests and cancels those that have exceeded the timeout.
-     *
-     * Uses game-time seconds (deterministic) rather than wall-clock time.
+     * in-progress requests and warns about those that have exceeded the timeout.
      *
      * @param dt Delta time in seconds.
-     * @param activeJobs Map of carrier ID → TransportJob (mutated: stalled jobs are deleted).
+     * @param activeJobs Map of carrier ID -> TransportJob (read-only, not mutated).
      */
-    tick(dt: number, activeJobs: Map<number, TransportJob>): void {
-        this.timeSinceCheck += dt;
-        if (this.timeSinceCheck >= STALL_CHECK_INTERVAL_SEC) {
-            this.timeSinceCheck = 0;
+    tick(dt: number, activeJobs: ReadonlyMap<number, TransportJobRecord>): void {
+        if (this.timer.advance(dt)) {
             this.checkNow(activeJobs);
         }
     }
 
     /**
-     * Immediately scan for stalled requests and cancel them.
+     * Immediately scan for stalled requests and log warnings.
      *
-     * @param activeJobs Map of carrier ID → TransportJob (mutated: stalled jobs are deleted).
+     * @param activeJobs Map of carrier ID -> TransportJob (read-only).
      */
-    checkNow(activeJobs: Map<number, TransportJob>): void {
+    checkNow(activeJobs: ReadonlyMap<number, TransportJobRecord>): void {
         const stalledRequests = this.requestManager.getStalledRequests(REQUEST_TIMEOUT_SEC);
+        if (stalledRequests.length === 0) return;
 
         for (const request of stalledRequests) {
+            const age = Math.round(this.requestManager.getGameTime() - request.assignedAt!);
+            const job = request.assignedCarrier !== null ? activeJobs.get(request.assignedCarrier) : undefined;
+            const jobStatus = job ? job.phase : 'no-job';
+
             log.warn(
-                `Request #${request.id} stalled after ${REQUEST_TIMEOUT_SEC}s: ` +
-                    `material=${request.materialType}, building=${request.buildingId}, carrier=${request.assignedCarrier}. ` +
-                    'Cancelling transport job.'
+                `Request #${request.id} stalled (${age}s): ` +
+                    `material=${request.materialType}, dest=${request.buildingId}, ` +
+                    `carrier=${request.assignedCarrier}, jobStatus=${jobStatus}`
             );
-
-            // Find and cancel the TransportJob for this carrier
-            if (request.assignedCarrier !== null) {
-                const job = activeJobs.get(request.assignedCarrier);
-                if (job) {
-                    job.cancel('timeout');
-                    activeJobs.delete(request.assignedCarrier);
-                    continue;
-                }
-            }
-
-            // Fallback: no active job found, clean up manually
-            this.reservationManager.releaseReservationForRequest(request.id);
-            this.requestManager.resetRequest(request.id, 'timeout');
         }
     }
 }

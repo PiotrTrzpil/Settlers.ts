@@ -5,6 +5,7 @@ import 'vue-toastification/dist/index.css';
 import App from './app.vue';
 import router from './router';
 import { LogHandler } from './utilities/log-handler';
+import { toastError } from './game/toast-notifications';
 
 declare const __SOURCE_HASH__: string;
 
@@ -52,6 +53,8 @@ window.addEventListener('error', (event: ErrorEvent) => {
 const app = createApp(App);
 app.config.errorHandler = (err, _vm, info) => {
     log.error('Vue error (' + info + '): ' + err, err instanceof Error ? err : undefined);
+    const msg = err instanceof Error ? err.message : String(err);
+    toastError(info, msg);
 };
 app.use(Toast, {
     position: 'bottom-right' as const,

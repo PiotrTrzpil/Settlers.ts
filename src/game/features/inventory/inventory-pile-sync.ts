@@ -17,7 +17,7 @@ import { BuildingType, EntityType } from '../../entity';
 import { EMaterialType } from '../../economy/material-type';
 import type { Command, CommandResult } from '../../commands';
 import { type EventBus, EventSubscriptionManager } from '../../event-bus';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import type { ConstructionSiteManager } from '../building-construction/construction-site-manager';
 import type { PileRegistry } from './pile-registry';
 import type { PileSlotKey } from './pile-registry';
@@ -26,7 +26,7 @@ import type { PileKind, LinkedSlotKind } from './pile-kind';
 import { SlotKind } from './pile-kind';
 import type { EntityCleanupRegistry } from '../../systems/entity-cleanup-registry';
 
-const log = new LogHandler('InventoryPileSync');
+const log = createLogger('InventoryPileSync');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -141,10 +141,15 @@ export class InventoryPileSync {
     ): void {
         log.debug(`onChange: building=${buildingId}, ${EMaterialType[materialType]}, ${slotType}, amount=${newAmount}`);
 
+        // Entity may have been removed between the inventory change and this callback
+        // (e.g. building destroyed while carrier was en-route). Bail out — cleanup
+        // handlers already converted any linked piles to free piles.
+        const entity = this.gameState.getEntity(buildingId);
+        if (!entity) return;
+
         // Free piles: the pile entity already exists — no sync needed.
         // Quantity updates are handled by GameServices.onInventoryChanged.
-        const entity = this.gameState.getEntity(buildingId);
-        if (entity?.type === EntityType.StackedPile) return;
+        if (entity.type === EntityType.StackedPile) return;
 
         const slotKind = this.resolveSlotKind(buildingId, slotType);
         const key: PileSlotKey = { buildingId, material: materialType, slotKind };

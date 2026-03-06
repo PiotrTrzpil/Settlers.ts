@@ -12,14 +12,14 @@
  * generic work triggers activate the building's Working condition overlays.
  */
 
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import type { TriggerSystem } from '@/game/features/settler-tasks/choreo-types';
 import type { GameState } from '@/game/game-state';
 import type { GameDataLoader } from '@/resources/game-data/game-data-loader';
 import type { BuildingTrigger } from '@/resources/game-data/types';
 import { EntityType } from '@/game/entity';
 import { raceToRaceId } from '@/game/game-data-access';
-const log = new LogHandler('TriggerSystem');
+const log = createLogger('TriggerSystem');
 
 // ============================================================================
 // Config

@@ -98,7 +98,12 @@ export enum SettlerState {
 export interface EntityWorkHandler {
     type: WorkHandlerType.ENTITY;
     /** Find a target entity for this settler */
-    findTarget(x: number, y: number, settlerId?: number): { entityId: number; x: number; y: number } | null;
+    findTarget(
+        x: number,
+        y: number,
+        settlerId?: number,
+        player?: number
+    ): { entityId: number; x: number; y: number } | null;
     /** Check if target is still valid / has materials to work with */
     canWork(targetId: number): boolean;
     /** If true, worker waits (idles) when canWork is false instead of failing */

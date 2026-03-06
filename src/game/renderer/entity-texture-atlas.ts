@@ -9,7 +9,7 @@ import type { CachedSlot } from './sprite-cache';
 const ATLAS_PADDING = 1;
 
 /** Log slow main-thread operations (threshold in ms) */
-const SLOW_OP_THRESHOLD_MS = 2;
+const SLOW_OP_THRESHOLD_MS = 20;
 
 /** Fixed layer size — each layer is LAYER_SIZE x LAYER_SIZE pixels.
  *  4096x4096 = 32MB per layer at 2 bytes/pixel (R16UI). */

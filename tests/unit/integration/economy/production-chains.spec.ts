@@ -518,12 +518,12 @@ describe.skipIf(!hasRealData)('Economy simulation (real game data)', { timeout: 
 
         // Exactly 3 soldiers trained in queue order
         expect(trained).toHaveLength(3);
-        expect(trained[0]).toEqual({ unitType: UnitType.Bowman, level: 1 });
-        expect(trained[1]).toEqual({ unitType: UnitType.Swordsman, level: 2 });
+        expect(trained[0]).toEqual({ unitType: UnitType.Bowman1, level: 1 });
+        expect(trained[1]).toEqual({ unitType: UnitType.Swordsman1, level: 2 });
         expect(trained[2]).toEqual({ unitType: UnitType.SquadLeader, level: 1 });
 
         // Verify entities: Bowman, Swordsman2, SquadLeader
-        expect(sim.countEntities(EntityType.Unit, UnitType.Bowman)).toBe(1);
+        expect(sim.countEntities(EntityType.Unit, UnitType.Bowman1)).toBe(1);
         expect(sim.countEntities(EntityType.Unit, UnitType.Swordsman2)).toBe(1);
         expect(sim.countEntities(EntityType.Unit, UnitType.SquadLeader)).toBe(1);
 

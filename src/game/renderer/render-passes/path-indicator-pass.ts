@@ -5,18 +5,18 @@
  */
 
 import type { IViewPoint } from '../i-view-point';
-import type { IRenderPass, PassContext } from './types';
+import type { IRenderPass, PathIndicatorContext } from './types';
 import { SelectionOverlayRenderer } from '../selection-overlay-renderer';
 
 export class PathIndicatorPass implements IRenderPass {
-    private ctx!: PassContext;
+    private ctx!: PathIndicatorContext;
     private readonly overlay: SelectionOverlayRenderer;
 
     constructor(overlay: SelectionOverlayRenderer) {
         this.overlay = overlay;
     }
 
-    public prepare(ctx: PassContext): void {
+    public prepare(ctx: PathIndicatorContext): void {
         this.ctx = ctx;
     }
 

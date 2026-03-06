@@ -88,19 +88,7 @@ export class SelectMode extends BaseInputMode {
                 // Drag selection completed - handled by onDragEnd
                 return HANDLED;
             }
-
-            // Single click - select entity at tile or deselect if clicking empty space
-            if (data.tileX !== undefined && data.tileY !== undefined) {
-                context.executeCommand({
-                    type: 'select_at_tile',
-                    x: data.tileX,
-                    y: data.tileY,
-                    addToSelection: data.shiftKey,
-                });
-            } else {
-                // Clicked outside valid tile area - deselect all
-                context.executeCommand({ type: 'select', entityId: null });
-            }
+            this.handleClickSelect(data, context);
             return HANDLED;
         }
 
@@ -119,6 +107,28 @@ export class SelectMode extends BaseInputMode {
         return UNHANDLED;
     }
 
+    /** Handle single-click entity selection with sprite-bounds picking. */
+    private handleClickSelect(data: PointerData, context: InputContext): void {
+        // Try sprite-bounds pick first, fall back to tile pick
+        const pickedId = context.pickEntityAtScreen?.(data.screenX, data.screenY) ?? null;
+        if (pickedId !== null) {
+            if (data.shiftKey) {
+                context.executeCommand({ type: 'toggle_selection', entityId: pickedId });
+            } else {
+                context.executeCommand({ type: 'select', entityId: pickedId });
+            }
+        } else if (data.tileX !== undefined && data.tileY !== undefined) {
+            context.executeCommand({
+                type: 'select_at_tile',
+                x: data.tileX,
+                y: data.tileY,
+                addToSelection: data.shiftKey,
+            });
+        } else {
+            context.executeCommand({ type: 'select', entityId: null });
+        }
+    }
+
     override onDrag(_data: DragData, _context: InputContext): InputResult {
         // Visual feedback for drag selection - the selection box is drawn via getRenderState
         return HANDLED;
@@ -126,8 +136,16 @@ export class SelectMode extends BaseInputMode {
 
     override onDragEnd(data: DragData, context: InputContext): InputResult {
         if (data.button === MouseButton.Left && data.isDragging) {
-            // Box selection
-            if (
+            // Box selection — try sprite-bounds picker first, fall back to tile-based
+            const pickedIds = context.pickEntitiesInScreenRect?.(
+                data.startX,
+                data.startY,
+                data.currentX,
+                data.currentY
+            );
+            if (pickedIds && pickedIds.length > 0) {
+                context.executeCommand({ type: 'select_multiple', entityIds: pickedIds });
+            } else if (
                 data.startTileX !== undefined &&
                 data.startTileY !== undefined &&
                 data.currentTileX !== undefined &&

@@ -10,7 +10,6 @@
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
-import { EventSubscriptionManager } from '../../event-bus';
 import { StoneSystem } from './stone-system';
 import { EntityType } from '../../entity';
 import { MapObjectType } from '@/game/types/map-object-types';
@@ -32,8 +31,6 @@ export const StoneFeature: FeatureDefinition = {
     dependencies: [],
 
     create(ctx: FeatureContext) {
-        const subscriptions = new EventSubscriptionManager();
-
         const stoneSystem = new StoneSystem({
             gameState: ctx.gameState,
             visualService: ctx.visualService,
@@ -42,7 +39,7 @@ export const StoneFeature: FeatureDefinition = {
 
         // Register for map object creation events to auto-register stones.
         // The variation from map data encodes the initial depletion level (1-12).
-        subscriptions.subscribe(ctx.eventBus, 'entity:created', ({ entityId, type, subType, variation }) => {
+        ctx.on('entity:created', ({ entityId, type, subType, variation }) => {
             if (type === EntityType.MapObject) {
                 stoneSystem.register(entityId, subType as MapObjectType, variation || undefined);
             }
@@ -54,9 +51,6 @@ export const StoneFeature: FeatureDefinition = {
         return {
             systems: [],
             exports: { stoneSystem } satisfies StoneFeatureExports,
-            destroy: () => {
-                subscriptions.unsubscribeAll();
-            },
         };
     },
 };

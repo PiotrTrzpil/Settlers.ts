@@ -94,35 +94,21 @@ type SeqAnimEntry = { unitType: UnitType; seqKey: string; frames: Map<number, Sp
  *
  * @param jobs - Pre-collected job descriptors, each with a `jobIndex` for sprite loading
  * @param mapResult - Converts loaded direction frames into one or more sequence entries
- * @param onLoadError - Optional error handler for load failures (default: skip silently)
  */
 async function loadSequenceAnimations<J extends { jobIndex: number }>(
     ctx: UnitFileCtx,
     jobs: J[],
-    mapResult: (job: J, dirFrames: Map<number, SpriteEntry[]>) => SeqAnimEntry[],
-    onLoadError?: (job: J, error: unknown) => void
+    mapResult: (job: J, dirFrames: Map<number, SpriteEntry[]>) => SeqAnimEntry[]
 ): Promise<number> {
     const { fileSet, race, paletteBase } = ctx;
     const batch = new SafeLoadBatch<SeqAnimEntry>();
 
-    const results = await Promise.all(
-        jobs.map(async job => {
-            try {
-                const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(
-                    fileSet,
-                    job.jobIndex,
-                    ctx.atlas,
-                    paletteBase
-                );
-                return { job, loadedDirs };
-            } catch (e) {
-                onLoadError?.(job, e);
-                return { job, loadedDirs: null };
-            }
-        })
-    );
+    // Batch-load all jobs in a single worker round-trip
+    const jobIndices = jobs.map(j => j.jobIndex);
+    const allDirs = await ctx.spriteLoader.loadMultiJobBatch(fileSet, jobIndices, ctx.atlas, paletteBase);
 
-    for (const { job, loadedDirs } of results) {
+    for (const job of jobs) {
+        const loadedDirs = allDirs.get(job.jobIndex);
         if (!loadedDirs) continue;
         const dirFrames = toEntryMap(loadedDirs);
         if (dirFrames.size === 0) continue;
@@ -238,16 +224,13 @@ async function loadBaseUnits(ctx: UnitFileCtx): Promise<number> {
         (entry): entry is [string, NonNullable<(typeof entry)[1]>] => entry[1] != null
     );
 
-    // Load all unit types in parallel — each one internally parallelizes directions
-    const unitResults = await Promise.all(
-        unitEntries.map(async([typeStr, info]) => {
-            const unitType = Number(typeStr) as UnitType;
-            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, info.index, ctx.atlas, paletteBase);
-            return { unitType, loadedDirs };
-        })
-    );
+    // Batch-load all unit types in a single worker round-trip
+    const jobIndices = unitEntries.map(([, info]) => info.index);
+    const allDirs = await ctx.spriteLoader.loadMultiJobBatch(fileSet, jobIndices, ctx.atlas, paletteBase);
 
-    for (const { unitType, loadedDirs } of unitResults) {
+    for (const [typeStr, info] of unitEntries) {
+        const unitType = Number(typeStr) as UnitType;
+        const loadedDirs = allDirs.get(info.index);
         if (!loadedDirs) continue;
         const directionFrames = toEntryMap(loadedDirs);
         if (directionFrames.size > 0) batch.add({ unitType, directionFrames });
@@ -372,14 +355,12 @@ async function loadWorkerCarryAnimations(ctx: UnitFileCtx): Promise<number> {
 
     const carryJobs = collectSuffixJobs(ctx, 'carry', new Set([UnitType.Carrier]));
 
-    const results = await Promise.all(
-        carryJobs.map(async({ unitType, suffix, jobIndex }) => {
-            const loadedDirs = await ctx.spriteLoader.loadJobAllDirections(fileSet, jobIndex, ctx.atlas, paletteBase);
-            return { unitType, suffix, loadedDirs };
-        })
-    );
+    // Batch-load all carry jobs in a single worker round-trip
+    const jobIndices = carryJobs.map(j => j.jobIndex);
+    const allDirs = await ctx.spriteLoader.loadMultiJobBatch(fileSet, jobIndices, ctx.atlas, paletteBase);
 
-    for (const { unitType, suffix, loadedDirs } of results) {
+    for (const { unitType, suffix, jobIndex } of carryJobs) {
+        const loadedDirs = allDirs.get(jobIndex);
         if (!loadedDirs) continue;
         const directionFrames = toEntryMap(loadedDirs);
         if (directionFrames.size > 0) batch.add({ unitType, suffix, directionFrames });
@@ -455,20 +436,9 @@ function collectFightJobs(ctx: UnitFileCtx): FightJob[] {
 }
 
 async function loadFightAnimations(ctx: UnitFileCtx): Promise<number> {
-    return loadSequenceAnimations(
-        ctx,
-        collectFightJobs(ctx),
-        (job, frames) => [{ unitType: job.unitType, seqKey: fightSequenceKey(job.fightIndex), frames }],
-        (job, e) => {
-            const fileId = SETTLER_FILE_NUMBERS[ctx.race];
-            log.error(
-                `Fight animation load crashed: JIL index ${job.jobIndex} for ${UnitType[job.unitType]} ` +
-                    `(fight.${job.fightIndex}) in file ${fileId}.jil (${Race[ctx.race]}) — ` +
-                    `index likely points to invalid data. ` +
-                    `Fix the index in jil-indices.ts. Error: ${e}`
-            );
-        }
-    );
+    return loadSequenceAnimations(ctx, collectFightJobs(ctx), (job, frames) => [
+        { unitType: job.unitType, seqKey: fightSequenceKey(job.fightIndex), frames },
+    ]);
 }
 
 /** Extract frame[0] per direction (idle pose). */

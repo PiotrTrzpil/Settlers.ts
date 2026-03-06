@@ -10,6 +10,8 @@
  *       └── gs (test-scoped, 4x speed, game state reset)
  *   assetPage (worker-scoped, real game assets)
  *       └── gpAssets (skips in CI if assets unavailable)
+ *   emptyMapPage (worker-scoped, empty flat map + real assets)
+ *       └── gpEmptyMap (skips in CI if assets unavailable)
  *
  * ## Usage
  *
@@ -63,6 +65,8 @@ type TestFixtures = {
     gpWithUI: GamePage;
     /** GamePage with real game assets loaded. Skips in CI if assets unavailable. */
     gpAssets: GamePage;
+    /** GamePage on an empty flat map with real sprites. Skips in CI if assets unavailable. */
+    gpEmptyMap: GamePage;
 };
 
 type WorkerFixtures = {
@@ -72,6 +76,8 @@ type WorkerFixtures = {
     gameStatePage: Page;
     /** Shared page with real game assets. Skips in CI if assets unavailable. */
     assetPage: Page;
+    /** Shared page with empty flat map + real sprite assets. */
+    emptyMapPage: Page;
 };
 
 export const test = base.extend<TestFixtures, WorkerFixtures>({
@@ -174,6 +180,47 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
                     const renderer = window.__settlers__?.entityRenderer;
                     return renderer?.spriteManager?.hasSprites === true;
                 },
+                undefined,
+                { timeout: 30_000 }
+            );
+
+            await use(page);
+
+            await page.unrouteAll({ behavior: 'ignoreErrors' });
+            await context.close();
+        },
+        { scope: 'worker', timeout: 60_000 },
+    ],
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Worker-scoped fixture: empty flat map with real sprite assets
+    // ─────────────────────────────────────────────────────────────────────────
+    emptyMapPage: [
+        async ({ browser }, use) => {
+            const context = await browser.newContext();
+            const page = await context.newPage();
+            const gp = new GamePage(page);
+
+            // Bypass cache for large GFX files to avoid ERR_CACHE_WRITE_FAILURE
+            await page.route('**/*.gfx', async route => {
+                const response = await route.fetch();
+                await route.fulfill({
+                    response,
+                    headers: { ...response.headers(), 'cache-control': 'no-store' },
+                });
+            });
+
+            // Load empty flat map with real sprite assets
+            await gp.goto({ emptyMap: true });
+            await gp.wait.waitForReady(5, 30_000);
+
+            // Wait for sprites to actually be loaded (happens async after rendererReady)
+            await page.waitForFunction(
+                () => {
+                    const renderer = window.__settlers__?.entityRenderer;
+                    return renderer?.spriteManager?.hasSprites === true;
+                },
+                undefined,
                 { timeout: 30_000 }
             );
 
@@ -249,6 +296,32 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
                     );
                 }
             }
+
+            await use(gp);
+        },
+        { timeout: 60_000 },
+    ],
+
+    /** GamePage on empty flat map with real sprites. Skips in CI if unavailable, fails locally. */
+    gpEmptyMap: [
+        async ({ emptyMapPage }, use, testInfo) => {
+            const gp = new GamePage(emptyMapPage);
+
+            const hasSprites = await gp.sprites.hasSpritesLoaded();
+            if (!hasSprites) {
+                if (isCloudEnv()) {
+                    testInfo.skip(true, 'CI environment - game assets not available');
+                } else {
+                    throw new Error(
+                        'No sprites loaded. Game assets are required for this test.\n' +
+                            'See docs/SETUP.md for asset installation instructions.'
+                    );
+                }
+            }
+
+            // Reset game state (clear any entities from previous test)
+            await gp.resetGameState();
+            await gp.actions.setGameSpeed(0);
 
             await use(gp);
         },

@@ -5,24 +5,18 @@
  *   - Phase 2C: WORK, WORK_ON_ENTITY, PLANT (visible, positional/entity work)
  *   - Phase 2D: WORK_VIRTUAL, WORK_ON_ENTITY_VIRTUAL, PRODUCE_VIRTUAL (settler invisible)
  *
- * All executors conform to ChoreoExecutorFn and must not throw — handler
+ * All executors conform to WorkExecutorFn and must not throw — handler
  * errors are caught and reported via ctx.handlerErrorLogger.
  */
 
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import { TaskResult } from '../types';
-import {
-    framesToSeconds,
-    type ChoreoContext,
-    type ChoreoJobState,
-    type ChoreoNode,
-    type WorkContext,
-} from '../choreo-types';
+import { framesToSeconds, tickDuration, type ChoreoJobState, type ChoreoNode, type WorkContext } from '../choreo-types';
 import type { Entity } from '../../../entity';
 import type { EntityWorkHandler } from '../types';
 import { safeCall } from '../safe-call';
 
-const log = new LogHandler('WorkExecutors');
+const log = createLogger('WorkExecutors');
 
 // ─────────────────────────────────────────────────────
 // Internal helpers
@@ -129,14 +123,6 @@ function startEntityWork(job: ChoreoJobState, handler: EntityWorkHandler, ctx: W
     return true;
 }
 
-/** Duration-based progress tick. Returns DONE when complete, CONTINUE otherwise. */
-function tickDurationProgress(job: ChoreoJobState, node: ChoreoNode, dt: number): TaskResult {
-    const durationSeconds = resolveDurationSeconds(node);
-    if (durationSeconds === Infinity) return TaskResult.DONE;
-    job.progress += dt / durationSeconds;
-    return job.progress >= 1 ? TaskResult.DONE : TaskResult.CONTINUE;
-}
-
 // ─────────────────────────────────────────────────────
 // Phase 2C — Regular (visible) work executors
 // ─────────────────────────────────────────────────────
@@ -156,7 +142,7 @@ export function executeWork(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: ChoreoContext
+    ctx: WorkContext
 ): TaskResult {
     applyDirectionConstraint(settler, node, job, ctx);
     fireTriggerOnStart(settler, node, job, ctx);
@@ -170,7 +156,7 @@ export function executeWork(
     // Position handler path
     if (!job.workStarted) job.workStarted = true;
 
-    const result = tickDurationProgress(job, node, dt);
+    const result = tickDuration(job, dt, resolveDurationSeconds(node));
     if (result === TaskResult.DONE) {
         callPositionComplete(settler, job, ctx, 'onWorkAtPositionComplete');
     }
@@ -187,7 +173,7 @@ export function executeWorkOnEntity(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: ChoreoContext
+    ctx: WorkContext
 ): TaskResult {
     if (!ctx.entityHandler) {
         log.warn(`executeWorkOnEntity: no entityHandler for settler ${settler.id}`);
@@ -205,19 +191,6 @@ export function executeWorkOnEntity(
     return tickEntityWork(settler, job, node, dt, ctx.entityHandler, ctx, '');
 }
 
-/**
- * PLANT — planting operation. Same mechanics as WORK, distinct for animation routing.
- */
-export function executePlant(
-    settler: Entity,
-    job: ChoreoJobState,
-    node: ChoreoNode,
-    dt: number,
-    ctx: ChoreoContext
-): TaskResult {
-    return executeWork(settler, job, node, dt, ctx);
-}
-
 // ─────────────────────────────────────────────────────
 // Phase 2D — Virtual (invisible) work executors
 // ─────────────────────────────────────────────────────
@@ -232,7 +205,7 @@ export function executeWorkVirtual(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: ChoreoContext
+    ctx: WorkContext
 ): TaskResult {
     if (!job.workStarted) job.visible = false;
 
@@ -240,7 +213,7 @@ export function executeWorkVirtual(
     fireTriggerOnStart(settler, node, job, ctx);
     if (!job.workStarted) job.workStarted = true;
 
-    const result = tickDurationProgress(job, node, dt);
+    const result = tickDuration(job, dt, resolveDurationSeconds(node));
     if (result === TaskResult.DONE) {
         callPositionComplete(settler, job, ctx, 'onWorkAtPositionComplete (virtual)');
     }
@@ -255,7 +228,7 @@ export function executeWorkOnEntityVirtual(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: ChoreoContext
+    ctx: WorkContext
 ): TaskResult {
     if (!ctx.entityHandler) {
         log.warn(`executeWorkOnEntityVirtual: no entityHandler for settler ${settler.id}`);
@@ -286,12 +259,12 @@ export function executeProduceVirtual(
     job: ChoreoJobState,
     node: ChoreoNode,
     dt: number,
-    ctx: ChoreoContext
+    ctx: WorkContext
 ): TaskResult {
     if (!job.workStarted) {
         job.visible = false;
         fireTriggerOnStart(settler, node, job, ctx);
         job.workStarted = true;
     }
-    return tickDurationProgress(job, node, dt);
+    return tickDuration(job, dt, resolveDurationSeconds(node));
 }

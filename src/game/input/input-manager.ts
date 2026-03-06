@@ -36,6 +36,11 @@ export type CommandExecutor = (command: Record<string, unknown>) => CommandResul
  */
 export type ModeChangeCallback = (oldMode: string, newMode: string, data?: Record<string, unknown>) => void;
 
+/** Pick entity at screen coords (sprite-bounds hit test). Returns entity ID or null. */
+export type EntityPicker = (screenX: number, screenY: number) => number | null;
+/** Pick entities whose sprites intersect a screen-space rectangle. */
+export type EntityRectPicker = (sx1: number, sy1: number, sx2: number, sy2: number) => number[];
+
 /**
  * Input manager configuration.
  */
@@ -48,6 +53,10 @@ export interface InputManagerOptions {
     tileResolver?: TileResolver;
     /** Function to execute game commands */
     commandExecutor?: CommandExecutor;
+    /** Screen-space entity picker (click) */
+    entityPicker?: EntityPicker;
+    /** Screen-space entity rect picker (box select) */
+    entityRectPicker?: EntityRectPicker;
     /** Initial mode name */
     initialMode?: string;
     /** Callback when mode changes */
@@ -68,6 +77,8 @@ export class InputManager {
     private modeData: Map<string, unknown> = new Map();
     private tileResolver: TileResolver | null = null;
     private commandExecutor: CommandExecutor | null = null;
+    private entityPicker: EntityPicker | null = null;
+    private entityRectPicker: EntityRectPicker | null = null;
     private onModeChange: ModeChangeCallback | null = null;
     private cameraMode: CameraMode;
     private isDestroyed = false;
@@ -92,6 +103,8 @@ export class InputManager {
         this.target = options.target;
         this.tileResolver = options.tileResolver ?? null;
         this.commandExecutor = options.commandExecutor ?? null;
+        this.entityPicker = options.entityPicker ?? null;
+        this.entityRectPicker = options.entityRectPicker ?? null;
         this.onModeChange = options.onModeChange ?? null;
         this.raceProvider = options.raceProvider ?? null;
 
@@ -216,6 +229,16 @@ export class InputManager {
         this.commandExecutor = executor;
     }
 
+    /** Set the entity picker (sprite-bounds click hit test). */
+    setEntityPicker(picker: EntityPicker | null): void {
+        this.entityPicker = picker;
+    }
+
+    /** Set the entity rect picker (sprite-bounds box selection). */
+    setEntityRectPicker(picker: EntityRectPicker | null): void {
+        this.entityRectPicker = picker;
+    }
+
     /**
      * Get the current input state.
      */
@@ -335,6 +358,8 @@ export class InputManager {
             getModeData: <T>() => this.modeData.get(this.currentModeName) as T | undefined,
             setModeData: <T>(data: T) => this.modeData.set(this.currentModeName, data),
             localPlayerRace: this.raceProvider?.() ?? null,
+            pickEntityAtScreen: this.entityPicker,
+            pickEntitiesInScreenRect: this.entityRectPicker,
         };
     }
 

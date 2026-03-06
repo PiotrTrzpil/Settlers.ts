@@ -103,9 +103,9 @@ export interface TerritoryDotRenderData {
 }
 
 /**
- * Lightweight service area data for rendering (avoids importing full ServiceArea type).
+ * Lightweight circle data for rendering overlays (work areas, etc.).
  */
-export interface ServiceAreaRenderData {
+export interface CircleRenderData {
     centerX: number;
     centerY: number;
     radius: number;
@@ -241,17 +241,13 @@ export interface IRenderContext {
     /** Current view point for world coordinate calculation */
     readonly viewPoint: IViewPoint;
 
-    // === Service Areas ===
-    /** Service areas to render for selected hub buildings */
-    readonly selectedServiceAreas: readonly ServiceAreaRenderData[];
-
     // === Territory ===
     /** Territory boundary dots to render */
     readonly territoryDots: readonly TerritoryDotRenderData[];
 
     // === Work Areas ===
     /** Work area circles to render as line overlays (debug adjustment mode) */
-    readonly workAreaCircles: readonly ServiceAreaRenderData[];
+    readonly workAreaCircles: readonly CircleRenderData[];
     /** Work area boundary dots to render as sprites (gameplay adjustment mode) */
     readonly workAreaDots: readonly TerritoryDotRenderData[];
 
@@ -283,9 +279,8 @@ export class RenderContextBuilder {
     private _mapWidth = 0;
     private _mapHeight = 0;
     private _viewPoint: IViewPoint | null = null;
-    private _selectedServiceAreas: readonly ServiceAreaRenderData[] = [];
     private _territoryDots: readonly TerritoryDotRenderData[] = [];
-    private _workAreaCircles: readonly ServiceAreaRenderData[] = [];
+    private _workAreaCircles: readonly CircleRenderData[] = [];
     private _workAreaDots: readonly TerritoryDotRenderData[] = [];
     private _stackGhosts: readonly StackGhostRenderData[] = [];
 
@@ -375,17 +370,12 @@ export class RenderContextBuilder {
         return this;
     }
 
-    selectedServiceAreas(areas: readonly ServiceAreaRenderData[]): this {
-        this._selectedServiceAreas = areas;
-        return this;
-    }
-
     territoryDots(dots: readonly TerritoryDotRenderData[]): this {
         this._territoryDots = dots;
         return this;
     }
 
-    workAreaCircles(circles: readonly ServiceAreaRenderData[]): this {
+    workAreaCircles(circles: readonly CircleRenderData[]): this {
         this._workAreaCircles = circles;
         return this;
     }
@@ -428,7 +418,6 @@ export class RenderContextBuilder {
             mapWidth: this._mapWidth,
             mapHeight: this._mapHeight,
             viewPoint: this._viewPoint,
-            selectedServiceAreas: this._selectedServiceAreas,
             territoryDots: this._territoryDots,
             workAreaCircles: this._workAreaCircles,
             workAreaDots: this._workAreaDots,

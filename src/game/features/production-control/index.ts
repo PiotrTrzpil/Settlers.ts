@@ -47,3 +47,6 @@ export type { ProductionState } from './types';
 
 // Manager
 export { ProductionControlManager } from './production-control-manager';
+
+// Feature definition (self-registering via FeatureRegistry)
+export { ProductionControlFeature, type ProductionControlExports } from './production-control-feature';

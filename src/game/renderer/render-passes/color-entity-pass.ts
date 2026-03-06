@@ -7,8 +7,11 @@
 
 import type { Entity } from '@/game/entity';
 import { EntityType } from '@/game/entity';
+import { UnitType } from '@/game/unit-types';
+import { BuildingType } from '@/game/buildings/building-type';
+import { EMaterialType } from '@/game/economy/material-type';
 import type { IViewPoint } from '../i-view-point';
-import type { IRenderPass, PassContext } from './types';
+import type { IRenderPass, ColorEntityContext } from './types';
 import { TilePicker } from '@/game/input/tile-picker';
 import { TILE_CENTER_X, TILE_CENTER_Y } from '@/game/systems/coordinate-system';
 import { subTypeToRawByte } from '@/resources/map/raw-object-registry';
@@ -23,13 +26,13 @@ import {
 import { PLAYER_COLORS } from '../tint-utils';
 
 export class ColorEntityPass implements IRenderPass {
-    private ctx!: PassContext;
+    private ctx!: ColorEntityContext;
     /** Whether the textured sprite pass already handled buildings/units with sprites. */
     public texturedBuildingsHandled = false;
 
     private readonly vertexData = new Float32Array(6 * 2);
 
-    public prepare(ctx: PassContext): void {
+    public prepare(ctx: ColorEntityContext): void {
         this.ctx = ctx;
     }
 
@@ -66,6 +69,9 @@ export class ColorEntityPass implements IRenderPass {
 
             if (appearance.isDecoration) {
                 this.collectDecoDebugLabel(entity, worldPos, projection, canvasW, canvasH);
+            } else if (this.texturedBuildingsHandled) {
+                // Entity rendered as color dot because sprite is missing — add a name label
+                this.collectMissingSpriteLabel(entity, worldPos, projection, canvasW, canvasH);
             }
         }
     }
@@ -112,6 +118,32 @@ export class ColorEntityPass implements IRenderPass {
             type: rawByte,
             hue: decoTypeToHue(entity.subType),
         });
+    }
+
+    private collectMissingSpriteLabel(
+        entity: Entity,
+        worldPos: { worldX: number; worldY: number },
+        projection: Float32Array,
+        canvasW: number,
+        canvasH: number
+    ): void {
+        const clipX = projection[0]! * worldPos.worldX + projection[12]!;
+        const clipY = projection[5]! * worldPos.worldY + projection[13]!;
+        const name = this.resolveEntityName(entity);
+        this.ctx.debugDecoLabels.push({
+            screenX: (clipX * 0.5 + 0.5) * canvasW,
+            screenY: (-clipY * 0.5 + 0.5) * canvasH,
+            type: entity.subType,
+            hue: 0,
+            name,
+        });
+    }
+
+    private resolveEntityName(entity: Entity): string {
+        if (entity.type === EntityType.Unit) return UnitType[entity.subType] ?? `Unit#${entity.subType}`;
+        if (entity.type === EntityType.Building) return BuildingType[entity.subType] ?? `Bld#${entity.subType}`;
+        if (entity.type === EntityType.StackedPile) return EMaterialType[entity.subType] ?? `Pile#${entity.subType}`;
+        return `${entity.type}#${entity.subType}`;
     }
 
     private getEntityWorldPos(entity: Entity, viewPoint: IViewPoint): { worldX: number; worldY: number } {

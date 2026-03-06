@@ -5,6 +5,7 @@
 
 import { BuildingType } from '../../buildings/types';
 import { Race } from '../../race';
+import type { TerrainData } from '../../terrain';
 import { UnitType } from '../../unit-types';
 import type { EMaterialType } from '../../economy/material-type';
 import type { ConstructionCost } from '../../economy/building-production';
@@ -159,7 +160,7 @@ export interface BuildingSpawnConfig {
  * Pass this to enable terrain leveling during construction.
  */
 export interface TerrainContext {
-    terrain: import('../../terrain').TerrainData;
+    terrain: TerrainData;
     /** Callback to notify that terrain has changed and needs re-upload to GPU */
     onTerrainModified?: () => void;
 }

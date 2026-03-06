@@ -149,7 +149,7 @@ describe.skipIf(!hasRealData)('Free pile logistics (real game data)', { timeout:
         const redirectedJob = jobsAfter.find(j => j.id === jobId);
         expect(redirectedJob).toBeDefined();
         expect(redirectedJob!.sourceBuilding).toBe(pileId);
-        expect(redirectedJob!.status).toBe('active');
+        expect(redirectedJob!.phase).toBe('reserved');
     });
 
     it('destroyed building piles are picked up by carriers for pending requests', () => {

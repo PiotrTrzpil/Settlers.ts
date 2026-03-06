@@ -1,55 +1,51 @@
 /**
  * TransitionBlendPass — draws units transitioning between movement directions.
  *
- * These units are identified during the EntitySpritePass and rendered here
- * using the blend shader (two sprites cross-faded by directionTransitionProgress).
+ * EntitySpritePass pre-resolves both direction sprites during its loop and
+ * queues them here via queueTransition(). This pass only handles scaling,
+ * tinting, positioning, and the blend shader draw calls — no sprite resolution.
  */
 
 import type { Entity } from '@/game/entity';
-import { UnitType } from '@/game/entity';
 import type { IViewPoint } from '../i-view-point';
-import type { IRenderPass, PassContext } from './types';
+import type { IRenderPass, TransitionBlendContext } from './types';
+import type { TransitionSpriteData } from '../entity-sprite-resolver';
 import { TilePicker } from '@/game/input/tile-picker';
 import { PALETTE_TEXTURE_WIDTH } from '../palette-texture';
 import { scaleSprite } from '../entity-renderer-constants';
 import { TINT_NEUTRAL, TINT_SELECTED } from '../tint-utils';
 
-export class TransitionBlendPass implements IRenderPass {
-    private ctx!: PassContext;
-    /** Units queued by EntitySpritePass each frame */
-    public transitioningUnits: Entity[] = [];
+interface QueuedTransition {
+    entity: Entity;
+    data: TransitionSpriteData;
+}
 
-    public prepare(ctx: PassContext): void {
+export class TransitionBlendPass implements IRenderPass {
+    private ctx!: TransitionBlendContext;
+    private readonly queue: QueuedTransition[] = [];
+
+    public prepare(ctx: TransitionBlendContext): void {
         this.ctx = ctx;
-        this.transitioningUnits.length = 0;
+        this.queue.length = 0;
+    }
+
+    /** Queue a unit with pre-resolved transition sprites (called by EntitySpritePass). */
+    queueTransition(entity: Entity, data: TransitionSpriteData): void {
+        this.queue.push({ entity, data });
     }
 
     public draw(gl: WebGL2RenderingContext, projection: Float32Array, viewPoint: IViewPoint): void {
         const { ctx } = this;
-        if (this.transitioningUnits.length === 0) return;
+        if (this.queue.length === 0) return;
         if (!ctx.spriteManager) return;
 
         const paletteWidth = PALETTE_TEXTURE_WIDTH;
         const rowsPerPlayer = ctx.spriteManager.paletteManager.textureRowsPerPlayer;
         ctx.spriteBatchRenderer.beginBlendBatch(gl, projection, paletteWidth, rowsPerPlayer);
 
-        for (const entity of this.transitioningUnits) {
-            const vs = ctx.getVisualState(entity.id);
-            const transition = ctx.getDirectionTransition(entity.id);
-            if (!vs?.animation || !transition) continue;
-
-            const oldDir = transition.previousDirection;
-            const newDir = vs.animation.direction;
-            const blendFactor = transition.progress;
-            const unitType = entity.subType as UnitType;
-
-            const oldSprite = ctx.spriteResolver.getUnitSpriteForDirection(unitType, vs.animation, oldDir, entity.race);
-            const newSprite = ctx.spriteResolver.getUnitSpriteForDirection(unitType, vs.animation, newDir, entity.race);
-
-            if (!oldSprite || !newSprite) continue;
-
-            const scaledOld = scaleSprite(oldSprite);
-            const scaledNew = scaleSprite(newSprite);
+        for (const { entity, data } of this.queue) {
+            const scaledOld = scaleSprite(data.oldSprite);
+            const scaledNew = scaleSprite(data.newSprite);
 
             const cachedPos = ctx.frameContext?.getWorldPos(entity);
             const worldPos = cachedPos ?? this.getInterpolatedWorldPos(entity, viewPoint);
@@ -63,7 +59,7 @@ export class TransitionBlendPass implements IRenderPass {
                 worldPos.worldY,
                 scaledOld,
                 scaledNew,
-                blendFactor,
+                data.blendFactor,
                 playerRow,
                 tint[0]!,
                 tint[1]!,

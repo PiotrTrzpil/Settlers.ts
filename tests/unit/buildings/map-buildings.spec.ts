@@ -7,17 +7,11 @@ import { EntityType } from '@/game/entity';
 import { Race } from '@/game/race';
 import type { MapBuildingData } from '@/resources/map/map-entity-data';
 
-const TEST_PLAYER_RACES = new Map<number, Race>([
-    [0, Race.Roman],
-    [1, Race.Roman],
-]);
-
 function createPopulateOptions(ctx: TestContext, player?: number) {
     return {
         player,
         eventBus: ctx.eventBus,
         terrain: ctx.map.terrain,
-        playerRaces: TEST_PLAYER_RACES,
     };
 }
 

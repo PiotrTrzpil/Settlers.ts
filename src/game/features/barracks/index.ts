@@ -19,6 +19,9 @@ export type { TrainingRecipe, TrainingRecipeSet, BarracksTrainingState } from '.
 export { BarracksTrainingManager, TRAINING_DURATION_FRAMES } from './barracks-training-manager';
 export type { BarracksTrainingManagerConfig } from './barracks-training-manager';
 
+// Feature definition (self-registering via FeatureRegistry)
+export { BarracksFeature, type BarracksExports } from './barracks-feature';
+
 // Recipe data
 export {
     getTrainingRecipes,

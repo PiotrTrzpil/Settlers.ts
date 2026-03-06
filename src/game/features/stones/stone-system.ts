@@ -12,11 +12,13 @@ import type { GameState } from '../../game-state';
 import type { EntityVisualService } from '../../animation/entity-visual-service';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
 import { OBJECT_TYPE_CATEGORY } from '../../systems/map-objects';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 import { findEmptySpot } from '../../systems/spatial-search';
 import type { Command, CommandResult } from '../../commands';
+import type { Persistable } from '@/game/persistence';
+import type { SerializedStone } from '@/game/game-state-persistence';
 
-const log = new LogHandler('StoneSystem');
+const log = createLogger('StoneSystem');
 
 /** Number of visual depletion stages per variant (GIL indices 0-12). */
 export const STONE_DEPLETION_STAGES = 13;
@@ -57,7 +59,9 @@ export interface StoneSystemConfig {
 /**
  * Manages stone mining depletion and variant assignment.
  */
-export class StoneSystem {
+export class StoneSystem implements Persistable<SerializedStone[]> {
+    readonly persistKey = 'stones' as const;
+
     private gameState: GameState;
     private readonly visualService: EntityVisualService;
     private readonly executeCommand: (cmd: Command) => CommandResult;
@@ -209,6 +213,31 @@ export class StoneSystem {
             placed++;
         }
         return placed;
+    }
+
+    // ── Persistable ───────────────────────────────────────────────
+
+    serialize(): SerializedStone[] {
+        const result: SerializedStone[] = [];
+        for (const [entityId, state] of this.states) {
+            result.push({
+                entityId,
+                stage: state.stage,
+                variant: state.variant,
+                level: state.level,
+            });
+        }
+        return result;
+    }
+
+    deserialize(data: SerializedStone[]): void {
+        for (const s of data) {
+            this.restoreStoneState(s.entityId, {
+                stage: s.stage,
+                variant: s.variant,
+                level: s.level,
+            });
+        }
     }
 
     /** Get stats for debugging. */

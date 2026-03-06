@@ -17,7 +17,7 @@ import type { BuildingInventoryManager } from '../inventory';
 import type { OreVeinData } from '../ore-veins';
 import { MINE_ORE_TYPE, MINE_SEARCH_RADIUS } from '../ore-veins/ore-type';
 import { isMineBuilding } from '../../buildings/types';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger, type Logger } from '@/utilities/logger';
 import { WorkHandlerType, type EntityWorkHandler, type PositionWorkHandler } from './types';
 import type { PlantingCapable } from '../growth';
 import type { TreeSystem } from '../trees/tree-system';
@@ -60,20 +60,18 @@ export function findNearestWorkplace(
         return null;
     }
 
+    // Use entity index — iterates only this player's buildings, not all entities
     const result = findNearestEntity(
-        gameState,
+        gameState.entityIndex.ofTypeAndPlayer(EntityType.Building, settler.player),
         settler.x,
         settler.y,
         Infinity,
         entity =>
-            entity.type === EntityType.Building &&
             workplaceTypes.has(entity.subType as BuildingType) &&
-            entity.player === settler.player &&
             (!isBuildingAvailable || isBuildingAvailable(entity.id)) &&
             (!buildingOccupants ||
                 (buildingOccupants.get(entity.id) ?? 0) < getBuildingMaxOccupants(entity.subType as BuildingType))
     );
-
     return result ? gameState.getEntityOrThrow(result.entityId, 'nearest workplace') : null;
 }
 
@@ -228,12 +226,17 @@ export function createWoodcuttingHandler(gameState: GameState, treeSystem: TreeS
     return {
         type: WorkHandlerType.ENTITY,
 
-        findTarget: (x: number, y: number) => {
-            return findNearestEntity(gameState, x, y, WOODCUTTER_SEARCH_RADIUS, entity => {
-                if (entity.type !== EntityType.MapObject) return false;
-                const category = OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType];
-                return category === MapObjectCategory.Trees && treeSystem.canCut(entity.id);
-            });
+        findTarget: (x: number, y: number, _settlerId?: number, player?: number) => {
+            return findNearestEntity(
+                gameState.spatialIndex.nearbyForPlayer(x, y, WOODCUTTER_SEARCH_RADIUS, player!),
+                x,
+                y,
+                WOODCUTTER_SEARCH_RADIUS,
+                entity => {
+                    const category = OBJECT_TYPE_CATEGORY[entity.subType as MapObjectType];
+                    return category === MapObjectCategory.Trees && treeSystem.canCut(entity.id);
+                }
+            );
         },
 
         canWork: (targetId: number) => {
@@ -258,7 +261,7 @@ export function createWoodcuttingHandler(gameState: GameState, treeSystem: TreeS
     };
 }
 
-const woodcuttingLog = new LogHandler('WoodcuttingHandler');
+const woodcuttingLog = createLogger('WoodcuttingHandler');
 
 /**
  * Create a generic planting handler for any GrowableSystem.
@@ -289,7 +292,7 @@ export function createForesterHandler(treeSystem: TreeSystem): PositionWorkHandl
 }
 
 const STONECUTTER_SEARCH_RADIUS = 30;
-const stonecuttingLog = new LogHandler('StonecuttingHandler');
+const stonecuttingLog = createLogger('StonecuttingHandler');
 
 /**
  * Create a handler for STONE search type (stonecutters).
@@ -300,11 +303,14 @@ export function createStonecuttingHandler(gameState: GameState, stoneSystem: Sto
     return {
         type: WorkHandlerType.ENTITY,
 
-        findTarget: (x: number, y: number) => {
-            return findNearestEntity(gameState, x, y, STONECUTTER_SEARCH_RADIUS, entity => {
-                if (entity.type !== EntityType.MapObject) return false;
-                return entity.subType === MapObjectType.ResourceStone && stoneSystem.canMine(entity.id);
-            });
+        findTarget: (x: number, y: number, _settlerId?: number, player?: number) => {
+            return findNearestEntity(
+                gameState.spatialIndex.nearbyForPlayer(x, y, STONECUTTER_SEARCH_RADIUS, player!),
+                x,
+                y,
+                STONECUTTER_SEARCH_RADIUS,
+                entity => entity.subType === MapObjectType.ResourceStone && stoneSystem.canMine(entity.id)
+            );
         },
 
         canWork: (targetId: number) => {
@@ -333,7 +339,7 @@ export function createStonecuttingHandler(gameState: GameState, stoneSystem: Sto
 }
 
 const CROP_HARVEST_SEARCH_RADIUS = 20;
-const cropLog = new LogHandler('CropHandler');
+const cropLog = createLogger('CropHandler');
 
 /**
  * Create a harvest handler for a specific crop type.
@@ -347,11 +353,14 @@ export function createCropHarvestHandler(
     return {
         type: WorkHandlerType.ENTITY,
 
-        findTarget: (x: number, y: number) => {
-            return findNearestEntity(gameState, x, y, CROP_HARVEST_SEARCH_RADIUS, entity => {
-                if (entity.type !== EntityType.MapObject) return false;
-                return entity.subType === cropType && cropSystem.canHarvest(entity.id);
-            });
+        findTarget: (x: number, y: number, _settlerId?: number, player?: number) => {
+            return findNearestEntity(
+                gameState.spatialIndex.nearbyForPlayer(x, y, CROP_HARVEST_SEARCH_RADIUS, player!),
+                x,
+                y,
+                CROP_HARVEST_SEARCH_RADIUS,
+                entity => entity.subType === cropType && cropSystem.canHarvest(entity.id)
+            );
         },
 
         canWork: (targetId: number) => {
@@ -386,7 +395,7 @@ export function createCropHarvestHandler(
  */
 interface SimpleHarvestConfig {
     gameState: GameState;
-    log: LogHandler;
+    log: Logger;
     workerLabel: string;
     searchRadius: number;
     targetFilter: (entity: Entity) => boolean;
@@ -404,13 +413,13 @@ export function createSimpleHarvestHandler(config: SimpleHarvestConfig): EntityW
     return {
         type: WorkHandlerType.ENTITY,
 
-        findTarget: (x: number, y: number) => {
+        findTarget: (x: number, y: number, _settlerId?: number, player?: number) => {
             return findNearestEntity(
-                gameState,
+                gameState.spatialIndex.nearbyForPlayer(x, y, searchRadius, player!),
                 x,
                 y,
                 searchRadius,
-                entity => entity.type === EntityType.MapObject && targetFilter(entity)
+                targetFilter
             );
         },
 
@@ -440,7 +449,7 @@ const WATER_SEARCH_RADIUS = 20;
 /** River ground types (S4GroundType.RIVER1–RIVER4) */
 const RIVER_TYPE_MIN = 96;
 const RIVER_TYPE_MAX = 99;
-const waterLog = new LogHandler('WaterHandler');
+const waterLog = createLogger('WaterHandler');
 
 function isRiverTile(groundType: number): boolean {
     return groundType >= RIVER_TYPE_MIN && groundType <= RIVER_TYPE_MAX;
@@ -519,8 +528,8 @@ export function createGeologistHandler(
 // Construction handlers (digger + builder)
 // ─────────────────────────────────────────────────────────────
 
-const diggerLog = new LogHandler('DiggerHandler');
-const builderLog = new LogHandler('BuilderHandler');
+const diggerLog = createLogger('DiggerHandler');
+const builderLog = createLogger('BuilderHandler');
 
 /**
  * Create a handler for CONSTRUCTION_DIG search type (diggers).
@@ -642,6 +651,9 @@ export function createDiggerHandler(
     };
 }
 
+/** Number of animation (work) cycles a builder plays per 1 unit of material consumed. */
+const BUILD_CYCLES_PER_MATERIAL = 10;
+
 /**
  * Create a handler for CONSTRUCTION search type (builders).
  *
@@ -658,6 +670,8 @@ export function createBuilderHandler(
     const pendingClaims = new Map<number, number[]>();
     // Active workers: settlerId → targetId; used to release the correct slot on complete/interrupt
     const activeWorkers = new Map<number, number>();
+    // Counts work cycles per target to know when to consume a material unit
+    const cycleCounters = new Map<number, number>();
 
     function releaseActive(targetId: number, settlerLabel: string): void {
         for (const [sid, tid] of activeWorkers) {
@@ -690,8 +704,8 @@ export function createBuilderHandler(
                     site.building.progress < 1.0 &&
                     constructionSiteManager.hasAvailableMaterials(existingTarget)
                 ) {
-                    const door = getBuildingDoorPos(site.tileX, site.tileY, site.race, site.buildingType);
-                    return { entityId: existingTarget, x: door.x, y: door.y };
+                    const pos = constructionSiteManager.getRandomBuilderWorkPos(existingTarget);
+                    return { entityId: existingTarget, x: pos.x, y: pos.y };
                 }
                 // Construction done, materials exhausted, or site removed — release
                 releaseActive(existingTarget, 'builder findTarget (done)');
@@ -714,9 +728,9 @@ export function createBuilderHandler(
             queue.push(settlerId);
             pendingClaims.set(buildingId, queue);
 
-            // Return door position — building footprint is blocked after leveling
-            const door = getBuildingDoorPos(site.tileX, site.tileY, site.race, site.buildingType);
-            return { entityId: buildingId, x: door.x, y: door.y };
+            // Random position along the lower border of the building footprint
+            const pos = constructionSiteManager.getRandomBuilderWorkPos(buildingId);
+            return { entityId: buildingId, x: pos.x, y: pos.y };
         },
 
         canWork: (targetId: number) => {
@@ -748,17 +762,28 @@ export function createBuilderHandler(
         onWorkComplete: (targetId: number) => {
             const site = constructionSiteManager.getSite(targetId);
             if (site) {
-                const progressPerCycle = 1.0 / site.materials.totalCost;
+                const totalCycles = site.materials.totalCost * BUILD_CYCLES_PER_MATERIAL;
+                const progressPerCycle = 1.0 / totalCycles;
                 constructionSiteManager.advanceConstruction(targetId, progressPerCycle);
-                // Consume one unit of material per work cycle
-                site.materials.consumedAmount += 1;
+
+                // Consume one material unit every BUILD_CYCLES_PER_MATERIAL cycles
+                const count = (cycleCounters.get(targetId) ?? 0) + 1;
+                if (count >= BUILD_CYCLES_PER_MATERIAL) {
+                    site.materials.consumedAmount += 1;
+                    cycleCounters.set(targetId, 0);
+                } else {
+                    cycleCounters.set(targetId, count);
+                }
+
                 // Stay claimed until construction done or materials exhausted
                 if (site.building.progress < 1.0 && constructionSiteManager.hasAvailableMaterials(targetId)) return;
             }
+            cycleCounters.delete(targetId);
             releaseActive(targetId, 'builder onWorkComplete');
         },
 
         onWorkInterrupt: (targetId: number) => {
+            cycleCounters.delete(targetId);
             releaseActive(targetId, 'builder onWorkInterrupt');
         },
     };

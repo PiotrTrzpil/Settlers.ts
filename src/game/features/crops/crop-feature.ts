@@ -10,7 +10,6 @@
  */
 
 import type { FeatureDefinition, FeatureContext } from '../feature';
-import { EventSubscriptionManager } from '../../event-bus';
 import { CropSystem } from './crop-system';
 import { EntityType } from '../../entity';
 import { MapObjectCategory, MapObjectType } from '@/game/types/map-object-types';
@@ -25,7 +24,6 @@ export const CropFeature: FeatureDefinition = {
     dependencies: [],
 
     create(ctx: FeatureContext) {
-        const subscriptions = new EventSubscriptionManager();
         const cropSystem = new CropSystem({
             gameState: ctx.gameState,
             visualService: ctx.visualService,
@@ -34,7 +32,7 @@ export const CropFeature: FeatureDefinition = {
         });
 
         // Register crop entities on creation (map-loaded crops start as Mature)
-        subscriptions.subscribe(ctx.eventBus, 'entity:created', ({ entityId, type, subType }) => {
+        ctx.on('entity:created', ({ entityId, type, subType }) => {
             if (
                 type === EntityType.MapObject &&
                 OBJECT_TYPE_CATEGORY[subType as MapObjectType] === MapObjectCategory.Crops
@@ -49,9 +47,6 @@ export const CropFeature: FeatureDefinition = {
         return {
             systems: [cropSystem],
             exports: { cropSystem } satisfies CropFeatureExports,
-            destroy: () => {
-                subscriptions.unsubscribeAll();
-            },
         };
     },
 };

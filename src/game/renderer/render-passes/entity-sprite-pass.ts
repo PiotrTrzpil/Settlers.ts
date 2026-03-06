@@ -12,7 +12,7 @@
 import { EntityType } from '@/game/entity';
 import type { Entity } from '@/game/entity';
 import type { IViewPoint } from '../i-view-point';
-import type { IRenderPass, PassContext } from './types';
+import type { IRenderPass, EntitySpriteContext } from './types';
 import type { TransitionBlendPass } from './transition-blend-pass';
 import { TilePicker } from '@/game/input/tile-picker';
 import { TILE_CENTER_X, TILE_CENTER_Y } from '@/game/systems/coordinate-system';
@@ -28,7 +28,7 @@ import { resolveSelectionIndicator, resolveHealthDot } from '../selection-indica
 const EMPTY_OVERLAYS: readonly BuildingOverlayRenderData[] = [];
 
 export class EntitySpritePass implements IRenderPass {
-    private ctx!: PassContext;
+    private ctx!: EntitySpriteContext;
     private readonly blendPass: TransitionBlendPass;
 
     /** Draw calls emitted by this pass (updated each frame). */
@@ -40,7 +40,7 @@ export class EntitySpritePass implements IRenderPass {
         this.blendPass = blendPass;
     }
 
-    public prepare(ctx: PassContext): void {
+    public prepare(ctx: EntitySpriteContext): void {
         this.ctx = ctx;
     }
 
@@ -73,8 +73,8 @@ export class EntitySpritePass implements IRenderPass {
         for (const entity of ctx.sortedEntities) {
             const resolved = ctx.spriteResolver.resolve(entity);
             if (resolved.skip) continue;
-            if (resolved.transitioning) {
-                this.blendPass.transitioningUnits.push(entity);
+            if (resolved.transitioning && resolved.transitionData) {
+                this.blendPass.queueTransition(entity, resolved.transitionData);
                 continue;
             }
             if (!resolved.sprite) continue;

@@ -5,7 +5,7 @@ import { TilePicker } from '../input/tile-picker';
 import { TileCoord } from '../entity';
 import { PlacementStatus } from '../features/placement';
 import { ShaderProgram } from './shader-program';
-import type { ValidPositionGrid } from '../features/placement/valid-position-grid';
+import type { ValidPositionGrid, ValidPositionEntry } from '../features/placement/valid-position-grid';
 
 import vertCode from './shaders/entity-vert.glsl';
 import fragCode from './shaders/entity-frag.glsl';
@@ -189,10 +189,7 @@ export class BuildingIndicatorRenderer implements IRenderer {
     }
 
     /** Batch visible positions into the vertex buffer with frustum culling. */
-    private batchPositions(
-        positions: readonly import('../features/placement/valid-position-grid').ValidPositionEntry[],
-        viewPoint: IViewPoint
-    ): void {
+    private batchPositions(positions: readonly ValidPositionEntry[], viewPoint: IViewPoint): void {
         const visibleWorldRange = 2 / viewPoint.zoom;
         const visibleWidth = Math.ceil(visibleWorldRange * viewPoint.aspectRatio) + 10;
         const visibleHeight = Math.ceil(visibleWorldRange * 2) + 10;

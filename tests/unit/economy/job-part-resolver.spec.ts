@@ -130,13 +130,13 @@ describe('JobPartResolverImpl', () => {
     describe('military fight level mapping', () => {
         it('maps fight animations to correct level-indexed fight sequences', () => {
             const cases: Array<[string, UnitType, number, number]> = [
-                ['SML01_FIGHT', UnitType.Swordsman, 1, 0],
+                ['SML01_FIGHT', UnitType.Swordsman1, 1, 0],
                 ['SML02_FIGHT', UnitType.Swordsman2, 2, 1],
                 ['SML03_FIGHT', UnitType.Swordsman3, 3, 2],
-                ['BML01_FIGHT', UnitType.Bowman, 1, 0],
-                ['BML01_SHOOT', UnitType.Bowman, 1, 0],
-                ['AWL01_FIGHT', UnitType.AxeWarrior, 1, 0],
-                ['MEL01_HEAL', UnitType.Medic, 1, 0],
+                ['BML01_FIGHT', UnitType.Bowman1, 1, 0],
+                ['BML01_SHOOT', UnitType.Bowman1, 1, 0],
+                ['AWL01_FIGHT', UnitType.AxeWarrior1, 1, 0],
+                ['MEL01_HEAL', UnitType.Medic1, 1, 0],
             ];
 
             for (const [jobPart, unitType, level, expectedFightIndex] of cases) {

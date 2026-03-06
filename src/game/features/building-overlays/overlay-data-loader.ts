@@ -15,9 +15,9 @@ import {
     BUILDING_JOB_INDICES,
     resolveOverlayJilEntry,
 } from '../../renderer/sprite-metadata/jil-indices';
-import { LogHandler } from '@/utilities/log-handler';
+import { createLogger } from '@/utilities/logger';
 
-const log = new LogHandler('OverlayDataLoader');
+const log = createLogger('OverlayDataLoader');
 
 /** Default animation frame duration for permanent/event overlays (ms). */
 const DEFAULT_FRAME_DURATION_MS = 80;
