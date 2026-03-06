@@ -29,6 +29,7 @@ export type {
     ScriptAddSettlersCommand,
     CommandResult,
     CommandEffect,
+    CommandType,
 } from './command-types';
 
 export {

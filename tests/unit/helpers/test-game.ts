@@ -389,9 +389,6 @@ export function createTestRegistry(ctx: TestContext, eventBus?: EventBus): Comma
             assignMoveTask: (id: number, x: number, y: number) => ctx.state.movement.moveUnit(id, x, y),
         } as any,
         combatSystem: { releaseFromCombat: () => {} } as any,
-        treeSystem: undefined as any,
-        cropSystem: undefined as any,
-        productionControlManager: undefined as any,
         storageFilterManager: undefined as any,
         getPlacementFilter: () => null,
     });

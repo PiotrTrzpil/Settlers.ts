@@ -14,7 +14,12 @@ export type {
     SelectionContext,
     StackGhostContext,
     PlacementPreviewContext,
+    RenderPassNeeds,
+    RenderPassDeps,
+    RenderPassDefinition,
+    PluggableRenderPass,
 } from './types';
+export { RenderLayer } from './types';
 export { PathIndicatorPass } from './path-indicator-pass';
 export { GroundOverlayPass } from './ground-overlay-pass';
 export { TerritoryDotPass } from './territory-dot-pass';

@@ -38,7 +38,9 @@ export type { PlacementPreviewState } from './render-context';
 import { TEXTURE_UNIT_SPRITE_ATLAS } from './entity-renderer-constants';
 
 import type { PassContext } from './render-passes';
-import type { DebugEntityLabel } from './render-passes/types';
+import type { DebugEntityLabel, RenderPassDefinition } from './render-passes/types';
+import { RenderLayer } from './render-passes/types';
+import { RenderPassRegistry } from './render-pass-registry';
 import { PathIndicatorPass } from './render-passes/path-indicator-pass';
 import { GroundOverlayPass } from './render-passes/ground-overlay-pass';
 import { TerritoryDotPass } from './render-passes/territory-dot-pass';
@@ -50,6 +52,57 @@ import { StackGhostPass } from './render-passes/stack-ghost-pass';
 import { PlacementPreviewPass } from './render-passes/placement-preview-pass';
 
 const EMPTY_OVERLAYS: readonly BuildingOverlayRenderData[] = [];
+
+/**
+ * Core pass definitions — the 6 pluggable passes migrated from hardcoded
+ * fields. Entity passes (EntitySpritePass, TransitionBlendPass,
+ * ColorEntityPass) are NOT included — they have special coordination and
+ * stay as hardcoded fields.
+ */
+const CORE_PASS_DEFINITIONS: RenderPassDefinition[] = [
+    {
+        id: 'path-indicator',
+        layer: RenderLayer.BeforeDepthSort,
+        priority: 100,
+        needs: { colorShader: true },
+        create: deps => new PathIndicatorPass(deps.selectionOverlayRenderer!),
+    },
+    {
+        id: 'ground-overlay',
+        layer: RenderLayer.BehindEntities,
+        priority: 100,
+        needs: { colorShader: true, entities: true },
+        create: deps => new GroundOverlayPass(deps.selectionOverlayRenderer!),
+    },
+    {
+        id: 'territory-dot',
+        layer: RenderLayer.BehindEntities,
+        priority: 200,
+        needs: { sprites: true },
+        create: () => new TerritoryDotPass(),
+    },
+    {
+        id: 'selection',
+        layer: RenderLayer.AboveEntities,
+        priority: 100,
+        needs: { colorShader: true, entities: true },
+        create: deps => new SelectionPass(deps.selectionOverlayRenderer!),
+    },
+    {
+        id: 'stack-ghost',
+        layer: RenderLayer.AboveEntities,
+        priority: 200,
+        needs: { sprites: true },
+        create: () => new StackGhostPass(),
+    },
+    {
+        id: 'placement-preview',
+        layer: RenderLayer.Overlay,
+        priority: 100,
+        needs: { sprites: true, colorShader: true },
+        create: () => new PlacementPreviewPass(),
+    },
+];
 
 /**
  * Renders entities (units and buildings) as colored quads or textured sprites.
@@ -188,6 +241,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     private passStackGhost: StackGhostPass;
     private passPlacementPreview: PlacementPreviewPass;
 
+    /** Dynamic pass registry — core definitions registered in constructor, initialized in init(). */
+    private readonly passRegistry = new RenderPassRegistry();
+
     constructor(mapSize: MapSize, groundHeight: Uint8Array, fileManager?: FileManager) {
         super();
         this.mapSize = mapSize;
@@ -210,6 +266,9 @@ export class EntityRenderer extends RendererBase implements IRenderer {
         this.passSelection = new SelectionPass(this.selectionOverlayRenderer);
         this.passStackGhost = new StackGhostPass();
         this.passPlacementPreview = new PlacementPreviewPass();
+
+        // Register core pass definitions with the dynamic registry
+        this.passRegistry.registerAll(CORE_PASS_DEFINITIONS);
     }
 
     // eslint-disable-next-line @typescript-eslint/require-await -- sprite loading is fire-and-forget
@@ -228,6 +287,12 @@ export class EntityRenderer extends RendererBase implements IRenderer {
 
         // Create a single reusable dynamic buffer for color shader
         this.dynamicBuffer = gl.createBuffer();
+
+        // Initialize the dynamic pass registry (instantiates all registered pass definitions)
+        this.passRegistry.init({
+            selectionOverlayRenderer: this.selectionOverlayRenderer,
+            spriteBatchRenderer: this.spriteBatchRenderer,
+        });
 
         // Initialize sprite batch renderer and manager if available
         if (this.spriteManager && !this.skipSpriteLoading) {
@@ -267,8 +332,13 @@ export class EntityRenderer extends RendererBase implements IRenderer {
     }
 
     /**
-     * Get the current race being used for building sprites.
+     * Register feature-provided render pass definitions.
+     * Must be called before init() — pass factories are invoked during init().
      */
+    public registerPassDefinitions(definitions: readonly RenderPassDefinition[]): void {
+        this.passRegistry.registerAll(definitions);
+    }
+
     /** Set the initial race before GL init. Must be called before init(). */
     public setInitialRace(race: Race): void {
         this.spriteManager?.setInitialRace(race);

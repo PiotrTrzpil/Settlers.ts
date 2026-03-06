@@ -12,9 +12,13 @@ import type { TickSystem } from '../tick-system';
 import { EventSubscriptionManager } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
-import type { CoreDeps, FeatureDefinition, FeatureInstance, FeatureContext } from './feature';
-import type { Command, CommandResult } from '../commands';
+import type { CoreDeps, FeatureDefinition, FeatureInstance, FeatureContext, BoundCommandHandler } from './feature';
+import type { Command, CommandResult, CommandType } from '../commands';
+import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
+import type { RenderPassDefinition } from '../renderer/render-passes/types';
+import { RenderDataRegistry } from './render-data-registry';
+import { DiagnosticsRegistry } from './diagnostics-registry';
 import { createLogger } from '@/utilities/logger';
 
 const log = createLogger('FeatureRegistry');
@@ -48,6 +52,21 @@ export class FeatureRegistry {
 
     /** Track loaded feature IDs for summary logging */
     private readonly loadedIds: string[] = [];
+
+    /** Persistable managers collected in feature-load order */
+    private readonly persistables: Persistable[] = [];
+
+    /** Command handlers collected from features, keyed by command type */
+    private readonly commandHandlers = new Map<CommandType, BoundCommandHandler>();
+
+    /** Render data contributions from features */
+    private readonly renderDataRegistry = new RenderDataRegistry();
+
+    /** Render pass definitions from features */
+    private readonly renderPassDefinitions: RenderPassDefinition[] = [];
+
+    /** Diagnostics providers from features */
+    private readonly diagnosticsRegistry = new DiagnosticsRegistry();
 
     constructor(config: FeatureRegistryConfig) {
         this.config = config;
@@ -109,6 +128,9 @@ export class FeatureRegistry {
             }
         }
 
+        // Collect plugin hooks (persistence, commands, render, diagnostics)
+        this.collectPluginHooks(definition.id, instance);
+
         this.loadedIds.push(definition.id);
     }
 
@@ -134,6 +156,41 @@ export class FeatureRegistry {
      */
     getSystems(): readonly { system: TickSystem; group: string }[] {
         return this.allSystems;
+    }
+
+    /**
+     * Get all persistables from loaded features, in feature-load order.
+     */
+    getPersistables(): readonly Persistable[] {
+        return this.persistables;
+    }
+
+    /**
+     * Get all command handlers from loaded features.
+     */
+    getCommandHandlers(): ReadonlyMap<CommandType, BoundCommandHandler> {
+        return this.commandHandlers;
+    }
+
+    /**
+     * Get the render data registry with all feature contributions.
+     */
+    getRenderDataRegistry(): RenderDataRegistry {
+        return this.renderDataRegistry;
+    }
+
+    /**
+     * Get all render pass definitions from loaded features.
+     */
+    getRenderPassDefinitions(): readonly RenderPassDefinition[] {
+        return this.renderPassDefinitions;
+    }
+
+    /**
+     * Get the diagnostics registry with all feature providers.
+     */
+    getDiagnosticsRegistry(): DiagnosticsRegistry {
+        return this.diagnosticsRegistry;
     }
 
     /**
@@ -181,6 +238,48 @@ export class FeatureRegistry {
         this.exports.clear();
         this.autoSubscriptions.clear();
         this.allSystems.length = 0;
+        this.persistables.length = 0;
+        this.commandHandlers.clear();
+        this.renderPassDefinitions.length = 0;
+    }
+
+    /**
+     * Collect optional plugin hooks from a feature instance.
+     * Extracted from load() to keep complexity under the limit.
+     */
+    private collectPluginHooks(featureId: string, instance: FeatureInstance): void {
+        if (instance.persistence) {
+            for (const persistable of instance.persistence) {
+                this.persistables.push(persistable);
+            }
+        }
+
+        if (instance.commands) {
+            for (const [type, handler] of Object.entries(instance.commands)) {
+                const cmdType = type as CommandType;
+                if (this.commandHandlers.has(cmdType)) {
+                    throw new Error(
+                        `Feature '${featureId}' registers command '${type}' ` +
+                            `which is already registered by another feature`
+                    );
+                }
+                this.commandHandlers.set(cmdType, handler);
+            }
+        }
+
+        if (instance.renderContributions) {
+            this.renderDataRegistry.registerFeature(featureId, instance.renderContributions);
+        }
+
+        if (instance.renderPasses) {
+            for (const pass of instance.renderPasses) {
+                this.renderPassDefinitions.push(pass);
+            }
+        }
+
+        if (instance.diagnostics) {
+            this.diagnosticsRegistry.register(featureId, instance.diagnostics);
+        }
     }
 
     /**

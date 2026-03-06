@@ -274,7 +274,10 @@ export class Simulation {
         this.services = new GameServices(this.state, this.eventBus, cmd => this.commandRegistry.execute(cmd));
         this.services.setTerrainData(this.map.terrain);
 
-        // Register handlers now that services exist
+        // Register feature-provided command handlers first, then central handlers
+        for (const [type, handler] of this.services.getFeatureCommandHandlers()) {
+            this.commandRegistry.register(type, handler);
+        }
         registerAllHandlers(this.commandRegistry, {
             state: this.state,
             terrain: this.map.terrain,
@@ -282,10 +285,7 @@ export class Simulation {
             settings: settings.state,
             settlerTaskSystem: this.services.settlerTaskSystem,
             constructionSiteManager: this.services.constructionSiteManager,
-            treeSystem: this.services.treeSystem,
-            cropSystem: this.services.cropSystem,
             combatSystem: this.services.combatSystem,
-            productionControlManager: this.services.productionControlManager,
             storageFilterManager: this.services.storageFilterManager,
             getPlacementFilter: () => null,
         });

@@ -38,6 +38,7 @@ export const CarrierFeature: FeatureDefinition = {
 
         return {
             exports: { carrierRegistry } satisfies CarrierFeatureExports,
+            persistence: [carrierRegistry],
         };
     },
 };

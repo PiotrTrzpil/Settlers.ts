@@ -127,7 +127,10 @@ export class Game {
         this.services = new GameServices(this.state, this.eventBus, cmd => this.commandRegistry.execute(cmd));
         this.services.setTerrainData(this.terrain, mapLoader.landscape.getResourceData?.());
 
-        // Register all command handlers now that systems exist.
+        // Register feature-provided command handlers first, then central handlers.
+        for (const [type, handler] of this.services.getFeatureCommandHandlers()) {
+            this.commandRegistry.register(type, handler);
+        }
         registerAllHandlers(this.commandRegistry, {
             state: this.state,
             terrain: this.terrain,
@@ -135,10 +138,7 @@ export class Game {
             settings: this.settings.state,
             settlerTaskSystem: this.services.settlerTaskSystem,
             constructionSiteManager: this.services.constructionSiteManager,
-            treeSystem: this.services.treeSystem,
-            cropSystem: this.services.cropSystem,
             combatSystem: this.services.combatSystem,
-            productionControlManager: this.services.productionControlManager,
             storageFilterManager: this.services.storageFilterManager,
             getPlacementFilter: () => this._placementFilter,
         });

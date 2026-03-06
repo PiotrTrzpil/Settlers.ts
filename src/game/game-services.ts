@@ -15,10 +15,14 @@ import type { TickSystem } from './tick-system';
 import { EntityType } from './entity';
 import { EventBus, EventSubscriptionManager } from './event-bus';
 import { EntityVisualService } from './animation/entity-visual-service';
-import type { Command, CommandResult } from './commands';
+import type { Command, CommandResult, CommandType } from './commands';
 import { EntityCleanupRegistry, CLEANUP_PRIORITY } from './systems/entity-cleanup-registry';
 import { FeatureRegistry } from './features/feature-registry';
-import { PersistenceRegistry } from './persistence';
+import type { BoundCommandHandler } from './features/feature';
+import type { RenderPassDefinition } from './renderer/render-passes/types';
+import { RenderDataRegistry } from './features/render-data-registry';
+import { DiagnosticsRegistry } from './features/diagnostics-registry';
+import { PersistenceRegistry, type Persistable } from './persistence';
 
 // Feature definitions
 import { MovementFeature, type MovementExports } from './features/movement/movement-feature';
@@ -208,22 +212,22 @@ export class GameServices {
         const pileSyncExports = this.feat<InventoryPileSyncExports>('inventory-pile-sync');
         this.inventoryPileSync = pileSyncExports.inventoryPileSync;
 
-        // 4. Persistence registry — register all Persistable managers in dependency order.
+        // 4. Persistence registry — register feature-declared persistables first, then manual ones.
         this.persistenceRegistry = new PersistenceRegistry();
+        for (const persistable of this.featureRegistry.getPersistables()) {
+            this.persistenceRegistry.register(persistable);
+        }
+        // Manual registrations for non-migrated features (with ordering constraints)
         this.persistenceRegistry.register(this.constructionSiteManager);
-        this.persistenceRegistry.register(this.carrierRegistry);
         this.persistenceRegistry.register(this.workAreaStore);
-        this.persistenceRegistry.register(this.treeSystem);
         this.persistenceRegistry.register(this.stoneSystem);
         this.persistenceRegistry.register(gameState.piles);
         this.persistenceRegistry.register(this.inventoryManager, ['constructionSites']);
         this.persistenceRegistry.register(this.requestManager, ['constructionSites']);
-        this.persistenceRegistry.register(this.cropSystem);
         this.persistenceRegistry.register(this.storageFilterManager);
         this.persistenceRegistry.register(this.combatSystem);
         this.persistenceRegistry.register(this.signSystem);
         this.persistenceRegistry.register(this.residenceSpawner);
-        this.persistenceRegistry.register(this.productionControlManager);
         this.persistenceRegistry.register(this.barracksTrainingManager, ['productionControl']);
         this.persistenceRegistry.register(this.autoRecruitSystem);
         this.persistenceRegistry.register(this.settlerTaskSystem, [
@@ -267,6 +271,31 @@ export class GameServices {
     /** Ordered tick systems for the frame loop, with group labels. */
     public getTickSystems(): readonly { system: TickSystem; group: string }[] {
         return this.featureRegistry.getSystems();
+    }
+
+    /** Feature-collected persistables (from features using self-registration). */
+    public getFeaturePersistables(): readonly Persistable[] {
+        return this.featureRegistry.getPersistables();
+    }
+
+    /** Feature-collected command handlers. */
+    public getFeatureCommandHandlers(): ReadonlyMap<CommandType, BoundCommandHandler> {
+        return this.featureRegistry.getCommandHandlers();
+    }
+
+    /** Feature-provided render pass definitions. */
+    public getFeatureRenderPassDefinitions(): readonly RenderPassDefinition[] {
+        return this.featureRegistry.getRenderPassDefinitions();
+    }
+
+    /** Render data registry for glue layer. */
+    public getRenderDataRegistry(): RenderDataRegistry {
+        return this.featureRegistry.getRenderDataRegistry();
+    }
+
+    /** Diagnostics registry for debug panel. */
+    public getDiagnosticsRegistry(): DiagnosticsRegistry {
+        return this.featureRegistry.getDiagnosticsRegistry();
     }
 
     /** Clean up all event subscriptions and system state. */

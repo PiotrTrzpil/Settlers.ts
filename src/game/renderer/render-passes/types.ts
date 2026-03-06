@@ -133,6 +133,64 @@ export interface IRenderPass {
 }
 
 // ============================================================================
+// Pluggable render pass types (feature plugin system)
+// ============================================================================
+
+import type { SelectionOverlayRenderer } from '../selection-overlay-renderer';
+
+/**
+ * Render ordering layer — determines when a pass runs relative to the
+ * core entity rendering pipeline.
+ */
+export enum RenderLayer {
+    BeforeDepthSort = 0,
+    BehindEntities = 1,
+    // Entities = 2 is reserved for core sprite/color passes
+    AboveEntities = 3,
+    Overlay = 4,
+}
+
+/**
+ * Declares what shared resources a render pass needs.
+ * EntityRenderer uses this to provide only the required sub-context.
+ */
+export interface RenderPassNeeds {
+    colorShader?: boolean;
+    sprites?: boolean;
+    entities?: boolean;
+}
+
+/**
+ * Dependencies provided to render pass factories based on their `needs`.
+ */
+export interface RenderPassDeps {
+    selectionOverlayRenderer?: SelectionOverlayRenderer;
+    spriteBatchRenderer?: SpriteBatchRenderer;
+}
+
+/**
+ * Definition of a pluggable render pass.
+ * Returned by features in the `renderPasses` hook.
+ */
+export interface RenderPassDefinition {
+    id: string;
+    layer: RenderLayer;
+    priority?: number;
+    needs: RenderPassNeeds;
+    create: (deps: RenderPassDeps) => PluggableRenderPass;
+}
+
+/**
+ * Extended IRenderPass with typed prepare().
+ * All pluggable passes use PassContext (the existing full context type).
+ */
+export interface PluggableRenderPass extends IRenderPass {
+    prepare(ctx: PassContext): void;
+    lastDrawCalls?: number;
+    lastSpriteCount?: number;
+}
+
+// ============================================================================
 // PassContext — full per-frame data assembled by EntityRenderer
 // ============================================================================
 

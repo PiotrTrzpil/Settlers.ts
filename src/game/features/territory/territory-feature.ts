@@ -8,7 +8,7 @@
  * Event wiring for building lifecycle happens after creation.
  */
 
-import type { FeatureDefinition, FeatureContext } from '../feature';
+import type { FeatureDefinition, FeatureContext, FeatureDiagnostics } from '../feature';
 import type { BuildingType } from '../../buildings/types';
 import type { TerrainData } from '../../terrain';
 import { EntityType } from '../../entity';
@@ -60,6 +60,23 @@ export const TerritoryFeature: FeatureDefinition = {
                 // Remove territory when buildings are destroyed
                 ctx.cleanupRegistry.onEntityRemoved(territoryManager.removeBuilding.bind(territoryManager));
             },
+            renderContributions: {
+                territoryDots: () => exports.territoryManager?.getBoundaryDots() ?? [],
+            },
+            diagnostics: (): FeatureDiagnostics => ({
+                label: 'Territory',
+                sections: [
+                    {
+                        label: 'Status',
+                        entries: [
+                            {
+                                key: 'Buildings',
+                                value: exports.territoryManager?.buildingCount ?? 0,
+                            },
+                        ],
+                    },
+                ],
+            }),
         };
     },
 };

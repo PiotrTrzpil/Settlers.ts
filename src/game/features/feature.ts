@@ -33,8 +33,10 @@ import type { GameState } from '../game-state';
 import type { EventBus, EventHandler, GameEvents } from '../event-bus';
 import type { EntityVisualService } from '../animation/entity-visual-service';
 import type { EntityCleanupRegistry } from '../systems/entity-cleanup-registry';
-import type { Command, CommandResult } from '../commands';
+import type { Command, CommandResult, CommandType } from '../commands';
+import type { Persistable } from '../persistence';
 import type { TerrainData } from '../terrain';
+import type { RenderPassDefinition } from '../renderer/render-passes/types';
 
 /**
  * Minimal shared dependencies injected into almost every system and manager.
@@ -82,10 +84,47 @@ export interface FeatureContext extends CoreDeps {
 }
 
 /**
+ * A command handler that a feature provides.
+ * The feature binds its own dependencies at creation time.
+ */
+export type BoundCommandHandler = (cmd: Command) => CommandResult;
+
+/**
+ * Render data contribution from a feature.
+ * Each key identifies a named data slot that the glue layer reads.
+ * Values are getter functions called once per frame.
+ *
+ * Return types must be plain data (arrays, maps, primitives).
+ * No renderer types (WebGL, SpriteEntry, etc.).
+ */
+export type RenderContributions = Record<string, () => unknown>;
+
+/**
+ * Diagnostic data a feature can provide for the debug panel.
+ * Each entry is a labeled section with key-value pairs.
+ */
+export interface FeatureDiagnostics {
+    label: string;
+    sections: DiagnosticSection[];
+}
+
+export interface DiagnosticSection {
+    label: string;
+    entries: DiagnosticEntry[];
+}
+
+export interface DiagnosticEntry {
+    key: string;
+    value: string | number | boolean;
+}
+
+/**
  * Result of feature creation.
  * Contains the systems, managers, and exports the feature provides.
  */
 export interface FeatureInstance {
+    // === Existing (unchanged) ===
+
     /** Tick systems to register with GameLoop */
     systems?: TickSystem[];
 
@@ -110,6 +149,41 @@ export interface FeatureInstance {
      * Use for event unsubscription and resource cleanup.
      */
     destroy?: () => void;
+
+    // === New: Self-registration hooks ===
+
+    /**
+     * Persistable managers owned by this feature.
+     * Registered with PersistenceRegistry automatically.
+     * Ordering derived from feature dependencies.
+     */
+    persistence?: Persistable[];
+
+    /**
+     * Command handlers owned by this feature.
+     * Keys are CommandType strings. Handlers have dependencies pre-bound.
+     */
+    commands?: Partial<Record<CommandType, BoundCommandHandler>>;
+
+    /**
+     * Render data this feature contributes per frame.
+     * Keys are named slots. Values are getter functions returning plain data.
+     * The glue layer reads these and maps them to PassContext fields.
+     */
+    renderContributions?: RenderContributions;
+
+    /**
+     * Custom render passes this feature provides.
+     * Pass classes live physically in the feature folder but are
+     * architecturally renderer-layer code.
+     */
+    renderPasses?: RenderPassDefinition[];
+
+    /**
+     * Diagnostic data provider for the debug panel.
+     * Called on-demand (not every frame).
+     */
+    diagnostics?: () => FeatureDiagnostics;
 }
 
 /**

@@ -286,6 +286,9 @@ export type Command =
     | AddToProductionQueueCommand
     | RemoveFromProductionQueueCommand;
 
+/** Union of all command type string literals. */
+export type CommandType = Command['type'];
+
 // === Command Result Types ===
 
 /**
