@@ -75,6 +75,43 @@ button.onClick(() => this.close());
 items.filter(x => x.active);
 ```
 
+### Type Aliases
+
+**Never use `Pick`, `Omit`, or mapped utility types to define public interfaces.** Write explicit `interface` declarations instead. Utility types obscure the shape at the definition site, make hover-info useless, and hide intent.
+
+```typescript
+// BAD — opaque, hard to read, hover shows Pick<...>
+export type AddUnitOptions = Pick<AddEntityOptions, 'selectable' | 'race' | 'occupancy'>;
+
+// GOOD — explicit, self-documenting, readable at definition and hover
+export interface AddUnitOptions {
+    race?: Race;
+    selectable?: boolean;
+    occupancy?: boolean;
+}
+```
+
+Utility types are fine for local/internal use (e.g., inside a function body or a `Parameters<>` extraction), but exported interfaces that other modules depend on must be spelled out.
+
+### No Inline Type Imports
+
+**Never use `import('...').Type` as an inline type annotation.** Use a proper `import type` statement at the top of the file instead. Inline imports are hard to read, clutter signatures, and bypass the module's import section where dependencies are visible at a glance.
+
+```typescript
+// BAD — inline import for type annotation
+function validate(terrain: import('../../../terrain').TerrainData): boolean { ... }
+public labels: import('./render-passes/types').DebugEntityLabel[] = [];
+
+// GOOD — top-level import type
+import type { TerrainData } from '../../../terrain';
+import type { DebugEntityLabel } from './render-passes/types';
+
+function validate(terrain: TerrainData): boolean { ... }
+public labels: DebugEntityLabel[] = [];
+```
+
+Dynamic `await import(...)` for lazy-loading or optional dependencies at runtime is fine — this rule only applies to type-position usage.
+
 ### Coding Style
 
 - **Prefer async/await** over `.then()` chains

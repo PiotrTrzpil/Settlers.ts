@@ -84,27 +84,26 @@ NEVER GIT STASH.
 - Playwright `outputDir` writes to `tests/e2e/.results/` (gitignored).
 - Screenshot baselines live in `tests/e2e/__screenshots__/` and are committed.
 
-## Coding guidelines
+## CRITICAL — Optimistic Programming (MANDATORY)
 
-**CRITICAL — Read `docs/optimistic.md`** before writing any code. Optimistic programming rules are mandatory and violations are treated as bugs.
+**This is the #1 coding rule in this project. Violations are treated as bugs.**
 
-**Read `docs/coding-style.md`** for TypeScript patterns (error handling, async/await).
+Read `docs/optimistic.md` for full details. Read `docs/coding-style.md` for TypeScript patterns.
 
-Key project-specific rules:
+**Core principle: Trust contracts. No fallbacks. No defensive code. Fail loudly.**
+
+- **NO optional chaining (`?.`) on required dependencies** — use `!.` or direct access
+- **NO silent fallbacks** (`?? 0`, `|| 0`, `?? []`) when value must exist — use `!` or throw
+- **NO defensive guards** (`if (x)`) when value is guaranteed — trust the contract
+- **NO fallback code paths** — if a dependency is required, assert it exists, don't provide alternatives
 - Use `getEntityOrThrow(id, 'context')` instead of `getEntity(id)!`
+- Throw with context instead of returning null/undefined silently
+- Defensive code is ONLY OK for: nullable-by-design, API boundaries, cleanup/destroy, external input
 - See `docs/design-rules.md` for architecture patterns
-
 
 ## Pre-Commit Review Checklist
 
-**Check ALL modified code for these patterns before committing (see `docs/coding-style.md` for examples):**
-
-- No optional chaining on required deps — use `!.` not `?.` on injected dependencies
-- Use `getEntityOrThrow(id, 'context')` not `getEntity(id)!`
-- No silent fallbacks (`?? 0`, `|| 0`) when value must exist — use `!`
-- No defensive guards (`if (x)`) when value is guaranteed — trust the contract
-- Throw with context instead of returning null/undefined silently
-- Defensive code OK for: nullable-by-design, API boundaries, cleanup/destroy, external input
+**Check ALL modified code for the optimistic programming rules above (see `docs/coding-style.md` for examples).** Every item in the list above is a checklist item.
 
 
 

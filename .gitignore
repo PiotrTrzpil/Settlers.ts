@@ -29,6 +29,7 @@ css
 /public/file-list.txt
 test-results/
 tests/e2e/.results/
+tests/e2e/__screenshots__/
 playwright-report/
 
 # Playwright MCP/CLI browser logs

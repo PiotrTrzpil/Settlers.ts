@@ -122,7 +122,7 @@ The game exposes several window globals for test access. The primary ones:
 | Bridge | Purpose |
 |--------|---------|
 | `__settlers_debug__` | Read-only stats (frameCount, entityCount, camera, etc.) |
-| `__settlers_game__` | Execute commands, read entities, `resetToCleanState()` |
+| `__settlers_game__` | Execute commands, read entities, `restoreToInitialState()` |
 | `__settlers_view_state__` | Reactive view state (entity counts, mode, etc.) |
 | `__settlers_game_settings__` | Game speed, player settings |
 | `__settlers_input__` | Switch modes with proper lifecycle |
@@ -339,8 +339,9 @@ Use `gs` when the test only needs game state (movement, animation state, entity 
 
 ### State reset
 
-`resetGameState()` calls `game.resetToCleanState()` which removes user-placed entities
-(units, buildings, resources) but **keeps environment objects** (~500 trees in test map).
+`resetGameState()` calls `game.restoreToInitialState()` which restores the game to
+its initial map state via the persistence pipeline — removing all current entities,
+recreating from the initial snapshot, and restoring all feature state.
 Then switches mode to 'select' via InputManager and waits for propagation.
 
 ### When NOT to use the shared fixture
